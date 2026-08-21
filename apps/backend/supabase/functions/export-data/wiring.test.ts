@@ -125,3 +125,40 @@ Deno.test('the track and hr path-shape assertions still gate the downloader', ()
 	assert(SRC.includes('canonicalHrUrl(r)'), 'hr_series_url path shape is no longer asserted');
 	assert(SRC.includes('isSafeStoragePath(sp)'), 'photo path shape is no longer asserted');
 });
+
+Deno.test('the artifact lands in the exports bucket, not runs', () => {
+	// `file_size_limit` is per bucket. `runs` caps an object at 25 MB,
+	// which on a full-history backup is a tighter ceiling than either cap
+	// §703 removed — and storage-api enforces it for service_role too, so
+	// the subject gets a failed upload rather than a short archive.
+	assert(SRC.includes("const EXPORT_BUCKET = 'exports';"));
+	assert(SRC.includes('bucket: EXPORT_BUCKET'), 'the upload must target the exports bucket');
+	assert(SRC.includes('.from(EXPORT_BUCKET)'), 'the signed URL must be minted on the same bucket');
+	assert(
+		!/storage\s*\n?\s*\.from\('runs'\)\s*\n?\s*\.createSignedUrl/.test(SRC),
+		'a signed URL on `runs` would point at the old bucket',
+	);
+});
+
+Deno.test('the exports bucket admits a big archive and stays signed-URL-only', async () => {
+	const mig = await Deno.readTextFile(
+		new URL('../../migrations/20270602_001_exports_storage_bucket.sql', import.meta.url),
+	);
+	const limit = Number(/\n\s*(\d{9,}), -- /.exec(mig)?.[1] ?? '0');
+	assert(limit > 26214400, `exports limit ${limit} is not above the runs bucket's 25 MB`);
+	assert(mig.includes("'exports'"), 'the bucket id must be `exports`');
+	// 20260816_001 carved `exports/` out of the owner-folder SELECT on
+	// `runs` so an export is reachable through its 10-minute signed URL
+	// and nothing else. A policy here would reverse that.
+	assert(
+		!mig.includes('create policy'),
+		'the exports bucket must carry no storage.objects policy — service_role ' +
+			'is the only reader/writer and 20260816_001 made exports signed-URL-only',
+	);
+	// And the 7-day retention sweep has to reach the new bucket, or an
+	// archive of the subject's whole history outlives its URL forever.
+	assert(
+		mig.includes('cleanup_stale_export_blobs') && mig.includes("bucket_id = 'exports'"),
+		'the retention sweep must be widened to the new bucket',
+	);
+});

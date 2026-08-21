@@ -12,11 +12,13 @@
 ///     primary. Added per audit/data-export-completeness May 2026
 ///     High; brought to full layout parity per the 2026-07-02 High.
 ///
-/// Output is streamed to the `runs` Storage bucket under the caller's
-/// user-id-prefixed path (`{user_id}/exports/<ts>.<ext>`) so the
-/// existing path-based RLS still gates direct reads. The returned
-/// URL is a signed URL with a 10-minute expiry — the user can
-/// download once without re-authenticating.
+/// Output is streamed to the `exports` Storage bucket under the
+/// caller's user-id-prefixed path (`{user_id}/exports/<ts>.<ext>`) so
+/// the same path-based RLS gates direct reads. The returned URL is a
+/// signed URL with a 10-minute expiry — the user can download once
+/// without re-authenticating. Its own bucket because `file_size_limit`
+/// is per bucket and `runs` caps an object at 25 MB, which was a far
+/// tighter ceiling on a full-history archive than either cap below.
 ///
 /// Nothing is assembled in memory. The archive goes out through the
 /// chunked tus sink in `resumable_upload.ts` and each section is
@@ -74,6 +76,13 @@ import {
 } from './resumable_upload.ts';
 
 const SIGNED_URL_TTL_S = 600; // 10 minutes
+
+/// Export artifacts live in their own bucket because `file_size_limit`
+/// is per bucket: `runs` caps an object at 25 MB (20260620_001), which
+/// is right for one gzipped track and is a tighter ceiling on a
+/// full-history archive than either cap this function used to carry.
+/// Migration `20270602_001`, decisions §703.
+const EXPORT_BUCKET = 'exports';
 
 const RUNS_SELECT =
 	'id, user_id, started_at, duration_s, distance_m, source, activity_type, is_dnf, external_id, metadata, track_url, hr_series_url, is_public, event_id, route_id, created_at, updated_at';
@@ -207,7 +216,7 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	const budget = createExportBudget();
 	const upload = createResumableUpload({
 		supabaseUrl: Deno.env.get('SUPABASE_URL')!,
-		bucket: 'runs',
+		bucket: EXPORT_BUCKET,
 		objectPath: path,
 		contentType,
 		headers: secretKeyHeaders(),
@@ -237,7 +246,7 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	}
 
 	const { data: signed, error: signErr } = await adminSupabase.storage
-		.from('runs')
+		.from(EXPORT_BUCKET)
 		.createSignedUrl(path, SIGNED_URL_TTL_S);
 	if (signErr || !signed) {
 		// Log message only — the full error object can carry storage

@@ -19,7 +19,7 @@
 
 begin;
 
-select plan(24);
+select plan(29);
 
 -- ─── 1. public = false on private buckets ──────────────────────────
 select is(
@@ -311,6 +311,57 @@ select is(
   0::int,
   'every blob in club-photos MUST be referenced by a club_photos row '
   '(via storage_path OR thumb_512_path)'
+);
+
+-- ─── 5. exports bucket configuration ───────────────────────────────
+-- Created in 20270602_001 because `file_size_limit` is per bucket and
+-- the Art 20 artifacts were sharing the `runs` bucket's 25 MB object
+-- cap — a tighter ceiling on a full-history archive than either of the
+-- caps decisions.md §703 removed. It holds a complete copy of the
+-- subject's history, so the invariants are the strictest of any bucket.
+select is(
+  (select public from storage.buckets where id = 'exports'),
+  false,
+  'exports bucket MUST have public = false — a public flag would put a '
+  'complete copy of every subject''s history on the CDN behind nothing '
+  'but a guessable object path'
+);
+
+select ok(
+  (select file_size_limit from storage.buckets where id = 'exports')
+    > (select file_size_limit from storage.buckets where id = 'runs'),
+  'exports bucket MUST admit an object larger than the runs bucket does '
+  '— sharing the 25 MB track cap was the whole reason for the split'
+);
+
+select isnt(
+  (select allowed_mime_types from storage.buckets where id = 'exports'),
+  null,
+  'exports bucket MUST set allowed_mime_types — same SVG-XSS shape '
+  '20260620_001 closed elsewhere'
+);
+
+-- ZERO policies, deliberately. 20260816_001 carved `exports/` out of
+-- the owner-folder SELECT on `runs` so an export is reachable through
+-- its 10-minute signed URL and nothing else; an owner SELECT policy
+-- here would reverse that. service_role is the only reader and writer
+-- and it bypasses RLS, so any policy naming this bucket is a widening.
+select is(
+  (select count(*) from pg_policies
+     where schemaname = 'storage' and tablename = 'objects'
+       and coalesce(qual, '') || coalesce(with_check, '') like '%''exports''%')::int,
+  0::int,
+  'exports bucket MUST carry no storage.objects policy — signed-URL-only '
+  'access is what 20260816_001 established and service_role needs none'
+);
+
+-- Retention: the 7-day sweep must reach the new bucket, or an archive
+-- holding the subject's whole history outlives its signed URL forever.
+select ok(
+  (select prosrc from pg_proc
+     where proname = 'cleanup_stale_export_blobs') like '%bucket_id = ''exports''%',
+  'cleanup_stale_export_blobs MUST sweep the exports bucket, not only '
+  'the legacy runs/{uid}/exports/ prefix (20270602_001)'
 );
 
 select * from finish();
