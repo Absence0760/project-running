@@ -187,6 +187,7 @@ The most-tested surface in the codebase. The recording state machine + filter ch
 | Standalone recording | Watch app → Start → walk → Stop | Run records via `HKWorkoutSession` + `CLLocationManager`; transfers to phone on stop via WatchConnectivity. |
 | BPM stream | Wear the watch → record a run | `metadata.avg_bpm` is set on the run; track points carry per-point `bpm` (the recorder pulls `HKLiveWorkoutBuilder` HR samples). |
 | Phone ingest | After Stop, open the iOS Flutter app | Run appears in the home list within a few seconds; `lib/watch_ingest_queue.dart` decoded the payload via the `run_app/watch_ingest` method channel and saved through `LocalRunStore.save`. |
+| In-run mini-map | Start a run, swipe left off the stats page | Page two draws the track so far and a white position dot, auto-fitting as the run grows; an armed route draws as a lilac line with a start marker. Before the first fix it reads "Waiting for GPS" with no dot — never a dot at the centre of the map. Swiping back leaves the clock, distance and Pause/Stop exactly where they were. |
 
 ---
 
