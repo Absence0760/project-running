@@ -66,6 +66,19 @@ than before — tus publishes the object only once the declared length
 arrives, so a build that dies produces no artifact instead of a short
 one.
 
+A third cap turned up underneath both of them and had to move with
+this: the artifacts were written to the `runs` Storage bucket, whose
+per-object limit is 25 MB — on a full-history `backup` archive that is a
+ceiling of *tens* of runs, enforced for `service_role` too, and it
+surfaced as a failed upload rather than a short archive. Exports now
+live in their own `exports` bucket (migration `20270602_001`, 5 GiB,
+signed-URL-only, no `storage.objects` policies), which `delete-account`
+drains and the 7-day `cleanup_stale_export_blobs` sweep covers.
+**One bound is a deploy-time operator step, not code:** Supabase also
+enforces a project-level upload limit (50 MB by default) and the
+effective ceiling is the lower of the two, so until that is raised the
+project setting is the honest bound whatever the bucket allows.
+
 *The Go worker's `/v1/export`, which production traffic uses, still
 carries both caps* because it still assembles the archive in one
 `bytes.Buffer`:
