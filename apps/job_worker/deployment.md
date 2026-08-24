@@ -214,7 +214,9 @@ The worker dispatches by `jobs.kind`. Today:
 
 | Endpoint | Replaces | Notes |
 |---|---|---|
-| `POST /v1/export` on the Go service | `export-data` Edge Function | JWT-authed (same `SUPABASE_JWT_SECRET` the live hub uses). Tiered rate limit (free 2/h, pro 8/h) via `check_rate_limit_tiered`. Builds CSV or GPX zip of up to 5000 runs, uploads to `runs/{user_id}/exports/<ts>.{csv,zip}`, returns a 10-min signed URL. Body shape: `{format: 'csv'|'gpx'}`. |
+| `POST /v1/export` on the Go service | `export-data` Edge Function | JWT-authed (same `SUPABASE_JWT_SECRET` the live hub uses). Tiered rate limit (free 2/h, pro 8/h) via `check_rate_limit_tiered`. Streams a CSV, GPX zip or full `backup` archive into `exports/{user_id}/exports/<ts>.{csv,zip}` in 6 MiB tus chunks, returns a 10-min signed URL. Body shape: `{format: 'csv'|'gpx'|'backup'}`. **No run cap and no per-section row ceiling** since [decisions § 708](../../docs/architecture/decisions.md) — every section is read page by page and written as it arrives, so peak memory is one chunk plus the blob in flight and does not grow with the history. |
+
+**Operator note — the artifact bucket and its ceiling.** The export writes to the `exports` bucket (migration `20270602_001`), not `runs`: `file_size_limit` is per bucket, and `runs` caps an object at 25 MB, which on a full-history archive was a tighter bound than either of the row caps § 708 deleted. `exports` admits 5 GiB, but Supabase also enforces a **project-level upload limit** (Dashboard → Storage → Settings, 50 MB by default) and the effective ceiling is the lower of the two. Raising the project limit is the one pre-deploy step that is not expressible in SQL; until it is raised, the project setting is the export's honest bound and a subject past it gets a failed upload (a 500 with no artifact), never a short archive.
 
 **Premium endpoints** are the Pro-tier compute surface — VDOT, Riegel, training-load, plan generation. All four mount on the existing health/live-hub listener and gate on `user_profiles.subscription_tier` (`pro` + `lifetime` count; `free` → 402):
 

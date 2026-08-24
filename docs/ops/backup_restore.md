@@ -80,7 +80,7 @@ What can make each writer short:
 
 | Writer | Can come up short on | Why |
 |---|---|---|
-| `go-service` | `runs` (past the 5000-run `MaxRunsPerExport` ceiling), any paged personal-data section past 50,000 rows, blobs | A capped export + a paging failure. `counts` for a short *paged* section publishes the **database's** own total, so a file short of it reads as a shortfall rather than as the whole set |
+| `go-service` | any section whose paging genuinely failed mid-read, blobs | **No run cap and no row ceiling** since [decisions § 708](../architecture/decisions.md) — the archive streams into the `exports` bucket in 6 MiB tus chunks and every section is serialised page by page, so nothing but a failed page can shorten it. `counts` for a short *paged* section publishes the **database's** own total, so a file short of it reads as a shortfall rather than as the whole set |
 | `edge-function` | any section the 120 s wall-clock budget cut short, blobs | **No run cap and no row ceiling** since [decisions § 703](../architecture/decisions.md) — the archive streams into the `exports` bucket in 6 MiB tus chunks, so only the platform's request clock can shorten it, and `incomplete` names exactly which sections it reached. (The artifact moved off the `runs` bucket in migration `20270602_001`: `file_size_limit` is per bucket and `runs` caps an object at 25 MB, which was a tighter ceiling on a full-history archive than either removed cap) |
 | `mobile_android` / `mobile_ios` | `tracks`, `hr_series` | The row reads are paged and **uncapped**, so the runs and routes in the archive are the whole account. Only a blob download that failed can leave the file short, and the writer swallows that per-blob so one dead download can't sink the archive |
 | `web` | `runs`, `routes`, `tracks` | Same per-track swallow as mobile. The row reads page through `readAllRows` and are **uncapped**, so `runs` / `routes` appear only when a page genuinely failed mid-read; a `runs` read that returned nothing at all raises instead of writing a file (decisions § 675) |
@@ -90,9 +90,10 @@ disk and downloads tracks in bounded batches ([decisions.md § 66]), so peak hea
 is `O(concurrency × avg-track-size)` and does not grow with run count; the only
 per-run cost held in memory is the already-fetched `runs.json` row list, a few
 hundred bytes each. A cap would buy nothing and would reintroduce the silent
-truncation this pair exists to remove. The **Go** server keeps its 5000-run
-ceiling because it builds the whole archive in one `bytes.Buffer`; mobile skips
-the server path entirely once it is past it, which is what covers the long tail.
+truncation this pair exists to remove. The **Go** server no longer carries one
+either ([decisions § 708](../architecture/decisions.md)): it streams the archive
+into Storage the same way, so the mobile fall-through to the local writer is now
+a failure path rather than the long-tail path it used to be.
 The **Edge Function** no longer has one — it streams into a chunked tus upload
 ([decisions § 703](../architecture/decisions.md)) and is bounded only by its
 150 s request clock — so the two server writers are deliberately no longer in

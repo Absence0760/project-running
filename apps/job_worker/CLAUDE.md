@@ -143,7 +143,10 @@ Function moves per
   `handler_strava_event.go` for the dispatch and
   `internal/stravahook/server.go` for the request-side validation.
   Data-export follows the request-side pattern; it doesn't fit the
-  job-queue shape because the user is waiting on a signed URL.
+  job-queue shape because the user is waiting on a signed URL — which is
+  itself the remaining bound on that endpoint (decisions § 708), and
+  moving it to a `jobs` kind is a client-contract change, not a
+  server-side one.
 - A new **`NotificationKind`** (as opposed to a new `jobs.kind`) has its own
   three-file rule, because the notifications AFTER-INSERT triggers enqueue an
   email job **and** a push job for every kind with **no allowlist**. The
@@ -219,7 +222,9 @@ apps/job_worker/
 ├── internal/
 │   ├── types.go             # Job, MapMatchPayload, TrackPoint, MatchedTrackRow, IntegrationRow, TokenPair
 │   ├── schema/schema.go     # registry: PostgREST table names + Storage bucket names + runs.metadata keys + prefs keys (every package routes its literals through here)
-│   ├── supabase.go          # PostgREST + Storage REST client (service role); exportPersonalDataSpecs is the single source of truth for the Art 20 export table list
+│   ├── supabase.go          # PostgREST + Storage REST client (service role); exportPersonalDataSpecs is the single source of truth for the Art 20 export table list; walkExportPages pages every export read without accumulating
+│   ├── supabase_resumable.go # chunked (tus) Storage upload the export archive streams into; fail-closed — no object until Finish
+│   ├── supabase_resumable_test.go # 12 tus cases incl. a real zip across chunk boundaries, offset mismatch, mid-stream failure
 │   ├── personal_data_export_guard_test.go # parses migrations for user_id tables; fails the build if one is missing from the export spec or the reasoned exclusion list
 │   ├── strava.go            # StravaClient — /oauth/token refresh_token grant
 │   ├── strava_test.go       # 4 tests: parse, error surface, malformed, default URL
@@ -289,8 +294,9 @@ apps/job_worker/
 │   │   ├── server.go        # GET handshake + POST validate / freshness / dedupe / enqueue
 │   │   └── server_test.go   # 13 httptest cases on every gate + the handshake
 │   ├── dataexport/          # GDPR data-export HTTP endpoint (POST /v1/export)
-│   │   ├── server.go        # JWT auth + tiered rate limit + CSV/GPX-zip builder + signed URL
-│   │   └── server_test.go   # 14 tests (9 httptest + 5 pure builder/helpers)
+│   │   ├── server.go        # JWT auth + tiered rate limit + streaming CSV/GPX/backup writers + signed URL; no run cap, no row ceiling (decisions § 708)
+│   │   ├── server_test.go   # httptest gates + streaming + fail-closed + pure builder/helper cases
+│   │   └── wiring_test.go   # source-grep guards: nothing buffers the archive, no cap comes back, manifest.json stays last
 │   └── premium/             # Pro-only HTTP endpoints (POST /v1/premium/{vo2max,race-predictor,recovery,training-plan})
 │       ├── server.go        # Shared JWT + Pro-tier gate + 4 handlers; Backend leaf interface
 │       ├── compute.go       # Pure helpers — Daniels VDOT, Riegel, EWMA training load, recovery advice, plan generator
