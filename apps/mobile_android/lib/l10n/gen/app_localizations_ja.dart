@@ -505,7 +505,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get peopleNearbyEmptyBody =>
-      '設定 → 環境設定 → プライバシーで「近くのランナーに自分を表示」をオンにし、エリアを設定してください。同じ設定をしたランナーだけがあなたを見つけられます。';
+      '「近くのランナーに自分を表示」をオンにし、エリアを設定してください。同じ設定をしたランナーだけがあなたを見つけられます。';
+
+  @override
+  String get peopleNearbyEmptyAction => '環境設定を開く';
 
   @override
   String get peopleNearbyLoadFailed => '近くのランナーを読み込めませんでした。';
@@ -4693,6 +4696,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorStatRaceTime => 'レース時間';
+
+  @override
+  String get liveSpectatorStatTimer => 'タイマー';
+
+  @override
+  String get liveSpectatorStatTimerStale => 'タイマー（最終受信）';
 
   @override
   String get liveSpectatorRecentPace => '直近';

@@ -18,6 +18,7 @@ import '../main.dart'
 import '../preferences.dart';
 import '../push_target.dart';
 import '../race_controller.dart';
+import '../settings_destination.dart';
 import '../settings_sync.dart';
 import '../shared_file_import.dart' show incomingRouteImport;
 import '../social_service.dart';
@@ -41,6 +42,13 @@ import 'profile_screen.dart';
 import 'public_run_screen.dart';
 import 'route_detail_screen.dart';
 import 'run_screen.dart';
+import 'settings_about_screen.dart';
+import 'settings_account_screen.dart';
+import 'settings_body_metrics_screen.dart';
+import 'settings_integrations_screen.dart';
+import 'settings_preferences_screen.dart';
+import 'settings_pro_screen.dart';
+import 'settings_safety_screen.dart';
 import 'setup_wizard_screen.dart';
 import 'social_screen.dart';
 import 'you_screen.dart';
@@ -171,6 +179,7 @@ class _HomeScreenState extends State<HomeScreen>
     pendingStartRunWithRoute.addListener(_onPendingStartRunWithRoute);
     incomingRouteImport.addListener(_onIncomingRouteImport);
     pendingPushTarget.addListener(_onPendingPushTarget);
+    pendingSettingsDestination.addListener(_onPendingSettingsDestination);
     // A GPX/KML opened while the app was closed sets the notifier during
     // main() before this screen mounts, so drain any already-present value
     // once the first frame is up (the listener only fires on later shares).
@@ -179,6 +188,7 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onIncomingRouteImport();
       _onPendingPushTarget();
+      _onPendingSettingsDestination();
     });
     // Surface the recovery banner from main.dart's in-progress
     // evaluation. Casual #3: this also fires on DISCARD ("Discarded a
@@ -383,6 +393,56 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  /// A surface somewhere in the tree asked to open a Settings sub-screen.
+  /// Drain the parked destination and push it.
+  ///
+  /// The shell is the host because it already holds every dependency the
+  /// settings screens take, so a leaf surface needs none of them — see
+  /// [SettingsDestination] and decisions § 710. The push lands on top of the
+  /// current tab rather than switching to You first: a runner sent to
+  /// Preferences from the nearby list wants one Back to return to the list
+  /// they were reading, not to be relocated into Settings.
+  void _onPendingSettingsDestination() {
+    final destination = pendingSettingsDestination.value;
+    if (destination == null || !mounted) return;
+    pendingSettingsDestination.value = null;
+    _pushScreen(_settingsDestinationScreen(destination));
+  }
+
+  Widget _settingsDestinationScreen(SettingsDestination destination) =>
+      switch (destination) {
+        SettingsDestination.preferences => SettingsPreferencesScreen(
+            apiClient: widget.apiClient,
+            preferences: widget.preferences,
+            settingsSync: widget.settingsSync,
+          ),
+        SettingsDestination.account => SettingsAccountScreen(
+            apiClient: widget.apiClient,
+            preferences: widget.preferences,
+            settingsSync: widget.settingsSync,
+            runStore: widget.runStore,
+            routeStore: widget.routeStore,
+          ),
+        SettingsDestination.safety => SettingsSafetyScreen(
+            api: widget.apiClient,
+            settingsSync: widget.settingsSync,
+          ),
+        SettingsDestination.integrations => SettingsIntegrationsScreen(
+            apiClient: widget.apiClient,
+            heartRate: widget.heartRate,
+            treadmill: widget.treadmill,
+            preferences: widget.preferences,
+            settingsSync: widget.settingsSync,
+          ),
+        SettingsDestination.bodyMetrics => SettingsBodyMetricsScreen(
+            api: widget.apiClient,
+            settingsSync: widget.settingsSync,
+            preferences: widget.preferences,
+          ),
+        SettingsDestination.about => const SettingsAboutScreen(),
+        SettingsDestination.pro => const SettingsProScreen(),
+      };
+
   Future<void> _pushClubsHub(ApiClient api) => _pushScreen(ClubsScreen(
         social: widget.social,
         training: widget.training,
@@ -533,6 +593,8 @@ class _HomeScreenState extends State<HomeScreen>
     pendingStartRunWithRoute.removeListener(_onPendingStartRunWithRoute);
     incomingRouteImport.removeListener(_onIncomingRouteImport);
     pendingPushTarget.removeListener(_onPendingPushTarget);
+    pendingSettingsDestination
+        .removeListener(_onPendingSettingsDestination);
     _pageController.dispose();
     _currentIndex.dispose();
     super.dispose();

@@ -84,6 +84,13 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   // not read it as a precise current position.
   bool _lastPingCoarse = false;
 
+  // The run's own start + conclusion instants, off the `public_runs` row an
+  // anonymous spectator can already read. They anchor the race clock, which is
+  // a different quantity from the ping's `elapsed_s` and used to be rendered
+  // under the same label.
+  int? _startedAtMs;
+  int? _concludedAtMs;
+
   RealtimeChannel? _channel;
 
   // Predictive next-cutoff projection (mirror web `/live/[id]`). The route's
@@ -144,6 +151,8 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       // last ping went stale (signal loss), not a terminal outcome.
       final run = await widget.api.fetchPublicRunById(widget.runId);
       if (!mounted) return;
+      _startedAtMs = run?.startedAt.toUtc().millisecondsSinceEpoch;
+      _concludedAtMs = run?.concludedAt?.toUtc().millisecondsSinceEpoch;
       await _loadCutoffLegs(run?.routeId, run?.startedAt);
       if (!mounted) return;
       final rows = await widget.api.fetchLiveRunPings(widget.runId);
@@ -320,18 +329,18 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   /// no route with cutoffs / no position yet / the runner is past the last
   /// cutoff. `stale` suppresses the verdict (the helper returns
   /// [LiveCutoffStatus.unknown]) rather than fabricating an ETA off an old fix.
-  LiveCutoffEta? _cutoffEta(bool stale, int? ageMs) {
+  LiveCutoffEta? _cutoffEta(bool stale, int? ageMs, int? raceClock) {
     if (_cutoffLegs.isEmpty || _latestPos == null) return null;
     final distAlong = distanceAlongRoute(_latestPos!, _routeWaypoints);
     if (distAlong == null) return null;
     final eta = nextCutoffEta(
       distAlongRouteM: distAlong,
-      // `_elapsedS` only moves when a ping lands, so it freezes the moment
-      // the runner drops out of signal. A cut-off deadline does not —
-      // advance the race clock by the ping age so a limit that expired
-      // during a dead zone actually registers. Distance is deliberately NOT
-      // extrapolated: only time that has genuinely passed is added.
-      elapsedS: liveElapsedS(_elapsedS, ageMs).toDouble(),
+      // A cut-off is a wall-clock deadline measured from the start, so it
+      // runs on the race clock. `_elapsedS` is the runner's own recording
+      // timer and freezes the moment they drop out of signal; `liveElapsedS`
+      // reconstructs a lower bound on the race clock from the ping age and is
+      // only the fallback for a run whose start instant we never resolved.
+      elapsedS: (raceClock ?? liveElapsedS(_elapsedS, ageMs)).toDouble(),
       recentPaceSecPerKm: _recentPaceSecPerKm,
       legs: _cutoffLegs,
       stale: stale,
@@ -381,6 +390,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       }
       setState(() {
         _status = 'finished';
+        _concludedAtMs = run.concludedAt?.toUtc().millisecondsSinceEpoch;
         _distanceM = run.distanceM;
         _elapsedS = run.durationS;
       });
@@ -416,9 +426,20 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
     // its saved totals, so we never surface the approximate treatment for
     // one.
     final coarse = !terminal && _lastPingCoarse;
+    // The strip renders two different quantities that used to share one
+    // label. `_elapsedS` is the runner's own recording timer as of the last
+    // fix: it stops when they tap pause and it freezes the moment the pings
+    // do. The race clock is wall time since the start — what a cut-off is
+    // measured against — and needs no estimate, because `public_runs` serves
+    // `started_at` to every spectator. A terminal run measures to its
+    // conclusion instant, never to now, or its clock would tick forever; one
+    // that ended before that marker existed has no end to measure to and the
+    // tile is withheld rather than fabricated.
+    final raceClock =
+        raceClockS(_startedAtMs, terminal ? _concludedAtMs : _nowMs);
     // A concluded run has no "next" cut-off — the projection would be a
     // live claim about a runner who has already stopped.
-    final cutoff = terminal ? null : _cutoffEta(stale, fresh?.ageMs);
+    final cutoff = terminal ? null : _cutoffEta(stale, fresh?.ageMs, raceClock);
     final motion = terminal ? null : _motion(stale);
     return Scaffold(
       appBar: AppBar(
@@ -521,11 +542,27 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                                   value: formatDistanceForPref(_distanceM),
                                 ),
                               ),
+                              if (raceClock != null)
+                                Expanded(
+                                  child: _Metric(
+                                    key: const Key('race-clock'),
+                                    label: l10n.liveSpectatorStatRaceTime,
+                                    value: formatLiveDuration(
+                                        Duration(seconds: raceClock)),
+                                  ),
+                                ),
                               Expanded(
                                 child: _Metric(
-                                  label: l10n.runStatTime,
+                                  key: const Key('runner-timer'),
+                                  label: stale
+                                      ? l10n.liveSpectatorStatTimerStale
+                                      : l10n.liveSpectatorStatTimer,
                                   value: formatLiveDuration(
                                       Duration(seconds: _elapsedS)),
+                                  // The runner's timer stopped at the last
+                                  // fix. Recede it so the ticking race clock
+                                  // beside it is unmistakably the live one.
+                                  muted: stale,
                                 ),
                               ),
                               Expanded(
@@ -700,7 +737,13 @@ class _StatusBadge extends StatelessWidget {
 class _Metric extends StatelessWidget {
   final String label;
   final String value;
-  const _Metric({super.key, required this.label, required this.value});
+  final bool muted;
+  const _Metric({
+    super.key,
+    required this.label,
+    required this.value,
+    this.muted = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -716,17 +759,23 @@ class _Metric extends StatelessWidget {
           child: Text(value,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
+                color: muted ? theme.colorScheme.onSurfaceVariant : null,
               )),
         ),
         const SizedBox(height: 2),
-        Text(
-          label.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            letterSpacing: 0.6,
+        // Scaled rather than ellipsized: the row can carry five cells on a
+        // narrow phone, and a label clipped to "RACE TI…" is worse than a
+        // slightly smaller one — the label is what tells the two clocks apart.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              letterSpacing: 0.6,
+            ),
+            maxLines: 1,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

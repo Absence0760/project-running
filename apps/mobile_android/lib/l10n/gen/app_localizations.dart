@@ -860,8 +860,14 @@ abstract class AppLocalizations {
   /// Empty-state body for the runners-nearby list, pointing at the opt-in and area setter
   ///
   /// In en, this message translates to:
-  /// **'Turn on \"Show me to runners nearby\" in Settings → Preferences → Privacy and set your area. Only runners who did the same can find you.'**
+  /// **'Turn on \"Show me to runners nearby\" and set your area. Only runners who did the same can find you.'**
   String get peopleNearbyEmptyBody;
+
+  /// Button on the runners-nearby empty state that opens the Preferences settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Open Preferences'**
+  String get peopleNearbyEmptyAction;
 
   /// Error-state message when the runners-nearby list fails to load
   ///
@@ -8247,6 +8253,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'DNF'**
   String get liveSpectatorBadgeDnf;
+
+  /// Label for the live spectator race-clock stat tile — wall-clock time since the runner started, distinct from the runner's own recording timer
+  ///
+  /// In en, this message translates to:
+  /// **'Race time'**
+  String get liveSpectatorStatRaceTime;
+
+  /// Label for the live spectator stat tile showing the runner's own recording timer as of the last fix
+  ///
+  /// In en, this message translates to:
+  /// **'Timer'**
+  String get liveSpectatorStatTimer;
+
+  /// Label for the runner's-timer stat tile once the last fix is stale, so the frozen figure cannot pass as current
+  ///
+  /// In en, this message translates to:
+  /// **'Timer, last fix'**
+  String get liveSpectatorStatTimerStale;
 
   /// Label for the recent-pace spectator stat tile (distinct from cumulative average pace)
   ///

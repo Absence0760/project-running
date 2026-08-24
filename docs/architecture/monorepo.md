@@ -399,7 +399,7 @@ Full pipeline defined in `.github/workflows/ci.yml`. Seventeen jobs run on every
 | `test-packages` | ubuntu-latest | `melos bootstrap` → scoped `flutter test` on `run_recorder` + `mobile_android` + `api_client` + `gpx_parser` |
 | `test-worker` | ubuntu-latest | `go vet ./...` + `go test ./...` for `apps/job_worker` (incl. the GDPR Art 20 export-completeness guard) |
 | `test-graph-cycle` | ubuntu-latest | `go vet ./...` + `go test ./...` for the `apps/graph_cycle` street-graph cycle-search sidecar |
-| `parity-types` | ubuntu-latest | `supabase start` → `npm run gen:types:check` |
+| `parity-types` | ubuntu-latest | migration version-key + online-safety guards, `check_constraint_unions.mjs`, the web TS unit suite, then `supabase start` → `npm run gen:types:check`. Every step prints its own `::error::` — the job name covers more than type drift, so it cannot say which one broke ([decisions.md § 711](decisions.md)) |
 | `build-web` | ubuntu-latest | `npm run build --workspace=apps/web` — SvelteKit compile check, no deploy |
 | `parity-matrix` | ubuntu-latest | `dart run scripts/check_parity_matrix.dart` — keeps `docs/product/parity.md` honest |
 | `build-watch-wear` | ubuntu-latest | Gradle build of `apps/watch_wear` (Compose-for-Wear smoke) |

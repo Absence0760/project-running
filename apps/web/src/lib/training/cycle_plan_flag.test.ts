@@ -22,11 +22,14 @@ test('cycle_plan_flag is fail-closed (defaults off)', () => {
 		/PUBLIC_CYCLE_PLANS_ENABLED/,
 		'flag must read PUBLIC_CYCLE_PLANS_ENABLED',
 	);
-	// Unset → '' → falsy: only explicit truthy strings enable it.
+	// Unset → '' → falsy: only explicit truthy strings enable it. The parse
+	// itself lives in `core/env_flag.ts` and is pinned there — what this asserts
+	// is that this gate routes through it rather than carrying a fifth copy of
+	// the affirmative set (decisions § 709).
 	assert.match(
 		source,
-		/raw === '1' \|\| raw === 'true' \|\| raw === 'yes' \|\| raw === 'on'/,
-		'flag must enable only on explicit truthy values (fail-closed default)',
+		/isTruthyFlagValue\(env\.PUBLIC_CYCLE_PLANS_ENABLED\)/,
+		'flag must delegate to the canonical isTruthyFlagValue (fail-closed default)',
 	);
 });
 

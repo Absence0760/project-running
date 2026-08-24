@@ -8,16 +8,24 @@
 //
 // Why move it out of the Edge Function:
 //
-//   - 5000-run GPX zips push the 150s EF timeout when the per-run
-//     track downloads are slow; the Go runtime has no such cap and
-//     can run wide-fanout downloads against Storage.
+//   - A deep history's GPX zip pushes the 150s EF timeout when the
+//     per-run track downloads are slow; the Go runtime has no request
+//     clock at all and can run wide-fanout downloads against Storage.
 //   - All other Strava + token work is in this service, so the
 //     export consolidates the third Edge Function move (after
 //     refresh-tokens and strava-webhook) and lets us deprecate the
 //     `export-data` EF in a follow-up.
-//   - Future improvement: gzip on the wire, range-resumable
-//     downloads, the per-run CSV-of-tracks variant — all easier
-//     to grow here than in Deno.
+//
+// The archive is STREAMED, never assembled: every section is read page
+// by page and serialised into a chunked (tus) Storage upload as it
+// arrives, so peak memory is one 6 MiB chunk plus whichever blob is in
+// flight, flat in the size of the history. That is what removed this
+// rail's 5000-run cap and its 50,000-row-per-section ceiling
+// (decisions.md §708); both were memory bounds, and a cap that exists
+// to keep an allocation alive is a data subject not receiving their
+// data. Fail-closed is the other half: tus materialises the object only
+// once the declared length arrives, so any mid-build failure aborts the
+// session and answers 500 with no artifact at all.
 //
 // Rate limit + auth model is unchanged from the EF: HS256 JWT
 // over SUPABASE_JWT_SECRET (same as the live hub's authorizer),
@@ -73,15 +81,15 @@ type Backend interface {
 	// over their tier's per-hour quota.
 	CheckRateLimitTiered(ctx context.Context, userID, bucket string, freeMax, proMax, windowSec int) (denied bool, retryAfterSec int, err error)
 
-	// FetchExportRuns returns up to `limit` rows for the user,
-	// most-recent-first. The projection is the same shape the EF
-	// pulled — id, started_at, duration_s, distance_m, source,
-	// external_id, metadata, track_url, is_public, event_id,
+	// StreamExportRuns walks the user's runs most-recent-first, handing
+	// each page to `emit` and dropping it. The projection is the same
+	// shape the EF pulled — id, started_at, duration_s, distance_m,
+	// source, external_id, metadata, track_url, is_public, event_id,
 	// route_id, created_at, updated_at.
-	// Returns the rows read alongside an ExportCompleteness naming the
-	// authoritative row count — a fetch stopped short by the per-section
-	// ceiling must be visible in manifest.json, not silently truncated.
-	FetchExportRuns(ctx context.Context, userID string, limit int) ([]ExportRun, ExportCompleteness, error)
+	// Returns an ExportCompleteness naming the authoritative row count —
+	// a walk that could not read every page must be visible in
+	// manifest.json, not silently truncated.
+	StreamExportRuns(ctx context.Context, userID string, emit func([]ExportRun) error) (ExportCompleteness, error)
 
 	// DownloadTrackBytes pulls the gzipped track from Storage and
 	// returns the decompressed JSON bytes. Used by the GPX zip
@@ -91,13 +99,16 @@ type Backend interface {
 	// per-run GPX file.
 	DownloadTrackBytes(ctx context.Context, path string) ([]TrackPoint, error)
 
-	// UploadExportArtifact writes the assembled body to the
-	// `runs` bucket at `path` with `Content-Type: contentType`.
-	// `upsert=false` so a duplicate timestamp doesn't overwrite
-	// a previous export (the path includes a ms-precision
-	// timestamp so collisions only happen on extreme parallel
-	// retries from the same client).
-	UploadExportArtifact(ctx context.Context, path, contentType string, body []byte) error
+	// OpenExportArtifact opens a chunked upload session for the artifact
+	// at `path` with `Content-Type: contentType`. Nothing is written to
+	// Storage until the session's Finish, and a session that is aborted
+	// leaves no object — which is what lets a mid-build failure answer
+	// 500 with no artifact rather than a short-but-real archive.
+	// `upsert=false` so a duplicate timestamp doesn't overwrite a
+	// previous export (the path includes a ms-precision timestamp so
+	// collisions only happen on extreme parallel retries from the same
+	// client).
+	OpenExportArtifact(ctx context.Context, path, contentType string) ArtifactSink
 
 	// CreateSignedURL returns a presigned Storage URL valid for
 	// `ttlSec` seconds. The caller hands this back to the client
@@ -105,11 +116,11 @@ type Backend interface {
 	// underlying Storage path.
 	CreateSignedURL(ctx context.Context, path string, ttlSec int) (string, error)
 
-	// FetchExportRoutes returns the user's saved routes for the
-	// `format=backup` path. Service role bypasses RLS; the
+	// StreamExportRoutes walks the user's saved routes for the
+	// `format=backup` path, page by page. Service role bypasses RLS; the
 	// caller's userID filter is the only access gate. Mirrors the
 	// `routes` selection the mobile / web backup writers do.
-	FetchExportRoutes(ctx context.Context, userID string) ([]ExportRoute, ExportCompleteness, error)
+	StreamExportRoutes(ctx context.Context, userID string, emit func([]ExportRoute) error) (ExportCompleteness, error)
 
 	// FetchExportProfile returns the user's profile via a direct
 	// service-role select on `user_profiles` (NOT `get_my_profile`,
@@ -168,18 +179,69 @@ type Backend interface {
 	// user_device_settings, user_coach_usage, and the reporter side
 	// of reports.
 	//
-	// Returns a map keyed by zip entry name (the table name with a
-	// `.json` extension); each value is a list of JSON-encodable
-	// row maps. Empty tables are omitted from the map so the zip
-	// doesn't carry zero-row entries. Service-role auth bypasses
-	// RLS; the implementation filters on user_id for every table.
+	// Pages are handed to `emit` keyed by zip entry name (the table name
+	// with a `.json` extension). Pages of one table arrive consecutively
+	// and tables never interleave, so the consumer opens an archive
+	// entry on a table's first page and closes it when the next table
+	// (or the walk) ends. An empty table emits nothing, so the zip
+	// carries no zero-row entries. Service-role auth bypasses RLS; the
+	// implementation filters on user_id for every table.
 	//
 	// Bundled as one call rather than 16 separate Backend methods
 	// to keep the fake-backend surface small and avoid leaking the
 	// per-table fan-out into the Server handler. Single Backend
 	// method = one fake stub for tests.
-	FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, ExportCompleteness, error)
+	StreamExportPersonalDataTables(ctx context.Context, userID string, emit func(entry string, rows []map[string]interface{}) error) (ExportCompleteness, error)
 }
+
+// ArtifactSink is a chunked, fail-closed Storage upload session. The
+// builders write the archive into it as they produce it, so nothing
+// larger than one chunk is ever resident.
+//
+// The lifecycle is the fail-closed guarantee: the object does not exist
+// until Finish returns nil, and Abort removes any partial session. A
+// build that dies half-way therefore leaves nothing behind, where the
+// old single-shot upload would happily have stored a short-but-real
+// archive and handed back a signed URL to it.
+type ArtifactSink interface {
+	io.Writer
+	// Finish flushes the tail and materialises the object.
+	Finish() error
+	// Abort terminates the session. It runs on a path that is already
+	// failing, so it reports rather than returns.
+	Abort()
+}
+
+// RunSource walks the subject's runs newest-first, handing each page to
+// `emit` and dropping it, and returns the walk's completeness ledger.
+type RunSource func(ctx context.Context, emit func([]ExportRun) error) (ExportCompleteness, error)
+
+// RouteSource is RunSource for the subject's saved routes.
+type RouteSource func(ctx context.Context, emit func([]ExportRoute) error) (ExportCompleteness, error)
+
+// TableSource walks the personal-data sections. Pages of one section
+// arrive consecutively and sections never interleave.
+type TableSource func(ctx context.Context, emit func(entry string, rows []map[string]interface{}) error) (ExportCompleteness, error)
+
+// BuildResult is what a finished archive reports back to the handler.
+type BuildResult struct {
+	// Runs is the number of run rows the archive carries.
+	Runs int
+	// Completeness carries every section's authoritative total and the
+	// sections that came up short.
+	Completeness ExportCompleteness
+}
+
+// sectionError names the section whose READ failed, so the handler can
+// keep the error codes the client already distinguishes. A failure in
+// the archive writer or the upload is deliberately NOT one of these.
+type sectionError struct {
+	section string
+	err     error
+}
+
+func (e *sectionError) Error() string { return e.section + " fetch failed: " + e.err.Error() }
+func (e *sectionError) Unwrap() error { return e.err }
 
 // ExportCompleteness is the honesty ledger a paged export carries beside
 // its rows: the authoritative row count the database holds for each
@@ -265,15 +327,6 @@ type TrackPoint struct {
 }
 
 const (
-	// MaxRunsPerExport caps a single export at 5000 runs — a memory
-	// bound, because this path builds the whole archive in one
-	// bytes.Buffer before uploading it.
-	//
-	// The Edge Function no longer has this cap: it streams into a
-	// chunked tus Storage upload (decisions.md §703). So the two rails
-	// are deliberately out of lockstep, and lifting this one means
-	// streaming here too rather than picking a bigger number.
-	MaxRunsPerExport = 5000
 	// SignedURLTTLSec is the 10-min window the client has to
 	// download. Matches the EF.
 	SignedURLTTLSec = 600
@@ -354,44 +407,34 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runs, runsComp, err := s.Backend.FetchExportRuns(r.Context(), userID, MaxRunsPerExport)
-	if err != nil {
-		s.log().Error("dataexport: runs select failed", "err", err, "user_id", userID)
-		http.Error(w, `{"error":"runs_fetch_failed"}`, http.StatusInternalServerError)
-		return
-	}
-
 	ts := time.Now().UTC().Format("2006-01-02T15-04-05.000Z")
+	contentType, ext := "application/zip", "zip"
+	if format == "csv" {
+		contentType, ext = "text/csv", "csv"
+	}
+	objectPath := fmt.Sprintf("%s/exports/%s.%s", userID, ts, ext)
+
+	// The session opens before the first row is read: from here on the
+	// archive exists only as bytes in flight, and any failure below has
+	// to abort it or Storage keeps a partial upload.
+	sink := s.Backend.OpenExportArtifact(r.Context(), objectPath, contentType)
+	runs := RunSource(func(ctx context.Context, emit func([]ExportRun) error) (ExportCompleteness, error) {
+		return s.Backend.StreamExportRuns(ctx, userID, emit)
+	})
+
 	var (
-		body        []byte
-		contentType string
-		ext         string
+		built    BuildResult
+		buildErr error
 	)
 	switch format {
 	case "csv":
-		body = []byte(BuildCSV(runs))
-		contentType = "text/csv"
-		ext = "csv"
+		built, buildErr = WriteCSV(r.Context(), sink, runs)
 	case "gpx":
-		zipped, err := BuildGpxZip(r.Context(), runs, s.Backend.DownloadTrackBytes)
-		if err != nil {
-			s.log().Error("dataexport: gpx zip build failed", "err", err, "user_id", userID)
-			http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
-			return
-		}
-		body = zipped
-		contentType = "application/zip"
-		ext = "zip"
+		built, buildErr = WriteGpxZip(r.Context(), sink, runs, s.Backend.DownloadTrackBytes)
 	case "backup":
-		// Fetch the extra inputs only needed for the backup format —
-		// routes + profile + user_settings.prefs. None of these are
-		// huge so a single batch fetch is fine inside the EF timeout.
-		routes, routesComp, rerr := s.Backend.FetchExportRoutes(r.Context(), userID)
-		if rerr != nil {
-			s.log().Error("dataexport: routes fetch failed", "err", rerr, "user_id", userID)
-			http.Error(w, `{"error":"routes_fetch_failed"}`, http.StatusInternalServerError)
-			return
-		}
+		// Two small single-row reads the backup format needs beside the
+		// paged sections. Neither is worth failing the export over: a
+		// missing profile ships as null, missing prefs as an empty bag.
 		profile, perr := s.Backend.FetchExportProfile(r.Context(), userID)
 		if perr != nil {
 			s.log().Warn("dataexport: profile fetch failed; including null", "err", perr, "user_id", userID)
@@ -402,73 +445,68 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			s.log().Warn("dataexport: prefs fetch failed; including empty", "err", prefErr, "user_id", userID)
 			prefs = map[string]interface{}{}
 		}
-		// audit/data-export-completeness (May 2026): the prior shape
-		// only included runs + routes + profile. Pull every other
-		// personal-data table the subject has an Art 20 right to
-		// receive in one Backend call. Failure here is logged + we
-		// ship a partial export rather than 500 — losing the runs
-		// + routes export over a single optional table being slow
-		// would be a worse outcome.
-		extras, extrasComp, extrasErr := s.Backend.FetchExportPersonalDataTables(r.Context(), userID)
-		if extrasErr != nil {
-			s.log().Warn("dataexport: extra-tables fetch failed; shipping partial",
-				"err", extrasErr, "user_id", userID)
-			extras = nil
-		}
-		completeness := ExportCompleteness{}
-		completeness.Merge(runsComp)
-		completeness.Merge(routesComp)
-		completeness.Merge(extrasComp)
-		if !completeness.IsComplete() {
-			s.log().Warn("dataexport: export is short of the database; manifest says so",
-				"user_id", userID, "incomplete", completeness.Incomplete)
-		}
-		zipped, err := BuildBackupZip(r.Context(), BuildBackupZipInput{
-			Runs:          runs,
-			Routes:        routes,
+		built, buildErr = WriteBackupZip(r.Context(), sink, BuildBackupZipInput{
+			Runs: runs,
+			Routes: func(ctx context.Context, emit func([]ExportRoute) error) (ExportCompleteness, error) {
+				return s.Backend.StreamExportRoutes(ctx, userID, emit)
+			},
 			Profile:       profile,
 			SettingsPrefs: prefs,
 			UserID:        userID,
 			ExportedFrom:  "go-service",
-			ExtraTables:   extras,
-			Completeness:  completeness,
+			ExtraTables: func(ctx context.Context, emit func(string, []map[string]interface{}) error) (ExportCompleteness, error) {
+				return s.Backend.StreamExportPersonalDataTables(ctx, userID, emit)
+			},
 		}, BackupFetchers{
 			RawTrack:    s.Backend.DownloadRawTrackBytes,
 			Photo:       s.Backend.DownloadPhoto,
 			Avatar:      s.Backend.DownloadAvatar,
 			ListObjects: s.Backend.ListStorageObjects,
 		})
-		if err != nil {
-			s.log().Error("dataexport: backup zip build failed", "err", err, "user_id", userID)
-			http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
-			return
-		}
-		body = zipped
-		contentType = "application/zip"
-		ext = "zip"
 	}
 
-	path := fmt.Sprintf("%s/exports/%s.%s", userID, ts, ext)
-	if err := s.Backend.UploadExportArtifact(r.Context(), path, contentType, body); err != nil {
-		s.log().Error("dataexport: storage upload failed", "err", err, "path", path)
+	if buildErr != nil {
+		sink.Abort()
+		var se *sectionError
+		if errors.As(buildErr, &se) {
+			s.log().Error("dataexport: section read failed", "err", buildErr, "section", se.section, "user_id", userID)
+			http.Error(w, fmt.Sprintf(`{"error":"%s_fetch_failed"}`, se.section), http.StatusInternalServerError)
+			return
+		}
+		s.log().Error("dataexport: archive build failed", "err", buildErr, "user_id", userID)
+		http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
+		return
+	}
+	// Until this returns, tus has not been told the archive's length and
+	// no object exists. A failure here is the upload's, not the build's.
+	if err := sink.Finish(); err != nil {
+		sink.Abort()
+		s.log().Error("dataexport: storage upload failed", "err", err, "user_id", userID)
 		http.Error(w, `{"error":"upload_failed"}`, http.StatusInternalServerError)
 		return
 	}
-	signed, err := s.Backend.CreateSignedURL(r.Context(), path, SignedURLTTLSec)
+
+	if !built.Completeness.IsComplete() {
+		s.log().Warn("dataexport: export is short of the database; manifest says so",
+			"user_id", userID, "incomplete", built.Completeness.Incomplete)
+	}
+
+	signed, err := s.Backend.CreateSignedURL(r.Context(), objectPath, SignedURLTTLSec)
 	if err != nil {
-		s.log().Error("dataexport: signed URL failed", "err", err, "path", path)
+		s.log().Error("dataexport: signed URL failed", "err", err, "user_id", userID)
 		http.Error(w, `{"error":"signed_url_failed"}`, http.StatusInternalServerError)
 		return
 	}
 	// `count` is what the archive carries, `total` what the database
-	// holds and `complete` whether the two agree. A runner past
-	// MaxRunsPerExport gets a truncated CSV/GPX and has to be told so.
+	// holds and `complete` whether the two agree AND no other section
+	// came up short. The backup format says the same thing in
+	// manifest.json, in more detail.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"url":        signed,
 		"expires_in": SignedURLTTLSec,
-		"count":      len(runs),
-		"total":      runsComp.Totals["runs"],
-		"complete":   runsComp.IsComplete(),
+		"count":      built.Runs,
+		"total":      built.Completeness.Totals["runs"],
+		"complete":   built.Completeness.IsComplete(),
 		"format":     format,
 	})
 }
@@ -534,42 +572,73 @@ var csvColumns = []string{
 	"updated_at",
 }
 
-// BuildCSV emits one summary row per run with the column shape the
-// EF used. Exposed for unit testing without booting the HTTP host.
-func BuildCSV(runs []ExportRun) string {
-	var buf bytes.Buffer
-	w := csv.NewWriter(&buf)
-	_ = w.Write(csvColumns)
-	for _, r := range runs {
-		md := r.Metadata
-		if md == nil {
-			md = map[string]interface{}{}
-		}
-		mdJSON, _ := json.Marshal(md)
-		row := []string{
-			r.ID,
-			r.StartedAt,
-			fmt.Sprintf("%.0f", r.DistanceM),
-			fmt.Sprintf("%d", r.DurationS),
-			r.Source,
-			r.ActivityType,
-			strconv.FormatBool(r.IsDNF),
-			stringy(md[schema.MetaTitle]),
-			stringy(md[schema.MetaAvgBPM]),
-			stringy(md[schema.MetaSteps]),
-			stringy(md[schema.MetaElevationM]),
-			deref(r.RouteID),
-			deref(r.EventID),
-			deref(r.ExternalID),
-			derefBool(r.IsPublic),
-			string(mdJSON),
-			r.CreatedAt,
-			r.UpdatedAt,
-		}
-		_ = w.Write(row)
+// WriteCSV streams one summary row per run into `w` with the column
+// shape the EF used, a page at a time. Nothing but the current page is
+// resident, so a runner's hundred-thousandth row costs what their first
+// one did.
+func WriteCSV(ctx context.Context, w io.Writer, runs RunSource) (BuildResult, error) {
+	cw := csv.NewWriter(w)
+	if err := cw.Write(csvColumns); err != nil {
+		return BuildResult{}, err
 	}
-	w.Flush()
-	return buf.String()
+	written := 0
+	var emitErr error
+	comp, err := runs(ctx, func(page []ExportRun) error {
+		for _, r := range page {
+			if err := cw.Write(csvRow(r)); err != nil {
+				emitErr = err
+				return err
+			}
+		}
+		written += len(page)
+		// Flush per page: csv.Writer buffers, and an unflushed writer
+		// would hold the whole history exactly as the old builder did.
+		cw.Flush()
+		if err := cw.Error(); err != nil {
+			emitErr = err
+			return err
+		}
+		return nil
+	})
+	if emitErr != nil {
+		return BuildResult{}, emitErr
+	}
+	if err != nil {
+		return BuildResult{}, &sectionError{section: "runs", err: err}
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		return BuildResult{}, err
+	}
+	return BuildResult{Runs: written, Completeness: comp}, nil
+}
+
+func csvRow(r ExportRun) []string {
+	md := r.Metadata
+	if md == nil {
+		md = map[string]interface{}{}
+	}
+	mdJSON, _ := json.Marshal(md)
+	return []string{
+		r.ID,
+		r.StartedAt,
+		fmt.Sprintf("%.0f", r.DistanceM),
+		fmt.Sprintf("%d", r.DurationS),
+		r.Source,
+		r.ActivityType,
+		strconv.FormatBool(r.IsDNF),
+		stringy(md[schema.MetaTitle]),
+		stringy(md[schema.MetaAvgBPM]),
+		stringy(md[schema.MetaSteps]),
+		stringy(md[schema.MetaElevationM]),
+		deref(r.RouteID),
+		deref(r.EventID),
+		deref(r.ExternalID),
+		derefBool(r.IsPublic),
+		string(mdJSON),
+		r.CreatedAt,
+		r.UpdatedAt,
+	}
 }
 
 func stringy(v interface{}) string {
@@ -613,82 +682,155 @@ func derefBool(b *bool) string {
 // --- GPX zip builder -------------------------------------------------
 
 // TrackFetcher pulls the decompressed track for a Storage path.
-// Used by BuildGpxZip; production wires SupabaseClient.DownloadTrack.
+// Used by WriteGpxZip; production wires SupabaseClient.DownloadTrack.
 // Tests substitute a deterministic fake.
 type TrackFetcher func(ctx context.Context, path string) ([]TrackPoint, error)
 
-// BuildGpxZip assembles `runs.json` (manifest) + per-run `runs/<id>.gpx`
-// into a single zip. Mirrors the EF's `buildGpxZip`. Track download
-// failures are silently swallowed — the row stays in the manifest,
-// the per-run GPX is omitted, the zip ships.
+// gpxRef is what the GPX builder retains per run while `runs.json`
+// streams past: enough to name the entry and title the document, for
+// the runs that actually have a track. The rows themselves are dropped
+// — retaining them is what the deleted 5000-run cap existed to bound.
+type gpxRef struct {
+	userID    string
+	id        string
+	startedAt string
+	title     string
+}
+
+// WriteGpxZip streams `runs.json` (manifest) + per-run `runs/<id>.gpx`
+// into `w`. Mirrors the EF's `writeGpxZip`. Track download failures are
+// silently swallowed — the row stays in the manifest, the per-run GPX is
+// omitted, the zip ships.
 //
-// `trackFetcher` is the per-run track download. nil tracks (no
-// track_url, or fetch failed, or fewer than 2 points) skip the
-// per-run GPX file.
-func BuildGpxZip(ctx context.Context, runs []ExportRun, trackFetcher TrackFetcher) ([]byte, error) {
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+// `trackFetcher` is the per-run track download. Runs with no track_url
+// never enter the ref list, so no round trip is spent on them.
+func WriteGpxZip(ctx context.Context, w io.Writer, runs RunSource, trackFetcher TrackFetcher) (BuildResult, error) {
+	zw := zip.NewWriter(w)
 
 	// Manifest first so a partial / corrupt zip still has it.
-	manifest := make([]map[string]interface{}, 0, len(runs))
-	for _, r := range runs {
-		manifest = append(manifest, map[string]interface{}{
-			"id":            r.ID,
-			"started_at":    r.StartedAt,
-			"distance_m":    r.DistanceM,
-			"duration_s":    r.DurationS,
-			"source":        r.Source,
-			"activity_type": r.ActivityType,
-			"is_dnf":        r.IsDNF,
-			"external_id":   r.ExternalID,
-			"metadata":      r.Metadata,
-			"is_public":     r.IsPublic,
-			"event_id":      r.EventID,
-			"route_id":      r.RouteID,
-		})
-	}
-	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return nil, err
-	}
 	fw, err := zw.Create("runs.json")
 	if err != nil {
-		return nil, err
+		return BuildResult{}, err
 	}
-	if _, err := fw.Write(manifestJSON); err != nil {
-		return nil, err
+	manifest := &jsonArray{w: fw}
+	var refs []gpxRef
+	written := 0
+	var emitErr error
+	comp, err := runs(ctx, func(page []ExportRun) error {
+		for _, r := range page {
+			if err := manifest.row(map[string]interface{}{
+				"id":            r.ID,
+				"started_at":    r.StartedAt,
+				"distance_m":    r.DistanceM,
+				"duration_s":    r.DurationS,
+				"source":        r.Source,
+				"activity_type": r.ActivityType,
+				"is_dnf":        r.IsDNF,
+				"external_id":   r.ExternalID,
+				"metadata":      r.Metadata,
+				"is_public":     r.IsPublic,
+				"event_id":      r.EventID,
+				"route_id":      r.RouteID,
+			}); err != nil {
+				emitErr = err
+				return err
+			}
+			if hasCanonicalTrack(r) {
+				refs = append(refs, gpxRef{
+					userID:    r.UserID,
+					id:        r.ID,
+					startedAt: r.StartedAt,
+					title:     stringy(r.Metadata[schema.MetaTitle]),
+				})
+			}
+		}
+		written += len(page)
+		return nil
+	})
+	if emitErr != nil {
+		return BuildResult{}, emitErr
+	}
+	if err != nil {
+		return BuildResult{}, &sectionError{section: "runs", err: err}
+	}
+	if err := manifest.close(); err != nil {
+		return BuildResult{}, err
 	}
 
-	for _, r := range runs {
-		if r.TrackURL == nil || *r.TrackURL == "" {
-			continue
-		}
-		// Path-shape assertion — same gate the EF runs. The CHECK
-		// constraint on `runs.track_url` (20260621_001) enforces this
-		// shape for new writes; this assertion is the runtime
-		// backstop against legacy / malformed rows.
-		expected := fmt.Sprintf("%s/%s.json.gz", r.UserID, r.ID)
-		if *r.TrackURL != expected {
-			continue
-		}
-		track, err := trackFetcher(ctx, *r.TrackURL)
+	for _, ref := range refs {
+		track, err := trackFetcher(ctx, trackPath(ref.userID, ref.id))
 		if err != nil || len(track) < 2 {
 			continue
 		}
-		gpx := BuildGpx(r, track)
-		fw, err := zw.Create(fmt.Sprintf("runs/%s.gpx", r.ID))
+		fw, err := zw.Create(fmt.Sprintf("runs/%s.gpx", ref.id))
 		if err != nil {
-			return nil, err
+			return BuildResult{}, err
 		}
-		if _, err := fw.Write([]byte(gpx)); err != nil {
-			return nil, err
+		if _, err := io.WriteString(fw, buildGpxDoc(ref.id, ref.startedAt, ref.title, track)); err != nil {
+			return BuildResult{}, err
 		}
 	}
 
 	if err := zw.Close(); err != nil {
-		return nil, err
+		return BuildResult{}, err
 	}
-	return buf.Bytes(), nil
+	return BuildResult{Runs: written, Completeness: comp}, nil
+}
+
+// trackPath / hrPath are the canonical Storage keys for a run's track
+// and HR sidecar. The CHECK constraint on `runs.track_url`
+// (20260621_001) enforces this shape for new writes; hasCanonicalTrack
+// is the runtime backstop against legacy / malformed rows, and keeping
+// the derivation here is what lets the builders retain a run id instead
+// of a pair of Storage URLs.
+func trackPath(userID, runID string) string { return userID + "/" + runID + ".json.gz" }
+func hrPath(userID, runID string) string    { return userID + "/" + runID + ".hr.json.gz" }
+
+func hasCanonicalTrack(r ExportRun) bool {
+	return r.TrackURL != nil && *r.TrackURL == trackPath(r.UserID, r.ID)
+}
+
+func hasCanonicalHr(r ExportRun) bool {
+	return r.HrSeriesURL != nil && *r.HrSeriesURL == hrPath(r.UserID, r.ID)
+}
+
+// jsonArray streams a JSON array into an archive entry one row at a
+// time, so a section never has to be resident to be serialised. The
+// per-row indentation differs from a whole-value MarshalIndent (each
+// row's braces start at column zero); the EF's streaming sections made
+// the same trade, and every consumer parses the JSON rather than
+// diffing it.
+type jsonArray struct {
+	w     io.Writer
+	count int
+}
+
+func (a *jsonArray) row(v interface{}) error {
+	encoded, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	sep := ",\n"
+	if a.count == 0 {
+		sep = "[\n"
+	}
+	if _, err := io.WriteString(a.w, sep); err != nil {
+		return err
+	}
+	if _, err := a.w.Write(encoded); err != nil {
+		return err
+	}
+	a.count++
+	return nil
+}
+
+func (a *jsonArray) close() error {
+	if a.count == 0 {
+		_, err := io.WriteString(a.w, "[]\n")
+		return err
+	}
+	_, err := io.WriteString(a.w, "\n]\n")
+	return err
 }
 
 // --- run-app-backup v1 builder ---------------------------------------
@@ -698,22 +840,18 @@ func BuildGpxZip(ctx context.Context, runs []ExportRun, trackFetcher TrackFetche
 // signatures the moment the caller had to pass runs + routes +
 // profile + prefs + user id + exported-from in one go.
 type BuildBackupZipInput struct {
-	Runs          []ExportRun
-	Routes        []ExportRoute
+	Runs          RunSource
+	Routes        RouteSource
 	Profile       map[string]interface{}
 	SettingsPrefs map[string]interface{}
 	UserID        string
 	ExportedFrom  string
-	// ExtraTables: zip-entry-name -> rows. Each non-empty entry is
-	// serialised as `{name}.json` (with the .json suffix already
-	// baked into the key, e.g. "coach_messages.json"). Audit/data-
-	// export-completeness (May 2026) — every personal-data table
-	// the subject has an Art 20 right to receive lives here.
-	ExtraTables map[string][]map[string]interface{}
-	// Completeness carries the authoritative per-section row counts and
-	// the sections that came up short. manifest.json publishes both, so
-	// a truncated archive can't present itself as whole.
-	Completeness ExportCompleteness
+	// ExtraTables walks the personal-data sections, each serialised as
+	// `{name}.json` (with the .json suffix already baked into the entry
+	// key, e.g. "coach_messages.json"). Audit/data-export-completeness
+	// (May 2026) — every personal-data table the subject has an Art 20
+	// right to receive arrives through here.
+	ExtraTables TableSource
 }
 
 // RawTrackFetcher pulls the **gzipped** bytes for a Storage path
@@ -733,7 +871,7 @@ type PhotoFetcher func(ctx context.Context, path string) ([]byte, string, error)
 // SupabaseClient.ListStorageObjects.
 type ObjectLister func(ctx context.Context, bucket, prefix string) ([]string, error)
 
-// BackupFetchers bundles the Storage callbacks BuildBackupZip fans out
+// BackupFetchers bundles the Storage callbacks WriteBackupZip fans out
 // over. Grouped in a struct because the positional list outgrew the
 // signature once avatars joined tracks + photos; a nil field skips its
 // section (tests exercise one section at a time).
@@ -761,95 +899,171 @@ const BackupFormatVersion = 1
 // rejected by every restore path.
 const BackupFormatName = "run-app-backup"
 
-// BuildBackupZip assembles `manifest.json` + `runs.json` +
-// `routes.json` + `profile.json` + per-run `tracks/<id>.json.gz`
-// (raw gzipped bytes) into a single zip. Output is byte-compatible
-// with `BackupService.restore` on mobile and `restoreBackup` on
-// web. Track download failures are silently swallowed — the row
-// stays in the manifest, the `tracks/...` entry is omitted, the
-// zip ships.
-func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetchers) ([]byte, error) {
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+// runRef is what the backup builder retains per run while `runs.json`
+// streams past — an id plus whether the row named a canonically-shaped
+// track / HR object. Around a hundred bytes a run, against the row
+// itself, which is what the deleted 5000-run cap existed to bound. The
+// Storage keys are derived rather than kept because the path-shape
+// assertion has already proved they are exactly trackPath / hrPath.
+type runRef struct {
+	userID   string
+	id       string
+	hasTrack bool
+	hasHr    bool
+}
+
+// extraSections streams the personal-data sections into the archive as
+// they page out of PostgREST: it opens an entry on a section's first
+// page and closes it when the next section arrives. Nothing but the
+// current page is resident, which is what removed the 50,000-row
+// ceiling (`live_run_pings` runs into the millions on a deep history).
+type extraSections struct {
+	zw     *zip.Writer
+	name   string
+	arr    *jsonArray
+	counts map[string]int
+	// photoPaths are the run-photo Storage keys the blob sweep below
+	// downloads. Keys, not rows: a path per photo is bounded by a few
+	// dozen bytes where the metadata row is not.
+	photoPaths []string
+}
+
+func (e *extraSections) write(entry string, rows []map[string]interface{}) error {
+	if entry != e.name {
+		if err := e.closeCurrent(); err != nil {
+			return err
+		}
+		fw, err := e.zw.Create(entry)
+		if err != nil {
+			return err
+		}
+		e.name, e.arr = entry, &jsonArray{w: fw}
+	}
+	for _, row := range rows {
+		if entry == "run_photos.json" {
+			if sp, ok := row["storage_path"].(string); ok && isSafeStoragePath(sp) {
+				e.photoPaths = append(e.photoPaths, sp)
+			}
+		}
+		if err := e.arr.row(row); err != nil {
+			return err
+		}
+	}
+	e.counts[strings.TrimSuffix(entry, ".json")] += len(rows)
+	return nil
+}
+
+func (e *extraSections) closeCurrent() error {
+	if e.arr == nil {
+		return nil
+	}
+	err := e.arr.close()
+	e.arr, e.name = nil, ""
+	return err
+}
+
+// isSafeStoragePath is defence in depth alongside the
+// run_photos_storage_path_shape CHECK (migration 20260622): only a
+// canonical, non-absolute Storage key may be fed to the service-role
+// downloader's URL or used as a zip entry name, so a malformed row
+// can't land a traversal entry in the archive.
+func isSafeStoragePath(sp string) bool {
+	return sp != "" && sp == path.Clean(sp) && !strings.HasPrefix(sp, "/") && !strings.Contains(sp, "..")
+}
+
+// WriteBackupZip streams `manifest.json` + `runs.json` + `routes.json` +
+// `profile.json` + per-run `tracks/<id>.json.gz` (raw gzipped bytes)
+// into `w`. Output is byte-compatible with `BackupService.restore` on
+// mobile and `restoreBackup` on web. Track download failures are
+// silently swallowed — the row stays in the manifest, the `tracks/...`
+// entry is omitted, the zip ships.
+//
+// Every section is written as it is read, so the peak allocation is one
+// page of rows plus whichever blob is in flight, and the archive itself
+// is never resident anywhere.
+func WriteBackupZip(ctx context.Context, w io.Writer, in BuildBackupZipInput, f BackupFetchers) (BuildResult, error) {
+	zw := zip.NewWriter(w)
+	completeness := ExportCompleteness{}
 
 	// runs.json — strip user_id for re-homeability.
-	runsOut := make([]map[string]interface{}, 0, len(in.Runs))
-	for _, r := range in.Runs {
-		runsOut = append(runsOut, map[string]interface{}{
-			"id":            r.ID,
-			"started_at":    r.StartedAt,
-			"duration_s":    r.DurationS,
-			"distance_m":    r.DistanceM,
-			"source":        r.Source,
-			"activity_type": r.ActivityType,
-			"is_dnf":        r.IsDNF,
-			"external_id":   r.ExternalID,
-			"metadata":      r.Metadata,
-			"track_url":     r.TrackURL,
-			"hr_series_url": r.HrSeriesURL,
-			"is_public":     r.IsPublic,
-			"event_id":      r.EventID,
-			"route_id":      r.RouteID,
-			"created_at":    r.CreatedAt,
-			"updated_at":    r.UpdatedAt,
-		})
+	fw, err := zw.Create("runs.json")
+	if err != nil {
+		return BuildResult{}, err
 	}
-	if err := writeJSONEntry(zw, "runs.json", runsOut); err != nil {
-		return nil, err
+	runsArr := &jsonArray{w: fw}
+	var refs []runRef
+	runsWritten := 0
+	var emitErr error
+	runsComp, err := in.Runs(ctx, func(page []ExportRun) error {
+		for _, r := range page {
+			if err := runsArr.row(map[string]interface{}{
+				"id":            r.ID,
+				"started_at":    r.StartedAt,
+				"duration_s":    r.DurationS,
+				"distance_m":    r.DistanceM,
+				"source":        r.Source,
+				"activity_type": r.ActivityType,
+				"is_dnf":        r.IsDNF,
+				"external_id":   r.ExternalID,
+				"metadata":      r.Metadata,
+				"track_url":     r.TrackURL,
+				"hr_series_url": r.HrSeriesURL,
+				"is_public":     r.IsPublic,
+				"event_id":      r.EventID,
+				"route_id":      r.RouteID,
+				"created_at":    r.CreatedAt,
+				"updated_at":    r.UpdatedAt,
+			}); err != nil {
+				emitErr = err
+				return err
+			}
+			ref := runRef{userID: r.UserID, id: r.ID, hasTrack: hasCanonicalTrack(r), hasHr: hasCanonicalHr(r)}
+			if ref.hasTrack || ref.hasHr {
+				refs = append(refs, ref)
+			}
+		}
+		runsWritten += len(page)
+		return nil
+	})
+	if emitErr != nil {
+		return BuildResult{}, emitErr
 	}
+	if err != nil {
+		return BuildResult{}, &sectionError{section: "runs", err: err}
+	}
+	if err := runsArr.close(); err != nil {
+		return BuildResult{}, err
+	}
+	completeness.Merge(runsComp)
 
 	// routes.json
-	routesOut := make([]map[string]interface{}, 0, len(in.Routes))
-	for _, r := range in.Routes {
-		row := map[string]interface{}{
-			"id":        r.ID,
-			"name":      r.Name,
-			"waypoints": r.Waypoints,
-		}
-		if r.DistanceM != nil {
-			row["distance_m"] = *r.DistanceM
-		}
-		if r.ElevationM != nil {
-			row["elevation_m"] = *r.ElevationM
-		}
-		if r.Surface != nil {
-			row["surface"] = *r.Surface
-		}
-		if r.IsPublic != nil {
-			row["is_public"] = *r.IsPublic
-		}
-		if r.Slug != nil {
-			row["slug"] = *r.Slug
-		}
-		if r.Tags != nil {
-			row["tags"] = r.Tags
-		}
-		if r.Featured != nil {
-			row["is_featured"] = *r.Featured
-		}
-		if r.RunCount != nil {
-			row["run_count"] = *r.RunCount
-		}
-		if r.IsStarred != nil {
-			row["is_starred"] = *r.IsStarred
-		}
-		if r.Description != nil {
-			row["description"] = *r.Description
-		}
-		if r.ClubID != nil {
-			row["club_id"] = *r.ClubID
-		}
-		if r.CreatedAt != nil {
-			row["created_at"] = *r.CreatedAt
-		}
-		if r.UpdatedAt != nil {
-			row["updated_at"] = *r.UpdatedAt
-		}
-		routesOut = append(routesOut, row)
+	fw, err = zw.Create("routes.json")
+	if err != nil {
+		return BuildResult{}, err
 	}
-	if err := writeJSONEntry(zw, "routes.json", routesOut); err != nil {
-		return nil, err
+	routesArr := &jsonArray{w: fw}
+	routesWritten := 0
+	emitErr = nil
+	routesComp, err := in.Routes(ctx, func(page []ExportRoute) error {
+		for _, r := range page {
+			if err := routesArr.row(routeRow(r)); err != nil {
+				emitErr = err
+				return err
+			}
+		}
+		routesWritten += len(page)
+		return nil
+	})
+	if emitErr != nil {
+		return BuildResult{}, emitErr
 	}
+	if err != nil {
+		return BuildResult{}, &sectionError{section: "routes", err: err}
+	}
+	if err := routesArr.close(); err != nil {
+		return BuildResult{}, err
+	}
+	completeness.Merge(routesComp)
 
 	// profile.json — strip `id` from the profile so the archive
 	// is re-homeable (restore stamps the new owner's uid).
@@ -858,7 +1072,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 		"settings_prefs": defaultIfNil(in.SettingsPrefs),
 	}
 	if err := writeJSONEntry(zw, "profile.json", profileOut); err != nil {
-		return nil, err
+		return BuildResult{}, err
 	}
 
 	// Object keys the row-driven loops below actually archived, per
@@ -868,137 +1082,90 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 
 	// Tracks — raw gzipped bytes, archived verbatim. STORE (no
 	// recompression) since the source is already deflated.
+	// A nil fetcher skips its section, per BackupFetchers.
 	tracksAdded := 0
-	for _, r := range in.Runs {
-		// A nil fetcher skips its section, per BackupFetchers. Every other
-		// section guards; these two did not, so a caller taking the documented
-		// option and a run row whose track_url matched the canonical shape
-		// called through a nil func and panicked.
-		if f.RawTrack == nil {
-			break
-		}
-		if r.TrackURL == nil || *r.TrackURL == "" {
-			continue
-		}
-		// Same path-shape assertion as the GPX builder.
-		expected := fmt.Sprintf("%s/%s.json.gz", r.UserID, r.ID)
-		if *r.TrackURL != expected {
-			continue
-		}
-		bytes, err := f.RawTrack(ctx, *r.TrackURL)
-		if err != nil || len(bytes) == 0 {
-			continue
-		}
-		header := &zip.FileHeader{
-			Name:   fmt.Sprintf("tracks/%s.json.gz", r.ID),
-			Method: zip.Store, // already gzipped; STORE avoids wasted CPU
-		}
-		fw, err := zw.CreateHeader(header)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := fw.Write(bytes); err != nil {
-			return nil, err
-		}
-		archivedRunObjects[*r.TrackURL] = true
-		tracksAdded++
-	}
-
-	// HR sidecars (indoor/treadmill runs, decisions §116). Same verbatim-bytes
-	// + path-shape-assertion + STORE shape as the tracks loop. Lets restore
-	// re-home the per-point HR for trackless runs.
 	hrAdded := 0
-	for _, r := range in.Runs {
-		if f.RawTrack == nil {
-			break
-		}
-		if r.HrSeriesURL == nil || *r.HrSeriesURL == "" {
-			continue
-		}
-		expected := fmt.Sprintf("%s/%s.hr.json.gz", r.UserID, r.ID)
-		if *r.HrSeriesURL != expected {
-			continue
-		}
-		bytes, err := f.RawTrack(ctx, *r.HrSeriesURL)
-		if err != nil || len(bytes) == 0 {
-			continue
-		}
-		header := &zip.FileHeader{
-			Name:   fmt.Sprintf("hr/%s.hr.json.gz", r.ID),
-			Method: zip.Store,
-		}
-		fw, err := zw.CreateHeader(header)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := fw.Write(bytes); err != nil {
-			return nil, err
-		}
-		archivedRunObjects[*r.HrSeriesURL] = true
-		hrAdded++
-	}
-
-	// Extra personal-data tables. Stable sort so the zip is
-	// reproducible byte-for-byte for tests (and so a restore tool
-	// can rely on entry order if it ever wants to).
-	extraCounts := map[string]int{}
-	if in.ExtraTables != nil {
-		names := make([]string, 0, len(in.ExtraTables))
-		for n := range in.ExtraTables {
-			names = append(names, n)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			rows := in.ExtraTables[name]
-			if len(rows) == 0 {
+	if f.RawTrack != nil {
+		for _, ref := range refs {
+			if !ref.hasTrack {
 				continue
 			}
-			if err := writeJSONEntry(zw, name, rows); err != nil {
-				return nil, err
+			key := trackPath(ref.userID, ref.id)
+			body, err := f.RawTrack(ctx, key)
+			if err != nil || len(body) == 0 {
+				continue
 			}
-			extraCounts[strings.TrimSuffix(name, ".json")] = len(rows)
+			if err := storeEntry(zw, fmt.Sprintf("tracks/%s.json.gz", ref.id), body); err != nil {
+				return BuildResult{}, err
+			}
+			archivedRunObjects[key] = true
+			tracksAdded++
 		}
+
+		// HR sidecars (indoor/treadmill runs, decisions §116). Same
+		// verbatim-bytes + STORE shape as the tracks loop. Lets restore
+		// re-home the per-point HR for trackless runs.
+		for _, ref := range refs {
+			if !ref.hasHr {
+				continue
+			}
+			key := hrPath(ref.userID, ref.id)
+			body, err := f.RawTrack(ctx, key)
+			if err != nil || len(body) == 0 {
+				continue
+			}
+			if err := storeEntry(zw, fmt.Sprintf("hr/%s.hr.json.gz", ref.id), body); err != nil {
+				return BuildResult{}, err
+			}
+			archivedRunObjects[key] = true
+			hrAdded++
+		}
+	}
+
+	// Extra personal-data tables, streamed section by section in the
+	// order the source walks them.
+	extras := &extraSections{zw: zw, counts: map[string]int{}}
+	if in.ExtraTables != nil {
+		emitErr = nil
+		extrasComp, err := in.ExtraTables(ctx, func(entry string, rows []map[string]interface{}) error {
+			if err := extras.write(entry, rows); err != nil {
+				emitErr = err
+				return err
+			}
+			return nil
+		})
+		if emitErr != nil {
+			return BuildResult{}, emitErr
+		}
+		if err := extras.closeCurrent(); err != nil {
+			return BuildResult{}, err
+		}
+		if err != nil {
+			// Losing the runs + routes export over one optional table
+			// being slow would be the worse outcome; the ledger names
+			// what came up short and manifest.json publishes it.
+			extrasComp.Incomplete = append(extrasComp.Incomplete, "extra_tables")
+		}
+		completeness.Merge(extrasComp)
 	}
 
 	// Photos — the image bytes themselves, archived under `photos/`
 	// so the Art 20 export carries the subject's run photos and not
 	// just the `run_photos.json` metadata (audit-findings 2026-05-30
-	// High). Rows come from the already-fetched run_photos extra
-	// table; each `storage_path` is `{owner_id}/{photo_id}.ext` and we
+	// High). Each `storage_path` is `{owner_id}/{photo_id}.ext` and we
 	// keep the basename (`{photo_id}.ext`) as the zip entry so the
 	// extension/content survives. Download failures are tolerated
 	// per-photo — the metadata row already shipped; the zip closes
 	// without the missing image (same contract as tracks).
 	photosAdded := 0
-	if f.Photo != nil && in.ExtraTables != nil {
-		for _, row := range in.ExtraTables["run_photos.json"] {
-			sp, _ := row["storage_path"].(string)
-			if sp == "" {
-				continue
-			}
-			// Defence in depth alongside the run_photos_storage_path_shape
-			// CHECK (migration 20260622): only fetch a canonical,
-			// non-absolute Storage key so a malformed row can't feed
-			// `..`/`/etc/...` into the service-role downloader's URL or
-			// land a traversal entry name in the zip (mirrors the track
-			// loop's path-shape assertion).
-			if sp != path.Clean(sp) || strings.HasPrefix(sp, "/") || strings.Contains(sp, "..") {
-				continue
-			}
+	if f.Photo != nil {
+		for _, sp := range extras.photoPaths {
 			body, _, err := f.Photo(ctx, sp)
 			if err != nil || len(body) == 0 {
 				continue
 			}
-			header := &zip.FileHeader{
-				Name:   "photos/" + path.Base(sp),
-				Method: zip.Store, // JPEG/PNG are already compressed
-			}
-			fw, err := zw.CreateHeader(header)
-			if err != nil {
-				return nil, err
-			}
-			if _, err := fw.Write(body); err != nil {
-				return nil, err
+			if err := storeEntry(zw, "photos/"+path.Base(sp), body); err != nil {
+				return BuildResult{}, err
 			}
 			archivedPhotoObjects[sp] = true
 			photosAdded++
@@ -1017,16 +1184,8 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 			if err != nil || len(body) == 0 {
 				continue
 			}
-			header := &zip.FileHeader{
-				Name:   "avatar." + ext,
-				Method: zip.Store,
-			}
-			fw, err := zw.CreateHeader(header)
-			if err != nil {
-				return nil, err
-			}
-			if _, err := fw.Write(body); err != nil {
-				return nil, err
+			if err := storeEntry(zw, "avatar."+ext, body); err != nil {
+				return BuildResult{}, err
 			}
 			avatarsAdded++
 		}
@@ -1039,8 +1198,10 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 	// see worker.go), legacy tracks whose run row is gone, and the
 	// worker-generated photo thumbnails. Deduped against the row-driven
 	// entries; {uid}/exports/ is skipped (prior export artifacts —
-	// self-referential, and each is itself a copy of this data). A list
-	// failure is tolerated so the row-driven export still ships.
+	// self-referential, and each is itself a copy of this data; the
+	// artifact now lands in its own bucket, but legacy ones are still
+	// under that prefix). A list failure is tolerated so the row-driven
+	// export still ships.
 	orphansAdded := 0
 	if f.ListObjects != nil && in.UserID != "" {
 		prefix := in.UserID + "/"
@@ -1069,8 +1230,8 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 				},
 			})
 		}
-		for _, w := range walks {
-			keys, err := f.ListObjects(ctx, w.bucket, in.UserID)
+		for _, wk := range walks {
+			keys, err := f.ListObjects(ctx, wk.bucket, in.UserID)
 			if err != nil {
 				continue
 			}
@@ -1079,32 +1240,24 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 					continue
 				}
 				rel := strings.TrimPrefix(key, prefix)
-				if rel == "" || (w.skipRel != nil && w.skipRel(rel)) {
+				if rel == "" || (wk.skipRel != nil && wk.skipRel(rel)) {
 					continue
 				}
-				if w.archived[key] {
+				if wk.archived[key] {
 					continue
 				}
 				// Same defence-in-depth as the row-driven loops: a
 				// hostile object name must not land a traversal entry
 				// in the zip.
-				if key != path.Clean(key) || strings.Contains(key, "..") {
+				if !isSafeStoragePath(key) {
 					continue
 				}
-				body, err := w.fetch(ctx, key)
+				body, err := wk.fetch(ctx, key)
 				if err != nil || len(body) == 0 {
 					continue
 				}
-				header := &zip.FileHeader{
-					Name:   "storage/" + w.bucket + "/" + rel,
-					Method: zip.Store,
-				}
-				fw, err := zw.CreateHeader(header)
-				if err != nil {
-					return nil, err
-				}
-				if _, err := fw.Write(body); err != nil {
-					return nil, err
+				if err := storeEntry(zw, "storage/"+wk.bucket+"/"+rel, body); err != nil {
+					return BuildResult{}, err
 				}
 				orphansAdded++
 			}
@@ -1114,28 +1267,28 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 	// manifest last so the counts include the actual tracks + photos
 	// + avatar + orphan objects + extra tables that made it in.
 	counts := map[string]interface{}{
-		"runs":            len(in.Runs),
-		"routes":          len(in.Routes),
+		"runs":            runsWritten,
+		"routes":          routesWritten,
 		"tracks":          tracksAdded,
 		"hr_series":       hrAdded,
 		"photos":          photosAdded,
 		"avatars":         avatarsAdded,
 		"storage_orphans": orphansAdded,
 	}
-	for k, v := range extraCounts {
+	for k, v := range extras.counts {
 		counts[k] = v
 	}
 	// A section's published count is the database's own total, so a file
 	// short of it reads as a shortfall instead of as the whole set. A
 	// section that failed short is counted even at zero rows — an absent
 	// key must not be readable as "the subject has none of these".
-	for k, total := range in.Completeness.Totals {
+	for k, total := range completeness.Totals {
 		if fetched, ok := counts[k].(int); ok && fetched > total {
 			continue
 		}
 		counts[k] = total
 	}
-	incomplete := append([]string{}, in.Completeness.Incomplete...)
+	incomplete := append([]string{}, completeness.Incomplete...)
 	sort.Strings(incomplete)
 	manifest := map[string]interface{}{
 		"format":              BackupFormatName,
@@ -1148,13 +1301,76 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetcher
 		"incomplete":          incomplete,
 	}
 	if err := writeJSONEntry(zw, "manifest.json", manifest); err != nil {
-		return nil, err
+		return BuildResult{}, err
 	}
 
 	if err := zw.Close(); err != nil {
-		return nil, err
+		return BuildResult{}, err
 	}
-	return buf.Bytes(), nil
+	return BuildResult{Runs: runsWritten, Completeness: completeness}, nil
+}
+
+// routeRow shapes one route for `routes.json`. `user_id` is
+// deliberately omitted — the archive is re-homeable and restore stamps
+// the new owner's uid.
+func routeRow(r ExportRoute) map[string]interface{} {
+	row := map[string]interface{}{
+		"id":        r.ID,
+		"name":      r.Name,
+		"waypoints": r.Waypoints,
+	}
+	if r.DistanceM != nil {
+		row["distance_m"] = *r.DistanceM
+	}
+	if r.ElevationM != nil {
+		row["elevation_m"] = *r.ElevationM
+	}
+	if r.Surface != nil {
+		row["surface"] = *r.Surface
+	}
+	if r.IsPublic != nil {
+		row["is_public"] = *r.IsPublic
+	}
+	if r.Slug != nil {
+		row["slug"] = *r.Slug
+	}
+	if r.Tags != nil {
+		row["tags"] = r.Tags
+	}
+	if r.Featured != nil {
+		row["is_featured"] = *r.Featured
+	}
+	if r.RunCount != nil {
+		row["run_count"] = *r.RunCount
+	}
+	if r.IsStarred != nil {
+		row["is_starred"] = *r.IsStarred
+	}
+	if r.Description != nil {
+		row["description"] = *r.Description
+	}
+	if r.ClubID != nil {
+		row["club_id"] = *r.ClubID
+	}
+	if r.CreatedAt != nil {
+		row["created_at"] = *r.CreatedAt
+	}
+	if r.UpdatedAt != nil {
+		row["updated_at"] = *r.UpdatedAt
+	}
+	return row
+}
+
+// storeEntry writes bytes that are already compressed (a gzipped track,
+// a JPEG) with STORE, so the archive doesn't spend CPU re-deflating
+// them.
+func storeEntry(zw *zip.Writer, name string, body []byte) error {
+	fw, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store})
+	if err != nil {
+		return err
+	}
+	_, err = fw.Write(body)
+	return err
 }
 
 func writeJSONEntry(zw *zip.Writer, name string, body interface{}) error {
@@ -1209,15 +1425,20 @@ func gpxFloat(v float64) string {
 }
 
 func BuildGpx(run ExportRun, track []TrackPoint) string {
-	title := stringy(run.Metadata[schema.MetaTitle])
+	return buildGpxDoc(run.ID, run.StartedAt, stringy(run.Metadata[schema.MetaTitle]), track)
+}
+
+// buildGpxDoc is BuildGpx over the three fields it actually reads, so
+// the streaming builder can hold a gpxRef per run instead of a row.
+func buildGpxDoc(runID, startedAt, title string, track []TrackPoint) string {
 	if title == "" {
-		title = "Run " + run.ID
+		title = "Run " + runID
 	}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<gpx version="1.1" creator="Runonward" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">` + "\n")
 	fmt.Fprintf(&b, "  <metadata><name>%s</name><time>%s</time></metadata>\n",
-		xmlEscape(title), xmlEscape(run.StartedAt))
+		xmlEscape(title), xmlEscape(startedAt))
 	b.WriteString("  <trk>\n")
 	fmt.Fprintf(&b, "    <name>%s</name>\n", xmlEscape(title))
 	b.WriteString("    <trkseg>\n")

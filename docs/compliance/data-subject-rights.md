@@ -79,16 +79,29 @@ enforces a project-level upload limit (50 MB by default) and the
 effective ceiling is the lower of the two, so until that is raised the
 project setting is the honest bound whatever the bucket allows.
 
-*The Go worker's `/v1/export`, which production traffic uses, still
-carries both caps* because it still assembles the archive in one
-`bytes.Buffer`:
+*The Go worker's `/v1/export`, which production traffic uses, carries
+neither cap either* since [decisions § 708](../architecture/decisions.md):
+`MaxRunsPerExport = 5000` and `exportRowCeiling = 50_000` were both
+consequences of the one `bytes.Buffer` the archive used to be assembled
+in, and both are deleted. Every section is now read page by page and
+serialised into the same chunked tus upload as it arrives, so a subject's
+whole history is exported however deep it is.
 
-- **5000 runs per export** (`MaxRunsPerExport`) — the archive bundles
-  every run's GPS track and HR sidecar, so the cap is a memory bound,
-  not a data-minimisation one.
-- **50,000 rows per section** (`exportRowCeiling`) — an unbounded walk of
-  a high-cardinality table (`live_run_pings` runs into the millions on a
-  deep history) is an OOM rather than a slow export.
+Unlike the Edge Function, this rail has **no request clock** — it is a
+long-lived Go process, not a 150 s function — so there is no wall-clock
+budget and no `ExportBudget` equivalent. What remains is not a policy
+choice:
+
+- **The Storage object-size ceiling.** The `exports` bucket admits 5 GiB,
+  but Supabase's project-level upload limit (50 MB by default) is the
+  lower of the two, and storage-api enforces it for `service_role`. Past
+  it the upload fails and the subject gets a 500 with **no artifact** —
+  an error, never a short archive.
+- **The client connection.** The caller holds the request open for the
+  whole build, so their own timeout (or a disconnect) can end an export
+  that would otherwise have completed. Closing that is the async `jobs`
+  kind tracked in `followups.md`, which is a client-contract change
+  rather than a server one.
 
 **Corrected 2026-08-21, and it had been wrong on both rails since before
 either cap mattered:** `profile.json` shipped as `null` and

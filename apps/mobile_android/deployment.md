@@ -162,7 +162,20 @@ Each define is passed from a GitHub Secret; `main.dart`'s `String.fromEnvironmen
 | `MOBILE_STRAVA_CLIENT_ID` | `STRAVA_CLIENT_ID` | Strava OAuth client id; empty → connect falls back to the web flow |
 | `MOBILE_REVENUECAT_API_KEY_ANDROID` | `REVENUECAT_API_KEY_ANDROID` | RevenueCat Android key; empty → Subscribe falls back to the web upgrade page |
 
-Dev-only defines (`DEV_USER_EMAIL` / `DEV_USER_PASSWORD` auto-login, `BYPASS_PAYWALL`, `ADAPTIVE_FITNESS_GATE` / `WEIGH_IN_GATE`, `USDA_FDC_API_KEY`) are **deliberately not passed** — the gated ones stay off until their sign-off lands.
+**Sign-off-gated + optional defines — the bridge carries them, the workflow does not pass them (yet):**
+
+| Define | Value / effect |
+|---|---|
+| `OFF_ROUTE_ESCALATION_ENABLED` | off-route → notify-a-contact escalation; unset → the whole path stays inert. Owner + CISO + counsel sign-off. |
+| `ADAPTIVE_FITNESS_GATE` | plan-generator-v2 P2 health-derived load → prescription; unset → exactly shipped P1. CISO / Security-Analyst sign-off. |
+| `WEIGH_IN_GATE` | Art 9 checkpoint weigh-in fields; unset → never collected or sent. Owner + CISO + counsel sign-off. |
+| `ENABLE_NEARBY_RUNNERS` | opt-in person-location discovery; unset → the surface is unreachable. Owner + CISO/counsel sign-off. |
+| `USDA_FDC_API_KEY` | second food-search source; unset → Open Food Facts only, no error. |
+| `TILE_URL_TEMPLATE` | `{z}/{x}/{y}` raster override that outranks MapTiler (decisions §68) — the wire for a self-hosted Protomaps migration. |
+
+Every one of these is read through `main.dart`'s `String.fromEnvironment` bridge, so passing the define is all it takes to turn it on. That was not true before decisions §709: the three sign-off gates were absent from the bridge entirely, so a release build could not have flipped them however the deploy was configured. Adding a define to the workflow is now the *only* remaining step, and it stays a deploy-time decision the sign-off unlocks.
+
+`DEV_USER_EMAIL` / `DEV_USER_PASSWORD` (auto-login) are bridged too but self-limiting — `shouldAutoLogin` only fires against a loopback `SUPABASE_URL`. `BYPASS_PAYWALL` is not read by the Flutter app at all.
 
 ### Manifest declarations to verify before launch
 

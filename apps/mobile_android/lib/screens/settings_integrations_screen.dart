@@ -6,7 +6,6 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../ble_heart_rate.dart';
@@ -17,6 +16,7 @@ import '../parkrun_regions.dart';
 import '../preferences.dart';
 import '../race_service.dart';
 import '../settings_sync.dart';
+import '../share_sheet.dart';
 import '../strava.dart';
 import '../widgets/top_banner.dart';
 import 'races_screen.dart';
@@ -114,12 +114,12 @@ class _SettingsIntegrationsScreenState
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
-        await Share.share(url);
+        await shareTextFrom(context, text: url);
       }
     } catch (_) {
       if (!mounted) return;
       try {
-        await Share.share(url);
+        await shareTextFrom(context, text: url);
       } catch (e) {
         if (!mounted) return;
         showTopBanner(context, AppLocalizations.of(context).integrationsCouldNotOpen(e));

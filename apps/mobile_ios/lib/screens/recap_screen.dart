@@ -1,7 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart' show ChoiceChipOption, ChoiceChipRow;
 
 import '../l10n/date_format.dart';
@@ -10,6 +9,7 @@ import '../l10n/locale_support.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../recap.dart';
+import '../share_sheet.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
 
@@ -154,11 +154,10 @@ class _RecapScreenState extends State<RecapScreen> {
         showTopBanner(context, l10n.recapPublishFailed);
         return;
       }
-      await SharePlus.instance.share(
-        ShareParams(
-          text: '$_webBase/recap/share/$id',
-          subject: _shareSubject(l10n, label),
-        ),
+      await shareTextFrom(
+        context,
+        text: '$_webBase/recap/share/$id',
+        subject: _shareSubject(l10n, label),
       );
     } catch (e) {
       debugPrint('publishAndShare failed: $e');
@@ -187,8 +186,10 @@ class _RecapScreenState extends State<RecapScreen> {
       if (recap.bestStreakDays > 0)
         l10n.recapShareBestStreak(recap.bestStreakDays),
     ];
-    await SharePlus.instance.share(
-      ShareParams(text: lines.join('\n'), subject: _shareSubject(l10n, label)),
+    await shareTextFrom(
+      context,
+      text: lines.join('\n'),
+      subject: _shareSubject(l10n, label),
     );
   }
 

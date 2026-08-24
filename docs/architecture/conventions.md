@@ -12,7 +12,7 @@ Rules are grouped by area below. (Section anchors are deep-linked from `CLAUDE.m
 
 **Web UI** — [Page padding](#web-page-padding) · [Page titles & sidebar](#web-page-titles-and-sidebar-chrome) · [Material Symbols](#material-symbols-icons) · [Buttons](#web-buttons) · [Svelte 5 `$effect`](#svelte-5-effect--never-read-state-you-write-in-the-same-effect) · [Modals](#web-modals) · [List-page scroll](#web-list-pages--preserve-scroll-on-back-navigation)
 
-**Mobile & cross-platform** — [In-app notifications](#mobile-in-app-notifications--showtopbanner) · [Local-tz date strings](#local-tz-date-strings)
+**Mobile & cross-platform** — [In-app notifications](#mobile-in-app-notifications--showtopbanner) · [OS share sheet](#mobile-os-share-sheet--sharefilesfrom--sharetextfrom-never-share_plus-directly) · [Local-tz date strings](#local-tz-date-strings)
 
 **Testing** — [Testing](#testing) · [Test hygiene](#test-hygiene--review-then-unit-then-e2e)
 
@@ -371,13 +371,15 @@ Every `uses:` line in `.github/workflows/*.yml` pins the action to a 40-characte
 
 Tag-based refs (`@v4`, `@main`) are mutable — the publisher can force-push a malicious version under the same tag and every workflow that uses it pulls the malicious code on the next run. SHAs are immutable. This applies to ALL workflows, not just secret-touching ones, because `actions/checkout@<sha>` runs with `GITHUB_TOKEN` and a malicious checkout step can read repo contents + write commits.
 
+It applies to **commented-out lines too**, and to composite actions under `.github/actions/`. A commented reference is not dead code — it is what someone uncomments on the day they are trying to ship, which is the worst day to discover the pin ([decisions.md § 711](decisions.md)); and Dependabot's github-actions ecosystem scans `.github/workflows` plus a *root* `action.yml` only, so a reference inside a composite action gets no update PRs either.
+
 When upgrading an action: resolve the new SHA via
 
 ```bash
-git ls-remote https://github.com/<owner>/<repo>.git refs/tags/v5
+git ls-remote https://github.com/<owner>/<repo>.git 'refs/tags/v5*'
 ```
 
-and update both the SHA and the `# vN` comment together. Don't update one without the other.
+A release tag is often **annotated**, so its own object hash is not the commit — take the `refs/tags/v5^{}` row, or dereference through the API (`git/ref/tags/v5` → `git/tags/<sha>` → `.object.sha`). Update both the SHA and the `# vN` comment together; don't update one without the other. `scripts/check_toolchain_pins.mjs`, in the `workflow-lint` job, fails the build on a tag pin and on a SHA pin with no version comment.
 
 ## Fix bugs, don't code around them
 
@@ -425,6 +427,16 @@ The rule behind the "real readiness signal" clause above, and the one three sepa
 - **An inner deadline must fit inside the outer budget**, or the outer one always fires first and the specific diagnosis underneath is dead code. Prefer a deadline re-armed on progress over one multiplied by the number of expected steps.
 - **When a stall has two possible causes, check the cheap one first.** A firmware that stops receiving GPS and a runner who stopped moving look identical from inside the recorder; a wait on distance that cannot tell them apart blames the wrong component every time.
 
+### A CI failure names the step that produced it
+
+The sibling on the reporting side, and the same class of confident-but-wrong sentence ([decisions.md § 711](decisions.md)). A step condition of `failure()` is true for a failure *anywhere earlier in the job*, so a diagnosis printed from a trailing on-failure step speaks for every step above it — `parity-types` ended in one that printed "database.types.ts is out of sync with the Supabase schema" and told the reader to run `npm run gen:types`, which is what a web unit-test failure five steps up produced.
+
+- **A diagnosis lives in the step it describes**, as `if ! cmd; then echo "::error::<what broke>"; echo "<how to fix it>"; exit 1; fi` — the form the `twin-parity` and `schema-codegen-drift` jobs already use. Scoping a trailing step with `steps.<id>.outcome == 'failure'` is the other legal shape; a bare `failure()` is not.
+- **An on-failure step that claims nothing is fine.** Uploading a Playwright report or staging a sim log under `if: failure()` asserts nothing about which step failed. The rule is about claims, not about running on failure.
+- **A job whose name cannot say which check broke owes a diagnosis per step.** Splitting such a job so its name does the work is the alternative, and it costs a hosted-runner slot on every PR; per-step annotations surface on the checks summary for free.
+
+`scripts/check_ci_diagnostics.mjs`, in the `workflow-lint` job, fails the build on both halves.
+
 ## If you see something wrong, fix it
 
 A sibling rule to the one above. When you're working in a file and notice something **that doesn't look right, doesn't act correctly, or isn't optimal**, fix it in the same session. Don't walk past it on the grounds of "out of scope" — by the time anyone else looks, the broken thing will still be broken AND your touch in the file's git blame will look like a tacit endorsement.
@@ -460,6 +472,40 @@ Specifically:
 - Don't write a `Store<T>` abstraction when `LocalRunStore` and `LocalRouteStore` are the only two stores in the codebase.
 - Don't build a plugin system for importers when `health_connect_importer.dart` and `strava_importer.dart` are the only two and they share ~zero code.
 - Don't refactor in a bug-fix PR. Split the refactor into its own change.
+
+## Feature gates — one parser, and a define a release build can actually read
+
+Every fail-closed feature gate on either client parses its env string through the
+canonical helper, never a hand-written comparison:
+
+- Web: `isTruthyFlagValue` from `core/env_flag.ts`.
+- Mobile: `isTruthyFlagValue` from `lib/env_flag.dart`.
+
+The two are a registered parity pair, so the accepted set is one contract across
+both platforms: `1` / `true` / `yes` / `on`, trimmed and case-insensitive; unset,
+empty, `false`, `0`, or anything unrecognised reads as OFF. Fail-closed means a
+gate can only be turned ON by an explicit affirmative — never left on by a typo.
+
+A copy of that chain is what this rule exists to stop. Eight modules carried one
+before decisions § 709, and the narrowest of them accepted two of the four values,
+so `WEIGH_IN_GATE=yes` silently left an Art 9 surface off while the same string
+enabled every other gate. Both suites now scan for the pattern and fail on a new
+copy; on web, every `*_flag.ts` module must additionally reach the canonical
+parser, directly or through one named delegate.
+
+A flag whose parser belongs to a TS↔Dart parity pair (`off_route_alert`,
+`plan_adaptive_replan`) keeps its named function and delegates to the canonical
+one — on **both** sides, in the same change, or the pair diverges.
+
+**On mobile the gate is not finished until the key is in `main.dart`'s
+`String.fromEnvironment` bridge.** Release builds never load `.env.development`
+(decisions § 13), so the bridge is the only path a value has into `dotenv`: a key
+read at runtime but absent from it is readable in debug and unreachable in
+production. Three sign-off-gated flags shipped in exactly that state. Add the
+`String.fromEnvironment` const *and* the matching `'KEY=$def'` entry — the
+reachability guard in `env_flag_test.dart` fails on either half missing. Whether
+a release *workflow* passes the define is a separate deploy-time decision, and
+the place to record it is `apps/<app>/deployment.md`.
 
 ## Backwards compatibility
 
@@ -497,6 +543,16 @@ On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical tr
 **Don't call `ScaffoldMessenger.of(context).showSnackBar(...)` inside `lib/screens/` or `lib/widgets/`.** Material's floating SnackBar docks at the bottom of the screen, where it overlapped the Pause / Stop / Lap controls on the recording surface — a runner couldn't reach Stop without dismissing a snack first. Top-anchored eliminates that overlap on every screen and gives notifications a consistent shape app-wide. Two architecture-guard tests in `apps/mobile_android/test/architecture_guards_test.dart` (mirrored on iOS) fail any new `showSnackBar` or `ScaffoldMessenger.of(context)` use under those folders.
 
 If the notification has an action (e.g. "Settings" on the GPS-unavailable banner), pass `actionLabel:` + `onAction:`. Tapping the action runs the callback and dismisses the banner.
+
+## Mobile OS share sheet — `shareFilesFrom` / `shareTextFrom`, never `share_plus` directly
+
+On the Flutter apps, every hand-off to the OS share sheet goes through `shareFilesFrom(context, files: …)` or `shareTextFrom(context, text: …)` in `lib/share_sheet.dart`. That module is the only file under `lib/` allowed to import `package:share_plus/share_plus.dart`.
+
+The reason is iPadOS, and it is not cosmetic. UIKit presents `UIActivityViewController` as a **popover** there and refuses to present one without a non-empty source rect inside the host view; share_plus's iOS plugin turns a missing or empty anchor into a `PlatformException`, so the sheet never appears and the share silently fails. The apps ship to iPad (`TARGETED_DEVICE_FAMILY = "1,2"`), and every one of the 21 share call sites in the tree once omitted the anchor — an optional parameter that Android and iPhone never miss is one nobody remembers.
+
+So the helper takes the `BuildContext` it derives the anchor from as a **required positional** parameter. There is deliberately no overload that accepts a bare `Rect`, and none that accepts nothing: a caller cannot express a share without an anchor. Derivation degrades rather than throwing (the invoking widget's own global bounds, clipped to the view; else a small rect at the view's centre; else a one-pixel rect at its origin) because a share is an L4 auxiliary effect — a screen must not go down because its anchor could not be resolved. It never yields an empty rect, since an empty rect is the failure itself.
+
+Four source guards in `apps/mobile_android/test/architecture_guards_test.dart` (mirrored on iOS) hold this: nothing but the helper imports `share_plus`, nothing but the helper names `Share.share*` or `SharePlus.instance`, every `ShareParams` the helper builds carries `sharePositionOrigin`, and every entry point's first parameter is a `BuildContext`.
 
 ## Mobile async gaps — the `mounted` check goes BEFORE the `setState`, not after
 
@@ -1226,6 +1282,16 @@ token "stroller" in every language. Corollaries:
 - **An unrecognised value renders VERBATIM, never title-cased.** A title-cased
   token is indistinguishable from a real translation and hides the drift on
   exactly the surface where it would be noticed.
+- **A narrow surface truncates; it does not get its own shorter words.** The
+  Wear OS pre-run chip carried four abbreviated activity labels on the theory
+  that a 56 dp `maxLines = 1` chip needed them. Measured, its label box is
+  32 dp and the abbreviations overflowed it too (`Caminar` 38 dp, `ウォーク`
+  40 dp) while the long words the same chip already shipped ran to 60 dp
+  (`Kinderwagen`) — so the fork bought a fourth vocabulary and no fit
+  (decisions § 713). Ellipsis plus a full `contentDescription` is how a cramped
+  surface handles a long word. If a constrained surface ever genuinely does
+  need shorter forms, they are a *documented abbreviation table* with a row per
+  locale, agreed as such — never a quietly different translation.
 
 **Two destinations may not have names a reader cannot tell apart.** A
 destination's name is the thing a user searches for, so "Coach" (the AI chat)
@@ -1248,6 +1314,37 @@ so the notification bell opened the wrong tab in silence. With an enum, out of
 range is unrepresentable, so the test to write is not a clamp test but the
 property a clamp cannot give: every value opens its own tab, and the strip is
 exactly as long as the enum.
+
+## Mobile embedded surfaces name a Settings destination, they don't acquire it
+
+A surface that sits inside a nav destination — a sub-tab of `SocialScreen`, a
+card on the dashboard, a widget in a sheet — links into Settings by calling
+`openSettings(SettingsDestination.x)` from `settings_destination.dart`.
+`HomeScreen` drains the parked intent and pushes the screen with the
+dependencies it already holds. Do NOT thread `Preferences` /
+`SettingsSyncService` / `ApiClient` down through the intermediate hosts so a
+leaf can build a settings screen: that makes each host carry dependencies it has
+no other use for, and the next surface that wants a Settings link is a different
+host with a different set to thread (decisions § 710). Naming a path in prose —
+"turn this on in Settings → Preferences" — is the same gap, one step worse: it is
+a link the reader has to walk by hand, and it must be re-translated into six
+catalogues every time the settings IA moves.
+
+Two limits are real, and both are reasons to keep the direct `Navigator.push`:
+
+- **The caller must have nothing to do when the screen closes.** A parked intent
+  is fire-and-forget and cannot report a pop, so a caller that awaits the push
+  and refreshes on return (`nutrition_screen.dart`'s `_openBodyMetrics`) keeps
+  its own push.
+- **A surface that already holds the dependencies for its own reads keeps its
+  own push.** `run_detail_screen.dart` reads `Preferences` throughout; routing
+  its "Set max HR" button through the seam would trade a button that works
+  wherever the screen is pushed for one that needs the shell above it.
+
+Adding a destination means adding an enum value and its arm in the shell's
+`switch` — the arm is exhaustive, so a new value fails the build until it is
+wired. Only *pushable* sub-screens are destinations; the Settings landing is
+embedded in the You tab, so opening it is a tab switch, not a push.
 
 ## Step a date through the calendar, never through a fixed `Duration`
 

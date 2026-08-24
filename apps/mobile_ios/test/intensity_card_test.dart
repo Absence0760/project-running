@@ -7,6 +7,7 @@ import 'package:ui_kit/ui_kit.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
+import '../lib/settings_destination.dart';
 import '../lib/settings_sync.dart';
 import '../lib/widgets/intensity_card.dart';
 
@@ -293,6 +294,44 @@ void main() {
       expect(find.text('TRAINING INTENSITY'), findsOneWidget,
           reason: 'derived zones should render the breakdown');
       expect(find.textContaining('age-estimated max HR'), findsOneWidget);
+    });
+
+    testWidgets('the caveat carries a way to act on it (decisions § 710)',
+        (tester) async {
+      // Run-detail has always shown this caveat with a "Set max HR" button;
+      // the card could not, because it carries only a SettingsSyncService and
+      // the settings screen also wants a Preferences and an ApiClient. Naming
+      // the destination makes the same advice actionable on both surfaces.
+      addTearDown(() => pendingSettingsDestination.value = null);
+      pendingSettingsDestination.value = null;
+      await _pump(
+        tester,
+        runs: hrRuns,
+        hrZones: null,
+        now: DateTime(2026, 5, 1, 12),
+        settingsSync: _FakeSettingsSync(prefs!, _FakeSettingsService({})),
+      );
+
+      final action = find.widgetWithText(TextButton, 'Set max HR');
+      expect(action, findsOneWidget);
+      await tester.tap(action);
+      await tester.pump();
+
+      expect(pendingSettingsDestination.value, SettingsDestination.preferences);
+    });
+
+    testWidgets('no caveat means no dangling action', (tester) async {
+      addTearDown(() => pendingSettingsDestination.value = null);
+      pendingSettingsDestination.value = null;
+      await _pump(
+        tester,
+        runs: hrRuns,
+        hrZones: null,
+        now: DateTime(2026, 5, 1, 12),
+        settingsSync:
+            _FakeSettingsSync(prefs!, _FakeSettingsService({'max_hr_bpm': 185})),
+      );
+      expect(find.text('Set max HR'), findsNothing);
     });
 
     testWidgets('hides the caveat when a max_hr_bpm override is set',

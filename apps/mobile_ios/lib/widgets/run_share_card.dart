@@ -11,7 +11,6 @@ import 'package:path_provider/path_provider.dart';
 import 'live_run_map.dart'
     show basemapTileLayer, basemapVoidColour, tileUrlFor;
 import 'map_attribution.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../l10n/date_format.dart';
 import '../map_tile_readiness.dart';
@@ -20,6 +19,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
+import '../share_sheet.dart';
 import '../widgets/top_banner.dart';
 
 /// Whether the share card for [run] draws a basemap at all, and therefore
@@ -104,8 +104,9 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
       final file = File('${tmp.path}/run-${widget.run.id}.png');
       await file.writeAsBytes(bytes);
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png')],
+      await shareFilesFrom(
+        context,
+        files: [XFile(file.path, mimeType: 'image/png')],
         text: _caption(l10n),
       );
     } catch (e) {
@@ -137,7 +138,8 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
           file = File('${tmp.path}/run-${run.id}.gpx');
           await file.writeAsString(_runToGpx(run, title));
       }
-      await Share.shareXFiles([XFile(file.path)], text: _caption(l10n));
+      await shareFilesFrom(context,
+          files: [XFile(file.path)], text: _caption(l10n));
     } catch (e) {
       debugPrint('Failed to export run file: $e');
       if (mounted) {

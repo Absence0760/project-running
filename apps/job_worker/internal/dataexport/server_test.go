@@ -33,8 +33,15 @@ type fakeBackend struct {
 	trackByPath map[string][]TrackPoint
 	uploads     []uploadCall
 	uploadErr   error
-	signedURL   string
-	signURLErr  error
+	// uploadFailAfter > 0 makes the sink fail mid-archive rather than
+	// on Finish, standing in for a chunk PATCH that died in flight.
+	uploadFailAfter int
+	sink            *fakeSink
+	// pageSize splits the fake's rows into pages the way a real paged
+	// walk would; 0 hands everything over in one page.
+	pageSize   int
+	signedURL  string
+	signURLErr error
 	// Backup-format extras (format=backup only).
 	routes        []ExportRoute
 	routesErr     error
@@ -71,19 +78,75 @@ func (f *fakeBackend) CheckRateLimitTiered(_ context.Context, _, _ string, _, _,
 	return f.denied, f.retryAfter, f.rateErr
 }
 
-func (f *fakeBackend) FetchExportRuns(_ context.Context, _ string, _ int) ([]ExportRun, ExportCompleteness, error) {
-	return f.runs, f.runsComp, f.runsErr
+func (f *fakeBackend) StreamExportRuns(ctx context.Context, _ string, emit func([]ExportRun) error) (ExportCompleteness, error) {
+	if f.runsErr != nil {
+		return f.runsComp, f.runsErr
+	}
+	return f.runsComp, emitPages(f.runs, f.pageSize, emit)
 }
 
 func (f *fakeBackend) DownloadTrackBytes(_ context.Context, path string) ([]TrackPoint, error) {
 	return f.trackByPath[path], nil
 }
 
-func (f *fakeBackend) UploadExportArtifact(_ context.Context, path, contentType string, body []byte) error {
-	if f.uploadErr != nil {
-		return f.uploadErr
+func (f *fakeBackend) OpenExportArtifact(_ context.Context, path, contentType string) ArtifactSink {
+	sink := &fakeSink{be: f, path: path, contentType: contentType, failAfter: f.uploadFailAfter, err: f.uploadErr}
+	f.sink = sink
+	return sink
+}
+
+// fakeSink stands in for the tus session: it accumulates so a test can
+// unzip the archive, and it records the call only on Finish — so a test
+// asserting "no artifact" is asserting exactly what Storage would hold.
+type fakeSink struct {
+	be          *fakeBackend
+	path        string
+	contentType string
+	body        bytes.Buffer
+	// err is returned once failAfter bytes have been written (0 = on
+	// Finish), standing in for a chunk PATCH that failed mid-archive.
+	err       error
+	failAfter int
+	aborted   bool
+	finished  bool
+}
+
+func (s *fakeSink) Write(p []byte) (int, error) {
+	if s.err != nil && s.failAfter > 0 && s.body.Len()+len(p) >= s.failAfter {
+		return 0, s.err
 	}
-	f.uploads = append(f.uploads, uploadCall{Path: path, ContentType: contentType, Size: len(body)})
+	return s.body.Write(p)
+}
+
+func (s *fakeSink) Finish() error {
+	if s.err != nil {
+		return s.err
+	}
+	s.finished = true
+	s.be.uploads = append(s.be.uploads, uploadCall{Path: s.path, ContentType: s.contentType, Size: s.body.Len()})
+	return nil
+}
+
+func (s *fakeSink) Abort() { s.aborted = true }
+
+// emitPages hands `rows` over in pages of `size` (one page when unset),
+// the way a paged PostgREST walk would.
+func emitPages[T any](rows []T, size int, emit func([]T) error) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	if size <= 0 {
+		size = len(rows)
+	}
+	for off := 0; off < len(rows); off += size {
+		end := off + size
+		if end > len(rows) {
+			end = len(rows)
+		}
+		if err := emit(rows[off:end]); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -97,8 +160,11 @@ func (f *fakeBackend) CreateSignedURL(_ context.Context, _ string, _ int) (strin
 	return f.signedURL, nil
 }
 
-func (f *fakeBackend) FetchExportRoutes(_ context.Context, _ string) ([]ExportRoute, ExportCompleteness, error) {
-	return f.routes, f.routesComp, f.routesErr
+func (f *fakeBackend) StreamExportRoutes(ctx context.Context, _ string, emit func([]ExportRoute) error) (ExportCompleteness, error) {
+	if f.routesErr != nil {
+		return f.routesComp, f.routesErr
+	}
+	return f.routesComp, emitPages(f.routes, f.pageSize, emit)
 }
 
 func (f *fakeBackend) FetchExportProfile(_ context.Context, _ string) (map[string]interface{}, error) {
@@ -109,10 +175,32 @@ func (f *fakeBackend) FetchUserSettingsPrefs(_ context.Context, _ string) (map[s
 	return f.prefs, f.prefsErr
 }
 
-func (f *fakeBackend) FetchExportPersonalDataTables(
-	_ context.Context, _ string,
-) (map[string][]map[string]interface{}, ExportCompleteness, error) {
-	return f.extraTables, f.extrasComp, f.extraTablesErr
+func (f *fakeBackend) StreamExportPersonalDataTables(
+	_ context.Context, _ string, emit func(string, []map[string]interface{}) error,
+) (ExportCompleteness, error) {
+	if f.extraTablesErr != nil {
+		return f.extrasComp, f.extraTablesErr
+	}
+	return f.extrasComp, emitTables(f.extraTables, emit)
+}
+
+// emitTables walks the fake's tables in a stable order, one section at a
+// time, the way the real walk does.
+func emitTables(tables map[string][]map[string]interface{}, emit func(string, []map[string]interface{}) error) error {
+	names := make([]string, 0, len(tables))
+	for n := range tables {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		if len(tables[n]) == 0 {
+			continue
+		}
+		if err := emit(n, tables[n]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (f *fakeBackend) DownloadRawTrackBytes(_ context.Context, path string) ([]byte, error) {
@@ -150,6 +238,72 @@ func (f *fakeBackend) ListStorageObjects(_ context.Context, bucket, _ string) ([
 		return nil, f.listErr
 	}
 	return f.listedObjects[bucket], nil
+}
+
+// runSource / routeSource / tableSource wrap a fixture slice as the
+// paged source the streaming builders consume, so a test can still
+// state its input as rows. `comp` is the ledger the walk reports back.
+func runSource(runs []ExportRun, comp ...ExportCompleteness) RunSource {
+	return func(_ context.Context, emit func([]ExportRun) error) (ExportCompleteness, error) {
+		return firstComp(comp), emitPages(runs, 0, emit)
+	}
+}
+
+func routeSource(routes []ExportRoute, comp ...ExportCompleteness) RouteSource {
+	return func(_ context.Context, emit func([]ExportRoute) error) (ExportCompleteness, error) {
+		return firstComp(comp), emitPages(routes, 0, emit)
+	}
+}
+
+func tableSource(tables map[string][]map[string]interface{}, comp ...ExportCompleteness) TableSource {
+	return func(_ context.Context, emit func(string, []map[string]interface{}) error) (ExportCompleteness, error) {
+		return firstComp(comp), emitTables(tables, emit)
+	}
+}
+
+func firstComp(comp []ExportCompleteness) ExportCompleteness {
+	if len(comp) == 0 {
+		return ExportCompleteness{}
+	}
+	return comp[0]
+}
+
+func buildBackupZip(ctx context.Context, in BuildBackupZipInput, f BackupFetchers) ([]byte, error) {
+	// Production always wires all three sources; a fixture that only
+	// cares about one gets empty walks for the rest rather than a nil
+	// guard in the builder, where "no source" and "no rows" must not be
+	// the same thing.
+	if in.Runs == nil {
+		in.Runs = runSource(nil)
+	}
+	if in.Routes == nil {
+		in.Routes = routeSource(nil)
+	}
+	if in.ExtraTables == nil {
+		in.ExtraTables = tableSource(nil)
+	}
+	var buf bytes.Buffer
+	if _, err := WriteBackupZip(ctx, &buf, in, f); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func buildGpxZip(ctx context.Context, runs []ExportRun, fetcher TrackFetcher) ([]byte, error) {
+	var buf bytes.Buffer
+	if _, err := WriteGpxZip(ctx, &buf, runSource(runs), fetcher); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func buildCSV(t *testing.T, runs []ExportRun) string {
+	t.Helper()
+	var buf bytes.Buffer
+	if _, err := WriteCSV(context.Background(), &buf, runSource(runs)); err != nil {
+		t.Fatal(err)
+	}
+	return buf.String()
 }
 
 func signTestToken(t *testing.T, sub string, expDelta int) string {
@@ -421,7 +575,7 @@ func TestBuildCSV_ColumnOrderAndDataShape(t *testing.T) {
 			CreatedAt: "2026-05-11T11:00:00Z", UpdatedAt: "2026-05-11T11:00:00Z",
 		},
 	}
-	csv := BuildCSV(runs)
+	csv := buildCSV(t, runs)
 	lines := strings.Split(strings.TrimSpace(csv), "\n")
 	if len(lines) != 2 {
 		t.Fatalf("expected 2 lines (header + 1 row); got %d", len(lines))
@@ -460,7 +614,7 @@ func TestBuildGpxZip_ManifestAndPerRunFiles(t *testing.T) {
 		}
 		return nil, nil
 	}
-	zipped, err := BuildGpxZip(context.Background(), runs, fetcher)
+	zipped, err := buildGpxZip(context.Background(), runs, fetcher)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -650,8 +804,8 @@ func TestBuildBackupZip_ProducesValidArchive(t *testing.T) {
 		return nil, nil
 	}
 
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, Routes: routes, Profile: profile, SettingsPrefs: prefs,
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), Routes: routeSource(routes), Profile: profile, SettingsPrefs: prefs,
 		UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
@@ -752,8 +906,8 @@ func TestBuildBackupZip_PartialTrackFailureDoesNotSinkArchive(t *testing.T) {
 		return nil, errors.New("synthetic download failure")
 	}
 
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
 		t.Fatal(err)
@@ -804,8 +958,8 @@ func TestBuildBackupZip_ArchivesHrSidecar(t *testing.T) {
 		return nil, nil
 	}
 
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
 		t.Fatal(err)
@@ -884,8 +1038,8 @@ func TestBuildBackupZip_BundlesRunPhotoBytes(t *testing.T) {
 		return nil, "", errors.New("synthetic photo download failure")
 	}
 
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test", ExtraTables: tableSource(extras),
 	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, Photo: photoFetcher})
 	if err != nil {
 		t.Fatal(err)
@@ -940,7 +1094,7 @@ func TestBuildBackupZip_ArchivesAvatarBytes(t *testing.T) {
 		return nil, "", errors.New("object not found")
 	}
 
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{Avatar: avatar})
 	if err != nil {
@@ -980,7 +1134,7 @@ func TestBuildBackupZip_NoAvatarShipsZeroCount(t *testing.T) {
 	avatar := func(_ context.Context, _ string) ([]byte, string, error) {
 		return nil, "", errors.New("object not found")
 	}
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{Avatar: avatar})
 	if err != nil {
@@ -1064,8 +1218,8 @@ func TestBuildBackupZip_PrefixWalkArchivesOrphanObjects(t *testing.T) {
 		return nil, errors.New("unexpected bucket: " + bucket)
 	}
 
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), UserID: "uid", ExportedFrom: "test", ExtraTables: tableSource(extras),
 	}, BackupFetchers{RawTrack: rawFetch, Photo: photoFetch, ListObjects: lister})
 	if err != nil {
 		t.Fatal(err)
@@ -1116,8 +1270,8 @@ func TestBuildBackupZip_ListerErrorDoesNotSinkArchive(t *testing.T) {
 		ID: "run-1", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
 		DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &trackURL,
 	}}
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{
 		RawTrack: func(_ context.Context, _ string) ([]byte, error) { return rawTrack, nil },
 		ListObjects: func(_ context.Context, _, _ string) ([]string, error) {
@@ -1172,8 +1326,8 @@ func TestBuildBackupZip_TrackUrlShapeMismatchSkipsTrack(t *testing.T) {
 		called++
 		return nil, errors.New("must not be called")
 	}
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: fetcher})
 	if err != nil {
 		t.Fatal(err)
@@ -1190,7 +1344,7 @@ func TestBuildBackupZip_TrackUrlShapeMismatchSkipsTrack(t *testing.T) {
 }
 
 func TestBuildBackupZip_EmptyInputProducesValidManifestOnlyArchive(t *testing.T) {
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) {
 		return nil, errors.New("must not be called")
@@ -1205,7 +1359,7 @@ func TestBuildBackupZip_EmptyInputProducesValidManifestOnlyArchive(t *testing.T)
 }
 
 func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test", Profile: nil,
 	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
@@ -1435,8 +1589,8 @@ func TestBuildBackupZip_PathTraversalAttemptIsBlocked(t *testing.T) {
 				called++
 				return []byte("payload"), nil
 			}
-			body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-				Runs: runs, UserID: "uid", ExportedFrom: "test",
+			body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+				Runs: runSource(runs), UserID: "uid", ExportedFrom: "test",
 			}, BackupFetchers{RawTrack: fetcher})
 			if err != nil {
 				t.Fatal(err)
@@ -1486,8 +1640,8 @@ func TestBuildBackupZip_ManyRoutesAndTracksScale(t *testing.T) {
 		return rawBytes[path], nil
 	}
 	start := time.Now()
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, Routes: routes, UserID: "uid", ExportedFrom: "test",
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), Routes: routeSource(routes), UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: fetcher})
 	elapsed := time.Since(start)
 	if err != nil {
@@ -1529,8 +1683,8 @@ func TestBuildBackupZip_RouteWithNilPointerFieldsRoundTrips(t *testing.T) {
 		Waypoints: []map[string]interface{}{{"lat": 0.0, "lng": 0.0}, {"lat": 1.0, "lng": 1.0}},
 		// Every other field nil.
 	}}
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Routes: routes, UserID: "uid", ExportedFrom: "test",
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Routes: routeSource(routes), UserID: "uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
 		t.Fatal(err)
@@ -1574,8 +1728,8 @@ func TestBuildBackupZip_StripsUserIdFromRuns(t *testing.T) {
 		{ID: "run-1", UserID: "old-uid", StartedAt: "2026-05-11T10:00:00Z",
 			DurationS: 1500, DistanceM: 5000, Source: "app"},
 	}
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: runs, UserID: "new-uid", ExportedFrom: "test",
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(runs), UserID: "new-uid", ExportedFrom: "test",
 	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
 		t.Fatal(err)
@@ -1598,7 +1752,7 @@ func TestBuildBackupZip_StripsUserIdFromRuns(t *testing.T) {
 }
 
 func TestBuildBackupZip_ManifestExportedFromIsPreserved(t *testing.T) {
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "go-service-test",
 	}, BackupFetchers{RawTrack: func(_ context.Context, _ string) ([]byte, error) { return nil, nil }})
 	if err != nil {
@@ -1675,9 +1829,9 @@ func TestBuildBackupZip_ExtraTablesAppearAsZipEntries(t *testing.T) {
 		},
 		"empty_table.json": {}, // empty -> should be omitted
 	}
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs: nil, Routes: nil, UserID: "uid", ExportedFrom: "test",
-		ExtraTables: extras,
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(nil), Routes: routeSource(nil), UserID: "uid", ExportedFrom: "test",
+		ExtraTables: tableSource(extras),
 	}, BackupFetchers{})
 	if err != nil {
 		t.Fatal(err)
@@ -1735,8 +1889,8 @@ func TestBuildBackupZip_ExtraTablesContentIsPreservedAsArray(t *testing.T) {
 			{"id": "m1", "body": "hello"},
 		},
 	}
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test", ExtraTables: tableSource(extras),
 	}, BackupFetchers{})
 	if err != nil {
 		t.Fatal(err)
@@ -1790,13 +1944,13 @@ func TestServer_BackupFormatToleratesExtraTablesError(t *testing.T) {
 func TestBuildBackupZip_NilRawTrackFetcherSkipsSection(t *testing.T) {
 	trackURL := "uid/r1.json.gz"
 	hrURL := "uid/r1.hr.json.gz"
-	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+	body, err := buildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID:       "uid",
 		ExportedFrom: "test",
-		Runs: []ExportRun{{
+		Runs: runSource([]ExportRun{{
 			ID: "r1", UserID: "uid",
 			TrackURL: &trackURL, HrSeriesURL: &hrURL,
-		}},
+		}}),
 	}, BackupFetchers{})
 	if err != nil {
 		t.Fatal(err)
@@ -1878,16 +2032,17 @@ func manifestOf(t *testing.T, zipped []byte) map[string]any {
 }
 
 func TestBuildBackupZip_ManifestCountsTheDatabaseNotTheArchive(t *testing.T) {
-	zipped, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs:   []ExportRun{{ID: "r-1", UserID: "uid"}, {ID: "r-2", UserID: "uid"}},
+	zipped, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runSource(
+			[]ExportRun{{ID: "r-1", UserID: "uid"}, {ID: "r-2", UserID: "uid"}},
+			ExportCompleteness{Totals: map[string]int{"runs": 12000}, Incomplete: []string{"runs"}},
+		),
 		UserID: "uid",
-		ExtraTables: map[string][]map[string]interface{}{
-			"food_log.json": {{"id": "f-1"}},
-		},
-		Completeness: ExportCompleteness{
-			Totals:     map[string]int{"runs": 12000, "food_log": 4000},
-			Incomplete: []string{"runs", "food_log"},
-		},
+		Routes: routeSource(nil),
+		ExtraTables: tableSource(
+			map[string][]map[string]interface{}{"food_log.json": {{"id": "f-1"}}},
+			ExportCompleteness{Totals: map[string]int{"food_log": 4000}, Incomplete: []string{"food_log"}},
+		),
 	}, BackupFetchers{})
 	if err != nil {
 		t.Fatalf("BuildBackupZip: %v", err)
@@ -1910,10 +2065,10 @@ func TestBuildBackupZip_ManifestCountsTheDatabaseNotTheArchive(t *testing.T) {
 }
 
 func TestBuildBackupZip_CompleteExportSaysSo(t *testing.T) {
-	zipped, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
-		Runs:         []ExportRun{{ID: "r-1", UserID: "uid"}},
-		UserID:       "uid",
-		Completeness: ExportCompleteness{Totals: map[string]int{"runs": 1}},
+	zipped, err := buildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs:   runSource([]ExportRun{{ID: "r-1", UserID: "uid"}}, ExportCompleteness{Totals: map[string]int{"runs": 1}}),
+		Routes: routeSource(nil),
+		UserID: "uid",
 	}, BackupFetchers{})
 	if err != nil {
 		t.Fatalf("BuildBackupZip: %v", err)
@@ -1927,5 +2082,248 @@ func TestBuildBackupZip_CompleteExportSaysSo(t *testing.T) {
 	}
 	if m["counts"].(map[string]any)["runs"] != float64(1) {
 		t.Errorf("counts=%v", m["counts"])
+	}
+}
+
+// --- streaming + fail-closed ------------------------------------------
+
+// The archive is pushed to Storage as it is produced, so a chunk that
+// fails mid-build has to leave NOTHING behind. The old shape assembled
+// the whole thing first, so this failure could not happen half-way; now
+// it can, and the answer must still be a 500 with no artifact rather
+// than a short-but-real zip carrying a signed URL.
+func TestServer_MidStreamUploadFailureLeavesNoArtifact(t *testing.T) {
+	runs := make([]ExportRun, 400)
+	for i := range runs {
+		runs[i] = ExportRun{
+			ID: fmt.Sprintf("run-%03d", i), UserID: "user-A",
+			StartedAt: "2026-05-11T10:00:00Z", ActivityType: "run",
+		}
+	}
+	be := &fakeBackend{
+		runs:            runs,
+		pageSize:        100,
+		uploadErr:       errors.New("resumable: patch at offset 6291456 returned 500"),
+		uploadFailAfter: 512,
+	}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 500 {
+		t.Fatalf("status=%d; a dead upload must not answer 200", resp.StatusCode)
+	}
+	if len(be.uploads) != 0 {
+		t.Errorf("uploads=%v; a build that died half-way must leave no artifact", be.uploads)
+	}
+	if be.sink == nil || !be.sink.aborted {
+		t.Error("the upload session must be aborted so Storage keeps no partial object")
+	}
+	if be.sink != nil && be.sink.finished {
+		t.Error("a failed build must never finalise the object")
+	}
+}
+
+// A tail chunk that fails is the upload's failure, not the build's, and
+// the client is told so — the object still never materialises.
+func TestServer_FinishFailureIsReportedAsUploadFailed(t *testing.T) {
+	be := &fakeBackend{
+		runs:      []ExportRun{{ID: "run-1", UserID: "user-A", StartedAt: "2026-05-11T10:00:00Z"}},
+		uploadErr: errors.New("resumable: finish short"),
+	}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 500 || !strings.Contains(string(body), "upload_failed") {
+		t.Fatalf("status=%d body=%s; want a 500 naming the upload", resp.StatusCode, body)
+	}
+	if len(be.uploads) != 0 {
+		t.Errorf("uploads=%v; nothing may be recorded when the upload failed", be.uploads)
+	}
+	if be.sink == nil || !be.sink.aborted {
+		t.Error("the session must be aborted")
+	}
+}
+
+// countingWriter stands in for the sink when the test cares about WHEN
+// bytes arrive rather than what they are.
+type countingWriter struct{ n int }
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	c.n += len(p)
+	return len(p), nil
+}
+
+// The streaming property itself: bytes reach the sink while the walk is
+// still going. A builder that assembled first and wrote once would pass
+// every content assertion in this file and fail only this one.
+func TestWriteCSV_BytesReachTheSinkBeforeTheWalkEnds(t *testing.T) {
+	var w countingWriter
+	page := make([]ExportRun, 500)
+	for i := range page {
+		page[i] = ExportRun{ID: fmt.Sprintf("r-%03d", i), UserID: "uid", StartedAt: "2026-05-11T10:00:00Z"}
+	}
+	atLastPage := -1
+	src := RunSource(func(_ context.Context, emit func([]ExportRun) error) (ExportCompleteness, error) {
+		for p := 0; p < 4; p++ {
+			if p == 3 {
+				atLastPage = w.n
+			}
+			if err := emit(page); err != nil {
+				return ExportCompleteness{}, err
+			}
+		}
+		return ExportCompleteness{Totals: map[string]int{"runs": 2000}}, nil
+	})
+	built, err := WriteCSV(context.Background(), &w, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if built.Runs != 2000 {
+		t.Fatalf("runs=%d; want 2000", built.Runs)
+	}
+	if atLastPage <= 0 {
+		t.Fatal("nothing had reached the sink by the final page; the archive is being buffered")
+	}
+	if atLastPage >= w.n {
+		t.Errorf("bytes at last page (%d) is the whole output (%d); the walk finished before anything was written", atLastPage, w.n)
+	}
+}
+
+// The row ceiling is gone on this rail, so a history far past it has to
+// come out whole and be reported as complete. 120,000 is the figure the
+// Edge Function's own streaming suite uses against the same deleted
+// 50,000-row bound.
+func TestWriteBackupZip_HistoryFarPastTheDeletedCeilingStreamsWhole(t *testing.T) {
+	const total = 120_000
+	const pageSize = 1000
+	biggestPage := 0
+	src := RunSource(func(_ context.Context, emit func([]ExportRun) error) (ExportCompleteness, error) {
+		page := make([]ExportRun, pageSize)
+		for off := 0; off < total; off += pageSize {
+			for i := range page {
+				page[i] = ExportRun{
+					ID: fmt.Sprintf("run-%06d", off+i), UserID: "uid",
+					StartedAt: "2026-05-11T10:00:00Z", ActivityType: "run",
+					DistanceM: 5000, DurationS: 1500, Source: "app",
+				}
+			}
+			if len(page) > biggestPage {
+				biggestPage = len(page)
+			}
+			if err := emit(page); err != nil {
+				return ExportCompleteness{}, err
+			}
+		}
+		return ExportCompleteness{Totals: map[string]int{"runs": total}}, nil
+	})
+
+	var buf bytes.Buffer
+	built, err := WriteBackupZip(context.Background(), &buf, BuildBackupZipInput{
+		Runs: src, Routes: routeSource(nil), ExtraTables: tableSource(nil),
+		UserID: "uid", ExportedFrom: "test",
+	}, BackupFetchers{})
+	if err != nil {
+		t.Fatalf("WriteBackupZip: %v", err)
+	}
+	if built.Runs != total {
+		t.Fatalf("runs=%d; want all %d", built.Runs, total)
+	}
+	if biggestPage != pageSize {
+		t.Errorf("biggest page=%d; the builder must never be handed the whole history", biggestPage)
+	}
+
+	zipped := buf.Bytes()
+	zr, err := zip.NewReader(bytes.NewReader(zipped), int64(len(zipped)))
+	if err != nil {
+		t.Fatalf("the streamed archive does not open: %v", err)
+	}
+	var runsEntry *zip.File
+	for _, f := range zr.File {
+		if f.Name == "runs.json" {
+			runsEntry = f
+		}
+	}
+	if runsEntry == nil {
+		t.Fatal("no runs.json in the archive")
+	}
+	rc, err := runsEntry.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rc.Close()
+	dec := json.NewDecoder(rc)
+	if _, err := dec.Token(); err != nil {
+		t.Fatalf("runs.json is not a JSON array: %v", err)
+	}
+	rows := 0
+	for dec.More() {
+		var row map[string]interface{}
+		if err := dec.Decode(&row); err != nil {
+			t.Fatalf("row %d: %v", rows, err)
+		}
+		if _, ok := row["user_id"]; ok {
+			t.Fatal("runs.json must stay re-homeable; user_id is stripped")
+		}
+		rows++
+	}
+	if rows != total {
+		t.Fatalf("runs.json carries %d rows; want %d", rows, total)
+	}
+
+	m := manifestOf(t, zipped)
+	if m["complete"] != true {
+		t.Errorf("complete=%v; nothing was truncated", m["complete"])
+	}
+	if m["counts"].(map[string]any)["runs"] != float64(total) {
+		t.Errorf("counts.runs=%v; want %d", m["counts"].(map[string]any)["runs"], total)
+	}
+}
+
+// A section that failed to read must reach the RESPONSE's `complete`,
+// not only manifest.json — both clients gate their truncation notice on
+// an explicit `complete: false` (decisions §643).
+func TestServer_ShortSectionMakesTheResponseIncomplete(t *testing.T) {
+	be := &fakeBackend{
+		runs:       []ExportRun{{ID: "run-1", UserID: "user-A", StartedAt: "2026-05-11T10:00:00Z"}},
+		runsComp:   ExportCompleteness{Totals: map[string]int{"runs": 1}},
+		extrasComp: ExportCompleteness{Totals: map[string]int{"food_log": 40000}, Incomplete: []string{"food_log"}},
+		extraTables: map[string][]map[string]interface{}{
+			"food_log.json": {{"id": "f-1"}},
+		},
+	}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got["complete"] != false {
+		t.Errorf("complete=%v; a section short of the database must be disclosed on the response too", got["complete"])
 	}
 }

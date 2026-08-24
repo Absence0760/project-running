@@ -522,7 +522,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get peopleNearbyEmptyBody =>
-      'Turn on \"Show me to runners nearby\" in Settings → Preferences → Privacy and set your area. Only runners who did the same can find you.';
+      'Turn on \"Show me to runners nearby\" and set your area. Only runners who did the same can find you.';
+
+  @override
+  String get peopleNearbyEmptyAction => 'Open Preferences';
 
   @override
   String get peopleNearbyLoadFailed => 'Could not load runners nearby.';
@@ -4944,6 +4947,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorStatRaceTime => 'Race time';
+
+  @override
+  String get liveSpectatorStatTimer => 'Timer';
+
+  @override
+  String get liveSpectatorStatTimerStale => 'Timer, last fix';
 
   @override
   String get liveSpectatorRecentPace => 'Recent';

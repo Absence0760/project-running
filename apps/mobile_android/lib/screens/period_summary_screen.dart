@@ -6,7 +6,6 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart' show EmptyState, StatGrid, StatTile;
 
 import '../goals.dart';
@@ -17,6 +16,7 @@ import '../local_run_store.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
+import '../share_sheet.dart';
 import 'run_detail_screen.dart';
 import '../widgets/run_list_tile.dart';
 import '../widgets/top_banner.dart';
@@ -578,8 +578,9 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
       );
       await file.writeAsBytes(byteData.buffer.asUint8List());
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png')],
+      await shareFilesFrom(
+        context,
+        files: [XFile(file.path, mimeType: 'image/png')],
         text: widget.periodTitle,
       );
     } catch (e) {
@@ -592,8 +593,8 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
     }
   }
 
-  void _shareText() {
-    Share.share(widget.shareText);
+  Future<void> _shareText() async {
+    await shareTextFrom(context, text: widget.shareText);
   }
 
   @override

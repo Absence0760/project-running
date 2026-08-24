@@ -42,6 +42,7 @@
 /// lockstep (equal test counts).
 library;
 
+import 'env_flag.dart';
 import 'plan_adherence.dart';
 import 'plan_replan.dart';
 
@@ -116,17 +117,14 @@ class AdaptiveReplanResult {
   });
 }
 
-/// Pure parse of the P2 fitness-gate deploy flag. Truthy only for an explicit
-/// `1` / `true` / `yes` / `on` (case-insensitive, trimmed); anything else —
-/// including unset / empty / `false` / `0` — is off. Fail-closed: the whole
-/// health-derived-load → prescription path stays unreachable until CISO /
-/// Security-Analyst sign-off flips the flag at deploy time. The mobile binding
-/// reads `dotenv.env['ADAPTIVE_FITNESS_GATE']`; the web env binding lives in
-/// `adaptive_fitness_flag.ts` — both call this so the parse can't drift.
-bool adaptiveFitnessGateEnabled(String? raw) {
-  final v = (raw ?? '').trim().toLowerCase();
-  return v == '1' || v == 'true' || v == 'yes' || v == 'on';
-}
+/// Pure parse of the P2 fitness-gate deploy flag, delegating to the one
+/// canonical [isTruthyFlagValue] so the accepted-affirmative set is a single
+/// contract across every gate on both platforms (decisions § 709).
+/// Fail-closed: the whole health-derived-load → prescription path stays
+/// unreachable until CISO / Security-Analyst sign-off flips the flag at deploy
+/// time. The mobile binding reads `dotenv.env['ADAPTIVE_FITNESS_GATE']`; the
+/// web env binding lives in `adaptive_fitness_flag.ts`.
+bool adaptiveFitnessGateEnabled(String? raw) => isTruthyFlagValue(raw);
 
 /// Deeply fatigued: form in the hole AND acute load high against a real chronic
 /// base. Non-finite or absent chronic load fails closed (a runner with no

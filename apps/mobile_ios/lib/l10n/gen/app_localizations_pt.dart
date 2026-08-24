@@ -527,7 +527,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get peopleNearbyEmptyBody =>
-      'Ative «Mostrar-me a corredores por perto» em Configurações → Preferências → Privacidade e defina a sua área. Só os corredores que fizeram o mesmo o podem encontrar.';
+      'Ative «Mostrar-me a corredores por perto» e defina a sua área. Só os corredores que fizeram o mesmo o podem encontrar.';
+
+  @override
+  String get peopleNearbyEmptyAction => 'Abrir Preferências';
 
   @override
   String get peopleNearbyLoadFailed =>
@@ -4994,6 +4997,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorStatRaceTime => 'Tempo de prova';
+
+  @override
+  String get liveSpectatorStatTimer => 'Cronômetro';
+
+  @override
+  String get liveSpectatorStatTimerStale => 'Cronômetro, último sinal';
 
   @override
   String get liveSpectatorRecentPace => 'Recente';
@@ -13958,7 +13970,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get peopleNearbyEmptyBody =>
-      'Ative “Mostrar meu perfil a corredores por perto” em Configurações → Preferências → Privacidade e defina sua área. Só os corredores que fizeram o mesmo podem te encontrar.';
+      'Ative “Mostrar meu perfil a corredores por perto” e defina sua área. Só os corredores que fizeram o mesmo podem te encontrar.';
+
+  @override
+  String get peopleNearbyEmptyAction => 'Abrir Preferências';
 
   @override
   String get peopleNearbyLoadFailed =>
@@ -18425,6 +18440,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorStatRaceTime => 'Tempo de prova';
+
+  @override
+  String get liveSpectatorStatTimer => 'Cronômetro';
+
+  @override
+  String get liveSpectatorStatTimerStale => 'Cronômetro, último sinal';
 
   @override
   String get liveSpectatorRecentPace => 'Recente';

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../pro_sellable.dart';
 import '../revenuecat.dart';
+import '../share_sheet.dart';
 import '../widgets/top_banner.dart';
 
 class SettingsProScreen extends StatefulWidget {
@@ -72,12 +72,12 @@ class _SettingsProScreenState extends State<SettingsProScreen> {
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
-        await Share.share(url);
+        await shareTextFrom(context, text: url);
       }
     } catch (_) {
       if (!context.mounted) return;
       try {
-        await Share.share(url);
+        await shareTextFrom(context, text: url);
       } catch (e) {
         if (!context.mounted) return;
         showTopBanner(context, AppLocalizations.of(context).proCouldNotOpen(e));
