@@ -116,6 +116,8 @@ The iOS toolchain doesn't accept Supabase's `sb_publishable_...` keys via inline
 
 Then `flutter build ipa --release --dart-define-from-file=dart_defines.json`. The file is gitignored; the workflow generates it from secrets, builds, then deletes.
 
+The sign-off-gated feature flags (`OFF_ROUTE_ESCALATION_ENABLED`, `ADAPTIVE_FITNESS_GATE`, `WEIGH_IN_GATE`, `ENABLE_NEARBY_RUNNERS`) go in the same file, one key each, once their sign-off lands — `main.dart`'s `String.fromEnvironment` bridge reads them the same way it reads the Supabase keys, and an absent key stays fail-closed. See the table in [`apps/mobile_android/deployment.md`](../mobile_android/deployment.md) for what each one unlocks; the bridge is shared code, so the two platforms accept the same names and the same values ([decisions.md § 709](../../docs/architecture/decisions.md)).
+
 ### Info.plist keys to verify before launch
 
 Required strings (Apple rejects without a meaningful description):

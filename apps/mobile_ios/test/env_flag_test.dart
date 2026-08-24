@@ -1,8 +1,12 @@
-// The mobile feature-flag contract: one parser, every gate.
+// The mobile feature-flag contract: one parser, and every gate reachable in a
+// release build.
 //
-// The parse used to be copied into four gates, and one of the copies was
-// narrower — `WEIGH_IN_GATE=yes` left the Art 9 weigh-in fields off while the
-// same string turned every other gate on (decisions § 709).
+// Two defects motivated this suite (decisions § 709). The parse was copied
+// into four gates and one of the copies was narrower — `WEIGH_IN_GATE=yes`
+// left the Art 9 weigh-in fields off while the same string turned every other
+// gate on. And release builds never load `.env.development`, so a gate absent
+// from main.dart's `String.fromEnvironment` bridge could not be flipped on in
+// production at all, however the deploy passed it.
 
 import 'dart:io';
 
@@ -32,6 +36,76 @@ Iterable<RegExpMatch> codeMatches(String src, RegExp pattern) {
 
 bool matchesInCode(String src, RegExp pattern) =>
     codeMatches(src, pattern).isNotEmpty;
+
+/// Every dotenv key read anywhere under `lib/`, with the two indirections the
+/// tree actually uses resolved: a file-local `const K = 'KEY'`, and a
+/// same-file `String _env(String key)` accessor called with literals.
+Set<String> dotenvKeysRead() {
+  final consts = <String, String>{};
+  final constDecl = RegExp(r"const\s+(?:String\s+)?(\w+)\s*=\s*'([A-Z0-9_]+)'\s*;");
+  final files = dartFiles(_libRoot);
+  for (final f in files) {
+    for (final m in codeMatches(f.readAsStringSync(), constDecl)) {
+      consts[m.group(1)!] = m.group(2)!;
+    }
+  }
+
+  final keys = <String>{};
+  for (final f in files) {
+    final src = f.readAsStringSync();
+    final blanked = blankNonCode(src);
+    for (final m in RegExp(r'dotenv\.env\[').allMatches(blanked)) {
+      final close = src.indexOf(']', m.end);
+      expect(close, greaterThan(m.end),
+          reason: 'unterminated dotenv.env[ in ${f.path}');
+      final index = src.substring(m.end, close).trim();
+      final literal = RegExp(r"^'([A-Z0-9_]+)'$").firstMatch(index);
+      if (literal != null) {
+        keys.add(literal.group(1)!);
+        continue;
+      }
+      if (consts.containsKey(index)) {
+        keys.add(consts[index]!);
+        continue;
+      }
+      // A parameter: the enclosing accessor's own literal call sites are the
+      // keys. Anything this cannot resolve is a read the guard would silently
+      // miss, so it fails rather than passing over it.
+      final accessor =
+          RegExp(r'String\s+(\w+)\(String\s+\w+\)\s*\{').allMatches(src)
+              .where((a) => a.start < m.start)
+              .toList();
+      expect(accessor, isNotEmpty,
+          reason: 'dotenv.env[$index] in ${f.path} is indexed by neither a '
+              'literal, a const, nor an accessor parameter — name the key so '
+              'the release-reachability guard can see it.');
+      final name = accessor.last.group(1)!;
+      final calls = RegExp("$name\\('([A-Z0-9_]+)'\\)").allMatches(src);
+      expect(calls, isNotEmpty,
+          reason: '$name(...) in ${f.path} is never called with a literal key');
+      for (final c in calls) {
+        keys.add(c.group(1)!);
+      }
+    }
+  }
+  return keys;
+}
+
+/// Keys main.dart bridges from a `--dart-define` into dotenv. Both halves are
+/// required: reading the define without merging it, or merging a name that is
+/// never read, leaves the key unreachable just the same.
+Set<String> bridgedKeys() {
+  final main = File('lib/main.dart').readAsStringSync();
+  final read = RegExp(r"String\.fromEnvironment\('([A-Z0-9_]+)'")
+      .allMatches(main)
+      .map((m) => m.group(1)!)
+      .toSet();
+  final merged = RegExp(r"'([A-Z0-9_]+)=\$")
+      .allMatches(main)
+      .map((m) => m.group(1)!)
+      .toSet();
+  return read.intersection(merged);
+}
 
 void main() {
   group('isTruthyFlagValue — the one accepted-affirmative set', () {
@@ -112,5 +186,28 @@ void main() {
                 'isTruthyFlagValue, not a private copy.');
       });
     }
+  });
+
+  group('every gate is reachable in a release build', () {
+    // Release builds never load `.env.development` (pinned in
+    // architecture_guards_test.dart), so main.dart's String.fromEnvironment
+    // bridge is the ONLY way a value reaches dotenv in production. A key read
+    // at runtime but absent from that bridge can never be set, whatever the
+    // deploy passes — which is how OFF_ROUTE_ESCALATION_ENABLED and
+    // ADAPTIVE_FITNESS_GATE sat unflippable behind their sign-offs.
+    test('every dotenv key read under lib/ is bridged from a --dart-define', () {
+      final read = dotenvKeysRead();
+      expect(read.length, greaterThanOrEqualTo(12),
+          reason: 'the dotenv-read scan found only ${read.length} keys — its '
+              'shape assumptions broke and it is enforcing nothing.');
+
+      final missing = read.difference(bridgedKeys()).toList()..sort();
+      expect(missing, isEmpty,
+          reason: 'dotenv key(s) read at runtime but absent from main.dart\'s '
+              '--dart-define bridge: ${missing.join(', ')}. Release builds do '
+              'not read .env.development, so these are unreachable in '
+              'production. Add a String.fromEnvironment const and the matching '
+              'entry to the loadFromString list.');
+    });
   });
 }
