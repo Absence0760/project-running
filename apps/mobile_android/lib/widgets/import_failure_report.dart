@@ -2,12 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../import_failures.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
 import '../l10n/locale_support.dart';
+import '../share_sheet.dart';
 import 'top_banner.dart';
 
 /// What did not import, named and classified — the mobile twin of web's
@@ -59,8 +59,9 @@ class ImportFailureReport extends StatelessWidget {
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/$provider-import-failures.csv');
       await file.writeAsString(importFailureReportCsv(log));
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/csv')],
+      await shareFilesFrom(
+        context,
+        files: [XFile(file.path, mimeType: 'text/csv')],
         text: '$provider import failures',
       );
     } catch (e) {

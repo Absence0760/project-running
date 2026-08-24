@@ -182,7 +182,7 @@ Build after web ships + review (decisions §24). Byte-identical iOS twin in the 
   branch for `kind='achievement'` in `notification_bell` / `NotificationsList` mirror (web first).
 - **Nav placement**: none added (badges live inside Profile + Feed + Notifications — all existing surfaces). The
   mobile bottom-nav (Home / Fitness / Log / Social / You in `home_screen.dart`) is untouched. Share uses the OS share
-  sheet (`Share.share` of the `/share/badge/[id]` URL).
+  sheet (`shareTextFrom` of the `/share/badge/[id]` URL).
 
 ## TS↔Dart parity helpers
 
