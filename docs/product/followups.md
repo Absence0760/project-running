@@ -145,7 +145,7 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 - [x] **`tests-e2e/routes/segment-catalogue-browse.spec.ts`** — written alongside the `/segments` browse page ([decisions § 593](../architecture/decisions.md)) by a round that shared a local Supabase stack it could not reset, so it landed unexecuted; **run on the integration branch 2026-08-13 and it passed.** No longer an open gap.
 - [ ] **Positive-path Edge Function tests** — the envelope suite covers auth-rejection only; 200-on-valid-HMAC / replay-dedupe / freshness-window tests need real secret values in the CI config.
 
-- [ ] **The `Schema / type drift` job reports "database.types.ts is out of sync with the Supabase schema" for any failure in the job, including a plain unit-test failure.** A failed web source guard in that job printed the type-drift error and the "run `npm run gen:types`" instruction, which is a confident statement about the wrong thing — the first look went to the migration and the generated types, neither of which was involved. Same class as the CI wait loop's "within 90s" ([§ 697](../architecture/decisions.md)): the message should name what actually failed, or the step should be conditioned on the drift check specifically.
+- [x] **The `Schema / type drift` job reports "database.types.ts is out of sync with the Supabase schema" for any failure in the job, including a plain unit-test failure.** Closed 2026-08-24 ([decisions § 711](../architecture/decisions.md)) — the trailing `if: failure()` step is gone and each of the five checks now diagnoses itself in the `if ! cmd; then echo "::error::…"; exit 1; fi` form the `twin-parity` and `schema-codegen-drift` jobs already used, with its own remediation; each migration guard now runs its own unit suite FIRST, because a broken guard's verdict on the migration set means nothing. The job was renamed `Schema / type drift + web unit tests` rather than split in two — splitting is the only thing that makes the job NAME say which check broke, and it costs a second `npm ci` plus a hosted-runner slot on every PR against a budget the concurrency block is already rationing, while a per-step `::error::` reaches the checks summary for free. `scripts/check_ci_diagnostics.mjs` (in `workflow-lint`) fails the build on any `failure()`-conditioned step that prints a diagnosis without naming a step outcome, and on a check step added to that job without one; verified against the pre-fix file, which it reports five ways. A failed web source guard in that job printed the type-drift error and the "run `npm run gen:types`" instruction, which is a confident statement about the wrong thing — the first look went to the migration and the generated types, neither of which was involved. Same class as the CI wait loop's "within 90s" ([§ 697](../architecture/decisions.md)): the message should name what actually failed, or the step should be conditioned on the drift check specifically.
 
 ## Web bundle weight
 
@@ -572,15 +572,29 @@ of them drifts. Rationale and the rejected alternatives: decisions.md § 595.
   resolution *constraint*; the lockfile is the pin, and Dependabot's `pub`
   entry means a bump arrives as a reviewable PR rather than silently.
 
-Two items remain open, deliberately:
+One item remains open, deliberately (the TestFlight pin below was closed 2026-08-24):
 
 - [ ] The `node-version: 24` inputs track a major line rather than an exact
   patch. Left as-is: a Node minor/patch break is loud and local to the job
   that runs it, not a silent change to what gets built or shipped.
-- [ ] `apple-actions/upload-testflight-build@v1` in `release-ios.yml` is
+- [x] `apple-actions/upload-testflight-build@v1` in `release-ios.yml` is
   tag-pinned, not SHA-pinned — the only such reference in the repo. It sits
   inside the commented-out TestFlight block, so it is not live; SHA-pin it
-  when that block is uncommented.
+  when that block is uncommented. **Closed 2026-08-24**
+  ([decisions § 711](../architecture/decisions.md)) — pinned now rather than
+  on the day someone uncomments it. Pinned to **v5.3.0**
+  (`5e75ff58276689011512ba87a381d93dc67dbcf8`), not to v1: `@v1` resolves to a
+  2020 commit declaring `runs.using: node12`, a runtime GitHub has removed, so
+  SHA-pinning the tag verbatim would have frozen a reference that cannot
+  execute. v5 takes the same five inputs the step passes and adds only
+  optional ones. No repo-wide guard asserted SHA pinning at all — the sweep
+  that pinned everything else was a one-time audit — so
+  `scripts/check_toolchain_pins.mjs` grew a fourth check that reads **every**
+  `uses:` in `.github/workflows` **and** `.github/actions/*/action.yml`,
+  **including commented-out lines**, which is precisely why this one drifted;
+  it also fails a SHA pin carrying no `# vN` comment, which caught four bare
+  `actions/checkout` lines. 150 references, verified green, and verified to
+  fail on the pre-fix file.
 
 ## Challenges: two things this round deliberately did not ship (2026-08-13)
 

@@ -4,16 +4,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+	ACTION_DIR,
 	LOCKFILE,
 	WORKFLOW_DIR,
+	checkActionPins,
 	checkAll,
 	checkDefmtPrint,
 	checkFlutter,
 	checkMelos,
+	parseActionUses,
 	parseDefmtPrint,
 	parseLockedVersion,
 	parseMelosActivations,
 	parseWorkflow,
+	readCompositeActions,
 	resolveVersion,
 } from './check_toolchain_pins.mjs';
 
@@ -343,12 +347,83 @@ test('checkDefmtPrint fails rather than passing vacuously when nothing matches',
 	assert.match(errors[0], /enforces nothing/);
 });
 
+const PINNED_SHA = 'a'.repeat(40);
+
+test('parseActionUses reads a use whether it is live or commented out', () => {
+	const uses = parseActionUses(
+		`      - uses: actions/checkout@${PINNED_SHA} # v7.0.1\n` +
+			`      #   uses: apple-actions/upload-testflight-build@v1\n` +
+			`      - uses: ./.github/actions/start-supabase\n`,
+	);
+	assert.deepEqual(
+		uses.map((u) => [u.ref, u.commented, u.local]),
+		[
+			[`actions/checkout@${PINNED_SHA}`, false, false],
+			['apple-actions/upload-testflight-build@v1', true, false],
+			['./.github/actions/start-supabase', false, true],
+		],
+	);
+});
+
+// The composite action's own header sentence mentions the key in prose. A
+// guard that matched it would report an unpinned action that does not exist.
+test('parseActionUses ignores prose that merely mentions the key', () => {
+	assert.deepEqual(
+		parseActionUses('  flutter-action, and start-supabase carries no `uses:` for this reason.\n'),
+		[],
+	);
+});
+
+test('a tag-pinned action fails, and the message says it is still read when commented', () => {
+	const { errors } = checkActionPins([
+		{
+			name: 'release-ios.yml',
+			text: `      #   uses: apple-actions/upload-testflight-build@v1\n`,
+		},
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /pins a tag, not a commit \(commented out/);
+});
+
+test('a SHA-pinned action with no trailing version comment fails', () => {
+	const { errors } = checkActionPins([
+		{ name: 'ci.yml', text: `      - uses: actions/checkout@${PINNED_SHA}\n` },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no trailing `# vN` comment/);
+});
+
+test('a local `./` reference needs no pin', () => {
+	const { errors, seen } = checkActionPins([
+		{
+			name: 'ci.yml',
+			text: `      - uses: ./.github/actions/start-supabase\n      - uses: actions/checkout@${PINNED_SHA} # v7\n`,
+		},
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(seen, 1);
+});
+
+test('checkActionPins fails rather than passing vacuously when nothing matches', () => {
+	const { errors } = checkActionPins([{ name: 'ci.yml', text: 'jobs:\n  a:\n    steps:\n      - run: hi\n' }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /enforces nothing/);
+});
+
 test('the repo’s real workflows and lockfile agree on both toolchains', () => {
 	const files = readdirSync(WORKFLOW_DIR)
 		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
 		.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') }));
-	const { errors, flutter, melos, defmt } = checkAll(files, readFileSync(LOCKFILE, 'utf-8'));
+	const { errors, flutter, melos, defmt, actions } = checkAll(
+		files,
+		readFileSync(LOCKFILE, 'utf-8'),
+		readCompositeActions(ACTION_DIR),
+	);
 	assert.deepEqual(errors, []);
+	assert.ok(
+		actions.ok.length >= 100,
+		`expected every third-party action reference, found ${actions.ok.length}`,
+	);
 	assert.ok(
 		flutter.ok.length >= 8,
 		`expected every flutter-action step, found ${flutter.ok.length}`,

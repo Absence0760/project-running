@@ -14,7 +14,7 @@ jobs:
     name: Compliance drift advisory
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The drift script diffs against origin/<base>; full history not
           # needed but the base ref must exist locally.
