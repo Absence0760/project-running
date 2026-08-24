@@ -15,7 +15,6 @@ import 'package:geolocator/geolocator.dart' hide ActivityType;
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:run_recorder/run_recorder.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart'
     show AppMotion, AppSemanticColors, StatTile, motionDuration;
 import 'package:uuid/uuid.dart';
@@ -60,6 +59,7 @@ import '../background_location_nudge.dart';
 import '../battery_optimisation_hint.dart';
 import '../run_notification_bridge.dart';
 import '../run_stats.dart';
+import '../share_sheet.dart';
 import '../social_service.dart';
 import '../training.dart';
 import '../training_service.dart';
@@ -1352,12 +1352,12 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     final started = await _startLiveBroadcast();
 
     try {
-      await Share.share(url, subject: _l10n.runShareSubject);
+      await shareTextFrom(context, text: url, subject: _l10n.runShareSubject);
     } catch (e) {
       // The user-facing banner is the primary signal, but also log
-      // so a Share.share regression is observable in dev/release
-      // logs without us reproducing the user's exact moment.
-      debugPrint('Share.share live link failed: $e');
+      // so a share regression is observable in dev/release logs without
+      // us reproducing the user's exact moment.
+      debugPrint('share live link failed: $e');
       if (mounted) _showTopBanner(_l10n.runCouldNotShareLink(friendlyError(_l10n, e)));
       return;
     }

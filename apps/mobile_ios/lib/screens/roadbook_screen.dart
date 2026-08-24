@@ -5,7 +5,6 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, ChoiceChipOption, ChoiceChipRow;
 
 import '../elevation.dart';
@@ -14,6 +13,7 @@ import '../goal_time.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../roadbook.dart';
+import '../share_sheet.dart';
 import '../route_markers.dart' show kindSpec;
 import '../widgets/top_banner.dart';
 
@@ -389,7 +389,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
     }
   }
 
-  void _share() {
+  Future<void> _share() async {
     final l10n = AppLocalizations.of(context);
     final unit = activeDistanceUnit;
     final rb = _roadbook;
@@ -409,7 +409,7 @@ class _RoadbookScreenState extends State<RoadbookScreen> {
       lines.add(
           '${UnitFormat.distance(leg.cumDistM, unit)}  $name  $pace  $arrival$tgt$cut');
     }
-    Share.share(lines.join('\n'));
+    await shareTextFrom(context, text: lines.join('\n'));
   }
 
   /// Seconds the pacing model allocated to the leg arriving at [i]. The start

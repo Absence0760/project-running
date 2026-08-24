@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart'
     show AppSemanticColors, StatGrid, StatTile, StatusPill, motionScrollTo;
 
@@ -31,6 +30,7 @@ import '../route_describe_client.dart';
 import '../route_description.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
 import '../route_gpx.dart';
+import '../share_sheet.dart';
 import '../roadbook.dart'
     show RoadbookMarker, RoadbookWaypoint, buildRoadbook;
 import '../sim_watch_link.dart' show maybeDevBackendUrl;
@@ -1617,8 +1617,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         return;
       }
     }
-    await Share.share(routeShareUrl(widget.route.id),
-        subject: widget.route.name);
+    await shareTextFrom(context,
+        text: routeShareUrl(widget.route.id), subject: widget.route.name);
   }
 
   /// Whether the custom-watch course push is offered at all. See
@@ -1901,8 +1901,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         contents = _routeToGpx(route);
       }
       await file.writeAsString(contents);
-      await Share.shareXFiles(
-        [
+      await shareFilesFrom(
+        context,
+        files: [
           XFile(file.path,
               mimeType: isKml
                   ? 'application/vnd.google-earth.kml+xml'
