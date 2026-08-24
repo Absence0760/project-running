@@ -83,8 +83,13 @@ regression guard at all. This is that guard. See `scenario_dropout`.
 **What a panel dump does NOT prove.** A dump shows that *something* was drawn,
 not *what*: nothing here reads a glyph. The only evidence that a given page is
 on screen is the firmware's own `ui: page <Name>` line, and the only evidence a
-banner is up is `record: alert <Kind>` plus the ink a solid inverse-video band
-has to add. Every assertion message says which of the two it rests on. Comparing
+banner is up is its `ui: banner <Kind>` counterpart plus the ink a solid
+inverse-video band has to add. Both are emitted AFTER `display.flush` returns,
+which is what makes them evidence about the panel rather than about a task's
+intent — the RECORD task's `record: alert <Kind>` is emitted before the alert
+even reaches the composer and is never what a dump is taken against
+(decisions.md § 716). Every assertion message says which of the two it rests
+on. Comparing
 two dumps is likewise weaker than it looks — the run's clock advances every
 second, so any two frames taken seconds apart differ; what the comparison rules
 out is a DumpFrame that never landed and left us re-reading a stale file.
