@@ -12,7 +12,7 @@ Rules are grouped by area below. (Section anchors are deep-linked from `CLAUDE.m
 
 **Web UI** — [Page padding](#web-page-padding) · [Page titles & sidebar](#web-page-titles-and-sidebar-chrome) · [Material Symbols](#material-symbols-icons) · [Buttons](#web-buttons) · [Svelte 5 `$effect`](#svelte-5-effect--never-read-state-you-write-in-the-same-effect) · [Modals](#web-modals) · [List-page scroll](#web-list-pages--preserve-scroll-on-back-navigation)
 
-**Mobile & cross-platform** — [In-app notifications](#mobile-in-app-notifications--showtopbanner) · [Local-tz date strings](#local-tz-date-strings)
+**Mobile & cross-platform** — [In-app notifications](#mobile-in-app-notifications--showtopbanner) · [OS share sheet](#mobile-os-share-sheet--sharefilesfrom--sharetextfrom-never-share_plus-directly) · [Local-tz date strings](#local-tz-date-strings)
 
 **Testing** — [Testing](#testing) · [Test hygiene](#test-hygiene--review-then-unit-then-e2e)
 
@@ -497,6 +497,16 @@ On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical tr
 **Don't call `ScaffoldMessenger.of(context).showSnackBar(...)` inside `lib/screens/` or `lib/widgets/`.** Material's floating SnackBar docks at the bottom of the screen, where it overlapped the Pause / Stop / Lap controls on the recording surface — a runner couldn't reach Stop without dismissing a snack first. Top-anchored eliminates that overlap on every screen and gives notifications a consistent shape app-wide. Two architecture-guard tests in `apps/mobile_android/test/architecture_guards_test.dart` (mirrored on iOS) fail any new `showSnackBar` or `ScaffoldMessenger.of(context)` use under those folders.
 
 If the notification has an action (e.g. "Settings" on the GPS-unavailable banner), pass `actionLabel:` + `onAction:`. Tapping the action runs the callback and dismisses the banner.
+
+## Mobile OS share sheet — `shareFilesFrom` / `shareTextFrom`, never `share_plus` directly
+
+On the Flutter apps, every hand-off to the OS share sheet goes through `shareFilesFrom(context, files: …)` or `shareTextFrom(context, text: …)` in `lib/share_sheet.dart`. That module is the only file under `lib/` allowed to import `package:share_plus/share_plus.dart`.
+
+The reason is iPadOS, and it is not cosmetic. UIKit presents `UIActivityViewController` as a **popover** there and refuses to present one without a non-empty source rect inside the host view; share_plus's iOS plugin turns a missing or empty anchor into a `PlatformException`, so the sheet never appears and the share silently fails. The apps ship to iPad (`TARGETED_DEVICE_FAMILY = "1,2"`), and every one of the 21 share call sites in the tree once omitted the anchor — an optional parameter that Android and iPhone never miss is one nobody remembers.
+
+So the helper takes the `BuildContext` it derives the anchor from as a **required positional** parameter. There is deliberately no overload that accepts a bare `Rect`, and none that accepts nothing: a caller cannot express a share without an anchor. Derivation degrades rather than throwing (the invoking widget's own global bounds, clipped to the view; else a small rect at the view's centre; else a one-pixel rect at its origin) because a share is an L4 auxiliary effect — a screen must not go down because its anchor could not be resolved. It never yields an empty rect, since an empty rect is the failure itself.
+
+Four source guards in `apps/mobile_android/test/architecture_guards_test.dart` (mirrored on iOS) hold this: nothing but the helper imports `share_plus`, nothing but the helper names `Share.share*` or `SharePlus.instance`, every `ShareParams` the helper builds carries `sharePositionOrigin`, and every entry point's first parameter is a `BuildContext`.
 
 ## Mobile async gaps — the `mounted` check goes BEFORE the `setState`, not after
 
