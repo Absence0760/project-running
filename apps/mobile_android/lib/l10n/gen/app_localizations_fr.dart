@@ -525,7 +525,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get peopleNearbyEmptyBody =>
-      'Activez « Me montrer aux coureurs à proximité » dans Réglages → Préférences → Confidentialité et définissez votre zone. Seuls les coureurs ayant fait de même peuvent vous trouver.';
+      'Activez « Me montrer aux coureurs à proximité » et définissez votre zone. Seuls les coureurs ayant fait de même peuvent vous trouver.';
+
+  @override
+  String get peopleNearbyEmptyAction => 'Ouvrir les Préférences';
 
   @override
   String get peopleNearbyLoadFailed =>

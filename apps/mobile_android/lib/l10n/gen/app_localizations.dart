@@ -860,8 +860,14 @@ abstract class AppLocalizations {
   /// Empty-state body for the runners-nearby list, pointing at the opt-in and area setter
   ///
   /// In en, this message translates to:
-  /// **'Turn on \"Show me to runners nearby\" in Settings → Preferences → Privacy and set your area. Only runners who did the same can find you.'**
+  /// **'Turn on \"Show me to runners nearby\" and set your area. Only runners who did the same can find you.'**
   String get peopleNearbyEmptyBody;
+
+  /// Button on the runners-nearby empty state that opens the Preferences settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Open Preferences'**
+  String get peopleNearbyEmptyAction;
 
   /// Error-state message when the runners-nearby list fails to load
   ///
