@@ -475,7 +475,7 @@ void main() {
 
     /// Lets the pushed route's transition run without pumpAndSettle, which
     /// hangs on the shell's rescheduling async tabs.
-    Future<void> _openAndSettle(WidgetTester tester) async {
+    Future<void> openAndSettle(WidgetTester tester) async {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
     }
@@ -487,7 +487,7 @@ void main() {
       expect(find.byType(SettingsPreferencesScreen), findsNothing);
 
       openSettings(SettingsDestination.preferences);
-      await _openAndSettle(tester);
+      await openAndSettle(tester);
 
       expect(find.byType(SettingsPreferencesScreen), findsOneWidget,
           reason: 'the People tab holds neither a Preferences nor a '
@@ -498,7 +498,7 @@ void main() {
       final s = await _makeStores();
       await _pump(tester, s);
       openSettings(SettingsDestination.preferences);
-      await _openAndSettle(tester);
+      await openAndSettle(tester);
 
       expect(pendingSettingsDestination.value, isNull,
           reason: 'a slot left full would swallow the next identical request, '
@@ -509,7 +509,7 @@ void main() {
       final s = await _makeStores();
       await _pump(tester, s);
       openSettings(SettingsDestination.about);
-      await _openAndSettle(tester);
+      await openAndSettle(tester);
 
       expect(find.byType(SettingsAboutScreen), findsOneWidget);
       expect(find.byType(SettingsPreferencesScreen), findsNothing);
@@ -518,7 +518,7 @@ void main() {
     testWidgets('an unrequested shell pushes nothing', (tester) async {
       final s = await _makeStores();
       await _pump(tester, s);
-      await _openAndSettle(tester);
+      await openAndSettle(tester);
       expect(find.byType(SettingsPreferencesScreen), findsNothing);
       expect(find.byType(SettingsAboutScreen), findsNothing);
     });
@@ -530,7 +530,7 @@ void main() {
       final s = await _makeStores();
       openSettings(SettingsDestination.preferences);
       await _pump(tester, s);
-      await _openAndSettle(tester);
+      await openAndSettle(tester);
 
       expect(find.byType(SettingsPreferencesScreen), findsOneWidget);
     });
