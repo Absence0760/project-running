@@ -1226,6 +1226,16 @@ token "stroller" in every language. Corollaries:
 - **An unrecognised value renders VERBATIM, never title-cased.** A title-cased
   token is indistinguishable from a real translation and hides the drift on
   exactly the surface where it would be noticed.
+- **A narrow surface truncates; it does not get its own shorter words.** The
+  Wear OS pre-run chip carried four abbreviated activity labels on the theory
+  that a 56 dp `maxLines = 1` chip needed them. Measured, its label box is
+  32 dp and the abbreviations overflowed it too (`Caminar` 38 dp, `ウォーク`
+  40 dp) while the long words the same chip already shipped ran to 60 dp
+  (`Kinderwagen`) — so the fork bought a fourth vocabulary and no fit
+  (decisions § 713). Ellipsis plus a full `contentDescription` is how a cramped
+  surface handles a long word. If a constrained surface ever genuinely does
+  need shorter forms, they are a *documented abbreviation table* with a row per
+  locale, agreed as such — never a quietly different translation.
 
 **Two destinations may not have names a reader cannot tell apart.** A
 destination's name is the thing a user searches for, so "Coach" (the AI chat)
