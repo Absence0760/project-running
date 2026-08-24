@@ -16,7 +16,7 @@ Flutter iOS app. **`lib/` and `test/` are now byte-for-byte identical to `apps/m
 **Don't build here first:**
 
 - A user-facing feature that doesn't yet exist on web — build it on web first, mirror after. Same rule as Android per §24.
-- An Android-only tile that has no iOS equivalent. The deliberately omitted set (already documented in `screens/settings_screen.dart`): BLE pairing UI, Strava ZIP import, backup/restore, advanced-GPS toggle, dark-mode toggle. Don't add these without a fresh decision.
+- An Android-only tile that has no iOS equivalent. **There is no such set today.** The list that stood here — BLE pairing UI, Strava ZIP import, backup/restore, advanced-GPS toggle, dark-mode toggle — predates the twin merge and cited a `screens/settings_screen.dart` comment that no longer exists; all five render on both apps out of the one byte-identical file, none behind a `Platform` gate ([decisions § 707](../../docs/architecture/decisions.md)). A genuinely Android-only tile would need a `Platform` gate and a fresh decision.
 - New abstractions / DI frameworks. Match Android's `StatefulWidget + setState + ChangeNotifier` stack — verbatim. The iOS app is "structurally identical to mobile_android" by design (see "What 'done' means" below).
 - Direct `Supabase.instance.client.from(...)` calls in screens. Route through `packages/api_client`.
 - Comments, decision docs, READMEs. Conventions in [../../docs/architecture/conventions.md](../../docs/architecture/conventions.md) apply in full.
