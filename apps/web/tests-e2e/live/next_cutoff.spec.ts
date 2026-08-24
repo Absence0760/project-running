@@ -267,7 +267,11 @@ test.describe('/live/[id] — Next cut-off card (anon)', () => {
 			await page.goto(`/live/${runId}`);
 
 			// The stat strip mounts (proves the page loaded), but no card.
-			await expect(page.locator('.live-stat-label')).toHaveCount(3);
+			// A live run knows its own start instant, so the race clock tile is
+			// there — asserted by identity rather than by tile COUNT, which the
+			// recent-pace tile makes race-dependent.
+			await expect(page.getByTestId('race-clock')).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByTestId('runner-timer')).toBeVisible();
 			await expect(page.locator('.cutoff-card')).toHaveCount(0);
 		} finally {
 			await deleteRun(runId);

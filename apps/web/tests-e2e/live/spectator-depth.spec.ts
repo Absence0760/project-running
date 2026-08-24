@@ -229,7 +229,7 @@ test.describe('/live/[id] — finished-run 2-minute boundary (anon)', () => {
 			);
 			// Saved totals frozen: 7.5 km / 30:00.
 			await expect(page.locator('.live-stat-value').first()).toContainText('7.5');
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('30:00');
+			await expect(page.getByTestId('runner-timer')).toContainText('30:00');
 		} finally {
 			await deleteRun(runId);
 		}

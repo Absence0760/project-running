@@ -21,6 +21,16 @@ test.describe('/live/[id] — anon spectator', () => {
 
 		await expect(page.locator('.live-logo')).toContainText('Threkir');
 		await expect(page.locator('.live-badge')).toBeVisible();
+		// Distance / Timer / Pace. The seeded run concluded before the
+		// `concluded_at` marker existed, so there is no instant to measure a
+		// race clock TO — the page withholds that tile rather than measuring
+		// to now, which would tick on for a run that ended months ago. The
+		// saved 45:00 lands first, so the withheld tile is asserted against a
+		// hydrated page rather than an empty one.
+		await expect(page.getByTestId('runner-timer')).toContainText('45:00', {
+			timeout: 10_000
+		});
+		await expect(page.getByTestId('race-clock')).toHaveCount(0);
 		await expect(page.locator('.live-stat-label')).toHaveCount(3);
 	});
 
@@ -75,8 +85,8 @@ test.describe('/live/[id] — anon spectator', () => {
 			);
 
 			await expect(page.locator('.live-stat-value').first()).toContainText('4.5');
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('22:30');
-			await expect(page.locator('.live-stat-value').nth(2)).not.toContainText('--');
+			await expect(page.getByTestId('runner-timer')).toContainText('22:30');
+			await expect(page.getByTestId('avg-pace')).not.toContainText('--');
 
 			// The runner sub-line now carries ping freshness (the live_freshness
 			// feature): a just-arrived ping reads "Updated just now" / "Updated Ns
@@ -85,6 +95,67 @@ test.describe('/live/[id] — anon spectator', () => {
 			// the freshness indicator is what surfaces — and the LIVE badge above
 			// already pins liveness.
 			await expect(page.locator('.live-runner-sub')).toContainText(/Updated/i);
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('the race clock keeps running through a dead zone the runner timer sat out', async ({
+		page
+	}) => {
+		// The 240-mile-race case (decisions §712). The runner's last ping is
+		// 40 min old and its own timer stopped at 30:00 with it; the race
+		// clock — wall time since `started_at`, which `public_runs` serves
+		// every spectator — is 90 min and does not pause because a phone lost
+		// a tower. Both figures render, each under its own label, so the
+		// spectator doing cut-off arithmetic reads the one that is still
+		// moving and the frozen one cannot be mistaken for it.
+		const startedAt = new Date(Date.now() - 90 * 60 * 1000).toISOString();
+		const lastPingAt = new Date(Date.now() - 40 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 30_000,
+			// A 6 h plan, so the run is still in progress and the page does
+			// not take the finished fast path.
+			duration_s: 6 * 3_600,
+			is_public: true
+		});
+		try {
+			await insertLivePings({
+				run_id: runId,
+				user_id: USER_A.id,
+				points: [
+					{
+						...MELBOURNE_NEARBY_OUT_OF_ZONE[0],
+						distance_m: 4_000,
+						elapsed_s: 1_500,
+						at: new Date(Date.now() - 45 * 60 * 1000).toISOString()
+					},
+					{
+						...MELBOURNE_NEARBY_OUT_OF_ZONE[1],
+						distance_m: 5_000,
+						elapsed_s: 1_800,
+						at: lastPingAt
+					}
+				]
+			});
+
+			await page.goto(`/live/${runId}`);
+
+			// A 40 min-old fix is past the stale threshold, which is exactly
+			// the state this test is about — the badge says so.
+			await expect(page.locator('.live-badge')).toHaveClass(/stale/, {
+				timeout: 10_000
+			});
+			// Frozen at the last ping's own reading.
+			await expect(page.getByTestId('runner-timer')).toContainText('30:00');
+			// Ticking: 1:30:xx, not 30:00. The seconds are live so match the
+			// hour + minute the run's own start pins.
+			await expect(page.getByTestId('race-clock')).toContainText(/1:30:\d\d/);
+			// The frozen figure says so, rather than passing as current.
+			await expect(page.getByTestId('runner-timer')).toContainText(/last fix/i);
+			await expect(page.locator('.live-runner-sub')).toContainText(/40 min/i);
 		} finally {
 			await deleteRun(runId);
 		}
@@ -179,7 +250,7 @@ test.describe('/live/[id] — anon spectator', () => {
 			// these assertions fail if only the snapshot/first point
 			// hydrated.
 			await expect(page.locator('.live-stat-value').first()).toContainText('12');
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('1:14:56');
+			await expect(page.getByTestId('runner-timer')).toContainText('1:14:56');
 		} finally {
 			await deleteRun(runId);
 		}
@@ -203,7 +274,7 @@ test.describe('/live/[id] — anon spectator', () => {
 			await expect(page.locator('.live-badge')).toContainText(/Finished/i);
 
 			await expect(page.locator('.live-stat-value').first()).toContainText('10');
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('50:00');
+			await expect(page.getByTestId('runner-timer')).toContainText('50:00');
 
 			await expect(page.locator('.live-runner-sub')).toContainText(/Run finished/i);
 		} finally {
@@ -434,7 +505,9 @@ test.describe('/live/[id] — anon spectator', () => {
 			// pinned as a regression net, not a UX endorsement.
 			const stats = page.locator('.live-stat-value');
 			const distanceText = (await stats.first().innerText()).trim();
-			const elapsedText = (await stats.nth(1).innerText()).trim();
+			const elapsedText = (
+				await page.getByTestId('runner-timer').locator('.live-stat-value').innerText()
+			).trim();
 			expect(distanceText).not.toMatch(/NaN|undefined|null/);
 			expect(elapsedText).not.toMatch(/NaN|undefined|null/);
 			// Pin the specific shape so a future change to em-dash
@@ -475,7 +548,7 @@ test.describe('/live/[id] — anon spectator', () => {
 			await expect(badge).toContainText(/Finished/i);
 			// Frozen saved totals, not demo-ticker fabrications.
 			await expect(page.locator('.live-stat-value').first()).toContainText('2.5');
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('9:30');
+			await expect(page.getByTestId('runner-timer')).toContainText('9:30');
 		} finally {
 			await deleteRun(runId);
 		}
@@ -506,7 +579,7 @@ test.describe('/live/[id] — anon spectator', () => {
 			await page.waitForTimeout(7_000);
 			await expect(badge).toContainText(/Connecting/i);
 			await expect(badge).not.toHaveClass(/active|finished|not-found/);
-			await expect(page.locator('.live-stat-value').nth(1)).toHaveText('0:00');
+			await expect(page.getByTestId('runner-timer')).toContainText('0:00');
 			await expect(page.locator('.live-runner-sub')).toContainText(/Waiting/i);
 		} finally {
 			await deleteRun(runId);
