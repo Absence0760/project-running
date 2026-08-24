@@ -103,6 +103,11 @@ const (
 	BucketRoutePhotos = "route-photos"
 	BucketClubPhotos  = "club-photos"
 	BucketAvatars     = "avatars"
+	// BucketExports holds Art 20 export artifacts (migration
+	// 20270602_001). Separate from `runs` because `file_size_limit` is
+	// per bucket: `runs` caps an object at 25 MB, which is right for a
+	// single gzipped track and far below a full-history archive.
+	BucketExports = "exports"
 )
 
 // MetadataKey is a key inside the `runs.metadata` jsonb bag. The bag
