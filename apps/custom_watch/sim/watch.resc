@@ -222,6 +222,19 @@ macro reset
 """
 runMacro $reset
 
+# Stage markers. The monitor does NOT put an error raised inside an include
+# into the log file, so an include that stops half-way leaves nothing behind to
+# read: the only symptom bin/watch-sim.sh could see was the GPS pty that never
+# appeared, and its diagnosis had to guess at which command failed. Each marker
+# is the last line the log carries when the command AFTER it is the one that
+# died, which turns that guess into a reading.
+python
+"""
+def resc_stage(name):
+    monitor.Machine.SystemBus.GetCPUs()[0].InfoLog("watch.resc stage: " + name)
+"""
+python "resc_stage('platform built, ELF loaded')"
+
 include @defmt_rtt.py
 setup_defmt_rtt $defmt_out
 
@@ -329,6 +342,7 @@ led.StateChanged += led_changed
 # makes the first frame a client reads the current one.
 emulation CreateServerSocketTerminal $phone_port "phone" false true
 connector Connect sysbus.uart1 phone
+python "resc_stage('phone link socket bound')"
 
 # GPS rail: the u-blox breakout's NMEA stream arrives on uart0 (UARTE0).
 # The pty end is where the host feeder writes canned sentences. The firmware
@@ -338,5 +352,7 @@ connector Connect sysbus.uart1 phone
 # symlink appearing as proof the whole script executed.
 emulation CreateUartPtyTerminal "gps" $gps_pty true
 connector Connect sysbus.uart0 gps
+python "resc_stage('gps pty created')"
 
 start
+python "resc_stage('machine started')"
