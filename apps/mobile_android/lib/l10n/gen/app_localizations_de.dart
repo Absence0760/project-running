@@ -527,7 +527,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get peopleNearbyEmptyBody =>
-      'Aktiviere „Mich Läufern in der Nähe zeigen“ unter Einstellungen → Präferenzen → Privatsphäre und setze dein Gebiet. Nur Läufer, die dasselbe getan haben, können dich finden.';
+      'Aktiviere „Mich Läufern in der Nähe zeigen“ und setze dein Gebiet. Nur Läufer, die dasselbe getan haben, können dich finden.';
+
+  @override
+  String get peopleNearbyEmptyAction => 'Voreinstellungen öffnen';
 
   @override
   String get peopleNearbyLoadFailed =>

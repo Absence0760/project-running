@@ -525,7 +525,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get peopleNearbyEmptyBody =>
-      'Activa «Mostrarme a corredores cercanos» en Ajustes → Preferencias → Privacidad y fija tu zona. Solo pueden encontrarte los corredores que hayan hecho lo mismo.';
+      'Activa «Mostrarme a corredores cercanos» y fija tu zona. Solo pueden encontrarte los corredores que hayan hecho lo mismo.';
+
+  @override
+  String get peopleNearbyEmptyAction => 'Abrir Preferencias';
 
   @override
   String get peopleNearbyLoadFailed =>

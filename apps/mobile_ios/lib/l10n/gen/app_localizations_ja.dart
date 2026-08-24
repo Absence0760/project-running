@@ -505,7 +505,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get peopleNearbyEmptyBody =>
-      '設定 → 環境設定 → プライバシーで「近くのランナーに自分を表示」をオンにし、エリアを設定してください。同じ設定をしたランナーだけがあなたを見つけられます。';
+      '「近くのランナーに自分を表示」をオンにし、エリアを設定してください。同じ設定をしたランナーだけがあなたを見つけられます。';
+
+  @override
+  String get peopleNearbyEmptyAction => '環境設定を開く';
 
   @override
   String get peopleNearbyLoadFailed => '近くのランナーを読み込めませんでした。';

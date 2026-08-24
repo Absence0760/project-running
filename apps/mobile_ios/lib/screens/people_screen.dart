@@ -10,6 +10,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../nearby.dart';
 import '../nearby_flag.dart';
 import '../preferences.dart' show formatDistanceForPref;
+import '../settings_destination.dart';
 import '../widgets/error_state.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
@@ -478,6 +479,17 @@ class _PeopleScreenState extends State<PeopleScreen> {
                   icon: Icons.near_me,
                   title: l10n.peopleNearbyEmptyTitle,
                   body: l10n.peopleNearbyEmptyBody,
+                  // The opt-in and the area setter both live on the
+                  // Preferences screen, which needs a Preferences and a
+                  // SettingsSyncService this tab was never handed. Name the
+                  // destination and let the shell open it (decisions § 710) —
+                  // web's empty card links to /settings/preferences here.
+                  action: OutlinedButton.icon(
+                    onPressed: () =>
+                        openSettings(SettingsDestination.preferences),
+                    icon: const Icon(Icons.settings, size: 18),
+                    label: Text(l10n.peopleNearbyEmptyAction),
+                  ),
                 ),
               )
             else
@@ -636,11 +648,13 @@ class _Empty extends StatelessWidget {
   final IconData icon;
   final String title;
   final String body;
+  final Widget? action;
 
   const _Empty({
     required this.icon,
     required this.title,
     required this.body,
+    this.action,
   });
 
   @override
@@ -664,6 +678,10 @@ class _Empty extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
+          if (action != null) ...[
+            const SizedBox(height: 12),
+            action!,
+          ],
         ],
       ),
     );

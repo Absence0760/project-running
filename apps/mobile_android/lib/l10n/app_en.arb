@@ -689,9 +689,13 @@
   "@peopleNearbyEmptyTitle": {
     "description": "Empty-state title when the runners-nearby list comes back with no one"
   },
-  "peopleNearbyEmptyBody": "Turn on \"Show me to runners nearby\" in Settings \u2192 Preferences \u2192 Privacy and set your area. Only runners who did the same can find you.",
+  "peopleNearbyEmptyBody": "Turn on \"Show me to runners nearby\" and set your area. Only runners who did the same can find you.",
   "@peopleNearbyEmptyBody": {
     "description": "Empty-state body for the runners-nearby list, pointing at the opt-in and area setter"
+  },
+  "peopleNearbyEmptyAction": "Open Preferences",
+  "@peopleNearbyEmptyAction": {
+    "description": "Button on the runners-nearby empty state that opens the Preferences settings screen"
   },
   "peopleNearbyLoadFailed": "Could not load runners nearby.",
   "@peopleNearbyLoadFailed": {
