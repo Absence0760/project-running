@@ -30,7 +30,6 @@ Iterable<RegExpMatch> codeMatches(String src, RegExp pattern) {
   final blanked = blankNonCode(src);
   return pattern
       .allMatches(src)
-      .whereType<RegExpMatch>()
       .where((m) => blanked.substring(m.start, m.end).trim().isNotEmpty);
 }
 
