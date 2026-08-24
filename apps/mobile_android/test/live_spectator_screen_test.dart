@@ -47,14 +47,30 @@ RunRow _run({
   concludedAt: concludedAt,
 );
 
-Map<String, dynamic> _ping(DateTime at, {bool coarse = false}) => {
+Map<String, dynamic> _ping(
+  DateTime at, {
+  bool coarse = false,
+  double distanceM = 2000,
+  int elapsedS = 600,
+}) => {
   'lat': -37.8136,
   'lng': 144.9631,
-  'distance_m': 2000,
-  'elapsed_s': 600,
+  'distance_m': distanceM,
+  'elapsed_s': elapsedS,
   'at': at.toUtc().toIso8601String(),
   'coarse': coarse,
 };
+
+/// The big value a keyed `_Metric` cell is currently rendering.
+String _metricValue(WidgetTester tester, String key) => tester
+    .widgetList<Text>(
+      find.descendant(
+        of: find.byKey(Key(key)),
+        matching: find.byType(Text),
+      ),
+    )
+    .first
+    .data!;
 
 bool _supabaseReady = false;
 
@@ -468,6 +484,112 @@ void main() {
     );
   });
 
+  group('LiveSpectatorScreen — race clock vs runner timer', () {
+    realtimeWidgetTest(
+      'the race clock keeps running through a dead zone the timer sat out',
+      (tester) async {
+        // decisions §712. The last fix is 40 min old and the runner's own
+        // timer stopped at 30:00 with it; the race clock is 90 min and did
+        // not pause because a phone lost a tower. Both render, each under
+        // its own label, so the frozen one cannot pass as the moving one.
+        final now = DateTime.now().toUtc();
+        final api = _FakeApi(
+          run: _run(
+            durationS: 6 * 3600,
+            startedAt: now.subtract(const Duration(minutes: 90)),
+          ),
+          pings: [
+            _ping(
+              now.subtract(const Duration(minutes: 40)),
+              elapsedS: 1800,
+            ),
+          ],
+        );
+        await tester.runAsync(() async {
+          await _pumpApi(tester, api);
+          await tester.pump();
+          await tester.pump();
+          expect(_metricValue(tester, 'runner-timer'), '30:00');
+          expect(
+            _metricValue(tester, 'race-clock'),
+            matches(RegExp(r'^1:30:\d\d$')),
+          );
+          // The frozen figure says so rather than passing as current.
+          expect(find.text('TIMER, LAST FIX'), findsOneWidget);
+          expect(find.text('TIMER'), findsNothing);
+          await tester.pumpWidget(const SizedBox());
+        });
+      },
+    );
+
+    realtimeWidgetTest(
+      'a fresh fix labels the timer plainly, without the last-fix qualifier',
+      (tester) async {
+        final now = DateTime.now().toUtc();
+        final api = _FakeApi(
+          run: _run(
+            durationS: 3600,
+            startedAt: now.subtract(const Duration(minutes: 10)),
+          ),
+          pings: [_ping(now, elapsedS: 600)],
+        );
+        await tester.runAsync(() async {
+          await _pumpApi(tester, api);
+          await tester.pump();
+          await tester.pump();
+          expect(find.text('TIMER'), findsOneWidget);
+          expect(find.text('TIMER, LAST FIX'), findsNothing);
+          await tester.pumpWidget(const SizedBox());
+        });
+      },
+    );
+
+    realtimeWidgetTest(
+      "a concluded run's race clock stops at the conclusion instant",
+      (tester) async {
+        // Measured to concluded_at, never to now, or a run that ended
+        // yesterday would still be counting. The timer is the saved
+        // duration_s, which is the shorter of the two by the time the
+        // runner stood still with the recording paused.
+        final now = DateTime.now().toUtc();
+        final startedAt = now.subtract(const Duration(hours: 4));
+        final api = _FakeApi(
+          run: _run(
+            durationS: 5400,
+            startedAt: startedAt,
+            concludedAt: startedAt.add(const Duration(hours: 2)),
+          ),
+        );
+        await _pumpApi(tester, api);
+        await tester.pumpAndSettle();
+        expect(_metricValue(tester, 'race-clock'), '2:00:00');
+        expect(_metricValue(tester, 'runner-timer'), '1:30:00');
+      },
+    );
+
+    realtimeWidgetTest(
+      'a run concluded before the marker existed withholds the race clock',
+      (tester) async {
+        // No concluded_at means no instant to measure to. The tile is
+        // withheld rather than measured to now, which would tick on
+        // forever for a run that ended months ago.
+        final api = _FakeApi(
+          run: _run(
+            durationS: 1800,
+            startedAt: DateTime.now().toUtc().subtract(
+              const Duration(hours: 2),
+            ),
+          ),
+        );
+        await _pumpApi(tester, api);
+        await tester.pumpAndSettle();
+        expect(find.text('Finished'), findsOneWidget);
+        expect(find.byKey(const Key('race-clock')), findsNothing);
+        expect(_metricValue(tester, 'runner-timer'), '30:00');
+      },
+    );
+  });
+
   group('LiveSpectatorScreen — metric row at a narrow width', () {
     realtimeWidgetTest(
       'an ultra-length distance/time/pace does not overflow the row',
@@ -478,22 +600,28 @@ void main() {
         addTearDown(view.reset);
 
         // Mid-ultra at hour 100: the spectator's runner is 240 miles in, which
-        // is the widest the metric cells ever get. The values come off the
-        // ping, not the run row (the run row only feeds them once finished).
+        // is the widest the metric cells ever get. Two pings so the recent-pace
+        // cell is present too — five ultra-length cells is the real worst case
+        // since the race clock got its own tile. The values come off the ping,
+        // not the run row (the run row only feeds them once finished).
         final now = DateTime.now().toUtc();
         await _pumpApi(
           tester,
           _FakeApi(
-            run: _run(durationS: 376331, distanceM: 386243, startedAt: now),
+            run: _run(
+              durationS: 376331,
+              distanceM: 386243,
+              // Ends now, so the 2-min slack keeps it non-terminal and the
+              // race clock reads its own ultra length rather than zero.
+              startedAt: now.subtract(const Duration(seconds: 376331)),
+            ),
             pings: [
-              {
-                'lat': -37.8136,
-                'lng': 144.9631,
-                'distance_m': 386243,
-                'elapsed_s': 376331,
-                'at': now.toIso8601String(),
-                'coarse': false,
-              },
+              _ping(
+                now.subtract(const Duration(seconds: 30)),
+                distanceM: 386143,
+                elapsedS: 376301,
+              ),
+              _ping(now, distanceM: 386243, elapsedS: 376331),
             ],
           ),
         );
@@ -503,6 +631,7 @@ void main() {
         // Prove the row actually rendered the ultra values before asserting
         // on overflow — a zeroed row would pass vacuously.
         expect(find.textContaining('386'), findsWidgets);
+        expect(_metricValue(tester, 'runner-timer'), '104:32:11');
         expect(tester.takeException(), isNull);
       },
     );

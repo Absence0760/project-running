@@ -4996,6 +4996,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get liveSpectatorBadgeDnf => 'DNF';
 
   @override
+  String get liveSpectatorStatRaceTime => 'Tempo de prova';
+
+  @override
+  String get liveSpectatorStatTimer => 'Cronômetro';
+
+  @override
+  String get liveSpectatorStatTimerStale => 'Cronômetro, último sinal';
+
+  @override
   String get liveSpectatorRecentPace => 'Recente';
 
   @override
@@ -18425,6 +18434,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get liveSpectatorBadgeDnf => 'DNF';
+
+  @override
+  String get liveSpectatorStatRaceTime => 'Tempo de prova';
+
+  @override
+  String get liveSpectatorStatTimer => 'Cronômetro';
+
+  @override
+  String get liveSpectatorStatTimerStale => 'Cronômetro, último sinal';
 
   @override
   String get liveSpectatorRecentPace => 'Recente';
