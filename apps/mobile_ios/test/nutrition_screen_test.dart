@@ -15,6 +15,7 @@ import '../lib/screens/nutrition_screen.dart';
 import '../lib/screens/settings_body_metrics_screen.dart';
 import '../lib/widgets/nutrition_log_sheet.dart';
 import '../lib/widgets/undo_bar.dart';
+import 'pump_until.dart';
 
 class _OfflineFakeApi extends ApiClient {
   @override
@@ -55,17 +56,8 @@ Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() done, {
   Duration timeout = const Duration(seconds: 10),
-}) async {
-  final deadline = DateTime.now().add(timeout);
-  while (!done()) {
-    if (DateTime.now().isAfter(deadline)) {
-      fail('timed out after $timeout waiting for the expected state');
-    }
-    await tester
-        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
-    await tester.pump();
-  }
-}
+}) =>
+    pumpUntil(tester, done, describe: 'the nutrition screen to reach the expected state', timeout: timeout);
 
 /// Close the armed undo window so the deferred commit runs. The delete tap
 /// itself must NOT be wrapped in `runAsync` any more — deferring means no store

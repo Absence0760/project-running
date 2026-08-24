@@ -17,6 +17,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/run_detail_screen.dart';
 import '../lib/settings_sync.dart';
 import '../lib/widgets/live_run_map.dart';
+import 'pump_until.dart';
 
 late Directory _runsDir;
 
@@ -901,18 +902,14 @@ void main() {
       // window, so the in-memory tombstone is set (the assertion below passes)
       // but showTopBanner hasn't run yet. Pump the real event loop until the
       // banner mounts rather than racing a fixed delay.
-      await tester.runAsync(() async {
-        for (var i = 0; i < 200; i++) {
-          if (find
-              .textContaining("Couldn't delete from the cloud")
-              .evaluate()
-              .isNotEmpty) {
-            break;
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          await tester.pump();
-        }
-      });
+      await pumpUntil(
+        tester,
+        () => find
+            .textContaining("Couldn't delete from the cloud")
+            .evaluate()
+            .isNotEmpty,
+        describe: 'the queued-delete banner to mount',
+      );
 
       expect(api.calls, 1);
       // Run NOT removed locally — the cloud row still exists, so a local
