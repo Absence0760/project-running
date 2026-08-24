@@ -371,13 +371,15 @@ Every `uses:` line in `.github/workflows/*.yml` pins the action to a 40-characte
 
 Tag-based refs (`@v4`, `@main`) are mutable — the publisher can force-push a malicious version under the same tag and every workflow that uses it pulls the malicious code on the next run. SHAs are immutable. This applies to ALL workflows, not just secret-touching ones, because `actions/checkout@<sha>` runs with `GITHUB_TOKEN` and a malicious checkout step can read repo contents + write commits.
 
+It applies to **commented-out lines too**, and to composite actions under `.github/actions/`. A commented reference is not dead code — it is what someone uncomments on the day they are trying to ship, which is the worst day to discover the pin ([decisions.md § 711](decisions.md)); and Dependabot's github-actions ecosystem scans `.github/workflows` plus a *root* `action.yml` only, so a reference inside a composite action gets no update PRs either.
+
 When upgrading an action: resolve the new SHA via
 
 ```bash
-git ls-remote https://github.com/<owner>/<repo>.git refs/tags/v5
+git ls-remote https://github.com/<owner>/<repo>.git 'refs/tags/v5*'
 ```
 
-and update both the SHA and the `# vN` comment together. Don't update one without the other.
+A release tag is often **annotated**, so its own object hash is not the commit — take the `refs/tags/v5^{}` row, or dereference through the API (`git/ref/tags/v5` → `git/tags/<sha>` → `.object.sha`). Update both the SHA and the `# vN` comment together; don't update one without the other. `scripts/check_toolchain_pins.mjs`, in the `workflow-lint` job, fails the build on a tag pin and on a SHA pin with no version comment.
 
 ## Fix bugs, don't code around them
 

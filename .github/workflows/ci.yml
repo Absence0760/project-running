@@ -178,8 +178,12 @@ jobs:
       # release workflows; the melos pin is checked against pubspec.lock,
       # which `pub global activate` otherwise ignores entirely. This is what
       # stops either from drifting, and it lives here because it is a lint on
-      # workflow files.
-      - name: Toolchain pin drift (Flutter SDK + melos)
+      # workflow files. The same script also fails any third-party `uses:`
+      # that pins a tag instead of a commit SHA — including one inside a
+      # comment, which is how release-ios.yml's TestFlight upload survived the
+      # sweep that pinned everything else, and including composite actions
+      # under .github/actions, which Dependabot does not scan at all.
+      - name: Toolchain pin drift (Flutter SDK + melos + action SHAs)
         run: |
           node scripts/check_toolchain_pins.mjs
           node --test scripts/check_toolchain_pins.test.mjs

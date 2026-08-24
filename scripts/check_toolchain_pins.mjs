@@ -45,21 +45,43 @@
 // ended SHA updates for it. Three declarations plus this check keeps both
 // properties.
 //
-// The vacuous-pass case is checked for both: if the action is renamed, or the
-// activate line reworded, this fails rather than reporting success over an
-// empty set. A guard that inspects nothing enforces nothing.
+//   GitHub Actions — every `uses:` reference naming a third-party action pins
+//     a 40-character commit SHA and carries the trailing `# vN` comment that
+//     makes it readable (conventions.md § GitHub Actions). A tag is mutable:
+//     the publisher can move `@v1` onto anything, and it then runs with this
+//     repo's GITHUB_TOKEN. Local `uses: ./…` references are the repo's own
+//     files and need no pin.
+//
+//     **Commented-out lines are read too**, and that is the point rather than
+//     an edge case. `apple-actions/upload-testflight-build@v1` sat on a
+//     mutable tag inside release-ios.yml's commented TestFlight block through
+//     the whole pin sweep that moved every live reference to a SHA — written
+//     off as dead code precisely because nothing looked at it. It is not
+//     dead; it is what someone uncomments on the day they first ship to
+//     TestFlight. A guard that skips comments would have re-created the
+//     blind spot it exists to close.
+//
+// The vacuous-pass case is checked for all of them: if the action is renamed,
+// or the activate line reworded, this fails rather than reporting success over
+// an empty set. A guard that inspects nothing enforces nothing.
 //
 // Run: `node scripts/check_toolchain_pins.mjs`
 // CI:  the `workflow-lint` job in .github/workflows/ci.yml, which is in the
 //      `CI gate` aggregator's `needs:` list.
 // Unit tests: `node --test scripts/check_toolchain_pins.test.mjs`
 
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const WORKFLOW_DIR = join(REPO_ROOT, '.github', 'workflows');
+// Composite actions are the one place a third-party `uses:` can hide from
+// Dependabot entirely — its github-actions ecosystem scans `.github/workflows`
+// plus a ROOT action.yml and nothing else (§ 595) — so an unpinned reference
+// here would never be updated either. Read for the pin check only; the three
+// toolchain checks below are about what the WORKFLOWS install.
+export const ACTION_DIR = join(REPO_ROOT, '.github', 'actions');
 export const LOCKFILE = join(REPO_ROOT, 'pubspec.lock');
 
 const ACTION = 'subosito/flutter-action@';
@@ -67,6 +89,11 @@ const ENV_KEY = 'FLUTTER_VERSION';
 const ACTIVATE = 'dart pub global activate melos';
 const CARGO_INSTALL = 'cargo install defmt-print';
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
+const COMMIT_SHA = /^[0-9a-f]{40}$/;
+// `owner/repo` or `owner/repo/path`, then `@ref`, then an optional trailing
+// comment. Anchored so a `uses:` inside prose cannot match.
+const ACTION_USES = /^[\s#]*(?:-\s+)?uses:\s*(\S+)\s*(?:#\s*(\S.*?))?\s*$/;
+const ACTION_REF = /^([\w][\w.-]*(?:\/[\w.-]+)+)@(\S+)$/;
 
 /// The workflow-level `env.FLUTTER_VERSION` and every flutter-action step,
 /// each with the raw `flutter-version:` value it carries (null when absent).
@@ -370,16 +397,84 @@ export function checkDefmtPrint(files) {
 	return { errors, ok, versions };
 }
 
-export function checkAll(files, lockText) {
+/// Every `uses:` line in a workflow or composite action, commented or not, as
+/// `{ line, ref, comment, commented }`. A line whose value is not shaped like
+/// an action reference is prose mentioning the key, not a use of it.
+export function parseActionUses(text) {
+	const found = [];
+	text.split('\n').forEach((line, i) => {
+		const m = line.match(ACTION_USES);
+		if (!m) return;
+		const ref = unquote(m[1]);
+		const commented = line.trimStart().startsWith('#');
+		if (ref.startsWith('./') || ref.startsWith('../')) {
+			found.push({ line: i + 1, ref, comment: m[2] ?? null, commented, local: true });
+			return;
+		}
+		if (!ACTION_REF.test(ref)) return;
+		found.push({ line: i + 1, ref, comment: m[2] ?? null, commented, local: false });
+	});
+	return found;
+}
+
+export function checkActionPins(files) {
+	const errors = [];
+	const ok = [];
+	let seen = 0;
+
+	for (const { name, text } of files) {
+		for (const use of parseActionUses(text)) {
+			if (use.local) continue;
+			seen++;
+			const where = `${name}:${use.line}`;
+			const [, action, ref] = use.ref.match(ACTION_REF);
+			const dead = use.commented ? ' (commented out — which is how this one drifted, not a reason to skip it)' : '';
+			if (!COMMIT_SHA.test(ref)) {
+				errors.push(
+					`${where} — \`${action}@${ref}\` pins a tag, not a commit${dead}. A tag is ` +
+						`mutable: the publisher can move it onto anything, and it then runs with ` +
+						`this repo's GITHUB_TOKEN. Resolve the SHA with \`git ls-remote ` +
+						`https://github.com/${action.split('/').slice(0, 2).join('/')}.git ` +
+						`refs/tags/${ref}\` (dereference an annotated tag to its commit) and ` +
+						`record the version in a trailing \`# ${ref}\` comment.`,
+				);
+				continue;
+			}
+			if (!use.comment || !/^v?\d/.test(use.comment)) {
+				errors.push(
+					`${where} — \`${action}\` is SHA-pinned but carries no trailing \`# vN\` ` +
+						`comment${dead}, so nothing on the line says which release it is and an ` +
+						`upgrade cannot be reviewed. Append the version the SHA came from.`,
+				);
+				continue;
+			}
+			ok.push(`${where} -> ${action} @ ${ref.slice(0, 7)} (${use.comment})`);
+		}
+	}
+
+	if (seen === 0) {
+		errors.push(
+			`no third-party \`uses:\` lines found in any workflow. Either every action ` +
+				`was removed, or the parser stopped matching and this check now enforces ` +
+				`nothing.`,
+		);
+	}
+
+	return { errors, ok, seen };
+}
+
+export function checkAll(files, lockText, compositeFiles = []) {
 	const flutter = checkFlutter(files);
 	const melos = checkMelos(files, lockText);
 	const defmt = checkDefmtPrint(files);
+	const actions = checkActionPins([...files, ...compositeFiles]);
 	return {
-		errors: [...flutter.errors, ...melos.errors, ...defmt.errors],
-		ok: [...flutter.ok, ...melos.ok, ...defmt.ok],
+		errors: [...flutter.errors, ...melos.errors, ...defmt.errors, ...actions.errors],
+		ok: [...flutter.ok, ...melos.ok, ...defmt.ok, ...actions.ok],
 		flutter,
 		melos,
 		defmt,
+		actions,
 	};
 }
 
@@ -390,10 +485,24 @@ function readWorkflows(dir) {
 		.map((name) => ({ name, text: readFileSync(join(dir, name), 'utf-8') }));
 }
 
+export function readCompositeActions(dir) {
+	return readdirSync(dir, { withFileTypes: true })
+		.filter((e) => e.isDirectory())
+		.map((e) => e.name)
+		.sort()
+		.flatMap((name) =>
+			['action.yml', 'action.yaml']
+				.map((f) => join(dir, name, f))
+				.filter((f) => existsSync(f))
+				.map((f) => ({ name: `actions/${name}/${basename(f)}`, text: readFileSync(f, 'utf-8') })),
+		);
+}
+
 function main() {
-	const { errors, ok, flutter, melos, defmt } = checkAll(
+	const { errors, ok, flutter, melos, defmt, actions } = checkAll(
 		readWorkflows(WORKFLOW_DIR),
 		readFileSync(LOCKFILE, 'utf-8'),
+		readCompositeActions(ACTION_DIR),
 	);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
@@ -407,7 +516,8 @@ function main() {
 		`\n${flutter.ok.length} flutter-action step(s) pin Flutter ` +
 			`${[...flutter.versions.keys()][0]}; ${melos.ok.length} activation(s) pin ` +
 			`melos ${melos.locked}, matching pubspec.lock; defmt-print pinned to ` +
-			`${[...defmt.versions.keys()][0]} with matching cache keys.`,
+			`${[...defmt.versions.keys()][0]} with matching cache keys; ` +
+			`${actions.ok.length} third-party action reference(s) pinned by commit SHA.`,
 	);
 	return 0;
 }

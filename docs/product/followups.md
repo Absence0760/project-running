@@ -577,10 +577,24 @@ Two items remain open, deliberately:
 - [ ] The `node-version: 24` inputs track a major line rather than an exact
   patch. Left as-is: a Node minor/patch break is loud and local to the job
   that runs it, not a silent change to what gets built or shipped.
-- [ ] `apple-actions/upload-testflight-build@v1` in `release-ios.yml` is
+- [x] `apple-actions/upload-testflight-build@v1` in `release-ios.yml` is
   tag-pinned, not SHA-pinned — the only such reference in the repo. It sits
   inside the commented-out TestFlight block, so it is not live; SHA-pin it
-  when that block is uncommented.
+  when that block is uncommented. **Closed 2026-08-24**
+  ([decisions § 711](../architecture/decisions.md)) — pinned now rather than
+  on the day someone uncomments it. Pinned to **v5.3.0**
+  (`5e75ff58276689011512ba87a381d93dc67dbcf8`), not to v1: `@v1` resolves to a
+  2020 commit declaring `runs.using: node12`, a runtime GitHub has removed, so
+  SHA-pinning the tag verbatim would have frozen a reference that cannot
+  execute. v5 takes the same five inputs the step passes and adds only
+  optional ones. No repo-wide guard asserted SHA pinning at all — the sweep
+  that pinned everything else was a one-time audit — so
+  `scripts/check_toolchain_pins.mjs` grew a fourth check that reads **every**
+  `uses:` in `.github/workflows` **and** `.github/actions/*/action.yml`,
+  **including commented-out lines**, which is precisely why this one drifted;
+  it also fails a SHA pin carrying no `# vN` comment, which caught four bare
+  `actions/checkout` lines. 150 references, verified green, and verified to
+  fail on the pre-fix file.
 
 ## Challenges: two things this round deliberately did not ship (2026-08-13)
 
