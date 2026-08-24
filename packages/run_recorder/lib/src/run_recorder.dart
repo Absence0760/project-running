@@ -480,11 +480,11 @@ class RunRecorder {
   /// for that flag is `true`, which auto-pauses the GPS the moment iOS
   /// decides the user has stopped moving — including the 30-second pause
   /// taken to photograph something interesting mid-run. That produces the
-  /// same silent freeze the Android `whileInUse` path produced (see
-  /// [LocationPermissionWhileInUseError]) — fixes stop, distance flat-lines,
-  /// the foreground capability stays alive so no error surfaces, and the
-  /// user only notices once they look at the finished run. Pinning the flag
-  /// here keeps the iOS twin honest. `activityType: fitness` biases the
+  /// same silent freeze an Android `whileInUse` grant can produce — see
+  /// [backgroundLocationLimited] — fixes stop, distance flat-lines, the
+  /// foreground capability stays alive so no error surfaces, and the user
+  /// only notices once they look at the finished run. Pinning the flag here
+  /// keeps the iOS twin honest. `activityType: fitness` biases the
   /// CoreLocation power-saving heuristics for foot-paced motion.
   ///
   /// Android gets [AndroidSettings] with [ForegroundNotificationConfig] so
