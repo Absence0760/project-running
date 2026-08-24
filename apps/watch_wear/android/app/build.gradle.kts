@@ -203,7 +203,7 @@ dependencies {
     // 1.1.0 stable when it ships.
     implementation("androidx.health:health-services-client:1.1.0-rc02")
     implementation("androidx.concurrent:concurrent-futures-ktx:1.3.0")
-    implementation("com.google.guava:guava:33.6.0-android")
+    implementation("com.google.guava:guava:33.7.1-android")
 
     // Location
     implementation("com.google.android.gms:play-services-location:21.4.0")
@@ -212,7 +212,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
 
     // Networking
-    implementation("com.squareup.okhttp3:okhttp:5.4.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
 
     // Local persistence
     implementation("androidx.datastore:datastore-preferences:1.2.1")
