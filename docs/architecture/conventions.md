@@ -425,6 +425,16 @@ The rule behind the "real readiness signal" clause above, and the one three sepa
 - **An inner deadline must fit inside the outer budget**, or the outer one always fires first and the specific diagnosis underneath is dead code. Prefer a deadline re-armed on progress over one multiplied by the number of expected steps.
 - **When a stall has two possible causes, check the cheap one first.** A firmware that stops receiving GPS and a runner who stopped moving look identical from inside the recorder; a wait on distance that cannot tell them apart blames the wrong component every time.
 
+### A CI failure names the step that produced it
+
+The sibling on the reporting side, and the same class of confident-but-wrong sentence ([decisions.md § 711](decisions.md)). A step condition of `failure()` is true for a failure *anywhere earlier in the job*, so a diagnosis printed from a trailing on-failure step speaks for every step above it — `parity-types` ended in one that printed "database.types.ts is out of sync with the Supabase schema" and told the reader to run `npm run gen:types`, which is what a web unit-test failure five steps up produced.
+
+- **A diagnosis lives in the step it describes**, as `if ! cmd; then echo "::error::<what broke>"; echo "<how to fix it>"; exit 1; fi` — the form the `twin-parity` and `schema-codegen-drift` jobs already use. Scoping a trailing step with `steps.<id>.outcome == 'failure'` is the other legal shape; a bare `failure()` is not.
+- **An on-failure step that claims nothing is fine.** Uploading a Playwright report or staging a sim log under `if: failure()` asserts nothing about which step failed. The rule is about claims, not about running on failure.
+- **A job whose name cannot say which check broke owes a diagnosis per step.** Splitting such a job so its name does the work is the alternative, and it costs a hosted-runner slot on every PR; per-step annotations surface on the checks summary for free.
+
+`scripts/check_ci_diagnostics.mjs`, in the `workflow-lint` job, fails the build on both halves.
+
 ## If you see something wrong, fix it
 
 A sibling rule to the one above. When you're working in a file and notice something **that doesn't look right, doesn't act correctly, or isn't optimal**, fix it in the same session. Don't walk past it on the grounds of "out of scope" — by the time anyone else looks, the broken thing will still be broken AND your touch in the file's git blame will look like a tacit endorsement.

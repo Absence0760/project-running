@@ -183,6 +183,16 @@ jobs:
         run: |
           node scripts/check_toolchain_pins.mjs
           node --test scripts/check_toolchain_pins.test.mjs
+      # A step's `if: failure()` is true for a failure anywhere earlier in the
+      # job, so a diagnosis printed from one speaks for steps it cannot see —
+      # parity-types' trailing step reported "database.types.ts is out of sync"
+      # over a web unit-test failure and sent the reader to the migrations. This
+      # fails the build on that shape anywhere in the repo, and on a check step
+      # added to a bundled job without a diagnosis of its own.
+      - name: CI failure diagnoses name what actually failed
+        run: |
+          node scripts/check_ci_diagnostics.mjs
+          node --test scripts/check_ci_diagnostics.test.mjs
       # The stack-start wait loop is shell inside a composite action, so it
       # runs in no job's test suite. Its accounting (a wall-clock deadline the
       # error string can be trusted to report) and its failure forensics are
@@ -261,7 +271,15 @@ jobs:
   parity-types:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Schema / type drift
+    # The name states everything in here, because it used to state only the
+    # last step and every failure inherited that framing. Each step below
+    # therefore diagnoses ITSELF: a job-level `if: failure()` cannot tell
+    # which step failed, so the one that used to sit at the bottom printed
+    # "database.types.ts is out of sync" over a web unit-test failure and
+    # sent the reader to the migrations and the generated types, neither of
+    # which was involved. `scripts/check_ci_diagnostics.mjs` is what stops a
+    # new step being added here without its own diagnosis.
+    name: Schema / type drift + web unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -281,18 +299,38 @@ jobs:
       # `supabase start` die mid-apply with an opaque schema_migrations_pkey
       # collision — that took down five jobs in run 26820381977. Fail here in
       # milliseconds with a named error instead.
+      #
+      # The guard's own suite runs FIRST here and in the step below it: a
+      # broken guard's verdict on the migration set means nothing, so saying
+      # so is more useful than reporting the verdict it produced.
       - name: Migration version keys are unique
         run: |
-          node apps/backend/scripts/check_migration_versions.mjs
-          node --test apps/backend/scripts/check_migration_versions.test.mjs
+          if ! node --test apps/backend/scripts/check_migration_versions.test.mjs; then
+            echo "::error::The migration version-key guard's own unit tests failed, so its verdict on the migration set cannot be trusted. This is not schema drift."
+            echo "Fix apps/backend/scripts/check_migration_versions.mjs (or its tests) first, then re-read what it says about the migrations."
+            exit 1
+          fi
+          if ! node apps/backend/scripts/check_migration_versions.mjs; then
+            echo "::error::Two migrations share a version key, so 'supabase start' would die mid-apply on a schema_migrations_pkey collision. Nothing here is about the generated types."
+            echo "Rename one migration so the digits before its first underscore are unique — the Supabase CLI parses only those, so a trailing '_NNN' does not disambiguate."
+            exit 1
+          fi
       # A new migration that adds a CHECK/FK to a high-volume table (runs,
       # notifications, …) without the NOT VALID two-step scans every existing
       # row under a blocking lock — downtime against prod. Grandfathers the
       # shipped history; see docs/backend/migration_locks.md.
       - name: Migration online-safety (NOT VALID on guarded tables)
         run: |
-          node apps/backend/scripts/check_migration_online_safety.mjs
-          node --test apps/backend/scripts/check_migration_online_safety.test.mjs
+          if ! node --test apps/backend/scripts/check_migration_online_safety.test.mjs; then
+            echo "::error::The migration online-safety guard's own unit tests failed, so its verdict on the migration set cannot be trusted. This is not schema drift."
+            echo "Fix apps/backend/scripts/check_migration_online_safety.mjs (or its tests) first, then re-read what it says about the migrations."
+            exit 1
+          fi
+          if ! node apps/backend/scripts/check_migration_online_safety.mjs; then
+            echo "::error::A migration adds a constraint to a guarded high-volume table without the NOT VALID two-step, which would take a blocking lock against populated prod tables."
+            echo "Split it into ADD CONSTRAINT ... NOT VALID plus a later VALIDATE CONSTRAINT — the playbook is docs/backend/migration_locks.md."
+            exit 1
+          fi
       # These two checks parse source files only (no DB), so they run BEFORE
       # the Supabase stack starts. Keeping them after it meant a broken stack
       # — e.g. the run-26820381977 migration-version collision — silently
@@ -301,7 +339,12 @@ jobs:
       # the stack was fixed. Running them up front makes web-unit / constraint
       # regressions fail fast and independent of stack health.
       - name: CHECK constraints vs TS unions
-        run: npm run check:check-constraints --workspace=apps/web
+        run: |
+          if ! npm run check:check-constraints --workspace=apps/web; then
+            echo "::error::A narrow-union CHECK constraint and its TypeScript union have drifted apart, so one client can write a value the other rejects (postgres 23514). This is not database.types.ts drift."
+            echo "Update the TS union in apps/web/src/lib/types.ts and the CHECK in its migration together; a new pair also goes in the PAIRS array of apps/web/scripts/check_constraint_unions.mjs."
+            exit 1
+          fi
       # `src/**`, not `src/lib/**`: the route-level source guards under
       # src/routes (e.g. the preferences i18n guard) were silently never run.
       - name: Web TS unit tests
@@ -309,18 +352,25 @@ jobs:
         # tests-e2e/fixtures holds the Playwright harness guards, which run in
         # no Playwright shard (the config ignores **/fixtures/**) — they are
         # unit tests of the harness itself.
-        run: npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts'
+        run: |
+          if ! npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts'; then
+            echo "::error::The web TypeScript unit suite failed. Nothing here involves the migrations, the Supabase schema, or the generated row types — read the failing test name above."
+            echo "Reproduce locally with: npm ci && npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts' (from apps/web)."
+            exit 1
+          fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
       # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
-      - run: npm run gen:types:check --workspace=apps/backend
-      - if: failure()
+      - name: Generated TS row types vs the live schema
         run: |
-          echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
-          echo "Run 'npm run gen:types' locally and commit the result."
+          if ! npm run gen:types:check --workspace=apps/backend; then
+            echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
+            echo "Run 'npm run gen:types' locally and commit the result."
+            exit 1
+          fi
 
   build-web:
     needs: changes
