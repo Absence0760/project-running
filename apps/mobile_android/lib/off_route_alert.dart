@@ -16,6 +16,8 @@
 /// is canonical, the wiring is the platform-additive surface).
 library;
 
+import 'env_flag.dart';
+
 /// How far off the planned route (metres) the runner must be for the alert
 /// clock to run. Deliberately larger than the 40 m off-route *banner*
 /// threshold (`_offRouteThresholdMetres` on the run screen): the banner is a
@@ -80,14 +82,11 @@ class OffRouteAlertDetector {
   }
 }
 
-/// Pure parse of the off-route-escalation deploy flag. Truthy only for an
-/// explicit `1` / `true` / `yes` / `on` (case-insensitive, trimmed); anything
-/// else — including unset / empty / `false` / `0` — is off. Fail-closed: the
-/// whole off-route auto-notify path stays unreachable until owner + CISO +
-/// counsel sign-off flips the flag at deploy time. The run screen passes
-/// `dotenv.env['OFF_ROUTE_ESCALATION_ENABLED']`; the web binding lives in
-/// `off_route_flag.ts` — both call this so the parse can't drift.
-bool offRouteEscalationEnabled(String? raw) {
-  final v = (raw ?? '').trim().toLowerCase();
-  return v == '1' || v == 'true' || v == 'yes' || v == 'on';
-}
+/// Pure parse of the off-route-escalation deploy flag, delegating to the one
+/// canonical [isTruthyFlagValue] so the accepted-affirmative set is a single
+/// contract across every gate on both platforms (decisions § 709).
+/// Fail-closed: the whole off-route auto-notify path stays unreachable until
+/// owner + CISO + counsel sign-off flips the flag at deploy time. The run
+/// screen passes `dotenv.env['OFF_ROUTE_ESCALATION_ENABLED']`; the web
+/// binding lives in `off_route_flag.ts`.
+bool offRouteEscalationEnabled(String? raw) => isTruthyFlagValue(raw);
