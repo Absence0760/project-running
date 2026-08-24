@@ -568,6 +568,32 @@ void main() {
     );
 
     realtimeWidgetTest(
+      'a race-marked DNF stops its race clock at the conclusion instant too',
+      (tester) async {
+        // DNF is the terminal state web has no analogue for, so it is the one
+        // that could drift: it shares `terminal` with finished and must take
+        // the same conclusion instant rather than counting on from `now`.
+        final now = DateTime.now().toUtc();
+        final startedAt = now.subtract(const Duration(hours: 6));
+        final api = _FakeApi(
+          run: _run(
+            durationS: 9000,
+            startedAt: startedAt,
+            isDnf: true,
+            concludedAt: startedAt.add(const Duration(hours: 3)),
+          ),
+        );
+        await _pumpApi(tester, api);
+        await tester.pumpAndSettle();
+        expect(find.text('DNF'), findsOneWidget);
+        expect(_metricValue(tester, 'race-clock'), '3:00:00');
+        expect(_metricValue(tester, 'runner-timer'), '2:30:00');
+        expect(find.text('TIMER'), findsOneWidget);
+        expect(find.text('TIMER, LAST FIX'), findsNothing);
+      },
+    );
+
+    realtimeWidgetTest(
       'a run concluded before the marker existed withholds the race clock',
       (tester) async {
         // No concluded_at means no instant to measure to. The tile is
