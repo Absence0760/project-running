@@ -12,6 +12,11 @@ import 'package:flutter_test/flutter_test.dart';
 /// expires the test fails naming what never happened, so a regression is loud
 /// instead of being slept through. A fixed delay in this position is the flake
 /// this replaces — see docs/architecture/decisions.md § 715.
+///
+/// It moves real-zone and microtask work only. Work parked on a FAKE timer —
+/// anything started outside `runAsync` that awaits a `Future.delayed` — needs
+/// the clock advanced, which this deliberately never does: pumping a duration
+/// here would also fire whatever unrelated timer the screen has armed.
 Future<void> pumpUntil(
   WidgetTester tester,
   bool Function() condition, {
