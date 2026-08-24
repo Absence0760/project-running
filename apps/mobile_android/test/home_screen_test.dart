@@ -17,10 +17,13 @@ import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/race_controller.dart';
+import '../lib/settings_destination.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/screens/home_screen.dart';
 import '../lib/screens/run_screen.dart';
+import '../lib/screens/settings_about_screen.dart';
+import '../lib/screens/settings_preferences_screen.dart';
 import '../lib/screens/setup_wizard_screen.dart';
 
 /// Drives auth transitions for the setup-wizard gate (#232): a fresh
@@ -459,6 +462,77 @@ void main() {
       expect(find.text('Runs'), findsWidgets,
           reason: 'the Fitness hub mounted, so the tap navigated the PageView '
               'despite the locked swipe physics');
+    });
+  });
+
+  group('Settings destination seam (decisions § 710)', () {
+    // The shell is the host for "open a Settings sub-screen" because it is
+    // the one place holding every dependency those screens take. A surface
+    // buried in a tab names the destination; these pin that the name is what
+    // actually reaches the screen.
+    setUp(() => pendingSettingsDestination.value = null);
+    tearDown(() => pendingSettingsDestination.value = null);
+
+    /// Lets the pushed route's transition run without pumpAndSettle, which
+    /// hangs on the shell's rescheduling async tabs.
+    Future<void> _openAndSettle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('a parked preferences intent opens SettingsPreferencesScreen',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      expect(find.byType(SettingsPreferencesScreen), findsNothing);
+
+      openSettings(SettingsDestination.preferences);
+      await _openAndSettle(tester);
+
+      expect(find.byType(SettingsPreferencesScreen), findsOneWidget,
+          reason: 'the People tab holds neither a Preferences nor a '
+              'SettingsSyncService — naming the destination has to be enough');
+    });
+
+    testWidgets('the shell clears the slot as it navigates', (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      openSettings(SettingsDestination.preferences);
+      await _openAndSettle(tester);
+
+      expect(pendingSettingsDestination.value, isNull,
+          reason: 'a slot left full would swallow the next identical request, '
+              'since a ValueNotifier is silent on an unchanged value');
+    });
+
+    testWidgets('each name reaches its own screen', (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      openSettings(SettingsDestination.about);
+      await _openAndSettle(tester);
+
+      expect(find.byType(SettingsAboutScreen), findsOneWidget);
+      expect(find.byType(SettingsPreferencesScreen), findsNothing);
+    });
+
+    testWidgets('an unrequested shell pushes nothing', (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      await _openAndSettle(tester);
+      expect(find.byType(SettingsPreferencesScreen), findsNothing);
+      expect(find.byType(SettingsAboutScreen), findsNothing);
+    });
+
+    testWidgets('a request parked before the shell mounts still opens',
+        (tester) async {
+      // Same contract pendingPushTarget carries: a cold start drains on the
+      // first frame, so an intent set before any Navigator existed is not lost.
+      final s = await _makeStores();
+      openSettings(SettingsDestination.preferences);
+      await _pump(tester, s);
+      await _openAndSettle(tester);
+
+      expect(find.byType(SettingsPreferencesScreen), findsOneWidget);
     });
   });
 }
