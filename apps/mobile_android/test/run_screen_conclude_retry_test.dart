@@ -25,6 +25,8 @@ import '../lib/social_service.dart';
 import '../lib/widgets/live_share_indicator.dart';
 import '../lib/training_service.dart';
 
+import 'pump_until.dart';
+
 /// Stopping the live share mid-run detaches the broadcaster whether or not
 /// its `concludeLiveBroadcast` call landed. The run-stop wind-down then read
 /// the detached broadcaster as "nothing to conclude" and skipped the stamp, so
@@ -336,19 +338,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
     tester.takeException();
-  }
-
-  Future<void> holdFinish(WidgetTester tester) async {
-    final btnFinder = find.byWidgetPredicate(
-        (w) => w.runtimeType.toString() == 'HoldToStopButton');
-    expect(btnFinder.hitTestable(), findsOneWidget);
-    final hitButton = btnFinder.hitTestable().evaluate().single.widget;
-    await tester.runAsync(() async {
-      // ignore: avoid_dynamic_calls
-      (hitButton as dynamic).onHoldComplete();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await tester.pump();
   }
 
   Future<void> drainAndUnmount(WidgetTester tester) async {

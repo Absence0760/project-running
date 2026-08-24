@@ -46,8 +46,10 @@ Future<void> pumpUntil(
 /// ordered behind it: the local save lands before the screen leaves its
 /// recording state, and the cloud push and live wind-down after. Pass [until]
 /// for the cases where `_stop` deliberately does NOT finish — it parks on the
-/// post-live visibility dialog until that dialog is answered.
-Future<void> holdFinish(
+/// post-live visibility dialog until that dialog is answered. The returned
+/// predicate reports whether the stop path has finished, so those callers can
+/// answer the dialog and then wait for the rest of it.
+Future<bool Function()> holdFinish(
   WidgetTester tester, {
   bool Function()? until,
   String describe = "the Finish hold's stop path to finish",
@@ -73,4 +75,5 @@ Future<void> holdFinish(
   });
   await pumpUntil(tester, until ?? () => stopped, describe: describe);
   if (stopFailure != null) fail('the Finish hold threw: $stopFailure');
+  return () => stopped;
 }
