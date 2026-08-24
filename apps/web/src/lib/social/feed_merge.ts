@@ -1,14 +1,17 @@
 // Pure helpers for the following-feed query. The feed filters runs by the
 // viewer's followee set via `.in('user_id', ids)`. PostgREST serialises
 // `.in()` into the URL query string, so a viewer following many hundreds of
-// people overflows the gateway's ~8 KB request-line limit and the query
-// returns `{ data: null }` — a silently empty feed. We chunk the id set,
-// query each chunk, and merge. These helpers are extracted so the chunking +
-// merge math is unit-testable without a live Supabase.
+// people overflows the request-line budget of whatever gateway fronts it and
+// the read is lost. HOW it is lost is a property of the deployment, not of
+// this code — the local stack answers `414` past an 8 KiB request line
+// (~208 uuids), where decisions § 653 recorded a gateway that answered 200
+// with an empty match instead. We chunk the id set, query each chunk, and
+// merge. These helpers are extracted so the chunking + merge math is
+// unit-testable without a live Supabase.
 
 // Conservative chunk size: a UUID serialises to ~38 chars inside `.in(...)`,
-// so 100 ids keep the in-clause well under the gateway header budget even
-// alongside the other query params.
+// so 100 ids keep the in-clause well under either bound alongside the other
+// query params. Mirrors mobile's `kInFilterChunk` (api_client/chunk.dart).
 export const FEED_FOLLOWEE_CHUNK = 100;
 
 export function chunk<T>(items: T[], size: number): T[][] {
@@ -58,8 +61,8 @@ export function mergeFeedPages<T extends { id: string; started_at: string }>(
  * Merge chunked `user_profiles` reads into one id→row map. The profile-join
  * leg (`.in('id', ids)`) is chunked for the same request-URL reason as the
  * feed: a club / event with more than ~100 members overflows the gateway's
- * request-line limit and the leg silently returns null, degrading every
- * name / avatar to a placeholder. A row can only come from one chunk (ids are
+ * request-line budget and the leg is lost, degrading every name / avatar to
+ * a placeholder. A row can only come from one chunk (ids are
  * deduped upstream); later chunks win on a collision.
  */
 export function mergeProfilePages<T extends { id: string }>(
