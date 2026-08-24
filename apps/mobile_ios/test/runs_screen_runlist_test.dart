@@ -17,6 +17,7 @@ import '../lib/preferences.dart';
 import '../lib/screens/runs_screen.dart';
 import '../lib/widgets/run_list_tile.dart';
 import '../lib/widgets/surface_peer_strip.dart';
+import 'pump_until.dart';
 
 /// Signed-in fake with no remote runs — keeps `_fetchRemote` off the network
 /// so the run-list mode renders purely from the seeded local store.
@@ -214,16 +215,11 @@ void main() {
         isNull);
 
     // Releasing the delete finishes the pass and leaves selection mode. The
-    // tail does real store file I/O, so alternate real-clock delays (which let
-    // that I/O complete) with pumps (which flush the fake-zone microtasks that
-    // resume the awaiting UI code) until it lands — a fixed delay never drains
-    // it. Same shape as gym_screen_test's `_pumpUntil`.
+    // tail does real store file I/O, which only completes on the real event
+    // loop.
     await tester.runAsync(() async => api.gate.complete());
-    for (var i = 0; i < 40 && tester.any(find.text('1 selected')); i++) {
-      await tester.runAsync(
-          () async => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
-    }
+    await pumpUntil(tester, () => !tester.any(find.text('1 selected')),
+        describe: 'the delete pass to finish and leave selection mode');
     expect(api.deleteCalls, 1, reason: 'exactly one pass over the selection');
     // Selection mode ended, so its AppBar (and with it the guarded controls)
     // is gone. Asserted on the selection title rather than the trash glyph,
