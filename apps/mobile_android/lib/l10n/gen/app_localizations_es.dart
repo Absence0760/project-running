@@ -4993,6 +4993,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get liveSpectatorBadgeDnf => 'DNF';
 
   @override
+  String get liveSpectatorStatRaceTime => 'Tiempo de carrera';
+
+  @override
+  String get liveSpectatorStatTimer => 'Cronómetro';
+
+  @override
+  String get liveSpectatorStatTimerStale => 'Cronómetro, última señal';
+
+  @override
   String get liveSpectatorRecentPace => 'Reciente';
 
   @override

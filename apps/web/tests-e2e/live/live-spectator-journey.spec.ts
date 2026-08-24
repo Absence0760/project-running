@@ -169,9 +169,7 @@ test.describe('live-tracking journey', () => {
 				await expect(
 					spectator.locator('.live-stat-value').first()
 				).toContainText('3.5');
-				await expect(
-					spectator.locator('.live-stat-value').nth(1)
-				).toContainText('17:30');
+				await expect(spectator.getByTestId('runner-timer')).toContainText('17:30');
 
 				// Freshness consumed the ping's `at` clock — the sub-line is
 				// an "Updated …" age, not the static fallback copy.
@@ -202,9 +200,9 @@ test.describe('live-tracking journey', () => {
 				await expect(
 					spectator.locator('.live-stat-value').first()
 				).toContainText('5', { timeout: 15_000 });
-				await expect(
-					spectator.locator('.live-stat-value').nth(1)
-				).toContainText('25:00', { timeout: 15_000 });
+				await expect(spectator.getByTestId('runner-timer')).toContainText('25:00', {
+					timeout: 15_000
+				});
 				// Still LIVE + fresh — the new ping is current.
 				await expect(spectator.locator('.live-badge')).toHaveClass(/active/);
 			});
@@ -314,9 +312,7 @@ test.describe('live-tracking journey', () => {
 				await expect(
 					spectator.locator('.live-stat-value').first()
 				).toContainText('7.5');
-				await expect(
-					spectator.locator('.live-stat-value').nth(1)
-				).toContainText('30:00');
+				await expect(spectator.getByTestId('runner-timer')).toContainText('30:00');
 			});
 
 			// ── 7. It's now an ordinary completed run for the owner ─────

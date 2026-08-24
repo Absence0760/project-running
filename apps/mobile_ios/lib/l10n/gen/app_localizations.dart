@@ -8254,6 +8254,24 @@ abstract class AppLocalizations {
   /// **'DNF'**
   String get liveSpectatorBadgeDnf;
 
+  /// Label for the live spectator race-clock stat tile — wall-clock time since the runner started, distinct from the runner's own recording timer
+  ///
+  /// In en, this message translates to:
+  /// **'Race time'**
+  String get liveSpectatorStatRaceTime;
+
+  /// Label for the live spectator stat tile showing the runner's own recording timer as of the last fix
+  ///
+  /// In en, this message translates to:
+  /// **'Timer'**
+  String get liveSpectatorStatTimer;
+
+  /// Label for the runner's-timer stat tile once the last fix is stale, so the frozen figure cannot pass as current
+  ///
+  /// In en, this message translates to:
+  /// **'Timer, last fix'**
+  String get liveSpectatorStatTimerStale;
+
   /// Label for the recent-pace spectator stat tile (distinct from cumulative average pace)
   ///
   /// In en, this message translates to:
