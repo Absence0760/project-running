@@ -111,7 +111,7 @@
     "html-to-image": "^1.11.13"
   },
   "devDependencies": {
-    "svelte": "5.56.9"
+    "svelte": "5.56.10"
   },
   "overrides": {
     "cookie": "^1.0.2",
