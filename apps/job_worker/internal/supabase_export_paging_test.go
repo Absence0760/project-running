@@ -13,6 +13,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -89,13 +90,44 @@ func clampedServer(t *testing.T, tables ...*clampedTable) *SupabaseClient {
 	})
 }
 
+// collectExportRuns / collectExportRoutes / collectExportTables drain a
+// streaming walk into the shape the assertions below read. Production
+// never collects — that is the point of the change — so the collecting
+// lives here, in the tests that need something to look at.
+func collectExportRuns(c *SupabaseClient, ctx context.Context, userID string) ([]ExportRunRow, ExportCompleteness, error) {
+	var rows []ExportRunRow
+	comp, err := c.StreamExportRuns(ctx, userID, func(page []ExportRunRow) error {
+		rows = append(rows, page...)
+		return nil
+	})
+	return rows, comp, err
+}
+
+func collectExportRoutes(c *SupabaseClient, ctx context.Context, userID string) ([]ExportRouteRow, ExportCompleteness, error) {
+	var rows []ExportRouteRow
+	comp, err := c.StreamExportRoutes(ctx, userID, func(page []ExportRouteRow) error {
+		rows = append(rows, page...)
+		return nil
+	})
+	return rows, comp, err
+}
+
+func collectExportTables(c *SupabaseClient, ctx context.Context, userID string) (map[string][]map[string]interface{}, ExportCompleteness, error) {
+	out := map[string][]map[string]interface{}{}
+	comp, err := c.StreamExportPersonalDataTables(ctx, userID, func(entry string, rows []map[string]interface{}) error {
+		out[entry] = append(out[entry], rows...)
+		return nil
+	})
+	return out, comp, err
+}
+
 func TestFetchExportRuns_PagesPastThePostgrestRowCap(t *testing.T) {
 	runs := &clampedTable{table: "runs", total: 2400, failFromOffset: -1}
 	client := clampedServer(t, runs)
 
-	rows, comp, err := client.FetchExportRuns(context.Background(), "user-A", 5000)
+	rows, comp, err := collectExportRuns(client, context.Background(), "user-A")
 	if err != nil {
-		t.Fatalf("FetchExportRuns: %v", err)
+		t.Fatalf("StreamExportRuns: %v", err)
 	}
 	if len(rows) != 2400 {
 		t.Fatalf("got %d runs; want every one of the 2400 (a single unpaged read returns %d)", len(rows), postgrestMaxRows)
@@ -117,22 +149,112 @@ func TestFetchExportRuns_PagesPastThePostgrestRowCap(t *testing.T) {
 	}
 }
 
-func TestFetchExportRuns_HonoursTheCallerCeilingAndSaysSo(t *testing.T) {
-	runs := &clampedTable{table: "runs", total: 2400, failFromOffset: -1}
+// The runs walk used to stop at a caller-supplied ceiling
+// (MaxRunsPerExport = 5000) and flag the section short, because the
+// archive was assembled in one bytes.Buffer. Both are gone: the walk
+// runs to the end of the history and each page is serialised as it
+// arrives, so a runner far past either deleted bound receives their
+// whole history and the manifest says the export is complete.
+func TestStreamExportRuns_WalksPastEveryDeletedCeiling(t *testing.T) {
+	runs := &clampedTable{table: "runs", total: 120_000, failFromOffset: -1}
 	client := clampedServer(t, runs)
 
-	rows, comp, err := client.FetchExportRuns(context.Background(), "user-A", 2000)
+	seen, biggestPage := 0, 0
+	comp, err := client.StreamExportRuns(context.Background(), "user-A", func(page []ExportRunRow) error {
+		seen += len(page)
+		if len(page) > biggestPage {
+			biggestPage = len(page)
+		}
+		return nil
+	})
 	if err != nil {
-		t.Fatalf("FetchExportRuns: %v", err)
+		t.Fatalf("StreamExportRuns: %v", err)
 	}
-	if len(rows) != 2000 {
-		t.Fatalf("rows=%d; want the 2000 the caller allowed", len(rows))
+	if seen != 120_000 {
+		t.Fatalf("streamed %d runs; want all 120000 — far past the deleted 5000-run cap", seen)
 	}
-	if comp.Totals["runs"] != 2400 {
-		t.Errorf("count=%d; want the true 2400, not the 2000 exported", comp.Totals["runs"])
+	if comp.Totals["runs"] != 120_000 || len(comp.Incomplete) != 0 {
+		t.Errorf("comp=%+v; a whole history must not be flagged short", comp)
 	}
-	if len(comp.Incomplete) != 1 || comp.Incomplete[0] != "runs" {
-		t.Errorf("incomplete=%v; a truncated section must be named", comp.Incomplete)
+	// The consumer never sees more than one page at a time, which is the
+	// property that makes the walk flat in the size of the history.
+	if biggestPage != postgrestMaxRows {
+		t.Errorf("biggest page=%d; want one PostgREST page, never the whole set", biggestPage)
+	}
+	// 121, not 120: offset paging cannot know a full page was the last
+	// one, so a history that is an exact multiple of the page size costs
+	// one extra empty read to prove it ended.
+	if len(runs.windows) != 121 {
+		t.Errorf("windows=%d; want 120 full pages plus the empty one that ends the walk", len(runs.windows))
+	}
+}
+
+// Same for a high-cardinality personal-data section: `live_run_pings`
+// runs into the millions on a deep history and is what the 50,000-row
+// exportRowCeiling was written for.
+func TestStreamExportPersonalDataTables_WalksPastTheDeletedRowCeiling(t *testing.T) {
+	pings := &clampedTable{table: "live_run_pings", total: 120_000, failFromOffset: -1}
+	client := clampedServer(t, pings)
+
+	seen, biggestPage := 0, 0
+	comp, err := client.StreamExportPersonalDataTables(context.Background(), "user-A",
+		func(entry string, rows []map[string]interface{}) error {
+			if entry != "live_run_pings.json" {
+				return nil
+			}
+			seen += len(rows)
+			if len(rows) > biggestPage {
+				biggestPage = len(rows)
+			}
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("StreamExportPersonalDataTables: %v", err)
+	}
+	if seen != 120_000 {
+		t.Fatalf("streamed %d pings; want all 120000 — far past the deleted 50000-row ceiling", seen)
+	}
+	if comp.Totals["live_run_pings"] != 120_000 {
+		t.Errorf("count=%d; want 120000", comp.Totals["live_run_pings"])
+	}
+	for _, name := range comp.Incomplete {
+		if name == "live_run_pings" {
+			t.Error("a fully-read section must not be flagged short")
+		}
+	}
+	if biggestPage != postgrestMaxRows {
+		t.Errorf("biggest page=%d; want one PostgREST page", biggestPage)
+	}
+}
+
+// A consumer failure is the archive dying, not a table coming up short.
+// Recording it as a short table would hand the subject an export whose
+// manifest blamed the database for a write that never happened — and
+// would let the walk carry on writing into a dead archive.
+func TestStreamExportPersonalDataTables_ConsumerFailureIsNotAShortTable(t *testing.T) {
+	food := &clampedTable{table: "food_log", total: 2400, failFromOffset: -1}
+	client := clampedServer(t, food)
+
+	boom := errors.New("chunk upload failed")
+	calls := 0
+	comp, err := client.StreamExportPersonalDataTables(context.Background(), "user-A",
+		func(entry string, rows []map[string]interface{}) error {
+			if entry != "food_log.json" {
+				return nil
+			}
+			calls++
+			return boom
+		})
+	if !errors.Is(err, boom) {
+		t.Fatalf("err=%v; a consumer failure must surface unwrapped so the handler can 500", err)
+	}
+	if calls != 1 {
+		t.Errorf("emit called %d times; the walk must stop at the first consumer failure", calls)
+	}
+	for _, name := range comp.Incomplete {
+		if name == "food_log" {
+			t.Error("the table was readable; only the archive failed")
+		}
 	}
 }
 
@@ -140,12 +262,12 @@ func TestFetchExportRuns_AFailedPageKeepsRowsButNeverClaimsCompleteness(t *testi
 	runs := &clampedTable{table: "runs", total: 2400, failFromOffset: 1000}
 	client := clampedServer(t, runs)
 
-	rows, comp, err := client.FetchExportRuns(context.Background(), "user-A", 5000)
+	rows, comp, err := collectExportRuns(client, context.Background(), "user-A")
 	if err == nil {
 		t.Fatal("a failed page must surface as an error so the handler can refuse")
 	}
 	if len(rows) != 1000 {
-		t.Errorf("rows=%d; want the first page kept", len(rows))
+		t.Errorf("rows=%d; want the first page emitted before the failure", len(rows))
 	}
 	if comp.Totals["runs"] != 2400 || len(comp.Incomplete) != 1 {
 		t.Errorf("comp=%+v; want the true total and a short flag", comp)
@@ -156,9 +278,9 @@ func TestFetchExportRoutes_PagesPastTheRowCap(t *testing.T) {
 	routes := &clampedTable{table: "routes", total: 1500, failFromOffset: -1}
 	client := clampedServer(t, routes)
 
-	rows, comp, err := client.FetchExportRoutes(context.Background(), "user-A")
+	rows, comp, err := collectExportRoutes(client, context.Background(), "user-A")
 	if err != nil {
-		t.Fatalf("FetchExportRoutes: %v", err)
+		t.Fatalf("StreamExportRoutes: %v", err)
 	}
 	if len(rows) != 1500 {
 		t.Fatalf("routes=%d; want 1500", len(rows))
@@ -174,9 +296,9 @@ func TestFetchExportPersonalDataTables_PagesEveryTable(t *testing.T) {
 	food := &clampedTable{table: "food_log", total: 2400, failFromOffset: -1}
 	client := clampedServer(t, food)
 
-	out, comp, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, comp, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
-		t.Fatalf("FetchExportPersonalDataTables: %v", err)
+		t.Fatalf("StreamExportPersonalDataTables: %v", err)
 	}
 	if got := len(out["food_log.json"]); got != 2400 {
 		t.Fatalf("food_log rows=%d; want all 2400", got)
@@ -195,7 +317,7 @@ func TestFetchExportPersonalDataTables_ShortTableIsNamedNotHidden(t *testing.T) 
 	gym := &clampedTable{table: "gym_workouts", total: 3000, failFromOffset: 2000}
 	client := clampedServer(t, gym)
 
-	out, comp, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, comp, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatalf("a per-table failure stays tolerated: %v", err)
 	}
