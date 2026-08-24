@@ -15,6 +15,8 @@
 /// screen; this detector is the twinned decision logic (decisions §24 — the
 /// pure core is canonical, the wiring is the platform-additive surface).
 
+import { isTruthyFlagValue } from '../core/env_flag';
+
 /// How far off the planned route (metres) the runner must be for the alert
 /// clock to run. Deliberately larger than the 40 m off-route *banner*
 /// threshold (`_offRouteThresholdMetres` on the run screen): the banner is a
@@ -77,14 +79,12 @@ export class OffRouteAlertDetector {
 	}
 }
 
-/// Pure parse of the off-route-escalation deploy flag. Truthy only for an
-/// explicit `1` / `true` / `yes` / `on` (case-insensitive, trimmed); anything
-/// else — including unset / empty / `false` / `0` — is off. Fail-closed: the
-/// whole off-route auto-notify path stays unreachable until owner + CISO +
-/// counsel sign-off flips the flag at deploy time. The web env binding lives
-/// in `off_route_flag.ts`; the mobile binding reads dotenv — both call this so
-/// the parse can't drift.
+/// Pure parse of the off-route-escalation deploy flag, delegating to the one
+/// canonical `isTruthyFlagValue` so the accepted-affirmative set is a single
+/// contract across every gate on both platforms (decisions § 709).
+/// Fail-closed: the whole off-route auto-notify path stays unreachable until
+/// owner + CISO + counsel sign-off flips the flag at deploy time. The web env
+/// binding lives in `off_route_flag.ts`; the mobile binding reads dotenv.
 export function offRouteEscalationEnabled(raw: string | null | undefined): boolean {
-	const v = (raw ?? '').trim().toLowerCase();
-	return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+	return isTruthyFlagValue(raw);
 }

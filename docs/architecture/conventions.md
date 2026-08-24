@@ -461,6 +461,40 @@ Specifically:
 - Don't build a plugin system for importers when `health_connect_importer.dart` and `strava_importer.dart` are the only two and they share ~zero code.
 - Don't refactor in a bug-fix PR. Split the refactor into its own change.
 
+## Feature gates — one parser, and a define a release build can actually read
+
+Every fail-closed feature gate on either client parses its env string through the
+canonical helper, never a hand-written comparison:
+
+- Web: `isTruthyFlagValue` from `core/env_flag.ts`.
+- Mobile: `isTruthyFlagValue` from `lib/env_flag.dart`.
+
+The two are a registered parity pair, so the accepted set is one contract across
+both platforms: `1` / `true` / `yes` / `on`, trimmed and case-insensitive; unset,
+empty, `false`, `0`, or anything unrecognised reads as OFF. Fail-closed means a
+gate can only be turned ON by an explicit affirmative — never left on by a typo.
+
+A copy of that chain is what this rule exists to stop. Eight modules carried one
+before decisions § 709, and the narrowest of them accepted two of the four values,
+so `WEIGH_IN_GATE=yes` silently left an Art 9 surface off while the same string
+enabled every other gate. Both suites now scan for the pattern and fail on a new
+copy; on web, every `*_flag.ts` module must additionally reach the canonical
+parser, directly or through one named delegate.
+
+A flag whose parser belongs to a TS↔Dart parity pair (`off_route_alert`,
+`plan_adaptive_replan`) keeps its named function and delegates to the canonical
+one — on **both** sides, in the same change, or the pair diverges.
+
+**On mobile the gate is not finished until the key is in `main.dart`'s
+`String.fromEnvironment` bridge.** Release builds never load `.env.development`
+(decisions § 13), so the bridge is the only path a value has into `dotenv`: a key
+read at runtime but absent from it is readable in debug and unreachable in
+production. Three sign-off-gated flags shipped in exactly that state. Add the
+`String.fromEnvironment` const *and* the matching `'KEY=$def'` entry — the
+reachability guard in `env_flag_test.dart` fails on either half missing. Whether
+a release *workflow* passes the define is a separate deploy-time decision, and
+the place to record it is `apps/<app>/deployment.md`.
+
 ## Backwards compatibility
 
 This is a pre-launch codebase with no shipped users. Backwards-compatibility shims are almost never warranted:
