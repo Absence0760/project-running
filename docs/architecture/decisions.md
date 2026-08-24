@@ -9379,3 +9379,89 @@ Hardware-in-the-loop verification against a real FTMS belt remains owed and is r
 This is the same failure `FLUTTER_VERSION` is pinned against (§ 595): a zero-warning bar plus a floating toolchain means the toolchain vendor decides when the build breaks, and it breaks on whoever pushes next rather than on whoever chose to upgrade. So the channel is an exact `1.98.0`. Bumping it is now a deliberate commit that carries its own fallout, which is the only way a zero-warning bar stays honest.
 
 The lint itself was worth taking: both sites read better as `as_chunks`, and the FIFO decode now hands `decode_sample` the `[u8; 3]` it already takes instead of re-indexing three bytes out of a slice. Worth recording *how* the second site was found, because it generalises — the CI log named exactly one, since clippy stops at the first crate that errors, so fixing what the log said would have failed the next run identically. Installing the pinned toolchain and reproducing locally is what surfaced the other one; a CI failure enumerates the first error, not the class.
+
+## 712. The spectator's "Elapsed" was two quantities under one label — the race clock is stated from `started_at`, and the runner's own timer keeps its own tile
+
+The open follow-up framed this as a single-stat problem: the `/live/[id]`
+stat strip renders the last ping's `elapsed_s`, which freezes the moment
+the pings do, so a crew doing cut-off arithmetic during an 18-hour dead
+zone on a 240-mile race reads a number 18 hours short. Advancing the
+displayed figure by wall clock was rejected because `elapsed` excludes
+paused time and advancing it would overstate a runner who paused. Both
+answers are wrong for the same reason: **one tile was being asked for two
+different quantities.**
+
+- The **race clock** is wall-clock time since the runner started. A
+  cut-off is a deadline measured from the start — that is [§ 601](#601-a-cut-off-clock-keeps-running-when-the-pings-stop-and-a-deadline-that-has-passed-is-stated-rather-than-left-behind-signal-lost)'s own
+  reasoning for `liveElapsedS` — and it does not pause because a phone
+  lost a tower.
+- The **runner's timer** is `elapsed_s`: the recorder's stopwatch as of
+  the last fix.
+
+The race clock needs no estimate, because **the start instant is already
+available to an anonymous spectator**. `beginLiveBroadcast` pre-creates the
+`runs` row with `is_public = true` and the recorder's real `started_at`,
+and `public_runs` projects `started_at` with `grant select … to anon`
+(migration `20270430_001` is the current definition; the column has been in
+the view since `20260626_001`). Both surfaces were already reading it —
+web into `visibleRun.started_at`, mobile into `run.startedAt` — and each
+was using it only to resolve a `cutoff_clock` marker's time of day. So the
+race clock is `now - started_at`: a subtraction of two values the page
+holds, not a reconstruction. `raceClockS` joins the `live_freshness` parity
+pair and states it; `liveElapsedS` stays as the fallback for a caller that
+cannot resolve the start, and both suites now pin that it can only ever be
+a **lower bound** on the same clock.
+
+**The trade the follow-up was gated on no longer exists, and that is worth
+recording separately.** The entry says `elapsed` "excludes auto-paused
+time". There has been no auto-pause layer since moving time became a
+track-derived post-run metric (`run_stats.dart` / `run_stats.ts`
+`movingTimeSeconds`); `run_screen.dart` says so outright and
+`RunRecorder.pause()` has exactly one caller, `_toggleManualPause`. So
+`elapsed_s` is not moving time — it is wall time less any stretch the
+runner *explicitly* paused. Naming it "Moving" would have been a fresh lie
+in place of the old one, which is why the tile is labelled **Timer**.
+
+What each figure now claims, on both platforms:
+
+- **Race time** — `raceClockS(startedAtMs, atMs)`. Ticks on the page's
+  own second clock. `atMs` is `now` while live and the **conclusion
+  instant** once terminal, so a finished run's clock stops where the run
+  did rather than counting on forever. A run that concluded before the
+  `concluded_at` marker existed has no end to measure to: the tile is
+  **withheld**, not measured to now. A start stamped in the viewer's
+  future clamps to 0, the same clamp `freshnessFor` makes on an age.
+- **Timer** — the ping's `elapsed_s`, unchanged. Once the fix is stale it
+  is muted and relabelled *"Timer, last fix"*, exactly as the recent-pace
+  tile already relabels to "When last seen". Qualifying rather than
+  withholding is the right call here and the distinction is consistent:
+  the page withholds *projections* off a stale fix (the cut-off verdict,
+  the motion claim) because they require extrapolation, and qualifies
+  *measurements* taken at the fix, because the measurement is real and
+  only its currency is in doubt.
+
+Clock skew argues for the race clock rather than against it. A
+`cutoff_clock` limit is resolved as `cutoffClockMin - startClockMin` off
+that same `started_at`, so a recorder whose clock ran an hour fast shifts
+the limit and the race clock by the same hour and the remaining budget is
+exact. Driving the same comparison off the runner's stopwatch shifts only
+one side of it. Cut-off maths therefore runs on the race clock wherever the
+start instant resolves.
+
+The `raceElapsedS` derivation the page already had is unchanged in spirit
+and now correct in fact; what changed is that it is also *shown*, and shown
+next to the figure it is not. The stat tiles gained `data-testid`s so the
+existing Playwright assertions stop depending on tile order, and mobile's
+`_Metric` label scales instead of ellipsizing, because five cells fit on a
+narrow phone only if the labels do — and the label is the whole mechanism
+by which a spectator tells the two clocks apart.
+
+**The watch rail does not share this bug and needs no port.**
+`watch_core::record`'s `elapsed_s()` is `now_s - start_s` and its
+`moving_s` is a separate accumulator; `cutoff_snapshot` already feeds the
+cut-off the race clock, and its doc comment already reasons about why race
+pace rather than moving pace is the honest projector. Porting `raceClockS`
+there would be inventing a subtraction the device does not need — it has a
+monotonic clock from the start rather than two epoch stamps to difference.
+`live_freshness.rs` carries only `freshness_for`; it never ported
+`liveElapsedS` either.
