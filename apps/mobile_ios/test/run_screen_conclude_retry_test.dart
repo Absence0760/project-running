@@ -24,7 +24,6 @@ import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/widgets/live_share_indicator.dart';
 import '../lib/training_service.dart';
-
 import 'pump_until.dart';
 
 /// Stopping the live share mid-run detaches the broadcaster whether or not

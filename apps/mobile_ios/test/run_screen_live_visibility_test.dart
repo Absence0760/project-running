@@ -23,7 +23,6 @@ import '../lib/race_controller.dart';
 import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
-
 import 'pump_until.dart';
 
 /// Pins the issue #664 fix: a run whose live share is active when the
