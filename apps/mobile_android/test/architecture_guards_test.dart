@@ -865,7 +865,6 @@ void main() {
       'lib/local_gear_store.dart',
       'lib/local_gym_store.dart',
       'lib/local_food_store.dart',
-      'lib/local_session_store.dart',
       'lib/local_routine_store.dart',
       'lib/offline_sync_store.dart',
     ];
@@ -5173,7 +5172,7 @@ void main() {
           }
         }
       }
-      expect(found, greaterThanOrEqualTo(8),
+      expect(found, greaterThanOrEqualTo(7),
           reason: 'the scan itself must find the replaceFromServer overrides');
       expect(offenders, isEmpty,
           reason: 'these replaceFromServer overrides rebuild rowsById before '

@@ -185,10 +185,13 @@ as their DB rows.
   outright while anything on the device is still undrained, since the server
   can only see cloud rows. The local writer's completeness verdict surfaces as
   a banner plus a persistent notice under the Full backup tile.
-- **Mobile iOS** shares the code — `lib/` is byte-identical (decisions § 39) and
-  neither tile carries a `Platform` gate — but `parity.md` still marks the whole
-  iOS sync-and-backup column `✗`. That contradiction is unresolved; verify on a
-  device before claiming either way.
+- **Mobile iOS** shares the code — `lib/` is byte-identical (decisions § 39),
+  neither tile carries a `Platform` gate, `BackupService` names no `Platform`,
+  and `archive` / `file_picker` / `share_plus` / `path_provider` all declare
+  iOS. `parity.md`'s iOS backup + restore cells read `Partial` on that basis:
+  wired, never exercised on a Mac (decisions § 707). What is still owed is the
+  device run, tracked by the single iOS-verification item in `followups.md` —
+  not a build.
 - The watch apps do **not** offer backup — too much UI for a small screen. Use
   the phone or the web.
 

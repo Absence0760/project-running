@@ -2685,7 +2685,7 @@ export async function joinClubByToken(token: string): Promise<string> {
 /// Fetch `display_name` + `avatar_url` for a set of user ids, chunked.
 /// PostgREST serialises `.in('id', ids)` into the request URL, so a
 /// club / event with more than ~100 members overflows the gateway's
-/// request-line limit and this profile-join leg silently returns null —
+/// request-line budget and the profile-join leg is lost (decisions § 653) —
 /// degrading every name + avatar to a placeholder. Chunk the id set and
 /// merge each chunk's rows into one map. See social/feed_merge.ts.
 async function fetchProfilesByIds(
@@ -5716,7 +5716,7 @@ export async function fetchFollowingFeed(
 	//
 	// The followee set is chunked: PostgREST serialises `.in()` into the
 	// URL, so a viewer following many hundreds of people overflows the
-	// gateway's request-line limit and the query silently returns null.
+	// gateway's request-line budget and the read is lost (decisions § 653).
 	// Each chunk applies the same cursor + ordering + limit; the global
 	// top-`limit` is a subset of the union of per-chunk results, which
 	// mergeFeedPages collapses back down.
@@ -11156,10 +11156,11 @@ export async function fetchFollowingBadgeAwards(opts?: {
 
 	// The followee set is chunked: PostgREST serialises `.in()` into the
 	// URL, so a viewer following many hundreds of people overflows the
-	// gateway's request-line limit and the query silently returns null —
-	// a silently empty badge feed. Each chunk applies the same cursor +
-	// ordering + limit; the global top-`limit` is a subset of the union,
-	// which mergeRecencyPages collapses back down (earned_at desc, id desc).
+	// gateway's request-line budget and the read is lost (decisions § 653) —
+	// the whole badge feed, not a short page. Each chunk applies the same
+	// cursor + ordering + limit; the global top-`limit` is a subset of the
+	// union, which mergeRecencyPages collapses back down (earned_at desc,
+	// id desc).
 	const queryChunk = async (ids: string[]) => {
 		let q = supabase
 			.from(TABLES.achievements)
