@@ -9,6 +9,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/local_routine_store.dart';
 import '../lib/screens/gym_session_screen.dart';
+import 'pump_until.dart';
 
 /// No-op so the session screen's `WakelockPlus.enable()` / `.disable()` don't
 /// hit the real pigeon channel (which throws under flutter_test).
@@ -196,17 +197,8 @@ Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() done, {
   Duration timeout = const Duration(seconds: 10),
-}) async {
-  final deadline = DateTime.now().add(timeout);
-  while (!done()) {
-    if (DateTime.now().isAfter(deadline)) {
-      fail('timed out after $timeout waiting for the expected state');
-    }
-    await tester
-        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
-    await tester.pump();
-  }
-}
+}) =>
+    pumpUntil(tester, done, describe: 'the session screen to reach the expected state', timeout: timeout);
 
 void main() {
   setUpAll(() {

@@ -18,6 +18,7 @@ import '../lib/screens/routine_library_screen.dart';
 import '../lib/screens/sessions_screen.dart';
 import '../lib/widgets/pending_sync_banner.dart';
 import '../lib/widgets/surface_peer_strip.dart';
+import 'pump_until.dart';
 
 /// No-op so a resumed session screen's `WakelockPlus.enable()` / `.disable()`
 /// don't hit the real pigeon channel (which throws under flutter_test).
@@ -158,17 +159,8 @@ Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() done, {
   Duration timeout = const Duration(seconds: 10),
-}) async {
-  final deadline = DateTime.now().add(timeout);
-  while (!done()) {
-    if (DateTime.now().isAfter(deadline)) {
-      fail('timed out after $timeout waiting for the expected state');
-    }
-    await tester
-        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
-    await tester.pump();
-  }
-}
+}) =>
+    pumpUntil(tester, done, describe: 'the gym screen to reach the expected state', timeout: timeout);
 
 /// Sentinel for "leave the draft marker at its well-formed shape" — null is a
 /// value a caller wants to seed, so it cannot double as the default.
