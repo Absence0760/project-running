@@ -4,13 +4,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../finisher_certificate.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
+import '../share_sheet.dart';
 import 'top_banner.dart';
 
 /// Opens a modal sheet showing the finisher certificate for an eligible
@@ -93,8 +93,9 @@ class _CertificateSheetState extends State<_CertificateSheet> {
       final file = File('${tmp.path}/threkir-certificate-$safe.png');
       await file.writeAsBytes(bytes);
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png')],
+      await shareFilesFrom(
+        context,
+        files: [XFile(file.path, mimeType: 'image/png')],
         text: l10n.clubEventCertificateShareText(widget.eventTitle),
       );
     } catch (e) {

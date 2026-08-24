@@ -13,8 +13,8 @@
  * flag alone never collects data without consent.
  */
 import { env } from '$env/dynamic/public';
+import { isTruthyFlagValue } from '../core/env_flag';
 
 export function isCyclePlansEnabled(): boolean {
-	const raw = (env.PUBLIC_CYCLE_PLANS_ENABLED ?? '').trim().toLowerCase();
-	return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+	return isTruthyFlagValue(env.PUBLIC_CYCLE_PLANS_ENABLED);
 }

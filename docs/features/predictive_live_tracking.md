@@ -103,9 +103,17 @@ over-claiming when the position is stale** (the personas' core complaint).
    is the fact a crew at the checkpoint is deciding on. The two can never
    co-render, which is what keeps the "you cannot make it" surface from firing
    off the *other* null `requiredPaceSecPerKm` produces (a checkpoint under
-   50 m away). Both surfaces feed the helper a race clock advanced by the ping
-   age (`liveElapsedS`), because `elapsed_s` stops moving when the pings do and
-   a limit that expires mid-dead-zone would otherwise never register.
+   50 m away). Both surfaces feed the helper a **race clock**, because
+   `elapsed_s` stops moving when the pings do and a limit that expires
+   mid-dead-zone would otherwise never register. Since 2026-08-24
+   (decisions § 712) that clock is stated rather than estimated: `raceClockS`
+   subtracts the run's own `started_at` — which `public_runs` already serves an
+   anonymous spectator — from now, and `liveElapsedS`'s ping-age advance is the
+   fallback for a start instant that will not parse. The two are not
+   interchangeable: `liveElapsedS` credits nothing for time the runner had the
+   recording paused, so it is a lower bound. Preferring `started_at` also
+   cancels recorder clock skew, because a `cutoff_clock` limit is resolved as
+   `cutoffClockMin - startClockMin` off that same stamp.
 3. **Pace source:** recent average over the last N pings (decide N), or
    effort-adjusted (GAP) remaining distance for a better hill estimate.
 

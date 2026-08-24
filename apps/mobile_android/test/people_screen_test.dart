@@ -12,6 +12,7 @@ import 'package:ui_kit/ui_kit.dart' show IdentityAvatar;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/nearby_flag.dart';
 import '../lib/screens/people_screen.dart';
+import '../lib/settings_destination.dart';
 import '../lib/widgets/error_state.dart';
 import '../lib/widgets/sign_in_required_state.dart';
 
@@ -526,6 +527,53 @@ void main() {
 
       expect(find.byIcon(Icons.near_me), findsOneWidget);
       expect(find.text('Nobody nearby yet'), findsOneWidget);
+    });
+
+    testWidgets('the empty state offers a real way into Preferences',
+        (tester) async {
+      // The tab is embedded in SocialScreen and holds neither a Preferences
+      // nor a SettingsSyncService, so it names the destination and the shell
+      // opens it (decisions § 710) — matching web's empty card, which links
+      // to /settings/preferences. Naming the path in prose was the old
+      // stand-in.
+      addTearDown(() => pendingSettingsDestination.value = null);
+      pendingSettingsDestination.value = null;
+      _setNearbyGate(true);
+      final api = _FakeApi(suggestions: const [], nearby: const []);
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      final action = find.widgetWithText(OutlinedButton, 'Open Preferences');
+      expect(action, findsOneWidget);
+      await tester.tap(action);
+      await tester.pump();
+
+      expect(pendingSettingsDestination.value, SettingsDestination.preferences);
+    });
+
+    testWidgets('the empty-state body no longer recites the Settings path',
+        (tester) async {
+      _setNearbyGate(true);
+      final api = _FakeApi(suggestions: const [], nearby: const []);
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      expect(find.textContaining('Settings \u2192'), findsNothing,
+          reason: 'the button is the path now; reciting it as prose was the '
+              'workaround for not having one');
+    });
+
+    testWidgets('with the gate off there is no Settings affordance either',
+        (tester) async {
+      addTearDown(() => pendingSettingsDestination.value = null);
+      pendingSettingsDestination.value = null;
+      final api = _FakeApi(suggestions: const [], nearby: const []);
+      await tester.pumpWidget(_wrap(PeopleScreen(api: api, embedded: true)));
+      await _settle(tester);
+
+      expect(find.text('Open Preferences'), findsNothing);
+      expect(pendingSettingsDestination.value, isNull,
+          reason: 'the whole surface stays inert behind the sign-off gate');
     });
 
     testWidgets('a failed nearby load shows a retry error state', (tester) async {

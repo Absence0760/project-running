@@ -571,12 +571,13 @@ test('setRunPublic is a real toggle: writes the caller boolean and surfaces erro
 	);
 });
 
-test('the profile-join fetchers chunk `.in()` so >~100 members do not silently empty', () => {
+test('the profile-join fetchers chunk `.in()` so >~100 members are not lost', () => {
 	// Reason: PostgREST serialises `.in('id', ids)` into the request URL.
 	// A club / event with more than ~100 members overflows the gateway's
-	// request-line limit and the profile-join leg silently returns null —
-	// every display_name/avatar_url degrades to a placeholder with no error
-	// (issue #325). The fix routes every such leg through fetchProfilesByIds,
+	// request-line budget and the profile-join leg is lost — every
+	// display_name/avatar_url degrades to a placeholder, and which way the
+	// gateway refuses is a property of the deployment (decisions § 653,
+	// issue #325). The fix routes every such leg through fetchProfilesByIds,
 	// which chunks the id set. This guard pins that (a) the helper chunks and
 	// (b) no fetcher rebuilds the inline unchunked profile-join it replaced.
 	const source = read('src/lib/core/data.ts');

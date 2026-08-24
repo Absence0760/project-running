@@ -67,7 +67,11 @@
     <string name="battery_consider_charging">Battery %1$d%% · consider charging</string>
     <string name="route">Route</string>
     <string name="pace">Pace</string>
-    <!-- Activity types — cycled by the pre-run Activity chip. -->
+    <!-- Activity types — cycled by the pre-run Activity chip. The words are
+         the phone's and the web's verbatim, NOT shortened for the 56 dp chip:
+         at caption3 the chip's 32 dp label box ellipsises the long words in
+         every locale either way, so shortening buys a second vocabulary and
+         no fit. Guarded by ActivityTypeVocabularyTest. -->
     <string name="activity_run">Run</string>
     <string name="activity_walk">Walk</string>
     <string name="activity_hike">Hike</string>

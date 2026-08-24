@@ -689,9 +689,13 @@
   "@peopleNearbyEmptyTitle": {
     "description": "Empty-state title when the runners-nearby list comes back with no one"
   },
-  "peopleNearbyEmptyBody": "Turn on \"Show me to runners nearby\" in Settings \u2192 Preferences \u2192 Privacy and set your area. Only runners who did the same can find you.",
+  "peopleNearbyEmptyBody": "Turn on \"Show me to runners nearby\" and set your area. Only runners who did the same can find you.",
   "@peopleNearbyEmptyBody": {
     "description": "Empty-state body for the runners-nearby list, pointing at the opt-in and area setter"
+  },
+  "peopleNearbyEmptyAction": "Open Preferences",
+  "@peopleNearbyEmptyAction": {
+    "description": "Button on the runners-nearby empty state that opens the Preferences settings screen"
   },
   "peopleNearbyLoadFailed": "Could not load runners nearby.",
   "@peopleNearbyLoadFailed": {
@@ -6683,6 +6687,18 @@
   "liveSpectatorBadgeDnf": "DNF",
   "@liveSpectatorBadgeDnf": {
     "description": "Status badge — the participant is race-marked Did Not Finish (terminal state)"
+  },
+  "liveSpectatorStatRaceTime": "Race time",
+  "@liveSpectatorStatRaceTime": {
+    "description": "Label for the live spectator race-clock stat tile — wall-clock time since the runner started, distinct from the runner's own recording timer"
+  },
+  "liveSpectatorStatTimer": "Timer",
+  "@liveSpectatorStatTimer": {
+    "description": "Label for the live spectator stat tile showing the runner's own recording timer as of the last fix"
+  },
+  "liveSpectatorStatTimerStale": "Timer, last fix",
+  "@liveSpectatorStatTimerStale": {
+    "description": "Label for the runner's-timer stat tile once the last fix is stale, so the frozen figure cannot pass as current"
   },
   "liveSpectatorRecentPace": "Recent",
   "@liveSpectatorRecentPace": {

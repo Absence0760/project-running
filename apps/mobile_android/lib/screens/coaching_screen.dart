@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../auth_error.dart';
 import '../coach_load.dart';
@@ -11,6 +10,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/date_format.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
+import '../share_sheet.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/top_banner.dart';
 import 'coaching_athlete_screen.dart';
@@ -101,7 +101,7 @@ class _CoachingScreenState extends State<CoachingScreen> {
 
   Future<void> _shareLink(String token) async {
     final link = coachInviteLink(token);
-    await Share.share(link);
+    await shareTextFrom(context, text: link);
   }
 
   Future<void> _mintInvite() async {

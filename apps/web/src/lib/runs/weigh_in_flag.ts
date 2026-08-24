@@ -13,8 +13,8 @@
  * this is the client half of a defence-in-depth pair, not the sole guard.
  */
 import { env } from '$env/dynamic/public';
+import { isTruthyFlagValue } from '../core/env_flag';
 
 export function isWeighInEnabled(): boolean {
-	const raw = (env.PUBLIC_WEIGH_IN_ENABLED ?? '').trim().toLowerCase();
-	return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+	return isTruthyFlagValue(env.PUBLIC_WEIGH_IN_ENABLED);
 }

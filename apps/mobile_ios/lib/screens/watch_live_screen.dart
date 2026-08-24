@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors;
 
 import '../auth_error.dart';
@@ -15,6 +14,7 @@ import '../live_watch_forwarder.dart';
 import '../privacy.dart';
 import '../reactive_ble_watch_transport.dart';
 import '../settings_sync.dart';
+import '../share_sheet.dart';
 import '../sim_watch_sync.dart';
 import '../watch_ingest_queue.dart';
 import '../watch_status_link.dart';
@@ -248,7 +248,8 @@ class _WatchLiveScreenState extends State<WatchLiveScreen> {
         ? 'https://threkir.com'
         : base.replaceAll(RegExp(r'/+$'), '');
     try {
-      await Share.share('$root/live/$runId', subject: _l10n.runShareSubject);
+      await shareTextFrom(context,
+          text: '$root/live/$runId', subject: _l10n.runShareSubject);
     } catch (e) {
       debugPrint('[WatchLiveScreen] share failed: $e');
       if (mounted) {

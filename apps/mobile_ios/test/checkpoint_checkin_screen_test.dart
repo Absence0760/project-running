@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
@@ -13,6 +14,7 @@ import '../lib/screens/checkpoint_checkin_screen.dart';
 /// any upsert the screen pushes through the store's drain.
 class _FakeApi extends ApiClient {
   final List<Map<String, dynamic>> upserts = [];
+  bool requiresWeighIn = false;
 
   @override
   Future<List<EventCheckpointRow>> fetchEventCheckpoints(
@@ -23,7 +25,7 @@ class _FakeApi extends ApiClient {
         eventId: eventId,
         name: 'Mile 25 Aid',
         ordinal: 0,
-        requiresWeighIn: false,
+        requiresWeighIn: requiresWeighIn,
         createdBy: 'organiser',
         createdAt: DateTime.utc(2026),
         updatedAt: DateTime.utc(2026),
@@ -62,7 +64,13 @@ void main() {
   late LocalCrossingsStore store;
   late _FakeApi api;
 
+  setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    dotenv.loadFromString(isOptional: true);
+  });
+
   setUp(() async {
+    dotenv.env.remove('WEIGH_IN_GATE');
     dir = Directory.systemTemp.createTempSync('checkin_screen_test_');
     store = LocalCrossingsStore();
     await store.init(overrideDirectory: dir);
@@ -123,6 +131,44 @@ void main() {
     expect(store.rows.first['in_time'], isNotNull);
     // The best-effort immediate sync drained it through the RPC.
     expect(api.upserts.single['bib'], '101');
+  });
+
+  // The gate parses through the canonical isTruthyFlagValue, so it honours
+  // every affirmative the rest of the product does. It used to accept `1` and
+  // `true` alone, and `yes` — which turns every other gate on, on both
+  // platforms — silently left these Art 9 fields off (decisions § 709).
+  testWidgets('WEIGH_IN_GATE=yes gates the stamp behind the weigh-in sheet',
+      (tester) async {
+    dotenv.env['WEIGH_IN_GATE'] = 'yes';
+    api.requiresWeighIn = true;
+    await _pumpLoaded(tester);
+    final l10n = AppLocalizations.of(
+        tester.element(find.byType(CheckpointCheckinScreen)));
+
+    await tester.enterText(find.byType(TextField), '101');
+    await tester.tap(find.text(l10n.checkpointStampIn));
+    await _settleUntil(
+        tester, () => tester.any(find.text(l10n.checkpointWeighInTitle)));
+
+    // The sheet is open and nothing has been written: the stamp waits on it.
+    expect(store.rows, isEmpty);
+    expect(api.upserts, isEmpty);
+  });
+
+  testWidgets('an unrecognised WEIGH_IN_GATE value leaves the fields off',
+      (tester) async {
+    dotenv.env['WEIGH_IN_GATE'] = 'maybe';
+    api.requiresWeighIn = true;
+    await _pumpLoaded(tester);
+    final l10n = AppLocalizations.of(
+        tester.element(find.byType(CheckpointCheckinScreen)));
+
+    await tester.enterText(find.byType(TextField), '101');
+    await tester.tap(find.text(l10n.checkpointStampIn));
+    await _settleUntil(tester, () => api.upserts.isNotEmpty);
+
+    expect(find.text(l10n.checkpointWeighInTitle), findsNothing);
+    expect(store.rows.single['bib'], '101');
   });
 
   testWidgets('an empty bib is rejected without writing', (tester) async {
