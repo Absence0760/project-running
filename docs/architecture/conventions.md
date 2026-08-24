@@ -1249,6 +1249,37 @@ range is unrepresentable, so the test to write is not a clamp test but the
 property a clamp cannot give: every value opens its own tab, and the strip is
 exactly as long as the enum.
 
+## Mobile embedded surfaces name a Settings destination, they don't acquire it
+
+A surface that sits inside a nav destination — a sub-tab of `SocialScreen`, a
+card on the dashboard, a widget in a sheet — links into Settings by calling
+`openSettings(SettingsDestination.x)` from `settings_destination.dart`.
+`HomeScreen` drains the parked intent and pushes the screen with the
+dependencies it already holds. Do NOT thread `Preferences` /
+`SettingsSyncService` / `ApiClient` down through the intermediate hosts so a
+leaf can build a settings screen: that makes each host carry dependencies it has
+no other use for, and the next surface that wants a Settings link is a different
+host with a different set to thread (decisions § 710). Naming a path in prose —
+"turn this on in Settings → Preferences" — is the same gap, one step worse: it is
+a link the reader has to walk by hand, and it must be re-translated into six
+catalogues every time the settings IA moves.
+
+Two limits are real, and both are reasons to keep the direct `Navigator.push`:
+
+- **The caller must have nothing to do when the screen closes.** A parked intent
+  is fire-and-forget and cannot report a pop, so a caller that awaits the push
+  and refreshes on return (`nutrition_screen.dart`'s `_openBodyMetrics`) keeps
+  its own push.
+- **A surface that already holds the dependencies for its own reads keeps its
+  own push.** `run_detail_screen.dart` reads `Preferences` throughout; routing
+  its "Set max HR" button through the seam would trade a button that works
+  wherever the screen is pushed for one that needs the shell above it.
+
+Adding a destination means adding an enum value and its arm in the shell's
+`switch` — the arm is exhaustive, so a new value fails the build until it is
+wired. Only *pushable* sub-screens are destinations; the Settings landing is
+embedded in the You tab, so opening it is a tab switch, not a push.
+
 ## Step a date through the calendar, never through a fixed `Duration`
 
 A local calendar day is 23 or 25 hours across a DST transition, so
