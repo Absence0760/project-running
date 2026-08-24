@@ -586,6 +586,10 @@ void main() {
         expect(find.text('Finished'), findsOneWidget);
         expect(find.byKey(const Key('race-clock')), findsNothing);
         expect(_metricValue(tester, 'runner-timer'), '30:00');
+        // Frozen on the saved duration, so the timer is a FINAL figure — the
+        // last-fix qualifier would misdescribe it.
+        expect(find.text('TIMER'), findsOneWidget);
+        expect(find.text('TIMER, LAST FIX'), findsNothing);
       },
     );
   });

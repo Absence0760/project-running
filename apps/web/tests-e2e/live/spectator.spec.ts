@@ -275,6 +275,10 @@ test.describe('/live/[id] — anon spectator', () => {
 
 			await expect(page.locator('.live-stat-value').first()).toContainText('10');
 			await expect(page.getByTestId('runner-timer')).toContainText('50:00');
+			// A concluded run is frozen on its saved duration, so the timer is a
+			// FINAL figure — the "last fix" qualifier would misdescribe it, even
+			// though the ping backlog under it is stale by definition.
+			await expect(page.getByTestId('runner-timer')).not.toContainText(/last fix/i);
 
 			await expect(page.locator('.live-runner-sub')).toContainText(/Run finished/i);
 		} finally {

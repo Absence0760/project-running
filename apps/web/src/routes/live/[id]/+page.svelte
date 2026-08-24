@@ -157,6 +157,11 @@
 	// conclusion instant, never to now, or its clock would tick forever.
 	const raceClockAtMs = $derived(status === 'finished' ? concludedAtMs : nowMs);
 	const raceClock = $derived(raceClockS(startedAtMs, raceClockAtMs));
+	// A concluded run is frozen on its SAVED duration, so its timer is a final
+	// figure rather than a reading whose currency is in doubt — the last-fix
+	// qualifier would misdescribe it, and the ping backlog under a finished run
+	// is always stale by the time it renders.
+	const timerIsStale = $derived(status !== 'finished' && isStale);
 	// Cut-off maths runs on the race clock where it is known. `liveElapsedS`
 	// is the fallback for a run whose start instant we could not parse: it
 	// reconstructs a lower bound on the same clock from the ping age.
@@ -966,10 +971,10 @@
 						<span class="live-stat-label">{m('live.statRaceTime')}</span>
 					</div>
 				{/if}
-				<div class="live-stat" class:frozen={isStale} data-testid="runner-timer">
+				<div class="live-stat" class:frozen={timerIsStale} data-testid="runner-timer">
 					<span class="live-stat-value">{formatDuration(elapsed)}</span>
 					<span class="live-stat-label"
-						>{isStale ? m('live.statTimerStale') : m('live.statTimer')}</span
+						>{timerIsStale ? m('live.statTimerStale') : m('live.statTimer')}</span
 					>
 				</div>
 				<div class="live-stat" data-testid="avg-pace">
