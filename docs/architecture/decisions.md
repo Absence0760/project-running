@@ -9404,9 +9404,10 @@ available to an anonymous spectator**. `beginLiveBroadcast` pre-creates the
 and `public_runs` projects `started_at` with `grant select … to anon`
 (migration `20270430_001` is the current definition; the column has been in
 the view since `20260626_001`). Both surfaces were already reading it —
-web into `visibleRun.started_at`, mobile into `run.startedAt` — and each
-was using it only to resolve a `cutoff_clock` marker's time of day. So the
-race clock is `now - started_at`: a subtraction of two values the page
+web into `visibleRun.started_at`, mobile into `run.startedAt` — and neither
+was subtracting it from now: it fed a `cutoff_clock` marker's time of day on
+both, plus the `isFinishedStale` / `runIsFinished` end inference. So the race
+clock is `now - started_at`: a subtraction of two values the page already
 holds, not a reconstruction. `raceClockS` joins the `live_freshness` parity
 pair and states it; `liveElapsedS` stays as the fallback for a caller that
 cannot resolve the start, and both suites now pin that it can only ever be
