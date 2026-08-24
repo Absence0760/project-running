@@ -168,6 +168,12 @@ pub async fn screen_task(
     let mut logged_page: Option<Page> = None;
     let mut idle_view = IdleView::Home;
     let mut logged_idle_view: Option<IdleView> = None;
+    // The alert banner the LAST flush actually put on the panel, and what has
+    // been said about it. `Option<Option<Alert>>` so the first render logs the
+    // empty state too: a harness that waits for "no banner on the panel" has
+    // nothing to wait for otherwise, and a change-gated line that never fires
+    // is indistinguishable from a composer that never ran.
+    let mut logged_banner: Option<Option<Alert>> = None;
     // The page-grid overview's cursor while open (None = closed) — published
     // by the button task, which owns the grid state machine.
     let mut grid: Option<Page> = None;
@@ -497,10 +503,16 @@ pub async fn screen_task(
         // band) is the most unmissable treatment the panel gives, and the alert
         // engine only emits during a run, so the idle face never loses its
         // title. Which band this is was decided above, with the row layout.
+        // What this frame will genuinely SHOW, as distinct from what the alert
+        // engine holds: the overlays below can still take the band back, and
+        // the post-flush line at the bottom of the loop reports this, not
+        // `alert`.
+        let mut drawn_banner: Option<Alert> = None;
         match band {
             HeroBand::AlertBanner => {
                 if let Some(a) = alert {
                     fb.draw_banner_2x(0, &alerts::banner(a));
+                    drawn_banner = Some(a);
                 }
             }
             HeroBand::RezeroBanner => {
@@ -612,6 +624,7 @@ pub async fn screen_task(
         // and disarms, never arms.
         if stop_pending {
             fb.draw_banner_2x(0, button::STOP_ARMED_BANNER);
+            drawn_banner = None;
         }
         // The page-grid overview takes the panel over while open: its rows
         // rewrite every band (erasing the composed page underneath — each
@@ -634,6 +647,7 @@ pub async fn screen_task(
                 widgets::draw_grid_cursor(&mut fb, cell);
             }
             widgets::draw_page_indicator(&mut fb, statusbar::page_indicator(cursor, pages_mask));
+            drawn_banner = None;
             // The Nav map's skip-cache is stale once the grid painted over it.
             panel_cache.invalidate();
         }
@@ -699,6 +713,22 @@ pub async fn screen_task(
         if logged_idle_view != Some(idle_view) {
             debug!("ui: idle {}", idle_view);
             logged_idle_view = Some(idle_view);
+        }
+        // The alert banner's equivalent, and post-flush for the same reason.
+        // `record: alert <Kind>` is the RECORD task's line and it is emitted
+        // BEFORE the value is even published to this task, so it says an alert
+        // exists — never that a band carrying it reached the panel. A harness
+        // that dumps the panel when that line decodes reads the frame from
+        // before the repaint, which is a race it can only lose quietly: the
+        // frame it gets is a perfectly valid run face, just the wrong one.
+        // This line is the panel's own statement, so a dump taken after it
+        // and re-checked against it is synchronised rather than sampled.
+        if logged_banner != Some(drawn_banner) {
+            match drawn_banner {
+                Some(a) => debug!("ui: banner {}", a),
+                None => debug!("ui: banner none"),
+            }
+            logged_banner = Some(drawn_banner);
         }
 
         // Sleep until a state change or the next time-based refresh. Recording

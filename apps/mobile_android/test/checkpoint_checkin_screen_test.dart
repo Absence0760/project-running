@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_crossings_store.dart';
 import '../lib/screens/checkpoint_checkin_screen.dart';
+import 'pump_until.dart';
 
 /// Fake [ApiClient] returning one checkpoint + no server crossings, recording
 /// any upsert the screen pushes through the store's drain.
@@ -98,15 +99,10 @@ void main() {
   // under runAsync with a bounded deadline instead. pumpAndSettle is avoided
   // — the loading spinner + the autofocused TextField cursor are perpetual
   // animations that hang it.
-  Future<void> _settleUntil(WidgetTester tester, bool Function() done) async {
-    final deadline = DateTime.now().add(const Duration(seconds: 5));
-    while (!done() && DateTime.now().isBefore(deadline)) {
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 10)));
-      await tester.pump();
-    }
-    expect(done(), isTrue, reason: 'condition not reached within 5s');
-  }
+  Future<void> _settleUntil(WidgetTester tester, bool Function() done) =>
+      pumpUntil(tester, done,
+          describe: 'the check-in screen to reach the expected state',
+          timeout: const Duration(seconds: 5));
 
   Future<void> _pumpLoaded(WidgetTester tester) async {
     await tester.runAsync(() async {

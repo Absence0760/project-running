@@ -21,12 +21,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ci_smoke import (  # noqa: E402
     GUEST_WEDGED_S,
     LINE_CADENCE_S,
+    PANEL_NO_BANNER,
     RENODE_HOST_SIDE_NOISE,
+    UI_BANNER,
     WEDGE_ISSUE,
     LogTail,
     SmokeFailure,
     last_firmware_stamp,
     monitor_value,
+    panel_banner,
     renode_cpu_tail,
 )
 
@@ -209,6 +212,59 @@ class RenodeTailTest(unittest.TestCase):
 
     def test_a_session_with_no_run_dir_yet_reports_nothing(self):
         self.assertEqual(renode_cpu_tail(None), [])
+
+
+class PanelBannerTest(unittest.TestCase):
+    """The panel-state read every dump is synchronised on (decisions § 716).
+
+    Hosted here rather than left to a sim run for the same reason the wedge
+    detector is: the cases that matter are a stream that has said nothing yet
+    and a stream that has moved on since a cursor was taken, and neither is a
+    state an emulator can be asked to hold.
+    """
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.log = Path(tmp.name) / "sim-output.log"
+        self.log.write_text("")
+        self.tail = LogTail(self.log)
+
+    def emit(self, *lines):
+        with self.log.open("a") as fh:
+            fh.write("".join(f"{line}\n" for line in lines))
+
+    def test_a_stream_that_has_never_said_claims_nothing(self):
+        self.emit("1.000000 DEBUG ui: page Dashboard")
+        self.assertIsNone(panel_banner(self.tail))
+
+    def test_the_newest_line_wins_not_the_first(self):
+        self.emit(
+            "1.000000 DEBUG ui: banner none",
+            "9.000000 DEBUG ui: banner Drink",
+            "17.000000 DEBUG ui: banner none",
+        )
+        self.assertEqual(panel_banner(self.tail), PANEL_NO_BANNER)
+
+    def test_a_cursor_reads_the_state_as_of_that_point(self):
+        self.emit("1.000000 DEBUG ui: banner none", "9.000000 DEBUG ui: banner Drink")
+        cursor = self.tail.mark()
+        self.emit("17.000000 DEBUG ui: banner none")
+        self.tail.poll()
+        # What the dump was vouched for against, not what has happened since:
+        # the difference between the two is the repaint that collided with it.
+        self.assertEqual(panel_banner(self.tail, cursor), "Drink")
+        self.assertEqual(panel_banner(self.tail), PANEL_NO_BANNER)
+
+    def test_a_repaint_after_the_cursor_is_visible_to_the_caller(self):
+        self.emit("9.000000 DEBUG ui: banner Drink")
+        cursor = self.tail.mark()
+        self.assertIsNone(self.tail.search(UI_BANNER, start=cursor))
+        self.emit("17.000000 DEBUG ui: banner none")
+        self.tail.poll()
+        moved = self.tail.search(UI_BANNER, start=cursor)
+        self.assertIsNotNone(moved)
+        self.assertEqual(moved.group(1), PANEL_NO_BANNER)
 
 
 if __name__ == "__main__":

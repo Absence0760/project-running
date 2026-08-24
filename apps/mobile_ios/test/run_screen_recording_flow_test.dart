@@ -24,6 +24,7 @@ import '../lib/social_service.dart';
 import '../lib/training_service.dart';
 import '../lib/turn_cues.dart';
 import '../lib/widgets/top_banner.dart';
+import 'pump_until.dart';
 
 /// Drives the full RunScreen UI flow: tap START → countdown → recording.
 ///
@@ -395,31 +396,6 @@ void main() {
     );
     await tester.pump();
     return s.runStore;
-  }
-
-  /// Complete a Finish hold. The button (`HoldToStopButton`) only fires
-  /// `onHoldComplete` after an 800 ms `Ticker`-driven hold; driving that
-  /// Ticker to the threshold under the fake test clock is unreliable, so
-  /// we assert the button is present + hit-testable in the recording UI
-  /// (a real user can reach it), then invoke its wired `onHoldComplete`
-  /// callback — the exact action a completed hold performs. That routes
-  /// through the real `_stop()`, which persists via `runStore.save(run)`.
-  Future<void> holdFinish(WidgetTester tester) async {
-    final btnFinder =
-        find.byWidgetPredicate((w) => w.runtimeType.toString() == 'HoldToStopButton');
-    expect(btnFinder.hitTestable(), findsOneWidget,
-        reason: 'a hit-testable Finish button must be present while recording');
-    final hitButton = btnFinder.hitTestable().evaluate().single.widget;
-    // _stop() awaits recorder.stop(), whose position-stream cancel only
-    // completes on the real event loop (not the fake test clock), so drive
-    // it under runAsync. The spy store captures the save synchronously, so
-    // no real I/O is left in flight when runAsync returns.
-    await tester.runAsync(() async {
-      // ignore: avoid_dynamic_calls
-      (hitButton as dynamic).onHoldComplete();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await tester.pump();
   }
 
   group('RunScreen — recording flow', () {
@@ -1088,8 +1064,8 @@ void main() {
         (tester) async {
       final runStore = await pumpResume(tester);
       await tester.tap(find.text('Finish now'));
-      await tester.pump();
-      await tester.pump();
+      await pumpUntil(tester, () => runStore.captured.isNotEmpty,
+          describe: 'Finish now to persist the recovered partial');
       expect(runStore.captured, hasLength(1),
           reason: 'Finish saves the recovered partial exactly once');
       final saved = runStore.captured.single;
@@ -1349,10 +1325,11 @@ void main() {
       await tester.tap(find.text('Treadmill mode'));
       // The off path awaits the live subscription's cancel before its
       // setState, and that future only completes on the real event loop.
-      await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      });
-      await tester.pump();
+      await pumpUntil(
+        tester,
+        () => !tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+        describe: 'the belt toggle to settle off',
+      );
 
       final sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
       expect(sw.value, isFalse);

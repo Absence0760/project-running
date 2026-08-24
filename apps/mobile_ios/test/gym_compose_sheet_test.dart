@@ -9,6 +9,7 @@ import 'package:ui_kit/ui_kit.dart' show TextLane;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/widgets/gym_compose_sheet.dart';
+import 'pump_until.dart';
 
 /// Flush the real event loop until [ready] holds, then settle the route pop.
 ///
@@ -19,12 +20,8 @@ import '../lib/widgets/gym_compose_sheet.dart';
 /// write still in flight. Waiting on the condition itself ends as soon as the
 /// write lands and only reports a failure when the save is genuinely broken.
 Future<void> _settleUntil(WidgetTester tester, bool Function() ready) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 10));
-  while (!ready() && DateTime.now().isBefore(deadline)) {
-    await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 5)));
-    await tester.pump();
-  }
+  await pumpUntil(tester, ready,
+      describe: 'the composer save to land in the store');
   await tester.pump(const Duration(milliseconds: 350));
 }
 
