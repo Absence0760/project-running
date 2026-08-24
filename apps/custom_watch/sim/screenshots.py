@@ -117,7 +117,18 @@ HERO_BAND_ROWS = 2
 CELL_H = 16
 BANNER_INK_FRACTION = 0.5
 BANNER_ATTEMPTS = 4
-BANNER_SETTLE_S = 3.0
+# How long a re-shoot may wait for the composer to say the banner has left the
+# panel. A bound on the wait, not the wait itself: what is waited ON is the
+# screen task's own post-flush `ui: banner none`, which is a fact about the
+# panel, where the fixed settle this replaced was a guess about it (§ 716).
+BANNER_CLEAR_TIMEOUT_S = 30.0
+# The re-shoot delay for the OTHER rejection, a frame identical to the previous
+# screen. It stays a fixed settle because there is nothing to synchronise on: a
+# repeat is not a state the composer announces, and the repaint race that used
+# to cause it is gone at the source (`ui: page` has been post-flush since
+# § 361), so what is left is a state that never reached the composer at all —
+# which no wait can fix, only report.
+STALE_SETTLE_S = 1.0
 
 
 def hero_band_ink_fraction(panel) -> float:
@@ -177,7 +188,21 @@ class Shots:
                     f"{title} came back under {why} — re-shooting "
                     f"(attempt {attempt}/{BANNER_ATTEMPTS})"
                 )
-                time.sleep(BANNER_SETTLE_S)
+                if bannered:
+                    # Wait for the composer to say the banner is off the panel
+                    # rather than sleeping a fixed settle and hoping. The
+                    # settle was three seconds against an eight-second TTL,
+                    # so a re-shoot could land under the same banner it was
+                    # re-shooting away from, and four of those is a lottery
+                    # rather than a bound (§ 716).
+                    ci.wait_panel_banner(
+                        sim,
+                        lambda state: state == ci.PANEL_NO_BANNER,
+                        BANNER_CLEAR_TIMEOUT_S,
+                        "the alert banner to leave the panel ('ui: banner none')",
+                    )
+                else:
+                    time.sleep(STALE_SETTLE_S)
         if stale:
             # Loud, because after this many tries it is no longer a repaint race:
             # the composer reported the screen and produced the previous frame.

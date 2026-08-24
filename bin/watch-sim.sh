@@ -157,6 +157,13 @@ RENODE_LOG="$RUN_DIR/renode.log"
 
 RENODE_PID=""
 cleanup() {
+	# The status that is ending the script, read before anything below can
+	# overwrite it (a caller may override it — see the INT trap). This used to
+	# be `exit 0` unconditionally, so every `fatal` above reported SUCCESS to
+	# whatever launched the sim: sim/ci_smoke.py could only notice a failed
+	# launch by an effect that never appeared, and said so as "exited early
+	# with status 0".
+	local status="${1:-$?}"
 	# Ignore further signals rather than resetting to default: pnpm forwards
 	# its own SIGINT right behind the tty's group-wide one (a second Ctrl-C
 	# does the same), and with the trap reset that second INT kills the
@@ -164,6 +171,14 @@ cleanup() {
 	# the emulator on the phone port.
 	trap '' INT TERM HUP
 	trap - EXIT
+	# Teardown is not `set -e`'s business. Every step below is best-effort — a
+	# kill of a pid that has already gone, a `pkill` with no children left to
+	# find — and under `set -e` the first one to return non-zero abandoned the
+	# REST of the teardown. `pkill` returning 1 (nothing left to sweep) is the
+	# common case, and it skipped both the `wait` and the removal of the
+	# latest-run pointer, leaving the next session following a symlink into a
+	# dead run directory.
+	set +e
 	# /usr/bin/renode is a shell wrapper around dotnet — killing the wrapper
 	# alone leaves Renode.dll running (and holding its monitor port), so also
 	# kill the real PID that Renode wrote to the pid-file.
@@ -176,16 +191,62 @@ cleanup() {
 	wait 2>/dev/null
 	[[ "$(readlink -f "$LATEST_LINK" 2>/dev/null)" == "$(readlink -f "$RUN_DIR")" ]] && rm -f "$LATEST_LINK"
 	dim "sim artifacts kept in $RUN_DIR (renode.log, defmt.raw)"
-	exit 0
+	exit "$status"
 }
 # HUP included: closing the terminal tab that ran the script would otherwise
 # kill it without the trap, orphaning Renode still holding the phone port —
-# the very stale instance the preflight above then refuses to start over.
-trap cleanup INT TERM HUP EXIT
+# the very stale instance the port claim below then has to wait out.
+#
+# INT is the exception that keeps its own status: Ctrl-C is how an interactive
+# session ENDS rather than how it fails (the script streams until stopped, so
+# there is no other way out), and `pnpm watch:sim` would print a lifecycle
+# error on every normal stop otherwise.
+trap 'cleanup 0' INT
+trap cleanup TERM HUP EXIT
 
-# Per-run monitor port: the default (1234) collides across concurrent or
-# stale sim instances and Renode aborts on AddressAlreadyInUse. The telnet
-# monitor also lets you poke the machine mid-run:
+# Both ports below are CLAIMED, not checked. `ss` can only report who held a
+# port a moment ago, and watch.resc binds them several seconds later — Renode
+# compiles seven C# peripheral models on the way — so two sims launched inside
+# that window both cleared the check and the loser's include aborted at the
+# socket, leaving a pty that never appeared as the only symptom. An advisory
+# lock per port, taken on a descriptor Renode inherits, answers the question a
+# check cannot: who is allowed to bind it NEXT. It stays held for as long as
+# anything in this session can still be holding the socket, so a second sim
+# waits for the real release instead of racing it.
+#
+# `ss` stays, after the claim, for the holder no lock can coordinate with: a
+# Renode orphaned by a killed session, or an unrelated program on the port.
+PORT_LOCK_WAIT_S="${WATCH_SIM_PORT_WAIT_S:-45}"
+HAVE_FLOCK=0
+command -v flock >/dev/null && HAVE_FLOCK=1
+if [[ "$HAVE_FLOCK" == 0 ]]; then
+	# macOS ships no flock(1). The check below is all there is there, and it
+	# is the check-then-use this claim exists to replace — say so rather than
+	# leave the weaker guarantee looking like the strong one.
+	warn "flock is not on PATH, so the phone port can only be CHECKED, not claimed — a sim starting alongside this one can still take port $PHONE_PORT out from under it"
+fi
+
+if [[ "$HAVE_FLOCK" == 1 ]]; then
+	exec 8>"${TMPDIR:-/tmp}/watch-sim.phone-$PHONE_PORT.lock"
+	if ! flock -n 8; then
+		step "Another watch sim holds phone-link port $PHONE_PORT — waiting up to ${PORT_LOCK_WAIT_S}s for it to release"
+		flock -w "$PORT_LOCK_WAIT_S" 8 || \
+			fatal "phone-link port $PHONE_PORT is claimed by another watch sim that has not exited within ${PORT_LOCK_WAIT_S}s. Close it, or run this one with --phone-port $(( PHONE_PORT + 1 ))."
+	fi
+fi
+PHONE_PORT_HOLDER="$(ss -tlnpH "sport = :$PHONE_PORT" 2>/dev/null || true)"
+if [[ -n "$PHONE_PORT_HOLDER" ]]; then
+	HOLDER_PID="$(grep -oP 'pid=\K[0-9]+' <<<"$PHONE_PORT_HOLDER" | head -1)"
+	fatal "phone-link port $PHONE_PORT is already in use${HOLDER_PID:+ by pid $HOLDER_PID} and the holder is not a watch sim this one can wait for. Close its Renode window${HOLDER_PID:+ or 'kill $HOLDER_PID'}, or run this one with --phone-port $(( PHONE_PORT + 1 ))."
+fi
+
+# Per-run monitor port, under the same claim. It had none at all: a bare draw
+# from a 20k-wide range, and Renode aborts on AddressAlreadyInUse with the same
+# invisible symptom the phone port has. Unlike the phone port this one has no
+# fixed value to honour, so a taken candidate is answered by drawing again.
+# (Renode's own default, 1234, collides across concurrent or stale instances,
+# which is why it is per-run at all.) The telnet monitor also lets you poke the
+# machine mid-run:
 #   ncat localhost <port>   then e.g.:  sysbus.spi3.display DumpFrame "/tmp/f.ppm"
 # bin/watch-monitor.sh attaches here without knowing the port — it follows
 # this checkout's watch-sim.latest-* pointer to this run dir and reads
@@ -193,17 +254,18 @@ trap cleanup INT TERM HUP EXIT
 # so `echo <cmd> | ncat localhost <port>` runs the command and then kills the
 # emulator. To script one command without ending the run, hold stdin open
 # (e.g. `{ echo "<cmd>"; sleep 2; } | ncat localhost <port>`).
-MONITOR_PORT=$(( 20000 + RANDOM % 20000 ))
-
-# The phone-link socket binds a FIXED port (the mobile Sim Watch screen dials
-# 7788), and watch.resc creates it BEFORE the GPS pty — so a stale sim
-# instance still holding the port aborts the include mid-script and the only
-# visible symptom is the pty never appearing. Name the real cause up front.
-PHONE_PORT_HOLDER="$(ss -tlnpH "sport = :$PHONE_PORT" 2>/dev/null || true)"
-if [[ -n "$PHONE_PORT_HOLDER" ]]; then
-	HOLDER_PID="$(grep -oP 'pid=\K[0-9]+' <<<"$PHONE_PORT_HOLDER" | head -1)"
-	fatal "phone-link port $PHONE_PORT is already in use${HOLDER_PID:+ by pid $HOLDER_PID} — a previous watch sim is probably still running. Close its Renode window${HOLDER_PID:+ or 'kill $HOLDER_PID'}, or run this one with --phone-port $(( PHONE_PORT + 1 ))."
-fi
+MONITOR_PORT=""
+for _ in $(seq 1 20); do
+	CANDIDATE=$(( 20000 + RANDOM % 20000 ))
+	if [[ "$HAVE_FLOCK" == 1 ]]; then
+		exec 9>"${TMPDIR:-/tmp}/watch-sim.monitor-$CANDIDATE.lock"
+		flock -n 9 || continue
+	fi
+	[[ -n "$(ss -tlnH "sport = :$CANDIDATE" 2>/dev/null || true)" ]] && continue
+	MONITOR_PORT="$CANDIDATE"
+	break
+done
+[[ -n "$MONITOR_PORT" ]] || fatal "could not claim a free Renode monitor port in 20 draws from 20000-39999 — something is holding most of that range."
 
 RENODE_FLAGS=(-P "$MONITOR_PORT" --pid-file "$RUN_DIR/renode.pid")
 echo "$MONITOR_PORT" > "$RUN_DIR/monitor.port"
@@ -217,19 +279,36 @@ else
 	RENODE_FLAGS+=(--disable-xwt --hide-analyzers)
 fi
 # Launch + wait for the pty symlink, whose appearance means the emulation
-# script ran to completion. Generous timeout: the first run in a Renode
-# process also compiles the C# display model, which adds several seconds.
-# Returns 0 on a booted machine, 1 on an early exit, 2 on a boot that never
-# produced the pty.
+# script ran to completion.
+#
+# The deadline is a FAILURE BOUND and nothing else. The old one was 30 s, which
+# is short enough to decide the outcome of a healthy boot: the first run in a
+# Renode process compiles seven C# peripheral models before it reaches the pty
+# — ~3 s on this workstation, several times that on a cold, contended CI runner
+# — and nothing in the wait could tell a compile still running from a machine
+# that had died. It is now 180 s, six times the widest boot ever measured here,
+# so expiry means something is actually wrong rather than that the runner was
+# busy; what the boot GOT TO is read off watch.resc's own stage markers instead
+# of guessed at. Returns 0 on a booted machine, 1 on an early exit, 2 on a boot
+# that ran out the bound.
+BOOT_TIMEOUT_S="${WATCH_SIM_BOOT_TIMEOUT_S:-180}"
 start_renode() {
 	renode "${RENODE_FLAGS[@]}" -e "$RENODE_CMDS" >"$RENODE_LOG" 2>&1 &
 	RENODE_PID=$!
-	for _ in $(seq 1 150); do
+	local started=$SECONDS
+	while (( SECONDS - started < BOOT_TIMEOUT_S )); do
 		[[ -e "$GPS_PTY" ]] && return 0
 		kill -0 "$RENODE_PID" 2>/dev/null || return 1
 		sleep 0.2
 	done
 	return 2
+}
+
+# The furthest watch.resc got, for a boot that did not finish. Renode does not
+# put an error raised inside an include into the log file, so without these the
+# only fact available about a half-run include was that it had not finished.
+boot_stage() {
+	sed -n 's/.*watch\.resc stage: //p' "$RENODE_LOG" 2>/dev/null | tail -1
 }
 
 start_renode && BOOT=0 || BOOT=$?
@@ -259,7 +338,9 @@ if [[ "$BOOT" == 1 ]]; then
 	tail -n 30 "$RENODE_LOG" >&2
 	fatal "Renode exited during startup — full log: $RENODE_LOG"
 elif [[ "$BOOT" == 2 ]]; then
-	fatal "Renode never created the GPS pty — check $RENODE_LOG (monitor errors don't reach the log; re-run the include under 'renode --console' to see them). If ss -tlnp 'sport = :$PHONE_PORT' shows a holder, a stale sim instance grabbed the phone port after the preflight check."
+	STAGE="$(boot_stage)"
+	tail -n 30 "$RENODE_LOG" >&2
+	fatal "Renode never created the GPS pty within ${BOOT_TIMEOUT_S}s — the emulation script got as far as '${STAGE:-nothing: not one stage marker reached the log, so the include never got past the platform and the C# peripheral models}' and stopped there. Full log: $RENODE_LOG (monitor errors do not reach it, which is what the stage markers are for; re-run the include under 'renode --console' to see the error itself)."
 fi
 grep -q "defmt-rtt drain active" "$RENODE_LOG" || \
 	fatal "defmt-rtt drain did not arm — check $RENODE_LOG and sim/defmt_rtt.py (must stay ASCII-only for Renode's IronPython)"

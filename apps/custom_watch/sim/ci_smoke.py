@@ -83,8 +83,13 @@ regression guard at all. This is that guard. See `scenario_dropout`.
 **What a panel dump does NOT prove.** A dump shows that *something* was drawn,
 not *what*: nothing here reads a glyph. The only evidence that a given page is
 on screen is the firmware's own `ui: page <Name>` line, and the only evidence a
-banner is up is `record: alert <Kind>` plus the ink a solid inverse-video band
-has to add. Every assertion message says which of the two it rests on. Comparing
+banner is up is its `ui: banner <Kind>` counterpart plus the ink a solid
+inverse-video band has to add. Both are emitted AFTER `display.flush` returns,
+which is what makes them evidence about the panel rather than about a task's
+intent — the RECORD task's `record: alert <Kind>` is emitted before the alert
+even reaches the composer and is never what a dump is taken against
+(decisions.md § 716). Every assertion message says which of the two it rests
+on. Comparing
 two dumps is likewise weaker than it looks — the run's clock advances every
 second, so any two frames taken seconds apart differ; what the comparison rules
 out is a DumpFrame that never landed and left us re-reading a stale file.
@@ -685,17 +690,36 @@ WORKOUT_EDGE_TIMEOUT = 90
 WORKOUT_LAP_TIMEOUT = 10
 
 ALERT_ANY = re.compile(r"record: alert (\S+)")
-ALERT_RAISED = re.compile(r"record: alert (?!cleared\b)(\S+)")
 FUEL_ALERT = re.compile(r"record: alert (Drink|Eat)\b")
 # The arms the sim added on top of fuel. Asserted as a disjunction, not one by
 # one: Distance and Time are DROPPED (not queued) when the single display slot
 # is busy, and the pace arm latches once per excursion, so which of them wins a
 # slot is not something the arming makes inevitable.
 OTHER_ALERT = re.compile(r"record: alert (Distance|Time|PaceFast|PaceSlow)\b")
+# The SCREEN task's post-flush statement about the panel: the alert kind of the
+# banner the last flush put up, or `none`. Change-gated like `ui: page`, and
+# emitted at the first render too, so the empty state is on the record and a
+# scenario that arms no alerts at all still has something to synchronise on.
+#
+# This is the signal every panel dump here is taken against. `record: alert
+# <Kind>` cannot be: it is the RECORD task's line and `record.rs` emits it
+# BEFORE publishing the alert to the composer, so it says an alert exists, not
+# that a band carrying it reached the panel. A dump sent when that line decodes
+# lands somewhere either side of the repaint, and which side depends on the
+# ratio between Renode's virtual clock and the host's — which is exactly the
+# thing a loaded CI runner changes. See decisions.md § 716.
+UI_BANNER = re.compile(r"ui: banner (\S+)")
+PANEL_NO_BANNER = "none"
+# How long a wait for a given panel state may run. Generous: the sim's alert
+# cadences put a banner up every ~15 s of firmware time, and the point of the
+# bound is to fail loudly naming the state that never arrived, never to be the
+# thing that decides when to dump.
+PANEL_BANNER_TIMEOUT = 240
+# How many times a dump may be discarded because the panel repainted while it
+# was landing. Bounded and small BECAUSE the wait above is synchronised: a
+# retry here is a genuine collision between the dump and a repaint, not a
+# sample that missed, so more than a couple means the panel never settles.
 ALERT_BANNER_ATTEMPTS = 4
-# The quiet baseline is sampled too, for the same repaint-lag reason the banner
-# side retries — see `scenario_alerts`.
-ALERT_QUIET_ATTEMPTS = 3
 # How many quiet windows a dump may be attempted in before the panel is called
 # unreadable. Bounded rather than open, and small: the engine guarantees the
 # next window (see `wait_for_no_alert`), so more than a couple of misses is a
@@ -1666,31 +1690,101 @@ def wait_for_no_alert(sim):
         time.sleep(0.25)
 
 
+def panel_banner(tail, end=None):
+    """What the screen task last said the panel carries — an alert kind, or
+    `PANEL_NO_BANNER`.
+
+    None means the firmware has never said, which is a build without the
+    post-flush line rather than a panel with nothing on it, and every caller
+    treats it as "not yet" rather than as "clear".
+    """
+    tail.poll()
+    lines = tail.lines if end is None else tail.lines[:end]
+    for line in reversed(lines):
+        m = UI_BANNER.search(line)
+        if m:
+            return m.group(1)
+    return None
+
+
+def wait_panel_banner(sim, want, timeout, what):
+    """Block until the panel's own banner state satisfies `want`, and return
+    the tail cursor it was read at, paired with the state.
+
+    Returning the cursor is the point of the helper. The state is read from the
+    lines decoded UP TO it, so anything the screen task says afterwards — a
+    banner expiring while a DumpFrame is in flight — lands beyond the cursor
+    and a caller can see that the panel moved under its dump. Read as the
+    NEWEST such line rather than the first one past a mark, so a caller
+    catching up on a decode backlog acts on where the panel is now instead of
+    on where it was when the line it matched was written.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        sim.alive()
+        mark = sim.tail.mark()
+        state = panel_banner(sim.tail, mark)
+        if state is not None and want(state):
+            return mark, state
+        if time.monotonic() >= deadline:
+            seen = state if state is not None else "nothing it has ever reported"
+            raise SmokeFailure(
+                f"expected {what} within {timeout:.0f}s — the screen task's newest "
+                f"post-flush line says the panel carries {seen} ('ui: banner "
+                "<Kind>' / 'ui: banner none', emitted after `display.flush` "
+                "returns, so its absence is a composer that never ran)"
+            )
+        time.sleep(0.25)
+
+
+def dump_panel(sim, name, what, want, what_state, attempts, timeout=PANEL_BANNER_TIMEOUT):
+    """Dump a panel frame the SCREEN task has vouched for, and prove the panel
+    did not repaint while the dump was landing.
+
+    The bounded attempt count is a failure bound, not the synchronisation: the
+    wait is on the firmware's own post-flush line, and a retry here means a
+    repaint genuinely collided with a dump, which the re-read DETECTS rather
+    than hopes against.
+    """
+    for attempt in range(1, attempts + 1):
+        mark, state = wait_panel_banner(sim, want, timeout, what_state)
+        shot = sim.dump(name, what)
+        sim.tail.poll()
+        moved = sim.tail.search(UI_BANNER, start=mark)
+        if moved is None:
+            return shot, state
+        announce(
+            f"the panel repainted to 'ui: banner {moved.group(1)}' while {name} was "
+            f"landing, so the frame is not the one the screen task vouched for — "
+            f"retrying (attempt {attempt}/{attempts})"
+        )
+    raise SmokeFailure(
+        f"the panel repainted under every one of {attempts} dumps of {what} — the "
+        "screen task flushed a frame and had flushed another before the DumpFrame "
+        "landed each time, so no dump on disk is a frame anything can be asserted "
+        "about"
+    )
+
+
 def dump_quiet(sim, name, what):
     """A panel frame with no alert banner on it.
 
-    The one acquisition every page assertion here shares. Waiting for the slot
-    to empty is not enough on its own: `record: alert` is the RECORD task's
-    line and the banner is painted by the screen task, so an alert raised while
-    the DumpFrame is in flight lands on the frame after the wait said the panel
-    was clear. Re-read the slot once the frame is on disk and take the next
-    window if it moved — the engine guarantees there is one.
+    The one acquisition every page assertion here shares. Two separate claims,
+    in order: the alert ENGINE's slot is empty (`wait_for_no_alert`, which is
+    also where the § 465 quiet-window guarantee is checked), and then the PANEL
+    is empty of a banner — which is the screen task's own statement, one repaint
+    behind the engine's, and the one a pixel assertion is actually about.
     """
-    for attempt in range(1, QUIET_DUMP_ATTEMPTS + 1):
-        wait_for_no_alert(sim)
-        shot = sim.dump(name, what)
-        if latest_alert(sim.tail) in (None, "cleared"):
-            return shot
-        announce(
-            f"an alert took the slot while {name} was landing — waiting for the "
-            f"next quiet window (attempt {attempt}/{QUIET_DUMP_ATTEMPTS})"
-        )
-    raise SmokeFailure(
-        f"no quiet window held long enough to dump {what} in "
-        f"{QUIET_DUMP_ATTEMPTS} attempts — every frame landed with an alert back "
-        "on the slot, so there is no dump of the PAGE to assert against, only of "
-        "a banner"
-    )
+    wait_for_no_alert(sim)
+    return dump_panel(
+        sim,
+        name,
+        what,
+        lambda state: state == PANEL_NO_BANNER,
+        "the screen task to flush a frame with no alert banner on it "
+        "('ui: banner none')",
+        QUIET_DUMP_ATTEMPTS,
+    )[0]
 
 
 def press_page(sim, macro, what):
@@ -1940,27 +2034,21 @@ def scenario_alerts(sim):
     # Taken through `dump_quiet` like every other page dump here, which is the
     # whole of what the baseline needs: the engine guarantees the slot goes
     # empty within ALERT_TTL_S + ALERT_QUIET_S of any raise, so a quiet window
-    # is a recurring resource rather than the run's opening stretch, and the
-    # helper re-reads the slot once the frame is on disk. This used to bet on
-    # the opening window specifically — the only stretch that was quiet by
-    # construction back when a queued alert took the slot in the same
+    # is a recurring resource rather than the run's opening stretch. This used
+    # to bet on the opening window specifically — the only stretch that was
+    # quiet by construction back when a queued alert took the slot in the same
     # `on_update` its predecessor expired in, and the bet lost whenever a
     # course-driven arm fired inside it (§ 465).
     #
-    # Sampled a few times and the LOWEST kept, which is a different race: the
-    # record task's line leads the screen task's repaint, so a frame the slot
-    # says is clear can still carry the banner one repaint behind. A stale
-    # quiet frame can only ever read too inky, never too clean, so the minimum
-    # is the one that cannot be the lagging one.
-    quiet = None
-    for attempt in range(1, ALERT_QUIET_ATTEMPTS + 1):
-        shot = dump_quiet(
-            sim, f"alert-quiet-{attempt}.ppm", "a panel frame with no alert on screen"
-        )
-        assert_rendered(shot, "the run face between alerts")
-        if quiet is None or shot.dark < quiet.dark:
-            quiet = shot
-    announce(f"quiet baseline: {quiet.dark} dark pixels (lowest of {ALERT_QUIET_ATTEMPTS})")
+    # ONE dump, not the lowest of several: `dump_quiet` now waits on the screen
+    # task's own post-flush line, so the frame is the panel's state rather than
+    # a sample of it, and taking the minimum of several samples was a way of
+    # guessing which sample was not lagging (§ 716).
+    quiet = dump_quiet(
+        sim, "alert-quiet.ppm", "a panel frame with no alert on screen"
+    )
+    assert_rendered(quiet, "the run face between alerts")
+    announce(f"quiet baseline: {quiet.dark} dark pixels")
 
     fuel = sim.wait(
         FUEL_ALERT,
@@ -1978,68 +2066,44 @@ def scenario_alerts(sim):
     )
     passed(f"one of the newer alert arms fired: {other.group(1)}")
 
-    # `ALERT_RAISED` is the RECORD task's line; the banner is painted later by
-    # the screen task. So a dump can land after the raise is logged, with the
-    # alert still up, and still catch the panel one repaint short of the banner
-    # — which is a bannerless frame that the `cleared` guard below cannot see.
-    # Retry that case rather than reading the first sample as a verdict: the
-    # claim is that a banner reaches the panel while an alert is active, not
-    # that it is already there the instant the record task logs the raise.
-    # Exhausting every attempt still fails, so a banner that never renders is
-    # caught exactly as before — the loop widens when the assertion samples,
-    # not what it demands.
-    banner = None
-    dumped = None
-    for attempt in range(1, ALERT_BANNER_ATTEMPTS + 1):
-        announce(f"waiting for an alert to dump under, attempt {attempt}/{ALERT_BANNER_ATTEMPTS}")
-        mark = sim.tail.mark()
-        sim.wait(
-            ALERT_RAISED,
-            240,
-            "an alert to raise so its banner can be dumped ('record: alert <Kind>')",
-            start=mark,
-        )
-        # One file per attempt so a failing run keeps every frame it judged.
-        shot = sim.dump(
-            f"alert-banner-{attempt}.ppm", "a panel frame while an alert is active"
-        )
-        if latest_alert(sim.tail) == "cleared":
-            announce("the alert cleared before the dump landed — waiting for the next")
-            continue
-        if dumped is None or shot.dark > dumped.dark:
-            dumped = shot
-        if shot.dark - quiet.dark < MIN_BANNER_INK_DELTA:
-            announce(
-                f"the alert was still up but the frame carries {shot.dark} dark pixels "
-                f"against {quiet.dark} quiet — the repaint had not landed yet, retrying"
-            )
-            continue
-        banner = shot
-        break
-    if banner is None and dumped is None:
-        raise SmokeFailure(
-            f"no alert stayed on screen long enough to dump in "
-            f"{ALERT_BANNER_ATTEMPTS} attempts — every raise had already logged "
-            "'record: alert cleared' by the time the DumpFrame landed, so the "
-            "banner's TTL is shorter than a panel dump takes"
-        )
-    if banner is None:
-        ink = dumped.dark - quiet.dark
-        raise SmokeFailure(
-            f"no frame dumped while an alert was active carried a banner in "
-            f"{ALERT_BANNER_ATTEMPTS} attempts — the inkiest was {dumped.dark} dark "
-            f"pixels against {quiet.dark} with no alert ({ink:+d}), short of the "
-            f"{MIN_BANNER_INK_DELTA} an inverse-video banner band has to add — the "
-            "alert reached state::ALERT but nothing that looks like a banner "
-            "reached the panel"
-        )
+    # The banner half, synchronised on the panel rather than on the engine. It
+    # used to wait for `record: alert <Kind>` — the RECORD task's line, emitted BEFORE
+    # the alert is even published to the composer — and dump on the strength of
+    # it, so whether the banner had reached the panel came down to how much
+    # virtual time passed during the host's decode-and-dump round trip. On this
+    # workstation the first attempt missed and the second landed, every run; on
+    # a loaded 2-core CI runner all four missed and the scenario went red on a
+    # PR that touches no firmware, reporting +340 ink where a band adds
+    # thousands. The wait is now on `ui: banner <Kind>`, which the screen task
+    # emits AFTER `display.flush` returns, and the dump is re-checked against
+    # that same line — so a repaint colliding with the DumpFrame is detected
+    # rather than sampled around. See decisions.md § 716.
+    banner, kind = dump_panel(
+        sim,
+        "alert-banner.ppm",
+        "a panel frame while an alert banner is on the panel",
+        lambda state: state != PANEL_NO_BANNER,
+        "the screen task to flush a frame carrying an alert banner "
+        "('ui: banner <Kind>')",
+        ALERT_BANNER_ATTEMPTS,
+    )
     assert_rendered(banner, "the run face with an alert banner")
 
     ink = banner.dark - quiet.dark
+    if ink < MIN_BANNER_INK_DELTA:
+        raise SmokeFailure(
+            f"the screen task flushed a frame carrying the {kind} banner, but that "
+            f"frame has {banner.dark} dark pixels against {quiet.dark} with no "
+            f"banner ({ink:+d}) — short of the {MIN_BANNER_INK_DELTA} an "
+            "inverse-video band across the two hero rows has to add. The panel's "
+            "own state was re-read after the dump landed and had not moved, so "
+            "this is a banner that composes without inking rather than a frame "
+            "caught between repaints"
+        )
     passed(
-        f"an alert banner reached the panel: {banner.dark} dark pixels with a banner "
-        f"up against {quiet.dark} without ({ink:+d} ink, consistent with an "
-        "inverse-video band; the dump cannot read the banner's text)"
+        f"an alert banner reached the panel: {banner.dark} dark pixels with the "
+        f"{kind} banner up against {quiet.dark} without ({ink:+d} ink, consistent "
+        "with an inverse-video band; the dump cannot read the banner's text)"
     )
 
 
