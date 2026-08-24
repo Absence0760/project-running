@@ -593,11 +593,22 @@ is the platform norm on a tiny screen).
   keeps only the pure numeric decomposition (`paceMinSec` / `paceMinSecFor`,
   `finishMinutes`, `finishDistanceSpoken` — the spoken distance uses a period
   decimal so no engine reads "comma").
+- **Shared vocabularies are the phone's, verbatim.** The five `activity_*`
+  labels are the same words `apps/mobile_android/lib/l10n/app_*.arb` and
+  `apps/web/src/lib/i18n/locales/*.ts` use, not shorter ones chosen for the
+  56 dp pre-run chip: that chip's label box is 32 dp, which the long words
+  already overflow in every locale, so it ellipsises and the
+  `contentDescription` carries the whole word (decisions § 713). The one live
+  divergence is `hike` — "Hike" here, "Trail run" there — an open product
+  rename, exempted in the guard rather than steamrollered.
 - **Tests**: `L10nResourceParityTest` (Wear-OS analogue of the mobile
   `l10n_parity_test`) asserts every `values-xx` declares exactly the default
-  key set, no empty values, and matching format-arg sets. `UnitFormatTest`
-  pins the locale decimal separator; `TtsLocaleWiringTest` pins the
-  device-locale + resource-phrase wiring.
+  key set, no empty values, and matching format-arg sets.
+  `ActivityTypeVocabularyTest` asserts the activity words equal the ARB's and
+  the web catalogue's locale for locale, keeps the `hike` exemption non-stale,
+  and pins the one phone locale the wrist does not carry (`app_pt.arb`).
+  `UnitFormatTest` pins the locale decimal separator; `TtsLocaleWiringTest`
+  pins the device-locale + resource-phrase wiring.
 - **When you add a user-facing string**: add it to `values/strings.xml` AND all
   five `values-xx` files (the parity test fails otherwise), keep format args
   (`%1$s` …) intact and in the right order, and escape apostrophes as `\'`.

@@ -6,9 +6,9 @@ import '../lib/offline_store_wipe.dart';
 
 /// Pins the issue #228 fix: sign-out must wipe EVERY OfflineSyncStore-backed
 /// local store, including the screen-owned types that main.dart holds no
-/// singleton for (routines, meal templates, recipes, checkpoint crossings,
-/// session plans). Before the fix, a different user signing in on the same
-/// device both saw the prior user's rows and adopted them — replaceFromServer
+/// singleton for (routines, meal templates, recipes, checkpoint crossings).
+/// Before the fix, a different user signing in on the same device both saw
+/// the prior user's rows and adopted them — replaceFromServer
 /// preserves pendingCreate rows and syncWithServer pushes them into the new
 /// account. The list-completeness half (a NEW subclass must land in a wipe
 /// list) is the offline-store guard in architecture_guards_test.dart.
@@ -22,7 +22,6 @@ void main() {
       'LocalMealTemplateStore',
       'LocalRecipeStore',
       'LocalCrossingsStore',
-      'LocalSessionStore',
     ]);
   });
 

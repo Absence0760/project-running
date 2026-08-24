@@ -6,6 +6,7 @@ import 'package:ui_kit/ui_kit.dart';
 import '../hr_zones.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../run_intensity.dart';
+import '../settings_destination.dart';
 import '../settings_sync.dart';
 
 /// Dashboard card surfacing how much of the runner's recent training
@@ -91,6 +92,25 @@ class IntensityCard extends StatelessWidget {
                 l10n.runDetailHrDisclaimer,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              // Run-detail shows this same caveat WITH a "Set max HR" button,
+              // because that screen happens to carry the Preferences and
+              // ApiClient the settings screen takes. This card carries only a
+              // SettingsSyncService, so it names the destination and lets the
+              // shell open it (decisions § 710) rather than the same advice
+              // being actionable on one surface and inert on the other.
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    minimumSize: const Size(0, 44),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () =>
+                      openSettings(SettingsDestination.preferences),
+                  child: Text(l10n.runDetailHrDisclaimerAction),
                 ),
               ),
             ],

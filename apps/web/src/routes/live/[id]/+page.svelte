@@ -28,7 +28,12 @@
 		type LivePing,
 	} from '$lib/runs/live_hub';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
-	import { freshnessFor, liveElapsedS, type Freshness } from '$lib/runs/live_freshness';
+	import {
+		freshnessFor,
+		liveElapsedS,
+		raceClockS,
+		type Freshness,
+	} from '$lib/runs/live_freshness';
 	import { motionFor } from '$lib/safety/live_motion';
 	import { isFinishedStale, statusAfterHydrate } from '$lib/runs/live_spectator_status';
 	import { m } from '$lib/i18n/store.svelte';
@@ -90,6 +95,12 @@
 	// as approximate and a "last seen near here" badge is shown — a SAR
 	// watcher must not read the dot as a precise current position.
 	let lastPingCoarse = $state(false);
+	// The run's own start + conclusion instants, off the `public_runs` row an
+	// anonymous spectator can already read. They anchor the race clock, which
+	// is a different quantity from the ping's `elapsed_s` and used to be
+	// rendered under the same label.
+	let startedAtMs = $state<number | null>(null);
+	let concludedAtMs = $state<number | null>(null);
 
 	// Next cut-off card state. Only wired when the run links a PUBLIC route
 	// (public_runs nulls route_id otherwise) that carries >=1 cutoff marker.
@@ -137,12 +148,24 @@
 		return Math.max(0, Math.min(100, (distAlongRouteM / total) * 100));
 	});
 
-	// `elapsed` only moves when a ping lands, so it freezes the moment the
-	// runner drops out of signal. A cut-off deadline does not — advance the
-	// race clock by the ping age so a limit that expired during a dead zone
-	// actually registers. Distance is deliberately NOT extrapolated: only
-	// time that has genuinely passed is added.
-	const raceElapsedS = $derived(liveElapsedS(elapsed, freshness?.ageMs ?? null));
+	// The strip renders two different quantities that used to share one label.
+	// `elapsed` is the runner's own recording timer as of the last fix: it
+	// stops when they tap pause and it freezes the moment the pings do. The
+	// race clock is wall time since the start — what a cut-off is measured
+	// against — and needs no estimate, because `public_runs` serves
+	// `started_at` to every spectator. A concluded run measures to its
+	// conclusion instant, never to now, or its clock would tick forever.
+	const raceClockAtMs = $derived(status === 'finished' ? concludedAtMs : nowMs);
+	const raceClock = $derived(raceClockS(startedAtMs, raceClockAtMs));
+	// A concluded run is frozen on its SAVED duration, so its timer is a final
+	// figure rather than a reading whose currency is in doubt — the last-fix
+	// qualifier would misdescribe it, and the ping backlog under a finished run
+	// is always stale by the time it renders.
+	const timerIsStale = $derived(status !== 'finished' && isStale);
+	// Cut-off maths runs on the race clock where it is known. `liveElapsedS`
+	// is the fallback for a run whose start instant we could not parse: it
+	// reconstructs a lower bound on the same clock from the ping age.
+	const raceElapsedS = $derived(raceClock ?? liveElapsedS(elapsed, freshness?.ageMs ?? null));
 
 	// A runner still pinging from the same spot renders as a fresh LIVE dot
 	// and, because the pace delta is zero, drops the pace readout entirely —
@@ -448,6 +471,8 @@
 			route_id: (row.route_id as string | null) ?? null,
 			concluded_at: (row.concluded_at as string | null) ?? null,
 		};
+		startedAtMs = Date.parse(visibleRun.started_at);
+		concludedAtMs = visibleRun.concluded_at ? Date.parse(visibleRun.concluded_at) : null;
 		if (row.user_id) {
 			// `public_profile_by_id` SECURITY DEFINER RPC — replaces
 			// the old anon SELECT on the public_profiles view, which
@@ -651,6 +676,7 @@
 			duration_s: Number(row.duration_s ?? visibleRun.duration_s),
 			concluded_at: row.concluded_at as string,
 		};
+		concludedAtMs = Date.parse(visibleRun.concluded_at as string);
 		freezeOnSavedTotals(visibleRun);
 		teardownTransports();
 		status = 'finished';
@@ -935,15 +961,23 @@
 				</div>
 			</div>
 			<div class="live-stats" role="group" aria-label={m('live.liveStatsAria')}>
-				<div class="live-stat">
+				<div class="live-stat" data-testid="live-distance">
 					<span class="live-stat-value">{formatDistance(distance)}</span>
 					<span class="live-stat-label">{m('live.statDistance')}</span>
 				</div>
-				<div class="live-stat">
+				{#if raceClock != null}
+					<div class="live-stat" data-testid="race-clock">
+						<span class="live-stat-value">{formatDuration(raceClock)}</span>
+						<span class="live-stat-label">{m('live.statRaceTime')}</span>
+					</div>
+				{/if}
+				<div class="live-stat" class:frozen={timerIsStale} data-testid="runner-timer">
 					<span class="live-stat-value">{formatDuration(elapsed)}</span>
-					<span class="live-stat-label">{m('live.statElapsed')}</span>
+					<span class="live-stat-label"
+						>{timerIsStale ? m('live.statTimerStale') : m('live.statTimer')}</span
+					>
 				</div>
-				<div class="live-stat">
+				<div class="live-stat" data-testid="avg-pace">
 					<span class="live-stat-value">{currentPace}</span>
 					<span class="live-stat-label">{m('live.statPace')}</span>
 				</div>
@@ -1390,6 +1424,13 @@
 		letter-spacing: 0.08em;
 		font-weight: 600;
 		margin-top: var(--space-2xs);
+	}
+	/* The runner's timer stopped at the last fix. Recede it so the ticking
+	 * race clock beside it is unmistakably the live one — the two figures
+	 * diverge by the whole length of a dead zone, and a spectator must be
+	 * able to see at a glance which of them is still moving. */
+	.live-stat.frozen .live-stat-value {
+		color: var(--color-text-secondary);
 	}
 
 	@media (max-width: 48rem) {

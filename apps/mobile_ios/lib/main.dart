@@ -133,6 +133,13 @@ void main() async {
   // through `--dart-define` (merged on top below, winning); on mobile
   // that is the override path, not a `.env.local` file, because
   // flutter_dotenv loads from the asset bundle (decisions §137).
+  //
+  // EVERY key any surface reads from dotenv must appear here, or it is
+  // debug-only by accident: three sign-off-gated feature flags sat unreadable
+  // in release builds because they did not (decisions §709). The
+  // `env_flag_test.dart` reachability guard fails the build when a new read
+  // is added without its bridge entry. Whether a release WORKFLOW passes a
+  // given define is a separate, deploy-time decision.
   const mapTilerKey = String.fromEnvironment('MAPTILER_KEY');
   const webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
   const stravaClientId = String.fromEnvironment('STRAVA_CLIENT_ID');
@@ -147,6 +154,12 @@ void main() async {
   const revenueCatAndroidDef = String.fromEnvironment('REVENUECAT_API_KEY_ANDROID');
   const revenueCatIosDef = String.fromEnvironment('REVENUECAT_API_KEY_IOS');
   const enableNearbyRunnersDef = String.fromEnvironment('ENABLE_NEARBY_RUNNERS');
+  const offRouteEscalationDef =
+      String.fromEnvironment('OFF_ROUTE_ESCALATION_ENABLED');
+  const adaptiveFitnessGateDef = String.fromEnvironment('ADAPTIVE_FITNESS_GATE');
+  const weighInGateDef = String.fromEnvironment('WEIGH_IN_GATE');
+  const tileUrlTemplateDef = String.fromEnvironment('TILE_URL_TEMPLATE');
+  const usdaFdcApiKeyDef = String.fromEnvironment('USDA_FDC_API_KEY');
   dotenv.loadFromString(
     envString: [
       if (supabaseUrlDef.isNotEmpty) 'SUPABASE_URL=$supabaseUrlDef',
@@ -164,6 +177,13 @@ void main() async {
       if (revenueCatIosDef.isNotEmpty) 'REVENUECAT_API_KEY_IOS=$revenueCatIosDef',
       if (enableNearbyRunnersDef.isNotEmpty)
         'ENABLE_NEARBY_RUNNERS=$enableNearbyRunnersDef',
+      if (offRouteEscalationDef.isNotEmpty)
+        'OFF_ROUTE_ESCALATION_ENABLED=$offRouteEscalationDef',
+      if (adaptiveFitnessGateDef.isNotEmpty)
+        'ADAPTIVE_FITNESS_GATE=$adaptiveFitnessGateDef',
+      if (weighInGateDef.isNotEmpty) 'WEIGH_IN_GATE=$weighInGateDef',
+      if (tileUrlTemplateDef.isNotEmpty) 'TILE_URL_TEMPLATE=$tileUrlTemplateDef',
+      if (usdaFdcApiKeyDef.isNotEmpty) 'USDA_FDC_API_KEY=$usdaFdcApiKeyDef',
     ].join('\n'),
     isOptional: true,
   );

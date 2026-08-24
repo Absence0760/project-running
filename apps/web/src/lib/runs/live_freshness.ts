@@ -87,8 +87,37 @@ export function freshnessFor(
 /// An age we cannot establish advances nothing — the caller is already in the
 /// `unknown`/stale branch above, which labels the readout rather than
 /// guessing at it.
+///
+/// This is the FALLBACK for a caller that cannot resolve the run's start
+/// instant. Where it can, `raceClockS` below states the same clock exactly
+/// instead of reconstructing a lower bound on it.
 export function liveElapsedS(anchorElapsedS: number, ageMs: number | null): number {
 	const base = Number.isFinite(anchorElapsedS) ? Math.max(0, anchorElapsedS) : 0;
 	if (ageMs == null || !Number.isFinite(ageMs) || ageMs <= 0) return base;
 	return base + Math.floor(ageMs / 1000);
+}
+
+/// The race clock: wall-clock seconds from the runner's start to `atMs`.
+///
+/// This is a different quantity from the ping's `elapsed_s`, and the spectator
+/// page used to present them as one. `elapsed_s` is the runner's own recording
+/// timer — it stops whenever they tap pause, and it is frozen at the instant of
+/// the last fix, so during a dead zone it states a time that stopped hours ago.
+/// The race clock is what a cut-off is measured against, and it needs no
+/// estimate: the run's `started_at` is on the row the spectator already reads.
+///
+/// Prefer this over `liveElapsedS` wherever the start instant is known —
+/// `liveElapsedS` can only ever be a lower bound on it (it credits nothing for
+/// time the runner had the recording paused before the last fix).
+///
+/// `atMs` is the instant to measure to: `now` for a live run, and the
+/// conclusion instant for one that has ended — a finished run's race clock must
+/// not keep ticking. Null when the start instant is unknown: no race clock is
+/// claimed rather than one being reconstructed from the frozen timer. Clamped
+/// to >= 0 so a start stamped in the viewer's future (clock skew) reads 0,
+/// never a negative clock — the same clamp `freshnessFor` makes on an age.
+export function raceClockS(startedAtMs: number | null, atMs: number | null): number | null {
+	if (startedAtMs == null || atMs == null) return null;
+	if (!Number.isFinite(startedAtMs) || !Number.isFinite(atMs)) return null;
+	return Math.floor(Math.max(0, atMs - startedAtMs) / 1000);
 }

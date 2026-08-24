@@ -82,6 +82,21 @@ jobs:
       # TestFlight-ready signing + upload. Uncomment when the iOS app
       # is ready to ship.
       #
+      # Commented out is not exempt from the SHA-pin rule
+      # (conventions.md § GitHub Actions), and being exempt in practice is
+      # how the upload step below stayed on a mutable `@v1` tag while every
+      # live reference in the repo moved to a SHA: nothing read it, and the
+      # audit that swept the rest wrote it off as dead code. It is not dead
+      # — it is code someone uncomments on the day they are trying to ship,
+      # which is the worst day to discover the pin. check_toolchain_pins.mjs
+      # now reads commented `uses:` lines too.
+      #
+      # Pinned to v5, not to v1. `@v1` resolves to a 2020 commit declaring
+      # `runs.using: node12`, a runtime GitHub removed, so SHA-pinning the
+      # tag verbatim would have frozen a reference that cannot execute at
+      # all. v5 takes the same five inputs this step passes (`app-type`
+      # still defaults to `ios`) and adds only optional ones.
+      #
       # - name: Install signing assets
       #   env:
       #     IOS_BUILD_CERTIFICATE_BASE64: ${{ secrets.IOS_BUILD_CERTIFICATE_BASE64 }}
@@ -108,7 +123,7 @@ jobs:
       #   run: flutter build ipa --release
       #
       # - name: Upload to TestFlight
-      #   uses: apple-actions/upload-testflight-build@v1
+      #   uses: apple-actions/upload-testflight-build@5e75ff58276689011512ba87a381d93dc67dbcf8 # v5.3.0
       #   with:
       #     app-path: apps/mobile_ios/build/ios/ipa/mobile_ios.ipa
       #     issuer-id: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}

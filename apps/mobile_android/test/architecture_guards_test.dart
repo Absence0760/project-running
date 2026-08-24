@@ -865,7 +865,6 @@ void main() {
       'lib/local_gear_store.dart',
       'lib/local_gym_store.dart',
       'lib/local_food_store.dart',
-      'lib/local_session_store.dart',
       'lib/local_routine_store.dart',
       'lib/offline_sync_store.dart',
     ];
@@ -5173,7 +5172,7 @@ void main() {
           }
         }
       }
-      expect(found, greaterThanOrEqualTo(8),
+      expect(found, greaterThanOrEqualTo(7),
           reason: 'the scan itself must find the replaceFromServer overrides');
       expect(offenders, isEmpty,
           reason: 'these replaceFromServer overrides rebuild rowsById before '
@@ -5839,6 +5838,100 @@ void main() {
             'es/fr/pt keyboard produces, turning 5,2 into 52 before any parse. '
             'Use typedDecimalInputFormatters:\n${offenders.join('\n')}',
       );
+    });
+  });
+
+  // iPadOS presents `UIActivityViewController` as a popover and will not
+  // present one without a non-empty anchor inside the host view. share_plus's
+  // iOS plugin turns a missing or empty anchor into a `PlatformException`, so
+  // the sheet never appears at all — and the app ships to iPad
+  // (`TARGETED_DEVICE_FAMILY = "1,2"`). Every share call site in the tree once
+  // omitted it. `share_sheet.dart` is the single place that derives and passes
+  // one, so nothing else may reach the plugin.
+  group('every share goes through share_sheet.dart', () {
+    const helper = 'lib/share_sheet.dart';
+
+    List<File> libSources() => Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+
+    test('share_plus is imported by the helper and nothing else', () {
+      var helperImports = false;
+      final offenders = <String>[];
+      for (final f in libSources()) {
+        if (!f.readAsStringSync().contains('package:share_plus/')) continue;
+        if (f.path == helper) {
+          helperImports = true;
+        } else {
+          offenders.add(f.path);
+        }
+      }
+      expect(helperImports, isTrue,
+          reason: '$helper must import share_plus — it is the only wrapper, '
+              'and the scan below is meaningless if it stops doing so');
+      expect(offenders, isEmpty,
+          reason: 'these reach share_plus directly and can therefore share '
+              'without a popover anchor, which is broken on iPad. Call '
+              'shareFilesFrom / shareTextFrom from $helper instead: '
+              '${offenders.join(', ')}');
+    });
+
+    test('no raw share call exists outside the helper', () {
+      final calls = RegExp(r'\bShare\.share|\bSharePlus\.instance');
+      final offenders = <String>[];
+      for (final f in libSources()) {
+        if (f.path == helper) continue;
+        for (final m in calls.allMatches(f.readAsStringSync())) {
+          offenders.add('${f.path}: ${m.group(0)}');
+        }
+      }
+      expect(offenders, isEmpty,
+          reason: 'a raw share call cannot carry the sharePositionOrigin iPad '
+              'requires. Route it through $helper: ${offenders.join(', ')}');
+    });
+
+    test('every share the helper makes carries a position origin', () {
+      final src = File(helper).readAsStringSync();
+      var found = 0;
+      var from = 0;
+      while (true) {
+        final at = src.indexOf('ShareParams(', from);
+        if (at < 0) break;
+        found++;
+        var i = at + 'ShareParams('.length;
+        var depth = 1;
+        while (depth > 0 && i < src.length) {
+          if (src[i] == '(') depth++;
+          if (src[i] == ')') depth--;
+          i++;
+        }
+        final args = src.substring(at, i);
+        expect(args.contains('sharePositionOrigin:'), isTrue,
+            reason: 'a ShareParams in $helper omits sharePositionOrigin, which '
+                'is the whole reason the helper exists:\n$args');
+        from = i;
+      }
+      expect(found, greaterThanOrEqualTo(2),
+          reason: 'expected the file + text share paths — did they move?');
+    });
+
+    test('every share entry point takes the context it anchors on', () {
+      final src = File(helper).readAsStringSync();
+      final entries =
+          RegExp(r'^Future<[^>]*> (share\w+)\(\s*\n?\s*([^,)]*)', multiLine: true)
+              .allMatches(src)
+              .toList();
+      expect(entries, isNotEmpty,
+          reason: 'no share entry point found in $helper — renamed?');
+      for (final m in entries) {
+        expect(m.group(2)!.trim(), 'BuildContext context',
+            reason: '${m.group(1)} must take the BuildContext it derives the '
+                'anchor from as its first parameter. An optional Rect lets a '
+                'caller omit the anchor, which is the bug this replaced.');
+      }
     });
   });
 }

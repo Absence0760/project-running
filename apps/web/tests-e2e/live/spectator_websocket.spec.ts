@@ -64,7 +64,7 @@ test.describe('/live/[id] — Go-hub WebSocket path', () => {
 			});
 			await expect(page.locator('.live-badge')).toContainText('LIVE');
 			await expect(page.locator('.live-stat-value').first()).toContainText('3.00');
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('15:00');
+			await expect(page.getByTestId('runner-timer')).toContainText('15:00');
 
 			// Anon viewer still sees the anonymous handle, not the
 			// display_name — the privacy contract holds on the WS path too
@@ -80,7 +80,7 @@ test.describe('/live/[id] — Go-hub WebSocket path', () => {
 			await expect(page.locator('.live-stat-value').first()).toContainText('4.5', {
 				timeout: 15_000
 			});
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('22:30');
+			await expect(page.getByTestId('runner-timer')).toContainText('22:30');
 		} finally {
 			await deleteRun(runId);
 		}
@@ -116,7 +116,7 @@ test.describe('/live/[id] — Go-hub WebSocket path', () => {
 			// pushed ping, not any client-side fabrication.
 			// (Sub-kilometre distance renders in metres, not "0.80 km".)
 			await expect(page.locator('.live-stat-value').first()).toContainText('800 m');
-			await expect(page.locator('.live-stat-value').nth(1)).toContainText('4:00');
+			await expect(page.getByTestId('runner-timer')).toContainText('4:00');
 		} finally {
 			await deleteRun(runId);
 		}

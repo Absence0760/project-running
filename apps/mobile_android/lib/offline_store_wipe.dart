@@ -6,7 +6,6 @@ import 'local_crossings_store.dart';
 import 'local_meal_template_store.dart';
 import 'local_recipe_store.dart';
 import 'local_routine_store.dart';
-import 'local_session_store.dart';
 import 'offline_sync_store.dart';
 
 /// Fresh instances of every SCREEN-OWNED [OfflineSyncStore] type, for the
@@ -22,7 +21,6 @@ List<OfflineSyncStore> buildScreenOwnedOfflineStores() => [
       LocalMealTemplateStore(),
       LocalRecipeStore(),
       LocalCrossingsStore(),
-      LocalSessionStore(),
     ];
 
 /// Init-then-clear each store, isolating per-store failures so one

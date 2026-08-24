@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:ui_kit/ui_kit.dart' show AppSemanticColors, IdentityAvatar;
 
 import '../ai_disclosure.dart';
@@ -25,6 +24,7 @@ import '../password_change.dart';
 import '../preferences.dart';
 import '../text_limits.dart';
 import '../settings_sync.dart';
+import '../share_sheet.dart';
 import '../widgets/ai_disclosure_notice.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/password_field.dart';
@@ -776,8 +776,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
           DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
       final file = File('${tmp.path}/runs-$ts.csv');
       await file.writeAsString(buf.toString());
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/csv')],
+      await shareFilesFrom(
+        context,
+        files: [XFile(file.path, mimeType: 'text/csv')],
         text: l10n.settingsAccountCsvShareText,
       );
     } catch (e) {
@@ -817,8 +818,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
           _backupLocalShortfall = localShort;
         });
       }
-      await Share.shareXFiles(
-        [XFile(file.path)],
+      await shareFilesFrom(
+        context,
+        files: [XFile(file.path)],
         text: l10n.settingsAccountBackupShareText,
       );
       // After the share sheet closes, not before — a banner raised

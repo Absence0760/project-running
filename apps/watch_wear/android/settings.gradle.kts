@@ -15,7 +15,7 @@ dependencyResolutionManagement {
 }
 
 plugins {
-    id("com.android.application") version "9.3.1" apply false
+    id("com.android.application") version "9.3.2" apply false
     // Pinned to 2.3.21 (NOT the 2.4.0 Dependabot offers): CodeQL's Kotlin
     // extractor can't analyse 2.4.0 yet ("kotlin-version-too-new" → the
     // codeql-kotlin Security job fails). Bump only once CodeQL supports it.

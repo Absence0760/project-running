@@ -753,9 +753,10 @@ private fun PreRunScreen(
                 .align(Alignment.BottomStart)
                 .padding(start = 22.dp, bottom = 36.dp)
                 .widthIn(max = 56.dp)
-                // The label is a single abbreviated word ("Run"); without
-                // this a TalkBack user can't tell it's a cycle control or
-                // what it does. Spell out the action + current value.
+                // The 32 dp label box ellipsises most of this vocabulary
+                // ("Radfahren", "Senderismo", "ウォーキング"), and even an intact
+                // one-word label says nothing about being a cycle control.
+                // The description carries the whole word and the action.
                 .semantics {
                     contentDescription = activityCd
                 },

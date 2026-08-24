@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshnessFor, liveElapsedS, LIVE_STALE_AFTER_MS } from './live_freshness';
+import { freshnessFor, liveElapsedS, raceClockS, LIVE_STALE_AFTER_MS } from './live_freshness';
 
 const NOW = 1_700_000_000_000;
 
@@ -107,4 +107,49 @@ test('liveElapsedS never rewinds the clock or invents time it cannot date', () =
 	assert.equal(liveElapsedS(NaN, 60_000), 60);
 	assert.equal(liveElapsedS(NaN, null), 0);
 	assert.equal(liveElapsedS(-10, 60_000), 60);
+});
+
+test('raceClockS states the wall clock since the start, not the runner timer', () => {
+	// The whole point of the helper: it needs no ping and no estimate.
+	assert.equal(raceClockS(NOW - 4 * 3_600_000, NOW), 4 * 3_600);
+	// Sub-second remainders floor, matching the seconds-granularity readout.
+	assert.equal(raceClockS(NOW - 1_999, NOW), 1);
+	assert.equal(raceClockS(NOW, NOW), 0);
+});
+
+test('raceClockS keeps running through a dead zone the runner timer sits out', () => {
+	// The case the stat strip used to get wrong: an 18 h blackout on a 240
+	// mile race. The last ping's own timer read 4 h and stopped there; the
+	// race clock a spectator does cut-off arithmetic against did not.
+	const lastPingAtMs = NOW - 18 * 3_600_000;
+	const anchorElapsedS = 4 * 3_600;
+	const f = freshnessFor(lastPingAtMs, NOW);
+	assert.equal(f.stale, true);
+	assert.equal(raceClockS(NOW - 22 * 3_600_000, NOW), 22 * 3_600);
+	// liveElapsedS reconstructs a LOWER BOUND on the same clock from the ping
+	// age; it can only ever undershoot, never exceed, the true race clock.
+	assert.ok(liveElapsedS(anchorElapsedS, f.ageMs) <= raceClockS(NOW - 22 * 3_600_000, NOW)!);
+});
+
+test('raceClockS measures to a conclusion instant so a finished run stops ticking', () => {
+	const startedAtMs = NOW - 5 * 3_600_000;
+	const concludedAtMs = NOW - 3 * 3_600_000;
+	assert.equal(raceClockS(startedAtMs, concludedAtMs), 2 * 3_600);
+	// Same run measured to `now` would keep counting hours after it ended.
+	assert.equal(raceClockS(startedAtMs, NOW), 5 * 3_600);
+});
+
+test('raceClockS claims nothing rather than inventing a clock it cannot date', () => {
+	// A run with no known start, and a run with no known end instant (a
+	// concluded broadcast predating the concluded_at marker), each withhold.
+	assert.equal(raceClockS(null, NOW), null);
+	assert.equal(raceClockS(NOW - 3_600_000, null), null);
+	assert.equal(raceClockS(NaN, NOW), null);
+	assert.equal(raceClockS(NOW - 3_600_000, NaN), null);
+});
+
+test('raceClockS clamps a future-dated start to zero, never a negative clock', () => {
+	// Clock skew between the recorder that stamped started_at and the
+	// spectator reading it — the same clamp freshnessFor makes on an age.
+	assert.equal(raceClockS(NOW + 30_000, NOW), 0);
 });

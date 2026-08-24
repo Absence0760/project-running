@@ -338,7 +338,7 @@ Activity type is locked once you tap Start — it can't change mid-run.
 - **Lap markers** — flag button records a lap split mid-run
 - **Pace alerts** — set a target pace in Settings; TTS warns when you're 30s+ off
 - **Wake lock** — screen stays on during the entire run
-- **Background recording** — GPS tracking continues when the screen is off or the app is backgrounded, via a foreground service notification ("Run in progress"). Requires location permission granted as **"Allow all the time"** and battery optimisation disabled for the app.
+- **Background recording** — GPS tracking continues when the screen is off or the app is backgrounded, via a foreground service notification ("Run in progress"). Works under **"While using the app"** too: the service is typed `location` and starts while the app is visible, which is what keeps Android counting the app as in-use. **"Allow all the time"** removes the OS's discretion to stop delivering anyway, and battery optimisation must be disabled for the app either way. When a background stretch really does miss every fix, the run keeps timing and keeps what it already had, and the off-screen distance is simply not counted — disclosed on return, once per run (#784 / #785, `decisions.md § 630`).
 - **Km/mi splits** — snackbar notification at each distance tick (every 1 km / 1 mi for run/walk/hike, every 5 km for cycle)
 - **Route following** — pick a saved route before starting; the planned route shows underneath your live track
 - **Off-route alerts** — banner + TTS announcement when you drift more than 40m from the selected route

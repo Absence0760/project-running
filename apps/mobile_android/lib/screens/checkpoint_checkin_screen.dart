@@ -5,6 +5,7 @@ import 'package:ui_kit/ui_kit.dart' show ActivityLoaderKind, FullBodyLoader;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../auth_error.dart';
+import '../env_flag.dart';
 import '../local_crossings_store.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../typed_decimal.dart';
@@ -14,11 +15,14 @@ import '../widgets/top_banner.dart';
 /// dotenv flag (OFF by default; mirrors `ADAPTIVE_FITNESS_GATE` in
 /// plan_detail_screen). When off, the screen never collects or sends body
 /// weight / medical-hold data. Production enablement is the owner+CISO+counsel
-/// sign-off (decisions §150).
+/// sign-off (decisions §150). The parse is the canonical
+/// [isTruthyFlagValue]: this gate used to accept `1` / `true` alone, so an
+/// operator who set `WEIGH_IN_GATE=yes` — an affirmative every other gate on
+/// both platforms honours — was silently left with the fields off
+/// (decisions § 709).
 bool get _weighInGate {
   try {
-    final v = dotenv.env['WEIGH_IN_GATE'];
-    return v == '1' || v == 'true';
+    return isTruthyFlagValue(dotenv.env['WEIGH_IN_GATE']);
   } catch (_) {
     return false;
   }
