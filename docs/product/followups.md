@@ -572,7 +572,7 @@ of them drifts. Rationale and the rejected alternatives: decisions.md § 595.
   resolution *constraint*; the lockfile is the pin, and Dependabot's `pub`
   entry means a bump arrives as a reviewable PR rather than silently.
 
-Two items remain open, deliberately:
+One item remains open, deliberately (the TestFlight pin below was closed 2026-08-24):
 
 - [ ] The `node-version: 24` inputs track a major line rather than an exact
   patch. Left as-is: a Node minor/patch break is loud and local to the job
