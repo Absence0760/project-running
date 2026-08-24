@@ -1,7 +1,7 @@
 package internal
 
 // HTTP-level coverage for the four `SupabaseClient` methods added in
-// the May 2026 backup work: FetchExportRoutes, FetchExportProfile,
+// the May 2026 backup work: StreamExportRoutes, FetchExportProfile,
 // FetchUserSettingsPrefs, DownloadRawTrackBytes. Spins up an
 // httptest.Server mimicking the Supabase REST + Storage shape; each
 // test asserts the request was shaped correctly (path, query
@@ -27,9 +27,9 @@ func newSupabaseTestServer(t *testing.T, handler http.HandlerFunc) *SupabaseClie
 	return NewSupabaseClient(srv.URL, testServiceKey)
 }
 
-// ─────────────────── FetchExportRoutes ───────────────────
+// ─────────────────── StreamExportRoutes ───────────────────
 
-func TestFetchExportRoutes_HappyPath(t *testing.T) {
+func TestStreamExportRoutes_HappyPath(t *testing.T) {
 	var capturedPath string
 	var capturedAuth string
 	var capturedApikey string
@@ -43,9 +43,9 @@ func TestFetchExportRoutes_HappyPath(t *testing.T) {
 			{"id":"rt-2","name":"Trail run","waypoints":[{"lat":51.5,"lng":-0.1},{"lat":51.6,"lng":-0.2}],"distance_m":10000,"surface":"trail"}
 		]`))
 	})
-	rows, _, err := client.FetchExportRoutes(context.Background(), "user-A")
+	rows, _, err := collectExportRoutes(client, context.Background(), "user-A")
 	if err != nil {
-		t.Fatalf("FetchExportRoutes: %v", err)
+		t.Fatalf("StreamExportRoutes: %v", err)
 	}
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 routes; got %d", len(rows))
@@ -70,27 +70,34 @@ func TestFetchExportRoutes_HappyPath(t *testing.T) {
 	}
 }
 
-func TestFetchExportRoutes_EmptyResultReturnsEmptySlice(t *testing.T) {
+// An empty section emits no page at all, so the archive writer never
+// opens an entry for it. `routes.json` still renders `[]` — the array
+// brackets are the writer's, not the row set's.
+func TestStreamExportRoutes_EmptyResultEmitsNoPage(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`[]`))
 	})
-	rows, _, err := client.FetchExportRoutes(context.Background(), "user-A")
+	pages := 0
+	comp, err := client.StreamExportRoutes(context.Background(), "user-A", func([]ExportRouteRow) error {
+		pages++
+		return nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rows == nil {
-		t.Errorf("expected non-nil empty slice; got nil")
+	if pages != 0 {
+		t.Errorf("emitted %d pages for an empty section; want none", pages)
 	}
-	if len(rows) != 0 {
-		t.Errorf("expected 0 rows; got %d", len(rows))
+	if len(comp.Incomplete) != 0 {
+		t.Errorf("incomplete=%v; an empty section was read in full", comp.Incomplete)
 	}
 }
 
-func TestFetchExportRoutes_5xxReturnsHTTPError(t *testing.T) {
+func TestStreamExportRoutes_5xxReturnsHTTPError(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db down", http.StatusInternalServerError)
 	})
-	_, _, err := client.FetchExportRoutes(context.Background(), "user-A")
+	_, _, err := collectExportRoutes(client, context.Background(), "user-A")
 	if err == nil {
 		t.Fatal("expected error on 500")
 	}
@@ -103,17 +110,17 @@ func TestFetchExportRoutes_5xxReturnsHTTPError(t *testing.T) {
 	}
 }
 
-func TestFetchExportRoutes_MalformedJSONReturnsError(t *testing.T) {
+func TestStreamExportRoutes_MalformedJSONReturnsError(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{not valid json`))
 	})
-	_, _, err := client.FetchExportRoutes(context.Background(), "user-A")
+	_, _, err := collectExportRoutes(client, context.Background(), "user-A")
 	if err == nil {
 		t.Fatal("expected error on malformed JSON")
 	}
 }
 
-func TestFetchExportRoutes_UrlEncodesUserId(t *testing.T) {
+func TestStreamExportRoutes_UrlEncodesUserId(t *testing.T) {
 	// A UID with a `+` (legacy non-uuid case) must round-trip through
 	// the URL query encoder rather than land as a literal space.
 	var capturedRaw string
@@ -121,7 +128,7 @@ func TestFetchExportRoutes_UrlEncodesUserId(t *testing.T) {
 		capturedRaw = r.URL.RawQuery
 		_, _ = w.Write([]byte(`[]`))
 	})
-	_, _, err := client.FetchExportRoutes(context.Background(), "user+with+plus")
+	_, _, err := collectExportRoutes(client, context.Background(), "user+with+plus")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +457,7 @@ func TestDownloadRawTrackBytes_LargeBodyRoundTrips(t *testing.T) {
 // methods round-trip the JSON shape the adapter then handles —
 // the adapter is a pure field-copy.
 
-func TestFetchExportRoutes_OptionalPointerFieldsRoundTrip(t *testing.T) {
+func TestStreamExportRoutes_OptionalPointerFieldsRoundTrip(t *testing.T) {
 	// A row with every optional column set — confirms the pointer
 	// fields decode to non-nil, with the right value.
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -476,7 +483,7 @@ func TestFetchExportRoutes_OptionalPointerFieldsRoundTrip(t *testing.T) {
 		})
 		_, _ = w.Write(body)
 	})
-	rows, _, err := client.FetchExportRoutes(context.Background(), "user-A")
+	rows, _, err := collectExportRoutes(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -513,7 +520,7 @@ func TestFetchExportRoutes_OptionalPointerFieldsRoundTrip(t *testing.T) {
 
 // ─────────────────── context cancellation ───────────────────
 
-func TestFetchExportRoutes_RespectsContextCancellation(t *testing.T) {
+func TestStreamExportRoutes_RespectsContextCancellation(t *testing.T) {
 	// Slow handler — cancel before it returns. The client must
 	// surface the cancellation rather than hang or return a stale
 	// response.
@@ -529,7 +536,7 @@ func TestFetchExportRoutes_RespectsContextCancellation(t *testing.T) {
 		// race-friendly because the assertion is "err != nil".
 		cancel()
 	}()
-	_, _, err := client.FetchExportRoutes(ctx, "user-A")
+	_, _, err := collectExportRoutes(client, ctx, "user-A")
 	if err == nil {
 		t.Fatal("expected error on context cancel")
 	}
@@ -573,7 +580,7 @@ func TestSupabaseClient_AllNewMethodsCarryAuthHeaders(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := NewSupabaseClient(srv.URL, testServiceKey)
 
-	_, _, _ = c.FetchExportRoutes(context.Background(), "user-A")
+	_, _, _ = collectExportRoutes(c, context.Background(), "user-A")
 	_, _ = c.FetchExportProfile(context.Background(), "user-A")
 	_, _ = c.FetchUserSettingsPrefs(context.Background(), "user-A")
 	_, _ = c.DownloadRawTrackBytes(context.Background(), "user-A/r.json.gz")
@@ -593,7 +600,7 @@ func TestSupabaseClient_AllNewMethodsCarryAuthHeaders(t *testing.T) {
 	}
 }
 
-// ─────────────────── FetchExportPersonalDataTables ───────────────────
+// ─────────────────── StreamExportPersonalDataTables ───────────────────
 //
 // audit/data-export-completeness (May 2026) — the audit/self-audit
 // pass caught that the run_gear filter used a SQL subselect inside
@@ -602,7 +609,7 @@ func TestSupabaseClient_AllNewMethodsCarryAuthHeaders(t *testing.T) {
 // fixed shape is a two-step fetch: gear ids first, then run_gear
 // filtered by the literal id list.
 
-func TestFetchExportPersonalDataTables_RunGearUsesTwoStepFetch(t *testing.T) {
+func TestStreamExportPersonalDataTables_RunGearUsesTwoStepFetch(t *testing.T) {
 	var observed []string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		observed = append(observed, r.URL.Path+"?"+r.URL.RawQuery)
@@ -616,9 +623,9 @@ func TestFetchExportPersonalDataTables_RunGearUsesTwoStepFetch(t *testing.T) {
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	_, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	_, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
-		t.Fatalf("FetchExportPersonalDataTables: %v", err)
+		t.Fatalf("StreamExportPersonalDataTables: %v", err)
 	}
 
 	// Verify the run_gear request used the literal id list, NOT a
@@ -645,7 +652,7 @@ func TestFetchExportPersonalDataTables_RunGearUsesTwoStepFetch(t *testing.T) {
 	}
 }
 
-func TestFetchExportPersonalDataTables_RunGearSkippedWhenUserHasNoGear(t *testing.T) {
+func TestStreamExportPersonalDataTables_RunGearSkippedWhenUserHasNoGear(t *testing.T) {
 	var runGearCalled bool
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -659,7 +666,7 @@ func TestFetchExportPersonalDataTables_RunGearSkippedWhenUserHasNoGear(t *testin
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -671,7 +678,7 @@ func TestFetchExportPersonalDataTables_RunGearSkippedWhenUserHasNoGear(t *testin
 	}
 }
 
-func TestFetchExportPersonalDataTables_RedactsDeviceTokens(t *testing.T) {
+func TestStreamExportPersonalDataTables_RedactsDeviceTokens(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(r.URL.Path, "/rest/v1/device_tokens") {
@@ -680,7 +687,7 @@ func TestFetchExportPersonalDataTables_RedactsDeviceTokens(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -704,7 +711,7 @@ func TestFetchExportPersonalDataTables_RedactsDeviceTokens(t *testing.T) {
 // secret columns are excluded). A regression that reverted the
 // select to the pre-fix shape would silently strip these from
 // every future export.
-func TestFetchExportPersonalDataTables_IntegrationsSelectIncludesDisconnectColumns(t *testing.T) {
+func TestStreamExportPersonalDataTables_IntegrationsSelectIncludesDisconnectColumns(t *testing.T) {
 	var integrationsURL string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -713,9 +720,9 @@ func TestFetchExportPersonalDataTables_IntegrationsSelectIncludesDisconnectColum
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	_, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	_, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
-		t.Fatalf("FetchExportPersonalDataTables: %v", err)
+		t.Fatalf("StreamExportPersonalDataTables: %v", err)
 	}
 	if integrationsURL == "" {
 		t.Fatalf("expected a GET to /rest/v1/integrations")
@@ -745,7 +752,7 @@ func TestFetchExportPersonalDataTables_IntegrationsSelectIncludesDisconnectColum
 // spec list must carry user_settings too. It must turn up in the export
 // when the subject has a row, scoped to the subject's own user_id, and
 // ship in full (no redaction — it's the subject's own data).
-func TestFetchExportPersonalDataTables_IncludesUserSettings(t *testing.T) {
+func TestStreamExportPersonalDataTables_IncludesUserSettings(t *testing.T) {
 	var userSettingsQ string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -757,7 +764,7 @@ func TestFetchExportPersonalDataTables_IncludesUserSettings(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -782,7 +789,7 @@ func TestFetchExportPersonalDataTables_IncludesUserSettings(t *testing.T) {
 	}
 }
 
-func TestFetchExportPersonalDataTables_PerTableErrorIsTolerated(t *testing.T) {
+func TestStreamExportPersonalDataTables_PerTableErrorIsTolerated(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.Contains(r.URL.Path, "/rest/v1/coach_messages") {
@@ -791,7 +798,7 @@ func TestFetchExportPersonalDataTables_PerTableErrorIsTolerated(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[{"id":"x"}]`))
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Errorf("per-table failures must be swallowed; got err=%v", err)
 	}
@@ -815,7 +822,7 @@ func extraTableKeys(m map[string][]map[string]interface{}) []string {
 // tables (race_pings, user_device_settings, user_coach_usage) plus
 // reports.reporter_id rows. Each must turn up in the export when the
 // underlying table has any rows for the subject.
-func TestFetchExportPersonalDataTables_IncludesAuditCompletenessTables(t *testing.T) {
+func TestStreamExportPersonalDataTables_IncludesAuditCompletenessTables(t *testing.T) {
 	hits := map[string]bool{
 		"race_pings":           false,
 		"user_device_settings": false,
@@ -843,7 +850,7 @@ func TestFetchExportPersonalDataTables_IncludesAuditCompletenessTables(t *testin
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,7 +878,7 @@ func TestFetchExportPersonalDataTables_IncludesAuditCompletenessTables(t *testin
 // directions), and event_results (own race finish records). Each must
 // appear in the manifest when the subject has rows; coach_athletes
 // must NOT leak the redeemable invite_token credential.
-func TestFetchExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T) {
+func TestStreamExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T) {
 	var dmSentQ, dmRecvQ, coachQ, athleteQ, eventResQ string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -897,7 +904,7 @@ func TestFetchExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T)
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -945,7 +952,7 @@ func TestFetchExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T)
 // user_blocks (own block list), club_posts (own authored posts), and
 // event_exceptions (own instance cancellations). Each must appear when
 // the subject has rows, scoped to the subject's own id column.
-func TestFetchExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
+func TestStreamExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
 	var claimsQ, blocksQ, postsQ, exceptionsQ string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -968,7 +975,7 @@ func TestFetchExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1007,7 +1014,7 @@ func TestFetchExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
 // — it cascades from the parent workout, so it can't be filtered
 // directly), and food_log must ship scoped to the subject. Keep the
 // shape in lockstep with the TS twin in backup_spec.test.ts.
-func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T) {
+func TestStreamExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T) {
 	var gymQ, foodQ, bodyQ string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1025,7 +1032,7 @@ func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T)
 			_, _ = w.Write([]byte(`[]`))
 		}
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1067,7 +1074,7 @@ func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T)
 // they are the confirmed contact), so both must ship, and the
 // confirm_token capability credential must never appear in the export's
 // select projection. Keep in lockstep with the TS twin.
-func TestFetchExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing.T) {
+func TestStreamExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing.T) {
 	var queries []string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1082,7 +1089,7 @@ func TestFetchExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1128,7 +1135,7 @@ func TestFetchExportPersonalDataTables_IncludesSafetyContactsBothWays(t *testing
 // from the parent routine, so they can't be filtered directly), the same
 // nested-embed shape gym_workouts/gym_sets and training_plans use. Keep the
 // shape in lockstep with the TS twin in backup_spec.test.ts.
-func TestFetchExportPersonalDataTables_IncludesGymRoutines(t *testing.T) {
+func TestStreamExportPersonalDataTables_IncludesGymRoutines(t *testing.T) {
 	var routinesQ string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1139,7 +1146,7 @@ func TestFetchExportPersonalDataTables_IncludesGymRoutines(t *testing.T) {
 		}
 		_, _ = w.Write([]byte(`[]`))
 	})
-	out, _, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	out, _, err := collectExportTables(client, context.Background(), "user-A")
 	if err != nil {
 		t.Fatal(err)
 	}
