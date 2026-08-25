@@ -61,8 +61,10 @@ fi
 # Build to a temp path then exec it, so the running process IS this
 # shell's replacement — Playwright's SIGTERM on teardown then reaps the
 # worker cleanly instead of leaving a detached `go run` child behind.
+# GOTOOLCHAIN=auto: a workstation pinned to `local` with a Go older than
+# go.mod requires dies here rather than fetching the toolchain.
 BIN_DIR="$(mktemp -d)"
-(cd "$WORKER_DIR" && go build -o "$BIN_DIR/jobworker-exporthub-e2e" .)
+(cd "$WORKER_DIR" && GOTOOLCHAIN=auto go build -o "$BIN_DIR/jobworker-exporthub-e2e" .)
 
 cd "$WORKER_DIR"
 export SUPABASE_URL="$API_URL"

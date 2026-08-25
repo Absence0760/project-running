@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { waterStorageKey } from '../fixtures/helpers';
+import { noonOnBrowserDay, waterStorageKey } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -28,12 +28,10 @@ import { USER_A } from '../fixtures/users';
  * gate lives only in Settings, for EDITING). So this spec NEVER sets or clears
  * body metrics or health consent: it relies on the seed and leaves it untouched.
  *
- * Date handling: the 7-day trend buckets on the LOCAL calendar day, and the
- * Playwright browser is pinned to UTC (playwright.config.ts § timezoneId). So
- * every inserted row is anchored to NOON UTC of its target day (Date.UTC(...,12))
- * — noon keeps each row safely inside its own UTC day regardless of the ±offset
- * between this Node process's zone and the browser's UTC, avoiding the
- * day-boundary flake that bit the dynamic-TDEE seed (see nutrition.spec.ts).
+ * Date handling: the 7-day trend buckets on the browser's calendar day, so
+ * every inserted row is anchored through fixtures/dates.ts, which builds the
+ * day in the zone playwright.config.ts pins the browser to rather than in this
+ * Node process's (decisions.md § 728).
  *
  * A unique stamp per run keeps the inserted rows + the UI-logged item isolated
  * from the seed's own week of food in the shared DB, and the finally block
@@ -70,19 +68,12 @@ test.describe('/nutrition — multi-day week journey', () => {
 
 	/// Noon UTC of (today − offsetDays), as an ISO string. Browser-UTC bucketing
 	/// puts this squarely on that calendar day.
-	function noonUtcDaysAgo(offsetDays: number): string {
-		const now = new Date();
-		return new Date(
-			Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - offsetDays, 12, 0, 0),
-		).toISOString();
-	}
-
 	test.beforeAll(async () => {
 		// Plant calorie-only food on three distinct prior days so the 7-day
 		// trend has multi-day variation independent of the seed's own week.
 		const rows = WEEK_OFFSETS.map((off) => ({
 			user_id: USER_A.id,
-			started_at: noonUtcDaysAgo(off),
+			started_at: noonOnBrowserDay(-off),
 			item_name: WEEK_ITEM(off),
 			calories: WEEK_KCAL,
 			meal_slot: 'lunch',
@@ -211,7 +202,7 @@ test.describe('/nutrition — multi-day week journey', () => {
 
 			// Backend cross-check: the three planted week rows + today's UI row
 			// all exist for USER_A within the trailing-week window.
-			const since = noonUtcDaysAgo(6);
+			const since = noonOnBrowserDay(-6);
 			const { data: weekRows } = await admin
 				.from('food_log')
 				.select('item_name')

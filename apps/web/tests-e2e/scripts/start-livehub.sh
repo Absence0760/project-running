@@ -35,8 +35,10 @@ fi
 # hub cleanly instead of leaving a detached `go run` child behind.
 # (exec replaces the shell, so no EXIT trap can clean BIN_DIR; the
 # /tmp dir is a negligible leak the OS reclaims.)
+# GOTOOLCHAIN=auto: a workstation pinned to `local` with a Go older than
+# go.mod requires dies here rather than fetching the toolchain.
 BIN_DIR="$(mktemp -d)"
-(cd "$WORKER_DIR" && go build -o "$BIN_DIR/jobworker-livehub-e2e" .)
+(cd "$WORKER_DIR" && GOTOOLCHAIN=auto go build -o "$BIN_DIR/jobworker-livehub-e2e" .)
 
 cd "$WORKER_DIR"
 export SUPABASE_URL="$API_URL"
