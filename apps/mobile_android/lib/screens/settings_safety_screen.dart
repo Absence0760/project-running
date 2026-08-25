@@ -9,6 +9,7 @@ import '../e164.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../off_route_alert.dart';
 import '../settings_sync.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/top_banner.dart';
 
 /// Settings → Safety contacts (decisions §131). Mirror of the web
@@ -333,24 +334,18 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
     final l10n = AppLocalizations.of(context);
     final api = widget.api;
     if (api == null || _contactOfBusyId != null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.safetyContactOfTitle),
-        content: Text(l10n.safetyContactOfWithdrawConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.safetyContactOfWithdraw),
-          ),
-        ],
-      ),
+    // Not the sibling `_remove` shape, which the guard exempts because an owner
+    // who drops a contact they added can add them straight back. This direction
+    // is the owner's loss and not the actor's: it ends an emergency-contact
+    // relationship the OTHER person is relying on, they are not asked, and only
+    // they can restart it by sending a fresh request. That earns error emphasis.
+    final confirmed = await confirmDestructive(
+      context,
+      title: l10n.safetyContactOfTitle,
+      body: l10n.safetyContactOfWithdrawConfirm,
+      confirmLabel: l10n.safetyContactOfWithdraw,
     );
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
     setState(() => _contactOfBusyId = rel.id);
     try {
       final ok = await api.declineSafetyRequest(rel.id);
