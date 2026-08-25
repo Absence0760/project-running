@@ -146,6 +146,19 @@ Shared pieces:
   transactional/lifecycle mail ignores it (you can't opt out of a receipt).
   Toggle on web `/settings/preferences` + mobile Settings → Preferences.
   Registry: `docs/backend/settings.md`.
+- **Per-kind mutes** — `mailer.go` `kindMutePrefKey` maps a notification kind to
+  a prefs-bag key that silences it on the OUTBOUND channels (email + both
+  pushes), leaving the inbox row alone. One entry today:
+  `notify_data_export_ready` for the `data_export_ready` kind
+  (`decisions.md § 729`). It exists for kinds where the three-mode channel
+  setting is too blunt — muting `email_notifications` to stop one notice also
+  stops direct messages. **It can only ever subtract**: `kindMuted` is consulted
+  INSIDE `shouldEmail` / `shouldPush` alongside the channel mode, never instead
+  of it, so a channel mute still wins and a per-kind `'on'` can never promote a
+  kind past one. Both gates take the whole prefs bag rather than a pre-resolved
+  mode for exactly this reason — a caller that had to remember a second key
+  separately would eventually be a channel that forgot to, and the miss is
+  invisible because the mail still sends.
 - **Deep links** — `internal/mailer.go` `pathForKind` is the single kind → URL
   map, shared by the email CTA, the web-push payload and the native-push
   message, so a wrong target misroutes all three channels at once. Its inputs
@@ -197,6 +210,7 @@ Shared pieces:
 | **Safety-contact finish alert** (any finish, incl. private) | `safety_email` (`finish`) | `runs` INSERT or live-stub→saved UPDATE (never the stub INSERT — `20270401_001`), per confirmed contact, 24h recency, **no `is_public` gate, no preference gate** | ✓ | §131 |
 | **Safety-contact overdue escalation** (live run gone silent) | `safety_email` (`overdue`) | `enqueue_safety_overdue_emails()` pg_cron (5 min) — in-progress live run silent past the owner's `safety_overdue_minutes` pref, once per run (`metadata.safety_escalated_at` stamp), per confirmed contact | ✓ | safety.md |
 | **Account-deletion receipt** | `lifecycle_email` (`account_deleted`) | `delete-account` EF enqueues it **inline** (address + locale in payload, no `user_id`) AFTER the cascade; send-once via the non-cascading `account_deletion_receipts` table | ✓ | §121 |
+| **Data export ready** (a queued Art 20 export has finished building) | `notification_email` (`data_export_ready`) + `web_push` + `native_push` | `notify_data_export_ready()` called by the Go worker's `data_export` handler once the row is `ready` with an object path; idempotent server-side via `data_export_jobs.notified_at` | ✓ | §729 |
 | **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
 | **Native push** (locked-phone FCM/APNs, same notification rows) | `native_push` | `notifications` AFTER INSERT, gated on an enabled `device_tokens` row + the same `push_notifications` pref | gated on operator FCM/APNs creds (title/body from the shared catalogue) | §166 |
 | **Lifecycle drip** (onboarding / first-week / re-engagement / streak nudges) | `lifecycle_drip` (`drip_onboarding`, `drip_first_week`, `drip_reengagement`, `drip_streak`) | daily pg_cron `enqueue_lifecycle_drip()` selects the cohort in SQL; handler gates on the opt-IN `email_lifecycle_drip` pref + `email_suppressions` + a working opt-out (unset `WEEKLY_DIGEST_UNSUB_SECRET` → no unsubscribe URL → log + skip); RFC 8058 one-click unsubscribe (`/unsubscribe/lifecycle-drip`). Enqueue dedupe excludes `done` for onboarding + first-week + re-engagement (`20270423_001`, issue #376) so the daily cron can't re-send a completed nudge; streak stays daily-repeating by design. **SEND fail-closed on the unset SMTP credential + CISO/counsel sign-off** (built, migration `20270223_001`) | ✓ | §177 |
@@ -402,11 +416,30 @@ Dashboard → Auth → Hooks in prod):
   `GoogleService-Info.plist`); unset → jobs finish done, rows stay pending. roadmap
   Phase 4b. See the architecture sibling note above + `decisions.md § 161`.
 
+- [x] **Data-export-ready notification** — SHIPPED 2026-08-25 (migration
+  `20270607_001`, `data_export_ready` notification kind; `decisions.md § 729`).
+  This was the longest-standing **Not planned** entry in this doc, on a
+  precondition that has since expired: "the export endpoint is synchronous and
+  returns a 10-minute signed URL inline, so an async email would arrive stale."
+  The export is a queued job since `§ 717` and the only rail on either client
+  since `§ 724`. The staleness objection is answered by the same design that
+  closed it rather than waived: the signed URL is minted when the subject asks
+  (web's status endpoint at read time, mobile at the Download tap), never when
+  the worker finishes, so the message links to **`/settings/account`** and
+  carries no URL and no expiry of its own. It is ONE `notifications` row, so all
+  three existing transports pick it up as siblings; the idempotency stamp is
+  `data_export_jobs.notified_at`, written in the same statement as the inbox row
+  by `notify_data_export_ready()`, which makes an at-least-once redelivery
+  silent AND lets the already-built branch re-ask (repairing a crash between the
+  finish write and the announcement). A failed announcement never fails the
+  export. The **opt-OUT** `notify_data_export_ready` pref is the per-kind mute
+  (default on, web Settings → Preferences), deliberately the opposite direction
+  from the engagement streams' opt-IN — see `docs/backend/settings.md` and the
+  ADR for why. Goes live with the shared `SMTP_HOST` worker gate like every
+  other notification kind; no new credential.
+
 ### Not planned (with reason)
 
-- **Data-export-ready email** — the export endpoint is **synchronous** and
-  returns a 10-minute signed URL inline; an async email would arrive stale.
-  Revisit only if export moves to an async/job model.
 - **New-device sign-in alerts** — there's no sign-in/device tracking to key
   them off. The send-email hook IS now configured (§ GoTrue auth emails) and
   its catalogue already carries `password_changed_notification` copy, so if
@@ -546,9 +579,14 @@ The code side is built and committed:
 ## Where the code lives
 
 - Worker: `apps/job_worker/internal/` — `mailer.go` (transport + HTML/text
-  render incl. `renderWeeklyDigest`), `email_i18n.go` (catalogue),
+  render incl. `renderWeeklyDigest`; also `importantKinds` / `inAppOnlyKinds` /
+  `kindMutePrefKey` + `pathForKind`), `email_i18n.go` (catalogue),
   `handler_notification_email.go`, `handler_lifecycle_email.go`,
-  `handler_safety_email.go`. Web push: `handler_web_push.go`, `push_render.go`
+  `handler_safety_email.go`. Data-export-ready: the announcement hook is
+  `handler_data_export.go`'s `announceExportReady` over
+  `SupabaseClient.NotifyDataExportReady` (`supabase_dataexport_jobs.go`) — it
+  runs on BOTH the fresh-build path and the already-built early return, and
+  never returns an error. Web push: `handler_web_push.go`, `push_render.go`
   (pref gate + payload), and the `internal/webpush/` RFC 8291/8292 sender.
   Native push: `handler_native_push.go` (reuses `push_render.go`'s `pushMode` /
   `shouldPush` pref gate + the shared title/body catalogue), and the
@@ -579,7 +617,12 @@ The code side is built and committed:
   `20270223_001` (lifecycle drip — the `lifecycle_drip` jobs.kind + the
   `enqueue_lifecycle_drip()` cohort-selection function + the daily
   `enqueue-lifecycle-drip` pg_cron; the opt-in `email_lifecycle_drip` pref is a
-  jsonb key with no migration, like the digest pref).
+  jsonb key with no migration, like the digest pref), `20270607_001`
+  (data-export-ready — the `data_export_ready` notifications kind, widened with
+  the `NOT VALID` + `VALIDATE` two-step because `notifications` is a guarded
+  table, plus `data_export_jobs.notified_at` and the `notify_data_export_ready()`
+  service-role RPC; the opt-OUT `notify_data_export_ready` pref is a jsonb key
+  with no migration).
 - Native-push client leg: the mobile device-token registration —
   `apps/mobile_android/lib/push_messaging_bridge.dart` +
   `firebase_push_messaging.dart` (byte-identical iOS twins), wired in `main.dart`,
@@ -605,4 +648,4 @@ The code side is built and committed:
   the committed `supabase/functions/.env`.
 - ADRs: `decisions.md` §117 (channel), §119 (lifecycle kind), §120 (i18n),
   §121 (subscription emails), §131 (safety-contact alerts), §203 (auth-email
-  hook).
+  hook), §729 (data-export-ready + the per-kind mute).

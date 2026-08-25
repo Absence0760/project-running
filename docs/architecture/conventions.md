@@ -361,6 +361,16 @@ Don't paginate when the bound is intrinsic and small (members of a club ≤ a fe
 - Don't add a dependency without checking that it's maintained. "Last updated 3 years ago" is a red flag; "no tests" is a red flag; "single maintainer on a personal account" is a red flag. Combine them and it's a veto.
 - `melos bootstrap` / `npm install` at the workspace root after changing `pubspec.yaml` / `package.json`. Commit the lockfile updates.
 
+### An `overrides` entry is a security pin, and it is checked as an outcome
+
+The root `package.json` carries four dependency overrides — `cookie`, `devalue`, `undici`, `brace-expansion` — each nudging a transitive dependency off a version with a live advisory that its own parent has not bumped past. The reason for each lives in `_overrides_rationale` beside them; drop one only when upstream's own lockfile has moved past it.
+
+They are declared **twice on purpose**: `pnpm.overrides` in pnpm's flat spelling (`"@sveltejs/kit>cookie"`) and the npm-style top-level `overrides` in npm's nested-object spelling, because `parity-types` / `build-web` / `cross-client-roundtrip` install with `npm ci` off `package-lock.json` while the Playwright, live-hub, export-hub and SSO lanes install with `pnpm install --frozen-lockfile` off `pnpm-lock.yaml`. Both must agree, or half of CI installs a patched tree and half does not.
+
+- **Never hand-edit an `overrides:` block in a lockfile.** Change `package.json` (both declarations), then run `pnpm install --lockfile-only` and commit both lockfiles.
+- **A declared pin is not an applied pin.** `pnpm install --frozen-lockfile` compares the declaration and stops there, so a lockfile that records the override and resolved around it looks healthy to it. npm's lockfile does not record the declaration at all — it records the outcome.
+- `scripts/check_pnpm_overrides.mjs`, in the `parity-types` job (also `pnpm check:pnpm-overrides`), fails the build when a lockfile is missing the block, when the two declarations disagree, and when any resolved copy in either lockfile's package tree — nested copies included — falls outside a pin. It never rewrites a lockfile: regenerating one re-resolves the whole graph, which is a human's change to review ([decisions.md § 730](decisions.md)).
+
 ### GitHub Actions: pin to commit SHAs, not tags
 
 Every `uses:` line in `.github/workflows/*.yml` pins the action to a 40-character commit SHA, with a trailing `# vN` comment for human readability:

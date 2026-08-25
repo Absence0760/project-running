@@ -6,10 +6,13 @@
 		addSafetyContact,
 		removeSafetyContact,
 		fetchPendingSafetyRequests,
+		fetchSafetyContactOf,
 		confirmSafetyRequest,
 		declineSafetyRequest,
+		setSafetySmsOptIn,
 		type SafetyContact,
 		type PendingSafetyRequest,
+		type SafetyContactOf,
 	} from '$lib/core/data';
 	import { SvelteSet } from 'svelte/reactivity';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -30,6 +33,12 @@
 	// can't fire confirm/decline twice.
 	let respondingId = $state<string | null>(null);
 	let confirmingRemove = $state<SafetyContact | null>(null);
+	let contactOf = $state<SafetyContactOf[]>([]);
+	// In-flight guard for the contact-of controls, kept separate from
+	// `respondingId` so a pending-request response and a consent change
+	// can't disable each other's list.
+	let contactOfBusyId = $state<string | null>(null);
+	let confirmingWithdraw = $state<SafetyContactOf | null>(null);
 	// Per-request SMS opt-in choice, keyed by request id. Only meaningful
 	// when the request's owner stored a phone (has_phone).
 	let smsOptIn = new SvelteSet<string>();
@@ -39,13 +48,15 @@
 	const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 	async function reload() {
-		const [c, p] = await Promise.all([
+		const [c, p, co] = await Promise.all([
 			fetchMySafetyContacts(),
 			fetchPendingSafetyRequests(),
+			fetchSafetyContactOf(),
 		]);
 		contacts = c.contacts;
 		pending = p.requests;
-		loadError = c.error ?? p.error;
+		contactOf = co.relationships;
+		loadError = c.error ?? p.error ?? co.error;
 	}
 
 	// Overdue escalation (docs/features/safety.md): a universal pref holding
@@ -158,6 +169,63 @@
 			showToast(m('safety.addFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			respondingId = null;
+		}
+	}
+
+	async function handleSmsToggle(rel: SafetyContactOf, next: boolean, input: HTMLInputElement) {
+		if (contactOfBusyId) return;
+		contactOfBusyId = rel.id;
+		try {
+			const ok = await setSafetySmsOptIn(rel.id, next);
+			await reload();
+			// A consent control must never read as a state the server didn't
+			// record. Svelte skips re-writing `checked` when the derived value
+			// is unchanged, so a refused write would leave the user's click
+			// standing in the DOM — re-assert it from the reloaded row.
+			const after = contactOf.find((r) => r.id === rel.id);
+			input.checked = after ? after.sms_opt_in_at !== null : next;
+			if (!ok) {
+				showToast(m('safety.contactOfSmsNoChange'), 'error');
+				return;
+			}
+			showToast(
+				m(next ? 'safety.contactOfSmsOnToast' : 'safety.contactOfSmsOffToast'),
+				'success',
+			);
+		} catch (e) {
+			input.checked = !next;
+			showToast(
+				m('safety.contactOfSmsFailed', { error: e instanceof Error ? e.message : String(e) }),
+				'error',
+			);
+		} finally {
+			contactOfBusyId = null;
+		}
+	}
+
+	/// Withdrawing from a relationship you are the CONTACT of is
+	/// `decline_safety_contact`, never `removeSafetyContact` — the latter is
+	/// scoped to `owner_id` and would silently match nothing here (§720).
+	async function handleWithdraw(rel: SafetyContactOf) {
+		if (contactOfBusyId) return;
+		contactOfBusyId = rel.id;
+		try {
+			const ok = await declineSafetyRequest(rel.id);
+			await reload();
+			showToast(
+				ok ? m('safety.contactOfWithdrawnToast') : m('safety.contactOfSmsNoChange'),
+				ok ? 'info' : 'error',
+			);
+		} catch (e) {
+			showToast(
+				m('safety.contactOfWithdrawFailed', {
+					error: e instanceof Error ? e.message : String(e),
+				}),
+				'error',
+			);
+		} finally {
+			contactOfBusyId = null;
+			confirmingWithdraw = null;
 		}
 	}
 </script>
@@ -348,6 +416,56 @@
 			</ul>
 		</section>
 	{/if}
+
+	{#if contactOf.length > 0}
+		<section class="card" data-testid="safety-contact-of">
+			<header class="section-head">
+				<h2>{m('safety.contactOfTitle')}</h2>
+				<p class="tagline">{m('safety.contactOfIntro')}</p>
+			</header>
+			<ul class="contact-list">
+				{#each contactOf as rel (rel.id)}
+					<li class="contact" data-testid="safety-contact-of-row">
+						<div class="who">
+							<span class="email">
+								{m('safety.contactOfFor', {
+									name: rel.owner_name || m('safety.unknownRunner'),
+								})}
+							</span>
+							{#if rel.has_phone}
+								<label class="sms-opt">
+									<input
+										type="checkbox"
+										checked={rel.sms_opt_in_at !== null}
+										disabled={contactOfBusyId !== null}
+										onchange={(e) =>
+											handleSmsToggle(
+												rel,
+												(e.currentTarget as HTMLInputElement).checked,
+												e.currentTarget as HTMLInputElement,
+											)}
+										data-testid="safety-contact-of-sms"
+									/>
+									<span>{m('safety.contactOfSmsLabel')}</span>
+								</label>
+							{:else}
+								<span class="no-phone">{m('safety.contactOfNoPhone')}</span>
+							{/if}
+						</div>
+						<button
+							class="btn-danger btn-sm"
+							onclick={() => (confirmingWithdraw = rel)}
+							disabled={contactOfBusyId !== null}
+							data-testid="safety-contact-of-withdraw"
+						>
+							<span class="material-symbols" aria-hidden="true">person_remove</span>
+							{m('safety.contactOfWithdraw')}
+						</button>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
 </div>
 
 <ConfirmDialog
@@ -360,6 +478,19 @@
 		if (confirmingRemove) handleRemove(confirmingRemove);
 	}}
 	oncancel={() => (confirmingRemove = null)}
+/>
+
+<ConfirmDialog
+	open={confirmingWithdraw !== null}
+	data-testid="safety-withdraw-dialog"
+	title={m('safety.contactOfTitle')}
+	message={m('safety.contactOfWithdrawConfirm')}
+	confirmLabel={m('safety.contactOfWithdraw')}
+	danger
+	onconfirm={() => {
+		if (confirmingWithdraw) handleWithdraw(confirmingWithdraw);
+	}}
+	oncancel={() => (confirmingWithdraw = null)}
 />
 
 <style>
@@ -502,6 +633,11 @@
 	}
 	.phone-hint {
 		margin: 0 0 var(--space-lg);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		color: var(--color-text-secondary);
+	}
+	.no-phone {
 		font-size: 0.82rem;
 		line-height: 1.5;
 		color: var(--color-text-secondary);

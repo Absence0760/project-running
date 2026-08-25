@@ -838,6 +838,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyConfirmSmsLabel => 'Also alert me by SMS';
 
   @override
+  String get safetyContactOfTitle => 'You are a safety contact';
+
+  @override
+  String get safetyContactOfIntro =>
+      'These runners named you as their emergency contact and you confirmed. Change how you\'re alerted, or withdraw, whenever you like.';
+
+  @override
+  String safetyContactOfFor(String name) {
+    return 'Emergency contact for $name';
+  }
+
+  @override
+  String get safetyContactOfSmsLabel => 'Alert me by SMS as well as email';
+
+  @override
+  String get safetyContactOfNoPhone =>
+      'SMS alerts need a mobile number for you, and none is on file. Email alerts are always sent.';
+
+  @override
+  String get safetyContactOfSmsOnToast => 'SMS alerts on.';
+
+  @override
+  String get safetyContactOfSmsOffToast => 'SMS alerts off.';
+
+  @override
+  String get safetyContactOfSmsNoChange =>
+      'That request is no longer active — the runner may have removed it.';
+
+  @override
+  String safetyContactOfSmsFailed(String error) {
+    return 'Could not update your SMS choice: $error';
+  }
+
+  @override
+  String get safetyContactOfWithdraw => 'Withdraw';
+
+  @override
+  String get safetyContactOfWithdrawConfirm =>
+      'Stop being this runner\'s safety contact? They won\'t be able to alert you any more, and they\'d have to send a new request to add you back.';
+
+  @override
+  String get safetyContactOfWithdrawnToast =>
+      'You\'re no longer a safety contact.';
+
+  @override
+  String safetyContactOfWithdrawFailed(String error) {
+    return 'Could not withdraw: $error';
+  }
+
+  @override
   String get safetyAddButton => 'Add contact';
 
   @override
@@ -4331,6 +4381,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get profileNotifContentHidden =>
       'One of your posts was hidden after being reported';
+
+  @override
+  String get profileNotifDataExportReady =>
+      'Your data export is ready to download';
 
   @override
   String profileNotifGeneric(String name) {

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { browserDate, browserDayAt } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -20,20 +21,12 @@ import { USER_A } from '../fixtures/users';
 test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	function isoDate(d: Date): string {
-		const mm = String(d.getMonth() + 1).padStart(2, '0');
-		const dd = String(d.getDate()).padStart(2, '0');
-		return `${d.getFullYear()}-${mm}-${dd}`;
-	}
-
 	test('breakfast detail rolls up only this slot, lists items, and renders a 7-day trend', async ({
 		page,
 	}) => {
 		const admin = getAdminClient();
 		const stamp = Date.now();
-		const today = new Date();
-		const todayKey = isoDate(today);
-		const yesterday = new Date(today.getTime() - 24 * 3600 * 1000);
+		const todayKey = browserDate();
 
 		// USER_A is the seed user (runner@test.com), whose seed food_log carries
 		// today-relative items in every slot across the trailing week — they'd
@@ -49,7 +42,7 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 		const rows = [
 			{
 				user_id: USER_A.id,
-				started_at: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 8, 0).toISOString(),
+				started_at: browserDayAt(0, 8, 0),
 				item_name: `E2E Eggs ${stamp}`,
 				calories: 200,
 				protein_g: 18,
@@ -59,7 +52,7 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 			},
 			{
 				user_id: USER_A.id,
-				started_at: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 8, 30).toISOString(),
+				started_at: browserDayAt(0, 8, 30),
 				item_name: `E2E Toast ${stamp}`,
 				calories: 150,
 				protein_g: 5,
@@ -69,14 +62,14 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 			},
 			{
 				user_id: USER_A.id,
-				started_at: new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 8, 0).toISOString(),
+				started_at: browserDayAt(-1, 8, 0),
 				item_name: `E2E Oatmeal ${stamp}`,
 				calories: 300,
 				meal_slot: 'breakfast',
 			},
 			{
 				user_id: USER_A.id,
-				started_at: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0).toISOString(),
+				started_at: browserDayAt(0, 12, 0),
 				item_name: `E2E Sandwich ${stamp}`,
 				calories: 999,
 				meal_slot: 'lunch',
@@ -118,11 +111,10 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 	test('a slot with nothing logged shows the empty items state but still a 7-day trend', async ({
 		page,
 	}) => {
-		const today = new Date();
 		// Dinner today is empty for the seed user on a fresh run; the day macros
 		// read 0 kcal and the items list shows the empty hint, but the trend axis
 		// is still seven stable columns.
-		await page.goto(`/nutrition/${isoDate(today)}/dinner`);
+		await page.goto(`/nutrition/${browserDate()}/dinner`);
 
 		await expect(page.getByRole('heading', { name: 'Dinner' })).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByTestId('meal-trend').locator('.trend-col')).toHaveCount(7);
@@ -133,7 +125,6 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 		// + "no items" empty state — that is indistinguishable from a genuinely
 		// empty meal. fetchFoodLogWithError surfaces the error; the page shows a
 		// retry banner. Fail the first food_log read, then fall back.
-		const today = new Date();
 		let failNext = true;
 		await page.route('**/rest/v1/food_log**', async (route) => {
 			if (failNext && route.request().method() === 'GET') {
@@ -148,7 +139,7 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 			await route.fallback();
 		});
 
-		await page.goto(`/nutrition/${isoDate(today)}/breakfast`);
+		await page.goto(`/nutrition/${browserDate()}/breakfast`);
 		const banner = page.getByTestId('meal-load-error');
 		await expect(banner).toBeVisible({ timeout: 10_000 });
 		// Not the macro card masquerading as an empty meal.
@@ -160,8 +151,7 @@ test.describe('/nutrition/[date]/[slot] — per-meal detail', () => {
 	});
 
 	test('an unknown slot renders the invalid-slot guard, not a crash', async ({ page }) => {
-		const today = new Date();
-		await page.goto(`/nutrition/${isoDate(today)}/brunch`);
+		await page.goto(`/nutrition/${browserDate()}/brunch`);
 		// validSlot is false → the invalid-slot copy renders; no meal heading.
 		await expect(page.getByRole('heading', { name: 'Brunch' })).toHaveCount(0);
 		await expect(page.getByText("That meal slot doesn't exist.")).toBeVisible({ timeout: 10_000 });

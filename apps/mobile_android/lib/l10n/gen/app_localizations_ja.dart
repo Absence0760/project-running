@@ -810,6 +810,54 @@ class AppLocalizationsJa extends AppLocalizations {
   String get safetyConfirmSmsLabel => 'SMSでも通知する';
 
   @override
+  String get safetyContactOfTitle => 'あなたが緊急連絡先になっているランナー';
+
+  @override
+  String get safetyContactOfIntro =>
+      'これらの人があなたを緊急連絡先に指定し、あなたが承認しました。通知方法の変更や辞退はいつでもできます。';
+
+  @override
+  String safetyContactOfFor(String name) {
+    return '$name さんの緊急連絡先';
+  }
+
+  @override
+  String get safetyContactOfSmsLabel => 'メールに加えてSMSでも通知する';
+
+  @override
+  String get safetyContactOfNoPhone =>
+      'SMS通知にはあなたの携帯番号が必要ですが、登録されていません。メール通知は常に送信されます。';
+
+  @override
+  String get safetyContactOfSmsOnToast => 'SMS通知を有効にしました。';
+
+  @override
+  String get safetyContactOfSmsOffToast => 'SMS通知を無効にしました。';
+
+  @override
+  String get safetyContactOfSmsNoChange => 'この関係はすでに解除されています。相手が削除した可能性があります。';
+
+  @override
+  String safetyContactOfSmsFailed(String error) {
+    return 'SMSの設定を変更できませんでした: $error';
+  }
+
+  @override
+  String get safetyContactOfWithdraw => '辞退する';
+
+  @override
+  String get safetyContactOfWithdrawConfirm =>
+      'このランナーの緊急連絡先をやめますか？相手はあなたに通知できなくなり、再び追加するには新しい依頼が必要になります。';
+
+  @override
+  String get safetyContactOfWithdrawnToast => '緊急連絡先ではなくなりました。';
+
+  @override
+  String safetyContactOfWithdrawFailed(String error) {
+    return '辞退できませんでした: $error';
+  }
+
+  @override
   String get safetyAddButton => '連絡先を追加';
 
   @override
@@ -4117,6 +4165,9 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get profileNotifContentHidden => '報告を受けて、あなたの投稿の1つが非表示になりました';
+
+  @override
+  String get profileNotifDataExportReady => 'データのエクスポートをダウンロードできます';
 
   @override
   String profileNotifGeneric(String name) {

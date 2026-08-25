@@ -641,6 +641,7 @@ export type Database = {
           finished_at: string | null
           format: string
           id: string
+          notified_at: string | null
           object_path: string | null
           run_count: number | null
           started_at: string | null
@@ -656,6 +657,7 @@ export type Database = {
           finished_at?: string | null
           format: string
           id?: string
+          notified_at?: string | null
           object_path?: string | null
           run_count?: number | null
           started_at?: string | null
@@ -671,6 +673,7 @@ export type Database = {
           finished_at?: string | null
           format?: string
           id?: string
+          notified_at?: string | null
           object_path?: string | null
           run_count?: number | null
           started_at?: string | null
@@ -5523,6 +5526,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      notify_data_export_ready: {
+        Args: { p_export_job_id: string }
+        Returns: boolean
       }
       personal_records: {
         Args: never

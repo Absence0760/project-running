@@ -471,8 +471,21 @@ FIX_STALE_BUDGET_S = 10
 # while the recorder stamps its whole-second anchor when it CONSUMES that fix
 # off the channel, which can cross the next second boundary. Assertions about
 # the settled state start after budget + slack; the frozen-distance check above
-# them still covers the void from its first snapshot.
+# them start after their own settle window, for the reason below.
 FIX_STALE_FLIP_SLACK_S = 2
+
+# The recorder publishes a fix's credited distance AFTER the `gps: fix` line
+# that announced it, not with it: the fix is logged when it is decoded and the
+# snapshot when it has been folded into the running total. The two usually land
+# in the same millisecond, but a stale-state snapshot can slip between them, so
+# a distance anchor taken at the first snapshot past `void_start` — which IS the
+# last fix's stamp — can be sampled one publish short of that fix's own credit.
+# That displacement was measured by the last real fix and belongs to it, not to
+# the void, so the freeze is asserted from a settle window past it. Sized well
+# above the ~1 ms lag actually observed (CI run 32870450327) because being
+# generous here costs almost nothing: the fixture's void is 40 s, so all but the
+# first seconds of it stay under the frozen assertion either way.
+DROPOUT_FIX_CREDIT_SETTLE_S = 2.0
 
 # The run view opens on `Page::default()`, so the forward walk wrapping back to
 # it marks one full lap. Asserted from the ui task's boot-time anchor line
@@ -2550,14 +2563,48 @@ def scenario_dropout(sim):
             "void with no snapshots in it means the record task stopped ticking "
             "when the fixes stopped, which is a stall and not a pause"
         )
-    frozen = float(inside[0][1].group(2))
-    moved = [(t, float(m.group(2))) for t, m in inside if float(m.group(2)) != frozen]
+    # Anchor past the last fix's own credit (DROPOUT_FIX_CREDIT_SETTLE_S), not at
+    # the first snapshot inside the void. Anchoring at `inside[0]` raced that
+    # credit: it passed locally, where the credited snapshot landed first, and
+    # failed on a CI runner where a `paused` snapshot carrying the pre-fix
+    # distance arrived 1 ms after the fix and became the anchor — so the credit
+    # that followed read as movement inside the void. The recorder had settled on
+    # the same distance in both runs.
+    settle_deadline = void_start + DROPOUT_FIX_CREDIT_SETTLE_S
+    settled_snaps = [(t, m) for t, m in inside if t > settle_deadline]
+    if not settled_snaps:
+        raise SmokeFailure(
+            f"the {span:.1f}s void produced no snapshot past the "
+            f"{DROPOUT_FIX_CREDIT_SETTLE_S:.0f}s fix-credit settle window "
+            f"(deadline t={settle_deadline:.1f}s), so the frozen distance this "
+            "scenario exists to prove was never observable"
+        )
+    frozen = float(settled_snaps[0][1].group(2))
+    moved = [
+        (t, float(m.group(2))) for t, m in settled_snaps if float(m.group(2)) != frozen
+    ]
     if moved:
         t, d = moved[0]
         raise SmokeFailure(
             f"distance moved from {frozen:.1f} m to {d:.1f} m at t={t:.1f}s, "
             "inside a void with no fixes in it — the recorder is crediting "
             "distance it cannot have measured"
+        )
+    # The settle window is for the last fix's credit ARRIVING, never for a lump
+    # of the void's own displacement credited early: nothing in it may read above
+    # the anchor the recorder settles on.
+    overshot = [
+        (t, float(m.group(2)))
+        for t, m in inside
+        if t <= settle_deadline and float(m.group(2)) > frozen
+    ]
+    if overshot:
+        t, d = overshot[0]
+        raise SmokeFailure(
+            f"distance read {d:.1f} m at t={t:.1f}s, above the {frozen:.1f} m the "
+            f"recorder settles on after the {DROPOUT_FIX_CREDIT_SETTLE_S:.0f}s "
+            "fix-credit settle window — inside a void with no fixes, so the "
+            "recorder credited more than the last real fix could justify"
         )
     # The pause is owed once the fix-stale budget has elapsed, not at the instant
     # the fixes stop: `fix_stale` compares strictly past `fix_stale_budget_s`, so
@@ -2592,9 +2639,10 @@ def scenario_dropout(sim):
             "tracking them"
         )
     passed(
-        f"distance held at {frozen:.1f} m across all {len(inside)} snapshots in the "
-        f"void, and every one of the {len(settled)} past the "
-        f"{FIX_STALE_BUDGET_S}s(+{FIX_STALE_FLIP_SLACK_S}s) fix-stale budget "
+        f"distance held at {frozen:.1f} m across all {len(settled_snaps)} snapshots "
+        f"past the {DROPOUT_FIX_CREDIT_SETTLE_S:.0f}s fix-credit settle window "
+        f"(of {len(inside)} in the void), and every one of the {len(settled)} past "
+        f"the {FIX_STALE_BUDGET_S}s(+{FIX_STALE_FLIP_SLACK_S}s) fix-stale budget "
         "read paused"
     )
 

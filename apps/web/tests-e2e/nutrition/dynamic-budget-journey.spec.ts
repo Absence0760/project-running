@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { noonOnBrowserDay } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertRun } from '../fixtures/simulate';
@@ -89,15 +90,6 @@ test.describe('/nutrition — dynamic budget (base + exercise) cross-modal day',
 
 	let user: SagaUser;
 
-	/// Noon UTC of today, as an ISO string. The browser is UTC-pinned, so this
-	/// lands inside /nutrition's local-day "today" window.
-	function noonUtcToday(): string {
-		const now = new Date();
-		return new Date(
-			Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0),
-		).toISOString();
-	}
-
 	test.beforeAll(async () => {
 		[user] = await createSagaUsers(1, { displayNames: ['Budget Saga'] });
 
@@ -124,7 +116,7 @@ test.describe('/nutrition — dynamic budget (base + exercise) cross-modal day',
 		//    reads the most-recent row).
 		const { error: bmErr } = await admin
 			.from('body_metrics')
-			.insert({ user_id: user.id, weight_kg: WEIGHT_KG, recorded_at: noonUtcToday() });
+			.insert({ user_id: user.id, weight_kg: WEIGHT_KG, recorded_at: noonOnBrowserDay() });
 		if (bmErr) throw bmErr;
 
 		// 3) Activity/goal prefs. sedentary (factor 1.2) + maintain (0 delta) so
@@ -144,7 +136,7 @@ test.describe('/nutrition — dynamic budget (base + exercise) cross-modal day',
 		//    fetchRuns() to today and feeds distance into exerciseCaloriesForDay.
 		await insertRun({
 			user_id: user.id,
-			started_at: noonUtcToday(),
+			started_at: noonOnBrowserDay(),
 			distance_m: RUN_DISTANCE_M,
 			duration_s: 3000,
 		});
@@ -156,7 +148,7 @@ test.describe('/nutrition — dynamic budget (base + exercise) cross-modal day',
 		const { error: gymErr } = await admin.from('gym_workouts').insert({
 			user_id: user.id,
 			title: 'E2E Budget Lift',
-			started_at: noonUtcToday(),
+			started_at: noonOnBrowserDay(),
 			duration_s: GYM_DURATION_S,
 		});
 		if (gymErr) throw gymErr;

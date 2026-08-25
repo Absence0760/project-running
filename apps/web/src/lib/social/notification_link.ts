@@ -51,6 +51,14 @@ export function notificationLinkFor(item: NotificationLinkInput): string | null 
 			return r.achievement_id ? `/share/badge/${r.achievement_id}` : null;
 		case 'challenge_complete':
 			return r.challenge_id ? `/challenges/${r.challenge_id}` : null;
+		case 'data_export_ready':
+			// The export card lives on Settings → Account, which mints the
+			// signed download URL at the moment the subject asks for it. The
+			// notification carries no URL of its own and must not: one minted
+			// when the worker finished would already be expiring (decisions
+			// § 717 + § 729). No FK — the export is not a `notifications`
+			// column, so this is the one kind whose link needs no id.
+			return '/settings/account';
 		case 'content_hidden':
 			return null;
 		default:

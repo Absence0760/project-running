@@ -168,7 +168,29 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // which is a bare `create or replace function` body (plus its grant/revoke pair)
 // on top of 20270418_001 — no table DDL of any kind and no constraint, so the
 // scanner passes it with zero violations after this bump too.
-export const GRANDFATHER_CUTOFF = '20270605';
+//
+// Bumped to 20270606 for 20270606_001_segment_leaderboard_age_band_consent.sql,
+// which puts the two segment boards' age band behind health_data_consent_at
+// (§ 718 open item 2, now § 727). Two bare `create or replace function` bodies
+// re-emitted from 20270524_001 with one predicate added at each of their two
+// age sites — no table DDL of any kind and no constraint, so the scanner passes
+// it with zero violations after this bump too. Both bodies join `segment_efforts`
+// / `global_segment_efforts`, which ARE guarded tables, but a SELECT inside a
+// function body is not ALTER TABLE and takes no DDL lock; the scanner only
+// inspects `alter table` statements, so the join is invisible to it either way.
+// Bumped to 20270607 for 20270607_001_data_export_ready_notification.sql, which
+// DOES touch a guarded table: it widens `notifications_kind_check` for the new
+// `data_export_ready` kind. It takes the NOT VALID + VALIDATE two-step, so it
+// would pass the scanner on its merits — the bump is the max-version
+// bookkeeping this file's own test enforces, not an exemption. It is the first
+// `notifications` kind widen to take the two-step; all twelve before it
+// (20260903_001 through 20270218_001) dropped and recreated the CHECK in one
+// statement, which scans every notification ever written under ACCESS EXCLUSIVE
+// for a widen that cannot invalidate a single existing row. Those are
+// grandfathered; new ones are not. The migration's other DDL is a nullable
+// `data_export_jobs.notified_at` ADD COLUMN with no default (catalogue-only, and
+// the table is not guarded) plus one function body.
+export const GRANDFATHER_CUTOFF = '20270607';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

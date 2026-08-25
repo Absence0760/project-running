@@ -274,12 +274,53 @@ const (
 // noise (kudos, comment, comment_reply, follow, club_post, run_completed,
 // event_rsvp) is emailed only under "all". event_reminder / event_cancel
 // are the Phase 4b event-day items; message is a DM; plan_update is a
-// coach changing the user's training.
+// coach changing the user's training; data_export_ready is the literal
+// definition of the category — the subject asked for the archive minutes
+// ago and is waiting to be told it exists.
 var importantKinds = map[string]bool{
-	"event_reminder": true,
-	"event_cancel":   true,
-	"plan_update":    true,
-	"message":        true,
+	"event_reminder":    true,
+	"event_cancel":      true,
+	"plan_update":       true,
+	"message":           true,
+	"data_export_ready": true,
+}
+
+// kindMutePrefKey maps a notification kind to the user_settings.prefs key
+// that silences it on the OUTBOUND channels — email and both pushes. The
+// inbox row is never withheld; this is the same scope
+// email_notifications / push_notifications have.
+//
+// It exists for kinds where the three-mode channel setting is too blunt an
+// instrument. Muting `email_notifications` to silence "your data export is
+// ready" would also silence direct messages and event-day reminders, so a
+// runner who wants no mail about their own data-rights requests has no
+// proportionate control without this.
+//
+// The direction is opt-OUT, and that is the opposite of email_weekly_digest
+// / email_lifecycle_drip on purpose. Those are marketing, where the absence
+// of a choice is the absence of consent. This is transactional: the subject
+// requested the export, and an opt-IN default would mean the feature does
+// nothing at all for everyone who has never opened Settings — which is the
+// gap it was built to close. The fail-closed property that IS preserved is
+// that a key here can only ever SUBTRACT: it is consulted alongside the
+// channel mode, never instead of it, so `email_notifications = "off"` still
+// silences the kind and no per-kind key can promote a kind past a channel
+// mute. See docs/backend/settings.md + decisions.md § 729.
+var kindMutePrefKey = map[string]string{
+	"data_export_ready": "notify_data_export_ready",
+}
+
+// kindMuted reports whether the recipient silenced this one kind. Only the
+// literal "off" mutes: an absent key is a runner who never chose, and a
+// non-string or unrecognised value is a corrupt bag, neither of which is a
+// decision to stop being told about their own export.
+func kindMuted(kind string, prefs map[string]interface{}) bool {
+	key, ok := kindMutePrefKey[kind]
+	if !ok {
+		return false
+	}
+	v, _ := prefs[key].(string)
+	return v == "off"
 }
 
 // inAppOnlyKinds never leave the notifications inbox, whatever channel mode
@@ -320,13 +361,18 @@ func emailMode(prefs map[string]interface{}) string {
 	}
 }
 
-// shouldEmail decides whether a notification of the given kind is emailed
-// under the resolved mode.
-func shouldEmail(kind, mode string) bool {
-	if inAppOnlyKinds[kind] {
+// shouldEmail decides whether a notification of the given kind is emailed,
+// given the recipient's whole prefs bag.
+//
+// It takes the bag rather than a pre-resolved mode so that every gate the
+// bag carries is consulted in one place. A caller that had to remember to
+// check the per-kind mute separately would eventually be a channel that
+// forgot to — and the miss is invisible, because the mail still sends.
+func shouldEmail(kind string, prefs map[string]interface{}) bool {
+	if inAppOnlyKinds[kind] || kindMuted(kind, prefs) {
 		return false
 	}
-	switch mode {
+	switch emailMode(prefs) {
 	case emailModeOff:
 		return false
 	case emailModeAll:
@@ -412,6 +458,16 @@ func pathForKind(kind, base string, n NotificationRow) string {
 		// it, the page is readable without a session, and it is the surface
 		// they'd share — matching notificationLinkFor on web.
 		return badgePath(base, n)
+	case "data_export_ready":
+		// Settings → Account, where the export card lives. The message
+		// carries no download URL of its own and must not: a signed URL
+		// minted when the worker finished would already be spending its
+		// ten minutes by the time the subject opened the mail, which is
+		// the exact objection that kept this notification unbuilt. The
+		// page mints it at the tap instead (decisions.md § 717 + § 729).
+		// No FK: the export lives in data_export_jobs, which the
+		// notifications row has no column for and does not need.
+		return base + "/settings/account"
 	case "content_hidden":
 		// A provisional moderation notice with no destination — web's
 		// notificationLinkFor returns null for it, and inAppOnlyKinds keeps it

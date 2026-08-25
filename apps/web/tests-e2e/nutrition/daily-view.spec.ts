@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { waterStorageKey } from '../fixtures/helpers';
+import { browserDayAt, waterStorageKey } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -22,9 +22,7 @@ test.describe('/nutrition — daily grouping + water decrement', () => {
 	test('meals group + order by slot, each header summing its own items', async ({ page }) => {
 		const admin = getAdminClient();
 		const stamp = Date.now();
-		const now = new Date();
-		const at = (h: number) =>
-			new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, 0).toISOString();
+		const at = (h: number) => browserDayAt(0, h);
 
 		// USER_A is the seed user (runner@test.com), whose seed food_log carries
 		// today-relative items in every slot — they'd sum into these slot headers

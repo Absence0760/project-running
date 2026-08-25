@@ -850,6 +850,58 @@ class AppLocalizationsDe extends AppLocalizations {
   String get safetyConfirmSmsLabel => 'Mich auch per SMS benachrichtigen';
 
   @override
+  String get safetyContactOfTitle => 'Du bist Sicherheitskontakt';
+
+  @override
+  String get safetyContactOfIntro =>
+      'Diese Läuferinnen und Läufer haben dich als Notfallkontakt eingetragen und du hast bestätigt. Du kannst jederzeit ändern, wie du benachrichtigt wirst, oder dich zurückziehen.';
+
+  @override
+  String safetyContactOfFor(String name) {
+    return 'Notfallkontakt für $name';
+  }
+
+  @override
+  String get safetyContactOfSmsLabel =>
+      'Mich zusätzlich zur E-Mail per SMS benachrichtigen';
+
+  @override
+  String get safetyContactOfNoPhone =>
+      'Für SMS-Benachrichtigungen wird eine Mobilnummer von dir benötigt, es ist keine hinterlegt. E-Mails werden immer gesendet.';
+
+  @override
+  String get safetyContactOfSmsOnToast => 'SMS-Benachrichtigungen aktiviert.';
+
+  @override
+  String get safetyContactOfSmsOffToast =>
+      'SMS-Benachrichtigungen deaktiviert.';
+
+  @override
+  String get safetyContactOfSmsNoChange =>
+      'Diese Verknüpfung ist nicht mehr aktiv — die Person hat sie vermutlich entfernt.';
+
+  @override
+  String safetyContactOfSmsFailed(String error) {
+    return 'SMS-Einstellung konnte nicht geändert werden: $error';
+  }
+
+  @override
+  String get safetyContactOfWithdraw => 'Zurückziehen';
+
+  @override
+  String get safetyContactOfWithdrawConfirm =>
+      'Nicht mehr Sicherheitskontakt dieser Person sein? Sie kann dich dann nicht mehr benachrichtigen und müsste dich erneut anfragen.';
+
+  @override
+  String get safetyContactOfWithdrawnToast =>
+      'Du bist kein Sicherheitskontakt mehr.';
+
+  @override
+  String safetyContactOfWithdrawFailed(String error) {
+    return 'Zurückziehen fehlgeschlagen: $error';
+  }
+
+  @override
   String get safetyAddButton => 'Kontakt hinzufügen';
 
   @override
@@ -4383,6 +4435,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get profileNotifContentHidden =>
       'Einer deiner Beiträge wurde nach einer Meldung ausgeblendet';
+
+  @override
+  String get profileNotifDataExportReady =>
+      'Dein Datenexport steht zum Download bereit';
 
   @override
   String profileNotifGeneric(String name) {

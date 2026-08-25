@@ -162,6 +162,21 @@ func (c *SupabaseClient) FinishDataExportJob(ctx context.Context, exportJobID st
 	return c.patchDataExportJob(ctx, exportJobID, payload)
 }
 
+// NotifyDataExportReady announces a finished export to its subject via the
+// SECURITY DEFINER RPC (migration 20270607_001). Idempotency lives in the
+// RPC rather than here: it inserts the inbox row and stamps
+// `notified_at` under one row lock, so an at-least-once redelivery of the
+// same `data_export` job cannot announce the same archive twice. Returns
+// whether this call was the one that announced.
+func (c *SupabaseClient) NotifyDataExportReady(ctx context.Context, exportJobID string) (bool, error) {
+	params := map[string]any{"p_export_job_id": exportJobID}
+	var announced bool
+	if err := c.rpc(ctx, "notify_data_export_ready", params, &announced); err != nil {
+		return false, err
+	}
+	return announced, nil
+}
+
 func (c *SupabaseClient) patchDataExportJob(ctx context.Context, exportJobID string, payload map[string]any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {

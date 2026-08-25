@@ -73,6 +73,11 @@ type fakeBackend struct {
 	getExportJobErr      error
 	markExportRunningErr error
 	finishExportJobErr   error
+	// exportNotifies records every announcement attempt; the fake mirrors
+	// the RPC's own `notified_at` stamp so a redelivery is a no-op here too.
+	exportNotifies  []string
+	exportNotified  map[string]bool
+	notifyExportErr error
 
 	// downloadDelay, when non-zero, makes DownloadTrack block for
 	// that duration OR until the caller's context is cancelled.
@@ -598,7 +603,33 @@ func (f *fakeBackend) FinishDataExportJob(_ context.Context, exportJobID string,
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.exportFinishes = append(f.exportFinishes, exportFinishCall{id: exportJobID, res: res})
-	return f.finishExportJobErr
+	if f.finishExportJobErr != nil {
+		return f.finishExportJobErr
+	}
+	if row, ok := f.exportJobs[exportJobID]; ok {
+		row.Status = res.Status
+		if res.ObjectPath != nil {
+			row.ObjectPath = *res.ObjectPath
+		}
+	}
+	return nil
+}
+
+func (f *fakeBackend) NotifyDataExportReady(_ context.Context, exportJobID string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.exportNotifies = append(f.exportNotifies, exportJobID)
+	if f.notifyExportErr != nil {
+		return false, f.notifyExportErr
+	}
+	if f.exportNotified == nil {
+		f.exportNotified = map[string]bool{}
+	}
+	if f.exportNotified[exportJobID] {
+		return false, nil
+	}
+	f.exportNotified[exportJobID] = true
+	return true, nil
 }
 
 func (f *fakeBackend) DownloadTrack(ctx context.Context, path string) ([]TrackPoint, error) {

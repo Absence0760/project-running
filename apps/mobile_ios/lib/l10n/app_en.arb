@@ -1093,6 +1093,73 @@
   "@safetyConfirmSmsLabel": {
     "description": "Checkbox on an incoming safety-contact request, offered only when the requester stored a phone number"
   },
+  "safetyContactOfTitle": "You are a safety contact",
+  "@safetyContactOfTitle": {
+    "description": "Heading above the relationships the user is the safety contact of"
+  },
+  "safetyContactOfIntro": "These runners named you as their emergency contact and you confirmed. Change how you're alerted, or withdraw, whenever you like.",
+  "@safetyContactOfIntro": {
+    "description": "Intro under the you-are-a-safety-contact heading"
+  },
+  "safetyContactOfFor": "Emergency contact for {name}",
+  "@safetyContactOfFor": {
+    "description": "Names the runner whose safety contact the user is",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "safetyContactOfSmsLabel": "Alert me by SMS as well as email",
+  "@safetyContactOfSmsLabel": {
+    "description": "Toggle label for the contact-side SMS consent"
+  },
+  "safetyContactOfNoPhone": "SMS alerts need a mobile number for you, and none is on file. Email alerts are always sent.",
+  "@safetyContactOfNoPhone": {
+    "description": "Shown instead of the SMS toggle when the runner stored no number"
+  },
+  "safetyContactOfSmsOnToast": "SMS alerts on.",
+  "@safetyContactOfSmsOnToast": {
+    "description": "Toast after turning SMS alerts on"
+  },
+  "safetyContactOfSmsOffToast": "SMS alerts off.",
+  "@safetyContactOfSmsOffToast": {
+    "description": "Toast after turning SMS alerts off"
+  },
+  "safetyContactOfSmsNoChange": "That request is no longer active — the runner may have removed it.",
+  "@safetyContactOfSmsNoChange": {
+    "description": "Shown when the relationship no longer exists server-side"
+  },
+  "safetyContactOfSmsFailed": "Could not update your SMS choice: {error}",
+  "@safetyContactOfSmsFailed": {
+    "description": "Error toast when changing the SMS consent fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "safetyContactOfWithdraw": "Withdraw",
+  "@safetyContactOfWithdraw": {
+    "description": "Button to withdraw from being someone else’s safety contact"
+  },
+  "safetyContactOfWithdrawConfirm": "Stop being this runner's safety contact? They won't be able to alert you any more, and they'd have to send a new request to add you back.",
+  "@safetyContactOfWithdrawConfirm": {
+    "description": "Confirm-dialog body for withdrawing as a safety contact"
+  },
+  "safetyContactOfWithdrawnToast": "You're no longer a safety contact.",
+  "@safetyContactOfWithdrawnToast": {
+    "description": "Toast after withdrawing as a safety contact"
+  },
+  "safetyContactOfWithdrawFailed": "Could not withdraw: {error}",
+  "@safetyContactOfWithdrawFailed": {
+    "description": "Error toast when withdrawing as a safety contact fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "safetyAddButton": "Add contact",
   "@safetyAddButton": {
     "description": "Button to add a safety contact"
@@ -5856,6 +5923,10 @@
   "profileNotifContentHidden": "One of your posts was hidden after being reported",
   "@profileNotifContentHidden": {
     "description": "Notification text for one of the user's own posts being hidden after reports"
+  },
+  "profileNotifDataExportReady": "Your data export is ready to download",
+  "@profileNotifDataExportReady": {
+    "description": "Notification text for the user's own Art 20 data export finishing its build"
   },
   "profileNotifGeneric": "{name} interacted with your activity",
   "@profileNotifGeneric": {

@@ -846,6 +846,56 @@ class AppLocalizationsEs extends AppLocalizations {
   String get safetyConfirmSmsLabel => 'Avisarme también por SMS';
 
   @override
+  String get safetyContactOfTitle => 'Eres contacto de seguridad';
+
+  @override
+  String get safetyContactOfIntro =>
+      'Estas personas te indicaron como su contacto de emergencia y tú lo confirmaste. Puedes cambiar cómo te avisamos, o retirarte, cuando quieras.';
+
+  @override
+  String safetyContactOfFor(String name) {
+    return 'Contacto de emergencia de $name';
+  }
+
+  @override
+  String get safetyContactOfSmsLabel => 'Avisarme por SMS además de por correo';
+
+  @override
+  String get safetyContactOfNoPhone =>
+      'Los avisos por SMS necesitan un número móvil tuyo y no hay ninguno registrado. Los avisos por correo se envían siempre.';
+
+  @override
+  String get safetyContactOfSmsOnToast => 'Avisos por SMS activados.';
+
+  @override
+  String get safetyContactOfSmsOffToast => 'Avisos por SMS desactivados.';
+
+  @override
+  String get safetyContactOfSmsNoChange =>
+      'Esa relación ya no está activa: es posible que la persona la haya eliminado.';
+
+  @override
+  String safetyContactOfSmsFailed(String error) {
+    return 'No se pudo cambiar tu preferencia de SMS: $error';
+  }
+
+  @override
+  String get safetyContactOfWithdraw => 'Retirarme';
+
+  @override
+  String get safetyContactOfWithdrawConfirm =>
+      '¿Dejar de ser el contacto de seguridad de esta persona? Ya no podrá avisarte y tendría que enviarte una nueva solicitud.';
+
+  @override
+  String get safetyContactOfWithdrawnToast =>
+      'Ya no eres contacto de seguridad.';
+
+  @override
+  String safetyContactOfWithdrawFailed(String error) {
+    return 'No se pudo retirar: $error';
+  }
+
+  @override
   String get safetyAddButton => 'Añadir contacto';
 
   @override
@@ -4366,6 +4416,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get profileNotifContentHidden =>
       'Una de tus publicaciones se ocultó tras ser denunciada';
+
+  @override
+  String get profileNotifDataExportReady =>
+      'Tu exportación de datos está lista para descargar';
 
   @override
   String profileNotifGeneric(String name) {

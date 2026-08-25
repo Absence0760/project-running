@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { waterStorageKey } from '../fixtures/helpers';
+import { waterStorageKey } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 

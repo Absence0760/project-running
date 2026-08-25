@@ -1439,6 +1439,84 @@ abstract class AppLocalizations {
   /// **'Also alert me by SMS'**
   String get safetyConfirmSmsLabel;
 
+  /// Heading above the relationships the user is the safety contact of
+  ///
+  /// In en, this message translates to:
+  /// **'You are a safety contact'**
+  String get safetyContactOfTitle;
+
+  /// Intro under the you-are-a-safety-contact heading
+  ///
+  /// In en, this message translates to:
+  /// **'These runners named you as their emergency contact and you confirmed. Change how you\'re alerted, or withdraw, whenever you like.'**
+  String get safetyContactOfIntro;
+
+  /// Names the runner whose safety contact the user is
+  ///
+  /// In en, this message translates to:
+  /// **'Emergency contact for {name}'**
+  String safetyContactOfFor(String name);
+
+  /// Toggle label for the contact-side SMS consent
+  ///
+  /// In en, this message translates to:
+  /// **'Alert me by SMS as well as email'**
+  String get safetyContactOfSmsLabel;
+
+  /// Shown instead of the SMS toggle when the runner stored no number
+  ///
+  /// In en, this message translates to:
+  /// **'SMS alerts need a mobile number for you, and none is on file. Email alerts are always sent.'**
+  String get safetyContactOfNoPhone;
+
+  /// Toast after turning SMS alerts on
+  ///
+  /// In en, this message translates to:
+  /// **'SMS alerts on.'**
+  String get safetyContactOfSmsOnToast;
+
+  /// Toast after turning SMS alerts off
+  ///
+  /// In en, this message translates to:
+  /// **'SMS alerts off.'**
+  String get safetyContactOfSmsOffToast;
+
+  /// Shown when the relationship no longer exists server-side
+  ///
+  /// In en, this message translates to:
+  /// **'That request is no longer active — the runner may have removed it.'**
+  String get safetyContactOfSmsNoChange;
+
+  /// Error toast when changing the SMS consent fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update your SMS choice: {error}'**
+  String safetyContactOfSmsFailed(String error);
+
+  /// Button to withdraw from being someone else’s safety contact
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw'**
+  String get safetyContactOfWithdraw;
+
+  /// Confirm-dialog body for withdrawing as a safety contact
+  ///
+  /// In en, this message translates to:
+  /// **'Stop being this runner\'s safety contact? They won\'t be able to alert you any more, and they\'d have to send a new request to add you back.'**
+  String get safetyContactOfWithdrawConfirm;
+
+  /// Toast after withdrawing as a safety contact
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re no longer a safety contact.'**
+  String get safetyContactOfWithdrawnToast;
+
+  /// Error toast when withdrawing as a safety contact fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not withdraw: {error}'**
+  String safetyContactOfWithdrawFailed(String error);
+
   /// Button to add a safety contact
   ///
   /// In en, this message translates to:
@@ -7179,6 +7257,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'One of your posts was hidden after being reported'**
   String get profileNotifContentHidden;
+
+  /// Notification text for the user's own Art 20 data export finishing its build
+  ///
+  /// In en, this message translates to:
+  /// **'Your data export is ready to download'**
+  String get profileNotifDataExportReady;
 
   /// Fallback notification text for unknown kinds
   ///

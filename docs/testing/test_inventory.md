@@ -850,6 +850,8 @@ End-to-end browser tests that drive the real SvelteKit app against a real local 
 
 **Auth fixture (`fixtures/auth.ts`)** — Playwright `globalSetup` signs each seeded user in once via the real form and saves their storage state to `.auth/<user>.json`. Specs then `test.use({ storageState: USER_X.storageStatePath })` instead of re-running the login flow per test. Three users from `seed.sql` (`runner@test.com` free, `alex@test.com` free, `morgan@test.com` pro) cover owner / cross-user-viewer / paywall-pro cases.
 
+**Browser-zone dates (`fixtures/dates.ts`)** — every day-relative seed (`browserDate` / `browserDateOf` / `browserDayStart` / `browserDayAt` / `noonOnBrowserDay` / `waterStorageKey`) is built in the zone `playwright.config.ts` pins the browser to, never in the runner's. `fixtures/dates.test.ts` unit-tests those helpers and additionally scans the whole `tests-e2e` tree for local-zone date getters, with a reasoned allowlist; it runs in the web unit suite, not under Playwright, because the defect is invisible to any run whose two zones happen to agree that hour ([decisions § 728](../architecture/decisions.md)).
+
 **Pinned UUIDs (`fixtures/seeded-data.ts`)** — `RUNNER_PUBLIC_RUN_ID`, `ALEX_PRIVATE_RUN_ID`, `RUNNER_PUBLIC_ROUTE_ID` are deterministic UUIDs hardcoded into `seed.sql` so cross-user, share-page, and privacy-clipping tests can address known rows without first listing-and-picking. The pinned public run is also exempted from the cross-user kudos / comment seeds (`id != '...'` filter on the engagement inserts) so the kudos toggle test starts at zero kudos.
 
 #### Layout
@@ -858,7 +860,7 @@ The suite mirrors `apps/web/src/routes/`, with two flat concern folders for thin
 
 ```
 tests-e2e/
-  fixtures/                    — globalSetup, helpers, seeded constants, users
+  fixtures/                    — globalSetup, helpers, browser-zone dates, seeded constants, users
   landing.spec.ts              — /
   explore.spec.ts              — /explore (redirects to /routes?tab=explore)
   learn/                       — public Learn/guides surface (anon storageState; learn.md, decisions §161)

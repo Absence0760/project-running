@@ -120,6 +120,13 @@ func (w *Worker) handleDataExport(ctx context.Context, job *Job) error {
 	// sweep collected it.
 	if row.Status == "ready" && row.ObjectPath != "" {
 		logger.Info("data export already built; skipping rebuild")
+		// Still announce. The window this covers is a crash between the
+		// Finish write and the announcement: the artifact is there, the
+		// row says ready, and the only thing missing is that nobody told
+		// the subject. Announcing here rather than only on the fresh-build
+		// path is what makes the retry repair that instead of inheriting
+		// it — the RPC's own stamp is what keeps it from announcing twice.
+		w.announceExportReady(ctx, p.ExportJobID, logger)
 		return nil
 	}
 	if row.Status == "expired" {
@@ -149,14 +156,41 @@ func (w *Worker) handleDataExport(ctx context.Context, job *Job) error {
 	// costs one orphaned archive that the 7-day sweep collects; the
 	// alternative, swallowing the error, would leave the subject
 	// watching a `running` row whose export is sitting in Storage.
-	return w.Backend.FinishDataExportJob(ctx, p.ExportJobID, ExportJobResult{
+	if err := w.Backend.FinishDataExportJob(ctx, p.ExportJobID, ExportJobResult{
 		Status:     "ready",
 		ObjectPath: &art.ObjectPath,
 		RunCount:   &art.Runs,
 		TotalRuns:  &art.TotalRuns,
 		Complete:   &art.Complete,
 		FinishedAt: now,
-	})
+	}); err != nil {
+		return err
+	}
+
+	w.announceExportReady(ctx, p.ExportJobID, logger)
+	return nil
+}
+
+// announceExportReady tells the subject their archive is collectable
+// (decisions.md § 729). Called only once the row already says `ready`,
+// because that is the claim the announcement makes.
+//
+// Deliberately returns nothing. A failure here must not fail the job:
+// the export succeeded, the archive is in Storage, and the status
+// endpoint the message merely points at is already reporting it. Failing
+// would spend the second attempt rebuilding a whole archive to fix a
+// missing email — and the rebuild would find the row `ready` and skip,
+// so the retry could not even repair what it cost. The subject is told
+// late, or not at all, rather than charged for an announcement.
+func (w *Worker) announceExportReady(ctx context.Context, exportJobID string, logger *slog.Logger) {
+	announced, err := w.Backend.NotifyDataExportReady(ctx, exportJobID)
+	if err != nil {
+		logger.Error("data export: announcing the finished export failed", "err", err)
+		return
+	}
+	if announced {
+		logger.Info("data export: subject notified")
+	}
 }
 
 func (w *Worker) recordExportFailure(ctx context.Context, exportJobID, code string, logger *slog.Logger) {

@@ -52,6 +52,20 @@ void main() {
     test('achievement + any future kind → /notifications', () {
       expect(pushTargetFromUrl('$_base/notifications'), PushTarget.inbox);
     });
+
+    test('data_export_ready → /settings/account', () {
+      // The archive is collected from Settings → Account, which mints the
+      // signed download URL at the tap. A push landing on the inbox instead
+      // would leave the runner one screen short of the thing the
+      // notification is about (decisions §729).
+      expect(pushTargetFromUrl('$_base/settings/account'),
+          const PushTarget(PushTargetKind.settingsAccount));
+    });
+
+    test('any other /settings path degrades to the inbox', () {
+      expect(pushTargetFromUrl('$_base/settings'), PushTarget.inbox);
+      expect(pushTargetFromUrl('$_base/settings/preferences'), PushTarget.inbox);
+    });
   });
 
   group('pushTargetFromUrl — tolerates a hostile payload', () {

@@ -8,7 +8,7 @@
 
 begin;
 
-select plan(20);
+select plan(25);
 
 -- Actors. owner runs; contact_a is an app user who'll confirm in-app;
 -- stranger owns an unrelated list.
@@ -226,6 +226,64 @@ select is(
   (select count(*)::int from safety_contacts
    where owner_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c01'),
   1, 'the same delete carrying the clients'' owner_id scope leaves the owner''s row alone');
+
+-- ─────────── the contact-of direction: read, re-consent, withdraw ───────────
+--
+-- The rows §720's `owner_id` filter took OUT of the list read are exactly the
+-- ones the "you are a safety contact for" section puts back, deliberately, and
+-- the linked-contact SELECT policy already permits that query — decisions §726.
+-- The SMS consent's round trip matters here because `confirm_safety_contact`
+-- could previously grant it exactly once: only the withdraw direction was
+-- covered (safety_sms_escalation_test.sql), never the re-arm.
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c02"}';
+
+select is(
+  (select count(*)::int from safety_contacts where contact_user_id = auth.uid()),
+  1, 'the contact-of read scoped to contact_user_id returns the relationship the caller confirmed');
+
+-- The owner stored no number. The RPC still reports a row updated, because it
+-- did update one — a client that read "SMS is on" off that boolean would be
+-- claiming a consent the CASE just cleared, which is why the surface offers
+-- the toggle only where a number exists.
+select is(
+  set_safety_sms_opt_in(
+    (select id from safety_contacts where contact_user_id = auth.uid()), true),
+  true, 'opting in against a number-less relationship still reports a row updated');
+reset role;
+
+select is(
+  (select sms_opt_in_at from safety_contacts
+   where contact_user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c02'),
+  null, 'and stamps nothing — the owner never stored a number to text');
+
+update safety_contacts set contact_phone = '+447700900199'
+ where contact_user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c02';
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c02"}';
+select set_safety_sms_opt_in(
+  (select id from safety_contacts where contact_user_id = auth.uid()), true);
+reset role;
+
+select isnt(
+  (select sms_opt_in_at from safety_contacts
+   where contact_user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c02'),
+  null, 'with a number on file the contact can arm SMS long after confirming');
+
+-- Withdrawal is decline, not delete: `removeSafetyContact` is owner-scoped on
+-- both clients, so it matches nothing from this side of the relationship.
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c02"}';
+select decline_safety_contact(
+  (select id from safety_contacts where contact_user_id = auth.uid()));
+reset role;
+
+select is(
+  (select count(*)::int from safety_contacts
+   where owner_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa5c01'),
+  0, 'a CONFIRMED contact withdraws through decline_safety_contact');
 
 select * from finish();
 
