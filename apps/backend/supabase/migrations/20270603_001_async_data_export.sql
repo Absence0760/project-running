@@ -118,6 +118,17 @@ comment on table data_export_jobs is
 -- Three-file rule (20260822_001): widen the CHECK here + add the Go
 -- dispatch case (worker.go) + extend the pgtap suite. Full set as of
 -- 20270410_001 plus the new kind.
+--
+-- `jobs` is a guarded high-volume table, so the widen takes the online
+-- two-step (migration_locks.md § CHECK constraints) rather than the
+-- single-step drop-and-recreate every previous kind migration used: a
+-- validating ADD holds ACCESS EXCLUSIVE while it scans every row of a
+-- queue that accumulates finished jobs. Every existing row already
+-- satisfies the wider set — this only ever ADDS a kind — so the scan is
+-- pure waste, and VALIDATE runs it under SHARE UPDATE EXCLUSIVE instead,
+-- with reads and writes proceeding. Both halves are here rather than
+-- split across migrations because the scan is of a queue table, not of
+-- `runs`; the lock class is what mattered.
 alter table public.jobs
   drop constraint jobs_kind_chk;
 alter table public.jobs
@@ -129,7 +140,10 @@ alter table public.jobs
       'weekly_digest', 'native_push', 'lifecycle_drip', 'route_photo_process',
       'club_photo_process', 'safety_sms', 'data_export'
     )
-  );
+  )
+  not valid;
+alter table public.jobs
+  validate constraint jobs_kind_chk;
 
 -- ─────────────────── 3. enqueue_data_export ───────────────────
 
