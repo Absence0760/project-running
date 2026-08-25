@@ -6544,6 +6544,78 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsAccountImportSubtitle => 'Strava, GPX, TCX';
 
   @override
+  String get settingsAccountAccountExport => 'Exportación de la cuenta';
+
+  @override
+  String get settingsAccountAccountExportSubtitle =>
+      'Todo lo de tu cuenta: carreras, rutas, mensajes, pedidos, integraciones y contactos de seguridad. Se crea en nuestro servidor; puedes cerrar la app mientras tanto.';
+
+  @override
+  String get settingsAccountExportQueued =>
+      'Estamos creando tu exportación. Puedes cerrar la app; vuelve aquí para descargarla.';
+
+  @override
+  String get settingsAccountExportBuildingNotice =>
+      'Tu exportación de la cuenta se está creando. Puedes cerrar la app; sigue creándose sin ti.';
+
+  @override
+  String get settingsAccountExportReadyNotice =>
+      'Tu exportación de la cuenta está lista.';
+
+  @override
+  String get settingsAccountExportDownload => 'Descargar y compartir';
+
+  @override
+  String settingsAccountExportFailedNotice(String error) {
+    return 'Tu última exportación de la cuenta falló ($error). No se borró nada: pide otra.';
+  }
+
+  @override
+  String get settingsAccountExportStalledNotice =>
+      'Tu última exportación de la cuenta dejó de responder. No se borró nada: pide otra.';
+
+  @override
+  String get settingsAccountExportExpiredNotice =>
+      'Tu última exportación de la cuenta ha caducado. Las exportaciones se borran a los 7 días: pide otra.';
+
+  @override
+  String get settingsAccountExportStatusUnavailable =>
+      'No se puede contactar con el servicio de exportación para comprobar el estado. Puede que siga creándose.';
+
+  @override
+  String get settingsAccountExportUnavailable =>
+      'El servicio de exportación de la cuenta no está configurado en esta versión. La copia de seguridad completa de abajo se crea en este dispositivo y no incluye los registros de tu cuenta.';
+
+  @override
+  String settingsAccountExportUnsyncedWarning(int count) {
+    return '$count carreras aún no se han sincronizado. La exportación de la cuenta se crea en el servidor, así que no las incluirá: usa la copia de seguridad completa para conservarlas.';
+  }
+
+  @override
+  String get settingsAccountBackupOnDeviceNotice =>
+      'Tu última copia de seguridad completa se creó en este dispositivo. Contiene tus carreras, rutas, perfil, preferencias y registros de gimnasio y comidas, pero no los registros de tu cuenta. Usa la exportación de la cuenta para la copia completa.';
+
+  @override
+  String settingsAccountExportRateLimited(int seconds) {
+    return 'Límite de exportaciones alcanzado: inténtalo de nuevo en $seconds segundos.';
+  }
+
+  @override
+  String settingsAccountExportRequestFailed(String error) {
+    return 'No se pudo solicitar tu exportación: $error';
+  }
+
+  @override
+  String settingsAccountExportDownloadFailed(String error) {
+    return 'No se pudo descargar tu exportación: $error';
+  }
+
+  @override
+  String settingsAccountExportReadyBanner(int count) {
+    return 'Tu exportación de la cuenta está lista: $count carreras.';
+  }
+
+  @override
   String get settingsAccountFullBackup => 'Copia de seguridad completa';
 
   @override

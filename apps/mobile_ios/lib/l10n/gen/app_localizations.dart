@@ -10707,6 +10707,108 @@ abstract class AppLocalizations {
   /// **'Strava, GPX, TCX'**
   String get settingsAccountImportSubtitle;
 
+  /// Tile title for the queued server-built GDPR Art 20 export
+  ///
+  /// In en, this message translates to:
+  /// **'Account export'**
+  String get settingsAccountAccountExport;
+
+  /// Subtitle for the account-export tile
+  ///
+  /// In en, this message translates to:
+  /// **'Everything on your account — runs, routes, messages, orders, integrations, safety contacts. Built on our server; you can close the app while it runs.'**
+  String get settingsAccountAccountExportSubtitle;
+
+  /// Banner shown the moment an export job is queued
+  ///
+  /// In en, this message translates to:
+  /// **'Building your export. You can close the app — come back here to download it.'**
+  String get settingsAccountExportQueued;
+
+  /// Persistent notice while the queued export job is running
+  ///
+  /// In en, this message translates to:
+  /// **'Your account export is being built. You can close the app; it keeps building without you.'**
+  String get settingsAccountExportBuildingNotice;
+
+  /// Persistent notice when the queued export job has finished
+  ///
+  /// In en, this message translates to:
+  /// **'Your account export is ready.'**
+  String get settingsAccountExportReadyNotice;
+
+  /// Button that downloads a ready account export and opens the share sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Download and share'**
+  String get settingsAccountExportDownload;
+
+  /// Persistent notice naming why the last queued export failed
+  ///
+  /// In en, this message translates to:
+  /// **'Your last account export failed ({error}). Nothing was deleted — ask for another one.'**
+  String settingsAccountExportFailedNotice(String error);
+
+  /// Persistent notice when the export job went quiet for longer than the worker's retry budget
+  ///
+  /// In en, this message translates to:
+  /// **'Your last account export stopped responding. Nothing was deleted — ask for another one.'**
+  String get settingsAccountExportStalledNotice;
+
+  /// Persistent notice when the export artifact has been swept
+  ///
+  /// In en, this message translates to:
+  /// **'Your last account export has expired. Exports are deleted after 7 days — ask for another one.'**
+  String get settingsAccountExportExpiredNotice;
+
+  /// Persistent notice after repeated failed status reads
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the export service to check on your export. It may still be building.'**
+  String get settingsAccountExportStatusUnavailable;
+
+  /// Banner when no export service is configured
+  ///
+  /// In en, this message translates to:
+  /// **'The account export service isn\'t set up in this build. Full backup below is built on this device and doesn\'t include your account records.'**
+  String get settingsAccountExportUnavailable;
+
+  /// Persistent notice under the account-export tile when the device holds undrained runs
+  ///
+  /// In en, this message translates to:
+  /// **'{count} runs haven\'t synced yet. The account export is built on the server, so it won\'t include them — use Full backup to keep those.'**
+  String settingsAccountExportUnsyncedWarning(int count);
+
+  /// Persistent notice after a locally-built archive naming which archive the runner got
+  ///
+  /// In en, this message translates to:
+  /// **'Your last full backup was built on this device. It holds your runs, routes, profile, preferences, gym and food logs — but not your account records. Use Account export for the complete copy.'**
+  String get settingsAccountBackupOnDeviceNotice;
+
+  /// Banner when the export quota refused the request
+  ///
+  /// In en, this message translates to:
+  /// **'Export limit reached — try again in {seconds} seconds.'**
+  String settingsAccountExportRateLimited(int seconds);
+
+  /// Banner when the enqueue call failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t request your export: {error}'**
+  String settingsAccountExportRequestFailed(String error);
+
+  /// Banner when downloading a ready export failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t download your export: {error}'**
+  String settingsAccountExportDownloadFailed(String error);
+
+  /// Banner raised when a watched export job finishes while the screen is open
+  ///
+  /// In en, this message translates to:
+  /// **'Your account export is ready — {count} runs.'**
+  String settingsAccountExportReadyBanner(int count);
+
   /// Tile title for the full backup export
   ///
   /// In en, this message translates to:

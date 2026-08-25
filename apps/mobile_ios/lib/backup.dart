@@ -10,7 +10,6 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-import 'backup_server_client.dart';
 import 'local_food_store.dart';
 import 'local_gym_store.dart';
 import 'local_route_store.dart';
@@ -30,9 +29,8 @@ import 'local_run_store.dart';
 /// (`settings_screen._restoreBackup`) only requires `runStore` for the
 /// offline branch; it picks `api`-less mode when `api` is null.
 class BackupService {
-  BackupService({this.api, BackupServerClient? serverClient})
-      : _client = api == null ? null : _maybeClient(),
-        _serverClient = serverClient;
+  BackupService({this.api})
+      : _client = api == null ? null : _maybeClient();
 
   /// Try to grab `Supabase.instance.client` without throwing when
   /// Supabase wasn't initialized. Release builds without
@@ -49,11 +47,6 @@ class BackupService {
 
   final ApiClient? api;
   final SupabaseClient? _client;
-  /// Optional injection for the Go-service backup path. When null
-  /// or unconfigured (no LIVE_HUB_URL), createBackup goes straight
-  /// to the local writer. Tests pass a fake to assert the
-  /// server-first → local-fallback dance.
-  final BackupServerClient? _serverClient;
 
   static const _format = 'run-app-backup';
   static const _version = 1;
@@ -64,8 +57,16 @@ class BackupService {
   /// and a typical phone's connection pool isn't saturated.
   static const _kTrackDownloadConcurrency = 6;
 
-  /// Build a `.zip` and write it to [outputFile]. Returns the file plus
-  /// whatever the server said about the archive's completeness.
+  /// Build the ON-DEVICE `.zip` archive and write it to [outputFile].
+  ///
+  /// This writer is NOT the Art 20 export. It carries runs, routes,
+  /// profile, preferences, gym and food logs — everything a restore
+  /// needs — but not the account-record set (messages, orders,
+  /// integrations, safety contacts, moderation history) that the
+  /// server export bundles. Since decisions.md § 724 the server export
+  /// is a queued job the surface orchestrates directly, so this class
+  /// no longer reaches for it and can no longer demote one to the other
+  /// without the subject being told which archive they got.
   ///
   /// Tracks are archived in their raw gzipped form — the same bytes
   /// that live in the `runs` Storage bucket — so restore can upload
@@ -100,31 +101,7 @@ class BackupService {
     final userId = api.userId;
     if (userId == null) throw Exception('Not authenticated');
 
-    // Server-first: when the Go service is configured + the user has
-    // a session, ask the server to build the archive and stream the
-    // signed-URL response straight to disk. Cheaper for the device
-    // (no fan-out downloads, no zip encode) and uses less cellular.
-    // Any failure (HTTP non-200, IO error, server cap-overflow) falls
-    // through to the local writer — never blocks the user from
-    // getting a backup because the server hiccuped. See
-    // [decisions.md § 66] for the trade-off (server caps at 5000
-    // runs; the local writer covers the rest of the long tail).
-    //
-    // Skipped outright while anything is still local-only: the server builds
-    // the archive from the cloud rows and cannot see this device's undrained
-    // runs, so taking it would produce an archive missing them.
     final localOnly = runStore?.unsyncedRuns ?? const <cm.Run>[];
-    final serverSummary = localOnly.isNotEmpty
-        ? null
-        : await tryServerBackup(
-            serverClient: _serverClient,
-            accessToken: client.auth.currentSession?.accessToken,
-            outputFile: outputFile,
-            onProgress: onProgress,
-          );
-    if (serverSummary != null) {
-      return BackupOutcome(outputFile, server: serverSummary);
-    }
 
     onProgress?.call(const BackupProgress.stage('runs'));
     final runs = await api.fetchRunRowsRaw();
@@ -207,57 +184,6 @@ class BackupService {
       onProgress: onProgress,
     );
     return BackupOutcome(written.file, local: written);
-  }
-
-  /// Server-first attempt + partial-file cleanup, pulled out as a
-  /// static helper so the orchestration is unit-testable without a
-  /// live Supabase session.
-  ///
-  /// Returns the server's completeness verdict when the server path
-  /// was attempted **and** succeeded — the caller treats the
-  /// [outputFile] as a finished backup. Returns null when:
-  ///
-  /// * the server is unconfigured (null client or empty baseUrl),
-  /// * the access token is null or empty,
-  /// * the server attempt failed (HTTP non-200, IO error, etc.) —
-  ///   any partial [outputFile] is deleted before falling through
-  ///   so the local writer doesn't see a half-written file.
-  ///
-  /// Never throws. The local writer always gets a clean attempt
-  /// either way, so a transient server hiccup can't block a
-  /// power-user backup.
-  @visibleForTesting
-  static Future<ServerBackupSummary?> tryServerBackup({
-    required BackupServerClient? serverClient,
-    required String? accessToken,
-    required File outputFile,
-    void Function(BackupProgress)? onProgress,
-  }) async {
-    if (serverClient == null || !serverClient.isConfigured) return null;
-    if (accessToken == null || accessToken.isEmpty) return null;
-    onProgress?.call(const BackupProgress.stage('server'));
-    try {
-      final summary = await serverClient.fetchBackupToFile(
-        accessToken: accessToken,
-        outputFile: outputFile,
-      );
-      onProgress?.call(const BackupProgress.done());
-      return summary;
-    } catch (e) {
-      debugPrint('[backup] server path failed, falling back to local: $e');
-      // Clean up any partial download so the local writer doesn't
-      // see a half-written file. Safe to ignore the inner delete
-      // exception — the local writer will overwrite anyway, this
-      // is belt-and-braces.
-      if (outputFile.existsSync()) {
-        try {
-          outputFile.deleteSync();
-        } catch (e2) {
-          debugPrint('backup: partial-download cleanup failed: $e2');
-        }
-      }
-      return null;
-    }
   }
 
   /// Pure(-ish) writer extracted from [createBackup] so the streaming
@@ -724,8 +650,8 @@ class BackupService {
   /// verdict has to reach the runner rather than stopping at the manifest.
   ///
   /// Only an explicit `complete: false` claims a shortfall, matching
-  /// [ServerBackupSummary.fromJson]: an archive from a writer that predates
-  /// the field says nothing about its own completeness, and warning on every
+  /// `exportJobShortfall`: an archive from a writer that predates the
+  /// field says nothing about its own completeness, and warning on every
   /// one of those would be its own dishonesty.
   @visibleForTesting
   static void noteIncompleteArchive(dynamic manifest, RestoreResult result) {
@@ -1067,25 +993,14 @@ class LocalArchiveSummary {
   int get blobsMissing => blobsWanted - blobsWritten;
 }
 
-/// A finished archive plus what its writer said about it. [server] is
-/// null whenever the local writer built the file, [local] whenever the
-/// server did — exactly one of the two is set.
+/// A finished on-device archive plus what its writer said about it.
 class BackupOutcome {
   final File file;
-  final ServerBackupSummary? server;
   final LocalArchiveSummary? local;
-  const BackupOutcome(this.file, {this.server, this.local});
+  const BackupOutcome(this.file, {this.local});
 
-  /// The server built this archive and told us it is short of the
-  /// account's run history. Null when the archive is whole, or when
-  /// there is no server verdict to read.
-  ServerBackupSummary? get shortfall {
-    final s = server;
-    return s != null && !s.complete ? s : null;
-  }
-
-  /// The local writer built this archive and could not download every blob it
-  /// asked for. Null when the archive is whole, or when the server built it.
+  /// The local writer could not download every blob it asked for. Null
+  /// when the archive is whole.
   LocalArchiveSummary? get localShortfall {
     final l = local;
     return l != null && !l.complete ? l : null;
