@@ -4016,6 +4016,7 @@ export const en = {
 	"nutrition.targets.emptyBody": "Add your height, weight, date of birth and sex and your calorie + macro targets appear here.",
 	"nutrition.targets.age": "Age",
 	"nutrition.targets.ageYears": "{n} years",
+	"nutrition.targets.ageConsentWithheld": "Needs health-data consent",
 	"nutrition.day.logHeadingFor": "Log food — {date}",
 	"nutrition.day.navLabel": "Diary day",
 	"nutrition.day.previous": "Previous day",

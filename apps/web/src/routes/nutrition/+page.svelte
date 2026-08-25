@@ -34,6 +34,7 @@
 		type WeightGoal,
 		type NutritionTargets,
 	} from '$lib/nutrition/nutrition_targets';
+	import { healthUseDob } from '$lib/core/health_consent';
 	import { exerciseCaloriesForDay } from '$lib/nutrition/exercise_calories';
 	import {
 		sumMacros,
@@ -264,12 +265,15 @@
 				dayGym.reduce((s, w) => s + (w.duration_s ?? 0), 0);
 			exerciseMinutes = Math.round(activeSeconds / 60);
 			const prof = profileRes.data as
-				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
+				| { height_cm: number | null; gender: string | null }
 				| null;
 			targets = computeNutritionTargets({
 				weightKg,
 				heightCm: prof?.height_cm ?? null,
-				ageYears: ageFromDob(prof?.date_of_birth, Date.now()),
+				// A calorie target is an Art 9 use of the age record, which
+				// carries no consent term of its own (§ 718 / § 722). The
+				// consent stamp rides on the same `get_my_profile()` row.
+				ageYears: ageFromDob(healthUseDob(profileRes.data), Date.now()),
 				sex: prof?.gender ?? null,
 				activityLevel: effective<ActivityLevel>(settings, 'nutrition_activity_level', 'moderate') ?? 'moderate',
 				goal: effective<WeightGoal>(settings, 'nutrition_goal', 'maintain') ?? 'maintain',

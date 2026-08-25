@@ -31,6 +31,7 @@
 	import { parsePlanMarkdown, parsePlanJson } from '$lib/training/plan_serialize';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { ageFromDob } from '$lib/nutrition/nutrition_targets';
+	import { healthUseDob } from '$lib/core/health_consent';
 	import { supabase } from '$lib/core/supabase';
 	import { fmtKm, fmtPace, getUnit } from '$lib/format/units.svelte';
 	import { paceMinutesSeconds } from '$lib/format/pace_format';
@@ -43,11 +44,13 @@
 	// the segments-leaderboard demographics). null → unmodified
 	// (male-curve) paces, matching pre-fix behaviour.
 	let viewerGender = $state<TrainingGender>(null);
-	// Persona-hunt finding Older #30. Age (from date_of_birth) drives the
-	// masters recovery calibration in generatePlan — wider hard-day
-	// spacing + a 3-week build/recover cycle for 50+. Like gender, it's
-	// read off the profile rather than asked in the wizard. null → the
-	// standard (younger-physiology) schedule.
+	// Persona-hunt finding Older #30. Age drives the masters recovery
+	// calibration in generatePlan — wider hard-day spacing + a 3-week
+	// build/recover cycle for 50+. Like gender, it's read off the profile
+	// rather than asked in the wizard. null → the standard
+	// (younger-physiology) schedule. Reshaping the plan around the runner's
+	// age is an Art 9 health inference, so the date comes through
+	// `healthUseDob` rather than off the age record directly (§ 722).
 	let viewerAge = $state<number | null>(null);
 	// The runner's chronic weekly volume, so the preview can say whether the
 	// plan's opening week is a step the runner's current training supports.
@@ -56,17 +59,17 @@
 	let recentVolume = $state<RecentVolume | null>(null);
 	onMount(async () => {
 		if (!auth.user) return;
-		// Self-read via get_my_profile(): gender / date_of_birth are
-		// deny-by-default for direct authenticated SELECTs (column lockdown,
-		// 20260707_001).
+		// Self-read via get_my_profile(): gender / the age record / the consent
+		// stamp are all deny-by-default for direct authenticated SELECTs
+		// (column lockdown, 20260707_001), and the RPC returns the whole row so
+		// the stamp arrives with the date.
 		const { data } = await supabase.rpc('get_my_profile');
 		const g = (data as { gender?: string | null } | null)?.gender;
 		if (g === 'male' || g === 'female' || g === 'prefer_not_to_say') viewerGender = g;
-		const dob = (data as { date_of_birth?: string | null } | null)?.date_of_birth;
 		// Parse by calendar components — new Date('YYYY-MM-DD') is UTC midnight,
 		// and reading it back through local getters shifts the birthday a day
 		// early in negative-UTC offsets, misfiring the masters (50) gate.
-		const age = ageFromDob(dob, Date.now());
+		const age = ageFromDob(healthUseDob(data), Date.now());
 		if (age !== null) viewerAge = age;
 	});
 
