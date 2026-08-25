@@ -134,13 +134,35 @@ void main() {
       expect(v!, lessThan(90)); // the real 20-min 5k, not the glitch
     });
 
-    test('excludes parkrun and race sources from VDOT qualifying set', () {
-      final r = _r(
+    test('a parkrun result anchors VDOT like any other timed effort', () {
+      // Mirrors the web case of the same name. The concrete consequence: a
+      // runner whose best effort is a 19:30 parkrun 5K, with slower
+      // app-recorded runs otherwise, had their whole fitness picture
+      // (threshold pace, every run's TSS, ATL/CTL/TSB, and the race
+      // predictor's anchor pool) computed off the slower run.
+      //
+      // `now` is pinned. This assertion used to read `expect(currentVdot([r]),
+      // isNull)` against the shipped _sourceQualifies map, which says the
+      // opposite — it passed only because `_r`'s fixed 2026-01-01 fixture date
+      // had fallen out of the unpinned rolling 90-day window, so the recency
+      // guard answered before the source filter ever ran.
+      final now = DateTime.utc(2026, 4, 5);
+      final parkrun = _r(
         distance: 5000,
-        durationS: 900,
+        durationS: 1170,
+        startedAt: DateTime.utc(2026, 4, 1, 8),
         source: RunSource.parkrun,
       );
-      expect(currentVdot([r]), isNull);
+      final tempo = _r(
+        distance: 8000,
+        durationS: 2160,
+        startedAt: DateTime.utc(2026, 4, 2, 8),
+      );
+      final withParkrun = currentVdot([parkrun, tempo], now: now);
+      final without = currentVdot([tempo], now: now);
+      expect(withParkrun, isNotNull);
+      expect(without, isNotNull);
+      expect(withParkrun!, greaterThan(without! + 5));
     });
   });
 
