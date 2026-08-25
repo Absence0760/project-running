@@ -117,10 +117,6 @@ const LOCAL_ZONE_ALLOWED: Record<string, string> = {
 		'shifts an instant by whole days and reads the UTC date back, so the result already tracks the browser day',
 	'cross-cutting/dashboard-journey.spec.ts':
 		'not yet converted — types a runner-zone wall clock into a datetime-local input the browser reads as UTC',
-	'dashboard/consistency.spec.ts': 'not yet converted — anchors a seeded run to runner-zone midday',
-	'dashboard/dashboard-readiness-gym-journey.spec.ts':
-		'not yet converted — anchors seeded runs to runner-zone midday',
-	'dashboard/week-strip.spec.ts': 'not yet converted — anchors a seeded run to 06:00 in the runner zone',
 	'plans/calendar.spec.ts':
 		'zone-neutral: one read runs inside page.evaluate (browser zone), the rest construct and format a fixed y/m/d in the same zone',
 	'recap/page.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
