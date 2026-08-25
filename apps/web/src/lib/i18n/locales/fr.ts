@@ -2207,6 +2207,7 @@ export const messages = {
 	"importRoute.saveRoute": "Enregistrer l'itinéraire",
 	"importRoute.multiIntroPrefix": "Found ",
 	"importRoute.multiIntroSuffix": " itinéraires trouvés dans ce fichier. Choisis ceux à importer — chacun devient son propre itinéraire dans Threkir.",
+	"importRoute.includeRoute": "Importer {name}",
 	"importRoute.metaElev": "{m} m dén.",
 	"importRoute.metaPts": "{n} pts",
 	"importRoute.importCountOne": "Importer {n} itinéraire",

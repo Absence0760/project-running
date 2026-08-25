@@ -940,16 +940,18 @@
 								class="chip chip-link"
 								href="/settings/preferences#heart-rate-zones"
 								title={t('coachChat.hrZonesLoadedTitle')}
+								aria-label={t('coachChat.hrZonesLoadedTitle')}
 							>
-								<span class="material-symbols">monitor_heart</span>
+								<span class="material-symbols" aria-hidden="true">monitor_heart</span>
 							</a>
 						{:else}
 							<a
 								class="chip chip-muted chip-link"
 								href="/settings/preferences#heart-rate-zones"
 								title={t('coachChat.noHrZonesTitle')}
+								aria-label={t('coachChat.noHrZonesTitle')}
 							>
-								<span class="material-symbols">monitor_heart</span>
+								<span class="material-symbols" aria-hidden="true">monitor_heart</span>
 							</a>
 						{/if}
 						{#if c.weeklyGoalMetres}

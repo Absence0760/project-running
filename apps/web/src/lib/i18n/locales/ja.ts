@@ -2202,6 +2202,7 @@ export const messages = {
 	"importRoute.saveRoute": "ルートを保存",
 	"importRoute.multiIntroPrefix": "このファイルから ",
 	"importRoute.multiIntroSuffix": " 件のルートが見つかりました。インポートするものを選んでください。それぞれが Threkir で個別のルートになります。",
+	"importRoute.includeRoute": "{name} をインポート",
 	"importRoute.metaElev": "標高 {m} m",
 	"importRoute.metaPts": "{n} ポイント",
 	"importRoute.importCountOne": "{n} 件のルートをインポート",

@@ -200,7 +200,12 @@
 		<div class="comments">
 			{#each topLevel as comment (comment.id)}
 				<article class="comment">
-					<a href="/u/{comment.author_id}" class="comment-author">
+					<!-- Redundant image link for the same destination as the author-name
+					     link below (WCAG technique H2). Avatar renders alt="" so this
+					     anchor has no accessible name of its own; tabindex="-1" keeps it
+					     out of the tab order, which is what makes aria-hidden legitimate
+					     rather than a focusable-but-invisible node. -->
+					<a href="/u/{comment.author_id}" class="comment-author" tabindex="-1" aria-hidden="true">
 						<Avatar
 							url={comment.author.avatar_url}
 							name={comment.author.display_name}
@@ -247,7 +252,12 @@
 							<div class="replies">
 								{#each repliesByParent.get(comment.id) ?? [] as reply (reply.id)}
 									<div class="reply">
-										<a href="/u/{reply.author_id}" class="reply-author">
+										<a
+											href="/u/{reply.author_id}"
+											class="reply-author"
+											tabindex="-1"
+											aria-hidden="true"
+										>
 											<Avatar
 												url={reply.author.avatar_url}
 												name={reply.author.display_name}
