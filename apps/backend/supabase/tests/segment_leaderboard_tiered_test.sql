@@ -66,15 +66,25 @@ values
 -- the "no demographics → invisible to filtered queries" branch).
 -- DOBs are picked so current age (vs now()) lands inside an obvious
 -- 5-year bin: 35-39, 50-54, 75+ (80yo), null.
-insert into user_profiles (id, display_name, gender, date_of_birth)
+--
+-- Every DOB-carrying profile also carries `health_data_consent_at`: since
+-- migration 20270606_001 an age band is gated on the Art 9 stamp, because
+-- deriving an age from the child-safety age record is a health inference
+-- (decisions § 727). These fixtures are runners who consented, so the bands
+-- below read exactly as they always did. The withheld case is a separate
+-- suite — `segment_leaderboard_age_band_consent_test.sql` — since it needs two
+-- runners identical but for the stamp. `tests.confirm_consent()` below stamps
+-- the Art 8 age-confirmation columns, a different gate on a different lawful
+-- basis, so it does not supply this one.
+insert into user_profiles (id, display_name, gender, date_of_birth, health_data_consent_at)
 values
-  ('00000000-0000-0000-0000-000000cc0001', 'Route Owner', 'male', '1985-01-01'),
-  ('00000000-0000-0000-0000-000000cc0002', 'Male 35yo', 'male', (now() - interval '36 years')::date),
-  ('00000000-0000-0000-0000-000000cc0003', 'Female 50yo', 'female', (now() - interval '51 years')::date),
-  ('00000000-0000-0000-0000-000000cc0004', 'PNTS 80yo', 'prefer_not_to_say', (now() - interval '80 years')::date),
-  ('00000000-0000-0000-0000-000000cc0005', 'No Demographics', null, null),
-  ('00000000-0000-0000-0000-000000cc0006', 'Repeat Runner', 'male', (now() - interval '30 years')::date),
-  ('00000000-0000-0000-0000-000000cc0007', 'Single Effort', 'male', (now() - interval '30 years')::date);
+  ('00000000-0000-0000-0000-000000cc0001', 'Route Owner', 'male', '1985-01-01', now()),
+  ('00000000-0000-0000-0000-000000cc0002', 'Male 35yo', 'male', (now() - interval '36 years')::date, now()),
+  ('00000000-0000-0000-0000-000000cc0003', 'Female 50yo', 'female', (now() - interval '51 years')::date, now()),
+  ('00000000-0000-0000-0000-000000cc0004', 'PNTS 80yo', 'prefer_not_to_say', (now() - interval '80 years')::date, now()),
+  ('00000000-0000-0000-0000-000000cc0005', 'No Demographics', null, null, null),
+  ('00000000-0000-0000-0000-000000cc0006', 'Repeat Runner', 'male', (now() - interval '30 years')::date, now()),
+  ('00000000-0000-0000-0000-000000cc0007', 'Single Effort', 'male', (now() - interval '30 years')::date, now());
 
 -- Synthetic fixture users stand in for signed-up accounts, which always
 -- carry the GDPR Art 8 stamp before they can write (20270424000004).
