@@ -60,7 +60,10 @@ class _RecordingSync extends SettingsSyncService {
   @override
   Future<void> updateUniversal(Map<String, dynamic> changes) async {
     writes.add(changes);
-    bag.addAll(changes);
+    // Same null semantics as SettingsService.applyPrefsChanges: a null
+    // value REMOVES the key rather than storing a null, which is how a
+    // cleared Art 9 mirror actually reads back.
+    changes.forEach((k, v) => v == null ? bag.remove(k) : bag[k] = v);
     notifyListeners();
   }
 }
@@ -133,8 +136,9 @@ void main() {
     expect(api.ageRecordCalls, 1,
         reason: 'the age record must be written without an Art 9 consent');
     expect(api.ageRecordWritten?.year, 1990);
-    expect(sync.bag.containsKey(SettingsKeys.dateOfBirth), isTrue);
-    expect(sync.bag[SettingsKeys.dateOfBirth], isNull,
+    expect(sync.writes.last[SettingsKeys.dateOfBirth], isNull,
+        reason: 'the Art 9 mirror write must clear, not carry, the date');
+    expect(sync.bag.containsKey(SettingsKeys.dateOfBirth), isFalse,
         reason: 'the Art 9 mirror fails closed with no consent on record');
   });
 
