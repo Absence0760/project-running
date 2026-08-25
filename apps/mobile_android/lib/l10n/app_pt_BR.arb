@@ -1225,6 +1225,7 @@
   "profileNotifAchievement": "Você conquistou uma nova conquista",
   "profileNotifChallengeComplete": "Você completou um desafio",
   "profileNotifContentHidden": "Uma das suas publicações foi ocultada após ser denunciada",
+  "profileNotifDataExportReady": "Sua exportação de dados está pronta para baixar",
   "profileNotifGeneric": "{name} interagiu com sua atividade",
   "socialTabFeed": "Feed",
   "socialTabPeople": "Pessoas",

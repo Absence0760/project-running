@@ -390,6 +390,10 @@ class _HomeScreenState extends State<HomeScreen>
           clubSlug: slug,
           eventId: target.id!,
         ));
+      case PushTargetKind.settingsAccount:
+        await _pushScreen(
+          _settingsDestinationScreen(SettingsDestination.account),
+        );
     }
   }
 

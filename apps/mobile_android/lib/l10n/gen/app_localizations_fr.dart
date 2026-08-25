@@ -4385,6 +4385,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Une de vos publications a été masquée après un signalement';
 
   @override
+  String get profileNotifDataExportReady =>
+      'Votre export de données est prêt à télécharger';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name a interagi avec votre activité';
   }

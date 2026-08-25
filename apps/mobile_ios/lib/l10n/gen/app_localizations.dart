@@ -7180,6 +7180,12 @@ abstract class AppLocalizations {
   /// **'One of your posts was hidden after being reported'**
   String get profileNotifContentHidden;
 
+  /// Notification text for the user's own Art 20 data export finishing its build
+  ///
+  /// In en, this message translates to:
+  /// **'Your data export is ready to download'**
+  String get profileNotifDataExportReady;
+
   /// Fallback notification text for unknown kinds
   ///
   /// In en, this message translates to:

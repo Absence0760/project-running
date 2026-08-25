@@ -8,6 +8,7 @@ import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../notification_groups.dart';
 import '../preferences.dart';
+import '../settings_destination.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../undo_queue.dart';
@@ -1227,6 +1228,11 @@ class _ProfileScreenState extends State<ProfileScreen>
               PublicRunScreen(api: widget.api, runId: item.row.runId!),
         ),
       );
+    } else if (kind == 'data_export_ready') {
+      // The archive is collected from Settings → Account, which this screen
+      // cannot construct (it holds none of that screen's dependencies), so
+      // the request is parked for the shell to drain — decisions § 710.
+      openSettings(SettingsDestination.account);
     }
   }
 
@@ -1273,6 +1279,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         return l10n.profileNotifChallengeComplete;
       case 'content_hidden':
         return l10n.profileNotifContentHidden;
+      case 'data_export_ready':
+        return l10n.profileNotifDataExportReady;
       case 'message':
         return l10n.profileNotifMessage(name);
       case 'club_post':
