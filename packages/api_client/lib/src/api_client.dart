@@ -707,18 +707,6 @@ class ApiClient {
     return result == true;
   }
 
-  /// Turn SMS consent on/off on a relationship I am the confirmed contact of.
-  /// Opting in requires a phone on file (server-enforced). Returns whether a
-  /// row changed — false means the RPC declined, which the caller must not
-  /// render as success.
-  Future<bool> setSafetySmsOptIn(String id, bool optIn) async {
-    final result = await _client.rpc(
-      'set_safety_sms_opt_in',
-      params: {'p_id': id, 'p_opt_in': optIn},
-    );
-    return result == true;
-  }
-
   /// Decline a pending request / withdraw from a confirmed one. Returns
   /// whether a row was removed.
   Future<bool> declineSafetyRequest(String id) async {
