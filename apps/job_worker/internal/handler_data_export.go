@@ -15,8 +15,9 @@ import (
 // The build used to run on the caller's own connection: they POSTed
 // /v1/export and waited while every section was walked and every 6 MiB
 // chunk pushed, so their timeout, a disconnect, or a backgrounded mobile
-// app could end an export that would otherwise have completed. It now
-// runs here, with nothing to lose.
+// app could end an export that would otherwise have completed. It runs
+// here now, with nothing to lose, and that endpoint is gone
+// (decisions.md § 724).
 
 const (
 	// ExportJobTimeout is the per-attempt clock for one export build.
@@ -24,7 +25,7 @@ const (
 	// and wrong for a deep-history archive: the export's cost is
 	// dominated by per-object Storage fetches, and killing it at five
 	// minutes would make the queued rail worse than the synchronous one
-	// it replaces, which had no clock at all.
+	// it replaced, which had no clock at all.
 	ExportJobTimeout = 15 * time.Minute
 
 	// ExportJobMaxAttempts mirrors the `max_attempts` the enqueue RPC

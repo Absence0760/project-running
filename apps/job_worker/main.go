@@ -193,10 +193,9 @@ func (b *dataexportBackend) LatestDataExportJob(ctx context.Context, userID stri
 }
 
 // dataexportBuilder adapts the shared archive builder to the worker's
-// `data_export` handler, so the queued rail and the deprecated
-// synchronous endpoint produce byte-identical archives. It is also
-// where a build failure acquires the machine token the subject's client
-// renders — the leaf package reports WHAT failed, this names it.
+// `data_export` handler. It is also where a build failure acquires the
+// machine token the subject's client renders — the leaf package reports
+// WHAT failed, this names it.
 type dataexportBuilder struct {
 	backend dataexport.Backend
 	log     *slog.Logger
@@ -718,11 +717,11 @@ func main() {
 		logger.Warn("stravahook: DISABLED — STRAVA_WEBHOOK_SECRET / STRAVA_VERIFY_TOKEN unset; webhook endpoint returns 503")
 	}
 
-	// Data export endpoint — POST /v1/export. JWT-authed (the same
-	// verifier the live hub uses), service-role for the Storage upload
-	// + signed URL. Replaces the export-data Edge Function. Refuses
-	// with 503 when no verification is configured — matching the live
-	// hub's posture.
+	// Data export endpoints — POST /v1/export/jobs + GET
+	// /v1/export/jobs/latest. JWT-authed (the same verifier the live hub
+	// uses), service-role for the Storage upload + signed URL. Replaces
+	// the export-data Edge Function. Refuses with 503 when no
+	// verification is configured — matching the live hub's posture.
 	var exportSrv *dataexport.Server
 	if verifier.Enabled() {
 		exportBackend := &dataexportBackend{client: client}
@@ -737,7 +736,7 @@ func main() {
 		// on one condition: an endpoint that can accept a request but no
 		// worker to serve it would leave every export queued for ever.
 		worker.DataExport = &dataexportBuilder{backend: exportBackend, log: exportLog}
-		logger.Info("dataexport: enabled (queued rail at /v1/export/jobs, deprecated synchronous rail at /v1/export)")
+		logger.Info("dataexport: enabled (queued rail at /v1/export/jobs + /v1/export/jobs/latest)")
 	} else {
 		logger.Warn("dataexport: DISABLED — no token verification configured; export endpoint returns 503 and data_export jobs fail")
 	}

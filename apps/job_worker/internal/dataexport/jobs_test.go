@@ -344,3 +344,95 @@ func TestJobs_MethodsAreConstrained(t *testing.T) {
 		t.Fatalf("POST /v1/export/jobs/latest status=%d, want 405", resp.StatusCode)
 	}
 }
+
+// The auth + configuration gates that used to be pinned on the
+// synchronous POST /v1/export (deleted with decisions.md § 724). They
+// are the queued rail's gates now, and they are the ones that matter:
+// this endpoint is the only way to ask for an Art 20 archive.
+
+func TestJobs_MissingJwtSecretIs503(t *testing.T) {
+	srv := &Server{} // no verifier
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	resp, err := http.Post(base+"/v1/export/jobs", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("POST status=%d, want 503", resp.StatusCode)
+	}
+	resp, err = http.Get(base + "/v1/export/jobs/latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("GET status=%d, want 503", resp.StatusCode)
+	}
+}
+
+func TestJobs_ExpiredTokenIsRejected(t *testing.T) {
+	be := &fakeBackend{}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export/jobs",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", -600))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401", resp.StatusCode)
+	}
+	if len(be.enqueued) != 0 {
+		t.Fatalf("an expired token must enqueue nothing")
+	}
+}
+
+func TestJobs_TokenWithoutExpIsRejected(t *testing.T) {
+	// A correctly-signed token with the right `sub` but NO `exp` claim
+	// (signTestToken omits exp when expDelta == 0). Without
+	// WithExpirationRequired such a token is valid forever — it must be
+	// rejected on this security boundary, same as livehub.
+	be := &fakeBackend{}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export/jobs",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 0))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401 (no immortal tokens)", resp.StatusCode)
+	}
+}
+
+func TestJobs_RateLimitRpcErrorFailsClosed(t *testing.T) {
+	// A wave of 429s under a DB blip is preferable to free multi-MB
+	// archives during the outage.
+	be := &fakeBackend{rateErr: errors.New("db down")}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	resp, _ := postJob(t, base, "user-A", `{"format":"backup"}`)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status=%d, want 429 (fail-closed)", resp.StatusCode)
+	}
+	if len(be.enqueued) != 0 {
+		t.Fatalf("a fail-closed throttle must enqueue nothing")
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -18,8 +19,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-
-	"github.com/Absence0760/project-running/apps/job_worker/internal/supajwt"
 )
 
 const testJWTSecret = "test-jwt-secret"
@@ -361,111 +360,24 @@ func newTestServer(t *testing.T, srv *Server) (string, func()) {
 	return ts.URL, ts.Close
 }
 
-func TestServer_MissingJwtSecretIs503(t *testing.T) {
-	srv := &Server{} // no JWTSecret
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	resp, err := http.Post(base+"/v1/export", "application/json", strings.NewReader(`{}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 503 {
-		t.Fatalf("status=%d, want 503", resp.StatusCode)
-	}
+// buildFor runs the shared archive builder the way the queued rail's
+// job handler does. The synchronous POST /v1/export that used to reach
+// it over HTTP is gone (decisions.md § 724), so what these tests pin is
+// the builder itself; the translation of its errors into the machine
+// codes a client renders lives in main.go's `dataexportBuilder`.
+func buildFor(t *testing.T, be *fakeBackend, format string) (ArtifactBuild, error) {
+	t.Helper()
+	return BuildArtifact(context.Background(), be,
+		slog.New(slog.NewTextHandler(io.Discard, nil)), "user-A", format)
 }
 
-func TestServer_MethodNotAllowed(t *testing.T) {
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
 
-	resp, err := http.Get(base + "/v1/export")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 405 {
-		t.Fatalf("status=%d, want 405", resp.StatusCode)
-	}
-}
 
-func TestServer_MissingBearerIs401(t *testing.T) {
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
 
-	resp, err := http.Post(base+"/v1/export", "application/json", strings.NewReader(`{"format":"csv"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 401 {
-		t.Fatalf("status=%d, want 401", resp.StatusCode)
-	}
-}
 
-func TestServer_BadFormatIs400(t *testing.T) {
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
 
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"xml"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 400 {
-		t.Fatalf("status=%d, want 400", resp.StatusCode)
-	}
-}
 
-func TestServer_RateLimitedReturns429(t *testing.T) {
-	be := &fakeBackend{denied: true, retryAfter: 1800}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 429 {
-		t.Fatalf("status=%d, want 429", resp.StatusCode)
-	}
-	if resp.Header.Get("Retry-After") != "1800" {
-		t.Errorf("Retry-After=%q, want 1800", resp.Header.Get("Retry-After"))
-	}
-}
-
-func TestServer_RateLimitRpcErrorFailsClosed(t *testing.T) {
-	be := &fakeBackend{rateErr: errors.New("db down")}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 429 {
-		t.Fatalf("status=%d, want 429 (fail-closed)", resp.StatusCode)
-	}
-}
-
-func TestServer_HappyPathCsvUploadsAndSigns(t *testing.T) {
+func TestBuildArtifact_CsvLandsInTheExportsBucketAndSignsNothing(t *testing.T) {
 	be := &fakeBackend{
 		runs: []ExportRun{
 			{
@@ -477,31 +389,12 @@ func TestServer_HappyPathCsvUploadsAndSigns(t *testing.T) {
 			},
 		},
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	built, err := buildFor(t, be, "csv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status=%d, body=%s", resp.StatusCode, body)
-	}
-	var got map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
-		t.Fatal(err)
-	}
-	if got["count"] != float64(1) || got["format"] != "csv" {
-		t.Errorf("response=%v", got)
-	}
-	if !strings.HasPrefix(got["url"].(string), "https://signed.example/") {
-		t.Errorf("signed url=%v", got["url"])
+	if built.Runs != 1 {
+		t.Errorf("runs=%d, want 1", built.Runs)
 	}
 	if len(be.uploads) != 1 {
 		t.Fatalf("expected 1 upload; got %d", len(be.uploads))
@@ -512,9 +405,18 @@ func TestServer_HappyPathCsvUploadsAndSigns(t *testing.T) {
 	if !strings.HasPrefix(be.uploads[0].Path, "user-A/exports/") || !strings.HasSuffix(be.uploads[0].Path, ".csv") {
 		t.Errorf("upload path=%q", be.uploads[0].Path)
 	}
+	if built.ObjectPath != be.uploads[0].Path {
+		t.Errorf("ObjectPath=%q, want the uploaded path %q", built.ObjectPath, be.uploads[0].Path)
+	}
+	// The builder must NOT mint a URL: a signed URL created when the
+	// build happened to finish starts its ten minutes at a moment the
+	// subject had no part in choosing (decisions.md § 717).
+	if be.signCalls != 0 {
+		t.Errorf("signCalls=%d; the build must not sign anything", be.signCalls)
+	}
 }
 
-func TestServer_HappyPathGpxZipContainsManifestAndPerRunGpx(t *testing.T) {
+func TestBuildArtifact_GpxZipUploadsAZip(t *testing.T) {
 	trackURL := "user-A/run-1.json.gz"
 	be := &fakeBackend{
 		runs: []ExportRun{
@@ -532,67 +434,25 @@ func TestServer_HappyPathGpxZipContainsManifestAndPerRunGpx(t *testing.T) {
 			},
 		},
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"gpx"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
+	if _, err := buildFor(t, be, "gpx"); err != nil {
 		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		t.Fatalf("status=%d", resp.StatusCode)
 	}
 	if len(be.uploads) != 1 || be.uploads[0].ContentType != "application/zip" {
 		t.Fatalf("upload=%+v", be.uploads)
 	}
 }
 
-func TestServer_ExpiredTokenIsRejected(t *testing.T) {
+func TestBuildArtifact_RejectsUnknownFormat(t *testing.T) {
 	be := &fakeBackend{}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", -600))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := buildFor(t, be, "made-up"); err == nil {
+		t.Fatal("an unknown format must not build an archive")
 	}
-	resp.Body.Close()
-	if resp.StatusCode != 401 {
-		t.Fatalf("status=%d, want 401", resp.StatusCode)
+	if len(be.uploads) != 0 {
+		t.Errorf("uploads=%v; nothing may be written for a format nobody asked for", be.uploads)
 	}
 }
 
-func TestServer_TokenWithoutExpIsRejected(t *testing.T) {
-	// A correctly-signed token with the right `sub` but NO `exp` claim
-	// (signTestToken omits exp when expDelta == 0). Without
-	// WithExpirationRequired such a token is valid forever — it must be
-	// rejected on this security boundary, same as livehub.
-	be := &fakeBackend{}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
 
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 0))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 401 {
-		t.Fatalf("status=%d, want 401 (no immortal tokens)", resp.StatusCode)
-	}
-}
 
 // --- pure helpers --------------------------------------------------------
 
@@ -718,24 +578,8 @@ func TestBuildGpx_XmlEscapesTitle(t *testing.T) {
 
 // ---- format=backup ---------------------------------------------------
 
-func TestServer_RejectsUnknownFormat(t *testing.T) {
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"made-up"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 400 {
-		t.Fatalf("status=%d, want 400", resp.StatusCode)
-	}
-}
 
-func TestServer_BackupFormatHappyPath(t *testing.T) {
+func TestBuildArtifact_BackupFormatHappyPath(t *testing.T) {
 	trackURL := "user-A/run-1.json.gz"
 	trueVal := true
 	floatVal := 5000.0
@@ -774,31 +618,12 @@ func TestServer_BackupFormatHappyPath(t *testing.T) {
 			trackURL: gzipString(t, `[{"lat":51.5,"lng":-0.1},{"lat":51.6,"lng":-0.2}]`),
 		},
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	built, err := buildFor(t, be, "backup")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status=%d, body=%s", resp.StatusCode, body)
-	}
-	var got map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
-		t.Fatal(err)
-	}
-	if got["format"] != "backup" {
-		t.Errorf("format=%v, want backup", got["format"])
-	}
-	if got["count"] != float64(1) {
-		t.Errorf("count=%v, want 1", got["count"])
+	if built.Runs != 1 {
+		t.Errorf("runs=%d, want 1", built.Runs)
 	}
 	if len(be.uploads) != 1 {
 		t.Fatalf("expected 1 upload; got %d", len(be.uploads))
@@ -1420,110 +1245,30 @@ func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
 
 // ---- format=backup edge cases ----------------------------------------
 
-func TestServer_BackupFormatMissingBearerIs401(t *testing.T) {
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 401 {
-		t.Fatalf("status=%d, want 401", resp.StatusCode)
-	}
-}
 
-func TestServer_BackupFormatExpiredTokenIs401(t *testing.T) {
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: &fakeBackend{}}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	// expDelta = -60 means the token expired 60 seconds ago.
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", -60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 401 {
-		t.Fatalf("status=%d, want 401", resp.StatusCode)
-	}
-}
 
-func TestServer_BackupFormatRateLimitedReturns429(t *testing.T) {
-	be := &fakeBackend{denied: true, retryAfter: 1800}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 429 {
-		t.Fatalf("status=%d, want 429", resp.StatusCode)
-	}
-	if resp.Header.Get("Retry-After") != "1800" {
-		t.Errorf("Retry-After=%q, want 1800", resp.Header.Get("Retry-After"))
-	}
-}
 
-func TestServer_BackupFormatRateLimitRpcErrorFailsClosed(t *testing.T) {
-	be := &fakeBackend{rateErr: errors.New("db down")}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 429 {
-		t.Fatalf("status=%d, want 429 (fail-closed)", resp.StatusCode)
-	}
-}
 
-func TestServer_BackupFormatRoutesFetchErrorReturns500(t *testing.T) {
+func TestBuildArtifact_RoutesFetchErrorNamesTheSection(t *testing.T) {
 	be := &fakeBackend{
 		runs:      []ExportRun{},
 		routesErr: errors.New("routes table on fire"),
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
+	_, err := buildFor(t, be, "backup")
+	if err == nil {
+		t.Fatal("a section that would not read must fail the build")
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 500 {
-		t.Fatalf("status=%d, want 500", resp.StatusCode)
+	// The section name is what main.go's adapter turns into the
+	// `routes_fetch_failed` code the subject's client renders.
+	if got := SectionOf(err); got != "routes" {
+		t.Errorf("SectionOf=%q, want routes", got)
 	}
-	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "routes_fetch_failed") {
-		t.Errorf("error body=%s", body)
+	if len(be.uploads) != 0 {
+		t.Errorf("uploads=%v; a failed build must leave no artifact", be.uploads)
 	}
 }
 
-func TestServer_BackupFormatProfileFetchErrorDegradesGracefully(t *testing.T) {
+func TestBuildArtifact_ProfileFetchErrorDegradesGracefully(t *testing.T) {
 	// A profile fetch failure must NOT sink the whole backup —
 	// runs + routes still get archived, profile.profile is null.
 	be := &fakeBackend{
@@ -1532,68 +1277,40 @@ func TestServer_BackupFormatProfileFetchErrorDegradesGracefully(t *testing.T) {
 		profileErr: errors.New("rpc unavailable"),
 		prefs:      map[string]interface{}{"unit": "km"},
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status=%d, body=%s", resp.StatusCode, body)
+	if _, err := buildFor(t, be, "backup"); err != nil {
+		t.Fatalf("build failed: %v", err)
 	}
 	if len(be.uploads) != 1 {
 		t.Fatalf("expected 1 upload; got %d", len(be.uploads))
 	}
 }
 
-func TestServer_BackupFormatPrefsFetchErrorDegradesGracefully(t *testing.T) {
+func TestBuildArtifact_PrefsFetchErrorDegradesGracefully(t *testing.T) {
 	be := &fakeBackend{
 		runs:     []ExportRun{},
 		routes:   []ExportRoute{},
 		profile:  map[string]interface{}{"display_name": "Test"},
 		prefsErr: errors.New("user_settings unavailable"),
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := buildFor(t, be, "backup"); err != nil {
+		t.Fatalf("build failed: %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		t.Fatalf("status=%d, body=%s", resp.StatusCode, body)
+	if len(be.uploads) != 1 {
+		t.Fatalf("expected 1 upload; got %d", len(be.uploads))
 	}
 }
 
-func TestServer_BackupFormatRunsFetchErrorReturns500(t *testing.T) {
+func TestBuildArtifact_RunsFetchErrorNamesTheSection(t *testing.T) {
 	be := &fakeBackend{runsErr: errors.New("runs table down")}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
+	_, err := buildFor(t, be, "backup")
+	if err == nil {
+		t.Fatal("a runs walk that would not read must fail the build")
 	}
-	resp.Body.Close()
-	if resp.StatusCode != 500 {
-		t.Fatalf("status=%d, want 500", resp.StatusCode)
+	if got := SectionOf(err); got != "runs" {
+		t.Errorf("SectionOf=%q, want runs", got)
+	}
+	if len(be.uploads) != 0 {
+		t.Errorf("uploads=%v; a failed build must leave no artifact", be.uploads)
 	}
 }
 
@@ -1946,25 +1663,20 @@ func TestBuildBackupZip_ExtraTablesContentIsPreservedAsArray(t *testing.T) {
 	}
 }
 
-func TestServer_BackupFormatToleratesExtraTablesError(t *testing.T) {
+func TestBuildArtifact_ToleratesExtraTablesError(t *testing.T) {
 	// audit/data-export-completeness: a single failing table must
-	// not sink the entire export. The handler logs + ships a
+	// not sink the entire export. The builder logs + ships a
 	// partial archive.
 	be := &fakeBackend{
 		runs:           []ExportRun{},
 		routes:         []ExportRoute{},
 		extraTablesErr: errors.New("supabase down"),
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	mux := http.NewServeMux()
-	srv.RegisterRoutes(mux)
-	req := httptest.NewRequest(http.MethodPost, "/v1/export",
-		strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 3600))
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("backup export must ship despite extra-tables error; got %d: %s", w.Code, w.Body.String())
+	if _, err := buildFor(t, be, "backup"); err != nil {
+		t.Errorf("backup export must ship despite extra-tables error; got %v", err)
+	}
+	if len(be.uploads) != 1 {
+		t.Errorf("expected 1 upload; got %d", len(be.uploads))
 	}
 }
 
@@ -2125,7 +1837,7 @@ func TestBuildBackupZip_CompleteExportSaysSo(t *testing.T) {
 // the whole thing first, so this failure could not happen half-way; now
 // it can, and the answer must still be a 500 with no artifact rather
 // than a short-but-real zip carrying a signed URL.
-func TestServer_MidStreamUploadFailureLeavesNoArtifact(t *testing.T) {
+func TestBuildArtifact_MidStreamUploadFailureLeavesNoArtifact(t *testing.T) {
 	runs := make([]ExportRun, 400)
 	for i := range runs {
 		runs[i] = ExportRun{
@@ -2139,19 +1851,8 @@ func TestServer_MidStreamUploadFailureLeavesNoArtifact(t *testing.T) {
 		uploadErr:       errors.New("resumable: patch at offset 6291456 returned 500"),
 		uploadFailAfter: 512,
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 500 {
-		t.Fatalf("status=%d; a dead upload must not answer 200", resp.StatusCode)
+	if _, err := buildFor(t, be, "backup"); err == nil {
+		t.Fatal("a dead upload must not report a finished archive")
 	}
 	if len(be.uploads) != 0 {
 		t.Errorf("uploads=%v; a build that died half-way must leave no artifact", be.uploads)
@@ -2166,25 +1867,23 @@ func TestServer_MidStreamUploadFailureLeavesNoArtifact(t *testing.T) {
 
 // A tail chunk that fails is the upload's failure, not the build's, and
 // the client is told so — the object still never materialises.
-func TestServer_FinishFailureIsReportedAsUploadFailed(t *testing.T) {
+func TestBuildArtifact_FinishFailureIsReportedAsUploadFailed(t *testing.T) {
 	be := &fakeBackend{
 		runs:      []ExportRun{{ID: "run-1", UserID: "user-A", StartedAt: "2026-05-11T10:00:00Z"}},
 		uploadErr: errors.New("resumable: finish short"),
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"csv"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
+	_, err := buildFor(t, be, "csv")
+	if err == nil {
+		t.Fatal("a failed Finish must fail the build")
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 500 || !strings.Contains(string(body), "upload_failed") {
-		t.Fatalf("status=%d body=%s; want a 500 naming the upload", resp.StatusCode, body)
+	// ErrUpload is what main.go's adapter turns into `upload_failed`:
+	// the archive build was fine, the write was not, and the two are
+	// different operational facts.
+	if !errors.Is(err, ErrUpload) {
+		t.Fatalf("err=%v; want an ErrUpload", err)
+	}
+	if SectionOf(err) != "" {
+		t.Errorf("a dead upload must not be blamed on a section (%q)", SectionOf(err))
 	}
 	if len(be.uploads) != 0 {
 		t.Errorf("uploads=%v; nothing may be recorded when the upload failed", be.uploads)
@@ -2332,7 +2031,7 @@ func TestWriteBackupZip_HistoryFarPastTheDeletedCeilingStreamsWhole(t *testing.T
 // A section that failed to read must reach the RESPONSE's `complete`,
 // not only manifest.json — both clients gate their truncation notice on
 // an explicit `complete: false` (decisions §643).
-func TestServer_ShortSectionMakesTheResponseIncomplete(t *testing.T) {
+func TestBuildArtifact_ShortSectionMakesTheBuildIncomplete(t *testing.T) {
 	be := &fakeBackend{
 		runs:       []ExportRun{{ID: "run-1", UserID: "user-A", StartedAt: "2026-05-11T10:00:00Z"}},
 		runsComp:   ExportCompleteness{Totals: map[string]int{"runs": 1}},
@@ -2341,22 +2040,11 @@ func TestServer_ShortSectionMakesTheResponseIncomplete(t *testing.T) {
 			"food_log.json": {{"id": "f-1"}},
 		},
 	}
-	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
-	base, teardown := newTestServer(t, srv)
-	defer teardown()
-
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"backup"}`))
-	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
-	resp, err := http.DefaultClient.Do(req)
+	built, err := buildFor(t, be, "backup")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	var got map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
-		t.Fatal(err)
-	}
-	if got["complete"] != false {
-		t.Errorf("complete=%v; a section short of the database must be disclosed on the response too", got["complete"])
+	if built.Complete {
+		t.Error("a section short of the database must be disclosed on the build, not only in manifest.json")
 	}
 }

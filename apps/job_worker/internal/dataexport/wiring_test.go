@@ -97,9 +97,6 @@ func TestWiring_FailedBuildAbortsBeforeAnswering(t *testing.T) {
 			"TTL would start whenever the worker happened to finish, not when the subject asks")
 	}
 
-	if sync := readSource(t, "server.go"); !strings.Contains(sync, "CreateSignedURL(r.Context(), built.ObjectPath, SignedURLTTLSec)") {
-		t.Error("the synchronous rail must sign only the path its own build returned")
-	}
 	jobs := readSource(t, "jobs.go")
 	ready := strings.Index(jobs, `case row.Status == "ready":`)
 	jobSign := strings.Index(jobs, "CreateSignedURL(r.Context(), row.ObjectPath")
@@ -113,8 +110,27 @@ func TestWiring_ResponseCompletenessFoldsInEverySection(t *testing.T) {
 	if src := readSource(t, "build.go"); !strings.Contains(src, "Complete:   built.Completeness.IsComplete(),") {
 		t.Error("a section that came up short must not be reported as a complete export")
 	}
-	if src := readSource(t, "server.go"); !strings.Contains(src, `"complete":   built.Complete,`) {
-		t.Error("the synchronous response must carry the builder's own completeness verdict")
+	if src := readSource(t, "jobs.go"); !strings.Contains(src, `body["complete"] = *row.Complete`) {
+		t.Error("the status endpoint must carry the builder's own completeness verdict, or a " +
+			"short archive is handed over as a whole one")
+	}
+}
+
+// The synchronous rail is gone (decisions.md § 724), and it must not
+// come back: it held the caller's connection open for the whole build,
+// which on a phone is the ordinary way an export died. Mobile was the
+// only reason it survived § 717.
+func TestWiring_NoSynchronousExportRailSurvives(t *testing.T) {
+	src := readSource(t, "server.go")
+	if strings.Contains(src, `mux.HandleFunc("/v1/export"`) {
+		t.Error("POST /v1/export must not be mounted: the queued rail is the only rail")
+	}
+	if strings.Contains(src, "BuildArtifact(") {
+		t.Error("no HTTP handler may build the archive on the caller's connection")
+	}
+	if strings.Contains(src, "CreateSignedURL(r.Context()") {
+		t.Error("server.go must mint no signed URL: signing happens in the status endpoint, " +
+			"so the 10-minute clock starts when the subject asks")
 	}
 }
 
