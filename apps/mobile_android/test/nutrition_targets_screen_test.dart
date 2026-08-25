@@ -40,6 +40,10 @@ class _MetricsApi extends ApiClient {
       gender: 'male',
       // January the 1st, so the age is 30 whatever day the suite runs on.
       dateOfBirth: DateTime.utc(DateTime.now().year - 30, 1, 1),
+      // Height and gender are nulled the moment consent is withdrawn, so a
+      // row carrying them carries the stamp too. Without it the age is
+      // withheld from the BMR — the § 722 gate, pinned separately below.
+      healthDataConsentAt: DateTime.utc(2026, 1, 1),
     );
   }
 
@@ -55,6 +59,37 @@ class _MetricsApi extends ApiClient {
           summary: <String, dynamic>{'distance_m': runDistanceM},
         ),
       ];
+
+  @override
+  Future<List<FoodLogRow>> fetchFoodLog({
+    DateTime? from,
+    DateTime? to,
+    int limit = 500,
+  }) async =>
+      const [];
+}
+
+/// A runner who supplied a date of birth and declined (or withdrew) the Art 9
+/// health-data consent. `withdraw_health_data_consent()` nulls height + gender
+/// and erases the weight series, but the age record survives on purpose — the
+/// under-18 people-search floor depends on it (§ 718). So this is exactly what
+/// the profile looks like, and the age must not reach the BMR from it.
+class _ConsentWithheldApi extends ApiClient {
+  @override
+  String? get userId => 'u1';
+
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async => UserProfileRow(
+        shadowHidden: false,
+        id: 'u1',
+        dateOfBirth: DateTime.utc(DateTime.now().year - 30, 1, 1),
+      );
+
+  @override
+  Future<double?> fetchLatestBodyWeightKg() async => null;
+
+  @override
+  Future<List<ActivityRow>> fetchActivities({int limit = 100}) async => const [];
 
   @override
   Future<List<FoodLogRow>> fetchFoodLog({
@@ -247,6 +282,28 @@ void main() {
       await tester.tap(find.text('Edit in Settings'));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsBodyMetricsScreen), findsOneWidget);
+    });
+
+    testWidgets('a date on record without consent says so, not "Not set"',
+        (tester) async {
+      final prefs = await _prefs();
+      registerActivePreferences(prefs);
+      await tester.pumpWidget(_app(NutritionTargetsScreen(
+        api: _ConsentWithheldApi(),
+        settingsSync: null,
+      )));
+      await _settle(tester);
+      await _scrollTo(tester, find.text('Needs health-data consent'));
+
+      // The runner DID supply a date; "Not set" would be a lie about their own
+      // record, and the age itself must not be shown on a health surface it
+      // may not be used for.
+      expect(find.text('Needs health-data consent'), findsOneWidget);
+      expect(find.text('30 years'), findsNothing);
+      // Height and weight really are absent — those stay "Not set".
+      expect(find.text('Not set'), findsWidgets);
+      // And nothing was derived: no BMR off an age the consent does not cover.
+      expect(find.text('Resting metabolism'), findsNothing);
     });
 
     testWidgets('with no metrics it explains what is missing, not a zero goal',

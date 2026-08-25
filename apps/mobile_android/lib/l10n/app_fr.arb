@@ -2971,6 +2971,7 @@
   "nutritionTargetsEmptyBody": "Renseigne ta taille, ton poids, ta date de naissance et ton sexe et tes objectifs de calories et de macros apparaîtront ici.",
   "nutritionTargetsAge": "Âge",
   "nutritionTargetsAgeYears": "{n} ans",
+  "nutritionTargetsAgeConsentWithheld": "Nécessite le consentement aux données de santé",
   "nutritionTargetsLoadError": "Impossible de charger tes objectifs.",
   "nutritionWeeklyTrend": "7 derniers jours",
   "nutritionCaloriesLeft": "{n} kcal restantes",

@@ -46,6 +46,7 @@
 		type WeightGoal,
 		type NutritionTargets,
 	} from '$lib/nutrition/nutrition_targets';
+	import { healthUseDob } from '$lib/core/health_consent';
 	import { exerciseCaloriesForDay } from '$lib/nutrition/exercise_calories';
 	import { isWithinWindow } from '$lib/nutrition/diary_day';
 	import { sumMacros } from '$lib/nutrition/nutrition_totals';
@@ -119,9 +120,14 @@
 	// score each record against the world standard for the runner's age & sex.
 	// Both stay null when the profile lacks the data → the column self-hides.
 	// `height_cm` on the same row feeds the nutrition targets.
+	//
+	// The date is taken through `healthUseDob` (§ 722) rather than off the row:
+	// age-grading and a calorie target are Art 9 uses of the age record, which
+	// itself carries no consent term because the under-18 search floor depends
+	// on it. The consent stamp rides on the same `get_my_profile()` row — this
+	// interface names only the fields read directly.
 	interface DashboardProfile {
 		height_cm?: number | null;
-		date_of_birth?: string | null;
 		gender?: string | null;
 	}
 	let viewerDobIso = $state<string | null>(null);
@@ -544,7 +550,7 @@
 		// An RLS blip just leaves the curve run-only — the contract: a
 		// lift-load failure can't corrupt run readiness.
 		if (gymRead) [gymWorkouts, gymHistory] = gymRead;
-		if (typeof profileRead?.date_of_birth === 'string') viewerDobIso = profileRead.date_of_birth;
+		viewerDobIso = healthUseDob(profileRead);
 		if (
 			profileRead?.gender === 'male' ||
 			profileRead?.gender === 'female' ||
@@ -626,7 +632,7 @@
 			nutritionTargets = computeNutritionTargets({
 				weightKg: weight,
 				heightCm: profile?.height_cm ?? null,
-				ageYears: ageFromDob(profile?.date_of_birth, Date.now()),
+				ageYears: ageFromDob(healthUseDob(profile), Date.now()),
 				sex: profile?.gender ?? null,
 				activityLevel:
 					effective<ActivityLevel>(prefs, 'nutrition_activity_level', 'moderate') ?? 'moderate',

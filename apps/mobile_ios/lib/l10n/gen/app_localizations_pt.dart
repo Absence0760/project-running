@@ -10616,6 +10616,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get nutritionTargetsAgeConsentWithheld =>
+      'Requer consentimento de dados de saúde';
+
+  @override
   String get nutritionTargetsLoadError =>
       'Não foi possível carregar as tuas metas.';
 
@@ -24132,6 +24136,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String nutritionTargetsAgeYears(int n) {
     return '$n anos';
   }
+
+  @override
+  String get nutritionTargetsAgeConsentWithheld =>
+      'Requer consentimento de dados de saúde';
 
   @override
   String get nutritionTargetsLoadError =>

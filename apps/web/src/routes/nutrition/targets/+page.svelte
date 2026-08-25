@@ -17,6 +17,11 @@
 		type WeightGoal,
 		type NutritionTargets,
 	} from '$lib/nutrition/nutrition_targets';
+	import {
+		healthUseDob,
+		healthUseDobState,
+		type HealthUseDobState,
+	} from '$lib/core/health_consent';
 	import { exerciseCaloriesForDay } from '$lib/nutrition/exercise_calories';
 	import { diaryWindow, isoDateOf } from '$lib/nutrition/diary_day';
 	import { formatWeight } from '$lib/format/units.svelte';
@@ -29,6 +34,12 @@
 	let weightKg = $state<number | null>(null);
 	let heightCm = $state<number | null>(null);
 	let ageYears = $state<number | null>(null);
+	/// Why the age is missing, not merely that it is. The age record itself
+	/// carries no consent term (the under-18 search floor depends on it), but
+	/// feeding it to a BMR is an Art 9 use — so a runner who supplied a date
+	/// and declined the health-data consent is told that, rather than shown
+	/// "Not set" about a date they did set (§ 722).
+	let dobState = $state<HealthUseDobState>('absent');
 	let sex = $state<string | null>(null);
 	let exerciseKcal = $state(0);
 	let activityLevel = $state<ActivityLevel>('moderate');
@@ -76,10 +87,11 @@
 			]);
 			weightKg = weight;
 			const prof = profileRes.data as
-				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
+				| { height_cm: number | null; gender: string | null }
 				| null;
 			heightCm = prof?.height_cm ?? null;
-			ageYears = ageFromDob(prof?.date_of_birth, Date.now());
+			dobState = healthUseDobState(profileRes.data);
+			ageYears = ageFromDob(healthUseDob(profileRes.data), Date.now());
 			sex = prof?.gender ?? null;
 			activityLevel =
 				effective<ActivityLevel>(settings, 'nutrition_activity_level', 'moderate') ?? 'moderate';
@@ -299,7 +311,9 @@
 				<li>
 					<span class="term">{m('nutrition.targets.age')}</span>
 					<span class="value">
-						{ageYears != null ? m('nutrition.targets.ageYears', { n: ageYears }) : m('nutrition.targets.unset')}
+						{#if ageYears != null}{m('nutrition.targets.ageYears', { n: ageYears })}
+						{:else if dobState === 'consent_withheld'}{m('nutrition.targets.ageConsentWithheld')}
+						{:else}{m('nutrition.targets.unset')}{/if}
 					</span>
 				</li>
 				<li>

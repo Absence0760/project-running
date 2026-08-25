@@ -10084,6 +10084,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get nutritionTargetsAgeConsentWithheld => '健康データの同意が必要です';
+
+  @override
   String get nutritionTargetsLoadError => '目標を読み込めませんでした。';
 
   @override

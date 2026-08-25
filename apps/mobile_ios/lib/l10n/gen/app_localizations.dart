@@ -17504,6 +17504,12 @@ abstract class AppLocalizations {
   /// **'{n} years'**
   String nutritionTargetsAgeYears(int n);
 
+  /// Body-metrics row value when a date of birth is on record but the Art 9 health-data consent is not, so the age cannot be used for the calorie target
+  ///
+  /// In en, this message translates to:
+  /// **'Needs health-data consent'**
+  String get nutritionTargetsAgeConsentWithheld;
+
   /// Error state when the targets screen's read fails
   ///
   /// In en, this message translates to:

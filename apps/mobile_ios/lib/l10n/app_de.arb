@@ -2971,6 +2971,7 @@
   "nutritionTargetsEmptyBody": "Gib Größe, Gewicht, Geburtsdatum und Geschlecht an, dann erscheinen hier deine Kalorien- und Makro-Ziele.",
   "nutritionTargetsAge": "Alter",
   "nutritionTargetsAgeYears": "{n} Jahre",
+  "nutritionTargetsAgeConsentWithheld": "Benötigt Einwilligung zu Gesundheitsdaten",
   "nutritionTargetsLoadError": "Deine Ziele konnten nicht geladen werden.",
   "nutritionWeeklyTrend": "Letzte 7 Tage",
   "nutritionCaloriesLeft": "{n} kcal übrig",

@@ -10643,6 +10643,10 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get nutritionTargetsAgeConsentWithheld =>
+      'Nécessite le consentement aux données de santé';
+
+  @override
   String get nutritionTargetsLoadError =>
       'Impossible de charger tes objectifs.';
 

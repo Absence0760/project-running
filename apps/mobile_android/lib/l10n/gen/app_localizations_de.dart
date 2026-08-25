@@ -10630,6 +10630,10 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get nutritionTargetsAgeConsentWithheld =>
+      'Benötigt Einwilligung zu Gesundheitsdaten';
+
+  @override
   String get nutritionTargetsLoadError =>
       'Deine Ziele konnten nicht geladen werden.';
 
