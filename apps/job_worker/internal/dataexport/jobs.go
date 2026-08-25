@@ -111,6 +111,13 @@ type exportJobRequest struct {
 
 // handleJobsCreate serves POST /v1/export/jobs.
 func (s *Server) handleJobsCreate(w http.ResponseWriter, r *http.Request) {
+	// Preflight before the config gate: an OPTIONS probe
+	// carries no credentials, so answering 503 to it would hide a
+	// working endpoint behind a browser-level failure.
+	if s.preflight(w, r, "POST, OPTIONS") {
+		return
+	}
+	s.writeCORS(w, r)
 	if !s.Verifier.Enabled() {
 		s.log().Error("dataexport: JWT secret not configured; refusing")
 		http.Error(w, `{"error":"export_not_configured"}`, http.StatusServiceUnavailable)
@@ -196,6 +203,13 @@ func (s *Server) handleJobsCreate(w http.ResponseWriter, r *http.Request) {
 
 // handleJobsLatest serves GET /v1/export/jobs/latest.
 func (s *Server) handleJobsLatest(w http.ResponseWriter, r *http.Request) {
+	// Preflight before the config gate: an OPTIONS probe
+	// carries no credentials, so answering 503 to it would hide a
+	// working endpoint behind a browser-level failure.
+	if s.preflight(w, r, "GET, OPTIONS") {
+		return
+	}
+	s.writeCORS(w, r)
 	if !s.Verifier.Enabled() {
 		s.log().Error("dataexport: JWT secret not configured; refusing")
 		http.Error(w, `{"error":"export_not_configured"}`, http.StatusServiceUnavailable)

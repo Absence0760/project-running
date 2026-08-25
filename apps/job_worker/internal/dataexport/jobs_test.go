@@ -436,3 +436,111 @@ func TestJobs_RateLimitRpcErrorFailsClosed(t *testing.T) {
 		t.Fatalf("a fail-closed throttle must enqueue nothing")
 	}
 }
+
+// The browser rail is cross-origin in every deployment: the site is on
+// one host and the worker on another, so an enqueue is preceded by a
+// preflight. Without an allowlist that probe is refused and the POST
+// never leaves the browser — which is how the queued rail shipped, and
+// what the export-hub e2e lane caught.
+func TestJobs_PreflightIsAnsweredForAnAllowedOrigin(t *testing.T) {
+	be := &fakeBackend{}
+	srv := &Server{
+		Verifier:       supajwt.New(testJWTSecret, "", nil),
+		Backend:        be,
+		AllowedOrigins: []string{"https://threkir.com"},
+	}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	for _, tc := range []struct {
+		path    string
+		methods string
+	}{
+		{"/v1/export/jobs", "POST, OPTIONS"},
+		{"/v1/export/jobs/latest", "GET, OPTIONS"},
+	} {
+		req, err := http.NewRequest(http.MethodOptions, base+tc.path, nil)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		req.Header.Set("Origin", "https://threkir.com")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("do: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("%s: status=%d, want 204", tc.path, resp.StatusCode)
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://threkir.com" {
+			t.Fatalf("%s: allow-origin=%q, want the exact origin", tc.path, got)
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Methods"); got != tc.methods {
+			t.Fatalf("%s: allow-methods=%q, want %q", tc.path, got, tc.methods)
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Headers"); got != "authorization, content-type" {
+			t.Fatalf("%s: allow-headers=%q", tc.path, got)
+		}
+		if got := resp.Header.Get("Vary"); got != "Origin" {
+			t.Fatalf("%s: vary=%q, want Origin", tc.path, got)
+		}
+	}
+}
+
+// A wildcard would be invalid here anyway — the endpoint is
+// authenticated, and a browser rejects `*` on a credentialed request —
+// so an origin nobody listed is refused rather than echoed back.
+func TestJobs_PreflightRefusesAnUnlistedOrigin(t *testing.T) {
+	be := &fakeBackend{}
+	srv := &Server{
+		Verifier:       supajwt.New(testJWTSecret, "", nil),
+		Backend:        be,
+		AllowedOrigins: []string{"https://threkir.com"},
+	}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodOptions, base+"/v1/export/jobs", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("allow-origin=%q, want empty", got)
+	}
+}
+
+// An enqueue that succeeds still needs the header on the response, or
+// the browser discards a 202 the worker really did accept.
+func TestJobs_PostCarriesTheAllowOriginHeader(t *testing.T) {
+	be := &fakeBackend{enqueueRef: ExportJobRef{ID: "exp-1", Status: "queued", Format: "backup"}}
+	srv := &Server{
+		Verifier:       supajwt.New(testJWTSecret, "", nil),
+		Backend:        be,
+		AllowedOrigins: []string{"https://threkir.com"},
+	}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export/jobs", strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://threkir.com")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status=%d, want 202", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://threkir.com" {
+		t.Fatalf("allow-origin=%q", got)
+	}
+}

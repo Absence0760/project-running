@@ -80,6 +80,65 @@ type Server struct {
 	Backend Backend
 
 	Log *slog.Logger
+
+	// AllowedOrigins is the exact `Origin` allowlist the browser rail
+	// is answered for. The web client posts from a different origin
+	// than the worker in every deployment, so without this the
+	// preflight is refused and the enqueue never leaves the browser.
+	// Empty → no CORS headers at all, which is correct for a
+	// server-to-server deployment and fail-closed for a browser one.
+	AllowedOrigins []string
+}
+
+// allowOrigin answers the exact origin when it is on the allowlist.
+//
+// Exact match rather than a wildcard: the endpoint is authenticated,
+// and `Access-Control-Allow-Origin: *` is invalid the moment a request
+// carries credentials — a browser rejects the response rather than
+// relaxing the check.
+func (s *Server) allowOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+	for _, o := range s.AllowedOrigins {
+		if o == origin {
+			return true
+		}
+	}
+	return false
+}
+
+// writeCORS stamps the allow headers when the caller's origin is
+// permitted, and reports whether it did. `Vary: Origin` is not
+// optional: without it a cache can serve one origin's allow header to
+// another.
+func (s *Server) writeCORS(w http.ResponseWriter, r *http.Request) bool {
+	w.Header().Add("Vary", "Origin")
+	origin := r.Header.Get("Origin")
+	if !s.allowOrigin(origin) {
+		return false
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	return true
+}
+
+// preflight answers an OPTIONS probe and reports whether it handled
+// the request. A disallowed origin gets 403 rather than the mux's 405:
+// the method IS allowed, the caller is not.
+func (s *Server) preflight(w http.ResponseWriter, r *http.Request, methods string) bool {
+	if r.Method != http.MethodOptions {
+		return false
+	}
+	if !s.writeCORS(w, r) {
+		w.WriteHeader(http.StatusForbidden)
+		return true
+	}
+	w.Header().Set("Access-Control-Allow-Methods", methods)
+	w.Header().Set("Access-Control-Allow-Headers", "authorization, content-type")
+	w.Header().Set("Access-Control-Max-Age", "600")
+	w.WriteHeader(http.StatusNoContent)
+	return true
 }
 
 // Backend is the Supabase REST surface the export endpoint

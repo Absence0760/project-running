@@ -70,4 +70,8 @@ export SUPABASE_SECRET_KEY="$SERVICE_KEY"
 export SUPABASE_JWT_SECRET="$JWT_SECRET"
 export HEALTH_PORT
 export WORKER_ID="exporthub-e2e"
+# The spec drives the enqueue from a browser on the dev server's origin,
+# which is not the worker's, so without this the preflight is refused and
+# the POST never leaves the page. Same variable the live hub uses.
+export LIVEHUB_ALLOWED_ORIGINS="http://localhost:${EXPORTHUB_E2E_DEV_PORT:-7779},http://127.0.0.1:${EXPORTHUB_E2E_DEV_PORT:-7779}"
 exec "$BIN_DIR/jobworker-exporthub-e2e"

@@ -730,6 +730,13 @@ func main() {
 			Verifier: verifier,
 			Backend:  exportBackend,
 			Log:      exportLog,
+			// The web client posts from the site's origin, never the
+			// worker's, so the browser rail needs an allowlist or its
+			// preflight is refused. Shares LIVEHUB_ALLOWED_ORIGINS
+			// because it is the same site talking to the same service;
+			// a second variable would be one more thing to set and
+			// exactly one more thing to forget.
+			AllowedOrigins: allowedOrigins,
 		}
 		// The same backend drains the queue. Wiring it here rather than
 		// beside the Worker literal keeps the two halves of the export
