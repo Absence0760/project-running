@@ -2232,6 +2232,7 @@ export const en = {
 	"importRoute.saveRoute": "Save Route",
 	"importRoute.multiIntroPrefix": "Found ",
 	"importRoute.multiIntroSuffix": " routes in this file. Pick which ones to import — each becomes its own route in Threkir.",
+	"importRoute.includeRoute": "Import {name}",
 	"importRoute.metaElev": "{m} m elev",
 	"importRoute.metaPts": "{n} pts",
 	"importRoute.importCountOne": "Import {n} route",

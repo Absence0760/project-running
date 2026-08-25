@@ -1218,7 +1218,9 @@
 									<div class="replies">
 										{#each expandedThreads[post.id] ?? [] as reply (reply.id)}
 											<div class="reply">
-												<a href="/u/{reply.author_id}" class="reply-author-link">
+												<!-- Redundant image link for the same destination as the
+												     author-name link below (WCAG technique H2). See RunSocial. -->
+												<a href="/u/{reply.author_id}" class="reply-author-link" tabindex="-1" aria-hidden="true">
 													<Avatar name={reply.author_display_name} size="2.1rem" font="0.9rem" bg="seed" seedHue={hashHue(reply.author_id)} />
 												</a>
 												<div class="reply-body">

@@ -2224,6 +2224,7 @@ export const messages = {
 	"importRoute.saveRoute": "Guardar ruta",
 	"importRoute.multiIntroPrefix": "Se encontraron ",
 	"importRoute.multiIntroSuffix": " rutas en este archivo. Elige cuáles importar: cada una se convierte en su propia ruta en Threkir.",
+	"importRoute.includeRoute": "Importar {name}",
 	"importRoute.metaElev": "{m} m desn.",
 	"importRoute.metaPts": "{n} ptos",
 	"importRoute.importCountOne": "Importar {n} ruta",

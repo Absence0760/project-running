@@ -199,10 +199,19 @@
 					{#each parsed as route, i (i)}
 						<li class="multi-item">
 							<label class="multi-toggle">
-								<input type="checkbox" bind:checked={selected[i]} />
+								<input
+									type="checkbox"
+									bind:checked={selected[i]}
+									aria-label={m('importRoute.includeRoute', { name: names[i] || route.name })}
+								/>
 							</label>
 							<div class="multi-fields">
-								<input type="text" bind:value={names[i]} disabled={!selected[i]} />
+								<input
+									type="text"
+									bind:value={names[i]}
+									disabled={!selected[i]}
+									aria-label={m('importRoute.routeName')}
+								/>
 								<div class="multi-meta">
 									<span>{formatDistance(route.distance_m)}</span>
 									<span class="meta-sep">·</span>

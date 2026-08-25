@@ -2239,21 +2239,36 @@ test('accessibility: web shell wires WCAG 2.4.1 skip link + #main-content target
 	);
 });
 
-test('accessibility: ToastContainer wraps the live region (audit/accessibility High)', () => {
-	// Reason: audit/accessibility High — toasts went unannounced
-	// because the container had no aria-live region. Pin role +
-	// aria-live on the wrapper AND assertive on the error toast.
+test('accessibility: ToastContainer announces from permanently-mounted live regions', () => {
+	// Reason: audit/accessibility High — toasts went unannounced because the
+	// container had no aria-live region at all. The first fix added one, but
+	// mounted it in the same `{#if}` as the toast: a live region only announces
+	// changes made INSIDE it while it is already in the accessibility tree, so
+	// region and text arriving in one mutation left the first toast of a burst
+	// — one toast at a time, the ordinary case — announced by nothing.
+	//
+	// Both regions must therefore sit OUTSIDE every `{#if}`, and the visible
+	// stack must stay aria-hidden or the same sentence is announced twice.
 	const src = read('src/lib/components/ToastContainer.svelte');
+	const markup = src.replace(/<script[\s\S]*?<\/script>/, '').replace(/<style[\s\S]*?<\/style>/, '');
+	const firstIf = markup.indexOf('{#if');
+	assert.ok(firstIf >= 0, 'ToastContainer no longer has a conditional block to measure against.');
+
+	for (const politeness of ['polite', 'assertive']) {
+		const at = markup.indexOf(`aria-live="${politeness}"`);
+		assert.ok(at >= 0, `ToastContainer must carry an aria-live="${politeness}" region.`);
+		assert.ok(
+			at < firstIf,
+			`The aria-live="${politeness}" region must be mounted unconditionally — a region ` +
+				'that appears together with its text announces nothing.',
+		);
+	}
+
 	assert.match(
-		src,
-		/role="status"\s+aria-live="polite"/,
-		'ToastContainer must wrap toasts in role="status" aria-live="polite".',
-	);
-	assert.match(
-		src,
-		/aria-live=\{t\.type\s*===\s*'error'\s*\?\s*'assertive'\s*:\s*'polite'\}/,
-		'Error toasts must escalate to aria-live="assertive" so screen ' +
-			'readers interrupt the user on failure.',
+		markup,
+		/<div class="toast-container" aria-hidden="true">/,
+		'The visible toast stack must be aria-hidden so a toast is not announced ' +
+			'by both it and the live region above it.',
 	);
 });
 
