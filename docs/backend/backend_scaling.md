@@ -263,9 +263,13 @@ same database would find it. Do not copy the snippet above.
 rate limiting is `20260604_001_rate_limits.sql` (a `SECURITY DEFINER`
 `check_rate_limit` doing an atomic fixed-window increment) behind
 `functions/_shared/rate_limit.ts`, whose posture is per-caller: fail-open by
-default so a transient DB blip doesn't 429 everyone, `{ failClosed: true }` on
-the destructive and expensive paths (`delete-account`, `export-data`, OAuth
-code exchange). The Strava bullet asked for **signature** verification, which
+default so a transient DB blip doesn't 429 everyone, `{ failClosed: true }` wherever a
+retry is not free. That is **nine** functions today, not the three an earlier note
+enumerated: `delete-account`, `export-data`, `strava-import` (its `connect` /
+`disconnect` actions — the OAuth code exchange — while the idempotent `sync` stays
+fail-open, `strava-import/index.ts:110`), `strava-webhook`, `clip-public-track` (both
+its authed and its anon-keyed bucket), and the four money paths `donations-checkout`,
+`events-checkout`, `events-cancel`, `events-connect-onboard`. The Strava bullet asked for **signature** verification, which
 Strava cannot satisfy — it does not sign webhook payloads. `strava-webhook`
 therefore authenticates the caller with a constant-time shared-secret compare
 (`timingSafeEqual`, header `X-Webhook-Secret` winning over the `?secret=`
