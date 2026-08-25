@@ -10,6 +10,7 @@ import '../age_grade.dart';
 import '../auth_change_aware.dart';
 import '../device_timezone.dart';
 import '../goals.dart';
+import '../health_consent.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
 import '../local_gym_store.dart';
@@ -209,7 +210,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   /// Best-effort load of the viewer's DOB + sex for age-grading the PB rows
   /// (L4 — a failure just omits the age grade). Sourced from the profile,
-  /// which carries both `date_of_birth` and `gender` (get_my_profile).
+  /// which carries the age record, `gender` and the Art 9 consent stamp
+  /// (get_my_profile).
   Future<void> _loadViewerProfile() async {
     final api = widget.apiClient;
     if (api == null) return;
@@ -251,7 +253,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     final result = ageGradeForRun(
       distanceM: metres,
       durationSec: time.inSeconds.toDouble(),
-      dobIso: p?.dateOfBirth?.toIso8601String(),
+      // Age grading is an Art 9 use of the age record, which carries no
+      // consent term of its own (§ 718 / § 722).
+      dobIso: healthUseDob(p),
       runStartIso: (achievedAt ?? now).toIso8601String(),
       sex: p?.gender,
     );

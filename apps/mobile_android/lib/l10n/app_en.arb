@@ -13801,6 +13801,10 @@
       }
     }
   },
+  "nutritionTargetsAgeConsentWithheld": "Needs health-data consent",
+  "@nutritionTargetsAgeConsentWithheld": {
+    "description": "Body-metrics row value when a date of birth is on record but the Art 9 health-data consent is not, so the age cannot be used for the calorie target"
+  },
   "nutritionTargetsLoadError": "Couldn't load your targets.",
   "@nutritionTargetsLoadError": {
     "description": "Error state when the targets screen's read fails"

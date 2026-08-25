@@ -2971,6 +2971,7 @@
   "nutritionTargetsEmptyBody": "Informe sua altura, peso, data de nascimento e sexo e suas metas de calorias e macros aparecerão aqui.",
   "nutritionTargetsAge": "Idade",
   "nutritionTargetsAgeYears": "{n} anos",
+  "nutritionTargetsAgeConsentWithheld": "Requer consentimento de dados de saúde",
   "nutritionTargetsLoadError": "Não foi possível carregar suas metas.",
   "nutritionWeeklyTrend": "Últimos 7 dias",
   "nutritionCaloriesLeft": "{n} kcal restantes",

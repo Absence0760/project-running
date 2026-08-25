@@ -2971,6 +2971,7 @@
   "nutritionTargetsEmptyBody": "身長・体重・生年月日・性別を入力すると、カロリー・マクロの目標がここに表示されます。",
   "nutritionTargetsAge": "年齢",
   "nutritionTargetsAgeYears": "{n}歳",
+  "nutritionTargetsAgeConsentWithheld": "健康データの同意が必要です",
   "nutritionTargetsLoadError": "目標を読み込めませんでした。",
   "nutritionWeeklyTrend": "直近7日間",
   "nutritionCaloriesLeft": "残り {n} kcal",

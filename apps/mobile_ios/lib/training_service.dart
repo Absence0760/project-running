@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'training.dart' show TrainingGender;
 
+import 'health_consent.dart';
+import 'nutrition_targets.dart' show ageFromDob;
 import 'plan_ramp.dart';
 import 'plan_week.dart';
 import 'relink_candidates.dart';
@@ -72,38 +74,46 @@ class TrainingService extends ChangeNotifier {
   /// bootstrap bug, not a signed-out viewer, and must not read as one.
   String? get currentUserId => _uid;
 
-  /// Persona-hunt Round 3 finding Woman #3. Reads the viewer's
-  /// `user_profiles.gender` so the plan wizard can apply the
-  /// gender-aware pace calibration. Returns null when the column is
-  /// unset (the default) — pacesFromGoalPace then uses the
-  /// male-derived curve unchanged. Mirror of the inline supabase
-  /// read on web `PlanEditor.svelte`.
+  /// The viewer's own `user_profiles` row, or null. Goes through
+  /// `get_my_profile()` (SECURITY DEFINER) because neither `gender` nor
+  /// `date_of_birth` nor `health_data_consent_at` is in the cross-user column
+  /// grant (20260707_001 / 20270408_001): a direct `.select('gender')` is
+  /// rejected outright with 42501, so the reads this replaced could only ever
+  /// report "unset" — the same defect `ApiClient.fetchAiDisclosure` records.
   ///
-  /// L4 best-effort by contract: the plan wizard's initState awaits
-  /// this without blocking, and any failure here only means the
-  /// paces fall through to the unmodified male-derived curve. The
-  /// try/catch must therefore wrap BOTH the `_uid` access (which
-  /// touches `_c`, which throws `StateError` in widget tests that
-  /// don't initialise Supabase) AND the network read. A regression
-  /// that narrowed the catch to the inner read alone surfaced as
-  /// `plan_new_screen_test` failing with "TrainingService called
-  /// before Supabase.initialize() resolved" in CI.
-  Future<TrainingGender> fetchViewerGender() async {
+  /// L4 best-effort by contract: the plan wizard's initState awaits the two
+  /// callers without blocking, and any failure only costs the calibration.
+  /// The try/catch must therefore wrap BOTH the `_uid` access (which touches
+  /// `_c`, which throws `StateError` in widget tests that don't initialise
+  /// Supabase) AND the network read. A regression that narrowed the catch to
+  /// the inner read alone surfaced as `plan_new_screen_test` failing with
+  /// "TrainingService called before Supabase.initialize() resolved" in CI.
+  Future<UserProfileRow?> _fetchMyProfile() async {
     try {
-      final uid = _uid;
-      if (uid == null) return null;
-      final row = await _c
-          .from('user_profiles')
-          .select('gender')
-          .eq('id', uid)
-          .maybeSingle();
-      final g = row?['gender'] as String?;
-      if (g == 'male' || g == 'female' || g == 'prefer_not_to_say') return g;
+      if (_uid == null) return null;
+      final res = await _c.rpc('get_my_profile');
+      final row = (res is List ? (res.isEmpty ? null : res.first) : res)
+          as Map<String, dynamic>?;
+      if (row == null) return null;
+      return UserProfileRow.fromJson(row);
     } catch (_) {
       /* L4 best-effort — fall back to null on any failure,
          including the not-yet-initialised StateError thrown by
          the _c getter in widget tests. */
     }
+    return null;
+  }
+
+  /// Persona-hunt Round 3 finding Woman #3. Reads the viewer's
+  /// `user_profiles.gender` so the plan wizard can apply the
+  /// gender-aware pace calibration. Returns null when the column is
+  /// unset (the default) — pacesFromGoalPace then uses the
+  /// male-derived curve unchanged. Mirror of the inline supabase
+  /// read on web `PlanEditor.svelte`. Gender carries its own consent
+  /// term at every write path, so the read needs none.
+  Future<TrainingGender> fetchViewerGender() async {
+    final g = (await _fetchMyProfile())?.gender;
+    if (g == 'male' || g == 'female' || g == 'prefer_not_to_say') return g;
     return null;
   }
 
@@ -141,37 +151,18 @@ class TrainingService extends ChangeNotifier {
     return null;
   }
 
-  /// Persona-hunt finding Older #30. Reads the viewer's
-  /// `user_profiles.date_of_birth` and returns whole years so the plan
-  /// wizard can apply the masters recovery calibration (50+). Returns
-  /// null when the column is unset or unparseable — generatePlan then
-  /// uses the standard younger-physiology schedule. Same L4 best-effort
-  /// contract as fetchViewerGender (the try/catch must wrap the `_uid`
-  /// access too, for widget tests without an initialised Supabase).
+  /// Persona-hunt finding Older #30. Returns the viewer's whole-year age so
+  /// the plan wizard can apply the masters recovery calibration (50+), or
+  /// null — generatePlan then uses the standard younger-physiology schedule.
+  ///
+  /// Reshaping a training plan around the runner's age is an Art 9 health
+  /// inference, and the age record itself carries no consent term because the
+  /// under-18 search floor depends on it (§ 718). So the date comes through
+  /// [healthUseDob] rather than off the row, matching web's PlanEditor
+  /// (§ 722). Same L4 best-effort contract as [fetchViewerGender].
   Future<int?> fetchViewerAge() async {
-    try {
-      final uid = _uid;
-      if (uid == null) return null;
-      final row = await _c
-          .from('user_profiles')
-          .select('date_of_birth')
-          .eq('id', uid)
-          .maybeSingle();
-      final dob = row?['date_of_birth'] as String?;
-      if (dob == null) return null;
-      final born = DateTime.tryParse(dob);
-      if (born == null) return null;
-      final now = DateTime.now();
-      var age = now.year - born.year;
-      if (now.month < born.month ||
-          (now.month == born.month && now.day < born.day)) {
-        age--;
-      }
-      if (age >= 0 && age < 120) return age;
-    } catch (_) {
-      /* L4 best-effort — null on any failure. */
-    }
-    return null;
+    final dob = healthUseDob(await _fetchMyProfile());
+    return ageFromDob(dob, DateTime.now().millisecondsSinceEpoch);
   }
 
   /// Plan templates owned by `clubId`. Visible to club members per RLS.

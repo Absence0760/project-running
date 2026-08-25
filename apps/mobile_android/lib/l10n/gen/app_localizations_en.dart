@@ -10507,6 +10507,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get nutritionTargetsAgeConsentWithheld => 'Needs health-data consent';
+
+  @override
   String get nutritionTargetsLoadError => 'Couldn\'t load your targets.';
 
   @override
