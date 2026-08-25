@@ -493,6 +493,52 @@ class PendingSafetyRequest {
       );
 }
 
+/// A relationship in which SOMEONE ELSE named the signed-in user as their
+/// safety contact and the user confirmed — the mirror image of
+/// [SafetyContact], and the only place `set_safety_sms_opt_in` can be called
+/// from once the confirm step is behind you. Mobile mirror of the web
+/// `SafetyContactOf` interface (`apps/web/src/lib/core/data.ts`).
+///
+/// [hasPhone] reports the FACT that the owner stored a number, never the
+/// digits — the same posture `my_pending_safety_requests` takes. It gates
+/// whether the SMS consent toggle would do anything; there is no owner
+/// UPDATE policy, so a contact could not correct a wrong number from here
+/// even if it were shown.
+class SafetyContactOf {
+  final String id;
+  final String ownerId;
+  final String? ownerName;
+  final bool hasPhone;
+  final DateTime? smsOptInAt;
+  final DateTime createdAt;
+
+  const SafetyContactOf({
+    required this.id,
+    required this.ownerId,
+    this.ownerName,
+    this.hasPhone = false,
+    this.smsOptInAt,
+    required this.createdAt,
+  });
+
+  bool get isSmsOptedIn => smsOptInAt != null;
+
+  factory SafetyContactOf.fromJson(
+    Map<String, dynamic> json,
+    String? ownerName,
+  ) =>
+      SafetyContactOf(
+        id: json['id'] as String,
+        ownerId: json['owner_id'] as String,
+        ownerName: ownerName,
+        hasPhone: json['contact_phone'] != null,
+        smsOptInAt: json['sms_opt_in_at'] == null
+            ? null
+            : DateTime.parse(json['sms_opt_in_at'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
 /// A public achievement-badge award from someone the viewer follows, paired
 /// with the awardee's profile — the feed badge-strip entry. Mobile mirror of
 /// the web `BadgeAwardFeedEntry` interface (`apps/web/src/lib/core/data.ts`).

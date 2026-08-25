@@ -737,6 +737,72 @@ class ApiClient {
     return result == true;
   }
 
+  /// The contact-of direction of `safety_contacts`: the relationships in
+  /// which SOMEONE ELSE named the caller and the caller confirmed. Scoped by
+  /// an explicit `contact_user_id` filter for the same reason the owner list
+  /// scopes on `owner_id` — the table's permissive policies OR, so a query
+  /// has to state which half it wants rather than inherit whatever RLS
+  /// happens to allow. The linked-contact SELECT policy (migration
+  /// 20261218_001) already permits exactly this read. Every row is a
+  /// confirmed relationship by construction: `contact_user_id` is set only by
+  /// `confirm_safety_contact`, which stamps `confirmed_at` in the same UPDATE.
+  ///
+  /// The owner's name comes from a second read; a shadow-hidden or otherwise
+  /// unreadable profile degrades to null rather than dropping the row, since
+  /// the consent controls are the point and the name is decoration. Fails
+  /// soft to an empty list like its siblings on this screen.
+  Future<List<SafetyContactOf>> fetchSafetyContactOf() async {
+    try {
+      final userId = _client.auth.currentUser?.id;
+      if (userId == null) return const [];
+      final rows = await _client
+          .from(SafetyContactRow.table)
+          .select('id, owner_id, contact_phone, sms_opt_in_at, created_at')
+          .eq(SafetyContactRow.colContactUserId, userId)
+          .order(SafetyContactRow.colCreatedAt, ascending: false);
+      if (rows.isEmpty) return const [];
+      final ownerIds = <String>{
+        for (final r in rows) r[SafetyContactRow.colOwnerId] as String,
+      }.toList();
+      // Cross-user reads must stay inside the granted column set
+      // (migration 20260707_001) — a bare select() requests revoked columns
+      // and PostgREST rejects the whole read with 42501.
+      final profiles = await readChunked(
+        ownerIds,
+        (chunk) async => _client
+            .from(UserProfileRow.table)
+            .select('id, display_name')
+            .inFilter(UserProfileRow.colId, chunk),
+      );
+      final nameById = <String, String?>{
+        for (final p in profiles)
+          p['id'] as String: p['display_name'] as String?,
+      };
+      return [
+        for (final r in rows)
+          SafetyContactOf.fromJson(
+            r,
+            nameById[r[SafetyContactRow.colOwnerId] as String],
+          ),
+      ];
+    } catch (e) {
+      debugPrint('fetchSafetyContactOf failed: ${safeErrorLabel(e)}');
+      return const [];
+    }
+  }
+
+  /// Turn SMS consent on or off on a relationship the caller is the confirmed
+  /// contact of. Opting in requires a phone on file (server-enforced, so
+  /// passing true against a number-less relationship clears rather than
+  /// lies). Returns whether a row was updated.
+  Future<bool> setSafetySmsOptIn(String id, bool optIn) async {
+    final result = await _client.rpc(
+      'set_safety_sms_opt_in',
+      params: {'p_id': id, 'p_opt_in': optIn},
+    );
+    return result == true;
+  }
+
   /// Save a completed [Run] to the backend.
   ///
   /// The GPS track is uploaded as a gzipped JSON file to the `runs` Storage

@@ -129,6 +129,64 @@ class _AddFailApi extends ApiClient {
   }
 }
 
+/// One confirmed relationship the signed-in user is the CONTACT of. The
+/// opt-in state lives on the fake, not on the widget, so the switch is only
+/// ever driven by what a reload reports.
+class _ContactOfApi extends ApiClient {
+  _ContactOfApi({this.hasPhone = true, this.optInResult = true});
+
+  final bool hasPhone;
+  final bool optInResult;
+  bool optedIn = false;
+  bool withdrawn = false;
+  final List<({String id, bool optIn})> optInCalls = [];
+  final List<String> declines = [];
+  final List<String> removes = [];
+
+  @override
+  String? get userId => 'me';
+
+  @override
+  Future<List<SafetyContact>> fetchMySafetyContacts() async => const [];
+
+  @override
+  Future<List<PendingSafetyRequest>> fetchPendingSafetyRequests() async =>
+      const [];
+
+  @override
+  Future<List<SafetyContactOf>> fetchSafetyContactOf() async => withdrawn
+      ? const []
+      : [
+          SafetyContactOf(
+            id: 'rel-1',
+            ownerId: 'owner-1',
+            ownerName: 'Jordan',
+            hasPhone: hasPhone,
+            smsOptInAt: optedIn ? DateTime.utc(2026, 5, 2) : null,
+            createdAt: DateTime.utc(2026, 5, 1),
+          ),
+        ];
+
+  @override
+  Future<bool> setSafetySmsOptIn(String id, bool optIn) async {
+    optInCalls.add((id: id, optIn: optIn));
+    if (optInResult) optedIn = optIn;
+    return optInResult;
+  }
+
+  @override
+  Future<bool> declineSafetyRequest(String id) async {
+    declines.add(id);
+    withdrawn = true;
+    return true;
+  }
+
+  @override
+  Future<void> removeSafetyContact(String id) async {
+    removes.add(id);
+  }
+}
+
 /// Never resolves either load, so the loading frame is observable.
 class _HangingApi extends ApiClient {
   @override
@@ -735,6 +793,118 @@ void main() {
 
       // Reset the global flag so no later test in the file sees the toggle.
       dotenv.clean();
+    });
+  });
+
+  // The relationships the user is the CONTACT of — the only surface
+  // `set_safety_sms_opt_in` can be reached from once the confirm step is
+  // behind them (decisions 726).
+  group('SettingsSafetyScreen — you are a safety contact for', () {
+    Future<_ContactOfApi> pumpContactOf(
+      WidgetTester tester, {
+      bool hasPhone = true,
+      bool optInResult = true,
+    }) async {
+      final api = _ContactOfApi(hasPhone: hasPhone, optInResult: optInResult);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsSafetyScreen(api: api),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('You are a safety contact'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      return api;
+    }
+
+    testWidgets('names the runner and offers the SMS consent, off',
+        (tester) async {
+      await pumpContactOf(tester);
+      expect(find.text('Emergency contact for Jordan'), findsOneWidget);
+      final sms = find.widgetWithText(
+          SwitchListTile, 'Alert me by SMS as well as email');
+      expect(sms, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(sms).value, isFalse);
+    });
+
+    testWidgets('turning SMS on calls the RPC and follows the server',
+        (tester) async {
+      final api = await pumpContactOf(tester);
+      await tester.tap(find.widgetWithText(
+          SwitchListTile, 'Alert me by SMS as well as email'));
+      await tester.pumpAndSettle();
+
+      expect(api.optInCalls.length, 1);
+      expect(api.optInCalls.first.id, 'rel-1');
+      expect(api.optInCalls.first.optIn, isTrue);
+      expect(
+        tester
+            .widget<SwitchListTile>(find.widgetWithText(
+                SwitchListTile, 'Alert me by SMS as well as email'))
+            .value,
+        isTrue,
+      );
+      // Drain the banner's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('a refused write leaves the switch where the server has it',
+        (tester) async {
+      final api = await pumpContactOf(tester, optInResult: false);
+      await tester.tap(find.widgetWithText(
+          SwitchListTile, 'Alert me by SMS as well as email'));
+      await tester.pumpAndSettle();
+
+      expect(api.optInCalls.length, 1);
+      expect(
+        tester
+            .widget<SwitchListTile>(find.widgetWithText(
+                SwitchListTile, 'Alert me by SMS as well as email'))
+            .value,
+        isFalse,
+      );
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('withdrawing declines, never the owner-scoped remove',
+        (tester) async {
+      final api = await pumpContactOf(tester);
+      await tester.tap(find.widgetWithText(TextButton, 'Withdraw'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Withdraw'),
+      ));
+      await tester.pumpAndSettle();
+
+      // `removeSafetyContact` is owner-scoped since 720 — wiring the button
+      // to it would match nothing here and still report success.
+      expect(api.declines, ['rel-1']);
+      expect(api.removes, isEmpty);
+      expect(find.text('Emergency contact for Jordan'), findsNothing);
+      await tester.pump(const Duration(seconds: 6));
+    });
+
+    testWidgets('no number on file offers the note, not the toggle',
+        (tester) async {
+      await pumpContactOf(tester, hasPhone: false);
+      expect(
+        find.widgetWithText(
+            SwitchListTile, 'Alert me by SMS as well as email'),
+        findsNothing,
+      );
+      expect(
+        find.textContaining('SMS alerts need a mobile number for you'),
+        findsOneWidget,
+      );
     });
   });
 }

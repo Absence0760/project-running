@@ -848,6 +848,56 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetyConfirmSmsLabel => 'Avisar-me também por SMS';
 
   @override
+  String get safetyContactOfTitle => 'Você é contato de segurança';
+
+  @override
+  String get safetyContactOfIntro =>
+      'Estas pessoas indicaram você como contato de emergência e você confirmou. Dá para mudar como você é avisado, ou sair, quando quiser.';
+
+  @override
+  String safetyContactOfFor(String name) {
+    return 'Contato de emergência de $name';
+  }
+
+  @override
+  String get safetyContactOfSmsLabel => 'Avisar por SMS além do e-mail';
+
+  @override
+  String get safetyContactOfNoPhone =>
+      'Os avisos por SMS precisam de um número de celular seu, e nenhum está cadastrado. Os avisos por e-mail são sempre enviados.';
+
+  @override
+  String get safetyContactOfSmsOnToast => 'Avisos por SMS ativados.';
+
+  @override
+  String get safetyContactOfSmsOffToast => 'Avisos por SMS desativados.';
+
+  @override
+  String get safetyContactOfSmsNoChange =>
+      'Esse vínculo não está mais ativo — a pessoa pode tê-lo removido.';
+
+  @override
+  String safetyContactOfSmsFailed(String error) {
+    return 'Não foi possível mudar sua preferência de SMS: $error';
+  }
+
+  @override
+  String get safetyContactOfWithdraw => 'Sair';
+
+  @override
+  String get safetyContactOfWithdrawConfirm =>
+      'Deixar de ser o contato de segurança desta pessoa? Ela não poderá mais avisar você e precisaria enviar um novo pedido.';
+
+  @override
+  String get safetyContactOfWithdrawnToast =>
+      'Você não é mais contato de segurança.';
+
+  @override
+  String safetyContactOfWithdrawFailed(String error) {
+    return 'Não foi possível sair: $error';
+  }
+
+  @override
   String get safetyAddButton => 'Adicionar contato';
 
   @override
@@ -14444,6 +14494,56 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get safetyConfirmSmsLabel => 'Avisar-me também por SMS';
+
+  @override
+  String get safetyContactOfTitle => 'Você é contato de segurança';
+
+  @override
+  String get safetyContactOfIntro =>
+      'Estas pessoas indicaram você como contato de emergência e você confirmou. Dá para mudar como você é avisado, ou sair, quando quiser.';
+
+  @override
+  String safetyContactOfFor(String name) {
+    return 'Contato de emergência de $name';
+  }
+
+  @override
+  String get safetyContactOfSmsLabel => 'Avisar por SMS além do e-mail';
+
+  @override
+  String get safetyContactOfNoPhone =>
+      'Os avisos por SMS precisam de um número de celular seu, e nenhum está cadastrado. Os avisos por e-mail são sempre enviados.';
+
+  @override
+  String get safetyContactOfSmsOnToast => 'Avisos por SMS ativados.';
+
+  @override
+  String get safetyContactOfSmsOffToast => 'Avisos por SMS desativados.';
+
+  @override
+  String get safetyContactOfSmsNoChange =>
+      'Esse vínculo não está mais ativo — a pessoa pode tê-lo removido.';
+
+  @override
+  String safetyContactOfSmsFailed(String error) {
+    return 'Não foi possível mudar sua preferência de SMS: $error';
+  }
+
+  @override
+  String get safetyContactOfWithdraw => 'Sair';
+
+  @override
+  String get safetyContactOfWithdrawConfirm =>
+      'Deixar de ser o contato de segurança desta pessoa? Ela não poderá mais avisar você e precisaria enviar um novo pedido.';
+
+  @override
+  String get safetyContactOfWithdrawnToast =>
+      'Você não é mais contato de segurança.';
+
+  @override
+  String safetyContactOfWithdrawFailed(String error) {
+    return 'Não foi possível sair: $error';
+  }
 
   @override
   String get safetyAddButton => 'Adicionar contato';

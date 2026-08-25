@@ -13,8 +13,10 @@ import '../widgets/top_banner.dart';
 
 /// Settings → Safety contacts (decisions §131). Mirror of the web
 /// `/settings/safety` page: add a safety contact by email, see its
-/// pending/confirmed status, remove it, and confirm/decline incoming
-/// requests where you are the named contact.
+/// pending/confirmed status, remove it, confirm/decline incoming requests
+/// where you are the named contact, and manage the relationships you are
+/// already the confirmed contact OF — the only place the SMS consent given
+/// at confirm time can be changed or withdrawn.
 ///
 /// A safety contact is emailed when the owner finishes a run — even a
 /// private one — via a double opt-in (the owner adds an email; the
@@ -49,6 +51,11 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
   String? _respondingId;
   List<SafetyContact> _contacts = const [];
   List<PendingSafetyRequest> _pending = const [];
+  List<SafetyContactOf> _contactOf = const [];
+  // In-flight guard for the contact-of controls, kept separate from
+  // [_respondingId] so a pending-request response and a consent change can't
+  // disable each other's list.
+  String? _contactOfBusyId;
 
   // Overdue escalation (docs/features/safety.md): the universal pref
   // holding the silence window in minutes; null = escalation off
@@ -159,11 +166,13 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
     final results = await Future.wait([
       api.fetchMySafetyContacts(),
       api.fetchPendingSafetyRequests(),
+      api.fetchSafetyContactOf(),
     ]);
     if (!mounted) return;
     setState(() {
       _contacts = results[0] as List<SafetyContact>;
       _pending = results[1] as List<PendingSafetyRequest>;
+      _contactOf = results[2] as List<SafetyContactOf>;
     });
   }
 
@@ -288,6 +297,73 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
           onRetry: () => _decline(req));
     } finally {
       if (mounted) setState(() => _respondingId = null);
+    }
+  }
+
+  // The switch reads straight off the reloaded row rather than off an
+  // optimistic local flag: a consent control that shows "on" while the server
+  // still has it off is the one state this surface must never render.
+  Future<void> _setContactOfSms(SafetyContactOf rel, bool value) async {
+    final l10n = AppLocalizations.of(context);
+    final api = widget.api;
+    if (api == null || _contactOfBusyId != null) return;
+    setState(() => _contactOfBusyId = rel.id);
+    try {
+      final ok = await api.setSafetySmsOptIn(rel.id, value);
+      await _reload();
+      _banner(ok
+          ? (value
+              ? l10n.safetyContactOfSmsOnToast
+              : l10n.safetyContactOfSmsOffToast)
+          : l10n.safetyContactOfSmsNoChange);
+    } catch (e) {
+      debugPrint('safety sms opt-in failed: $e');
+      _banner(l10n.safetyContactOfSmsFailed(friendlyError(l10n, e)),
+          onRetry: () => _setContactOfSms(rel, value));
+    } finally {
+      if (mounted) setState(() => _contactOfBusyId = null);
+    }
+  }
+
+  /// Withdrawing from a relationship you are the CONTACT of is
+  /// `decline_safety_contact`, never [ApiClient.removeSafetyContact]: that one
+  /// is scoped to `owner_id` and would match no row here, reporting success
+  /// while the relationship stood (decisions 720).
+  Future<void> _withdrawContactOf(SafetyContactOf rel) async {
+    final l10n = AppLocalizations.of(context);
+    final api = widget.api;
+    if (api == null || _contactOfBusyId != null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.safetyContactOfTitle),
+        content: Text(l10n.safetyContactOfWithdrawConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(MaterialLocalizations.of(ctx).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.safetyContactOfWithdraw),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _contactOfBusyId = rel.id);
+    try {
+      final ok = await api.declineSafetyRequest(rel.id);
+      await _reload();
+      _banner(ok
+          ? l10n.safetyContactOfWithdrawnToast
+          : l10n.safetyContactOfSmsNoChange);
+    } catch (e) {
+      debugPrint('safety withdraw failed: $e');
+      _banner(l10n.safetyContactOfWithdrawFailed(friendlyError(l10n, e)),
+          onRetry: () => _withdrawContactOf(rel));
+    } finally {
+      if (mounted) setState(() => _contactOfBusyId = null);
     }
   }
 
@@ -538,6 +614,65 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                         ],
                       ),
                     ),
+                  ],
+                ],
+                if (_contactOf.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                    child: Text(
+                      l10n.safetyContactOfTitle,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Text(
+                      l10n.safetyContactOfIntro,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                  for (final rel in _contactOf) ...[
+                    ListTile(
+                      title: Text(
+                        l10n.safetyContactOfFor(
+                          (rel.ownerName == null || rel.ownerName!.isEmpty)
+                              ? l10n.safetyUnknownRunner
+                              : rel.ownerName!,
+                        ),
+                      ),
+                      trailing: TextButton(
+                        onPressed: _contactOfBusyId != null
+                            ? null
+                            : () => _withdrawContactOf(rel),
+                        style: TextButton.styleFrom(
+                            foregroundColor: theme.colorScheme.error),
+                        child: Text(l10n.safetyContactOfWithdraw),
+                      ),
+                    ),
+                    // Offered only where the runner stored a number: a
+                    // consent against no number consents to nothing, and the
+                    // RPC forces it null anyway.
+                    if (rel.hasPhone)
+                      SwitchListTile(
+                        dense: true,
+                        value: rel.isSmsOptedIn,
+                        onChanged: _contactOfBusyId != null
+                            ? null
+                            : (v) => _setContactOfSms(rel, v),
+                        title: Text(l10n.safetyContactOfSmsLabel),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Text(
+                          l10n.safetyContactOfNoPhone,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ),
                   ],
                 ],
               ],

@@ -848,6 +848,57 @@ class AppLocalizationsFr extends AppLocalizations {
   String get safetyConfirmSmsLabel => 'M\'alerter aussi par SMS';
 
   @override
+  String get safetyContactOfTitle => 'Vous êtes contact de sécurité';
+
+  @override
+  String get safetyContactOfIntro =>
+      'Ces personnes vous ont désigné comme contact d\'urgence et vous avez confirmé. Vous pouvez changer la façon dont vous êtes alerté, ou vous retirer, à tout moment.';
+
+  @override
+  String safetyContactOfFor(String name) {
+    return 'Contact d\'urgence de $name';
+  }
+
+  @override
+  String get safetyContactOfSmsLabel =>
+      'M\'alerter par SMS en plus de l\'e-mail';
+
+  @override
+  String get safetyContactOfNoPhone =>
+      'Les alertes par SMS nécessitent un numéro de mobile pour vous, et aucun n\'est enregistré. Les e-mails sont toujours envoyés.';
+
+  @override
+  String get safetyContactOfSmsOnToast => 'Alertes SMS activées.';
+
+  @override
+  String get safetyContactOfSmsOffToast => 'Alertes SMS désactivées.';
+
+  @override
+  String get safetyContactOfSmsNoChange =>
+      'Cette relation n\'est plus active — la personne l\'a probablement supprimée.';
+
+  @override
+  String safetyContactOfSmsFailed(String error) {
+    return 'Impossible de modifier votre choix SMS : $error';
+  }
+
+  @override
+  String get safetyContactOfWithdraw => 'Me retirer';
+
+  @override
+  String get safetyContactOfWithdrawConfirm =>
+      'Ne plus être le contact de sécurité de cette personne ? Elle ne pourra plus vous alerter et devrait vous envoyer une nouvelle demande.';
+
+  @override
+  String get safetyContactOfWithdrawnToast =>
+      'Vous n\'êtes plus contact de sécurité.';
+
+  @override
+  String safetyContactOfWithdrawFailed(String error) {
+    return 'Impossible de se retirer : $error';
+  }
+
+  @override
   String get safetyAddButton => 'Ajouter un contact';
 
   @override
