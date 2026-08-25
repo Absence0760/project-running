@@ -141,6 +141,15 @@ type Backend interface {
 	// the bounded per-user weekly summary from existing data.
 	IsEmailSuppressed(ctx context.Context, email string) (bool, error)
 	BuildWeeklyDigest(ctx context.Context, userID string, since time.Time) (DigestSummary, error)
+	// Art 20 export path — kind='data_export' (migration 20270603_001).
+	// The `jobs` row is the queue entry; `data_export_jobs` is the
+	// durable state the subject's status read sees, so the handler
+	// stamps it at the start of an attempt and records the outcome.
+	// GetDataExportJob returns ErrExportJobGone when the row has
+	// cascaded away with a deleted account.
+	GetDataExportJob(ctx context.Context, exportJobID string) (*ExportJobRow, error)
+	MarkDataExportRunning(ctx context.Context, exportJobID, startedAt string) error
+	FinishDataExportJob(ctx context.Context, exportJobID string, res ExportJobResult) error
 }
 
 // WebPushSender is the transport for kind='web_push' jobs. Production wires
@@ -185,7 +194,14 @@ type Config struct {
 	WorkerID       string
 	PollInterval   time.Duration // sleep between empty claims
 	HandleTimeout  time.Duration // per-job timeout
-	TransientDelay int           // seconds; defer_job's delay_seconds
+	// ExportTimeout is the per-attempt timeout for kind='data_export'
+	// only. A deep-history archive is dominated by per-object Storage
+	// fetches and does not fit the generic HandleTimeout; capping it
+	// there would make the queued rail worse than the synchronous
+	// endpoint it replaces, which had no clock at all. Zero falls back
+	// to ExportJobTimeout.
+	ExportTimeout  time.Duration
+	TransientDelay int // seconds; defer_job's delay_seconds
 }
 
 // Worker drains background jobs forever. Stops when ctx is
@@ -230,6 +246,13 @@ type Worker struct {
 	// missing SMS provider never suppresses the alert. Wired in main.go when
 	// SMS_PROVIDER + the provider credentials are all set.
 	Sms SmsSender
+	// DataExport builds the archive for kind='data_export' jobs. Nil
+	// disables the path — unlike the optional transports above, the
+	// handler then FAILS the export row rather than finishing quietly,
+	// because a subject is waiting on a status that would otherwise say
+	// `queued` for ever. Wired in main.go whenever the export endpoint
+	// is (both need the same service-role Storage access).
+	DataExport DataExportBuilder
 	// AppBaseURL is the web origin used to build deep links + the
 	// unsubscribe URL in rendered email (APP_BASE_URL). Empty falls back
 	// to relative-looking links; production sets it.
@@ -311,7 +334,7 @@ func (w *Worker) Run(ctx context.Context) error {
 // process start because attempts < max_attempts and locked_at can be
 // reaped by an external watchdog (out of scope for v1).
 func (w *Worker) handle(ctx context.Context, job *Job) {
-	jobCtx, cancel := context.WithTimeout(ctx, w.Config.HandleTimeout)
+	jobCtx, cancel := context.WithTimeout(ctx, w.handleTimeoutFor(job.Kind))
 	defer cancel()
 
 	logger := w.Log.With("job_id", job.ID, "kind", job.Kind, "attempt", job.Attempts)
@@ -353,8 +376,27 @@ func (w *Worker) handle(ctx context.Context, job *Job) {
 	logger.Error("job failed", "err", err)
 }
 
-// dispatch picks the per-kind handler. New job types (strava-webhook,
-// data-export per roadmap §214) plug in here.
+// handleTimeoutFor is the per-attempt clock. Every kind takes the
+// generic HandleTimeout except `data_export` — see Config.ExportTimeout.
+// The zero-checks live here rather than only in Run so a handler driven
+// directly (tests, a future one-shot runner) gets the same bounds.
+func (w *Worker) handleTimeoutFor(kind string) time.Duration {
+	if kind == "data_export" {
+		if w.Config.ExportTimeout > 0 {
+			return w.Config.ExportTimeout
+		}
+		return ExportJobTimeout
+	}
+	if w.Config.HandleTimeout > 0 {
+		return w.Config.HandleTimeout
+	}
+	return 5 * time.Minute
+}
+
+// dispatch picks the per-kind handler. New job types plug in here —
+// alongside a migration widening `jobs_kind_chk` and a case in
+// `apps/backend/supabase/tests/jobs_kind_allowlist_test.sql`, the
+// three-file rule migration 20260822_001 documents.
 func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 	switch job.Kind {
 	case "map_match":
@@ -385,6 +427,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleWeeklyDigest(ctx, job)
 	case "lifecycle_drip":
 		return w.handleLifecycleDrip(ctx, job)
+	case "data_export":
+		return w.handleDataExport(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

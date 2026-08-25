@@ -154,7 +154,16 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // no lock on `runs`; the unschedule writes one row of the small cron.job table.
 // No constraint, no guarded-table DDL, so the scanner passes it with zero
 // violations after this bump too.
-export const GRANDFATHER_CUTOFF = '20270602';
+//
+// Bumped to 20270603 for 20270603_001_async_data_export.sql, which DOES touch a
+// guarded table: it widens `jobs_kind_chk` for the new `data_export` kind. It
+// takes the NOT VALID + VALIDATE two-step, so it would pass the scanner on its
+// merits — the bump is the max-version bookkeeping this file's own test
+// enforces, not an exemption. Worth noting for whoever adds the next job kind:
+// every earlier kind migration used the single-step drop-and-recreate, which is
+// a full scan of the queue under ACCESS EXCLUSIVE for a widen that cannot
+// invalidate a single existing row. Those are grandfathered; new ones are not.
+export const GRANDFATHER_CUTOFF = '20270603';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

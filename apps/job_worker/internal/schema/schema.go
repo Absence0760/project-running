@@ -37,6 +37,7 @@ const (
 	TableIntegrations            = "integrations"
 	TableWebhookEvents           = "webhook_events"
 	TableJobs                    = "jobs"
+	TableDataExportJobs          = "data_export_jobs"
 	TableUserProfiles            = "user_profiles"
 	TableUserSettings            = "user_settings"
 	TableUserDeviceSettings      = "user_device_settings"

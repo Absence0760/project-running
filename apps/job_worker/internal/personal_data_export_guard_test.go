@@ -64,6 +64,12 @@ var exportGuardExclusions = map[string]string{
 	// deletion (Art 17) instead — see the delete-account EF.
 	"rate_limits":         "operational throttle counters; drained on deletion, not part of an Art 20 export",
 	"lifecycle_email_log": "internal send-once guard for transactional mail; operational, not Art 20 portable data",
+	// The state of the subject's own export REQUESTS (queued/running/
+	// ready, the artifact's Storage key, a failure code) — metadata about
+	// fulfilling an Art 20 request rather than data the subject provided,
+	// and shipping it inside the archive it describes would be circular.
+	// Cascades away with the account (Art 17) via its auth.users FK.
+	"data_export_jobs": "state of the subject's own Art 20 export requests; operational fulfilment metadata, not portable data they provided — cascades away on deletion",
 
 	// Internal access-control allow-list, not subject-provided personal data:
 	// admin status is controller-assigned (an org decision, not data the user

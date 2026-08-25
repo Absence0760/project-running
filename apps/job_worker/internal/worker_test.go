@@ -19,6 +19,11 @@ import (
 // fakeBackend records every call so tests can pin the worker's
 // finish/defer/upload behaviour without a real Supabase. Pure data —
 // no network, no goroutines — so tests run in milliseconds.
+type exportFinishCall struct {
+	id  string
+	res ExportJobResult
+}
+
 type fakeBackend struct {
 	mu sync.Mutex
 
@@ -59,6 +64,15 @@ type fakeBackend struct {
 	// defer_job RPC return). Empty → "queued"; set to "failed" to
 	// simulate the worker deferring a job whose retry budget is spent.
 	deferStatus string
+
+	// data_export job state. `exportJobs` is the fake table; the two
+	// slices record what the handler did to it.
+	exportJobs           map[string]*ExportJobRow
+	exportRunningMarks   []string
+	exportFinishes       []exportFinishCall
+	getExportJobErr      error
+	markExportRunningErr error
+	finishExportJobErr   error
 
 	// downloadDelay, when non-zero, makes DownloadTrack block for
 	// that duration OR until the caller's context is cancelled.
@@ -149,11 +163,11 @@ type fakeBackend struct {
 	isAlreadyImportedErr error
 	// nearIdentities feeds FetchRunIdentitiesNear — the cross-provider
 	// dedupe guard's view of existing runs near a candidate's start.
-	nearIdentities    []RunIdentity
-	nearIdentitiesErr error
-	insertStravaRunErr   error
-	webhookEvents        map[string]bool
-	insertWebhookErr     error
+	nearIdentities     []RunIdentity
+	nearIdentitiesErr  error
+	insertStravaRunErr error
+	webhookEvents      map[string]bool
+	insertWebhookErr   error
 	// strava_event outputs
 	insertedStravaRuns []insertedStravaRun
 	trackURLPatches    []trackURLPatch
@@ -548,6 +562,43 @@ func (f *fakeBackend) BuildWeeklyDigest(_ context.Context, userID string, _ time
 		return DigestSummary{}, err
 	}
 	return f.digestByUser[userID], nil
+}
+
+// ─────────────── data_export job state (20270603_001) ───────────────
+
+func (f *fakeBackend) GetDataExportJob(_ context.Context, exportJobID string) (*ExportJobRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.getExportJobErr != nil {
+		return nil, f.getExportJobErr
+	}
+	row, ok := f.exportJobs[exportJobID]
+	if !ok {
+		return nil, ErrExportJobGone
+	}
+	copied := *row
+	return &copied, nil
+}
+
+func (f *fakeBackend) MarkDataExportRunning(_ context.Context, exportJobID, startedAt string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.exportRunningMarks = append(f.exportRunningMarks, exportJobID)
+	if f.markExportRunningErr != nil {
+		return f.markExportRunningErr
+	}
+	if row, ok := f.exportJobs[exportJobID]; ok {
+		row.Status = "running"
+		row.StartedAt = startedAt
+	}
+	return nil
+}
+
+func (f *fakeBackend) FinishDataExportJob(_ context.Context, exportJobID string, res ExportJobResult) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.exportFinishes = append(f.exportFinishes, exportFinishCall{id: exportJobID, res: res})
+	return f.finishExportJobErr
 }
 
 func (f *fakeBackend) DownloadTrack(ctx context.Context, path string) ([]TrackPoint, error) {
