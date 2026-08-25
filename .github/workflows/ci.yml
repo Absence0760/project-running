@@ -336,10 +336,10 @@ jobs:
             exit 1
           fi
       # deno.lock's `workspace` section is generated from the npm workspace's
-      # package.json files, and drifted on every web dep bump for four months
-      # because nothing looked — five hand-sync commits, plus a half-synced
-      # lockfile left in the shared working tree between two of them. Belongs
-      # in this job rather than edge-functions: it is a
+      # package.json files, and drifted on every web dep bump because nothing
+      # looked — six hand-sync commits between 2026-05 and 2026-07, each a
+      # session that had to work out what the file was first (decisions § 706).
+      # Belongs in this job rather than edge-functions: it is a
       # generated-artifact-matches-its-source check like gen:types:check below
       # it, it costs ~1 s, and it must not sit behind a Docker stack start that
       # can fail first and take the signal with it.
