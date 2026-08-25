@@ -17,6 +17,7 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { effective, loadSettings, updateUniversal } from '$lib/settings/settings';
 	import { isOffRouteEscalationEnabled } from '$lib/safety/off_route_flag';
+	import { normaliseE164 } from '$lib/safety/e164';
 
 	let contacts = $state<SafetyContact[]>([]);
 	let pending = $state<PendingSafetyRequest[]>([]);
@@ -36,8 +37,6 @@
 	// Mirror the server-side CHECK so the user gets an inline message before
 	// a round trip that would 23514.
 	const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-	// Mirror the E.164 CHECK on safety_contacts.contact_phone.
-	const phoneRe = /^\+[1-9][0-9]{6,14}$/;
 
 	async function reload() {
 		const [c, p] = await Promise.all([
@@ -99,14 +98,17 @@
 			showToast(m('safety.invalidEmail'), 'error');
 			return;
 		}
-		const phoneValue = phone.trim();
-		if (phoneValue && !phoneRe.test(phoneValue)) {
+		// A pasted `+44 7700 900123` is a valid number that is merely
+		// punctuated; normalise before grading so only a genuinely
+		// unreachable entry is refused.
+		const phoneValue = normaliseE164(phone);
+		if (phone.trim() && phoneValue === null) {
 			showToast(m('safety.invalidPhone'), 'error');
 			return;
 		}
 		adding = true;
 		try {
-			await addSafetyContact(value, phoneValue || null);
+			await addSafetyContact(value, phoneValue);
 			email = '';
 			phone = '';
 			await reload();

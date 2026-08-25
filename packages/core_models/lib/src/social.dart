@@ -410,30 +410,53 @@ class ClubPin {
 /// settings list shows — never `confirm_token` (the email-link capability) or
 /// `owner_id`. `confirmedAt == null` means pending (the contact hasn't opted
 /// in yet, so no finish alerts are sent).
+///
+/// [contactPhone] and [smsOptInAt] are the two halves of the SMS escalation
+/// leg (migration `20270410_001`): the owner stores the number, the CONTACT
+/// consents to being texted. Both are required before an SMS is ever
+/// enqueued, which is why [isSmsReachable] reads them together — a stored
+/// number on its own reaches nobody.
 class SafetyContact {
   final String id;
   final String contactEmail;
+  final String? contactPhone;
   final String? contactUserId;
   final DateTime? confirmedAt;
+  final DateTime? smsOptInAt;
   final DateTime createdAt;
 
   const SafetyContact({
     required this.id,
     required this.contactEmail,
+    this.contactPhone,
     this.contactUserId,
     this.confirmedAt,
+    this.smsOptInAt,
     required this.createdAt,
   });
 
   bool get isConfirmed => confirmedAt != null;
 
+  /// Whether an overdue alert would actually reach this contact by SMS. The
+  /// scan's join requires all three, so anything less is email-only.
+  bool get isSmsReachable =>
+      isConfirmed && contactPhone != null && smsOptInAt != null;
+
+  /// A number is on file but the contact has not consented to SMS — the
+  /// state the owner must not read as "SMS is on".
+  bool get isSmsAwaitingOptIn => contactPhone != null && smsOptInAt == null;
+
   factory SafetyContact.fromJson(Map<String, dynamic> json) => SafetyContact(
         id: json['id'] as String,
         contactEmail: json['contact_email'] as String,
+        contactPhone: json['contact_phone'] as String?,
         contactUserId: json['contact_user_id'] as String?,
         confirmedAt: json['confirmed_at'] == null
             ? null
             : DateTime.parse(json['confirmed_at'] as String),
+        smsOptInAt: json['sms_opt_in_at'] == null
+            ? null
+            : DateTime.parse(json['sms_opt_in_at'] as String),
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 }
@@ -446,11 +469,18 @@ class SafetyContact {
 class PendingSafetyRequest {
   final String id;
   final String ownerName;
+
+  /// Whether the owner stored a phone number for this relationship. The RPC
+  /// reports the FACT, never the number — so the confirm surface can offer
+  /// the SMS opt-in only where it would do something, without disclosing a
+  /// third party's phone to the person being asked.
+  final bool hasPhone;
   final DateTime createdAt;
 
   const PendingSafetyRequest({
     required this.id,
     required this.ownerName,
+    this.hasPhone = false,
     required this.createdAt,
   });
 
@@ -458,6 +488,7 @@ class PendingSafetyRequest {
       PendingSafetyRequest(
         id: json['id'] as String,
         ownerName: (json['owner_name'] as String?) ?? '',
+        hasPhone: json['has_phone'] == true,
         createdAt: DateTime.parse(json['created_at'] as String),
       );
 }

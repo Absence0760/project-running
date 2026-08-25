@@ -1069,6 +1069,30 @@
   "@safetyAddHint": {
     "description": "Example email placeholder in the add-safety-contact input; the local part is localized, the example.com domain is RFC 2606 reserved and must stay"
   },
+  "safetyPhoneLabel": "Phone for SMS (optional)",
+  "@safetyPhoneLabel": {
+    "description": "Label for the optional safety-contact phone input (E.164 international format)"
+  },
+  "safetyPhoneHint": "Add a mobile number and this contact can also be alerted by SMS — they choose whether to when they confirm. Alerts by email are always sent.",
+  "@safetyPhoneHint": {
+    "description": "Hint under the add-contact form explaining that SMS is additive and needs the contact’s own consent"
+  },
+  "safetyInvalidPhone": "Enter the phone in international format, e.g. +447700900123.",
+  "@safetyInvalidPhone": {
+    "description": "Inline validation banner when the typed phone cannot be read as an international number"
+  },
+  "safetySmsBadge": "SMS on",
+  "@safetySmsBadge": {
+    "description": "Badge on a safety contact who has a number on file AND opted in to SMS"
+  },
+  "safetySmsPending": "SMS off — they haven't opted in yet",
+  "@safetySmsPending": {
+    "description": "Shown on a safety contact with a number on file whose owner has not consented to SMS; the alert reaches them by email only"
+  },
+  "safetyConfirmSmsLabel": "Also alert me by SMS",
+  "@safetyConfirmSmsLabel": {
+    "description": "Checkbox on an incoming safety-contact request, offered only when the requester stored a phone number"
+  },
   "safetyAddButton": "Add contact",
   "@safetyAddButton": {
     "description": "Button to add a safety contact"
@@ -1827,6 +1851,70 @@
   "runLiveShareStop": "Stop sharing",
   "@runLiveShareStop": {
     "description": "Action that stops the live-tracking share without ending the run"
+  },
+  "runLiveShareExpectedReturn": "Not back by…",
+  "@runLiveShareExpectedReturn": {
+    "description": "Live-share sheet action opening the per-run expected-return control"
+  },
+  "runExpectedReturnTitle": "Not back by…",
+  "@runExpectedReturnTitle": {
+    "description": "Title of the per-run expected-return dialog"
+  },
+  "runExpectedReturnIntro": "Pick when you expect to be done. If this run is still going then, your confirmed safety contacts get one alert with your live link.",
+  "@runExpectedReturnIntro": {
+    "description": "Intro in the expected-return dialog"
+  },
+  "runExpectedReturnServerNote": "The deadline is kept on the server, so it still counts if this phone dies. It clears when the run saves — a run that finishes with no signal can still alert until it syncs.",
+  "@runExpectedReturnServerNote": {
+    "description": "Honesty note in the expected-return dialog: the alarm survives the app being killed, and a run saved offline can still escalate"
+  },
+  "runExpectedReturnOptionMinutes": "In {minutes} min",
+  "@runExpectedReturnOptionMinutes": {
+    "description": "Expected-return option expressed in minutes from now",
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "runExpectedReturnOptionHours": "{hours, plural, =1{In 1 hour} other{In {hours} hours}}",
+  "@runExpectedReturnOptionHours": {
+    "description": "Expected-return option expressed in hours from now",
+    "placeholders": {
+      "hours": { "type": "int" }
+    }
+  },
+  "runExpectedReturnBy": "Back by {time}",
+  "@runExpectedReturnBy": {
+    "description": "Subtitle under an expected-return option showing the resulting local clock time",
+    "placeholders": {
+      "time": { "type": "String" }
+    }
+  },
+  "runExpectedReturnActive": "Alert set for {time}.",
+  "@runExpectedReturnActive": {
+    "description": "Shown in the expected-return dialog when an alarm is already armed",
+    "placeholders": {
+      "time": { "type": "String" }
+    }
+  },
+  "runExpectedReturnClear": "Clear the alert",
+  "@runExpectedReturnClear": {
+    "description": "Button clearing an armed expected-return alarm"
+  },
+  "runExpectedReturnSetToast": "Return-time alert set.",
+  "@runExpectedReturnSetToast": {
+    "description": "Banner after arming the expected-return alarm"
+  },
+  "runExpectedReturnClearedToast": "Return-time alert cleared.",
+  "@runExpectedReturnClearedToast": {
+    "description": "Banner after clearing the expected-return alarm"
+  },
+  "runExpectedReturnFailed": "Could not update the return-time alert.",
+  "@runExpectedReturnFailed": {
+    "description": "Banner when the expected-return write failed or was refused"
+  },
+  "runExpectedReturnUnavailable": "Could not reach the server to set a return-time alert.",
+  "@runExpectedReturnUnavailable": {
+    "description": "Banner when the expected-return state could not be read; the alarm lives on the server so it cannot be set offline"
   },
   "runLiveShareStopped": "Live sharing stopped",
   "@runLiveShareStopped": {

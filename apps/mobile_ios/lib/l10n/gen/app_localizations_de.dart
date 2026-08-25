@@ -830,6 +830,26 @@ class AppLocalizationsDe extends AppLocalizations {
   String get safetyAddHint => 'partner@example.com';
 
   @override
+  String get safetyPhoneLabel => 'Telefon für SMS (optional)';
+
+  @override
+  String get safetyPhoneHint =>
+      'Füge eine Mobilnummer hinzu, dann kann dieser Kontakt auch per SMS benachrichtigt werden – ob er das möchte, entscheidet er bei der Bestätigung. E-Mail-Benachrichtigungen werden immer gesendet.';
+
+  @override
+  String get safetyInvalidPhone =>
+      'Gib die Nummer im internationalen Format ein, z. B. +447700900123.';
+
+  @override
+  String get safetySmsBadge => 'SMS aktiv';
+
+  @override
+  String get safetySmsPending => 'SMS inaktiv – noch nicht zugestimmt';
+
+  @override
+  String get safetyConfirmSmsLabel => 'Mich auch per SMS benachrichtigen';
+
+  @override
   String get safetyAddButton => 'Kontakt hinzufügen';
 
   @override
@@ -1425,6 +1445,63 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runLiveShareStop => 'Teilen beenden';
+
+  @override
+  String get runLiveShareExpectedReturn => 'Nicht zurück bis …';
+
+  @override
+  String get runExpectedReturnTitle => 'Nicht zurück bis …';
+
+  @override
+  String get runExpectedReturnIntro =>
+      'Wähle, wann du fertig sein willst. Läuft dieser Lauf dann noch, erhalten deine bestätigten Sicherheitskontakte eine Benachrichtigung mit deinem Live-Link.';
+
+  @override
+  String get runExpectedReturnServerNote =>
+      'Die Frist liegt auf dem Server und gilt auch, wenn dieses Telefon ausfällt. Sie endet, sobald der Lauf gespeichert ist – ein ohne Empfang beendeter Lauf kann bis zur Synchronisierung noch auslösen.';
+
+  @override
+  String runExpectedReturnOptionMinutes(int minutes) {
+    return 'In $minutes Min.';
+  }
+
+  @override
+  String runExpectedReturnOptionHours(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: 'In $hours Stunden',
+      one: 'In 1 Stunde',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runExpectedReturnBy(String time) {
+    return 'Zurück bis $time';
+  }
+
+  @override
+  String runExpectedReturnActive(String time) {
+    return 'Alarm gesetzt für $time.';
+  }
+
+  @override
+  String get runExpectedReturnClear => 'Alarm löschen';
+
+  @override
+  String get runExpectedReturnSetToast => 'Rückkehr-Alarm gesetzt.';
+
+  @override
+  String get runExpectedReturnClearedToast => 'Rückkehr-Alarm gelöscht.';
+
+  @override
+  String get runExpectedReturnFailed =>
+      'Rückkehr-Alarm konnte nicht aktualisiert werden.';
+
+  @override
+  String get runExpectedReturnUnavailable =>
+      'Server nicht erreichbar – Rückkehr-Alarm kann nicht gesetzt werden.';
 
   @override
   String get runLiveShareStopped => 'Live-Teilen beendet';
