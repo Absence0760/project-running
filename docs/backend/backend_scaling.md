@@ -19,7 +19,18 @@ This was the right choice for Phase 1: it handles CRUD, auth, and storage with z
 
 ---
 
-## Architectural issues to fix before scaling
+## Architectural issues to fix before scaling — all six are closed
+
+**Read this section as history, not as a work list.** Every heading below is phrased in the present
+tense of early 2026 and every one of them is now false as a statement about the running system: the
+JSONB tracks moved, PostGIS landed twice, the PR scan became a trigger-maintained cache, the OAuth
+tokens went into Vault, and rate limiting plus webhook authentication shipped. § 4 is the one that
+closed by being *withdrawn* rather than built — the matview it proposed existed for 422 migrations,
+was never read, and was dropped. Each section keeps its original Problem / Fix / When text so the
+reasoning survives, followed by a **Shipped** (or **Status**) note recording what actually landed and
+where it diverged. Do not copy the SQL snippets: several of them describe a shape that was
+deliberately not taken.
+
 
 ### 1. GPS tracks stored as JSONB in the `runs` table
 
