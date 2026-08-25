@@ -163,7 +163,12 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // every earlier kind migration used the single-step drop-and-recreate, which is
 // a full scan of the queue under ACCESS EXCLUSIVE for a widen that cannot
 // invalidate a single existing row. Those are grandfathered; new ones are not.
-export const GRANDFATHER_CUTOFF = '20270603';
+//
+// Bumped to 20270605 for 20270605_001_withdraw_health_consent_keeps_age_record.sql,
+// which is a bare `create or replace function` body (plus its grant/revoke pair)
+// on top of 20270418_001 — no table DDL of any kind and no constraint, so the
+// scanner passes it with zero violations after this bump too.
+export const GRANDFATHER_CUTOFF = '20270605';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
