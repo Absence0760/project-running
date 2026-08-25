@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { browserDayAt } from '../fixtures/dates';
 import { deleteRun, insertRun, withCleanCurrentWeek } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
@@ -23,12 +24,11 @@ test.describe('/dashboard This Week strip', () => {
 		// strip total + today's cell reflect ONLY our inserted run.
 		const restoreWeek = await withCleanCurrentWeek(USER_A.id);
 
-		// 06:00 local today, 7.50 km — well inside the current calendar week.
-		const today = new Date();
-		today.setHours(6, 0, 0, 0);
+		// 06:00 on the BROWSER's today, 7.50 km — the strip buckets onto the
+		// day the page resolves, not the day the runner's zone names.
 		const runId = await insertRun({
 			user_id: USER_A.id,
-			started_at: today.toISOString(),
+			started_at: browserDayAt(0, 6),
 			duration_s: 35 * 60,
 			distance_m: 7500,
 		});
