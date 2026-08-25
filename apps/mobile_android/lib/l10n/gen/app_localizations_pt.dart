@@ -1445,6 +1445,64 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runLiveShareStop => 'Parar partilha';
 
   @override
+  String get runLiveShareExpectedReturn => 'Sem voltar até…';
+
+  @override
+  String get runExpectedReturnTitle => 'Sem voltar até…';
+
+  @override
+  String get runExpectedReturnIntro =>
+      'Escolha a que horas espera terminar. Se esta atividade ainda estiver a decorrer, os seus contactos de segurança confirmados recebem um aviso com a sua ligação em direto.';
+
+  @override
+  String get runExpectedReturnServerNote =>
+      'O prazo fica guardado no servidor, por isso continua a contar mesmo que este telemóvel falhe. É limpo quando a atividade é guardada — uma atividade terminada sem rede ainda pode avisar até sincronizar.';
+
+  @override
+  String runExpectedReturnOptionMinutes(int minutes) {
+    return 'Dentro de $minutes min';
+  }
+
+  @override
+  String runExpectedReturnOptionHours(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: 'Dentro de $hours horas',
+      one: 'Dentro de 1 hora',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runExpectedReturnBy(String time) {
+    return 'De volta às $time';
+  }
+
+  @override
+  String runExpectedReturnActive(String time) {
+    return 'Aviso definido para as $time.';
+  }
+
+  @override
+  String get runExpectedReturnClear => 'Limpar o aviso';
+
+  @override
+  String get runExpectedReturnSetToast => 'Aviso de hora de regresso definido.';
+
+  @override
+  String get runExpectedReturnClearedToast =>
+      'Aviso de hora de regresso limpo.';
+
+  @override
+  String get runExpectedReturnFailed =>
+      'Não foi possível atualizar o aviso de hora de regresso.';
+
+  @override
+  String get runExpectedReturnUnavailable =>
+      'Servidor inacessível — não é possível definir o aviso de hora de regresso.';
+
+  @override
   String get runLiveShareStopped => 'Partilha em direto terminada';
 
   @override
@@ -14907,6 +14965,64 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runLiveShareStop => 'Parar de compartilhar';
+
+  @override
+  String get runLiveShareExpectedReturn => 'Sem voltar até…';
+
+  @override
+  String get runExpectedReturnTitle => 'Sem voltar até…';
+
+  @override
+  String get runExpectedReturnIntro =>
+      'Escolha a que horas espera terminar. Se esta atividade ainda estiver em andamento, seus contatos de segurança confirmados recebem um aviso com seu link ao vivo.';
+
+  @override
+  String get runExpectedReturnServerNote =>
+      'O prazo fica no servidor, então continua valendo mesmo se este celular parar. Ele é limpo quando a atividade é salva — uma atividade concluída sem sinal ainda pode avisar até sincronizar.';
+
+  @override
+  String runExpectedReturnOptionMinutes(int minutes) {
+    return 'Em $minutes min';
+  }
+
+  @override
+  String runExpectedReturnOptionHours(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: 'Em $hours horas',
+      one: 'Em 1 hora',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runExpectedReturnBy(String time) {
+    return 'De volta às $time';
+  }
+
+  @override
+  String runExpectedReturnActive(String time) {
+    return 'Aviso definido para $time.';
+  }
+
+  @override
+  String get runExpectedReturnClear => 'Limpar o aviso';
+
+  @override
+  String get runExpectedReturnSetToast => 'Aviso de horário de volta definido.';
+
+  @override
+  String get runExpectedReturnClearedToast =>
+      'Aviso de horário de volta limpo.';
+
+  @override
+  String get runExpectedReturnFailed =>
+      'Não foi possível atualizar o aviso de horário de volta.';
+
+  @override
+  String get runExpectedReturnUnavailable =>
+      'Servidor inacessível — não é possível definir o aviso de horário de volta.';
 
   @override
   String get runLiveShareStopped => 'Compartilhamento ao vivo encerrado';

@@ -50,13 +50,24 @@ void main() {
     expect(taps, 1);
   });
 
-  testWidgets('sheet renders the title and both actions', (tester) async {
+  testWidgets('sheet renders the title and all three actions', (tester) async {
     await _pumpSheetHost(tester, onResolved: (_) {});
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('Live sharing on'), findsOneWidget);
     expect(find.text('Share link again'), findsOneWidget);
+    expect(find.text('Not back by…'), findsOneWidget);
     expect(find.text('Stop sharing'), findsOneWidget);
+  });
+
+  testWidgets('picking "Not back by…" resolves expectedReturn', (tester) async {
+    LiveShareAction? resolved;
+    await _pumpSheetHost(tester, onResolved: (a) => resolved = a);
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not back by…'));
+    await tester.pumpAndSettle();
+    expect(resolved, LiveShareAction.expectedReturn);
   });
 
   testWidgets('picking "Share link again" resolves reshare', (tester) async {

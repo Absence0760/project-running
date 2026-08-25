@@ -1444,6 +1444,64 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runLiveShareStop => 'Dejar de compartir';
 
   @override
+  String get runLiveShareExpectedReturn => 'Sin volver a las…';
+
+  @override
+  String get runExpectedReturnTitle => 'Sin volver a las…';
+
+  @override
+  String get runExpectedReturnIntro =>
+      'Elige cuándo esperas terminar. Si esta actividad sigue en marcha entonces, tus contactos de seguridad confirmados recibirán un aviso con tu enlace en directo.';
+
+  @override
+  String get runExpectedReturnServerNote =>
+      'El plazo se guarda en el servidor, así que sigue contando aunque este teléfono se apague. Se borra cuando la actividad se guarda: una actividad terminada sin cobertura puede avisar hasta que se sincronice.';
+
+  @override
+  String runExpectedReturnOptionMinutes(int minutes) {
+    return 'En $minutes min';
+  }
+
+  @override
+  String runExpectedReturnOptionHours(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: 'En $hours horas',
+      one: 'En 1 hora',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runExpectedReturnBy(String time) {
+    return 'De vuelta a las $time';
+  }
+
+  @override
+  String runExpectedReturnActive(String time) {
+    return 'Alerta activada para las $time.';
+  }
+
+  @override
+  String get runExpectedReturnClear => 'Borrar la alerta';
+
+  @override
+  String get runExpectedReturnSetToast => 'Alerta de hora de vuelta activada.';
+
+  @override
+  String get runExpectedReturnClearedToast =>
+      'Alerta de hora de vuelta borrada.';
+
+  @override
+  String get runExpectedReturnFailed =>
+      'No se pudo actualizar la alerta de hora de vuelta.';
+
+  @override
+  String get runExpectedReturnUnavailable =>
+      'No se pudo contactar con el servidor para activar la alerta.';
+
+  @override
   String get runLiveShareStopped => 'Se dejó de compartir en vivo';
 
   @override

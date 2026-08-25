@@ -2495,6 +2495,84 @@ abstract class AppLocalizations {
   /// **'Stop sharing'**
   String get runLiveShareStop;
 
+  /// Live-share sheet action opening the per-run expected-return control
+  ///
+  /// In en, this message translates to:
+  /// **'Not back by…'**
+  String get runLiveShareExpectedReturn;
+
+  /// Title of the per-run expected-return dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Not back by…'**
+  String get runExpectedReturnTitle;
+
+  /// Intro in the expected-return dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Pick when you expect to be done. If this run is still going then, your confirmed safety contacts get one alert with your live link.'**
+  String get runExpectedReturnIntro;
+
+  /// Honesty note in the expected-return dialog: the alarm survives the app being killed, and a run saved offline can still escalate
+  ///
+  /// In en, this message translates to:
+  /// **'The deadline is kept on the server, so it still counts if this phone dies. It clears when the run saves — a run that finishes with no signal can still alert until it syncs.'**
+  String get runExpectedReturnServerNote;
+
+  /// Expected-return option expressed in minutes from now
+  ///
+  /// In en, this message translates to:
+  /// **'In {minutes} min'**
+  String runExpectedReturnOptionMinutes(int minutes);
+
+  /// Expected-return option expressed in hours from now
+  ///
+  /// In en, this message translates to:
+  /// **'{hours, plural, =1{In 1 hour} other{In {hours} hours}}'**
+  String runExpectedReturnOptionHours(int hours);
+
+  /// Subtitle under an expected-return option showing the resulting local clock time
+  ///
+  /// In en, this message translates to:
+  /// **'Back by {time}'**
+  String runExpectedReturnBy(String time);
+
+  /// Shown in the expected-return dialog when an alarm is already armed
+  ///
+  /// In en, this message translates to:
+  /// **'Alert set for {time}.'**
+  String runExpectedReturnActive(String time);
+
+  /// Button clearing an armed expected-return alarm
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the alert'**
+  String get runExpectedReturnClear;
+
+  /// Banner after arming the expected-return alarm
+  ///
+  /// In en, this message translates to:
+  /// **'Return-time alert set.'**
+  String get runExpectedReturnSetToast;
+
+  /// Banner after clearing the expected-return alarm
+  ///
+  /// In en, this message translates to:
+  /// **'Return-time alert cleared.'**
+  String get runExpectedReturnClearedToast;
+
+  /// Banner when the expected-return write failed or was refused
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update the return-time alert.'**
+  String get runExpectedReturnFailed;
+
+  /// Banner when the expected-return state could not be read; the alarm lives on the server so it cannot be set offline
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the server to set a return-time alert.'**
+  String get runExpectedReturnUnavailable;
+
   /// Confirmation banner shown after the runner stops the live-tracking share mid-run
   ///
   /// In en, this message translates to:

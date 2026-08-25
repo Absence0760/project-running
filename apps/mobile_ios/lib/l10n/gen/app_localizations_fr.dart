@@ -1449,6 +1449,64 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runLiveShareStop => 'Arrêter le partage';
 
   @override
+  String get runLiveShareExpectedReturn => 'Pas rentré à…';
+
+  @override
+  String get runExpectedReturnTitle => 'Pas rentré à…';
+
+  @override
+  String get runExpectedReturnIntro =>
+      'Choisissez l’heure à laquelle vous pensez avoir fini. Si cette activité est toujours en cours, vos contacts de sécurité confirmés recevront une alerte avec votre lien en direct.';
+
+  @override
+  String get runExpectedReturnServerNote =>
+      'L’échéance est conservée sur le serveur : elle vaut même si ce téléphone lâche. Elle disparaît à l’enregistrement de l’activité — une activité terminée sans réseau peut encore alerter jusqu’à la synchronisation.';
+
+  @override
+  String runExpectedReturnOptionMinutes(int minutes) {
+    return 'Dans $minutes min';
+  }
+
+  @override
+  String runExpectedReturnOptionHours(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: 'Dans $hours heures',
+      one: 'Dans 1 heure',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runExpectedReturnBy(String time) {
+    return 'De retour à $time';
+  }
+
+  @override
+  String runExpectedReturnActive(String time) {
+    return 'Alerte réglée sur $time.';
+  }
+
+  @override
+  String get runExpectedReturnClear => 'Supprimer l’alerte';
+
+  @override
+  String get runExpectedReturnSetToast => 'Alerte d’heure de retour réglée.';
+
+  @override
+  String get runExpectedReturnClearedToast =>
+      'Alerte d’heure de retour supprimée.';
+
+  @override
+  String get runExpectedReturnFailed =>
+      'Impossible de mettre à jour l’alerte d’heure de retour.';
+
+  @override
+  String get runExpectedReturnUnavailable =>
+      'Serveur injoignable — impossible de régler l’alerte d’heure de retour.';
+
+  @override
   String get runLiveShareStopped => 'Partage en direct arrêté';
 
   @override

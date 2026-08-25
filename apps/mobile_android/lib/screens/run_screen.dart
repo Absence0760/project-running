@@ -66,6 +66,7 @@ import '../training_service.dart';
 import '../widgets/collapsible_panel.dart';
 import '../widgets/ghost_pacer.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/expected_return_dialog.dart';
 import '../widgets/live_share_indicator.dart';
 import '../widgets/safety_nudge_banner.dart';
 import '../widgets/todays_workout_card.dart';
@@ -1379,8 +1380,62 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     switch (action) {
       case LiveShareAction.reshare:
         await _shareLiveLink();
+      case LiveShareAction.expectedReturn:
+        await _setExpectedReturn();
       case LiveShareAction.stop:
         await _stopLiveShare();
+    }
+  }
+
+  /// The per-run "not back by X" deadline (docs/features/safety.md,
+  /// decisions §240). Arming it is the one safety control that keeps working
+  /// after this phone stops: the deadline is written to the run row and the
+  /// server-side overdue scan reads it, so an app the OS killed, a dead
+  /// battery or a destroyed handset all leave the alert standing — which is
+  /// exactly the "never came home" case the net exists for.
+  ///
+  /// Because the alarm lives server-side, so does the truth about it. The
+  /// current value is READ before the picker opens rather than remembered:
+  /// a run recovered after a crash has no memory of what it armed, and a
+  /// picker that defaulted to "nothing set" would quietly invite the runner
+  /// to believe that. A failed read refuses outright — an alarm that cannot
+  /// be read cannot be written either, and offering the choice would end in
+  /// a control that claims a deadline the server never took.
+  Future<void> _setExpectedReturn() async {
+    final api = widget.apiClient;
+    final id = _runId;
+    if (api == null || api.userId == null || id == null) return;
+
+    DateTime? armed;
+    try {
+      armed = await api.fetchRunExpectedReturn(id).timeout(kBackendLoadTimeout);
+    } catch (e) {
+      debugPrint('fetchRunExpectedReturn failed: $e');
+      if (mounted) _showTopBanner(_l10n.runExpectedReturnUnavailable);
+      return;
+    }
+    if (!mounted) return;
+
+    final choice = await showExpectedReturnDialog(context, armed: armed);
+    if (choice == null || !mounted) return;
+
+    try {
+      final ok = await api
+          .setRunExpectedReturn(id, choice.at)
+          .timeout(kBackendLoadTimeout);
+      if (!mounted) return;
+      if (!ok) {
+        // The RPC refused (not my run, or no longer in progress). Reporting
+        // success here would leave a runner trusting an alert nobody armed.
+        _showTopBanner(_l10n.runExpectedReturnFailed);
+        return;
+      }
+      _showTopBanner(choice.isClear
+          ? _l10n.runExpectedReturnClearedToast
+          : _l10n.runExpectedReturnSetToast);
+    } catch (e) {
+      debugPrint('setRunExpectedReturn failed: $e');
+      if (mounted) _showTopBanner(_l10n.runExpectedReturnFailed);
     }
   }
 

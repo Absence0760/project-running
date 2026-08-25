@@ -1379,6 +1379,61 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runLiveShareStop => '共有を停止';
 
   @override
+  String get runLiveShareExpectedReturn => '指定時刻までに未帰還';
+
+  @override
+  String get runExpectedReturnTitle => '指定時刻までに未帰還';
+
+  @override
+  String get runExpectedReturnIntro =>
+      '終える予定の時刻を選びます。その時刻を過ぎてもこのアクティビティが続いている場合、承認済みの緊急連絡先にライブリンク付きの通知が1回送られます。';
+
+  @override
+  String get runExpectedReturnServerNote =>
+      '期限はサーバーに保存されるため、この端末が使えなくなっても有効です。アクティビティを保存すると解除されます。圏外で終えた場合は、同期されるまで通知が送られることがあります。';
+
+  @override
+  String runExpectedReturnOptionMinutes(int minutes) {
+    return '$minutes分後';
+  }
+
+  @override
+  String runExpectedReturnOptionHours(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: '$hours時間後',
+      one: '1時間後',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runExpectedReturnBy(String time) {
+    return '$timeまでに帰還';
+  }
+
+  @override
+  String runExpectedReturnActive(String time) {
+    return '$timeに通知を設定済みです。';
+  }
+
+  @override
+  String get runExpectedReturnClear => '通知を解除';
+
+  @override
+  String get runExpectedReturnSetToast => '帰還時刻の通知を設定しました。';
+
+  @override
+  String get runExpectedReturnClearedToast => '帰還時刻の通知を解除しました。';
+
+  @override
+  String get runExpectedReturnFailed => '帰還時刻の通知を更新できませんでした。';
+
+  @override
+  String get runExpectedReturnUnavailable => 'サーバーに接続できず、帰還時刻の通知を設定できません。';
+
+  @override
   String get runLiveShareStopped => 'ライブ共有を停止しました';
 
   @override
