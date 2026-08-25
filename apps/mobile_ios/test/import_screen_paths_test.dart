@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_run_store.dart';
 import '../lib/screens/import_screen.dart';
+import 'pump_until.dart';
 
 /// Behavioural cover for the three file-picked import paths — Strava export
 /// ZIP, CSV summary, full-backup ZIP.
@@ -121,7 +122,28 @@ Future<void> _pump(
 }
 
 /// Drives a tap through real disk I/O and `compute` — neither can be advanced
-/// by the fake clock.
+/// by the fake clock — and waits for [until], the status the import settles on.
+Future<void> _tapUntil(
+  WidgetTester tester,
+  Finder button, {
+  required bool Function() until,
+  required String describe,
+}) async {
+  await tester.ensureVisible(button);
+  await tester.pump();
+  await tester.runAsync(() async {
+    await tester.tap(button);
+    await tester.pump();
+  });
+  await pumpUntil(tester, until, describe: describe);
+}
+
+/// [_tapUntil] for the one case that asserts an ABSENCE.
+///
+/// A pick carrying no readable path returns before the screen sets any state
+/// at all, so there is no condition to poll: the window is deliberately fixed
+/// and generous, to give a wrong outcome every chance to appear before it is
+/// asserted absent.
 Future<void> _tapAndDrain(WidgetTester tester, Finder button) async {
   await tester.ensureVisible(button);
   await tester.pump();
@@ -154,7 +176,9 @@ void main() {
       final store = await _makeStore();
       await _pump(tester, store, _write('strava.zip', _stravaZip()));
 
-      await _tapAndDrain(tester, _stravaButton);
+      await _tapUntil(tester, _stravaButton,
+          until: () => tester.any(find.text(l10n.importStatusImported(1, 'Strava'))),
+          describe: 'the Strava import to report one activity imported');
 
       expect(store.summaryRuns, hasLength(1));
       final saved = await store.runById(store.summaryRuns.single.id);
@@ -172,7 +196,9 @@ void main() {
       await _pump(
           tester, store, _write('other.zip', ZipEncoder().encode(archive)));
 
-      await _tapAndDrain(tester, _stravaButton);
+      await _tapUntil(tester, _stravaButton,
+          until: () => tester.any(find.textContaining('Not a Strava export')),
+          describe: 'the archive to be rejected as not a Strava export');
 
       expect(store.summaryRuns, isEmpty);
       expect(find.textContaining('Not a Strava export'), findsOneWidget);
@@ -184,7 +210,9 @@ void main() {
       await _pump(tester, store,
           _write('corrupt.zip', utf8.encode('this is not a zip archive')));
 
-      await _tapAndDrain(tester, _stravaButton);
+      await _tapUntil(tester, _stravaButton,
+          until: () => tester.any(find.textContaining('Import failed:')),
+          describe: 'the unreadable file to surface an import failure');
 
       expect(store.summaryRuns, isEmpty);
       // The message is the decoder's, but something failure-shaped must show:
@@ -198,7 +226,9 @@ void main() {
       await _pump(
           tester, store, _write('strava.zip', _stravaZip(withTrack: false)));
 
-      await _tapAndDrain(tester, _stravaButton);
+      await _tapUntil(tester, _stravaButton,
+          until: () => tester.any(find.text(l10n.importStatusImportedWithErrors(0, 1))),
+          describe: 'the missing track file to be reported as an error');
 
       expect(store.summaryRuns, isEmpty);
       expect(find.text(l10n.importFailuresHeading(1)), findsOneWidget);
@@ -226,7 +256,9 @@ void main() {
                 withTrack: false)),
       );
 
-      await _tapAndDrain(tester, _stravaButton);
+      await _tapUntil(tester, _stravaButton,
+          until: () => tester.any(find.text(l10n.importStatusImported(1, 'Strava'))),
+          describe: 'the track-less manual activity to import');
 
       expect(store.summaryRuns, hasLength(1));
       final saved = await store.runById(store.summaryRuns.single.id);
@@ -252,7 +284,9 @@ void main() {
                 withTrack: false)),
       );
 
-      await _tapAndDrain(tester, _stravaButton);
+      await _tapUntil(tester, _stravaButton,
+          until: () => tester.any(find.text(l10n.importStatusImported(1, 'Strava'))),
+          describe: 'the Strava import to report one activity imported');
 
       expect(store.summaryRuns, hasLength(1));
       expect(find.text(l10n.importStatusImported(1, 'Strava')), findsOneWidget);
@@ -282,7 +316,9 @@ void main() {
                 '2026-04-10T07:30:00Z,10000,3600,360,app\n')),
       );
 
-      await _tapAndDrain(tester, _csvButton);
+      await _tapUntil(tester, _csvButton,
+          until: () => tester.any(find.text(l10n.importStatusImported(2, 'CSV'))),
+          describe: 'the CSV import to report both rows imported');
 
       expect(store.summaryRuns, hasLength(2));
       expect(find.text(l10n.importStatusImported(2, 'CSV')), findsOneWidget);
@@ -297,7 +333,9 @@ void main() {
         _write('bad.csv', utf8.encode('name,notes\nMorning run,felt good\n')),
       );
 
-      await _tapAndDrain(tester, _csvButton);
+      await _tapUntil(tester, _csvButton,
+          until: () => tester.any(find.text(l10n.importFailuresHeading(1))),
+          describe: 'the bad CSV header to be reported as a failure');
 
       expect(store.summaryRuns, isEmpty);
       expect(find.text(l10n.importFailuresHeading(1)), findsOneWidget);
@@ -320,7 +358,9 @@ void main() {
                 'not-a-date,5000,1800\n')),
       );
 
-      await _tapAndDrain(tester, _csvButton);
+      await _tapUntil(tester, _csvButton,
+          until: () => tester.any(find.text(l10n.importStatusImportedWithErrors(1, 1))),
+          describe: 'the CSV import to report one row in and one failed');
 
       expect(store.summaryRuns, hasLength(1));
       expect(
@@ -334,7 +374,9 @@ void main() {
       final store = await _makeStore();
       await _pump(tester, store, _write('backup.zip', _backupZip()));
 
-      await _tapAndDrain(tester, _backupButton);
+      await _tapUntil(tester, _backupButton,
+          until: () => tester.any(find.text(l10n.importStatusBackupRestored(1, 0, 0))),
+          describe: 'the backup to report its restore');
 
       expect(store.summaryRuns.single.id, 'backup-run-1');
       expect(
@@ -351,7 +393,9 @@ void main() {
             _backupZip(manifest: {'format': 'something-else', 'version': 1})),
       );
 
-      await _tapAndDrain(tester, _backupButton);
+      await _tapUntil(tester, _backupButton,
+          until: () => tester.any(find.textContaining('Not a valid backup')),
+          describe: 'the archive to be rejected as not a backup');
 
       expect(store.summaryRuns, isEmpty);
       expect(find.textContaining('Not a valid backup'), findsOneWidget);
@@ -366,7 +410,9 @@ void main() {
             _backupZip(manifest: {'format': 'run-app-backup', 'version': 99})),
       );
 
-      await _tapAndDrain(tester, _backupButton);
+      await _tapUntil(tester, _backupButton,
+          until: () => tester.any(find.textContaining('Backup restore failed:')),
+          describe: 'the newer-version backup to be refused');
 
       expect(store.summaryRuns, isEmpty);
       expect(find.textContaining('Backup restore failed:'), findsOneWidget);
@@ -393,7 +439,9 @@ void main() {
       await _pump(tester, store,
           _write('corrupt2.zip', utf8.encode('definitely not a zip')));
 
-      await _tapAndDrain(tester, _backupButton);
+      await _tapUntil(tester, _backupButton,
+          until: () => tester.any(find.textContaining('Backup restore failed:')),
+          describe: 'the corrupt archive to surface a restore failure');
 
       expect(store.summaryRuns, isEmpty);
       expect(find.textContaining('Backup restore failed:'), findsOneWidget);

@@ -78,17 +78,24 @@ Run _run({
 /// Signed-in fake whose column-only edit push succeeds.
 class _EditOkApi extends ApiClient {
   final List<String> updated = [];
+  int attempts = 0;
 
   @override
   String? get userId => 'user-1';
 
   @override
-  Future<void> updateRunFields(Run run) async => updated.add(run.id);
+  Future<void> updateRunFields(Run run) async {
+    attempts++;
+    updated.add(run.id);
+  }
 }
 
 class _EditFailApi extends _EditOkApi {
   @override
-  Future<void> updateRunFields(Run run) async => throw Exception('offline');
+  Future<void> updateRunFields(Run run) async {
+    attempts++;
+    throw Exception('offline');
+  }
 }
 
 class _ThrowingRouteStore extends LocalRouteStore {
@@ -1025,24 +1032,28 @@ void main() {
       return runStore;
     }
 
-    Future<void> saveViaEditDialog(WidgetTester tester) async {
-      // Whole interaction inside runAsync so the store's real file I/O
-      // (update's atomic write + the synced-ids sidecar) completes.
+    /// Open the edit dialog, save, and wait for [until] — the per-caller end
+    /// of the save's own chain. The taps stay inside runAsync so the store's
+    /// real file I/O (update's atomic write + the synced-ids sidecar)
+    /// completes.
+    ///
+    /// Deliberately NOT waiting on the dialog's dismissal: the pop is a route
+    /// transition on the FAKE clock, which `pumpUntil` never advances, so the
+    /// AlertDialog stays in the tree for the whole wait. The bounded loop this
+    /// replaces watched for exactly that and never saw it — it ran all 200
+    /// iterations every time and then fell through to a further 500 ms drain.
+    Future<void> saveViaEditDialog(
+      WidgetTester tester, {
+      required bool Function() until,
+      required String describe,
+    }) async {
       await tester.runAsync(() async {
         await tester.tap(find.byTooltip('Edit run'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
         await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-        for (var i = 0; i < 200; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          await tester.pump();
-          if (find.byType(AlertDialog).evaluate().isEmpty) break;
-        }
-        for (var i = 0; i < 50; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-          await tester.pump();
-        }
       });
+      await pumpUntil(tester, until, describe: describe);
     }
 
     testWidgets('a successful updateRunFields leaves nothing to re-upload',
@@ -1055,7 +1066,12 @@ void main() {
       final api = _EditOkApi();
       final runStore = await pumpForEdit(tester, run, api);
 
-      await saveViaEditDialog(tester);
+      // `pumpForEdit` leaves the run already synced, so an empty
+      // `unsyncedRuns` is true before the save as well as after it. The push
+      // having happened is what makes the second half a real claim.
+      await saveViaEditDialog(tester,
+          until: () => api.attempts > 0 && runStore.unsyncedRuns.isEmpty,
+          describe: 'the column push to land and settle the run as synced');
 
       expect(api.updated, [run.id]);
       expect(runStore.unsyncedRuns, isEmpty,
@@ -1068,7 +1084,9 @@ void main() {
       final api = _EditFailApi();
       final runStore = await pumpForEdit(tester, run, api);
 
-      await saveViaEditDialog(tester);
+      await saveViaEditDialog(tester,
+          until: () => api.attempts > 0,
+          describe: 'the column push to be attempted and fail');
 
       expect(runStore.unsyncedRuns.map((r) => r.id), [run.id]);
 
