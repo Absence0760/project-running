@@ -2,16 +2,18 @@
 	import { toastStore } from '$lib/stores/toast.svelte';
 
 	// A live region only announces changes that happen INSIDE it while it is
-	// already in the accessibility tree. The region used to be mounted by the
-	// same `{#if}` that mounted the toast, so region and text appeared in one
-	// mutation and the first toast of a burst — the ordinary case, one toast at
-	// a time — was announced by nothing. Both regions are therefore permanent
-	// and only their text changes, the idiom CoachChat's announcer already uses.
-	// The visible stack is aria-hidden so a toast is never spoken twice.
+	// already in the accessibility tree. The stack used to be mounted by an
+	// `{#if}` alongside the toast, so region and text appeared in one mutation
+	// and the first toast of a burst — the ordinary case, one toast at a time
+	// across ~400 showToast call sites — was announced by nothing (WCAG 4.1.3).
+	//
+	// The two stacks are therefore permanent and only their CHILDREN change.
+	// A separate visually-hidden mirror would work for a screen reader and put
+	// the same sentence in the DOM twice, which makes every `getByText('…')`
+	// toast assertion in the e2e suite a strict-mode violation — the announcer
+	// and the visible toast are one element, not two.
 	const errors = $derived(toastStore.toasts.filter((t) => t.type === 'error'));
 	const others = $derived(toastStore.toasts.filter((t) => t.type !== 'error'));
-	const assertiveText = $derived(errors.at(-1)?.message ?? '');
-	const politeText = $derived(others.at(-1)?.message ?? '');
 </script>
 
 <!--
@@ -19,28 +21,27 @@
 	shorthand for exactly these politeness values, and adding a permanent
 	`alert` role to every page would make a bare getByRole('alert') ambiguous
 	on surfaces that assert on their own inline error banner.
--->
-<div class="visually-hidden" aria-live="polite" aria-atomic="true" data-testid="toast-live-polite">
-	{politeText}
-</div>
-<div
-	class="visually-hidden"
-	aria-live="assertive"
-	aria-atomic="true"
-	data-testid="toast-live-assertive"
->
-	{assertiveText}
-</div>
 
-{#if toastStore.toasts.length > 0}
-	<div class="toast-container" aria-hidden="true">
-		{#each toastStore.toasts as t (t.id)}
+	`aria-atomic` is left at its default (false) because each stack holds a
+	LIST: atomic would re-announce every toast still on screen each time one
+	more arrives.
+-->
+<div class="toast-container">
+	<div class="toast-stack" aria-live="polite" data-testid="toast-live-polite">
+		{#each others as t (t.id)}
 			<div class="toast toast-{t.type}">
 				{t.message}
 			</div>
 		{/each}
 	</div>
-{/if}
+	<div class="toast-stack" aria-live="assertive" data-testid="toast-live-assertive">
+		{#each errors as t (t.id)}
+			<div class="toast toast-{t.type}">
+				{t.message}
+			</div>
+		{/each}
+	</div>
+</div>
 
 <style>
 	.toast-container {
@@ -52,6 +53,15 @@
 		gap: var(--space-sm);
 		z-index: var(--z-toast);
 		max-width: 24rem;
+		/* Permanently mounted now, so it sits over the page even with nothing in
+		   it. An empty flex column has no box, but a toast must not eat a click
+		   at the moment it appears either. */
+		pointer-events: none;
+	}
+	.toast-stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
 	}
 	.toast {
 		padding: var(--space-sm) var(--space-lg);

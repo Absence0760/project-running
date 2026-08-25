@@ -13,9 +13,12 @@ import { USER_A } from '../fixtures/users';
  * sites — appeared as one mutation and was announced by nothing.
  *
  * The two things worth pinning are therefore: the regions exist BEFORE any
- * toast does, and a toast's text lands in the one matching its politeness while
- * the visible stack stays out of the accessibility tree so nothing is spoken
- * twice.
+ * toast does, and a toast's text lands in the one matching its politeness.
+ *
+ * The regions ARE the visible stacks rather than hidden mirrors of them. A
+ * mirror announces correctly and puts the same sentence in the DOM twice, which
+ * turns every `getByText('<toast text>')` in the suite into a strict-mode
+ * violation — so the announcer and the toast are one element, not two.
  */
 
 // The browser is pinned to UTC while the runner is not, so the recap year has
@@ -71,8 +74,9 @@ test.describe('toast live regions', () => {
 		await expect(assertive).toHaveText(message);
 		await expect(page.getByTestId('toast-live-polite')).toHaveText('');
 
-		// The visible stack must stay out of the accessibility tree, or the same
-		// sentence is announced by both it and the region above it.
-		await expect(page.locator('.toast-container')).toHaveAttribute('aria-hidden', 'true');
+		// The announcing region and the visible toast are the SAME element, so
+		// the sentence appears in the DOM exactly once and a bare getByText on a
+		// toast message stays unambiguous for every other spec in the suite.
+		await expect(page.getByText(message, { exact: true })).toHaveCount(1);
 	});
 });
