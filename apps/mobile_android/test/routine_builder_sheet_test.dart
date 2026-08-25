@@ -6,12 +6,22 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_routine_store.dart';
 import '../lib/widgets/routine_builder_sheet.dart';
+import 'pump_until.dart';
 
-Future<({LocalRoutineStore store, Directory dir})> _store(String tag) async {
+/// A temp-dir-backed store plus a `persisted` probe.
+///
+/// `OfflineSyncStore.persist` populates the in-memory routines BEFORE its
+/// atomic write, and ends with `notifyListeners()` once the row file and the
+/// index are both down — so the notification, not the routine count, is what
+/// says the write has cleared the temp dir's teardown.
+Future<({LocalRoutineStore store, Directory dir, bool Function() persisted})>
+    _store(String tag) async {
   final dir = Directory.systemTemp.createTempSync('routine_builder_$tag');
   final store = LocalRoutineStore();
   await store.init(overrideDirectory: dir);
-  return (store: store, dir: dir);
+  var persisted = false;
+  store.addListener(() => persisted = true);
+  return (store: store, dir: dir, persisted: () => persisted);
 }
 
 void main() {
@@ -98,13 +108,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.ensureVisible(find.text('Save routine'));
       await tester.pump();
-      // The save runs inside runAsync so the atomic file write's await
-      // chain completes in the real zone.
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Save routine'));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      await tester.pump();
+      // The save has to start in the real zone — the atomic file write's
+      // await chain never resumes under the fake clock.
+      await tester.runAsync(() => tester.tap(find.text('Save routine')));
+      await pumpUntil(tester, f.persisted,
+          describe: "the routine's row + index files to land on disk");
       expect(f.store.routines, hasLength(1));
     } finally {
       f.dir.deleteSync(recursive: true);
@@ -139,10 +147,8 @@ void main() {
       await tester.ensureVisible(find.text('Save routine'));
       await tester.pump();
       await tester.tap(find.text('Save routine'));
-      // createLocal awaits a real file write — flush the real event loop.
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, f.persisted,
+          describe: "the routine's row + index files to land on disk");
 
       expect(f.store.routines, hasLength(1));
       final r = f.store.routines.first;
@@ -196,9 +202,8 @@ void main() {
       await tester.ensureVisible(find.text('Save routine'));
       await tester.pump();
       await tester.tap(find.text('Save routine'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, f.persisted,
+          describe: "the routine's row + index files to land on disk");
 
       expect(f.store.routines, hasLength(1));
       final exes = f.store.routines.first.exercises;
@@ -251,9 +256,8 @@ void main() {
       await tester.ensureVisible(find.text('Save routine'));
       await tester.pump();
       await tester.tap(find.text('Save routine'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, f.persisted,
+          describe: "the routine's row + index files to land on disk");
 
       expect(f.store.routines, hasLength(1));
       final sets = f.store.routines.first.exercises.first.sets;
