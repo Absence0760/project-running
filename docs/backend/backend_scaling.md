@@ -2,7 +2,7 @@
 
 How the backend evolves from a single Supabase project to a two-service architecture (Supabase + Go) that supports live spectator tracking, training intelligence, and hundreds of thousands of users.
 
-> **Status as of August 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds — plus the email / push / digest kinds added since (`notification_email`, `lifecycle_email`, `safety_email`, `web_push`, `weekly_digest`, with an inbound bounce/complaint webhook) — and serves the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) **is deployed and serving** — the worker went out 2026-07-21 and `live.threkir.com` is a live CNAME in Terraform (`infra/dns/main.tf`). What remains is the **client** cutover, not infra: `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` are still unset, so recorders and spectators ride Supabase Realtime. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent — treat every SQL snippet as plan-of-record, not current state. Each of the six numbered sections now carries a **Shipped** note recording what actually landed and where it diverged from the sketch, and every box in the migration timeline is ticked with the migration or file that closed it. **Exactly one box is still open**, and it is the WebSocket-hub row under Phase 2: `[~]`, waiting on the client cutover alone.
+> **Status as of August 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains **fourteen** job kinds — `map_match`, `token_refresh`, `strava_event`, `photo_process`, `route_photo_process`, `club_photo_process`, `notification_email`, `lifecycle_email`, `safety_email`, `safety_sms`, `web_push`, `native_push`, `weekly_digest`, `lifecycle_drip` (`internal/worker.go:359`, and that `switch` is the authoritative list) — and serves the `POST /v1/export` and `POST /v1/premium/*` endpoints. One caveat on `map_match`: `OSRM_URL` is deliberately unset in `fly.toml`, so `main.go:287` selects `PassthroughMatcher` and the job completes as a no-op — runs ship, just without the snapped line, until the sibling `osrm` app deploys. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) **is deployed and serving** — the worker went out 2026-07-21 and `live.threkir.com` is a live CNAME in Terraform (`infra/dns/main.tf`). What remains is the **client** cutover, not infra: `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` are still unset, so recorders and spectators ride Supabase Realtime. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent — treat every SQL snippet as plan-of-record, not current state. Each of the six numbered sections now carries a **Shipped** note recording what actually landed and where it diverged from the sketch, and every box in the migration timeline is ticked with the migration or file that closed it. **Two boxes are still open**, both under Phase 2 and both `[~]`: the WebSocket-hub row, waiting on the client cutover alone, and the Upstash Redis row, whose code shipped but whose provider was never provisioned (`REDIS_URL` unset). A prior pass ticked the Redis row on the strength of the code existing; the box asks for infrastructure, and that half is not done.
 
 ---
 
@@ -19,7 +19,18 @@ This was the right choice for Phase 1: it handles CRUD, auth, and storage with z
 
 ---
 
-## Architectural issues to fix before scaling
+## Architectural issues to fix before scaling — all six are closed
+
+**Read this section as history, not as a work list.** Every heading below is phrased in the present
+tense of early 2026 and every one of them is now false as a statement about the running system: the
+JSONB tracks moved, PostGIS landed twice, the PR scan became a trigger-maintained cache, the OAuth
+tokens went into Vault, and rate limiting plus webhook authentication shipped. § 4 is the one that
+closed by being *withdrawn* rather than built — the matview it proposed existed for 422 migrations,
+was never read, and was dropped. Each section keeps its original Problem / Fix / When text so the
+reasoning survives, followed by a **Shipped** (or **Status**) note recording what actually landed and
+where it diverged. Do not copy the SQL snippets: several of them describe a shape that was
+deliberately not taken.
+
 
 ### 1. GPS tracks stored as JSONB in the `runs` table
 
@@ -263,9 +274,13 @@ same database would find it. Do not copy the snippet above.
 rate limiting is `20260604_001_rate_limits.sql` (a `SECURITY DEFINER`
 `check_rate_limit` doing an atomic fixed-window increment) behind
 `functions/_shared/rate_limit.ts`, whose posture is per-caller: fail-open by
-default so a transient DB blip doesn't 429 everyone, `{ failClosed: true }` on
-the destructive and expensive paths (`delete-account`, `export-data`, OAuth
-code exchange). The Strava bullet asked for **signature** verification, which
+default so a transient DB blip doesn't 429 everyone, `{ failClosed: true }` wherever a
+retry is not free. That is **nine** functions today, not the three an earlier note
+enumerated: `delete-account`, `export-data`, `strava-import` (its `connect` /
+`disconnect` actions — the OAuth code exchange — while the idempotent `sync` stays
+fail-open, `strava-import/index.ts:110`), `strava-webhook`, `clip-public-track` (both
+its authed and its anon-keyed bucket), and the four money paths `donations-checkout`,
+`events-checkout`, `events-cancel`, `events-connect-onboard`. The Strava bullet asked for **signature** verification, which
 Strava cannot satisfy — it does not sign webhook payloads. `strava-webhook`
 therefore authenticates the caller with a constant-time shared-secret compare
 (`timingSafeEqual`, header `X-Webhook-Secret` winning over the `?secret=`
@@ -323,6 +338,10 @@ Clients (mobile, watch, web)
     └───────────────────────┘
 ```
 
+**The last box is plan, not build.** The worker holds no Postgres connection: it reaches Supabase over
+PostgREST with the service-role key, exactly as the clients above it do, just without RLS
+(`internal/supabase.go:131`). See the Tech stack table below.
+
 ### How clients connect
 
 | Client action | Target | Protocol |
@@ -355,7 +374,7 @@ Clients still talk to Supabase for 90%+ of requests. The Go service handles real
 
 During a run, the runner's phone/watch publishes GPS position to the Go service every 3 seconds. Friends and family connect via a spectator URL and see the runner move in real time.
 
-As built (the worker is reachable at `live.threkir.com` once deployed; see `apps/job_worker/internal/livehub/`):
+As built and deployed (`live.threkir.com`, since 2026-07-21; see `apps/job_worker/internal/livehub/`):
 
 ```
 Runner (recorder) publishes:
@@ -370,10 +389,19 @@ Spectator subscribes:
   GET /v1/live/{run_id}/snapshot         (late-joiner one-shot, 204 when empty)
 ```
 
-**Data flow:**
-1. Runner publishes position → Go service fans out to all connected spectators
-2. Go service writes position to a Redis stream (ephemeral, TTL 24h) for late joiners
-3. On run complete, Go service writes final track summary to Postgres
+**Data flow (as built — the three bullets this replaced described a design that did not ship):**
+1. Runner publishes position → Go service fans out to all connected spectators, in-process
+2. Each accepted push is also written to `live_run_pings` by a detached service-role insert
+   (`internal/livehub/server.go:17`, 15 s timeout, best-effort and never surfaced to the recorder).
+   That is the hub→Supabase-Realtime bridge of [decisions § 282](../architecture/decisions.md), and it —
+   not Redis — is what a late joiner and the legacy Realtime spectator path read today
+3. Nothing writes a "final track summary" on run completion. The client owns the finished run: it uploads
+   the gzipped track to Storage and writes the `runs` row itself
+
+The Redis tier is written but unprovisioned (`REDIS_URL` unset). When it lands it is **not** a stream:
+`internal/livehub/redis_hub.go:21` defines a per-run pub/sub channel `live:{runID}:ch` plus a single
+last-known key `live:{runID}:last` that `EXPIRE`s after 24 h. The channel is fan-out across replicas;
+the key is the restart-survivable snapshot.
 
 **Scale target:** 1,000 concurrent runners, 10 spectators each = 11,000 WebSocket connections. One Go instance handles this comfortably.
 
@@ -389,7 +417,9 @@ Replaces Supabase Edge Functions for operations that need retries, long runtimes
 | parkrun import | User action | 2 min | 2x |
 | Data export (GDPR) | User action | 5 min | 2x |
 
-**Queue implementation:** Use a Postgres-backed queue (e.g., River for Go) — no extra infrastructure needed. Jobs are stored in a `jobs` table with status, retry count, and scheduled time. The Go service polls the queue.
+**Queue implementation:** a Postgres-backed queue — no extra infrastructure needed. Jobs are stored in a `jobs` table with status, retry count, and scheduled time. The Go service polls the queue.
+
+**Shipped without River.** The `e.g., River for Go` this line used to recommend was never taken up: `apps/job_worker/go.mod` has no `riverqueue/river`, and the queue is a hand-rolled claim-and-dispatch loop (`internal/worker.go:359`) over the `jobs` table `20260609_001` created. The table below is the Phase-2 sketch, not the built set — parkrun import in particular never moved and is still the `parkrun-import` Edge Function. The authoritative list of what the worker actually drains is the `switch` at `internal/worker.go:359`, enumerated in the status banner at the top of this file.
 
 ```sql
 create table jobs (
@@ -440,26 +470,41 @@ Rule-based training intelligence. All algorithms are proven exercise science —
 3. Training stress balance: TSB = CTL - ATL
 4. Recommend rest/easy/hard based on TSB threshold
 
-All premium endpoints gated by `subscription_tier = 'premium'` check against Supabase JWT.
+**Shipped, with different verbs, paths and a different gate.** All four are **POSTs** under
+`/v1/premium/` — `vo2max`, `race-predictor`, `recovery`, `training-plan` (`internal/premium/server.go:91`)
+— not the mixed `GET`/`POST` top-level routes sketched above. And the tier is **not** read off the JWT: a
+claim in a token issued before an expiry or a refund would still say `premium`, so `main.go:169` resolves
+`subscription_tier` server-side against `user_profiles` on every call. The whole surface is fail-closed at
+boot — with no token verification configured (`SUPABASE_JWT_SECRET` or `SUPABASE_URL` for JWKS), `main.go:691`
+logs `premium: DISABLED` and every endpoint answers 503 rather than running unauthenticated.
 
 ### Deployment
 
-- **Platform:** Fly.io or Google Cloud Run
-- **Instance size:** 256MB RAM, shared CPU (scales to 1GB under load)
+- **Platform:** Fly.io — shipped as app `threkir-worker` in `ord` (`fly.toml:16`)
+- **Instance size:** 256MB RAM, shared CPU (`fly.toml:117`), scales to 1GB under load
 - **Cost:** ~$5/month at low traffic, ~$25/month at 10K DAU
-- **Dependencies:** Supabase Postgres (direct connection string), Redis (Upstash, ~$0/month at low volume)
+- **Dependencies:** Supabase, **over PostgREST — there is no direct Postgres connection.** Every read and
+  write goes through `/rest/v1/…` with the service-role key (`internal/supabase.go:131`,
+  `internal/schema/schema.go:23`), which is why `go.mod` carries no Postgres driver. Redis (Upstash) is a
+  dependency of the *design*, not of the running binary: `REDIS_URL` is unset, so nothing is provisioned
 
 ### Tech stack
 
-| Concern | Choice |
-|---|---|
-| HTTP framework | `net/http` (stdlib) or Chi |
-| WebSocket | `nhooyr.io/websocket` |
-| Database | `jackc/pgx` (Postgres driver) |
-| Job queue | `riverqueue/river` (Postgres-backed) |
-| Auth validation | Verify Supabase JWTs using JWKS endpoint |
-| Config | Environment variables |
-| Logging | `log/slog` (stdlib) |
+Three rows of this table were plan-of-record that the build did not take. The **Built** column is the
+whole of `apps/job_worker/go.mod` plus the stdlib.
+
+| Concern | Planned | Built |
+|---|---|---|
+| HTTP framework | `net/http` (stdlib) or Chi | `net/http` — no router dependency |
+| WebSocket | `nhooyr.io/websocket` | `github.com/coder/websocket` v1.8.15 (`go.mod:11`) — the same library under its current module path |
+| Database | `jackc/pgx` (Postgres driver) | **none.** PostgREST over HTTPS with the service-role key (`internal/supabase.go:131`) |
+| Job queue | `riverqueue/river` (Postgres-backed) | **none.** A hand-rolled claim-and-dispatch loop over the `jobs` table (`internal/worker.go:359`) |
+| Auth validation | Verify Supabase JWTs using JWKS endpoint | as planned — `github.com/golang-jwt/jwt/v5`, JWKS from `SUPABASE_URL` (HS256 secret still accepted for legacy projects) |
+| Config | Environment variables | as planned |
+| Logging | `log/slog` (stdlib) | as planned |
+
+The three remaining direct dependencies are `github.com/redis/go-redis/v9` (compiled in for the unprovisioned
+`RedisHub`), `golang.org/x/image` (photo EXIF scrub / resize), and `github.com/alicebob/miniredis/v2` (tests).
 
 ---
 
@@ -490,12 +535,19 @@ Used only by the Go service for ephemeral real-time data.
 
 **Provider:** Upstash (serverless Redis). Free tier covers early usage. ~$10/month at scale.
 
+**Not provisioned.** `REDIS_URL` is unset, so none of the three rows above exists in production. The live
+hub runs its in-process map, and rate limiting was built in Postgres instead (`20260604_001_rate_limits.sql`
+behind `functions/_shared/rate_limit.ts`) — a Redis counter was never needed for it. Before this can be
+switched on, the Upstash DPA has to be executed and dated in
+[`sub-processors.md`](../compliance/sub-processors.md): live pings carry GPS coordinates, so a hosted Redis
+is a cross-border processor transfer, not just a cache.
+
 ### No other new infrastructure
 
 The architecture intentionally avoids:
 - **Kafka/RabbitMQ** — Postgres-backed job queue is sufficient at this scale
 - **Elasticsearch** — PostGIS spatial queries and Postgres full-text search cover route discovery
-- **Separate cache layer** — Materialized views handle dashboard caching within Postgres
+- **Separate cache layer** — still avoided, but no longer for this reason. The materialized view this line pointed at was dropped in `20270530_001` after 422 migrations without a reader; the dashboard windows `runs` to 14 weeks off `runs_user_started_at` and buckets in TypeScript. There is no matview caching layer, and none is needed. See § 4 above and [decisions.md § 690](../architecture/decisions.md)
 - **Kubernetes** — Cloud Run/Fly.io handles scaling without cluster management
 
 ---
@@ -522,12 +574,12 @@ Aligned with the existing product roadmap.
 **Backend:** Supabase + Go service.
 
 **New:**
-- [x] Deploy Go service to Fly.io (`apps/job_worker/` — drains `map_match`, `token_refresh`, `strava_event`)
+- [x] Deploy Go service to Fly.io — app `threkir-worker` (`apps/job_worker/fly.toml:16`). It drains fourteen job kinds today, not the three this line named; the `switch` at `internal/worker.go:359` is the list
 - [~] WebSocket hub for live spectator tracking (`apps/job_worker/internal/livehub/`). Code shipped + tested, **deployed 2026-07-21**, `live.threkir.com` CNAME live in `infra/dns/main.tf`. Still `[~]` for the client cutover alone — `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` unset, so nothing connects to it yet
 - [x] Move Strava webhook handler from Edge Function to Go (`apps/job_worker/internal/stravahook/`; EF kept as rollback)
 - [x] Move token refresh from Edge Function to Go cron worker (`token_refresh` job kind; EF kept as rollback)
 - [x] Move data export from Edge Function to Go background job (`POST /v1/export` via `apps/job_worker/internal/dataexport/`; EF kept as rollback)
-- [x] Set up Upstash Redis for live position streams (`RedisHub` in `internal/livehub/`; activates on hub deploy)
+- [~] Set up Upstash Redis for live position streams — **code only; no Redis is provisioned.** `internal/livehub/redis_hub.go` implements the multi-replica backend and `main.go:497` selects it, but `REDIS_URL` is unset, so the deployed hub logs `backend=in-process (single-replica)` (`main.go:510`) and `internal/livehub/bridge.go:40` says so outright. The earlier "activates on hub deploy" was falsified by the 2026-07-21 deploy itself: the hub went out and Redis did not come with it. Two things gate it — `apps/job_worker/deployment.md:9` keeps the app at `--ha=false` until `REDIS_URL` lands (the in-process hub shares no state, so a second machine silently breaks fan-out), and live pings are GPS coordinates, so pointing `REDIS_URL` at hosted Upstash is a cross-border processor transfer whose DPA is an explicit pre-cutover item in [`sub-processors.md`](../compliance/sub-processors.md)
 
 **Migrate from Edge Functions:** Strava webhook, token refresh, data export. All three moved, and all three are still deployed as the rollback path.
 
@@ -607,9 +659,14 @@ run-app/
 │       │   ├── stravahook/      # Strava webhook ingest endpoint
 │       │   ├── dataexport/      # POST /v1/export (CSV / GPX-zip)
 │       │   ├── premium/         # Pro-only VO2max / race-predictor / recovery / plan endpoints
+│       │   ├── bouncehook/      # inbound bounce / complaint webhook
+│       │   ├── unsubscribe/     # RFC 8058 one-click opt-out endpoints
+│       │   ├── webpush/ nativepush/  # push transports
+│       │   ├── digesttoken/ supajwt/ supakey/ schema/  # tokens, JWT verify, keys, PostgREST table names
 │       │   ├── exif/            # photo EXIF scrub
-│       │   ├── matcher*.go      # map-match (OSRM) handler
-│       │   └── handler_*.go     # job dispatch: map_match, token_refresh, strava_event, photo_process
+│       │   ├── matcher*.go      # map-match (OSRM when OSRM_URL is set; passthrough otherwise)
+│       │   ├── worker.go        # claim + dispatch loop; its `switch` is the job-kind list
+│       │   └── handler_*.go     # one per job kind — fourteen kinds today, not the four the worker shipped with
 │       ├── go.mod
 │       ├── Dockerfile
 │       ├── fly.toml

@@ -594,7 +594,8 @@ class ApiClient {
       final data = await _client
           .from(SafetyContactRow.table)
           .select(
-            'id, contact_email, contact_user_id, confirmed_at, created_at',
+            'id, contact_email, contact_phone, contact_user_id, confirmed_at, '
+            'sms_opt_in_at, created_at',
           )
           .order(SafetyContactRow.colCreatedAt, ascending: false);
       return (data as List)
@@ -607,12 +608,13 @@ class ApiClient {
     }
   }
 
-  /// Add a safety contact by email. The address is stored as-is; the confirm
-  /// email is sent by the AFTER INSERT trigger. `confirmed_at` /
-  /// `contact_user_id` are forced null server-side (the contact must opt in),
-  /// so we never set them here. Throws on RLS / unique / format failure for
-  /// the caller to surface.
-  Future<SafetyContact> addSafetyContact(String email) async {
+  /// Add a safety contact by email, optionally with an E.164 [phone] for the
+  /// SMS escalation leg. The address is stored as-is; the confirm email is
+  /// sent by the AFTER INSERT trigger. `confirmed_at` / `contact_user_id` /
+  /// `sms_opt_in_at` are forced null server-side (the contact must opt in to
+  /// both the relationship and, separately, to SMS), so we never set them
+  /// here. Throws on RLS / unique / format failure for the caller to surface.
+  Future<SafetyContact> addSafetyContact(String email, {String? phone}) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
     final data = await _client
@@ -620,8 +622,10 @@ class ApiClient {
         .insert(<String, dynamic>{
           SafetyContactRow.colOwnerId: userId,
           SafetyContactRow.colContactEmail: email,
+          SafetyContactRow.colContactPhone: phone,
         })
-        .select('id, contact_email, contact_user_id, confirmed_at, created_at')
+        .select('id, contact_email, contact_phone, contact_user_id, '
+            'confirmed_at, sms_opt_in_at, created_at')
         .single();
     return SafetyContact.fromJson(data);
   }
@@ -691,10 +695,15 @@ class ApiClient {
   }
 
   /// Confirm a pending request addressed to my account email (links my
-  /// account). Returns whether a row was confirmed.
-  Future<bool> confirmSafetyRequest(String id) async {
-    final result =
-        await _client.rpc('confirm_safety_contact', params: {'p_id': id});
+  /// account). [smsOptIn] additionally consents to SMS alerts — the server
+  /// arms it only when the owner stored a phone, so passing true against a
+  /// number-less relationship is a no-op rather than a lie. Returns whether a
+  /// row was confirmed.
+  Future<bool> confirmSafetyRequest(String id, {bool smsOptIn = false}) async {
+    final result = await _client.rpc(
+      'confirm_safety_contact',
+      params: {'p_id': id, 'p_sms_opt_in': smsOptIn},
+    );
     return result == true;
   }
 
@@ -5853,6 +5862,46 @@ class ApiClient {
     }).eq(RunRow.colId, runId).eq(RunRow.colUserId, userId);
   }
 
+  /// Arm (or clear, with a null [expectedReturnAt]) the per-run "not back by
+  /// X" override on one of my own in-progress broadcast runs — the absolute
+  /// deadline that escalates to my confirmed safety contacts independently of
+  /// the universal silence window (migration `20270410_001`).
+  ///
+  /// The deadline lives on the SERVER, which is the entire point: once armed,
+  /// killing the app, losing signal or destroying the phone cannot disarm it.
+  /// It stops mattering when the run stops being in-progress, which the
+  /// finishing `saveRun` upsert does.
+  ///
+  /// Returns whether the run was updated — false when it isn't mine or is no
+  /// longer in progress. A false must never be rendered as an armed alarm.
+  Future<bool> setRunExpectedReturn(
+      String runId, DateTime? expectedReturnAt) async {
+    final result = await _client.rpc('set_run_expected_return', params: {
+      'p_run_id': runId,
+      'p_expected_return_at': expectedReturnAt?.toUtc().toIso8601String(),
+    });
+    return result == true;
+  }
+
+  /// The per-run expected-return override currently armed on my own run, or
+  /// null when none is. Read back from the server rather than trusted from
+  /// memory so a run recovered after the app was killed — or one armed from
+  /// the web live page — reports the truth. Throws on read failure: a
+  /// swallowed error here would render "no alarm set" over an alarm that is
+  /// in fact armed.
+  Future<DateTime?> fetchRunExpectedReturn(String runId) async {
+    final row = await _client
+        .from(RunRow.table)
+        .select(RunRow.colMetadata)
+        .eq(RunRow.colId, runId)
+        .maybeSingle();
+    final metadata = row?[RunRow.colMetadata];
+    if (metadata is! Map) return null;
+    final raw = metadata[MetadataKeys.expectedReturnAt];
+    if (raw is! String) return null;
+    return DateTime.tryParse(raw)?.toLocal();
+  }
+
   // ─────────────────── Gym (Phase 4 multi-modal, decisions §63) ───────────────────
 
   /// Recent gym workouts for the signed-in user, newest first.
@@ -7083,6 +7132,35 @@ class ApiClient {
       await _client.from('user_profiles').insert({
         UserProfileRow.colId: uid,
         UserProfileRow.colHeightCm: heightCm,
+      });
+    }
+  }
+
+  /// Set (or clear, when null) the signed-in user's date of birth on
+  /// `user_profiles`. **Deliberately NOT gated on health-data consent**
+  /// (decisions § 718): this column is the age record behind the under-18
+  /// discoverability floor in `search_user_profiles` — a child-protection
+  /// purpose distinct from the Art 9(2)(a) consent needed to USE the date
+  /// for HR calibration and age-banded leaderboards. That consented use
+  /// reads the `user_settings.prefs` mirror, which the caller writes (and
+  /// clears on withdrawal) separately.
+  ///
+  /// Row-count-verified with an insert fallback for the same reason as
+  /// [setMyHeightCm] — rows are client-provisioned, so a plain update
+  /// against a missing row matches 0 rows and reports success (issue #233).
+  Future<void> setMyDateOfBirth(DateTime? dateOfBirth) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    final value = dateOfBirth == null ? null : dateOnly(dateOfBirth);
+    final updated = await _client
+        .from(UserProfileRow.table)
+        .update({UserProfileRow.colDateOfBirth: value})
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        UserProfileRow.colDateOfBirth: value,
       });
     }
   }

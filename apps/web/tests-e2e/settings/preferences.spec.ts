@@ -542,6 +542,30 @@ test.describe('/settings/preferences', () => {
 		await consent.uncheck();
 	});
 
+	test('the DOB field stays reachable with health-data consent off', async ({
+		page
+	}) => {
+		// decisions § 718: the column DOB writes is the age record behind the
+		// under-18 discoverability floor — a child-protection purpose. Gating
+		// the FIELD on the Art 9 checkbox left a minor who declined it unable
+		// to record a birth date at all, so the floor never fired for exactly
+		// the account it exists to protect. Consent gates the prefs-bag
+		// mirror and the other three fields, which stay disabled here.
+		// In-memory only: nothing is saved, so USER_A's stored state is
+		// untouched.
+		await page.goto('/settings/preferences');
+		const consent = page
+			.locator('label.consent-checkbox', { hasText: 'date of birth' })
+			.locator('input[type="checkbox"]');
+		if (await consent.isChecked()) await consent.uncheck();
+
+		await expect(page.getByTestId('date-of-birth')).toBeEnabled();
+		await expect(page.getByTestId('height-cm')).toBeDisabled();
+		await expect(page.getByTestId('weight')).toBeDisabled();
+		// The purpose line has to say why an ungated field is asking.
+		await expect(page.locator('#dob-purpose')).toContainText(/under-18|name search/i);
+	});
+
 	test('skeleton renders during initial load + is replaced by real content', async ({
 		page
 	}) => {

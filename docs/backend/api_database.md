@@ -1310,7 +1310,7 @@ To read or write tokens, call the SECURITY DEFINER helpers:
 
 #### `jobs`
 
-Generic Postgres-backed job queue. First tenant was map matching (`kind = 'map_match'`); it now also hosts the Strava webhook ingest (`kind = 'strava_event'`), hourly token rotation (`kind = 'token_refresh'`), the run-photo EXIF-strip + thumbnail (`kind = 'photo_process'`), and the club-photo EXIF-strip + thumbnail (`kind = 'club_photo_process'`, migration `20270301_001`) that moved off / never lived in Edge Functions (see `roadmap.md` Phase 2 backend bullets). The `kind` CHECK allowlist is maintained by ALTER migrations (latest adds `club_photo_process`); a new kind must extend the CHECK + the Go dispatch switch + the pgtap kind test together. Data export moved to the Go worker too but as a synchronous HTTP endpoint (`POST /v1/export`), not a job kind, since the user blocks on a signed URL.
+Generic Postgres-backed job queue. First tenant was map matching (`kind = 'map_match'`); it now also hosts the Strava webhook ingest (`kind = 'strava_event'`), hourly token rotation (`kind = 'token_refresh'`), the run-photo EXIF-strip + thumbnail (`kind = 'photo_process'`), and the club-photo EXIF-strip + thumbnail (`kind = 'club_photo_process'`, migration `20270301_001`) that moved off / never lived in Edge Functions (see `roadmap.md` Phase 2 backend bullets). The `kind` CHECK allowlist is maintained by ALTER migrations (latest adds `data_export`, `20270603_001`); a new kind must extend the CHECK + the Go dispatch switch + the pgtap kind test together. Data export is a job kind as of [decisions § 717](../architecture/decisions.md) — `kind = 'data_export'`, enqueued by `enqueue_data_export` alongside its `data_export_jobs` state row, with `max_attempts = 2` (every attempt past the tus Finish uploads a whole archive) and a 15-minute per-attempt worker clock instead of the generic five. The subject no longer blocks on the signed URL: they poll `GET /v1/export/jobs/latest`, which mints it at read time.
 
 ```sql
 create table jobs (
@@ -1428,6 +1428,43 @@ create table rate_limits (
 
 ---
 
+#### `data_export_jobs`
+
+Durable state of one Art 20 export request (`20270603_001`, [decisions § 717](../architecture/decisions.md)). The sibling of the generic `jobs` queue entry, the same split `run_matched_tracks` uses: the `jobs` row is what the worker claims, this row is what the subject's status read sees.
+
+```sql
+create table data_export_jobs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  format text not null,          -- csv | gpx | backup
+  status text not null default 'queued',
+                                 -- queued | running | ready | failed | expired
+  object_path text,              -- key in the `exports` bucket; never a signed URL
+  run_count integer,
+  total_runs integer,
+  complete boolean,
+  error_code text,               -- machine token, <= 64 chars
+  started_at timestamptz,
+  finished_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index data_export_jobs_one_in_flight
+  on data_export_jobs (user_id) where status in ('queued', 'running');
+```
+
+**RLS on, zero policies, and no `authenticated` grant either.** The row is useless to a client without a signed URL, which only the service role can mint (the `exports` bucket carries no `storage.objects` policies at all, § 703), so the whole read goes through the worker's JWT-authed `GET /v1/export/jobs/latest`. It sits beside `app_quota` and `deletion_audit_log` on `role_grant_matrix_test.sql`'s service-role-only allow-list; denying at the grant level as well as through RLS means a policy added by mistake later still opens nothing. It is deliberately **excluded** from the Art 20 export itself (`exportGuardExclusions`): it is fulfilment metadata about the subject's own requests, not data they provided, and shipping it inside the archive it describes would be circular. It cascades away with the account (Art 17).
+
+**`object_path`, never a URL.** A 10-minute signed URL minted when the build finished is already spent by the time a subject who closed the tab comes back; the path is inert on its own and the status endpoint signs at read time.
+
+**RPCs** (both `service_role` only):
+- `enqueue_data_export(p_user_id uuid, p_format text)` → `(id, status, format, created_at, reused)`. Inserts the state row **and** its `jobs` entry in one statement — two round-trips from the HTTP handler could leave a state row nothing will ever build. Returns the export already in flight with `reused = true` rather than starting a second one; a race past that check is caught by the unique index and resolved to the same row. Stamps `max_attempts = 2` on the queue entry, not the table default of 5, because every attempt that reaches the tus Finish uploads a whole archive.
+- `expire_stale_export_jobs()` → count. Flips `ready` rows past the 7-day artifact-retention window to `expired`, called by `cleanup_stale_export_blobs` so a row cannot outlive its own object and keep offering a download that 404s. Split out because `storage.objects` refuses a direct DELETE on a current local stack, which puts the blob sweep itself out of pgtap's reach.
+
+Pinned by `data_export_jobs_test.sql` (19 assertions) + `jobs_kind_allowlist_test.sql`.
+
+---
+
 #### pg_cron schedules
 
 | Job | Schedule | What it does | Migration |
@@ -1435,7 +1472,7 @@ create table rate_limits (
 | `cleanup-stale-live-run-pings` | `*/15 * * * *` | Calls `cleanup_stale_live_run_pings()` to delete `live_run_pings` rows older than the retention window — keeps the spectator feed table bounded during a multi-hour event. | `20260602_001` |
 | `cleanup-stale-rate-limits` | `0 * * * *` (hourly) | Calls `cleanup_stale_rate_limits()` to GC elapsed `rate_limits` rows. | `20260604_001` |
 | `cleanup-stale-webhook-events` | `17 4 * * *` | Deletes `webhook_events` rows older than 30 days (RevenueCat/Stripe replay-dedupe table). | `20260623_001` |
-| `cleanup-stale-export-blobs` | `23 4 * * *` | Calls `cleanup_stale_export_blobs()` to remove expired data-export artifacts. | `20260720_001` |
+| `cleanup-stale-export-blobs` | `23 4 * * *` | Calls `cleanup_stale_export_blobs()` to remove expired data-export artifacts, then `expire_stale_export_jobs()` for the `data_export_jobs` rows that pointed at them — a `ready` row outliving its own object would keep offering a download that 404s (`20270603_001`). | `20260720_001` |
 | `jobs-stuck-alert` | `*/10 * * * *` | Calls `jobs_stuck_summary()` — surfaces wedged `running` jobs for the observability scraper. | `20260731_001` |
 | `enqueue-token-refresh` | `0 * * * *` | Inserts a `token_refresh` job into `jobs` for the Go worker (dedupe-safe: skips if a queued/running one exists). | `20260821_001` |
 | `purge-stale-coach-messages` | `17 3 * * *` | Calls `private.purge_stale_coach_messages()` (retention purge). | `20260922_001` |
@@ -1722,9 +1759,17 @@ No request body required. Irreversible.
 
 ---
 
+### `POST /v1/export/jobs` + `GET /v1/export/jobs/latest` (Go worker)
+
+The queued Art 20 rail ([decisions § 717](../architecture/decisions.md)). Both endpoints take the same `Authorization: Bearer <supabase access token>` the synchronous one does, and refuse with 503 when the worker has no JWT verification configured.
+
+**`POST /v1/export/jobs`** — body `{ "format": "csv" | "gpx" | "backup" }` (default `csv`). Answers **202** with `{ "job_id", "status", "format", "reused" }` and builds nothing on the caller's connection. An export already `queued` or `running` for the subject is returned with `reused: true` and **spends no rate-limit token** — a client retrying through a flaky connection would otherwise burn its whole hour's quota re-requesting the export it already has building. Rate limit otherwise unchanged: free 2/h, pro 8/h via `check_rate_limit_tiered`, fail-closed on an RPC error.
+
+**`GET /v1/export/jobs/latest`** — the subject's most recent export, so a page reloading mid-build needs nothing stored locally. Answers 200 with `{ "status", "job_id", "format", "requested_at" }` plus, when `status = "ready"`, `{ "url", "expires_in", "count", "total", "complete" }`. `status` is one of `none` (never asked), `queued`, `running`, `ready`, `failed` (with `error_code`), `expired` (the 7-day sweep collected the artifact), or `stalled` — a **read-time derivation**, never a stored state, for a row nothing has touched for longer than the worker's whole retry budget, which is what a crash between claim and result write looks like. The signed URL is minted **here**, not at build time, so its 10-minute clock starts when the subject asks; the web client re-reads at half that lifetime so a download link on screen cannot expire under them.
+
 ### `POST /export-data`
 
-> **Status: Deprecated.** Superseded by `POST /v1/export` on the Go worker (`apps/job_worker/internal/dataexport/`). Clients pick transport via `PUBLIC_EXPORT_HUB_URL` (web) / `EXPORT_HUB_URL` (mobile); unset → call the EF; set → call the worker. The EF is kept deployed as the rollback path.
+> **Status: Deprecated.** Superseded by the Go worker's **queued** export rail — `POST /v1/export/jobs` + `GET /v1/export/jobs/latest` (`apps/job_worker/internal/dataexport/`, [decisions § 717](../architecture/decisions.md)). Clients pick transport via `PUBLIC_EXPORT_HUB_URL` (web) / `EXPORT_HUB_URL` (mobile); unset → call the EF; set → call the worker. The EF is kept deployed as the rollback path and still builds **synchronously**, which is why the web client keeps a synchronous branch for it.
 
 Exports a user's data as a CSV, a GPX zip, or the full `run-app-backup` zip. GDPR data portability.
 

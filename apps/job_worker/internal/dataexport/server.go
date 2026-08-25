@@ -27,6 +27,15 @@
 // once the declared length arrives, so any mid-build failure aborts the
 // session and answers 500 with no artifact at all.
 //
+// Since decisions.md § 717 the production rail is QUEUED: `POST
+// /v1/export/jobs` enqueues a `data_export` job and answers with its id,
+// the worker builds it with no connection attached, and `GET
+// /v1/export/jobs/latest` reports the outcome and mints the signed URL
+// at read time. `POST /v1/export` — the synchronous rail below — is
+// deprecated and survives only for the un-migrated mobile client; both
+// go through the same `BuildArtifact`, so they cannot drift in what they
+// include.
+//
 // Rate limit + auth model is unchanged from the EF: HS256 JWT
 // over SUPABASE_JWT_SECRET (same as the live hub's authorizer),
 // then per-user tiered throttle via `check_rate_limit_tiered`
@@ -113,8 +122,20 @@ type Backend interface {
 	// CreateSignedURL returns a presigned Storage URL valid for
 	// `ttlSec` seconds. The caller hands this back to the client
 	// as the single download token; the user has no need for the
-	// underlying Storage path.
+	// underlying Storage path. Returns an error wrapping
+	// ErrArtifactGone when the object is no longer there, which the
+	// queued rail reports as an expiry rather than as an outage.
 	CreateSignedURL(ctx context.Context, path string, ttlSec int) (string, error)
+
+	// EnqueueDataExport queues one Art 20 export for `userID`, or
+	// returns the one already in flight (`Reused`). Both the state row
+	// and its queue entry land in one statement — see
+	// `enqueue_data_export`, migration 20270603_001.
+	EnqueueDataExport(ctx context.Context, userID, format string) (ExportJobRef, error)
+
+	// LatestDataExportJob returns the subject's most recent export
+	// request, or (nil, nil) when they have never asked for one.
+	LatestDataExportJob(ctx context.Context, userID string) (*ExportJobRow, error)
 
 	// StreamExportRoutes walks the user's saved routes for the
 	// `format=backup` path, page by page. Service role bypasses RLS; the
@@ -339,15 +360,30 @@ const (
 	MaxBodyBytes = 1024
 )
 
-// RegisterRoutes mounts POST /v1/export on [mux].
+// RegisterRoutes mounts the export endpoints on [mux].
+//
+// `/v1/export` is the deprecated synchronous rail; `/v1/export/jobs` +
+// `/v1/export/jobs/latest` are the queued one (decisions.md § 717).
+// Go's ServeMux longest-pattern-wins matching keeps the three apart
+// without a prefix handler.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/export", s.handle)
+	mux.HandleFunc("/v1/export/jobs", s.handleJobsCreate)
+	mux.HandleFunc("/v1/export/jobs/latest", s.handleJobsLatest)
 }
 
 type exportRequest struct {
 	Format string `json:"format"`
 }
 
+// handle serves the DEPRECATED synchronous POST /v1/export: it builds
+// the whole archive while the caller waits, so their timeout, a
+// disconnect, or a backgrounded app can end an export that would
+// otherwise have completed. It survives only because the mobile client
+// has not moved to `/v1/export/jobs` yet, and removing it would silently
+// demote mobile's Art 20 export to its narrower on-device archive — a
+// data-rights regression shipped to close a data-rights follow-up.
+// decisions.md § 717.
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if !s.Verifier.Enabled() {
 		s.log().Error("dataexport: JWT secret not configured; refusing")
@@ -407,91 +443,24 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ts := time.Now().UTC().Format("2006-01-02T15-04-05.000Z")
-	contentType, ext := "application/zip", "zip"
-	if format == "csv" {
-		contentType, ext = "text/csv", "csv"
-	}
-	objectPath := fmt.Sprintf("%s/exports/%s.%s", userID, ts, ext)
-
-	// The session opens before the first row is read: from here on the
-	// archive exists only as bytes in flight, and any failure below has
-	// to abort it or Storage keeps a partial upload.
-	sink := s.Backend.OpenExportArtifact(r.Context(), objectPath, contentType)
-	runs := RunSource(func(ctx context.Context, emit func([]ExportRun) error) (ExportCompleteness, error) {
-		return s.Backend.StreamExportRuns(ctx, userID, emit)
-	})
-
-	var (
-		built    BuildResult
-		buildErr error
-	)
-	switch format {
-	case "csv":
-		built, buildErr = WriteCSV(r.Context(), sink, runs)
-	case "gpx":
-		built, buildErr = WriteGpxZip(r.Context(), sink, runs, s.Backend.DownloadTrackBytes)
-	case "backup":
-		// Two small single-row reads the backup format needs beside the
-		// paged sections. Neither is worth failing the export over: a
-		// missing profile ships as null, missing prefs as an empty bag.
-		profile, perr := s.Backend.FetchExportProfile(r.Context(), userID)
-		if perr != nil {
-			s.log().Warn("dataexport: profile fetch failed; including null", "err", perr, "user_id", userID)
-			profile = nil
-		}
-		prefs, prefErr := s.Backend.FetchUserSettingsPrefs(r.Context(), userID)
-		if prefErr != nil {
-			s.log().Warn("dataexport: prefs fetch failed; including empty", "err", prefErr, "user_id", userID)
-			prefs = map[string]interface{}{}
-		}
-		built, buildErr = WriteBackupZip(r.Context(), sink, BuildBackupZipInput{
-			Runs: runs,
-			Routes: func(ctx context.Context, emit func([]ExportRoute) error) (ExportCompleteness, error) {
-				return s.Backend.StreamExportRoutes(ctx, userID, emit)
-			},
-			Profile:       profile,
-			SettingsPrefs: prefs,
-			UserID:        userID,
-			ExportedFrom:  "go-service",
-			ExtraTables: func(ctx context.Context, emit func(string, []map[string]interface{}) error) (ExportCompleteness, error) {
-				return s.Backend.StreamExportPersonalDataTables(ctx, userID, emit)
-			},
-		}, BackupFetchers{
-			RawTrack:    s.Backend.DownloadRawTrackBytes,
-			Photo:       s.Backend.DownloadPhoto,
-			Avatar:      s.Backend.DownloadAvatar,
-			ListObjects: s.Backend.ListStorageObjects,
-		})
-	}
-
+	built, buildErr := BuildArtifact(r.Context(), s.Backend, s.log(), userID, format)
 	if buildErr != nil {
-		sink.Abort()
-		var se *sectionError
-		if errors.As(buildErr, &se) {
-			s.log().Error("dataexport: section read failed", "err", buildErr, "section", se.section, "user_id", userID)
-			http.Error(w, fmt.Sprintf(`{"error":"%s_fetch_failed"}`, se.section), http.StatusInternalServerError)
+		if section := SectionOf(buildErr); section != "" {
+			s.log().Error("dataexport: section read failed", "err", buildErr, "section", section, "user_id", userID)
+			http.Error(w, fmt.Sprintf(`{"error":"%s_fetch_failed"}`, section), http.StatusInternalServerError)
+			return
+		}
+		if errors.Is(buildErr, ErrUpload) {
+			s.log().Error("dataexport: storage upload failed", "err", buildErr, "user_id", userID)
+			http.Error(w, `{"error":"upload_failed"}`, http.StatusInternalServerError)
 			return
 		}
 		s.log().Error("dataexport: archive build failed", "err", buildErr, "user_id", userID)
 		http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
 		return
 	}
-	// Until this returns, tus has not been told the archive's length and
-	// no object exists. A failure here is the upload's, not the build's.
-	if err := sink.Finish(); err != nil {
-		sink.Abort()
-		s.log().Error("dataexport: storage upload failed", "err", err, "user_id", userID)
-		http.Error(w, `{"error":"upload_failed"}`, http.StatusInternalServerError)
-		return
-	}
 
-	if !built.Completeness.IsComplete() {
-		s.log().Warn("dataexport: export is short of the database; manifest says so",
-			"user_id", userID, "incomplete", built.Completeness.Incomplete)
-	}
-
-	signed, err := s.Backend.CreateSignedURL(r.Context(), objectPath, SignedURLTTLSec)
+	signed, err := s.Backend.CreateSignedURL(r.Context(), built.ObjectPath, SignedURLTTLSec)
 	if err != nil {
 		s.log().Error("dataexport: signed URL failed", "err", err, "user_id", userID)
 		http.Error(w, `{"error":"signed_url_failed"}`, http.StatusInternalServerError)
@@ -505,8 +474,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		"url":        signed,
 		"expires_in": SignedURLTTLSec,
 		"count":      built.Runs,
-		"total":      built.Completeness.Totals["runs"],
-		"complete":   built.Completeness.IsComplete(),
+		"total":      built.TotalRuns,
+		"complete":   built.Complete,
 		"format":     format,
 	})
 }

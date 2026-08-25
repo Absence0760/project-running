@@ -25,6 +25,7 @@ class MetadataKeys {
   static const String distanceSource = 'distance_source';
   static const String elevationM = 'elevation_m';
   static const String event = 'event';
+  static const String expectedReturnAt = 'expected_return_at';
   static const String fastest10kS = 'fastest_10k_s';
   static const String fastest5kS = 'fastest_5k_s';
   static const String fastestHalfMarathonS = 'fastest_half_marathon_s';

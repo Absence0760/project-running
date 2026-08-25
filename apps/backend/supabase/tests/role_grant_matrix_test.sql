@@ -19,14 +19,18 @@ begin;
 
 select plan(7);
 
--- (1) Catch-all — readability. Only app_quota + deletion_audit_log are
--- intentionally service_role-only (no anon/authenticated grant at all).
+-- (1) Catch-all — readability. Only app_quota, deletion_audit_log and
+-- data_export_jobs are intentionally service_role-only (no anon/authenticated
+-- grant at all). data_export_jobs (20270603_001) holds the state of an Art 20
+-- export request; the row is useless to a client without a signed URL, which
+-- only the service role can mint, so the whole read goes through the Go
+-- worker's JWT-authed status endpoint and the table needs no client grant.
 select is(
   (select count(*)::int
      from pg_class c
      join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
      where c.relkind = 'r'
-       and c.relname not in ('app_quota', 'deletion_audit_log')
+       and c.relname not in ('app_quota', 'deletion_audit_log', 'data_export_jobs')
        and not has_table_privilege('authenticated', c.oid, 'SELECT')
        and not exists (
          select 1 from information_schema.role_column_grants g

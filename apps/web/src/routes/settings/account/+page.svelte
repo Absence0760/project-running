@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -36,11 +36,15 @@
 		unsubscribeFromPush,
 		getCurrentSubscription,
 	} from '$lib/util/push';
-	import { cloudExport } from '$lib/backup/cloud_export';
+	import { fetchCloudExportJob, startCloudExport } from '$lib/backup/cloud_export';
 	import {
+		type CloudExportFormat,
+		type CloudExportJob,
 		type CloudExportResponse,
 		type CloudExportShortfall,
+		cloudExportPollDelayMs,
 		cloudExportShortfall,
+		isCloudExportJobActive,
 	} from '$lib/backup/cloud_export_helpers';
 	import { m } from '$lib/i18n/store.svelte';
 	import PasswordInput from '$lib/components/PasswordInput.svelte';
@@ -75,11 +79,14 @@
 	let cycleLengthDays = $state('28');
 	let cycleLastPeriodStart = $state('');
 	let pregnancyDueDate = $state('');
-	// Date of birth is Art 9 demographic data — its persistence is gated
-	// on explicit health-data consent, mirroring the Demographics section
-	// of /settings/preferences. Without this, the account page was an
-	// unguarded second write path for DOB into user_settings.prefs
-	// (the DB lock trigger only protects user_profiles.health_data_consent_at).
+	// Date of birth is split across two stores with two rules, identical to
+	// /settings/preferences and /onboarding (decisions § 718): the
+	// `user_settings.prefs` mirror is the Art 9 HEALTH-USE copy the coach
+	// context + HR-max derivation read, so it persists only under explicit
+	// health-data consent and is nulled on withdrawal; the
+	// `user_profiles.date_of_birth` column is the AGE RECORD backing the
+	// under-18 discoverability floor, a child-protection purpose written
+	// whenever the runner supplies a date.
 	let healthDataConsent = $state(false);
 	let healthDataConsentAt = $state<string | null>(null);
 	// The versioned AI-processing consent record (decisions.md § 571). This
@@ -106,6 +113,20 @@
 	/// after the toast has gone, and the archive itself only says so
 	/// inside manifest.json.
 	let exportShortfall = $state<CloudExportShortfall | null>(null);
+	/// State of the subject's most recent QUEUED export (decisions.md
+	/// § 717). The archive is built off a job now, so the page has to be
+	/// able to say what is happening across a reload — the status
+	/// endpoint answers for the latest export rather than by id, so
+	/// nothing has to be persisted here to find the way back to it.
+	/// Null on the legacy Edge Function transport, which still builds
+	/// inline and has no job to watch.
+	let exportJob = $state<CloudExportJob | null>(null);
+	let exportStatusUnreadable = $state(false);
+	let exportPollTimer: ReturnType<typeof setTimeout> | null = null;
+	let exportPollFailures = 0;
+	const exportJobBuilding = $derived(
+		exportJob !== null && isCloudExportJobActive(exportJob.status),
+	);
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
@@ -239,6 +260,7 @@
 			.maybeSingle();
 		if (data?.prefs && typeof data.prefs === 'object') {
 			const p = data.prefs as Record<string, unknown>;
+			// Legacy fallback only — the canonical age record read below wins.
 			dateOfBirth = (p.date_of_birth as string) ?? '';
 			restingHr = (p.resting_hr_bpm as number)?.toString() ?? '';
 			maxHr = (p.max_hr_bpm as number)?.toString() ?? '';
@@ -258,13 +280,39 @@
 		handleInitial = (prof?.handle as string | null) ?? '';
 		handle = handleInitial;
 		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
+		// The age record is the source of truth for the field; the prefs bag
+		// read above only covers a legacy account that never wrote the
+		// column (§ 718). A withdrawal clears the mirror but not the record,
+		// so reading the bag alone would blank a DOB that is still on file.
+		dateOfBirth = (prof?.date_of_birth as string | null) ?? dateOfBirth;
 		aiDisclosure = aiDisclosureFromProfileRow(prof);
 		// Pre-tick the box if consent is already on record so a user can
 		// edit DOB / HR without re-consenting on every visit.
 		healthDataConsent = healthDataConsentAt != null;
 		await loadIdentities();
 		await refreshPushState();
+		await resumeExportJob();
 	});
+
+	/// Pick up an export that was already building (or has since
+	/// finished) when the page mounts. The whole point of the queued
+	/// rail is that the subject can close the tab, so the page has to be
+	/// able to find its way back with nothing stored locally — the
+	/// status endpoint answers for their LATEST export, so this is the
+	/// entire mechanism. A read that fails is silent here: a subject who
+	/// never asked for an export must not be shown an error about one.
+	async function resumeExportJob() {
+		try {
+			const job = await fetchCloudExportJob();
+			if (job.status === 'none') return;
+			exportJob = job;
+			if (job.status === 'ready') exportShortfall = cloudExportShortfall(job);
+			scheduleExportPoll(0);
+		} catch {
+			// Nothing to say. The subject learns of any real problem when
+			// they ask for an export.
+		}
+	}
 
 	async function withdrawCoachConsent() {
 		if (coachConsentWithdrawing) return;
@@ -434,16 +482,13 @@
 		saving = true;
 		saved = false;
 
-		// Date of birth is consent-gated. Fail loudly rather than silently
-		// dropping it, mirroring /settings/preferences.
-		if (dateOfBirth && !healthDataConsent) {
-			showToast(
-				m('settingsAccount.dobConsentRequired'),
-				'error',
-			);
-			saving = false;
-			return;
-		}
+		// No DOB-without-consent abort. It used to refuse the whole save,
+		// which both denied a non-consenting minor the age record the
+		// discoverability floor keys off AND deadlocked the page: the DOB
+		// input is populated from storage, so a runner who withdrew consent
+		// elsewhere could not save their display name and could not clear
+		// the DOB either. Consent gates the Art 9 mirror below, not the age
+		// record (§ 718).
 		if (healthDataConsent && healthDataConsentAt == null) {
 			// Grant — stamp the consent timestamp server-side via the
 			// SECURITY DEFINER RPC (first-stamp-wins; a direct write of
@@ -459,9 +504,35 @@
 			if (stampedAt) healthDataConsentAt = stampedAt as string;
 		}
 
+		if (!healthDataConsent && healthDataConsentAt != null) {
+			// Withdrawal (Art 7(3)) — the SECURITY DEFINER RPC nulls the
+			// consent stamp + gender/DOB/height and erases the weight series
+			// atomically; insert-or-update server-side so a missing profile
+			// row can't 0-row silent no-op (issue #233). Local state flips
+			// only after the server confirms. The Art 9 DOB mirror is cleared from
+			// prefs below; the age record is re-asserted by the profile write
+			// that follows, which is why that write moved after this one.
+			const { error: withdrawError } = await supabase.rpc(
+				'withdraw_health_data_consent',
+			);
+			if (withdrawError) {
+				showToast(
+					m('settingsAccount.saveFailed', { error: withdrawError.message }),
+					'error',
+				);
+				saving = false;
+				return;
+			}
+			healthDataConsentAt = null;
+		}
 		const profileUpdate: Record<string, unknown> = {
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
+			// The age record, carrying no consent term (§ 718). This write
+			// runs AFTER the withdrawal RPC above precisely to put back the
+			// column that RPC nulls — ending the Art 9 processing does not
+			// end the under-18 discoverability floor.
+			date_of_birth: dateOfBirth || null,
 		};
 		// Row-count-verified: user_profiles rows are client-provisioned, so a
 		// plain update against a missing row matches 0 rows and reports
@@ -488,25 +559,6 @@
 				saving = false;
 				return;
 			}
-		}
-		if (!healthDataConsent && healthDataConsentAt != null) {
-			// Withdrawal (Art 7(3)) — the SECURITY DEFINER RPC nulls the
-			// consent stamp + gender/DOB/height and erases the weight series
-			// atomically; insert-or-update server-side so a missing profile
-			// row can't 0-row silent no-op (issue #233). Local state flips
-			// only after the server confirms. DOB is cleared from prefs below.
-			const { error: withdrawError } = await supabase.rpc(
-				'withdraw_health_data_consent',
-			);
-			if (withdrawError) {
-				showToast(
-					m('settingsAccount.saveFailed', { error: withdrawError.message }),
-					'error',
-				);
-				saving = false;
-				return;
-			}
-			healthDataConsentAt = null;
 		}
 
 		// Persist DOB + HR into user_settings.prefs. DOB only when consented;
@@ -696,14 +748,7 @@
 	async function handleCloudGpxExport() {
 		exportingGpx = true;
 		try {
-			const res = await cloudExport('gpx');
-			// Trigger the download via the signed URL. `target=_blank`
-			// preserves the user's settings tab — the browser swaps to
-			// a download tab, then auto-closes after the GET completes.
-			window.open(res.url, '_blank', 'noopener');
-			announceExport(res);
-		} catch (e) {
-			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
+			await requestCloudExport('gpx');
 		} finally {
 			exportingGpx = false;
 		}
@@ -723,15 +768,113 @@
 	async function handleFullAccountArchive() {
 		exportingArchive = true;
 		try {
-			const res = await cloudExport('backup');
-			window.open(res.url, '_blank', 'noopener');
-			announceExport(res);
-		} catch (e) {
-			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
+			await requestCloudExport('backup');
 		} finally {
 			exportingArchive = false;
 		}
 	}
+
+	/// Ask for an export on whichever rail is configured.
+	///
+	/// The Go service enqueues and answers immediately, so nothing here
+	/// waits for the archive — the page starts watching the job instead,
+	/// and the subject may close the tab. The legacy Edge Function still
+	/// builds inline, so its finished archive comes straight back and
+	/// opens in a download tab exactly as before.
+	async function requestCloudExport(format: CloudExportFormat) {
+		try {
+			const started = await startCloudExport(format);
+			if (started.kind === 'ready') {
+				// Trigger the download via the signed URL. `target=_blank`
+				// preserves the user's settings tab — the browser swaps to
+				// a download tab, then auto-closes after the GET completes.
+				window.open(started.response.url, '_blank', 'noopener');
+				announceExport(started.response);
+				return;
+			}
+			exportStatusUnreadable = false;
+			exportPollFailures = 0;
+			exportJob = started.job;
+			showToast(m('settingsAccount.exportQueued'), 'info');
+			scheduleExportPoll(0);
+		} catch (e) {
+			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
+		}
+	}
+
+	function clearExportPoll() {
+		if (exportPollTimer !== null) {
+			clearTimeout(exportPollTimer);
+			exportPollTimer = null;
+		}
+	}
+
+	/// One timer, two jobs. While the archive is building it backs off
+	/// from 2s to 15s; once it is ready it re-reads at half the signed
+	/// URL's lifetime, because the URL is minted per read and a download
+	/// link left on the page would otherwise expire under the subject
+	/// while they are looking at it.
+	function scheduleExportPoll(attempt: number) {
+		clearExportPoll();
+		const job = exportJob;
+		if (!job) return;
+		let delay: number;
+		if (isCloudExportJobActive(job.status)) {
+			delay = cloudExportPollDelayMs(attempt);
+		} else if (job.status === 'ready') {
+			delay = Math.max(((job.expires_in ?? 600) * 1000) / 2, 30_000);
+		} else {
+			return;
+		}
+		exportPollTimer = setTimeout(() => {
+			void readExportJob(attempt + 1);
+		}, delay);
+	}
+
+	async function readExportJob(attempt: number) {
+		exportPollTimer = null;
+		let job: CloudExportJob;
+		try {
+			job = await fetchCloudExportJob();
+		} catch {
+			// A status read that failed is not an export that failed. Try
+			// again a few times before saying anything, and never rewrite
+			// the job the page is already showing on the strength of a
+			// network blip.
+			exportPollFailures += 1;
+			if (exportPollFailures >= 5) {
+				exportStatusUnreadable = true;
+				return;
+			}
+			scheduleExportPoll(attempt);
+			return;
+		}
+		exportPollFailures = 0;
+		exportStatusUnreadable = false;
+		const wasBuilding = exportJob !== null && isCloudExportJobActive(exportJob.status);
+		exportJob = job;
+		if (wasBuilding && job.status === 'ready') {
+			// Deliberately no window.open: this runs on a timer, not a
+			// user gesture, so a popup would be blocked. The subject gets
+			// a real download link on the page instead, which also serves
+			// the reload case identically.
+			exportShortfall = cloudExportShortfall(job);
+			if (exportShortfall) {
+				showToast(
+					m('settingsAccount.exportPartialReady', {
+						count: exportShortfall.count,
+						total: exportShortfall.total,
+					}),
+					'info',
+				);
+			} else {
+				showToast(m('settingsAccount.exportReady', { count: job.count ?? 0 }), 'success');
+			}
+		}
+		scheduleExportPoll(attempt);
+	}
+
+	onDestroy(clearExportPoll);
 
 	async function handleBackup() {
 		backingUp = true; backupProgress = null; backupShortfall = null;
@@ -1097,7 +1240,10 @@
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.dateOfBirth')}</span>
-				<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} disabled={!healthDataConsent} />
+				<!-- Not consent-disabled: the column it writes is the under-18
+				     discoverability floor's age record (§ 718). Consent gates
+				     the Art 9 prefs mirror, not the field. -->
+				<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} data-testid="date-of-birth" />
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.restingHr')}</span>
@@ -1386,22 +1532,24 @@
 			{m('settingsAccount.dataExportDescPrefix')}<code>runs.json</code>{m('settingsAccount.dataExportDescBetween')}<code>runs.json</code>{m('settingsAccount.dataExportDescSuffix')}
 		</p>
 		<div class="btn-row">
-			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson || exportingGpx || exportingArchive}>
+			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson || exportingGpx || exportingArchive || exportJobBuilding}>
 				<span class="material-symbols">download</span>
 				{exporting ? m('settingsAccount.exporting') : m('settingsAccount.exportCsv')}
 			</button>
-			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson || exportingGpx || exportingArchive}>
+			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson || exportingGpx || exportingArchive || exportJobBuilding}>
 				<span class="material-symbols">code</span>
 				{exportingJson ? m('settingsAccount.exporting') : m('settingsAccount.exportJson')}
 			</button>
 			<button
 				class="btn btn-outline"
 				onclick={handleCloudGpxExport}
-				disabled={exporting || exportingJson || exportingGpx || exportingArchive}
+				disabled={exporting || exportingJson || exportingGpx || exportingArchive || exportJobBuilding}
 				title={m('settingsAccount.cloudExportTitle')}
 			>
 				<span class="material-symbols">cloud_download</span>
-				{exportingGpx ? m('settingsAccount.buildingZip') : m('settingsAccount.cloudExport')}
+				{exportingGpx || (exportJobBuilding && exportJob?.format === 'gpx')
+					? m('settingsAccount.buildingZip')
+					: m('settingsAccount.cloudExport')}
 			</button>
 		</div>
 		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
@@ -1412,17 +1560,49 @@
 			<button
 				class="btn btn-outline"
 				onclick={handleFullAccountArchive}
-				disabled={exporting || exportingJson || exportingGpx || exportingArchive}
+				disabled={exporting || exportingJson || exportingGpx || exportingArchive || exportJobBuilding}
 				title={m('settingsAccount.fullArchiveTitle')}
 				data-testid="full-account-archive"
 			>
 				<span class="material-symbols">database</span>
-				{exportingArchive ? m('settingsAccount.buildingZip') : m('settingsAccount.fullArchive')}
+				{exportingArchive || (exportJobBuilding && exportJob?.format === 'backup')
+					? m('settingsAccount.buildingZip')
+					: m('settingsAccount.fullArchive')}
 			</button>
 		</div>
 		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
 			<strong>{m('settingsAccount.fullArchiveFootnotePrefix')}</strong>{m('settingsAccount.fullArchiveFootnoteSuffix')}
 		</p>
+		{#if exportJob && exportJob.status !== 'none'}
+			<p class="section-desc" role="status" data-testid="export-job-state">
+				{#if exportJob.status === 'queued' || exportJob.status === 'running'}
+					{m('settingsAccount.exportBuildingNotice')}
+				{:else if exportJob.status === 'ready' && exportJob.url}
+					{m('settingsAccount.exportReadyNotice')}
+					<a
+						class="btn btn-outline"
+						href={exportJob.url}
+						target="_blank"
+						rel="noopener"
+						data-testid="export-job-download"
+					>
+						<span class="material-symbols">download</span>
+						{m('settingsAccount.exportDownload')}
+					</a>
+				{:else if exportJob.status === 'expired'}
+					{m('settingsAccount.exportExpiredNotice')}
+				{:else if exportJob.status === 'stalled'}
+					{m('settingsAccount.exportStalledNotice')}
+				{:else}
+					{m('settingsAccount.exportFailedNotice', { error: exportJob.error_code ?? 'unknown' })}
+				{/if}
+			</p>
+		{/if}
+		{#if exportStatusUnreadable}
+			<p class="warn-text" role="status" data-testid="export-status-unreadable">
+				{m('settingsAccount.exportStatusUnavailable')}
+			</p>
+		{/if}
 		{#if exportShortfall}
 			<p class="warn-text" role="status" data-testid="export-shortfall">
 				{m('settingsAccount.exportPartialNotice', {

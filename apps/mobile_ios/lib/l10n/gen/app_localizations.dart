@@ -1403,6 +1403,42 @@ abstract class AppLocalizations {
   /// **'partner@example.com'**
   String get safetyAddHint;
 
+  /// Label for the optional safety-contact phone input (E.164 international format)
+  ///
+  /// In en, this message translates to:
+  /// **'Phone for SMS (optional)'**
+  String get safetyPhoneLabel;
+
+  /// Hint under the add-contact form explaining that SMS is additive and needs the contact’s own consent
+  ///
+  /// In en, this message translates to:
+  /// **'Add a mobile number and this contact can also be alerted by SMS — they choose whether to when they confirm. Alerts by email are always sent.'**
+  String get safetyPhoneHint;
+
+  /// Inline validation banner when the typed phone cannot be read as an international number
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the phone in international format, e.g. +447700900123.'**
+  String get safetyInvalidPhone;
+
+  /// Badge on a safety contact who has a number on file AND opted in to SMS
+  ///
+  /// In en, this message translates to:
+  /// **'SMS on'**
+  String get safetySmsBadge;
+
+  /// Shown on a safety contact with a number on file whose owner has not consented to SMS; the alert reaches them by email only
+  ///
+  /// In en, this message translates to:
+  /// **'SMS off — they haven\'t opted in yet'**
+  String get safetySmsPending;
+
+  /// Checkbox on an incoming safety-contact request, offered only when the requester stored a phone number
+  ///
+  /// In en, this message translates to:
+  /// **'Also alert me by SMS'**
+  String get safetyConfirmSmsLabel;
+
   /// Button to add a safety contact
   ///
   /// In en, this message translates to:
@@ -2458,6 +2494,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stop sharing'**
   String get runLiveShareStop;
+
+  /// Live-share sheet action opening the per-run expected-return control
+  ///
+  /// In en, this message translates to:
+  /// **'Not back by…'**
+  String get runLiveShareExpectedReturn;
+
+  /// Title of the per-run expected-return dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Not back by…'**
+  String get runExpectedReturnTitle;
+
+  /// Intro in the expected-return dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Pick when you expect to be done. If this run is still going then, your confirmed safety contacts get one alert with your live link.'**
+  String get runExpectedReturnIntro;
+
+  /// Honesty note in the expected-return dialog: the alarm survives the app being killed, and a run saved offline can still escalate
+  ///
+  /// In en, this message translates to:
+  /// **'The deadline is kept on the server, so it still counts if this phone dies. It clears when the run saves — a run that finishes with no signal can still alert until it syncs.'**
+  String get runExpectedReturnServerNote;
+
+  /// Expected-return option expressed in minutes from now
+  ///
+  /// In en, this message translates to:
+  /// **'In {minutes} min'**
+  String runExpectedReturnOptionMinutes(int minutes);
+
+  /// Expected-return option expressed in hours from now
+  ///
+  /// In en, this message translates to:
+  /// **'{hours, plural, =1{In 1 hour} other{In {hours} hours}}'**
+  String runExpectedReturnOptionHours(int hours);
+
+  /// Subtitle under an expected-return option showing the resulting local clock time
+  ///
+  /// In en, this message translates to:
+  /// **'Back by {time}'**
+  String runExpectedReturnBy(String time);
+
+  /// Shown in the expected-return dialog when an alarm is already armed
+  ///
+  /// In en, this message translates to:
+  /// **'Alert set for {time}.'**
+  String runExpectedReturnActive(String time);
+
+  /// Button clearing an armed expected-return alarm
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the alert'**
+  String get runExpectedReturnClear;
+
+  /// Banner after arming the expected-return alarm
+  ///
+  /// In en, this message translates to:
+  /// **'Return-time alert set.'**
+  String get runExpectedReturnSetToast;
+
+  /// Banner after clearing the expected-return alarm
+  ///
+  /// In en, this message translates to:
+  /// **'Return-time alert cleared.'**
+  String get runExpectedReturnClearedToast;
+
+  /// Banner when the expected-return write failed or was refused
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update the return-time alert.'**
+  String get runExpectedReturnFailed;
+
+  /// Banner when the expected-return state could not be read; the alarm lives on the server so it cannot be set offline
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the server to set a return-time alert.'**
+  String get runExpectedReturnUnavailable;
 
   /// Confirmation banner shown after the runner stops the live-tracking share mid-run
   ///

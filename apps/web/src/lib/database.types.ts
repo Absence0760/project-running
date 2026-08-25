@@ -633,6 +633,54 @@ export type Database = {
           },
         ]
       }
+      data_export_jobs: {
+        Row: {
+          complete: boolean | null
+          created_at: string
+          error_code: string | null
+          finished_at: string | null
+          format: string
+          id: string
+          object_path: string | null
+          run_count: number | null
+          started_at: string | null
+          status: string
+          total_runs: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          complete?: boolean | null
+          created_at?: string
+          error_code?: string | null
+          finished_at?: string | null
+          format: string
+          id?: string
+          object_path?: string | null
+          run_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_runs?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          complete?: boolean | null
+          created_at?: string
+          error_code?: string | null
+          finished_at?: string | null
+          format?: string
+          id?: string
+          object_path?: string | null
+          run_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_runs?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       deletion_audit_log: {
         Row: {
           deleted_at: string
@@ -5054,6 +5102,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      enqueue_data_export: {
+        Args: { p_format: string; p_user_id: string }
+        Returns: {
+          created_at: string
+          format: string
+          id: string
+          reused: boolean
+          status: string
+        }[]
+      }
       enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_lifecycle_drip: { Args: never; Returns: number }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
@@ -5068,6 +5126,7 @@ export type Database = {
           going_count: number
         }[]
       }
+      expire_stale_export_jobs: { Args: never; Returns: number }
       fetch_checkpoint_crossings_for_organiser: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: {

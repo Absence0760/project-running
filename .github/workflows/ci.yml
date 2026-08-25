@@ -335,6 +335,40 @@ jobs:
             echo "Split it into ADD CONSTRAINT ... NOT VALID plus a later VALIDATE CONSTRAINT — the playbook is docs/backend/migration_locks.md."
             exit 1
           fi
+      # deno.lock's `workspace` section is generated from the npm workspace's
+      # package.json files, and drifted on every web dep bump because nothing
+      # looked — six hand-sync commits between 2026-05 and 2026-07, each a
+      # session that had to work out what the file was first (decisions § 706).
+      # Belongs in this job rather than edge-functions: it is a
+      # generated-artifact-matches-its-source check like gen:types:check below
+      # it, it costs ~1 s, and it must not sit behind a Docker stack start that
+      # can fail first and take the signal with it.
+      #
+      # deno is what writes the section (it canonicalizes the ranges), so the
+      # guard needs the same toolchain the edge-functions job uses — but no
+      # network and no node_modules: it stages the package.json files in a temp
+      # dir and runs `deno check --no-remote` there.
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+      # Drift is checked BEFORE the tool's own suite, the reverse of the two
+      # migration guards above. Those run their tests first because a broken
+      # guard's verdict is worthless; here the suite's last case IS the drift
+      # check, so running it first would report "the tool is broken" over an
+      # ordinary stale lockfile. This order keeps both messages true: the
+      # second can only fire once the first has established there is no drift.
+      - name: deno.lock workspace section vs package.json
+        run: |
+          if ! npm run sync:deno-lock:check; then
+            echo "::error::The 'workspace' section of deno.lock has drifted from the npm workspace's package.json files. Nothing here is about the Edge Functions' integrity pins, the migrations, or the generated row types."
+            echo "Run 'pnpm sync:deno-lock' locally and commit the result — deno rewrites the section, because it canonicalizes 0.x ranges and a hand-edit does not stick."
+            exit 1
+          fi
+          if ! node --test scripts/sync_deno_lock.test.mjs; then
+            echo "::error::The deno.lock sync tool's own unit tests failed. The lockfile itself is in sync — the check above just passed — so this is a defect in scripts/sync_deno_lock.mjs, not drift."
+            echo "Fix scripts/sync_deno_lock.mjs (or its tests); reproduce with: node --test scripts/sync_deno_lock.test.mjs (needs deno on PATH, two cases skip without it)."
+            exit 1
+          fi
       # These two checks parse source files only (no DB), so they run BEFORE
       # the Supabase stack starts. Keeping them after it meant a broken stack
       # — e.g. the run-26820381977 migration-version collision — silently

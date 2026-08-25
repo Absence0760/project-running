@@ -36,6 +36,15 @@ updates:
   # The repo uses npm workspaces with a single root lockfile, so one
   # entry covers every package.json under it. Updates surface as
   # `chore(deps)` and the actual workspace is in the file paths.
+  #
+  # Run `pnpm sync:deno-lock` on the branch before merging — deno.lock's
+  # `workspace` section transcribes these package.json specs, Dependabot
+  # doesn't know about it, and the parity-types job fails on the drift
+  # (decisions.md § 706). Same shape as the mobile-twin caveat in the
+  # header above: auto-merge only queues on the required checks, so the
+  # PR waits for the human step rather than landing without it. Having
+  # CI push the sync onto this branch was refused, not deferred —
+  # decisions.md § 711.
   - package-ecosystem: "npm"
     directory: "/"
     schedule:

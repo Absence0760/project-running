@@ -818,6 +818,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyAddHint => 'partner@example.com';
 
   @override
+  String get safetyPhoneLabel => 'Phone for SMS (optional)';
+
+  @override
+  String get safetyPhoneHint =>
+      'Add a mobile number and this contact can also be alerted by SMS — they choose whether to when they confirm. Alerts by email are always sent.';
+
+  @override
+  String get safetyInvalidPhone =>
+      'Enter the phone in international format, e.g. +447700900123.';
+
+  @override
+  String get safetySmsBadge => 'SMS on';
+
+  @override
+  String get safetySmsPending => 'SMS off — they haven\'t opted in yet';
+
+  @override
+  String get safetyConfirmSmsLabel => 'Also alert me by SMS';
+
+  @override
   String get safetyAddButton => 'Add contact';
 
   @override
@@ -1409,6 +1429,63 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get runLiveShareStop => 'Stop sharing';
+
+  @override
+  String get runLiveShareExpectedReturn => 'Not back by…';
+
+  @override
+  String get runExpectedReturnTitle => 'Not back by…';
+
+  @override
+  String get runExpectedReturnIntro =>
+      'Pick when you expect to be done. If this run is still going then, your confirmed safety contacts get one alert with your live link.';
+
+  @override
+  String get runExpectedReturnServerNote =>
+      'The deadline is kept on the server, so it still counts if this phone dies. It clears when the run saves — a run that finishes with no signal can still alert until it syncs.';
+
+  @override
+  String runExpectedReturnOptionMinutes(int minutes) {
+    return 'In $minutes min';
+  }
+
+  @override
+  String runExpectedReturnOptionHours(int hours) {
+    String _temp0 = intl.Intl.pluralLogic(
+      hours,
+      locale: localeName,
+      other: 'In $hours hours',
+      one: 'In 1 hour',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runExpectedReturnBy(String time) {
+    return 'Back by $time';
+  }
+
+  @override
+  String runExpectedReturnActive(String time) {
+    return 'Alert set for $time.';
+  }
+
+  @override
+  String get runExpectedReturnClear => 'Clear the alert';
+
+  @override
+  String get runExpectedReturnSetToast => 'Return-time alert set.';
+
+  @override
+  String get runExpectedReturnClearedToast => 'Return-time alert cleared.';
+
+  @override
+  String get runExpectedReturnFailed =>
+      'Could not update the return-time alert.';
+
+  @override
+  String get runExpectedReturnUnavailable =>
+      'Could not reach the server to set a return-time alert.';
 
   @override
   String get runLiveShareStopped => 'Live sharing stopped';

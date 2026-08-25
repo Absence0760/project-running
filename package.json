@@ -87,6 +87,10 @@
     "gen:types:check": "pnpm -C apps/backend gen:types:check",
     "gen:dart": "dart run scripts/gen_dart_models.dart",
 
+    "//-- sync --": "deno.lock's `workspace` section is generated from the npm workspace's package.json files — re-sync it after any npm dep bump. Needs deno, but no network, no node_modules and no Docker. CI's parity-types job runs the :check half.",
+    "sync:deno-lock": "node scripts/sync_deno_lock.mjs",
+    "sync:deno-lock:check": "node scripts/sync_deno_lock.mjs --check",
+
     "//-- build --": "Production builds + install-to-device.",
     "build:web": "pnpm -C apps/web build",
     "build:android": "cd apps/mobile_android && flutter build apk",
