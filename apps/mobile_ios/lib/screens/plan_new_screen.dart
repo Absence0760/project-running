@@ -8,6 +8,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../plan_ramp.dart';
+import '../plan_start.dart';
 import '../race_plan_preset.dart';
 import '../social_service.dart' show ClubView, SocialService;
 import '../starter_plans.dart';
@@ -120,16 +121,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   bool _creatingStarter = false;
   bool _nameDefaulted = false;
 
-  static DateTime _nextSunday() {
-    var d = DateTime.now().add(const Duration(days: 7));
-    while (d.weekday != DateTime.sunday) {
-      // elapsed-time: walks until the weekday matches, and a 23-hour day only
-      // costs one extra iteration — the result is a Sunday either way, and the
-      // return below re-normalises it to a local midnight.
-      d = d.add(const Duration(days: 1));
-    }
-    return DateTime(d.year, d.month, d.day);
-  }
+  static DateTime _nextSunday() =>
+      nextSunday(DateTime.now().add(const Duration(days: 7)));
 
   @override
   void initState() {
@@ -533,6 +526,13 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                 initialDate: _startDate,
                 firstDate: DateTime.now(),
                 lastDate: DateTime.now().add(const Duration(days: 365)),
+                // Every day role the generator emits is an offset from day 0,
+                // which it treats as the Sunday long run — so a non-Sunday
+                // start shifts the whole week. Web can only snap the value
+                // afterwards (`<input type="date">` takes no predicate); the
+                // Material picker can refuse it in both calendar and keyboard
+                // modes, so it does.
+                selectableDayPredicate: isSunday,
               );
               if (!mounted) return;
               if (picked != null) setState(() => _startDate = picked);
