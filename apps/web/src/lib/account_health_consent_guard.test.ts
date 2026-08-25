@@ -38,19 +38,24 @@ test('account page writes the DOB age record without a consent term', () => {
 	);
 });
 
-test('account page re-asserts the age record after the withdrawal RPC', () => {
-	// withdraw_health_data_consent() nulls user_profiles.date_of_birth
-	// server-side. Ending the Art 9 processing does not end the child-safety
-	// floor, so the profile write must run AFTER the RPC or a withdrawal
-	// silently makes a declared minor name-searchable again.
+test('the withdrawal RPC is not asked to clear the age record', () => {
+	// § 721 moved this to the server: withdraw_health_data_consent() nulls
+	// the Art 9 columns and leaves user_profiles.date_of_birth alone, so the
+	// page no longer orders its profile write after the RPC to put the
+	// column back. What must not return is a client-side compensation that
+	// re-asserts the record only on the withdrawal arm — that is the
+	// crash-window § 718 filed and the pgtap
+	// withdraw_health_data_consent_test.sql now pins directly.
 	const source = read(SOURCE);
-	const withdrawAt = source.indexOf("supabase.rpc(\n\t\t\t\t'withdraw_health_data_consent',");
-	assert.ok(withdrawAt > 0, 'withdrawal RPC call not found');
-	const profileWriteAt = source.indexOf('date_of_birth: dateOfBirth || null');
-	assert.ok(profileWriteAt > 0, 'age-record writeback not found');
-	assert.ok(
-		profileWriteAt > withdrawAt,
-		'the age-record write must follow the withdrawal RPC that nulls the column',
+	const withdrawArm = source.slice(
+		source.indexOf("supabase.rpc(\n\t\t\t\t'withdraw_health_data_consent',"),
+		source.indexOf('const profileUpdate'),
+	);
+	assert.ok(withdrawArm.length > 0, 'withdrawal arm not found');
+	assert.doesNotMatch(
+		withdrawArm,
+		/date_of_birth/,
+		'the withdrawal arm must not carry its own age-record write',
 	);
 });
 
