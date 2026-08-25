@@ -49,7 +49,7 @@ class _SafetyApi extends ApiClient {
       ];
 
   @override
-  Future<bool> confirmSafetyRequest(String id) async {
+  Future<bool> confirmSafetyRequest(String id, {bool smsOptIn = false}) async {
     confirmCalls++;
     await confirmGate.future;
     return true;
@@ -73,7 +73,7 @@ class _AddFailApi extends ApiClient {
       const [];
 
   @override
-  Future<SafetyContact> addSafetyContact(String email) async {
+  Future<SafetyContact> addSafetyContact(String email, {String? phone}) async {
     addCalls++;
     throw Exception('network down');
   }
