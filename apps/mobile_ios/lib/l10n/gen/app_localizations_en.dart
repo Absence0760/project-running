@@ -818,6 +818,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetyAddHint => 'partner@example.com';
 
   @override
+  String get safetyPhoneLabel => 'Phone for SMS (optional)';
+
+  @override
+  String get safetyPhoneHint =>
+      'Add a mobile number and this contact can also be alerted by SMS — they choose whether to when they confirm. Alerts by email are always sent.';
+
+  @override
+  String get safetyInvalidPhone =>
+      'Enter the phone in international format, e.g. +447700900123.';
+
+  @override
+  String get safetySmsBadge => 'SMS on';
+
+  @override
+  String get safetySmsPending => 'SMS off — they haven\'t opted in yet';
+
+  @override
+  String get safetyConfirmSmsLabel => 'Also alert me by SMS';
+
+  @override
   String get safetyAddButton => 'Add contact';
 
   @override

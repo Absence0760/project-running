@@ -1403,6 +1403,42 @@ abstract class AppLocalizations {
   /// **'partner@example.com'**
   String get safetyAddHint;
 
+  /// Label for the optional safety-contact phone input (E.164 international format)
+  ///
+  /// In en, this message translates to:
+  /// **'Phone for SMS (optional)'**
+  String get safetyPhoneLabel;
+
+  /// Hint under the add-contact form explaining that SMS is additive and needs the contact’s own consent
+  ///
+  /// In en, this message translates to:
+  /// **'Add a mobile number and this contact can also be alerted by SMS — they choose whether to when they confirm. Alerts by email are always sent.'**
+  String get safetyPhoneHint;
+
+  /// Inline validation banner when the typed phone cannot be read as an international number
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the phone in international format, e.g. +447700900123.'**
+  String get safetyInvalidPhone;
+
+  /// Badge on a safety contact who has a number on file AND opted in to SMS
+  ///
+  /// In en, this message translates to:
+  /// **'SMS on'**
+  String get safetySmsBadge;
+
+  /// Shown on a safety contact with a number on file whose owner has not consented to SMS; the alert reaches them by email only
+  ///
+  /// In en, this message translates to:
+  /// **'SMS off — they haven\'t opted in yet'**
+  String get safetySmsPending;
+
+  /// Checkbox on an incoming safety-contact request, offered only when the requester stored a phone number
+  ///
+  /// In en, this message translates to:
+  /// **'Also alert me by SMS'**
+  String get safetyConfirmSmsLabel;
+
   /// Button to add a safety contact
   ///
   /// In en, this message translates to:

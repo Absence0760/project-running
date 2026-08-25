@@ -828,6 +828,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetyAddHint => 'parceiro@example.com';
 
   @override
+  String get safetyPhoneLabel => 'Telefone para SMS (opcional)';
+
+  @override
+  String get safetyPhoneHint =>
+      'Adicione um número de telemóvel e este contacto também poderá ser avisado por SMS — decide ao confirmar. Os avisos por e-mail são sempre enviados.';
+
+  @override
+  String get safetyInvalidPhone =>
+      'Introduza o telefone no formato internacional, ex.: +447700900123.';
+
+  @override
+  String get safetySmsBadge => 'SMS ativado';
+
+  @override
+  String get safetySmsPending => 'SMS desativado — ainda não aceitou';
+
+  @override
+  String get safetyConfirmSmsLabel => 'Avisar-me também por SMS';
+
+  @override
   String get safetyAddButton => 'Adicionar contato';
 
   @override
@@ -14270,6 +14290,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get safetyAddHint => 'parceiro@example.com';
+
+  @override
+  String get safetyPhoneLabel => 'Telefone para SMS (opcional)';
+
+  @override
+  String get safetyPhoneHint =>
+      'Adicione um número de celular e este contato também poderá ser avisado por SMS — ele decide ao confirmar. Os avisos por e-mail são sempre enviados.';
+
+  @override
+  String get safetyInvalidPhone =>
+      'Digite o telefone no formato internacional, ex.: +447700900123.';
+
+  @override
+  String get safetySmsBadge => 'SMS ativado';
+
+  @override
+  String get safetySmsPending => 'SMS desativado — ainda não aceitou';
+
+  @override
+  String get safetyConfirmSmsLabel => 'Avisar-me também por SMS';
 
   @override
   String get safetyAddButton => 'Adicionar contato';

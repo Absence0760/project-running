@@ -1069,6 +1069,30 @@
   "@safetyAddHint": {
     "description": "Example email placeholder in the add-safety-contact input; the local part is localized, the example.com domain is RFC 2606 reserved and must stay"
   },
+  "safetyPhoneLabel": "Phone for SMS (optional)",
+  "@safetyPhoneLabel": {
+    "description": "Label for the optional safety-contact phone input (E.164 international format)"
+  },
+  "safetyPhoneHint": "Add a mobile number and this contact can also be alerted by SMS — they choose whether to when they confirm. Alerts by email are always sent.",
+  "@safetyPhoneHint": {
+    "description": "Hint under the add-contact form explaining that SMS is additive and needs the contact’s own consent"
+  },
+  "safetyInvalidPhone": "Enter the phone in international format, e.g. +447700900123.",
+  "@safetyInvalidPhone": {
+    "description": "Inline validation banner when the typed phone cannot be read as an international number"
+  },
+  "safetySmsBadge": "SMS on",
+  "@safetySmsBadge": {
+    "description": "Badge on a safety contact who has a number on file AND opted in to SMS"
+  },
+  "safetySmsPending": "SMS off — they haven't opted in yet",
+  "@safetySmsPending": {
+    "description": "Shown on a safety contact with a number on file whose owner has not consented to SMS; the alert reaches them by email only"
+  },
+  "safetyConfirmSmsLabel": "Also alert me by SMS",
+  "@safetyConfirmSmsLabel": {
+    "description": "Checkbox on an incoming safety-contact request, offered only when the requester stored a phone number"
+  },
   "safetyAddButton": "Add contact",
   "@safetyAddButton": {
     "description": "Button to add a safety contact"

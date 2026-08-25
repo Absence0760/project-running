@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../auth_error.dart';
+import '../e164.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../off_route_alert.dart';
 import '../settings_sync.dart';
@@ -35,6 +36,11 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
   static final RegExp _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   final _emailCtl = TextEditingController();
+  final _phoneCtl = TextEditingController();
+
+  // Per-request SMS opt-in choice. Only offered where the requester stored a
+  // number (`hasPhone`) — an opt-in against no number consents to nothing.
+  final Set<String> _smsOptIn = <String>{};
 
   bool _loading = true;
   bool _adding = false;
@@ -143,6 +149,7 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
   @override
   void dispose() {
     _emailCtl.dispose();
+    _phoneCtl.dispose();
     super.dispose();
   }
 
@@ -187,18 +194,26 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
       _banner(l10n.safetyInvalidEmail);
       return;
     }
+    // A number typed on a phone keypad arrives punctuated; normalise before
+    // grading so only a genuinely unreachable entry is refused.
+    final phone = normaliseE164(_phoneCtl.text);
+    if (_phoneCtl.text.trim().isNotEmpty && phone == null) {
+      _banner(l10n.safetyInvalidPhone);
+      return;
+    }
     final api = widget.api;
     if (api == null) return;
     setState(() => _adding = true);
     try {
-      await api.addSafetyContact(value);
+      await api.addSafetyContact(value, phone: phone);
       _emailCtl.clear();
+      _phoneCtl.clear();
       await _reload();
       _banner(l10n.safetyAddedToast);
     } catch (e) {
       debugPrint('safety add failed: $e');
-      // The email text survives (cleared only on success), so a retry
-      // re-submits exactly what the user typed.
+      // The typed text survives (cleared only on success), so a retry
+      // re-submits exactly what the user entered.
       _banner(l10n.safetyAddFailed(friendlyError(l10n, e)), onRetry: _add);
     } finally {
       if (mounted) setState(() => _adding = false);
@@ -244,7 +259,9 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
     if (api == null || _respondingId != null) return;
     setState(() => _respondingId = req.id);
     try {
-      await api.confirmSafetyRequest(req.id);
+      await api.confirmSafetyRequest(req.id,
+          smsOptIn: req.hasPhone && _smsOptIn.contains(req.id));
+      _smsOptIn.remove(req.id);
       await _reload();
       _banner(l10n.safetyConfirmedToast);
     } catch (e) {
@@ -314,6 +331,28 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    controller: _phoneCtl,
+                    keyboardType: TextInputType.phone,
+                    autocorrect: false,
+                    enabled: !_adding,
+                    decoration: InputDecoration(
+                      labelText: l10n.safetyPhoneLabel,
+                      hintText: '+447700900123',
+                    ),
+                    onSubmitted: (_) => _adding ? null : _add(),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Text(
+                    l10n.safetyPhoneHint,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Align(
                     alignment: AlignmentDirectional.centerEnd,
                     child: FilledButton(
@@ -336,16 +375,40 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                 else
                   for (final c in _contacts)
                     ListTile(
+                      isThreeLine: c.contactPhone != null,
                       title: Text(c.contactEmail),
-                      subtitle: Text(
-                        c.isConfirmed
-                            ? l10n.safetyStatusConfirmed
-                            : l10n.safetyStatusPending,
-                        style: TextStyle(
-                          color: c.isConfirmed
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            c.isConfirmed
+                                ? l10n.safetyStatusConfirmed
+                                : l10n.safetyStatusPending,
+                            style: TextStyle(
+                              color: c.isConfirmed
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          // The number is the owner's claim; the opt-in is the
+                          // contact's consent. Only both together reach anyone
+                          // by SMS, so a stored-but-unarmed number says so
+                          // outright rather than rendering as silence the
+                          // owner would read as working.
+                          if (c.isSmsReachable)
+                            Text(
+                              l10n.safetySmsBadge,
+                              style: TextStyle(
+                                  color: theme.colorScheme.primary),
+                            )
+                          else if (c.isSmsAwaitingOptIn)
+                            Text(
+                              l10n.safetySmsPending,
+                              style: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant),
+                            ),
+                        ],
                       ),
                       trailing: TextButton(
                         onPressed: () => _remove(c),
@@ -429,7 +492,7 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                           color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ),
-                  for (final req in _pending)
+                  for (final req in _pending) ...[
                     ListTile(
                       title: Text(
                         l10n.safetyIncomingFrom(
@@ -438,8 +501,26 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                               : req.ownerName,
                         ),
                       ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    ),
+                    // Offered only where the requester stored a number: an
+                    // opt-in against no number consents to nothing, and the
+                    // RPC forces it null anyway.
+                    if (req.hasPhone)
+                      CheckboxListTile(
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        value: _smsOptIn.contains(req.id),
+                        onChanged: _respondingId != null
+                            ? null
+                            : (v) => setState(() => v == true
+                                ? _smsOptIn.add(req.id)
+                                : _smsOptIn.remove(req.id)),
+                        title: Text(l10n.safetyConfirmSmsLabel),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
                             onPressed: _respondingId != null
@@ -457,6 +538,7 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
                         ],
                       ),
                     ),
+                  ],
                 ],
               ],
             ),

@@ -791,6 +791,25 @@ class AppLocalizationsJa extends AppLocalizations {
   String get safetyAddHint => 'partner@example.com';
 
   @override
+  String get safetyPhoneLabel => 'SMS用電話番号（任意）';
+
+  @override
+  String get safetyPhoneHint =>
+      '携帯番号を追加すると、この連絡先はSMSでも通知を受け取れます。受け取るかどうかは承認時に本人が選びます。メール通知は常に送信されます。';
+
+  @override
+  String get safetyInvalidPhone => '電話番号は国際形式で入力してください（例: +447700900123）。';
+
+  @override
+  String get safetySmsBadge => 'SMS有効';
+
+  @override
+  String get safetySmsPending => 'SMS無効 — まだ同意されていません';
+
+  @override
+  String get safetyConfirmSmsLabel => 'SMSでも通知する';
+
+  @override
   String get safetyAddButton => '連絡先を追加';
 
   @override

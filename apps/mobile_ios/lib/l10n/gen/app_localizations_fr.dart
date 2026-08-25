@@ -828,6 +828,26 @@ class AppLocalizationsFr extends AppLocalizations {
   String get safetyAddHint => 'partenaire@example.com';
 
   @override
+  String get safetyPhoneLabel => 'Téléphone pour SMS (facultatif)';
+
+  @override
+  String get safetyPhoneHint =>
+      'Ajoutez un numéro de mobile et ce contact pourra aussi être alerté par SMS — il choisit lors de la confirmation. Les alertes par e-mail sont toujours envoyées.';
+
+  @override
+  String get safetyInvalidPhone =>
+      'Saisissez le numéro au format international, par ex. +447700900123.';
+
+  @override
+  String get safetySmsBadge => 'SMS activé';
+
+  @override
+  String get safetySmsPending => 'SMS désactivé — pas encore accepté';
+
+  @override
+  String get safetyConfirmSmsLabel => 'M\'alerter aussi par SMS';
+
+  @override
   String get safetyAddButton => 'Ajouter un contact';
 
   @override
