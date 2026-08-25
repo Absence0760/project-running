@@ -1,23 +1,41 @@
 <script lang="ts">
 	import { toastStore } from '$lib/stores/toast.svelte';
+
+	// A live region only announces changes that happen INSIDE it while it is
+	// already in the accessibility tree. The region used to be mounted by the
+	// same `{#if}` that mounted the toast, so region and text appeared in one
+	// mutation and the first toast of a burst — the ordinary case, one toast at
+	// a time — was announced by nothing. Both regions are therefore permanent
+	// and only their text changes, the idiom CoachChat's announcer already uses.
+	// The visible stack is aria-hidden so a toast is never spoken twice.
+	const errors = $derived(toastStore.toasts.filter((t) => t.type === 'error'));
+	const others = $derived(toastStore.toasts.filter((t) => t.type !== 'error'));
+	const assertiveText = $derived(errors.at(-1)?.message ?? '');
+	const politeText = $derived(others.at(-1)?.message ?? '');
 </script>
 
 <!--
-	audit/accessibility High (May 2026): the container had no
-	aria-live region, so screen readers never announced "Run
-	saved" / "Export failed" / etc. Wrap in role="status" +
-	aria-live="polite" by default; per-toast aria-live="assertive"
-	for error toasts so the user is interrupted on failure but not
-	on routine confirmations.
+	`aria-live` rather than role="status" / role="alert": the roles are
+	shorthand for exactly these politeness values, and adding a permanent
+	`alert` role to every page would make a bare getByRole('alert') ambiguous
+	on surfaces that assert on their own inline error banner.
 -->
+<div class="visually-hidden" aria-live="polite" aria-atomic="true" data-testid="toast-live-polite">
+	{politeText}
+</div>
+<div
+	class="visually-hidden"
+	aria-live="assertive"
+	aria-atomic="true"
+	data-testid="toast-live-assertive"
+>
+	{assertiveText}
+</div>
+
 {#if toastStore.toasts.length > 0}
-	<div class="toast-container" role="status" aria-live="polite" aria-atomic="false">
+	<div class="toast-container" aria-hidden="true">
 		{#each toastStore.toasts as t (t.id)}
-			<div
-				class="toast toast-{t.type}"
-				role={t.type === 'error' ? 'alert' : 'status'}
-				aria-live={t.type === 'error' ? 'assertive' : 'polite'}
-			>
+			<div class="toast toast-{t.type}">
 				{t.message}
 			</div>
 		{/each}
