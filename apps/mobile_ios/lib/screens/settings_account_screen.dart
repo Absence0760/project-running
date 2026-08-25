@@ -1429,7 +1429,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
               ),
               ListTile(
                 key: const Key('account-export-tile'),
-                leading: const Icon(Icons.cloud_download_outlined),
+                leading: const Icon(Icons.cloud_download),
                 title: Text(l10n.settingsAccountAccountExport),
                 subtitle: Text(l10n.settingsAccountAccountExportSubtitle),
                 trailing: const Icon(Icons.chevron_right),
