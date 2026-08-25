@@ -6555,6 +6555,77 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsAccountImportSubtitle => 'Strava, GPX, TCX';
 
   @override
+  String get settingsAccountAccountExport => 'Kontoexport';
+
+  @override
+  String get settingsAccountAccountExportSubtitle =>
+      'Alles in deinem Konto — Läufe, Routen, Nachrichten, Bestellungen, Integrationen, Notfallkontakte. Wird auf unserem Server erstellt; du kannst die App währenddessen schließen.';
+
+  @override
+  String get settingsAccountExportQueued =>
+      'Dein Export wird erstellt. Du kannst die App schließen — komm zum Herunterladen hierher zurück.';
+
+  @override
+  String get settingsAccountExportBuildingNotice =>
+      'Dein Kontoexport wird erstellt. Du kannst die App schließen; er läuft ohne dich weiter.';
+
+  @override
+  String get settingsAccountExportReadyNotice => 'Dein Kontoexport ist fertig.';
+
+  @override
+  String get settingsAccountExportDownload => 'Herunterladen und teilen';
+
+  @override
+  String settingsAccountExportFailedNotice(String error) {
+    return 'Dein letzter Kontoexport ist fehlgeschlagen ($error). Es wurde nichts gelöscht — fordere einen neuen an.';
+  }
+
+  @override
+  String get settingsAccountExportStalledNotice =>
+      'Dein letzter Kontoexport antwortet nicht mehr. Es wurde nichts gelöscht — fordere einen neuen an.';
+
+  @override
+  String get settingsAccountExportExpiredNotice =>
+      'Dein letzter Kontoexport ist abgelaufen. Exporte werden nach 7 Tagen gelöscht — fordere einen neuen an.';
+
+  @override
+  String get settingsAccountExportStatusUnavailable =>
+      'Der Exportdienst ist nicht erreichbar, um den Status zu prüfen. Der Export läuft möglicherweise noch.';
+
+  @override
+  String get settingsAccountExportUnavailable =>
+      'Der Kontoexport-Dienst ist in diesem Build nicht eingerichtet. Das vollständige Backup unten wird auf diesem Gerät erstellt und enthält deine Kontodaten nicht.';
+
+  @override
+  String settingsAccountExportUnsyncedWarning(int count) {
+    return '$count Läufe sind noch nicht synchronisiert. Der Kontoexport wird auf dem Server erstellt und enthält sie daher nicht — nutze das vollständige Backup, um sie zu sichern.';
+  }
+
+  @override
+  String get settingsAccountBackupOnDeviceNotice =>
+      'Dein letztes vollständiges Backup wurde auf diesem Gerät erstellt. Es enthält deine Läufe, Routen, dein Profil, Einstellungen sowie Gym- und Ernährungsprotokolle — aber nicht deine Kontodaten. Nutze den Kontoexport für die vollständige Kopie.';
+
+  @override
+  String settingsAccountExportRateLimited(int seconds) {
+    return 'Exportlimit erreicht — versuche es in $seconds Sekunden erneut.';
+  }
+
+  @override
+  String settingsAccountExportRequestFailed(String error) {
+    return 'Export konnte nicht angefordert werden: $error';
+  }
+
+  @override
+  String settingsAccountExportDownloadFailed(String error) {
+    return 'Export konnte nicht heruntergeladen werden: $error';
+  }
+
+  @override
+  String settingsAccountExportReadyBanner(int count) {
+    return 'Dein Kontoexport ist fertig — $count Läufe.';
+  }
+
+  @override
   String get settingsAccountFullBackup => 'Vollständiges Backup';
 
   @override
@@ -10628,6 +10699,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String nutritionTargetsAgeYears(int n) {
     return '$n Jahre';
   }
+
+  @override
+  String get nutritionTargetsAgeConsentWithheld =>
+      'Benötigt Einwilligung zu Gesundheitsdaten';
 
   @override
   String get nutritionTargetsLoadError =>

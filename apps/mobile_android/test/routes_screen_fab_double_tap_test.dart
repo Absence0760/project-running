@@ -15,6 +15,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/routes_screen.dart';
+import 'pump_until.dart';
 
 class _FakeApi extends ApiClient {}
 
@@ -113,7 +114,8 @@ void main() {
     expect(_onPressed(tester, 'Import'), isNull);
 
     picker.completer.complete(null);
-    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await pumpUntil(tester, () => _onPressed(tester, 'Import') != null,
+        describe: 'the released picker to re-arm both FABs');
     await tester.pumpAndSettle();
 
     expect(_onPressed(tester, 'Build'), isNotNull);

@@ -9,6 +9,7 @@ import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/add_run_screen.dart';
+import 'pump_until.dart';
 
 late Directory _runsDir;
 
@@ -144,14 +145,15 @@ void main() {
       );
       await tester.pump();
 
-      // runStore.save writes a real file, which the fake-async clock never
-      // pumps — the tap has to run on the real event loop (runs_screen_test
-      // idiom).
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Save'));
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      });
-      await tester.pump();
+      // runStore.save encodes the track off-isolate and writes a real file,
+      // neither of which the fake-async clock advances — so the tap has to run
+      // on the real event loop, and the wait is for the store's own
+      // notification, which lands after the write and the index flush.
+      var saved = false;
+      s.runs.addListener(() => saved = true);
+      await tester.runAsync(() => tester.tap(find.text('Save')));
+      await pumpUntil(tester, () => saved,
+          describe: "the run's file + index to land on disk");
 
       expect(s.runs.runs.single.distanceMetres, closeTo(5200, 0.01));
     });

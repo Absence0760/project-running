@@ -6566,6 +6566,78 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsAccountImportSubtitle => 'Strava, GPX, TCX';
 
   @override
+  String get settingsAccountAccountExport => 'Export du compte';
+
+  @override
+  String get settingsAccountAccountExportSubtitle =>
+      'Tout ce que contient ton compte : courses, itinéraires, messages, commandes, intégrations, contacts d\'urgence. Créé sur notre serveur ; tu peux fermer l\'appli pendant ce temps.';
+
+  @override
+  String get settingsAccountExportQueued =>
+      'Ton export est en cours de création. Tu peux fermer l\'appli — reviens ici pour le télécharger.';
+
+  @override
+  String get settingsAccountExportBuildingNotice =>
+      'Ton export de compte est en cours de création. Tu peux fermer l\'appli ; il continue sans toi.';
+
+  @override
+  String get settingsAccountExportReadyNotice =>
+      'Ton export de compte est prêt.';
+
+  @override
+  String get settingsAccountExportDownload => 'Télécharger et partager';
+
+  @override
+  String settingsAccountExportFailedNotice(String error) {
+    return 'Ton dernier export de compte a échoué ($error). Rien n\'a été supprimé — demandes-en un autre.';
+  }
+
+  @override
+  String get settingsAccountExportStalledNotice =>
+      'Ton dernier export de compte ne répond plus. Rien n\'a été supprimé — demandes-en un autre.';
+
+  @override
+  String get settingsAccountExportExpiredNotice =>
+      'Ton dernier export de compte a expiré. Les exports sont supprimés au bout de 7 jours — demandes-en un autre.';
+
+  @override
+  String get settingsAccountExportStatusUnavailable =>
+      'Impossible de joindre le service d\'export pour vérifier l\'état. Il est peut-être encore en cours.';
+
+  @override
+  String get settingsAccountExportUnavailable =>
+      'Le service d\'export du compte n\'est pas configuré dans cette version. La sauvegarde complète ci-dessous est créée sur cet appareil et n\'inclut pas les données de ton compte.';
+
+  @override
+  String settingsAccountExportUnsyncedWarning(int count) {
+    return '$count courses ne sont pas encore synchronisées. L\'export du compte est créé sur le serveur, il ne les inclura donc pas — utilise la sauvegarde complète pour les conserver.';
+  }
+
+  @override
+  String get settingsAccountBackupOnDeviceNotice =>
+      'Ta dernière sauvegarde complète a été créée sur cet appareil. Elle contient tes courses, itinéraires, ton profil, tes préférences et tes journaux de salle et de repas — mais pas les données de ton compte. Utilise l\'export du compte pour la copie complète.';
+
+  @override
+  String settingsAccountExportRateLimited(int seconds) {
+    return 'Limite d\'exports atteinte — réessaie dans $seconds secondes.';
+  }
+
+  @override
+  String settingsAccountExportRequestFailed(String error) {
+    return 'Impossible de demander ton export : $error';
+  }
+
+  @override
+  String settingsAccountExportDownloadFailed(String error) {
+    return 'Impossible de télécharger ton export : $error';
+  }
+
+  @override
+  String settingsAccountExportReadyBanner(int count) {
+    return 'Ton export de compte est prêt — $count courses.';
+  }
+
+  @override
   String get settingsAccountFullBackup => 'Sauvegarde complète';
 
   @override
@@ -10641,6 +10713,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String nutritionTargetsAgeYears(int n) {
     return '$n ans';
   }
+
+  @override
+  String get nutritionTargetsAgeConsentWithheld =>
+      'Nécessite le consentement aux données de santé';
 
   @override
   String get nutritionTargetsLoadError =>

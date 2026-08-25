@@ -4002,6 +4002,7 @@ export const messages = {
 	"nutrition.targets.emptyBody": "Informe sua altura, peso, data de nascimento e sexo e suas metas de calorias e macros aparecerão aqui.",
 	"nutrition.targets.age": "Idade",
 	"nutrition.targets.ageYears": "{n} anos",
+	"nutrition.targets.ageConsentWithheld": "Requer consentimento de dados de saúde",
 	"nutrition.day.logHeadingFor": "Registrar comida — {date}",
 	"nutrition.day.navLabel": "Dia do diário",
 	"nutrition.day.previous": "Dia anterior",

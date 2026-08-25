@@ -40,9 +40,12 @@ func ValidFormat(format string) bool {
 }
 
 // BuildArtifact streams one Art 20 archive into the `exports` bucket and
-// returns where it landed. Shared verbatim by the deprecated synchronous
-// endpoint and by the queued `data_export` job handler, so the two rails
-// cannot drift in what they include or in what they claim about it.
+// returns where it landed. Called only from the queued `data_export` job
+// handler now — the synchronous endpoint that shared it was deleted with
+// decisions.md § 724 — and deliberately still a package-level function
+// rather than a method on the handler, because the archive's contents
+// are a data-rights contract and belong somewhere a guard can read them
+// without booting a worker.
 //
 // Fail-closed, unchanged from § 708: the tus session opens before the
 // first row is read, and every failure below aborts it. tus materialises

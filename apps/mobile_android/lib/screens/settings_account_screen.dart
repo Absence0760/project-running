@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -17,6 +18,7 @@ import '../auth_validation.dart';
 import '../backup.dart';
 import '../exif_strip.dart';
 import '../backup_server_client.dart';
+import '../export_job.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
@@ -39,6 +41,11 @@ class SettingsAccountScreen extends StatefulWidget {
   final LocalRouteStore? routeStore;
   final SettingsSyncService? settingsSync;
 
+  /// Transport for the queued Art 20 export rail. Production resolves
+  /// it from `LIVE_HUB_URL`; tests inject a fake so the whole
+  /// enqueue → poll → resume path can be driven without sockets.
+  final BackupServerClient? exportClient;
+
   const SettingsAccountScreen({
     super.key,
     required this.apiClient,
@@ -46,6 +53,7 @@ class SettingsAccountScreen extends StatefulWidget {
     required this.settingsSync,
     this.runStore,
     this.routeStore,
+    this.exportClient,
   });
 
   @override
@@ -81,9 +89,28 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   /// Art. 20 export is a claim the runner has to be able to re-read after
   /// the banner has gone, and the archive itself only says so inside
   /// manifest.json.
-  ServerBackupSummary? _backupShortfall;
   LocalArchiveSummary? _backupLocalShortfall;
   RestoreResult? _lastIncompleteRestore;
+
+  /// The subject's most recent queued Art 20 export, or null when they
+  /// have never asked for one. Nothing about it is persisted on the
+  /// device: the status endpoint answers for their LATEST export, so an
+  /// app killed between asking and finishing finds its way back with no
+  /// local state at all (decisions.md § 724).
+  ExportJob? _exportJob;
+  ExportShortfall? _exportShortfall;
+  bool _exportStatusUnreadable = false;
+  bool _exportBusy = false;
+  int _exportPollFailures = 0;
+  Timer? _exportPollTimer;
+  BackupServerClient? _resolvedExportClient;
+  bool _exportClientResolved = false;
+
+  /// The last archive this screen handed over came from the on-device
+  /// writer, which is narrower than the server export. Held so the
+  /// runner can re-read WHICH archive they got after the share sheet
+  /// and the banner have gone.
+  bool _lastBackupWasOnDevice = false;
 
   String? _avatarUrl;
   bool _avatarBusy = false;
@@ -106,11 +133,14 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     widget.preferences.addListener(_onChange);
     _loadAiDisclosure();
     _loadAvatar();
+    unawaited(_resumeExportJob());
   }
 
   @override
   void dispose() {
     widget.preferences.removeListener(_onChange);
+    _exportPollTimer?.cancel();
+    _exportPollTimer = null;
     super.dispose();
   }
 
@@ -123,12 +153,238 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   /// signed in now (the loaders no-op while signed out).
   @override
   void onAuthUserChanged(String? userId) {
+    // The export card is one subject's data-rights request; leaving it
+    // up across a sign-out would show the next account someone else's
+    // export state and offer them its download.
+    _exportPollTimer?.cancel();
+    _exportPollTimer = null;
     setState(() {
       _disclosure = const AiDisclosureRecord();
       _avatarUrl = null;
+      _exportJob = null;
+      _exportShortfall = null;
+      _exportStatusUnreadable = false;
+      _exportPollFailures = 0;
+      _lastBackupWasOnDevice = false;
     });
     _loadAiDisclosure();
     _loadAvatar();
+    unawaited(_resumeExportJob());
+  }
+
+  /// Transport for the queued export rail, or null when this build has
+  /// no service configured. An unconfigured build says so on the
+  /// surface rather than quietly handing over the on-device archive as
+  /// though it were the Art 20 export.
+  ///
+  /// Resolved once and kept: `build` consults it to decide what the
+  /// export section may say, and neither the injected client nor the
+  /// env it falls back to can change under a mounted screen.
+  BackupServerClient? _resolveExportClient() {
+    if (_exportClientResolved) return _resolvedExportClient;
+    _exportClientResolved = true;
+    final injected = widget.exportClient;
+    if (injected != null) {
+      _resolvedExportClient = injected.isConfigured ? injected : null;
+      return _resolvedExportClient;
+    }
+    String base;
+    try {
+      base = dotenv.env['LIVE_HUB_URL']?.trim() ?? '';
+    } catch (e) {
+      debugPrint('SettingsAccountScreen export client unavailable: $e');
+      return null;
+    }
+    if (base.isNotEmpty) {
+      _resolvedExportClient = BackupServerClient(baseUrl: base);
+    }
+    return _resolvedExportClient;
+  }
+
+  String? get _exportToken {
+    final token = widget.apiClient?.currentAccessToken;
+    return (token == null || token.isEmpty) ? null : token;
+  }
+
+  /// Pick up an export that was already building — or has since
+  /// finished — when this screen mounts.
+  ///
+  /// A phone that queues an export and then goes to the lock screen is
+  /// the normal case, not the edge case, so this is the whole resume
+  /// mechanism: the status endpoint answers for the subject's LATEST
+  /// export, and the one-in-flight index makes that unambiguous, so
+  /// nothing has to survive on the device. A read that fails is silent
+  /// — a subject who never asked for an export must not be shown an
+  /// error about one.
+  Future<void> _resumeExportJob() async {
+    final client = _resolveExportClient();
+    final token = _exportToken;
+    if (client == null || token == null) return;
+    try {
+      final job = await client.fetchLatestExportJob(accessToken: token);
+      if (!mounted || job.status == ExportJobStatus.none) return;
+      setState(() {
+        _exportJob = job;
+        _exportShortfall = exportJobShortfall(job);
+      });
+      if (isExportJobActive(job.status)) _scheduleExportPoll(0);
+    } catch (e) {
+      debugPrint('SettingsAccountScreen export resume failed: $e');
+    }
+  }
+
+  /// Ask the server to build the Art 20 archive. Returns as soon as the
+  /// job is queued — the build no longer rides this phone's connection,
+  /// so the app may be backgrounded or killed from here on.
+  Future<void> _requestAccountExport() async {
+    final l10n = AppLocalizations.of(context);
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      showTopBanner(context, l10n.settingsAccountBackupSignInFirst);
+      return;
+    }
+    final client = _resolveExportClient();
+    final token = _exportToken;
+    if (client == null || token == null) {
+      showTopBanner(context, l10n.settingsAccountExportUnavailable);
+      return;
+    }
+    if (_exportBusy) return;
+    setState(() => _exportBusy = true);
+    try {
+      final job = await client.enqueueExport(accessToken: token);
+      if (!mounted) return;
+      setState(() {
+        _exportJob = job;
+        _exportShortfall = null;
+        _exportStatusUnreadable = false;
+        _exportPollFailures = 0;
+      });
+      showTopBanner(context, l10n.settingsAccountExportQueued);
+      _scheduleExportPoll(0);
+    } on BackupServerError catch (e) {
+      // Surfaced, never swallowed: the rail this replaced fell through
+      // to the on-device writer on any non-200, so a refused Art 20
+      // request reached the subject as a narrower archive they were
+      // never told was narrower.
+      if (!mounted) return;
+      final retry = e.retryAfterSeconds;
+      showTopBanner(
+        context,
+        e.isRateLimited && retry != null
+            ? l10n.settingsAccountExportRateLimited(retry)
+            : l10n.settingsAccountExportRequestFailed(e.message),
+      );
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.settingsAccountExportRequestFailed('$e'));
+      }
+    } finally {
+      if (mounted) setState(() => _exportBusy = false);
+    }
+  }
+
+  void _scheduleExportPoll(int attempt) {
+    _exportPollTimer?.cancel();
+    _exportPollTimer = null;
+    final job = _exportJob;
+    if (job == null || !isExportJobActive(job.status)) return;
+    _exportPollTimer =
+        Timer(Duration(milliseconds: exportPollDelayMs(attempt)), () {
+      _exportPollTimer = null;
+      unawaited(_readExportJob(attempt + 1));
+    });
+  }
+
+  Future<void> _readExportJob(int attempt) async {
+    final client = _resolveExportClient();
+    final token = _exportToken;
+    if (client == null || token == null) return;
+    ExportJob job;
+    try {
+      job = await client.fetchLatestExportJob(accessToken: token);
+    } catch (e) {
+      // A status read that failed is not an export that failed. Try a
+      // few more times before saying anything, and never rewrite the
+      // job the screen is showing on the strength of one lost request.
+      if (!mounted) return;
+      _exportPollFailures += 1;
+      if (_exportPollFailures >= 5) {
+        setState(() => _exportStatusUnreadable = true);
+        return;
+      }
+      _scheduleExportPoll(attempt);
+      return;
+    }
+    if (!mounted) return;
+    final wasBuilding =
+        isExportJobActive(_exportJob?.status ?? ExportJobStatus.none);
+    setState(() {
+      _exportPollFailures = 0;
+      _exportStatusUnreadable = false;
+      _exportJob = job;
+      _exportShortfall = exportJobShortfall(job);
+    });
+    if (wasBuilding && job.status == ExportJobStatus.ready) {
+      // Deliberately no share sheet: this runs on a timer, not on a
+      // tap, and a share sheet that opens itself while the phone is in
+      // a pocket is worse than a card. The runner taps Download, which
+      // also makes the resume case and the finished-while-watching case
+      // the same code path.
+      showTopBanner(
+        context,
+        AppLocalizations.of(context).settingsAccountExportReadyBanner(job.count ?? 0),
+      );
+    }
+    _scheduleExportPoll(attempt);
+  }
+
+  /// Download a ready export and hand it to the share sheet.
+  ///
+  /// The URL is minted HERE rather than reused from the card: it is
+  /// signed for ten minutes from the read that produced it, and a card
+  /// left on screen outlives that window.
+  Future<void> _downloadAccountExport() async {
+    final l10n = AppLocalizations.of(context);
+    final client = _resolveExportClient();
+    final token = _exportToken;
+    if (client == null || token == null || _exportBusy) return;
+    setState(() => _exportBusy = true);
+    try {
+      final job = await client.fetchLatestExportJob(accessToken: token);
+      if (!mounted) return;
+      setState(() {
+        _exportJob = job;
+        _exportShortfall = exportJobShortfall(job);
+      });
+      final url = job.url;
+      if (job.status != ExportJobStatus.ready || url == null) return;
+      final tmp = await getTemporaryDirectory();
+      final ts =
+          DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
+      final ext = job.format == 'csv' ? 'csv' : 'zip';
+      final file = File('${tmp.path}/run-app-export-$ts.$ext');
+      await client.downloadToFile(url: Uri.parse(url), outputFile: file);
+      if (!mounted) return;
+      await shareFilesFrom(
+        context,
+        files: [XFile(file.path)],
+        text: l10n.settingsAccountBackupShareText,
+      );
+      final short = _exportShortfall;
+      if (mounted && short != null) {
+        showTopBanner(
+          context,
+          l10n.settingsAccountBackupPartial(short.count, short.total),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(context, l10n.settingsAccountExportDownloadFailed('$e'));
+      }
+    } finally {
+      if (mounted) setState(() => _exportBusy = false);
+    }
   }
 
   Future<void> _loadAiDisclosure() async {
@@ -803,19 +1059,13 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       final ts =
           DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
       final file = File('${tmp.path}/run-app-backup-$ts.zip');
-      final serviceBase = dotenv.env['LIVE_HUB_URL']?.trim() ?? '';
-      final outcome = await BackupService(
-        api: api,
-        serverClient: serviceBase.isEmpty
-            ? null
-            : BackupServerClient(baseUrl: serviceBase),
-      ).createBackup(outputFile: file, runStore: widget.runStore);
-      final short = outcome.shortfall;
+      final outcome = await BackupService(api: api)
+          .createBackup(outputFile: file, runStore: widget.runStore);
       final localShort = outcome.localShortfall;
       if (mounted) {
         setState(() {
-          _backupShortfall = short;
           _backupLocalShortfall = localShort;
+          _lastBackupWasOnDevice = true;
         });
       }
       await shareFilesFrom(
@@ -825,12 +1075,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       );
       // After the share sheet closes, not before — a banner raised
       // underneath it is a disclosure nobody reads.
-      if (mounted && short != null) {
-        showTopBanner(
-          context,
-          l10n.settingsAccountBackupPartial(short.count, short.total),
-        );
-      } else if (mounted && localShort != null) {
+      if (mounted && localShort != null) {
         showTopBanner(
           context,
           l10n.settingsAccountBackupTracksPartial(
@@ -912,6 +1157,130 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
     } finally {
       if (mounted) setState(() => _accountBusy = false);
     }
+  }
+
+  bool get _exportJobBuilding =>
+      isExportJobActive(_exportJob?.status ?? ExportJobStatus.none);
+
+  Widget _accountNotice({
+    required Key key,
+    required String text,
+    bool emphasis = true,
+  }) {
+    final theme = Theme.of(context);
+    final color =
+        emphasis ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      key: key,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            emphasis ? Icons.warning_amber_rounded : Icons.info_outline,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What the screen may say about the subject's most recent export.
+  ///
+  /// Every branch is a claim about their data-rights request, so an
+  /// unrecognised state has already been turned into `failed` by
+  /// `exportJobFromResponse` — there is no branch here that renders a
+  /// download for a job with no URL, and none that leaves a job the
+  /// client cannot read looking like one still building.
+  List<Widget> _accountExportState(AppLocalizations l10n) {
+    final widgets = <Widget>[];
+    if (_resolveExportClient() == null) {
+      // Standing, not a banner on tap. A build with no export service
+      // has no complete Art 20 archive to offer, and the runner has to
+      // be able to read that rather than discover it by pressing a tile
+      // — the alternative is them taking the on-device backup below in
+      // the belief that it is the same thing.
+      widgets.add(_accountNotice(
+        key: const Key('account-export-unavailable'),
+        text: l10n.settingsAccountExportUnavailable,
+      ));
+      return widgets;
+    }
+    final unsynced = widget.runStore?.unsyncedRuns.length ?? 0;
+    if (unsynced > 0) {
+      // The server builds from the cloud rows, so a run still sitting
+      // on this device cannot be in the archive. Standing fact about
+      // the account, so it is a notice rather than a banner.
+      widgets.add(_accountNotice(
+        key: const Key('account-export-unsynced'),
+        text: l10n.settingsAccountExportUnsyncedWarning(unsynced),
+      ));
+    }
+    final job = _exportJob;
+    if (job != null && job.status != ExportJobStatus.none) {
+      switch (job.status) {
+        case ExportJobStatus.queued:
+        case ExportJobStatus.running:
+          widgets.add(_accountNotice(
+            key: const Key('account-export-building'),
+            text: l10n.settingsAccountExportBuildingNotice,
+            emphasis: false,
+          ));
+        case ExportJobStatus.ready:
+          widgets.add(_accountNotice(
+            key: const Key('account-export-ready'),
+            text: l10n.settingsAccountExportReadyNotice,
+            emphasis: false,
+          ));
+          widgets.add(ListTile(
+            key: const Key('account-export-download'),
+            leading: const Icon(Icons.download_outlined),
+            title: Text(l10n.settingsAccountExportDownload),
+            enabled: !_exportBusy,
+            onTap: _downloadAccountExport,
+          ));
+        case ExportJobStatus.expired:
+          widgets.add(_accountNotice(
+            key: const Key('account-export-expired'),
+            text: l10n.settingsAccountExportExpiredNotice,
+          ));
+        case ExportJobStatus.stalled:
+          widgets.add(_accountNotice(
+            key: const Key('account-export-stalled'),
+            text: l10n.settingsAccountExportStalledNotice,
+          ));
+        case ExportJobStatus.failed:
+          widgets.add(_accountNotice(
+            key: const Key('account-export-failed'),
+            text: l10n.settingsAccountExportFailedNotice(
+                job.errorCode ?? 'unknown'),
+          ));
+        case ExportJobStatus.none:
+          break;
+      }
+    }
+    if (_exportStatusUnreadable) {
+      widgets.add(_accountNotice(
+        key: const Key('account-export-status-unreadable'),
+        text: l10n.settingsAccountExportStatusUnavailable,
+      ));
+    }
+    final short = _exportShortfall;
+    if (short != null) {
+      widgets.add(_accountNotice(
+        key: const Key('account-export-shortfall'),
+        text: l10n.settingsAccountBackupPartialNotice(short.count, short.total),
+      ));
+    }
+    return widgets;
   }
 
   @override
@@ -1059,6 +1428,18 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 },
               ),
               ListTile(
+                key: const Key('account-export-tile'),
+                leading: const Icon(Icons.cloud_download),
+                title: Text(l10n.settingsAccountAccountExport),
+                subtitle: Text(l10n.settingsAccountAccountExportSubtitle),
+                trailing: const Icon(Icons.chevron_right),
+                enabled: !_exportBusy &&
+                    !_exportJobBuilding &&
+                    _resolveExportClient() != null,
+                onTap: _requestAccountExport,
+              ),
+              ..._accountExportState(l10n),
+              ListTile(
                 leading: const Icon(Icons.archive_outlined),
                 title: Text(l10n.settingsAccountFullBackup),
                 subtitle: Text(l10n.settingsAccountFullBackupSubtitle),
@@ -1066,34 +1447,13 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 enabled: !_accountBusy,
                 onTap: _exportBackup,
               ),
-              if (_backupShortfall != null)
-                Padding(
-                  key: const Key('backup-shortfall'),
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          l10n.settingsAccountBackupPartialNotice(
-                            _backupShortfall!.count,
-                            _backupShortfall!.total,
-                          ),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
+              if (_lastBackupWasOnDevice)
+                _accountNotice(
+                  key: const Key('backup-on-device'),
+                  text: l10n.settingsAccountBackupOnDeviceNotice,
+                  emphasis: false,
                 ),
-              if (_backupShortfall == null && _backupLocalShortfall != null)
+              if (_backupLocalShortfall != null)
                 Padding(
                   key: const Key('backup-tracks-shortfall'),
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),

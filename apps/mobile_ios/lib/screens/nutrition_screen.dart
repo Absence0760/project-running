@@ -13,6 +13,7 @@ import '../exercise_calories.dart';
 import '../exercise_day.dart';
 import '../extended_nutrients.dart';
 import '../food_search.dart' show FoodMacros;
+import '../health_consent.dart';
 import '../hydration.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -53,8 +54,11 @@ Future<NutritionTargets?> loadNutritionTargets(
   try {
     final profile = await api.fetchMyProfile();
     final weightKg = await api.fetchLatestBodyWeightKg();
+    // The settings-bag mirror already follows consent in both directions;
+    // the profile column is the ungated age record, so its fallback takes the
+    // Art 9 term (§ 718 / § 722).
     final dobIso = settings?.effective<String>(SettingsKeys.dateOfBirth) ??
-        profile?.dateOfBirth?.toIso8601String();
+        healthUseDob(profile);
     return computeNutritionTargets(BodyMetricsInput(
       weightKg: weightKg,
       heightCm: profile?.heightCm,

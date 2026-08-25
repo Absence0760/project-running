@@ -2,12 +2,13 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ui_kit/ui_kit.dart' show TextLane;
+import 'package:ui_kit/ui_kit.dart' show FullBodyLoader, TextLane;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/plan_detail_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training.dart' show toIsoDate;
 import '../lib/training_service.dart';
+import 'pump_until.dart';
 
 const _uid = 'owner-uuid';
 
@@ -116,11 +117,10 @@ Future<void> _pump(
       ),
     ),
   );
-  // _load (plan fetch) + _loadRecentRuns are async.
-  await tester.runAsync(() async {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  });
-  await tester.pump();
+  // _load's plan fetch is async; the trailing pump lands the setState that
+  // _loadRecentRuns — kicked off once the plan is in — resolves into.
+  await pumpUntil(tester, () => !tester.any(find.byType(FullBodyLoader)),
+      describe: 'the plan fetch to replace the full-body loader');
   await tester.pump();
 }
 
@@ -224,10 +224,8 @@ void main() {
       expect(find.text('Proposed changes'), findsOneWidget);
 
       await tester.tap(find.text('Apply changes'));
-      await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      });
-      await tester.pump();
+      await pumpUntil(tester, () => training.updated.isNotEmpty,
+          describe: 'the re-plan to write its week updates');
       // 28 km capped to 22 km * 1.15 = 25300.
       expect(training.updated['next'], (22000 * 1.15).round());
       // Drain the showTopBanner auto-dismiss timer before teardown.
@@ -260,10 +258,8 @@ void main() {
       await tester.tap(find.descendant(
           of: find.byType(AlertDialog),
           matching: find.widgetWithText(FilledButton, 'Duplicate')));
-      await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      });
-      await tester.pump();
+      await pumpUntil(tester, () => training.duplicated.isNotEmpty,
+          describe: 'the confirmed duplicate to reach the RPC');
       expect(training.duplicated, contains('plan-1:0'));
       await tester.pump(const Duration(seconds: 4));
     });

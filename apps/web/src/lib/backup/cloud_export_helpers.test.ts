@@ -7,7 +7,6 @@ import {
 	buildCloudExportBody,
 	buildCloudExportJobStatusUrl,
 	buildCloudExportJobsUrl,
-	buildCloudExportUrl,
 	cloudExportJobFromResponse,
 	cloudExportPollDelayMs,
 	cloudExportShortfall,
@@ -25,27 +24,6 @@ function res(over: Partial<CloudExportResponse> = {}): CloudExportResponse {
 		...over,
 	};
 }
-
-test('buildCloudExportUrl — clean base', () => {
-	assert.equal(
-		buildCloudExportUrl('https://live.threkir.com'),
-		'https://live.threkir.com/v1/export',
-	);
-});
-
-test('buildCloudExportUrl — strips a trailing slash', () => {
-	assert.equal(
-		buildCloudExportUrl('https://live.threkir.com/'),
-		'https://live.threkir.com/v1/export',
-	);
-});
-
-test('buildCloudExportUrl — strips multiple trailing slashes', () => {
-	assert.equal(
-		buildCloudExportUrl('https://live.threkir.com///'),
-		'https://live.threkir.com/v1/export',
-	);
-});
 
 test('buildCloudExportBody — csv shape', () => {
 	assert.equal(buildCloudExportBody('csv'), '{"format":"csv"}');
@@ -99,11 +77,23 @@ test('cloudExportShortfall — total can never render below count', () => {
 
 test('buildCloudExportJobsUrl / buildCloudExportJobStatusUrl — trailing slashes normalise', () => {
 	assert.equal(
+		buildCloudExportJobsUrl('https://live.threkir.com'),
+		'https://live.threkir.com/v1/export/jobs',
+	);
+	assert.equal(
+		buildCloudExportJobsUrl('https://live.threkir.com/'),
+		'https://live.threkir.com/v1/export/jobs',
+	);
+	assert.equal(
 		buildCloudExportJobsUrl('https://live.threkir.com//'),
 		'https://live.threkir.com/v1/export/jobs',
 	);
 	assert.equal(
 		buildCloudExportJobStatusUrl('https://live.threkir.com'),
+		'https://live.threkir.com/v1/export/jobs/latest',
+	);
+	assert.equal(
+		buildCloudExportJobStatusUrl('https://live.threkir.com///'),
 		'https://live.threkir.com/v1/export/jobs/latest',
 	);
 });

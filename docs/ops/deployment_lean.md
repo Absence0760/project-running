@@ -139,8 +139,12 @@ done
 - `clip-public-track` — privacy-zone clipping for non-owner track viewers (privacy
   invariant, not optional). `delete-account` — GDPR erasure; the third-party sweeps
   (RevenueCat / FCM / Stripe) record `skipped` when their keys are unset. `export-data` —
-  nominally deprecated for the Go worker's `/v1/export`, but the worker is exactly what
-  this tier defers, so the EF is the load-bearing export path. `race-results-import` +
+  nominally deprecated for the Go worker's queued rail, but the worker is exactly what
+  this tier defers, so the EF is the load-bearing export path on this tier. Note the
+  consequence for MOBILE: since [decisions § 724](../architecture/decisions.md) the
+  mobile client speaks only the queued rail, so without the worker its Account export
+  tile has no service to call and says so — the on-device Full backup is what mobile
+  gets on this tier, and it does not carry the personal-data table set. `race-results-import` +
   `race-listings-sync` — the parkrun and manual-paste legs work keyless; the
   RunSignUp / UltraSignup / ChronoTrack legs answer 503 `provider_not_configured`.
 - **Skip**: `strava-import` (needs Strava OAuth creds, and token refresh lives on the

@@ -52,6 +52,18 @@ test.describe('/settings/safety', () => {
 			// After confirming, the pending section clears.
 			await expect(alex.getByTestId('safety-incoming')).toHaveCount(0, { timeout: 5_000 });
 
+			// …and the row alex just confirmed does NOT reappear as one of alex's
+			// OWN contacts. `safety_contacts` has a permissive linked-contact SELECT
+			// policy alongside the owner one, so the unfiltered read returned the
+			// union and rendered the runner's row here — under alex's own address,
+			// with a Remove button that the equally-permissive linked-contact DELETE
+			// policy let through, destroying the RUNNER's emergency contact
+			// (decisions §720).
+			await expect(alex.getByTestId('safety-empty')).toBeVisible({ timeout: 5_000 });
+			await expect(
+				alex.getByTestId('safety-contact').filter({ hasText: USER_B.email }),
+			).toHaveCount(0);
+
 			// ── Owner now sees the contact as confirmed ──
 			await runner.reload();
 			const confirmed = runner.getByTestId('safety-contact').filter({ hasText: USER_B.email });

@@ -65,12 +65,6 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
   DateTime? _consentAt;
   double? _loadedWeightKg;
 
-  /// The `user_profiles` date of birth as loaded. It is the age record
-  /// behind the under-18 discoverability floor, not an Art 9 health field
-  /// (decisions § 718) — but `withdraw_health_data_consent()` still nulls
-  /// the column, so a withdrawal here re-asserts it rather than letting a
-  /// declared minor fall back into name search.
-  DateTime? _profileDob;
   String _activity = 'moderate';
   String _goal = 'maintain';
 
@@ -102,7 +96,6 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
         final profile = await api.fetchMyProfile();
         _consentAt = profile?.healthDataConsentAt;
         _consent = _consentAt != null;
-        _profileDob = profile?.dateOfBirth;
         final h = profile?.heightCm;
         if (h != null && h > 0) _heightCtl.text = h.toStringAsFixed(0);
         final w = await api.fetchLatestBodyWeightKg();
@@ -189,7 +182,7 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
         }
       } else {
         // Art 7(3) withdrawal: one RPC nulls consent + the Art 9 profile
-        // columns and erases the weight series atomically.
+        // columns (height, gender) and erases the weight series atomically.
         await api.withdrawHealthDataConsent();
         _consentAt = null;
         _loadedWeightKg = null;
@@ -199,13 +192,12 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
         // Art 9 health-use copy the coach + HR-max reads consume, so the
         // withdrawal clears it — leaving it behind kept withdrawn
         // special-category data feeding those reads. The `user_profiles`
-        // column is the child-safety age record and is put back, because
-        // ending the Art 9 processing does not end the discoverability
-        // floor. Ordered after the RPC precisely because the RPC nulls it.
+        // column is the child-safety age record and this screen never
+        // touches it: since § 721 the RPC leaves it standing, so there is
+        // nothing to put back.
         await widget.settingsSync?.updateUniversal(
           <String, dynamic>{SettingsKeys.dateOfBirth: null},
         );
-        if (_profileDob != null) await api.setMyDateOfBirth(_profileDob);
       }
       _snack(l10n.bodyMetricsSaved);
     } catch (e) {

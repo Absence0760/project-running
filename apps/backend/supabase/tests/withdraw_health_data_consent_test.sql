@@ -10,7 +10,7 @@
 
 begin;
 
-select plan(10);
+select plan(11);
 
 -- Seed users: A has a consented profile + Art 9 columns + a weight series;
 -- B and C have NO profile row (the client-provisioned-row gap).
@@ -81,9 +81,24 @@ select is(
   (select count(*)::int from user_profiles
     where id = '00000000-0000-0000-0000-0000000ccd11'
       and health_data_consent_at is null and height_cm is null
-      and gender is null and date_of_birth is null),
+      and gender is null),
   1,
-  'withdrawal nulled the consent stamp + height + gender + DOB'
+  'withdrawal nulled the consent stamp + height + gender'
+);
+
+-- ── 5b. The age record SURVIVES the withdrawal ───────────────────────
+-- `user_profiles.date_of_birth` is the child-safety age record behind the
+-- under-18 exclusions in search_user_profiles / discoverable_runners_near,
+-- not an Art 9 health column (decisions § 718 / § 721). Art 7(3) ends the
+-- health processing the consent authorised; it does not end the
+-- discoverability floor, and nulling the date here made a declared minor
+-- name-searchable again the moment they withdrew. Erasure (Art 17) is the
+-- separate right that does clear it — via delete-account's cascade.
+select is(
+  (select date_of_birth from user_profiles
+    where id = '00000000-0000-0000-0000-0000000ccd11'),
+  '1990-01-15'::date,
+  'withdrawal kept the age record the under-18 floor reads'
 );
 
 -- ── 6. The weight series is erased in the same call ──────────────────

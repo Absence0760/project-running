@@ -49,10 +49,12 @@ function setConsentAccepted() {
  * Seeding — a saga user starts with NO body metrics, so this spec seeds the
  * full target-input set itself (height_cm/date_of_birth/gender on
  * user_profiles, nutrition_activity_level/nutrition_goal in user_settings, and a
- * body_metrics weight row). There is NO health-consent gate on the /nutrition
- * READ path (the Art 9 gate lives only in Settings, for EDITING — confirmed in
- * the page's load(): it reads fetchLatestWeightKg() + get_my_profile() and gates
- * the rings purely on whether those resolve into a target). The saga user owns
+ * body_metrics weight row, and the Art 9 `health_data_consent_at` stamp). That
+ * stamp is load-bearing since § 722: reading `date_of_birth` to derive a calorie
+ * target is an Art 9 health use, so `healthUseDob` withholds the date until
+ * consent is on record and the page falls back to its untargeted "set your body
+ * metrics" state. seed.sql stamps the three seed users; a saga user starts
+ * without it. The saga user owns
  * every row, and deleteSagaUsers CASCADEs auth.users → all child rows
  * (body_metrics, runs, gym_workouts, food_log), so cleanup is a single delete.
  *
@@ -103,7 +105,18 @@ test.describe('/nutrition — dynamic budget (base + exercise) cross-modal day',
 		//    Jeor inputs that aren't weight). get_my_profile() reads these back.
 		const { error: profErr } = await admin
 			.from('user_profiles')
-			.update({ height_cm: HEIGHT_CM, date_of_birth: DOB, gender: 'male' })
+			.update({
+				height_cm: HEIGHT_CM,
+				date_of_birth: DOB,
+				gender: 'male',
+				// A calorie target is an Art 9 health use of the age record, so
+				// `healthUseDob` (§ 722) withholds the date until the Art 9
+				// consent is on record — a saga user starts without it, where
+				// the three seed users are stamped by seed.sql. Without this the
+				// page renders its untargeted "set your body metrics" state and
+				// every assertion below reads as a product bug.
+				health_data_consent_at: new Date().toISOString(),
+			})
 			.eq('id', user.id);
 		if (profErr) throw profErr;
 

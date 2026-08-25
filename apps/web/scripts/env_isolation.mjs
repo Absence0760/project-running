@@ -28,7 +28,7 @@ const KNOWN_ENV_VARS = [
 	'LIVE_HUB_URL',
 	'PUBLIC_LIVE_HUB_URL',
 	// Web's "Cloud export (GPX zip)" button POSTs to
-	// `${PUBLIC_EXPORT_HUB_URL}/v1/export` (the Go worker). Same
+	// `${PUBLIC_EXPORT_HUB_URL}/v1/export/jobs` (the Go worker). Same
 	// risk shape as the live hub: a dev .env aimed at the prod
 	// export endpoint would write test export jobs to the live
 	// service's queue + Storage bucket.

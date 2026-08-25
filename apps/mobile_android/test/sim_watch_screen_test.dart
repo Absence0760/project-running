@@ -12,6 +12,7 @@ import '../lib/screens/settings_screen.dart';
 import '../lib/screens/sim_watch_screen.dart';
 import '../lib/sim_watch_link.dart';
 import '../lib/sim_watch_sync.dart';
+import 'pump_until.dart';
 
 /// The golden run blob from `watch_core::run_store` (pinned identically in
 /// `sim_watch_sync_test.dart`), served in chunks so the screen's Sync action
@@ -291,12 +292,10 @@ void main() {
       );
       await _tapAction(tester, Icons.sync);
       await tester.pump();
-      // The pull is real-async (broadcast stream + completers); let the event
-      // loop drain it (pumpAndSettle would hang on the sync spinner).
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
-      );
-      await tester.pump();
+      // The pull is real-async (broadcast stream + completers), so it needs the
+      // real event loop; pumpAndSettle would hang on the sync spinner.
+      await pumpUntil(tester, () => delivered.isNotEmpty,
+          describe: 'the pulled run to reach the sink');
 
       expect(delivered, hasLength(1));
       expect(delivered.first['source'], 'watch');
@@ -322,10 +321,8 @@ void main() {
       );
       await _tapAction(tester, Icons.tune);
       await tester.pump();
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump();
+      await pumpUntil(tester, () => transport.settingsWrites.isNotEmpty,
+          describe: 'the settings frame to be written to the transport');
 
       expect(transport.settingsWrites, hasLength(1));
       expect(transport.settingsWrites.single, hasLength(38));
@@ -373,10 +370,8 @@ void main() {
       );
       await _tapAction(tester, Icons.checklist);
       await tester.pump();
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump();
+      await pumpUntil(tester, () => transport.workoutWrites.isNotEmpty,
+          describe: 'the workout frame to be written to the transport');
 
       // The six-step demo frame (7 + 6*12 + 4 = 83 B) fits one chunk:
       // offset(2 LE) | payload. The frame bytes themselves are pinned
@@ -417,10 +412,8 @@ void main() {
       );
       await _tapAction(tester, Icons.dashboard_customize);
       await tester.pumpAndSettle();
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 20)),
-      );
-      await tester.pump();
+      await pumpUntil(tester, () => tester.any(find.text('No screens composed')),
+          describe: "the editor's stored-screens read to resolve to empty");
 
       expect(find.text('Watch screens'), findsOneWidget);
       expect(find.text('No screens composed'), findsOneWidget);
@@ -443,10 +436,8 @@ void main() {
       );
       await _tapAction(tester, Icons.route);
       await tester.pump();
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump();
+      await pumpUntil(tester, () => transport.courseWrites.isNotEmpty,
+          describe: 'the course frame to be written to the transport');
 
       // The three-point demo course with elevation (8 + 3*8 + 3*2 + 4 =
       // 42 B) fits one chunk: offset(2 LE) | payload. The frame bytes are
@@ -488,10 +479,8 @@ void main() {
       );
       await _tapAction(tester, Icons.table_chart_outlined);
       await tester.pump();
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
-      );
-      await tester.pump();
+      await pumpUntil(tester, () => transport.roadbookWrites.isNotEmpty,
+          describe: 'the roadbook frame to be written to the transport');
 
       // The canned three-checkpoint / two-cut-off sim schedule is
       // 8 + 3*14 + 2*8 + 4 = 70 B, so it fits one chunk. The frame bytes are

@@ -73,7 +73,18 @@ test.describe('/nutrition — extended nutrients, coverage-aware', () => {
 
 		const { error: profErr } = await admin
 			.from('user_profiles')
-			.update({ height_cm: HEIGHT_CM, date_of_birth: DOB, gender: 'male' })
+			.update({
+				height_cm: HEIGHT_CM,
+				date_of_birth: DOB,
+				gender: 'male',
+				// A calorie target is an Art 9 health use of the age record, so
+				// `healthUseDob` (§ 722) withholds the date until the Art 9
+				// consent is on record — a saga user starts without it, where
+				// the three seed users are stamped by seed.sql. Without this the
+				// page renders its untargeted "set your body metrics" state and
+				// every assertion below reads as a product bug.
+				health_data_consent_at: new Date().toISOString(),
+			})
 			.eq('id', user.id);
 		if (profErr) throw profErr;
 

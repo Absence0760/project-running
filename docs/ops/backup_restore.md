@@ -99,7 +99,7 @@ The **Edge Function** no longer has one — it streams into a chunked tus upload
 150 s request clock — so the two server writers are deliberately no longer in
 lockstep on this.
 
-The two server writers (`go-service` — the Go worker's `POST /v1/export`
+The two server writers (`go-service` — the Go worker's queued rail with
 `format: 'backup'` — and `edge-function` — the deprecated `export-data`
 rollback path) emit the same layout plus the Art 20 extras clients don't
 fetch: `hr/{run_id}.hr.json.gz` sidecars, `photos/` image bytes, the
@@ -181,11 +181,20 @@ as their DB rows.
   next sign-in. Profile and `user_settings` keys are skipped in that
   mode with a warning; they need a user id to attach to. Export still
   requires sign-in since the canonical source of truth is the server.
-  The export is server-first (the Go service's `POST /v1/export?format=backup`)
-  and falls back to the local writer on any failure — and skips the server
-  outright while anything on the device is still undrained, since the server
-  can only see cloud rows. The local writer's completeness verdict surfaces as
-  a banner plus a persistent notice under the Full backup tile.
+  Since [decisions § 724](../architecture/decisions.md) the two archives are
+  two tiles, because they are two archives. **Account export** enqueues the
+  server's Art 20 build (`POST /v1/export/jobs`), watches it, and resumes from
+  `GET /v1/export/jobs/latest` on mount — so an app the OS killed between
+  asking and finishing finds the export waiting, with nothing persisted on the
+  device. **Full backup** is the on-device writer: runs, routes, profile,
+  prefs, gym and food, but NOT the account-record set, and it says so in a
+  persistent notice once it has produced one. The old silent fall-back from
+  the first to the second is deleted — a refused server export is surfaced,
+  never quietly answered with the narrower archive. The server cannot see a
+  run that has not drained, so the account-export tile discloses how many are
+  outstanding rather than switching rails behind the runner's back. The local
+  writer's completeness verdict still surfaces as a banner plus a persistent
+  notice under the Full backup tile.
 - **Mobile iOS** shares the code — `lib/` is byte-identical (decisions § 39),
   neither tile carries a `Platform` gate, `BackupService` names no `Platform`,
   and `archive` / `file_picker` / `share_plus` / `path_provider` all declare

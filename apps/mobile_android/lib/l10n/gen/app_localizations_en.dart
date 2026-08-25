@@ -6474,6 +6474,78 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAccountImportSubtitle => 'Strava, GPX, TCX';
 
   @override
+  String get settingsAccountAccountExport => 'Account export';
+
+  @override
+  String get settingsAccountAccountExportSubtitle =>
+      'Everything on your account — runs, routes, messages, orders, integrations, safety contacts. Built on our server; you can close the app while it runs.';
+
+  @override
+  String get settingsAccountExportQueued =>
+      'Building your export. You can close the app — come back here to download it.';
+
+  @override
+  String get settingsAccountExportBuildingNotice =>
+      'Your account export is being built. You can close the app; it keeps building without you.';
+
+  @override
+  String get settingsAccountExportReadyNotice =>
+      'Your account export is ready.';
+
+  @override
+  String get settingsAccountExportDownload => 'Download and share';
+
+  @override
+  String settingsAccountExportFailedNotice(String error) {
+    return 'Your last account export failed ($error). Nothing was deleted — ask for another one.';
+  }
+
+  @override
+  String get settingsAccountExportStalledNotice =>
+      'Your last account export stopped responding. Nothing was deleted — ask for another one.';
+
+  @override
+  String get settingsAccountExportExpiredNotice =>
+      'Your last account export has expired. Exports are deleted after 7 days — ask for another one.';
+
+  @override
+  String get settingsAccountExportStatusUnavailable =>
+      'Can\'t reach the export service to check on your export. It may still be building.';
+
+  @override
+  String get settingsAccountExportUnavailable =>
+      'The account export service isn\'t set up in this build. Full backup below is built on this device and doesn\'t include your account records.';
+
+  @override
+  String settingsAccountExportUnsyncedWarning(int count) {
+    return '$count runs haven\'t synced yet. The account export is built on the server, so it won\'t include them — use Full backup to keep those.';
+  }
+
+  @override
+  String get settingsAccountBackupOnDeviceNotice =>
+      'Your last full backup was built on this device. It holds your runs, routes, profile, preferences, gym and food logs — but not your account records. Use Account export for the complete copy.';
+
+  @override
+  String settingsAccountExportRateLimited(int seconds) {
+    return 'Export limit reached — try again in $seconds seconds.';
+  }
+
+  @override
+  String settingsAccountExportRequestFailed(String error) {
+    return 'Couldn\'t request your export: $error';
+  }
+
+  @override
+  String settingsAccountExportDownloadFailed(String error) {
+    return 'Couldn\'t download your export: $error';
+  }
+
+  @override
+  String settingsAccountExportReadyBanner(int count) {
+    return 'Your account export is ready — $count runs.';
+  }
+
+  @override
   String get settingsAccountFullBackup => 'Full backup';
 
   @override
@@ -10505,6 +10577,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String nutritionTargetsAgeYears(int n) {
     return '$n years';
   }
+
+  @override
+  String get nutritionTargetsAgeConsentWithheld => 'Needs health-data consent';
 
   @override
   String get nutritionTargetsLoadError => 'Couldn\'t load your targets.';

@@ -8,6 +8,7 @@ import '../auth_error.dart';
 import '../diary_day.dart';
 import '../exercise_calories.dart';
 import '../exercise_day.dart';
+import '../health_consent.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -55,6 +56,12 @@ class _NutritionTargetsScreenState extends State<NutritionTargetsScreen> {
   double? _weightKg;
   double? _heightCm;
   int? _ageYears;
+  /// Why the age is missing, not merely that it is. The age record itself
+  /// carries no consent term (the under-18 search floor depends on it), but
+  /// feeding it to a BMR is an Art 9 use — so a runner who supplied a date and
+  /// declined the health-data consent is told that, rather than shown "Not
+  /// set" about a date they did set (§ 722).
+  HealthUseDobState _dobState = HealthUseDobState.absent;
   String? _sex;
   double _exerciseKcal = 0;
   String _activity = 'moderate';
@@ -80,8 +87,14 @@ class _NutritionTargetsScreenState extends State<NutritionTargetsScreen> {
         final profile = await api.fetchMyProfile();
         _heightCm = profile?.heightCm;
         _sex = profile?.gender;
-        final dobIso = settings?.effective<String>(SettingsKeys.dateOfBirth) ??
-            profile?.dateOfBirth?.toIso8601String();
+        // The settings-bag mirror already follows consent in both directions;
+        // the profile column is the ungated age record, so its fallback takes
+        // the Art 9 term (§ 718 / § 722).
+        final bagDob = settings?.effective<String>(SettingsKeys.dateOfBirth);
+        _dobState = bagDob != null
+            ? HealthUseDobState.usable
+            : healthUseDobState(profile);
+        final dobIso = bagDob ?? healthUseDob(profile);
         _ageYears =
             ageFromDob(dobIso, DateTime.now().millisecondsSinceEpoch);
         _weightKg = await api.fetchLatestBodyWeightKg();
@@ -474,7 +487,11 @@ class _NutritionTargetsScreenState extends State<NutritionTargetsScreen> {
             value: w == null ? unset : WeightFormat.format(w, activeWeightUnit)),
         _row(theme,
             term: l10n.nutritionTargetsAge,
-            value: a == null ? unset : l10n.nutritionTargetsAgeYears(a)),
+            value: a != null
+                ? l10n.nutritionTargetsAgeYears(a)
+                : _dobState == HealthUseDobState.consentWithheld
+                    ? l10n.nutritionTargetsAgeConsentWithheld
+                    : unset),
         _row(theme,
             term: l10n.setupGenderLabel,
             value: switch (_sex) {

@@ -24,4 +24,17 @@ void main() {
       expect(g, isNull);
     },
   );
+
+  // Same contract for the age read, which shares the profile fetch: both go
+  // through `get_my_profile()` now (the direct column selects they replaced
+  // are refused by the column lockdown, 20260707_001, so they could only ever
+  // report "unset"), and both are awaited unblocking from the same initState.
+  test(
+    'fetchViewerAge returns null (no throw) when Supabase is uninitialised',
+    () async {
+      final svc = TrainingService();
+      final a = await svc.fetchViewerAge();
+      expect(a, isNull);
+    },
+  );
 }

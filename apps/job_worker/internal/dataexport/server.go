@@ -1,10 +1,10 @@
 // Package dataexport is the GDPR data-portability HTTP endpoint on
-// the Go service. Replaces the synchronous `export-data` Edge
-// Function at apps/backend/supabase/functions/export-data/index.ts
-// with the same UX: client POSTs `{format: 'csv'|'gpx'}` with a
-// Bearer JWT, server builds the artifact, uploads to the `runs`
-// Storage bucket under the caller's user-id prefix, returns a
-// 10-minute signed URL.
+// the Go service. Replaces the `export-data` Edge Function at
+// apps/backend/supabase/functions/export-data/index.ts: the client asks
+// for `{format: 'csv'|'gpx'|'backup'}` with a Bearer JWT, the worker
+// builds the artifact into the `exports` Storage bucket under the
+// caller's user-id prefix, and the status read hands back a 10-minute
+// signed URL.
 //
 // Why move it out of the Edge Function:
 //
@@ -27,14 +27,15 @@
 // once the declared length arrives, so any mid-build failure aborts the
 // session and answers 500 with no artifact at all.
 //
-// Since decisions.md § 717 the production rail is QUEUED: `POST
-// /v1/export/jobs` enqueues a `data_export` job and answers with its id,
-// the worker builds it with no connection attached, and `GET
+// The rail is QUEUED, and since decisions.md § 724 it is the only one:
+// `POST /v1/export/jobs` enqueues a `data_export` job and answers with
+// its id, the worker builds it with no connection attached, and `GET
 // /v1/export/jobs/latest` reports the outcome and mints the signed URL
-// at read time. `POST /v1/export` — the synchronous rail below — is
-// deprecated and survives only for the un-migrated mobile client; both
-// go through the same `BuildArtifact`, so they cannot drift in what they
-// include.
+// at read time. The synchronous `POST /v1/export` that § 717 kept alive
+// for the un-migrated mobile client is gone with that client's
+// migration — it held the caller's connection open for the whole build,
+// which on a phone is the ordinary way an export died rather than an
+// edge case.
 //
 // Rate limit + auth model is unchanged from the EF: HS256 JWT
 // over SUPABASE_JWT_SECRET (same as the live hub's authorizer),
@@ -79,6 +80,65 @@ type Server struct {
 	Backend Backend
 
 	Log *slog.Logger
+
+	// AllowedOrigins is the exact `Origin` allowlist the browser rail
+	// is answered for. The web client posts from a different origin
+	// than the worker in every deployment, so without this the
+	// preflight is refused and the enqueue never leaves the browser.
+	// Empty → no CORS headers at all, which is correct for a
+	// server-to-server deployment and fail-closed for a browser one.
+	AllowedOrigins []string
+}
+
+// allowOrigin answers the exact origin when it is on the allowlist.
+//
+// Exact match rather than a wildcard: the endpoint is authenticated,
+// and `Access-Control-Allow-Origin: *` is invalid the moment a request
+// carries credentials — a browser rejects the response rather than
+// relaxing the check.
+func (s *Server) allowOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+	for _, o := range s.AllowedOrigins {
+		if o == origin {
+			return true
+		}
+	}
+	return false
+}
+
+// writeCORS stamps the allow headers when the caller's origin is
+// permitted, and reports whether it did. `Vary: Origin` is not
+// optional: without it a cache can serve one origin's allow header to
+// another.
+func (s *Server) writeCORS(w http.ResponseWriter, r *http.Request) bool {
+	w.Header().Add("Vary", "Origin")
+	origin := r.Header.Get("Origin")
+	if !s.allowOrigin(origin) {
+		return false
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	return true
+}
+
+// preflight answers an OPTIONS probe and reports whether it handled
+// the request. A disallowed origin gets 403 rather than the mux's 405:
+// the method IS allowed, the caller is not.
+func (s *Server) preflight(w http.ResponseWriter, r *http.Request, methods string) bool {
+	if r.Method != http.MethodOptions {
+		return false
+	}
+	if !s.writeCORS(w, r) {
+		w.WriteHeader(http.StatusForbidden)
+		return true
+	}
+	w.Header().Set("Access-Control-Allow-Methods", methods)
+	w.Header().Set("Access-Control-Allow-Headers", "authorization, content-type")
+	w.Header().Set("Access-Control-Max-Age", "600")
+	w.WriteHeader(http.StatusNoContent)
+	return true
 }
 
 // Backend is the Supabase REST surface the export endpoint
@@ -362,122 +422,14 @@ const (
 
 // RegisterRoutes mounts the export endpoints on [mux].
 //
-// `/v1/export` is the deprecated synchronous rail; `/v1/export/jobs` +
-// `/v1/export/jobs/latest` are the queued one (decisions.md § 717).
-// Go's ServeMux longest-pattern-wins matching keeps the three apart
-// without a prefix handler.
+// The queued rail is the only rail: `/v1/export/jobs` enqueues and
+// `/v1/export/jobs/latest` reports. The synchronous `POST /v1/export`
+// was deleted with decisions.md § 724 once mobile moved off it — it
+// held the caller's connection open for the whole build, which on a
+// phone is the ordinary way an export died rather than an edge case.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/v1/export", s.handle)
 	mux.HandleFunc("/v1/export/jobs", s.handleJobsCreate)
 	mux.HandleFunc("/v1/export/jobs/latest", s.handleJobsLatest)
-}
-
-type exportRequest struct {
-	Format string `json:"format"`
-}
-
-// handle serves the DEPRECATED synchronous POST /v1/export: it builds
-// the whole archive while the caller waits, so their timeout, a
-// disconnect, or a backgrounded app can end an export that would
-// otherwise have completed. It survives only because the mobile client
-// has not moved to `/v1/export/jobs` yet, and removing it would silently
-// demote mobile's Art 20 export to its narrower on-device archive — a
-// data-rights regression shipped to close a data-rights follow-up.
-// decisions.md § 717.
-func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
-	if !s.Verifier.Enabled() {
-		s.log().Error("dataexport: JWT secret not configured; refusing")
-		http.Error(w, `{"error":"export_not_configured"}`, http.StatusServiceUnavailable)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", "POST")
-		http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	userID, err := s.extractUserID(r)
-	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusUnauthorized)
-		return
-	}
-
-	// Body parse + format pick — same shape as the EF: tiny request,
-	// `{format: 'csv'|'gpx'}`.
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, MaxBodyBytes))
-	dec.DisallowUnknownFields()
-	var req exportRequest
-	if err := dec.Decode(&req); err != nil && !errors.Is(err, io.EOF) {
-		http.Error(w, `{"error":"bad_body"}`, http.StatusBadRequest)
-		return
-	}
-	format := req.Format
-	if format == "" {
-		format = "csv"
-	}
-	if format != "csv" && format != "gpx" && format != "backup" {
-		http.Error(w, `{"error":"format must be csv, gpx, or backup"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Tiered rate limit. EF runs this with `failClosed: true`; an
-	// RPC error treats the user as throttled. Same posture here —
-	// a wave of 429s under a DB blip is preferable to free
-	// multi-MB zips during the outage.
-	denied, retryAfter, rateErr := s.Backend.CheckRateLimitTiered(
-		r.Context(), userID, "export-data",
-		FreeQuotaPerHour, ProQuotaPerHour, 3600,
-	)
-	if rateErr != nil {
-		s.log().Warn("dataexport: rate-limit RPC failed; throttling fail-closed",
-			"err", rateErr, "user_id", userID)
-		w.Header().Set("Retry-After", "60")
-		http.Error(w, `{"error":"rate_limit_unavailable"}`, http.StatusTooManyRequests)
-		return
-	}
-	if denied {
-		if retryAfter > 0 {
-			w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-		}
-		http.Error(w, `{"error":"rate_limited"}`, http.StatusTooManyRequests)
-		return
-	}
-
-	built, buildErr := BuildArtifact(r.Context(), s.Backend, s.log(), userID, format)
-	if buildErr != nil {
-		if section := SectionOf(buildErr); section != "" {
-			s.log().Error("dataexport: section read failed", "err", buildErr, "section", section, "user_id", userID)
-			http.Error(w, fmt.Sprintf(`{"error":"%s_fetch_failed"}`, section), http.StatusInternalServerError)
-			return
-		}
-		if errors.Is(buildErr, ErrUpload) {
-			s.log().Error("dataexport: storage upload failed", "err", buildErr, "user_id", userID)
-			http.Error(w, `{"error":"upload_failed"}`, http.StatusInternalServerError)
-			return
-		}
-		s.log().Error("dataexport: archive build failed", "err", buildErr, "user_id", userID)
-		http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
-		return
-	}
-
-	signed, err := s.Backend.CreateSignedURL(r.Context(), built.ObjectPath, SignedURLTTLSec)
-	if err != nil {
-		s.log().Error("dataexport: signed URL failed", "err", err, "user_id", userID)
-		http.Error(w, `{"error":"signed_url_failed"}`, http.StatusInternalServerError)
-		return
-	}
-	// `count` is what the archive carries, `total` what the database
-	// holds and `complete` whether the two agree AND no other section
-	// came up short. The backup format says the same thing in
-	// manifest.json, in more detail.
-	writeJSON(w, http.StatusOK, map[string]any{
-		"url":        signed,
-		"expires_in": SignedURLTTLSec,
-		"count":      built.Runs,
-		"total":      built.TotalRuns,
-		"complete":   built.Complete,
-		"format":     format,
-	})
 }
 
 func (s *Server) extractUserID(r *http.Request) (string, error) {

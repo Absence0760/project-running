@@ -424,7 +424,7 @@ Thin TypeScript functions deployed to Supabase Edge Functions (Deno runtime).
 | `strava-import` | POST (user action) | OAuth token exchange, backfill last 90 days of activities | Active |
 | `parkrun-import` | POST (user action) | Fetch athlete results page by athlete number, parse HTML, save runs | Active |
 | `refresh-tokens` | Scheduled (pg_cron, every 4h) | Refresh expiring Strava access tokens before they expire | **Deprecated** — superseded by `token_refresh` job kind on the Go worker; EF kept as rollback |
-| `export-data` | POST (user action) | Export all user runs as GPX zip or CSV (GDPR Art 20) | **Deprecated** — superseded by `POST /v1/export` on the Go worker (`apps/job_worker/internal/dataexport/`); EF kept as rollback |
+| `export-data` | POST (user action) | Export all user runs as GPX zip or CSV (GDPR Art 20) | **Deprecated** — superseded by the Go worker's queued rail, `POST /v1/export/jobs` + `GET /v1/export/jobs/latest` (`apps/job_worker/internal/dataexport/`, decisions §717 + §724); EF kept as rollback and is the only synchronous export rail left |
 | `revenuecat-webhook` | POST (RevenueCat push) | Update `subscription_tier` on purchase/renewal/cancellation | Active |
 | `delete-account` | POST (user action) | Delete Storage files + auth user (cascades row data) | Active |
 | `clip-public-track` | GET (anon-callable) | Serve clipped track JSON for non-owner viewers (replaces the dropped bare-table Storage SELECT policy, migration `20260619_001`) | Active |

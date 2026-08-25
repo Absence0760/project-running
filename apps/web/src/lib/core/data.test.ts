@@ -1048,3 +1048,63 @@ test('fetchGymRoutineHistory aggregates on the server, never re-windows gym_work
 		'the count shown must be the aggregate sessionCount, never the bounded page length.'
 	);
 });
+
+test('the safety-contact list + remove are owner-scoped on BOTH clients, not left to RLS', () => {
+	// Reason: `safety_contacts` carries FOUR permissive policies, not two —
+	// "owner read"/"owner delete" (owner_id = auth.uid()) AND "linked contact
+	// read"/"linked contact delete" (contact_user_id = auth.uid()), both from
+	// migration 20261218_001 and both still present after 20270416_001's
+	// initplan wrap. Permissive policies OR, so an unfiltered select returns
+	// the UNION: your contacts plus every relationship in which someone else
+	// named YOU and you confirmed — rendered as your own list, under your own
+	// email address, with a Remove button. That button was not a no-op: the
+	// linked-contact DELETE policy let it through, so pressing it stripped the
+	// OTHER person's emergency contact. RLS is a security boundary (what you
+	// MAY read), never a query specification (what you WANT) — both clients
+	// must say `owner_id` out loud. Withdrawing from a relationship you are the
+	// contact of is declineSafetyRequest / decline_safety_contact.
+	const web = read('src/lib/core/data.ts');
+	const webFetchStart = web.indexOf('export async function fetchMySafetyContacts');
+	assert.ok(webFetchStart >= 0, 'Could not locate fetchMySafetyContacts — rename?');
+	const webFetch = web.slice(webFetchStart, web.indexOf('\nexport ', webFetchStart + 1));
+	assert.match(
+		webFetch,
+		/\.eq\('owner_id',\s*userId\)/,
+		'fetchMySafetyContacts must filter owner_id — RLS alone returns the contact-of union.'
+	);
+	assert.match(
+		webFetch,
+		/if \(!userId\) return \{ contacts: \[\], error: /,
+		'a signed-out read must report, never render as "you have no emergency contacts".'
+	);
+
+	const webRemoveStart = web.indexOf('export async function removeSafetyContact');
+	assert.ok(webRemoveStart >= 0, 'Could not locate removeSafetyContact — rename?');
+	const webRemove = web.slice(webRemoveStart, web.indexOf('\nexport ', webRemoveStart + 1));
+	assert.match(
+		webRemove,
+		/\.eq\('owner_id',\s*userId\)/,
+		'removeSafetyContact must scope the delete to owner_id — an id-only delete reaches ' +
+			"a row naming the caller as someone else's contact and deletes it."
+	);
+
+	// Mobile runs the same two queries against the same policies.
+	const dart = read('../../packages/api_client/lib/src/api_client.dart');
+	const dartFetchStart = dart.indexOf('Future<List<SafetyContact>> fetchMySafetyContacts(');
+	assert.ok(dartFetchStart >= 0, 'Could not locate the Dart fetchMySafetyContacts — rename?');
+	const dartFetch = dart.slice(dartFetchStart, dart.indexOf('\n  /// ', dartFetchStart + 1));
+	assert.match(
+		dartFetch,
+		/\.eq\(SafetyContactRow\.colOwnerId,\s*userId\)/,
+		'the Dart list read must filter owner_id for the same reason the web one does.'
+	);
+
+	const dartRemoveStart = dart.indexOf('Future<void> removeSafetyContact(');
+	assert.ok(dartRemoveStart >= 0, 'Could not locate the Dart removeSafetyContact — rename?');
+	const dartRemove = dart.slice(dartRemoveStart, dart.indexOf('\n  /// ', dartRemoveStart + 1));
+	assert.match(
+		dartRemove,
+		/\.eq\(SafetyContactRow\.colOwnerId,\s*userId\)/,
+		'the Dart delete must scope to owner_id — the linked-contact DELETE policy is permissive.'
+	);
+});

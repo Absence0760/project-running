@@ -344,3 +344,203 @@ func TestJobs_MethodsAreConstrained(t *testing.T) {
 		t.Fatalf("POST /v1/export/jobs/latest status=%d, want 405", resp.StatusCode)
 	}
 }
+
+// The auth + configuration gates that used to be pinned on the
+// synchronous POST /v1/export (deleted with decisions.md § 724). They
+// are the queued rail's gates now, and they are the ones that matter:
+// this endpoint is the only way to ask for an Art 20 archive.
+
+func TestJobs_MissingJwtSecretIs503(t *testing.T) {
+	srv := &Server{} // no verifier
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	resp, err := http.Post(base+"/v1/export/jobs", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("POST status=%d, want 503", resp.StatusCode)
+	}
+	resp, err = http.Get(base + "/v1/export/jobs/latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("GET status=%d, want 503", resp.StatusCode)
+	}
+}
+
+func TestJobs_ExpiredTokenIsRejected(t *testing.T) {
+	be := &fakeBackend{}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export/jobs",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", -600))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401", resp.StatusCode)
+	}
+	if len(be.enqueued) != 0 {
+		t.Fatalf("an expired token must enqueue nothing")
+	}
+}
+
+func TestJobs_TokenWithoutExpIsRejected(t *testing.T) {
+	// A correctly-signed token with the right `sub` but NO `exp` claim
+	// (signTestToken omits exp when expDelta == 0). Without
+	// WithExpirationRequired such a token is valid forever — it must be
+	// rejected on this security boundary, same as livehub.
+	be := &fakeBackend{}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export/jobs",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 0))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401 (no immortal tokens)", resp.StatusCode)
+	}
+}
+
+func TestJobs_RateLimitRpcErrorFailsClosed(t *testing.T) {
+	// A wave of 429s under a DB blip is preferable to free multi-MB
+	// archives during the outage.
+	be := &fakeBackend{rateErr: errors.New("db down")}
+	srv := &Server{Verifier: supajwt.New(testJWTSecret, "", nil), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	resp, _ := postJob(t, base, "user-A", `{"format":"backup"}`)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status=%d, want 429 (fail-closed)", resp.StatusCode)
+	}
+	if len(be.enqueued) != 0 {
+		t.Fatalf("a fail-closed throttle must enqueue nothing")
+	}
+}
+
+// The browser rail is cross-origin in every deployment: the site is on
+// one host and the worker on another, so an enqueue is preceded by a
+// preflight. Without an allowlist that probe is refused and the POST
+// never leaves the browser — which is how the queued rail shipped, and
+// what the export-hub e2e lane caught.
+func TestJobs_PreflightIsAnsweredForAnAllowedOrigin(t *testing.T) {
+	be := &fakeBackend{}
+	srv := &Server{
+		Verifier:       supajwt.New(testJWTSecret, "", nil),
+		Backend:        be,
+		AllowedOrigins: []string{"https://threkir.com"},
+	}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	for _, tc := range []struct {
+		path    string
+		methods string
+	}{
+		{"/v1/export/jobs", "POST, OPTIONS"},
+		{"/v1/export/jobs/latest", "GET, OPTIONS"},
+	} {
+		req, err := http.NewRequest(http.MethodOptions, base+tc.path, nil)
+		if err != nil {
+			t.Fatalf("request: %v", err)
+		}
+		req.Header.Set("Origin", "https://threkir.com")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("do: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("%s: status=%d, want 204", tc.path, resp.StatusCode)
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://threkir.com" {
+			t.Fatalf("%s: allow-origin=%q, want the exact origin", tc.path, got)
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Methods"); got != tc.methods {
+			t.Fatalf("%s: allow-methods=%q, want %q", tc.path, got, tc.methods)
+		}
+		if got := resp.Header.Get("Access-Control-Allow-Headers"); got != "authorization, content-type" {
+			t.Fatalf("%s: allow-headers=%q", tc.path, got)
+		}
+		if got := resp.Header.Get("Vary"); got != "Origin" {
+			t.Fatalf("%s: vary=%q, want Origin", tc.path, got)
+		}
+	}
+}
+
+// A wildcard would be invalid here anyway — the endpoint is
+// authenticated, and a browser rejects `*` on a credentialed request —
+// so an origin nobody listed is refused rather than echoed back.
+func TestJobs_PreflightRefusesAnUnlistedOrigin(t *testing.T) {
+	be := &fakeBackend{}
+	srv := &Server{
+		Verifier:       supajwt.New(testJWTSecret, "", nil),
+		Backend:        be,
+		AllowedOrigins: []string{"https://threkir.com"},
+	}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodOptions, base+"/v1/export/jobs", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("allow-origin=%q, want empty", got)
+	}
+}
+
+// An enqueue that succeeds still needs the header on the response, or
+// the browser discards a 202 the worker really did accept.
+func TestJobs_PostCarriesTheAllowOriginHeader(t *testing.T) {
+	be := &fakeBackend{enqueueRef: ExportJobRef{ID: "exp-1", Status: "queued", Format: "backup"}}
+	srv := &Server{
+		Verifier:       supajwt.New(testJWTSecret, "", nil),
+		Backend:        be,
+		AllowedOrigins: []string{"https://threkir.com"},
+	}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export/jobs", strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://threkir.com")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status=%d, want 202", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "https://threkir.com" {
+		t.Fatalf("allow-origin=%q", got)
+	}
+}

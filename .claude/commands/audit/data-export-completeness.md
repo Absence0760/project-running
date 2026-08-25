@@ -10,7 +10,7 @@ GDPR Art 20 (portability) and CCPA right-to-know both require the export to be *
 
 ## What to check
 
-1. **Walker.** The primary export is `apps/job_worker/internal/dataexport/server.go` (HTTP `POST /v1/export`). The rollback is `apps/backend/supabase/functions/export-data/index.ts`. Read both. List every table + column the exporter pulls.
+1. **Walker.** The primary export is `apps/job_worker/internal/dataexport/` — `build.go` assembles the archive off the `data_export` job queue, `server.go` holds the section writers, `jobs.go` the enqueue + status endpoints. The rollback is `apps/backend/supabase/functions/export-data/index.ts`. Read both. List every table + column the exporter pulls.
 2. **Schema.** Walk every `apps/backend/supabase/migrations/*.sql` `create table` + `add column` statement. Filter to tables that hold user-data per `compliance-auditor`'s "personal data this project handles" list. Diff against the exporter's coverage.
 3. **Storage.** Buckets `runs`, `run-photos`, `avatars`, plus the export-output bucket itself. The exporter must enumerate `{user_id}/*` for each (including subprefixes like `run-photos/<user>/<run>/<thumb>.webp`). Verify.
 4. **Third-party-linked state.**

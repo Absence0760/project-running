@@ -586,10 +586,18 @@ class ApiClient {
   // by an email link or, when they're an app user, in-app via the pending-
   // request flow.
 
-  /// The owner's own safety-contact list (RLS scopes to `owner_id = me`).
+  /// The owner's own safety-contact list, scoped by an explicit `owner_id`
+  /// filter. RLS is NOT the scope here and never was: `safety_contacts` carries
+  /// a second permissive SELECT policy for `contact_user_id = auth.uid()`
+  /// (migration 20261218_001), and permissive policies OR — so an unfiltered
+  /// read returns the union of the rows the caller owns and the rows naming
+  /// THEM as someone else's contact, which the settings screen then renders as
+  /// the caller's own list under their own email address.
   /// Returns an empty list on read failure so the settings screen renders an
   /// empty state rather than throwing.
   Future<List<SafetyContact>> fetchMySafetyContacts() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return const [];
     try {
       final data = await _client
           .from(SafetyContactRow.table)
@@ -597,6 +605,7 @@ class ApiClient {
             'id, contact_email, contact_phone, contact_user_id, confirmed_at, '
             'sms_opt_in_at, created_at',
           )
+          .eq(SafetyContactRow.colOwnerId, userId)
           .order(SafetyContactRow.colCreatedAt, ascending: false);
       return (data as List)
           .map<SafetyContact>(
@@ -668,12 +677,25 @@ class ApiClient {
     }
   }
 
-  /// Remove a safety contact the owner added (RLS gates to `owner_id = me`).
+  /// Remove a safety contact the owner added, scoped by an explicit `owner_id`
+  /// filter for the same reason the read is: the table's second permissive
+  /// DELETE policy (`contact_user_id = auth.uid()`) means an unscoped
+  /// delete-by-id succeeds against a row naming the caller as SOMEONE ELSE's
+  /// contact — silently stripping that person's emergency contact under a
+  /// button labelled as the caller's own housekeeping. Withdrawing from a
+  /// relationship the caller is the contact of is [declineSafetyRequest],
+  /// which says so.
   Future<void> removeSafetyContact(String id) async {
+    final userId = _client.auth.currentUser?.id;
+    // 'Not authenticated' (not 'not signed in') is the phrasing
+    // classifyAuthError matches, so the screen offers "sign in" rather than a
+    // generic failure with a Retry that could never succeed.
+    if (userId == null) throw Exception('Not authenticated');
     await _client
         .from(SafetyContactRow.table)
         .delete()
-        .eq(SafetyContactRow.colId, id);
+        .eq(SafetyContactRow.colId, id)
+        .eq(SafetyContactRow.colOwnerId, userId);
   }
 
   /// Pending requests where the signed-in user is the named contact (matched
@@ -7097,12 +7119,16 @@ class ApiClient {
   /// Withdraw health-data consent (GDPR Art 7(3)) via the
   /// `withdraw_health_data_consent()` SECURITY DEFINER RPC — the
   /// sanctioned inverse of [grantHealthDataConsent] (migration
-  /// 20270418_001). One transaction nulls the consent stamp + every
-  /// Art 9 profile column (height, gender, DOB) and erases the
-  /// `body_metrics` weight series. Server-side insert-or-update, so a
-  /// missing client-provisioned profile row can't turn the withdrawal
-  /// into a 0-row silent no-op; throws on a missing session for the
-  /// same reason.
+  /// 20270418_001). One transaction nulls the consent stamp + the Art 9
+  /// profile columns (height, gender) and erases the `body_metrics`
+  /// weight series. `date_of_birth` is deliberately NOT among them: it is
+  /// the child-safety age record the under-18 discoverability floor reads,
+  /// and Art 7(3) ends the health processing, not the floor (decisions
+  /// § 721 — before that the RPC nulled it and every caller re-asserted it
+  /// afterwards). The caller still clears the Art 9 prefs-bag DOB mirror.
+  /// Server-side insert-or-update, so a missing client-provisioned profile
+  /// row can't turn the withdrawal into a 0-row silent no-op; throws on a
+  /// missing session for the same reason.
   Future<void> withdrawHealthDataConsent() async {
     if (_client.auth.currentUser?.id == null) {
       throw StateError('not signed in');

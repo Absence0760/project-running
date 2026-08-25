@@ -87,6 +87,10 @@ class _FakeApiPb extends ApiClient {
         shadowHidden: false,
         gender: 'male',
         dateOfBirth: DateTime.utc(1990, 1, 1),
+        // Gender is nulled the moment consent is withdrawn, so a row carrying
+        // it carries the stamp too. Age grading is an Art 9 use of the age
+        // record and is withheld without it (§ 722).
+        healthDataConsentAt: DateTime.utc(2026, 1, 1),
       );
 }
 

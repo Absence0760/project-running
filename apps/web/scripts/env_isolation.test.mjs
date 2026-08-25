@@ -132,7 +132,7 @@ test('accepts a loopback PUBLIC_LIVE_HUB_URL', () => {
 
 test('fails when PUBLIC_EXPORT_HUB_URL points at a remote host', () => {
 	// The "Cloud export (GPX zip)" button POSTs to
-	// `${PUBLIC_EXPORT_HUB_URL}/v1/export` (the Go worker). A dev
+	// `${PUBLIC_EXPORT_HUB_URL}/v1/export/jobs` (the Go worker). A dev
 	// .env aimed at the prod exporter would write test export jobs
 	// into live infra's queue + Storage.
 	const r = checkEnvIsolation({
