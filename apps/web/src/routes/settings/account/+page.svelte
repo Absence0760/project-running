@@ -506,12 +506,12 @@
 
 		if (!healthDataConsent && healthDataConsentAt != null) {
 			// Withdrawal (Art 7(3)) — the SECURITY DEFINER RPC nulls the
-			// consent stamp + gender/DOB/height and erases the weight series
+			// consent stamp + gender + height and erases the weight series
 			// atomically; insert-or-update server-side so a missing profile
 			// row can't 0-row silent no-op (issue #233). Local state flips
-			// only after the server confirms. The Art 9 DOB mirror is cleared from
-			// prefs below; the age record is re-asserted by the profile write
-			// that follows, which is why that write moved after this one.
+			// only after the server confirms. The Art 9 DOB mirror is cleared
+			// from prefs below; the age record is not this RPC's to touch
+			// (§ 721), so nothing here has to put it back.
 			const { error: withdrawError } = await supabase.rpc(
 				'withdraw_health_data_consent',
 			);
@@ -528,10 +528,10 @@
 		const profileUpdate: Record<string, unknown> = {
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
-			// The age record, carrying no consent term (§ 718). This write
-			// runs AFTER the withdrawal RPC above precisely to put back the
-			// column that RPC nulls — ending the Art 9 processing does not
-			// end the under-18 discoverability floor.
+			// The age record, carrying no consent term (§ 718) — ending the
+			// Art 9 processing does not end the under-18 discoverability
+			// floor, and since § 721 the withdrawal RPC leaves the column
+			// alone rather than needing this write to undo it.
 			date_of_birth: dateOfBirth || null,
 		};
 		// Row-count-verified: user_profiles rows are client-provisioned, so a

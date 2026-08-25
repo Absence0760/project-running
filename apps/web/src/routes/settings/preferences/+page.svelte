@@ -559,8 +559,8 @@
 	// Withdrawing consent (Art 7(3)) erases the saved height + the entire
 	// weight time-series — irreversible, so confirm before running the save.
 	// The DOB age record is the one field that survives a withdrawal
-	// (§ 718): it is re-asserted below because the withdrawal RPC still
-	// nulls the column server-side.
+	// (§ 718), and since § 721 it survives it server-side: the RPC no
+	// longer nulls the column, so nothing here re-asserts it.
 	let showWithdrawConfirm = $state(false);
 	function requestSaveDemographics() {
 		if (!healthDataConsent && healthDataConsentAt != null) {
@@ -598,7 +598,7 @@
 			}
 			if (!healthDataConsent) {
 				// Art 7(3): one SECURITY DEFINER RPC nulls the consent stamp +
-				// gender/DOB/height and erases the weight series atomically.
+				// gender + height and erases the weight series atomically.
 				// Insert-or-update server-side, so a missing client-provisioned
 				// profile row can't turn the withdrawal into a 0-row silent
 				// no-op while the UI confirms success (issue #233).
@@ -611,11 +611,12 @@
 				weightInput = null;
 			}
 			// One profile write on both arms. `date_of_birth` is the age
-			// record and carries no consent term — on the withdrawal arm this
-			// runs AFTER the RPC precisely to put back the column the RPC
-			// nulls, because ending the Art 9 processing does not end the
-			// child-safety discoverability floor (§ 718). gender + height are
-			// the Art 9 fields and go null the moment consent is off.
+			// record and carries no consent term, because ending the Art 9
+			// processing does not end the child-safety discoverability floor
+			// (§ 718) — and since § 721 the withdrawal RPC leaves the column
+			// alone, so this write records an edit rather than undoing one.
+			// gender + height are the Art 9 fields and go null the moment
+			// consent is off.
 			const profileUpdate: Record<string, unknown> = {
 				date_of_birth: dateOfBirth || null,
 				gender: healthDataConsent && gender ? gender : null,

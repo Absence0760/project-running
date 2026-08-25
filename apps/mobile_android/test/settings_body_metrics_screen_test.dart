@@ -42,6 +42,51 @@ class _ConsentedApi extends ApiClient {
   Future<void> withdrawHealthDataConsent() async => withdrawCalled = true;
 }
 
+/// Consented, with a birth date on file. Records whether the withdrawal
+/// path writes the age record back — since decisions § 721 the server keeps
+/// the column, so the screen must not touch it.
+class _ConsentedWithDobApi extends ApiClient {
+  bool withdrawCalled = false;
+  int ageRecordCalls = 0;
+
+  @override
+  String? get userId => 'u1';
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async => UserProfileRow(
+        shadowHidden: false,
+        id: 'u1',
+        healthDataConsentAt: DateTime.utc(2026, 1, 1),
+        heightCm: 175,
+        dateOfBirth: DateTime.utc(1990, 1, 15),
+      );
+  @override
+  Future<double?> fetchLatestBodyWeightKg() async => 70.0;
+  @override
+  Future<void> withdrawHealthDataConsent() async => withdrawCalled = true;
+  @override
+  Future<void> setMyDateOfBirth(DateTime? dateOfBirth) async =>
+      ageRecordCalls++;
+}
+
+/// Records the universal-bag writes so the Art 9 mirror clear is observable.
+class _RecordingSync extends SettingsSyncService {
+  _RecordingSync(Preferences prefs) : super(preferences: prefs);
+
+  final List<Map<String, dynamic>> writes = [];
+
+  @override
+  bool get synced => true;
+
+  @override
+  SettingsService? get service => null;
+
+  @override
+  Future<void> updateUniversal(Map<String, dynamic> changes) async {
+    writes.add(changes);
+    notifyListeners();
+  }
+}
+
 /// The profile read fails. Before the fail-closed guard the screen fell back
 /// to consent-off with no stamp, which made Save read as a withdrawal.
 class _FailingLoadApi extends ApiClient {
@@ -283,6 +328,57 @@ void main() {
       expect(api.withdrawCalled, isTrue);
 
       // Drain the showTopBanner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('withdrawal clears the Art 9 mirror and leaves the age record '
+        'to the server', (tester) async {
+      // Two DOB stores, two lawful bases (§ 718). The prefs-bag mirror is
+      // the Art 9 health-use copy and goes with the consent; the
+      // `user_profiles` column is the child-safety age record the under-18
+      // discoverability floor reads, and since § 721 the withdrawal RPC
+      // leaves it standing. This screen used to write it back straight after
+      // the RPC — a compensation whose whole failure mode was a crash
+      // between the two calls leaving a declared minor discoverable.
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      final api = _ConsentedWithDobApi();
+      final sync = _RecordingSync(prefs);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsBodyMetricsScreen(
+            api: api,
+            settingsSync: sync,
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await tester.enterText(find.widgetWithText(TextField, 'Height'), '');
+      await tester.enterText(find.widgetWithText(TextField, 'Weight'), '');
+      await tester.pump();
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pump();
+      await tester
+          .runAsync(() => tester.tap(find.widgetWithText(FilledButton, 'Save')));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+          () => tester.tap(find.widgetWithText(TextButton, 'Withdraw & erase')));
+      await tester.pumpAndSettle();
+
+      expect(api.withdrawCalled, isTrue);
+      expect(api.ageRecordCalls, 0,
+          reason: 'the age record is the server\'s to keep, not this '
+              'screen\'s to re-assert');
+      expect(sync.writes.any((w) => w.containsKey(SettingsKeys.dateOfBirth) &&
+              w[SettingsKeys.dateOfBirth] == null), isTrue,
+          reason: 'the Art 9 prefs-bag mirror must be cleared');
+
       await tester.pump(const Duration(seconds: 4));
     });
   });
