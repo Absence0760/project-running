@@ -2247,28 +2247,51 @@ test('accessibility: ToastContainer announces from permanently-mounted live regi
 	// region and text arriving in one mutation left the first toast of a burst
 	// — one toast at a time, the ordinary case — announced by nothing.
 	//
-	// Both regions must therefore sit OUTSIDE every `{#if}`, and the visible
-	// stack must stay aria-hidden or the same sentence is announced twice.
+	// Both regions must therefore sit OUTSIDE every `{#if}`. They must also BE
+	// the visible stacks rather than hidden mirrors of them: a mirror announces
+	// correctly and puts the same sentence in the DOM twice, which makes every
+	// `getByText('<toast text>')` in the e2e suite a strict-mode violation.
 	const src = read('src/lib/components/ToastContainer.svelte');
 	const markup = src.replace(/<script[\s\S]*?<\/script>/, '').replace(/<style[\s\S]*?<\/style>/, '');
-	const firstIf = markup.indexOf('{#if');
-	assert.ok(firstIf >= 0, 'ToastContainer no longer has a conditional block to measure against.');
 
 	for (const politeness of ['polite', 'assertive']) {
-		const at = markup.indexOf(`aria-live="${politeness}"`);
-		assert.ok(at >= 0, `ToastContainer must carry an aria-live="${politeness}" region.`);
-		assert.ok(
-			at < firstIf,
-			`The aria-live="${politeness}" region must be mounted unconditionally — a region ` +
-				'that appears together with its text announces nothing.',
+		assert.match(
+			markup,
+			new RegExp(`aria-live="${politeness}"`),
+			`ToastContainer must carry an aria-live="${politeness}" region.`,
 		);
 	}
 
-	assert.match(
+	const firstIf = markup.indexOf('{#if');
+	if (firstIf >= 0) {
+		for (const politeness of ['polite', 'assertive']) {
+			assert.ok(
+				markup.indexOf(`aria-live="${politeness}"`) < firstIf,
+				`The aria-live="${politeness}" region must be mounted unconditionally — a region ` +
+					'that appears together with its text announces nothing.',
+			);
+		}
+	}
+
+	// The message renders once. Two `{#each}` blocks over the toast list, one
+	// per politeness, and no separate hidden copy of the text.
+	assert.equal(
+		(markup.match(/\{#each/g) ?? []).length,
+		2,
+		'ToastContainer must render each toast exactly once, in the stack matching ' +
+			'its politeness — a second copy for the announcer duplicates the message.',
+	);
+	assert.doesNotMatch(
 		markup,
-		/<div class="toast-container" aria-hidden="true">/,
-		'The visible toast stack must be aria-hidden so a toast is not announced ' +
-			'by both it and the live region above it.',
+		/aria-hidden/,
+		'Nothing in ToastContainer may be aria-hidden: the announcing region IS the ' +
+			'visible stack, so hiding it would silence the toast rather than de-duplicate it.',
+	);
+	assert.doesNotMatch(
+		markup,
+		/class="visually-hidden"/,
+		'The announcer must not be a visually-hidden mirror of the visible stack — ' +
+			'that duplicates the sentence in the DOM (see decisions.md § 736).',
 	);
 });
 
