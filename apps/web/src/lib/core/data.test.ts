@@ -1108,3 +1108,44 @@ test('the safety-contact list + remove are owner-scoped on BOTH clients, not lef
 		'the Dart delete must scope to owner_id — the linked-contact DELETE policy is permissive.'
 	);
 });
+
+test('the contact-of section reads the OTHER half deliberately, and withdraws by decline', () => {
+	// Reason: §720 scoped both clients' list read to `owner_id`, which is
+	// exactly the rows this section needs — so it has to ask for the other
+	// half by name. The linked-contact SELECT policy already permits the
+	// query; nothing about it may lean on RLS to supply the predicate.
+	// And the action on such a row is `decline_safety_contact`, NOT
+	// `removeSafetyContact`: the latter is owner-scoped and would match no
+	// row here, so a "withdraw" button wired to it toasts success while the
+	// runner's contact list is untouched — the failure mode that reads as
+	// working, which is the worst kind on a consent surface.
+	const web = read('src/lib/core/data.ts');
+	const start = web.indexOf('export async function fetchSafetyContactOf');
+	assert.ok(start >= 0, 'Could not locate fetchSafetyContactOf — rename?');
+	const body = web.slice(start, web.indexOf('\nexport ', start + 1));
+	assert.match(
+		body,
+		/\.eq\('contact_user_id',\s*userId\)/,
+		'fetchSafetyContactOf must name contact_user_id — RLS is not the scope.'
+	);
+	assert.match(
+		body,
+		/if \(!userId\) return \{ relationships: \[\], error: /,
+		'a signed-out read must report, never render as "you are nobody\'s contact".'
+	);
+
+	const page = read('src/routes/settings/safety/+page.svelte');
+	const withdrawAt = page.indexOf('async function handleWithdraw');
+	assert.ok(withdrawAt >= 0, 'Could not locate handleWithdraw — rename?');
+	const withdraw = page.slice(withdrawAt, page.indexOf('\n\t}', withdrawAt));
+	assert.match(
+		withdraw,
+		/declineSafetyRequest\(rel\.id\)/,
+		'withdrawing from a relationship you are the CONTACT of is decline_safety_contact.'
+	);
+	assert.doesNotMatch(
+		withdraw,
+		/removeSafetyContact/,
+		'removeSafetyContact is owner-scoped — it silently matches nothing on a contact-of row.'
+	);
+});

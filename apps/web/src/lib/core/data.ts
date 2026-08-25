@@ -7542,6 +7542,72 @@ export async function removeSafetyContact(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// A relationship in which SOMEONE ELSE named the signed-in user as their
+/// safety contact and the user confirmed. The mirror image of
+/// `SafetyContact`, and the only place `set_safety_sms_opt_in` can be called
+/// from once the confirm step is behind you.
+export interface SafetyContactOf {
+	id: string;
+	owner_id: string;
+	owner_name: string | null;
+	has_phone: boolean;
+	sms_opt_in_at: string | null;
+	created_at: string;
+}
+
+/// The contact-of direction of `safety_contacts`, scoped by an explicit
+/// `contact_user_id` filter for the same reason the owner list scopes on
+/// `owner_id` (§720): the table's permissive policies OR, so a query has to
+/// state which half it wants rather than inherit whatever RLS happens to
+/// allow. The linked-contact SELECT policy (`20261218_001`) already permits
+/// exactly this read, so no migration is involved. Every row here is a
+/// confirmed relationship by construction — `contact_user_id` is set only by
+/// `confirm_safety_contact`, which stamps `confirmed_at` in the same UPDATE.
+///
+/// The owner's stored number is reported as a FACT, never as digits. It only
+/// gates whether the SMS consent toggle means anything, and there is no owner
+/// UPDATE policy, so a contact could not correct a wrong number from here
+/// even if it were shown — the same posture `my_pending_safety_requests`
+/// takes with `has_phone`.
+///
+/// Reports the error rather than degrading to `[]`, matching the owner list:
+/// a signed-out caller is an error, not "you are nobody's contact".
+export async function fetchSafetyContactOf(): Promise<{
+	relationships: SafetyContactOf[];
+	error: string | null;
+}> {
+	const userId = auth.user?.id;
+	if (!userId) return { relationships: [], error: 'Not signed in' };
+	const { data, error } = await supabase
+		.from(TABLES.safety_contacts)
+		.select('id, owner_id, contact_phone, sms_opt_in_at, created_at')
+		.eq('contact_user_id', userId)
+		.order('created_at', { ascending: false });
+	if (error) return { relationships: [], error: error.message };
+	const rows = (data ?? []) as {
+		id: string;
+		owner_id: string;
+		contact_phone: string | null;
+		sms_opt_in_at: string | null;
+		created_at: string;
+	}[];
+	// A shadow-hidden or unreadable owner degrades to the anonymous fallback
+	// rather than dropping the row: the consent controls are the point, the
+	// name is decoration.
+	const byId = await fetchProfilesByIds([...new Set(rows.map((r) => r.owner_id))]);
+	return {
+		relationships: rows.map((r) => ({
+			id: r.id,
+			owner_id: r.owner_id,
+			owner_name: byId.get(r.owner_id)?.display_name ?? null,
+			has_phone: r.contact_phone !== null,
+			sms_opt_in_at: r.sms_opt_in_at,
+			created_at: r.created_at,
+		})),
+		error: null,
+	};
+}
+
 /// Pending requests where the signed-in user is the named contact (matched
 /// by their account email via a SECURITY DEFINER RPC — the pending row isn't
 /// directly readable until they link by confirming).
