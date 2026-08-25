@@ -7097,12 +7097,16 @@ class ApiClient {
   /// Withdraw health-data consent (GDPR Art 7(3)) via the
   /// `withdraw_health_data_consent()` SECURITY DEFINER RPC — the
   /// sanctioned inverse of [grantHealthDataConsent] (migration
-  /// 20270418_001). One transaction nulls the consent stamp + every
-  /// Art 9 profile column (height, gender, DOB) and erases the
-  /// `body_metrics` weight series. Server-side insert-or-update, so a
-  /// missing client-provisioned profile row can't turn the withdrawal
-  /// into a 0-row silent no-op; throws on a missing session for the
-  /// same reason.
+  /// 20270418_001). One transaction nulls the consent stamp + the Art 9
+  /// profile columns (height, gender) and erases the `body_metrics`
+  /// weight series. `date_of_birth` is deliberately NOT among them: it is
+  /// the child-safety age record the under-18 discoverability floor reads,
+  /// and Art 7(3) ends the health processing, not the floor (decisions
+  /// § 721 — before that the RPC nulled it and every caller re-asserted it
+  /// afterwards). The caller still clears the Art 9 prefs-bag DOB mirror.
+  /// Server-side insert-or-update, so a missing client-provisioned profile
+  /// row can't turn the withdrawal into a 0-row silent no-op; throws on a
+  /// missing session for the same reason.
   Future<void> withdrawHealthDataConsent() async {
     if (_client.auth.currentUser?.id == null) {
       throw StateError('not signed in');
