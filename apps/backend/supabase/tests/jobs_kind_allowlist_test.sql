@@ -13,17 +13,23 @@
 -- + a Go dispatch case + extending this test.
 --
 -- Coverage:
---   1. INSERT 'map_match'     — accepted (worker handler exists)
---   2. INSERT 'token_refresh' — accepted (worker handler exists)
---   3. INSERT 'unknown_kind'  — rejected (23514)
---   4. INSERT 'map-match'     — rejected (the typo-catcher path)
---   5. UPDATE flipping a valid kind to a junk one is also rejected
+--   1. One INSERT per allowlisted kind — each accepted, because a
+--      kind the CHECK admits is a kind the Go dispatch switch must
+--      know. The list here IS the assertion: `club_photo_process`
+--      (20270301_001) and `safety_sms` (20270410_001) shipped their
+--      migration and their handler but were never added below, so for
+--      two rounds the suite passed while asserting nothing about them.
+--      A kind missing from this file is a kind whose three-file rule
+--      was only followed twice.
+--   2. INSERT 'unknown_kind'  — rejected (23514)
+--   3. INSERT 'map-match'     — rejected (the typo-catcher path)
+--   4. UPDATE flipping a valid kind to a junk one is also rejected
 --      (so a future REST surface that lets a row be re-classified
 --      can't bypass the constraint via UPDATE).
 
 begin;
 
-select plan(15);
+select plan(18);
 
 -- Accepted kinds round-trip cleanly. We're not asserting any
 -- particular id; just that the INSERT doesn't throw.
@@ -118,6 +124,33 @@ select lives_ok(
                                 'storage_path', 'user/route_photo.jpg',
                                 'owner_id', gen_random_uuid())) $$,
   'public.jobs accepts kind = ''route_photo_process'''
+);
+
+select lives_ok(
+  $$ insert into public.jobs (kind, payload)
+     values ('club_photo_process',
+             jsonb_build_object('photo_id', gen_random_uuid(),
+                                'storage_path', 'club/photo.jpg',
+                                'owner_id', gen_random_uuid())) $$,
+  'public.jobs accepts kind = ''club_photo_process'''
+);
+
+select lives_ok(
+  $$ insert into public.jobs (kind, payload)
+     values ('safety_sms',
+             jsonb_build_object('template', 'overdue',
+                                'contact_phone', '+10000000000',
+                                'run_id', gen_random_uuid())) $$,
+  'public.jobs accepts kind = ''safety_sms'''
+);
+
+select lives_ok(
+  $$ insert into public.jobs (kind, payload)
+     values ('data_export',
+             jsonb_build_object('export_job_id', gen_random_uuid(),
+                                'user_id', gen_random_uuid(),
+                                'format', 'backup')) $$,
+  'public.jobs accepts kind = ''data_export'''
 );
 
 -- Junk kinds are rejected at INSERT time, not deferred to dispatch.
