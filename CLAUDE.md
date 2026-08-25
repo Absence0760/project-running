@@ -170,6 +170,7 @@ If you're unsure whether a doc change is warranted, err on the side of editing �
 - **`supabase gen types typescript --local` writes "Connecting to db 5432" to stdout**, not stderr. The `gen:types` script in `apps/backend/package.json` pipes through `grep -v '^Connecting to db'` to strip it. If you rewrite the script, keep the filter.
 - **Seed user**: `runner@test.com` / `testtest`. Lives in `apps/backend/supabase/seed.sql`. Use it for any manual testing.
 - **Local Supabase ports**: API 54321, DB 54322, Studio 54323, Mailpit 54324. The SvelteKit web dev server runs on **7777**, preview on 8888.
+- **A Playwright seed's calendar day is the BROWSER's, not the runner's.** `playwright.config.ts` pins every context to `timezoneId: 'UTC'` while the Node process building the seed sits in the workstation's zone, so `new Date(y, m, d, h, 0)` puts the row on the adjacent day whenever the two disagree — green sixteen hours a day in EDT, red the other eight, and always green on UTC CI. Build every day-relative timestamp through `apps/web/tests-e2e/fixtures/dates.ts`; `fixtures/dates.test.ts` scans the whole `tests-e2e` tree and fails on a local-zone date getter. [decisions.md § 728](docs/architecture/decisions.md).
 
 ### Schema and row types
 
