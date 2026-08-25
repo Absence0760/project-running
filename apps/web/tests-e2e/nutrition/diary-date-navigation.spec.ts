@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { browserDate, browserDateOf, noonOnBrowserDay } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -21,22 +22,6 @@ import { USER_A } from '../fixtures/users';
 test.describe('/nutrition — diary day navigation', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	/// Local `YYYY-MM-DD`, `offsetDays` calendar days from today. Stepped
-	/// through the calendar, never by 24 h (decisions.md § 589).
-	function localDate(offsetDays: number): string {
-		const n = new Date();
-		const d = new Date(n.getFullYear(), n.getMonth(), n.getDate() + offsetDays);
-		const mm = String(d.getMonth() + 1).padStart(2, '0');
-		const dd = String(d.getDate()).padStart(2, '0');
-		return `${d.getFullYear()}-${mm}-${dd}`;
-	}
-
-	/// Local noon on the day `offsetDays` from today, as an instant.
-	function noonOn(offsetDays: number): string {
-		const n = new Date();
-		return new Date(n.getFullYear(), n.getMonth(), n.getDate() + offsetDays, 12, 0).toISOString();
-	}
-
 	test('stepping back shows that day only, and the URL carries it', async ({ page }) => {
 		const admin = getAdminClient();
 		const stamp = Date.now();
@@ -46,8 +31,8 @@ test.describe('/nutrition — diary day navigation', () => {
 		const { data: created } = await admin
 			.from('food_log')
 			.insert([
-				{ user_id: USER_A.id, started_at: noonOn(0), item_name: todayItem, calories: 300, meal_slot: 'lunch' },
-				{ user_id: USER_A.id, started_at: noonOn(-1), item_name: pastItem, calories: 400, meal_slot: 'lunch' },
+				{ user_id: USER_A.id, started_at: noonOnBrowserDay(0), item_name: todayItem, calories: 300, meal_slot: 'lunch' },
+				{ user_id: USER_A.id, started_at: noonOnBrowserDay(-1), item_name: pastItem, calories: 400, meal_slot: 'lunch' },
 			])
 			.select('id');
 		const ids = (created ?? []).map((r) => r.id);
@@ -64,7 +49,7 @@ test.describe('/nutrition — diary day navigation', () => {
 
 			await page.getByTestId('diary-prev-day').click();
 
-			await expect(page).toHaveURL(new RegExp(`\\?date=${localDate(-1)}$`));
+			await expect(page).toHaveURL(new RegExp(`\\?date=${browserDate(-1)}$`));
 			await expect(page.getByTestId('diary-day')).toHaveText('Yesterday');
 			await expect(page.getByText(pastItem)).toBeVisible();
 			await expect(page.getByText(todayItem)).toBeHidden();
@@ -75,7 +60,7 @@ test.describe('/nutrition — diary day navigation', () => {
 			// that day, and which one sorts first is not this test's business.
 			await expect(page.locator('.meal-head-link').first()).toHaveAttribute(
 				'href',
-				new RegExp(`^/nutrition/${localDate(-1)}/`),
+				new RegExp(`^/nutrition/${browserDate(-1)}/`),
 			);
 
 			// Back to today drops the query string entirely.
@@ -89,7 +74,7 @@ test.describe('/nutrition — diary day navigation', () => {
 	});
 
 	test('a future or malformed ?date= falls back to today', async ({ page }) => {
-		await page.goto(`/nutrition?date=${localDate(3)}`);
+		await page.goto(`/nutrition?date=${browserDate(3)}`);
 		await expect(page.getByTestId('diary-day')).toHaveText('Today', { timeout: 10_000 });
 		await expect(page.getByTestId('diary-next-day')).toBeDisabled();
 
@@ -101,7 +86,7 @@ test.describe('/nutrition — diary day navigation', () => {
 		const admin = getAdminClient();
 		const stamp = Date.now();
 		const item = `E2E Backfill ${stamp}`;
-		const twoDaysAgo = localDate(-2);
+		const twoDaysAgo = browserDate(-2);
 
 		await page.goto(`/nutrition?date=${twoDaysAgo}`);
 		await expect(page.getByTestId('diary-day')).toBeVisible({ timeout: 10_000 });
@@ -127,9 +112,7 @@ test.describe('/nutrition — diary day navigation', () => {
 			.eq('user_id', USER_A.id)
 			.eq('item_name', item);
 		expect(created?.length).toBe(1);
-		const at = new Date(created![0].started_at);
-		const localOf = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')}`;
-		expect(localOf).toBe(twoDaysAgo);
+		expect(browserDateOf(created![0].started_at)).toBe(twoDaysAgo);
 
 		// And today's view does not show it.
 		await page.goto('/nutrition');

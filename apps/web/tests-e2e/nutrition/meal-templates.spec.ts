@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { browserDayStart } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -30,13 +31,11 @@ test.describe('/nutrition — meal templates', () => {
 		// this test asserts the template has exactly one item. Sibling specs
 		// sharing USER_A can leave today's food_log dirty, so clear today's
 		// entries first — this test owns today's meals for its window.
-		const todayStart = new Date();
-		todayStart.setHours(0, 0, 0, 0);
 		await admin
 			.from('food_log')
 			.delete()
 			.eq('user_id', USER_A.id)
-			.gte('started_at', todayStart.toISOString());
+			.gte('started_at', browserDayStart());
 
 		// Seed one logged entry today so "Save as meal" has something to capture.
 		const { data: seedEntry } = await admin

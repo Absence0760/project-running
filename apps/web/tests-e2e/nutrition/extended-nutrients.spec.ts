@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { noonOnBrowserDay } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 
@@ -61,13 +62,6 @@ test.describe('/nutrition — extended nutrients, coverage-aware', () => {
 
 	let user: SagaUser;
 
-	function noonUtcToday(): string {
-		const now = new Date();
-		return new Date(
-			Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0),
-		).toISOString();
-	}
-
 	test.beforeAll(async () => {
 		[user] = await createSagaUsers(1, { displayNames: ['Nutrient Saga'] });
 
@@ -90,7 +84,7 @@ test.describe('/nutrition — extended nutrients, coverage-aware', () => {
 
 		const { error: bmErr } = await admin
 			.from('body_metrics')
-			.insert({ user_id: user.id, weight_kg: WEIGHT_KG, recorded_at: noonUtcToday() });
+			.insert({ user_id: user.id, weight_kg: WEIGHT_KG, recorded_at: noonOnBrowserDay() });
 		if (bmErr) throw bmErr;
 
 		const { error: setErr } = await admin.from('user_settings').upsert({
@@ -104,7 +98,7 @@ test.describe('/nutrition — extended nutrients, coverage-aware', () => {
 		const { error: foodErr } = await admin.from('food_log').insert([
 			{
 				user_id: user.id,
-				started_at: noonUtcToday(),
+				started_at: noonOnBrowserDay(),
 				item_name: 'E2E Nutrient Salted Bowl',
 				meal_slot: 'lunch',
 				calories: 600,
@@ -117,7 +111,7 @@ test.describe('/nutrition — extended nutrients, coverage-aware', () => {
 			},
 			{
 				user_id: user.id,
-				started_at: noonUtcToday(),
+				started_at: noonOnBrowserDay(),
 				item_name: 'E2E Nutrient Broth',
 				meal_slot: 'dinner',
 				calories: 90,
