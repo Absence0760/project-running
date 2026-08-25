@@ -430,7 +430,7 @@
             "npm:@sveltejs/vite-plugin-svelte@7.3.0",
             "npm:@types/aws-lambda@8.10.162",
             "npm:@types/geojson@^7946.0.16",
-            "npm:@types/node@^26.1.2",
+            "npm:@types/node@^26.2.0",
             "npm:@zip.js/zip.js@^2.8.55",
             "npm:esbuild@0.28.2",
             "npm:fit-file-parser@^4.1.0",
