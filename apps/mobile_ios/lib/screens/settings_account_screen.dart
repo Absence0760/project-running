@@ -103,6 +103,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   bool _exportBusy = false;
   int _exportPollFailures = 0;
   Timer? _exportPollTimer;
+  BackupServerClient? _resolvedExportClient;
+  bool _exportClientResolved = false;
 
   /// The last archive this screen handed over came from the on-device
   /// writer, which is narrower than the server export. Held so the
@@ -174,9 +176,18 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   /// no service configured. An unconfigured build says so on the
   /// surface rather than quietly handing over the on-device archive as
   /// though it were the Art 20 export.
+  ///
+  /// Resolved once and kept: `build` consults it to decide what the
+  /// export section may say, and neither the injected client nor the
+  /// env it falls back to can change under a mounted screen.
   BackupServerClient? _resolveExportClient() {
+    if (_exportClientResolved) return _resolvedExportClient;
+    _exportClientResolved = true;
     final injected = widget.exportClient;
-    if (injected != null) return injected.isConfigured ? injected : null;
+    if (injected != null) {
+      _resolvedExportClient = injected.isConfigured ? injected : null;
+      return _resolvedExportClient;
+    }
     String base;
     try {
       base = dotenv.env['LIVE_HUB_URL']?.trim() ?? '';
@@ -184,8 +195,10 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
       debugPrint('SettingsAccountScreen export client unavailable: $e');
       return null;
     }
-    if (base.isEmpty) return null;
-    return BackupServerClient(baseUrl: base);
+    if (base.isNotEmpty) {
+      _resolvedExportClient = BackupServerClient(baseUrl: base);
+    }
+    return _resolvedExportClient;
   }
 
   String? get _exportToken {
