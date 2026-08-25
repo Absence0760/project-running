@@ -63,7 +63,7 @@ func (w *Worker) handleNativePush(ctx context.Context, job *Job) error {
 	if err != nil {
 		return fmt.Errorf("fetch prefs: %w", err)
 	}
-	if !shouldPush(n.Kind, pushMode(prefs)) {
+	if !shouldPush(n.Kind, prefs) {
 		// Recipient opted this category out of the push channel. Terminal.
 		// Same push_notifications pref the web-push channel gates on — one
 		// "push" channel covers browser + native.

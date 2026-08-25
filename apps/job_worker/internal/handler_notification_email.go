@@ -63,7 +63,7 @@ func (w *Worker) handleNotificationEmail(ctx context.Context, job *Job) error {
 	if err != nil {
 		return fmt.Errorf("fetch prefs: %w", err)
 	}
-	if !shouldEmail(n.Kind, emailMode(prefs)) {
+	if !shouldEmail(n.Kind, prefs) {
 		// Recipient opted this category out. Terminal: stamp so we
 		// don't reconsider on a future sweep.
 		if err := w.Backend.MarkNotificationEmailed(ctx, n.ID); err != nil {
