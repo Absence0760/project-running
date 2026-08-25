@@ -917,13 +917,22 @@ create table user_profiles (
 -- act. WITHDRAWAL is also RPC-shaped on both consents:
 -- withdraw_coach_consent() (20261128_001) and
 -- withdraw_health_data_consent() (20270418_001, issue #233) — the
--- latter nulls the consent stamp + every Art 9 profile column
--- (height_cm, gender, date_of_birth) AND erases the body_metrics
--- series in one transaction, insert-or-update so a missing profile
--- row can't turn the withdrawal into a silent no-op. (A direct NULL
--- write of health_data_consent_at remains trigger-permitted, but
--- clients use the RPC.) Pinned by withdraw_coach_consent_test.sql +
+-- latter nulls the consent stamp + the Art 9 profile columns
+-- (height_cm, gender) AND erases the body_metrics series in one
+-- transaction, insert-or-update so a missing profile row can't turn
+-- the withdrawal into a silent no-op. (A direct NULL write of
+-- health_data_consent_at remains trigger-permitted, but clients use
+-- the RPC.) Pinned by withdraw_coach_consent_test.sql +
 -- withdraw_health_data_consent_test.sql.
+--
+-- date_of_birth is NOT among them (20270605_001, decisions § 721).
+-- The column is the child-safety age record the under-18 exclusions
+-- in search_user_profiles / discoverable_runners_near read; the Art 9
+-- health use reads the user_settings.prefs mirror, which every client
+-- clears on withdrawal. Art 7(3) ends the processing the consent
+-- authorised, not the discoverability floor — Art 17 erasure is the
+-- separate right that does clear the column, via delete-account's
+-- auth.users cascade. See decisions § 718 for the two-store rule.
 ```
 
 **The AI consent record is VERSIONED** (migration `20270511_001`, issue #734, decisions § 571).
