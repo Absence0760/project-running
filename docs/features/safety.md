@@ -241,9 +241,36 @@ channel-agnostic scan rather than forking it.
   page now prompts-then-confirms (with the opt-in) rather than auto-confirming;
   an owner-only "Not back by X" control on `/live/[id]` (web can't record, so
   the owner's own live spectator view is the only in-progress-run surface).
-- **Deferred (additive per §24).** Mobile safety-contacts screens don't yet
-  carry the phone/SMS fields or the expected-return control; native-push leg
-  still waits on FCM/APNs.
+- **Mobile surfaces (2026-08-24, ADR §719).** Settings → Safety contacts
+  takes the optional number and offers the confirm-time opt-in on an inbound
+  request that carries `has_phone`. Two things differ from web deliberately:
+  the number is repaired through the shared `e164` parity pair before it is
+  graded (a pasted `+44 (0) 7700 900123` is a valid number that is merely
+  punctuated — and the parenthesised trunk zero is DELETED, because stripping
+  only its brackets yields `+4407700900123`, a different conforming number
+  whose alert reaches nobody), and the contact row renders three states
+  rather than two: SMS on, **a number on file with no contact opt-in**, or
+  nothing. Web shows only the first, so an owner who typed a number the
+  contact never consented to sees silence and reads it as working. The
+  per-run "not back by X" ladder hangs off the live-share sheet — recording
+  is mobile-only, and the RPC needs a server-side in-progress run row, which
+  only a live broadcast creates.
+- **What the phone cannot disarm — and what that costs.** The deadline is
+  written to the run row and read by the cron scan, so killing the app,
+  flattening the battery or destroying the handset all leave the alert
+  standing. That is the feature. Its cost is the other direction: a run that
+  FINISHES out of signal is queued locally, the server row stays
+  `in_progress`, and the scan escalates a runner who is already home. This is
+  the pre-existing false-positive posture of the whole overdue net (the
+  runner's confirmed contacts get one email that says signal loss is a
+  possible cause), sharpened by an absolute deadline; the mobile dialog says
+  so outright rather than leaving a runner to discover it. A successful save
+  upserts the whole metadata bag and takes both `in_progress` and
+  `expected_return_at` with it, so an online finish cannot false-fire.
+- **Still deferred.** Neither platform can change an SMS consent AFTER
+  confirming: `set_safety_sms_opt_in` exists and works, but no surface lists
+  the relationships a user is the *contact* of, so nothing can call it. The
+  native-push leg still waits on FCM/APNs.
 
 ## Open decisions (chosen; revisit deliberately)
 
