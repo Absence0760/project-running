@@ -7481,17 +7481,26 @@ export interface PendingSafetyRequest {
 	created_at: string;
 }
 
-/// The owner's own safety-contact list (RLS scopes to owner_id = me).
+/// The owner's own safety-contact list, scoped by an explicit `owner_id`
+/// filter. RLS is NOT the scope here and never was: `safety_contacts` carries
+/// a second permissive SELECT policy for `contact_user_id = auth.uid()`
+/// (20261218_001), and permissive policies OR — so an unfiltered read returns
+/// the union of the rows you own and the rows naming YOU as someone else's
+/// contact, rendered as your own list under your own email address.
 /// Reports the error rather than degrading to `[]`: on a safety surface a
 /// failed read rendered as "you have no emergency contacts", which is the
-/// one wrong answer a runner might act on.
+/// one wrong answer a runner might act on — so a signed-out caller is an
+/// error, not an empty list.
 export async function fetchMySafetyContacts(): Promise<{
 	contacts: SafetyContact[];
 	error: string | null;
 }> {
+	const userId = auth.user?.id;
+	if (!userId) return { contacts: [], error: 'Not signed in' };
 	const { data, error } = await supabase
 		.from(TABLES.safety_contacts)
 		.select('id, contact_email, contact_phone, contact_user_id, confirmed_at, sms_opt_in_at, created_at')
+		.eq('owner_id', userId)
 		.order('created_at', { ascending: false });
 	return { contacts: (data ?? []) as SafetyContact[], error: error?.message ?? null };
 }
@@ -7514,9 +7523,22 @@ export async function addSafetyContact(email: string, phone?: string | null): Pr
 	return data as SafetyContact;
 }
 
-/// Remove a safety contact the owner added (RLS gates to owner_id = me).
+/// Remove a safety contact the owner added, scoped by an explicit `owner_id`
+/// filter for the same reason the read is: the table's second permissive
+/// DELETE policy (`contact_user_id = auth.uid()`) means an unscoped
+/// delete-by-id succeeds against a row naming the caller as SOMEONE ELSE's
+/// contact — silently stripping that person's emergency contact under a
+/// button labelled as the caller's own housekeeping. Withdrawing from a
+/// relationship you are the contact of is `declineSafetyRequest`, which says
+/// so.
 export async function removeSafetyContact(id: string): Promise<void> {
-	const { error } = await supabase.from(TABLES.safety_contacts).delete().eq('id', id);
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase
+		.from(TABLES.safety_contacts)
+		.delete()
+		.eq('id', id)
+		.eq('owner_id', userId);
 	if (error) throw error;
 }
 
