@@ -3,8 +3,8 @@
 /// SvelteKit `$env` / `supabase-js` imports. Mirrors the layering in
 /// `live_hub_helpers.ts`.
 ///
-/// The Go endpoint and the legacy `export-data` Edge Function both
-/// accept `{format: 'csv' | 'gpx' | 'backup'}` and both return
+/// The legacy `export-data` Edge Function accepts
+/// `{format: 'csv' | 'gpx' | 'backup'}` and returns
 /// `{url, expires_in, count, total, complete, format}`. `count` is what
 /// the archive carries, `total` what the database holds, and `complete`
 /// whether the two agree — a runner past the per-export run ceiling gets
@@ -12,13 +12,15 @@
 /// GDPR Art. 20 archive (the `run-app-backup` zip bundling every
 /// personal-data table that the mobile `backup_server_client.dart`
 /// already requests); `csv` / `gpx` are the runs-only summaries. The
-/// only thing that differs is
-/// the transport — `supabase.functions.invoke()` vs `fetch()` against
-/// the Go base URL — and the auth header shape (the EF picks up the
-/// bearer from supabase-js's session automatically; the Go endpoint
-/// needs an explicit `Authorization: Bearer <jwt>` header). The
-/// helper here just builds the absolute URL so the call site doesn't
-/// have to reason about trailing-slash normalisation.
+/// The Go service answers in the same vocabulary but never on one
+/// request: it enqueues, and the status endpoint below reports. Its own
+/// synchronous rail was deleted with decisions.md § 724, so this
+/// response shape belongs to the Edge Function alone. The auth header
+/// shape differs too — the EF picks up the bearer from supabase-js's
+/// session automatically; the Go endpoints need an explicit
+/// `Authorization: Bearer <jwt>` header. The helpers here just build
+/// the absolute URLs so the call site doesn't have to reason about
+/// trailing-slash normalisation.
 
 export type CloudExportFormat = 'csv' | 'gpx' | 'backup';
 
@@ -170,14 +172,9 @@ export function cloudExportPollDelayMs(attempt: number): number {
 	return Math.min(ms, CLOUD_EXPORT_POLL_MAX_MS);
 }
 
-/// Build the absolute URL of the Go service's `/v1/export` endpoint.
-/// Strips a trailing slash on the base so a paste-in
+/// Build the absolute URL of the queued rail's enqueue endpoint. Strips
+/// trailing slashes on the base so a paste-in
 /// `https://live.threkir.com/` still produces a single-slash join.
-export function buildCloudExportUrl(base: string): string {
-	return `${base.replace(/\/+$/, '')}/v1/export`;
-}
-
-/// Build the absolute URL of the queued rail's enqueue endpoint.
 export function buildCloudExportJobsUrl(base: string): string {
 	return `${base.replace(/\/+$/, '')}/v1/export/jobs`;
 }
