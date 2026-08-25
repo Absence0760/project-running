@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] — threaded post replies.
@@ -164,11 +165,14 @@ test.describe('/clubs/[slug] — a failed reply says so', () => {
 			// retype it.
 			await expect(replyInput).toHaveValue(replyBody);
 
-			const { data: replies } = await admin
-				.from('club_posts')
-				.select('id')
-				.eq('parent_post_id', parentId);
-			expect(replies?.length ?? 0).toBe(0);
+			const replies = await readRows(
+				'club_posts by parent_post_id',
+				admin
+					.from('club_posts')
+					.select('id')
+					.eq('parent_post_id', parentId)
+			);
+			expect(replies.length).toBe(0);
 		} finally {
 			await admin.from('club_posts').delete().eq('id', parentId);
 		}

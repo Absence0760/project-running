@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /gym — the Phase 4 multi-modal gym module (decisions §63,
@@ -83,11 +84,14 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		await expect(page.locator('.workout-row', { hasText: title })).toHaveCount(0);
 
 		// Backend row is gone (sets cascade with it).
-		const { data: afterDelete } = await admin
-			.from('gym_workouts')
-			.select('id')
-			.eq('id', workoutId);
-		expect(afterDelete?.length ?? 0).toBe(0);
+		const afterDelete = await readRows(
+			'gym_workouts by id',
+			admin
+				.from('gym_workouts')
+				.select('id')
+				.eq('id', workoutId)
+		);
+		expect(afterDelete.length).toBe(0);
 	});
 
 	test('a failed workout-list load shows an error + retry, and retry recovers', async ({

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Avatar upload — the in-app profile-picture feature (data.ts uploadAvatar /
@@ -86,12 +87,15 @@ test.describe('avatar upload', () => {
 				});
 
 				// avatar_url now points at the public avatars bucket; the object exists.
-				const { data: after } = await admin
-					.from('user_profiles')
-					.select('avatar_url')
-					.eq('id', USER_A.id)
-					.single();
-				expect(String(after?.avatar_url ?? '')).toMatch(
+				const after = await readRow(
+					'user_profiles by id',
+					admin
+						.from('user_profiles')
+						.select('avatar_url')
+						.eq('id', USER_A.id)
+						.single()
+				);
+				expect(String(after.avatar_url ?? '')).toMatch(
 					/\/storage\/v1\/object\/public\/avatars\/.*\/avatar\.png/,
 				);
 				expect(await avatarNames()).toContain('avatar.png');

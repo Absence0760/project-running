@@ -5,6 +5,7 @@ import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 import type { TrackPoint } from '../../src/lib/types';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /runs/[id] — owner-only run detail page.
@@ -643,14 +644,18 @@ test.describe('/runs/[id]', () => {
 			).toBeVisible({ timeout: 10_000 });
 
 			// Backend mirrors it: a run_gear row was created by the trigger.
-			const { data } = await admin
-				.from('run_gear')
-				.select('gear_id, gear:gear_id(name)')
-				.eq('run_id', runId);
-			expect(data?.length ?? 0).toBe(1);
-			expect((data?.[0] as { gear: { name: string } } | undefined)?.gear?.name).toBe(
-				'Pegasus 40'
+			const data = await readRows(
+				'run_gear by run_id',
+				admin
+					.from('run_gear')
+					.select('gear_id, gear:gear_id(name)')
+					.eq('run_id', runId)
 			);
+			expect(data.length).toBe(1);
+			// PostgREST returns a to-one embed as an OBJECT; the untyped admin
+			// client can't resolve the FK cardinality and types it as an array.
+			const link = data[0] as unknown as { gear: { name: string } };
+			expect(link.gear?.name).toBe('Pegasus 40');
 		} finally {
 			await admin.from('run_gear').delete().eq('run_id', runId);
 			await deleteRun(runId);

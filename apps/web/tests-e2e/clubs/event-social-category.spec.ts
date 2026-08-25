@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Typed events — the `social` category + the data-layer athletic guard.
@@ -108,15 +109,21 @@ test.describe('/clubs/[slug]/events/[id] — social category + athletic guard', 
 		// And confirm nothing was written (service-role read — the rows must
 		// genuinely not exist, not merely be RLS-invisible).
 		const admin = getAdminClient();
-		const { data: results } = await admin
-			.from('event_results')
-			.select('event_id')
-			.eq('event_id', eventId);
-		expect(results?.length ?? 0).toBe(0);
-		const { data: races } = await admin
-			.from('race_sessions')
-			.select('event_id')
-			.eq('event_id', eventId);
-		expect(races?.length ?? 0).toBe(0);
+		const results = await readRows(
+			'event_results by event_id',
+			admin
+				.from('event_results')
+				.select('event_id')
+				.eq('event_id', eventId)
+		);
+		expect(results.length).toBe(0);
+		const races = await readRows(
+			'race_sessions by event_id',
+			admin
+				.from('race_sessions')
+				.select('event_id')
+				.eq('event_id', eventId)
+		);
+		expect(races.length).toBe(0);
 	});
 });

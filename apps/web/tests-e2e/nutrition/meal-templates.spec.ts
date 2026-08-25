@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDayStart } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /nutrition — meal templates (docs/features/multi_modal.md § Nutrition mid
@@ -135,19 +136,25 @@ test.describe('/nutrition — meal templates', () => {
 			await expect(templateRow).toHaveCount(0, { timeout: 10_000 });
 
 			// The template (and its items, by cascade) is gone…
-			const { data: afterTmpl } = await admin
-				.from('meal_templates')
-				.select('id')
-				.eq('id', templateId);
-			expect(afterTmpl?.length ?? 0).toBe(0);
+			const afterTmpl = await readRows(
+				'meal_templates by id',
+				admin
+					.from('meal_templates')
+					.select('id')
+					.eq('id', templateId)
+			);
+			expect(afterTmpl.length).toBe(0);
 			templateId = null;
 			// …but the food_log entries it logged remain (parallel plan, no FK).
-			const { data: stillLogged } = await admin
-				.from('food_log')
-				.select('id')
-				.eq('user_id', USER_A.id)
-				.eq('item_name', item);
-			expect((stillLogged?.length ?? 0)).toBeGreaterThanOrEqual(1);
+			const stillLogged = await readRows(
+				'food_log by user_id+item_name',
+				admin
+					.from('food_log')
+					.select('id')
+					.eq('user_id', USER_A.id)
+					.eq('item_name', item)
+			);
+			expect((stillLogged.length)).toBeGreaterThanOrEqual(1);
 		} finally {
 			if (templateId) await admin.from('meal_templates').delete().eq('id', templateId);
 			await admin.from('food_log').delete().eq('user_id', USER_A.id).eq('item_name', item);

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Session planner P3 (session_planner.md) — club-published session templates.
@@ -76,14 +77,17 @@ test.describe('/sessions — club session templates', () => {
 		await expect(page.getByText('Session added to your plans.')).toBeVisible({ timeout: 10_000 });
 		await expect(page).toHaveURL(/\/clubs\/richmond-run-club\?tab=templates$/);
 
-		const { data: personalClones } = await admin
-			.from('session_plans')
-			.select('id')
-			.eq('author_id', USER_A.id)
-			.is('club_id', null)
-			.eq('title', title);
+		const personalClones = await readRows(
+			'session_plans by author_id+title',
+			admin
+				.from('session_plans')
+				.select('id')
+				.eq('author_id', USER_A.id)
+				.is('club_id', null)
+				.eq('title', title)
+		);
 		// The original source + the adopted clone are both personal + club-less.
-		expect((personalClones?.length ?? 0)).toBeGreaterThanOrEqual(2);
+		expect((personalClones.length)).toBeGreaterThanOrEqual(2);
 	});
 
 	test('opening a session template from the club, then Back, returns to the club', async ({

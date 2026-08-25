@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deletePlan, deleteRun, insertRun, setPlanStatus } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Starter-ADOPTION → RE-LINK → ADHERENCE-DRIFT → RE-PLAN journey.
@@ -350,11 +351,14 @@ test.describe('plan adherence + re-plan journey', () => {
 				.single();
 			expect(planRow?.status).toBe('active');
 
-			const { data: weekRows } = await admin
-				.from('plan_weeks')
-				.select('id')
-				.eq('plan_id', plantedPlanId);
-			expect((weekRows ?? []).length).toBe(2);
+			const weekRows = await readRows(
+				'plan_weeks by plan_id',
+				admin
+					.from('plan_weeks')
+					.select('id')
+					.eq('plan_id', plantedPlanId)
+			);
+			expect(weekRows.length).toBe(2);
 
 			// The re-link landed on the target run; the missed long stayed
 			// uncompleted; the future long carries the bumped distance.

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Strava bulk-export ZIP import — the MULTI-activity, track-bearing,
@@ -333,12 +334,15 @@ test.describe('Strava bulk-import — multi-activity, track-bearing, partial re-
 				});
 
 				// Backend: the new run landed; the originals were NOT duplicated.
-				const { data: newRows } = await admin
-					.from('runs')
-					.select('id')
-					.eq('user_id', saga.id)
-					.eq('external_id', `strava:${newRunId}`);
-				expect(newRows ?? []).toHaveLength(1);
+				const newRows = await readRows(
+					'runs by user_id+external_id',
+					admin
+						.from('runs')
+						.select('id')
+						.eq('user_id', saga.id)
+						.eq('external_id', `strava:${newRunId}`)
+				);
+				expect(newRows).toHaveLength(1);
 				plantedRunRowIds.push(newRows![0].id as string);
 
 				// Each original external_id still resolves to exactly one row —

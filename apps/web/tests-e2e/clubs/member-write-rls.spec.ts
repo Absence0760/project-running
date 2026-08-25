@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Server-side permission backstop. The club detail UI hides the post
@@ -85,15 +86,18 @@ test.describe('club write-path RLS — UI gates are not the security boundary', 
 
 		try {
 			const alex = await signedInClient(USER_B);
-			const { data } = await alex
-				.from('club_members')
-				.update({ status: 'active' })
-				.eq('club_id', RICHMOND_ID)
-				.eq('user_id', USER_C_PRO.id)
-				.select('user_id');
+			const data = await readRows(
+				'club_members by club_id+user_id',
+				alex
+					.from('club_members')
+					.update({ status: 'active' })
+					.eq('club_id', RICHMOND_ID)
+					.eq('user_id', USER_C_PRO.id)
+					.select('user_id')
+			);
 			// Either a hard reject or (more typically) a silent zero-row
 			// update — the RLS USING clause excludes the row for a non-admin.
-			expect(data ?? []).toEqual([]);
+			expect(data).toEqual([]);
 
 			// Authoritative check: the status is still pending.
 			const { data: row } = await admin
@@ -117,13 +121,16 @@ test.describe('club write-path RLS — UI gates are not the security boundary', 
 		// The admins-only UPDATE policy blocks it — alex stays a member.
 		const admin = getAdminClient();
 		const alex = await signedInClient(USER_B);
-		const { data } = await alex
-			.from('club_members')
-			.update({ role: 'admin' })
-			.eq('club_id', RICHMOND_ID)
-			.eq('user_id', USER_B.id)
-			.select('user_id');
-		expect(data ?? []).toEqual([]);
+		const data = await readRows(
+			'club_members by club_id+user_id',
+			alex
+				.from('club_members')
+				.update({ role: 'admin' })
+				.eq('club_id', RICHMOND_ID)
+				.eq('user_id', USER_B.id)
+				.select('user_id')
+		);
+		expect(data).toEqual([]);
 
 		const { data: row } = await admin
 			.from('club_members')
@@ -142,13 +149,16 @@ test.describe('club write-path RLS — UI gates are not the security boundary', 
 		// rows.
 		const admin = getAdminClient();
 		const alex = await signedInClient(USER_B);
-		const { data } = await alex
-			.from('club_members')
-			.delete()
-			.eq('club_id', RICHMOND_ID)
-			.eq('user_id', USER_A.id)
-			.select('user_id');
-		expect(data ?? []).toEqual([]);
+		const data = await readRows(
+			'club_members by club_id+user_id',
+			alex
+				.from('club_members')
+				.delete()
+				.eq('club_id', RICHMOND_ID)
+				.eq('user_id', USER_A.id)
+				.select('user_id')
+		);
+		expect(data).toEqual([]);
 
 		// The owner row is intact.
 		const { data: owner } = await admin

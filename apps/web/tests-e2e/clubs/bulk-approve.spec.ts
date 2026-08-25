@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] — admin bulk-approves pending join requests (persona round-5
@@ -61,13 +62,16 @@ test.describe('/clubs/[slug] — bulk approve', () => {
 		// No pending rows left → the whole section is hidden.
 		await expect(pendingPanel).toHaveCount(0, { timeout: 10_000 });
 
-		const { data } = await getAdminClient()
-			.from('club_members')
-			.select('user_id, status')
-			.eq('club_id', TEMPO_TUESDAY_ID)
-			.in('user_id', [USER_B.id, USER_C_PRO.id]);
-		expect((data ?? []).every((r) => r.status === 'active')).toBe(true);
-		expect((data ?? []).length).toBe(2);
+		const data = await readRows(
+			'club_members by club_id',
+			getAdminClient()
+				.from('club_members')
+				.select('user_id, status')
+				.eq('club_id', TEMPO_TUESDAY_ID)
+				.in('user_id', [USER_B.id, USER_C_PRO.id])
+		);
+		expect(data.every((r) => r.status === 'active')).toBe(true);
+		expect(data.length).toBe(2);
 	});
 
 	test('Approve all is hidden when only one request is pending', async ({ page }) => {
