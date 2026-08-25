@@ -6544,6 +6544,78 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsAccountImportSubtitle => 'Strava, GPX, TCX';
 
   @override
+  String get settingsAccountAccountExport => 'Exportação da conta';
+
+  @override
+  String get settingsAccountAccountExportSubtitle =>
+      'Tudo o que há na sua conta — corridas, rotas, mensagens, pedidos, integrações, contactos de emergência. Criada no nosso servidor; pode fechar a app enquanto isso.';
+
+  @override
+  String get settingsAccountExportQueued =>
+      'A sua exportação está a ser criada. Pode fechar a app — volte aqui para a transferir.';
+
+  @override
+  String get settingsAccountExportBuildingNotice =>
+      'A exportação da sua conta está a ser criada. Pode fechar a app; ela continua sem si.';
+
+  @override
+  String get settingsAccountExportReadyNotice =>
+      'A exportação da sua conta está pronta.';
+
+  @override
+  String get settingsAccountExportDownload => 'Transferir e partilhar';
+
+  @override
+  String settingsAccountExportFailedNotice(String error) {
+    return 'A sua última exportação da conta falhou ($error). Nada foi apagado — peça outra.';
+  }
+
+  @override
+  String get settingsAccountExportStalledNotice =>
+      'A sua última exportação da conta deixou de responder. Nada foi apagado — peça outra.';
+
+  @override
+  String get settingsAccountExportExpiredNotice =>
+      'A sua última exportação da conta expirou. As exportações são apagadas ao fim de 7 dias — peça outra.';
+
+  @override
+  String get settingsAccountExportStatusUnavailable =>
+      'Não é possível contactar o serviço de exportação para verificar o estado. Pode ainda estar a ser criada.';
+
+  @override
+  String get settingsAccountExportUnavailable =>
+      'O serviço de exportação da conta não está configurado nesta versão. O backup completo abaixo é criado neste dispositivo e não inclui os registos da sua conta.';
+
+  @override
+  String settingsAccountExportUnsyncedWarning(int count) {
+    return '$count corridas ainda não foram sincronizadas. A exportação da conta é criada no servidor, por isso não as inclui — use o backup completo para as guardar.';
+  }
+
+  @override
+  String get settingsAccountBackupOnDeviceNotice =>
+      'O seu último backup completo foi criado neste dispositivo. Contém as suas corridas, rotas, perfil, preferências e registos de ginásio e alimentação — mas não os registos da sua conta. Use a exportação da conta para a cópia completa.';
+
+  @override
+  String settingsAccountExportRateLimited(int seconds) {
+    return 'Limite de exportações atingido — tente de novo dentro de $seconds segundos.';
+  }
+
+  @override
+  String settingsAccountExportRequestFailed(String error) {
+    return 'Não foi possível pedir a sua exportação: $error';
+  }
+
+  @override
+  String settingsAccountExportDownloadFailed(String error) {
+    return 'Não foi possível transferir a sua exportação: $error';
+  }
+
+  @override
+  String settingsAccountExportReadyBanner(int count) {
+    return 'A exportação da sua conta está pronta — $count corridas.';
+  }
+
+  @override
   String get settingsAccountFullBackup => 'Backup completo';
 
   @override
@@ -20064,6 +20136,78 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsAccountImportSubtitle => 'Strava, GPX, TCX';
+
+  @override
+  String get settingsAccountAccountExport => 'Exportação da conta';
+
+  @override
+  String get settingsAccountAccountExportSubtitle =>
+      'Tudo o que há na sua conta — corridas, rotas, mensagens, pedidos, integrações, contatos de emergência. Criada no nosso servidor; você pode fechar o app enquanto isso.';
+
+  @override
+  String get settingsAccountExportQueued =>
+      'Sua exportação está sendo criada. Você pode fechar o app — volte aqui para baixá-la.';
+
+  @override
+  String get settingsAccountExportBuildingNotice =>
+      'A exportação da sua conta está sendo criada. Você pode fechar o app; ela continua sem você.';
+
+  @override
+  String get settingsAccountExportReadyNotice =>
+      'A exportação da sua conta está pronta.';
+
+  @override
+  String get settingsAccountExportDownload => 'Baixar e compartilhar';
+
+  @override
+  String settingsAccountExportFailedNotice(String error) {
+    return 'Sua última exportação da conta falhou ($error). Nada foi excluído — peça outra.';
+  }
+
+  @override
+  String get settingsAccountExportStalledNotice =>
+      'Sua última exportação da conta parou de responder. Nada foi excluído — peça outra.';
+
+  @override
+  String get settingsAccountExportExpiredNotice =>
+      'Sua última exportação da conta expirou. As exportações são excluídas depois de 7 dias — peça outra.';
+
+  @override
+  String get settingsAccountExportStatusUnavailable =>
+      'Não foi possível falar com o serviço de exportação para verificar o status. Ela pode ainda estar sendo criada.';
+
+  @override
+  String get settingsAccountExportUnavailable =>
+      'O serviço de exportação da conta não está configurado nesta versão. O backup completo abaixo é criado neste dispositivo e não inclui os registros da sua conta.';
+
+  @override
+  String settingsAccountExportUnsyncedWarning(int count) {
+    return '$count corridas ainda não foram sincronizadas. A exportação da conta é criada no servidor, então não vai incluí-las — use o backup completo para guardá-las.';
+  }
+
+  @override
+  String get settingsAccountBackupOnDeviceNotice =>
+      'Seu último backup completo foi criado neste dispositivo. Ele contém suas corridas, rotas, perfil, preferências e registros de academia e alimentação — mas não os registros da sua conta. Use a exportação da conta para a cópia completa.';
+
+  @override
+  String settingsAccountExportRateLimited(int seconds) {
+    return 'Limite de exportações atingido — tente de novo em $seconds segundos.';
+  }
+
+  @override
+  String settingsAccountExportRequestFailed(String error) {
+    return 'Não foi possível solicitar sua exportação: $error';
+  }
+
+  @override
+  String settingsAccountExportDownloadFailed(String error) {
+    return 'Não foi possível baixar sua exportação: $error';
+  }
+
+  @override
+  String settingsAccountExportReadyBanner(int count) {
+    return 'A exportação da sua conta está pronta — $count corridas.';
+  }
 
   @override
   String get settingsAccountFullBackup => 'Backup completo';

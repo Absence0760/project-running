@@ -14,6 +14,7 @@
 ///              outcome and mints the signed URL at read time. Nothing
 ///              holds the connection open for the build, so a closed
 ///              tab or a client timeout can no longer end an export.
+///              Its synchronous `POST /v1/export` is gone (§724).
 ///   * Unset  → `supabase.functions.invoke('export-data', ...)` on
 ///              the legacy Edge Function, which still builds inline.
 ///              Same rate-limit RPC, same Storage path. Kept as the
@@ -33,7 +34,6 @@ import {
 	buildCloudExportBody,
 	buildCloudExportJobStatusUrl,
 	buildCloudExportJobsUrl,
-	buildCloudExportUrl,
 	cloudExportJobFromResponse,
 } from './cloud_export_helpers';
 
@@ -75,13 +75,14 @@ function throwForStatus(res: Response, body: string): never {
 /// deprecated; the split is by TRANSPORT, not by export size — a
 /// size-based split would need a size the server cannot know before
 /// building, and would make one endpoint's response shape depend on the
-/// subject's data.
+/// subject's data. It is also the ONLY synchronous rail left: the Go
+/// service's own was deleted with § 724.
 export async function startCloudExport(
 	format: CloudExportFormat,
 ): Promise<CloudExportStart> {
 	const hubUrl = (env.PUBLIC_EXPORT_HUB_URL ?? '').trim();
 	if (!hubUrl) {
-		return { kind: 'ready', response: await cloudExport(format) };
+		return { kind: 'ready', response: await edgeFunctionExport(format) };
 	}
 	const token = await hubSession();
 	const res = await fetch(buildCloudExportJobsUrl(hubUrl), {
@@ -114,48 +115,17 @@ export async function fetchCloudExportJob(): Promise<CloudExportJob> {
 	return cloudExportJobFromResponse(await res.json().catch(() => null));
 }
 
-/// Kicks off a server-side export and returns the signed-URL
-/// response. Throws on auth / rate-limit / 5xx errors so the caller
-/// can surface a toast.
+/// The legacy `export-data` Edge Function, which still builds inline and
+/// answers with the finished archive. Reached only when
+/// `PUBLIC_EXPORT_HUB_URL` is unset — the Go service has no synchronous
+/// rail any more (decisions.md § 724), so there is nothing to choose
+/// between here: the transport decides the shape.
 ///
-/// DEPRECATED on the Go rail: it POSTs the synchronous `/v1/export`,
-/// which holds the connection open for the whole build. Reach for
-/// [startCloudExport] instead. It survives because the mobile client
-/// has not moved to the queued rail yet and the Edge Function fallback
-/// has no queued rail at all.
-export async function cloudExport(
+/// Throws on auth / rate-limit / 5xx errors so the caller can surface a
+/// toast. supabase-js attaches the user's bearer automatically.
+async function edgeFunctionExport(
 	format: CloudExportFormat,
 ): Promise<CloudExportResponse> {
-	const hubUrl = (env.PUBLIC_EXPORT_HUB_URL ?? '').trim();
-	if (hubUrl) {
-		// Go service path. Caller must be signed in — JWTAuthorizer
-		// returns 401 on missing / invalid bearer.
-		const { data: sessionData } = await supabase.auth.getSession();
-		const token = sessionData.session?.access_token;
-		if (!token) throw new Error('Not signed in');
-		const res = await fetch(buildCloudExportUrl(hubUrl), {
-			method: 'POST',
-			headers: {
-				'content-type': 'application/json',
-				authorization: `Bearer ${token}`,
-			},
-			body: buildCloudExportBody(format),
-		});
-		if (res.status === 429) {
-			const retryAfter = res.headers.get('retry-after');
-			throw new Error(
-				`Rate-limited — try again in ${retryAfter ?? '60'}s.`,
-			);
-		}
-		if (!res.ok) {
-			const body = await res.text().catch(() => '');
-			throw new Error(`Export failed (${res.status}): ${body || 'no detail'}`);
-		}
-		return (await res.json()) as CloudExportResponse;
-	}
-	// Fallback: the legacy `export-data` Edge Function. Same body
-	// shape, same response shape — supabase-js attaches the user's
-	// bearer automatically.
 	const { data, error } = await supabase.functions.invoke('export-data', {
 		body: { format },
 	});

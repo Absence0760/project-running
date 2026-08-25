@@ -6168,6 +6168,77 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAccountImportSubtitle => 'Strava、GPX、TCX';
 
   @override
+  String get settingsAccountAccountExport => 'アカウントのエクスポート';
+
+  @override
+  String get settingsAccountAccountExportSubtitle =>
+      'ラン、ルート、メッセージ、注文、連携、緊急連絡先など、アカウントのすべて。サーバー側で作成するため、作成中はアプリを閉じてかまいません。';
+
+  @override
+  String get settingsAccountExportQueued =>
+      'エクスポートを作成しています。アプリを閉じても大丈夫です — ダウンロードはこの画面に戻ってください。';
+
+  @override
+  String get settingsAccountExportBuildingNotice =>
+      'アカウントのエクスポートを作成中です。アプリを閉じても、作成は続きます。';
+
+  @override
+  String get settingsAccountExportReadyNotice => 'アカウントのエクスポートの準備ができました。';
+
+  @override
+  String get settingsAccountExportDownload => 'ダウンロードして共有';
+
+  @override
+  String settingsAccountExportFailedNotice(String error) {
+    return '前回のアカウントエクスポートは失敗しました ($error)。データは削除されていません — もう一度リクエストしてください。';
+  }
+
+  @override
+  String get settingsAccountExportStalledNotice =>
+      '前回のアカウントエクスポートが応答しなくなりました。データは削除されていません — もう一度リクエストしてください。';
+
+  @override
+  String get settingsAccountExportExpiredNotice =>
+      '前回のアカウントエクスポートは期限切れです。エクスポートは 7 日後に削除されます — もう一度リクエストしてください。';
+
+  @override
+  String get settingsAccountExportStatusUnavailable =>
+      'エクスポートサービスに接続できず、状態を確認できません。まだ作成中の可能性があります。';
+
+  @override
+  String get settingsAccountExportUnavailable =>
+      'このビルドではアカウントエクスポートのサービスが設定されていません。下の完全バックアップはこの端末で作成され、アカウント記録は含まれません。';
+
+  @override
+  String settingsAccountExportUnsyncedWarning(int count) {
+    return '$count 件のランがまだ同期されていません。アカウントのエクスポートはサーバーで作成されるため、それらは含まれません — 残すには完全バックアップを使ってください。';
+  }
+
+  @override
+  String get settingsAccountBackupOnDeviceNotice =>
+      '前回の完全バックアップはこの端末で作成されました。ラン、ルート、プロフィール、設定、ジムと食事の記録は含まれますが、アカウント記録は含まれません。完全なコピーはアカウントのエクスポートを使ってください。';
+
+  @override
+  String settingsAccountExportRateLimited(int seconds) {
+    return 'エクスポートの上限に達しました — $seconds 秒後にもう一度お試しください。';
+  }
+
+  @override
+  String settingsAccountExportRequestFailed(String error) {
+    return 'エクスポートをリクエストできませんでした: $error';
+  }
+
+  @override
+  String settingsAccountExportDownloadFailed(String error) {
+    return 'エクスポートをダウンロードできませんでした: $error';
+  }
+
+  @override
+  String settingsAccountExportReadyBanner(int count) {
+    return 'アカウントのエクスポートの準備ができました — $count 件のラン。';
+  }
+
+  @override
   String get settingsAccountFullBackup => '完全バックアップ';
 
   @override

@@ -736,15 +736,16 @@
 		showToast(m('settingsAccount.exportReady', { count: res.count }), 'success');
 	}
 
-	/// Server-built GPX zip download. Calls /v1/export on the Go
-	/// service (or the legacy `export-data` Edge Function when
-	/// PUBLIC_EXPORT_HUB_URL is unset). The server builds the zip
-	/// from up to 5,000 runs — including GPX-with-HR-extensions per
-	/// run — uploads to Storage, and returns a 10-minute signed URL.
-	/// Different from `handleBackup` (the in-page Full backup) in
-	/// three ways: GPX format instead of raw row JSON + gz tracks;
-	/// server-side memory budget instead of client-heap; subject to
-	/// the tiered rate limit (free 2/hour, pro 8/hour).
+	/// Server-built GPX zip download. Enqueues a `data_export` job on
+	/// the Go service (or calls the legacy `export-data` Edge Function
+	/// when PUBLIC_EXPORT_HUB_URL is unset — the only synchronous
+	/// export rail left, decisions §724). The server streams the zip —
+	/// including GPX-with-HR-extensions per run — into Storage and the
+	/// status read mints a 10-minute signed URL. Different from
+	/// `handleBackup` (the in-page Full backup) in three ways: GPX
+	/// format instead of raw row JSON + gz tracks; server-side build
+	/// instead of client-heap; subject to the tiered rate limit
+	/// (free 2/hour, pro 8/hour).
 	async function handleCloudGpxExport() {
 		exportingGpx = true;
 		try {
@@ -754,8 +755,8 @@
 		}
 	}
 
-	/// Comprehensive GDPR Art. 20 archive. Asks the server (Go
-	/// `/v1/export` or the legacy `export-data` EF) to build the
+	/// Comprehensive GDPR Art. 20 archive. Asks the server (the Go
+	/// queued rail, or the legacy `export-data` EF) to build the
 	/// `run-app-backup` zip that bundles EVERY personal-data table —
 	/// coach chat, direct messages, health / body metrics, the
 	/// financial ledger, integrations, social graph — not just runs.

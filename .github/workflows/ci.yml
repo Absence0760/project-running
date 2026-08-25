@@ -1807,6 +1807,114 @@ jobs:
             apps/web/test-results
           retention-days: 7
 
+  e2e-web-exporthub:
+    needs: changes
+    if: needs.changes.outputs.web_e2e == 'true'
+    # The QUEUED Art 20 export rail, end-to-end (decisions.md § 717 + § 724).
+    # The sharded e2e-web job runs every export spec against the
+    # `export-data` Edge Function FALLBACK (PUBLIC_EXPORT_HUB_URL unset);
+    # setting the hub URL there would flip all twelve onto a transport
+    # they do not mock. This single, UNSHARDED job boots the real Go
+    # worker — auth on, service key, draining its own `data_export`
+    # queue — plus a dev server pointed at it
+    # (playwright.exporthub.config.ts), so the spec drives the actual
+    # enqueue → claim → tus upload into the `exports` bucket → signed
+    # URL. § 717 shipped with that rail unobserved against a live stack.
+    # Kept separate for the same reason as e2e-web-livehub: the Go
+    # build+boot cost is paid once, not 14× across the e2e-web shards.
+    name: Web e2e — queued Art 20 export (Go worker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Node 24 — see e2e-web for why 22+ is mandatory (realtime-js
+          # needs native WebSocket).
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/job_worker/go.mod
+          cache-dependency-path: apps/job_worker/go.sum
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: 2.84.2
+      - name: Start local Supabase stack
+        uses: ./.github/actions/start-supabase
+      - name: Verify the seed loaded
+        working-directory: apps/backend
+        run: |
+          DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
+          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where email = 'runner@test.com'")
+          if [ "$seeded" != "1" ]; then
+            echo "::error::supabase start did not seed runner@test.com — the suite cannot sign in"
+            exit 1
+          fi
+      - name: Verify the export queue's schema is applied
+        working-directory: apps/backend
+        run: |
+          DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
+          have=$(psql "$DB_URL" -tAc "select count(*) from pg_proc where proname = 'enqueue_data_export'")
+          if [ "$have" = "0" ]; then
+            echo "::error::enqueue_data_export is missing — migration 20270603_001 did not apply, so every export would 500 at the enqueue"
+            exit 1
+          fi
+          bucket=$(psql "$DB_URL" -tAc "select count(*) from storage.buckets where id = 'exports'")
+          if [ "$bucket" = "0" ]; then
+            echo "::error::the exports Storage bucket is missing — migration 20270602_001 did not apply, so the archive upload would fail"
+            exit 1
+          fi
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+      - uses: ./.github/actions/install-playwright
+      - name: Write apps/web/.env from supabase status
+        working-directory: apps/backend
+        run: |
+          ANON_KEY=$(supabase status -o env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '"')
+          API_URL=$(supabase status -o env | grep '^API_URL=' | cut -d= -f2- | tr -d '"')
+          {
+            echo "PUBLIC_SUPABASE_URL=${API_URL}"
+            echo "PUBLIC_SUPABASE_ANON_KEY=${ANON_KEY}"
+            echo "PUBLIC_MAPTILER_KEY="
+            echo "PUBLIC_STRAVA_CLIENT_ID="
+            echo "PUBLIC_REVENUECAT_WEB_CHECKOUT_URL="
+            echo "PUBLIC_VAPID_PUBLIC_KEY="
+            echo "ANTHROPIC_API_KEY=ci-test-key-not-actually-called"
+            echo "PUBLIC_BYPASS_PAYWALL=true"
+          } > ../web/.env
+      # playwright.exporthub.config.ts boots two webServers: the Go worker
+      # (start-exporthub.sh — go build + run with auth ON, resolving the
+      # Supabase creds and the JWT signing secret from `supabase status`,
+      # and verifying that secret against the stack's own anon key before
+      # booting) and a dev server with PUBLIC_EXPORT_HUB_URL set. Both are
+      # reaped on teardown.
+      - name: Sync SvelteKit generated types
+        working-directory: apps/web
+        run: pnpm exec svelte-kit sync
+      - name: Run Playwright queued-export suite
+        working-directory: apps/web
+        run: pnpm exec playwright test --config=tests-e2e/playwright.exporthub.config.ts
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-exporthub
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
   e2e-web-sso:
     needs: changes
     if: needs.changes.outputs.web_e2e == 'true'
@@ -2035,6 +2143,7 @@ jobs:
       - pgtap-rls
       - e2e-web
       - e2e-web-livehub
+      - e2e-web-exporthub
       - e2e-web-sso
       - test-watch-ios
     steps:

@@ -13,7 +13,7 @@ operator process, not a legal opinion. Counsel review before EU launch.
 
 | Right | Article | How it's satisfied | Surface |
 |---|---|---|---|
-| Access / copy | 15 | Machine-readable export of personal-data tables + run-photo bytes + tracks, on both paths (`export-data/backup_spec.ts` + the job_worker `exportPersonalDataSpecs`/`buildBackupSpecs`). **Owner-FK gap closed (2026-06-20):** the export previously keyed most tables off a literal `user_id` column, so tables owned via a differently-named column were missing — `session_plans` (`author_id`), `event_orders` (`buyer_user_id`/`host_user_id`), `route_photos` (`owner_id`), and `event_pricing` (`event_id` → host). All four are now exported on both paths, and the completeness guard (`personal_data_export_guard_test.go`) was widened to key on ANY owner-style FK to `auth.users` (`user_id`/`author_id`/`owner_id`/`buyer_user_id`/`host_user_id`/`contact_user_id`), so the next such table can't slip past silently. Widening the guard also surfaced five pre-existing plain-`user_id` gaps now wired in too: `achievements`, `challenge_participants`, `challenge_badges`, `public_recaps`, and `route_conditions` (the user's own community route-condition reports, migration `20270215_001`). | Settings → "Export data" → `data-export` (Go worker `/v1/export`) |
+| Access / copy | 15 | Machine-readable export of personal-data tables + run-photo bytes + tracks, on both paths (`export-data/backup_spec.ts` + the job_worker `exportPersonalDataSpecs`/`buildBackupSpecs`). **Owner-FK gap closed (2026-06-20):** the export previously keyed most tables off a literal `user_id` column, so tables owned via a differently-named column were missing — `session_plans` (`author_id`), `event_orders` (`buyer_user_id`/`host_user_id`), `route_photos` (`owner_id`), and `event_pricing` (`event_id` → host). All four are now exported on both paths, and the completeness guard (`personal_data_export_guard_test.go`) was widened to key on ANY owner-style FK to `auth.users` (`user_id`/`author_id`/`owner_id`/`buyer_user_id`/`host_user_id`/`contact_user_id`), so the next such table can't slip past silently. Widening the guard also surfaced five pre-existing plain-`user_id` gaps now wired in too: `achievements`, `challenge_participants`, `challenge_badges`, `public_recaps`, and `route_conditions` (the user's own community route-condition reports, migration `20270215_001`). | Settings → "Export data" → the Go worker's queued rail (`POST /v1/export/jobs`, `GET /v1/export/jobs/latest`) |
 | Portability | 20 | Same machine-readable export (JSON + GPX + zip); the owner-FK gap above is closed on both paths, and every table read pages past PostgREST's 1000-row cap — see [Export completeness](#export-completeness--paging-and-what-the-manifest-count-means) | as above |
 | Rectification | 16 | Profile + preference edits; run title/notes edit | Settings, run detail |
 | Erasure | 17 | Account deletion: FK cascade + mandatory Storage drain of every user-content bucket (`runs`, `run-photos`, `route-photos`, `club-photos`; best-effort `avatars`) + third-party deauth (Strava, Garmin placeholder, RevenueCat, FCM, Stripe Connect Express account) + audit log. **route-photos/club-photos drain gap closed 2026-07-03** (audit/storage) — buckets added after the original drain code shipped had retained photo bytes post-deletion. | Settings → Delete account (email re-entry challenge) → `delete-account` EF |
@@ -29,7 +29,7 @@ and reports the truncation nowhere in the body — even an explicit
 `limit=5000` comes back with 1000 rows — so until this was fixed a
 runner past their thousandth run, photo, food-log row or gym set
 received a silently short archive. Both paths (the Go worker's
-`/v1/export`, and the deprecated `export-data` Edge Function) now walk
+queued rail, and the deprecated `export-data` Edge Function) now walk
 1000-row pages until the server returns a short one, ordered by each
 table's primary key so offset paging cannot repeat one row and skip
 another.
@@ -79,7 +79,7 @@ enforces a project-level upload limit (50 MB by default) and the
 effective ceiling is the lower of the two, so until that is raised the
 project setting is the honest bound whatever the bucket allows.
 
-*The Go worker's `/v1/export`, which production traffic uses, carries
+*The Go worker's queued rail, which production traffic uses, carries
 neither cap either* since [decisions § 708](../architecture/decisions.md):
 `MaxRunsPerExport = 5000` and `exportRowCeiling = 50_000` were both
 consequences of the one `bytes.Buffer` the archive used to be assembled
