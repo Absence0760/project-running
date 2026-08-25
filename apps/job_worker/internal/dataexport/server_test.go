@@ -371,12 +371,6 @@ func buildFor(t *testing.T, be *fakeBackend, format string) (ArtifactBuild, erro
 		slog.New(slog.NewTextHandler(io.Discard, nil)), "user-A", format)
 }
 
-
-
-
-
-
-
 func TestBuildArtifact_CsvLandsInTheExportsBucketAndSignsNothing(t *testing.T) {
 	be := &fakeBackend{
 		runs: []ExportRun{
@@ -451,8 +445,6 @@ func TestBuildArtifact_RejectsUnknownFormat(t *testing.T) {
 		t.Errorf("uploads=%v; nothing may be written for a format nobody asked for", be.uploads)
 	}
 }
-
-
 
 // --- pure helpers --------------------------------------------------------
 
@@ -577,7 +569,6 @@ func TestBuildGpx_XmlEscapesTitle(t *testing.T) {
 }
 
 // ---- format=backup ---------------------------------------------------
-
 
 func TestBuildArtifact_BackupFormatHappyPath(t *testing.T) {
 	trackURL := "user-A/run-1.json.gz"
@@ -1244,10 +1235,6 @@ func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
 }
 
 // ---- format=backup edge cases ----------------------------------------
-
-
-
-
 
 func TestBuildArtifact_RoutesFetchErrorNamesTheSection(t *testing.T) {
 	be := &fakeBackend{
