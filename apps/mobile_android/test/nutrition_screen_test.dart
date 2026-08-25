@@ -55,9 +55,10 @@ Future<({LocalFoodStore store, Directory dir})> _store(String tag) async {
 Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() done, {
+  required String describe,
   Duration timeout = const Duration(seconds: 10),
 }) =>
-    pumpUntil(tester, done, describe: 'the nutrition screen to reach the expected state', timeout: timeout);
+    pumpUntil(tester, done, describe: describe, timeout: timeout);
 
 /// Close the armed undo window so the deferred commit runs. The delete tap
 /// itself must NOT be wrapped in `runAsync` any more — deferring means no store
@@ -186,7 +187,8 @@ void main() {
       expect(f.store.rows.length, 1,
           reason: 'nothing is destroyed while undo is on offer');
       await _closeUndoWindow(tester);
-      await _pumpUntil(tester, () => f.store.rows.isEmpty);
+      await _pumpUntil(tester, () => f.store.rows.isEmpty,
+          describe: 'the deferred delete to commit');
     } finally {
       f.dir.deleteSync(recursive: true);
     }
@@ -235,7 +237,8 @@ void main() {
       await _tapDelete(tester);
       await tester.pump();
       await _closeUndoWindow(tester);
-      await _pumpUntil(tester, () => f.store.rows.isEmpty);
+      await _pumpUntil(tester, () => f.store.rows.isEmpty,
+          describe: 'the deferred delete to commit');
       expect(find.text('Oats'), findsNothing);
       expect(f.store.rows.length, 0);
     } finally {
@@ -471,9 +474,8 @@ void main() {
       await tester.pump();
       expect(find.text('0 × 250 ml'), findsOneWidget);
       await tester.tap(find.byTooltip('Add water'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await _pumpUntil(tester, () => tester.any(find.text('1 × 250 ml')),
+          describe: 'the water count to reach one unit');
       expect(find.text('1 × 250 ml'), findsOneWidget);
     } finally {
       f.dir.deleteSync(recursive: true);
@@ -529,7 +531,8 @@ void main() {
                   .any((e) =>
                       e.path.endsWith('.json') &&
                       !e.path.endsWith('index.json')) &&
-              saveBtn().onPressed != null);
+              saveBtn().onPressed != null,
+          describe: 'the meal template to land on disk and the guard to release');
       await tester.pumpAndSettle();
 
       // Saved exactly once: the template section shows the one row, and the
@@ -681,15 +684,13 @@ void _diaryDayTests() {
       await tester.pumpWidget(_app(f.store));
       await tester.pump();
       await tester.tap(find.byTooltip('Add water'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await _pumpUntil(tester, () => tester.any(find.text('1 × 250 ml')),
+          describe: "today's water count to reach one unit");
       expect(find.text('1 × 250 ml'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Previous day'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await _pumpUntil(tester, () => tester.any(find.text('0 × 250 ml')),
+          describe: "the previous day's own water count to load");
       expect(find.text('0 × 250 ml'), findsOneWidget);
     } finally {
       f.dir.deleteSync(recursive: true);
@@ -761,7 +762,8 @@ void _diaryDayTests() {
               .map((e) => e.readAsStringSync())
               .toList()
           : <String>[];
-      await _pumpUntil(tester, () => writtenRows().isNotEmpty);
+      await _pumpUntil(tester, () => writtenRows().isNotEmpty,
+          describe: 'the saved meal template to land on disk');
       await tester.pumpAndSettle();
 
       final written = writtenRows();
@@ -807,13 +809,15 @@ void _diaryDayTests() {
         ));
       });
       await _pumpUntil(
-          tester, () => find.text('Dinner again').evaluate().isNotEmpty);
+          tester, () => find.text('Dinner again').evaluate().isNotEmpty,
+          describe: 'the saved template to appear in the picker');
       await tester.pumpAndSettle();
 
       await tester.runAsync(() async {
         await tester.tap(find.widgetWithText(TextButton, 'Log'));
       });
-      await _pumpUntil(tester, () => f.store.rows.length == 2);
+      await _pumpUntil(tester, () => f.store.rows.length == 2,
+          describe: "the template's entries to be logged");
       await tester.pumpAndSettle();
 
       final stamps = [
@@ -857,13 +861,15 @@ void _diaryDayTests() {
         ));
       });
       await _pumpUntil(
-          tester, () => find.text('Big pot').evaluate().isNotEmpty);
+          tester, () => find.text('Big pot').evaluate().isNotEmpty,
+          describe: 'the saved recipe to appear in the picker');
       await tester.pumpAndSettle();
 
       await tester.runAsync(() async {
         await tester.tap(find.widgetWithText(TextButton, 'Log'));
       });
-      await _pumpUntil(tester, () => f.store.rows.length == 2);
+      await _pumpUntil(tester, () => f.store.rows.length == 2,
+          describe: "the recipe's servings to be logged");
       await tester.pumpAndSettle();
 
       final stamps = [
