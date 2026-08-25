@@ -1529,10 +1529,17 @@ func (c *SupabaseClient) CreateSignedURL(ctx context.Context, path string, ttlSe
 	if parsed.SignedURL == "" {
 		return "", errors.New("signed url: empty")
 	}
-	// The signedURL field is path-relative (`/storage/v1/object/sign/...`).
-	// Front it with the base URL so the client doesn't need to know.
+	// Storage answers with a path relative to the STORAGE API, not to
+	// the project root — `/object/sign/...`, with no `/storage/v1` on
+	// it — so fronting it with the base URL alone yields a 404 on
+	// every download. Both shapes are accepted because which one a
+	// deployment returns is the storage service's business, not ours.
 	if strings.HasPrefix(parsed.SignedURL, "/") {
-		return strings.TrimRight(c.BaseURL, "/") + parsed.SignedURL, nil
+		base := strings.TrimRight(c.BaseURL, "/")
+		if !strings.HasPrefix(parsed.SignedURL, "/storage/v1/") {
+			base += "/storage/v1"
+		}
+		return base + parsed.SignedURL, nil
 	}
 	return parsed.SignedURL, nil
 }
