@@ -75,11 +75,14 @@
 	let cycleLengthDays = $state('28');
 	let cycleLastPeriodStart = $state('');
 	let pregnancyDueDate = $state('');
-	// Date of birth is Art 9 demographic data — its persistence is gated
-	// on explicit health-data consent, mirroring the Demographics section
-	// of /settings/preferences. Without this, the account page was an
-	// unguarded second write path for DOB into user_settings.prefs
-	// (the DB lock trigger only protects user_profiles.health_data_consent_at).
+	// Date of birth is split across two stores with two rules, identical to
+	// /settings/preferences and /onboarding (decisions § 718): the
+	// `user_settings.prefs` mirror is the Art 9 HEALTH-USE copy the coach
+	// context + HR-max derivation read, so it persists only under explicit
+	// health-data consent and is nulled on withdrawal; the
+	// `user_profiles.date_of_birth` column is the AGE RECORD backing the
+	// under-18 discoverability floor, a child-protection purpose written
+	// whenever the runner supplies a date.
 	let healthDataConsent = $state(false);
 	let healthDataConsentAt = $state<string | null>(null);
 	// The versioned AI-processing consent record (decisions.md § 571). This
@@ -239,6 +242,7 @@
 			.maybeSingle();
 		if (data?.prefs && typeof data.prefs === 'object') {
 			const p = data.prefs as Record<string, unknown>;
+			// Legacy fallback only — the canonical age record read below wins.
 			dateOfBirth = (p.date_of_birth as string) ?? '';
 			restingHr = (p.resting_hr_bpm as number)?.toString() ?? '';
 			maxHr = (p.max_hr_bpm as number)?.toString() ?? '';
@@ -258,6 +262,11 @@
 		handleInitial = (prof?.handle as string | null) ?? '';
 		handle = handleInitial;
 		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
+		// The age record is the source of truth for the field; the prefs bag
+		// read above only covers a legacy account that never wrote the
+		// column (§ 718). A withdrawal clears the mirror but not the record,
+		// so reading the bag alone would blank a DOB that is still on file.
+		dateOfBirth = (prof?.date_of_birth as string | null) ?? dateOfBirth;
 		aiDisclosure = aiDisclosureFromProfileRow(prof);
 		// Pre-tick the box if consent is already on record so a user can
 		// edit DOB / HR without re-consenting on every visit.
@@ -434,16 +443,13 @@
 		saving = true;
 		saved = false;
 
-		// Date of birth is consent-gated. Fail loudly rather than silently
-		// dropping it, mirroring /settings/preferences.
-		if (dateOfBirth && !healthDataConsent) {
-			showToast(
-				m('settingsAccount.dobConsentRequired'),
-				'error',
-			);
-			saving = false;
-			return;
-		}
+		// No DOB-without-consent abort. It used to refuse the whole save,
+		// which both denied a non-consenting minor the age record the
+		// discoverability floor keys off AND deadlocked the page: the DOB
+		// input is populated from storage, so a runner who withdrew consent
+		// elsewhere could not save their display name and could not clear
+		// the DOB either. Consent gates the Art 9 mirror below, not the age
+		// record (§ 718).
 		if (healthDataConsent && healthDataConsentAt == null) {
 			// Grant — stamp the consent timestamp server-side via the
 			// SECURITY DEFINER RPC (first-stamp-wins; a direct write of
@@ -459,9 +465,35 @@
 			if (stampedAt) healthDataConsentAt = stampedAt as string;
 		}
 
+		if (!healthDataConsent && healthDataConsentAt != null) {
+			// Withdrawal (Art 7(3)) — the SECURITY DEFINER RPC nulls the
+			// consent stamp + gender/DOB/height and erases the weight series
+			// atomically; insert-or-update server-side so a missing profile
+			// row can't 0-row silent no-op (issue #233). Local state flips
+			// only after the server confirms. The Art 9 DOB mirror is cleared from
+			// prefs below; the age record is re-asserted by the profile write
+			// that follows, which is why that write moved after this one.
+			const { error: withdrawError } = await supabase.rpc(
+				'withdraw_health_data_consent',
+			);
+			if (withdrawError) {
+				showToast(
+					m('settingsAccount.saveFailed', { error: withdrawError.message }),
+					'error',
+				);
+				saving = false;
+				return;
+			}
+			healthDataConsentAt = null;
+		}
 		const profileUpdate: Record<string, unknown> = {
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
+			// The age record, carrying no consent term (§ 718). This write
+			// runs AFTER the withdrawal RPC above precisely to put back the
+			// column that RPC nulls — ending the Art 9 processing does not
+			// end the under-18 discoverability floor.
+			date_of_birth: dateOfBirth || null,
 		};
 		// Row-count-verified: user_profiles rows are client-provisioned, so a
 		// plain update against a missing row matches 0 rows and reports
@@ -488,25 +520,6 @@
 				saving = false;
 				return;
 			}
-		}
-		if (!healthDataConsent && healthDataConsentAt != null) {
-			// Withdrawal (Art 7(3)) — the SECURITY DEFINER RPC nulls the
-			// consent stamp + gender/DOB/height and erases the weight series
-			// atomically; insert-or-update server-side so a missing profile
-			// row can't 0-row silent no-op (issue #233). Local state flips
-			// only after the server confirms. DOB is cleared from prefs below.
-			const { error: withdrawError } = await supabase.rpc(
-				'withdraw_health_data_consent',
-			);
-			if (withdrawError) {
-				showToast(
-					m('settingsAccount.saveFailed', { error: withdrawError.message }),
-					'error',
-				);
-				saving = false;
-				return;
-			}
-			healthDataConsentAt = null;
 		}
 
 		// Persist DOB + HR into user_settings.prefs. DOB only when consented;
@@ -1097,7 +1110,10 @@
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.dateOfBirth')}</span>
-				<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} disabled={!healthDataConsent} />
+				<!-- Not consent-disabled: the column it writes is the under-18
+				     discoverability floor's age record (§ 718). Consent gates
+				     the Art 9 prefs mirror, not the field. -->
+				<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} data-testid="date-of-birth" />
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.restingHr')}</span>
