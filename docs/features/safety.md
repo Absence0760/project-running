@@ -166,6 +166,21 @@ clipping; the email only carries times + the link.
 - Mobile `settings_safety_screen.dart`: same section (universal pref via
   `SettingsSyncService.updateUniversal`), plus the `auto_live_share` device
   toggle ("Start a live share automatically when I start a run").
+- **The contact list is owner-scoped by the client, not by RLS** (ADR §720).
+  `safety_contacts` carries four permissive policies — the owner pair
+  (`owner_id = auth.uid()`) and a linked-contact pair
+  (`contact_user_id = auth.uid()`, `20261218_001`) — and permissive policies
+  OR, so an unfiltered read returns the union: your contacts plus every
+  relationship someone else added you to and you confirmed. Both
+  `fetchMySafetyContacts` (web `core/data.ts`, Dart `api_client.dart`) and
+  `removeSafetyContact` therefore carry an explicit `owner_id` filter and
+  refuse when signed out. Do not remove it, and do not "simplify" it away on
+  the grounds that RLS covers it: the delete leg is permissive too, so an
+  id-only delete reaches a row you merely appear on and destroys the other
+  person's emergency contact. Withdrawing from a relationship you are the
+  contact *of* is `declineSafetyRequest` / `decline_safety_contact`. Pinned by
+  source guards on both clients plus four assertions in
+  `apps/backend/supabase/tests/safety_contacts_test.sql`.
 - Settings → Account "Safety" card (web) + `trusted_contacts_screen.dart`
   (mobile): replaced by a pointer to the real Safety settings; the
   `trusted_contacts.ts`/`.dart` helpers + tests deleted (nothing else reads
