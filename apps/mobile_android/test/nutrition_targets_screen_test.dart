@@ -352,6 +352,7 @@ void main() {
         'grantHealthDataConsent',
         'withdrawHealthDataConsent',
         'setMyHeightCm',
+        'setMyDateOfBirth',
         'recordBodyWeightKg',
         'clearBodyWeightHistory',
         'TextField',
