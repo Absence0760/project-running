@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,12 +60,43 @@ void main() {
     });
 
     test('fetchMySafetyContacts fails soft and logs only the error type', () async {
+      // The list read is owner-scoped, so it needs a session before it will
+      // reach the wire at all (decisions §720).
+      await fake.auth.setInitialSession(jsonEncode({
+        'access_token': 'fake-token',
+        'token_type': 'bearer',
+        'user': {
+          'id': 'user-1',
+          'aud': 'authenticated',
+          'app_metadata': <String, dynamic>{},
+          'user_metadata': <String, dynamic>{},
+          'created_at': '2026-01-01T00:00:00Z',
+        },
+      }));
       final api = ApiClient.withClient(fake);
       final contacts = await api.fetchMySafetyContacts();
       expect(contacts, isEmpty);
       final line = logged.singleWhere((l) => l.startsWith('fetchMySafetyContacts failed:'));
       expect(line, isNot(contains('127.0.0.1')));
       expect(line, isNot(contains('http')));
+    });
+
+    test('a signed-out fetchMySafetyContacts refuses before the wire', () async {
+      // Not merely an optimisation: the owner scope has no value to filter on
+      // without a session, and an unfiltered fallback is exactly the union
+      // bug (decisions §720).
+      final api = ApiClient.withClient(fake);
+      expect(await api.fetchMySafetyContacts(), isEmpty);
+      expect(logged, isEmpty);
+    });
+
+    test('a signed-out removeSafetyContact throws instead of deleting by id', () async {
+      final api = ApiClient.withClient(fake);
+      await expectLater(
+        api.removeSafetyContact('11111111-1111-1111-1111-111111111111'),
+        throwsA(predicate((Object e) =>
+            e.toString().toLowerCase().contains('not authenticated'))),
+      );
     });
 
     test('fetchPendingSafetyRequests fails soft and logs only the error type', () async {
