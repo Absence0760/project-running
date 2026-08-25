@@ -26,7 +26,7 @@ func readSource(t *testing.T, path string) string {
 }
 
 func TestWiring_ArchiveIsStreamedNeverBuffered(t *testing.T) {
-	src := readSource(t, "server.go")
+	src := readSource(t, "server.go") + readSource(t, "build.go")
 	if !strings.Contains(src, "OpenExportArtifact(ctx context.Context, path, contentType string) ArtifactSink") {
 		t.Error("the archive must go out through a chunked upload session")
 	}
@@ -76,29 +76,76 @@ func TestWiring_NoRunCapAndNoRowCeilingSurvive(t *testing.T) {
 }
 
 func TestWiring_FailedBuildAbortsBeforeAnswering(t *testing.T) {
-	src := readSource(t, "server.go")
-	abort := strings.Index(src, "sink.Abort()")
-	sign := strings.Index(src, "CreateSignedURL(r.Context()")
-	if abort == -1 {
-		t.Fatal("the failure path must abort the upload session")
-	}
-	if sign == -1 {
-		t.Fatal("signed-URL call not found")
-	}
-	if abort > sign {
-		t.Error("the abort must precede the signing path: an archive that stopped " +
-			"half-way must not exist, let alone be handed to the caller")
+	// The build and the signing sit in different files since the queued
+	// rail landed (§ 717), so the invariant is pinned in two halves: the
+	// builder yields a path only after the upload finalised, and neither
+	// rail signs anything else.
+	src := readSource(t, "build.go")
+	if n := strings.Count(src, "sink.Abort()"); n < 2 {
+		t.Errorf("every failure path out of the build must abort the upload session; found %d aborts", n)
 	}
 	finish := strings.Index(src, "sink.Finish()")
-	if finish == -1 || finish > sign {
-		t.Error("the signed URL must only be minted after the upload finalises, or it signs a nonexistent object")
+	ok := strings.Index(src, "ObjectPath: objectPath,")
+	if finish == -1 || ok == -1 {
+		t.Fatal("builder shape changed: expected a Finish and a success return carrying the object path")
+	}
+	if finish > ok {
+		t.Error("the object path must only be returned after the upload finalises, or a caller signs a nonexistent object")
+	}
+	if strings.Contains(src, "CreateSignedURL") {
+		t.Error("the builder must not mint the signed URL: on the queued rail its 10-minute " +
+			"TTL would start whenever the worker happened to finish, not when the subject asks")
+	}
+
+	if sync := readSource(t, "server.go"); !strings.Contains(sync, "CreateSignedURL(r.Context(), built.ObjectPath, SignedURLTTLSec)") {
+		t.Error("the synchronous rail must sign only the path its own build returned")
+	}
+	jobs := readSource(t, "jobs.go")
+	ready := strings.Index(jobs, `case row.Status == "ready":`)
+	jobSign := strings.Index(jobs, "CreateSignedURL(r.Context(), row.ObjectPath")
+	if ready == -1 || jobSign == -1 || ready > jobSign {
+		t.Error("the queued rail must sign only inside the ready arm: a queued, running, " +
+			"failed or expired row has no artifact to hand over")
 	}
 }
 
 func TestWiring_ResponseCompletenessFoldsInEverySection(t *testing.T) {
-	src := readSource(t, "server.go")
-	if !strings.Contains(src, `"complete":   built.Completeness.IsComplete()`) {
+	if src := readSource(t, "build.go"); !strings.Contains(src, "Complete:   built.Completeness.IsComplete(),") {
 		t.Error("a section that came up short must not be reported as a complete export")
+	}
+	if src := readSource(t, "server.go"); !strings.Contains(src, `"complete":   built.Complete,`) {
+		t.Error("the synchronous response must carry the builder's own completeness verdict")
+	}
+}
+
+// The queued rail's own structural invariants (decisions.md § 717).
+func TestWiring_QueuedRailHoldsNoConnectionAndStoresNoURL(t *testing.T) {
+	jobs := readSource(t, "jobs.go")
+	if strings.Contains(jobs, "BuildArtifact(") {
+		t.Error("the enqueue endpoint must not build: holding the caller's connection for the " +
+			"build is the whole thing the queued rail exists to stop")
+	}
+	// The state row carries a Storage key, never a live download credential.
+	if strings.Contains(readSource(t, "../supabase_dataexport_jobs.go"), `"url"`) {
+		t.Error("the export state row must store the object path, not a signed URL")
+	}
+	// Both endpoints authenticate before touching anything.
+	for _, fn := range []string{"handleJobsCreate", "handleJobsLatest"} {
+		start := strings.Index(jobs, "func (s *Server) "+fn)
+		if start == -1 {
+			t.Fatalf("%s not found", fn)
+		}
+		body := jobs[start:]
+		auth := strings.Index(body, "s.extractUserID(r)")
+		if auth == -1 {
+			t.Errorf("%s must resolve the caller before doing anything", fn)
+			continue
+		}
+		for _, call := range []string{"s.Backend.EnqueueDataExport(", "s.Backend.LatestDataExportJob(", "s.Backend.CheckRateLimitTiered("} {
+			if at := strings.Index(body, call); at != -1 && at < auth {
+				t.Errorf("%s calls %s before authenticating the caller", fn, call)
+			}
+		}
 	}
 }
 

@@ -42,6 +42,15 @@ type fakeBackend struct {
 	pageSize   int
 	signedURL  string
 	signURLErr error
+	// Queued-rail state (decisions.md § 717). `latestJob` is what the
+	// status read returns; `enqueued` records every enqueue so a test
+	// can assert a re-POST started no second build.
+	latestJob    *ExportJobRow
+	latestJobErr error
+	enqueueRef   ExportJobRef
+	enqueueErr   error
+	enqueued     []ExportJobRef
+	signCalls    int
 	// Backup-format extras (format=backup only).
 	routes        []ExportRoute
 	routesErr     error
@@ -150,7 +159,31 @@ func emitPages[T any](rows []T, size int, emit func([]T) error) error {
 	return nil
 }
 
+func (f *fakeBackend) EnqueueDataExport(_ context.Context, userID, format string) (ExportJobRef, error) {
+	if f.enqueueErr != nil {
+		return ExportJobRef{}, f.enqueueErr
+	}
+	ref := f.enqueueRef
+	if ref.ID == "" {
+		ref = ExportJobRef{ID: "job-1", Status: "queued", Format: format}
+	}
+	f.enqueued = append(f.enqueued, ref)
+	return ref, nil
+}
+
+func (f *fakeBackend) LatestDataExportJob(_ context.Context, _ string) (*ExportJobRow, error) {
+	if f.latestJobErr != nil {
+		return nil, f.latestJobErr
+	}
+	if f.latestJob == nil {
+		return nil, nil
+	}
+	copied := *f.latestJob
+	return &copied, nil
+}
+
 func (f *fakeBackend) CreateSignedURL(_ context.Context, _ string, _ int) (string, error) {
+	f.signCalls++
 	if f.signURLErr != nil {
 		return "", f.signURLErr
 	}

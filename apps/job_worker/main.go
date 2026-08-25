@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -158,7 +159,66 @@ func (b *dataexportBackend) OpenExportArtifact(ctx context.Context, path, conten
 }
 
 func (b *dataexportBackend) CreateSignedURL(ctx context.Context, path string, ttlSec int) (string, error) {
-	return b.client.CreateSignedURL(ctx, path, ttlSec)
+	signed, err := b.client.CreateSignedURL(ctx, path, ttlSec)
+	if err != nil {
+		// A 404 from the sign endpoint means the artifact is gone — the
+		// 7-day retention sweep collected it, or an operator removed it.
+		// The queued rail reports that as an expiry; anything else is an
+		// outage and must not be dressed up as one. Translating here
+		// keeps `internal.HTTPError` out of the leaf package.
+		var hErr *internal.HTTPError
+		if errors.As(err, &hErr) && hErr.StatusCode == http.StatusNotFound {
+			return "", fmt.Errorf("%w: %v", dataexport.ErrArtifactGone, err)
+		}
+		return "", err
+	}
+	return signed, nil
+}
+
+func (b *dataexportBackend) EnqueueDataExport(ctx context.Context, userID, format string) (dataexport.ExportJobRef, error) {
+	ref, err := b.client.EnqueueDataExport(ctx, userID, format)
+	if err != nil {
+		return dataexport.ExportJobRef{}, err
+	}
+	return dataexport.ExportJobRef(ref), nil
+}
+
+func (b *dataexportBackend) LatestDataExportJob(ctx context.Context, userID string) (*dataexport.ExportJobRow, error) {
+	row, err := b.client.LatestDataExportJob(ctx, userID)
+	if err != nil || row == nil {
+		return nil, err
+	}
+	out := dataexport.ExportJobRow(*row)
+	return &out, nil
+}
+
+// dataexportBuilder adapts the shared archive builder to the worker's
+// `data_export` handler, so the queued rail and the deprecated
+// synchronous endpoint produce byte-identical archives. It is also
+// where a build failure acquires the machine token the subject's client
+// renders — the leaf package reports WHAT failed, this names it.
+type dataexportBuilder struct {
+	backend dataexport.Backend
+	log     *slog.Logger
+}
+
+func (b *dataexportBuilder) BuildExportArtifact(ctx context.Context, userID, format string) (internal.ExportArtifact, error) {
+	built, err := dataexport.BuildArtifact(ctx, b.backend, b.log, userID, format)
+	if err != nil {
+		code := "build_failed"
+		if section := dataexport.SectionOf(err); section != "" {
+			code = section + "_fetch_failed"
+		} else if errors.Is(err, dataexport.ErrUpload) {
+			code = "upload_failed"
+		}
+		return internal.ExportArtifact{}, &internal.ExportBuildError{Code: code, Err: err}
+	}
+	return internal.ExportArtifact{
+		ObjectPath: built.ObjectPath,
+		Runs:       built.Runs,
+		TotalRuns:  built.TotalRuns,
+		Complete:   built.Complete,
+	}, nil
 }
 
 // premiumBackend adapts SupabaseClient to premium.Backend.
@@ -665,14 +725,21 @@ func main() {
 	// hub's posture.
 	var exportSrv *dataexport.Server
 	if verifier.Enabled() {
+		exportBackend := &dataexportBackend{client: client}
+		exportLog := logger.With("component", "dataexport")
 		exportSrv = &dataexport.Server{
 			Verifier: verifier,
-			Backend:  &dataexportBackend{client: client},
-			Log:      logger.With("component", "dataexport"),
+			Backend:  exportBackend,
+			Log:      exportLog,
 		}
-		logger.Info("dataexport: enabled (export endpoint mounted at /v1/export)")
+		// The same backend drains the queue. Wiring it here rather than
+		// beside the Worker literal keeps the two halves of the export
+		// on one condition: an endpoint that can accept a request but no
+		// worker to serve it would leave every export queued for ever.
+		worker.DataExport = &dataexportBuilder{backend: exportBackend, log: exportLog}
+		logger.Info("dataexport: enabled (queued rail at /v1/export/jobs, deprecated synchronous rail at /v1/export)")
 	} else {
-		logger.Warn("dataexport: DISABLED — no token verification configured; export endpoint returns 503")
+		logger.Warn("dataexport: DISABLED — no token verification configured; export endpoint returns 503 and data_export jobs fail")
 	}
 
 	// Premium endpoints — Pro-tier-gated POSTs at /v1/premium/{vo2max,
