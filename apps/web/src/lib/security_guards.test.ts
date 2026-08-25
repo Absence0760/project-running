@@ -2239,6 +2239,35 @@ test('accessibility: web shell wires WCAG 2.4.1 skip link + #main-content target
 	);
 });
 
+// Keep only the lines OUTSIDE a component's script and style blocks, so a
+// source guard reads the template and never script text. Deliberately a
+// line-wise scan rather than a strip-the-tags replace: a Svelte 5 component may
+// carry both `<script module>` and `<script>`, a closing tag may be written
+// `</script >`, and the replace shape is a sanitiser CodeQL rightly refuses to
+// believe is complete. Nothing here is sanitisation — the input is a file in
+// this repo and the result is only ever matched against, never rendered.
+function extractSvelteMarkup(src: string): string {
+	const kept: string[] = [];
+	let inBlock: 'script' | 'style' | null = null;
+	for (const line of src.split('\n')) {
+		const lower = line.toLowerCase();
+		if (inBlock) {
+			if (lower.includes(`</${inBlock}`)) inBlock = null;
+			continue;
+		}
+		if (lower.includes('<script')) {
+			if (!lower.includes('</script')) inBlock = 'script';
+			continue;
+		}
+		if (lower.includes('<style')) {
+			if (!lower.includes('</style')) inBlock = 'style';
+			continue;
+		}
+		kept.push(line);
+	}
+	return kept.join('\n');
+}
+
 test('accessibility: ToastContainer announces from permanently-mounted live regions', () => {
 	// Reason: audit/accessibility High — toasts went unannounced because the
 	// container had no aria-live region at all. The first fix added one, but
@@ -2252,16 +2281,7 @@ test('accessibility: ToastContainer announces from permanently-mounted live regi
 	// correctly and puts the same sentence in the DOM twice, which makes every
 	// `getByText('<toast text>')` in the e2e suite a strict-mode violation.
 	const src = read('src/lib/components/ToastContainer.svelte');
-	// Strip the script and style blocks so the assertions below see only the
-	// template. Global and case-insensitive on purpose: a Svelte 5 component may
-	// carry BOTH `<script module>` and `<script>`, and a non-global replace would
-	// leave the second one in `markup` — where the `aria-hidden` / `visually-hidden`
-	// checks below would then match script text and fail a correct component.
-	// This is source extraction for a source guard, not HTML sanitisation: the
-	// input is a file in this repo and the result is never rendered.
-	const markup = src
-		.replace(/<script[\s\S]*?<\/script>/gi, '')
-		.replace(/<style[\s\S]*?<\/style>/gi, '');
+	const markup = extractSvelteMarkup(src);
 
 	for (const politeness of ['polite', 'assertive']) {
 		assert.match(
