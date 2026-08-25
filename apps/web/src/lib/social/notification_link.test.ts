@@ -88,6 +88,21 @@ test('content_hidden is informational — never links', () => {
 	assert.equal(notificationLinkFor(make({ kind: 'content_hidden' })), null);
 });
 
+// The only kind whose link needs no id — and it must not grow one. A signed
+// download URL minted when the worker finished would already be expiring by
+// the time the subject opened the message, which is the objection that kept
+// this notification unbuilt (decisions § 717 + § 729). The page mints it at
+// the tap instead, so the link is the page and nothing more.
+test('data_export_ready links to the export page, with or without any FK', () => {
+	assert.equal(notificationLinkFor(make({ kind: 'data_export_ready' })), '/settings/account');
+	assert.equal(
+		notificationLinkFor(
+			make({ kind: 'data_export_ready', run_id: 'r1', plan_id: 'p1', challenge_id: 'c1' }),
+		),
+		'/settings/account',
+	);
+});
+
 test('an unknown future kind falls through to null, never undefined', () => {
 	const href = notificationLinkFor(make({ kind: 'brand_new_kind' }));
 	assert.equal(href, null);
