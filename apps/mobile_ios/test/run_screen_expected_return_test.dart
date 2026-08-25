@@ -24,7 +24,6 @@ import '../lib/screens/run_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/widgets/live_share_indicator.dart';
 import '../lib/training_service.dart';
-import 'pump_until.dart';
 
 /// The per-run "not back by X" deadline, driven end-to-end from the
 /// live-share sheet (docs/features/safety.md, decisions §240 + §719).
