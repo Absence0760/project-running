@@ -335,6 +335,33 @@ jobs:
             echo "Split it into ADD CONSTRAINT ... NOT VALID plus a later VALIDATE CONSTRAINT — the playbook is docs/backend/migration_locks.md."
             exit 1
           fi
+      # The four `pnpm.overrides` entries are security pins, and a bot can drop
+      # them. Dependabot #812 regenerated pnpm-lock.yaml without its top-level
+      # `overrides:` block, and all 17 pnpm jobs then died at
+      # ERR_PNPM_LOCKFILE_CONFIG_MISMATCH before running anything — an error
+      # naming pnpm and not the change (decisions § 730). The loud case is not
+      # what this guards: a divergence that no frozen install reads leaves the
+      # pins declared and not applied, silently. Sits here rather than in the
+      # pnpm lanes because it is a lockfile-matches-its-source check like the
+      # deno one below, it costs milliseconds, and it must report ahead of the
+      # 14 shards it explains rather than inside them.
+      #
+      # Drift first, then the tool's own suite — the same order the deno step
+      # below uses, and for the same reason: this suite's own last cases read
+      # the committed tree, so running it first would report "the tool is
+      # broken" over an ordinary stale lockfile.
+      - name: pnpm security overrides declared and in effect
+        run: |
+          if ! node scripts/check_pnpm_overrides.mjs; then
+            echo "::error::A pnpm.overrides security pin is missing from a lockfile or was resolved around. Nothing here is about the Supabase schema, the migrations, or the generated row types — the pins are the CVE nudges in package.json's _overrides_rationale."
+            echo "Run 'pnpm install --lockfile-only' locally and commit both lockfiles; the failing line above names which pin and which resolved version broke it."
+            exit 1
+          fi
+          if ! node --test scripts/check_pnpm_overrides.test.mjs; then
+            echo "::error::The pnpm-overrides guard's own unit tests failed. The lockfiles themselves are fine — the check above just passed — so this is a defect in scripts/check_pnpm_overrides.mjs, not override drift."
+            echo "Fix scripts/check_pnpm_overrides.mjs (or its tests); reproduce with: node --test scripts/check_pnpm_overrides.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # deno.lock's `workspace` section is generated from the npm workspace's
       # package.json files, and drifted on every web dep bump because nothing
       # looked — six hand-sync commits between 2026-05 and 2026-07, each a
