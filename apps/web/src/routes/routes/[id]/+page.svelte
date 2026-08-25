@@ -19,6 +19,7 @@
 	import RouteConditions from '$lib/components/RouteConditions.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import SendRouteDialog from '$lib/components/SendRouteDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
 	import { buildRouteShareCanonical } from '$lib/share/share_meta';
@@ -344,9 +345,24 @@
 	// privacy-relevant, one-way-for-now step, so confirm it first. An
 	// already-public route shares straight away (nothing changes).
 	let showShareConfirm = $state(false);
+	// Both share affordances go through the one ensure-public step, so the
+	// confirm has to remember which of them asked for it.
+	let shareIntent = $state<'link' | 'dm'>('link');
+	let showSendDm = $state(false);
 
 	async function handleShare() {
 		if (!route || sharing) return;
+		shareIntent = 'link';
+		if (!route.is_public) {
+			showShareConfirm = true;
+			return;
+		}
+		await runShare();
+	}
+
+	async function handleSendToFollower() {
+		if (!route || sharing) return;
+		shareIntent = 'dm';
 		if (!route.is_public) {
 			showShareConfirm = true;
 			return;
@@ -388,6 +404,7 @@
 		}
 		shareLink = buildRouteShareCanonical(window.location.origin, route.id);
 		shareCopied = false;
+		if (shareIntent === 'dm') showSendDm = true;
 	}
 
 	/// Bidirectional public/private toggle. Owner-only. Optimistic
@@ -697,6 +714,14 @@
 						onclick={handleShare}
 						disabled={sharing}>{m('routeDetail.share')}</button
 					>
+					{#if auth.user && (route.is_public || isOwner)}
+						<button
+							class="btn btn-outline btn-sm"
+							data-testid="route-send-dm-btn"
+							onclick={handleSendToFollower}
+							disabled={sharing}>{m('routeDetail.sendToFollower')}</button
+						>
+					{/if}
 					{#if !isOwner && auth.user}
 						<button
 							class="btn btn-outline btn-sm"
@@ -990,6 +1015,11 @@
 		confirmLabel={m('routeDetail.shareConfirmCta')}
 		onconfirm={confirmShare}
 		oncancel={() => (showShareConfirm = false)}
+	/>
+	<SendRouteDialog
+		open={showSendDm}
+		shareUrl={shareLink}
+		onclose={() => (showSendDm = false)}
 	/>
 {/if}
 
