@@ -37,7 +37,8 @@
 /// the response's `complete`. The download sweeps still run
 /// `EXPORT_FETCH_CONCURRENCY`-wide through `pooledPipeline` so the round
 /// trips overlap. A deep history that cannot finish inside one request
-/// belongs on the Go worker's `/v1/export`, which has no such clock.
+/// belongs on the Go worker's queued rail (`POST /v1/export/jobs`),
+/// which holds no connection at all.
 ///
 /// Fail-closed: tus materialises the object only once the declared
 /// length arrives, so any build failure aborts the upload and answers

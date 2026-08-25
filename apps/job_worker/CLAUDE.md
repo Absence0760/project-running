@@ -293,7 +293,7 @@ apps/job_worker/
 │   ├── stravahook/          # Strava webhook HTTP endpoint (POST → enqueue strava_event)
 │   │   ├── server.go        # GET handshake + POST validate / freshness / dedupe / enqueue
 │   │   └── server_test.go   # 13 httptest cases on every gate + the handshake
-│   ├── dataexport/          # GDPR data-export HTTP endpoint (POST /v1/export)
+│   ├── dataexport/          # GDPR data-export queue endpoints (POST /v1/export/jobs, GET /v1/export/jobs/latest)
 │   │   ├── server.go        # JWT auth + tiered rate limit + streaming CSV/GPX/backup writers + signed URL; no run cap, no row ceiling (decisions § 708)
 │   │   ├── server_test.go   # httptest gates + streaming + fail-closed + pure builder/helper cases
 │   │   └── wiring_test.go   # source-grep guards: nothing buffers the archive, no cap comes back, manifest.json stays last
