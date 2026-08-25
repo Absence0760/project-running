@@ -430,14 +430,16 @@ Re-keys the `route_photos` shape to club membership. **INSERT** requires `auth.u
 
 #### `notifications`
 
-Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows / club posts / completed runs) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, `event_attendees`, `club_posts`, and `runs` so the notification lands in the same transaction as the source write.
+Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows / club posts / completed runs) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, `event_attendees`, `club_posts`, and `runs` so the notification lands in the same transaction as the source write. Not every kind comes from a trigger: `data_export_ready` (`20270607_001`, [decisions § 729](../architecture/decisions.md)) is written by the `notify_data_export_ready()` RPC the Go worker calls once a queued Art 20 export is `ready` — the kind carries **no FK**, because the export lives in `data_export_jobs` and the notification's deep link is `/settings/account`, where the signed download URL is minted at read time.
+
+**Widening the `kind` CHECK takes the `NOT VALID` + `VALIDATE` two-step** — `notifications` is in the migration-locks guard's `GUARDED_TABLES`, and a single-step drop-and-recreate scans every notification ever written under ACCESS EXCLUSIVE for a widen that cannot invalidate a single existing row. `20270607_001` is the first kind migration to do so; the twelve before it are grandfathered.
 
 ```sql
 create table notifications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid references auth.users(id) on delete cascade not null,
   actor_id    uuid references auth.users(id) on delete set null,
-  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed','event_reminder','plan_assigned','achievement','challenge_complete','content_hidden')),
+  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed','event_reminder','plan_assigned','achievement','challenge_complete','content_hidden','data_export_ready')),
   run_id        uuid references runs(id) on delete cascade,
   comment_id    uuid references run_comments(id) on delete cascade,
   event_id      uuid references events(id) on delete cascade,
@@ -1455,6 +1457,7 @@ create table data_export_jobs (
   error_code text,               -- machine token, <= 64 chars
   started_at timestamptz,
   finished_at timestamptz,
+  notified_at timestamptz,       -- 20270607_001: the subject has been told
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1469,8 +1472,9 @@ create unique index data_export_jobs_one_in_flight
 **RPCs** (both `service_role` only):
 - `enqueue_data_export(p_user_id uuid, p_format text)` → `(id, status, format, created_at, reused)`. Inserts the state row **and** its `jobs` entry in one statement — two round-trips from the HTTP handler could leave a state row nothing will ever build. Returns the export already in flight with `reused = true` rather than starting a second one; a race past that check is caught by the unique index and resolved to the same row. Stamps `max_attempts = 2` on the queue entry, not the table default of 5, because every attempt that reaches the tus Finish uploads a whole archive.
 - `expire_stale_export_jobs()` → count. Flips `ready` rows past the 7-day artifact-retention window to `expired`, called by `cleanup_stale_export_blobs` so a row cannot outlive its own object and keep offering a download that 404s. Split out because `storage.objects` refuses a direct DELETE on a current local stack, which puts the blob sweep itself out of pgtap's reach.
+- `notify_data_export_ready(p_export_job_id uuid)` → boolean (`20270607_001`, [decisions § 729](../architecture/decisions.md)). Announces a finished export: one `notifications` row of kind `data_export_ready`, and `notified_at` stamped in the **same statement** under a `for update` lock — so an at-least-once redelivery of the `data_export` job cannot announce the same archive twice, while the handler's already-built early-return can safely re-ask and thereby repair a crash between the finish write and the announcement. Refuses (returns false) unless the row is `ready`, carries an `object_path`, and is not already stamped; an expired row is refused for the same reason its artifact is gone. The stamp is a column rather than a "does a notification row exist" check because the subject may delete the row from their own inbox, and a deleted row must not read as never-notified. `service_role` only — the notifications AFTER INSERT fan-out turns the row into an email job and a push job, so a client-reachable version would be a mail cannon. Carries **no FK and no URL**: the deep link is `/settings/account`, where the signed download URL is minted at read time.
 
-Pinned by `data_export_jobs_test.sql` (19 assertions) + `jobs_kind_allowlist_test.sql`.
+Pinned by `data_export_jobs_test.sql` (19 assertions) + `data_export_ready_notification_test.sql` (14) + `jobs_kind_allowlist_test.sql`.
 
 ---
 
