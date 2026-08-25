@@ -32,6 +32,7 @@ void main() {
 
   final fetch = slice('Future<List<SafetyContact>> fetchMySafetyContacts(');
   final remove = slice('Future<void> removeSafetyContact(');
+  final contactOf = slice('Future<List<SafetyContactOf>> fetchSafetyContactOf(');
 
   test('both safety-contact methods exist', () {
     expect(fetch, isNotEmpty, reason: 'fetchMySafetyContacts moved or renamed');
@@ -44,6 +45,19 @@ void main() {
       isTrue,
       reason: 'without it the read returns the union with the rows naming the '
           'caller as someone ELSE\'s safety contact',
+    );
+  });
+
+  test('the contact-of read names the OTHER half rather than inheriting it', () {
+    // The rows this read wants are exactly the ones the owner-scoped list
+    // stopped returning. Both halves of the table are legitimately readable,
+    // so neither query may leave the predicate to the policy.
+    expect(contactOf, isNotEmpty, reason: 'fetchSafetyContactOf moved or renamed');
+    expect(
+      contactOf.contains('.eq(SafetyContactRow.colContactUserId, userId)'),
+      isTrue,
+      reason: 'without it the read returns the union with the caller\'s own '
+          'safety contacts, presented as relationships they are the contact of',
     );
   });
 
