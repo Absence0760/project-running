@@ -36,6 +36,11 @@ export default defineConfig({
 		'**/.auth/**',
 		'**/fixtures/**',
 		'**/live/spectator_websocket.spec.ts',
+		// The queued-export lane needs the Go worker + a dev server with
+		// PUBLIC_EXPORT_HUB_URL set, which only
+		// playwright.exporthub.config.ts boots. Without it the page takes
+		// the Edge Function fallback and the job card never appears.
+		'**/settings/export_job.spec.ts',
 		// The SSO/OAuth lane (tests-e2e/sso) needs the mock OIDC provider +
 		// GoTrue wired to it, which only playwright.sso.config.ts boots.
 		'**/sso/**'
