@@ -110,14 +110,22 @@
 				{/if}
 
 				<form class="reset-form" onsubmit={handleSubmit}>
+					<label for="reset-password" class="visually-hidden">
+						{m('authReset.newPasswordPlaceholder')}
+					</label>
 					<PasswordInput
+						id="reset-password"
 						bind:value={password}
 						placeholder={m('authReset.newPasswordPlaceholder')}
 						required
 						minlength={PASSWORD_MIN_LENGTH}
 						autocomplete="new-password"
 					/>
+					<label for="reset-confirm-password" class="visually-hidden">
+						{m('authReset.confirmPasswordPlaceholder')}
+					</label>
 					<PasswordInput
+						id="reset-confirm-password"
 						bind:value={confirmPassword}
 						placeholder={m('authReset.confirmPasswordPlaceholder')}
 						required
