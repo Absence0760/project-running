@@ -2252,7 +2252,16 @@ test('accessibility: ToastContainer announces from permanently-mounted live regi
 	// correctly and puts the same sentence in the DOM twice, which makes every
 	// `getByText('<toast text>')` in the e2e suite a strict-mode violation.
 	const src = read('src/lib/components/ToastContainer.svelte');
-	const markup = src.replace(/<script[\s\S]*?<\/script>/, '').replace(/<style[\s\S]*?<\/style>/, '');
+	// Strip the script and style blocks so the assertions below see only the
+	// template. Global and case-insensitive on purpose: a Svelte 5 component may
+	// carry BOTH `<script module>` and `<script>`, and a non-global replace would
+	// leave the second one in `markup` — where the `aria-hidden` / `visually-hidden`
+	// checks below would then match script text and fail a correct component.
+	// This is source extraction for a source guard, not HTML sanitisation: the
+	// input is a file in this repo and the result is never rendered.
+	const markup = src
+		.replace(/<script[\s\S]*?<\/script>/gi, '')
+		.replace(/<style[\s\S]*?<\/style>/gi, '');
 
 	for (const politeness of ['polite', 'assertive']) {
 		assert.match(
