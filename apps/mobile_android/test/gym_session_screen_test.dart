@@ -196,9 +196,10 @@ Finder _inDialog(String text) => find.descendant(
 Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() done, {
+  required String describe,
   Duration timeout = const Duration(seconds: 10),
 }) =>
-    pumpUntil(tester, done, describe: 'the session screen to reach the expected state', timeout: timeout);
+    pumpUntil(tester, done, describe: describe, timeout: timeout);
 
 void main() {
   setUpAll(() {
@@ -248,12 +249,13 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
     await tester.pump();
 
-    // Finish writes the file; let the (api == null) save path settle.
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Finish'));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+    // Finish writes the file; the (api == null) save path only lands on the
+    // real event loop. The saved banner is raised AFTER the atomic write and
+    // the index flush, so it is the one signal that outlives the temp dir's
+    // teardown — the in-memory row is populated before the write.
+    await tester.runAsync(() => tester.tap(find.text('Finish')));
+    await _pumpUntil(tester, () => tester.any(find.text('Workout saved')),
+        describe: 'the finished session to be persisted and confirmed');
 
     final sets = g.store.workouts.single.sets;
     expect(sets.length, 1);
@@ -318,11 +320,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
     await tester.pump();
 
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Finish'));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+    await tester.runAsync(() => tester.tap(find.text('Finish')));
+    await _pumpUntil(tester, () => tester.any(find.text('Workout saved')),
+        describe: 'the finished session to be persisted and confirmed');
 
     // Distance has no gym_sets column, so the flat set list stays empty — the
     // real distance travels in the metadata step-results instead.
@@ -349,11 +349,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
     await tester.pump();
 
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Finish'));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+    await tester.runAsync(() => tester.tap(find.text('Finish')));
+    await _pumpUntil(tester, () => tester.any(find.text('Workout saved')),
+        describe: 'the finished session to be persisted and confirmed');
 
     final results = ((g.store.workouts.single.row['metadata']
         as Map)['gym_step_results'] as List);
@@ -469,7 +467,8 @@ void main() {
 
     // Leave writes the draft file before popping; poll the pop through.
     await tester.tap(_inDialog('Leave — keep draft'));
-    await _pumpUntil(tester, () => tester.any(find.text('open session')));
+    await _pumpUntil(tester, () => tester.any(find.text('open session')),
+        describe: 'the draft to be saved and the launcher to report it');
     final draft = g.store.workouts.single;
     expect(draft.sets.length, 1, reason: 'the logged set must survive');
     final meta = draft.row['metadata'] as Map;
@@ -499,7 +498,8 @@ void main() {
 
     await tester.tap(_inDialog('Leave — keep draft'));
     await _pumpUntil(
-        tester, () => tester.any(find.textContaining("Couldn't save your draft")));
+        tester, () => tester.any(find.textContaining("Couldn't save your draft")),
+        describe: 'the draft-save failure banner');
 
     // Still on the session with the logged set intact — not popped back to the
     // launcher with the work thrown away.
@@ -526,7 +526,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(_inDialog('Discard'));
-    await _pumpUntil(tester, () => tester.any(find.text('open session')));
+    await _pumpUntil(tester, () => tester.any(find.text('open session')),
+        describe: 'the discard to return to the launcher');
     expect(g.store.workouts, isEmpty,
         reason: 'Discard must not leave an orphan draft row');
   });
@@ -546,13 +547,11 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
     await tester.pump();
 
-    // Finish → createLocal writes a file; run it on the real event loop and let
-    // the (api == null) save path settle before asserting on the store.
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Finish'));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+    // Finish → createLocal writes a file; run it on the real event loop and
+    // wait for the (api == null) save path to land in the store.
+    await tester.runAsync(() => tester.tap(find.text('Finish')));
+    await _pumpUntil(tester, () => tester.any(find.text('Workout saved')),
+        describe: 'the finished session to be persisted and confirmed');
 
     // One workout landed, titled from the routine, with both completed sets
     // and the routine-id metadata stamped (the cross-modal review trio).
@@ -592,11 +591,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Complete set'));
     await tester.pump();
 
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Finish'));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+    await tester.runAsync(() => tester.tap(find.text('Finish')));
+    await _pumpUntil(tester, () => tester.any(find.text('Workout saved')),
+        describe: 'the finished session to be persisted and confirmed');
 
     final w = g.store.workouts.single;
     expect(
@@ -652,11 +649,9 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Skip set'));
     await tester.pump();
 
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Finish'));
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
+    await tester.runAsync(() => tester.tap(find.text('Finish')));
+    await _pumpUntil(tester, () => tester.any(find.text('Workout saved')),
+        describe: 'the finished session to be persisted and confirmed');
 
     final set = g.store.workouts.single.sets.single;
     expect(set['reps'], 8);
