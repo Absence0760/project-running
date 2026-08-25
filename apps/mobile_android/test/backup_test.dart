@@ -6,13 +6,11 @@ import 'package:api_client/api_client.dart';
 import 'package:archive/archive.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:archive/archive_io.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/backup.dart';
-import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/local_route_store.dart';
