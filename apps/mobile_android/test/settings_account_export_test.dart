@@ -355,6 +355,34 @@ void main() {
     expect(find.byKey(const Key('account-export-tile')), findsOneWidget);
   });
 
+  testWidgets('a build with no export service says so, standing, and disables the tile',
+      (tester) async {
+    // Discovering there is no complete archive by pressing a tile is
+    // not disclosure: the runner would otherwise take the on-device
+    // backup below in the belief that it is the same thing.
+    _tallSurface(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: SettingsAccountScreen(
+          apiClient: _ExportApi(),
+          preferences: Preferences(),
+          settingsSync: null,
+          runStore: LocalRunStore(),
+          exportClient: const BackupServerClient(baseUrl: ''),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byKey(const Key('account-export-unavailable')), findsOneWidget);
+    final tile = tester.widget<ListTile>(
+        find.byKey(const Key('account-export-tile')));
+    expect(tile.enabled, isFalse);
+  });
+
   testWidgets('the on-device disclosure names what that archive does not carry',
       (tester) async {
     // The local writer is not the Art 20 export: runs, routes, profile,

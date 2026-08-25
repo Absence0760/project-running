@@ -1202,8 +1202,20 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
   /// client cannot read looking like one still building.
   List<Widget> _accountExportState(AppLocalizations l10n) {
     final widgets = <Widget>[];
+    if (_resolveExportClient() == null) {
+      // Standing, not a banner on tap. A build with no export service
+      // has no complete Art 20 archive to offer, and the runner has to
+      // be able to read that rather than discover it by pressing a tile
+      // — the alternative is them taking the on-device backup below in
+      // the belief that it is the same thing.
+      widgets.add(_accountNotice(
+        key: const Key('account-export-unavailable'),
+        text: l10n.settingsAccountExportUnavailable,
+      ));
+      return widgets;
+    }
     final unsynced = widget.runStore?.unsyncedRuns.length ?? 0;
-    if (unsynced > 0 && _resolveExportClient() != null) {
+    if (unsynced > 0) {
       // The server builds from the cloud rows, so a run still sitting
       // on this device cannot be in the archive. Standing fact about
       // the account, so it is a notice rather than a banner.
@@ -1421,7 +1433,9 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen>
                 title: Text(l10n.settingsAccountAccountExport),
                 subtitle: Text(l10n.settingsAccountAccountExportSubtitle),
                 trailing: const Icon(Icons.chevron_right),
-                enabled: !_exportBusy && !_exportJobBuilding,
+                enabled: !_exportBusy &&
+                    !_exportJobBuilding &&
+                    _resolveExportClient() != null,
                 onTap: _requestAccountExport,
               ),
               ..._accountExportState(l10n),
