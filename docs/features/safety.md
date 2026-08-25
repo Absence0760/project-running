@@ -181,6 +181,17 @@ clipping; the email only carries times + the link.
   contact *of* is `declineSafetyRequest` / `decline_safety_contact`. Pinned by
   source guards on both clients plus four assertions in
   `apps/backend/supabase/tests/safety_contacts_test.sql`.
+- **The contact-of list is a second, deliberate read** (ADR §726):
+  `fetchSafetyContactOf` (web `core/data.ts`, Dart `api_client.dart`) filters
+  `contact_user_id` for the same reason the owner list filters `owner_id` —
+  both halves of the table are legitimately readable, so each query has to say
+  which one it wants. It backs the "you are a safety contact for" section on
+  web `/settings/safety` and mobile Settings → Safety contacts, the only place
+  the SMS consent granted at confirm time can be changed or withdrawn. The
+  owner's stored number travels as a **fact** (`has_phone`), never as digits —
+  the same posture `my_pending_safety_requests` takes, and there is no owner
+  UPDATE policy, so a contact could not correct a wrong number from there
+  anyway.
 - Settings → Account "Safety" card (web) + `trusted_contacts_screen.dart`
   (mobile): replaced by a pointer to the real Safety settings; the
   `trusted_contacts.ts`/`.dart` helpers + tests deleted (nothing else reads
@@ -282,10 +293,15 @@ channel-agnostic scan rather than forking it.
   so outright rather than leaving a runner to discover it. A successful save
   upserts the whole metadata bag and takes both `in_progress` and
   `expected_return_at` with it, so an online finish cannot false-fire.
-- **Still deferred.** Neither platform can change an SMS consent AFTER
-  confirming: `set_safety_sms_opt_in` exists and works, but no surface lists
-  the relationships a user is the *contact* of, so nothing can call it. The
-  native-push leg still waits on FCM/APNs.
+- **Consent is changeable after confirming (2026-08-25, ADR §726).** Both
+  platforms carry a "you are a safety contact for" section listing the
+  relationships the signed-in user is the *contact* of — an SMS toggle over
+  `set_safety_sms_opt_in` and a withdraw over `decline_safety_contact`. The
+  rows come from a read scoped on `contact_user_id`, which the linked-contact
+  SELECT policy already permitted, so there is no migration. Withdrawing is
+  **decline, never `removeSafetyContact`**: that one is owner-scoped since
+  §720 and would match nothing from this side while reporting success.
+- **Still deferred.** The native-push leg still waits on FCM/APNs.
 
 ## Open decisions (chosen; revisit deliberately)
 
