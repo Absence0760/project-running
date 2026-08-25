@@ -99,9 +99,10 @@
     "install:android": "cd apps/mobile_android && adb install build/app/outputs/flutter-apk/app-release.apk",
     "install:android:debug": "cd apps/mobile_android && adb install build/app/outputs/flutter-apk/app-debug.apk",
 
-    "//-- check --": "Static analysis. check:flutter exits non-zero on info-level lints — only warning/error matter (see CLAUDE.md).",
+    "//-- check --": "Static analysis. check:flutter exits non-zero on info-level lints — only warning/error matter (see CLAUDE.md). check:pnpm-overrides verifies the security pins are declared in both lockfiles AND actually resolved to; it never rewrites a lockfile — fix drift with 'pnpm install --lockfile-only'. CI's parity-types job runs it.",
     "check:web": "pnpm -C apps/web check",
     "check:flutter": "melos exec -- dart analyze",
+    "check:pnpm-overrides": "node scripts/check_pnpm_overrides.mjs",
 
     "//-- test --": "Test suites per surface; test:scripts validates this file's script targets.",
     "test:web:unit": "pnpm -C apps/web test:unit",
