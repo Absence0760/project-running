@@ -135,6 +135,25 @@ test.describe('/settings/account', () => {
 		expect(await dob.getAttribute('min')).toBeNull();
 	});
 
+	test('the DOB field is not disabled by the health-data consent box', async ({
+		page
+	}) => {
+		// decisions § 718: this input feeds the user_profiles age record
+		// behind the under-18 discoverability floor, which does not rest on
+		// Art 9 consent. Disabling it also deadlocked the page — the save
+		// aborted on a stored DOB the runner could not clear. In-memory only:
+		// the box is restored and nothing is saved.
+		await page.goto('/settings/account');
+		const consent = page
+			.locator('label.consent-checkbox')
+			.locator('input[type="checkbox"]')
+			.first();
+		const startedChecked = await consent.isChecked();
+		if (startedChecked) await consent.uncheck();
+		await expect(page.getByTestId('date-of-birth')).toBeEnabled();
+		if (startedChecked) await consent.check();
+	});
+
 	// Change-password validation. This section MINTS a password
 	// (updateUser), so it shares checkPasswordPair with /login?signup=1
 	// and /auth/reset — see web_app_auth.md § Password confirmation.

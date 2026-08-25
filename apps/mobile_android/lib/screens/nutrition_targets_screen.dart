@@ -27,10 +27,13 @@ import 'settings_body_metrics_screen.dart';
 /// Composed entirely from what `nutrition_targets.dart` already exports, so
 /// there is no arithmetic here and no obligation on the TS twin.
 ///
-/// Height / weight / date of birth / sex are Art 9 special-category data and
-/// stay editable only in [SettingsBodyMetricsScreen] behind its explicit
-/// consent gate — this screen displays them and links there. A second input
-/// would be a second consent surface.
+/// Height / weight / sex are Art 9 special-category data and stay editable
+/// only in [SettingsBodyMetricsScreen] behind its explicit consent gate —
+/// this screen displays them and links there. A second input would be a
+/// second consent surface. Date of birth is displayed on the same terms but
+/// is edited from Preferences, because the column it writes is the
+/// child-safety age record rather than an Art 9 field (decisions § 718);
+/// only its prefs-bag mirror is consent-gated.
 class NutritionTargetsScreen extends StatefulWidget {
   final ApiClient? api;
   final SettingsSyncService? settingsSync;

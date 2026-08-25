@@ -95,6 +95,17 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   final bool _nearbyGate = nearbyRunnersGate;
   String? _nearbyAreaLabel;
 
+  /// Date of birth lives in two stores under two rules (decisions § 718).
+  /// [_profileDob] is the `user_profiles` age record behind the under-18
+  /// discoverability floor — written whenever the runner picks a date — and
+  /// is what the tile displays, because a withdrawal clears the Art 9
+  /// mirror while the record stays on file. [_healthConsentAt] decides
+  /// whether the mirror is written at all; null means no consent on record,
+  /// which is also what an unreadable profile leaves behind, so the Art 9
+  /// half fails closed.
+  String? _profileDob;
+  DateTime? _healthConsentAt;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +113,27 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     widget.settingsSync?.addListener(_onChange);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeBackfillLocale());
     if (_nearbyGate) _loadNearbyAreaLabel();
+    _loadHealthProfile();
+  }
+
+  /// Best-effort (L4), for the same reason as [_loadNearbyAreaLabel]: a
+  /// signed-out or offline read must leave the row showing the bag mirror
+  /// rather than throw out of initState.
+  Future<void> _loadHealthProfile() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final profile = await api.fetchMyProfile();
+      if (!mounted) return;
+      setState(() {
+        _profileDob = profile?.dateOfBirth == null
+            ? null
+            : ApiClient.dateOnly(profile!.dateOfBirth!);
+        _healthConsentAt = profile?.healthDataConsentAt;
+      });
+    } catch (e) {
+      debugPrint('preferences health profile read failed: $e');
+    }
   }
 
   @override
@@ -953,7 +985,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editDateOfBirth() async {
-    final raw = _bagValue<String>(SettingsKeys.dateOfBirth);
+    final raw = _dateOfBirthDisplay;
     final current = raw != null ? DateTime.tryParse(raw) : null;
     final now = DateTime.now();
     final picked = await showDatePicker(
@@ -965,10 +997,36 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       helpText: AppLocalizations.of(context).prefsDateOfBirth,
     );
     if (picked == null) return;
-    final iso =
-        '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-    await _putUniversal(SettingsKeys.dateOfBirth, iso);
+    final iso = ApiClient.dateOnly(picked);
+    // The age record first and unconditionally: the under-18
+    // discoverability floor keys off this column, so a runner who has not
+    // granted Art 9 consent must still be able to record a birth date
+    // (decisions § 718). Best-effort like every other row on this screen —
+    // a failed write must not throw out of an onTap handler.
+    final api = widget.apiClient;
+    if (api != null) {
+      try {
+        await api.setMyDateOfBirth(picked);
+        if (mounted) setState(() => _profileDob = iso);
+      } catch (e) {
+        debugPrint('date of birth age-record write failed: $e');
+      }
+    }
+    // The bag mirror is the Art 9 health-use copy the coach + HR-max reads
+    // consume. Fail closed: no consent on record — including a profile read
+    // that never landed — writes nothing, and clears anything a previous
+    // consent left behind.
+    await _putUniversal(
+      SettingsKeys.dateOfBirth,
+      _healthConsentAt == null ? null : iso,
+    );
   }
+
+  /// What the row shows: the age record when it is known, the Art 9 mirror
+  /// otherwise. Reading the mirror alone would blank the row for a runner
+  /// who withdrew consent while their birth date is still on file.
+  String? get _dateOfBirthDisplay =>
+      _profileDob ?? _bagValue<String>(SettingsKeys.dateOfBirth);
 
   Future<void> _editRestingHr() async {
     final picked = await _pickInt(
@@ -1609,10 +1667,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                     ),
                     ListTile(
                       title: Text(l10n.prefsDateOfBirth),
-                      subtitle: Text(
-                        _bagValue<String>(SettingsKeys.dateOfBirth) ??
-                            l10n.prefsNotSet,
-                      ),
+                      subtitle: Text(_dateOfBirthDisplay ?? l10n.prefsNotSet),
                       trailing: const Icon(Icons.chevron_right),
                       enabled: _bagReady,
                       onTap: _editDateOfBirth,

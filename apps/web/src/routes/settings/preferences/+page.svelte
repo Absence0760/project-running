@@ -331,13 +331,15 @@
 	let z4 = $state('');
 	let z5 = $state('');
 
-	// Demographics — live on user_profiles, not the cross-device prefs bag.
-	// Used only by tiered segment leaderboards. Both fields are optional;
-	// leaving them blank simply means the runner doesn't appear in
-	// gender/age-band-filtered views. Gender + DOB combined are
-	// special-category data under GDPR Art 9 (health-adjacent) —
-	// `healthDataConsent` captures the explicit Art 9(2)(a) consent
-	// timestamp. Withdrawing consent nulls both fields atomically.
+	// Demographics. Gender is special-category data under GDPR Art 9
+	// (health-adjacent) and only persists under the explicit Art 9(2)(a)
+	// consent `healthDataConsent` stamps. DOB is split across two stores
+	// with two different rules (decisions § 718): the `user_profiles`
+	// column is the AGE RECORD backing the under-18 discoverability floor
+	// — a child-protection purpose, so it is written whenever the runner
+	// supplies a date, consent or not — while the `user_settings.prefs`
+	// mirror is the Art 9 HEALTH-USE copy the coach + HR reads consume,
+	// written only under consent and cleared on withdrawal.
 	let gender = $state<'male' | 'female' | ''>('');
 	let dateOfBirth = $state('');
 	let healthDataConsent = $state(false);
@@ -549,13 +551,16 @@
 		void autoSave({ hr_zones: z });
 	}
 
-	// Demographics (gender + DOB) are special-category data under GDPR Art 9,
-	// so they keep an EXPLICIT, consent-gated save rather than auto-saving —
-	// the user must deliberately confirm. Grant stamps the consent timestamp
-	// via a SECURITY DEFINER RPC (first-stamp-wins, lock-trigger enforced);
-	// withdrawal nulls gender + DOB + the timestamp atomically per Art 7(3).
+	// Demographics are special-category data under GDPR Art 9, so they keep
+	// an EXPLICIT, consent-gated save rather than auto-saving — the user
+	// must deliberately confirm. Grant stamps the consent timestamp via a
+	// SECURITY DEFINER RPC (first-stamp-wins, lock-trigger enforced);
+	// withdrawal nulls gender + the timestamp atomically per Art 7(3).
 	// Withdrawing consent (Art 7(3)) erases the saved height + the entire
 	// weight time-series — irreversible, so confirm before running the save.
+	// The DOB age record is the one field that survives a withdrawal
+	// (§ 718): it is re-asserted below because the withdrawal RPC still
+	// nulls the column server-side.
 	let showWithdrawConfirm = $state(false);
 	function requestSaveDemographics() {
 		if (!healthDataConsent && healthDataConsentAt != null) {
@@ -569,7 +574,12 @@
 		if (!auth.user) return;
 		const heightVal = heightCm != null && heightCm > 0 ? heightCm : null;
 		const weightDisplay = weightInput != null && weightInput > 0 ? weightInput : null;
-		const hasDemographic = !!(gender || dateOfBirth || heightVal != null || weightDisplay != null);
+		// DOB is deliberately absent from this gate: the column write is the
+		// child-protection age record, not an Art 9 health use (§ 718).
+		// Refusing the save left a minor who declined consent with a NULL
+		// DOB and fully discoverable in people-search — the exact fail-open
+		// the floor exists to close.
+		const hasDemographic = !!(gender || heightVal != null || weightDisplay != null);
 		if (hasDemographic && !healthDataConsent) {
 			showToast(m('prefs.demographicsConsentRequired'), 'error');
 			return;
@@ -599,35 +609,47 @@
 				healthDataConsentAt = null;
 				loadedWeightKg = null;
 				weightInput = null;
-			} else {
-				const profileUpdate: Record<string, unknown> = {
-					gender: healthDataConsent && gender ? gender : null,
-					date_of_birth: healthDataConsent && dateOfBirth ? dateOfBirth : null,
-					height_cm: healthDataConsent && heightVal != null ? heightVal : null,
-				};
-				// Row-count-verified: rows are client-provisioned, so a plain
-				// update against a missing row matches 0 rows and reports
-				// success — the save would silently vanish (issue #233).
-				const { data: updatedRows, error } = await supabase
+			}
+			// One profile write on both arms. `date_of_birth` is the age
+			// record and carries no consent term — on the withdrawal arm this
+			// runs AFTER the RPC precisely to put back the column the RPC
+			// nulls, because ending the Art 9 processing does not end the
+			// child-safety discoverability floor (§ 718). gender + height are
+			// the Art 9 fields and go null the moment consent is off.
+			const profileUpdate: Record<string, unknown> = {
+				date_of_birth: dateOfBirth || null,
+				gender: healthDataConsent && gender ? gender : null,
+				height_cm: healthDataConsent && heightVal != null ? heightVal : null,
+			};
+			// Row-count-verified: rows are client-provisioned, so a plain
+			// update against a missing row matches 0 rows and reports
+			// success — the save would silently vanish (issue #233).
+			const { data: updatedRows, error } = await supabase
+				.from('user_profiles')
+				.update(profileUpdate)
+				.eq('id', auth.user.id)
+				.select('id');
+			if (error) throw error;
+			if (!updatedRows?.length) {
+				const { error: insertErr } = await supabase
 					.from('user_profiles')
-					.update(profileUpdate)
-					.eq('id', auth.user.id)
-					.select('id');
-				if (error) throw error;
-				if (!updatedRows?.length) {
-					const { error: insertErr } = await supabase
-						.from('user_profiles')
-						.insert({ id: auth.user.id, ...profileUpdate });
-					if (insertErr) throw insertErr;
-				}
-				if (weightDisplay != null && weightDisplay > 0) {
-					// Append a new measurement only when the value changed, so
-					// re-saving the card doesn't pad the time-series.
-					const kg = roundWeight(displayToKg(weightDisplay, weightUnit));
-					if (loadedWeightKg == null || Math.abs(kg - loadedWeightKg) > 0.01) {
-						await recordWeightKg(kg);
-						loadedWeightKg = kg;
-					}
+					.insert({ id: auth.user.id, ...profileUpdate });
+				if (insertErr) throw insertErr;
+			}
+			// The prefs-bag mirror is the Art 9 health-use copy (coach
+			// context, HR-max derivation) — it follows consent in both
+			// directions, so a withdrawal clears it here rather than leaving
+			// withdrawn special-category data feeding those reads.
+			await updateUniversal(auth.user.id, {
+				date_of_birth: healthDataConsent && dateOfBirth ? dateOfBirth : null,
+			});
+			if (healthDataConsent && weightDisplay != null && weightDisplay > 0) {
+				// Append a new measurement only when the value changed, so
+				// re-saving the card doesn't pad the time-series.
+				const kg = roundWeight(displayToKg(weightDisplay, weightUnit));
+				if (loadedWeightKg == null || Math.abs(kg - loadedWeightKg) > 0.01) {
+					await recordWeightKg(kg);
+					loadedWeightKg = kg;
 				}
 			}
 			demographicsSaved = true;
@@ -1009,8 +1031,12 @@
 		</section>
 
 		<!-- Demographics — gender + DOB power tiered segment leaderboards.
-		     Combined they are special-category data under GDPR Art 9 so the
-		     explicit-consent checkbox is the precondition for saving either. -->
+		     Gender, height and weight are special-category data under GDPR
+		     Art 9, so the explicit-consent checkbox is the precondition for
+		     saving any of them. The DOB field is deliberately NOT disabled
+		     with them: the column it writes is the under-18 discoverability
+		     floor's age record, a child-protection purpose that must stay
+		     reachable by a runner who declines the health checkbox (§ 718). -->
 		<section class="card" id="body-metrics">
 			<h2>{m('prefs.demographicsHeading')}</h2>
 			<p class="section-desc">
@@ -1037,7 +1063,13 @@
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.dateOfBirth')}</span>
-					<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} disabled={!healthDataConsent} />
+					<input
+						type="date"
+						bind:value={dateOfBirth}
+						max={new Date().toISOString().slice(0, 10)}
+						aria-describedby="dob-purpose"
+						data-testid="date-of-birth"
+					/>
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.heightCm')}</span>
@@ -1063,6 +1095,7 @@
 					/>
 				</label>
 			</div>
+			<p class="field-hint" id="dob-purpose">{m('prefs.dateOfBirthPurpose')}</p>
 			{#if healthDataConsentAt}
 				<p class="section-hint">
 					{m('prefs.consentRecordedOn', { date: new Date(healthDataConsentAt).toLocaleDateString() })}
@@ -1488,6 +1521,7 @@
 	.btn-save { width: auto; }
 	.muted { color: var(--color-text-tertiary); }
 	.section-hint { color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0 0 var(--space-md) 0; }
+	.field-hint { color: var(--color-text-secondary); font-size: 0.8rem; line-height: 1.4; margin: 0 0 var(--space-md) 0; }
 	.zone-list { list-style: none; padding: 0; margin: 0 0 var(--space-md) 0; display: flex; flex-direction: column; gap: var(--space-sm); }
 	.zone-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-md); background: var(--color-bg-tertiary); border-radius: var(--radius-md); }
 	.zone-coords { font-variant-numeric: tabular-nums; font-weight: 600; }

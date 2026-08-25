@@ -93,10 +93,12 @@ test('Settings → preferences writes gender + date_of_birth to user_profiles', 
 	// Reason: tiered leaderboards depend on user_profiles.gender +
 	// date_of_birth. If the settings page stops persisting them the
 	// filter dropdowns silently return empty for every user.
-	// GDPR Art 9 gates both writes behind healthDataConsent — without
-	// consent the page null-writes, with consent it writes the user
-	// input. Both branches are valid writebacks, so the guard accepts
-	// either shape.
+	// The two columns carry DIFFERENT rules (decisions § 718). Gender is
+	// Art 9 special-category data and its write keeps the healthDataConsent
+	// term. date_of_birth is the age record behind the under-18
+	// discoverability floor — a child-protection purpose — so its column
+	// write carries no consent term at all; the consent gate moved to the
+	// user_settings.prefs mirror, which is what the Art 9 read paths use.
 	const source = read('src/routes/settings/preferences/+page.svelte');
 	assert.match(source, /user_profiles/, 'page must talk to user_profiles');
 	assert.match(
@@ -106,8 +108,42 @@ test('Settings → preferences writes gender + date_of_birth to user_profiles', 
 	);
 	assert.match(
 		source,
-		/date_of_birth:\s*\(?healthDataConsent\s*&&\s*dateOfBirth\)?\s*\?\s*dateOfBirth\s*:\s*null/,
-		'date_of_birth writeback missing (consent-gated form)',
+		/date_of_birth:\s*dateOfBirth\s*\|\|\s*null/,
+		'ungated age-record writeback missing',
+	);
+	assert.doesNotMatch(
+		source,
+		/date_of_birth:\s*\(?healthDataConsent\s*&&\s*dateOfBirth\)?\s*\?\s*dateOfBirth\s*:\s*null,\n\t*gender/,
+		'the column write must not be consent-gated (§ 718)',
+	);
+	assert.match(
+		source,
+		/updateUniversal\(auth\.user\.id,\s*\{\s*\n?\s*date_of_birth:\s*healthDataConsent\s*&&\s*dateOfBirth\s*\?\s*dateOfBirth\s*:\s*null,/,
+		'consent-gated prefs-bag mirror write missing',
+	);
+});
+
+test('Settings → preferences leaves DOB out of the consent-required refusal', () => {
+	// A minor who declines the Art 9 checkbox must still be able to record
+	// a DOB — refusing the save left them with a NULL age record and fully
+	// discoverable in people-search, the exact fail-open the floor closes.
+	const source = read('src/routes/settings/preferences/+page.svelte');
+	const gate = source.match(/const hasDemographic = [^;]+;/);
+	assert.ok(gate, 'hasDemographic gate not found');
+	assert.doesNotMatch(gate![0], /dateOfBirth/, 'DOB must not gate the demographics save');
+	assert.match(gate![0], /gender/, 'gender must still gate the demographics save');
+});
+
+test('Settings → preferences does not consent-disable the DOB input', () => {
+	const source = read('src/routes/settings/preferences/+page.svelte');
+	const dobInput = source
+		.split('\n')
+		.find((l) => l.includes('bind:value={dateOfBirth}'));
+	assert.ok(dobInput, 'DOB input not found');
+	assert.doesNotMatch(
+		dobInput!,
+		/disabled=\{!healthDataConsent\}/,
+		'DOB input is consent-disabled — the age record must stay reachable',
 	);
 });
 
