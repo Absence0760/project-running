@@ -25,31 +25,102 @@ func TestEmailMode_DefaultsToImportant(t *testing.T) {
 	}
 }
 
+// emailPrefs / pushPrefs build the one-key bag the gate reads, so the matrix
+// below still reads as "kind x mode" now that shouldEmail/shouldPush take the
+// whole prefs bag rather than a pre-resolved mode.
+func emailPrefs(mode string) map[string]interface{} {
+	return map[string]interface{}{"email_notifications": mode}
+}
+
+func pushPrefs(mode string) map[string]interface{} {
+	return map[string]interface{}{"push_notifications": mode}
+}
+
 func TestShouldEmail_Matrix(t *testing.T) {
-	important := []string{"event_reminder", "event_cancel", "plan_update", "message"}
+	important := []string{"event_reminder", "event_cancel", "plan_update", "message", "data_export_ready"}
 	social := []string{"kudos", "comment", "comment_reply", "follow", "club_post", "run_completed", "event_rsvp"}
 
 	for _, k := range important {
-		if !shouldEmail(k, emailModeImportant) {
+		if !shouldEmail(k, emailPrefs(emailModeImportant)) {
 			t.Errorf("%s should email under 'important'", k)
 		}
-		if !shouldEmail(k, emailModeAll) {
+		if !shouldEmail(k, emailPrefs(emailModeAll)) {
 			t.Errorf("%s should email under 'all'", k)
 		}
-		if shouldEmail(k, emailModeOff) {
+		if shouldEmail(k, emailPrefs(emailModeOff)) {
 			t.Errorf("%s must NOT email under 'off'", k)
 		}
 	}
 	for _, k := range social {
-		if shouldEmail(k, emailModeImportant) {
+		if shouldEmail(k, emailPrefs(emailModeImportant)) {
 			t.Errorf("%s must NOT email under 'important'", k)
 		}
-		if !shouldEmail(k, emailModeAll) {
+		if !shouldEmail(k, emailPrefs(emailModeAll)) {
 			t.Errorf("%s should email under 'all'", k)
 		}
-		if shouldEmail(k, emailModeOff) {
+		if shouldEmail(k, emailPrefs(emailModeOff)) {
 			t.Errorf("%s must NOT email under 'off'", k)
 		}
+	}
+}
+
+// The per-kind mute (decisions.md § 729) can only ever SUBTRACT. It is the
+// proportionate control the three-mode channel setting cannot express — muting
+// email to stop one notice would also stop direct messages — and its direction
+// is deliberately the opposite of the engagement streams' opt-IN: the subject
+// asked for the export minutes earlier, so an absent key means "never chose",
+// not "declined".
+func TestKindMute_OnlyEverSubtracts(t *testing.T) {
+	const kind = "data_export_ready"
+	muted := map[string]interface{}{"notify_data_export_ready": "off"}
+
+	for _, mode := range []string{emailModeAll, emailModeImportant} {
+		prefs := emailPrefs(mode)
+		if !shouldEmail(kind, prefs) {
+			t.Fatalf("precondition: %s should email under %q", kind, mode)
+		}
+		prefs["notify_data_export_ready"] = "off"
+		if shouldEmail(kind, prefs) {
+			t.Errorf("a muted kind must not email under %q", mode)
+		}
+	}
+	for _, mode := range []string{pushModeAll, pushModeImportant} {
+		prefs := pushPrefs(mode)
+		if !shouldPush(kind, prefs) {
+			t.Fatalf("precondition: %s should push under %q", kind, mode)
+		}
+		prefs["notify_data_export_ready"] = "off"
+		if shouldPush(kind, prefs) {
+			t.Errorf("a muted kind must not push under %q", mode)
+		}
+	}
+
+	// It never widens: the mute key is not a way past a muted channel, and it
+	// says nothing about any other kind.
+	off := map[string]interface{}{"email_notifications": emailModeOff, "notify_data_export_ready": "on"}
+	if shouldEmail(kind, off) {
+		t.Error("a per-kind 'on' must not promote a kind past email_notifications=off")
+	}
+	if !shouldEmail("message", muted) {
+		t.Error("muting one kind must not touch another")
+	}
+
+	// Absent, unrecognised and non-string all read as unmuted: a corrupt bag is
+	// not a decision to stop being told about your own data-rights request.
+	for name, v := range map[string]interface{}{
+		"unknown string": "silence",
+		"bool":           true,
+		"number":         0,
+	} {
+		if kindMuted(kind, map[string]interface{}{"notify_data_export_ready": v}) {
+			t.Errorf("%s value must not mute", name)
+		}
+	}
+	if kindMuted(kind, map[string]interface{}{}) {
+		t.Error("an absent key must not mute")
+	}
+	if kindMuted("message", muted) {
+		t.Error("a kind with no registered mute key is never muted")
 	}
 }
 
@@ -64,12 +135,12 @@ func TestInAppOnlyKinds_NeverLeaveTheInbox(t *testing.T) {
 	}
 	for kind := range inAppOnlyKinds {
 		for _, mode := range []string{emailModeAll, emailModeImportant, emailModeOff} {
-			if shouldEmail(kind, mode) {
+			if shouldEmail(kind, emailPrefs(mode)) {
 				t.Errorf("shouldEmail(%q, %q) = true; in-app-only kinds must never email", kind, mode)
 			}
 		}
 		for _, mode := range []string{pushModeAll, pushModeImportant, pushModeOff} {
-			if shouldPush(kind, mode) {
+			if shouldPush(kind, pushPrefs(mode)) {
 				t.Errorf("shouldPush(%q, %q) = true; in-app-only kinds must never push", kind, mode)
 			}
 		}
@@ -147,6 +218,11 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 		{"challenge_complete", NotificationRow{Kind: "challenge_complete"}, base + "/challenges"},
 		{"achievement", NotificationRow{Kind: "achievement", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
 		{"content_hidden", NotificationRow{Kind: "content_hidden", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
+		// The one kind whose link carries no id: the export lives in
+		// data_export_jobs, which the notifications row has no column for,
+		// and the page mints the signed download URL when the subject
+		// arrives (decisions.md § 729).
+		{"data_export_ready", NotificationRow{Kind: "data_export_ready", UserID: "usr-1"}, base + "/settings/account"},
 		{"unknown_future_kind", NotificationRow{Kind: "unknown_future_kind", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
 	}
 

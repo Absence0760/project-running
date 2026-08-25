@@ -5924,6 +5924,10 @@
   "@profileNotifContentHidden": {
     "description": "Notification text for one of the user's own posts being hidden after reports"
   },
+  "profileNotifDataExportReady": "Your data export is ready to download",
+  "@profileNotifDataExportReady": {
+    "description": "Notification text for the user's own Art 20 data export finishing its build"
+  },
   "profileNotifGeneric": "{name} interacted with your activity",
   "@profileNotifGeneric": {
     "description": "Fallback notification text for unknown kinds",

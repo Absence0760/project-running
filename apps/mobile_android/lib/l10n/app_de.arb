@@ -1238,6 +1238,7 @@
   "profileNotifAchievement": "Du hast einen neuen Erfolg erzielt",
   "profileNotifChallengeComplete": "Du hast eine Challenge abgeschlossen",
   "profileNotifContentHidden": "Einer deiner Beiträge wurde nach einer Meldung ausgeblendet",
+  "profileNotifDataExportReady": "Dein Datenexport steht zum Download bereit",
   "profileNotifGeneric": "{name} hat mit deiner Aktivität interagiert",
   "socialTabFeed": "Feed",
   "socialTabPeople": "Personen",

@@ -1238,6 +1238,7 @@
   "profileNotifAchievement": "新しいアチーブメントを獲得しました",
   "profileNotifChallengeComplete": "チャレンジを達成しました",
   "profileNotifContentHidden": "報告を受けて、あなたの投稿の1つが非表示になりました",
+  "profileNotifDataExportReady": "データのエクスポートをダウンロードできます",
   "profileNotifGeneric": "{name}があなたのアクティビティに反応しました",
   "socialTabFeed": "フィード",
   "socialTabPeople": "ユーザー",

@@ -34,15 +34,18 @@ func pushMode(prefs map[string]interface{}) string {
 	}
 }
 
-// shouldPush decides whether a notification of the given kind is pushed under
-// the resolved mode. Shares importantKinds AND inAppOnlyKinds with the email
-// channel — both the "what's important" classification and the "this never
-// leaves the inbox" one are channel-independent.
-func shouldPush(kind, mode string) bool {
-	if inAppOnlyKinds[kind] {
+// shouldPush decides whether a notification of the given kind is pushed,
+// given the recipient's whole prefs bag. Shares importantKinds,
+// inAppOnlyKinds AND the per-kind mute with the email channel — the
+// "what's important" classification, the "this never leaves the inbox" one
+// and "the recipient silenced this kind" are all channel-independent. Only
+// the three-mode key differs, which is what makes muting email leave push
+// alone. Mirrors shouldEmail, including why it takes the bag.
+func shouldPush(kind string, prefs map[string]interface{}) bool {
+	if inAppOnlyKinds[kind] || kindMuted(kind, prefs) {
 		return false
 	}
-	switch mode {
+	switch pushMode(prefs) {
 	case pushModeOff:
 		return false
 	case pushModeAll:

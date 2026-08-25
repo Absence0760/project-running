@@ -102,6 +102,12 @@
 	// Opt-IN consent for the lifecycle drip — a SEPARATE engagement stream from
 	// the weekly digest. Opting into one is never consent to the other.
 	let emailLifecycleDrip = $state(false);
+	// Per-kind mute for the data-export-ready notice (decisions § 729). Opt-OUT,
+	// unlike the two engagement streams above: the subject requested the export
+	// minutes earlier, so an opt-in default would mean nobody who never opened
+	// this page is ever told their archive finished. It only ever subtracts —
+	// muting the email or push channel above still silences the kind.
+	let notifyDataExportReady = $state(true);
 	let stravaAutoShare = $state(false);
 	let voiceFeedbackEnabled = $state(VOICE_FEEDBACK_ENABLED_DEFAULT);
 	// 'full' (default) speaks every cue; 'minimal' drops the chatty in-rep
@@ -429,6 +435,11 @@
 			pushNotifications = effective(settings, 'push_notifications', 'important') ?? 'important';
 			emailWeeklyDigest = effective<string>(settings, 'email_weekly_digest', 'off') === 'on';
 			emailLifecycleDrip = effective<string>(settings, 'email_lifecycle_drip', 'off') === 'on';
+			// Only the literal 'off' mutes — an absent key is a runner who never
+			// chose and a corrupt one is not a decision, matching the worker's
+			// own read in mailer.go's kindMuted.
+			notifyDataExportReady =
+				effective<string>(settings, 'notify_data_export_ready', 'on') !== 'off';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
 			voiceFeedbackEnabled =
 				effective(settings, 'voice_feedback_enabled', VOICE_FEEDBACK_ENABLED_DEFAULT) ??
@@ -1285,6 +1296,19 @@
 				<span>
 					{m('prefs.emailLifecycleDrip')}
 					<span class="hint">{m('prefs.emailLifecycleDripHint')}</span>
+				</span>
+			</label>
+			<label class="checkbox-row">
+				<input
+					type="checkbox"
+					bind:checked={notifyDataExportReady}
+					onchange={() =>
+						autoSave({ notify_data_export_ready: notifyDataExportReady ? 'on' : 'off' })}
+					data-testid="notify-data-export-ready"
+				/>
+				<span>
+					{m('prefs.notifyDataExportReady')}
+					<span class="hint">{m('prefs.notifyDataExportReadyHint')}</span>
 				</span>
 			</label>
 		</section>

@@ -4383,6 +4383,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'One of your posts was hidden after being reported';
 
   @override
+  String get profileNotifDataExportReady =>
+      'Your data export is ready to download';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interacted with your activity';
   }

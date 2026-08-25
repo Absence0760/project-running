@@ -171,6 +171,16 @@ Function moves per
   missing 1 or 2; `profile_screen_test.dart` reads the same union and fails on a
   missing 3. Before those guards existed, three kinds silently emailed "You have
   a new notification" and six rendered "{name} interacted with your activity".
+  A fourth, optional piece is a **per-kind mute**: `mailer.go`'s
+  `kindMutePrefKey` maps a kind to a `user_settings.prefs` key that silences it
+  on the outbound channels only, for the case where the three-mode channel
+  setting is too blunt (muting `email_notifications` to stop one notice also
+  stops direct messages). It can only ever SUBTRACT — `kindMuted` is consulted
+  inside `shouldEmail` / `shouldPush` alongside the channel mode, never instead
+  of it — and both gates take the whole prefs bag rather than a pre-resolved
+  mode so a new channel cannot forget to consult it. One entry today,
+  `notify_data_export_ready` (`decisions.md § 729`); register any new one in
+  `docs/backend/settings.md` too.
 - Live-hub extensions — Redis-backed storage (swap [`internal/livehub.Hub`](internal/livehub/hub.go)
   with a Redis pub/sub-backed variant), per-run ring buffer for
   late-joiner replay of more than the most recent ping.

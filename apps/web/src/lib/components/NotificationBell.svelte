@@ -164,6 +164,8 @@
 				return m('notificationBell.challengeComplete');
 			case 'content_hidden':
 				return m('notificationBell.contentHidden');
+			case 'data_export_ready':
+				return m('notificationBell.dataExportReady');
 			default:
 				return m('notificationBell.generic');
 		}

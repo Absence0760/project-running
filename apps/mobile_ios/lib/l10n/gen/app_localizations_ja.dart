@@ -4167,6 +4167,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get profileNotifContentHidden => '報告を受けて、あなたの投稿の1つが非表示になりました';
 
   @override
+  String get profileNotifDataExportReady => 'データのエクスポートをダウンロードできます';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$nameがあなたのアクティビティに反応しました';
   }

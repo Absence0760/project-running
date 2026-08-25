@@ -241,3 +241,110 @@ func TestDataExport_TheStalenessWindowOutlastsTheWholeRetryBudget(t *testing.T) 
 			dataexport.ExportJobStaleAfter, budget, ExportJobMaxAttempts, ExportJobTimeout)
 	}
 }
+
+// ─────────── the completion announcement (decisions.md § 729) ───────────
+
+func TestDataExport_AFinishedBuildTellsTheSubject(t *testing.T) {
+	be := queuedExportBackend("exp-1")
+	b := &fakeExportBuilder{art: ExportArtifact{ObjectPath: "user-A/exports/x.zip", Complete: true}}
+	w := exportWorker(be, b)
+
+	if err := w.handleDataExport(context.Background(), exportJob("exp-1", 1)); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if len(be.exportNotifies) != 1 || be.exportNotifies[0] != "exp-1" {
+		t.Fatalf("notifies=%v, want one announcement for exp-1", be.exportNotifies)
+	}
+}
+
+// The announcement claims the archive is collectable, so it may only follow
+// the write that makes that claim true. Announcing off the build's return
+// value would send a subject to a page whose status endpoint still says the
+// export is running.
+func TestDataExport_TheAnnouncementFollowsTheRowSayingReady(t *testing.T) {
+	be := queuedExportBackend("exp-1")
+	b := &fakeExportBuilder{art: ExportArtifact{ObjectPath: "user-A/exports/x.zip", Complete: true}}
+	w := exportWorker(be, b)
+
+	if err := w.handleDataExport(context.Background(), exportJob("exp-1", 1)); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if len(be.exportFinishes) != 1 || be.exportFinishes[0].res.Status != "ready" {
+		t.Fatal("precondition: the row was recorded ready")
+	}
+	if be.exportJobs["exp-1"].Status != "ready" {
+		t.Fatal("precondition: the fake row followed the write")
+	}
+}
+
+// An at-least-once queue re-delivers a job whose build already succeeded. The
+// rebuild is already skipped; the announcement must be too, or the subject is
+// told twice about one archive.
+func TestDataExport_ARedeliveryAnnouncesNothingASecondTime(t *testing.T) {
+	be := queuedExportBackend("exp-1")
+	b := &fakeExportBuilder{art: ExportArtifact{ObjectPath: "user-A/exports/x.zip", Complete: true}}
+	w := exportWorker(be, b)
+
+	for i := 0; i < 3; i++ {
+		if err := w.handleDataExport(context.Background(), exportJob("exp-1", 1)); err != nil {
+			t.Fatalf("handle %d: %v", i, err)
+		}
+	}
+	if b.calls != 1 {
+		t.Fatalf("builds=%d, want 1 - the redeliveries must not rebuild", b.calls)
+	}
+	// Asking three times is deliberate: the already-built branch still asks,
+	// which is what repairs a crash between the finish write and the
+	// announcement. Announcing three times is not, and the stamp that stops
+	// it lives in the RPC rather than in a flag this handler keeps.
+	if len(be.exportNotifies) != 3 {
+		t.Fatalf("notify calls=%d, want 3 - a retry must still ASK", len(be.exportNotifies))
+	}
+	if len(be.exportNotified) != 1 || !be.exportNotified["exp-1"] {
+		t.Fatalf("notified=%v, want exactly one announcement recorded", be.exportNotified)
+	}
+}
+
+// The archive is in Storage and the row says ready; the status endpoint the
+// message merely points at is already reporting it. Failing here would spend
+// the second attempt rebuilding a whole archive to fix a missing email - and
+// that attempt would find the row ready and skip, so it could not even repair
+// what it cost.
+func TestDataExport_AFailedAnnouncementDoesNotFailTheExport(t *testing.T) {
+	be := queuedExportBackend("exp-1")
+	be.notifyExportErr = errors.New("500 from postgrest")
+	b := &fakeExportBuilder{art: ExportArtifact{ObjectPath: "user-A/exports/x.zip", Complete: true}}
+	w := exportWorker(be, b)
+
+	if err := w.handleDataExport(context.Background(), exportJob("exp-1", 1)); err != nil {
+		t.Fatalf("a failed announcement must not fail the job: %v", err)
+	}
+	if len(be.exportFinishes) != 1 || be.exportFinishes[0].res.Status != "ready" {
+		t.Fatal("the export still succeeded and the row must still say so")
+	}
+}
+
+func TestDataExport_AFailedExportAnnouncesNothing(t *testing.T) {
+	be := queuedExportBackend("exp-1")
+	b := &fakeExportBuilder{err: &ExportBuildError{Code: "upload_failed", Err: errors.New("boom")}}
+	w := exportWorker(be, b)
+
+	if err := w.handleDataExport(context.Background(), exportJob("exp-1", ExportJobMaxAttempts)); err == nil {
+		t.Fatal("want an error")
+	}
+	if len(be.exportNotifies) != 0 {
+		t.Fatal("there is no archive to collect; announcing one would send the subject to an empty page")
+	}
+}
+
+func TestDataExport_ADeletedAccountIsAnnouncedNothing(t *testing.T) {
+	be := &fakeBackend{exportJobs: map[string]*ExportJobRow{}}
+	w := exportWorker(be, &fakeExportBuilder{})
+
+	if err := w.handleDataExport(context.Background(), exportJob("exp-gone", 1)); err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+	if len(be.exportNotifies) != 0 {
+		t.Fatal("there is nobody left to tell")
+	}
+}

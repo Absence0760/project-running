@@ -220,6 +220,8 @@
 				return m('notificationsList.verbChallengeComplete');
 			case 'content_hidden':
 				return m('notificationsList.verbContentHidden');
+			case 'data_export_ready':
+				return m('notificationsList.verbDataExportReady');
 			default:
 				return m('notificationsList.verbGeneric');
 		}

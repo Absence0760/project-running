@@ -38,6 +38,11 @@ enum PushTargetKind {
   /// A single club event (`/events/<id>`). Carries the event UUID; the host
   /// resolves the owning club's slug before pushing.
   event,
+
+  /// Settings → Account (`/settings/account`), where a finished Art 20
+  /// export is collected. Carries no id: the export lives in
+  /// `data_export_jobs` and the screen reads the subject's latest one.
+  settingsAccount,
 }
 
 /// A resolved push target: a [kind] plus the entity id when the kind carries
@@ -103,6 +108,13 @@ PushTarget pushTargetFromUrl(String? url) {
       return id == null
           ? PushTarget.inbox
           : PushTarget(PushTargetKind.profile, id);
+    case 'settings':
+      // Only the Account screen is a push destination today. Any other
+      // settings path degrades to the inbox rather than dumping the runner
+      // on a screen the notification was not about.
+      return id == 'account'
+          ? const PushTarget(PushTargetKind.settingsAccount)
+          : PushTarget.inbox;
     case 'plans':
       return const PushTarget(PushTargetKind.plans);
     case 'challenges':

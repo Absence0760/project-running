@@ -4423,6 +4423,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Uma das tuas publicações foi ocultada após ser denunciada';
 
   @override
+  String get profileNotifDataExportReady =>
+      'A tua exportação de dados está pronta para transferir';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interagiu com a tua atividade';
   }
@@ -18068,6 +18072,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get profileNotifContentHidden =>
       'Uma das suas publicações foi ocultada após ser denunciada';
+
+  @override
+  String get profileNotifDataExportReady =>
+      'Sua exportação de dados está pronta para baixar';
 
   @override
   String profileNotifGeneric(String name) {

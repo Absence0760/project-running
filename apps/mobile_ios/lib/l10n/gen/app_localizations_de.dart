@@ -4437,6 +4437,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Einer deiner Beiträge wurde nach einer Meldung ausgeblendet';
 
   @override
+  String get profileNotifDataExportReady =>
+      'Dein Datenexport steht zum Download bereit';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name hat mit deiner Aktivität interagiert';
   }

@@ -4418,6 +4418,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Una de tus publicaciones se ocultó tras ser denunciada';
 
   @override
+  String get profileNotifDataExportReady =>
+      'Tu exportación de datos está lista para descargar';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interactuó con tu actividad';
   }

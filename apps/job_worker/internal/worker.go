@@ -150,6 +150,12 @@ type Backend interface {
 	GetDataExportJob(ctx context.Context, exportJobID string) (*ExportJobRow, error)
 	MarkDataExportRunning(ctx context.Context, exportJobID, startedAt string) error
 	FinishDataExportJob(ctx context.Context, exportJobID string, res ExportJobResult) error
+	// NotifyDataExportReady writes the subject's `data_export_ready`
+	// inbox row once the archive has landed (migration 20270607_001,
+	// decisions.md § 729). Idempotent server-side against an
+	// at-least-once redelivery; reports whether it was the caller that
+	// announced.
+	NotifyDataExportReady(ctx context.Context, exportJobID string) (bool, error)
 }
 
 // WebPushSender is the transport for kind='web_push' jobs. Production wires
