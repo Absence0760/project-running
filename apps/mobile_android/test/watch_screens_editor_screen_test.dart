@@ -10,6 +10,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/watch_screens_editor_screen.dart';
 import '../lib/sim_watch_sync.dart';
 import '../lib/watch_screens.dart';
+import 'pump_until.dart';
 
 class _FakeTransport implements WatchBleTransport {
   final _chunks = StreamController<List<int>>.broadcast();
@@ -65,13 +66,16 @@ Future<void> _pumpEditor(WidgetTester tester, {_FakeTransport? transport}) async
       ),
     ),
   );
-  await tester.runAsync(
-    () => Future<void>.delayed(const Duration(milliseconds: 20)),
-  );
-  await tester.pump();
+  await pumpUntil(tester, () => !tester.any(find.byType(ListSkeleton)),
+      describe: 'the stored screen set to load and replace the skeleton');
 }
 
 /// Drain the fire-and-forget SharedPreferences write a mutation kicks off.
+///
+/// Deliberately still a fixed window: the write goes to the mocked, in-memory
+/// preference store the assertions then read back, so any predicate over it
+/// holds the moment `setString` is called. There is nothing here to poll for
+/// that is not already true (decisions.md § 723).
 Future<void> _settleStore(WidgetTester tester) async {
   await tester.runAsync(
     () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -183,13 +187,12 @@ void main() {
           ),
         ),
       );
-      // No runAsync yet: the store read is still in flight.
+      // Nothing has turned the real event loop yet: the store read is still
+      // in flight.
       expect(find.byType(ListSkeleton), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 20)),
-      );
-      await tester.pump();
+      await pumpUntil(tester, () => !tester.any(find.byType(ListSkeleton)),
+          describe: 'the stored screen set to load and replace the skeleton');
       expect(find.byType(ListSkeleton), findsNothing);
     });
 

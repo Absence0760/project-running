@@ -11,6 +11,7 @@ import '../lib/local_gear_store.dart';
 import '../lib/preferences.dart';
 import '../lib/widgets/gear_form_sheet.dart';
 import '../lib/widgets/undo_bar.dart';
+import 'pump_until.dart';
 
 /// Fakes the gear wear-log endpoints only; every other ApiClient method
 /// is unused by this sheet when [existing] carries an id + [api] is
@@ -41,15 +42,28 @@ GearWearLogRow _wearLog() => GearWearLogRow(
       updatedAt: DateTime(2026, 1, 1),
     );
 
-Future<({LocalGearStore store, Directory dir, Preferences prefs})> _setup(
-    String tag) async {
+/// The sheet's store, temp dir and preferences, plus a `persisted` probe.
+///
+/// `OfflineSyncStore.persist` populates the in-memory rows BEFORE its atomic
+/// write and notifies only once the row file and the index are both down, so
+/// the notification — not the row count — is what says the write has cleared
+/// the temp dir's teardown.
+Future<
+    ({
+      LocalGearStore store,
+      Directory dir,
+      Preferences prefs,
+      bool Function() persisted
+    })> _setup(String tag) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = Preferences();
   await prefs.init();
   final dir = Directory.systemTemp.createTempSync('gear_form_$tag');
   final store = LocalGearStore();
   await store.init(overrideDirectory: dir);
-  return (store: store, dir: dir, prefs: prefs);
+  var persisted = false;
+  store.addListener(() => persisted = true);
+  return (store: store, dir: dir, prefs: prefs, persisted: () => persisted);
 }
 
 Widget _opener(
@@ -153,9 +167,8 @@ void main() {
           find.widgetWithText(TextField, 'Name'), 'Vaporfly');
       await tester.ensureVisible(find.text('Add'));
       await tester.tap(find.text('Add'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, f.persisted,
+          describe: "the gear row's files to land on disk");
 
       expect(f.store.rows, hasLength(1));
       expect(f.store.rows.first['name'], 'Vaporfly');

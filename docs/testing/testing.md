@@ -187,6 +187,13 @@ The same file carries `holdFinish`, the RunScreen Finish-hold drive built on it:
 
 **When to use**: any assertion that depends on async work with no future you can await. **When not to**: a delay that *models elapsed time* (a debounce window, a throttle, an auto-pause interval, a GPS blackout, a hanging fetcher proving a `.timeout()` fires) is the test's subject and must stay a delay.
 
+**Picking the predicate** (decisions.md § 723 — the residue sweep that worked § 715 down from 58 sites to 14):
+
+- **A local store's row list is not its write.** `OfflineSyncStore.persist` puts the row into `rowsById` *before* `writeJsonAtomic`, and calls `notifyListeners()` only once the row file and the index are both on disk. So `store.rows.isNotEmpty` returns while the write is in flight, and an `addTearDown` that deletes the temp dir then races it. Wait on the notification — `store.addListener(() => persisted = true)` in the fixture, which needs no seam in production code — or on a UI state the screen only reaches after `persist()` returns (a saved banner, a flipped chip).
+- **Never a route transition, animation, or dialog dismissal.** `pumpUntil` deliberately does not advance the fake clock, so a pop's exit transition never completes inside it and the `AlertDialog` stays in the tree for the whole wait.
+- **Not from inside `tester.runAsync`.** `pumpUntil` calls `runAsync` itself and it does not nest; a test whose body is already wrapped has to be restructured first.
+- **Check the predicate is ever false.** A `pumpUntil` whose condition already holds on its first evaluation has converted nothing, and reading the diff will not tell you. Temporarily count the iterations inside `pumpUntil` and run the file: zero means either the work is microtask-only (the preceding `pump()` already drained it, and the wait is a guard rather than a wait) or the predicate is wrong — one converted case waited on a run being synced when the fixture had already synced it.
+
 ---
 
 ## How to add a new test

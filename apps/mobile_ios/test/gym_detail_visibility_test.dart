@@ -9,6 +9,7 @@ import 'package:ui_kit/ui_kit.dart' show TextLane;
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/screens/gym_detail_screen.dart';
+import 'pump_until.dart';
 
 /// Counts updateLocal calls so the double-submit guard can be asserted.
 class _CountingGymStore extends LocalGymStore {
@@ -86,14 +87,12 @@ void main() {
     expect(find.byTooltip('Make public'), findsOneWidget);
     expect(store.byId(id)!.workout.isPublic, isFalse);
 
-    // Toggle to public.
-    await tester.runAsync(() async {
-      await tester.tap(find.byTooltip('Make public'));
-      // Let the fire-and-forget async store write + its listener notify settle.
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
-    await tester.pump();
+    // Toggle to public. The chip only flips once updateLocal's atomic write
+    // has landed and the store has notified, so it is the one signal that is
+    // ordered AFTER the write rather than alongside the in-memory row.
+    await tester.runAsync(() => tester.tap(find.byTooltip('Make public')));
+    await pumpUntil(tester, () => tester.any(find.text('Public')),
+        describe: 'the visibility chip to flip to public');
 
     // Store flipped to public + queued for the next sync (pendingUpdate).
     final updated = store.byId(id)!;
@@ -190,12 +189,10 @@ void main() {
       of: find.byType(AlertDialog),
       matching: find.widgetWithText(TextButton, 'Delete'),
     );
-    await tester.runAsync(() async {
-      await tester.tap(confirm);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    });
-    await tester.pump();
-    await tester.pump();
+    await tester.runAsync(() => tester.tap(confirm));
+    await pumpUntil(
+        tester, () => tester.any(find.textContaining("Couldn't delete the workout")),
+        describe: 'the failed delete to surface its error banner');
 
     // The delete threw; the detail screen stays open (no pop) and an error
     // banner shows rather than the failure being swallowed silently.
@@ -234,10 +231,9 @@ void main() {
     await tester.runAsync(() async {
       await tester.tap(find.byTooltip('Make public'));
       await tester.tap(find.byTooltip('Make public'), warnIfMissed: false);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
     });
-    await tester.pump();
-    await tester.pump();
+    await pumpUntil(tester, () => tester.any(find.text('Public')),
+        describe: 'the first toggle to land and flip the chip');
 
     expect(store.updateCalls, 1);
     expect(store.byId(id)!.workout.isPublic, isTrue);

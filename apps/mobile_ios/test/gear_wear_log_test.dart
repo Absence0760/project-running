@@ -11,6 +11,7 @@ import '../lib/local_gear_store.dart';
 import '../lib/preferences.dart';
 import '../lib/widgets/gear_form_sheet.dart';
 import '../lib/widgets/undo_bar.dart';
+import 'pump_until.dart';
 
 GearWearLogRow _log({
   String id = 'l1',
@@ -216,9 +217,8 @@ void main() {
           find.widgetWithText(TextField, 'Observation'), 'midsole dead');
       await tester.ensureVisible(find.text('Add observation'));
       await tester.tap(find.text('Add observation'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, () => api.addCalls > 0,
+          describe: 'the observation to reach the api');
       expect(api.addCalls, 1);
       expect(api.lastAddNote, 'midsole dead');
     } finally {

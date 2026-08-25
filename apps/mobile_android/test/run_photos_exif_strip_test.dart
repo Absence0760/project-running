@@ -19,6 +19,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/run_photos.dart';
+import 'pump_until.dart';
 
 class _CapturingApi extends ApiClient {
   Uint8List? uploaded;
@@ -175,8 +176,9 @@ void main() {
     await tester.runAsync(() async {
       await tester.tap(find.widgetWithText(FilledButton, 'Upload'));
       await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 200));
     });
+    await pumpUntil(tester, () => api.uploaded != null,
+        describe: 'the stripped image to reach the upload api');
     await tester.pumpAndSettle();
 
     expect(api.uploadedContentType, 'image/png');

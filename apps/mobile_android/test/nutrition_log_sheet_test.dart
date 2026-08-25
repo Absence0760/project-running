@@ -8,12 +8,22 @@ import '../lib/food_search.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_food_store.dart';
 import '../lib/widgets/nutrition_log_sheet.dart';
+import 'pump_until.dart';
 
-Future<({LocalFoodStore store, Directory dir})> _store(String tag) async {
+/// A temp-dir-backed store plus a `persisted` probe.
+///
+/// `OfflineSyncStore.persist` populates the in-memory rows BEFORE its atomic
+/// write, and ends with `notifyListeners()` once both the row file and the
+/// index are on disk — so the notification, not the row count, is what says
+/// the write is safely past the temp dir's teardown.
+Future<({LocalFoodStore store, Directory dir, bool Function() persisted})>
+    _store(String tag) async {
   final dir = Directory.systemTemp.createTempSync('nutrition_log_$tag');
   final store = LocalFoodStore();
   await store.init(overrideDirectory: dir);
-  return (store: store, dir: dir);
+  var persisted = false;
+  store.addListener(() => persisted = true);
+  return (store: store, dir: dir, persisted: () => persisted);
 }
 
 /// A store whose create throws, to drive the save-failure path.
@@ -101,9 +111,8 @@ void main() {
       await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, f.persisted,
+          describe: "the entry's row + index files to land on disk");
       expect(f.store.rows, hasLength(1));
       final e = f.store.rows.first;
       expect(e['item_name'], 'Banana');
@@ -135,9 +144,8 @@ void main() {
       await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, f.persisted,
+          describe: "the entry's row + index files to land on disk");
       expect(f.store.rows, hasLength(1));
       final at =
           DateTime.parse(f.store.rows.first['started_at'] as String).toLocal();
@@ -165,9 +173,8 @@ void main() {
       await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add'));
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Add'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await pumpUntil(tester, f.persisted,
+          describe: "the entry's row + index files to land on disk");
       expect(f.store.rows, hasLength(1));
       final e = f.store.rows.first;
       expect(e['fiber_g'], 4.0);
@@ -192,9 +199,8 @@ void main() {
           find.widgetWithText(TextField, 'Search for a food'), 'oats');
       // Debounce (350ms) then the async search resolves.
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await pumpUntil(tester, () => tester.any(find.text('Rolled Oats')),
+          describe: 'the Open Food Facts result to render');
       expect(find.text('Rolled Oats'), findsOneWidget);
       expect(find.textContaining('389 kcal / 100 g'), findsOneWidget);
     } finally {
@@ -215,9 +221,8 @@ void main() {
       await tester.enterText(
           find.widgetWithText(TextField, 'Search for a food'), 'oats');
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await pumpUntil(tester, () => tester.any(find.textContaining('Search failed')),
+          describe: 'the search failure state to render');
 
       // The distinct failure copy + retry button — NOT the no-results state.
       expect(find.textContaining('Search failed'), findsOneWidget);
@@ -228,9 +233,11 @@ void main() {
       // Retry after recovery resolves to the genuine empty state.
       failNext = false;
       await tester.tap(find.widgetWithText(OutlinedButton, 'Retry search'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await pumpUntil(
+          tester,
+          () => tester.any(find.text(
+              'No matches. Try another term or enter it manually below.')),
+          describe: 'the retried search to resolve to the empty state');
       expect(find.textContaining('Search failed'), findsNothing);
       expect(find.text('No matches. Try another term or enter it manually below.'),
           findsOneWidget);
@@ -278,8 +285,8 @@ void main() {
       ));
       await tester.pump();
       await tester.tap(find.byTooltip('Scan barcode'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await pumpUntil(tester, () => tester.any(find.text('Rolled Oats')),
+          describe: 'the scanned product to resolve');
       await tester.pumpAndSettle();
       // The portion dialog opened on the matched product.
       expect(find.text('Rolled Oats'), findsOneWidget);
@@ -300,9 +307,8 @@ void main() {
       ));
       await tester.pump();
       await tester.tap(find.byTooltip('Scan barcode'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await pumpUntil(tester, () => tester.any(find.textContaining('No product found')),
+          describe: 'the not-found message for an unmatched barcode');
       expect(find.textContaining('No product found'), findsOneWidget);
       // The manual / search fallback is still present.
       expect(find.text('Enter manually'), findsOneWidget);
@@ -322,9 +328,8 @@ void main() {
       ));
       await tester.pump();
       await tester.tap(find.byTooltip('Scan barcode'));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await pumpUntil(tester, () => tester.any(find.textContaining('Scan failed')),
+          describe: 'the scan-failed message');
       expect(find.textContaining('Scan failed'), findsOneWidget);
       expect(find.text('Enter manually'), findsOneWidget);
     } finally {
@@ -339,6 +344,9 @@ void main() {
       await tester.pumpWidget(_host(f.store, scanner: (_) async => null));
       await tester.pump();
       await tester.tap(find.byTooltip('Scan barcode'));
+      // Absence assertion, and deliberately still a fixed window: a cancelled
+      // scan's only state change is `_scanning` true→false, so every rendered
+      // condition here also holds before the tap. Nothing to poll for.
       await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
@@ -365,9 +373,8 @@ void main() {
       await tester.enterText(
           find.widgetWithText(TextField, 'Search for a food'), 'oats');
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+      await pumpUntil(tester, () => tester.any(find.text('Oats, raw')),
+          describe: 'both source-labelled results to render');
       expect(find.text('Rolled Oats'), findsOneWidget);
       expect(find.text('Oats, raw'), findsOneWidget);
       expect(find.text('Open Food Facts'), findsOneWidget);
