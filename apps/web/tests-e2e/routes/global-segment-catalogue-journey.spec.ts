@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { insertRun, deleteRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Global / famous-segment catalogue journey (decisions §232) — the
@@ -116,11 +117,14 @@ test.describe('global segment catalogue journey', () => {
 					})
 				});
 
-				const { data: pre } = await admin
-					.from('global_segment_efforts')
-					.select('id')
-					.eq('global_segment_id', segmentId);
-				expect(pre?.length ?? 0).toBe(0);
+				const pre = await readRows(
+					'global_segment_efforts by global_segment_id',
+					admin
+						.from('global_segment_efforts')
+						.select('id')
+						.eq('global_segment_id', segmentId)
+				);
+				expect(pre.length).toBe(0);
 			});
 
 			await test.step('opening /runs/[id] backfills the catalogue effort and renders the chip', async () => {
@@ -141,13 +145,16 @@ test.describe('global segment catalogue journey', () => {
 				await expect(row.locator('.time')).toHaveText('6:40');
 
 				// Backend: exactly one catalogue effort, USER_A's, ~400 s.
-				const { data: eff } = await admin
-					.from('global_segment_efforts')
-					.select('user_id, time_seconds')
-					.eq('global_segment_id', segmentId);
-				expect(eff?.length ?? 0).toBe(1);
-				expect(eff?.[0]?.user_id).toBe(USER_A.id);
-				expect(Math.round(Number(eff?.[0]?.time_seconds))).toBe(400);
+				const eff = await readRows(
+					'global_segment_efforts by global_segment_id',
+					admin
+						.from('global_segment_efforts')
+						.select('user_id, time_seconds')
+						.eq('global_segment_id', segmentId)
+				);
+				expect(eff.length).toBe(1);
+				expect(eff[0]?.user_id).toBe(USER_A.id);
+				expect(Math.round(Number(eff[0]?.time_seconds))).toBe(400);
 			});
 
 			await test.step('the chip navigates to the segment detail leaderboard', async () => {

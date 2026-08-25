@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Gym / strength-class instructor depth — the two journeys the existing
@@ -183,11 +184,14 @@ test.describe('gym class instructor — recurring capacity class + session-prefi
 			)
 			.not.toBeNull();
 		const workoutId = createdWorkoutIds[0];
-		const { data: sets } = await admin
-			.from('gym_sets')
-			.select('exercise_name')
-			.eq('workout_id', workoutId)
-			.order('set_index');
-		expect((sets ?? []).map((s) => s.exercise_name)).toEqual(['Cat Cow', 'Child Pose']);
+		const sets = await readRows(
+			'gym_sets by workout_id',
+			admin
+				.from('gym_sets')
+				.select('exercise_name')
+				.eq('workout_id', workoutId)
+				.order('set_index')
+		);
+		expect(sets.map((s) => s.exercise_name)).toEqual(['Cat Cow', 'Child Pose']);
 	});
 });

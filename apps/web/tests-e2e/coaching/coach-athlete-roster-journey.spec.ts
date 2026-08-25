@@ -3,6 +3,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertRun } from '../fixtures/simulate';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Coach <-> athlete roster lifecycle JOURNEY, told from the angle the existing
@@ -243,13 +244,16 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 				// Belt-and-braces at the data layer: both run ids are the athlete's two
 				// seeded runs (one public, one private), confirming the page isn't
 				// silently dropping the private row before render.
-				const { data: visible } = await getAdminClient()
-					.from('runs')
-					.select('id, is_public')
-					.eq('user_id', athlete.id);
-				const ids = (visible ?? []).map((r) => r.id).sort();
+				const visible = await readRows(
+					'runs by user_id',
+					getAdminClient()
+						.from('runs')
+						.select('id, is_public')
+						.eq('user_id', athlete.id)
+				);
+				const ids = visible.map((r) => r.id).sort();
 				expect(ids).toEqual([publicRunId, privateRunId].sort());
-				expect((visible ?? []).filter((r) => r.is_public === false)).toHaveLength(1);
+				expect(visible.filter((r) => r.is_public === false)).toHaveLength(1);
 			});
 
 			await test.step('plan compliance renders real counts on the review surface', async () => {

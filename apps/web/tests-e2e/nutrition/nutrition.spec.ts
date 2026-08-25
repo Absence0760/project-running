@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDateOf, waterStorageKey } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /nutrition — the Phase 4 nutrition module (docs/features/multi_modal.md
@@ -322,8 +323,11 @@ test.describe('/nutrition — manual log, render, water', () => {
 			// The delete was DEFERRED, never performed: the backend row was
 			// untouched the whole time. Checked after the undo so the assertion
 			// can't race the window — once undone, nothing can delete it.
-			const { data: after } = await admin.from('food_log').select('id').eq('id', created!.id);
-			expect(after?.length ?? 0).toBe(1);
+			const after = await readRows(
+				'food_log by id',
+				admin.from('food_log').select('id').eq('id', created!.id)
+			);
+			expect(after.length).toBe(1);
 		} finally {
 			await admin.from('food_log').delete().eq('id', created!.id);
 		}

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — an organiser edits an existing event (issue #335).
@@ -96,16 +97,22 @@ test.describe('/clubs/[slug]/events/[id] — organiser event edit', () => {
 		expect(row?.meet_label).toBe('Tan track, boathouse end');
 
 		// Attendee + result rows survive the edit (the whole point of #335).
-		const { data: attRows } = await admin
-			.from('event_attendees')
-			.select('event_id')
-			.eq('event_id', eventId);
-		expect(attRows?.length ?? 0).toBe(1);
-		const { data: resRows } = await admin
-			.from('event_results')
-			.select('event_id')
-			.eq('event_id', eventId);
-		expect(resRows?.length ?? 0).toBe(1);
+		const attRows = await readRows(
+			'event_attendees by event_id',
+			admin
+				.from('event_attendees')
+				.select('event_id')
+				.eq('event_id', eventId)
+		);
+		expect(attRows.length).toBe(1);
+		const resRows = await readRows(
+			'event_results by event_id',
+			admin
+				.from('event_results')
+				.select('event_id')
+				.eq('event_id', eventId)
+		);
+		expect(resRows.length).toBe(1);
 	});
 
 	test('switching an event with results to a non-athletic category warns first, then applies on confirm', async ({
@@ -165,10 +172,13 @@ test.describe('/clubs/[slug]/events/[id] — organiser event edit', () => {
 
 		// The result row is orphaned, not destroyed — the warning was about
 		// hiding it, and the edit path must never silently delete it.
-		const { data: resRows } = await admin
-			.from('event_results')
-			.select('event_id')
-			.eq('event_id', eventId);
-		expect(resRows?.length ?? 0).toBe(1);
+		const resRows = await readRows(
+			'event_results by event_id',
+			admin
+				.from('event_results')
+				.select('event_id')
+				.eq('event_id', eventId)
+		);
+		expect(resRows.length).toBe(1);
 	});
 });

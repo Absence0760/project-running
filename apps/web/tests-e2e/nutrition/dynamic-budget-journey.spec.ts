@@ -4,6 +4,7 @@ import { noonOnBrowserDay } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertRun } from '../fixtures/simulate';
+import { readRows } from '../fixtures/db-read';
 
 function setConsentAccepted() {
 	localStorage.setItem(
@@ -312,12 +313,15 @@ test.describe('/nutrition — dynamic budget (base + exercise) cross-modal day',
 
 			// ── 6. Backend cross-check + the trend reflects today ─────────────
 			await test.step('the day’s food rows exist for the user and the trend’s today cell is non-empty', async () => {
-				const { data: rows } = await admin
-					.from('food_log')
-					.select('item_name, calories')
-					.eq('user_id', user.id)
-					.in('item_name', [UNDER_ITEM, OVER_ITEM]);
-				expect((rows ?? []).length).toBe(2);
+				const rows = await readRows(
+					'food_log by user_id',
+					admin
+						.from('food_log')
+						.select('item_name, calories')
+						.eq('user_id', user.id)
+						.in('item_name', [UNDER_ITEM, OVER_ITEM])
+				);
+				expect(rows.length).toBe(2);
 
 				const trend = page.locator('.trend-card');
 				await expect(trend).toBeVisible({ timeout: 10_000 });

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRoute } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /routes/[id] — course markers (aid stations, cutoffs, …) via the
@@ -391,11 +392,14 @@ test.describe('/routes/[id] — course markers', () => {
 		await expect(page.locator('.markers-list .marker-row')).toHaveCount(1, { timeout: 5_000 });
 		// Asserted after the undo so it cannot race the window: the marker
 		// never left the table, so its server-derived position_m is intact.
-		const { data: survived } = await admin
-			.from('route_markers')
-			.select('id')
-			.eq('route_id', routeId);
-		expect((survived ?? []).length).toBe(1);
+		const survived = await readRows(
+			'route_markers by route_id',
+			admin
+				.from('route_markers')
+				.select('id')
+				.eq('route_id', routeId)
+		);
+		expect(survived.length).toBe(1);
 
 		// Dismiss commits the held delete.
 		await page.locator('.markers-list .marker-row').first().getByTitle('Delete').click();

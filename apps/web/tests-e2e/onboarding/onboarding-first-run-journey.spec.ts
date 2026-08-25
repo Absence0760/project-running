@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Onboarding → first activity → dashboard-reflects-it journey. Heavier
@@ -232,13 +233,16 @@ test.describe('onboarding → first run → dashboard journey', () => {
 
 				// Settle the INSERT before the service-role read.
 				await page.waitForLoadState('networkidle');
-				const { data: row } = await admin
-					.from('runs')
-					.select('user_id, distance_m')
-					.eq('id', runId)
-					.single();
-				expect(row?.user_id).toBe(USER_A.id);
-				expect((row?.distance_m ?? 0) > 0).toBe(true);
+				const row = await readRow(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('user_id, distance_m')
+						.eq('id', runId)
+						.single()
+				);
+				expect(row.user_id).toBe(USER_A.id);
+				expect((row.distance_m) > 0).toBe(true);
 			});
 
 			// ── 5. The run shows in the /runs list ──────────────────────

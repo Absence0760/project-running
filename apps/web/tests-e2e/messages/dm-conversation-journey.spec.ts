@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * DM-conversation journey — the full life of a two-user direct-message
@@ -101,14 +102,17 @@ test.describe('DM conversation journey', () => {
 			await expect(page.locator('.send-error[role="alert"]')).toHaveCount(0);
 
 			// Backend: exactly one A→C row with the opening body, unread.
-			const { data: rows } = await admin
-				.from('direct_messages')
-				.select('sender_id, recipient_id, read_at')
-				.eq('sender_id', USER_A.id)
-				.eq('recipient_id', USER_C_PRO.id)
-				.eq('body', openingBody);
-			expect(rows?.length ?? 0).toBe(1);
-			expect(rows?.[0]?.read_at ?? null).toBeNull();
+			const rows = await readRows(
+				'direct_messages by sender_id+recipient_id+body',
+				admin
+					.from('direct_messages')
+					.select('sender_id, recipient_id, read_at')
+					.eq('sender_id', USER_A.id)
+					.eq('recipient_id', USER_C_PRO.id)
+					.eq('body', openingBody)
+			);
+			expect(rows.length).toBe(1);
+			expect(rows[0]?.read_at ?? null).toBeNull();
 		});
 
 		// ── 3-4. USER_C_PRO: unread badge → open → reply ────────────────
@@ -166,14 +170,17 @@ test.describe('DM conversation journey', () => {
 						{ timeout: 10_000 }
 					)
 					.not.toBeNull();
-				const { data: replyRows } = await admin
-					.from('direct_messages')
-					.select('id, read_at')
-					.eq('sender_id', USER_C_PRO.id)
-					.eq('recipient_id', USER_A.id)
-					.eq('body', replyBody);
-				expect(replyRows?.length ?? 0).toBe(1);
-				expect(replyRows?.[0]?.read_at ?? null).toBeNull();
+				const replyRows = await readRows(
+					'direct_messages by sender_id+recipient_id+body',
+					admin
+						.from('direct_messages')
+						.select('id, read_at')
+						.eq('sender_id', USER_C_PRO.id)
+						.eq('recipient_id', USER_A.id)
+						.eq('body', replyBody)
+				);
+				expect(replyRows.length).toBe(1);
+				expect(replyRows[0]?.read_at ?? null).toBeNull();
 			} finally {
 				await ctx.close();
 			}
@@ -269,12 +276,15 @@ test.describe('DM conversation journey', () => {
 				);
 
 				// Fail-closed: nothing was written B→C.
-				const { data } = await admin
-					.from('direct_messages')
-					.select('id')
-					.eq('sender_id', USER_B.id)
-					.eq('recipient_id', USER_C_PRO.id);
-				expect(data?.length ?? 0).toBe(0);
+				const data = await readRows(
+					'direct_messages by sender_id+recipient_id',
+					admin
+						.from('direct_messages')
+						.select('id')
+						.eq('sender_id', USER_B.id)
+						.eq('recipient_id', USER_C_PRO.id)
+				);
+				expect(data.length).toBe(0);
 			} finally {
 				await ctx.close();
 			}

@@ -4,6 +4,7 @@ import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { clearNotifications } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Database triggers, exercised through the UI and verified via
@@ -326,13 +327,16 @@ test.describe('database triggers via UI', () => {
 			expect(memberRows?.[0]?.actor_id).toBe(USER_A.id);
 
 			// The author is never notified of their own post.
-			const { data: authorRows } = await admin
-				.from('notifications')
-				.select('id')
-				.eq('user_id', USER_A.id)
-				.eq('kind', 'club_post')
-				.eq('club_id', clubId);
-			expect(authorRows?.length ?? 0).toBe(0);
+			const authorRows = await readRows(
+				'notifications by user_id+kind+club_id',
+				admin
+					.from('notifications')
+					.select('id')
+					.eq('user_id', USER_A.id)
+					.eq('kind', 'club_post')
+					.eq('club_id', clubId)
+			);
+			expect(authorRows.length).toBe(0);
 		} finally {
 			// Deleting the club cascades members, posts, and the
 			// club_id-linked notifications.
@@ -393,13 +397,16 @@ test.describe('database triggers via UI', () => {
 			expect(rows?.[0]?.actor_id).toBe(USER_A.id);
 
 			// The runner is never notified of their own run.
-			const { data: selfRows } = await admin
-				.from('notifications')
-				.select('id')
-				.eq('user_id', USER_A.id)
-				.eq('kind', 'run_completed')
-				.eq('run_id', runId);
-			expect(selfRows?.length ?? 0).toBe(0);
+			const selfRows = await readRows(
+				'notifications by user_id+kind+run_id',
+				admin
+					.from('notifications')
+					.select('id')
+					.eq('user_id', USER_A.id)
+					.eq('kind', 'run_completed')
+					.eq('run_id', runId)
+			);
+			expect(selfRows.length).toBe(0);
 		} finally {
 			// run_id is on delete cascade, so deleting the run clears
 			// the notification; drop the test follow too.

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Session planner P1 (session_planner.md) — build + save + reuse a session
@@ -144,12 +145,15 @@ test.describe('/sessions — session plan build, read, attach', () => {
 			.eq('title', planTitle)
 			.single();
 		const planId = planRow!.id as string;
-		const { data: itemRows } = await admin
-			.from('session_plan_items')
-			.select('per_side')
-			.eq('plan_id', planId);
+		const itemRows = await readRows(
+			'session_plan_items by plan_id',
+			admin
+				.from('session_plan_items')
+				.select('per_side')
+				.eq('plan_id', planId)
+		);
 		expect(itemRows).toHaveLength(3);
-		expect((itemRows ?? []).filter((r) => r.per_side)).toHaveLength(1);
+		expect(itemRows.filter((r) => r.per_side)).toHaveLength(1);
 
 		// Reopen from the list to confirm reuse (read round-trips).
 		await page.goto('/sessions');

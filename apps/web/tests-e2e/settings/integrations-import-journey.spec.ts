@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Third-party-import journey — the full life of a single imported
@@ -174,12 +175,15 @@ test.describe('third-party import journey', () => {
 				).toBeVisible();
 
 				// Backend: exactly one (live) garmin row for USER_A.
-				const { data: rows } = await admin
-					.from('integrations')
-					.select('id, disconnected_at')
-					.eq('user_id', USER_A.id)
-					.eq('provider', 'garmin');
-				expect(rows ?? []).toHaveLength(1);
+				const rows = await readRows(
+					'integrations by user_id+provider',
+					admin
+						.from('integrations')
+						.select('id, disconnected_at')
+						.eq('user_id', USER_A.id)
+						.eq('provider', 'garmin')
+				);
+				expect(rows).toHaveLength(1);
 				expect(rows![0].disconnected_at).toBeNull();
 			});
 
@@ -217,12 +221,15 @@ test.describe('third-party import journey', () => {
 				// Backend: exactly one strava run landed with this dedupe
 				// key + the canonical metadata.strava_id (both written by
 				// importOne — the two keys buildStravaDedupeSet later reads).
-				const { data: rows } = await admin
-					.from('runs')
-					.select('id, user_id, source, external_id, metadata')
-					.eq('user_id', USER_A.id)
-					.eq('external_id', externalId);
-				expect(rows ?? []).toHaveLength(1);
+				const rows = await readRows(
+					'runs by user_id+external_id',
+					admin
+						.from('runs')
+						.select('id, user_id, source, external_id, metadata')
+						.eq('user_id', USER_A.id)
+						.eq('external_id', externalId)
+				);
+				expect(rows).toHaveLength(1);
 				expect(rows![0].user_id).toBe(USER_A.id);
 				expect(rows![0].source).toBe('strava');
 				expect(
@@ -322,12 +329,15 @@ test.describe('third-party import journey', () => {
 
 				// Backend: the non-strava disconnect path is a hard DELETE
 				// (data.ts:disconnectIntegration), so no row remains.
-				const { data: rows } = await admin
-					.from('integrations')
-					.select('id')
-					.eq('user_id', USER_A.id)
-					.eq('provider', 'garmin');
-				expect(rows ?? []).toHaveLength(0);
+				const rows = await readRows(
+					'integrations by user_id+provider',
+					admin
+						.from('integrations')
+						.select('id')
+						.eq('user_id', USER_A.id)
+						.eq('provider', 'garmin')
+				);
+				expect(rows).toHaveLength(0);
 			});
 		} finally {
 			// Sweep the imported run + any garmin integration row this test
