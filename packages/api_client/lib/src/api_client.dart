@@ -7087,6 +7087,35 @@ class ApiClient {
     }
   }
 
+  /// Set (or clear, when null) the signed-in user's date of birth on
+  /// `user_profiles`. **Deliberately NOT gated on health-data consent**
+  /// (decisions § 718): this column is the age record behind the under-18
+  /// discoverability floor in `search_user_profiles` — a child-protection
+  /// purpose distinct from the Art 9(2)(a) consent needed to USE the date
+  /// for HR calibration and age-banded leaderboards. That consented use
+  /// reads the `user_settings.prefs` mirror, which the caller writes (and
+  /// clears on withdrawal) separately.
+  ///
+  /// Row-count-verified with an insert fallback for the same reason as
+  /// [setMyHeightCm] — rows are client-provisioned, so a plain update
+  /// against a missing row matches 0 rows and reports success (issue #233).
+  Future<void> setMyDateOfBirth(DateTime? dateOfBirth) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    final value = dateOfBirth == null ? null : dateOnly(dateOfBirth);
+    final updated = await _client
+        .from(UserProfileRow.table)
+        .update({UserProfileRow.colDateOfBirth: value})
+        .eq(UserProfileRow.colId, uid)
+        .select(UserProfileRow.colId);
+    if (updated.isEmpty) {
+      await _client.from(UserProfileRow.table).insert({
+        UserProfileRow.colId: uid,
+        UserProfileRow.colDateOfBirth: value,
+      });
+    }
+  }
+
   /// Append a weight measurement (kg) to the `body_metrics` time-series —
   /// one row per recording, so the series is the history. Owner-only
   /// (no public-read policy). The caller gates on health-data consent.
