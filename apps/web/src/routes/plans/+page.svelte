@@ -6,6 +6,8 @@
 	import { page } from '$app/stores';
 	import { fetchMyPlansWithError, deletePlan, updatePlanStatus } from '$lib/core/data';
 	import { m } from '$lib/i18n/store.svelte';
+	import { currentPlanWeekIndex } from '$lib/training/plan_week';
+	import { todayISO } from '$lib/training/training';
 	import { showToast } from '$lib/stores/toast.svelte';
 
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
@@ -115,13 +117,11 @@
 	/// Calendar-week index within the plan, 1-based. Capped to [1, total].
 	/// Used only as a coarse position indicator on the card — the plan
 	/// detail page has the authoritative "completed workouts" progress.
+	///
+	/// Bucketed through the same `currentPlanWeekIndex` the detail page uses,
+	/// so the two surfaces cannot name different weeks for the same plan.
 	function currentWeek(p: TrainingPlan): number {
-		const today = todayMidnight();
-		const start = planMidnight(p.start_date);
-		const total = totalWeeks(p);
-		if (today < start) return 1;
-		const week = Math.floor((today.getTime() - start.getTime()) / (7 * 86_400_000)) + 1;
-		return Math.min(Math.max(1, week), total);
+		return currentPlanWeekIndex(p.start_date, todayISO(), totalWeeks(p)) + 1;
 	}
 
 	/// Calendar progress (0–100) for the timeline bar on active cards.
