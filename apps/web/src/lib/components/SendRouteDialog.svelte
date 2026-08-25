@@ -190,7 +190,7 @@
 		margin: 0 0 var(--space-md);
 	}
 	.send-error {
-		color: var(--color-danger);
+		color: var(--color-danger-text);
 		margin: 0 0 var(--space-sm);
 	}
 	.search {
@@ -211,6 +211,14 @@
 	}
 	.search input:focus {
 		outline: none;
+	}
+	.search input:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+	.recipient:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
 	}
 	ul {
 		list-style: none;
