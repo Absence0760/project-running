@@ -153,9 +153,7 @@ test.describe('/share/route/[id] — anon', () => {
 		// routes /og/route/* to the share-route Lambda (same
 		// renderRouteOgPng helper). Either way the URL + Content-Type +
 		// magic bytes are pinned.
-		const res = await request.get(
-			`http://localhost:7777/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
-		);
+		const res = await request.get(`/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`);
 		expect(res.status()).toBe(200);
 		expect(res.headers()['content-type']).toContain('image/png');
 		const body = await res.body();

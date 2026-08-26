@@ -71,7 +71,7 @@ test.describe('paywall — at the wire', () => {
 
 		// curl the endpoint directly with a benign prompt. The handler
 		// will increment to 3, fail the gate, and return 429.
-		const res = await request.post('http://localhost:7777/api/coach', {
+		const res = await request.post('/api/coach', {
 			headers: {
 				'content-type': 'application/json',
 				'x-supabase-authorization': `Bearer ${token}`
@@ -121,7 +121,7 @@ test.describe('paywall — at the wire', () => {
 
 			// We don't care if the LLM call succeeds (no API key in
 			// CI); we only care that the free-cap branch didn't fire.
-			const res = await request.post('http://localhost:7777/api/coach', {
+			const res = await request.post('/api/coach', {
 				headers: {
 					'content-type': 'application/json',
 					'x-supabase-authorization': `Bearer ${token}`
@@ -173,7 +173,7 @@ test.describe('paywall — at the wire', () => {
 			const token = await freshAccessToken(USER_C_PRO.email, USER_C_PRO.password);
 			expect(token.length).toBeGreaterThan(20);
 
-			const res = await request.post('http://localhost:7777/api/coach', {
+			const res = await request.post('/api/coach', {
 				headers: {
 					'content-type': 'application/json',
 					'x-supabase-authorization': `Bearer ${token}`
@@ -205,7 +205,7 @@ test.describe('paywall — at the wire', () => {
 		// Defence in depth: even before we hit the daily-cap branch,
 		// the handler must reject anon callers. Hit /api/coach with
 		// no auth header and assert 401.
-		const res = await request.post('http://localhost:7777/api/coach', {
+		const res = await request.post('/api/coach', {
 			headers: { 'content-type': 'application/json' },
 			data: {
 				messages: [{ role: 'user', content: 'anon attempt' }],

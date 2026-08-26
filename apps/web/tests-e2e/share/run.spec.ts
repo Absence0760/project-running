@@ -169,9 +169,7 @@ test.describe('/share/run/[id] — anon', () => {
 		// In dev mode the +server.ts handler runs at request time;
 		// in production CloudFront serves the prerendered file from S3.
 		// Either way the URL + Content-Type + magic bytes are pinned.
-		const res = await request.get(
-			`http://localhost:7777/og/run/${RUNNER_PUBLIC_RUN_ID}.png`
-		);
+		const res = await request.get(`/og/run/${RUNNER_PUBLIC_RUN_ID}.png`);
 		expect(res.status()).toBe(200);
 		expect(res.headers()['content-type']).toContain('image/png');
 		const body = await res.body();
