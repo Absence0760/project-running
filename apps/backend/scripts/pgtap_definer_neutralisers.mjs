@@ -669,4 +669,183 @@ $neutralised$;`,
       },
     },
   ],
+  [
+    'public_run_counts',
+    {
+      why: "drops `r.is_public = true`; keeps the caller's own `user_id = any(p_user_ids)`",
+      sql: `create or replace function public.public_run_counts(p_user_ids uuid[])
+ returns table(user_id uuid, public_run_count bigint)
+ language sql stable security definer set search_path to 'public', 'pg_temp'
+as $neutralised$
+  select r.user_id, count(*)
+  from runs r
+  where r.user_id = any(p_user_ids)
+  group by r.user_id;
+$neutralised$;`,
+      witness: {
+        setup: `select set_config('pgtap_guard.witness',
+                  (select r.user_id::text from runs r order by r.id limit 1), true);
+                update runs set is_public = false
+                 where user_id = current_setting('pgtap_guard.witness')::uuid;`,
+        probe: `select count(*) from public_run_counts(
+                  array[current_setting('pgtap_guard.witness')::uuid]);`,
+      },
+    },
+  ],
+  [
+    'get_event_meet_point',
+    {
+      why: 'drops `is_club_member(e.club_id)`; keeps the event id and the both-coordinates-present condition, which is the row existing rather than the caller being allowed it',
+      sql: `create or replace function public.get_event_meet_point(p_event_id uuid)
+ returns table(meet_lat double precision, meet_lng double precision)
+ language sql security definer set search_path to 'public', 'private'
+as $neutralised$
+  select e.meet_lat, e.meet_lng
+  from events e
+  where e.id = p_event_id
+    and e.meet_lat is not null
+    and e.meet_lng is not null;
+$neutralised$;`,
+      witness: {
+        setup: `select set_config('pgtap_guard.witness',
+                  (select e.id::text from events e order by e.id limit 1), true);
+                update events set meet_lat = 51.5, meet_lng = -0.1
+                 where id = current_setting('pgtap_guard.witness')::uuid;`,
+        probe: `select count(*) from get_event_meet_point(
+                  current_setting('pgtap_guard.witness')::uuid);`,
+      },
+    },
+  ],
+  [
+    'heatmap_points_in_bbox',
+    {
+      why: "drops `is_public = true`, `shadow_hidden = false` and the `privacy_in_any_zone` clip that is the whole privacy contract of the heatmap; keeps the bounding box, the densification and the point cap, which are the query the caller asked for",
+      sql: `create or replace function public.heatmap_points_in_bbox(
+   p_min_lng double precision, p_min_lat double precision,
+   p_max_lng double precision, p_max_lat double precision,
+   p_max_points integer default 5000)
+ returns table(lng double precision, lat double precision)
+ language sql stable parallel safe security definer set search_path to 'public', 'extensions'
+as $neutralised$
+  with bbox as (
+    select ST_MakeEnvelope(p_min_lng, p_min_lat, p_max_lng, p_max_lat, 4326)::geography as g
+  ),
+  hit_routes as (
+    select r.geom
+    from routes r
+    cross join bbox
+    where r.geom is not null
+      and r.geom && bbox.g
+    limit 200
+  ),
+  densified as (
+    select (ST_DumpPoints(
+        ST_LineInterpolatePoints(
+          hr.geom::geometry,
+          least(1.0, 50.0 / greatest(ST_Length(hr.geom), 50.0))
+        )
+      )).geom as pt
+    from hit_routes hr
+  )
+  select ST_X(pt), ST_Y(pt) from densified limit p_max_points;
+$neutralised$;`,
+      witness: {
+        // Every route owner gets a globe-sized privacy zone, so the real
+        // relation clips every point it would otherwise emit — the witness
+        // measures the privacy clip itself rather than the is_public term.
+        setup: `select set_config('pgtap_guard.minlng', (ST_XMin(g) - 0.01)::text, true),
+                       set_config('pgtap_guard.minlat', (ST_YMin(g) - 0.01)::text, true),
+                       set_config('pgtap_guard.maxlng', (ST_XMax(g) + 0.01)::text, true),
+                       set_config('pgtap_guard.maxlat', (ST_YMax(g) + 0.01)::text, true)
+                  from (select ST_Envelope(r.geom::geometry) as g from routes r
+                         where r.geom is not null order by r.id limit 1) e;
+                insert into user_settings (user_id, prefs)
+                select distinct r.user_id,
+                       '{"privacy_zones":[{"lat":0,"lng":0,"radius_m":100000000}]}'::jsonb
+                  from routes r
+                 on conflict (user_id) do update set prefs = excluded.prefs;`,
+        probe: `select count(*) from heatmap_points_in_bbox(
+                  current_setting('pgtap_guard.minlng')::double precision,
+                  current_setting('pgtap_guard.minlat')::double precision,
+                  current_setting('pgtap_guard.maxlng')::double precision,
+                  current_setting('pgtap_guard.maxlat')::double precision, 5000);`,
+      },
+    },
+  ],
+  [
+    'routes_within_box',
+    {
+      why: "reads `routes` directly instead of the public_routes view, and matches on the raw `geom` instead of `geom_public` — the clipped geometry the privacy zones produce, which is NULL for a route that lies wholly inside one. Keeps the bounding box, the nearest-centre ordering and the result cap",
+      sql: `create or replace function public.routes_within_box(
+   min_lat double precision, min_lng double precision,
+   max_lat double precision, max_lng double precision,
+   max_results integer default 50)
+ returns setof public_routes
+ language sql stable security definer set search_path to 'public', 'extensions'
+as $neutralised$
+  with box as (
+    select ST_SetSRID(ST_MakeEnvelope(min_lng, min_lat, max_lng, max_lat), 4326)::geography as g
+  ),
+  centre as (
+    select ST_SetSRID(
+      ST_MakePoint((min_lng + max_lng) / 2, (min_lat + max_lat) / 2), 4326)::geography as g
+  )
+  select r.id, r.user_id, r.name, r.distance_m, r.elevation_m, r.surface, r.is_public,
+         r.slug, r.created_at, r.updated_at, r.tags, r.is_featured, r.featured_at,
+         r.run_count,
+         case when is_public_club_by_id(r.club_id) then r.club_id else null::uuid end
+  from routes r, box, centre
+  where r.geom is not null
+    and ST_Intersects(r.geom, box.g)
+  order by r.geom <-> centre.g
+  limit max_results;
+$neutralised$;`,
+      witness: {
+        setup: `select set_config('pgtap_guard.minlng', (ST_XMin(g) - 0.01)::text, true),
+                       set_config('pgtap_guard.minlat', (ST_YMin(g) - 0.01)::text, true),
+                       set_config('pgtap_guard.maxlng', (ST_XMax(g) + 0.01)::text, true),
+                       set_config('pgtap_guard.maxlat', (ST_YMax(g) + 0.01)::text, true)
+                  from (select ST_Envelope(r.geom::geometry) as g from routes r
+                         where r.geom is not null order by r.id limit 1) e;
+                update routes set geom_public = null;`,
+        probe: `select count(*) from routes_within_box(
+                  current_setting('pgtap_guard.minlat')::double precision,
+                  current_setting('pgtap_guard.minlng')::double precision,
+                  current_setting('pgtap_guard.maxlat')::double precision,
+                  current_setting('pgtap_guard.maxlng')::double precision, 50);`,
+      },
+    },
+  ],
+  [
+    'coach_roster_summary',
+    {
+      why: "drops the `mine` gate — `coach_id = auth.uid() and status = 'active'` — which is the entire authorisation of the roster, and the not-authenticated guard above it. The load and plan-completion aggregates are NOT reproduced: every assertion over this RPC is about which athletes appear at all, and a second copy of that arithmetic would be one more thing to keep in step for no measurement gained",
+      sql: `create or replace function public.coach_roster_summary()
+ returns table(athlete_id uuid, display_name text, avatar_url text, last_run_at timestamptz,
+               runs_7d integer, distance_7d_m double precision, load_acute double precision,
+               load_chronic double precision, active_plan_id uuid, plan_completion_pct integer)
+ language sql stable security definer set search_path to 'public'
+as $neutralised$
+  select p.id, p.display_name, p.avatar_url, null::timestamptz,
+         0, 0::double precision, 0::double precision, 0::double precision,
+         null::uuid, 0
+  from coach_athletes ca
+  join user_profiles p on p.id = ca.athlete_id;
+$neutralised$;`,
+      witness: {
+        // The seed already pairs a coach with an athlete and a unique index
+        // forbids a second live pair, so the witness demotes the existing link
+        // rather than adding one: pending is not active consent, and the real
+        // roster is empty for exactly that reason.
+        setup: `select set_config('pgtap_guard.witness',
+                  (select ca.coach_id::text from coach_athletes ca
+                    where ca.athlete_id is not null order by ca.id limit 1), true);
+                update coach_athletes set status = 'pending', ended_at = null
+                 where athlete_id is not null;
+                select set_config('request.jwt.claims',
+                  json_build_object('sub', current_setting('pgtap_guard.witness'))::text, true);`,
+        probe: `select count(*) from coach_roster_summary();`,
+      },
+    },
+  ],
 ]);

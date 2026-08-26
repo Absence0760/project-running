@@ -68,6 +68,7 @@ select is_empty(
 
 -- 3. Authenticated non-member gets no rows.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000fee03","role":"authenticated"}';
+-- refusal: club membership is what authorises a meet point
 select is_empty(
   $$ select * from get_event_meet_point('66666666-6666-6666-6666-666666666602') $$,
   'authenticated non-member gets no rows from the RPC'
@@ -85,6 +86,7 @@ select throws_ok(
 -- 5. Anon executes the function but the membership gate returns no rows.
 set local role anon;
 set local "request.jwt.claims" = '';
+-- refusal: the EXECUTE grant is deliberately wide and the membership gate is the real control
 select is_empty(
   $$ select * from get_event_meet_point('66666666-6666-6666-6666-666666666602') $$,
   'anon executes but the membership gate returns no rows'

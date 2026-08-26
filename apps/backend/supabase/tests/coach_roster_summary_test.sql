@@ -99,12 +99,14 @@ select is(
 -- A non-coach sees an empty roster (the mine CTE is the only gate).
 -- ============================================================
 set local "request.jwt.claims" = '{"sub":"aaaaaaaa-0000-0000-0000-0000000000e1","role":"authenticated"}';
+-- refusal: the coach link is the grant; an empty roster is the refusal
 select is(
   (select count(*)::int from coach_roster_summary()),
   0, 'a non-coach gets zero roster rows');
 
 -- The athlete is not a coach of their own coach (directional gate).
 set local "request.jwt.claims" = '{"sub":"aaaaaaaa-0000-0000-0000-0000000000a1","role":"authenticated"}';
+-- refusal: the coach link is directional, and the reverse direction grants nothing
 select is(
   (select count(*)::int from coach_roster_summary()),
   0, 'an athlete is not a coach -- their roster is empty');
@@ -130,6 +132,7 @@ update coach_athletes set status = 'ended', ended_at = now()
 
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"aaaaaaaa-0000-0000-0000-0000000000c1","role":"authenticated"}';
+-- refusal: a revoked grant is access control expressed as a lifecycle
 select is(
   (select count(*)::int from coach_roster_summary()),
   0, 'ending the last active link empties the coach roster');
@@ -143,10 +146,12 @@ insert into coach_athletes (coach_id, status, invite_token)
   values ('aaaaaaaa-0000-0000-0000-0000000000c1', 'pending', 'crs-tok-pending');
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"aaaaaaaa-0000-0000-0000-0000000000c1","role":"authenticated"}';
+-- refusal: an unredeemed invite is not consent, so it grants no read
 select is(
   (select count(*)::int from coach_roster_summary()),
   0, 'a pending invite (unredeemed) contributes no roster row');
 
+-- refusal: an unredeemed invite is not consent, so it grants no read
 select is(
   (select count(*)::int from coach_roster_summary()),
   0, 'roster is still empty -- pending is not active consent');

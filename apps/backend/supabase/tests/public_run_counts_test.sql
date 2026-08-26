@@ -29,6 +29,7 @@ select is(
   (select public_run_count from public_run_counts(array['bb000000-0000-0000-0000-0000000000a1']::uuid[])),
   2::bigint, 'A has 2 public runs (private one excluded), visible to a non-owner');
 
+-- refusal: a private run must not be countable through an aggregate
 select is(
   (select count(*) from public_run_counts(array['bb000000-0000-0000-0000-0000000000b2']::uuid[])),
   0::bigint, 'B has no public runs → no row (private-only is not counted)');
