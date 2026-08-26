@@ -157,7 +157,7 @@ Native in-app OAuth via `flutter_web_auth_2` — Chrome Custom Tabs on Android, 
 ```
 
 Operational pre-requisites:
-- The `threkir://strava-callback` URI must be allow-listed in the Strava developer console **and** in `STRAVA_ALLOWED_REDIRECTS` on the Edge Function.
+- The `threkir://strava-callback` URI must be allow-listed in the Strava developer console **and** in `STRAVA_ALLOWED_REDIRECTS` on the Edge Function. The comparison is **whole-string**, not by origin — Strava's own callback-domain check is path-prefix loose, so any path under our domain would otherwise be exchangeable, and a custom scheme has no origin to compare anyway. An unset or empty allowlist **fails closed** (503 `strava_not_configured`); a claim outside it is 400 `invalid_redirect_uri`. Parse + comparison live in `apps/backend/supabase/functions/_shared/redirect_allowlist.ts`, shared with the three Stripe-events functions, and both branches are covered by `_shared/redirect_allowlist.test.ts` ([decisions § 750](../architecture/decisions.md)). The committed local-dev value in `apps/backend/.env.development` carries only the **web** callback; a local mobile connect additionally needs `threkir://strava-callback` added there (alongside the real `STRAVA_CLIENT_ID` that local dev also leaves empty).
 - Falls back to the web browser hand-off on builds where the client ID is unconfigured (matches the existing `url_launcher` path used before native OAuth shipped).
 - `lib/strava.dart` mirrors `apps/web/src/lib/integrations/strava.ts` and is unit-tested (16 tests in `test/strava_test.dart` on URL building + callback parsing + configured-state checks).
 

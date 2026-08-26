@@ -1638,7 +1638,7 @@ Initiates the Strava OAuth flow and backfills the last 90 days of activities.
 { "code": "abc123", "scope": "activity:read_all,read", "redirect_uri": "https://app.example.com/settings/integrations" }
 ```
 
-`scope` must contain `activity:read_all` (the function 400s otherwise — Strava lets users untick scopes on the consent screen and we can't backfill without it). `redirect_uri` is validated against `STRAVA_ALLOWED_REDIRECTS` (comma-separated env var); when the env var is empty the check is disabled (single-tenant / dev).
+`scope` must contain `activity:read_all` (the function 400s otherwise — Strava lets users untick scopes on the consent screen and we can't backfill without it). `redirect_uri` is compared **whole** against `STRAVA_ALLOWED_REDIRECTS` (comma-separated env var) — not by origin, because Strava's own callback-domain check is already path-prefix loose and that is the window this gate closes. An **empty or unset** env var **fails closed**: the function returns 503 `strava_not_configured` and exchanges nothing. (An earlier revision of this page said the check was disabled when empty — it never was.) A claim outside the list returns 400 `invalid_redirect_uri`. Both branches plus the parse live in `_shared/redirect_allowlist.ts` and are covered by `_shared/redirect_allowlist.test.ts`.
 
 **Flow:**
 1. Exchange `code` for access + refresh tokens via Strava

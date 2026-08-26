@@ -1565,7 +1565,6 @@ jobs:
           PARKRUN_USER_AGENT=ci-parkrun-ua
           REVENUECAT_WEBHOOK_SECRET=ci-revenuecat-secret
           CRON_SECRET=ci-cron-secret
-          STRAVA_ALLOWED_REDIRECTS=http://localhost:7777/settings/integrations
           STRIPE_EVENTS_WEBHOOK_SECRET=ci-stripe-events-secret
           # Standard Webhooks secret for the auth-email envelope tests
           # (the rejection branches need the secret PRESENT so they hit
@@ -1579,6 +1578,17 @@ jobs:
           SENTRY_DSN=
           APP_RELEASE=ci
           ENV
+          # The dev Strava callback is NOT restated here. `.env.development`
+          # is the committed local-dev value, and
+          # `_shared/redirect_allowlist.test.ts` pins it to the port
+          # `apps/web/tests-e2e/fixtures/base-url.ts` declares (decisions
+          # § 743) and the path the web client actually sends — so moving
+          # the lane moves this without a second edit in the workflow.
+          if ! grep -q '^STRAVA_ALLOWED_REDIRECTS=.' .env.development; then
+            echo "::error::.env.development declares no STRAVA_ALLOWED_REDIRECTS"
+            exit 1
+          fi
+          grep '^STRAVA_ALLOWED_REDIRECTS=' .env.development >> .env.local
           docker stop supabase_edge_runtime_backend || true
           # Background `supabase functions serve`. The CLI keeps the
           # process attached to the terminal even in CI, so put it in
