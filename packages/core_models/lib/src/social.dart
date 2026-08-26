@@ -301,7 +301,11 @@ class PublicEventResult {
 class SegmentEffortWithSegment {
   final SegmentEffortRow effort;
   final SegmentRow segment;
-  final int rank;
+
+  /// Null when `segment_effort_ranks` did not answer for this effort. The
+  /// rank does not live on the effort row, so an absent answer is a genuinely
+  /// unknown standing — never `1`, which is a crown (decisions §746).
+  final int? rank;
 
   const SegmentEffortWithSegment({
     required this.effort,
@@ -331,7 +335,10 @@ class GlobalSegmentLeaderboardEntry {
 class GlobalSegmentEffortWithSegment {
   final GlobalSegmentEffortRow effort;
   final GlobalSegmentRow segment;
-  final int rank;
+
+  /// Null when `global_segment_effort_ranks` did not answer for this effort —
+  /// same contract as [SegmentEffortWithSegment.rank].
+  final int? rank;
 
   const GlobalSegmentEffortWithSegment({
     required this.effort,

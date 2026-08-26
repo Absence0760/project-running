@@ -1906,13 +1906,21 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	// translation (e.g. submitReport's old "Too many reports — please wait
 	// a few minutes"); centralising the rule means a future bucket lands
 	// in one place + behaves identically across clubs / routes / reports.
-	// Twin path on Dart is enforced by mobile_android's architecture-guard
-	// suite.
+	// Since decisions § 744 the wording lives in the catalogue, so the
+	// helper is the i18n one and the localizer is passed in — a call that
+	// dropped `m` would compile against a stray Translate and hand a
+	// non-English reader English. Twin path on Dart is enforced by
+	// mobile_android's architecture-guard suite.
 	const source = read('src/lib/core/data.ts');
 	assert.match(
 		source,
-		/import\s+\{\s*rateLimitErrorMessage\s*\}\s+from\s+['"]\.\.\/util\/rate_limit_errors['"]/,
-		'data.ts must import rateLimitErrorMessage from ./rate_limit_errors.',
+		/import\s+\{\s*rateLimitErrorMessage\s*\}\s+from\s+['"]\.\.\/i18n\/rate_limit_message['"]/,
+		'data.ts must import rateLimitErrorMessage from ../i18n/rate_limit_message.',
+	);
+	assert.match(
+		source,
+		/import\s+\{\s*m\s*\}\s+from\s+['"]\.\.\/i18n\/store\.svelte['"]/,
+		'data.ts must import the message lookup `m` — it is the localizer every rate-limit sentence is resolved through.',
 	);
 	// Slice each function body and assert the helper appears with the
 	// "throw new Error(friendly)" follow-up. Using the same bodyAfter
@@ -1950,8 +1958,8 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	] as const) {
 		assert.match(
 			body,
-			/rateLimitErrorMessage\(/,
-			`${name} must call rateLimitErrorMessage — every P0001 bucket goes through the shared helper.`,
+			/rateLimitErrorMessage\(m,/,
+			`${name} must call rateLimitErrorMessage(m, …) — every P0001 bucket goes through the shared helper, with the localizer passed in.`,
 		);
 		assert.match(
 			body,
@@ -1990,8 +1998,8 @@ test('template-clone / publish RPC wrappers translate P0001 via the shared helpe
 		const body = bodyOf(name);
 		assert.match(
 			body,
-			/rateLimitErrorMessage\(/,
-			`${name} must call rateLimitErrorMessage — every P0001 rate-limit bucket goes through the shared helper.`,
+			/rateLimitErrorMessage\(m,/,
+			`${name} must call rateLimitErrorMessage(m, …) — every P0001 rate-limit bucket goes through the shared helper, with the localizer passed in.`,
 		);
 		assert.match(
 			body,
@@ -2019,8 +2027,8 @@ test('sendDm translates the direct_messages send buckets via the shared helper',
 	const body = source.slice(start, end);
 	assert.match(
 		body,
-		/rateLimitErrorMessage\(/,
-		'sendDm must call rateLimitErrorMessage — every P0001 bucket goes through the shared helper.',
+		/rateLimitErrorMessage\(m,/,
+		'sendDm must call rateLimitErrorMessage(m, …) — every P0001 bucket goes through the shared helper, with the localizer passed in.',
 	);
 	assert.match(
 		body,
@@ -2028,7 +2036,7 @@ test('sendDm translates the direct_messages send buckets via the shared helper',
 		'sendDm must throw the friendly string when the helper recognises the bucket.',
 	);
 	assert.ok(
-		body.indexOf("=== '42501'") < body.indexOf('rateLimitErrorMessage('),
+		body.indexOf("=== '42501'") < body.indexOf('rateLimitErrorMessage(m,'),
 		'the 42501 follow-graph branch must be checked before the rate-limit branch.',
 	);
 });

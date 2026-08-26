@@ -123,10 +123,9 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 	});
 
 	test('a coach links an athlete, reviews their public AND private runs, then revoke severs private-run visibility', async ({
-		browser
+		browser,
+		baseURL
 	}) => {
-		const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777';
-
 		// The coach owns the primary context; the athlete acts in a second one.
 		const coachContext: BrowserContext = await browser.newContext({
 			baseURL,

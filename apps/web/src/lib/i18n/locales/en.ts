@@ -16,6 +16,21 @@ export const en = {
 	'common.unsavedTitle': 'Discard changes?',
 	'common.unsavedBody': 'You have unsaved changes. Leave without saving?',
 	'common.discard': 'Discard',
+	// Rate-limit refusals (postgres P0001 from enforce_create_rate_limit).
+	// The bucket picks the whole sentence; {wait} is the one noun phrase
+	// slotted into it. See i18n/rate_limit_message.ts + decisions § 744.
+	"rateLimit.createClub": "You're creating clubs too quickly — please wait {wait} and try again.",
+	"rateLimit.createRoute": "You're creating routes too quickly — please wait {wait} and try again.",
+	"rateLimit.createReport": "You're filing reports too quickly — please wait {wait} and try again.",
+	"rateLimit.adoptPlan": "You're adopting plans too quickly — please wait {wait} and try again.",
+	"rateLimit.adoptSessionPlan": "You're adopting session plans too quickly — please wait {wait} and try again.",
+	"rateLimit.adoptGymRoutine": "You're adopting gym routines too quickly — please wait {wait} and try again.",
+	"rateLimit.publishRoutine": "You're publishing routines too quickly — please wait {wait} and try again.",
+	"rateLimit.sendMessage": "You're sending messages too quickly — please wait {wait} and try again.",
+	"rateLimit.generic": "You're doing that too quickly — please wait {wait} and try again.",
+	"rateLimit.waitSeconds": "{n, plural, one {# second} other {# seconds}}",
+	"rateLimit.waitMinutes": "{n, plural, one {# minute} other {# minutes}}",
+	"rateLimit.waitSoon": "a few seconds",
 	// The one `runs.activity_type` vocabulary — every surface that names an
 	// activity resolves through `activityTypeLabel` (runs/activity_type.ts).
 	// Value domain is the `runs_activity_type_check` CHECK constraint.
@@ -2628,6 +2643,7 @@ export const en = {
 	"segmentEfforts.none": "No segment efforts on this run.",
 	"segmentEfforts.linkHint": "Segments are matched per route — link this run to a saved route to compete on its leaderboards.",
 	"segmentEfforts.catalogueHeading": "Famous segments",
+	"segmentEfforts.rankUnknown": "Rank unavailable",
 	"privacyZonePicker.hint": "Click anywhere on the map (or use your current location) to set the centre, then drag the marker to fine-tune. Anything within the red circle will be hidden from public shares.",
 	"privacyZonePicker.useCurrentLocation": "Use current location",
 	"privacyZonePicker.locating": "Locating…",

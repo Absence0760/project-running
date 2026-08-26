@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { originOf } from '../fixtures/base-url';
 import { browserYear } from '../fixtures/dates';
 import { USER_A } from '../fixtures/users';
 
@@ -188,9 +189,13 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 		expect(download.suggestedFilename()).toBe(`threkir-${CURRENT_YEAR}.png`);
 	});
 
-	test('Falls back to clipboard text when card rendering fails', async ({ page, context }) => {
+	test('Falls back to clipboard text when card rendering fails', async ({
+		page,
+		context,
+		baseURL
+	}) => {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-			origin: 'http://localhost:7777'
+			origin: originOf(baseURL)
 		});
 
 		await page.addInitScript(() => {

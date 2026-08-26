@@ -1,4 +1,8 @@
+import { resolve } from 'node:path';
+
 import { defineConfig, devices } from '@playwright/test';
+
+import { resolveBaseUrl } from './fixtures/base-url';
 
 /**
  * Playwright e2e config for apps/web.
@@ -19,11 +23,26 @@ import { defineConfig, devices } from '@playwright/test';
  * Local dev: `cd apps/web && pnpm test:e2e` (auto-boots dev server).
  * Or `pnpm test:e2e:ui` for the UI picker.
  *
+ * PLAYWRIGHT_BASE_URL moves the whole lane to another port — the dev
+ * server this config boots, the readiness probe, and `use.baseURL` all
+ * come off the one resolved value, so a second checkout can run the
+ * suite beside a first without the two fighting over :7777.
+ *
  * The fixtures/auth.ts globalSetup signs each seeded user in once via
  * the UI and saves their storage state to .auth/<user>.json. Spec
  * files attach the storage state via test.use({ storageState: ... }).
  * .auth/ is gitignored.
  */
+const WEB_DIR = resolve(import.meta.dirname, '..');
+
+const BASE_URL = resolveBaseUrl();
+const DEV_PORT = new URL(BASE_URL).port;
+if (!DEV_PORT) {
+	throw new Error(
+		`PLAYWRIGHT_BASE_URL must name a port — this config boots the dev server on it. Got ${BASE_URL}.`
+	);
+}
+
 export default defineConfig({
 	testDir: '.',
 	// Don't recurse into node_modules / .auth / fixtures from the testDir glob.
@@ -69,8 +88,13 @@ export default defineConfig({
 	// Auto-start the dev server. `reuseExistingServer` lets a manually
 	// started server (e.g. for `playwright test --ui`) take precedence.
 	webServer: {
-		command: 'pnpm run dev',
-		url: 'http://localhost:7777',
+		// `pnpm exec` (not `pnpm run dev`, which pins --port 7777) so the
+		// port follows PLAYWRIGHT_BASE_URL. `pnpm exec` does not move cwd
+		// the way `pnpm run` does, hence the explicit WEB_DIR — same shape
+		// as the livehub / exporthub / sso configs.
+		command: `pnpm exec vite dev --port ${DEV_PORT}`,
+		cwd: WEB_DIR,
+		url: BASE_URL,
 		reuseExistingServer: !process.env.CI,
 		timeout: 60_000,
 		// Force the localhost dev services empty for e2e. `.env.development`
@@ -87,7 +111,7 @@ export default defineConfig({
 	},
 
 	use: {
-		baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777',
+		baseURL: BASE_URL,
 		trace: 'on-first-retry',
 		screenshot: 'only-on-failure',
 		video: 'retain-on-failure',

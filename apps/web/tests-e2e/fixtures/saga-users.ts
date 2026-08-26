@@ -2,6 +2,7 @@ import { mkdir, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 
+import { resolveBaseUrl } from './base-url';
 import { getAdminClient } from './local-supabase';
 
 /**
@@ -113,7 +114,10 @@ export async function createSagaUsers(
 
 	// 2) sign each user in via the form to capture storage state.
 	//    Single browser process, parallel contexts. ~1.5s for 3 users.
-	const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777';
+	// The sharded lane's base URL: this fixture signs its users in from a
+	// plain chromium.launch() with no `baseURL` fixture in scope. No
+	// secondary lane (livehub / exporthub / sso) uses saga users.
+	const baseURL = resolveBaseUrl();
 	const browser = await chromium.launch();
 	try {
 		await Promise.all(

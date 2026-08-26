@@ -33,7 +33,8 @@ const HERE = import.meta.dirname;
 const WEB_DIR = resolve(HERE, '..');
 
 const MOCK_PORT = process.env.SSO_MOCK_OIDC_PORT ?? '9888';
-const DEV_PORT = '7779';
+// :7777 is the sharded lane, :7778 live-hub, :7779 export-hub.
+const DEV_PORT = '7780';
 
 export default defineConfig({
 	testDir: './sso',
@@ -66,8 +67,9 @@ export default defineConfig({
 		},
 		{
 			// A dedicated dev server (the main config owns :7777, livehub
-			// :7778). `localhost` not 127.0.0.1: vite binds localhost (::1)
-			// by default, so a 127.0.0.1 readiness probe never connects.
+			// :7778, exporthub :7779). `localhost` not 127.0.0.1: vite binds
+			// localhost (::1) by default, so a 127.0.0.1 readiness probe
+			// never connects.
 			// Empty PUBLIC_TILE_STYLE_URL + OSRM_URL force the committed
 			// .env.development localhost dev services off (same guard the
 			// livehub config uses) — the SSO lane never renders a map, but

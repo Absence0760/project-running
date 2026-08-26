@@ -22,7 +22,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/core/ai_disclosure.ts` (client half only — `gateAiDisclosure` / `aiDisclosureDenialBody` are server-side) | `apps/mobile_android/lib/ai_disclosure.dart` | `core/ai_disclosure.test.ts` ↔ `test/ai_disclosure_test.dart` |
 | `apps/web/src/lib/runs/checkpoint_projection.ts` | `apps/mobile_android/lib/checkpoint_projection.dart` | `runs/checkpoint_projection.test.ts` ↔ `test/checkpoint_projection_test.dart` |
 | `apps/web/src/lib/runs/race_phases.ts` | `apps/mobile_android/lib/race_phases.dart` | `runs/race_phases.test.ts` ↔ `test/race_phases_test.dart` |
-| `apps/web/src/lib/util/rate_limit_errors.ts` | `apps/mobile_android/lib/rate_limit_errors.dart` | `util/rate_limit_errors.test.ts` ↔ `test/rate_limit_errors_test.dart` |
+| `apps/web/src/lib/util/rate_limit_errors.ts` (parse only — the sentence lives in the locale catalogues, assembled by per-platform render glue that is NOT part of this lockstep) | `apps/mobile_android/lib/rate_limit_errors.dart` | `util/rate_limit_errors.test.ts` ↔ `test/rate_limit_errors_test.dart` |
 | `apps/web/src/lib/routes/distance_bands.ts` | `apps/mobile_android/lib/distance_bands.dart` | `routes/distance_bands.test.ts` ↔ `test/distance_bands_test.dart` |
 | `apps/web/src/lib/util/exif_strip.ts` (`stripJpegExif`) | `apps/mobile_android/lib/exif_strip.dart` | `util/exif_strip.test.ts` ↔ `test/exif_strip_test.dart` |
 | `apps/web/src/lib/runs/grade_adjusted_pace.ts` | `apps/mobile_android/lib/grade_adjusted_pace.dart` | `runs/grade_adjusted_pace.test.ts` ↔ `test/grade_adjusted_pace_test.dart` |

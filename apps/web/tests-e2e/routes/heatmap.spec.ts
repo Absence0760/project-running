@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { loadSupabaseEnv } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -141,15 +142,14 @@ test.describe('/routes — Heatmap tab', () => {
 		// dropped the extensions schema would 500 here. Drive via
 		// the running Supabase REST endpoint with the seeded anon
 		// session.
-		const res = await page.evaluate(async () => {
-			const r = await fetch(
-				'http://localhost:54321/rest/v1/rpc/heatmap_points_in_bbox',
-				{
+		const { url, anonKey } = loadSupabaseEnv();
+		const res = await page.evaluate(
+			async ({ url, anonKey }) => {
+				const r = await fetch(`${url}/rest/v1/rpc/heatmap_points_in_bbox`, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
-						apikey:
-							'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlLWRlbW8iLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE',
+						apikey: anonKey,
 					},
 					body: JSON.stringify({
 						p_min_lng: -0.2,
@@ -158,10 +158,11 @@ test.describe('/routes — Heatmap tab', () => {
 						p_max_lat: 51.6,
 						p_max_points: 100,
 					}),
-				}
-			);
-			return { status: r.status, body: await r.text() };
-		});
+				});
+				return { status: r.status, body: await r.text() };
+			},
+			{ url, anonKey }
+		);
 		// 200 = success; 401 acceptable only if the local stack is
 		// gating anon on this RPC (which it should not — the function
 		// has no SECURITY DEFINER + no auth check; the migration grants

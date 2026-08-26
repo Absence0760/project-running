@@ -11290,6 +11290,10 @@
       }
     }
   },
+  "runSegEffortsRankUnknown": "Rank unavailable",
+  "@runSegEffortsRankUnknown": {
+    "description": "Accessible name for a segment-effort rank pill whose standing the rank RPC did not return"
+  },
   "runSegEffortsChecking": "Checking segments…",
   "@runSegEffortsChecking": {
     "description": "Loading state while segment efforts are computed"
@@ -17311,5 +17315,108 @@
   "runSurfaceTabSegments": "Segments",
   "@runSurfaceTabSegments": {
     "description": "Run-surface peer strip entry for the famous-segment catalogue"
+  },
+  "rateLimitCreateClub": "You're creating clubs too quickly — please wait {wait} and try again.",
+  "@rateLimitCreateClub": {
+    "description": "Rate-limit refusal when the create_club bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitCreateRoute": "You're creating routes too quickly — please wait {wait} and try again.",
+  "@rateLimitCreateRoute": {
+    "description": "Rate-limit refusal when the create_route bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitCreateReport": "You're filing reports too quickly — please wait {wait} and try again.",
+  "@rateLimitCreateReport": {
+    "description": "Rate-limit refusal when the create_report bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitAdoptPlan": "You're adopting plans too quickly — please wait {wait} and try again.",
+  "@rateLimitAdoptPlan": {
+    "description": "Rate-limit refusal when a training-plan adopt bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitAdoptSessionPlan": "You're adopting session plans too quickly — please wait {wait} and try again.",
+  "@rateLimitAdoptSessionPlan": {
+    "description": "Rate-limit refusal when the clone_session_template bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitAdoptGymRoutine": "You're adopting gym routines too quickly — please wait {wait} and try again.",
+  "@rateLimitAdoptGymRoutine": {
+    "description": "Rate-limit refusal when the clone_gym_routine_template bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitPublishRoutine": "You're publishing routines too quickly — please wait {wait} and try again.",
+  "@rateLimitPublishRoutine": {
+    "description": "Rate-limit refusal when the publish_gym_routine_as_template bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitSendMessage": "You're sending messages too quickly — please wait {wait} and try again.",
+  "@rateLimitSendMessage": {
+    "description": "Rate-limit refusal when either direct-message send bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitGeneric": "You're doing that too quickly — please wait {wait} and try again.",
+  "@rateLimitGeneric": {
+    "description": "Rate-limit refusal for a bucket this build does not recognise",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
+  "rateLimitWaitSeconds": "{n, plural, one{1 second} other{{n} seconds}}",
+  "@rateLimitWaitSeconds": {
+    "description": "The wait a rate-limit refusal slots in, in seconds",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "rateLimitWaitMinutes": "{n, plural, one{1 minute} other{{n} minutes}}",
+  "@rateLimitWaitMinutes": {
+    "description": "The wait a rate-limit refusal slots in, in whole minutes",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "rateLimitWaitSoon": "a few seconds",
+  "@rateLimitWaitSoon": {
+    "description": "The wait a rate-limit refusal slots in when the trigger reported no positive figure"
   }
 }

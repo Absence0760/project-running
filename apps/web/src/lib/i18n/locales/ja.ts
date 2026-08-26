@@ -7,6 +7,18 @@ export const messages = {
 	'common.unsavedTitle': '変更を破棄しますか？',
 	'common.unsavedBody': '保存していない変更があります。保存せずに移動しますか？',
 	'common.discard': '破棄',
+	"rateLimit.createClub": "クラブの作成が速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.createRoute": "ルートの作成が速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.createReport": "報告の送信が速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.adoptPlan": "プランの取り込みが速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.adoptSessionPlan": "セッションプランの取り込みが速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.adoptGymRoutine": "ジムルーティンの取り込みが速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.publishRoutine": "ルーティンの公開が速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.sendMessage": "メッセージの送信が速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.generic": "操作が速すぎます。{wait}待ってから、もう一度お試しください。",
+	"rateLimit.waitSeconds": "{n, plural, other {#秒}}",
+	"rateLimit.waitMinutes": "{n, plural, other {#分}}",
+	"rateLimit.waitSoon": "少し",
 	// The one `runs.activity_type` vocabulary — every surface that names an
 	// activity resolves through `activityTypeLabel` (runs/activity_type.ts).
 	// Value domain is the `runs_activity_type_check` CHECK constraint.
@@ -2615,6 +2627,7 @@ export const messages = {
 	"segmentEfforts.none": "このランにセグメントの記録はありません。",
 	"segmentEfforts.linkHint": "セグメントはルートごとに紐づきます。このランを保存済みルートにリンクすると、そのリーダーボードで競えます。",
 	"segmentEfforts.catalogueHeading": "有名なセグメント",
+	"segmentEfforts.rankUnknown": "順位を取得できません",
 	"privacyZonePicker.hint": "地図上の任意の場所をタップ（または現在地を使用）して中心を設定し、マーカーをドラッグして微調整します。赤い円の内側にあるものは公開シェアから隠されます。",
 	"privacyZonePicker.useCurrentLocation": "現在地を使用",
 	"privacyZonePicker.locating": "位置情報を取得中…",

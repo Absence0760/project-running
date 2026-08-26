@@ -60,8 +60,6 @@ const RUN_A_MI_TEXT = '6.21 mi';
 const RUN_B_KM_TEXT = '5.00 km';
 const RUN_B_MI_TEXT = '3.11 mi';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777';
-
 test.describe('saga: unit pref flip propagates across runs list + dashboard + detail', () => {
 	// One continuous multi-surface journey with several full navigations
 	// + a UI save round-trip; the default 30 s test timeout is tight.
@@ -102,10 +100,11 @@ test.describe('saga: unit pref flip propagates across runs list + dashboard + de
 
 	test('km baseline → toggle to mi in Settings → every surface follows → revert to km', async ({
 		browser,
+		baseURL,
 	}) => {
 		const ctx = await browser.newContext({
 			storageState: users[0].storageStatePath,
-			baseURL: BASE_URL,
+			baseURL,
 		});
 		const page = await ctx.newPage();
 

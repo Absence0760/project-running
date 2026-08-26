@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { expect, test } from '@playwright/test';
 
+import { originOf } from '../fixtures/base-url';
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { USER_C_PRO } from '../fixtures/users';
 
@@ -46,8 +47,11 @@ async function freshAccessToken(email: string, password: string): Promise<string
 	return data.session?.access_token ?? '';
 }
 
-async function postCoach(token: string, prompt: string) {
-	return await fetch('http://localhost:7777/api/coach', {
+// A bare Node fetch, not Playwright's request fixture: the flip under test
+// is service-role and needs no browser, so the origin has to be threaded in
+// from the lane rather than resolved against baseURL.
+async function postCoach(baseURL: string | undefined, token: string, prompt: string) {
+	return await fetch(`${originOf(baseURL)}/api/coach`, {
 		method: 'POST',
 		headers: {
 			'content-type': 'application/json',
@@ -67,7 +71,9 @@ test.describe('paywall — tier check is dynamic, not cached', () => {
 		'BYPASS_PAYWALL=true; the cap is intentionally off in this environment'
 	);
 
-	test('flipping morgan free → pro mid-session lifts the daily cap on the next request', async ({}) => {
+	test('flipping morgan free → pro mid-session lifts the daily cap on the next request', async ({
+		baseURL
+	}) => {
 		// 1) Service-role flip morgan to free + plant message_count=5.
 		//    Morgan starts seeded as pro; we flip them down so the free
 		//    cap applies, then back up to pro and re-fire.
@@ -93,7 +99,7 @@ test.describe('paywall — tier check is dynamic, not cached', () => {
 			// 2) First request: morgan is free, used 5/5 today → 429
 			//    `tier: 'free'`. If the handler had cached the tier at
 			//    sign-in (when morgan was pro), this would NOT 429.
-			const r1 = await postCoach(token, 'first poke — should hit free cap');
+			const r1 = await postCoach(baseURL, token, 'first poke — should hit free cap');
 			expect(r1.status, 'morgan-as-free with 5/5 used must hit the cap')
 				.toBe(429);
 			const b1 = await r1.json();
@@ -115,7 +121,7 @@ test.describe('paywall — tier check is dynamic, not cached', () => {
 			//    per-hour rate limit lives at a different ceiling and
 			//    surfaces differently — same tolerance the static-state
 			//    paywall test uses).
-			const r2 = await postCoach(token, 'second poke — should pass cap');
+			const r2 = await postCoach(baseURL, token, 'second poke — should pass cap');
 			if (r2.status === 429) {
 				const b2 = await r2.json();
 				expect(

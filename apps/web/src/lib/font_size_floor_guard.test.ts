@@ -49,7 +49,8 @@
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -110,7 +111,12 @@ const TOKEN_PX = sectionLabelTokenPx();
 
 type Declaration = { file: string; line: number; raw: string; px: number };
 
-function scanFontSizes(): { sized: Declaration[]; relative: string[] } {
+// `root` exists so the planted-violation probe below can scan a throwaway tree.
+// The probe used to write its .css into src/lib and delete it again, and the
+// twenty-odd other guards that walk this same tree read a path they had already
+// listed — node runs test files concurrently, so one of them would occasionally
+// ENOENT on a file it had just seen. A tree nobody else scans cannot race.
+function scanFontSizes(root: string = SRC_ROOT): { sized: Declaration[]; relative: string[] } {
 	const sized: Declaration[] = [];
 	const relativeUnits: string[] = [];
 	(function walk(dir: string): void {
@@ -126,13 +132,13 @@ function scanFontSizes(): { sized: Declaration[]; relative: string[] } {
 				.forEach((line, i) => {
 					for (const m of line.matchAll(FONT_SIZE_DECLARATION)) {
 						const value = parseFloat(m[1]);
-						const where = `${relative(SRC_ROOT, path)}:${i + 1}  ${m[0]}`;
+						const where = `${relative(root, path)}:${i + 1}  ${m[0]}`;
 						if (m[2] === 'em') {
 							relativeUnits.push(where);
 							continue;
 						}
 						sized.push({
-							file: relative(SRC_ROOT, path),
+							file: relative(root, path),
 							line: i + 1,
 							raw: m[0],
 							px: m[2] === 'rem' ? value * ROOT_FONT_PX : value,
@@ -140,7 +146,7 @@ function scanFontSizes(): { sized: Declaration[]; relative: string[] } {
 					}
 				});
 		}
-	})(SRC_ROOT);
+	})(root);
 	return { sized, relative: relativeUnits };
 }
 
@@ -348,11 +354,13 @@ const PROBES: Array<{ css: string; px: number; underToken: boolean; underFloor: 
 ];
 
 test('the scan fires on planted violations in an unlisted file, at and under the token', () => {
-	const path = resolve(SRC_ROOT, 'lib/__font_size_floor_probe.css');
+	const root = mkdtempSync(join(tmpdir(), 'font-size-floor-probe-'));
+	mkdirSync(join(root, 'lib'));
+	const path = resolve(root, 'lib/__font_size_floor_probe.css');
 	for (const probe of PROBES) {
 		writeFileSync(path, `.probe { font-size: ${probe.css}; }\n`);
 		try {
-			const hit = scanFontSizes().sized.find((d) =>
+			const hit = scanFontSizes(root).sized.find((d) =>
 				d.file.endsWith('__font_size_floor_probe.css'),
 			);
 			assert.ok(hit, `the scan did not reach a newly added CSS file for ${probe.css}`);
@@ -377,4 +385,5 @@ test('the scan fires on planted violations in an unlisted file, at and under the
 			rmSync(path);
 		}
 	}
+	rmSync(root, { recursive: true, force: true });
 });

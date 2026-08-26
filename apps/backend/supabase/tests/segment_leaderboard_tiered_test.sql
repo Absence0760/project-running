@@ -319,6 +319,7 @@ select throws_ok(
 -- Stranger (cc0099) reads the public-segment leaderboard. None of the
 -- four returned rows are theirs, so every gender and age should be
 -- NULL — the 20260830_001 fix's load-bearing invariant.
+-- refusal: the masked columns are the refusal — a leaderboard row may exist without its demographics
 select is(
   (select count(*)::int
      from segment_leaderboard_tiered(

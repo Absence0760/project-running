@@ -516,9 +516,9 @@ test.describe('/dashboard — zero-data new runner', () => {
 	});
 
 	test('hides the intensity card + shows the mileage empty-state hint for a runless account', async ({
-		browser
+		browser,
+		baseURL
 	}) => {
-		const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777';
 		const ctx = await browser.newContext({
 			baseURL,
 			storageState: newRunner.storageStatePath

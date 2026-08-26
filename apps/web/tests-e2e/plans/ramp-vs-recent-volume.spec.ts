@@ -112,8 +112,8 @@ test.describe('/plans wizard — a plan that opens above the runner', () => {
 
 	test('a marathon plan over a 10 km/week base warns about the opening week', async ({
 		browser,
+		baseURL,
 	}) => {
-		const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:7777';
 		const context: BrowserContext = await browser.newContext({
 			baseURL,
 			storageState: runner.storageStatePath,

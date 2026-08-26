@@ -9,6 +9,7 @@ import 'package:meta/meta.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'chunk.dart';
+import 'effort_rank.dart';
 import 'paged_read.dart';
 import 'segments_rank.dart';
 
@@ -4402,7 +4403,9 @@ class ApiClient {
   /// RPC rather than one count query per effort.
   ///
   /// An effort whose segment row is missing (deactivated between the two reads)
-  /// is dropped rather than rendered nameless.
+  /// is dropped rather than rendered nameless. An effort the RPC did not answer
+  /// for keeps its row with a NULL rank — the standing is unknown, and the
+  /// surface says so rather than seating it at #1 (decisions §746).
   Future<List<GlobalSegmentEffortWithSegment>> fetchGlobalEffortsForRun(
     String runId,
   ) async {
@@ -4432,13 +4435,7 @@ class ApiClient {
       'global_segment_effort_ranks',
       params: {'p_run_id': runId},
     );
-    final rankByEffort = <String, int>{};
-    if (rankRows is List) {
-      for (final r in rankRows) {
-        final map = (r as Map).cast<String, dynamic>();
-        rankByEffort[map['effort_id'] as String] = (map['rank'] as num).toInt();
-      }
-    }
+    final rankByEffort = readEffortRankRows(rankRows);
 
     return [
       for (final e in efforts)
@@ -4446,7 +4443,7 @@ class ApiClient {
           GlobalSegmentEffortWithSegment(
             effort: e,
             segment: segById[e.globalSegmentId]!,
-            rank: rankByEffort[e.id] ?? 1,
+            rank: rankByEffort[e.id],
           ),
     ];
   }
@@ -5611,7 +5608,7 @@ class ApiClient {
   /// give — and it counts the caller's own faster efforts against them. The
   /// RPC also subtracts blocked athletes, which `segment_efforts` RLS cannot.
   /// Same contract as [fetchGlobalEffortsForRun] and the web
-  /// `fetchEffortsForRun`, including the `?? 1` degrade on a missing row.
+  /// `fetchEffortsForRun`, including the NULL rank on a missing row.
   Future<List<SegmentEffortWithSegment>> fetchEffortsForRunWithSegments(
     String runId,
   ) async {
@@ -5635,13 +5632,7 @@ class ApiClient {
       'segment_effort_ranks',
       params: {'p_run_id': runId},
     );
-    final rankByEffort = <String, int>{};
-    if (rankRows is List) {
-      for (final r in rankRows) {
-        final map = (r as Map).cast<String, dynamic>();
-        rankByEffort[map['effort_id'] as String] = (map['rank'] as num).toInt();
-      }
-    }
+    final rankByEffort = readEffortRankRows(rankRows);
 
     return [
       for (final eff in efforts)
@@ -5649,7 +5640,7 @@ class ApiClient {
           SegmentEffortWithSegment(
             effort: eff,
             segment: segById[eff.segmentId]!,
-            rank: rankByEffort[eff.id] ?? 1,
+            rank: rankByEffort[eff.id],
           ),
     ];
   }

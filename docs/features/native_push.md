@@ -212,10 +212,15 @@ The device-led leg — token registration + foreground/background display:
 - **Dependency:** add `firebase_messaging` (+ `firebase_core`) to
   `apps/mobile_android/pubspec.yaml` AND `apps/mobile_ios/pubspec.yaml`
   (twin: pubspecs differ only in `name`/`description` — every dep stays in
-  lockstep). Android needs `google-services.json`, iOS needs
-  `GoogleService-Info.plist` + the APNs entitlement — **these are operator
-  artifacts; the code compiles without live values but won't deliver** (the
-  credential gate; document as a deploy checklist item, do not stub the code).
+  lockstep). Android needs `google-services.json` and iOS needs
+  `GoogleService-Info.plist` — **these are operator artifacts; the code
+  compiles without live values but won't deliver** (the credential gate;
+  document as a deploy checklist item, do not stub the code). The iOS
+  `aps-environment` entitlement is **not** one of them: it is a checked-in
+  capability declaration, it lives in `Runner.entitlements` resolved through
+  the per-configuration `APS_ENVIRONMENT` build setting, and
+  `scripts/check_ios_native_declarations.mjs` requires it for as long as
+  `firebase_messaging` is a dependency (decisions § 742).
 - **`packages/api_client`** — add `registerDeviceToken({platform, token,
   appVersion, locale})` (upsert on `(user_id, token)`) +
   `setDeviceNotificationsEnabled(token, enabled)` + `removeDeviceToken(token)`.
@@ -356,8 +361,13 @@ this explicitly so the implementer doesn't manufacture a pair.
   write everything that doesn't need the secret now). **Not a paywall, not a
   CISO/counsel gate** — push of an already-consented notification is not
   privacy-sensitive new processing; the `push_notifications` pref + per-device
-  flag are the user controls. Record the credential provisioning + APNs
-  entitlement as a deploy-time checklist item in `email.md`'s "Production ops".
+  flag are the user controls. Record the credential provisioning as a
+  deploy-time checklist item in `email.md`'s "Production ops". The APNs
+  **entitlement** is not part of that: it ships in `Runner.entitlements` and is
+  guard-enforced (decisions § 742). What the deploy owes is a distribution
+  profile carrying the Push Notifications capability, and a
+  `codesign -d --entitlements` check that the exported IPA resolved
+  `aps-environment` to `production`.
 
 ## Commit plan (ordered, path-scoped per-piece)
 1. Migration + codegen + pgtap:

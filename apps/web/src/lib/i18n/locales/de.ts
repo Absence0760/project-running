@@ -7,6 +7,18 @@ export const messages = {
 	'common.unsavedTitle': 'Änderungen verwerfen?',
 	'common.unsavedBody': 'Du hast ungespeicherte Änderungen. Ohne Speichern verlassen?',
 	'common.discard': 'Verwerfen',
+	"rateLimit.createClub": "Du erstellst zu schnell Vereine – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.createRoute": "Du erstellst zu schnell Routen – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.createReport": "Du meldest zu schnell Inhalte – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.adoptPlan": "Du übernimmst zu schnell Trainingspläne – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.adoptSessionPlan": "Du übernimmst zu schnell Session-Pläne – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.adoptGymRoutine": "Du übernimmst zu schnell Gym-Routinen – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.publishRoutine": "Du veröffentlichst zu schnell Routinen – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.sendMessage": "Du sendest zu schnell Nachrichten – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.generic": "Du machst das zu schnell – bitte warte {wait} und versuche es erneut.",
+	"rateLimit.waitSeconds": "{n, plural, one {# Sekunde} other {# Sekunden}}",
+	"rateLimit.waitMinutes": "{n, plural, one {# Minute} other {# Minuten}}",
+	"rateLimit.waitSoon": "einen Moment",
 	// The one `runs.activity_type` vocabulary — every surface that names an
 	// activity resolves through `activityTypeLabel` (runs/activity_type.ts).
 	// Value domain is the `runs_activity_type_check` CHECK constraint.
@@ -2620,6 +2632,7 @@ export const messages = {
 	"segmentEfforts.none": "Keine Segment-Versuche bei diesem Lauf.",
 	"segmentEfforts.linkHint": "Segmente werden pro Route zugeordnet — verknüpfe diesen Lauf mit einer gespeicherten Route, um auf ihren Bestenlisten anzutreten.",
 	"segmentEfforts.catalogueHeading": "Berühmte Segmente",
+	"segmentEfforts.rankUnknown": "Platzierung nicht verfügbar",
 	"privacyZonePicker.hint": "Tippe irgendwo auf die Karte (oder nutze deinen aktuellen Standort), um das Zentrum festzulegen, und ziehe dann den Marker zur Feinabstimmung. Alles innerhalb des roten Kreises wird in öffentlichen Freigaben ausgeblendet.",
 	"privacyZonePicker.useCurrentLocation": "Aktuellen Standort verwenden",
 	"privacyZonePicker.locating": "Standort wird ermittelt…",

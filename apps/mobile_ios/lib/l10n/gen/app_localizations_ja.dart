@@ -8092,6 +8092,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => '順位を取得できません';
+
+  @override
   String get runSegEffortsChecking => 'セグメントを確認中…';
 
   @override
@@ -13019,4 +13022,64 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get runSurfaceTabSegments => 'セグメント';
+
+  @override
+  String rateLimitCreateClub(String wait) {
+    return 'クラブの作成が速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitCreateRoute(String wait) {
+    return 'ルートの作成が速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitCreateReport(String wait) {
+    return '報告の送信が速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitAdoptPlan(String wait) {
+    return 'プランの取り込みが速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitAdoptSessionPlan(String wait) {
+    return 'セッションプランの取り込みが速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitAdoptGymRoutine(String wait) {
+    return 'ジムルーティンの取り込みが速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitPublishRoutine(String wait) {
+    return 'ルーティンの公開が速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitSendMessage(String wait) {
+    return 'メッセージの送信が速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitGeneric(String wait) {
+    return '操作が速すぎます。$wait待ってから、もう一度お試しください。';
+  }
+
+  @override
+  String rateLimitWaitSeconds(int n) {
+    String _temp0 = intl.Intl.pluralLogic(n, locale: localeName, other: '$n秒');
+    return '$_temp0';
+  }
+
+  @override
+  String rateLimitWaitMinutes(int n) {
+    String _temp0 = intl.Intl.pluralLogic(n, locale: localeName, other: '$n分');
+    return '$_temp0';
+  }
+
+  @override
+  String get rateLimitWaitSoon => '少し';
 }

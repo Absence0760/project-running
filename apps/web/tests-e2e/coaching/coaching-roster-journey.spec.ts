@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
+import { resolveBaseUrl } from '../fixtures/base-url';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_B, USER_C_PRO } from '../fixtures/users';
 
@@ -59,7 +60,7 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
 		let inviteToken = '';
-		const baseURL = testInfo.project.use.baseURL ?? 'http://localhost:7777';
+		const baseURL = testInfo.project.use.baseURL ?? resolveBaseUrl();
 
 		// The athlete acts in a SEPARATE browser context (its own storage state /
 		// session) — a genuine second user, not a tab of the coach's session.

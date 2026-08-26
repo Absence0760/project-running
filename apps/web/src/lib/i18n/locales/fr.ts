@@ -7,6 +7,18 @@ export const messages = {
 	'common.unsavedTitle': 'Abandonner les modifications ?',
 	'common.unsavedBody': 'Vous avez des modifications non enregistrées. Quitter sans enregistrer ?',
 	'common.discard': 'Abandonner',
+	"rateLimit.createClub": "Vous créez des clubs trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.createRoute": "Vous créez des parcours trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.createReport": "Vous envoyez des signalements trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.adoptPlan": "Vous adoptez des plans trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.adoptSessionPlan": "Vous adoptez des plans de séance trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.adoptGymRoutine": "Vous adoptez des routines de renfo trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.publishRoutine": "Vous publiez des routines trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.sendMessage": "Vous envoyez des messages trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.generic": "Vous faites cela trop rapidement — veuillez patienter {wait} et réessayer.",
+	"rateLimit.waitSeconds": "{n, plural, one {# seconde} other {# secondes}}",
+	"rateLimit.waitMinutes": "{n, plural, one {# minute} other {# minutes}}",
+	"rateLimit.waitSoon": "un instant",
 	// The one `runs.activity_type` vocabulary — every surface that names an
 	// activity resolves through `activityTypeLabel` (runs/activity_type.ts).
 	// Value domain is the `runs_activity_type_check` CHECK constraint.
@@ -2620,6 +2632,7 @@ export const messages = {
 	"segmentEfforts.none": "Aucune tentative de segment sur cette course.",
 	"segmentEfforts.linkHint": "Les segments sont associés par itinéraire — associe cette course à un itinéraire enregistré pour figurer dans ses classements.",
 	"segmentEfforts.catalogueHeading": "Segments célèbres",
+	"segmentEfforts.rankUnknown": "Classement indisponible",
 	"privacyZonePicker.hint": "Touche n'importe où sur la carte (ou utilise ta position actuelle) pour définir le centre, puis fais glisser le marqueur pour l'ajuster. Tout ce qui se trouve dans le cercle rouge sera masqué des partages publics.",
 	"privacyZonePicker.useCurrentLocation": "Utiliser ma position actuelle",
 	"privacyZonePicker.locating": "Localisation…",

@@ -8,7 +8,7 @@ port = 54322
 
 [auth]
 site_url = "http://localhost:7777"
-additional_redirect_urls = ["http://localhost:7777/auth/callback", "http://localhost:7779/auth/callback"]
+additional_redirect_urls = ["http://localhost:7777/auth/callback", "http://localhost:7780/auth/callback"]
 enable_signup = true
 
 # The clients (web PASSWORD_MIN_LENGTH, mobile kPasswordMinLength) both

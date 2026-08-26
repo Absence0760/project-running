@@ -3,6 +3,7 @@ import { chromium } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
+import { resolveBaseUrl } from './base-url';
 import { assertServedTreeMatches } from './dev_server_guard';
 import { signIn } from './helpers';
 import { ALL_USERS, type SeededUser } from './users';
@@ -48,8 +49,7 @@ export default async function globalSetup(config: FullConfig) {
 		throw new Error(formatGuardError(result, { scope: 'playwright' }));
 	}
 
-	const baseURL =
-		config.projects[0]?.use?.baseURL ?? 'http://localhost:7777';
+	const baseURL = config.projects[0]?.use?.baseURL ?? resolveBaseUrl();
 
 	// A reused dev server can be serving a bundle that is not this tree's.
 	await assertServedTreeMatches(baseURL);

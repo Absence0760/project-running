@@ -8547,6 +8547,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => 'Classificação indisponível';
+
+  @override
   String get runSegEffortsChecking => 'Verificando segmentos…';
 
   @override
@@ -13653,6 +13656,76 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runSurfaceTabSegments => 'Segmentos';
+
+  @override
+  String rateLimitCreateClub(String wait) {
+    return 'Está a criar clubes demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitCreateRoute(String wait) {
+    return 'Está a criar percursos demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitCreateReport(String wait) {
+    return 'Está a enviar denúncias demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitAdoptPlan(String wait) {
+    return 'Está a adotar planos demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitAdoptSessionPlan(String wait) {
+    return 'Está a adotar planos de sessão demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitAdoptGymRoutine(String wait) {
+    return 'Está a adotar rotinas de ginásio demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitPublishRoutine(String wait) {
+    return 'Está a publicar rotinas demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitSendMessage(String wait) {
+    return 'Está a enviar mensagens demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitGeneric(String wait) {
+    return 'Está a fazer isso demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
+  String rateLimitWaitSeconds(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n segundos',
+      one: '1 segundo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rateLimitWaitMinutes(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n minutos',
+      one: '1 minuto',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rateLimitWaitSoon => 'um momento';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -22195,6 +22268,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get runSegEffortsRankUnknown => 'Classificação indisponível';
+
+  @override
   String get runSegEffortsChecking => 'Verificando segmentos…';
 
   @override
@@ -27298,4 +27374,74 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runSurfaceTabSegments => 'Segmentos';
+
+  @override
+  String rateLimitCreateClub(String wait) {
+    return 'Você está criando clubes rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitCreateRoute(String wait) {
+    return 'Você está criando rotas rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitCreateReport(String wait) {
+    return 'Você está enviando denúncias rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitAdoptPlan(String wait) {
+    return 'Você está adotando planos rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitAdoptSessionPlan(String wait) {
+    return 'Você está adotando planos de sessão rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitAdoptGymRoutine(String wait) {
+    return 'Você está adotando rotinas de academia rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitPublishRoutine(String wait) {
+    return 'Você está publicando rotinas rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitSendMessage(String wait) {
+    return 'Você está enviando mensagens rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitGeneric(String wait) {
+    return 'Você está fazendo isso rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitWaitSeconds(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n segundos',
+      one: '1 segundo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rateLimitWaitMinutes(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n minutos',
+      one: '1 minuto',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rateLimitWaitSoon => 'um momento';
 }

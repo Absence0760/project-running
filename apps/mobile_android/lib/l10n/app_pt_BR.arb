@@ -2343,6 +2343,7 @@
   "clubPhotosUploadError": "Falha no envio: {error}",
   "clubPhotosDeleteError": "Falha ao excluir: {error}",
   "clubPhotosCaptionError": "Não foi possível atualizar a legenda: {error}",
+  "runSegEffortsRankUnknown": "Classificação indisponível",
   "runSegEffortsChecking": "Verificando segmentos…",
   "runSegEffortsNoRoute": "Os segmentos são associados por rota — vincule esta corrida a uma rota salva para competir nos rankings dela.",
   "runSegEffortsEmpty": "Nenhum esforço de segmento nesta corrida.",
@@ -3940,5 +3941,17 @@
   "segmentCatalogueStatElevation": "Ganho de elevação",
   "segmentCatalogueStatSurface": "Piso",
   "segmentCatalogueLeaderboard": "Classificação",
-  "runSurfaceTabSegments": "Segmentos"
+  "runSurfaceTabSegments": "Segmentos",
+  "rateLimitCreateClub": "Você está criando clubes rápido demais — espere {wait} e tente de novo.",
+  "rateLimitCreateRoute": "Você está criando rotas rápido demais — espere {wait} e tente de novo.",
+  "rateLimitCreateReport": "Você está enviando denúncias rápido demais — espere {wait} e tente de novo.",
+  "rateLimitAdoptPlan": "Você está adotando planos rápido demais — espere {wait} e tente de novo.",
+  "rateLimitAdoptSessionPlan": "Você está adotando planos de sessão rápido demais — espere {wait} e tente de novo.",
+  "rateLimitAdoptGymRoutine": "Você está adotando rotinas de academia rápido demais — espere {wait} e tente de novo.",
+  "rateLimitPublishRoutine": "Você está publicando rotinas rápido demais — espere {wait} e tente de novo.",
+  "rateLimitSendMessage": "Você está enviando mensagens rápido demais — espere {wait} e tente de novo.",
+  "rateLimitGeneric": "Você está fazendo isso rápido demais — espere {wait} e tente de novo.",
+  "rateLimitWaitSeconds": "{n, plural, one{1 segundo} other{{n} segundos}}",
+  "rateLimitWaitMinutes": "{n, plural, one{1 minuto} other{{n} minutos}}",
+  "rateLimitWaitSoon": "um momento"
 }

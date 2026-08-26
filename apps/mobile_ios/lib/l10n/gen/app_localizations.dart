@@ -13976,6 +13976,12 @@ abstract class AppLocalizations {
   /// **'Could not update caption: {error}'**
   String clubPhotosCaptionError(String error);
 
+  /// Accessible name for a segment-effort rank pill whose standing the rank RPC did not return
+  ///
+  /// In en, this message translates to:
+  /// **'Rank unavailable'**
+  String get runSegEffortsRankUnknown;
+
   /// Loading state while segment efforts are computed
   ///
   /// In en, this message translates to:
@@ -22681,6 +22687,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Segments'**
   String get runSurfaceTabSegments;
+
+  /// Rate-limit refusal when the create_club bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re creating clubs too quickly — please wait {wait} and try again.'**
+  String rateLimitCreateClub(String wait);
+
+  /// Rate-limit refusal when the create_route bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re creating routes too quickly — please wait {wait} and try again.'**
+  String rateLimitCreateRoute(String wait);
+
+  /// Rate-limit refusal when the create_report bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re filing reports too quickly — please wait {wait} and try again.'**
+  String rateLimitCreateReport(String wait);
+
+  /// Rate-limit refusal when a training-plan adopt bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re adopting plans too quickly — please wait {wait} and try again.'**
+  String rateLimitAdoptPlan(String wait);
+
+  /// Rate-limit refusal when the clone_session_template bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re adopting session plans too quickly — please wait {wait} and try again.'**
+  String rateLimitAdoptSessionPlan(String wait);
+
+  /// Rate-limit refusal when the clone_gym_routine_template bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re adopting gym routines too quickly — please wait {wait} and try again.'**
+  String rateLimitAdoptGymRoutine(String wait);
+
+  /// Rate-limit refusal when the publish_gym_routine_as_template bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re publishing routines too quickly — please wait {wait} and try again.'**
+  String rateLimitPublishRoutine(String wait);
+
+  /// Rate-limit refusal when either direct-message send bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re sending messages too quickly — please wait {wait} and try again.'**
+  String rateLimitSendMessage(String wait);
+
+  /// Rate-limit refusal for a bucket this build does not recognise
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re doing that too quickly — please wait {wait} and try again.'**
+  String rateLimitGeneric(String wait);
+
+  /// The wait a rate-limit refusal slots in, in seconds
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{1 second} other{{n} seconds}}'**
+  String rateLimitWaitSeconds(int n);
+
+  /// The wait a rate-limit refusal slots in, in whole minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{n, plural, one{1 minute} other{{n} minutes}}'**
+  String rateLimitWaitMinutes(int n);
+
+  /// The wait a rate-limit refusal slots in when the trigger reported no positive figure
+  ///
+  /// In en, this message translates to:
+  /// **'a few seconds'**
+  String get rateLimitWaitSoon;
 }
 
 class _AppLocalizationsDelegate

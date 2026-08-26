@@ -10,5 +10,17 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- APNs. Resolved from the per-configuration APS_ENVIRONMENT build setting
+	     (Debug + Profile `development`, Release `production`) rather than
+	     hardcoded, because one entitlements file serves all three configurations
+	     and the sandbox and production APNs hosts reject each other's tokens.
+	     Pinning `development` here and trusting the distribution export to
+	     rewrite it is the shape that ships a TestFlight build whose tokens the
+	     worker's production host answers BadDeviceToken for — push that never
+	     arrives and never errors. An undefined setting expands to the literal
+	     string, which no profile carries, so the failure is loud at signing.
+	     decisions.md § 742. -->
+	<key>com.apple.developer.aps-environment</key>
+	<string>$(APS_ENVIRONMENT)</string>
 </dict>
 </plist>
