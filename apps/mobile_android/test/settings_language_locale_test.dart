@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/l10n/locale_support.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/settings_preferences_screen.dart';
 import '../lib/settings_sync.dart';
@@ -65,6 +66,73 @@ void main() {
     // no-ops here because `service` is null, so this is the only write).
     expect(sync.universalWrites, [
       {'locale': 'de'},
+    ]);
+  });
+
+  testWidgets('the picker offers every shipped catalogue', (tester) async {
+    final prefs = Preferences();
+    await prefs.init();
+    final sync = _FakeSettingsSync(prefs);
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: SettingsPreferencesScreen(preferences: prefs, settingsSync: sync),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Language'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.widgetWithText(ListTile, 'Language'));
+    await tester.pumpAndSettle();
+
+    // Scoped to the dialog: the tile underneath carries the current label too.
+    for (final locale in supportedLocales) {
+      final label = localeLabels[localeToTag(locale)]!;
+      expect(
+        find.descendant(
+          of: find.byType(SimpleDialog),
+          matching: find.text(label),
+        ),
+        findsOneWidget,
+        reason: '$locale ships a catalogue but the picker cannot offer it',
+      );
+    }
+  });
+
+  testWidgets('European Portuguese is selectable and stores its own tag',
+      (tester) async {
+    final prefs = Preferences();
+    await prefs.init();
+    final sync = _FakeSettingsSync(prefs);
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: SettingsPreferencesScreen(preferences: prefs, settingsSync: sync),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Language'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.widgetWithText(ListTile, 'Language'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.descendant(
+      of: find.byType(SimpleDialog),
+      matching: find.text(localeLabels['pt']!),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(prefs.locale, const Locale('pt'));
+    expect(sync.universalWrites, [
+      {'locale': 'pt'},
     ]);
   });
 }
