@@ -2074,7 +2074,7 @@ jobs:
             echo "PUBLIC_BYPASS_PAYWALL=true"
           } > ../web/.env
       # playwright.sso.config.ts boots two webServers: the mock OIDC server
-      # (start-mock-oidc.mjs) and a dedicated vite dev server on :7779.
+      # (start-mock-oidc.mjs) and a dedicated vite dev server on :7780.
       # Both are reaped on teardown.
       - name: Sync SvelteKit generated types
         working-directory: apps/web

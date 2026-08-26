@@ -33,7 +33,7 @@ is impossible; this is the closest faithful exercise of our OAuth code.
   body for the active identity. `POST /__identity {sub,email}` switches
   the issued identity between specs.
 - `../playwright.sso.config.ts` — boots the mock + a dedicated vite dev
-  server (`:7779`) and runs only `tests-e2e/sso/`. Chromium launches with
+  server (`:7780`) and runs only `tests-e2e/sso/`. Chromium launches with
   `--host-resolver-rules=MAP host.docker.internal 127.0.0.1` (see
   networking below).
 - `oauth_full_flow.spec.ts` — the happy paths (new user → age/terms gate
@@ -70,7 +70,7 @@ placeholders**, not real credentials:
 | `SSO_MOCK_OIDC_SECRET` | `sso-e2e-secret-not-real` |
 | `SSO_MOCK_OIDC_URL` | `http://host.docker.internal:9888` |
 
-`additional_redirect_urls` includes `http://localhost:7779/auth/callback`
+`additional_redirect_urls` includes `http://localhost:7780/auth/callback`
 (the SSO dev-server port) so GoTrue accepts the lane's `redirect_to`.
 
 ## Running locally
