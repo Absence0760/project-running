@@ -3,7 +3,11 @@ import { join } from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFINER_NEUTRALISERS } from './pgtap_definer_neutralisers.mjs';
+import {
+  DEFINER_NEUTRALISERS,
+  UNREGISTERED_DEFINER_RELATIONS,
+  mine,
+} from './pgtap_definer_neutralisers.mjs';
 import {
   EXPECTED_SURVIVORS,
   REFUSAL_VOCABULARY,
@@ -146,6 +150,49 @@ test('every permissive replacement redefines the relation it is registered under
     assert.ok(
       entry.witness?.setup?.length > 0 && entry.witness?.probe?.length > 0,
       `${name} has no witness, so nothing proves its replacement is not inert`,
+    );
+  }
+});
+
+test('every permissive replacement is scoped to the rows the transaction wrote', () => {
+  for (const [name, entry] of DEFINER_NEUTRALISERS) {
+    assert.ok(
+      typeof entry.subject === 'string' && entry.subject.length > 0,
+      `${name} does not name the relation its revealed rows come from, so nothing says which alias the transaction-local scope belongs on`,
+    );
+    const alias = entry.subject.split(/\s+/)[1];
+    assert.ok(
+      alias && /^[a-z_][a-z0-9_]*$/.test(alias),
+      `${name}'s subject "${entry.subject}" does not read as "<table> <alias>"`,
+    );
+    assert.ok(
+      entry.sql.includes(mine(alias)),
+      `${name} declares its subject as ${entry.subject} but its replacement does not carry ${mine(alias)}. ` +
+        'An unscoped replacement reveals every row in the table, so it kills a refusal whose fixture was never filed.',
+    );
+  }
+});
+
+test('every unreplaced definer relation still names an assertion in the suite', () => {
+  const descriptions = new Set();
+  for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+    const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+    for (const kind of ['is_empty', 'is', 'results_eq']) {
+      for (const call of findCalls(text, kind)) {
+        const description = literalOf(call.argv.at(-1) ?? '');
+        if (description !== null) descriptions.add(description);
+      }
+    }
+  }
+  for (const entry of UNREGISTERED_DEFINER_RELATIONS) {
+    assert.ok(entry.reason.length > 0, `${entry.relation} is left unreplaced with no reason`);
+    assert.ok(
+      descriptions.has(entry.assertion),
+      `UNREGISTERED_DEFINER_RELATIONS names "${entry.assertion}" for ${entry.relation}, and no assertion in the suite carries that description any more`,
+    );
+    assert.ok(
+      !DEFINER_NEUTRALISERS.has(entry.relation),
+      `${entry.relation} is declared unreplaced AND has a permissive replacement — one of the two is wrong`,
     );
   }
 });

@@ -31,6 +31,21 @@
 //      pgtap_definer_neutralisers.mjs holds one per relation, with a witness
 //      proving it reveals a subject the real relation hides.
 //
+// Either operator can reveal a row the test never filed, and a kill over one of
+// those says a subject exists in the database rather than that the test built
+// one - 741's inversion one remove further out, deterministic here because the
+// seed is committed rather than accumulated Playwright debris. Operator 2
+// rewrites the relation, so it can be scoped, and is (decisions.md 751): every
+// permissive replacement carries a `subject` alias and reveals only the rows
+// THIS TRANSACTION wrote. Without it `gym_exercise_set_history('Bench Press')`
+// is killed by seed.sql's six committed `Bench press` sets whether or not the
+// test inserted anything at all.
+//
+// Operator 1 has no query to add a predicate to - it is a role change, and the
+// bypass reveals the whole table exactly as a dropped WHERE does. That residue
+// is measured rather than assumed: 63 of its 117 assertions read at least one
+// table seed.sql leaves rows in, and it is filed in followups.md.
+//
 // If the rows exist and something was hiding them, the assertion turns red. If
 // it stays green, nothing was hidden because nothing was there - the assertion
 // is not testing access control and must either be given a subject or be
@@ -51,7 +66,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DEFINER_NEUTRALISERS } from './pgtap_definer_neutralisers.mjs';
+import {
+  DEFINER_NEUTRALISERS,
+  UNREGISTERED_DEFINER_RELATIONS,
+} from './pgtap_definer_neutralisers.mjs';
 
 export const TESTS_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -240,14 +258,15 @@ export function relationsIn(sql) {
   return new Set([...sql.matchAll(RELATION_REF)].map((m) => m[1].toLowerCase().split('.').pop()));
 }
 
-// Every zero-or-empty assertion in one file whose claim is a read refusal and
-// whose query reads at least one relation of this database, whatever mechanism
-// guards it. Two derived fields decide which operator measures it:
-// `neutralise` is the relations a permissive replacement is registered for,
-// and `unmeasurable` is the ones that run as their owner and have none — for
-// which the owner bypass is provably inert, so the assertion is not measured
-// at all rather than scored on an operator that could not have changed it.
-export function refusalAssertions(text, relations) {
+// Every zero-or-empty assertion in one file that reads at least one relation of
+// this database, with the fields that decide what can be said about it:
+// `selected` is whether its own prose (or an explicit marker) claims a
+// refusal, `neutralise` is the relations a permissive replacement is
+// registered for, and `unmeasurable` is the ones that run as their owner and
+// have none — for which the owner bypass is provably inert, so an assertion is
+// not measured at all rather than scored on an operator that could not have
+// changed it.
+export function zeroOrEmptyAssertions(text, relations) {
   const out = [];
   for (const kind of ['is_empty', 'is', 'results_eq']) {
     for (const call of findCalls(text, kind)) {
@@ -260,18 +279,31 @@ export function refusalAssertions(text, relations) {
       if (!zeroish) continue;
       const description = literalOf(call.argv.at(-1) ?? '');
       if (description === null) continue;
-      const marked = REFUSAL_MARKER.test(text.slice(statementStart(text, call.offset), call.offset));
-      if (!marked && !REFUSAL_VOCABULARY.test(description)) continue;
       const read = [...relationsIn(sql)].filter((r) => relations.has(r));
       if (read.length === 0) continue;
+      const marked = REFUSAL_MARKER.test(text.slice(statementStart(text, call.offset), call.offset));
       const neutralise = read.filter((r) => DEFINER_NEUTRALISERS.has(r));
       const unmeasurable = read.filter(
         (r) => relations.get(r) === 'definer' && !DEFINER_NEUTRALISERS.has(r),
       );
-      out.push({ ...call, description, read, neutralise, unmeasurable });
+      out.push({
+        ...call,
+        description,
+        read,
+        neutralise,
+        unmeasurable,
+        selected: marked || REFUSAL_VOCABULARY.test(description),
+      });
     }
   }
   return out.sort((a, b) => a.offset - b.offset);
+}
+
+// The half of the above whose claim is a read refusal: what makes an empty
+// result a security assertion rather than a statement about a trigger that
+// correctly did not fire.
+export function refusalAssertions(text, relations) {
+  return zeroOrEmptyAssertions(text, relations).filter((c) => c.selected);
 }
 
 export function statementStart(text, offset) {
@@ -361,7 +393,10 @@ export function parseTap(output) {
 // Refusal assertions whose empty result is a real answer rather than a hidden
 // row. Each needs the reason its subject genuinely does not exist; a stale
 // entry, one that no longer exists or that the mutation now kills, fails the
-// guard, so this list cannot quietly outlive what it excuses.
+// guard, so this list cannot quietly outlive what it excuses. "The subject is
+// in the database but this transaction did not write it" is NOT a reason to
+// add one: that is a fixture the test owes, and the entry would excuse exactly
+// the vacuity the guard exists to find.
 export const EXPECTED_SURVIVORS = [
   {
     file: 'auto_hide_reports_test.sql',
@@ -461,18 +496,43 @@ export function fetchRelationSecurity() {
   return out;
 }
 
-// The instrument checked end to end, on two assertions written to have known
+// The instrument checked end to end, on three assertions written to have known
 // verdicts. § 741's third vacuous refusal was scored *killed* on a dirty
 // database, so "the guard ran and was green" is not evidence the guard works:
-// a known-good and a known-bad have to come back different. Both read the same
-// definer view, differ only in whether a subject exists, and go through the
-// real classifier, the real mutant builder and the real TAP parse.
+// the three have to come back different. All read the same definer view and go
+// through the real classifier, the real mutant builder and the real TAP parse,
+// and they differ only in WHERE the subject is:
+//
+//   known-good     a private route this transaction filed          must be KILLED
+//   known-bad      no route at all                                 must SURVIVE
+//   known-debris   a private route already committed to the DB     must SURVIVE
+//
+// The third is the one § 751 added, and it is the only one that can tell a
+// scoped replacement from an unscoped one: before the scoping it was killed,
+// which is a refusal scored healthy by a row the test never filed.
 export function validateOperatorEndToEnd(relations) {
   const present = '00000000-0000-0000-0000-0000000e2e01';
   const absent = '00000000-0000-0000-0000-0000000e2e02';
+  const failures = [];
+  const committed = psql(
+    'select r.id from routes r' +
+      ' where not exists (select 1 from public_routes pr where pr.id = r.id)' +
+      ' order by r.id limit 1;',
+  )
+    .trim()
+    .split('\n')[0]
+    .trim();
+  if (!/^[0-9a-f-]{36}$/.test(committed)) {
+    failures.push(
+      'the end-to-end control found no COMMITTED route that public_routes hides, so its known-debris case proves nothing. ' +
+        'seed.sql is expected to leave at least one private or shadow-hidden route behind; without one, an unscoped ' +
+        'permissive replacement would pass this validation.',
+    );
+    return failures;
+  }
   const file = [
     'begin;',
-    'select plan(2);',
+    'select plan(3);',
     `insert into routes (id, user_id, name, waypoints, distance_m, is_public)
        values ('${present}', (select id from auth.users order by id limit 1),
                'guard control', '[]'::jsonb, 1000, false);`,
@@ -480,21 +540,23 @@ export function validateOperatorEndToEnd(relations) {
        'control: a stranger cannot see the private route');`,
     `select is((select count(*)::int from public_routes where id = '${absent}'), 0,
        'control: a stranger cannot see the route nobody filed');`,
+    `select is((select count(*)::int from public_routes where id = '${committed}'), 0,
+       'control: a stranger cannot see the private route this transaction did not file');`,
     'select * from finish();',
     'rollback;',
   ].join('\n');
 
   const candidates = refusalAssertions(file, relations);
-  const failures = [];
-  if (candidates.length !== 2) {
+  if (candidates.length !== 3) {
     failures.push(
-      `the end-to-end control did not classify: ${candidates.length} of its 2 assertions were selected. The population filter, not the operator, is what changed.`,
+      `the end-to-end control did not classify: ${candidates.length} of its 3 assertions were selected. The population filter, not the operator, is what changed.`,
     );
     return failures;
   }
   const tap = parseTap(psql(buildMutant(file, candidates)));
   const good = tap.get('control: a stranger cannot see the private route');
   const bad = tap.get('control: a stranger cannot see the route nobody filed');
+  const debris = tap.get('control: a stranger cannot see the private route this transaction did not file');
   if (good !== false) {
     failures.push(
       `the end-to-end control's KNOWN-GOOD assertion was not killed (${good === undefined ? 'it never ran' : 'it survived'}). A refusal with a real hidden subject must go red under the mutation; if it does not, every survivor this guard reports is unproven.`,
@@ -503,6 +565,11 @@ export function validateOperatorEndToEnd(relations) {
   if (bad !== true) {
     failures.push(
       `the end-to-end control's KNOWN-BAD assertion did not survive (${bad === undefined ? 'it never ran' : 'it was killed'}). A refusal with no subject at all must stay green under the mutation; if it goes red, the replacement is revealing rows the assertion never asked about and every kill this guard reports is unproven.`,
+    );
+  }
+  if (debris !== true) {
+    failures.push(
+      `the end-to-end control's KNOWN-DEBRIS assertion did not survive (${debris === undefined ? 'it never ran' : 'it was killed'}). Its subject is a route ALREADY IN THE DATABASE that this transaction never wrote, so a kill means the replacement is revealing rows on the strength of the seed rather than of the fixture — which is what every entry's \`subject\` scoping exists to stop. Check that the replacement for public_routes still carries \`mine('r')\`.`,
     );
   }
   return failures;
@@ -548,6 +615,41 @@ export function validateNeutralisers() {
   return failures;
 }
 
+// The declared set of definer relations left without a replacement, checked
+// against the set the suite actually reads. Both directions fail: an entry that
+// no assertion reads any more is a reason kept for nothing, and a relation the
+// suite reads that nobody declared is the case § 745 filed — the guard used to
+// meet it for the first time at merge, as "register a permissive replacement",
+// with no record of whether that had already been considered and refused.
+export function validateUnregisteredDefinerRelations(relations) {
+  const found = new Map();
+  for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
+    const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+    for (const c of zeroOrEmptyAssertions(text, relations)) {
+      for (const r of c.unmeasurable) {
+        if (!found.has(r)) found.set(r, []);
+        found.get(r).push(`${file}:${c.line} "${c.description}"`);
+      }
+    }
+  }
+  const failures = [];
+  const declared = new Set(UNREGISTERED_DEFINER_RELATIONS.map((e) => e.relation));
+  for (const [relation, sites] of found) {
+    if (declared.has(relation)) continue;
+    failures.push(
+      `${relation} runs as its own owner, has no permissive replacement, and is read by a zero-or-empty assertion (${sites.join(', ')}). ` +
+        'Either register a replacement in pgtap_definer_neutralisers.mjs, or add it to UNREGISTERED_DEFINER_RELATIONS with the reason its empty result is not an access-control claim.',
+    );
+  }
+  for (const entry of UNREGISTERED_DEFINER_RELATIONS) {
+    if (found.has(entry.relation)) continue;
+    failures.push(
+      `UNREGISTERED_DEFINER_RELATIONS entry ${entry.relation} is stale: no zero-or-empty assertion reads it as an unreplaced definer relation any more. It was registered, renamed or deleted — remove the entry.`,
+    );
+  }
+  return failures;
+}
+
 function report(failures, summary) {
   if (failures.length > 0) {
     console.error('pgtap refusal-assertion guard failed:\n');
@@ -579,9 +681,15 @@ function main() {
   if (process.argv.includes('--validate-operators')) {
     const relations = fetchRelationSecurity();
     report(
-      [...validateNeutralisers(), ...validateOperatorEndToEnd(relations)],
-      `all ${DEFINER_NEUTRALISERS.size} permissive replacements reveal a subject their real relation ` +
-        `hides, and the end-to-end control kills its known-good assertion while leaving its known-bad one standing`,
+      [
+        ...validateNeutralisers(),
+        ...validateOperatorEndToEnd(relations),
+        ...validateUnregisteredDefinerRelations(relations),
+      ],
+      `all ${DEFINER_NEUTRALISERS.size} permissive replacements reveal a subject their real relation hides that ` +
+        `THIS transaction filed, the end-to-end control kills its known-good assertion while leaving both its ` +
+        `known-bad and its known-debris one standing, and the ${UNREGISTERED_DEFINER_RELATIONS.length} declared ` +
+        `unreplaced definer relations are still exactly the ones the suite reads`,
     );
     return;
   }
@@ -632,9 +740,9 @@ function main() {
     failures.push(
       `${s.file}:${s.line}  "${s.description}" still passes with ` +
         (s.neutralise.length > 0
-          ? `row-level access control removed AND ${s.neutralise.join(', ')} replaced by a permissive definition`
+          ? `row-level access control removed AND ${s.neutralise.join(', ')} replaced by a permissive definition over the rows THIS TRANSACTION wrote`
           : 'row-level access control removed') +
-        `, so it cannot tell a hidden row from a row that was never inserted. Give it a subject (file the row the refusal is about, and read it back from a session that may see it); if the relation it reads filters in its own SQL, register a permissive replacement for it; or add it to EXPECTED_SURVIVORS with the reason its empty result is a real answer.`,
+        `, so it cannot tell a hidden row from a row that was never inserted. Give it a subject (file the row the refusal is about, and read it back from a session that may see it) — a row the test only SELECTs is not one it filed, and the permissive replacement is deliberately scoped so a committed seed row cannot stand in for a missing fixture; if the relation it reads filters in its own SQL, register a permissive replacement for it; or add it to EXPECTED_SURVIVORS with the reason its empty result is a real answer.`,
     );
   }
 

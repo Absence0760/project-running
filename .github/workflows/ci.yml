@@ -1683,8 +1683,8 @@ jobs:
             exit 1
           fi
           if ! node apps/backend/scripts/check_pgtap_refusal_assertions.mjs --validate-operators; then
-            echo "::error::A pgtap refusal-assertion mutation operator is inert, so the mutation run below would prove nothing."
-            echo "Either a permissive replacement in apps/backend/scripts/pgtap_definer_neutralisers.mjs no longer reveals the subject its relation hides (the relation's own filter has moved), or the end-to-end control stopped separating its known-good assertion from its known-bad one."
+            echo "::error::A pgtap refusal-assertion mutation operator is inert or over-wide, so the mutation run below would prove nothing."
+            echo "Either a permissive replacement in apps/backend/scripts/pgtap_definer_neutralisers.mjs no longer reveals the subject its relation hides (the relation's own filter has moved), or it reveals a row this transaction never wrote (its subject scoping was dropped), or the end-to-end control stopped separating its known-good, known-bad and known-debris assertions, or a definer relation with no replacement is neither registered nor declared in UNREGISTERED_DEFINER_RELATIONS."
             exit 1
           fi
       - name: Mutation-check the pgtap refusal assertions
