@@ -1,0 +1,17 @@
+{
+	// The Playwright tree is outside `.svelte-kit/tsconfig.json`'s `include`
+	// (SvelteKit generates `src/`, `test/` and `tests/`), and Playwright
+	// transpiles specs with esbuild without ever type-checking them — so
+	// nothing typechecked `tests-e2e/` at all. This config closes that, and is
+	// a SEPARATE root rather than an entry added to `tsconfig.json`: TypeScript
+	// does not merge `include` across `extends`, so widening the app's own
+	// would mean pasting SvelteKit's generated list here and re-pasting it
+	// every time SvelteKit changes it — a copy that goes stale silently, and
+	// silently loses coverage, which is the failure this file exists to end.
+	//
+	// Run: `npm run check:e2e-types --workspace=apps/web`
+	// CI:  the `parity-types` job in .github/workflows/ci.yml.
+	// The include list is guarded by tests-e2e/fixtures/tsconfig-coverage.test.ts.
+	"extends": "./tsconfig.json",
+	"include": ["tests-e2e/**/*.ts", "tests-e2e/**/*.mjs"]
+}

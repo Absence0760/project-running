@@ -134,7 +134,13 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 		await coachContext.grantPermissions(['clipboard-read', 'clipboard-write']);
 		const coachPage: Page = await coachContext.newPage();
 
-		let athleteContext: BrowserContext | null = null;
+		// Created up front, not inside the step that first uses it: a value
+		// assigned only from inside a closure is still its initialiser to the
+		// checker at the `finally` below, so the teardown could not see it.
+		const athleteContext: BrowserContext = await browser.newContext({
+			baseURL,
+			storageState: athlete.storageStatePath
+		});
 		let inviteToken = '';
 
 		try {
@@ -172,10 +178,6 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 			});
 
 			await test.step('athlete redeems the invite in a second context', async () => {
-				athleteContext = await browser.newContext({
-					baseURL,
-					storageState: athlete.storageStatePath
-				});
 				const athletePage = await athleteContext.newPage();
 
 				// The public accept landing redeems via redeem_coach_invite and, on
@@ -297,7 +299,7 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 			});
 
 			await test.step('the athlete no longer sees the coach (link ended on both sides)', async () => {
-				const athletePage = await athleteContext!.newPage();
+				const athletePage = await athleteContext.newPage();
 				await athletePage.goto('/coaching');
 				await expect(
 					athletePage.getByRole('heading', { level: 1, name: 'Athletes & coaches' })
@@ -311,7 +313,7 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 				await athletePage.close();
 			});
 		} finally {
-			if (athleteContext) await athleteContext.close();
+			await athleteContext.close();
 			await coachContext.close();
 		}
 	});

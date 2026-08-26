@@ -58,7 +58,6 @@ test.describe('saga: account deletion via /settings/account', () => {
 	// A second user so the relational tables (DMs, blocks, coaching links)
 	// have a counterpart; only `user` is deleted.
 	let other: SagaUser;
-	let plantedRunId: string | null = null;
 
 	test.beforeAll(async () => {
 		[user, other] = await createSagaUsers(2, {
@@ -76,7 +75,7 @@ test.describe('saga: account deletion via /settings/account', () => {
 		browser
 	}) => {
 		// 1) Plant a run so there's row + storage state to delete.
-		plantedRunId = await insertRun({
+		const plantedRunId = await insertRun({
 			user_id: user.id,
 			started_at: new Date('2026-04-30T10:00:00Z').toISOString(),
 			distance_m: 4_500,
@@ -296,8 +295,5 @@ test.describe('saga: account deletion via /settings/account', () => {
 			.select('id')
 			.eq('coach_id', user.id);
 		expect(coaching.data ?? [], 'coach_athletes must cascade on coach delete').toEqual([]);
-
-		// Mark plantedRunId as cleaned so the afterAll doesn't re-attempt.
-		plantedRunId = null;
 	});
 });
