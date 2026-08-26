@@ -1621,16 +1621,34 @@ jobs:
       # assertion asked anything. Under RLS a refused SELECT returns no rows
       # rather than erroring, so a refusal assertion and a fixture that never
       # inserted look identical (decisions.md 741). This re-runs each refusal
-      # assertion with row-level access control removed and fails if it still
-      # passes.
-      - name: Mutation-check the pgtap refusal assertions
+      # assertion with the mechanism that could be hiding a row taken away —
+      # the owner bypass for a base table, a permissive replacement for a
+      # relation that filters in its own SQL (decisions.md 745) — and fails if
+      # it still passes.
+      #
+      # The operator is validated before it is trusted, in its own step: a
+      # mutation that changes nothing scores every assertion it touches as
+      # vacuous, which is § 741's inversion pointed the other way, and it would
+      # be invisible inside a green mutation run.
+      - name: Validate the refusal-assertion mutation operators
         run: |
           if ! node --test apps/backend/scripts/check_pgtap_refusal_assertions.test.mjs; then
             echo "::error::The pgtap refusal-assertion guard's own tests fail."
             echo "Fix apps/backend/scripts/check_pgtap_refusal_assertions.mjs (or its tests) first."
             exit 1
           fi
-          node apps/backend/scripts/check_pgtap_refusal_assertions.mjs
+          if ! node apps/backend/scripts/check_pgtap_refusal_assertions.mjs --validate-operators; then
+            echo "::error::A pgtap refusal-assertion mutation operator is inert, so the mutation run below would prove nothing."
+            echo "Either a permissive replacement in apps/backend/scripts/pgtap_definer_neutralisers.mjs no longer reveals the subject its relation hides (the relation's own filter has moved), or the end-to-end control stopped separating its known-good assertion from its known-bad one."
+            exit 1
+          fi
+      - name: Mutation-check the pgtap refusal assertions
+        run: |
+          if ! node apps/backend/scripts/check_pgtap_refusal_assertions.mjs; then
+            echo "::error::A pgtap refusal assertion still passes with the access control it tests taken away, so it cannot tell a hidden row from a row that was never inserted."
+            echo "The failure above names the file and line. Give the assertion a subject, register a permissive replacement for the relation it reads, or add it to EXPECTED_SURVIVORS with the reason its empty result is a real answer."
+            exit 1
+          fi
 
   e2e-web:
     needs: changes

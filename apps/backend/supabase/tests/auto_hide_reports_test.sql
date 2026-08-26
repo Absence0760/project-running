@@ -129,6 +129,7 @@ on conflict (id) do nothing;
 
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000ae12","role":"authenticated"}';
+-- refusal: the under-18 floor is a child-protection access control, not a search filter
 select is(
   (select count(*)::int from search_user_profiles('Minor Searchable')),
   0, 'declared minor (canonical DOB column) stays excluded from search');

@@ -94,11 +94,13 @@ select is(
      where id = '00000000-0000-0000-0000-0000000db002'::uuid),
   1::bigint, 'opted-in nearby non-minor runner appears');
 
+-- refusal: the runner's own opt-in is what authorises the disclosure
 select is(
   (select count(*) from discoverable_runners_near()
      where id = '00000000-0000-0000-0000-0000000db003'::uuid),
   0::bigint, 'runner who did not opt in is excluded');
 
+-- refusal: the under-18 floor overrides consent, so it is access control
 select is(
   (select count(*) from discoverable_runners_near()
      where id = '00000000-0000-0000-0000-0000000db004'::uuid),
@@ -109,16 +111,19 @@ select is(
      where id = '00000000-0000-0000-0000-0000000db005'::uuid),
   0::bigint, 'shadow_hidden runner is excluded');
 
+-- refusal: a search opt-out is a privacy choice, not a query filter
 select is(
   (select count(*) from discoverable_runners_near()
      where id = '00000000-0000-0000-0000-0000000db006'::uuid),
   0::bigint, 'discoverable_in_search=false runner is excluded');
 
+-- refusal: the radius is the scrape bound on how much of the map one caller may enumerate
 select is(
   (select count(*) from discoverable_runners_near()
      where id = '00000000-0000-0000-0000-0000000db007'::uuid),
   0::bigint, 'runner beyond the radius is excluded');
 
+-- refusal: a block is access control in both directions
 select is(
   (select count(*) from discoverable_runners_near()
      where id = '00000000-0000-0000-0000-0000000db008'::uuid),

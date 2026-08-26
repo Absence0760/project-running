@@ -12,27 +12,46 @@
 // WHERE clause matching nothing looks like, and what a typo'd uuid looks like.
 //
 // The discriminator is mutation, not inspection: run each such assertion again
-// with row-level access control removed at that exact instant. Every public
-// table is owned by `postgres`, which holds BYPASSRLS and which no table
-// FORCEs RLS against, so `reset role` for the duration of one statement is a
-// complete, lock-free bypass. If the rows exist and a policy was hiding them,
-// the assertion turns red. If it stays green, nothing was hidden because
-// nothing was there - the assertion is not testing access control and must
-// either be given a subject or be listed below with the reason its zero is a
-// real answer.
+// with the mechanism that could be hiding a row taken away. There are two such
+// mechanisms and therefore two operators, chosen per assertion by what it
+// reads (decisions.md 745):
+//
+//   1. Row-level security, behind a base table read. Every public table is
+//      owned by `postgres`, which holds BYPASSRLS and which no table FORCEs
+//      RLS against, so `reset role` for the duration of one statement is a
+//      complete, lock-free bypass.
+//
+//   2. The relation's OWN predicate, behind a read through a view or an RPC. A
+//      `security definer` view and a SECURITY DEFINER function already run as
+//      their owner, so RLS was never what hid anything from them - and so does
+//      a SECURITY INVOKER function whose body carries a `= auth.uid()`, which
+//      the catalogue cannot tell you about. Dropping RLS leaves all of those
+//      returning exactly what they returned. The operator for them is a
+//      permissive replacement of the relation itself, inside a savepoint:
+//      pgtap_definer_neutralisers.mjs holds one per relation, with a witness
+//      proving it reveals a subject the real relation hides.
+//
+// If the rows exist and something was hiding them, the assertion turns red. If
+// it stays green, nothing was hidden because nothing was there - the assertion
+// is not testing access control and must either be given a subject or be
+// listed below with the reason its zero is a real answer.
 //
 // Found by this guard at introduction: rls_route_conditions_test's non-owner
 // and anon private-route reads, which asserted that an empty table reads
-// empty.
+// empty. Found by the second operator: seven "owner-scoped" RPC refusals that
+// the first operator could not have measured at all.
 //
-// Two phases. The first is static and checks that every negative pins the
-// error it expects, so a `throws_ok` cannot pass on a typo'd table name. The
-// second is the mutation run and needs the local stack.
+// Three phases. `--static-only` checks that every negative pins the error it
+// expects, so a `throws_ok` cannot pass on a typo'd table name.
+// `--validate-operators` proves each permissive replacement is not inert. The
+// default is the mutation run, and needs the local stack.
 
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { DEFINER_NEUTRALISERS } from './pgtap_definer_neutralisers.mjs';
 
 export const TESTS_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -168,8 +187,51 @@ export function throwsPinsItsError(argv) {
 // A description claiming a principal is denied SIGHT of data. This is what
 // makes an empty result a security claim rather than a statement about a
 // trigger that correctly did not fire.
+//
+// The selector is prose, so its reach is measured rather than argued
+// (decisions.md 745). Both operators were run over all 294 zero-or-empty
+// assertions in the suite, not just the ones worded as refusals. The regex as
+// it stood selected 126 and 121 of them died under mutation, so it is
+// precise. Of the 168 it did not select, 28 died too — a real recall gap, and
+// the words behind it split in two:
+//
+//   - `never sees`, `unfindable`, `enumerate`, `exposes no`, `reads nothing`,
+//     `gets nothing`, `absent from` — unambiguous refusal words the regex
+//     simply lacked. Added here: every assertion they select dies under
+//     mutation, so they cost nothing and reach tests not written yet.
+//
+//   - `excluded` / `excludes` — 21 assertions, about half access control (a
+//     declared minor, a search opt-out, a block, a members-only event) and
+//     about half ordinary filters (`byday=MO excludes it`, `free filter
+//     excludes the priced class`). One word, two claims. No regex separates
+//     them, and widening to catch the first half drags in the second, each
+//     needing an EXPECTED_SURVIVORS entry to excuse a filter that was never a
+//     security claim — the allowlist-that-rots this selector exists to avoid.
+//     Those carry an explicit `-- refusal:` marker instead.
+//
+// Two of the 28 are not refusals at all and are deliberately still outside:
+// `distance is returned as coarse bucket 0` and `a long-broken streak reports
+// current = 0` expect a zero VALUE, not an empty result, and a widening
+// mutation moves a value. A kill means "the mutation changed the answer",
+// which is only evidence of access control when the zero was an emptiness.
 export const REFUSAL_VOCABULARY =
-  /(cannot (see|read|select|view|find)|can't (see|read|select|view)|not (see|read|visible|readable|exposed|returned)|invisible|hidden|hides|no access|leak|denied|denies|sees no|sees none|returns nothing|shadow)/i;
+  /(cannot (see|read|select|view|find)|can't (see|read|select|view)|not (see|read|visible|readable|exposed|returned)|never (see|sees|read|reads)|invisible|hidden|hides|no access|leak|denied|denies|sees no|sees none|returns nothing|reads nothing|gets nothing|exposes no|unfindable|enumerate|absent from|shadow)/i;
+
+// An explicit "this zero is a refusal" marker in the test, for a claim whose
+// own wording cannot carry it. It goes on its own comment line immediately
+// above the assertion, inside the same statement span, and says why:
+//
+//   -- refusal: the under-18 floor is access control, not a search filter
+//   select is((select count(*)::int from search_user_profiles('Minor')), 0, ...);
+//
+// The colon is load-bearing: prose wrapping onto a line that happens to open
+// with `-- refusal,` is not a marker, and one such comment already exists.
+//
+// It is opt-IN only. Nothing here can take an assertion OUT of the
+// population: a zero the vocabulary claims is a refusal and that survives
+// mutation has to be argued for by name in EXPECTED_SURVIVORS, where the
+// reason is reviewable and a stale entry fails as loudly as a new offender.
+export const REFUSAL_MARKER = /--[ \t]*refusal:/i;
 
 const ZERO_EXPECTATION = /^\s*0(::(bigint|int4|int|integer|numeric|smallint))?\s*$/i;
 const RELATION_REF = /\b(?:from|join)\s+(?:only\s+)?([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)/gi;
@@ -179,8 +241,13 @@ export function relationsIn(sql) {
 }
 
 // Every zero-or-empty assertion in one file whose claim is a read refusal and
-// whose query reads a base table, so RLS is the mechanism that could hide it.
-export function refusalAssertions(text, baseTables) {
+// whose query reads at least one relation of this database, whatever mechanism
+// guards it. Two derived fields decide which operator measures it:
+// `neutralise` is the relations a permissive replacement is registered for,
+// and `unmeasurable` is the ones that run as their owner and have none — for
+// which the owner bypass is provably inert, so the assertion is not measured
+// at all rather than scored on an operator that could not have changed it.
+export function refusalAssertions(text, relations) {
   const out = [];
   for (const kind of ['is_empty', 'is', 'results_eq']) {
     for (const call of findCalls(text, kind)) {
@@ -192,9 +259,16 @@ export function refusalAssertions(text, baseTables) {
         (kind === 'results_eq' && expected !== undefined && /values\s*\(\s*0\s*\)/i.test(expected));
       if (!zeroish) continue;
       const description = literalOf(call.argv.at(-1) ?? '');
-      if (description === null || !REFUSAL_VOCABULARY.test(description)) continue;
-      if (![...relationsIn(sql)].some((r) => baseTables.has(r))) continue;
-      out.push({ ...call, description });
+      if (description === null) continue;
+      const marked = REFUSAL_MARKER.test(text.slice(statementStart(text, call.offset), call.offset));
+      if (!marked && !REFUSAL_VOCABULARY.test(description)) continue;
+      const read = [...relationsIn(sql)].filter((r) => relations.has(r));
+      if (read.length === 0) continue;
+      const neutralise = read.filter((r) => DEFINER_NEUTRALISERS.has(r));
+      const unmeasurable = read.filter(
+        (r) => relations.get(r) === 'definer' && !DEFINER_NEUTRALISERS.has(r),
+      );
+      out.push({ ...call, description, read, neutralise, unmeasurable });
     }
   }
   return out.sort((a, b) => a.offset - b.offset);
@@ -220,6 +294,30 @@ const BYPASS = [
 ].join('\n');
 const RESTORE = "select set_config('role', current_setting('pgtap_guard.role'), true);\n";
 
+// The definer span carries the same owner bypass plus a permissive
+// replacement of every definer relation the assertion reads, and rolls the
+// whole thing back to a savepoint afterwards. `create or replace` is
+// transactional, so the real view or function is restored before the next
+// assertion runs — which is what keeps a whole file measurable in one pass
+// even though this operator is a schema change and the first one is not.
+export function definerSpan(sql, definer) {
+  const mark = 'pgtap_guard_definer';
+  const replacements = definer.map((name) => {
+    const entry = DEFINER_NEUTRALISERS.get(name);
+    if (!entry) throw new Error(`no permissive replacement registered for ${name}`);
+    return entry.sql;
+  });
+  return (
+    `savepoint ${mark};\n` +
+    BYPASS +
+    replacements.join('\n') +
+    '\n' +
+    sql +
+    '\n' +
+    `rollback to savepoint ${mark};\nrelease savepoint ${mark};\n`
+  );
+}
+
 // One mutant per file: each candidate assertion runs with the role dropped to
 // the BYPASSRLS owner for the span of its own statement and restored straight
 // after. The assertions are read-only, so bypassing one changes nothing the
@@ -230,14 +328,22 @@ export function buildMutant(text, candidates) {
   if (!beginAt) throw new Error('test file does not open a transaction');
   const afterBegin = beginAt.index + beginAt[0].length + 1;
   const spans = candidates
-    .map((c) => ({ start: statementStart(text, c.offset), end: statementEnd(text, c.offset) }))
+    .map((c) => ({
+      start: statementStart(text, c.offset),
+      end: statementEnd(text, c.offset),
+      neutralise: c.neutralise ?? [],
+    }))
     .sort((a, b) => a.start - b.start);
   let out = '';
   let cursor = afterBegin;
   for (const span of spans) {
+    const statement = text.slice(span.start, span.end);
     out +=
       text.slice(cursor, span.start) +
-      '\n' + BYPASS + text.slice(span.start, span.end) + '\n' + RESTORE;
+      '\n' +
+      (span.neutralise.length > 0
+        ? definerSpan(statement, span.neutralise)
+        : BYPASS + statement + '\n' + RESTORE);
     cursor = span.end;
   }
   return text.slice(0, afterBegin) + CREATE_PGTAP + out + text.slice(cursor);
@@ -283,20 +389,35 @@ export const EXPECTED_SURVIVORS = [
     reason:
       'the assertion above it (an UNFILTERED read returning the owner row) carries the policy claim; this one states the data shape that makes the union surprising, and a contact genuinely owns no rows',
   },
+  {
+    file: 'segment_leaderboard_tiered_test.sql',
+    description: 'no-demographics runner is invisible to age-band filters',
+    reason:
+      'an age band cannot contain a runner who has no age, so no access control is what excludes them and no operator can reveal them. The positive control is test 2 of the same file, which asserts by results_eq that this exact runner IS on the unfiltered board - the pair is what makes the zero mean something. The consent half of the same predicate (a runner with a date but no Art 9 stamp) is a real refusal and is measured in segment_leaderboard_age_band_consent_test',
+  },
 ];
 
+// psql runs the whole mutant in one go and does NOT stop on the first error,
+// because a statement that fails is a fact about the mutation rather than a
+// reason to abandon the file. The consequence is that an early failure aborts
+// the transaction and every later assertion silently produces no TAP line —
+// which reads as "the guard could not measure it" with no clue why. So the
+// errors are kept, and quoted back by whoever reports a missing assertion.
+// spawnSync rather than execFileSync because only spawnSync hands back stderr
+// on the runs that succeed, and those are exactly the runs this matters for.
+let lastPsqlErrors = [];
+
 function psql(sql) {
-  try {
-    return execFileSync(
-      'psql',
-      ['-X', '-q', '--no-psqlrc', '--no-align', '--tuples-only', '--pset', 'pager=off', '-f', '-', DB_URL],
-      { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 180_000 },
-    );
-  } catch (error) {
+  const run = spawnSync(
+    'psql',
+    ['-X', '-q', '--no-psqlrc', '--no-align', '--tuples-only', '--pset', 'pager=off', '-f', '-', DB_URL],
+    { input: sql, encoding: 'utf8', timeout: 180_000 },
+  );
+  if (run.error || run.status !== 0) {
     const why =
-      error.code === 'ENOENT'
+      run.error?.code === 'ENOENT'
         ? 'psql is not on PATH'
-        : `psql could not reach ${DB_URL}: ${String(error.stderr ?? error.message).trim()}`;
+        : `psql could not reach ${DB_URL}: ${String(run.stderr ?? run.error?.message ?? '').trim()}`;
     console.error(
       `pgtap refusal-assertion guard could not run its mutation phase: ${why}.\n` +
         'Start the local Supabase stack (apps/backend: supabase start), set SUPABASE_DB_URL,\n' +
@@ -304,14 +425,127 @@ function psql(sql) {
     );
     process.exit(1);
   }
+  lastPsqlErrors = String(run.stderr ?? '')
+    .split('\n')
+    .filter((line) => line.includes('ERROR:'))
+    .slice(0, 3);
+  return run.stdout;
 }
 
-function fetchBaseTables() {
+// Every relation an assertion can read from `public`, tagged with the operator
+// that reaches it. Read from the live catalogue rather than from the migration
+// text: a view's `security_invoker` and a function's `prosecdef` are exactly
+// the fact that decides which mutation is not inert, and a list in this file
+// would be one more thing to keep in step with the schema.
+export function fetchRelationSecurity() {
   const rows = psql(
-    'select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace' +
-      " where n.nspname = 'public' and c.relkind in ('r','p');",
+    "select c.relname, case when c.relkind in ('r','p') then 'base'" +
+      " when array_to_string(coalesce(c.reloptions, '{}'), ',') ~ 'security_invoker=(true|on)'" +
+      " then 'invoker' else 'definer' end" +
+      ' from pg_class c join pg_namespace n on n.oid = c.relnamespace' +
+      " where n.nspname = 'public' and c.relkind in ('r','p','v','m')" +
+      ' union all ' +
+      "select p.proname, case when p.prosecdef then 'definer' else 'invoker' end" +
+      ' from pg_proc p join pg_namespace n on n.oid = p.pronamespace' +
+      " where n.nspname = 'public' and p.prokind = 'f';",
   );
-  return new Set(rows.split('\n').map((r) => r.trim()).filter(Boolean));
+  const out = new Map();
+  for (const row of rows.split('\n')) {
+    const [name, kind] = row.trim().split('|');
+    if (!name) continue;
+    // A table and a function of the same name resolve to the table in a FROM
+    // clause, so the relation's answer wins over the routine's.
+    if (out.has(name) && out.get(name) === 'base') continue;
+    out.set(name, kind);
+  }
+  return out;
+}
+
+// The instrument checked end to end, on two assertions written to have known
+// verdicts. § 741's third vacuous refusal was scored *killed* on a dirty
+// database, so "the guard ran and was green" is not evidence the guard works:
+// a known-good and a known-bad have to come back different. Both read the same
+// definer view, differ only in whether a subject exists, and go through the
+// real classifier, the real mutant builder and the real TAP parse.
+export function validateOperatorEndToEnd(relations) {
+  const present = '00000000-0000-0000-0000-0000000e2e01';
+  const absent = '00000000-0000-0000-0000-0000000e2e02';
+  const file = [
+    'begin;',
+    'select plan(2);',
+    `insert into routes (id, user_id, name, waypoints, distance_m, is_public)
+       values ('${present}', (select id from auth.users order by id limit 1),
+               'guard control', '[]'::jsonb, 1000, false);`,
+    `select is((select count(*)::int from public_routes where id = '${present}'), 0,
+       'control: a stranger cannot see the private route');`,
+    `select is((select count(*)::int from public_routes where id = '${absent}'), 0,
+       'control: a stranger cannot see the route nobody filed');`,
+    'select * from finish();',
+    'rollback;',
+  ].join('\n');
+
+  const candidates = refusalAssertions(file, relations);
+  const failures = [];
+  if (candidates.length !== 2) {
+    failures.push(
+      `the end-to-end control did not classify: ${candidates.length} of its 2 assertions were selected. The population filter, not the operator, is what changed.`,
+    );
+    return failures;
+  }
+  const tap = parseTap(psql(buildMutant(file, candidates)));
+  const good = tap.get('control: a stranger cannot see the private route');
+  const bad = tap.get('control: a stranger cannot see the route nobody filed');
+  if (good !== false) {
+    failures.push(
+      `the end-to-end control's KNOWN-GOOD assertion was not killed (${good === undefined ? 'it never ran' : 'it survived'}). A refusal with a real hidden subject must go red under the mutation; if it does not, every survivor this guard reports is unproven.`,
+    );
+  }
+  if (bad !== true) {
+    failures.push(
+      `the end-to-end control's KNOWN-BAD assertion did not survive (${bad === undefined ? 'it never ran' : 'it was killed'}). A refusal with no subject at all must stay green under the mutation; if it goes red, the replacement is revealing rows the assertion never asked about and every kill this guard reports is unproven.`,
+    );
+  }
+  return failures;
+}
+
+// Run every registered permissive replacement against a subject the real
+// relation provably hides, and report the ones that reveal nothing. A
+// replacement that does not widen what the caller sees is an inert mutation
+// dressed as a working one: it would score every assertion over that relation
+// as vacuous, which is the § 741 inversion pointed the other way.
+export function validateNeutralisers() {
+  const failures = [];
+  for (const [name, entry] of DEFINER_NEUTRALISERS) {
+    const probe = entry.witness.probe.trim().replace(/;$/, '');
+    const out = psql(
+      `begin;\n${entry.witness.setup}\nselect 'before=' || (${probe});\n` +
+        `${entry.sql}\nselect 'after=' || (${probe});\nrollback;`,
+    );
+    const read = (key) => {
+      const m = new RegExp(`^${key}=(-?\\d+)$`, 'm').exec(out);
+      return m ? Number(m[1]) : null;
+    };
+    const before = read('before');
+    const after = read('after');
+    if (before === null || after === null) {
+      failures.push(
+        `${name}: the witness did not run to completion, so the replacement is unproven. psql said: ${out.trim().split('\n').join(' / ')}`,
+      );
+      continue;
+    }
+    if (before !== 0) {
+      failures.push(
+        `${name}: the witness subject is visible through the REAL relation (${before} rows), so it is not a subject the relation hides and it proves nothing about the replacement. Fix witness.setup.`,
+      );
+      continue;
+    }
+    if (after <= 0) {
+      failures.push(
+        `${name}: the permissive replacement reveals nothing (${after} rows) where the real relation hid a subject, so the mutation is INERT. Every assertion reading ${name} would be scored vacuous for a reason that says nothing. Widen the replacement, or fix the witness if the relation's filter has moved.`,
+      );
+    }
+  }
+  return failures;
 }
 
 function report(failures, summary) {
@@ -342,25 +576,53 @@ function main() {
     return;
   }
 
-  const baseTables = fetchBaseTables();
+  if (process.argv.includes('--validate-operators')) {
+    const relations = fetchRelationSecurity();
+    report(
+      [...validateNeutralisers(), ...validateOperatorEndToEnd(relations)],
+      `all ${DEFINER_NEUTRALISERS.size} permissive replacements reveal a subject their real relation ` +
+        `hides, and the end-to-end control kills its known-good assertion while leaving its known-bad one standing`,
+    );
+    return;
+  }
+
+  const relations = fetchRelationSecurity();
   const survivors = [];
   let population = 0;
+  let definerPopulation = 0;
 
   for (const file of files) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
-    const candidates = refusalAssertions(text, baseTables);
+    const candidates = refusalAssertions(text, relations);
     if (candidates.length === 0) continue;
-    population += candidates.length;
-    const tap = parseTap(psql(buildMutant(text, candidates)));
-    for (const candidate of candidates) {
+    const unmeasurable = candidates.filter((c) => c.unmeasurable.length > 0);
+    for (const c of unmeasurable) {
+      failures.push(
+        `${file}:${c.line}  "${c.description}" reads ${c.unmeasurable.join(', ')}, which runs as its own owner and filters in its own SQL — the owner bypass leaves its result identical, so no operator here can tell this assertion's refusal from an empty fixture. Register a permissive replacement in pgtap_definer_neutralisers.mjs.`,
+      );
+    }
+    const measurable = candidates.filter((c) => c.unmeasurable.length === 0);
+    if (measurable.length === 0) continue;
+    population += measurable.length;
+    definerPopulation += measurable.filter((c) => c.neutralise.length > 0).length;
+    const tap = parseTap(psql(buildMutant(text, measurable)));
+    for (const candidate of measurable) {
       const passed = tap.get(candidate.description);
       if (passed === undefined) {
         failures.push(
-          `${file}:${candidate.line}  the mutant run never reached "${candidate.description}", so the guard could not measure it.`,
+          `${file}:${candidate.line}  the mutant run never reached "${candidate.description}", so the guard could not measure it.` +
+            (lastPsqlErrors.length > 0 ? ` psql said: ${lastPsqlErrors.join(' / ')}` : ''),
         );
         continue;
       }
-      if (passed) survivors.push({ file, line: candidate.line, description: candidate.description });
+      if (passed) {
+        survivors.push({
+          file,
+          line: candidate.line,
+          description: candidate.description,
+          neutralise: candidate.neutralise,
+        });
+      }
     }
   }
 
@@ -368,7 +630,11 @@ function main() {
   for (const s of survivors) {
     if (excused.has(`${s.file} ${s.description}`)) continue;
     failures.push(
-      `${s.file}:${s.line}  "${s.description}" still passes with row-level access control removed, so it cannot tell a hidden row from a row that was never inserted. Give it a subject (file the row the refusal is about, and read it back from a session that may see it), or add it to EXPECTED_SURVIVORS with the reason its empty result is a real answer.`,
+      `${s.file}:${s.line}  "${s.description}" still passes with ` +
+        (s.neutralise.length > 0
+          ? `row-level access control removed AND ${s.neutralise.join(', ')} replaced by a permissive definition`
+          : 'row-level access control removed') +
+        `, so it cannot tell a hidden row from a row that was never inserted. Give it a subject (file the row the refusal is about, and read it back from a session that may see it); if the relation it reads filters in its own SQL, register a permissive replacement for it; or add it to EXPECTED_SURVIVORS with the reason its empty result is a real answer.`,
     );
   }
 
@@ -382,7 +648,9 @@ function main() {
 
   report(
     failures,
-    `${population} refusal assertions mutation-checked across ${files.length} test files; ` +
+    `${population} refusal assertions mutation-checked across ${files.length} test files ` +
+      `(${population - definerPopulation} under the owner bypass, ${definerPopulation} additionally under a ` +
+      `permissive replacement of the relation they read); ` +
       `${survivors.length} survived, all ${EXPECTED_SURVIVORS.length} of them expected`,
   );
 }

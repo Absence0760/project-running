@@ -116,6 +116,7 @@ select is(
 
 set local role anon;
 
+-- refusal: geom_public is the privacy-clipped geometry, and matching on the raw line would reopen the oracle
 select is(
   (select count(*)
      from routes_within_box(47.3695, 8.5395, 47.3705, 8.5410, 50)
@@ -124,6 +125,7 @@ select is(
   'anon: a box over the in-zone head does NOT return the route (oracle closed)'
 );
 
+-- refusal: a null clipped geometry must fail closed rather than fall back to the raw line
 select is(
   (select count(*)
      from routes_within_box(47.3695, 8.5395, 47.3705, 8.5410, 50)
@@ -183,6 +185,7 @@ update user_settings
 
 set local role anon;
 
+-- refusal: a zone added later has to take effect on reads already possible before it
 select is(
   (select count(*)
      from routes_within_box(47.3695, 8.5395, 47.3705, 8.5410, 50)

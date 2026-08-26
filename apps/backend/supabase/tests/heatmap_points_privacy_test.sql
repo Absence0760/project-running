@@ -98,6 +98,7 @@ select cmp_ok(
 
 -- 2. The leak itself. The densified walk used to start ~50 m from the first
 --    waypoint, i.e. inside the owner's zone.
+-- refusal: the privacy-zone clip is the whole privacy contract of the heatmap
 select is(
   (select count(*)
      from heatmap_points_in_bbox(8.53, 47.36, 8.57, 47.38, 5000) p
@@ -108,6 +109,7 @@ select is(
 );
 
 -- 3. A public route that never leaves its owner's zone contributes nothing.
+-- refusal: the privacy-zone clip is the whole privacy contract of the heatmap
 select is(
   (select count(*) from heatmap_points_in_bbox(8.53, 47.09, 8.55, 47.11, 5000))::int,
   0::int,
@@ -123,6 +125,7 @@ select cmp_ok(
 );
 
 -- 5. The is_public gate is unchanged.
+-- refusal: an unpublished route must not be inferable from an aggregate
 select is(
   (select count(*) from heatmap_points_in_bbox(8.53, 47.19, 8.56, 47.21, 5000))::int,
   0::int,
