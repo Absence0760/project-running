@@ -21,7 +21,7 @@
 
 begin;
 
-select plan(13);
+select plan(14);
 
 -- ── Fixture ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -105,10 +105,25 @@ values
    'muddy', 'info', 47.37, 8.54);
 select pass('owner reports a condition inside their own privacy zone');
 
+-- 5. Owner files a report on their own PRIVATE route, and can read it back.
+--    This row is the subject tests 11 and 14 refuse access to: without it
+--    those two would be asserting that an empty table reads empty.
+insert into route_conditions (id, route_id, user_id, condition, severity, note)
+values
+  ('33333333-3333-3333-3333-3333000dd005',
+   '22222222-2222-2222-2222-2222000dd002',
+   '00000000-0000-0000-0000-0000000dd001',
+   'hazard', 'caution', 'Loose scree above the traverse');
+select isnt_empty(
+  $$ select id from route_conditions
+     where route_id = '22222222-2222-2222-2222-2222000dd002' $$,
+  'owner can read their own report on their own private route'
+);
+
 -- ── Switch to a different signed-in user (non-owner viewer) ──
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000dd002","role":"authenticated"}';
 
--- 5. A NON-OWNER viewer can report on the public route (any-viewer INSERT).
+-- 6. A NON-OWNER viewer can report on the public route (any-viewer INSERT).
 insert into route_conditions (id, route_id, user_id, condition, severity, note)
 values
   ('33333333-3333-3333-3333-3333000dd003',
@@ -117,7 +132,7 @@ values
    'overgrown', 'info', 'Brush past the bridge');
 select pass('a non-owner viewer can report a condition on a public route');
 
--- 6. Non-owner CANNOT report on the PRIVATE route (visibility gate).
+-- 7. Non-owner CANNOT report on the PRIVATE route (visibility gate).
 select throws_ok(
   $$ insert into route_conditions (route_id, user_id, condition, severity)
        values ('22222222-2222-2222-2222-2222000dd002',
@@ -128,7 +143,7 @@ select throws_ok(
   'a non-owner cannot report on a route they cannot see'
 );
 
--- 7. Forged INSERT under another user_id is rejected.
+-- 8. Forged INSERT under another user_id is rejected.
 select throws_ok(
   $$ insert into route_conditions (route_id, user_id, condition, severity)
        values ('22222222-2222-2222-2222-2222000dd001',
@@ -139,7 +154,7 @@ select throws_ok(
   'cannot report under another user_id'
 );
 
--- 8. Viewer RPC nulls the anchor of the in-privacy-zone report for a
+-- 9. Viewer RPC nulls the anchor of the in-privacy-zone report for a
 --    non-owner: the muddy report row STILL returns, but its lat is null.
 select is(
   (select lat from route_conditions_for_viewer(
@@ -149,7 +164,7 @@ select is(
   'viewer RPC redacts the anchor of a report inside the owner privacy zone'
 );
 
--- 9. The out-of-zone flooded report keeps its anchor for the non-owner.
+-- 10. The out-of-zone flooded report keeps its anchor for the non-owner.
 select cmp_ok(
   (select lat from route_conditions_for_viewer(
      '22222222-2222-2222-2222-2222000dd001')
@@ -158,14 +173,14 @@ select cmp_ok(
   'viewer RPC keeps the anchor of an out-of-zone report'
 );
 
--- 10. Non-owner CANNOT read reports on the PRIVATE route.
+-- 11. Non-owner CANNOT read reports on the PRIVATE route.
 select is_empty(
   $$ select id from route_conditions
      where route_id = '22222222-2222-2222-2222-2222000dd002' $$,
   'non-owner cannot SELECT reports on a private route'
 );
 
--- 11. The condition CHECK rejects an unknown condition value.
+-- 12. The condition CHECK rejects an unknown condition value.
 select throws_ok(
   $$ insert into route_conditions (route_id, user_id, condition, severity)
        values ('22222222-2222-2222-2222-2222000dd001',
@@ -179,7 +194,7 @@ select throws_ok(
 -- ── Back to the owner: spam cleanup on a FOREIGN report ──
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000dd001","role":"authenticated"}';
 
--- 12. The route owner can delete a report another user filed on their route.
+-- 13. The route owner can delete a report another user filed on their route.
 delete from route_conditions where id = '33333333-3333-3333-3333-3333000dd003';
 select is_empty(
   $$ select id from route_conditions
@@ -187,7 +202,7 @@ select is_empty(
   'route owner can delete a foreign report on their own route'
 );
 
--- 13. Anon cannot read reports on a private route.
+-- 14. Anon cannot read reports on a private route.
 set local role anon;
 set local "request.jwt.claims" = '';
 select is_empty(
