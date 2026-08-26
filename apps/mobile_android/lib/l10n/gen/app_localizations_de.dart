@@ -8563,6 +8563,9 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => 'Platzierung nicht verfügbar';
+
+  @override
   String get runSegEffortsChecking => 'Segmente werden geprüft…';
 
   @override

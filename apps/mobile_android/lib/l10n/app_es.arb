@@ -2343,6 +2343,7 @@
   "clubPhotosUploadError": "Error al subir: {error}",
   "clubPhotosDeleteError": "Error al eliminar: {error}",
   "clubPhotosCaptionError": "No se pudo actualizar el pie de foto: {error}",
+  "runSegEffortsRankUnknown": "Clasificación no disponible",
   "runSegEffortsChecking": "Comprobando segmentos…",
   "runSegEffortsNoRoute": "Los segmentos se asocian por ruta: vincula esta carrera a una ruta guardada para competir en sus clasificaciones.",
   "runSegEffortsEmpty": "No hay esfuerzos de segmento en esta carrera.",

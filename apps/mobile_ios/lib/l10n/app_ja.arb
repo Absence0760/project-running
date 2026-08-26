@@ -2343,6 +2343,7 @@
   "clubPhotosUploadError": "アップロードに失敗しました: {error}",
   "clubPhotosDeleteError": "削除に失敗しました: {error}",
   "clubPhotosCaptionError": "キャプションを更新できませんでした: {error}",
+  "runSegEffortsRankUnknown": "順位を取得できません",
   "runSegEffortsChecking": "セグメントを確認中…",
   "runSegEffortsNoRoute": "セグメントはルートごとに対応します。このランを保存済みルートに紐付けるとリーダーボードで競えます。",
   "runSegEffortsEmpty": "このランにセグメント記録はありません。",

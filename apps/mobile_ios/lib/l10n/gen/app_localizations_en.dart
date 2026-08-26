@@ -8460,6 +8460,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => 'Rank unavailable';
+
+  @override
   String get runSegEffortsChecking => 'Checking segments…';
 
   @override

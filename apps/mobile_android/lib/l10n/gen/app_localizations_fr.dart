@@ -8574,6 +8574,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => 'Classement indisponible';
+
+  @override
   String get runSegEffortsChecking => 'Vérification des segments…';
 
   @override

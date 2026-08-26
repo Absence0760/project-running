@@ -2343,6 +2343,7 @@
   "clubPhotosUploadError": "Falha no envio: {error}",
   "clubPhotosDeleteError": "Falha ao excluir: {error}",
   "clubPhotosCaptionError": "Não foi possível atualizar a legenda: {error}",
+  "runSegEffortsRankUnknown": "Classificação indisponível",
   "runSegEffortsChecking": "Verificando segmentos…",
   "runSegEffortsNoRoute": "Os segmentos são associados por rota — vincule esta corrida a uma rota salva para competir nos rankings dela.",
   "runSegEffortsEmpty": "Nenhum esforço de segmento nesta corrida.",

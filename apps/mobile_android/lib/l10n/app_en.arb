@@ -11290,6 +11290,10 @@
       }
     }
   },
+  "runSegEffortsRankUnknown": "Rank unavailable",
+  "@runSegEffortsRankUnknown": {
+    "description": "Accessible name for a segment-effort rank pill whose standing the rank RPC did not return"
+  },
   "runSegEffortsChecking": "Checking segments…",
   "@runSegEffortsChecking": {
     "description": "Loading state while segment efforts are computed"

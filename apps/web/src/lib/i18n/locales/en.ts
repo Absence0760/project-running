@@ -2643,6 +2643,7 @@ export const en = {
 	"segmentEfforts.none": "No segment efforts on this run.",
 	"segmentEfforts.linkHint": "Segments are matched per route — link this run to a saved route to compete on its leaderboards.",
 	"segmentEfforts.catalogueHeading": "Famous segments",
+	"segmentEfforts.rankUnknown": "Rank unavailable",
 	"privacyZonePicker.hint": "Click anywhere on the map (or use your current location) to set the centre, then drag the marker to fine-tune. Anything within the red circle will be hidden from public shares.",
 	"privacyZonePicker.useCurrentLocation": "Use current location",
 	"privacyZonePicker.locating": "Locating…",

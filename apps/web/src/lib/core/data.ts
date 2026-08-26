@@ -76,6 +76,7 @@ import {
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import { compareLeaderboard } from '../runs/race_leaderboard';
+import { readRankRows } from '../segments/effort_rank';
 import type { RecapPeriodKind } from '../types';
 import { normaliseExerciseName } from '../gym/gym_prs';
 import { GYM_SESSION_DRAFT_KEY, hasSessionDraft } from '../gym/gym_session_draft';
@@ -7710,7 +7711,9 @@ export interface SegmentLeaderboardEntry {
 export interface SegmentEffortWithSegment {
 	effort: SegmentEffort;
 	segment: Segment;
-	rank: number;
+	/** Null when the rank RPC did not answer for this effort — see
+	 *  `segments/rank_pill.ts`. Absent is not `#1`. */
+	rank: number | null;
 }
 
 export async function fetchSegmentsForRoute(routeId: string, limit = 100): Promise<Segment[]> {
@@ -7881,16 +7884,15 @@ export async function fetchEffortsForRunWithError(
 	// rendered. rank = 1 + the distinct OTHER athletes holding a strictly-faster
 	// visible, non-blocked effort — the per-athlete population the board this
 	// chip links to ranks over (20270523_001, decisions §594), not a count of
-	// effort rows. On RPC failure ranks fall back to 1, so the panel still shows
-	// the efforts (degraded, not blank) — at the cost of a false crown.
+	// effort rows. `supabase.rpc` RESOLVES with an error rather than throwing,
+	// so a failure here leaves the map empty and every effort unranked; the
+	// panel still shows the efforts (degraded, not blank) and each says so.
+	// It must not say `#1` — see decisions §746.
 	const { data: rankRows, error: rankErr } = await supabase.rpc('segment_effort_ranks', {
 		p_run_id: runId,
 	});
 	if (rankErr) console.error('segment_effort_ranks failed', rankErr);
-	const rankByEffort = new Map<string, number>();
-	for (const r of (rankRows ?? []) as { effort_id: string; rank: number }[]) {
-		rankByEffort.set(r.effort_id, r.rank);
-	}
+	const rankByEffort = readRankRows(rankRows);
 
 	const out: SegmentEffortWithSegment[] = [];
 	for (const e of efforts as SegmentEffort[]) {
@@ -7899,7 +7901,7 @@ export async function fetchEffortsForRunWithError(
 		out.push({
 			effort: e,
 			segment,
-			rank: rankByEffort.get(e.id) ?? 1,
+			rank: rankByEffort.get(e.id) ?? null,
 		});
 	}
 	return { efforts: out, error: null };
@@ -7986,7 +7988,9 @@ export interface GlobalSegmentLeaderboardEntry {
 export interface GlobalSegmentEffortWithSegment {
 	effort: GlobalSegmentEffort;
 	segment: GlobalSegment;
-	rank: number;
+	/** Null when the rank RPC did not answer for this effort — see
+	 *  `segments/rank_pill.ts`. Absent is not `#1`. */
+	rank: number | null;
 }
 
 export async function fetchGlobalSegments(
@@ -8213,20 +8217,21 @@ export async function fetchGlobalEffortsForRun(
 	const bySeg = new Map<string, GlobalSegment>();
 	for (const s of segments ?? []) bySeg.set(s.id, s as GlobalSegment);
 
+	// This one is reachable for a logged-out reader of a public run today:
+	// `global_segment_effort_ranks` is granted to `authenticated` only while
+	// both catalogue tables are readable by `anon` (20270512_001), so the rows
+	// arrive and the ranks 42501. Unranked is the honest answer either way.
 	const { data: rankRows, error: rankErr } = await supabase.rpc('global_segment_effort_ranks', {
 		p_run_id: runId,
 	});
 	if (rankErr) console.error('global_segment_effort_ranks failed', rankErr);
-	const rankByEffort = new Map<string, number>();
-	for (const r of (rankRows ?? []) as { effort_id: string; rank: number }[]) {
-		rankByEffort.set(r.effort_id, r.rank);
-	}
+	const rankByEffort = readRankRows(rankRows);
 
 	const out: GlobalSegmentEffortWithSegment[] = [];
 	for (const e of efforts as GlobalSegmentEffort[]) {
 		const segment = bySeg.get(e.global_segment_id);
 		if (!segment) continue;
-		out.push({ effort: e, segment, rank: rankByEffort.get(e.id) ?? 1 });
+		out.push({ effort: e, segment, rank: rankByEffort.get(e.id) ?? null });
 	}
 	return out;
 }

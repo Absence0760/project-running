@@ -260,13 +260,14 @@ test.describe('/runs/[id] — RunSegmentEfforts panel', () => {
 	test('Caller drops to rank 2 → .silver pill (rank-class swap)', async ({
 		page
 	}) => {
-		// rankClass() in RunSegmentEfforts.svelte: 1 → gold, 2-3 →
+		// rankPillClass() in segments/effort_rank.ts: 1 → gold, 2-3 →
 		// silver, 4-10 → bronze, 11+ → no class. The default fixture
 		// plants USER_A at rank 1 (gold). Swap USER_A's time slower
 		// than USER_B so USER_A drops to rank 2 → .silver. Pin both
 		// the class change AND the rank text. (Bronze/no-class
-		// branches require >=4 efforts to reach rank >=4 — covered by
-		// `rankClass` unit tests in `segments_test.dart`.)
+		// branches require >=4 efforts to reach rank >=4, and the
+		// unknown-rank branch needs the RPC to fail — both covered by
+		// `segments/effort_rank.test.ts`.)
 		const admin = getAdminClient();
 		const { data: row } = await admin
 			.from('segment_efforts')

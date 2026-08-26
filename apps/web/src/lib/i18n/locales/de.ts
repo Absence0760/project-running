@@ -2632,6 +2632,7 @@ export const messages = {
 	"segmentEfforts.none": "Keine Segment-Versuche bei diesem Lauf.",
 	"segmentEfforts.linkHint": "Segmente werden pro Route zugeordnet — verknüpfe diesen Lauf mit einer gespeicherten Route, um auf ihren Bestenlisten anzutreten.",
 	"segmentEfforts.catalogueHeading": "Berühmte Segmente",
+	"segmentEfforts.rankUnknown": "Platzierung nicht verfügbar",
 	"privacyZonePicker.hint": "Tippe irgendwo auf die Karte (oder nutze deinen aktuellen Standort), um das Zentrum festzulegen, und ziehe dann den Marker zur Feinabstimmung. Alles innerhalb des roten Kreises wird in öffentlichen Freigaben ausgeblendet.",
 	"privacyZonePicker.useCurrentLocation": "Aktuellen Standort verwenden",
 	"privacyZonePicker.locating": "Standort wird ermittelt…",
