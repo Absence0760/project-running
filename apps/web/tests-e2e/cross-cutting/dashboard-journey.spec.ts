@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { browserDatetimeLocal } from '../fixtures/dates';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { withCleanCurrentWeek } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
@@ -119,8 +120,13 @@ test.describe('dashboard end-to-end journey', () => {
 
 			// RunEditor: started_at default is now; activity defaults
 			// to 'run'; fill distance + duration explicitly. 10 km
-			// against the 25 km/week goal lifts pct to 40%.
-			await page.locator('input[type="datetime-local"]').first().fill(nowDatetimeLocal());
+			// against the 25 km/week goal lifts pct to 40%. A minute back
+			// so the stamp is in the past and sorts above any other run
+			// already on today.
+			await page
+				.locator('input[type="datetime-local"]')
+				.first()
+				.fill(browserDatetimeLocal(Date.now() - 60_000));
 			await page.locator('input[type="number"]').first().fill('10');
 			await page.locator('input[type="number"]').nth(1).fill('60');
 			await page.locator('textarea').fill('e2e-dashboard-journey');
@@ -202,12 +208,3 @@ test.describe('dashboard end-to-end journey', () => {
 		});
 	});
 });
-
-function nowDatetimeLocal(): string {
-	// `<input type="datetime-local">` accepts `YYYY-MM-DDTHH:MM` (no
-	// timezone). Use the local clock minus 1 minute so the run is
-	// stamped in the past and sorts above any other "today" runs.
-	const d = new Date(Date.now() - 60_000);
-	const pad = (n: number) => String(n).padStart(2, '0');
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}

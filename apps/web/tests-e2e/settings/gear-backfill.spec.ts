@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -27,13 +28,6 @@ import { USER_A } from '../fixtures/users';
 // Distinctive so the candidate row is unambiguous among whatever else USER_A
 // has run recently: 9321 m renders as "9.32 km".
 const PLANTED_DISTANCE_M = 9321;
-
-function isoDate(d: Date): string {
-	const y = d.getFullYear();
-	const mo = String(d.getMonth() + 1).padStart(2, '0');
-	const day = String(d.getDate()).padStart(2, '0');
-	return `${y}-${mo}-${day}`;
-}
 
 test.describe('/settings/gear — backfill past runs onto newly-registered gear', () => {
 	test.use({ storageState: USER_A.storageStatePath });
@@ -65,7 +59,7 @@ test.describe('/settings/gear — backfill past runs onto newly-registered gear'
 		const shoeName = `E2E Backfill Pair ${Date.now()}`;
 
 		// A run "now" — comfortably inside a window that opens at yesterday's
-		// local midnight, whatever hour the suite runs at.
+		// midnight in the browser's zone, whatever hour the suite runs at.
 		const { data: run } = await admin
 			.from('runs')
 			.insert({
@@ -88,16 +82,13 @@ test.describe('/settings/gear — backfill past runs onto newly-registered gear'
 			.eq('run_id', plantedRunId);
 		const beforeIds = (gearBefore ?? []).map((r) => r.gear_id).sort();
 
-		const yesterday = new Date();
-		yesterday.setDate(yesterday.getDate() - 1);
-
 		await test.step('register a pair bought yesterday', async () => {
 			await page.goto('/settings/gear');
 			await expect(page.locator('.gear-list')).toBeVisible({ timeout: 10_000 });
 
 			await page.getByRole('button', { name: /New shoes/, exact: false }).first().click();
 			await page.locator('input[placeholder="Pegasus 39"]').fill(shoeName);
-			await page.locator('input[type="date"]').fill(isoDate(yesterday));
+			await page.locator('input[type="date"]').fill(browserDate(-1));
 			await page.locator('input[type="number"]').fill('500');
 			await page.getByRole('button', { name: 'Add', exact: true }).click();
 		});

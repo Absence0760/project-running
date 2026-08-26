@@ -64,6 +64,23 @@ export function noonOnBrowserDay(offsetDays = 0): string {
 	return browserDayAt(offsetDays, 12);
 }
 
+/// The browser's calendar year, offset by whole years. The runner's year and
+/// the browser's disagree either side of a New Year boundary, and a surface
+/// that renders a year off the URL is only self-consistent when the year in
+/// the URL is the one the page itself calls current.
+export function browserYear(offsetYears = 0): number {
+	return new Date().getUTCFullYear() + offsetYears;
+}
+
+/// The naive `YYYY-MM-DDTHH:MM` an `<input type="datetime-local">` carries.
+/// The control holds no zone and the page resolves it in the browser's, so a
+/// string typed from the runner's wall clock is submitted as a different
+/// instant — hours out, and across a week boundary into a bucket the
+/// assertion did not mean.
+export function browserDatetimeLocal(instant: string | number | Date): string {
+	return new Date(instant).toISOString().slice(0, 16);
+}
+
 /// The nutrition water tracker's user-scoped localStorage key for the browser
 /// day `offsetDays` from today. The day component comes from the page's own
 /// `waterDayKey`, so the fixture cannot drift from the shipped (deliberately

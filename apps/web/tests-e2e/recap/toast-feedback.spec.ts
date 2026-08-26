@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { browserYear } from '../fixtures/dates';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -7,7 +8,7 @@ import { USER_A } from '../fixtures/users';
  * toast system, never a blocking native alert(). Pins the alert()→showToast
  * conversion on both the year and month recap surfaces.
  */
-const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_YEAR = browserYear();
 
 test.describe('/recap — feedback uses toasts, not native alert()', () => {
 	test.use({ storageState: USER_A.storageStatePath });
