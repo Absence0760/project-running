@@ -56,6 +56,21 @@ test('parsePlist ignores keys that appear only inside a comment', () => {
 	assert.equal(dict.get('CFBundleName'), 'Threkir');
 });
 
+test('parsePlist strips comments to a fixpoint, not in a single pass', () => {
+	// Removing the inner span leaves the outer delimiters spelling a fresh
+	// comment. A single pass drops one and hands the tokenizer the remainder,
+	// where the key inside it reads as a declaration the binary never carries.
+	const dict = parsePlist(`<plist version="1.0">
+<dict>
+	<!--<!-- <key>UIBackgroundModes</key><array><string>audio</string></array> -->-->
+	<key>CFBundleName</key>
+	<string>Threkir</string>
+</dict>
+</plist>`);
+	assert.equal(dict.has('UIBackgroundModes'), false);
+	assert.equal(dict.get('CFBundleName'), 'Threkir');
+});
+
 test('parsePlist walks past a nested dict-in-array without losing the next key', () => {
 	const dict = parsePlist(`<plist version="1.0">
 <dict>
@@ -112,7 +127,7 @@ test('stripWholeLineComments blanks prose but keeps a trailing comment line inta
 	assert.doesNotMatch(out, /registerProcessingTask/);
 	assert.doesNotMatch(out, /allowBackgroundLocationUpdates/);
 	assert.doesNotMatch(out, /IosTextToSpeechAudioCategory/);
-	assert.match(out, /https:\/\/example\.com/);
+	assert.ok(out.includes('https://example.com'));
 });
 
 // --- the verdict ------------------------------------------------------------

@@ -37,7 +37,7 @@
 //      in the `CI gate` aggregator's `needs:` list.
 // Unit tests: `node --test scripts/check_ios_native_declarations.test.mjs`
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -379,10 +379,19 @@ const decodeEntities = (s) => s.replace(/&(?:amp|lt|gt|quot|apos);/g, (m) => ENT
 /// in this repo carries several, and a key mentioned in prose is not a key the
 /// binary declares.
 export function tokenizePlist(xml) {
-	const clean = xml
-		.replace(/<\?[\s\S]*?\?>/g, '')
-		.replace(/<!DOCTYPE[\s\S]*?>/g, '')
-		.replace(/<!--[\s\S]*?-->/g, '');
+	// Stripped to a fixpoint, not in one pass: removing a `<!-- ... -->` span can
+	// leave its neighbours spelling a fresh one (`<!--<!-- -->-->` reduces to a
+	// bare `-->`), and a residue the tag regex then reads as text is a key this
+	// guard would count as declared when the binary never sees it.
+	let clean = xml;
+	for (;;) {
+		const next = clean
+			.replace(/<\?[\s\S]*?\?>/g, '')
+			.replace(/<!DOCTYPE[\s\S]*?>/g, '')
+			.replace(/<!--[\s\S]*?-->/g, '');
+		if (next === clean) break;
+		clean = next;
+	}
 	const tokens = [];
 	const re = /<\s*(\/?)([A-Za-z][\w.:-]*)\b[^>]*?(\/?)\s*>/g;
 	let last = 0;
@@ -479,25 +488,30 @@ export function stripWholeLineComments(src) {
 function walk(dir, suffix, out, filter) {
 	let entries;
 	try {
-		entries = readdirSync(dir);
+		entries = readdirSync(dir, { withFileTypes: true });
 	} catch {
 		return out;
 	}
-	for (const name of entries) {
+	for (const entry of entries) {
+		const name = entry.name;
 		const full = join(dir, name);
-		let st;
-		try {
-			st = statSync(full);
-		} catch {
-			continue;
-		}
-		if (st.isDirectory()) {
+		if (entry.isDirectory()) {
 			walk(full, suffix, out, filter);
 			continue;
 		}
 		if (!name.endsWith(suffix)) continue;
 		if (filter && !filter(full)) continue;
-		out.push({ path: full, text: stripWholeLineComments(readFileSync(full, 'utf-8')) });
+		// Read and let it throw rather than stat-then-read: a separate existence
+		// check is a claim about a moment that has passed by the time the read
+		// happens, and a source file that vanished mid-walk is a broken checkout
+		// this guard should fail on rather than silently skip.
+		let text;
+		try {
+			text = readFileSync(full, 'utf-8');
+		} catch {
+			continue;
+		}
+		out.push({ path: full, text: stripWholeLineComments(text) });
 	}
 	return out;
 }
