@@ -3,11 +3,13 @@ import { join } from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { DEFINER_NEUTRALISERS } from './pgtap_definer_neutralisers.mjs';
 import {
   EXPECTED_SURVIVORS,
   REFUSAL_VOCABULARY,
   TESTS_DIR,
   buildMutant,
+  definerSpan,
   findCalls,
   literalOf,
   parseTap,
@@ -68,19 +70,102 @@ test('relationsIn finds the base tables a query reads, schema-qualified or not',
   );
 });
 
-test('refusalAssertions selects only zero-or-empty claims over a base table', () => {
+test('refusalAssertions selects zero-or-empty claims over any relation, base table or not', () => {
   const sql = [
     'begin;',
     "select is_empty($$ select id from route_markers where id = 'x' $$, 'a stranger cannot read the marker');",
     "select is((select count(*)::int from notifications where user_id = 'y'), 0, 'a plain member is NOT notified');",
     "select is((select count(*)::int from route_markers where id = 'x'), 1, 'the marker survives');",
     "select is_empty($$ select id from public_runs where id = 'x' $$, 'a stranger cannot read the run');",
+    "select is_empty($$ select id from public_routes where id = 'x' $$, 'a stranger cannot read the route');",
     'rollback;',
   ].join('\n');
-  const found = refusalAssertions(sql, new Set(['route_markers', 'notifications']));
+  const relations = new Map([
+    ['route_markers', 'base'],
+    ['notifications', 'base'],
+    ['public_runs', 'definer'],
+    ['public_routes', 'definer'],
+  ]);
+  const found = refusalAssertions(sql, relations);
   assert.deepEqual(
     found.map((f) => f.description),
-    ['a stranger cannot read the marker'],
+    [
+      'a stranger cannot read the marker',
+      'a stranger cannot read the run',
+      'a stranger cannot read the route',
+    ],
+  );
+  // public_routes has a registered replacement and public_runs does not, so
+  // one is measured under the second operator and the other is not measured at
+  // all — never quietly scored under an operator that cannot reach it.
+  assert.deepEqual(found[0].neutralise, []);
+  assert.deepEqual(found[0].unmeasurable, []);
+  assert.deepEqual(found[1].neutralise, []);
+  assert.deepEqual(found[1].unmeasurable, ['public_runs']);
+  assert.deepEqual(found[2].neutralise, ['public_routes']);
+  assert.deepEqual(found[2].unmeasurable, []);
+});
+
+test('buildMutant reaches for the permissive replacement only where one is registered', () => {
+  const sql = [
+    'begin;',
+    'select plan(2);',
+    "select is_empty($$ select id from t $$, 'a stranger cannot read t');",
+    "select is_empty($$ select id from public_routes $$, 'a stranger cannot read the route');",
+    'rollback;',
+  ].join('\n');
+  const calls = findCalls(sql, 'is_empty');
+  const mutant = buildMutant(sql, [
+    { ...calls[0], neutralise: [] },
+    { ...calls[1], neutralise: ['public_routes'] },
+  ]);
+  assert.equal(mutant.match(/^savepoint pgtap_guard_definer;$/gm).length, 1);
+  assert.equal(mutant.match(/create or replace view public\.public_routes/g).length, 1);
+  const savepointAt = mutant.search(/^savepoint pgtap_guard_definer;$/m);
+  const replaceAt = mutant.indexOf('create or replace view public.public_routes');
+  const assertAt = mutant.indexOf('from public_routes $$');
+  const rollbackAt = mutant.indexOf('rollback to savepoint pgtap_guard_definer;');
+  assert.ok(savepointAt < replaceAt && replaceAt < assertAt && assertAt < rollbackAt);
+});
+
+test('definerSpan refuses a relation it has no replacement for rather than emitting an inert span', () => {
+  assert.throws(
+    () => definerSpan("select is_empty($$ select 1 $$, 'd');", ['not_a_registered_relation']),
+    /no permissive replacement registered/,
+  );
+});
+
+test('every permissive replacement redefines the relation it is registered under', () => {
+  for (const [name, entry] of DEFINER_NEUTRALISERS) {
+    assert.match(
+      entry.sql,
+      new RegExp(`create or replace (view|function) public\\.${name}\\b`),
+      `${name}'s replacement does not redefine ${name}`,
+    );
+    assert.ok(entry.why.length > 0, `${name} does not say which access control it drops`);
+    assert.ok(
+      entry.witness?.setup?.length > 0 && entry.witness?.probe?.length > 0,
+      `${name} has no witness, so nothing proves its replacement is not inert`,
+    );
+  }
+});
+
+test('no permissive replacement outlives the assertions it exists for', () => {
+  const read = new Set();
+  for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+    const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+    for (const kind of ['is_empty', 'is', 'results_eq']) {
+      for (const call of findCalls(text, kind)) {
+        const sql = literalOf(call.argv[0] ?? '') ?? call.argv[0] ?? '';
+        for (const relation of relationsIn(sql)) read.add(relation);
+      }
+    }
+  }
+  const stale = [...DEFINER_NEUTRALISERS.keys()].filter((name) => !read.has(name));
+  assert.deepEqual(
+    stale,
+    [],
+    'these relations have a permissive replacement but no assertion reads them any more: delete the entry rather than carrying a copy of a definition nothing checks',
   );
 });
 
