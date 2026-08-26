@@ -141,8 +141,6 @@ const LOCAL_ZONE_ALLOWED: Record<string, string> = {
 		'shifts an instant by whole days and reads the UTC date back, so the result already tracks the browser day',
 	'coaching/link-lifecycle.spec.ts':
 		'shifts an instant by whole days and reads the UTC date back, so the result already tracks the browser day',
-	'cross-cutting/dashboard-journey.spec.ts':
-		'not yet converted — types a runner-zone wall clock into a datetime-local input the browser reads as UTC',
 	'plans/calendar.spec.ts':
 		'zone-neutral: one read runs inside page.evaluate (browser zone), the rest construct and format a fixed y/m/d in the same zone',
 	'recap/page.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
