@@ -5934,4 +5934,180 @@ void main() {
       }
     });
   });
+  group('locale reach', () {
+    // A catalogue that ships in the binary but that no runtime path resolves
+    // to is translation work going nowhere: it costs bytes in every build and
+    // no reader can ever see it. Nothing else in the tree connects "the ARB
+    // file exists" to "a reader can get to it" — `app_pt.arb` shipped dark
+    // twice for exactly that reason (decisions.md § 740). These read the
+    // catalogue directory as the source of truth and hold every declaration
+    // site to it.
+
+    /// Catalogues that no BARE base-language tag resolves to, each with the
+    /// reason it is reachable anyway. `_baseToLocale` can name one variant per
+    /// language, so a language shipping two catalogues necessarily leaves one
+    /// off it. Every entry is asserted to still be unreachable that way, so
+    /// the list cannot rot into a blanket exemption.
+    const baseFallbackExempt = <String, String>{
+      'pt-BR': 'Portuguese ships two catalogues and the bare `pt` base is the '
+          'European one (Portugal and Angola share that orthography), so '
+          'pt-BR is reached by its exact tag — a pt-BR device, or the picker.',
+    };
+
+    /// `app_pt_BR.arb` -> `pt-BR`; `app_en.arb` -> `en`.
+    String tagOfArb(String filename) {
+      final stem = filename.substring('app_'.length, filename.length - 4);
+      final parts = stem.split('_');
+      return parts.length == 1
+          ? parts[0]
+          : '${parts[0]}-${parts[1].toUpperCase()}';
+    }
+
+    /// The text between the bracket [marker] ends on and its match.
+    String literalAfter(String source, String marker) {
+      final at = source.indexOf(marker);
+      if (at < 0) {
+        fail('Could not find "$marker" — renamed? Update this guard.');
+      }
+      final open = marker[marker.length - 1];
+      final close = open == '[' ? ']' : '}';
+      var depth = 1;
+      var i = at + marker.length;
+      while (depth > 0 && i < source.length) {
+        if (source[i] == open) depth++;
+        if (source[i] == close) depth--;
+        i++;
+      }
+      return source.substring(at + marker.length, i - 1);
+    }
+
+    Set<String> localeTags(String literal) => RegExp(
+          r"Locale\('(\w+)'(?:,\s*'(\w+)')?\)",
+        ).allMatches(literal).map((m) {
+          final country = m.group(2);
+          return country == null ? m.group(1)! : '${m.group(1)}-$country';
+        }).toSet();
+
+    Set<String> mapKeys(String literal) =>
+        RegExp(r"'([\w-]+)'\s*:").allMatches(literal).map((m) => m.group(1)!).toSet();
+
+    String withoutComments(String source) => source
+        .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
+        .split('\n')
+        .map((l) => l.replaceAll(RegExp(r'//.*$'), ''))
+        .join('\n');
+
+    late Set<String> catalogues;
+    late String support;
+    late String generated;
+
+    setUpAll(() {
+      catalogues = Directory('lib/l10n')
+          .listSync()
+          .map((e) => e.uri.pathSegments.last)
+          .where((n) => n.startsWith('app_') && n.endsWith('.arb'))
+          .map(tagOfArb)
+          .toSet();
+      support = File('lib/l10n/locale_support.dart').readAsStringSync();
+      generated =
+          File('lib/l10n/gen/app_localizations.dart').readAsStringSync();
+    });
+
+    test('a catalogue exists for exactly the locales we say we support', () {
+      expect(catalogues, isNotEmpty, reason: 'no app_*.arb found — moved?');
+      expect(
+        localeTags(literalAfter(support, 'supportedLocales = <Locale>[')),
+        catalogues,
+        reason: 'supportedLocales is what MaterialApp negotiates against. A '
+            'catalogue missing from it is dead weight in the binary; an entry '
+            'with no catalogue resolves to a locale gen-l10n cannot load.',
+      );
+    });
+
+    test('the generated delegate carries exactly the catalogue set', () {
+      expect(
+        localeTags(literalAfter(generated, 'supportedLocales = <Locale>[')),
+        catalogues,
+        reason: 'gen/app_localizations.dart is regenerated from the ARB '
+            'directory — a mismatch means the checked-in output is stale.',
+      );
+    });
+
+    test('every catalogue has a picker endonym', () {
+      expect(
+        mapKeys(literalAfter(support, 'localeLabels = <String, String>{')),
+        catalogues,
+        reason: 'the picker names each locale in its own language; a locale '
+            'the table cannot name renders a blank row.',
+      );
+    });
+
+    test('every catalogue is reachable by its exact tag', () {
+      expect(
+        localeTags(literalAfter(support, '_exact = <String, Locale>{')),
+        catalogues,
+        reason: '_exact is the only path a stored preference or an exactly '
+            'matching device tag takes; a catalogue absent from its VALUES '
+            'can be selected by nobody.',
+      );
+    });
+
+    test('the language picker is derived from the supported set, not listed',
+        () {
+      final body = withoutComments(_extractMethodBody(
+        File('lib/screens/settings_preferences_screen.dart').readAsStringSync(),
+        r'Future<void> _editLanguage\(\) async \{',
+      ));
+      expect(body.contains('supportedLocales'), isTrue,
+          reason: 'the picker must build its options from supportedLocales.');
+      for (final tag in catalogues) {
+        expect(body.contains("'$tag'"), isFalse,
+            reason: 'the picker spells $tag out. A hand-written list is how '
+                'European Portuguese came to be unpickable while shipping.');
+      }
+    });
+
+    test('the ARB parity suite covers every catalogue', () {
+      final listed = RegExp(r"'([\w_]+)'")
+          .allMatches(literalAfter(
+              File('test/l10n_parity_test.dart').readAsStringSync(),
+              'localeTags = ['))
+          .map((m) => m.group(1)!.replaceFirst('_', '-'))
+          .toSet();
+      expect(listed, catalogues,
+          reason: 'l10n_parity_test.dart names its locales by hand, so a new '
+              'catalogue is silently unchecked for missing keys until it is '
+              'added there too.');
+    });
+
+    test('a catalogue no base-language tag reaches carries a reason', () {
+      final reachedByBase =
+          localeTags(literalAfter(support, '_baseToLocale = <String, Locale>{'));
+      final unreached = catalogues
+          .difference(reachedByBase)
+          .where((t) => !baseFallbackExempt.containsKey(t))
+          .toList()
+        ..sort();
+      expect(unreached, isEmpty,
+          reason: 'a device reporting only a base language (`pt`, `de`) lands '
+              'on _baseToLocale. These catalogues are off it with no recorded '
+              'reason — either map the base to one of them, or add the entry '
+              'to baseFallbackExempt saying how a reader reaches it.');
+    });
+
+    test('every base-fallback exemption still needs its exemption', () {
+      final reachedByBase =
+          localeTags(literalAfter(support, '_baseToLocale = <String, Locale>{'));
+      for (final entry in baseFallbackExempt.entries) {
+        expect(catalogues, contains(entry.key),
+            reason: '${entry.key} is exempted from the base-fallback rule but '
+                'ships no catalogue — drop the entry.');
+        expect(reachedByBase, isNot(contains(entry.key)),
+            reason: '${entry.key} is now a base-fallback target '
+                '(${entry.value}) — drop it from baseFallbackExempt so the '
+                'guard covers it.');
+        expect(entry.value.trim(), isNotEmpty);
+      }
+    });
+  });
 }
