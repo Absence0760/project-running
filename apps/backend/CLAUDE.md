@@ -273,7 +273,20 @@ Older `supabase/setup-cli` versions on CI **silently skip** migrations that coll
 
 Under RLS a refused SELECT does not error — it returns no rows. So `is_empty(...)` / `is(<count>, 0, ...)` is what a refusal looks like AND what a fixture that never inserted looks like, what a `WHERE` clause matching nothing looks like, and what a typo'd uuid looks like. Two assertions in `rls_route_conditions_test` sat green for months asserting an empty table reads empty (decisions.md § 741). **Whenever you write "principal X cannot see Y", file Y first and read it back from a session that may see it** — the `isnt_empty` positive control is what turns the refusal into a measurement.
 
-`apps/backend/scripts/check_pgtap_refusal_assertions.mjs` enforces it in the `pgtap-rls` job: it re-runs each such assertion with the session dropped to the BYPASSRLS table owner for the span of that one statement, and fails if it still passes. Run it locally with the stack up (`node apps/backend/scripts/check_pgtap_refusal_assertions.mjs`, ~8s), or `--static-only` with no DB for the half that fails any `throws_ok` pinning neither a SQLSTATE nor a message. An assertion whose empty result is genuinely a real answer (a trigger that correctly did not fire) goes in `EXPECTED_SURVIVORS` with its reason — a stale entry fails the guard too, so the list cannot outlive what it excuses.
+`apps/backend/scripts/check_pgtap_refusal_assertions.mjs` enforces it in the `pgtap-rls` job by mutation: it re-runs each such assertion with the mechanism that could be hiding a row taken away, and fails if it still passes. There are two mechanisms and therefore two operators, picked per assertion by what it reads ([decisions.md § 745](../../docs/architecture/decisions.md)):
+
+- **A base table** is guarded by row-level security, so the session drops to the BYPASSRLS table owner for the span of that one statement.
+- **A view or an RPC filters in its own SQL**, which RLS never touched, so the relation itself is swapped for a permissive definition inside a savepoint. The replacements live in `apps/backend/scripts/pgtap_definer_neutralisers.mjs`, one per relation, each keeping every predicate that says *which* rows the assertion asked about and dropping every predicate that says *whether the caller may see them*. **Do not assume the catalogue tells you which relations need this**: eight of the twenty-four are `SECURITY INVOKER`, and filter with a `= auth.uid()` or an `is_public = true` written into the body.
+
+Run it locally with the stack up (`node apps/backend/scripts/check_pgtap_refusal_assertions.mjs`, ~11s over 168 assertions), `--validate-operators` to prove each replacement still reveals a subject its real relation hides, or `--static-only` with no DB for the half that fails any `throws_ok` pinning neither a SQLSTATE nor a message.
+
+An assertion whose empty result is genuinely a real answer (a trigger that correctly did not fire) goes in `EXPECTED_SURVIVORS` with its reason — a stale entry fails the guard too, so the list cannot outlive what it excuses. Conversely, an assertion whose refusal is real but whose wording the guard's vocabulary cannot match (`excluded from search` is a privacy floor in one test and a category filter in the next) opts in with a comment on the line above it:
+
+```sql
+-- refusal: the under-18 floor is a child-protection access control, not a search filter
+select is((select count(*)::int from search_user_profiles('Minor Searchable')), 0,
+  'declared minor stays excluded from search');
+```
 
 ### UUIDs must be 32 valid hex chars (0-9 a-f) in 8-4-4-4-12 layout
 
