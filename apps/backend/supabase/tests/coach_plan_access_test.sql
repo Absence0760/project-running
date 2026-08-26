@@ -95,6 +95,7 @@ update coach_athletes set status = 'ended'
    and athlete_id = '00000000-0000-0000-0000-0000000000a2';
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000000c1"}';
+-- refusal: a revoked grant is access control expressed as a lifecycle
 select is(
   (select count(*)::int from plan_workouts
      where id = 'aaaaaaaa-0000-0000-0000-00000000ff01'),

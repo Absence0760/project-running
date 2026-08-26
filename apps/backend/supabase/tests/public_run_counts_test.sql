@@ -45,6 +45,7 @@ select is(
 
 -- A non-owner reading the base table directly gets 0 (the policy 20260701_001
 -- dropped) — proving the RPC is what makes the count correct, not RLS.
+-- refusal: the base table is locked down deliberately so the RPC is the only public read
 select is(
   (select count(*) from runs where user_id = 'bb000000-0000-0000-0000-0000000000a1' and is_public = true),
   0::bigint, 'base-table public read is blocked for a non-owner (RPC is required)');

@@ -56,6 +56,7 @@ set local "request.jwt.claims" =
   '{"sub":"99999999-9999-9999-9999-99999cd00001","role":"authenticated"}';
 
 -- 1. THE BUG: minor with DOB only on the canonical column is excluded.
+-- refusal: the under-18 floor is a child-protection access control, not a search filter
 select is(
   (select count(*)::int from search_user_profiles('Cdob', 60)
     where display_name = 'Colkid Cdob'),
@@ -70,6 +71,7 @@ select is(
   'an adult with DOB only on the canonical column is still discoverable');
 
 -- 3. Legacy fallback: minor with DOB only in prefs is still excluded.
+-- refusal: same floor reached through the legacy mirror
 select is(
   (select count(*)::int from search_user_profiles('Cdob', 60)
     where display_name = 'Prefskid Cdob'),
@@ -77,6 +79,7 @@ select is(
   'the prefs-bag DOB fallback still excludes a legacy-mirror minor');
 
 -- 4. Off-by-one boundary: one day short of 18 is a minor (excluded).
+-- refusal: same floor at its edge
 select is(
   (select count(*)::int from search_user_profiles('Cdob', 60)
     where display_name = 'Edgekid Cdob'),

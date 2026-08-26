@@ -186,6 +186,7 @@ update coach_athletes set status = 'ended', ended_at = now()
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"cccccccc-0000-0000-0000-0000000000c1","role":"authenticated"}';
 
+-- refusal: a revoked grant is access control expressed as a lifecycle
 select is(
   (select count(*)::int from runs where id = 'cccccccc-0000-0000-0000-0000000000f1'),
   0, 'ending the link revokes the coach''s read access to the run');

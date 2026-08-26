@@ -155,6 +155,7 @@ select is(
 
 -- 8. A declared minor (DOB ~11 years ago) is excluded from search even
 --    though they never opted out — the hard minor floor (20261017_001).
+-- refusal: the under-18 floor is a child-protection access control, not a search filter
 select is(
   (select count(*)::int from search_user_profiles('Younger', 60)
     where display_name = 'Kid Younger'),

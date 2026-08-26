@@ -303,6 +303,7 @@ select results_eq(
   $$ values (1) $$,
   'discovery surfaces a public event in a public club'
 );
+-- refusal: members-only is a visibility setting, and the assertion above it is the positive control
 select is(
   (select count(*)::int from search_public_events() where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0011'),
   0,

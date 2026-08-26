@@ -111,6 +111,7 @@ set local "request.jwt.claims" =
   '{"sub":"88888888-8888-8888-8888-888888aaaaaa","role":"authenticated"}';
 do $$ begin perform block_user('88888888-8888-8888-8888-888888bbbbbb'::uuid); end $$;
 
+-- refusal: a block is access control in both directions
 select is(
   (select count(*) from public_profile_by_id(
     '88888888-8888-8888-8888-888888bbbbbb'::uuid)),

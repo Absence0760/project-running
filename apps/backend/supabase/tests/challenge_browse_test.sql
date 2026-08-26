@@ -90,6 +90,7 @@ select results_eq(
 select is(
   (select count(*)::int from browse_public_challenges(null, 24, 0) where title = 'JOINED board'),
   0, 'a challenge the caller joined is excluded from Browse');
+-- refusal: the challenge's own is_public flag is what authorises the listing
 select is(
   (select count(*)::int from browse_public_challenges(null, 24, 0) where title = 'PRIVATE board'),
   0, 'a private challenge is excluded from Browse');
