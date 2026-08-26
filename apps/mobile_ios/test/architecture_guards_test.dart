@@ -6121,6 +6121,25 @@ void main() {
       }
     });
 
+    test('the Android manifest advertises exactly the catalogue set', () {
+      // Android 13+ reads locales_config.xml to populate Settings -> Apps ->
+      // Threkir -> Language, a path to a catalogue the in-app picker does not
+      // own alone. Android and our canonical tags agree spelling, so unlike
+      // the plist this needs no override table.
+      final config = File(
+        '../mobile_android/android/app/src/main/res/xml/locales_config.xml',
+      ).readAsStringSync();
+      expect(
+        RegExp(r'android:name="([\w-]+)"')
+            .allMatches(config)
+            .map((m) => m.group(1)!)
+            .toSet(),
+        catalogues,
+        reason: 'locales_config.xml and lib/l10n disagree about which locales '
+            'ship, so the OS language picker offers the wrong set.',
+      );
+    });
+
     test('a catalogue no base-language tag reaches carries a reason', () {
       final reachedByBase =
           localeTags(literalAfter(support, '_baseToLocale = <String, Locale>{'));
