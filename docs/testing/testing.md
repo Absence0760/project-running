@@ -335,6 +335,8 @@ Any mismatch in any pair exits non-zero and fails the PR. Each fixture's expecte
 
 The `pgtap-rls` job runs `cd apps/backend && supabase test db --local` against the migrations-only local stack (no `db reset` — every test file is wrapped in its own `begin; … rollback;` and uses synthetic fixture UUIDs that don't collide with `seed.sql`). A regression in any RLS policy or SECURITY DEFINER function fails the PR.
 
+The same job then **mutation-checks the suite's refusal assertions**, because a green pgtap run says every assertion passed, not that every assertion asked anything. Under RLS a refused SELECT returns no rows rather than erroring, so `is_empty(...)` is simultaneously what a refusal looks like and what a fixture that never inserted looks like — two assertions in `rls_route_conditions_test` were the second thing for months ([decisions.md § 741](../architecture/decisions.md)). `apps/backend/scripts/check_pgtap_refusal_assertions.mjs` re-runs each refusal assertion with the session dropped to the BYPASSRLS table owner for the span of that one statement and fails if it still passes (104 assertions across 256 files, ~8s); its static half fails any `throws_ok` pinning neither a SQLSTATE nor a message. Its own unit suite is `check_pgtap_refusal_assertions.test.mjs`, run by `node --test` in the same step.
+
 ---
 
 ## Troubleshooting

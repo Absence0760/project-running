@@ -269,6 +269,12 @@ Older `supabase/setup-cli` versions on CI **silently skip** migrations that coll
 
 ## pgtap test gotchas
 
+### A refusal assertion needs a row to refuse, and CI now checks that it has one
+
+Under RLS a refused SELECT does not error — it returns no rows. So `is_empty(...)` / `is(<count>, 0, ...)` is what a refusal looks like AND what a fixture that never inserted looks like, what a `WHERE` clause matching nothing looks like, and what a typo'd uuid looks like. Two assertions in `rls_route_conditions_test` sat green for months asserting an empty table reads empty (decisions.md § 741). **Whenever you write "principal X cannot see Y", file Y first and read it back from a session that may see it** — the `isnt_empty` positive control is what turns the refusal into a measurement.
+
+`apps/backend/scripts/check_pgtap_refusal_assertions.mjs` enforces it in the `pgtap-rls` job: it re-runs each such assertion with the session dropped to the BYPASSRLS table owner for the span of that one statement, and fails if it still passes. Run it locally with the stack up (`node apps/backend/scripts/check_pgtap_refusal_assertions.mjs`, ~8s), or `--static-only` with no DB for the half that fails any `throws_ok` pinning neither a SQLSTATE nor a message. An assertion whose empty result is genuinely a real answer (a trigger that correctly did not fire) goes in `EXPECTED_SURVIVORS` with its reason — a stale entry fails the guard too, so the list cannot outlive what it excuses.
+
 ### UUIDs must be 32 valid hex chars (0-9 a-f) in 8-4-4-4-12 layout
 
 Synthetic UUID literals like `'99999999-9999-9999-9999-99999dnfaaaa'` (contains non-hex `n`) or `'11111111-1111-1111-1111-111111ddd01'` (trailing segment is only 11 chars) error at first insert with `invalid input syntax for type uuid`. The whole test then reports "Bad plan: you planned N tests but ran 0" — easy to miss in a long pgtap summary because no individual test is marked as failing. **Use only `0-9 a-f` in synthetic UUIDs, and count the trailing segment** (12 hex chars). Patterns I've used safely: `99999999-9999-9999-9999-9999ddddaa01`, `88888888-8888-8888-8888-888888aaaaaa`, `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01`.
