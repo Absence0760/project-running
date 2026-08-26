@@ -121,13 +121,13 @@ test('stripWholeLineComments blanks prose but keeps a trailing comment line inta
 		'// Workmanager().registerProcessingTask is what iOS calls processing.',
 		'  /// allowBackgroundLocationUpdates: true',
 		'   * IosTextToSpeechAudioCategory.playback',
-		"  final url = 'https://example.com'; // playback",
+		"  final category = 'spoken'; // playback",
 	].join('\n');
 	const out = stripWholeLineComments(src);
 	assert.doesNotMatch(out, /registerProcessingTask/);
 	assert.doesNotMatch(out, /allowBackgroundLocationUpdates/);
 	assert.doesNotMatch(out, /IosTextToSpeechAudioCategory/);
-	assert.ok(out.includes('https://example.com'));
+	assert.match(out, /final category = 'spoken';/);
 });
 
 // --- the verdict ------------------------------------------------------------
