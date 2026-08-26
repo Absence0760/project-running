@@ -10,8 +10,10 @@ import {
 	BROWSER_TIMEZONE,
 	browserDate,
 	browserDateOf,
+	browserDatetimeLocal,
 	browserDayAt,
 	browserDayStart,
+	browserYear,
 	noonOnBrowserDay,
 	waterStorageKey
 } from './dates';
@@ -51,6 +53,30 @@ test('the day a helper names is the same in every runner zone', () => {
 		const utc = [browserDate(), browserDate(-1), noonOnBrowserDay(), browserDayStart()];
 		assert.deepEqual(ahead, utc);
 		assert.deepEqual(behind, utc);
+	} finally {
+		if (original === undefined) delete process.env.TZ;
+		else process.env.TZ = original;
+	}
+});
+
+test('a datetime-local string is the browser wall clock of the instant', () => {
+	assert.equal(browserDatetimeLocal('2026-08-25T14:29:00.000Z'), '2026-08-25T14:29');
+	assert.equal(browserDatetimeLocal(Date.parse('2026-01-01T00:00:00Z')), '2026-01-01T00:00');
+	// The control has no zone, so the browser reads back exactly the instant
+	// the fixture meant — which is the whole reason it is not built locally.
+	const instant = Date.now() - 60_000;
+	assert.equal(Date.parse(`${browserDatetimeLocal(instant)}Z`), Math.floor(instant / 60_000) * 60_000);
+});
+
+test('the year and the datetime-local string are the same in every runner zone', () => {
+	const original = process.env.TZ;
+	try {
+		const seen = new Set<string>();
+		for (const tz of ['Pacific/Kiritimati', 'Pacific/Midway', 'Australia/Sydney', 'UTC']) {
+			process.env.TZ = tz;
+			seen.add(`${browserYear()}|${browserYear(-32)}|${browserDatetimeLocal(1_800_000_000_000)}`);
+		}
+		assert.equal(seen.size, 1);
 	} finally {
 		if (original === undefined) delete process.env.TZ;
 		else process.env.TZ = original;
