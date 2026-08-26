@@ -1,216 +1,239 @@
-// Mirror suite for the Dart port of apps/web/src/lib/rate_limit_errors.ts.
-// Keep the cases byte-for-byte in lockstep with the .test.ts file.
+// Dart mirror of apps/web/src/lib/util/rate_limit_errors.test.ts.
+//
+// The parser holds no prose since decisions § 744 — the sentence a
+// reader sees is assembled from the ARB catalogue in
+// `rate_limit_message.dart`, whose own suite renders it per locale.
+
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/rate_limit_errors.dart';
 
 void main() {
-  group('rateLimitErrorMessage', () {
-    test('returns null for null / non-P0001 / missing message inputs', () {
-      expect(rateLimitErrorMessage(), isNull);
-      expect(rateLimitErrorMessage(code: '23505', message: 'duplicate key'),
-          isNull);
-      expect(rateLimitErrorMessage(code: 'P0001'), isNull);
-      expect(rateLimitErrorMessage(code: 'P0001', message: ''), isNull);
+  group('parseRateLimitError', () {
+    test('returns null for null / non-P0001 errors', () {
+      expect(parseRateLimitError(), isNull);
       expect(
-        rateLimitErrorMessage(code: 'P0001', message: 'something unrelated'),
+          parseRateLimitError(code: '23505', message: 'duplicate key'), isNull);
+      expect(parseRateLimitError(code: 'P0001'), isNull);
+      expect(parseRateLimitError(code: 'P0001', message: ''), isNull);
+      expect(
+        parseRateLimitError(code: 'P0001', message: 'something unrelated'),
         isNull,
       );
     });
 
-    test('parses create_club bucket with sub-90s wait → "X seconds"', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club, retry in 42s',
-      );
+    test('parses the create_club bucket and its wait', () {
       expect(
-        msg,
-        "You're creating clubs too quickly — please wait 42 seconds and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club, retry in 42s',
+        ),
+        const RateLimitInfo(bucket: 'create_club', seconds: 42),
       );
     });
 
-    test('parses create_route bucket with > 90s wait → rounded "X minutes"', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_route, retry in 1234s',
-      );
-      // 1234s → ceil(1234 / 60) = 21 minutes.
+    test('parses the create_route bucket', () {
       expect(
-        msg,
-        "You're creating routes too quickly — please wait 21 minutes and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_route, retry in 1234s',
+        ),
+        const RateLimitInfo(bucket: 'create_route', seconds: 1234),
       );
     });
 
-    test('exactly 90s rolls up to "2 minutes" (the cutoff)', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club, retry in 90s',
-      );
+    test('parses the create_report bucket', () {
+      // submit_report + report_comments + report_posts_and_runs +
+      // report_route_reviews all debit this one bucket.
       expect(
-        msg,
-        "You're creating clubs too quickly — please wait 2 minutes and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_report, retry in 600s',
+        ),
+        const RateLimitInfo(bucket: 'create_report', seconds: 600),
       );
     });
 
-    test('89s stays as seconds (the cutoff boundary, other side)', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club, retry in 89s',
-      );
+    test('parses both plan-adopt buckets as themselves', () {
+      // clone_plan_template (club template) and clone_public_plan (public
+      // library) are the same act from two libraries; collapsing them onto
+      // one sentence is the render layer's decision, not the parser's.
       expect(
-        msg,
-        "You're creating clubs too quickly — please wait 89 seconds and try again.",
-      );
-    });
-
-    test('1s uses singular "second"', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club, retry in 1s',
-      );
-      expect(
-        msg,
-        "You're creating clubs too quickly — please wait 1 second and try again.",
-      );
-    });
-
-    test('unknown bucket falls back to generic verb', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_widget, retry in 30s',
-      );
-      expect(
-        msg,
-        "You're doing that too quickly — please wait 30 seconds and try again.",
-      );
-    });
-
-    test('parses create_report bucket with "filing reports" verb', () {
-      // The submit_report RPC (migration 20260908_001) delegates to
-      // enforce_create_rate_limit with bucket='create_report'. Web
-      // data.ts#submitReport routes through the shared helper; pin
-      // the verb so a future refactor can't slip back to the old
-      // "Too many reports" generic wording.
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_report, retry in 600s',
-      );
-      expect(
-        msg,
-        "You're filing reports too quickly — please wait 10 minutes and try again.",
-      );
-    });
-
-    test('clone_plan_template + clone_public_plan buckets use "adopting plans"',
-        () {
-      // The training-plan adopt flows (clonePlanTemplate from a club
-      // template, clonePublicPlan from the public library) both go
-      // through enforce_create_rate_limit. Pin the shared verb.
-      expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           code: 'P0001',
           message: 'rate limit exceeded for clone_plan_template, retry in 300s',
         ),
-        "You're adopting plans too quickly — please wait 5 minutes and try again.",
+        const RateLimitInfo(bucket: 'clone_plan_template', seconds: 300),
       );
       expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           code: 'P0001',
           message: 'rate limit exceeded for clone_public_plan, retry in 45s',
         ),
-        "You're adopting plans too quickly — please wait 45 seconds and try again.",
+        const RateLimitInfo(bucket: 'clone_public_plan', seconds: 45),
       );
     });
 
-    test('clone_session_template bucket uses "adopting session plans"', () {
+    test('parses the clone_session_template bucket', () {
       expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           code: 'P0001',
           message:
               'rate limit exceeded for clone_session_template, retry in 30s',
         ),
-        "You're adopting session plans too quickly — please wait 30 seconds and try again.",
+        const RateLimitInfo(bucket: 'clone_session_template', seconds: 30),
       );
     });
 
-    test('clone_gym_routine_template bucket uses "adopting gym routines"', () {
+    test('parses the clone_gym_routine_template bucket', () {
       expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           code: 'P0001',
           message:
               'rate limit exceeded for clone_gym_routine_template, retry in 30s',
         ),
-        "You're adopting gym routines too quickly — please wait 30 seconds and try again.",
+        const RateLimitInfo(bucket: 'clone_gym_routine_template', seconds: 30),
       );
     });
 
-    test('publish_gym_routine_as_template bucket uses "publishing routines"',
-        () {
+    test('parses the publish_gym_routine_as_template bucket', () {
       expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           code: 'P0001',
           message:
               'rate limit exceeded for publish_gym_routine_as_template, retry in 120s',
         ),
-        "You're publishing routines too quickly — please wait 2 minutes and try again.",
+        const RateLimitInfo(
+            bucket: 'publish_gym_routine_as_template', seconds: 120),
       );
     });
 
-    test('zero seconds defaults to "a few seconds"', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club, retry in 0s',
+    test('parses both direct-message buckets', () {
+      // Migration 20270608_001 debits two windows per send (decisions
+      // § 737): a 30/60 s burst and a 250/3600 s hour cap, the hour one
+      // checked first so the sender is told the binding wait. Both must
+      // parse — the helper used to fall through to the generic sentence
+      // for them on BOTH platforms, so a throttled sender read "You're
+      // doing that too quickly" about a message they had just tried to
+      // send.
+      expect(
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for send_direct_message, retry in 1800s',
+        ),
+        const RateLimitInfo(bucket: 'send_direct_message', seconds: 1800),
       );
       expect(
-        msg,
-        "You're creating clubs too quickly — please wait a few seconds and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message:
+              'rate limit exceeded for send_direct_message_burst, retry in 41s',
+        ),
+        const RateLimitInfo(bucket: 'send_direct_message_burst', seconds: 41),
       );
     });
 
-    test('mismatched format returns null (fail safe)', () {
+    test('an unrecognised bucket is returned verbatim, not swallowed', () {
+      // A bucket a later migration adds must reach the render layer as
+      // itself so that layer can pick the honest generic sentence.
+      // Dropping it here would leave the caller unable to tell a new
+      // bucket from a parse failure.
       expect(
-        rateLimitErrorMessage(code: 'P0001', message: 'rate limit exceeded'),
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_widget, retry in 30s',
+        ),
+        const RateLimitInfo(bucket: 'create_widget', seconds: 30),
+      );
+    });
+
+    test('a one-second wait is a plain 1, not rounded away', () {
+      expect(
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club, retry in 1s',
+        ),
+        const RateLimitInfo(bucket: 'create_club', seconds: 1),
+      );
+    });
+
+    test('the seconds pass through untouched either side of the minute cutoff',
+        () {
+      // The 90 s seconds-vs-minutes cutoff is a rendering decision and
+      // lives in rate_limit_message.dart. The parser reports what the
+      // trigger said.
+      expect(
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club, retry in 89s',
+        ),
+        const RateLimitInfo(bucket: 'create_club', seconds: 89),
+      );
+      expect(
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club, retry in 90s',
+        ),
+        const RateLimitInfo(bucket: 'create_club', seconds: 90),
+      );
+    });
+
+    test('zero seconds becomes a null wait, not a literal 0', () {
+      // "retry in 0s" is the trigger saying the window is about to roll.
+      // Null is "wait a moment"; a rendered "0 seconds" would invite an
+      // immediate retry that fails again.
+      expect(
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club, retry in 0s',
+        ),
+        const RateLimitInfo(bucket: 'create_club', seconds: null),
+      );
+    });
+
+    test("mismatched format returns null (fail safe — don't pretend to parse)",
+        () {
+      expect(
+        parseRateLimitError(code: 'P0001', message: 'rate limit exceeded'),
         isNull,
       );
     });
 
     test('tolerates extra whitespace between "retry in" and the seconds', () {
-      // Same edge case the web mirror covers: a future migration tweak
-      // could collapse / expand whitespace around the seconds token; the
-      // `\s*` keeps the parse tolerant.
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club,  retry in  42s',
-      );
+      // The postgres `raise exception '..., retry in %s'` literal uses a
+      // single space, but a future migration tweak could land tab /
+      // two-space variants. The regex's `\s*` keeps the parse tolerant.
       expect(
-        msg,
-        "You're creating clubs too quickly — please wait 42 seconds and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club,  retry in  42s',
+        ),
+        const RateLimitInfo(bucket: 'create_club', seconds: 42),
       );
     });
 
     test('parse is case-insensitive (mixed case still matches)', () {
-      // Postgres' raise is case-sensitive at write-time, but case-
-      // insensitive parsing guards against a future copy-edit that
-      // capitalises "Rate Limit Exceeded".
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'Rate Limit Exceeded for create_club, retry in 10s',
-      );
+      // Postgres' raise is case-sensitive at write-time, but
+      // case-insensitive at parse-time guards against a future copy-edit
+      // that capitalises "Rate Limit Exceeded".
       expect(
-        msg,
-        "You're creating clubs too quickly — please wait 10 seconds and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'Rate Limit Exceeded for create_club, retry in 10s',
+        ),
+        const RateLimitInfo(bucket: 'create_club', seconds: 10),
       );
     });
 
     test('rejects a wrong SQLSTATE even with matching message text', () {
       // Defensive: a CHECK-constraint violation (23514) or RLS deny
-      // (42501) must never get the friendly-rate-limit treatment, even
-      // on the hypothetical case that something else surfaces a near-
-      // identical "rate limit" string. Only P0001 + matching format is
-      // a match.
+      // (42501) must never get the friendly-rate-limit treatment, even on
+      // the hypothetical case that something else surfaces a
+      // near-identical "rate limit" string.
       expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           code: '23514',
           message: 'rate limit exceeded for create_club, retry in 42s',
         ),
@@ -219,50 +242,22 @@ void main() {
     });
 
     test('returns null when message has the right shape but no SQLSTATE', () {
-      // A bare-string error (e.g. from a non-PostgrestException throw
-      // path) must not be confused with the trigger's exception.
+      // A bare-string error (e.g. from a non-Postgrest throw path) must
+      // not be confused with the trigger's exception.
       expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           message: 'rate limit exceeded for create_club, retry in 42s',
         ),
         isNull,
       );
     });
 
-    test('3540s → "59 minutes" (just-under-one-hour boundary)', () {
-      // The create_club / create_route bucket window is 3600s, so
-      // the trigger's `retry in` value can land anywhere in [0, 3600).
-      // Pin the upper-edge wording so a rounding-logic tweak can't
-      // silently regress to "59.something" or "1 hour".
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club, retry in 3540s',
-      );
+    test(r'decimal seconds in message → null (only integer matches \d+)', () {
+      // Defensive: the trigger always emits an integer (postgres `%s` of
+      // a numeric interval), but if a future change inserts a decimal,
+      // we'd rather fall through to the raw error than pretend to parse.
       expect(
-        msg,
-        "You're creating clubs too quickly — please wait 59 minutes and try again.",
-      );
-    });
-
-    test('3600s → "60 minutes" (hour-exact boundary)', () {
-      // Practically unreachable (window resets at this boundary), but
-      // pinning the deterministic output keeps the helper future-proof
-      // if a migration widens the window past 3600.
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club, retry in 3600s',
-      );
-      expect(
-        msg,
-        "You're creating clubs too quickly — please wait 60 minutes and try again.",
-      );
-    });
-
-    test('decimal seconds in message → null (only integer matches \\d+)', () {
-      // Defensive: the trigger always emits an integer; if a future
-      // change inserts a decimal, fall through to the raw error.
-      expect(
-        rateLimitErrorMessage(
+        parseRateLimitError(
           code: 'P0001',
           message: 'rate limit exceeded for create_club, retry in 1.5s',
         ),
@@ -270,29 +265,74 @@ void main() {
       );
     });
 
-    test('extra trailing message text does not break the parse', () {
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_route, retry in 30s, please wait',
-      );
+    test("extra trailing message text doesn't break the parse", () {
+      // The regex doesn't anchor at end-of-string. A future migration
+      // could append a `using` clause hint after the main message; the
+      // bucket + seconds should still parse cleanly out of the prefix.
       expect(
-        msg,
-        "You're creating routes too quickly — please wait 30 seconds and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message:
+              'rate limit exceeded for create_route, retry in 30s, please wait',
+        ),
+        const RateLimitInfo(bucket: 'create_route', seconds: 30),
       );
     });
 
-    test('numeric chars inside the bucket name parse cleanly', () {
-      // `\w+` is greedy but the trailing comma anchors the bucket
-      // capture. `create_club_v2` lands as a full bucket and falls
-      // through to the unknown-bucket "doing that" wording.
-      final msg = rateLimitErrorMessage(
-        code: 'P0001',
-        message: 'rate limit exceeded for create_club_v2, retry in 30s',
-      );
+    test('numeric chars inside the bucket name parse to the seconds, not the '
+        'bucket', () {
+      // `\w+` is greedy and would happily eat digits — but the regex
+      // requires a comma right after the bucket, so a bucket name with an
+      // embedded number (`create_club_v2`) still parses correctly.
       expect(
-        msg,
-        "You're doing that too quickly — please wait 30 seconds and try again.",
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for create_club_v2, retry in 30s',
+        ),
+        const RateLimitInfo(bucket: 'create_club_v2', seconds: 30),
       );
+    });
+
+    test('a hyphenated bucket cannot be parsed — the buckets are snake_case '
+        'for that reason', () {
+      // decisions § 737: the filed DM entry proposed `'direct-messages'`.
+      // `(\w+)` stops at the hyphen, the comma check then fails, and the
+      // raw postgres string would have reached the sender. Pinned so a
+      // later migration naming a bucket with a hyphen fails here rather
+      // than in production.
+      expect(
+        parseRateLimitError(
+          code: 'P0001',
+          message: 'rate limit exceeded for direct-messages, retry in 30s',
+        ),
+        isNull,
+      );
+    });
+
+    test('the parser holds no user-facing sentence — the copy lives in the '
+        'ARBs', () {
+      // The whole point of § 744. A helper that grows its own English
+      // back is a helper a non-English reader gets English from, and
+      // neither the ARB parity suite nor the catalogue guards can see it.
+      // Mirrors the web suite's guard over rate_limit_errors.ts.
+      final code = File('lib/rate_limit_errors.dart')
+          .readAsLinesSync()
+          .where((line) => !line.trimLeft().startsWith('///'))
+          .join('\n');
+      for (final phrase in const [
+        'too quickly',
+        'please wait',
+        'try again',
+        'a few seconds',
+        'doing that',
+      ]) {
+        expect(
+          code.contains(phrase),
+          isFalse,
+          reason: 'rate_limit_errors.dart contains the user-facing phrase '
+              '"$phrase" — the sentence belongs in the ARB catalogues.',
+        );
+      }
     });
   });
 }

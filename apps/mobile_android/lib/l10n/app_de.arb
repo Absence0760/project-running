@@ -3940,5 +3940,17 @@
   "segmentCatalogueStatElevation": "Höhenmeter",
   "segmentCatalogueStatSurface": "Untergrund",
   "segmentCatalogueLeaderboard": "Bestenliste",
-  "runSurfaceTabSegments": "Segmente"
+  "runSurfaceTabSegments": "Segmente",
+  "rateLimitCreateClub": "Du erstellst zu schnell Vereine – bitte warte {wait} und versuche es erneut.",
+  "rateLimitCreateRoute": "Du erstellst zu schnell Routen – bitte warte {wait} und versuche es erneut.",
+  "rateLimitCreateReport": "Du meldest zu schnell Inhalte – bitte warte {wait} und versuche es erneut.",
+  "rateLimitAdoptPlan": "Du übernimmst zu schnell Trainingspläne – bitte warte {wait} und versuche es erneut.",
+  "rateLimitAdoptSessionPlan": "Du übernimmst zu schnell Session-Pläne – bitte warte {wait} und versuche es erneut.",
+  "rateLimitAdoptGymRoutine": "Du übernimmst zu schnell Gym-Routinen – bitte warte {wait} und versuche es erneut.",
+  "rateLimitPublishRoutine": "Du veröffentlichst zu schnell Routinen – bitte warte {wait} und versuche es erneut.",
+  "rateLimitSendMessage": "Du sendest zu schnell Nachrichten – bitte warte {wait} und versuche es erneut.",
+  "rateLimitGeneric": "Du machst das zu schnell – bitte warte {wait} und versuche es erneut.",
+  "rateLimitWaitSeconds": "{n, plural, one{1 Sekunde} other{{n} Sekunden}}",
+  "rateLimitWaitMinutes": "{n, plural, one{1 Minute} other{{n} Minuten}}",
+  "rateLimitWaitSoon": "einen Moment"
 }

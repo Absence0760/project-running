@@ -13665,4 +13665,74 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get runSurfaceTabSegments => 'Segmente';
+
+  @override
+  String rateLimitCreateClub(String wait) {
+    return 'Du erstellst zu schnell Vereine – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitCreateRoute(String wait) {
+    return 'Du erstellst zu schnell Routen – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitCreateReport(String wait) {
+    return 'Du meldest zu schnell Inhalte – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitAdoptPlan(String wait) {
+    return 'Du übernimmst zu schnell Trainingspläne – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitAdoptSessionPlan(String wait) {
+    return 'Du übernimmst zu schnell Session-Pläne – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitAdoptGymRoutine(String wait) {
+    return 'Du übernimmst zu schnell Gym-Routinen – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitPublishRoutine(String wait) {
+    return 'Du veröffentlichst zu schnell Routinen – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitSendMessage(String wait) {
+    return 'Du sendest zu schnell Nachrichten – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitGeneric(String wait) {
+    return 'Du machst das zu schnell – bitte warte $wait und versuche es erneut.';
+  }
+
+  @override
+  String rateLimitWaitSeconds(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n Sekunden',
+      one: '1 Sekunde',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rateLimitWaitMinutes(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n Minuten',
+      one: '1 Minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rateLimitWaitSoon => 'einen Moment';
 }

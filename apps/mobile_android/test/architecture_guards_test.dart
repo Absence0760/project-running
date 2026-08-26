@@ -3890,37 +3890,67 @@ void main() {
     // data.ts is a small follow-up" and that commit eee128c / 3c71481
     // closed. These guards keep it closed.
 
-    test('club_form_sheet imports + calls rateLimitErrorMessage', () {
+    // Since decisions § 744 the wording lives in the ARBs, so each catch
+    // path must reach the render-layer helper AND hand it a localizer —
+    // a call that resolved the sentence without one would put English in
+    // front of every reader, which is the defect that ADR closed.
+    test('club_form_sheet imports + calls rateLimitErrorMessage with a '
+        'localizer', () {
       final source =
           File('lib/widgets/club_form_sheet.dart').readAsStringSync();
       expect(
-        source.contains("import '../rate_limit_errors.dart'"),
+        source.contains("import '../rate_limit_message.dart'"),
         isTrue,
-        reason: 'club_form_sheet must import rate_limit_errors.dart so the '
+        reason: 'club_form_sheet must import rate_limit_message.dart so the '
             'create-club catch path runs through the helper.',
       );
       expect(
-        source.contains('rateLimitErrorMessage('),
+        source.contains('rateLimitErrorMessage(l10n,'),
         isTrue,
-        reason:
-            'club_form_sheet catch block must call rateLimitErrorMessage.',
+        reason: 'club_form_sheet catch block must call '
+            'rateLimitErrorMessage(l10n, …).',
       );
     });
 
-    test('route_builder_screen imports + calls rateLimitErrorMessage', () {
+    test('route_builder_screen imports + renders through rateLimitMessage',
+        () {
       final source =
           File('lib/screens/route_builder_screen.dart').readAsStringSync();
       expect(
-        source.contains("import '../rate_limit_errors.dart'"),
+        source.contains("import '../rate_limit_message.dart'"),
         isTrue,
-        reason: 'route_builder_screen must import rate_limit_errors.dart '
+        reason: 'route_builder_screen must import rate_limit_message.dart '
             'so the saveRoute catch path runs through the helper.',
       );
       expect(
-        source.contains('rateLimitErrorMessage('),
+        source.contains('parseRateLimitError('),
         isTrue,
         reason: 'route_builder_screen save catch block must call '
-            'rateLimitErrorMessage.',
+            'parseRateLimitError.',
+      );
+      expect(
+        RegExp(r'rateLimitMessage\(\s*\n?\s*context != null').hasMatch(source),
+        isTrue,
+        reason: 'formatSaveRouteError must render the refusal through '
+            'rateLimitMessage with the caller\'s AppLocalizations when it '
+            'has a context.',
+      );
+    });
+
+    test('report_sheet calls rateLimitErrorMessage with a localizer', () {
+      final source = File('lib/widgets/report_sheet.dart').readAsStringSync();
+      expect(
+        source.contains("import '../rate_limit_message.dart'"),
+        isTrue,
+        reason: 'report_sheet must import rate_limit_message.dart so the '
+            'create_report catch path runs through the helper.',
+      );
+      expect(
+        RegExp(r'rateLimitErrorMessage\(\s*\n?\s*AppLocalizations\.of\(context\)')
+            .hasMatch(source),
+        isTrue,
+        reason: 'report_sheet catch block must call rateLimitErrorMessage '
+            'with the sheet\'s AppLocalizations.',
       );
     });
   });
