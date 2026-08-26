@@ -151,8 +151,9 @@ Deno.test('strava-import routes its allowlist through the shared module', () => 
     'strava-import must build its allowlist with parseRedirectAllowlist',
   );
   assert(
-    STRAVA_SRC.includes('isExactRedirectAllowed(redirectUri, allowed)'),
-    'strava-import must compare the claimed redirect_uri with isExactRedirectAllowed',
+    STRAVA_SRC.includes('!isExactRedirectAllowed(redirectUri, allowed)'),
+    'strava-import must refuse on the NEGATION of isExactRedirectAllowed — a gate ' +
+      'branching the other way rejects every legitimate connect instead',
   );
 });
 
