@@ -208,7 +208,14 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // DDL, no constraint, so the scanner passes it with zero violations after this
 // bump too; the bump is the max-version bookkeeping this file's own test
 // enforces, not an exemption.
-export const GRANDFATHER_CUTOFF = '20270609';
+// Bumped to 20270610 for
+// 20270610_001_challenge_create_rate_limit_shared_helper.sql, which is a single
+// CREATE OR REPLACE FUNCTION re-emitting the create_challenge throttle trigger's
+// body to call enforce_create_rate_limit instead of raising its own bare string.
+// Replacing the function rather than the trigger takes no lock on challenges at
+// all: no table DDL, no constraint, no backfill, so the scanner passes it with
+// zero violations after this bump too. Same bookkeeping, not an exemption.
+export const GRANDFATHER_CUTOFF = '20270610';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
