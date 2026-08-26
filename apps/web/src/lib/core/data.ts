@@ -8556,7 +8556,10 @@ export async function fetchDmThread(otherId: string, limit = 200): Promise<Direc
 }
 
 /// Send a message. RLS enforces the no-block + follow-graph gate; a
-/// 42501 surfaces as a friendly "can't message this person" error.
+/// 42501 surfaces as a friendly "can't message this person" error, and
+/// the rail's two send buckets (migration 20270608_001) raise the same
+/// P0001 every other create-rate-limit does, so they go through the
+/// shared parser rather than reaching a composer as a raw exception.
 export async function sendDm(recipientId: string, body: string): Promise<DirectMessage> {
 	const me = auth.user?.id;
 	if (!me) throw new Error('Not signed in');
@@ -8571,6 +8574,8 @@ export async function sendDm(recipientId: string, body: string): Promise<DirectM
 		if (error?.code === '42501') {
 			throw new Error("You can only message people you follow (or who follow you), and who haven't blocked you.");
 		}
+		const friendly = rateLimitErrorMessage(error);
+		if (friendly) throw new Error(friendly);
 		throw error ?? new Error('Send failed');
 	}
 	return data as DirectMessage;

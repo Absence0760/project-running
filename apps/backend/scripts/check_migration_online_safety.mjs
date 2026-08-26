@@ -190,7 +190,16 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // grandfathered; new ones are not. The migration's other DDL is a nullable
 // `data_export_jobs.notified_at` ADD COLUMN with no default (catalogue-only, and
 // the table is not guarded) plus one function body.
-export const GRANDFATHER_CUTOFF = '20270607';
+// Bumped to 20270608 for 20270608_001_direct_message_rate_limit.sql, which
+// adds a BEFORE INSERT trigger + its function to `direct_messages`. No
+// constraint of any kind, and `direct_messages` is not in GUARDED_TABLES, so
+// the scanner passes it with zero violations after this bump too — the bump is
+// the max-version bookkeeping this file's own test enforces, not an exemption.
+// The lock it does take is out of the scanner's remit and is reasoned about in
+// the migration's own header: CREATE TRIGGER holds SHARE ROW EXCLUSIVE, which
+// pauses concurrent writes to that one table for a catalogue-only O(1) change
+// and never blocks a reader.
+export const GRANDFATHER_CUTOFF = '20270608';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in

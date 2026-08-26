@@ -692,6 +692,15 @@ spam wave forces the prioritisation.
   RPC. service_role + null-auth (migrations, seed) + forged inserts
   (caught by RLS instead) all bypass. Migration
   `20260907_001_create_rate_limits.sql`. (Anti-spam phase 2)
+- [x] **Send-rate-limits on direct messages** — the rail had no
+  throttle at all until migration
+  `20270608_001_direct_message_rate_limit.sql`; the INSERT policy's
+  follow-graph + block gate was its entire anti-spam story. A BEFORE
+  INSERT trigger on `direct_messages` debits two buckets through the
+  same `enforce_create_rate_limit` helper: 30/minute bounds how fast
+  messages arrive, 250/hour bounds how many. Table-level rather than
+  per-affordance, so `/messages` and the route-send dialog are both
+  covered by one mechanism ([decisions § 737](../architecture/decisions.md)).
 - [x] **User-submitted reports** on profiles, clubs, routes. A
   `reports` table with polymorphic `(target_kind, target_id)` ref + a
   `submit_report` SECURITY DEFINER RPC that validates the target
