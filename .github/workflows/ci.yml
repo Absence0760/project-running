@@ -1585,6 +1585,11 @@ jobs:
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
+      # For the refusal-assertion guard below. It imports nothing outside
+      # node:*, so no workspace install is needed — only a pinned runtime.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
