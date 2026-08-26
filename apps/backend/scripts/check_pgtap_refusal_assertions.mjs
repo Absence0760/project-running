@@ -187,8 +187,51 @@ export function throwsPinsItsError(argv) {
 // A description claiming a principal is denied SIGHT of data. This is what
 // makes an empty result a security claim rather than a statement about a
 // trigger that correctly did not fire.
+//
+// The selector is prose, so its reach is measured rather than argued
+// (decisions.md 745). Both operators were run over all 294 zero-or-empty
+// assertions in the suite, not just the ones worded as refusals. The regex as
+// it stood selected 126 and 121 of them died under mutation, so it is
+// precise. Of the 168 it did not select, 28 died too — a real recall gap, and
+// the words behind it split in two:
+//
+//   - `never sees`, `unfindable`, `enumerate`, `exposes no`, `reads nothing`,
+//     `gets nothing`, `absent from` — unambiguous refusal words the regex
+//     simply lacked. Added here: every assertion they select dies under
+//     mutation, so they cost nothing and reach tests not written yet.
+//
+//   - `excluded` / `excludes` — 21 assertions, about half access control (a
+//     declared minor, a search opt-out, a block, a members-only event) and
+//     about half ordinary filters (`byday=MO excludes it`, `free filter
+//     excludes the priced class`). One word, two claims. No regex separates
+//     them, and widening to catch the first half drags in the second, each
+//     needing an EXPECTED_SURVIVORS entry to excuse a filter that was never a
+//     security claim — the allowlist-that-rots this selector exists to avoid.
+//     Those carry an explicit `-- refusal:` marker instead.
+//
+// Two of the 28 are not refusals at all and are deliberately still outside:
+// `distance is returned as coarse bucket 0` and `a long-broken streak reports
+// current = 0` expect a zero VALUE, not an empty result, and a widening
+// mutation moves a value. A kill means "the mutation changed the answer",
+// which is only evidence of access control when the zero was an emptiness.
 export const REFUSAL_VOCABULARY =
-  /(cannot (see|read|select|view|find)|can't (see|read|select|view)|not (see|read|visible|readable|exposed|returned)|invisible|hidden|hides|no access|leak|denied|denies|sees no|sees none|returns nothing|shadow)/i;
+  /(cannot (see|read|select|view|find)|can't (see|read|select|view)|not (see|read|visible|readable|exposed|returned)|never (see|sees|read|reads)|invisible|hidden|hides|no access|leak|denied|denies|sees no|sees none|returns nothing|reads nothing|gets nothing|exposes no|unfindable|enumerate|absent from|shadow)/i;
+
+// An explicit "this zero is a refusal" marker in the test, for a claim whose
+// own wording cannot carry it. It goes on its own comment line immediately
+// above the assertion, inside the same statement span, and says why:
+//
+//   -- refusal: the under-18 floor is access control, not a search filter
+//   select is((select count(*)::int from search_user_profiles('Minor')), 0, ...);
+//
+// The colon is load-bearing: prose wrapping onto a line that happens to open
+// with `-- refusal,` is not a marker, and one such comment already exists.
+//
+// It is opt-IN only. Nothing here can take an assertion OUT of the
+// population: a zero the vocabulary claims is a refusal and that survives
+// mutation has to be argued for by name in EXPECTED_SURVIVORS, where the
+// reason is reviewable and a stale entry fails as loudly as a new offender.
+export const REFUSAL_MARKER = /--[ \t]*refusal:/i;
 
 const ZERO_EXPECTATION = /^\s*0(::(bigint|int4|int|integer|numeric|smallint))?\s*$/i;
 const RELATION_REF = /\b(?:from|join)\s+(?:only\s+)?([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)/gi;
@@ -216,7 +259,9 @@ export function refusalAssertions(text, relations) {
         (kind === 'results_eq' && expected !== undefined && /values\s*\(\s*0\s*\)/i.test(expected));
       if (!zeroish) continue;
       const description = literalOf(call.argv.at(-1) ?? '');
-      if (description === null || !REFUSAL_VOCABULARY.test(description)) continue;
+      if (description === null) continue;
+      const marked = REFUSAL_MARKER.test(text.slice(statementStart(text, call.offset), call.offset));
+      if (!marked && !REFUSAL_VOCABULARY.test(description)) continue;
       const read = [...relationsIn(sql)].filter((r) => relations.has(r));
       if (read.length === 0) continue;
       const neutralise = read.filter((r) => DEFINER_NEUTRALISERS.has(r));

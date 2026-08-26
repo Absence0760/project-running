@@ -169,6 +169,62 @@ test('no permissive replacement outlives the assertions it exists for', () => {
   );
 });
 
+test('an explicit refusal marker selects an assertion whose own wording cannot', () => {
+  const sql = [
+    'begin;',
+    "select is((select count(*)::int from t where kind = 'walk'), 0, 'the run filter excludes a walk');",
+    '-- refusal: the under-18 floor is access control, not a search filter',
+    "select is((select count(*)::int from t where id = 'x'), 0, 'the minor is excluded from search');",
+    'rollback;',
+  ].join('\n');
+  const found = refusalAssertions(sql, new Map([['t', 'base']]));
+  assert.deepEqual(
+    found.map((f) => f.description),
+    ['the minor is excluded from search'],
+  );
+});
+
+test('a refusal marker reaches only the assertion it sits above', () => {
+  const sql = [
+    'begin;',
+    '-- refusal: this one',
+    "select is_empty($$ select id from t $$, 'the first claim');",
+    "select is_empty($$ select id from t $$, 'the second claim');",
+    'rollback;',
+  ].join('\n');
+  const found = refusalAssertions(sql, new Map([['t', 'base']]));
+  assert.deepEqual(
+    found.map((f) => f.description),
+    ['the first claim'],
+  );
+});
+
+test('every refusal marker in the suite sits above an assertion the guard then selects', () => {
+  for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'))) {
+    const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+    const markers = [...text.matchAll(/--[ \t]*refusal:[^\n]*/g)];
+    if (markers.length === 0) continue;
+    // Every relation is claimed to be a base table so the selection under test
+    // is the marker's, not the catalogue's.
+    const relations = new Map(
+      [...text.matchAll(/\b(?:from|join)\s+(?:only\s+)?([a-z_][a-z0-9_]*)/gi)].map((m) => [
+        m[1].toLowerCase(),
+        'base',
+      ]),
+    );
+    const selected = refusalAssertions(text, relations).length;
+    const vocabularyOnly = refusalAssertions(
+      text.replaceAll(/--[ \t]*refusal:/g, '-- (was refusal)'),
+      relations,
+    ).length;
+    assert.equal(
+      selected - vocabularyOnly,
+      markers.length,
+      `${file}: ${markers.length} refusal marker(s) but only ${selected - vocabularyOnly} added assertion(s) to the population. A marker that sits above a non-assertion, or above one the vocabulary already selects, says nothing and should be removed.`,
+    );
+  }
+});
+
 test('statementStart and statementEnd bracket the whole assertion statement', () => {
   const sql = "select 1;\n\nselect is_empty($$ select 1; $$, 'd');\nselect 2;";
   const call = findCalls(sql, 'is_empty')[0];
