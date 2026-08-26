@@ -154,14 +154,15 @@ const LOCAL_ZONE_INSTANT =
 	/(?:new\s+Date\(|Date\.parse\()\s*['"`]\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?['"`]/;
 
 /**
- * Files that still derive a day in the runner's zone, each with why it has not
- * been converted. Every entry is asserted to still match, so the list cannot
- * rot into a set of stale exemptions — a converted file must be deleted from
- * it, and a new file may not be added without a reason.
+ * Files the scan flags that are nonetheless correct, each with why. Every
+ * entry is asserted to still match, so the list cannot rot into a set of
+ * stale exemptions — a converted file must be deleted from it, and a new file
+ * may not be added without a reason.
  *
- * The four marked "not yet converted" are the same bug this module exists to
- * kill, outside the nutrition surface it was fixed on; they are tracked in
- * docs/product/followups.md.
+ * Both surviving entries are zone-neutral for a reason a line-oriented scan
+ * cannot see. Nothing here is a deferral: § 738 converted the last spec that
+ * was one, after finding that four of the five reasons previously written as
+ * deliberate described the defect rather than an exemption from it.
  */
 const LOCAL_ZONE_ALLOWED: Record<string, string> = {
 	'fixtures/plan-today.ts':
