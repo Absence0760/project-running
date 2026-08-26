@@ -6,6 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { clearUserSettingKey, setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * The chip's visible word, read out of the en catalogue.
@@ -193,19 +194,22 @@ test.describe('/runs/new', () => {
 
 		const newId = await captureCreatedRunId(page);
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('user_id, distance_m, duration_s, source, activity_type, metadata')
-			.eq('id', newId)
-			.single();
-		expect(row?.user_id).toBe(USER_A.id);
-		expect(Math.round((row?.distance_m as number) ?? 0)).toBe(3140);
-		expect(row?.duration_s).toBe(25 * 60);
-		expect(row?.source).toBe('app');
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('user_id, distance_m, duration_s, source, activity_type, metadata')
+				.eq('id', newId)
+				.single()
+		);
+		expect(row.user_id).toBe(USER_A.id);
+		expect(Math.round((row.distance_m as number))).toBe(3140);
+		expect(row.duration_s).toBe(25 * 60);
+		expect(row.source).toBe('app');
 		// activity_type was promoted out of metadata into a real column
 		// (migration 20261207_001); manual_entry stays in the bag.
-		expect(row?.activity_type).toBe('walk');
-		const meta = row?.metadata as Record<string, unknown>;
+		expect(row.activity_type).toBe('walk');
+		const meta = row.metadata as Record<string, unknown>;
 		expect(meta?.manual_entry).toBe(true);
 	});
 
@@ -316,12 +320,15 @@ test.describe('/runs/new', () => {
 		await page.getByRole('button', { name: /Save/ }).click();
 		const newId = await captureCreatedRunId(page);
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('distance_m')
-			.eq('id', newId)
-			.single();
-		expect(Math.round((row?.distance_m as number) ?? 0)).toBe(5270);
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('distance_m')
+				.eq('id', newId)
+				.single()
+		);
+		expect(Math.round((row.distance_m as number))).toBe(5270);
 	});
 
 	test('activity defaults to Run and persists to metadata.activity_type', async ({
@@ -506,13 +513,16 @@ test.describe('/runs/new', () => {
 		// the client-side INSERT lands.
 		await page.waitForLoadState('networkidle');
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('distance_m, duration_s, user_id')
-			.eq('id', newId)
-			.single();
-		expect(row?.user_id).toBe(USER_A.id);
-		expect(Math.round((row?.distance_m as number) ?? 0)).toBe(10_000);
-		expect(row?.duration_s).toBe(50 * 60);
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('distance_m, duration_s, user_id')
+				.eq('id', newId)
+				.single()
+		);
+		expect(row.user_id).toBe(USER_A.id);
+		expect(Math.round((row.distance_m as number))).toBe(10_000);
+		expect(row.duration_s).toBe(50 * 60);
 	});
 });

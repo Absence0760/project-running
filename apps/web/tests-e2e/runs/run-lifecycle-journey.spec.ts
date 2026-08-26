@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Run-lifecycle journey — the full cradle-to-grave life of a single
@@ -227,12 +228,15 @@ test.describe('run lifecycle journey', () => {
 					page.locator('.comment p').first()
 				).toHaveText(commentBody, { timeout: 10_000 });
 				// Backend cross-check: exactly one kudos row from USER_C_PRO.
-				const { data: kudosRows } = await admin
-					.from('run_kudos')
-					.select('user_id')
-					.eq('run_id', runId);
-				expect(kudosRows?.length ?? 0).toBe(1);
-				expect(kudosRows?.[0]?.user_id).toBe(USER_C_PRO.id);
+				const kudosRows = await readRows(
+					'run_kudos by run_id',
+					admin
+						.from('run_kudos')
+						.select('user_id')
+						.eq('run_id', runId)
+				);
+				expect(kudosRows.length).toBe(1);
+				expect(kudosRows[0]?.user_id).toBe(USER_C_PRO.id);
 			});
 
 			// ── 7. Delete from the detail page; gone from /runs ─────────

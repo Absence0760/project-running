@@ -2239,21 +2239,88 @@ test('accessibility: web shell wires WCAG 2.4.1 skip link + #main-content target
 	);
 });
 
-test('accessibility: ToastContainer wraps the live region (audit/accessibility High)', () => {
-	// Reason: audit/accessibility High — toasts went unannounced
-	// because the container had no aria-live region. Pin role +
-	// aria-live on the wrapper AND assertive on the error toast.
+// Keep only the lines OUTSIDE a component's script and style blocks, so a
+// source guard reads the template and never script text. Deliberately a
+// line-wise scan rather than a strip-the-tags replace: a Svelte 5 component may
+// carry both `<script module>` and `<script>`, a closing tag may be written
+// `</script >`, and the replace shape is a sanitiser CodeQL rightly refuses to
+// believe is complete. Nothing here is sanitisation — the input is a file in
+// this repo and the result is only ever matched against, never rendered.
+function extractSvelteMarkup(src: string): string {
+	const kept: string[] = [];
+	let inBlock: 'script' | 'style' | null = null;
+	for (const line of src.split('\n')) {
+		const lower = line.toLowerCase();
+		if (inBlock) {
+			if (lower.includes(`</${inBlock}`)) inBlock = null;
+			continue;
+		}
+		if (lower.includes('<script')) {
+			if (!lower.includes('</script')) inBlock = 'script';
+			continue;
+		}
+		if (lower.includes('<style')) {
+			if (!lower.includes('</style')) inBlock = 'style';
+			continue;
+		}
+		kept.push(line);
+	}
+	return kept.join('\n');
+}
+
+test('accessibility: ToastContainer announces from permanently-mounted live regions', () => {
+	// Reason: audit/accessibility High — toasts went unannounced because the
+	// container had no aria-live region at all. The first fix added one, but
+	// mounted it in the same `{#if}` as the toast: a live region only announces
+	// changes made INSIDE it while it is already in the accessibility tree, so
+	// region and text arriving in one mutation left the first toast of a burst
+	// — one toast at a time, the ordinary case — announced by nothing.
+	//
+	// Both regions must therefore sit OUTSIDE every `{#if}`. They must also BE
+	// the visible stacks rather than hidden mirrors of them: a mirror announces
+	// correctly and puts the same sentence in the DOM twice, which makes every
+	// `getByText('<toast text>')` in the e2e suite a strict-mode violation.
 	const src = read('src/lib/components/ToastContainer.svelte');
-	assert.match(
-		src,
-		/role="status"\s+aria-live="polite"/,
-		'ToastContainer must wrap toasts in role="status" aria-live="polite".',
+	const markup = extractSvelteMarkup(src);
+
+	for (const politeness of ['polite', 'assertive']) {
+		assert.match(
+			markup,
+			new RegExp(`aria-live="${politeness}"`),
+			`ToastContainer must carry an aria-live="${politeness}" region.`,
+		);
+	}
+
+	const firstIf = markup.indexOf('{#if');
+	if (firstIf >= 0) {
+		for (const politeness of ['polite', 'assertive']) {
+			assert.ok(
+				markup.indexOf(`aria-live="${politeness}"`) < firstIf,
+				`The aria-live="${politeness}" region must be mounted unconditionally — a region ` +
+					'that appears together with its text announces nothing.',
+			);
+		}
+	}
+
+	// The message renders once. Two `{#each}` blocks over the toast list, one
+	// per politeness, and no separate hidden copy of the text.
+	assert.equal(
+		(markup.match(/\{#each/g) ?? []).length,
+		2,
+		'ToastContainer must render each toast exactly once, in the stack matching ' +
+			'its politeness — a second copy for the announcer duplicates the message.',
 	);
-	assert.match(
-		src,
-		/aria-live=\{t\.type\s*===\s*'error'\s*\?\s*'assertive'\s*:\s*'polite'\}/,
-		'Error toasts must escalate to aria-live="assertive" so screen ' +
-			'readers interrupt the user on failure.',
+	assert.doesNotMatch(
+		markup,
+		/aria-hidden/,
+		'Nothing in ToastContainer may be aria-hidden: the announcing region IS the ' +
+			'visible stack, so hiding it would silence the toast rather than de-duplicate it.',
+	);
+	assert.doesNotMatch(
+		markup,
+		/class="visually-hidden"/,
+		'The announcer must not be a visually-hidden mirror of the visible stack — ' +
+			'that duplicates the sentence in the DOM (see decisions.md § 736).',
 	);
 });
 

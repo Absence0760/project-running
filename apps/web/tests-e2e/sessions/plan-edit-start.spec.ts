@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Two session-plan lifecycle steps the instructor relies on that the build /
@@ -104,11 +105,14 @@ test.describe('/sessions/[id] — edit + start-from-event', () => {
 
 		// And the new item persisted on the plan.
 		const admin = getAdminClient();
-		const { data: itemRows } = await admin
-			.from('session_plan_items')
-			.select('movement_name')
-			.eq('plan_id', planId);
-		expect((itemRows ?? []).map((r) => r.movement_name)).toContain('Teaser');
+		const itemRows = await readRows(
+			'session_plan_items by plan_id',
+			admin
+				.from('session_plan_items')
+				.select('movement_name')
+				.eq('plan_id', planId)
+		);
+		expect(itemRows.map((r) => r.movement_name)).toContain('Teaser');
 	});
 
 	test('a class event links through to its attached session, where the runner starts', async ({

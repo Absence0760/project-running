@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Bulk-import failure reporting — the "what didn't import, and why"
@@ -131,11 +132,14 @@ test.describe('bulk-import failure report', () => {
 			expect(csv).toContain('"network"');
 
 			// A reported failure means nothing was written.
-			const { data: leaked } = await admin
-				.from('runs')
-				.select('id')
-				.in('external_id', externalIds);
-			expect(leaked ?? []).toHaveLength(0);
+			const leaked = await readRows(
+				'runs',
+				admin
+					.from('runs')
+					.select('id')
+					.in('external_id', externalIds)
+			);
+			expect(leaked).toHaveLength(0);
 
 			await report.getByRole('button', { name: 'Dismiss' }).click();
 			await expect(report).toHaveCount(0);

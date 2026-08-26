@@ -944,8 +944,11 @@
 						<p class="coord-error" role="alert">{endCoordError}</p>
 					{/if}
 
-					<span class="section-label">{m('routeNew.distance')}</span>
+					<span class="section-label" id="route-target-distance-label">{m('routeNew.distance')}</span>
 					<div class="target-row">
+						<!-- aria-valuetext carries the unit: the raw value is a bare number,
+						     so a screen reader otherwise announces "5" for both 5 km and
+						     5 mi. -->
 						<input
 							type="range"
 							min={targetDisplayMin}
@@ -954,6 +957,8 @@
 							value={targetDisplayValue}
 							oninput={(e) => setTargetFromDisplay(parseFloat((e.target as HTMLInputElement).value))}
 							class="target-slider"
+							aria-labelledby="route-target-distance-label"
+							aria-valuetext="{targetDisplayValue.toFixed(1)} {unitLabel}"
 						/>
 						<span class="target-value">{targetDisplayValue.toFixed(1)} {unitLabel}</span>
 					</div>

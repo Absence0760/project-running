@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /settings/integrations — connected-state UI + disconnect flow.
@@ -100,12 +101,15 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		// "Reconnect Strava" later. Vault secrets get wiped (the
 		// FK columns clear to null). Verify the new shape.
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('integrations')
-			.select('id, disconnected_at, disconnected_reason, access_token_secret_id, refresh_token_secret_id')
-			.eq('user_id', USER_B.id)
-			.eq('provider', 'strava');
-		expect(data ?? []).toHaveLength(1);
+		const data = await readRows(
+			'integrations by user_id+provider',
+			admin
+				.from('integrations')
+				.select('id, disconnected_at, disconnected_reason, access_token_secret_id, refresh_token_secret_id')
+				.eq('user_id', USER_B.id)
+				.eq('provider', 'strava')
+		);
+		expect(data).toHaveLength(1);
 		expect(data![0].disconnected_at).not.toBeNull();
 		expect(data![0].disconnected_reason).toBe('user_initiated');
 		expect(data![0].access_token_secret_id).toBeNull();
@@ -184,12 +188,15 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(stravaCard).toHaveClass(/connected/);
 
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('integrations')
-			.select('id')
-			.eq('user_id', USER_B.id)
-			.eq('provider', 'strava');
-		expect(data ?? []).toHaveLength(1);
+		const data = await readRows(
+			'integrations by user_id+provider',
+			admin
+				.from('integrations')
+				.select('id')
+				.eq('user_id', USER_B.id)
+				.eq('provider', 'strava')
+		);
+		expect(data).toHaveLength(1);
 	});
 
 	test('Strava bulk-import card renders on the integrations page (regardless of connection state)', async ({
@@ -252,11 +259,14 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(parkrunCard.getByRole('button', { name: 'Connect' })).toBeVisible();
 
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('integrations')
-			.select('id')
-			.eq('user_id', USER_B.id)
-			.eq('provider', 'parkrun');
-		expect(data ?? []).toHaveLength(0);
+		const data = await readRows(
+			'integrations by user_id+provider',
+			admin
+				.from('integrations')
+				.select('id')
+				.eq('user_id', USER_B.id)
+				.eq('provider', 'parkrun')
+		);
+		expect(data).toHaveLength(0);
 	});
 });

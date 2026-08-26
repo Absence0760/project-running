@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — a runner removes their own submitted
@@ -65,12 +66,15 @@ test.describe('/clubs/[slug]/events/[id] — remove my result', () => {
 		await dialog.getByRole('button', { name: 'Cancel' }).click();
 		await expect(dialog).toBeHidden({ timeout: 5_000 });
 
-		const { data: stillThere } = await getAdminClient()
-			.from('event_results')
-			.select('id')
-			.eq('event_id', eventId!)
-			.eq('user_id', USER_A.id);
-		expect(stillThere?.length ?? 0).toBe(1);
+		const stillThere = await readRows(
+			'event_results by event_id+user_id',
+			getAdminClient()
+				.from('event_results')
+				.select('id')
+				.eq('event_id', eventId!)
+				.eq('user_id', USER_A.id)
+		);
+		expect(stillThere.length).toBe(1);
 
 		// Confirm path: the result row is deleted server-side.
 		await page.getByRole('button', { name: 'Remove mine' }).click();
@@ -80,11 +84,14 @@ test.describe('/clubs/[slug]/events/[id] — remove my result', () => {
 			timeout: 10_000
 		});
 
-		const { data: gone } = await getAdminClient()
-			.from('event_results')
-			.select('id')
-			.eq('event_id', eventId!)
-			.eq('user_id', USER_A.id);
-		expect(gone?.length ?? 0).toBe(0);
+		const gone = await readRows(
+			'event_results by event_id+user_id',
+			getAdminClient()
+				.from('event_results')
+				.select('id')
+				.eq('event_id', eventId!)
+				.eq('user_id', USER_A.id)
+		);
+		expect(gone.length).toBe(0);
 	});
 });

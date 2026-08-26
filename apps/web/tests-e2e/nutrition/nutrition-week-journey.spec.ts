@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { noonOnBrowserDay, waterStorageKey } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Nutrition multi-day WEEK journey — one long, multi-step walk that THREADS
@@ -203,13 +204,16 @@ test.describe('/nutrition — multi-day week journey', () => {
 			// Backend cross-check: the three planted week rows + today's UI row
 			// all exist for USER_A within the trailing-week window.
 			const since = noonOnBrowserDay(-6);
-			const { data: weekRows } = await admin
-				.from('food_log')
-				.select('item_name')
-				.eq('user_id', USER_A.id)
-				.like('item_name', `%${stamp}%`)
-				.gte('started_at', since);
-			expect((weekRows ?? []).length).toBe(WEEK_OFFSETS.length + 1);
+			const weekRows = await readRows(
+				'food_log by user_id',
+				admin
+					.from('food_log')
+					.select('item_name')
+					.eq('user_id', USER_A.id)
+					.like('item_name', `%${stamp}%`)
+					.gte('started_at', since)
+			);
+			expect(weekRows.length).toBe(WEEK_OFFSETS.length + 1);
 		});
 
 		// ── 4b. The trend metric toggle re-plots the chart on protein ────────

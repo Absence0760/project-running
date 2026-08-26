@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /messages — DM permission boundaries + unread plumbing (#55).
@@ -54,12 +55,15 @@ test.describe('/messages — permission boundaries', () => {
 			await expect(alert).toContainText(/can only message people you follow/i);
 
 			// Fail-closed: nothing was written.
-			const { data } = await getAdminClient()
-				.from('direct_messages')
-				.select('id')
-				.eq('sender_id', USER_B.id)
-				.eq('recipient_id', USER_C_PRO.id);
-			expect(data?.length ?? 0).toBe(0);
+			const data = await readRows(
+				'direct_messages by sender_id+recipient_id',
+				getAdminClient()
+					.from('direct_messages')
+					.select('id')
+					.eq('sender_id', USER_B.id)
+					.eq('recipient_id', USER_C_PRO.id)
+			);
+			expect(data.length).toBe(0);
 		} finally {
 			await ctx.close();
 		}
@@ -86,12 +90,15 @@ test.describe('/messages — permission boundaries', () => {
 
 			await expect(page.locator('.send-error[role="alert"]')).toBeVisible({ timeout: 10_000 });
 
-			const { data } = await getAdminClient()
-				.from('direct_messages')
-				.select('id')
-				.eq('sender_id', USER_B.id)
-				.eq('recipient_id', USER_A.id);
-			expect(data?.length ?? 0).toBe(0);
+			const data = await readRows(
+				'direct_messages by sender_id+recipient_id',
+				getAdminClient()
+					.from('direct_messages')
+					.select('id')
+					.eq('sender_id', USER_B.id)
+					.eq('recipient_id', USER_A.id)
+			);
+			expect(data.length).toBe(0);
 		} finally {
 			await ctx.close();
 		}

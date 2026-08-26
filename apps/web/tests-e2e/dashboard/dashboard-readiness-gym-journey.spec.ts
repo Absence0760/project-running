@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { noonOnBrowserDay } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertRun, setUserSetting } from '../fixtures/simulate';
@@ -46,15 +47,6 @@ function setConsentAccepted() {
 	);
 }
 
-/** Local-date ISO for `daysAgo` days back, midday-anchored so it lands
- *  squarely on its own local calendar day regardless of tz offset. */
-function daysAgoIso(daysAgo: number): string {
-	const d = new Date();
-	d.setHours(12, 0, 0, 0);
-	d.setDate(d.getDate() - daysAgo);
-	return d.toISOString();
-}
-
 /** Read the numeric value out of the Fitness-card metric whose label
  *  matches `labelRe` (CTL/ATL/TSB). The card renders one
  *  `.fitness-metric` per metric; each has a `.fitness-label` + a
@@ -94,7 +86,7 @@ test.describe('dashboard readiness — gym sessions fold into CTL/ATL/TSB', () =
 					runIds.push(
 						await insertRun({
 							user_id: subject.id,
-							started_at: daysAgoIso(d),
+							started_at: noonOnBrowserDay(-d),
 							distance_m: 8000,
 							duration_s: 2700,
 						}),
@@ -112,7 +104,7 @@ test.describe('dashboard readiness — gym sessions fold into CTL/ATL/TSB', () =
 						.insert({
 							user_id: subject.id,
 							title: 'Heavy lower',
-							started_at: daysAgoIso(ago),
+							started_at: noonOnBrowserDay(-ago),
 							duration_s: 3600,
 						})
 						.select('id')

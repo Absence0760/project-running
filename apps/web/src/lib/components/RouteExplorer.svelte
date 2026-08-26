@@ -400,8 +400,14 @@
 							onclick={() => toggleBookmark(route)}
 							disabled={bookmarkBusy.has(route.id)}
 							title={savedIds.has(route.id) ? t('routeExplorer.removeFromLibrary') : t('routeExplorer.saveToLibrary')}
+							aria-label={savedIds.has(route.id) ? t('routeExplorer.removeFromLibrary') : t('routeExplorer.saveToLibrary')}
 						>
-							<span class="material-symbols">{savedIds.has(route.id) ? 'bookmark' : 'bookmark_add'}</span>
+							<!-- The ligature is the span's TEXT, so without aria-hidden it wins
+							     the accessible name over `title` and every card announces
+							     "bookmark_add". -->
+							<span class="material-symbols" aria-hidden="true"
+								>{savedIds.has(route.id) ? 'bookmark' : 'bookmark_add'}</span
+							>
 						</button>
 					{/if}
 				</div>

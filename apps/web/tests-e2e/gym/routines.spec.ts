@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /gym/routines — the gym-programming P1 slice (docs/features/gym_programming.md).
@@ -109,16 +110,22 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 		await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
 		await expect(page).toHaveURL(/\/gym\/routines$/, { timeout: 10_000 });
 
-		const { data: afterDelete } = await admin
-			.from('gym_routines')
-			.select('id')
-			.eq('id', routineId);
-		expect(afterDelete?.length ?? 0).toBe(0);
-		const { data: exAfter } = await admin
-			.from('gym_routine_exercises')
-			.select('id')
-			.eq('routine_id', routineId);
-		expect(exAfter?.length ?? 0).toBe(0);
+		const afterDelete = await readRows(
+			'gym_routines by id',
+			admin
+				.from('gym_routines')
+				.select('id')
+				.eq('id', routineId)
+		);
+		expect(afterDelete.length).toBe(0);
+		const exAfter = await readRows(
+			'gym_routine_exercises by routine_id',
+			admin
+				.from('gym_routine_exercises')
+				.select('id')
+				.eq('routine_id', routineId)
+		);
+		expect(exAfter.length).toBe(0);
 	});
 
 	test('builder persists + re-renders a per-set target RPE', async ({ page }) => {

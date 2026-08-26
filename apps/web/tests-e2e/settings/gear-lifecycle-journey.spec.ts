@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Gear-lifecycle journey — the full cradle-to-grave life of a single
@@ -148,12 +149,15 @@ test.describe('gear lifecycle journey', () => {
 				).toBeVisible({ timeout: 10_000 });
 
 				// Backend: exactly one run_gear link for this run, to our pair.
-				const { data: links } = await admin
-					.from('run_gear')
-					.select('gear_id')
-					.eq('run_id', runId);
-				expect(links?.length ?? 0).toBe(1);
-				expect(links?.[0]?.gear_id).toBe(gearId);
+				const links = await readRows(
+					'run_gear links for the journey run',
+					admin
+						.from('run_gear')
+						.select('gear_id')
+						.eq('run_id', runId)
+				);
+				expect(links.length).toBe(1);
+				expect(links[0]?.gear_id).toBe(gearId);
 			});
 
 			// ── 4. Mileage accrues on the gear page ─────────────────────
@@ -167,13 +171,16 @@ test.describe('gear lifecycle journey', () => {
 				await expect(row.locator('.gear-meta')).toContainText('1 run');
 
 				// Backend cross-check against the same view the UI consumes.
-				const { data: rollup } = await admin
-					.from('gear_with_distance')
-					.select('total_distance_m, run_count')
-					.eq('id', gearId)
-					.single();
-				expect(Number(rollup?.total_distance_m ?? 0)).toBe(6000);
-				expect(Number(rollup?.run_count ?? 0)).toBe(1);
+				const rollup = await readRow(
+					'gear_with_distance rollup for the journey shoe',
+					admin
+						.from('gear_with_distance')
+						.select('total_distance_m, run_count')
+						.eq('id', gearId)
+						.single()
+				);
+				expect(Number(rollup.total_distance_m)).toBe(6000);
+				expect(Number(rollup.run_count)).toBe(1);
 			});
 
 			// ── 5. Retire the pair → gone from active list + picker ─────
@@ -252,18 +259,24 @@ test.describe('gear lifecycle journey', () => {
 
 				// Backend: the run_gear link + the rolled-up total are intact
 				// even though the gear is retired.
-				const { data: links } = await admin
-					.from('run_gear')
-					.select('gear_id')
-					.eq('run_id', runId);
-				expect(links?.length ?? 0).toBe(1);
-				const { data: rollup } = await admin
-					.from('gear_with_distance')
-					.select('total_distance_m, run_count')
-					.eq('id', gearId)
-					.single();
-				expect(Number(rollup?.total_distance_m ?? 0)).toBe(6000);
-				expect(Number(rollup?.run_count ?? 0)).toBe(1);
+				const links = await readRows(
+					'run_gear links for the journey run',
+					admin
+						.from('run_gear')
+						.select('gear_id')
+						.eq('run_id', runId)
+				);
+				expect(links.length).toBe(1);
+				const rollup = await readRow(
+					'gear_with_distance rollup for the journey shoe',
+					admin
+						.from('gear_with_distance')
+						.select('total_distance_m, run_count')
+						.eq('id', gearId)
+						.single()
+				);
+				expect(Number(rollup.total_distance_m)).toBe(6000);
+				expect(Number(rollup.run_count)).toBe(1);
 			});
 		} finally {
 			// Sweep the planted run (cascades its run_gear link) + the gear,

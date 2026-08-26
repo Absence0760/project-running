@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deletePlan, setPlanStatus } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /plans/new — the standalone wizard route.
@@ -162,12 +163,15 @@ test.describe('/plans/new — standalone wizard', () => {
 					.select('id')
 					.eq('plan_id', plantedPlanId)
 			).data?.map((w) => w.id) ?? [];
-		const { data: persisted } = await admin
-			.from('plan_workouts')
-			.select('id, target_distance_m, kind')
-			.in('week_id', weekIds)
-			.eq('target_distance_m', 9500);
-		expect((persisted ?? []).length).toBeGreaterThan(0);
+		const persisted = await readRows(
+			'plan_workouts by target_distance_m',
+			admin
+				.from('plan_workouts')
+				.select('id, target_distance_m, kind')
+				.in('week_id', weekIds)
+				.eq('target_distance_m', 9500)
+		);
+		expect(persisted.length).toBeGreaterThan(0);
 	});
 
 	test('cancel mid-wizard via back-link discards the in-flight plan', async ({ page }) => {
@@ -183,11 +187,14 @@ test.describe('/plans/new — standalone wizard', () => {
 		await page.waitForURL(/\/plans(\?|$)/, { timeout: 5_000 });
 
 		const admin = getAdminClient();
-		const { data: leaked } = await admin
-			.from('training_plans')
-			.select('id')
-			.eq('user_id', USER_A.id)
-			.eq('name', name);
-		expect(leaked ?? []).toHaveLength(0);
+		const leaked = await readRows(
+			'training_plans by user_id+name',
+			admin
+				.from('training_plans')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('name', name)
+		);
+		expect(leaked).toHaveLength(0);
 	});
 });

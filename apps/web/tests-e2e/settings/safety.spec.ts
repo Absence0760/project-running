@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /settings/safety — safety-contact double opt-in (migration
@@ -428,11 +429,14 @@ test.describe('/settings/safety — you are a safety contact for', () => {
 			expect(tableDeletes).toBe(0);
 
 			const admin = getAdminClient();
-			const { data: left } = await admin
-				.from('safety_contacts')
-				.select('id')
-				.eq('owner_id', USER_A.id);
-			expect(left ?? []).toHaveLength(0);
+			const left = await readRows(
+				'safety_contacts by owner_id',
+				admin
+					.from('safety_contacts')
+					.select('id')
+					.eq('owner_id', USER_A.id)
+			);
+			expect(left).toHaveLength(0);
 		} finally {
 			await ctx.close();
 		}

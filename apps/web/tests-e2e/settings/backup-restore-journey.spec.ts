@@ -5,6 +5,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Backup & restore JOURNEY — the full account-data round-trip walked
@@ -190,11 +191,14 @@ test.describe('backup & restore journey', () => {
 			await test.step('delete the planted run; confirm it is gone from the DB + /runs', async () => {
 				await deleteRun(PLANTED_RUN_ID);
 
-				const { data: gone } = await admin
-					.from('runs')
-					.select('id')
-					.eq('id', PLANTED_RUN_ID);
-				expect(gone ?? []).toHaveLength(0);
+				const gone = await readRows(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('id')
+						.eq('id', PLANTED_RUN_ID)
+				);
+				expect(gone).toHaveLength(0);
 
 				// And gone from the list surface.
 				await page.goto('/runs');

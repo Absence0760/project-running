@@ -291,13 +291,23 @@
 </script>
 
 <div class="login-page">
-	<aside class="brand-pane" aria-hidden="true">
+	<!--
+		Not aria-hidden. The pane is display:none below 56rem and display:flex
+		above it, and `.logo-mobile` inside the form card is the mirror image —
+		so on every desktop viewport the link below is the ONLY route home, and
+		hiding the subtree left it focusable but nameless and roleless
+		(axe aria-hidden-focus; WCAG 4.1.2 + 2.4.3). Only one of the two logo
+		links is ever rendered, so exposing this one duplicates nothing.
+	-->
+	<aside class="brand-pane">
 		<a href="/" class="brand-logo">
 			<img src="/logo-mark.svg" alt="" class="brand-mark" />
 			<span class="brand-name">Threkir</span>
 		</a>
 		<div class="brand-copy">
-			<p class="brand-kicker">{kicker}</p>
+			<!-- The form card renders the same `kicker` string, and both panes are
+			     on screen together above 56rem; only this copy is redundant. -->
+			<p class="brand-kicker" aria-hidden="true">{kicker}</p>
 			<h2 class="brand-headline">{m('login.brandHeadline')}</h2>
 			<ul class="brand-bullets">
 				<li>

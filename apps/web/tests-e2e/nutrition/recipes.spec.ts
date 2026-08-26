@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /nutrition — recipes (docs/features/multi_modal.md § Nutrition mid tier;
@@ -129,16 +130,22 @@ test.describe('/nutrition — recipes', () => {
 			await expect(recipeRow).toHaveCount(0, { timeout: 10_000 });
 
 			// The recipe (and its ingredients, by cascade) is gone…
-			const { data: afterRec } = await admin.from('recipes').select('id').eq('id', recipeId);
-			expect(afterRec?.length ?? 0).toBe(0);
+			const afterRec = await readRows(
+				'recipes by id',
+				admin.from('recipes').select('id').eq('id', recipeId)
+			);
+			expect(afterRec.length).toBe(0);
 			recipeId = null;
 			// …but the logged summed entry remains (parallel plan, no FK).
-			const { data: stillLogged } = await admin
-				.from('food_log')
-				.select('id')
-				.eq('user_id', USER_A.id)
-				.eq('item_name', recipeName);
-			expect(stillLogged?.length ?? 0).toBe(1);
+			const stillLogged = await readRows(
+				'food_log by user_id+item_name',
+				admin
+					.from('food_log')
+					.select('id')
+					.eq('user_id', USER_A.id)
+					.eq('item_name', recipeName)
+			);
+			expect(stillLogged.length).toBe(1);
 		} finally {
 			if (recipeId) await admin.from('recipes').delete().eq('id', recipeId);
 			await admin.from('food_log').delete().eq('user_id', USER_A.id).eq('item_name', recipeName);
