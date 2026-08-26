@@ -146,9 +146,7 @@ const LOCAL_ZONE_ALLOWED: Record<string, string> = {
 	'recap/page.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
 	'recap/public-share.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
 	'recap/toast-feedback.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
-	'routes/segments.spec.ts': 'derives a birth YEAR for an age-grade fixture, not a day',
-	'settings/gear-backfill.spec.ts':
-		'not yet converted — builds a runner-zone purchase date the page resolves in the browser zone'
+	'routes/segments.spec.ts': 'derives a birth YEAR for an age-grade fixture, not a day'
 };
 
 function typescriptSources(dir: string, out: string[] = []): string[] {
