@@ -623,17 +623,27 @@ export function validateNeutralisers() {
 // with no record of whether that had already been considered and refused.
 export function validateUnregisteredDefinerRelations(relations) {
   const found = new Map();
+  const claimed = new Map();
   for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
     for (const c of zeroOrEmptyAssertions(text, relations)) {
       for (const r of c.unmeasurable) {
         if (!found.has(r)) found.set(r, []);
         found.get(r).push(`${file}:${c.line} "${c.description}"`);
+        if (!c.selected) continue;
+        if (!claimed.has(r)) claimed.set(r, []);
+        claimed.get(r).push(`${file}:${c.line} "${c.description}"`);
       }
     }
   }
   const failures = [];
   const declared = new Set(UNREGISTERED_DEFINER_RELATIONS.map((e) => e.relation));
+  for (const [relation, sites] of claimed) {
+    if (!declared.has(relation)) continue;
+    failures.push(
+      `UNREGISTERED_DEFINER_RELATIONS declares ${relation} unreplaced on the grounds that none of its assertions is a refusal, and one now is (${sites.join(', ')}). Register a permissive replacement for it and delete the entry.`,
+    );
+  }
   for (const [relation, sites] of found) {
     if (declared.has(relation)) continue;
     failures.push(
