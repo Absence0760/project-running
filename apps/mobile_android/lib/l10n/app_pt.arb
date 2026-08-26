@@ -3940,5 +3940,17 @@
   "segmentCatalogueStatElevation": "Ganho de elevação",
   "segmentCatalogueStatSurface": "Piso",
   "segmentCatalogueLeaderboard": "Classificação",
-  "runSurfaceTabSegments": "Segmentos"
+  "runSurfaceTabSegments": "Segmentos",
+  "rateLimitCreateClub": "Está a criar clubes demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitCreateRoute": "Está a criar percursos demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitCreateReport": "Está a enviar denúncias demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitAdoptPlan": "Está a adotar planos demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitAdoptSessionPlan": "Está a adotar planos de sessão demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitAdoptGymRoutine": "Está a adotar rotinas de ginásio demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitPublishRoutine": "Está a publicar rotinas demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitSendMessage": "Está a enviar mensagens demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitGeneric": "Está a fazer isso demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitWaitSeconds": "{n, plural, one{1 segundo} other{{n} segundos}}",
+  "rateLimitWaitMinutes": "{n, plural, one{1 minuto} other{{n} minutos}}",
+  "rateLimitWaitSoon": "um momento"
 }

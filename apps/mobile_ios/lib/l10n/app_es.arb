@@ -3940,5 +3940,17 @@
   "segmentCatalogueStatElevation": "Desnivel positivo",
   "segmentCatalogueStatSurface": "Superficie",
   "segmentCatalogueLeaderboard": "Clasificación",
-  "runSurfaceTabSegments": "Segmentos"
+  "runSurfaceTabSegments": "Segmentos",
+  "rateLimitCreateClub": "Estás creando clubes demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitCreateRoute": "Estás creando rutas demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitCreateReport": "Estás enviando informes demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitAdoptPlan": "Estás adoptando planes demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitAdoptSessionPlan": "Estás adoptando planes de sesión demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitAdoptGymRoutine": "Estás adoptando rutinas de gimnasio demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitPublishRoutine": "Estás publicando rutinas demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitSendMessage": "Estás enviando mensajes demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitGeneric": "Estás haciendo eso demasiado rápido: espera {wait} e inténtalo de nuevo.",
+  "rateLimitWaitSeconds": "{n, plural, one{1 segundo} other{{n} segundos}}",
+  "rateLimitWaitMinutes": "{n, plural, one{1 minuto} other{{n} minutos}}",
+  "rateLimitWaitSoon": "un momento"
 }

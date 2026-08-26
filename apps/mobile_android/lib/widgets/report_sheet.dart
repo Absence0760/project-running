@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
-import '../rate_limit_errors.dart';
+import '../rate_limit_message.dart';
 import 'top_banner.dart';
 
 /// Modal report sheet — entry point for the moderation flow on
@@ -16,7 +16,7 @@ import 'top_banner.dart';
 ///   - 23505 (duplicate pending report) → "You already have a
 ///     pending report against this content."
 ///   - P0001 (rate-limited create_report bucket) → routed through
-///     `rateLimitErrorMessage` for the shared friendly wording.
+///     `rateLimitErrorMessage` for the shared localized wording.
 ///   - Anything else → raw error message.
 ///
 /// Use the static [show] method rather than instantiating directly:
@@ -136,7 +136,11 @@ class _ReportSheetState extends State<_ReportSheet> {
             _error = AppLocalizations.of(context).reportErrDuplicate);
         return;
       }
-      final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
+      final friendly = rateLimitErrorMessage(
+        AppLocalizations.of(context),
+        code: e.code,
+        message: e.message,
+      );
       setState(() => _error = friendly ?? e.message);
     } catch (e) {
       debugPrint('report submit failed: $e');

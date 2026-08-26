@@ -3940,5 +3940,17 @@
   "segmentCatalogueStatElevation": "Dénivelé positif",
   "segmentCatalogueStatSurface": "Surface",
   "segmentCatalogueLeaderboard": "Classement",
-  "runSurfaceTabSegments": "Segments"
+  "runSurfaceTabSegments": "Segments",
+  "rateLimitCreateClub": "Vous créez des clubs trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitCreateRoute": "Vous créez des parcours trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitCreateReport": "Vous envoyez des signalements trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitAdoptPlan": "Vous adoptez des plans trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitAdoptSessionPlan": "Vous adoptez des plans de séance trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitAdoptGymRoutine": "Vous adoptez des routines de renfo trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitPublishRoutine": "Vous publiez des routines trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitSendMessage": "Vous envoyez des messages trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitGeneric": "Vous faites cela trop rapidement — veuillez patienter {wait} et réessayer.",
+  "rateLimitWaitSeconds": "{n, plural, one{1 seconde} other{{n} secondes}}",
+  "rateLimitWaitMinutes": "{n, plural, one{1 minute} other{{n} minutes}}",
+  "rateLimitWaitSoon": "un instant"
 }

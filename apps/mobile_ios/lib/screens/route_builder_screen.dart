@@ -23,6 +23,7 @@ import '../l10n/number_format.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../rate_limit_errors.dart';
+import '../rate_limit_message.dart';
 import '../route_loop.dart';
 import '../route_overlap.dart';
 import '../routing.dart';
@@ -1223,8 +1224,8 @@ String _modeLabel(AppLocalizations l10n, RouteBuilderMode m) => switch (m) {
 ///
 /// Behaviour:
 ///   - PostgrestException with the rate-limit signature (P0001 +
-///     migration 20260907_001 message) becomes the friendly "wait
-///     N minutes" wording from `rate_limit_errors.dart`.
+///     migration 20260907_001 message) becomes the localized "wait
+///     N minutes" sentence from the ARB catalogue.
 ///   - LateInitializationError (Supabase SDK's `late client` field
 ///     read before init) or a StateError carrying the "bootstrap"
 ///     signature from [ApiClient] surface as the offline-mode
@@ -1237,8 +1238,19 @@ String _modeLabel(AppLocalizations l10n, RouteBuilderMode m) => switch (m) {
 ///     stays in debugPrint only.
 String formatSaveRouteError(Object e, [BuildContext? context]) {
   if (e is PostgrestException) {
-    final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
-    if (friendly != null) return friendly;
+    final info = parseRateLimitError(code: e.code, message: e.message);
+    if (info != null) {
+      // Looked up off the English catalogue when the caller has no
+      // context (only the unit tests do) rather than re-spelling the
+      // sentence here — a hardcoded copy of a translated string is
+      // exactly what § 744 removed.
+      return rateLimitMessage(
+        context != null
+            ? AppLocalizations.of(context)
+            : lookupAppLocalizations(const Locale('en')),
+        info,
+      );
+    }
   }
   // `LateInitializationError` is not a public type in dart:core — the
   // SDK throws a private subclass of `Error` whose `toString()` begins

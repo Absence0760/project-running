@@ -13687,4 +13687,74 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get runSurfaceTabSegments => 'Segments';
+
+  @override
+  String rateLimitCreateClub(String wait) {
+    return 'Vous créez des clubs trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitCreateRoute(String wait) {
+    return 'Vous créez des parcours trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitCreateReport(String wait) {
+    return 'Vous envoyez des signalements trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitAdoptPlan(String wait) {
+    return 'Vous adoptez des plans trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitAdoptSessionPlan(String wait) {
+    return 'Vous adoptez des plans de séance trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitAdoptGymRoutine(String wait) {
+    return 'Vous adoptez des routines de renfo trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitPublishRoutine(String wait) {
+    return 'Vous publiez des routines trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitSendMessage(String wait) {
+    return 'Vous envoyez des messages trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitGeneric(String wait) {
+    return 'Vous faites cela trop rapidement — veuillez patienter $wait et réessayer.';
+  }
+
+  @override
+  String rateLimitWaitSeconds(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n secondes',
+      one: '1 seconde',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String rateLimitWaitMinutes(int n) {
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get rateLimitWaitSoon => 'un instant';
 }

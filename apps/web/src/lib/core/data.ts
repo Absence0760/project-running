@@ -104,7 +104,8 @@ import {
 	parseGymTemplate,
 	type EventGymTemplate
 } from '../social/event_gym_template';
-import { rateLimitErrorMessage } from '../util/rate_limit_errors';
+import { m } from '../i18n/store.svelte';
+import { rateLimitErrorMessage } from '../i18n/rate_limit_message';
 import type { ParsedResultRow } from '../runs/event_results_csv';
 import {
 	applyRunMetadataPatch,
@@ -1780,7 +1781,7 @@ export async function saveRoute(route: {
 		// 20260907_001 — 30 routes / hour per user, generous enough for
 		// bulk Strava / Garmin imports) as a friendlier "wait N minutes"
 		// message instead of the raw postgres exception.
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
@@ -2591,7 +2592,7 @@ export async function createClub(input: {
 		// converted to a friendlier 'wait N minutes' message rather than
 		// the raw `rate limit exceeded for create_club, retry in Ns`.
 		if (error && error.code !== '23505') {
-			const friendly = rateLimitErrorMessage(error);
+			const friendly = rateLimitErrorMessage(m, error);
 			if (friendly) throw new Error(friendly);
 			throw error;
 		}
@@ -4302,7 +4303,7 @@ export async function clonePlanTemplate(
 		new_start_date: newStartDate,
 	});
 	if (error) {
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
@@ -4391,7 +4392,7 @@ export async function clonePublicPlan(
 		new_start_date: newStartDate,
 	});
 	if (error) {
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
@@ -8455,7 +8456,7 @@ export async function submitReport(input: {
 		// consistent "filing reports too quickly — please wait N minutes"
 		// rather than this function carrying its own copy of the
 		// translation rule.
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
@@ -8574,7 +8575,7 @@ export async function sendDm(recipientId: string, body: string): Promise<DirectM
 		if (error?.code === '42501') {
 			throw new Error("You can only message people you follow (or who follow you), and who haven't blocked you.");
 		}
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error ?? new Error('Send failed');
 	}
@@ -10833,7 +10834,7 @@ export async function cloneSessionTemplate(templateId: string): Promise<string> 
 		template_id: templateId
 	});
 	if (error) {
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
@@ -10865,7 +10866,7 @@ export async function publishGymRoutineAsTemplate(routineId: string, clubId: str
 		p_club_id: clubId
 	});
 	if (error) {
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
@@ -10880,7 +10881,7 @@ export async function cloneGymRoutineTemplate(templateId: string): Promise<strin
 		p_template_id: templateId
 	});
 	if (error) {
-		const friendly = rateLimitErrorMessage(error);
+		const friendly = rateLimitErrorMessage(m, error);
 		if (friendly) throw new Error(friendly);
 		throw error;
 	}
