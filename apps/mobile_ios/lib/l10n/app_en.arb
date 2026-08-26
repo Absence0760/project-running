@@ -17343,6 +17343,15 @@
       }
     }
   },
+  "rateLimitCreateChallenge": "You're creating challenges too quickly — please wait {wait} and try again.",
+  "@rateLimitCreateChallenge": {
+    "description": "Rate-limit refusal when the create_challenge bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
   "rateLimitAdoptPlan": "You're adopting plans too quickly — please wait {wait} and try again.",
   "@rateLimitAdoptPlan": {
     "description": "Rate-limit refusal when a training-plan adopt bucket is spent",

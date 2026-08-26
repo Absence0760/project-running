@@ -10,6 +10,7 @@ export const messages = {
 	"rateLimit.createClub": "Você está criando clubes rápido demais — espere {wait} e tente de novo.",
 	"rateLimit.createRoute": "Você está criando rotas rápido demais — espere {wait} e tente de novo.",
 	"rateLimit.createReport": "Você está enviando denúncias rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.createChallenge": "Você está criando desafios rápido demais — espere {wait} e tente de novo.",
 	"rateLimit.adoptPlan": "Você está adotando planos rápido demais — espere {wait} e tente de novo.",
 	"rateLimit.adoptSessionPlan": "Você está adotando planos de sessão rápido demais — espere {wait} e tente de novo.",
 	"rateLimit.adoptGymRoutine": "Você está adotando rotinas de academia rápido demais — espere {wait} e tente de novo.",

@@ -1898,7 +1898,7 @@ test('release-web.yml runs the production-env guard before npm run build', () =>
 	}
 });
 
-test('createClub + saveRoute + submitReport all translate P0001 via the shared helper', () => {
+test('createClub + saveRoute + submitReport + createChallenge all translate P0001 via the shared helper', () => {
 	// Reason: every P0001 rate-limit bucket on the web client must route
 	// through `rateLimitErrorMessage` so users see a "wait N minutes" line
 	// instead of the raw `rate limit exceeded for <bucket>, retry in Ns`
@@ -1951,10 +1951,15 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 		// Anchor on the helper's RETURN statement so the slice is bounded.
 		'return data as string;',
 	);
+	const createChallengeBody = bodyAfter(
+		'export async function createChallenge(',
+		'return challengeFromRow(data);',
+	);
 	for (const [name, body] of [
 		['saveRoute', saveRouteBody],
 		['createClub', createClubBody],
 		['submitReport', submitReportBody],
+		['createChallenge', createChallengeBody],
 	] as const) {
 		assert.match(
 			body,
@@ -2038,6 +2043,54 @@ test('sendDm translates the direct_messages send buckets via the shared helper',
 	assert.ok(
 		body.indexOf("=== '42501'") < body.indexOf('rateLimitErrorMessage(m,'),
 		'the 42501 follow-graph branch must be checked before the rate-limit branch.',
+	);
+});
+
+test('every rate-limit trigger raises through enforce_create_rate_limit', () => {
+	// Reason: the parsers match one literal — `rate limit exceeded for
+	// <bucket>, retry in Ns`. A trigger that calls `check_rate_limit`
+	// itself and raises its own string produces a P0001 no client can
+	// read, which is what `challenges` did between 20270308_001 and
+	// 20270610_001: it raised the bare `challenge_create_rate_limited`,
+	// with no bucket and no retry figure, and the only surface that could
+	// have shown it fell through to a generic toast instead. Guarding the
+	// producer at the class level rather than pinning that one bucket:
+	// this is the check the next throttle has to pass too.
+	//
+	// "Later migration wins" — the map is keyed on the function name, so a
+	// grandfathered body is fine as long as a newer migration replaces it.
+	const MIGRATIONS = resolve(__dirname, '..', '..', '..', '..', 'apps/backend/supabase/migrations');
+	const files = readdirSync(MIGRATIONS)
+		.filter((f) => f.endsWith('.sql'))
+		.sort();
+	const latestBody = new Map<string, { file: string; body: string }>();
+	for (const file of files) {
+		const sql = readFileSync(resolve(MIGRATIONS, file), 'utf-8');
+		for (const match of sql.matchAll(
+			/create\s+or\s+replace\s+function\s+(\w+)\s*\(\s*\)\s*\n?\s*returns\s+trigger[\s\S]*?\n\$\$;/gi,
+		)) {
+			latestBody.set(match[1], { file, body: match[0] });
+		}
+	}
+	assert.ok(latestBody.size > 0, 'no trigger functions parsed out of the migrations — did the regex rot?');
+	let checked = 0;
+	for (const [name, { file, body }] of latestBody) {
+		if (!/rate_limit/i.test(body)) continue;
+		checked += 1;
+		assert.match(
+			body,
+			/perform\s+enforce_create_rate_limit\(/i,
+			`${name} (last defined in ${file}) throttles without calling enforce_create_rate_limit — route it through the shared helper so the refusal carries the bucket + retry figure the client parsers read.`,
+		);
+		assert.doesNotMatch(
+			body,
+			/\bcheck_rate_limit\s*\(/i,
+			`${name} (last defined in ${file}) calls check_rate_limit directly. Only enforce_create_rate_limit may do that — it is what raises the parseable message and carries the service-role / null-auth / forged-owner skips.`,
+		);
+	}
+	assert.ok(
+		checked >= 4,
+		`expected at least the clubs / routes / direct_messages / challenges throttles, found ${checked} rate-limit trigger functions`,
 	);
 });
 

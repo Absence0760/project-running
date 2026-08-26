@@ -19,6 +19,7 @@ const BUCKETS = [
 	'create_club',
 	'create_route',
 	'create_report',
+	'create_challenge',
 	'clone_plan_template',
 	'clone_public_plan',
 	'clone_session_template',
@@ -50,6 +51,10 @@ test('en: every bucket keeps the exact sentence it had before the copy moved', a
 	assert.equal(
 		rateLimitErrorMessage(t, err('create_report', 600)),
 		"You're filing reports too quickly — please wait 10 minutes and try again.",
+	);
+	assert.equal(
+		rateLimitErrorMessage(t, err('create_challenge', 42)),
+		"You're creating challenges too quickly — please wait 42 seconds and try again.",
 	);
 	assert.equal(
 		rateLimitErrorMessage(t, err('clone_plan_template', 300)),
@@ -167,6 +172,7 @@ for (const loc of SUPPORTED_LOCALES) {
 				'create_club',
 				'create_route',
 				'create_report',
+				'create_challenge',
 				'clone_plan_template',
 				'clone_session_template',
 				'clone_gym_routine_template',
@@ -175,7 +181,7 @@ for (const loc of SUPPORTED_LOCALES) {
 				'create_widget',
 			].map((bucket) => rateLimitMessage(t, { bucket, seconds: 42 })),
 		);
-		assert.equal(distinct.size, 9, `${loc} reuses one sentence for two different activities`);
+		assert.equal(distinct.size, 10, `${loc} reuses one sentence for two different activities`);
 		assert.equal(
 			rateLimitMessage(t, { bucket: 'clone_plan_template', seconds: 42 }),
 			rateLimitMessage(t, { bucket: 'clone_public_plan', seconds: 42 }),

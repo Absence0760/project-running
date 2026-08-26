@@ -22,6 +22,7 @@ export const en = {
 	"rateLimit.createClub": "You're creating clubs too quickly — please wait {wait} and try again.",
 	"rateLimit.createRoute": "You're creating routes too quickly — please wait {wait} and try again.",
 	"rateLimit.createReport": "You're filing reports too quickly — please wait {wait} and try again.",
+	"rateLimit.createChallenge": "You're creating challenges too quickly — please wait {wait} and try again.",
 	"rateLimit.adoptPlan": "You're adopting plans too quickly — please wait {wait} and try again.",
 	"rateLimit.adoptSessionPlan": "You're adopting session plans too quickly — please wait {wait} and try again.",
 	"rateLimit.adoptGymRoutine": "You're adopting gym routines too quickly — please wait {wait} and try again.",

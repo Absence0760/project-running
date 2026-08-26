@@ -145,6 +145,7 @@ touched row, bloats the table, and holds those locks for the whole statement.
 | `ALTER COLUMN … TYPE` | `ACCESS EXCLUSIVE` + full rewrite + index rebuild | **No** — add-new-column + batched backfill + swap |
 | `CREATE INDEX` | `ACCESS EXCLUSIVE` (blocks writes for the build) | **No** — but `CONCURRENTLY` can't run in Supabase's wrapped txn (see below) |
 | `CREATE TRIGGER` | `SHARE ROW EXCLUSIVE`, catalogue-only | Yes for readers, no for writers — blocks concurrent INSERT/UPDATE/DELETE on that table only, for an O(1) change |
+| `CREATE OR REPLACE FUNCTION` (incl. a trigger's function) | none on any table | Yes — swapping a trigger's *body* never touches the table the trigger is on |
 | unbounded `UPDATE`/`DELETE` | row locks on every touched row | **No** — batch in id-range chunks |
 
 `SHARE ROW EXCLUSIVE` does **not** conflict with `ACCESS SHARE` or `ROW SHARE`,
