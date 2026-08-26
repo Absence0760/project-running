@@ -90,22 +90,36 @@ test('the water key is the page key, unpadded, on the browser day', () => {
 	assert.equal(waterStorageKey('abc'), `water_ml_abc_${waterDayKey(browserDate())}`);
 });
 
-// `dates.ts` builds every day in UTC because that is what the config pins. If
-// the pin moves, the module is silently wrong everywhere at once.
-test('the browser is still pinned to the zone dates.ts builds in', () => {
-	const config = readFileSync(join(E2E_ROOT, 'playwright.config.ts'), 'utf8');
+// `dates.ts` builds every day in UTC because that is what the configs pin. If
+// a pin moves, the module is silently wrong for that whole lane at once — and
+// there are four lanes, not one: the sharded suite plus livehub, exporthub and
+// sso, each with its own config and its own `use` block.
+test('every lane still pins the browser to the zone dates.ts builds in', () => {
 	assert.equal(BROWSER_TIMEZONE, 'UTC');
-	assert.ok(
-		/timezoneId:\s*'UTC'/.test(config),
-		'playwright.config.ts no longer pins the browser to UTC — fixtures/dates.ts builds every ' +
-			'day-relative timestamp in UTC and must change with it.'
+	const configs = readdirSync(E2E_ROOT).filter(
+		(f) => f.startsWith('playwright') && f.endsWith('.config.ts')
 	);
+	assert.ok(configs.length >= 4, `expected the four lane configs, found ${configs.join(', ')}`);
+	for (const name of configs) {
+		assert.ok(
+			/timezoneId:\s*'UTC'/.test(readFileSync(join(E2E_ROOT, name), 'utf8')),
+			`${name} no longer pins the browser to UTC — fixtures/dates.ts builds every ` +
+				'day-relative timestamp in UTC and must change with it.'
+		);
+	}
 });
 
 /**
- * Local-zone date getters and setters, which derive a calendar day in the
- * Node process's zone. `.getUTCDate()` and friends do not match — the `.`
- * anchors the name.
+ * Local-zone date reads, writes and renderings, each of which resolves a
+ * calendar day in the Node process's zone. `.getUTCDate()` and friends do not
+ * match — the `.` anchors the name.
+ *
+ * `getTimezoneOffset` is here because subtracting it from an instant is the
+ * standard way to spell a local wall clock (`RunEditor.nowLocalIso` does), and
+ * that spelling reaches the bug with none of the getters above it in sight.
+ * The `toLocale*` / `toDateString` / `toTimeString` family renders in the
+ * runner's zone unless the call names a `timeZone`, which a line-oriented scan
+ * cannot see — a call that does names itself in the allowlist.
  */
 const LOCAL_ZONE_DAY = new RegExp(
 	'\\.(?:' +
@@ -115,14 +129,29 @@ const LOCAL_ZONE_DAY = new RegExp(
 			'getDate',
 			'getDay',
 			'getHours',
+			'getTimezoneOffset',
 			'setFullYear',
 			'setMonth',
 			'setDate',
 			'setHours',
-			'toLocaleDateString'
+			'toDateString',
+			'toTimeString',
+			'toLocaleDateString',
+			'toLocaleTimeString',
+			'toLocaleString'
 		].join('|') +
 		')\\s*\\('
 );
+
+/**
+ * A date-time literal with no zone designator, handed to `new Date` or
+ * `Date.parse`. ECMA-262 parses that form in the runner's zone (a date-ONLY
+ * literal is UTC, which is why the time part is required here), so it is the
+ * same defect reached without touching a getter at all — and the shape a spec
+ * lands on the moment it copies a `datetime-local` value back out of the DOM.
+ */
+const LOCAL_ZONE_INSTANT =
+	/(?:new\s+Date\(|Date\.parse\()\s*['"`]\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?['"`]/;
 
 /**
  * Files that still derive a day in the runner's zone, each with why it has not
@@ -135,16 +164,20 @@ const LOCAL_ZONE_DAY = new RegExp(
  * docs/product/followups.md.
  */
 const LOCAL_ZONE_ALLOWED: Record<string, string> = {
+	'fixtures/plan-today.ts':
+		"zone-neutral: the one toLocaleString names timeZone: 'UTC', which a line-oriented scan cannot see",
 	'plans/calendar.spec.ts':
 		'zone-neutral: one read runs inside page.evaluate (browser zone), the rest construct and format a fixed y/m/d in the same zone'
 };
 
-function typescriptSources(dir: string, out: string[] = []): string[] {
+const SCANNED_EXTENSIONS = ['.ts', '.mjs', '.js'];
+
+function scannedSources(dir: string, out: string[] = []): string[] {
 	for (const entry of readdirSync(dir)) {
 		if (entry === 'node_modules' || entry === '.auth') continue;
 		const full = join(dir, entry);
-		if (statSync(full).isDirectory()) typescriptSources(full, out);
-		else if (full.endsWith('.ts')) out.push(full);
+		if (statSync(full).isDirectory()) scannedSources(full, out);
+		else if (SCANNED_EXTENSIONS.some((ext) => full.endsWith(ext))) out.push(full);
 	}
 	return out;
 }
@@ -162,14 +195,14 @@ function localZoneDayLines(file: string): number[] {
 	const lines = withoutComments(readFileSync(file, 'utf8')).split('\n');
 	const hits: number[] = [];
 	lines.forEach((line, i) => {
-		if (LOCAL_ZONE_DAY.test(line)) hits.push(i + 1);
+		if (LOCAL_ZONE_DAY.test(line) || LOCAL_ZONE_INSTANT.test(line)) hits.push(i + 1);
 	});
 	return hits;
 }
 
 test('no spec derives a day-relative date in the runner zone', () => {
 	const offenders: string[] = [];
-	for (const file of typescriptSources(E2E_ROOT)) {
+	for (const file of scannedSources(E2E_ROOT)) {
 		const rel = relative(E2E_ROOT, file);
 		if (rel === 'fixtures/dates.ts' || rel === 'fixtures/dates.test.ts') continue;
 		if (rel in LOCAL_ZONE_ALLOWED) continue;
