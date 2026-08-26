@@ -4,12 +4,20 @@
 //   1. Row column count wrong (not 7 = Feature + 5 platforms + Notes).
 //   2. Platform cell uses a symbol outside the legal set
 //      `✓ | ✗ | Partial | N/A`.
-//   3. iOS marked `✓` while Android isn't `✓` — impossible per
-//      decisions.md § 39 (the Dart codebase is byte-identical).
-//   4. Cell marked `Partial` with an empty Notes column. (`N/A` cells
-//      are exempt — most "wrist can't render KML" rows are self-evident
-//      from the feature title; require Notes for `Partial` where the
-//      reader genuinely can't guess what shipped.)
+//   3. Cell marked `Partial` with an empty Notes column, in any column
+//      but iOS. (`N/A` cells are exempt — most "wrist can't render KML"
+//      rows are self-evident from the feature title; require Notes for
+//      `Partial` where the reader genuinely can't guess what shipped.
+//      The iOS column is exempt because its cells are derived rather
+//      than observed and the document explains the whole column once —
+//      see decisions § 739; a per-row restatement there is the habit
+//      that sweep removed, not a missing explanation.)
+//
+// The whole iOS column — its derivation, its one prose statement, and the
+// marker a departing cell carries — is `scripts/check_parity_ios_column.mjs`,
+// which runs beside this in the same job. This file used to carry a fourth
+// rule about it ("iOS `✓` while Android isn't"); that rule is subsumed, since
+// the derivation now forbids a bare iOS `✓` outright.
 //
 // Wired into CI via the `parity-matrix` job in `.github/workflows/ci.yml`.
 // Run locally with `dart run scripts/check_parity_matrix.dart`.
@@ -81,35 +89,17 @@ void main(List<String> args) {
       }
     }
 
-    // (3) iOS-ahead-of-Android sanity gate. Mobile_ios shares a byte-
-    // identical Dart codebase with mobile_android (decisions § 39).
-    // iOS can be equal-or-less than Android (the gap is Mac-build
-    // runtime verification) but never strictly ahead.
-    // `N/A` is exempt: it means the capability cannot apply to Android at
-    // all (pairing an Apple Watch), not that it is unbuilt there. The Dart
-    // stays byte-identical — the bridge ships on both twins and dispatches
-    // on `defaultTargetPlatform` — so § 39 is not violated by a row the
-    // hardware decides. `✗` and `Partial` still fail, which is the drift
-    // this gate exists to catch; see the mirror-image Wear OS push row,
-    // where iOS carries the `N/A`.
-    final android = row.platformCells[0];
-    final ios = row.platformCells[1];
-    if (ios == '✓' && android != '✓' && android != 'N/A') {
-      issues.add(_Issue(
-        row.lineNumber,
-        row.feature,
-        'iOS is `✓` while Android is `$android`. Impossible per '
-            'decisions § 39 — the Dart codebase is byte-identical, so '
-            'iOS cannot be strictly ahead. Either the matrix is stale '
-            '(re-mirror?) or the iOS cell is a mis-edit.',
-      ));
-    }
-
-    // (4) Partial-without-Notes sanity gate. The Legend says "Expand
+    // (3) Partial-without-Notes sanity gate. The Legend says "Expand
     // in the Notes column" — empty notes hide what makes the row
     // partial. N/A rows are exempt because most "wrist can't render
-    // KML" cases are obvious from the feature title.
-    if (row.platformCells.contains('Partial') && row.notes.trim().isEmpty) {
+    // KML" cases are obvious from the feature title, and the iOS cell is
+    // exempt because the whole column is derived from Android by a rule
+    // the document states once (decisions § 739).
+    final nonIosCells = [
+      row.platformCells[0],
+      ...row.platformCells.sublist(2),
+    ];
+    if (nonIosCells.contains('Partial') && row.notes.trim().isEmpty) {
       issues.add(_Issue(
         row.lineNumber,
         row.feature,
