@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { resolveBaseUrl } from '../fixtures/base-url';
 import { refreshStorageState, signOut } from '../fixtures/helpers';
 import { setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
@@ -161,7 +162,7 @@ test.describe('/dashboard — universal prefs cache', () => {
 			// week-strip.spec.ts saw the sign-in page, not the dashboard). Same
 			// hazard + same remedy as the password-rotation specs in
 			// auth/reset.spec.ts. Pinned by the e2e-session-hygiene guard.
-			await refreshStorageState(browser, baseURL ?? 'http://localhost:7777', USER_A);
+			await refreshStorageState(browser, baseURL ?? resolveBaseUrl(), USER_A);
 		}
 	});
 });

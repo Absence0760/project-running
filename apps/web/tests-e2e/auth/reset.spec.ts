@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { resolveBaseUrl } from '../fixtures/base-url';
 import { refreshStorageState } from '../fixtures/helpers';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { clearMailpit, extractLink, waitForEmail } from '../fixtures/mailpit';
@@ -111,7 +112,7 @@ test.describe('/auth/reset', () => {
 			// reads .auth/user-a.json once per spec) doesn't bounce back
 			// to /login.
 			try {
-				await refreshStorageState(browser, baseURL ?? 'http://localhost:7777', USER_A);
+				await refreshStorageState(browser, baseURL ?? resolveBaseUrl(), USER_A);
 			} catch (_) {
 				/* best-effort — the user's downstream specs will skip-skip
 				   anyway if this also fails, but most likely the form
@@ -231,7 +232,7 @@ test.describe('/auth/reset', () => {
 			// password actually changed value or not, so re-mint the
 			// saved storage state for the rest of the suite.
 			try {
-				await refreshStorageState(browser, baseURL ?? 'http://localhost:7777', USER_A);
+				await refreshStorageState(browser, baseURL ?? resolveBaseUrl(), USER_A);
 			} catch (_) {
 				/* best-effort */
 			}
