@@ -12,6 +12,7 @@
 		type GlobalSegmentEffortWithSegment,
 	} from '$lib/core/data';
 	import { pickAutoEffortRoute } from '$lib/segments/auto_segment_effort';
+	import { rankPillClass, rankPillText } from '$lib/segments/effort_rank';
 	import { distanceInPreferred } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import type { TrackPoint } from '$lib/types';
@@ -115,12 +116,6 @@
 		return formatDuration(Math.round(s));
 	}
 
-	function rankClass(rank: number): string {
-		if (rank === 1) return 'gold';
-		if (rank <= 3) return 'silver';
-		if (rank <= 10) return 'bronze';
-		return '';
-	}
 </script>
 
 {#if loading}
@@ -146,7 +141,11 @@
 								{fmtDist(Number(e.segment.length_m ?? Number(e.segment.end_distance_m) - Number(e.segment.start_distance_m)))}
 							</span>
 						</div>
-						<span class="rank-pill {rankClass(e.rank)}">#{e.rank}</span>
+						<span
+							class="rank-pill {rankPillClass(e.rank)}"
+							aria-label={e.rank == null ? m('segmentEfforts.rankUnknown') : undefined}
+							title={e.rank == null ? m('segmentEfforts.rankUnknown') : undefined}
+						>{rankPillText(e.rank)}</span>
 						<span class="time">{fmtTime(e.effort.time_seconds)}</span>
 					</a>
 				</li>
@@ -169,7 +168,11 @@
 								{#if e.segment.region}<span class="meta-sep">·</span>{e.segment.region}{/if}
 							</span>
 						</div>
-						<span class="rank-pill {rankClass(e.rank)}">#{e.rank}</span>
+						<span
+							class="rank-pill {rankPillClass(e.rank)}"
+							aria-label={e.rank == null ? m('segmentEfforts.rankUnknown') : undefined}
+							title={e.rank == null ? m('segmentEfforts.rankUnknown') : undefined}
+						>{rankPillText(e.rank)}</span>
 						<span class="time">{fmtTime(e.effort.time_seconds)}</span>
 					</a>
 				</li>

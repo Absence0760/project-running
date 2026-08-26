@@ -2620,6 +2620,7 @@ export const messages = {
 	"segmentEfforts.none": "No hay intentos de segmento en esta carrera.",
 	"segmentEfforts.linkHint": "Los segmentos se emparejan por ruta: vincula esta carrera a una ruta guardada para competir en sus clasificaciones.",
 	"segmentEfforts.catalogueHeading": "Segmentos famosos",
+	"segmentEfforts.rankUnknown": "Clasificación no disponible",
 	"privacyZonePicker.hint": "Toca en cualquier parte del mapa (o usa tu ubicación actual) para fijar el centro y luego arrastra el marcador para ajustarlo. Todo lo que esté dentro del círculo rojo se ocultará en las publicaciones públicas.",
 	"privacyZonePicker.useCurrentLocation": "Usar ubicación actual",
 	"privacyZonePicker.locating": "Localizando…",

@@ -2620,6 +2620,7 @@ export const messages = {
 	"segmentEfforts.none": "Aucune tentative de segment sur cette course.",
 	"segmentEfforts.linkHint": "Les segments sont associés par itinéraire — associe cette course à un itinéraire enregistré pour figurer dans ses classements.",
 	"segmentEfforts.catalogueHeading": "Segments célèbres",
+	"segmentEfforts.rankUnknown": "Classement indisponible",
 	"privacyZonePicker.hint": "Touche n'importe où sur la carte (ou utilise ta position actuelle) pour définir le centre, puis fais glisser le marqueur pour l'ajuster. Tout ce qui se trouve dans le cercle rouge sera masqué des partages publics.",
 	"privacyZonePicker.useCurrentLocation": "Utiliser ma position actuelle",
 	"privacyZonePicker.locating": "Localisation…",

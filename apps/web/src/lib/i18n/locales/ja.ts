@@ -2615,6 +2615,7 @@ export const messages = {
 	"segmentEfforts.none": "このランにセグメントの記録はありません。",
 	"segmentEfforts.linkHint": "セグメントはルートごとに紐づきます。このランを保存済みルートにリンクすると、そのリーダーボードで競えます。",
 	"segmentEfforts.catalogueHeading": "有名なセグメント",
+	"segmentEfforts.rankUnknown": "順位を取得できません",
 	"privacyZonePicker.hint": "地図上の任意の場所をタップ（または現在地を使用）して中心を設定し、マーカーをドラッグして微調整します。赤い円の内側にあるものは公開シェアから隠されます。",
 	"privacyZonePicker.useCurrentLocation": "現在地を使用",
 	"privacyZonePicker.locating": "位置情報を取得中…",

@@ -2619,6 +2619,7 @@ export const messages = {
 	"segmentEfforts.none": "Nenhuma tentativa de segmento nesta corrida.",
 	"segmentEfforts.linkHint": "Os segmentos são associados por rota — vincule esta corrida a uma rota salva para competir em seus rankings.",
 	"segmentEfforts.catalogueHeading": "Segmentos famosos",
+	"segmentEfforts.rankUnknown": "Classificação indisponível",
 	"privacyZonePicker.hint": "Toque em qualquer lugar do mapa (ou use sua localização atual) para definir o centro e arraste o marcador para ajustar. Tudo dentro do círculo vermelho será ocultado dos compartilhamentos públicos.",
 	"privacyZonePicker.useCurrentLocation": "Usar localização atual",
 	"privacyZonePicker.locating": "Localizando…",
