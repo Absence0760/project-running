@@ -23,9 +23,12 @@ class ActivityTypeVocabularyTest {
 
     private data class Catalogues(val arb: String, val web: String)
 
-    /// The six locales the Wear OS resource set ships, each paired with the
-    /// phone and web catalogue it answers for. Fewer than mobile's seven: the
-    /// wrist has no plain `pt` catalogue, only `pt-BR`.
+    /// Each locale directory the Wear OS resource set ships, paired with the
+    /// phone and web catalogue it answers for. Which catalogue a wrist locale
+    /// answers for is a judgement, so the pairing is declared — but the KEY
+    /// SET is held to the directories on disk by the test below, so the table
+    /// cannot fall behind the resource set (decisions § 748). Fewer than
+    /// mobile's seven: the wrist has no plain `pt` catalogue, only `pt-BR`.
     private val localeCatalogues = linkedMapOf(
         "values" to Catalogues("app_en.arb", "en.ts"),
         "values-de" to Catalogues("app_de.arb", "de.ts"),
@@ -223,11 +226,25 @@ class ActivityTypeVocabularyTest {
             mirrored - shipped,
         )
         assertEquals(
-            "the phone ships a locale the wrist has no values-* directory for. Add " +
-                "the Wear catalogue, or record the gap in unmirroredPhoneCatalogues " +
-                "and in docs/product/parity.md.",
+            "the recorded set of phone locales the wrist does not mirror is stale. " +
+                "Either the phone ships a locale the wrist has no values-* directory " +
+                "for (add the Wear string set, or record it in " +
+                "unmirroredPhoneCatalogues and in docs/product/parity.md), or the " +
+                "wrist has caught up on one that is still listed there as missing " +
+                "(drop the entry and tick the box in docs/product/followups.md).",
             unmirroredPhoneCatalogues,
             shipped - mirrored,
+        )
+    }
+
+    @Test
+    fun `the catalogue map covers exactly the locale directories that ship`() {
+        assertEquals(
+            "the wrist ships a values-* string set this table does not pair with a " +
+                "phone and web catalogue, so its words are never compared with " +
+                "theirs — or the table names a directory that no longer exists.",
+            WearLocales.allDirs().toSet(),
+            localeCatalogues.keys.toSet(),
         )
     }
 

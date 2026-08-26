@@ -168,6 +168,25 @@ android {
     }
 }
 
+// Several unit tests are source-level guards over files the compiler never
+// sees: the locale string sets under `src/main/res` and these build scripts
+// (LocaleReachTest, L10nResourceParityTest, ActivityTypeVocabularyTest).
+// Neither is an input to the test task by default, so adding an undeclared
+// `values-xx/strings.xml` leaves `testDebugUnitTest` UP-TO-DATE and reports
+// green on exactly the change the guards exist to catch.
+tasks.withType<Test>().configureEach {
+    inputs.dir("src/main/res")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("guardedResourceSet")
+    inputs.files(
+        project.file("build.gradle.kts"),
+        rootProject.file("build.gradle.kts"),
+        rootProject.file("settings.gradle.kts"),
+    )
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("guardedBuildScripts")
+}
+
 dependencies {
     testImplementation("junit:junit:4.13.2")
 
