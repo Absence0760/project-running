@@ -64,7 +64,13 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 
 		// The athlete acts in a SEPARATE browser context (its own storage state /
 		// session) — a genuine second user, not a tab of the coach's session.
-		let athleteContext: BrowserContext | null = null;
+		// Created up front, not inside the step that first uses it: a value
+		// assigned only from inside a closure is still its initialiser to the
+		// checker at the `finally` below, so the teardown could not see it.
+		const athleteContext: BrowserContext = await browser.newContext({
+			baseURL,
+			storageState: USER_C_PRO.storageStatePath
+		});
 
 		try {
 			await test.step('coach mints an invite link and captures the token', async () => {
@@ -101,10 +107,6 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 			});
 
 			await test.step('athlete redeems the invite in a second context', async () => {
-				athleteContext = await browser.newContext({
-					baseURL,
-					storageState: USER_C_PRO.storageStatePath
-				});
 				const athletePage: Page = await athleteContext.newPage();
 
 				// The public accept landing redeems via redeem_coach_invite and, on
@@ -198,7 +200,7 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 			});
 
 			await test.step('the athlete no longer sees the coach in their coach list', async () => {
-				const athletePage: Page = await athleteContext!.newPage();
+				const athletePage: Page = await athleteContext.newPage();
 				await athletePage.goto('/coaching');
 				await expect(
 					athletePage.getByRole('heading', { level: 1, name: 'Athletes & coaches' })
@@ -209,7 +211,7 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 				});
 			});
 		} finally {
-			if (athleteContext) await athleteContext.close();
+			await athleteContext.close();
 		}
 	});
 });

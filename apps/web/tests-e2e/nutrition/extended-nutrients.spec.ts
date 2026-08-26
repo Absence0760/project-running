@@ -165,10 +165,10 @@ test.describe('/nutrition — extended nutrients, coverage-aware', () => {
 				// the withholding rule firing, not a missing target.
 				await expect(row.locator('.nutrient-target')).toBeVisible();
 				await expect(page.getByTestId('nutrient-partial-fiber')).toBeVisible();
-				await expect(page.getByTestId('nutrient-state-fiber')).toHaveCount(
-					0,
+				await expect(
+					page.getByTestId('nutrient-state-fiber'),
 					'"N g left" is unsound while an item has not reported fibre',
-				);
+				).toHaveCount(0);
 			});
 
 			await test.step('sugar is reported but deliberately ungraded', async () => {

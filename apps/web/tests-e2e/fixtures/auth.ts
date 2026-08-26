@@ -7,9 +7,7 @@ import { resolveBaseUrl } from './base-url';
 import { assertServedTreeMatches } from './dev_server_guard';
 import { signIn } from './helpers';
 import { ALL_USERS, type SeededUser } from './users';
-// @ts-expect-error — sibling .mjs imports run fine under tsx but the
-// types are intentionally untyped (this file is plain JS so the same
-// helper can be imported from vite.config.ts too).
+// Plain JS so vite.config.ts can import the same guard.
 import { checkEnvIsolation, formatGuardError } from '../../scripts/env_isolation.mjs';
 
 /**

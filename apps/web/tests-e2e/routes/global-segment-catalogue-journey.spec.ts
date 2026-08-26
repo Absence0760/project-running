@@ -183,12 +183,11 @@ test.describe('global segment catalogue journey', () => {
 			if (runId) await deleteRun(runId).catch(() => {});
 			// Catalogue delete cascades global_segment_efforts (ON DELETE CASCADE).
 			if (segmentId) {
-				await admin
-					.from('global_segments')
-					.delete()
-					.eq('id', segmentId)
-					.then(() => {})
-					.catch(() => {});
+				try {
+					await admin.from('global_segments').delete().eq('id', segmentId);
+				} catch {
+					// Best-effort teardown: a failed cleanup must not mask the result.
+				}
 			}
 		}
 	});

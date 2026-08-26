@@ -53,6 +53,7 @@ const ISSUER = process.env.SSO_MOCK_OIDC_URL ?? `http://host.docker.internal:${P
 
 // GoTrue's keycloak provider prefixes every endpoint with this.
 const KC_PREFIX = '/protocol/openid-connect';
+/** @type {Record<string, string>} */
 const PATH_MAP = {
 	[`${KC_PREFIX}/auth`]: '/authorize',
 	[`${KC_PREFIX}/token`]: '/token',
@@ -119,9 +120,10 @@ const front = http.createServer((req, res) => {
 	mockHandler(req, res);
 });
 
-await new Promise((resolve) => front.listen(PORT, '0.0.0.0', resolve));
+await new Promise((resolve) => front.listen(PORT, '0.0.0.0', () => resolve(undefined)));
 
 // Strip CR/LF so an env-supplied sub/email can't forge extra log lines.
+/** @type {(v: unknown) => string} */
 const safeLog = (v) => String(v).replace(/[\r\n]/g, '');
 // eslint-disable-next-line no-console
 console.log(
