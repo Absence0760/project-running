@@ -1313,6 +1313,34 @@ nothing else would notice (its first run found "Über"/"Übersicht" and
 "Einstellungen" naming both Settings and its Preferences tab). Add a new
 sidebar item, popover entry or Settings tab to `DESTINATION_KEYS`.
 
+## A shipped locale catalogue is derived from disk, never listed by hand
+
+A translation catalogue that no runtime path resolves to costs bytes in every
+build and reaches nobody, and nothing about the file says so — it looks exactly
+like a catalogue that works. European Portuguese shipped that way twice, first
+missing from `supportedLocales` and then, after that was fixed, missing from a
+language picker that spelled its six options out beside a seven-entry supported
+list (decisions § 740).
+
+So the rule is that **the set of locales a surface offers is derived from the
+supported set, not written down beside it** — web's picker is
+`{#each SUPPORTED_LOCALES}`, mobile's builds from `supportedLocales`. And the
+supported set itself is held to the catalogue directory by a guard:
+`apps/mobile_android/test/architecture_guards_test.dart § locale reach` and
+`apps/web/src/lib/i18n/locale_reach.test.ts`. Adding a locale means adding the
+file and letting the guard name every declaration site that has not caught up
+(on mobile that is `supportedLocales`, `localeLabels`, `_exact`,
+`_baseToLocale`, the generated delegate, `l10n_parity_test.dart`'s own list and
+the iOS bundle's `CFBundleLocalizations`); deleting one means deleting the file
+and doing the same in reverse. The base-language fallback is the single rule a
+catalogue may legitimately fail, because a base tag can point at only one
+variant per language, and that carries a reason-per-entry allowlist with a
+companion test asserting each entry is still exempt.
+
+Distinct from key parity, which `messages_parity.test.ts` and
+`l10n_parity_test.dart` already own: those prove a *shipped* locale is
+complete, this proves the shipped set is the set that exists.
+
 ## A tab index is an ordered enum, never a raw int
 
 `initialTab` on a tab host takes a named enum whose declaration order IS the
