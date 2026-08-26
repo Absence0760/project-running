@@ -23,7 +23,7 @@ Built exactly as specced, no migration, no new RLS, no new column — it is a no
 
 **Fail-closed reads and writes.** A failed follower fetch renders an error + Retry, never the empty-picker copy — the two answers are different and only one is actionable. A refused or thrown send renders the reason in the dialog and never the sent confirmation. One send is in flight at a time.
 
-**Abuse posture: the rail's, unchanged.** v1 adds no new insert path, so it inherits the `direct_messages` INSERT policy (no block either way + a follow edge) and nothing else. The rail carries **no rate limit today** — the follow-graph gate is its whole anti-spam story — and this feature deliberately did not add a second, route-send-only mechanism; a limit belongs to the rail (a trigger over the existing `check_rate_limit`), covering `/messages` too. Tracked in `followups.md`.
+**Abuse posture: the rail's, unchanged.** v1 adds no new insert path, so it inherits the `direct_messages` INSERT policy (no block either way + a follow edge) plus the rail's own send throttle. That throttle arrived after this feature and is exactly the shape the feature declined to build locally: a `before insert` trigger over the existing `check_rate_limit` (migration `20270608_001`, [decisions § 737](../architecture/decisions.md)) debiting 30/minute and 250/hour per sender, so `/messages` and this dialog are covered by one mechanism rather than two. A refused send surfaces through `sendDm`'s shared `rateLimitErrorMessage` branch, beside the 42501 one.
 
 Web-only. **Not a parity pair** — `dm_recipients.ts` has no Dart twin and is owed none while mobile has no DM surface; see Mobile below.
 

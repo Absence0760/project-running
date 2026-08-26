@@ -144,7 +144,15 @@ touched row, bloats the table, and holds those locks for the whole statement.
 | `SET NOT NULL` | `ACCESS EXCLUSIVE` + full scan | **No** — use the `NOT VALID CHECK` route |
 | `ALTER COLUMN … TYPE` | `ACCESS EXCLUSIVE` + full rewrite + index rebuild | **No** — add-new-column + batched backfill + swap |
 | `CREATE INDEX` | `ACCESS EXCLUSIVE` (blocks writes for the build) | **No** — but `CONCURRENTLY` can't run in Supabase's wrapped txn (see below) |
+| `CREATE TRIGGER` | `SHARE ROW EXCLUSIVE`, catalogue-only | Yes for readers, no for writers — blocks concurrent INSERT/UPDATE/DELETE on that table only, for an O(1) change |
 | unbounded `UPDATE`/`DELETE` | row locks on every touched row | **No** — batch in id-range chunks |
+
+`SHARE ROW EXCLUSIVE` does **not** conflict with `ACCESS SHARE` or `ROW SHARE`,
+and a *queued* request only blocks later requests that conflict with it — so a
+`CREATE TRIGGER` waiting behind a long write still lets every reader through.
+That is what makes it acceptable on a populated table where an `ACCESS
+EXCLUSIVE` statement of the same duration would not be (`20270608_001`, the
+`direct_messages` send throttle, measured on PG 17.6).
 
 `CREATE INDEX CONCURRENTLY` / `DROP INDEX CONCURRENTLY` / `REINDEX CONCURRENTLY`
 **cannot run inside a transaction block**, and the Supabase apply path is prone
