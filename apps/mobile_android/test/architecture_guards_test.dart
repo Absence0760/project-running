@@ -5954,6 +5954,11 @@ void main() {
           'pt-BR is reached by its exact tag — a pt-BR device, or the picker.',
     };
 
+    /// Catalogue tag -> the spelling `ios/Runner/Info.plist` advertises it
+    /// under, for the locales where the two differ. Apple names a locale by
+    /// its REGION, so the European-Portuguese catalogue ships as `pt-PT`.
+    const plistTagOverride = <String, String>{'pt': 'pt-PT'};
+
     /// `app_pt_BR.arb` -> `pt-BR`; `app_en.arb` -> `en`.
     String tagOfArb(String filename) {
       final stem = filename.substring('app_'.length, filename.length - 4);
@@ -6078,6 +6083,42 @@ void main() {
           reason: 'l10n_parity_test.dart names its locales by hand, so a new '
               'catalogue is silently unchecked for missing keys until it is '
               'added there too.');
+    });
+
+    // A locale absent from CFBundleLocalizations is one the App Store and the
+    // iOS language picker will not offer the app in, however complete its ARB.
+    // Reachable from either twin's directory: `..` is `apps/`.
+    String bundleLocalizations() {
+      final plist =
+          File('../mobile_ios/ios/Runner/Info.plist').readAsStringSync();
+      final at = plist.indexOf('<key>CFBundleLocalizations</key>');
+      if (at < 0) fail('CFBundleLocalizations is gone from Info.plist.');
+      final open = plist.indexOf('<array>', at);
+      return plist.substring(open, plist.indexOf('</array>', open));
+    }
+
+    test('the iOS bundle advertises exactly the catalogue set', () {
+      final advertised = RegExp(r'<string>([\w-]+)</string>')
+          .allMatches(bundleLocalizations())
+          .map((m) => m.group(1)!)
+          .toSet();
+      expect(
+        advertised,
+        catalogues.map((t) => plistTagOverride[t] ?? t).toSet(),
+        reason: 'Info.plist and lib/l10n disagree about which locales ship.',
+      );
+    });
+
+    test('every plist spelling override is still an override', () {
+      final advertised = bundleLocalizations();
+      for (final entry in plistTagOverride.entries) {
+        expect(catalogues, contains(entry.key),
+            reason: '${entry.key} is spelled differently in the plist but '
+                'ships no catalogue — drop the entry.');
+        expect(advertised.contains('<string>${entry.key}</string>'), isFalse,
+            reason: 'the plist now spells ${entry.key} the same as the '
+                'catalogue — drop it from plistTagOverride.');
+      }
     });
 
     test('a catalogue no base-language tag reaches carries a reason', () {
