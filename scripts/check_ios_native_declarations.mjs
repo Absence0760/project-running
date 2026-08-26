@@ -240,6 +240,127 @@ export const FIXED_PLIST_KEYS = [
 	},
 ];
 
+/// `PrivacyInfo.xcprivacy`'s required-reason API declarations, derived from
+/// the plugin that touches the API. Apple's upload validation rejects a binary
+/// that uses one of these without an entry.
+export const PRIVACY_API_TYPES = [
+	{
+		type: 'NSPrivacyAccessedAPICategoryUserDefaults',
+		source: 'dart',
+		pattern: /package:(?:shared_preferences|flutter_secure_storage)\//,
+		needed_by: 'shared_preferences / flutter_secure_storage read UserDefaults',
+	},
+	{
+		type: 'NSPrivacyAccessedAPICategoryFileTimestamp',
+		source: 'dart',
+		pattern: /package:path_provider\//,
+		needed_by: 'the disk-backed tile cache and local stores stat their files',
+	},
+	{
+		type: 'NSPrivacyAccessedAPICategorySystemBootTime',
+		source: 'dart',
+		pattern: /package:workmanager\//,
+		needed_by: 'workmanager schedules against system boot time',
+	},
+];
+
+/// Required-reason categories no import implies, each with the reason code it
+/// must carry.
+export const PRIVACY_API_TYPES_FIXED = [
+	{
+		type: 'NSPrivacyAccessedAPICategoryActiveKeyboards',
+		reason: '3EC4.1',
+		why:
+			"Flutter's own text-input plugin calls UITextInputMode.activeInputModes " +
+			'during keyboard handling — nothing in this repo imports it, and the ' +
+			'engine is not scanned. 3EC4.1 is app functionality initiated by the user.',
+	},
+	{
+		type: 'NSPrivacyAccessedAPICategoryDiskSpace',
+		reason: 'E174.1',
+		why:
+			'Backup and export size estimation asks for free space. The call sits ' +
+			'behind platform plumbing rather than a named plugin import.',
+	},
+];
+
+/// The data types the binary collects, derived from the code that collects
+/// them. A partial `NSPrivacyCollectedDataTypes` array fails Privacy Manifest
+/// validation, and it also has to agree with the App Store Connect nutrition
+/// label, so under-declaring here is a compliance answer as well as a build one.
+export const PRIVACY_DATA_TYPES = [
+	{
+		type: 'NSPrivacyCollectedDataTypePreciseLocation',
+		source: 'dart',
+		pattern: /package:geolocator\//,
+		needed_by: 'geolocator records the GPS trace',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypeCoarseLocation',
+		source: 'dart',
+		pattern: /package:geolocator\//,
+		needed_by: 'the same fixes arrive coarse under an Approximate-Location grant',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypeHealth',
+		source: 'dart',
+		pattern: /package:health\//,
+		needed_by: 'the health plugin reads and writes HealthKit',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypeFitness',
+		source: 'dart',
+		pattern: /package:pedometer\//,
+		needed_by: 'pedometer counts steps',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypePhotosorVideos',
+		source: 'dart',
+		pattern: /package:image_picker\//,
+		needed_by: 'runs carry photo attachments',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypePurchaseHistory',
+		source: 'dart',
+		pattern: /package:purchases_flutter\//,
+		needed_by: 'RevenueCat records subscription events',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypeCrashData',
+		source: 'dart',
+		pattern: /package:sentry_flutter\//,
+		needed_by: 'Sentry captures unhandled exceptions',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypePerformanceData',
+		source: 'dart',
+		pattern: /package:sentry_flutter\//,
+		needed_by: 'Sentry captures performance traces',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypeEmailAddress',
+		source: 'dart',
+		pattern: /package:supabase_flutter\//,
+		needed_by: 'Supabase Auth signs the runner in by email',
+	},
+	{
+		type: 'NSPrivacyCollectedDataTypeUserID',
+		source: 'dart',
+		pattern: /package:supabase_flutter\//,
+		needed_by: "auth.users.id is stored against the runner's rows and on RevenueCat",
+	},
+];
+
+/// Collected types that are a property of the product rather than of an
+/// import: they arrive as ordinary columns, so no plugin names them.
+export const PRIVACY_DATA_TYPES_FIXED = [
+	{ type: 'NSPrivacyCollectedDataTypeName', why: 'user_profiles.display_name' },
+	{
+		type: 'NSPrivacyCollectedDataTypeOtherUserContent',
+		why: 'coach chat messages, run titles and notes',
+	},
+];
+
 // ---------------------------------------------------------------------------
 // Plist reading
 // ---------------------------------------------------------------------------
@@ -634,6 +755,26 @@ export function evaluate(input) {
 					'and workmanager logs the rejection rather than surfacing it.',
 			);
 		}
+		// iOS gates each BGTaskScheduler request type on a different background
+		// mode — `fetch` authorises BGAppRefreshTaskRequest, `processing`
+		// authorises BGProcessingTaskRequest — so which one the iOS BRANCH
+		// submits is what the declared mode has to match. Dropping to the
+		// periodic task would need `fetch` declared as well, not just a
+		// different call, and workmanager logs the resulting rejection rather
+		// than surfacing it.
+		if (!/Platform\.isIOS[\s\S]{0,120}?Workmanager\(\)\s*\.\s*registerProcessingTask/.test(
+			backgroundSyncDart ?? '',
+		)) {
+			errors.push(
+				'background_sync.dart does not call `registerProcessingTask` on its ' +
+					'`Platform.isIOS` branch.\n  registerPeriodicTask submits a ' +
+					'BGAppRefreshTaskRequest, which needs the `fetch` background mode ' +
+					'this app deliberately does not declare — the submission then ' +
+					'throws and workmanager swallows it, so background sync silently ' +
+					'never runs.',
+			);
+		}
+
 		const swiftId = appDelegate?.match(
 			/registerBGProcessingTask\(\s*withIdentifier:\s*"([^"]+)"/,
 		);
@@ -738,19 +879,91 @@ export function evaluate(input) {
 		ok.push('AppDelegate excludes the Documents directory from iCloud backup');
 	}
 
-	if (privacyManifest) {
-		const missing = ['NSPrivacyAccessedAPICategoryActiveKeyboards', '3EC4.1'].filter(
-			(needle) => !privacyManifest.includes(needle),
-		);
-		if (missing.length > 0) {
+	// --- PrivacyInfo.xcprivacy --------------------------------------------
+	// Parsed rather than substring-matched: a category named in a comment, or
+	// in the wrong array, satisfies `includes()` while declaring nothing.
+	if (privacyManifest !== null && privacyManifest !== undefined) {
+		const manifest = parsePlist(privacyManifest);
+		if (!manifest) {
 			errors.push(
-				`PrivacyInfo.xcprivacy is missing ${missing.join(' + ')}.\n` +
-					'  Flutter text input calls UITextInputMode.activeInputModes, a ' +
-					'required-reason API; Apple rejects an upload that uses one ' +
-					'undeclared. 3EC4.1 is app functionality initiated by the user.',
+				'Parsed no dictionary out of PrivacyInfo.xcprivacy.\n' +
+					'  Apple requires the manifest for every binary touching a ' +
+					'required-reason API; this guard is blind until parsePlist() is ' +
+					'taught the new form.',
 			);
 		} else {
-			ok.push('PrivacyInfo.xcprivacy declares the Active Keyboards required-reason API');
+			const apiEntries = manifest.get('NSPrivacyAccessedAPITypes') ?? [];
+			const apiTypes = new Map(
+				apiEntries
+					.filter((e) => e instanceof Map)
+					.map((e) => [e.get('NSPrivacyAccessedAPIType'), e.get('NSPrivacyAccessedAPITypeReasons') ?? []]),
+			);
+			const dataTypes = new Set(
+				(manifest.get('NSPrivacyCollectedDataTypes') ?? [])
+					.filter((e) => e instanceof Map)
+					.map((e) => e.get('NSPrivacyCollectedDataType')),
+			);
+
+			for (const rule of PRIVACY_API_TYPES) {
+				const where = firstMatch(sourcesFor(rule.source), rule.pattern, root);
+				if (!where) continue;
+				if (apiTypes.has(rule.type)) {
+					ok.push(`PrivacyInfo declares \`${rule.type}\` (${where}: ${rule.needed_by})`);
+					continue;
+				}
+				errors.push(
+					`PrivacyInfo.xcprivacy does not declare \`${rule.type}\`, but ` +
+						`${where} means ${rule.needed_by}.\n  Apple's upload validation ` +
+						'rejects a binary using a required-reason API it has not declared.',
+				);
+			}
+			for (const { type, reason, why } of PRIVACY_API_TYPES_FIXED) {
+				const reasons = apiTypes.get(type);
+				if (!reasons) {
+					errors.push(`PrivacyInfo.xcprivacy does not declare \`${type}\`.\n  ${why}`);
+					continue;
+				}
+				if (!reasons.includes(reason)) {
+					errors.push(
+						`PrivacyInfo.xcprivacy declares \`${type}\` without reason code ` +
+							`${reason}.\n  ${why}`,
+					);
+					continue;
+				}
+				ok.push(`PrivacyInfo declares \`${type}\` (${reason})`);
+			}
+
+			for (const rule of PRIVACY_DATA_TYPES) {
+				const where = firstMatch(sourcesFor(rule.source), rule.pattern, root);
+				if (!where) continue;
+				if (dataTypes.has(rule.type)) {
+					ok.push(`PrivacyInfo collects \`${rule.type}\` (${where}: ${rule.needed_by})`);
+					continue;
+				}
+				errors.push(
+					`PrivacyInfo.xcprivacy does not list \`${rule.type}\`, but ${where} ` +
+						`means ${rule.needed_by}.\n  A partial NSPrivacyCollectedDataTypes ` +
+						'array fails Privacy Manifest validation, and the App Store ' +
+						'nutrition label is answered from it.',
+				);
+			}
+			for (const { type, why } of PRIVACY_DATA_TYPES_FIXED) {
+				if (dataTypes.has(type)) {
+					ok.push(`PrivacyInfo collects \`${type}\``);
+					continue;
+				}
+				errors.push(`PrivacyInfo.xcprivacy does not list \`${type}\`.\n  ${why}`);
+			}
+
+			if (manifest.get('NSPrivacyTracking') !== false) {
+				errors.push(
+					'PrivacyInfo.xcprivacy does not set NSPrivacyTracking to <false/>.\n' +
+						'  The app reads no IDFA and does no cross-app tracking; claiming ' +
+						'otherwise changes what App Review and the nutrition label expect.',
+				);
+			} else {
+				ok.push('PrivacyInfo declares NSPrivacyTracking false');
+			}
 		}
 	}
 

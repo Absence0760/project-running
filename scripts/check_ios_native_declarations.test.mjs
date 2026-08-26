@@ -9,6 +9,8 @@ import {
 	BACKGROUND_MODES,
 	ENTITLEMENTS,
 	IOS_ROOT,
+	PRIVACY_API_TYPES,
+	PRIVACY_DATA_TYPES,
 	PURPOSE_STRINGS,
 	collectDartSources,
 	evaluate,
@@ -118,6 +120,42 @@ test('stripWholeLineComments blanks prose but keeps a trailing comment line inta
 const dart = (text) => [{ path: join(REPO_ROOT, 'apps/mobile_ios/lib/x.dart'), text }];
 const swift = (text) => [{ path: join(IOS_ROOT, 'Runner/X.swift'), text }];
 
+/// A structurally faithful PrivacyInfo.xcprivacy carrying exactly the entries
+/// the baseline's sources oblige — the two fixed API categories, the two fixed
+/// data types, and the no-tracking stance.
+function fakeManifest({ apis = ['3EC4.1', 'E174.1'], data = null, tracking = false } = {}) {
+	const apiEntry = (type, reason) =>
+		`\t\t<dict>\n\t\t\t<key>NSPrivacyAccessedAPIType</key>\n` +
+		`\t\t\t<string>${type}</string>\n` +
+		`\t\t\t<key>NSPrivacyAccessedAPITypeReasons</key>\n` +
+		`\t\t\t<array><string>${reason}</string></array>\n\t\t</dict>`;
+	const dataEntry = (type) =>
+		`\t\t<dict>\n\t\t\t<key>NSPrivacyCollectedDataType</key>\n` +
+		`\t\t\t<string>${type}</string>\n\t\t</dict>`;
+	const types =
+		data ??
+		['NSPrivacyCollectedDataTypeName', 'NSPrivacyCollectedDataTypeOtherUserContent'];
+	return (
+		`<plist version="1.0">\n<dict>\n` +
+		`\t<key>NSPrivacyTracking</key>\n\t<${tracking}/>\n` +
+		`\t<key>NSPrivacyAccessedAPITypes</key>\n\t<array>\n` +
+		[
+			apis.includes('3EC4.1')
+				? apiEntry('NSPrivacyAccessedAPICategoryActiveKeyboards', '3EC4.1')
+				: null,
+			apis.includes('E174.1')
+				? apiEntry('NSPrivacyAccessedAPICategoryDiskSpace', 'E174.1')
+				: null,
+		]
+			.filter(Boolean)
+			.join('\n') +
+		`\n\t</array>\n` +
+		`\t<key>NSPrivacyCollectedDataTypes</key>\n\t<array>\n` +
+		types.map(dataEntry).join('\n') +
+		`\n\t</array>\n</dict>\n</plist>`
+	);
+}
+
 const PBX =
 	`\t\t\tisa = XCBuildConfiguration;\n` +
 	`\t\t\tbuildSettings = {\n` +
@@ -138,12 +176,16 @@ function baseline(overrides = {}) {
 			['NSPhotoLibraryAddUsageDescription', 'Threkir saves cards.'],
 		]),
 		entitlements: new Map([['com.apple.developer.aps-environment', APS_SUBSTITUTION]]),
-		privacyManifest: 'NSPrivacyAccessedAPICategoryActiveKeyboards 3EC4.1',
+		privacyManifest: fakeManifest(),
 		appDelegate:
 			'isExcludedFromBackup = true\n.documentDirectory\n' +
 			'WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "com.threkir.backgroundSync")',
 		pbxproj: PBX,
-		backgroundSyncDart: "const backgroundSyncTaskName = 'com.threkir.backgroundSync';",
+		backgroundSyncDart:
+			"const backgroundSyncTaskName = 'com.threkir.backgroundSync';\n" +
+			'final registered = Platform.isIOS\n' +
+			'    ? Workmanager().registerProcessingTask(backgroundSyncTaskName)\n' +
+			'    : Workmanager().registerPeriodicTask(backgroundSyncTaskName);',
 		dartSources: dart(
 			'IosTextToSpeechAudioCategory.playback\n' + "import 'package:firebase_messaging/x.dart';",
 		),
@@ -216,7 +258,10 @@ test('a Release configuration minting sandbox tokens fails', () => {
 
 test('a renamed background-sync identifier is caught in each of the three files', () => {
 	for (const [field, mutated] of [
-		['backgroundSyncDart', "const backgroundSyncTaskName = 'com.threkir.other';"],
+		[
+			'backgroundSyncDart',
+			baseline().backgroundSyncDart.replace('com.threkir.backgroundSync', 'com.threkir.other'),
+		],
 		[
 			'infoPlist',
 			new Map([...baseline().infoPlist, ['BGTaskSchedulerPermittedIdentifiers', ['other']]]),
@@ -229,6 +274,18 @@ test('a renamed background-sync identifier is caught in each of the three files'
 		const { errors } = evaluate(baseline({ [field]: mutated }));
 		assert.ok(errors.length > 0, `mutating ${field} produced no error`);
 	}
+});
+
+test('an iOS branch submitting the periodic task type fails', () => {
+	const { errors } = evaluate(
+		baseline({
+			backgroundSyncDart: baseline().backgroundSyncDart.replace(
+				'? Workmanager().registerProcessingTask(backgroundSyncTaskName)',
+				'? Workmanager().registerPeriodicTask(backgroundSyncTaskName)',
+			),
+		}),
+	);
+	assert.equal(errors.filter((e) => e.includes('registerProcessingTask')).length, 1);
 });
 
 test('a missing CODE_SIGN_ENTITLEMENTS wiring fails', () => {
@@ -251,6 +308,26 @@ test('a usage string naming a different product than CFBundleDisplayName fails',
 		}),
 	);
 	assert.equal(errors.filter((e) => e.includes('does not name the app')).length, 1);
+});
+
+test('a required-reason API the manifest omits fails', () => {
+	const { errors } = evaluate(baseline({ privacyManifest: fakeManifest({ apis: ['3EC4.1'] }) }));
+	assert.equal(errors.filter((e) => e.includes('DiskSpace')).length, 1);
+});
+
+test('a collected data type the code implies but the manifest omits fails', () => {
+	const { errors } = evaluate(
+		baseline({ dartSources: dart("import 'package:health/health.dart';") }),
+	);
+	assert.equal(
+		errors.filter((e) => e.includes('NSPrivacyCollectedDataTypeHealth')).length,
+		1,
+	);
+});
+
+test('claiming tracking fails the no-IDFA stance', () => {
+	const { errors } = evaluate(baseline({ privacyManifest: fakeManifest({ tracking: true }) }));
+	assert.equal(errors.filter((e) => e.includes('NSPrivacyTracking')).length, 1);
 });
 
 test('an empty Dart source set fails rather than passing vacuously', () => {
@@ -277,7 +354,13 @@ test('every derivation pattern still matches something in the committed tree', (
 	// feature may be gone — but every rule in the table today has a live
 	// consumer, and a pattern that silently stops matching is how a derived
 	// guard turns permissive.
-	for (const rule of [...BACKGROUND_MODES, ...ENTITLEMENTS, ...PURPOSE_STRINGS]) {
+	for (const rule of [
+		...BACKGROUND_MODES,
+		...ENTITLEMENTS,
+		...PURPOSE_STRINGS,
+		...PRIVACY_API_TYPES,
+		...PRIVACY_DATA_TYPES,
+	]) {
 		const sources = rule.source === 'swift' ? swiftSources : dartSources;
 		assert.ok(
 			sources.some((s) => rule.pattern.test(s.text)),
