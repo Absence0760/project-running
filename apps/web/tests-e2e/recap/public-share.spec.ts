@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+import { browserYear } from '../fixtures/dates';
 import { USER_A } from '../fixtures/users';
 
-const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_YEAR = browserYear();
 // A random, never-published uuid — the private-by-default / revoked case.
 const UNKNOWN_ID = '00000000-0000-4000-8000-00000000dead';
 

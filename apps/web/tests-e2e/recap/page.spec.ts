@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+import { browserYear } from '../fixtures/dates';
 import { USER_A } from '../fixtures/users';
 
-const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_YEAR = browserYear();
 
 test.describe('/recap/[year] — anon visitor', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });

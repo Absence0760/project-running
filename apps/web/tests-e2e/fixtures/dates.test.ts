@@ -136,11 +136,7 @@ const LOCAL_ZONE_DAY = new RegExp(
  */
 const LOCAL_ZONE_ALLOWED: Record<string, string> = {
 	'plans/calendar.spec.ts':
-		'zone-neutral: one read runs inside page.evaluate (browser zone), the rest construct and format a fixed y/m/d in the same zone',
-	'recap/page.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
-	'recap/public-share.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
-	'recap/toast-feedback.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
-	'routes/segments.spec.ts': 'derives a birth YEAR for an age-grade fixture, not a day'
+		'zone-neutral: one read runs inside page.evaluate (browser zone), the rest construct and format a fixed y/m/d in the same zone'
 };
 
 function typescriptSources(dir: string, out: string[] = []): string[] {
