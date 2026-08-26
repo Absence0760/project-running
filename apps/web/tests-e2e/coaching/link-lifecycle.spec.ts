@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
 
@@ -39,12 +40,6 @@ async function seedActiveLink() {
 		invite_token: INVITE_TOKEN,
 		accepted_at: new Date().toISOString()
 	});
-}
-
-function isoDate(offsetDays: number): string {
-	const d = new Date();
-	d.setDate(d.getDate() + offsetDays);
-	return d.toISOString().slice(0, 10);
 }
 
 test.describe('/coaching — coach side (USER_B)', () => {
@@ -102,8 +97,8 @@ test.describe('/coaching — coach side (USER_B)', () => {
 				name: 'E2E Compliance Plan',
 				goal_event: 'distance_10k',
 				goal_distance_m: 10000,
-				start_date: isoDate(-7),
-				end_date: isoDate(21),
+				start_date: browserDate(-7),
+				end_date: browserDate(21),
 				status: 'active',
 				assigned_by_coach_id: USER_B.id
 			})
@@ -124,9 +119,9 @@ test.describe('/coaching — coach side (USER_B)', () => {
 		// default — for any row that omits a key the batch otherwise carries,
 		// which the NOT NULL constraint rejects.
 		await admin.from('plan_workouts').insert([
-			{ week_id: weekId, scheduled_date: isoDate(-2), kind: 'easy', manually_completed: true },
-			{ week_id: weekId, scheduled_date: isoDate(-3), kind: 'easy', manually_completed: false },
-			{ week_id: weekId, scheduled_date: isoDate(-4), kind: 'easy', manually_completed: false }
+			{ week_id: weekId, scheduled_date: browserDate(-2), kind: 'easy', manually_completed: true },
+			{ week_id: weekId, scheduled_date: browserDate(-3), kind: 'easy', manually_completed: false },
+			{ week_id: weekId, scheduled_date: browserDate(-4), kind: 'easy', manually_completed: false }
 		]);
 
 		await page.goto(`/coaching/athletes/${USER_C_PRO.id}`);

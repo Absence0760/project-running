@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
+import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertRun } from '../fixtures/simulate';
@@ -57,12 +58,6 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 	let privateRunId = '';
 	let planId = '';
 
-	function isoDate(offsetDays: number): string {
-		const d = new Date();
-		d.setDate(d.getDate() + offsetDays);
-		return d.toISOString().slice(0, 10);
-	}
-
 	test.beforeAll(async () => {
 		users = await createSagaUsers(2, { displayNames: ['Saga Coach', 'Saga Athlete'] });
 		[coach, athlete] = users;
@@ -94,8 +89,8 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 				name: 'Saga Compliance Plan',
 				goal_event: 'distance_10k',
 				goal_distance_m: 10000,
-				start_date: isoDate(-7),
-				end_date: isoDate(21),
+				start_date: browserDate(-7),
+				end_date: browserDate(21),
 				status: 'active'
 			})
 			.select('id')
@@ -114,9 +109,9 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 		// unions keys across the array and writes an explicit NULL for any row that
 		// omits a key the batch otherwise carries, which the NOT NULL column rejects.
 		const { error: woErr } = await admin.from('plan_workouts').insert([
-			{ week_id: week.id, scheduled_date: isoDate(-2), kind: 'easy', manually_completed: true },
-			{ week_id: week.id, scheduled_date: isoDate(-3), kind: 'easy', manually_completed: false },
-			{ week_id: week.id, scheduled_date: isoDate(-4), kind: 'easy', manually_completed: false }
+			{ week_id: week.id, scheduled_date: browserDate(-2), kind: 'easy', manually_completed: true },
+			{ week_id: week.id, scheduled_date: browserDate(-3), kind: 'easy', manually_completed: false },
+			{ week_id: week.id, scheduled_date: browserDate(-4), kind: 'easy', manually_completed: false }
 		]);
 		if (woErr) throw new Error(`workouts seed failed: ${woErr.message}`);
 	});

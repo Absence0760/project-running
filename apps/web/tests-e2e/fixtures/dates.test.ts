@@ -135,12 +135,6 @@ const LOCAL_ZONE_DAY = new RegExp(
  * docs/product/followups.md.
  */
 const LOCAL_ZONE_ALLOWED: Record<string, string> = {
-	'coaching/coach-athlete-depth.spec.ts':
-		'shifts an instant by whole days and reads the UTC date back, so the result already tracks the browser day',
-	'coaching/coach-athlete-roster-journey.spec.ts':
-		'shifts an instant by whole days and reads the UTC date back, so the result already tracks the browser day',
-	'coaching/link-lifecycle.spec.ts':
-		'shifts an instant by whole days and reads the UTC date back, so the result already tracks the browser day',
 	'plans/calendar.spec.ts':
 		'zone-neutral: one read runs inside page.evaluate (browser zone), the rest construct and format a fixed y/m/d in the same zone',
 	'recap/page.spec.ts': 'reads the calendar YEAR, which only diverges across a New Year boundary',
