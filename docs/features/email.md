@@ -467,7 +467,7 @@ None of this sends in prod until an operator:
    and/or `APNS_KEY_P8` + `APNS_KEY_ID` + `APNS_TEAM_ID` + `APNS_TOPIC`
    (+ `APNS_SANDBOX=1` for dev builds) (iOS); on the **mobile apps**, drops
    `google-services.json` into `apps/mobile_android/android/` and
-   `GoogleService-Info.plist` + the APNs push entitlement into
+   `GoogleService-Info.plist` into
    `apps/mobile_ios/ios/`. Either credential group alone enables that platform;
    neither set → `native_push` jobs finish done while leaving the rows pending,
    and the mobile bridge no-ops (compiles + runs without the config files). A
