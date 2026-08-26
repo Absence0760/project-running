@@ -5,7 +5,7 @@ description: Single table listing every user-visible feature with a per-platform
 
 # Cross-platform feature parity matrix
 
-> **iOS + Apple Watch are deferred.** The landing page lists both as "Coming soon" and the team is not actively pushing them forward right now. The cells below still reflect the *code-equivalent* state on the iOS twin (byte-for-byte Dart matches `mobile_android/`) and the scaffolded state of the Swift watch project — they are not regressions to ignore, but a `Partial` / `✓` on iOS or Apple Watch should be read as "wired but unverified on Mac hardware, behind the active roadmap" rather than "shipping today". The Apple columns will be re-energised when the deferral is lifted; until then, prioritise Android / Wear OS / Web work first.
+> **iOS + Apple Watch are deferred.** The landing page lists both as "Coming soon" and the team is not actively pushing them forward right now. Nothing in either column has been observed running on a Mac build, simulator or device. The Apple columns will be re-energised when the deferral is lifted; until then, prioritise Android / Wear OS / Web work first. How to read the **iOS** column is stated once, under [What an iOS cell means](#what-an-ios-cell-means); the Apple Watch column is a separate native Swift codebase and is not covered by that rule.
 
 The app ships on five surfaces — **Android**, **iOS** *(deferred)*, **Web**, **Wear OS**, **Apple Watch** *(deferred)* — and features drift between them. This doc is the single place where that drift is visible. Every user-facing feature has a row, every platform has a column, and every cell is either `✓`, `✗`, `Partial`, or `N/A`.
 
@@ -18,15 +18,32 @@ See [roadmap § Cross-platform parity enforcement](roadmap.md#future--cross-plat
 | Symbol | Meaning |
 |---|---|
 | `✓` | Shipped and working end-to-end on that platform. |
-| `Partial` | Scaffold, mock-data screen, or wired for read-only but missing the full flow. Expand in the **Notes** column. |
+| `Partial` | Scaffold, mock-data screen, wired for read-only but missing the full flow — or code that ships on that platform but whose runtime nobody has observed there. Expand in the **Notes** column, unless a column-level rule already accounts for it. |
 | `✗` | Not started. May be a genuine gap (drift) or a planned future item. |
 | `N/A` | Intentionally not applicable — the platform cannot reasonably provide the feature (e.g. pedometer in a browser). Expand in the **Notes** column so it isn't rediscovered as "missing". |
 | 🔸 in Notes | This row is a **gap against the web-canonical principle** ([decisions.md § 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)) — web is `✗` or `Partial` on a feature that is *not* a physical exception. Close these by building the web version, not by adding to the matrix's tail. |
 
+<!-- parity-ios-rule -->
+### What an iOS cell means
+
+`apps/mobile_ios/lib/` and `test/` are byte-identical to `mobile_android` ([decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)), and no row in this matrix has been run on a Mac build, simulator or device. An iOS cell is therefore not an observation. It is **derived from the Android cell**, and the only thing a row can add for itself is an obstruction on the iOS side of the shared Dart: a `Platform` gate, a method channel with no iOS handler, a plugin that does not declare iOS, or a missing `Info.plist` key or entitlement.
+
+| Android cell | iOS cell |
+|---|---|
+| `✓` | `Partial` |
+| `Partial` | `Partial` |
+| `✗` | `✗` |
+| `N/A` | `N/A` |
+
+So the column carries no `✓` at all: shared Dart nobody has run is wired, not shipped. A cell that departs from the table states the obstruction in its own Notes as `**iOS <symbol>:** <why>`, and that marker is the only per-row iOS claim this document wants — everything the rule already says, a row does not repeat. The one owed device run is tracked once in [followups.md](followups.md), never per row.
+
+`scripts/check_parity_ios_column.mjs` enforces the table above, the marker, and the fact that this block is the only place the column's vocabulary is stated.
+<!-- /parity-ios-rule -->
+
 **Columns:**
 
 - **Android** — `apps/mobile_android` (Flutter). Most mature surface.
-- **iOS** — `apps/mobile_ios` (Flutter). **Dart codebase is byte-identical to mobile_android** (see [decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). Cells stay `✗` until each row is verified on a Mac build / simulator / device — code-equivalent ≠ runtime-equivalent. See [apps/mobile_ios/CLAUDE.md](../../apps/mobile_ios/CLAUDE.md).
+- **iOS** — `apps/mobile_ios` (Flutter). Dart codebase byte-identical to mobile_android ([decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)); the column is derived, not observed — see [What an iOS cell means](#what-an-ios-cell-means). Also [apps/mobile_ios/CLAUDE.md](../../apps/mobile_ios/CLAUDE.md).
 - **Web** — `apps/web` (SvelteKit 2 + Svelte 5).
 - **Wear OS** — `apps/watch_wear` (native Kotlin + Compose-for-Wear). Recording-only by design.
 - **Apple Watch** — `apps/watch_ios` (native SwiftUI). Recording-only by design.
@@ -42,7 +59,7 @@ See [roadmap § Cross-platform parity enforcement](roadmap.md#future--cross-plat
 
 A periodic audit greps this matrix for rows whose platform ticks aren't uniform and checks each against the code. The patterns below are **permanent / structural** asymmetries — a mismatched row matching one of these is *not* drift and should not be opened as a follow-up. Anything *not* covered here that has a non-uniform row is a candidate gap.
 
-- **iOS `✗` / `Partial` while Android is `✓`** — the iOS Dart codebase is **byte-identical** to `mobile_android` ([decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). iOS cells stay `✗` / `Partial` *by design* until each row is simulator/device-verified on a Mac (iOS + Apple Watch are deferred — see the banner at the top). Code-equivalent ≠ runtime-equivalent. Tracked by the single "iOS verification" item in `followups.md`, not per-row.
+- **The iOS column differing from Android** — it is derived from Android rather than observed, per [What an iOS cell means](#what-an-ios-cell-means). A row where the two differ is that derivation, not drift, and the owed device run is one item in `followups.md` rather than a defect per row.
 - **Web `N/A` on a recording / device-sensor / on-wrist feature** — browsers can't reliably record a run, read a pedometer/BLE strap, or run a foreground service ([decisions.md § 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)). Live GPS recording, background location, wakelock, indoor mode, HR-via-sensor, offline tile cache, treadmill FTMS, etc. are correctly `N/A` on Web.
 - **Web `✓` while mobile is `✗` and the Notes say "web-canonical per § 24"** — back-office + authoring + acquisition surfaces are deliberately web-first: admin moderation queue, bulk results CSV import, claim-an-imported-result, AI route request, route-design preferences, the `/learn` guides, marketing/SEO pages. Building the device twin is optional platform-additive work, not drift.
 - **Watch `N/A` on a non-recording surface** — the watches are recording-only wrist complements, NOT pocket-app mirrors. History/analytics, social, training-plan authoring, settings editors, nutrition, gym, coaching, sharing, etc. are correctly `N/A` (or `✗` where a recording-adjacent feature is genuinely unbuilt) on Wear OS / Apple Watch.
