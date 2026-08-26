@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { originOf } from '../fixtures/base-url';
 import { getUserClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
 
@@ -84,13 +85,13 @@ test.describe('strava-import — pre-side-effect guards', () => {
 		expect(r.json.error).toBe('invalid_action');
 	});
 
-	test('auth + connect + missing code → 400 invalid_code', async () => {
+	test('auth + connect + missing code → 400 invalid_code', async ({ baseURL }) => {
 		const auth = await freshUserToken();
 		const r = await postEf({
 			body: {
 				action: 'connect',
 				scope: 'read,activity:read_all',
-				redirect_uri: 'http://localhost:7777/settings/integrations'
+				redirect_uri: `${originOf(baseURL)}/settings/integrations`
 			},
 			authHeader: auth
 		});
@@ -98,14 +99,14 @@ test.describe('strava-import — pre-side-effect guards', () => {
 		expect(r.json.error).toBe('invalid_code');
 	});
 
-	test('auth + connect + non-string scope → 400 invalid_scope', async () => {
+	test('auth + connect + non-string scope → 400 invalid_scope', async ({ baseURL }) => {
 		const auth = await freshUserToken();
 		const r = await postEf({
 			body: {
 				action: 'connect',
 				code: 'short_code_42',
 				scope: 12345,
-				redirect_uri: 'http://localhost:7777/settings/integrations'
+				redirect_uri: `${originOf(baseURL)}/settings/integrations`
 			},
 			authHeader: auth
 		});

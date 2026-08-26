@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { isInAnyZone } from '../../src/lib/routes/privacy';
+import { originOf } from '../fixtures/base-url';
 import { insertRun, deleteRun } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
 
@@ -113,13 +114,14 @@ test.describe('privacy-zone share guardrail', () => {
 
 	test('"Share anyway" flips is_public + the dialog does not re-open on a second click', async ({
 		page,
-		context
+		context,
+		baseURL
 	}) => {
 		// Grant clipboard permission so navigator.clipboard.writeText
 		// in handleShare's success path doesn't reject and trip the
 		// catch branch.
 		await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-			origin: 'http://localhost:7777'
+			origin: originOf(baseURL)
 		});
 
 		zoneRunId = await insertRun({

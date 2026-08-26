@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { originOf } from '../fixtures/base-url';
 import { browserYear } from '../fixtures/dates';
 import { USER_A } from '../fixtures/users';
 
@@ -50,12 +51,13 @@ test.describe('/recap/share/[id] — publish round-trip (seed user)', () => {
 
 	test('publish from /recap/[year] then load the public link with OG tags', async ({
 		page,
-		context
+		context,
+		baseURL
 	}) => {
 		// Stub the share sheet + clipboard so "Publish & copy link" resolves
 		// deterministically and we can read the minted URL back.
 		await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-			origin: 'http://localhost:7777'
+			origin: originOf(baseURL)
 		});
 		await page.addInitScript(() => {
 			Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
