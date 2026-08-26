@@ -8547,6 +8547,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => 'Classificação indisponível';
+
+  @override
   String get runSegEffortsChecking => 'Verificando segmentos…';
 
   @override
@@ -22193,6 +22196,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String clubPhotosCaptionError(String error) {
     return 'Não foi possível atualizar a legenda: $error';
   }
+
+  @override
+  String get runSegEffortsRankUnknown => 'Classificação indisponível';
 
   @override
   String get runSegEffortsChecking => 'Verificando segmentos…';

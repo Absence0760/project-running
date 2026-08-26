@@ -60,7 +60,7 @@ Future<void> _pumpWith(WidgetTester tester, ApiClient api) async {
   await tester.pumpAndSettle();
 }
 
-GlobalSegmentEffortWithSegment _catalogueEffort() =>
+GlobalSegmentEffortWithSegment _catalogueEffort({int? rank = 4}) =>
     GlobalSegmentEffortWithSegment(
       effort: GlobalSegmentEffortRow(
         id: 'ge-1',
@@ -82,10 +82,11 @@ GlobalSegmentEffortWithSegment _catalogueEffort() =>
         isActive: true,
         createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
       ),
-      rank: 4,
+      rank: rank,
     );
 
-SegmentEffortWithSegment _routeEffort() => SegmentEffortWithSegment(
+SegmentEffortWithSegment _routeEffort({int? rank = 2}) =>
+    SegmentEffortWithSegment(
       effort: SegmentEffortRow(
         id: 'se-1',
         segmentId: 'seg-1',
@@ -103,7 +104,7 @@ SegmentEffortWithSegment _routeEffort() => SegmentEffortWithSegment(
         endDistanceM: 1000,
         createdAt: DateTime.parse('2026-01-01T00:00:00Z'),
       ),
-      rank: 2,
+      rank: rank,
     );
 
 class _EffortsApi extends ApiClient {
@@ -162,6 +163,53 @@ void main() {
       // tests without a working Supabase backend.
       await _pump(tester);
       expect(find.text('Checking segments…'), findsOneWidget);
+    });
+  });
+
+  group('RunSegmentEfforts — an unanswered rank', () {
+    // `segment_effort_ranks` / `global_segment_effort_ranks` deliver the rank
+    // separately from the effort row, so an effort the RPC did not answer for
+    // has no known standing. Both clients used to spend that as `?? 1`, which
+    // renders the crown — the most flattering claim the chip can make, from
+    // having no answer at all (decisions §746). Against `main` every
+    // expectation below fails: the pill read '#1' in crown colours.
+
+    testWidgets('a route effort with no rank renders the placeholder, not #1',
+        (tester) async {
+      await _pumpWith(tester, _EffortsApi(routeEfforts: [_routeEffort(rank: null)]));
+      expect(find.text('Canal Straight'), findsOneWidget);
+      expect(find.text(kUnknownRankText), findsOneWidget);
+      expect(find.text('#1'), findsNothing);
+    });
+
+    testWidgets('a catalogue effort with no rank renders the placeholder',
+        (tester) async {
+      await _pumpWith(
+        tester,
+        _EffortsApi(globalEfforts: [_catalogueEffort(rank: null)]),
+      );
+      expect(find.text('Harlem Hill'), findsOneWidget);
+      expect(find.text(kUnknownRankText), findsOneWidget);
+      expect(find.text('#1'), findsNothing);
+    });
+
+    testWidgets('the placeholder pill is named for assistive tech',
+        (tester) async {
+      // TalkBack reading out an em dash tells the runner nothing.
+      final handle = tester.ensureSemantics();
+      await _pumpWith(tester, _EffortsApi(routeEfforts: [_routeEffort(rank: null)]));
+      expect(find.bySemanticsLabel('Rank unavailable'), findsOneWidget);
+      handle.dispose();
+    });
+
+    testWidgets('an unknown standing does not take the crown fill',
+        (tester) async {
+      await _pumpWith(tester, _EffortsApi(routeEfforts: [_routeEffort(rank: null)]));
+      final theme = Theme.of(
+        tester.element(find.text(kUnknownRankText)),
+      );
+      expect(rankPillColors(theme, null), isNot(rankPillColors(theme, 1)));
+      expect(rankPillColors(theme, null), rankPillColors(theme, 99));
     });
   });
 

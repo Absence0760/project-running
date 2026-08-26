@@ -308,6 +308,11 @@ class _CatalogueEffortRow extends StatelessWidget {
   }
 }
 
+/// Shown in place of "#3" when the standing is unknown. Mirrors the web
+/// `UNKNOWN_RANK_TEXT`.
+@visibleForTesting
+const String kUnknownRankText = '—';
+
 /// Fill and foreground for a leaderboard rank pill, as `(background, text)`.
 ///
 /// Both medal fills are fixed metal hues, so their foregrounds are fixed too —
@@ -315,28 +320,51 @@ class _CatalogueEffortRow extends StatelessWidget {
 /// a LIGHT metal: it carries dark ink (6.87:1), not the white it shipped with
 /// (2.56:1). Bronze is dark enough for white (5.02:1). Only the crown is
 /// theme-aware, through [AppSemanticColors].
+///
+/// A NULL rank — the RPC did not answer for this effort — takes the same
+/// neutral pair as an unplaced rank, never the crown. It is the whole point of
+/// the nullable type: an absent standing used to arrive here as `1`, so the
+/// most flattering claim the chip can make was what having no answer produced
+/// (decisions §746).
 @visibleForTesting
-(Color, Color) rankPillColors(ThemeData theme, int rank) {
+(Color, Color) rankPillColors(ThemeData theme, int? rank) {
   if (rank == 1) {
     final semantic = AppSemanticColors.ofTheme(theme);
     return (semantic.crown, semantic.onCrown);
   }
-  if (rank <= 3) return (const Color(0xFF94A3B8), AppTheme.ink);
-  if (rank <= 10) return (const Color(0xFFB45309), Colors.white);
+  if (rank != null && rank >= 1) {
+    if (rank <= 3) return (const Color(0xFF94A3B8), AppTheme.ink);
+    if (rank <= 10) return (const Color(0xFFB45309), Colors.white);
+  }
   return (
     theme.colorScheme.surfaceContainerHighest,
     theme.colorScheme.onSurfaceVariant,
   );
 }
 
+/// Pill text: the ordinal, or the placeholder when the standing is unknown.
+@visibleForTesting
+String rankPillText(int? rank) =>
+    rank == null || rank < 1 ? kUnknownRankText : '#$rank';
+
 class _RankPill extends StatelessWidget {
-  final int rank;
+  final int? rank;
   const _RankPill({required this.rank});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (bg, fg) = rankPillColors(theme, rank);
-    return StatusPill(label: '#$rank', foreground: fg, fill: bg);
+    final pill =
+        StatusPill(label: rankPillText(rank), foreground: fg, fill: bg);
+    if (rank != null && rank! >= 1) return pill;
+    // The placeholder is a glyph, so the pill needs a real name spoken in
+    // its place rather than an em dash read aloud.
+    return Semantics(
+      container: true,
+      label: AppLocalizations.of(context).runSegEffortsRankUnknown,
+      excludeSemantics: true,
+      child: pill,
+    );
   }
 }

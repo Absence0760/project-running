@@ -8550,6 +8550,9 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => 'Clasificación no disponible';
+
+  @override
   String get runSegEffortsChecking => 'Comprobando segmentos…';
 
   @override

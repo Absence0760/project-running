@@ -8092,6 +8092,9 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get runSegEffortsRankUnknown => '順位を取得できません';
+
+  @override
   String get runSegEffortsChecking => 'セグメントを確認中…';
 
   @override

@@ -13976,6 +13976,12 @@ abstract class AppLocalizations {
   /// **'Could not update caption: {error}'**
   String clubPhotosCaptionError(String error);
 
+  /// Accessible name for a segment-effort rank pill whose standing the rank RPC did not return
+  ///
+  /// In en, this message translates to:
+  /// **'Rank unavailable'**
+  String get runSegEffortsRankUnknown;
+
   /// Loading state while segment efforts are computed
   ///
   /// In en, this message translates to:
