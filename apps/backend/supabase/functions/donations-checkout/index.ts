@@ -39,6 +39,7 @@ import {
   validateDonationAmount,
 } from './lib.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
+import { parseRedirectAllowlist } from '../_shared/redirect_allowlist.ts';
 
 interface DonationBody {
   fundraiser_id?: string;
@@ -59,10 +60,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
   if (!stripeSecretKey) {
     return Response.json({ error: 'stripe_not_configured' }, { status: 503 });
   }
-  const allowlist = (Deno.env.get('STRIPE_EVENTS_ALLOWED_REDIRECTS') ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const allowlist = parseRedirectAllowlist(Deno.env.get('STRIPE_EVENTS_ALLOWED_REDIRECTS'));
   if (allowlist.length === 0) {
     return Response.json({ error: 'stripe_not_configured' }, { status: 503 });
   }
