@@ -13673,6 +13673,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String rateLimitCreateChallenge(String wait) {
+    return 'Está a criar desafios demasiado depressa — aguarde $wait e tente novamente.';
+  }
+
+  @override
   String rateLimitAdoptPlan(String wait) {
     return 'Está a adotar planos demasiado depressa — aguarde $wait e tente novamente.';
   }
@@ -27388,6 +27393,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String rateLimitCreateReport(String wait) {
     return 'Você está enviando denúncias rápido demais — espere $wait e tente de novo.';
+  }
+
+  @override
+  String rateLimitCreateChallenge(String wait) {
+    return 'Você está criando desafios rápido demais — espere $wait e tente de novo.';
   }
 
   @override

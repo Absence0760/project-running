@@ -3945,6 +3945,15 @@
   "rateLimitCreateClub": "Du erstellst zu schnell Vereine – bitte warte {wait} und versuche es erneut.",
   "rateLimitCreateRoute": "Du erstellst zu schnell Routen – bitte warte {wait} und versuche es erneut.",
   "rateLimitCreateReport": "Du meldest zu schnell Inhalte – bitte warte {wait} und versuche es erneut.",
+  "rateLimitCreateChallenge": "Du erstellst zu schnell Challenges – bitte warte {wait} und versuche es erneut.",
+  "@rateLimitCreateChallenge": {
+    "description": "Rate-limit refusal when the create_challenge bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
   "rateLimitAdoptPlan": "Du übernimmst zu schnell Trainingspläne – bitte warte {wait} und versuche es erneut.",
   "rateLimitAdoptSessionPlan": "Du übernimmst zu schnell Session-Pläne – bitte warte {wait} und versuche es erneut.",
   "rateLimitAdoptGymRoutine": "Du übernimmst zu schnell Gym-Routinen – bitte warte {wait} und versuche es erneut.",

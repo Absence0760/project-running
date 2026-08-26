@@ -3945,6 +3945,15 @@
   "rateLimitCreateClub": "クラブの作成が速すぎます。{wait}待ってから、もう一度お試しください。",
   "rateLimitCreateRoute": "ルートの作成が速すぎます。{wait}待ってから、もう一度お試しください。",
   "rateLimitCreateReport": "報告の送信が速すぎます。{wait}待ってから、もう一度お試しください。",
+  "rateLimitCreateChallenge": "チャレンジの作成が速すぎます。{wait}待ってから、もう一度お試しください。",
+  "@rateLimitCreateChallenge": {
+    "description": "Rate-limit refusal when the create_challenge bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
   "rateLimitAdoptPlan": "プランの取り込みが速すぎます。{wait}待ってから、もう一度お試しください。",
   "rateLimitAdoptSessionPlan": "セッションプランの取り込みが速すぎます。{wait}待ってから、もう一度お試しください。",
   "rateLimitAdoptGymRoutine": "ジムルーティンの取り込みが速すぎます。{wait}待ってから、もう一度お試しください。",

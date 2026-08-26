@@ -17,6 +17,7 @@ const _buckets = <String>[
   'create_club',
   'create_route',
   'create_report',
+  'create_challenge',
   'clone_plan_template',
   'clone_public_plan',
   'clone_session_template',
@@ -52,6 +53,8 @@ void main() {
           "You're creating routes too quickly — please wait 21 minutes and try again.");
       expect(_fromError(en, 'create_report', 600),
           "You're filing reports too quickly — please wait 10 minutes and try again.");
+      expect(_fromError(en, 'create_challenge', 42),
+          "You're creating challenges too quickly — please wait 42 seconds and try again.");
       expect(_fromError(en, 'clone_plan_template', 300),
           "You're adopting plans too quickly — please wait 5 minutes and try again.");
       expect(_fromError(en, 'clone_public_plan', 45),
@@ -149,6 +152,7 @@ void main() {
           'create_club',
           'create_route',
           'create_report',
+          'create_challenge',
           'clone_plan_template',
           'clone_session_template',
           'clone_gym_routine_template',
@@ -158,7 +162,7 @@ void main() {
         ])
           _render(l10n, bucket, 42),
       };
-      expect(distinct.length, 9,
+      expect(distinct.length, 10,
           reason: '$locale reuses one sentence for two different activities');
       expect(
         _render(l10n, 'clone_plan_template', 42),
