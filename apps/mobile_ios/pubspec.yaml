@@ -105,9 +105,12 @@ dependencies:
   # so a build WITHOUT the operator's `google-services.json` /
   # `GoogleService-Info.plist` compiles + runs with push disabled (the bridge
   # no-ops). The native config files + the Android google-services gradle plugin
-  # / iOS APNs entitlement are operator-supplied deploy-time artifacts — see
-  # docs/features/email.md "Production ops". firebase_messaging pulls
-  # firebase_core transitively but we depend on it explicitly for the init call.
+  # are operator-supplied deploy-time artifacts — see docs/features/email.md
+  # "Production ops". The iOS `aps-environment` entitlement is NOT one: it is a
+  # checked-in capability declaration in Runner.entitlements, required by
+  # scripts/check_ios_native_declarations.mjs for as long as this dependency
+  # exists (decisions.md § 742). firebase_messaging pulls firebase_core
+  # transitively but we depend on it explicitly for the init call.
   firebase_core: ^3.6.0
   firebase_messaging: ^15.1.3
   # OS "Open with" / share-target for GPX/KML → route import (device-led,

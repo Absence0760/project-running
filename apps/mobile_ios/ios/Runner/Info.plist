@@ -83,8 +83,17 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- `audio` is what licenses the AVAudioSession to keep SOUNDING once the
+	     app backgrounds. `location` keeps the process alive for GPS but says
+	     nothing about audio, so without this entry the spoken cues stop the
+	     moment the runner pockets the phone — the case they exist for — while
+	     the recording carries on, which makes the failure silent. audio_cues.dart
+	     puts the TTS session in the `playback` category, which is the claim this
+	     entry backs; scripts/check_ios_native_declarations.mjs derives the
+	     requirement from that call rather than from this list. decisions.md § 742. -->
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>location</string>
 		<string>processing</string>
 	</array>

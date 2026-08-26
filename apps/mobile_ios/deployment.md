@@ -142,8 +142,19 @@ Required keys:
 
 - HealthKit
 - Sign in with Apple
-- Push Notifications (APNs)
-- Background Modes → Location updates + Audio (for TTS) + Background fetch
+- Push Notifications (APNs) — the `aps-environment` entitlement is already
+  committed, resolved from the per-configuration `APS_ENVIRONMENT` build
+  setting (`development` on Debug/Profile, `production` on Release). What this
+  step adds is the profile that carries the capability; after the first signed
+  archive, verify with `codesign -d --entitlements :- <exported>.app` that
+  `aps-environment` resolved to `production` rather than to the literal
+  `$(APS_ENVIRONMENT)`.
+- Background Modes → Location updates + Audio (for TTS) + Background processing.
+  **Not** Background fetch: `background_sync.dart` submits a
+  `BGProcessingTaskRequest` on iOS, which `processing` authorises and `fetch`
+  does not, and claiming a mode the binary never exercises is an App Review
+  rejection cause. `scripts/check_ios_native_declarations.mjs` holds the plist
+  to that (decisions.md § 742).
 - App Groups → `group.com.threkir.app` (shared between iOS app, watch app, and the future complication target — see [`apps/watch_ios/Complications/README.md`](../watch_ios/Complications/README.md))
 
 ---

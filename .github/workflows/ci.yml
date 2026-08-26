@@ -567,6 +567,51 @@ jobs:
           node scripts/check_watch_ble_uuids.mjs
           node --test scripts/check_watch_ble_uuids.test.mjs
 
+  ios-native-declarations:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: iOS capability declarations vs the code that needs them
+    # decisions.md § 742 — an iOS capability the Dart exercises but the
+    # Info.plist / Runner.entitlements does not declare fails SILENTLY: iOS
+    # denies the permission or refuses the session, the feature returns
+    # nothing, and no exception surfaces. Spoken cues stopping the moment the
+    # phone pockets, and a push token that never arrives, were both exactly
+    # that shape.
+    #
+    # A `group('iOS Info.plist')` in architecture_guards_test.dart used to read
+    # these files, but every assertion sat behind `if (!file.existsSync())
+    # return;` and the only package where they exist — mobile_ios — is not in
+    # the `test-packages` job's `melos exec --scope=` list. Twelve tests, zero
+    # executions: the § 741 shape, a verdict decided by the environment rather
+    # than by the code. Hence a repo-level job that always runs.
+    #
+    # The script DERIVES each requirement from the source that obliges it
+    # (§ 739 / § 740) rather than restating the plist, so deleting the code
+    # deletes the requirement and adding a capability fails until it is
+    # declared. Its own `node --test` suite runs beside it because a parser
+    # that silently stops matching passes vacuously.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # Drift first, then the tool's own suite — the suite's last two cases
+      # read the committed tree, so running it first would report "the guard is
+      # broken" over an ordinary undeclared capability.
+      - name: Info.plist + Runner.entitlements vs the Dart and Swift that need them
+        run: |
+          if ! node scripts/check_ios_native_declarations.mjs; then
+            echo "::error::apps/mobile_ios declares iOS capabilities that do not match the code that needs them — a missing UIBackgroundModes entry, a missing entitlement, a missing usage-description string, or a background mode nothing exercises. Nothing here is about Dart source, the twin invariant or the parity matrix."
+            echo "The failing line above names the source file whose behaviour obliges the declaration and the exact fix. decisions.md § 742 is why the requirement is derived from the code rather than listed."
+            exit 1
+          fi
+          if ! node --test scripts/check_ios_native_declarations.test.mjs; then
+            echo "::error::The iOS-declaration guard's own unit tests failed. The committed tree is fine — the check above just passed — so this is a defect in scripts/check_ios_native_declarations.mjs, not a missing declaration."
+            echo "Reproduce with: node --test scripts/check_ios_native_declarations.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
+
   lambda-alias-coverage:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -2214,6 +2259,7 @@ jobs:
       - build-web
       - parity-matrix
       - watch-ble-uuids
+      - ios-native-declarations
       - lambda-alias-coverage
       - build-watch-wear
       - build-firmware
