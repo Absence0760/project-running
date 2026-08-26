@@ -205,7 +205,8 @@ npm install                              # workspace bootstrap
 npm run dev --workspace=apps/web         # Dev server on :7777
 npm run build --workspace=apps/web       # Production build
 npm run preview --workspace=apps/web     # Preview build on :8888
-npm run check --workspace=apps/web       # Type-check
+npm run check --workspace=apps/web       # Type-check src/ + .svelte (svelte-check)
+npm run check:e2e-types --workspace=apps/web  # Type-check tests-e2e/ (tsc; § 749)
 ```
 
 (`pnpm i / pnpm dev` from inside `apps/web/` still work locally because of the historical `pnpm-lock.yaml`, but CI runs the npm path.)
