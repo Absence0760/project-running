@@ -74,6 +74,16 @@ select is_empty(
 );
 
 -- 6. Anon cannot read.
+-- Test 5 deleted the only snapshot in this transaction, so without
+-- filing a fresh one this assertion reads an empty table and passes
+-- whether or not the policy exists (decisions § 741). File the subject
+-- first, as the owner, so the empty result below is a refusal rather
+-- than an absence.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000f17a001"}';
+insert into fitness_snapshots (user_id, computed_at, source, vdot, acute_load, chronic_load, training_stress_bal)
+values ('00000000-0000-0000-0000-00000f17a001', now(), 'client',
+        51.5, 41.0, 36.0, 5.5);
+
 set local role anon;
 set local "request.jwt.claims" = '';
 select is_empty(

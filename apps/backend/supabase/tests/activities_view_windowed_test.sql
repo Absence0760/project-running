@@ -36,7 +36,7 @@
 
 begin;
 
-select plan(15);
+select plan(16);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -178,15 +178,24 @@ select throws_ok(
   'anon cannot read the activities view at all'
 );
 
--- 15. Nor write through it — denied either as a missing INSERT privilege
--- (42501, 20270324_001) or as a non-updatable UNION view (0A000); both are a
--- refusal, so pin "throws" rather than one code.
+-- 15. Nor write through it. The refusal that actually fires is 55000: a UNION
+-- view is not auto-updatable, so the rewriter rejects the INSERT before the
+-- privilege check is ever reached. This used to pin neither a code nor a
+-- message and so passed on any error at all, including a typo'd column name.
 select throws_ok(
   $$ insert into public.activities (id, user_id, kind, started_at, summary, is_public)
      values (gen_random_uuid(), '0000000a-0000-0000-0000-00000000000a', 'run', now(), '{}', true) $$,
-  null,
+  '55000',
   null,
   'anon cannot write through the activities view'
+);
+
+-- 16. The missing INSERT grant (20270324_001) is the second, independent
+-- refusal, and it needs asserting directly: the rewriter answers first, so no
+-- write attempt can ever observe it.
+select ok(
+  not has_table_privilege('anon', 'public.activities', 'INSERT'),
+  'anon holds no INSERT privilege on the activities view'
 );
 
 select * from finish();

@@ -2001,6 +2001,38 @@ test('template-clone / publish RPC wrappers translate P0001 via the shared helpe
 	}
 });
 
+test('sendDm translates the direct_messages send buckets via the shared helper', () => {
+	// Reason: migration 20270608_001 put two P0001 buckets on the
+	// `direct_messages` INSERT itself, so the /messages composer and
+	// SendRouteDialog can both hit one. Both surfaces render the thrown
+	// `e.message` verbatim in a role="alert" line, so a wrapper that
+	// re-threw the PostgrestError would print `rate limit exceeded for
+	// send_direct_message_burst, retry in 41s` at a sender. The 42501
+	// branch must still come first: a follow-graph refusal is a
+	// different answer from "too fast" and only one of them is worth
+	// waiting out.
+	const source = read('src/lib/core/data.ts');
+	const start = source.indexOf('export async function sendDm(');
+	assert.ok(start >= 0, 'Could not locate sendDm — rename?');
+	const end = source.indexOf('export async function markDmThreadRead(', start);
+	assert.ok(end > start, 'Could not locate the markDmThreadRead landmark after sendDm');
+	const body = source.slice(start, end);
+	assert.match(
+		body,
+		/rateLimitErrorMessage\(/,
+		'sendDm must call rateLimitErrorMessage — every P0001 bucket goes through the shared helper.',
+	);
+	assert.match(
+		body,
+		/if\s*\(friendly\)\s*throw\s+new\s+Error\(friendly\)/,
+		'sendDm must throw the friendly string when the helper recognises the bucket.',
+	);
+	assert.ok(
+		body.indexOf("=== '42501'") < body.indexOf('rateLimitErrorMessage('),
+		'the 42501 follow-graph branch must be checked before the rate-limit branch.',
+	);
+});
+
 test('accessibility: sidebar profile popover has focus trap + ESC close + focus return', () => {
 	// Reason: audit/accessibility High — WCAG 2.1.2 (No Keyboard
 	// Trap, paradoxically — the prior version let Tab escape the

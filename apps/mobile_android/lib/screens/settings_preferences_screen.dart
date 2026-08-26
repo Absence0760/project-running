@@ -649,16 +649,13 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   Future<void> _editLanguage() async {
     final t = AppLocalizations.of(context);
-    // '' is the "follow device locale" sentinel; the rest are canonical tags.
-    const tags = ['', 'en', 'de', 'fr', 'es', 'ja', 'pt-BR'];
+    // '' is the "follow device locale" sentinel; the rest are derived from
+    // supportedLocales rather than listed, because a hand-written list is how
+    // European Portuguese came to ship in the binary while being unpickable.
+    final tags = ['', ...supportedLocales.map(localeToTag)];
     final labels = [
       t.prefsLanguageSystem,
-      localeLabels['en']!,
-      localeLabels['de']!,
-      localeLabels['fr']!,
-      localeLabels['es']!,
-      localeLabels['ja']!,
-      localeLabels['pt-BR']!,
+      ...supportedLocales.map((l) => localeLabels[localeToTag(l)]!),
     ];
     final current = widget.preferences.locale == null
         ? ''

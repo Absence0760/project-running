@@ -516,6 +516,27 @@ jobs:
         run: |
           node scripts/check_parity_pair_registry.mjs
           node --test scripts/check_parity_pair_registry.test.mjs
+      # Lives HERE and not in `parity-types` — a parity.md edit is a docs-only
+      # diff, so `needs.changes.outputs.code` is false, every code-gated job
+      # skips, and the CI gate counts a skip as a pass. A guard for this file
+      # in a gated job would never run on the PRs it polices. Same reason the
+      # job comment above gives for the two guards it already carries.
+      #
+      # Drift first, then the tool's own suite — this suite's last two cases
+      # read the committed matrix, so running it first would report "the guard
+      # is broken" over an ordinary stale column.
+      - name: parity.md iOS column matches its one stated rule
+        run: |
+          if ! node scripts/check_parity_ios_column.mjs; then
+            echo "::error::docs/product/parity.md's iOS column does not match the rule the document states for it, or that rule is stated in more than one place. Nothing here is about the TS<->Dart parity pairs or the matrix's table structure — those are the two other guards in this job."
+            echo "The failing line above names the row (or the second statement) and the fix. The rule itself is the <!-- parity-ios-rule --> block in the doc; decisions § 739 is why it has exactly one home."
+            exit 1
+          fi
+          if ! node --test scripts/check_parity_ios_column.test.mjs; then
+            echo "::error::The iOS-column guard's own unit tests failed. The matrix itself is fine — the check above just passed — so this is a defect in scripts/check_parity_ios_column.mjs, not column drift."
+            echo "Reproduce with: node --test scripts/check_parity_ios_column.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.21.0
         with:
           channel: stable
@@ -1585,12 +1606,31 @@ jobs:
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
+      # For the refusal-assertion guard below. It imports nothing outside
+      # node:*, so no workspace install is needed — only a pinned runtime.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
       - name: Run pgtap RLS suite
         working-directory: apps/backend
         run: supabase test db --local
+      # A green pgtap run says every assertion passed, not that every
+      # assertion asked anything. Under RLS a refused SELECT returns no rows
+      # rather than erroring, so a refusal assertion and a fixture that never
+      # inserted look identical (decisions.md 741). This re-runs each refusal
+      # assertion with row-level access control removed and fails if it still
+      # passes.
+      - name: Mutation-check the pgtap refusal assertions
+        run: |
+          if ! node --test apps/backend/scripts/check_pgtap_refusal_assertions.test.mjs; then
+            echo "::error::The pgtap refusal-assertion guard's own tests fail."
+            echo "Fix apps/backend/scripts/check_pgtap_refusal_assertions.mjs (or its tests) first."
+            exit 1
+          fi
+          node apps/backend/scripts/check_pgtap_refusal_assertions.mjs
 
   e2e-web:
     needs: changes
