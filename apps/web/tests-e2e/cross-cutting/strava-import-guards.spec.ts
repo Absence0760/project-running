@@ -20,14 +20,23 @@ import { USER_A } from '../fixtures/users';
  *      must NOT be treated as "allow any redirect".)
  *   7. POST with auth + `sync` + `lookbackDays` out of range → 400.
  *
- * The allowlist content check (a redirect_uri NOT in the list →
- * 400 `invalid_redirect_uri`) is exercised in production via the
- * `STRAVA_ALLOWED_REDIRECTS` env. Local dev / CI don't set this
- * secret (the live OAuth flow can't run locally anyway), so we pin
- * the fail-closed-when-unset path here. A regression that
- * silently fell through to "allow any" — a single bad refactor of
- * `if (allowed.length === 0) return 503` — would surface
- * immediately.
+ * Of the allowlist's three branches this lane can only ever reach
+ * guard 6, and that is deliberate. The sharded suite runs against the
+ * auto-started edge runtime, which carries no
+ * `STRAVA_ALLOWED_REDIRECTS` — so every `connect` posted
+ * here short-circuits at the 503 before the comparison, whatever
+ * `redirect_uri` it claims. Setting the var in this job would flip
+ * this test rather than add coverage. (The `edge-functions` CI job
+ * does set it, for a separately-booted function host that no
+ * `strava-import` test posts to.)
+ *
+ * The other two branches — a redirect IN the list accepted, one NOT
+ * in it refused with 400 `invalid_redirect_uri` — are pinned pure, in
+ * `apps/backend/supabase/functions/_shared/redirect_allowlist.test.ts`,
+ * which also source-guards that this handler still routes through the
+ * gate and still does so before the token exchange. Accepting means
+ * proceeding to Strava's `/oauth/token`, so a wire-level positive test
+ * would make CI depend on a third party.
  */
 
 const FUNCTION_URL_PATH = '/functions/v1/strava-import';
