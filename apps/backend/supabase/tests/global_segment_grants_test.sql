@@ -17,10 +17,12 @@
 --      here on the write side too.
 --   4. Functional end-to-end: an anon caller really can read an active
 --      catalogue segment (grant + policy compose).
+--   5. Both rank RPCs are reachable by anon — the EXECUTE grant AND the
+--      functions their SECURITY INVOKER bodies name (20270609_001).
 
 begin;
 
-select plan(10);
+select plan(16);
 
 -- (1) global_segments — anon reads, authenticated (where the admin allow-list
 --     lives) gets the curator DML surface.
@@ -106,6 +108,70 @@ select is_empty(
 );
 
 reset role;
+
+-- (5) Both rank RPCs must be answerable by a logged-out reader of a public run.
+--     20270411_001 granted the catalogue twin to `authenticated` only while
+--     20270512_001 granted `anon` SELECT on both catalogue tables, so anon got
+--     the effort rows and 42501'd on the ranks over them. Both clients then
+--     degraded that missing row to `#1`, painting a crown on every catalogue
+--     chip for every anonymous visitor (decisions §746). Fixed by 20270609_001.
+select ok(
+  has_function_privilege('anon', 'public.global_segment_effort_ranks(uuid)', 'EXECUTE'),
+  'anon can execute global_segment_effort_ranks — SECURITY INVOKER means it '
+  'reads under the caller''s own RLS, so it asks only about rows anon may '
+  'already SELECT'
+);
+
+-- The route-segment sibling has been anon+authenticated since 20261223_001.
+-- The two answer the same question over two tables and must not disagree about
+-- who may ask it — that divergence IS the defect above.
+select ok(
+  has_function_privilege('anon', 'public.global_segment_effort_ranks(uuid)', 'EXECUTE')
+    = has_function_privilege('anon', 'public.segment_effort_ranks(uuid)', 'EXECUTE')
+  and has_function_privilege('authenticated', 'public.global_segment_effort_ranks(uuid)', 'EXECUTE')
+    = has_function_privilege('authenticated', 'public.segment_effort_ranks(uuid)', 'EXECUTE'),
+  'the catalogue rank RPC and its route-segment sibling grant the same roles'
+);
+
+-- (6) The EXECUTE grant is necessary and not sufficient. Both bodies are
+--     SECURITY INVOKER, so every function they NAME is ACL-checked against the
+--     calling role — the principle 20270402000001 wrote down for this exact
+--     function. 20270523_001 added `not is_blocked_either_way(auth.uid(), ...)`
+--     to both, and 20261108_001 had revoked anon's EXECUTE on it, so an anon
+--     caller was admitted into the body and then denied inside it. The
+--     predicate is only evaluated once the rival subquery yields a row, so the
+--     failure landed exactly on the efforts the runner had NOT won — which is
+--     precisely where `?? 1` then drew the crown. Both now call
+--     private.viewer_blocks, which anon may execute (20270402000001).
+select ok(
+  not has_function_privilege('anon', 'public.is_blocked_either_way(uuid,uuid)', 'EXECUTE'),
+  'anon still has no EXECUTE on is_blocked_either_way — 20261108_001''s '
+  'anti-oracle revoke stands; the fix routes around it, it does not undo it'
+);
+select ok(
+  has_function_privilege('anon', 'private.viewer_blocks(uuid)', 'EXECUTE'),
+  'anon can execute private.viewer_blocks — the definer wrapper both rank '
+  'RPCs now name instead'
+);
+select is(
+  (select count(*)::int
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+    where p.proname in ('segment_effort_ranks', 'global_segment_effort_ranks')
+      and pg_get_functiondef(p.oid) like '%is_blocked_either_way%'),
+  0,
+  'neither rank RPC names is_blocked_either_way directly — a SECURITY INVOKER '
+  'body that does is unexecutable by anon whatever its EXECUTE grant says'
+);
+select is(
+  (select count(*)::int
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+    where p.proname in ('segment_effort_ranks', 'global_segment_effort_ranks')
+      and pg_get_functiondef(p.oid) like '%viewer_blocks%'),
+  2,
+  'both rank RPCs apply the block filter through private.viewer_blocks'
+);
 
 select * from finish();
 rollback;

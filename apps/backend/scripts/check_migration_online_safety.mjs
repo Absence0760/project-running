@@ -199,7 +199,16 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // the migration's own header: CREATE TRIGGER holds SHARE ROW EXCLUSIVE, which
 // pauses concurrent writes to that one table for a catalogue-only O(1) change
 // and never blocks a reader.
-export const GRANDFATHER_CUTOFF = '20270608';
+// Bumped to 20270609 for
+// 20270609_001_segment_effort_ranks_anon_reachable.sql, which re-emits the two
+// rank RPC bodies to call private.viewer_blocks instead of naming
+// is_blocked_either_way (whose anon EXECUTE grant 20261108_001 revoked, making
+// both 42501 for a logged-out caller since 20270523_001) and grants anon
+// EXECUTE on the catalogue twin. Two function bodies plus one grant — no table
+// DDL, no constraint, so the scanner passes it with zero violations after this
+// bump too; the bump is the max-version bookkeeping this file's own test
+// enforces, not an exemption.
+export const GRANDFATHER_CUTOFF = '20270609';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
