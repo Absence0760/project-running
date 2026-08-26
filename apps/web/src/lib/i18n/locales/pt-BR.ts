@@ -7,6 +7,18 @@ export const messages = {
 	'common.unsavedTitle': 'Descartar as alterações?',
 	'common.unsavedBody': 'Você tem alterações não salvas. Sair sem salvar?',
 	'common.discard': 'Descartar',
+	"rateLimit.createClub": "Você está criando clubes rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.createRoute": "Você está criando rotas rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.createReport": "Você está enviando denúncias rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.adoptPlan": "Você está adotando planos rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.adoptSessionPlan": "Você está adotando planos de sessão rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.adoptGymRoutine": "Você está adotando rotinas de academia rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.publishRoutine": "Você está publicando rotinas rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.sendMessage": "Você está enviando mensagens rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.generic": "Você está fazendo isso rápido demais — espere {wait} e tente de novo.",
+	"rateLimit.waitSeconds": "{n, plural, one {# segundo} other {# segundos}}",
+	"rateLimit.waitMinutes": "{n, plural, one {# minuto} other {# minutos}}",
+	"rateLimit.waitSoon": "um momento",
 	// The one `runs.activity_type` vocabulary — every surface that names an
 	// activity resolves through `activityTypeLabel` (runs/activity_type.ts).
 	// Value domain is the `runs_activity_type_check` CHECK constraint.
