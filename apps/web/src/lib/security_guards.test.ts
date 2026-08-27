@@ -1344,7 +1344,12 @@ test('revenuecat-webhook verifies HMAC before constructing the Supabase client',
 	const source = read('../backend/supabase/functions/revenuecat-webhook/index.ts');
 	const lines = source.split('\n');
 	const tseqLine = lines.findIndex((l) => /timingSafeEqual\s*\(/.test(l));
-	const createLine = lines.findIndex((l) => /createClient\s*\(/.test(l));
+	// The optional type argument is not cosmetic: every Edge Function client
+	// is `createClient<Database>(...)` since decisions § 762, and a pattern
+	// that only matched the bare call stopped locating it at all — this guard
+	// failed loudly on that, which is the behaviour the `!== -1` assert below
+	// exists to produce, but a narrower ordering guard could have gone quiet.
+	const createLine = lines.findIndex((l) => /createClient\s*(?:<[^>]*>)?\s*\(/.test(l));
 	assert.notStrictEqual(
 		tseqLine,
 		-1,
