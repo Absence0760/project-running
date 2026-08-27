@@ -2596,7 +2596,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String runDetailRunTooShortSplit(String unit) {
-    return 'Corrida curta demais para um parcial completo de $unit';
+    return 'Corrida demasiado curta para um parcial completo de $unit';
   }
 
   @override
@@ -5132,10 +5132,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get liveSpectatorStatRaceTime => 'Tempo de prova';
 
   @override
-  String get liveSpectatorStatTimer => 'Cronômetro';
+  String get liveSpectatorStatTimer => 'Cronómetro';
 
   @override
-  String get liveSpectatorStatTimerStale => 'Cronômetro, último sinal';
+  String get liveSpectatorStatTimerStale => 'Cronómetro, último sinal';
 
   @override
   String get liveSpectatorRecentPace => 'Recente';
@@ -5356,7 +5356,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planNewRecent5kWarning =>
-      'Até si confirmar, os ritmos permanecem na estimativa conservadora baseada na meta. Basear-se num resultado antigo pode prescrever ritmos rápidos demais para quem está a voltar.';
+      'Até confirmar, os ritmos permanecem na estimativa conservadora baseada na meta. Basear-se num resultado antigo pode prescrever ritmos demasiado rápidos para quem está a voltar.';
 
   @override
   String get planNewOverrideHint => 'Substituir o total de semanas';
@@ -5377,7 +5377,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planNewRaceTooSoon =>
-      'Essa corrida está próxima demais para montar um plano completo, então as datas abaixo são as predefinidas.';
+      'Essa corrida está demasiado próxima para montar um plano completo, então as datas abaixo são as predefinidas.';
 
   @override
   String get planNewRaceUnreadable =>
@@ -5669,7 +5669,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String planDetailDriftOverFlag(int pct) {
-    return 'Esta semana $pct% acima do plano — pegue leve nos dias fáceis para não cavar um buraco de fadiga.';
+    return 'Esta semana $pct% acima do plano — vá com calma nos dias fáceis para não cavar um buraco de fadiga.';
   }
 
   @override
@@ -5683,7 +5683,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planDetailMissedLongTaper =>
-      'Perdeu um longão, mas está em polimento — deixe pra lá e chegue descansado para a prova.';
+      'Perdeu um longão, mas está em polimento — deixe para lá e chegue descansado para a prova.';
 
   @override
   String get planDetailMissedLongRecovery =>
@@ -8253,7 +8253,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get fitnessStatVo2MaxTooltip =>
-      'O seu motor aeróbico: quanto oxigênio o seu corpo consegue utilizar por minuto. Quanto maior, melhor a forma.';
+      'O seu motor aeróbico: quanto oxigénio o seu corpo consegue utilizar por minuto. Quanto maior, melhor a forma.';
 
   @override
   String get fitnessStatVdot => 'VDOT';
@@ -9647,7 +9647,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get guidedFirst15Description =>
-      'Novo na corrida? Três séries de um minuto correndo e um minuto caminhando, mais aquecimento e desaquecimento. Uma entrada suave; todo mundo começa aqui.';
+      'Novo na corrida? Três séries de um minuto correndo e um minuto caminhando, mais aquecimento e desaquecimento. Uma entrada suave; toda a gente começa aqui.';
 
   @override
   String get guidedFirst15Cue0 =>
@@ -11755,7 +11755,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get roadbookTitle => 'Roadbook';
 
   @override
-  String get roadbookCrewSheet => 'Roadbook (planilha da equipa)';
+  String get roadbookCrewSheet => 'Roadbook (folha da equipa)';
 
   @override
   String get roadbookGoalTime => 'Tempo-alvo';
@@ -12447,7 +12447,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeOfflinePackTooLarge =>
-      'Esta rota é grande demais para guardar offline';
+      'Esta rota é demasiado grande para guardar offline';
 
   @override
   String get badgesSectionTitle => 'Conquistas';

@@ -201,6 +201,10 @@ const BRAZILIAN_ONLY = [
 	"registrar", "compartilhar", "baixar", "ônibus", "geladeira", "xícara",
 	"aplicativo", "cadastrar", "planejar", "gerenciar", "tênis", "quilômetro",
 	"gênero", "acessar", "câmera", "escanear",
+	// `quilômetro` and `gênero` were one class caught one word at a time: every
+	// Brazilian proparoxytone that takes ô/ê where Portugal takes ó/é.
+	"cronômetro", "oxigênio", "autônomo", "autônoma",
+	"planilha", "usuário", "deletar", "esporte",
 ];
 const EUROPEAN_ONLY = [
 	"palavra-passe", "ecrã", "ficheiro", "telemóvel", "passadeira", "partilhar",
