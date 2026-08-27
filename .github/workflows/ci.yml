@@ -458,6 +458,30 @@ jobs:
             echo "Reproduce locally with: npm ci && npm run test:tsconfig-coverage --workspace=apps/web."
             exit 1
           fi
+      # And the same hole once more OUTSIDE apps/web, which § 752 left open on
+      # purpose: this repo has no root tsconfig.json at all, so the guard
+      # scripts under scripts/ and apps/backend/scripts/ — the files whose
+      # verdicts every merge depends on — were in no tsc program, along with
+      # the CloudFront Function that runs at the edge on every request to the
+      # site. Two roots because cloudfront-js-2.0 is neither Node nor a
+      # browser; decisions § 757.
+      - name: Repo-root script + CloudFront tree typecheck
+        run: |
+          if ! npm run check:script-types; then
+            echo "::error::The repo's own Node scripts (scripts/, apps/backend/scripts/, .github/, infra/) do not typecheck. Nothing here involves the migrations, the schema or the generated row types — read the TS error above."
+            echo "Reproduce locally with: npm ci && npm run check:script-types."
+            exit 1
+          fi
+          if ! npm run check:cloudfront-types; then
+            echo "::error::infra/modules/web-stack/functions does not typecheck against the cloudfront-js-2.0 runtime, which has no Promise, no timers and no fetch. That code runs at the edge on every request to the site; nothing here is about the schema or the generated types."
+            echo "Reproduce locally with: npm ci && npm run check:cloudfront-types."
+            exit 1
+          fi
+          if ! npm run check:tsconfig-coverage; then
+            echo "::error::A compilable file outside apps/web is inside no tsconfig root, so nothing typechecks it. The failing assertion names the files."
+            echo "Reproduce locally with: npm ci && npm run check:tsconfig-coverage."
+            exit 1
+          fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
