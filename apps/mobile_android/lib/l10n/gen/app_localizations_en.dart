@@ -6688,6 +6688,38 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String integrationsSyncPartial(int imported, int skipped) {
+    return 'Sync stopped early. $imported new, $skipped already present — some activities were not fetched. Sync again to finish.';
+  }
+
+  @override
+  String integrationsSyncPartialRateLimited(int imported, int skipped) {
+    return 'Strava is limiting requests, so the sync stopped early. $imported new, $skipped already present. Try again in about 15 minutes.';
+  }
+
+  @override
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  ) {
+    return 'Synced. $imported new, $skipped already present, $failed failed.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartial(int imported, int skipped) {
+    return 'Strava connected, but the first import stopped early. $imported imported, $skipped already present — sync again to finish.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  ) {
+    return 'Strava connected, but Strava is limiting requests so the first import stopped early. $imported imported, $skipped already present. Sync again in about 15 minutes.';
+  }
+
+  @override
   String integrationsSyncFailed(Object error) {
     return 'Sync failed: $error';
   }

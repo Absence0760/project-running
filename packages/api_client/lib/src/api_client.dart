@@ -5766,18 +5766,18 @@ class ApiClient {
   }
 
   /// Trigger a manual Strava backfill via the `strava-import` Edge
-  /// Function. Mirrors the web `syncStrava` helper. Returns the raw
-  /// response payload so the caller can surface
-  /// `{imported, skipped, failed}` in a toast.
-  Future<Map<String, dynamic>> syncStrava({int lookbackDays = 90}) async {
+  /// Function. Mirrors the web `syncStrava` helper.
+  ///
+  /// The response is GRADED, not handed back raw: the function reports
+  /// whether it reached the end of the lookback window, and a caller that
+  /// reads only the counts renders a truncated import as a finished one.
+  /// See `StravaSyncResult` for why that costs runs rather than a click.
+  Future<StravaSyncResult> syncStrava({int lookbackDays = 90}) async {
     final res = await _client.functions.invoke(
       'strava-import',
       body: {'action': 'sync', 'lookbackDays': lookbackDays},
     );
-    final data = res.data;
-    if (data is Map<String, dynamic>) return data;
-    if (data is Map) return Map<String, dynamic>.from(data);
-    return const {};
+    return stravaSyncResultFromResponse(res.data);
   }
 
   /// Complete the in-app Strava OAuth exchange. The caller (Settings)
@@ -5787,8 +5787,11 @@ class ApiClient {
   /// to the `strava-import` EF with `action: 'connect'`. The EF
   /// validates the redirect against `STRAVA_ALLOWED_REDIRECTS`, swaps
   /// the code for a refresh token, and writes the row to `integrations`.
-  /// Returns the raw response so callers can surface success/failure.
-  Future<Map<String, dynamic>> completeStravaOAuth({
+  /// The connect call triggers a 90-day backfill of its own, so it answers
+  /// in the same graded shape as [syncStrava] — a first import Strava
+  /// throttled is partial, and saying "connected, N imported" is what stops
+  /// the runner coming back for the rest.
+  Future<StravaSyncResult> completeStravaOAuth({
     required String code,
     required String scope,
     required String redirectUri,
@@ -5802,10 +5805,7 @@ class ApiClient {
         'redirect_uri': redirectUri,
       },
     );
-    final data = res.data;
-    if (data is Map<String, dynamic>) return data;
-    if (data is Map) return Map<String, dynamic>.from(data);
-    return const {};
+    return stravaSyncResultFromResponse(res.data);
   }
 
   /// Lightweight count of a user's runs, capped by [limit]. The coach
