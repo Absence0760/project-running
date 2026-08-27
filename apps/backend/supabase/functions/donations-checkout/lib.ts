@@ -59,11 +59,18 @@ export function donationIdempotencyKey(donationId: string): string {
   return `donations-checkout:${donationId}`;
 }
 
-export interface DonationCheckoutMetadata {
+/// A type ALIAS, not an interface. Stripe's `MetadataParam` is an index
+/// signature (`{ [k: string]: string | number | null }`), and TypeScript
+/// gives an object-literal type alias an implicit index signature while
+/// an interface gets none — so as an interface this was not assignable
+/// to the `metadata` field of the params it is built into, the same
+/// shape decisions § 762 found on `delete-account`'s `ThirdPartyOutcomes`.
+/// Nothing about the values changed; they were always four strings.
+export type DonationCheckoutMetadata = {
   kind: 'donation';
   donation_id: string;
   fundraiser_id: string;
-}
+};
 
 export interface BuildDonationSessionArgs {
   amountCents: number;
