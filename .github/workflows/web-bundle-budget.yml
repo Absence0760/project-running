@@ -61,11 +61,31 @@ env:
   # still the durable follow-up and is where this 126 KB should be
   # revisited — a self-hosted worker + shared pair would de-duplicate it.
   #
+  # 2026-08-27 — total raised 2400 → 2700. A seventh locale catalogue
+  # (European Portuguese, decisions § 755) landed. Measured total 2462 KB
+  # against the 2376 KB the previous round measured on the same tree: the
+  # whole +86 KB is that one catalogue, and the largest single chunk is
+  # unchanged at 248 KB (byte-identical hash), so this is neither feature
+  # sprawl nor a rogue dep. It cannot be trimmed without deleting the
+  # feature: a catalogue is pure translated string data.
+  #
+  # Worth stating plainly, because it will recur: this metric sums ALL
+  # chunks (see above), and locale catalogues scale linearly with locale
+  # count at ~86 KB gzipped each — ~609 KB, roughly a QUARTER of the
+  # measured bundle, is translation data of which any one reader downloads
+  # exactly one. Every future locale costs another ~86 KB against a
+  # ceiling whose purpose is catching payload drift and rogue deps. That
+  # tension is real and belongs in the dedicated bundle-trim pass tracked
+  # in followups.md, which should decide whether catalogues are measured
+  # apart from code rather than having this ceiling climb per language.
+  # Re-set to ~9.7% headroom over 2462, matching the 2026-07-11 and
+  # 2026-07-27 precedents.
+  #
   # 33% headroom on largest (≥350) → keeps the main entry bundle from
   # quietly drifting toward code-split territory. Bump deliberately when
   # the right answer is "ship the feature", not casually because the job
   # failed.
-  MAX_TOTAL_KB: 2400
+  MAX_TOTAL_KB: 2700
   MAX_LARGEST_CHUNK_KB: 350
 
 jobs:
