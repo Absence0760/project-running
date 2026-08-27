@@ -126,13 +126,13 @@ void main() {
 
     await tester.tap(find.descendant(
       of: find.byType(SimpleDialog),
-      matching: find.text(localeLabels['pt']!),
+      matching: find.text(localeLabels['pt-PT']!),
     ));
     await tester.pumpAndSettle();
 
-    expect(prefs.locale, const Locale('pt'));
+    expect(prefs.locale, const Locale('pt', 'PT'));
     expect(sync.universalWrites, [
-      {'locale': 'pt'},
+      {'locale': 'pt-PT'},
     ]);
   });
 }

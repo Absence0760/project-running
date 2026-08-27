@@ -11,21 +11,24 @@ import 'dart:ui';
 /// negotiated, falling back to English.
 
 /// The seven locales we ship. Portuguese ships TWICE, as two real catalogues:
-/// `app_pt.arb` is European Portuguese and `app_pt_BR.arb` Brazilian, and 247
-/// of their 3478 strings genuinely differ ("partilhar" vs "compartilhar", "em
-/// direto" vs "ao vivo", "Modo passadeira" vs "Modo esteira"). `pt` was absent
-/// from this list until 2026-08-06, which made every one of those 3478
-/// translated strings unreachable: `negotiateLocale` mapped base `pt` — and so
-/// `pt-PT` — onto `pt-BR`. Web ships only `pt-BR`, so a pt-PT reader still gets
-/// Brazilian there; that is a missing web catalogue, not a reason to keep a
-/// finished mobile one dark.
+/// European Portuguese and Brazilian, differing on 1164 of their 3793 strings
+/// ("partilhar" vs "compartilhar", "em direto" vs "ao vivo", "ecrã" vs "tela").
+///
+/// European Portuguese is tagged `pt-PT` here, matching web's `pt-PT.ts`, the
+/// wrist's `values-b+pt+PT` and iOS's `CFBundleLocalizations`. Its ARB file is
+/// nonetheless `app_pt.arb`: gen-l10n REFUSES to generate when a country-coded
+/// catalogue exists without a bare base ("Arb file for a fallback, pt, does not
+/// exist"), so the base file is the tool's, and the tag is ours. The generated
+/// delegate resolves `Locale('pt', 'PT')` through that base, and the
+/// locale-reach guard holds the two spellings together through `arbTagOverride`
+/// — the same shape it already used for the plist.
 const List<Locale> supportedLocales = <Locale>[
   Locale('en'),
   Locale('de'),
   Locale('fr'),
   Locale('es'),
   Locale('ja'),
-  Locale('pt'),
+  Locale('pt', 'PT'),
   Locale('pt', 'BR'),
 ];
 
@@ -39,7 +42,7 @@ const Map<String, String> localeLabels = <String, String>{
   'fr': 'Français',
   'es': 'Español',
   'ja': '日本語',
-  'pt': 'Português (Portugal)',
+  'pt-PT': 'Português (Portugal)',
   'pt-BR': 'Português (Brasil)',
 };
 
@@ -51,22 +54,24 @@ const Map<String, Locale> _exact = <String, Locale>{
   'fr': Locale('fr'),
   'es': Locale('es'),
   'ja': Locale('ja'),
-  'pt': Locale('pt'),
+  'pt-pt': Locale('pt', 'PT'),
   'pt-br': Locale('pt', 'BR'),
 };
 
 // Base-language fallback: a tag we don't carry exactly (fr-CA, de-AT) still
 // resolves to the one variant we ship for that language. Portuguese is the
-// exception with two variants, and its base maps to the EUROPEAN one: `pt-PT`
-// and `pt-AO` (Angola uses the European orthography) reach it via this table
-// while `pt-BR` matches `_exact` first, so Brazil is unaffected.
+// exception with two variants, and its base maps to the EUROPEAN one, matching
+// web's `BASE_TO_LOCALE` (locale.ts): `pt-AO`, `pt-MZ` and `pt-CV` share
+// Portugal's orthography and have nowhere else to land, while `pt-BR` — which
+// Android, iOS and every browser report with the region — matches `_exact`
+// first, so Brazil is unaffected.
 const Map<String, Locale> _baseToLocale = <String, Locale>{
   'en': Locale('en'),
   'de': Locale('de'),
   'fr': Locale('fr'),
   'es': Locale('es'),
   'ja': Locale('ja'),
-  'pt': Locale('pt'),
+  'pt': Locale('pt', 'PT'),
 };
 
 // RTL base languages. None of the current six is RTL, but the switch-point
