@@ -10,19 +10,13 @@
 
 import { env } from '$env/dynamic/public';
 import { supabase } from '../core/supabase';
+import { parseStravaSyncResult, type StravaSyncResult } from './strava_sync_result';
 
 // Read via `$env/dynamic/public` rather than `static/public` so a build
 // without `PUBLIC_STRAVA_CLIENT_ID` set falls back gracefully to "not
 // configured" instead of crashing the page with a 500. The static
 // import would have failed the entire SvelteKit build.
 const PUBLIC_STRAVA_CLIENT_ID = env.PUBLIC_STRAVA_CLIENT_ID ?? '';
-
-export interface StravaSyncResult {
-	imported: number;
-	skipped: number;
-	failed: number;
-	athlete_id?: string;
-}
 
 /// Returns `true` when the Vite build has a public Strava client ID
 /// baked in. The UI uses this to decide whether to show a real Connect
@@ -135,7 +129,10 @@ export async function completeStravaOAuth(
 		body: { action: 'connect', code, scope, redirect_uri },
 	});
 	if (fnError) throw fnError;
-	return data as StravaSyncResult;
+	// Graded, not cast: the function reports whether it walked the whole
+	// lookback window, and a cast would let a body that says nothing about
+	// that render as a finished import. See `strava_sync_result.ts`.
+	return parseStravaSyncResult(data);
 }
 
 /// Trigger a manual sync for an already-connected user. Safe to call
@@ -146,5 +143,5 @@ export async function syncStrava(lookbackDays = 90): Promise<StravaSyncResult> {
 		body: { action: 'sync', lookbackDays },
 	});
 	if (error) throw error;
-	return data as StravaSyncResult;
+	return parseStravaSyncResult(data);
 }
