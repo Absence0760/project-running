@@ -3982,5 +3982,7 @@
   "challengesSuffixDays": "Tage",
   "challengesErrTitle": "Gib der Challenge einen Titel.",
   "challengesErrGoal": "Ziel: positive Zahl eingeben",
+  "challengesGoalPreview": "Teilnehmende sehen {value}",
+  "challengesGoalStreakCeiling": "In diesen Zeitraum passen höchstens {n} aktive Tage.",
   "challengesErrWindow": "Das Ende muss nach dem Beginn liegen."
 }

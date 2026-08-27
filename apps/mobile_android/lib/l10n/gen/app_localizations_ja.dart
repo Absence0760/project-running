@@ -13143,6 +13143,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String get challengesSuffixDays => '日';
 
   @override
+  String challengesGoalPreview(String value) {
+    return '参加者には $value と表示されます';
+  }
+
+  @override
+  String challengesGoalStreakCeiling(int n) {
+    return 'この期間に収まるアクティブな日数は最大 $n 日です。';
+  }
+
+  @override
   String get challengesErrTitle => 'チャレンジにタイトルを付けてください。';
 
   @override

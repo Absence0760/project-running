@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../activity_type_labels.dart';
 import '../auth_error.dart';
+import '../challenge_goal.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
@@ -30,47 +31,27 @@ const List<String> kChallengeScopes = [
   'group_goal',
 ];
 
-/// The unit a goal for [metric] is typed in.
+/// The unit a goal for [metric] is typed in, named in the reader's language.
 ///
-/// The column stores metres, seconds or a bare count, which is not what a
-/// person types: nobody enters a 100 km challenge as `100000`. The suffix is
-/// what makes the field answerable, and [challengeGoalToStored] is its
-/// inverse — the same entry/exit split `UnitFormat.paceSecPerUnit` /
-/// `paceSecPerKm` keeps for a typed pace.
+/// The kind comes from [challengeGoalUnit] (the shared pair); only the
+/// resolution to a displayable label lives here, because two of the five are
+/// localised words and the other two are the unit-preference symbols.
 String challengeGoalSuffix(
   AppLocalizations l10n,
   String metric,
   DistanceUnit unit,
 ) {
-  switch (metric) {
-    case 'duration':
+  switch (challengeGoalUnit(metric)) {
+    case ChallengeGoalUnit.hours:
       return l10n.challengesSuffixHours;
-    case 'vert':
+    case ChallengeGoalUnit.elevation:
       return UnitFormat.elevationLabel(unit);
-    case 'activity_count':
+    case ChallengeGoalUnit.activities:
       return l10n.challengesSuffixActivities;
-    case 'streak_days':
+    case ChallengeGoalUnit.days:
       return l10n.challengesSuffixDays;
-    case 'distance':
-    default:
+    case ChallengeGoalUnit.distance:
       return UnitFormat.distanceLabel(unit);
-  }
-}
-
-/// A goal typed in the unit [challengeGoalSuffix] named, converted into the
-/// unit `challenges.goal_value` and the leaderboard aggregate both use.
-num challengeGoalToStored(num typed, String metric, DistanceUnit unit) {
-  switch (metric) {
-    case 'duration':
-      return typed * 3600;
-    case 'vert':
-      return UnitFormat.elevationToMetres(typed.toDouble(), unit);
-    case 'activity_count':
-    case 'streak_days':
-      return typed;
-    case 'distance':
-    default:
-      return unit == DistanceUnit.mi ? typed * kMetresPerMile : typed * 1000;
   }
 }
 
@@ -132,7 +113,11 @@ class _ChallengeFormState extends State<_ChallengeForm> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _starts = now;
+    // Both bounds are truncated to the minute the pickers offer, so the
+    // default window is exactly 30 days rather than 30 days less however many
+    // seconds happened to be on the clock — which is a whole active day off
+    // the streak ceiling the goal field states.
+    _starts = DateTime(now.year, now.month, now.day, now.hour, now.minute);
     _ends = DateTime(now.year, now.month, now.day + 30, now.hour, now.minute);
     _initialSnapshot = _snapshot();
     _loadClubs();
@@ -163,6 +148,10 @@ class _ChallengeFormState extends State<_ChallengeForm> {
       ].join('|');
 
   bool get isDirty => _snapshot() != _initialSnapshot;
+
+  int get _startMs => _starts.millisecondsSinceEpoch;
+  int get _endMs => _ends.millisecondsSinceEpoch;
+  int get _streakCeiling => maxStreakDaysInWindow(_startMs, _endMs);
 
   @override
   void dispose() {
@@ -229,23 +218,38 @@ class _ChallengeFormState extends State<_ChallengeForm> {
     // at once (the goal_editor_sheet idiom), rather than one attempt each.
     final titleError = title.isEmpty ? l10n.challengesErrTitle : null;
 
+    // `challenges_window_ck` refuses ends_at <= starts_at with a 23514 that
+    // names neither bound. Catching it here is the only way the author is
+    // told which end to move. Graded first: the goal's own window rule reads
+    // off the same two bounds, so an inverted window would otherwise report
+    // a nonsense ceiling of zero days beside the real complaint.
+    final windowError =
+        _ends.isAfter(_starts) ? null : l10n.challengesErrWindow;
+
     num? goal;
     String? goalError;
     final goalText = _goal.text.trim();
     if (goalText.isNotEmpty) {
       final typed = parseTypedDecimal(goalText);
-      if (typed == null || typed <= 0) {
+      if (typed == null) {
         goalError = l10n.challengesErrGoal;
       } else {
-        goal = challengeGoalToStored(typed, _metric, activeDistanceUnit);
+        final stored = challengeGoalToStored(typed, _metric, activeDistanceUnit);
+        switch (checkChallengeGoal(stored, _metric, _startMs, _endMs)) {
+          case ChallengeGoalRefusal.notPositive:
+            goalError = l10n.challengesErrGoal;
+          case ChallengeGoalRefusal.exceedsWindow:
+            // An inverted window carries its own message and moving the end
+            // is the fix for both, so a ceiling of zero days beside it is
+            // noise rather than a second thing to correct.
+            goalError = windowError == null
+                ? l10n.challengesGoalStreakCeiling(_streakCeiling)
+                : null;
+          case null:
+            goal = stored;
+        }
       }
     }
-
-    // `challenges_window_ck` refuses ends_at <= starts_at with a 23514 that
-    // names neither bound. Catching it here is the only way the author is
-    // told which end to move.
-    final windowError =
-        _ends.isAfter(_starts) ? null : l10n.challengesErrWindow;
 
     setState(() {
       _titleError = titleError;
@@ -361,10 +365,12 @@ class _ChallengeFormState extends State<_ChallengeForm> {
             suffixText: challengeGoalSuffix(l10n, _metric, unit),
             errorText: _goalError,
           ),
-          onChanged: (_) {
-            if (_goalError != null) setState(() => _goalError = null);
-          },
+          onChanged: (_) => setState(() => _goalError = null),
         ),
+        for (final hint in _goalHints(l10n, unit)) ...[
+          const SizedBox(height: 4),
+          Text(hint, style: theme.textTheme.bodySmall),
+        ],
         const SizedBox(height: 12),
         DropdownButtonFormField<String?>(
           initialValue: _activityType,
@@ -447,6 +453,26 @@ class _ChallengeFormState extends State<_ChallengeForm> {
         ),
       ],
     );
+  }
+
+  /// The readback that makes a mistyped goal visible before it is stored, plus
+  /// the streak ceiling stated up front rather than only on a refusal. The
+  /// readback is offered only where a conversion happened — for the two
+  /// counting metrics the typed number IS the stored one, so echoing it back
+  /// says nothing.
+  List<String> _goalHints(AppLocalizations l10n, DistanceUnit unit) {
+    final out = <String>[];
+    final typed = parseTypedDecimal(_goal.text.trim());
+    if (typed != null && typed > 0 && _metric != 'activity_count' &&
+        _metric != 'streak_days') {
+      final stored = challengeGoalToStored(typed, _metric, unit);
+      out.add(l10n.challengesGoalPreview(
+          challengeValueLabel(l10n, _metric, stored)));
+    }
+    if (_metric == 'streak_days' && _streakCeiling > 0) {
+      out.add(l10n.challengesGoalStreakCeiling(_streakCeiling));
+    }
+    return out;
   }
 
   Widget _windowRow({
