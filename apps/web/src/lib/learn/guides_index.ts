@@ -168,10 +168,15 @@ export function localizedGuideMeta(
 ): GuideMeta | null {
 	const en = entries.find((e) => e.slug === slug && e.locale === DEFAULT_LOCALE);
 	if (!en) return null;
+	// Same resolution order as getGuide, or the card and the body disagree:
+	// this function exists so a reader never meets an English title above a
+	// localized body, and a pt-PT reader served the Brazilian body would have
+	// got exactly that.
 	const localized =
 		locale === DEFAULT_LOCALE
 			? undefined
-			: entries.find((e) => e.slug === slug && e.locale === locale);
+			: (entries.find((e) => e.slug === slug && e.locale === locale) ??
+				sameLanguageEntry(entries, slug, locale));
 	return {
 		slug,
 		title: localized?.title ?? en.title,

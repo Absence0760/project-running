@@ -129,6 +129,18 @@ test('isEnglishFallback — still true for a language with no guide at all', () 
 	assert.equal(isEnglishFallback(twoPortuguese, 'gamma', 'ja'), true);
 });
 
+test('localizedGuideMeta — a same-language variant titles the card too', () => {
+	// The card and the body must resolve the same way. getGuide serves the
+	// Brazilian body to a pt-PT reader, so an exact-tag-only meta lookup would
+	// put an English title above it — the exact defect this helper exists to
+	// prevent.
+	assert.equal(localizedGuideMeta(twoPortuguese, 'gamma', 'pt-PT')?.title, 'Gamma BR');
+});
+
+test('localizedGuideMeta — an unrelated language still reads the English title', () => {
+	assert.equal(localizedGuideMeta(twoPortuguese, 'gamma', 'ja')?.title, 'A guide');
+});
+
 // ---------------- localizedGuideMeta ----------------
 
 test('localizedGuideMeta — uses the localized title/description, English category', () => {
