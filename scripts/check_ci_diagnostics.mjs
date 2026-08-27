@@ -53,15 +53,31 @@ export const DIAGNOSING_JOBS = new Map([
 
 export const ANNOTATION = '::error::';
 
+/**
+ * @typedef {{ name: string, text: string }} WorkflowFile
+ * @typedef {{ job: string, line: number, lines: string[] }} RawStep
+ * @typedef {{ job: string, line: number, name: string | null, if: string | null, hasRun: boolean, body: string }} Step
+ */
+
 /// Every step of every job in one workflow file, as `{ job, name, if, body }`.
 /// `body` is the step's own lines joined — comments between steps belong to no
 /// step, so a `::error::` mentioned in prose above one is not read as a
 /// diagnosis it prints.
+/**
+ * @param {string} text
+ * @returns {Step[]}
+ */
 export function parseSteps(text) {
 	const lines = text.split('\n');
+	/** @type {RawStep[]} */
 	const steps = [];
+	/** @type {string | null} */
 	let job = null;
-	let stepIndent = null;
+	/// The `steps:` list being read. Its job travels with it, so every step
+	/// this loop opens has one — a step attributed to no job is unreportable.
+	/** @type {{ job: string, indent: number } | null} */
+	let list = null;
+	/** @type {RawStep | null} */
 	let current = null;
 
 	const close = () => {
@@ -84,35 +100,36 @@ export function parseSteps(text) {
 		if (jobKey) {
 			close();
 			job = jobKey[1];
-			stepIndent = null;
+			list = null;
 			continue;
 		}
 
-		if (job && stepIndent === null) {
-			if (/^ {4}steps:\s*$/.test(line)) stepIndent = -1; // awaiting the first `- `
+		if (job && list === null) {
+			if (/^ {4}steps:\s*$/.test(line)) list = { job, indent: -1 }; // awaiting the first `- `
 			continue;
 		}
+		if (list === null) continue;
 
-		if (stepIndent === -1) {
+		if (list.indent === -1) {
 			const first = line.match(/^(\s*)-\s/);
 			if (!first) continue;
-			stepIndent = first[1].length;
+			list.indent = first[1].length;
 		}
 
-		if (indent < stepIndent) {
+		if (indent < list.indent) {
 			// Back out to the job (or workflow) level: the steps list is over.
 			close();
-			stepIndent = null;
+			list = null;
 			job = null;
 			// Re-read this line as a possible job key.
 			i--;
 			continue;
 		}
 
-		if (indent === stepIndent) {
+		if (indent === list.indent) {
 			close();
 			if (!/^\s*-\s/.test(line)) continue; // a comment between two steps
-			current = { job, line: i + 1, lines: [line] };
+			current = { job: list.job, line: i + 1, lines: [line] };
 			continue;
 		}
 
@@ -137,6 +154,10 @@ export function parseSteps(text) {
 
 /// Rule 1 — a diagnosis behind an unscoped `failure()` speaks for every step
 /// above it. `steps.<id>.` in the condition is what scopes it to one.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @returns {{ errors: string[], ok: string[], conditioned: number }}
+ */
 export function checkFailureScoping(files) {
 	const errors = [];
 	const ok = [];
@@ -177,9 +198,14 @@ export function checkFailureScoping(files) {
 
 /// Rule 2 — in a job whose name cannot say which check broke, every check
 /// says it for itself.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @returns {{ errors: string[], ok: string[] }}
+ */
 export function checkStepDiagnoses(files) {
 	const errors = [];
 	const ok = [];
+	/** @type {Map<string, number>} */
 	const seen = new Map();
 
 	for (const { name, text } of files) {
@@ -216,6 +242,7 @@ export function checkStepDiagnoses(files) {
 	return { errors, ok };
 }
 
+/** @param {readonly WorkflowFile[]} files */
 export function checkAll(files) {
 	const scoping = checkFailureScoping(files);
 	const diagnoses = checkStepDiagnoses(files);
@@ -227,6 +254,10 @@ export function checkAll(files) {
 	};
 }
 
+/**
+ * @param {string} dir
+ * @returns {WorkflowFile[]}
+ */
 export function readWorkflows(dir) {
 	return readdirSync(dir)
 		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))

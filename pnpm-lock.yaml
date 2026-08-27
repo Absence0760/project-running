@@ -20,6 +20,9 @@ importers:
         specifier: ^1.11.13
         version: 1.11.13
     devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
       svelte:
         specifier: 5.56.10
         version: 5.56.10

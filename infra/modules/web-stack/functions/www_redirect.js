@@ -9,7 +9,13 @@
 // same code works for any apex the distribution is fronting (no domain baked
 // in). Non-www hosts pass through untouched.
 //
-// Runtime: cloudfront-js-2.0.
+// Runtime: cloudfront-js-2.0 — typechecked against it by
+// `tsconfig.cloudfront.json`, whose `lib` and `types` describe that runtime
+// rather than Node or a browser (decisions § 757).
+/**
+ * @param {CloudFrontEvent} event
+ * @returns {CloudFrontRequest | CloudFrontResponse}
+ */
 function handler(event) {
 	var request = event.request;
 	var headers = request.headers;

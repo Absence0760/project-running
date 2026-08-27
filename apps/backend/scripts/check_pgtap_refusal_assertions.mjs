@@ -79,8 +79,34 @@ export const DB_URL =
 
 const DOLLAR_TAG = /^\$[A-Za-z0-9_]*\$/;
 
+/**
+ * Which mutation operator reaches a relation: `base` is a table RLS hides rows
+ * in, `invoker` a view or function that inherits the caller's RLS, `definer`
+ * one that runs as its owner and filters in its own SQL.
+ * @typedef {'base' | 'invoker' | 'definer'} RelationSecurity
+ */
+
+/** @typedef {Map<string, RelationSecurity>} RelationMap */
+
+/** @typedef {{ name: string, offset: number, line: number, argv: string[] }} PgtapCall */
+
+/**
+ * @typedef {PgtapCall & {
+ *   description: string,
+ *   read: string[],
+ *   neutralise: string[],
+ *   unmeasurable: string[],
+ *   selected: boolean,
+ * }} ZeroOrEmptyAssertion
+ */
+
 // Offset just past the token starting at `i` when that token is a string,
 // dollar-quoted body, quoted identifier or comment; null when it is code.
+/**
+ * @param {string} text
+ * @param {number} i
+ * @returns {number | null}
+ */
 export function skipToken(text, i) {
   const n = text.length;
   const c = text[i];
@@ -115,6 +141,7 @@ export function skipToken(text, i) {
 }
 
 // Byte map of which offsets are code rather than string/comment payload.
+/** @param {string} text */
 export function codeMask(text) {
   const mask = new Uint8Array(text.length);
   let i = 0;
@@ -127,7 +154,12 @@ export function codeMask(text) {
   return mask;
 }
 
+/**
+ * @param {string} args
+ * @returns {string[]}
+ */
 export function splitArgs(args) {
+  /** @type {string[]} */
   const parts = [];
   let depth = 0;
   let last = 0;
@@ -145,9 +177,15 @@ export function splitArgs(args) {
   return parts;
 }
 
+/**
+ * @param {string} text
+ * @param {string} name
+ * @returns {PgtapCall[]}
+ */
 export function findCalls(text, name) {
   const mask = codeMask(text);
   const re = new RegExp(`(?<![A-Za-z0-9_.])${name}\\s*\\(`, 'g');
+  /** @type {PgtapCall[]} */
   const out = [];
   for (const m of text.matchAll(re)) {
     if (!mask[m.index]) continue;
@@ -173,6 +211,10 @@ export function findCalls(text, name) {
 
 // The text of a SQL literal argument (single-quoted or dollar-quoted), or null
 // when the argument is an expression rather than a literal.
+/**
+ * @param {string} arg
+ * @returns {string | null}
+ */
 export function literalOf(arg) {
   const a = arg.trim();
   const single = /^'((?:[^']|'')*)'$/s.exec(a);
@@ -188,6 +230,7 @@ export function literalOf(arg) {
 // an expected message; either is a pin. A `null` in both slots pins nothing, so
 // the assertion passes on ANY error, including one raised by a typo rather
 // than by the policy under test.
+/** @param {string[]} argv */
 export function throwsPinsItsError(argv) {
   for (const arg of argv.slice(1, 3)) {
     if (arg === undefined) continue;
@@ -250,8 +293,17 @@ export const REFUSAL_MARKER = /--[ \t]*refusal:/i;
 const ZERO_EXPECTATION = /^\s*0(::(bigint|int4|int|integer|numeric|smallint))?\s*$/i;
 const RELATION_REF = /\b(?:from|join)\s+(?:only\s+)?([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)/gi;
 
+/**
+ * @param {string} sql
+ * @returns {Set<string>}
+ */
 export function relationsIn(sql) {
-  return new Set([...sql.matchAll(RELATION_REF)].map((m) => m[1].toLowerCase().split('.').pop()));
+  return new Set(
+    [...sql.matchAll(RELATION_REF)].map((m) => {
+      const ref = m[1].toLowerCase();
+      return ref.slice(ref.lastIndexOf('.') + 1);
+    }),
+  );
 }
 
 // Every zero-or-empty assertion in one file that reads at least one relation of
@@ -262,7 +314,13 @@ export function relationsIn(sql) {
 // have none — for which the widening policy is provably inert, so an assertion is
 // not measured at all rather than scored on an operator that could not have
 // changed it.
+/**
+ * @param {string} text
+ * @param {RelationMap} relations
+ * @returns {ZeroOrEmptyAssertion[]}
+ */
 export function zeroOrEmptyAssertions(text, relations) {
+  /** @type {ZeroOrEmptyAssertion[]} */
   const out = [];
   for (const kind of ['is_empty', 'is', 'results_eq']) {
     for (const call of findCalls(text, kind)) {
@@ -298,16 +356,28 @@ export function zeroOrEmptyAssertions(text, relations) {
 // The half of the above whose claim is a read refusal: what makes an empty
 // result a security assertion rather than a statement about a trigger that
 // correctly did not fire.
+/**
+ * @param {string} text
+ * @param {RelationMap} relations
+ */
 export function refusalAssertions(text, relations) {
   return zeroOrEmptyAssertions(text, relations).filter((c) => c.selected);
 }
 
+/**
+ * @param {string} text
+ * @param {number} offset
+ */
 export function statementStart(text, offset) {
   const mask = codeMask(text);
   for (let i = offset - 1; i >= 0; i -= 1) if (mask[i] && text[i] === ';') return i + 1;
   return 0;
 }
 
+/**
+ * @param {string} text
+ * @param {number} offset
+ */
 export function statementEnd(text, offset) {
   const mask = codeMask(text);
   for (let i = offset; i < text.length; i += 1) if (mask[i] && text[i] === ';') return i + 1;
@@ -370,6 +440,10 @@ const BECOME_OWNER = [
 // or function is restored before the next assertion runs — which is what keeps a
 // whole file measurable in one pass even though this operator is a schema change
 // and the first one is not.
+/**
+ * @param {string} sql
+ * @param {string[]} definer
+ */
 export function definerSpan(sql, definer) {
   const mark = 'pgtap_guard_definer';
   const replacements = definer.map((name) => {
@@ -392,6 +466,10 @@ export function definerSpan(sql, definer) {
 // armed for the span of its own statement and disarmed straight after. The
 // assertions are read-only, so widening one changes nothing the next one sees,
 // which is what lets a whole file's candidates be measured in a single run.
+/**
+ * @param {string} text
+ * @param {{ offset: number, neutralise?: string[] }[]} candidates
+ */
 export function buildMutant(text, candidates) {
   const beginAt = /^begin;$/m.exec(text);
   if (!beginAt) throw new Error('test file does not open a transaction');
@@ -418,7 +496,12 @@ export function buildMutant(text, candidates) {
   return text.slice(0, afterBegin) + PREAMBLE + out + text.slice(cursor);
 }
 
+/**
+ * @param {string} output
+ * @returns {Map<string, boolean>}
+ */
 export function parseTap(output) {
+  /** @type {Map<string, boolean>} */
   const results = new Map();
   for (const line of output.split('\n')) {
     const m = /^(ok|not ok) (\d+) - (.*)$/.exec(line.trim());
@@ -477,8 +560,10 @@ export const EXPECTED_SURVIVORS = [
 // errors are kept, and quoted back by whoever reports a missing assertion.
 // spawnSync rather than execFileSync because only spawnSync hands back stderr
 // on the runs that succeed, and those are exactly the runs this matters for.
+/** @type {string[]} */
 let lastPsqlErrors = [];
 
+/** @param {string} sql */
 function psql(sql) {
   const run = spawnSync(
     'psql',
@@ -487,7 +572,7 @@ function psql(sql) {
   );
   if (run.error || run.status !== 0) {
     const why =
-      run.error?.code === 'ENOENT'
+      run.error !== undefined && 'code' in run.error && run.error.code === 'ENOENT'
         ? 'psql is not on PATH'
         : `psql could not reach ${DB_URL}: ${String(run.stderr ?? run.error?.message ?? '').trim()}`;
     console.error(
@@ -509,6 +594,52 @@ function psql(sql) {
 // text: a view's `security_invoker` and a function's `prosecdef` are exactly
 // the fact that decides which mutation is not inert, and a list in this file
 // would be one more thing to keep in step with the schema.
+/**
+ * The catalogue read's `name|kind` lines as a map, or the reason it cannot be
+ * one. Split out from the psql call so the parse is unit-testable, and made to
+ * REFUSE rather than degrade: every assertion in the suite is admitted to the
+ * population by `relations.has(...)`, so a read that comes back empty, or with
+ * a kind this file does not recognise, takes the whole population to zero and
+ * the guard then measures nothing while reporting a count. That is § 741's
+ * inversion pointed at the instrument itself.
+ * @param {string} rows
+ * @returns {{ relations: RelationMap, failure: string | null }}
+ */
+export function parseRelationSecurity(rows) {
+  /** @type {RelationMap} */
+  const out = new Map();
+  for (const row of rows.split('\n')) {
+    const [name, kind] = row.trim().split('|');
+    if (!name) continue;
+    if (kind !== 'base' && kind !== 'invoker' && kind !== 'definer') {
+      return {
+        relations: out,
+        failure:
+          `the catalogue read answered "${row.trim()}", whose second column is not one of ` +
+          'base / invoker / definer. Which operator is not inert is decided by that column, so ' +
+          'the guard cannot choose one until the query in fetchRelationSecurity() and this parse ' +
+          'agree again.',
+      };
+    }
+    // A table and a function of the same name resolve to the table in a FROM
+    // clause, so the relation's answer wins over the routine's.
+    if (out.has(name) && out.get(name) === 'base') continue;
+    out.set(name, kind);
+  }
+  if (out.size === 0) {
+    return {
+      relations: out,
+      failure:
+        'the catalogue read returned no relations at all. Every zero-or-empty assertion is ' +
+        'admitted to the population by the relations it reads, so an empty catalogue empties the ' +
+        'population and the guard measures nothing. Check that SUPABASE_DB_URL points at a ' +
+        'migrated database rather than an empty one.',
+    };
+  }
+  return { relations: out, failure: null };
+}
+
+/** @returns {RelationMap} */
 export function fetchRelationSecurity() {
   const rows = psql(
     "select c.relname, case when c.relkind in ('r','p') then 'base'" +
@@ -521,16 +652,12 @@ export function fetchRelationSecurity() {
       ' from pg_proc p join pg_namespace n on n.oid = p.pronamespace' +
       " where n.nspname = 'public' and p.prokind = 'f';",
   );
-  const out = new Map();
-  for (const row of rows.split('\n')) {
-    const [name, kind] = row.trim().split('|');
-    if (!name) continue;
-    // A table and a function of the same name resolve to the table in a FROM
-    // clause, so the relation's answer wins over the routine's.
-    if (out.has(name) && out.get(name) === 'base') continue;
-    out.set(name, kind);
+  const { relations, failure } = parseRelationSecurity(rows);
+  if (failure !== null) {
+    console.error(`pgtap refusal-assertion guard is blind: ${failure}`);
+    process.exit(1);
   }
-  return out;
+  return relations;
 }
 
 // The instrument checked end to end, on assertions written to have known
@@ -553,6 +680,10 @@ export function fetchRelationSecurity() {
 // The base trio's known-good is also filed inside a subtransaction, because
 // pgtap's own `lives_ok` is how a test states that a write succeeded and a
 // scope that misses those reports a survivor for every one of them.
+/**
+ * @param {RelationMap} relations
+ * @returns {string[]}
+ */
 export function validateOperatorEndToEnd(relations) {
   const present = '00000000-0000-0000-0000-0000000e2e01';
   const absent = '00000000-0000-0000-0000-0000000e2e02';
@@ -609,6 +740,7 @@ export function validateOperatorEndToEnd(relations) {
     return failures;
   }
   const tap = parseTap(psql(buildMutant(file, candidates)));
+  /** @type {[string, boolean, string, 'KNOWN-GOOD' | 'KNOWN-BAD' | 'KNOWN-DEBRIS'][]} */
   const verdicts = [
     ['a stranger cannot see the private route', false, 'definer', 'KNOWN-GOOD'],
     ['a stranger cannot see the route nobody filed', true, 'definer', 'KNOWN-BAD'],
@@ -654,7 +786,9 @@ export function validateOperatorEndToEnd(relations) {
 // replacement that does not widen what the caller sees is an inert mutation
 // dressed as a working one: it would score every assertion over that relation
 // as vacuous, which is the § 741 inversion pointed the other way.
+/** @returns {string[]} */
 export function validateNeutralisers() {
+  /** @type {string[]} */
   const failures = [];
   for (const [name, entry] of DEFINER_NEUTRALISERS) {
     const probe = entry.witness.probe.trim().replace(/;$/, '');
@@ -662,6 +796,7 @@ export function validateNeutralisers() {
       `begin;\n${TRANSACTION_LOCAL_SQL}${entry.witness.setup}\nselect 'before=' || (${probe});\n` +
         `${entry.sql}\nselect 'after=' || (${probe});\nrollback;`,
     );
+    /** @param {string} key */
     const read = (key) => {
       const m = new RegExp(`^${key}=(-?\\d+)$`, 'm').exec(out);
       return m ? Number(m[1]) : null;
@@ -695,21 +830,27 @@ export function validateNeutralisers() {
 // suite reads that nobody declared is the case § 745 filed — the guard used to
 // meet it for the first time at merge, as "register a permissive replacement",
 // with no record of whether that had already been considered and refused.
+/**
+ * @param {RelationMap} relations
+ * @returns {string[]}
+ */
 export function validateUnregisteredDefinerRelations(relations) {
+  /** @type {Map<string, string[]>} */
   const found = new Map();
+  /** @type {Map<string, string[]>} */
   const claimed = new Map();
   for (const file of readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
     const text = readFileSync(join(TESTS_DIR, file), 'utf8');
     for (const c of zeroOrEmptyAssertions(text, relations)) {
       for (const r of c.unmeasurable) {
-        if (!found.has(r)) found.set(r, []);
-        found.get(r).push(`${file}:${c.line} "${c.description}"`);
+        const site = `${file}:${c.line} "${c.description}"`;
+        found.set(r, [...(found.get(r) ?? []), site]);
         if (!c.selected) continue;
-        if (!claimed.has(r)) claimed.set(r, []);
-        claimed.get(r).push(`${file}:${c.line} "${c.description}"`);
+        claimed.set(r, [...(claimed.get(r) ?? []), site]);
       }
     }
   }
+  /** @type {string[]} */
   const failures = [];
   const declared = new Set(UNREGISTERED_DEFINER_RELATIONS.map((e) => e.relation));
   for (const [relation, sites] of claimed) {
@@ -734,6 +875,10 @@ export function validateUnregisteredDefinerRelations(relations) {
   return failures;
 }
 
+/**
+ * @param {string[]} failures
+ * @param {string} summary
+ */
 function report(failures, summary) {
   if (failures.length > 0) {
     console.error('pgtap refusal-assertion guard failed:\n');
@@ -745,6 +890,7 @@ function report(failures, summary) {
 
 function main() {
   const files = readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql')).sort();
+  /** @type {string[]} */
   const failures = [];
 
   for (const file of files) {
@@ -779,6 +925,7 @@ function main() {
   }
 
   const relations = fetchRelationSecurity();
+  /** @type {{ file: string, line: number, description: string, neutralise: string[] }[]} */
   const survivors = [];
   let population = 0;
   let definerPopulation = 0;

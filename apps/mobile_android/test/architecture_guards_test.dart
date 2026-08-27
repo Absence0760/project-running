@@ -7,6 +7,7 @@
 // optimization or broke a layering rule we deliberately codified. Read
 // the reason before blindly updating the test.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -5490,10 +5491,16 @@ void main() {
           'pt-BR is reached by its exact tag — a pt-BR device, or the picker.',
     };
 
-    /// Catalogue tag -> the spelling `ios/Runner/Info.plist` advertises it
-    /// under, for the locales where the two differ. Apple names a locale by
-    /// its REGION, so the European-Portuguese catalogue ships as `pt-PT`.
-    const plistTagOverride = <String, String>{'pt': 'pt-PT'};
+    /// ARB filename tag -> the CANONICAL tag every other declaration spells it
+    /// with. gen-l10n refuses to generate when a country-coded catalogue exists
+    /// without a bare base of the same language ("Arb file for a fallback, pt,
+    /// does not exist, even though the following locale(s) exist: [pt_BR,
+    /// pt_PT]"), so European Portuguese has to be the `pt` base FILE while
+    /// every tag a reader, the OS or the runtime sees is `pt-PT` — the
+    /// spelling web, the wrist and Info.plist all use. The filename is the
+    /// tool's; the tag is ours. Each entry is asserted below to still be a real
+    /// override, so the table cannot outlive the constraint that forced it.
+    const arbTagOverride = <String, String>{'pt': 'pt-PT'};
 
     /// `app_pt_BR.arb` -> `pt-BR`; `app_en.arb` -> `en`.
     String tagOfArb(String filename) {
@@ -5539,6 +5546,7 @@ void main() {
         .join('\n');
 
     late Set<String> catalogues;
+    late Set<String> declared;
     late String support;
     late String generated;
 
@@ -5549,6 +5557,7 @@ void main() {
           .where((n) => n.startsWith('app_') && n.endsWith('.arb'))
           .map(tagOfArb)
           .toSet();
+      declared = catalogues.map((t) => arbTagOverride[t] ?? t).toSet();
       support = File('lib/l10n/locale_support.dart').readAsStringSync();
       generated =
           File('lib/l10n/gen/app_localizations.dart').readAsStringSync();
@@ -5558,7 +5567,7 @@ void main() {
       expect(catalogues, isNotEmpty, reason: 'no app_*.arb found — moved?');
       expect(
         localeTags(literalAfter(support, 'supportedLocales = <Locale>[')),
-        catalogues,
+        declared,
         reason: 'supportedLocales is what MaterialApp negotiates against. A '
             'catalogue missing from it is dead weight in the binary; an entry '
             'with no catalogue resolves to a locale gen-l10n cannot load.',
@@ -5577,7 +5586,7 @@ void main() {
     test('every catalogue has a picker endonym', () {
       expect(
         mapKeys(literalAfter(support, 'localeLabels = <String, String>{')),
-        catalogues,
+        declared,
         reason: 'the picker names each locale in its own language; a locale '
             'the table cannot name renders a blank row.',
       );
@@ -5586,7 +5595,7 @@ void main() {
     test('every catalogue is reachable by its exact tag', () {
       expect(
         localeTags(literalAfter(support, '_exact = <String, Locale>{')),
-        catalogues,
+        declared,
         reason: '_exact is the only path a stored preference or an exactly '
             'matching device tag takes; a catalogue absent from its VALUES '
             'can be selected by nobody.',
@@ -5640,28 +5649,31 @@ void main() {
           .toSet();
       expect(
         advertised,
-        catalogues.map((t) => plistTagOverride[t] ?? t).toSet(),
-        reason: 'Info.plist and lib/l10n disagree about which locales ship.',
+        declared,
+        reason: 'Info.plist and lib/l10n disagree about which locales ship. '
+            'Apple names a locale by its region, which is the spelling the '
+            'canonical tag set now uses everywhere — the plist needs no '
+            'override of its own any more.',
       );
     });
 
-    test('every plist spelling override is still an override', () {
-      final advertised = bundleLocalizations();
-      for (final entry in plistTagOverride.entries) {
+    test('every ARB filename override is still an override', () {
+      for (final entry in arbTagOverride.entries) {
         expect(catalogues, contains(entry.key),
-            reason: '${entry.key} is spelled differently in the plist but '
-                'ships no catalogue — drop the entry.');
-        expect(advertised.contains('<string>${entry.key}</string>'), isFalse,
-            reason: 'the plist now spells ${entry.key} the same as the '
-                'catalogue — drop it from plistTagOverride.');
+            reason: '${entry.key} is renamed by arbTagOverride but ships no '
+                'catalogue file — drop the entry.');
+        expect(catalogues, isNot(contains(entry.value)),
+            reason: 'lib/l10n now holds app_${entry.value.replaceAll('-', '_')}'
+                '.arb, so the filename and the tag agree — drop '
+                '${entry.key} from arbTagOverride.');
       }
     });
 
     test('the Android manifest advertises exactly the catalogue set', () {
       // Android 13+ reads locales_config.xml to populate Settings -> Apps ->
       // Threkir -> Language, a path to a catalogue the in-app picker does not
-      // own alone. Android and our canonical tags agree spelling, so unlike
-      // the plist this needs no override table.
+      // own alone. Android spells tags the way we do, so this reads the
+      // canonical set directly.
       final config = File(
         '../mobile_android/android/app/src/main/res/xml/locales_config.xml',
       ).readAsStringSync();
@@ -5670,7 +5682,7 @@ void main() {
             .allMatches(config)
             .map((m) => m.group(1)!)
             .toSet(),
-        catalogues,
+        declared,
         reason: 'locales_config.xml and lib/l10n disagree about which locales '
             'ship, so the OS language picker offers the wrong set.',
       );
@@ -5679,7 +5691,7 @@ void main() {
     test('a catalogue no base-language tag reaches carries a reason', () {
       final reachedByBase =
           localeTags(literalAfter(support, '_baseToLocale = <String, Locale>{'));
-      final unreached = catalogues
+      final unreached = declared
           .difference(reachedByBase)
           .where((t) => !baseFallbackExempt.containsKey(t))
           .toList()
@@ -5691,11 +5703,82 @@ void main() {
               'to baseFallbackExempt saying how a reader reaches it.');
     });
 
+    /// Words that only one of the two Portuguese variants uses. A catalogue
+    /// tagged for one variant containing the other's word is the failure this
+    /// whole locale has kept producing: `app_pt.arb` shipped 3434 byte-identical
+    /// Brazilian strings under a European tag for three weeks, and nothing in
+    /// the tree could see it, because every existing guard asks whether a
+    /// catalogue is REACHABLE, never whether it says what its tag claims.
+    ///
+    /// Deliberately narrow. Each entry is a word the other variant does not use
+    /// at all, not merely one it uses less — a frequency judgement would need a
+    /// threshold, and a threshold is a number nobody can defend.
+    const brazilianOnly = <String>[
+      'você', 'senha', 'tela', 'arquivo', 'celular', 'esteira', 'excluir',
+      'registrar', 'compartilhar', 'baixar', 'ônibus', 'geladeira', 'xícara',
+      'aplicativo', 'cadastrar', 'planejar', 'gerenciar', 'tênis',
+      'quilômetro', 'gênero', 'acessar', 'câmera', 'escanear',
+    ];
+    const europeanOnly = <String>[
+      'palavra-passe', 'ecrã', 'ficheiro', 'telemóvel', 'passadeira',
+      'partilhar', 'quilómetro', 'género', 'autocarro', 'frigorífico',
+      'chávena', 'utilizador', 'ginásio',
+    ];
+
+    /// Which variant a catalogue's tag CLAIMS, for the tags that make a claim.
+    const portugueseVariant = <String, List<String>>{
+      'pt-PT': brazilianOnly,
+      'pt-BR': europeanOnly,
+    };
+
+    test('a Portuguese catalogue does not read as the variant it is not', () {
+      // `excluir`/`arquivo`/`acessar` carry a second sense in Portugal
+      // (exclude / archive / accessible) that is not a Brazilianism at all, so
+      // the scan runs on whole words and these keys are named rather than the
+      // words being dropped from the list — dropping them would blind the
+      // guard to the delete and file senses everywhere else.
+      const senseExempt = <String>{
+        'runDetailMarkDnfSubtitle', 'coachArchiveBanner',
+        'coachArchiveDeleteFailed', 'coachArchiveDeleteBody',
+        'prefsExcludeGymFromReadiness',
+        'settingsAccountRestoreIncompleteArchive',
+        'settingsAccountBackupTracksPartialNotice',
+      };
+      for (final entry in portugueseVariant.entries) {
+        final file = arbTagOverride.entries
+            .where((e) => e.value == entry.key)
+            .map((e) => e.key)
+            .followedBy([entry.key]).first;
+        final arb = File('lib/l10n/app_${file.replaceAll('-', '_')}.arb');
+        expect(arb.existsSync(), isTrue,
+            reason: '${entry.key} claims a catalogue at ${arb.path}.');
+        final messages =
+            (jsonDecode(arb.readAsStringSync()) as Map<String, dynamic>)
+              ..removeWhere((k, v) => k.startsWith('@') || v is! String);
+        final offenders = <String>[];
+        for (final message in messages.entries) {
+          if (senseExempt.contains(message.key)) continue;
+          for (final word in entry.value) {
+            if (RegExp('(?<![a-zà-ÿ])$word(s|es)?(?![a-zà-ÿ])',
+                    caseSensitive: false, unicode: true)
+                .hasMatch(message.value as String)) {
+              offenders.add('${message.key}: "$word"');
+            }
+          }
+        }
+        expect(offenders, isEmpty,
+            reason: '${arb.path} is tagged ${entry.key} but reads as the other '
+                'variant. A tag that disagrees with its content is worse than '
+                'a missing catalogue: the reader is told this is their '
+                'Portuguese and it is not.');
+      }
+    });
+
     test('every base-fallback exemption still needs its exemption', () {
       final reachedByBase =
           localeTags(literalAfter(support, '_baseToLocale = <String, Locale>{'));
       for (final entry in baseFallbackExempt.entries) {
-        expect(catalogues, contains(entry.key),
+        expect(declared, contains(entry.key),
             reason: '${entry.key} is exempted from the base-fallback rule but '
                 'ships no catalogue — drop the entry.');
         expect(reachedByBase, isNot(contains(entry.key)),

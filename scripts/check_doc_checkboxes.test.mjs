@@ -107,6 +107,19 @@ test('the committed docs pass', () => {
 	assert.deepEqual(run(), []);
 });
 
+// The floor under the walk itself. `git ls-files` coming back empty takes every
+// rule above over nothing and reports the tree clean — the shape of a guard
+// that has quietly stopped guarding. Both sibling guards in this directory
+// refuse that state (`Parsed no GATT rows`, `no failure()-conditioned steps`);
+// this one used to pass it.
+test('a walk over no documents is refused rather than reported clean', () => {
+	assert.throws(() => run([]), /came back empty/);
+});
+
+test('the walk reads exactly the documents it is handed', () => {
+	assert.throws(() => run(['docs/no-such-file.md']), /ENOENT/);
+});
+
 test('a planted violation is reported, and stops being reported once removed', () => {
 	const dir = mkdtempSync(join(tmpdir(), 'doc-checkbox-probe-'));
 	try {

@@ -1,18 +1,22 @@
 package internal
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Email localization. Emails are rendered server-side by the worker, which
 // has no access to the client's UI locale (web detects it client-side per
 // decisions §108; mobile keeps it per-device, not DB-synced, per §113). So
 // the user's chosen language is mirrored into user_settings.prefs.locale by
 // the clients (decisions §120), and the worker reads it here. The supported
-// set mirrors the web/mobile i18n catalogues: en/de/fr/es/ja/pt-BR.
+// set mirrors the web/mobile i18n catalogues: en/de/fr/es/ja/pt-BR/pt-PT.
 //
 // Unknown or absent locale → English. Unknown template key → the English
 // "default" entry. This is the worker's mirror of apps/web/src/lib/i18n and
-// the mobile ARB catalogues; emailCatalogueParity_test.go pins that every
-// locale carries every key.
+// the mobile ARB catalogues; email_i18n_test.go pins that every locale
+// carries every key, that the three catalogues agree on the locale set, and
+// that every locale is reachable from a tag a client can actually write.
 
 // emailStrings is the localizable copy for one email template.
 type emailStrings struct {
@@ -45,30 +49,73 @@ type emailShared struct {
 	digestQuietWeek    string // shown when nothing happened in the window
 }
 
-var emailLocales = []string{"en", "de", "fr", "es", "ja", "pt-BR"}
+// emailLocales is DERIVED from the catalogue rather than restated beside it.
+// A hand-written list is a second place to add a locale, and the one the
+// guards then loop over: a seventh catalogue added to the maps below but
+// missed here would be skipped by every parity test that ranges this slice,
+// which is the shape decisions § 748 / § 755 found six times on the client
+// side. Sorted so the order is stable across runs (Go map iteration is not).
+var emailLocales = catalogueLocales()
+
+func catalogueLocales() []string {
+	out := make([]string, 0, len(emailCatalogue))
+	for loc := range emailCatalogue {
+		out = append(out, loc)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// emailExact resolves a full tag (lowercased) to the catalogue we ship for
+// it; emailBase resolves a bare base language to the one variant we ship for
+// that language. The split, and its Portuguese rows, mirror EXACT /
+// BASE_TO_LOCALE in apps/web/src/lib/i18n/locale.ts exactly: `pt-BR` reaches
+// Brazilian by its own tag — which is what Android, iOS and every browser
+// report — while the bare `pt` and the other European-orthography regions
+// (`pt-AO`, `pt-MZ`, `pt-CV`) have nowhere else to land and so resolve to
+// European. Collapsing every `pt*` to Brazilian, as this function used to,
+// put a Lisbon reader on European Portuguese in the browser and on the wrist
+// and Brazilian in their inbox (decisions § 761).
+var emailExact = map[string]string{
+	"en":    "en",
+	"de":    "de",
+	"fr":    "fr",
+	"es":    "es",
+	"ja":    "ja",
+	"pt-br": "pt-BR",
+	"pt-pt": "pt-PT",
+}
+
+var emailBase = map[string]string{
+	"en": "en",
+	"de": "de",
+	"fr": "fr",
+	"es": "es",
+	"ja": "ja",
+	"pt": "pt-PT",
+}
 
 // normalizeEmailLocale maps an arbitrary BCP-47-ish tag to one of the
-// supported locales, else "en". Region variants collapse to their base
-// language (de-DE → de); Portuguese collapses to pt-BR (the only pt we
-// ship).
+// supported locales, else "en". An exact tag wins; otherwise the region is
+// dropped and the base language decides (de-DE → de). Underscores are read
+// as separators too — this reads user_settings.prefs.locale, which is
+// whatever a client wrote, not a negotiated navigator.language.
 func normalizeEmailLocale(tag string) string {
-	t := strings.ToLower(strings.TrimSpace(tag))
+	t := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(tag)), "_", "-")
 	if t == "" {
 		return "en"
 	}
-	if strings.HasPrefix(t, "pt") {
-		return "pt-BR"
+	if loc, ok := emailExact[t]; ok {
+		return loc
 	}
 	base := t
-	if i := strings.IndexAny(t, "-_"); i >= 0 {
+	if i := strings.IndexByte(t, '-'); i >= 0 {
 		base = t[:i]
 	}
-	switch base {
-	case "en", "de", "fr", "es", "ja":
-		return base
-	default:
-		return "en"
+	if loc, ok := emailBase[base]; ok {
+		return loc
 	}
+		return "en"
 }
 
 // localeFromPrefs reads the email locale out of the user_settings.prefs bag.
@@ -211,6 +258,23 @@ var emailSharedByLocale = map[string]emailShared{
 		digestStatKudos:       "%d kudos",
 		digestStatPBs:         "%d novos recordes pessoais",
 		digestQuietWeek:       "Uma semana tranquila — nenhuma corrida registrada. Calce o tênis e a gente se vê por aí.",
+	},
+	"pt-PT": {
+		footerNotification:    "Está a receber este e-mail por causa das suas definições de notificação.",
+		footerWelcome:         "Está a receber este e-mail porque acabou de criar uma conta no Threkir.",
+		footerTransactional:   "Esta é uma mensagem de serviço sobre a sua conta no Threkir.",
+		footerSafety:          "Está a receber este e-mail porque está registado como contacto de segurança desta pessoa no Threkir.",
+		footerDigest:          "Está a receber este resumo semanal porque o subscreveu. Cancele a subscrição quando quiser:",
+		footerDrip:            "Está a receber este lembrete porque subscreveu lembretes ocasionais. Cancele a subscrição quando quiser:",
+		footerAccountDeleted:  "Esta é uma confirmação única de que a sua conta do Threkir foi eliminada. Não voltará a receber e-mails da nossa parte.",
+		safetyDefaultOwner:    "Um corredor do Threkir",
+		managePrefsLabel:      "Gerir preferências de e-mail",
+		managePrefsTextPrefix: "Gere as suas preferências de e-mail:",
+		digestStatRuns:        "%d corridas",
+		digestStatDistance:    "%s no total",
+		digestStatKudos:       "%d kudos",
+		digestStatPBs:         "%d novos recordes pessoais",
+		digestQuietWeek:       "Uma semana tranquila — nenhuma corrida registada. Calce as sapatilhas e até breve.",
 	},
 }
 
@@ -396,5 +460,35 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"drip_reengagement": {"Sentimos sua falta no Threkir", "Já faz um tempo — seus tênis estão esperando.", "Hora de calçar os tênis de novo", "Abrir Threkir", []string{"Já faz um tempo desde a sua última corrida. Sem pressão — todo corredor faz uma pausa.", "Quando estiver pronto, estamos aqui. Uma corrida curta e leve é um ótimo jeito de voltar."}},
 		"drip_streak":       {"Mantenha viva a sua sequência de corridas", "Você está embalado — não deixe escapar hoje.", "Não quebre a sequência", "Registrar uma corrida", []string{"Você correu dois dias seguidos. Mais uma mantém a sequência viva.", "Hoje basta um esforço curto e leve. Abra o Threkir e garanta."}},
 		"account_deleted": {"Sua conta do Threkir foi excluída", "Sua conta e seus dados pessoais foram apagados.", "Sua conta foi excluída", "Visitar o Threkir", []string{"Sua conta do Threkir foi excluída, e suas corridas, rotas e dados pessoais foram apagados dos nossos sistemas.", "Também pedimos aos serviços de terceiros vinculados à sua conta (como o seu provedor de pagamento) que removam seus dados. Se você não solicitou isso, entre em contato conosco imediatamente.", "Obrigado por correr com a gente. Você é bem-vindo de volta a qualquer momento."}},
+	},
+	"pt-PT": {
+		"event_reminder":     {"Lembrete: o seu evento está a chegar", "Um evento a que confirmou presença começa em breve.", "O seu evento está a chegar", "Ver evento", []string{"Tem um evento a começar em breve a que confirmou presença.", "Abra-o para ver o ponto de encontro, o horário e quem mais vai."}},
+		"event_cancel":       {"Um evento a que ia foi cancelado", "Um dos eventos a que confirmou presença foi cancelado.", "Evento cancelado", "Ver evento", []string{"Um evento a que tinha confirmado presença foi cancelado.", "Abra-o para ver a nota do organizador e eventuais datas alternativas."}},
+		"plan_update":        {"O seu plano de treino foi atualizado", "O seu treinador alterou o seu plano.", "O seu plano de treino mudou", "Ver treino", []string{"O seu treinador fez uma alteração ao seu plano de treino."}},
+		"message":            {"Tem uma nova mensagem", "Alguém lhe enviou uma mensagem direta.", "Nova mensagem", "Ler mensagem", []string{"Tem uma nova mensagem direta no Threkir."}},
+		"event_rsvp":         {"Nova confirmação no seu evento", "Alguém vai ao seu evento.", "Nova confirmação", "Ver evento", []string{"Alguém confirmou presença num evento que organiza."}},
+		"club_post":          {"Nova publicação no seu clube", "Há uma nova publicação num dos seus clubes.", "Nova publicação do clube", "Ver clube", []string{"Há uma nova publicação num dos seus clubes."}},
+		"run_completed":      {"Alguém que segue concluiu uma corrida", "Veja a corrida mais recente.", "Nova corrida de alguém que segue", "Ver corrida", []string{"Alguém que segue acabou de concluir uma corrida."}},
+		"kudos":              {"Recebeu kudos", "Alguém deu kudos à sua corrida.", "Recebeu kudos", "Ver corrida", []string{"Alguém deu kudos à sua corrida."}},
+		"comment":            {"Novo comentário numa corrida", "Alguém comentou uma corrida.", "Novo comentário", "Ver corrida", []string{"Há um novo comentário numa corrida."}},
+		"follow":             {"Tem um novo seguidor", "Alguém começou a segui-lo.", "Novo seguidor", "Ver perfil", []string{"Alguém começou a segui-lo no Threkir."}},
+		"plan_assigned":      {"O seu treinador atribuiu-lhe um plano de treino", "Está um novo plano à sua espera no treino.", "Novo plano de treino atribuído", "Ver plano", []string{"O seu treinador atribuiu-lhe um plano de treino.", "Abra-o para ver as sessões desta semana e os seus ritmos objetivo."}},
+		"achievement":        {"Ganhou uma nova conquista", "Está uma nova conquista no seu perfil.", "Nova conquista obtida", "Ver conquista", []string{"Ganhou uma nova conquista no Threkir.", "Abra-a para ver o que a desbloqueou — e partilhe-a se quiser."}},
+		"challenge_complete": {"Concluiu um desafio", "Atingiu o objetivo — veja a classificação final.", "Desafio concluído", "Ver desafio", []string{"Atingiu o objetivo de um desafio em que participa.", "Abra-o para ver a classificação final e o seu resultado."}},
+		"data_export_ready":  {"A sua exportação de dados está pronta", "A exportação da sua conta terminou — vá buscá-la às Definições.", "A sua exportação de dados está pronta", "Abrir Definições", []string{"A exportação de conta que pediu terminou de ser criada.", "Abra Definições e depois Conta para a transferir. A ligação de transferência é criada quando lá chegar, por isso nada neste e-mail expira enquanto espera — o ficheiro em si é guardado durante 7 dias."}},
+		"welcome":            {"Bem-vindo ao Threkir", "Está tudo pronto — veja como começar.", "Bem-vindo ao Threkir", "Abrir o Threkir", []string{"Obrigado por se registar. Está tudo pronto para registar a sua primeira corrida, criar rotas e seguir amigos.", "Carregue no botão para começar."}},
+		"pro_welcome":        {"Já tem o Threkir Pro", "Obrigado por fazer o upgrade — veja o que ficou disponível.", "Bem-vindo ao Threkir Pro", "Explorar o Pro", []string{"Obrigado por fazer o upgrade — as suas funcionalidades do Threkir Pro já estão ativas.", "Aproveite as análises de treino avançadas, o treinador com IA e muito mais."}},
+		"payment_failed":     {"Houve um problema com o seu pagamento", "Atualize o seu método de pagamento para manter o Threkir Pro.", "Problema no pagamento", "Atualizar pagamento", []string{"Não conseguimos processar o seu último pagamento do Threkir Pro.", "Atualize o seu método de pagamento para manter as funcionalidades Pro — a assinatura pode ficar suspensa até isso ficar resolvido."}},
+		"default":            {"Tem uma nova notificação", "Tem uma nova notificação no Threkir.", "Nova notificação", "Abrir o Threkir", []string{"Tem uma nova notificação no Threkir."}},
+		"safety_finish":      {"%s concluiu uma corrida", "Uma corrida de que é contacto de segurança foi concluída.", "%s concluiu uma corrida", "Abrir o Threkir", []string{"Distância %s · tempo %s.", "É contacto de segurança desta pessoa, por isso é avisado quando ela conclui uma corrida — mesmo uma privada. Não é preciso fazer nada."}},
+		"safety_confirm":     {"%s quer tê-lo como contacto de segurança", "Confirme para ser avisado quando essa pessoa concluir uma corrida.", "%s quer tê-lo como contacto de segurança", "Confirmar", []string{"%s adicionou-o como contacto de segurança no Threkir. Se confirmar, recebe um e-mail sempre que essa pessoa concluir uma corrida — mesmo uma privada — para saber que voltou em segurança.", "Se não reconhece isto, basta ignorar este e-mail. Nada é enviado sem a sua confirmação."}},
+		"safety_overdue":     {"%s está bem? A corrida deixou de atualizar", "Não é recebida nenhuma posição há algum tempo — veja o progresso em direto.", "Sem atualizações recentes de %s", "Ver progresso em direto", []string{"%s começou uma corrida às %s e comunicou a última posição às %s. Isso ultrapassou a janela de alerta que a pessoa definiu.", "%s começou uma corrida às %s e não foi recebida nenhuma posição desde o início. Isso ultrapassou a janela de alerta que a pessoa definiu.", "Isto também pode ser perda de sinal ou a aplicação fechada. Veja o progresso em direto abaixo; se não conseguir contactar a pessoa e estiver preocupado, considere acionar os serviços de emergência locais."}},
+		"safety_off_route":   {"%s ainda vai bem? Saiu da rota", "Fora da rota planeada há algum tempo — veja o progresso em direto.", "%s saiu da rota", "Ver progresso em direto", []string{"%s começou uma corrida às %s e, desde as %s, afastou-se bastante da rota planeada e continua fora dela.", "%s começou uma corrida às %s e afastou-se bastante da rota planeada.", "Isto também pode ser um desvio propositado ou uma falha de GPS. Veja o progresso em direto abaixo; se não conseguir contactar a pessoa e estiver preocupado, considere acionar os serviços de emergência locais."}},
+		"weekly_digest":      {"A sua semana no Threkir", "Veja como correu a sua semana.", "A sua semana em resumo", "Abrir o Threkir", []string{"Aqui fica um resumo rápido da sua semana.", "Mantenha o ritmo — registe a próxima corrida e veja como fica a semana que vem."}},
+		"drip_onboarding":    {"Pronto para a sua primeira corrida?", "A primeira corrida é a mais difícil — e a mais gratificante.", "Vamos registar a sua primeira corrida", "Registar uma corrida", []string{"Está tudo configurado, mas ainda não registou nenhuma corrida. O primeiro passo é sempre o mais difícil — depois fica mais fácil.", "Abra o Threkir, carregue em registar e saia. Até uma caminhada-corrida curta conta."}},
+		"drip_first_week":    {"Uma corrida feita — pronto para a próxima?", "A segunda corrida é a que cria o hábito.", "Ótima primeira corrida — continue assim", "Registar uma corrida", []string{"A sua primeira corrida foi há alguns dias — a parte mais difícil já passou.", "A segunda corrida é a que cria o hábito. Uma corrida curta e leve esta semana mantém o embalo."}},
+		"drip_reengagement":  {"Temos sentido a sua falta no Threkir", "Já passou algum tempo — as sapatilhas estão à espera.", "Hora de calçar outra vez as sapatilhas", "Abrir o Threkir", []string{"Já passou algum tempo desde a sua última corrida. Sem pressão — todos os corredores fazem uma pausa.", "Quando estiver pronto, estamos aqui. Uma corrida curta e leve é uma ótima forma de voltar."}},
+		"drip_streak":        {"Mantenha viva a sua sequência de corridas", "Está embalado — não deixe escapar hoje.", "Não quebre a sequência", "Registar uma corrida", []string{"Correu dois dias seguidos. Mais um mantém a sequência viva.", "Hoje basta um esforço curto e leve. Abra o Threkir e garanta-o."}},
+		"account_deleted":    {"A sua conta do Threkir foi eliminada", "A sua conta e os seus dados pessoais foram apagados.", "A sua conta foi eliminada", "Visitar o Threkir", []string{"A sua conta do Threkir foi eliminada, e as suas corridas, rotas e dados pessoais foram apagados dos nossos sistemas.", "Também pedimos aos serviços de terceiros associados à sua conta (como o seu fornecedor de pagamentos) que removam os seus dados. Se não solicitou isto, contacte-nos imediatamente.", "Obrigado por ter corrido connosco. É bem-vindo de volta quando quiser."}},
 	},
 }

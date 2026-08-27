@@ -3982,5 +3982,7 @@
   "challengesSuffixDays": "días",
   "challengesErrTitle": "Ponle un título al desafío.",
   "challengesErrGoal": "Meta: introduce un número positivo",
+  "challengesGoalPreview": "Los participantes ven {value}",
+  "challengesGoalStreakCeiling": "En esta ventana caben como máximo {n} días activos.",
   "challengesErrWindow": "El fin debe ser posterior al inicio."
 }

@@ -12,10 +12,17 @@ import {
 	parseFirmware,
 } from './check_watch_ble_uuids.mjs';
 
+/**
+ * A GATT row or a Dart constant as the fixtures write it: `[name, uuid]`.
+ * @typedef {readonly [string, string]} Row
+ */
+
+/** @param {string | number} n */
 const U = (n) => `d1f6a7e${n}-5b2c-4e9a-9c3d-1a2b3c4d5e6f`;
 
 // The shape the firmware declares, minimal but structurally faithful — the
 // attribute macro, the extra attribute keys, the doc comment between rows.
+/** @param {readonly Row[]} rows */
 function fakeFirmware(rows) {
 	const body = rows
 		.map(
@@ -36,6 +43,7 @@ function fakeFirmware(rows) {
 	);
 }
 
+/** @param {readonly Row[]} consts */
 function fakeDart(consts) {
 	return (
 		`class ReactiveBleWatchTransport implements WatchBleTransport {\n` +
@@ -49,6 +57,7 @@ function fakeDart(consts) {
 
 // Every firmware row the phone claims, aligned. The baseline the mutations
 // below diverge from.
+/** @type {readonly Row[]} */
 const ALIGNED_ROWS = [
 	['frame', U(1)],
 	['run_manifest', U(2)],
@@ -60,6 +69,7 @@ const ALIGNED_ROWS = [
 	['roadbook', U(8)],
 	['push_status', U(9)],
 ];
+/** @type {readonly Row[]} */
 const ALIGNED_CONSTS = [
 	['frameCharUuid', U(1)],
 	['manifestCharUuid', U(2)],
@@ -72,6 +82,12 @@ const ALIGNED_CONSTS = [
 	['pushStatusCharUuid', U(9)],
 ];
 
+/**
+ * @param {readonly Row[]} rows
+ * @param {readonly Row[]} consts
+ * @param {typeof PAIRS} [pairs]
+ * @param {readonly string[]} [unclaimed]
+ */
 const verdict = (rows, consts, pairs, unclaimed) =>
 	compareTables(
 		parseFirmware(fakeFirmware(rows)),
@@ -139,14 +155,16 @@ test('an unclaimed firmware row the phone leaves alone passes', () => {
 });
 
 test('an unclaimed firmware row a Dart constant points at fails', () => {
+	// Named rather than sliced by index: the aligned table grows every time
+	// the watch does, and a positional edit here silently drops a pair from
+	// the fixture — which is the very failure the guard exists to catch.
+	/** @type {readonly Row[]} */
+	const misaimed = ALIGNED_CONSTS.map(([n, u]) =>
+		n === 'roadbookCharUuid' ? [n, U('a')] : [n, u],
+	);
 	const { errors } = verdict(
 		[...ALIGNED_ROWS, ['telemetry', U('a')]],
-		// Named rather than sliced by index: the aligned table grows every time
-		// the watch does, and a positional edit here silently drops a pair from
-		// the fixture — which is the very failure the guard exists to catch.
-		ALIGNED_CONSTS.map(([n, u]) =>
-			n === 'roadbookCharUuid' ? [n, U('a')] : [n, u],
-		),
+		misaimed,
 		PAIRS,
 		['telemetry'],
 	);
@@ -166,6 +184,7 @@ test('a UUID belonging to no characteristic at all says so', () => {
 });
 
 test('a renamed firmware row fails rather than silently dropping out', () => {
+	/** @type {readonly Row[]} */
 	const renamed = ALIGNED_ROWS.map(([n, u]) =>
 		n === 'course' ? ['course_v2', u] : [n, u],
 	);

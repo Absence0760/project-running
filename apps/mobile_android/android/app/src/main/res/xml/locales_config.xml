@@ -3,7 +3,7 @@
      an ARB catalogue for; the platform offers these in system Settings → Apps
      → Threkir → Language, which is a path to a catalogue the in-app picker is
      not the only owner of. Held to lib/l10n by the locale-reach guard in
-     test/architecture_guards_test.dart (decisions § 740). `pt` is European
+     test/architecture_guards_test.dart (decisions § 740). `pt-PT` is European
      Portuguese, `pt-BR` Brazilian. -->
 <locale-config xmlns:android="http://schemas.android.com/apk/res/android">
     <locale android:name="en" />
@@ -11,6 +11,6 @@
     <locale android:name="fr" />
     <locale android:name="es" />
     <locale android:name="ja" />
-    <locale android:name="pt" />
+    <locale android:name="pt-PT" />
     <locale android:name="pt-BR" />
 </locale-config>

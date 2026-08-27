@@ -14,10 +14,15 @@ import {
 
 /// A job shaped like the real `parity-types`: several named check steps, then
 /// whatever trailing step the caller wants.
+/** @param {string} steps */
 function bundledJob(steps) {
 	return `name: CI\njobs:\n  parity-types:\n    name: Schema / type drift\n    steps:\n${steps}`;
 }
 
+/**
+ * @param {string} name
+ * @param {string} cmd
+ */
 const selfDiagnosing = (name, cmd) =>
 	`      - name: ${name}\n` +
 	`        run: |\n` +

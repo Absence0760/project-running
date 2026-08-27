@@ -162,27 +162,60 @@ export interface ThirdPartyOutcomes {
 
 // ─── account-deletion receipt enqueue ───
 
+// RECEIPT_EXACT / RECEIPT_BASE mirror emailExact / emailBase in the worker's
+// email_i18n.go, which in turn mirror EXACT / BASE_TO_LOCALE in the web
+// negotiator (apps/web/src/lib/i18n/locale.ts). The three tables are the same
+// table; the copies exist because these are three deployment units (a Deno
+// Edge Function, a Go binary, a browser bundle) with no shared module between
+// them, and `RECEIPT_LOCALES` below is what a drift test can compare.
+//
+// The Portuguese rows are why this is a table and not a `switch`: `pt-BR`
+// reaches Brazilian by its own tag — Android, iOS and every browser report
+// the region — while the bare `pt` and the other European-orthography regions
+// (`pt-AO`, `pt-MZ`, `pt-CV`) have nowhere else to land and resolve to
+// European. This was `startsWith('pt')` → `pt-BR`, so the receipt confirming
+// a Lisbon reader's account erasure — the last mail we ever send them —
+// arrived in Brazilian Portuguese (decisions § 761).
+const RECEIPT_EXACT: Record<string, string> = {
+	en: 'en',
+	de: 'de',
+	fr: 'fr',
+	es: 'es',
+	ja: 'ja',
+	'pt-br': 'pt-BR',
+	'pt-pt': 'pt-PT',
+};
+
+const RECEIPT_BASE: Record<string, string> = {
+	en: 'en',
+	de: 'de',
+	fr: 'fr',
+	es: 'es',
+	ja: 'ja',
+	pt: 'pt-PT',
+};
+
+// The locales the worker's account_deleted copy exists in. Derived from the
+// exact table so adding a row there is the whole edit — a hand-kept second
+// list is what let the worker's own set drift out of reach of its guards.
+export const RECEIPT_LOCALES: readonly string[] = Object.values(RECEIPT_EXACT)
+	.filter((v, i, a) => a.indexOf(v) === i)
+	.sort();
+
 // normalizeReceiptLocale mirrors the worker's normalizeEmailLocale
 // (apps/job_worker/internal/email_i18n.go): map an arbitrary BCP-47-ish
-// `user_settings.prefs.locale` to one of the six supported email locales,
-// else 'en'. Doing it here keeps a junk pref value out of the job payload;
-// the worker normalizes again defensively.
+// `user_settings.prefs.locale` to one of the supported email locales, else
+// 'en'. Doing it here keeps a junk pref value out of the job payload; the
+// worker normalizes again defensively.
 export function normalizeReceiptLocale(tag: unknown): string {
 	if (typeof tag !== 'string') return 'en';
-	const t = tag.trim().toLowerCase();
+	const t = tag.trim().toLowerCase().replaceAll('_', '-');
 	if (t === '') return 'en';
-	if (t.startsWith('pt')) return 'pt-BR';
-	const base = t.split(/[-_]/)[0];
-	switch (base) {
-		case 'en':
-		case 'de':
-		case 'fr':
-		case 'es':
-		case 'ja':
-			return base;
-		default:
-			return 'en';
-	}
+	const exact = RECEIPT_EXACT[t];
+	if (exact) return exact;
+	const sep = t.indexOf('-');
+	const base = sep >= 0 ? t.slice(0, sep) : t;
+	return RECEIPT_BASE[base] ?? 'en';
 }
 
 // accountDeletionReceiptJobPayload builds the `lifecycle_email` job the

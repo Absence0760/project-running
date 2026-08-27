@@ -13788,6 +13788,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get challengesSuffixDays => 'días';
 
   @override
+  String challengesGoalPreview(String value) {
+    return 'Los participantes ven $value';
+  }
+
+  @override
+  String challengesGoalStreakCeiling(int n) {
+    return 'En esta ventana caben como máximo $n días activos.';
+  }
+
+  @override
   String get challengesErrTitle => 'Ponle un título al desafío.';
 
   @override

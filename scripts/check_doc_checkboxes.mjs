@@ -63,10 +63,18 @@ export const CLOSE_MARKER = '<!-- /doc-checkbox-states -->';
 
 /// The markers a `- \`[m]\` meaning` list declares, in document order. Both
 /// homes write the vocabulary in that one shape, so one parser reads both.
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
 export function readMarkerList(text) {
 	return [...text.matchAll(/^[-*+] {1,3}`\[(.)\]`/gm)].map((m) => m[1]);
 }
 
+/**
+ * @param {string} conventions
+ * @returns {string[]}
+ */
 export function readDocumentedMarkers(conventions) {
 	const opens = conventions.split(OPEN_MARKER).length - 1;
 	const closes = conventions.split(CLOSE_MARKER).length - 1;
@@ -89,10 +97,20 @@ export function readDocumentedMarkers(conventions) {
 /// Every checkbox bullet in one document, with the whole bullet's text — a
 /// bullet wraps over continuation lines, and the link rule reads all of it.
 /// Fenced blocks are skipped: a `- [ ]` inside one is sample output, not a box.
+/**
+ * @typedef {{ line: number, marker: string, indent: number, text: string }} Checkbox
+ */
+/**
+ * @param {string} text
+ * @returns {Checkbox[]}
+ */
 export function checkboxesIn(text) {
 	const lines = text.split('\n');
+	/** @type {Checkbox[]} */
 	const found = [];
+	/** @type {string | null} */
 	let fence = null;
+	/** @type {Checkbox | null} */
 	let open = null;
 
 	const flush = () => {
@@ -125,6 +143,7 @@ export function checkboxesIn(text) {
 	return found;
 }
 
+/** @returns {string[]} Repo-relative paths of every tracked `*.md`. */
 export function trackedMarkdown() {
 	return execFileSync('git', ['ls-files', '*.md'], { cwd: REPO_ROOT, encoding: 'utf-8' })
 		.split('\n')
@@ -134,12 +153,19 @@ export function trackedMarkdown() {
 /// A `[~]` box points at a survey file, as a link rather than a bare mention —
 /// `reviews/README.md` § 2 asks for a link, and naming the file in prose is not
 /// one.
+/** @param {string} bulletText */
 export function linksSurvey(bulletText) {
 	return SURVEY_FILES.some((name) =>
 		new RegExp(`\\]\\([^)]*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:#[^)]*)?\\)`).test(bulletText)
 	);
 }
 
+/**
+ * @param {string} relPath
+ * @param {string} text
+ * @param {readonly string[]} documented
+ * @returns {string[]}
+ */
 export function auditDoc(relPath, text, documented) {
 	const problems = [];
 	const frozen = text.includes(FROZEN_MARKER);
@@ -164,7 +190,14 @@ export function auditDoc(relPath, text, documented) {
 	return problems;
 }
 
-export function run() {
+/// `files` is overridable so the walk's own floor below can be exercised: a
+/// rule that only fires over a state the real repo never reaches is a rule
+/// nothing tests.
+/**
+ * @param {readonly string[]} [files]
+ * @returns {string[]}
+ */
+export function run(files = trackedMarkdown()) {
 	const documented = readDocumentedMarkers(readFileSync(CONVENTIONS_PATH, 'utf-8'));
 
 	const reviewsMarkers = readMarkerList(readFileSync(REVIEWS_README_PATH, 'utf-8'));
@@ -179,8 +212,16 @@ export function run() {
 		);
 	}
 
+	if (files.length === 0) {
+		throw new Error(
+			`no tracked *.md files to audit: \`git ls-files '*.md'\` came back empty. Rules 3 and 4 would ` +
+				`then run over no document at all and this guard would report the tree clean. Run it from a ` +
+				`checkout with history, or repair trackedMarkdown().`
+		);
+	}
+
 	const problems = [];
-	for (const rel of trackedMarkdown()) {
+	for (const rel of files) {
 		problems.push(...auditDoc(rel, readFileSync(join(REPO_ROOT, rel), 'utf-8'), documented));
 	}
 	return problems;
@@ -191,7 +232,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	try {
 		problems = run();
 	} catch (err) {
-		console.error(err.message);
+		console.error(err instanceof Error ? err.message : String(err));
 		process.exit(1);
 	}
 	if (problems.length > 0) {

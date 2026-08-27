@@ -1,0 +1,27 @@
+{
+	// `infra/modules/web-stack/functions/` holds CloudFront Functions —
+	// JavaScript Terraform reads with `file()` and uploads verbatim, run at
+	// the edge on every viewer request to the site. Its own root rather than
+	// a line in `tsconfig.scripts.json` for the reason § 752 gave the service
+	// worker: the runtime is not Node and not a browser. `cloudfront-js-2.0`
+	// is ECMAScript 5.1 plus a subset of later features, with no `Promise`,
+	// no timers and no `fetch` — so `lib` is `es5` and `types` is empty, and a
+	// `setTimeout` or a `fetch` that would throw at the edge fails here
+	// instead. (`target` stays inherited: TypeScript 6 deprecates `es5` there,
+	// and with `noEmit` it governs nothing `lib` does not already.) The
+	// runtime's own globals are declared in `cloudfront.d.ts` beside the
+	// function.
+	//
+	// Run: `npm run check:cloudfront-types`
+	// CI:  the `parity-types` job in .github/workflows/ci.yml.
+	// The include list is guarded by scripts/tsconfig_coverage.test.mjs.
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"lib": ["es5"],
+		"types": []
+	},
+	"include": [
+		"infra/modules/web-stack/functions/**/*.js",
+		"infra/modules/web-stack/functions/**/*.d.ts"
+	]
+}

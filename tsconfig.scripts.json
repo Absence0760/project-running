@@ -1,0 +1,33 @@
+{
+	// The repo's own Node tooling: the CI guard scripts under `scripts/` and
+	// `apps/backend/scripts/`, the composite action's test under `.github/`,
+	// and the placeholder Lambda under `infra/`. There is no root
+	// `tsconfig.json` in this repo, so until § 757 none of it was in any tsc
+	// program at all — 35 files whose verdicts every merge depends on.
+	//
+	// `types` is explicit because nothing here pulls `@types/node` in on its
+	// own: the automatic type-root scan does not fire under this config chain
+	// and `moduleResolution: bundler` skips `node:`-prefixed specifiers, so
+	// without it every `process` and every `node:fs` import reads as an
+	// unresolved name (the same trap § 752 recorded).
+	//
+	// `lib` is `esnext` alone, without `DOM`. These are Node processes; a
+	// `document` or a `localStorage` reaching one of them is a mistake, and
+	// everything a script legitimately uses (`fetch`, `URL`, `console`) comes
+	// from `@types/node`.
+	//
+	// Run: `npm run check:script-types`
+	// CI:  the `parity-types` job in .github/workflows/ci.yml.
+	// The include list is guarded by scripts/tsconfig_coverage.test.mjs.
+	"extends": "./tsconfig.base.json",
+	"compilerOptions": {
+		"lib": ["esnext"],
+		"types": ["node"]
+	},
+	"include": [
+		".github/**/*.mjs",
+		"apps/backend/scripts/**/*.mjs",
+		"infra/**/*.mjs",
+		"scripts/**/*.mjs"
+	]
+}

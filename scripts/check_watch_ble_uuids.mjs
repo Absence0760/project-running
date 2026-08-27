@@ -45,6 +45,9 @@ export const DART_FILE =
 // dev TCP link only (`sim_watch_link.dart`), so § 447's forwarder had no BLE
 // feed. `ReactiveBleWatchFrameSource` now subscribes to it on its own
 // connection, so it is a checked pair like the rest.
+/** @typedef {{ firmware: string, dart: string }} Pair */
+
+/** @type {readonly Pair[]} */
 export const PAIRS = [
 	{ firmware: 'service', dart: 'serviceUuid' },
 	{ firmware: 'frame', dart: 'frameCharUuid' },
@@ -67,12 +70,17 @@ export const PAIRS = [
 // because the watch is free to grow its table ahead of the phone, and the day
 // it does, listing the new row here silences the "no phone counterpart"
 // warning WITHOUT giving up the misaimed-constant check.
+/** @type {readonly string[]} */
 export const UNCLAIMED = [];
 
 // `#[nrf_softdevice::gatt_service(uuid = "…")] pub struct LinkService { … }`,
 // then one `#[characteristic(uuid = "…", …)] <name>: <ty>` per row. Parsed by
 // pairing each uuid attribute with the identifier that follows it, so a
 // reordered table or an inserted row is read correctly rather than positionally.
+/**
+ * @param {string} src
+ * @returns {Map<string, string>} GATT field name -> lowercased UUID.
+ */
 export function parseFirmware(src) {
 	const service = src.match(
 		/gatt_service\s*\(\s*uuid\s*=\s*"([0-9a-fA-F-]+)"\s*\)/,
@@ -93,6 +101,10 @@ export function parseFirmware(src) {
 
 // `static final Uuid <name> = Uuid.parse('…');` — the newline between the
 // declaration and the initialiser is why this can't be a one-line regex.
+/**
+ * @param {string} src
+ * @returns {Map<string, string>} Dart constant name -> lowercased UUID.
+ */
 export function parseDart(src) {
 	const out = new Map();
 	const re =
@@ -108,6 +120,13 @@ export function parseDart(src) {
 // exercised by the production tables stops being exercised the moment those
 // tables stop containing an example of it, which is exactly what happened to
 // `unclaimed` when the phone claimed `frame`.
+/**
+ * @param {Map<string, string>} firmware
+ * @param {Map<string, string>} dart
+ * @param {readonly Pair[]} [pairs]
+ * @param {readonly string[]} [unclaimed]
+ * @returns {{ errors: string[], warnings: string[], ok: string[] }}
+ */
 export function compareTables(
 	firmware,
 	dart,

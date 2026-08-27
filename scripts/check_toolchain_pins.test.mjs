@@ -23,14 +23,21 @@ import {
 
 /// A firmware-sim job shaped like the real one: an actions/cache step whose
 /// key embeds the version, then the `command -v || cargo install` line.
-function defmtWorkflow({ install, key = install }) {
+/** @param {{ install: string | null, key?: string | null, rawKey?: string }} opts */
+function defmtWorkflow({ install, key = install, rawKey }) {
+	const keyLine =
+		rawKey !== undefined
+			? `          key: ${rawKey}\n`
+			: key === null
+				? ''
+				: `          key: defmt-print-${key}-\${{ runner.os }}\n`;
 	return (
 		`name: Fake\njobs:\n  sim:\n    steps:\n` +
 		`      - name: Cache defmt-print\n` +
 		`        uses: actions/cache@abc\n` +
 		`        with:\n` +
 		`          path: ~/.cargo/bin/defmt-print\n` +
-		(key === null ? '' : `          key: defmt-print-${key}-\${{ runner.os }}\n`) +
+		keyLine +
 		`      - name: Install defmt-print\n` +
 		`        run: command -v defmt-print || cargo install defmt-print --locked` +
 		(install === null ? '' : ` --version ${install}`) +
@@ -40,6 +47,7 @@ function defmtWorkflow({ install, key = install }) {
 
 /// A pubspec.lock fragment shaped like the real one: two-space package keys,
 /// a nested description block, the version last.
+/** @param {string | null} melosVersion */
 function fakeLock(melosVersion) {
 	return (
 		`packages:\n` +
@@ -65,6 +73,7 @@ function fakeLock(melosVersion) {
 }
 
 /// A workflow that activates melos, optionally with a version.
+/** @param {string | null} version */
 function melosWorkflow(version) {
 	return (
 		`name: Fake\njobs:\n  build:\n    steps:\n` +
@@ -78,6 +87,7 @@ const SHA = 'subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2';
 /// A workflow with one flutter-action step, shaped like the real ones:
 /// a top-level `env:` block carrying an unrelated key alongside the pin,
 /// and the step nested two levels down inside a job.
+/** @param {{ declared: string | null, pin: string | null, extraStep?: string }} opts */
 function workflow({ declared, pin, extraStep = '' }) {
 	const env =
 		`env:\n` +
@@ -147,21 +157,21 @@ test('resolveVersion accepts a literal', () => {
 });
 
 test('resolveVersion rejects a missing pin', () => {
-	assert.match(resolveVersion({ version: null }, '3.47.0').error, /floats/);
+	const resolved = resolveVersion({ version: null }, '3.47.0');
+	assert.ok(resolved.error);
+	assert.match(resolved.error, /floats/);
 });
 
 test('resolveVersion rejects a reference the workflow never declares', () => {
-	assert.match(
-		resolveVersion({ version: '${{ env.FLUTTER_VERSION }}' }, null).error,
-		/declares no top-level/,
-	);
+	const resolved = resolveVersion({ version: '${{ env.FLUTTER_VERSION }}' }, null);
+	assert.ok(resolved.error);
+	assert.match(resolved.error, /declares no top-level/);
 });
 
 test('resolveVersion rejects some other env key', () => {
-	assert.match(
-		resolveVersion({ version: '${{ env.SDK }}' }, '3.47.0').error,
-		/every pin must read/,
-	);
+	const resolved = resolveVersion({ version: '${{ env.SDK }}' }, '3.47.0');
+	assert.ok(resolved.error);
+	assert.match(resolved.error, /every pin must read/);
 });
 
 test('checkFlutter passes when every workflow pins the same version', () => {
@@ -328,6 +338,31 @@ test('checkDefmtPrint fails a cache key that lags the pinned version', () => {
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /cache key names defmt-print 1\.1\.0 but the install pins 1\.2\.0/);
 	assert.match(errors[0], /the pin would never run/);
+});
+
+// The cache half going blind. A key simplified to `defmt-print-${{ runner.os }}`
+// is the exact hazard this half exists for, and the old pattern only matched a
+// key that ALREADY carried a version — so dropping it made the key invisible
+// and the check reported nothing while `command -v` kept winning.
+test('checkDefmtPrint fails a cache key that carries no version at all', () => {
+	const { errors } = checkDefmtPrint([
+		{
+			name: 'ci.yml',
+			text: defmtWorkflow({ install: '1.1.0', rawKey: 'defmt-print-${{ runner.os }}' }),
+		},
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /cache key carries no version/);
+	assert.match(errors[0], /the pin never runs/);
+});
+
+// Removing the cache step is sound — `cargo install` simply always runs — so
+// the absence of a key must not be reported as a stale one.
+test('checkDefmtPrint passes an install with no cache step at all', () => {
+	const { errors } = checkDefmtPrint([
+		{ name: 'ci.yml', text: defmtWorkflow({ install: '1.1.0', key: null }) },
+	]);
+	assert.deepEqual(errors, []);
 });
 
 test('checkDefmtPrint fails when the two sim jobs disagree', () => {

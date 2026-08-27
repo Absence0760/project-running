@@ -21,10 +21,24 @@ import {
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/** @typedef {import('./check_ios_native_declarations.mjs').EvaluateInput} EvaluateInput */
+
+/**
+ * `parsePlist` is nullable and a null is a parser failure, not a fixture that
+ * happens to be empty — so every reader asserts before it reads.
+ * @param {string} xml
+ * @returns {Map<string, unknown>}
+ */
+function parsed(xml) {
+	const dict = parsePlist(xml);
+	assert.ok(dict, 'parsePlist returned no dictionary for this fixture');
+	return dict;
+}
+
 // --- the parser -------------------------------------------------------------
 
 test('parsePlist reads scalars, arrays and booleans out of a dict', () => {
-	const dict = parsePlist(`<?xml version="1.0" encoding="UTF-8"?>
+	const dict = parsed(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -45,7 +59,7 @@ test('parsePlist reads scalars, arrays and booleans out of a dict', () => {
 });
 
 test('parsePlist ignores keys that appear only inside a comment', () => {
-	const dict = parsePlist(`<plist version="1.0">
+	const dict = parsed(`<plist version="1.0">
 <dict>
 	<!-- <key>UIBackgroundModes</key><array><string>audio</string></array> -->
 	<key>CFBundleName</key>
@@ -60,7 +74,7 @@ test('parsePlist strips comments to a fixpoint, not in a single pass', () => {
 	// Removing the inner span leaves the outer delimiters spelling a fresh
 	// comment. A single pass drops one and hands the tokenizer the remainder,
 	// where the key inside it reads as a declaration the binary never carries.
-	const dict = parsePlist(`<plist version="1.0">
+	const dict = parsed(`<plist version="1.0">
 <dict>
 	<!--<!-- <key>UIBackgroundModes</key><array><string>audio</string></array> -->-->
 	<key>CFBundleName</key>
@@ -72,7 +86,7 @@ test('parsePlist strips comments to a fixpoint, not in a single pass', () => {
 });
 
 test('parsePlist walks past a nested dict-in-array without losing the next key', () => {
-	const dict = parsePlist(`<plist version="1.0">
+	const dict = parsed(`<plist version="1.0">
 <dict>
 	<key>CFBundleDocumentTypes</key>
 	<array>
@@ -132,18 +146,28 @@ test('stripWholeLineComments blanks prose but keeps a trailing comment line inta
 
 // --- the verdict ------------------------------------------------------------
 
+/** @param {string} text */
 const dart = (text) => [{ path: join(REPO_ROOT, 'apps/mobile_ios/lib/x.dart'), text }];
+/** @param {string} text */
 const swift = (text) => [{ path: join(IOS_ROOT, 'Runner/X.swift'), text }];
 
 /// A structurally faithful PrivacyInfo.xcprivacy carrying exactly the entries
 /// the baseline's sources oblige — the two fixed API categories, the two fixed
 /// data types, and the no-tracking stance.
+/**
+ * @param {{ apis?: string[], data?: string[] | null, tracking?: boolean }} [options]
+ */
 function fakeManifest({ apis = ['3EC4.1', 'E174.1'], data = null, tracking = false } = {}) {
+	/**
+	 * @param {string} type
+	 * @param {string} reason
+	 */
 	const apiEntry = (type, reason) =>
 		`\t\t<dict>\n\t\t\t<key>NSPrivacyAccessedAPIType</key>\n` +
 		`\t\t\t<string>${type}</string>\n` +
 		`\t\t\t<key>NSPrivacyAccessedAPITypeReasons</key>\n` +
 		`\t\t\t<array><string>${reason}</string></array>\n\t\t</dict>`;
+	/** @param {string} type */
 	const dataEntry = (type) =>
 		`\t\t<dict>\n\t\t\t<key>NSPrivacyCollectedDataType</key>\n` +
 		`\t\t\t<string>${type}</string>\n\t\t</dict>`;
@@ -180,27 +204,37 @@ const PBX =
 	`\t\t\tname = Release;\n` +
 	`\t\t};\n`;
 
+const APP_DELEGATE =
+	'isExcludedFromBackup = true\n.documentDirectory\n' +
+	'WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "com.threkir.backgroundSync")';
+
+const BACKGROUND_SYNC_DART =
+	"const backgroundSyncTaskName = 'com.threkir.backgroundSync';\n" +
+	'final registered = Platform.isIOS\n' +
+	'    ? Workmanager().registerProcessingTask(backgroundSyncTaskName)\n' +
+	'    : Workmanager().registerPeriodicTask(backgroundSyncTaskName);';
+
 /// The smallest tree that satisfies every rule, so a mutation below is the
 /// only difference between green and red.
+/**
+ * @param {Partial<EvaluateInput>} [overrides]
+ * @returns {EvaluateInput}
+ */
 function baseline(overrides = {}) {
 	return {
-		infoPlist: new Map([
-			['UIBackgroundModes', ['audio']],
-			['BGTaskSchedulerPermittedIdentifiers', ['com.threkir.backgroundSync']],
-			['ITSAppUsesNonExemptEncryption', false],
-			['NSPhotoLibraryAddUsageDescription', 'Threkir saves cards.'],
-		]),
+		infoPlist: new Map(
+			/** @type {[string, unknown][]} */ ([
+				['UIBackgroundModes', ['audio']],
+				['BGTaskSchedulerPermittedIdentifiers', ['com.threkir.backgroundSync']],
+				['ITSAppUsesNonExemptEncryption', false],
+				['NSPhotoLibraryAddUsageDescription', 'Threkir saves cards.'],
+			]),
+		),
 		entitlements: new Map([['com.apple.developer.aps-environment', APS_SUBSTITUTION]]),
 		privacyManifest: fakeManifest(),
-		appDelegate:
-			'isExcludedFromBackup = true\n.documentDirectory\n' +
-			'WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "com.threkir.backgroundSync")',
+		appDelegate: APP_DELEGATE,
 		pbxproj: PBX,
-		backgroundSyncDart:
-			"const backgroundSyncTaskName = 'com.threkir.backgroundSync';\n" +
-			'final registered = Platform.isIOS\n' +
-			'    ? Workmanager().registerProcessingTask(backgroundSyncTaskName)\n' +
-			'    : Workmanager().registerPeriodicTask(backgroundSyncTaskName);',
+		backgroundSyncDart: BACKGROUND_SYNC_DART,
 		dartSources: dart(
 			'IosTextToSpeechAudioCategory.playback\n' + "import 'package:firebase_messaging/x.dart';",
 		),
@@ -210,6 +244,15 @@ function baseline(overrides = {}) {
 	};
 }
 
+/**
+ * The baseline's Info.plist with one key replaced. Built by copy-then-set
+ * rather than by spreading into a `new Map([...])` literal, which infers the
+ * added pair as an array rather than as an entry tuple.
+ * @param {string} key
+ * @param {unknown} value
+ */
+const plistWith = (key, value) => new Map(baseline().infoPlist).set(key, value);
+
 test('the baseline passes, so every mutation below is the only cause of its failure', () => {
 	const { errors } = evaluate(baseline());
 	assert.deepEqual(errors, []);
@@ -217,7 +260,7 @@ test('the baseline passes, so every mutation below is the only cause of its fail
 
 test('a playback TTS session with no `audio` background mode fails', () => {
 	const { errors } = evaluate(
-		baseline({ infoPlist: new Map([...baseline().infoPlist, ['UIBackgroundModes', []]]) }),
+		baseline({ infoPlist: plistWith('UIBackgroundModes', []) }),
 	);
 	assert.equal(errors.filter((e) => e.includes('`audio`')).length, 1);
 });
@@ -225,7 +268,7 @@ test('a playback TTS session with no `audio` background mode fails', () => {
 test('deleting the playback call deletes the requirement with it', () => {
 	const { errors, ok } = evaluate(
 		baseline({
-			infoPlist: new Map([...baseline().infoPlist, ['UIBackgroundModes', []]]),
+			infoPlist: plistWith('UIBackgroundModes', []),
 			dartSources: dart("import 'package:firebase_messaging/x.dart';"),
 		}),
 	);
@@ -250,7 +293,7 @@ test('an aps-environment value that is neither a substitution nor a legal litera
 
 test('a background mode nothing claims is an error, not a warning', () => {
 	const { errors } = evaluate(
-		baseline({ infoPlist: new Map([...baseline().infoPlist, ['UIBackgroundModes', ['audio', 'fetch']]]) }),
+		baseline({ infoPlist: plistWith('UIBackgroundModes', ['audio', 'fetch']) }),
 	);
 	assert.equal(errors.filter((e) => e.includes('`fetch`')).length, 1);
 });
@@ -272,29 +315,38 @@ test('a Release configuration minting sandbox tokens fails', () => {
 });
 
 test('a renamed background-sync identifier is caught in each of the three files', () => {
-	for (const [field, mutated] of [
+	/** @type {[string, Partial<EvaluateInput>][]} */
+	const mutations = [
 		[
-			'backgroundSyncDart',
-			baseline().backgroundSyncDart.replace('com.threkir.backgroundSync', 'com.threkir.other'),
+			'background_sync.dart',
+			{
+				backgroundSyncDart: BACKGROUND_SYNC_DART.replace(
+					'com.threkir.backgroundSync',
+					'com.threkir.other',
+				),
+			},
 		],
+		['Info.plist', { infoPlist: plistWith('BGTaskSchedulerPermittedIdentifiers', ['other']) }],
 		[
-			'infoPlist',
-			new Map([...baseline().infoPlist, ['BGTaskSchedulerPermittedIdentifiers', ['other']]]),
+			'AppDelegate.swift',
+			{
+				appDelegate: APP_DELEGATE.replace(
+					'com.threkir.backgroundSync',
+					'com.threkir.other',
+				),
+			},
 		],
-		[
-			'appDelegate',
-			baseline().appDelegate.replace('com.threkir.backgroundSync', 'com.threkir.other'),
-		],
-	]) {
-		const { errors } = evaluate(baseline({ [field]: mutated }));
-		assert.ok(errors.length > 0, `mutating ${field} produced no error`);
+	];
+	for (const [what, mutated] of mutations) {
+		const { errors } = evaluate(baseline(mutated));
+		assert.ok(errors.length > 0, `mutating ${what} produced no error`);
 	}
 });
 
 test('an iOS branch submitting the periodic task type fails', () => {
 	const { errors } = evaluate(
 		baseline({
-			backgroundSyncDart: baseline().backgroundSyncDart.replace(
+			backgroundSyncDart: BACKGROUND_SYNC_DART.replace(
 				'? Workmanager().registerProcessingTask(backgroundSyncTaskName)',
 				'? Workmanager().registerPeriodicTask(backgroundSyncTaskName)',
 			),
@@ -314,11 +366,9 @@ test('a missing CODE_SIGN_ENTITLEMENTS wiring fails', () => {
 test('a usage string naming a different product than CFBundleDisplayName fails', () => {
 	const { errors } = evaluate(
 		baseline({
-			infoPlist: new Map([
-				...baseline().infoPlist,
-				['CFBundleDisplayName', 'Threkir'],
-				['NSMotionUsageDescription', 'Run App counts your steps.'],
-			]),
+			infoPlist: new Map(baseline().infoPlist)
+				.set('CFBundleDisplayName', 'Threkir')
+				.set('NSMotionUsageDescription', 'Run App counts your steps.'),
 			dartSources: dart('import \'package:pedometer/pedometer.dart\';'),
 		}),
 	);
@@ -343,6 +393,47 @@ test('a collected data type the code implies but the manifest omits fails', () =
 test('claiming tracking fails the no-IDFA stance', () => {
 	const { errors } = evaluate(baseline({ privacyManifest: fakeManifest({ tracking: true }) }));
 	assert.equal(errors.filter((e) => e.includes('NSPrivacyTracking')).length, 1);
+});
+
+test('an absent PrivacyInfo.xcprivacy fails rather than skipping every check under it', () => {
+	// The manifest reader is the only input whose absence used to be silent:
+	// Info.plist and Runner.entitlements hard-fail, a null AppDelegate and a
+	// null pbxproj each fall through to a named error — but a null manifest
+	// skipped the whole block, so deleting the file took the unconditional
+	// required-reason and collected-data checks with it and reported nothing.
+	const { errors } = evaluate(baseline({ privacyManifest: null }));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /No PrivacyInfo\.xcprivacy was read/);
+});
+
+test('a NSPrivacyAccessedAPITypes that is not an array of dicts reports rather than throwing', () => {
+	const { errors } = evaluate(
+		baseline({
+			privacyManifest:
+				'<plist version="1.0">\n<dict>\n' +
+				'\t<key>NSPrivacyTracking</key>\n\t<false/>\n' +
+				'\t<key>NSPrivacyAccessedAPITypes</key>\n\t<string>see the wiki</string>\n' +
+				'\t<key>NSPrivacyCollectedDataTypes</key>\n\t<array></array>\n' +
+				'</dict>\n</plist>',
+		}),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /something other than an array of\s+dictionaries/);
+});
+
+test('a required-reason category whose reasons are not an array reports rather than throwing', () => {
+	const { errors } = evaluate(
+		baseline({
+			privacyManifest: fakeManifest().replace(
+				'<array><string>3EC4.1</string></array>',
+				'<string>3EC4.1</string>',
+			),
+		}),
+	);
+	assert.equal(
+		errors.filter((e) => e.includes('NSPrivacyAccessedAPITypeReasons that is not an array')).length,
+		1,
+	);
 });
 
 test('an empty Dart source set fails rather than passing vacuously', () => {

@@ -284,6 +284,7 @@
 				es,
 				ja,
 				"pt-BR",
+				"pt-PT",
 			);
 			mainGroup = A1B2C3D4E5F60006000A0001;
 			productRefGroup = A1B2C3D4E5F60006000A0004 /* Products */;

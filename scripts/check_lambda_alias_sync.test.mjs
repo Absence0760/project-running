@@ -19,6 +19,11 @@ import {
 // unbalanced brace are all things the real module has and all things a naive
 // brace scan gets wrong.
 
+/**
+ * @param {string[][]} fns
+ * @param {string[][]} aliases
+ * @param {string} [prefix]
+ */
 function fakeTerraform(fns, aliases, prefix = 'threkir-web-${var.env}') {
   const head = `locals {\n  resource_prefix = "${prefix}"\n}\n\n`;
   const funcs = fns
@@ -45,6 +50,10 @@ function fakeTerraform(fns, aliases, prefix = 'threkir-web-${var.env}') {
   return head + funcs + '\n' + als;
 }
 
+/**
+ * @param {string[]} functions
+ * @param {string} [prefix]
+ */
 function fakeScript(functions, prefix = 'threkir-web-${ENV_NAME}') {
   return (
     `#!/usr/bin/env bash\nset -euo pipefail\n\n` +
@@ -63,6 +72,10 @@ function fakeScript(functions, prefix = 'threkir-web-${ENV_NAME}') {
   );
 }
 
+/**
+ * @param {string[][]} entries
+ * @param {string} [prefix]
+ */
 function fakeRelease(entries, prefix = 'threkir-web-${ENV}') {
   const resolve =
     `      - name: Resolve target resources\n        id: aws\n        run: |\n` +
@@ -107,6 +120,11 @@ const RELEASE = [
   ['generate_route_lambda', 'generate-route'],
 ];
 
+/**
+ * @param {string} tf
+ * @param {string} sh
+ * @param {string} rel
+ */
 const verdict = (tf, sh, rel) =>
   compareSources(
     parseTerraform(tf),
@@ -114,6 +132,7 @@ const verdict = (tf, sh, rel) =>
     parseReleaseWorkflow(rel),
   );
 
+/** @param {{ tf?: string, sh?: string, rel?: string }} [over] */
 const aligned = (over = {}) =>
   verdict(
     over.tf ?? fakeTerraform(FNS, ALIASES),
@@ -152,11 +171,12 @@ test('the HCL reader pairs aliases by reference, not by declaration order', () =
   // wrong function, which is the class of mistake this guard exists to reject.
   const tf = parseTerraform(fakeTerraform(FNS, [...ALIASES].reverse()));
   const byLabel = new Map(tf.aliases.map((a) => [a.label, a]));
-  assert.equal(byLabel.get('live').functionName, 'threkir-web-<env>-coach');
-  assert.equal(
-    byLabel.get('generate_route_live').functionName,
-    'threkir-web-<env>-generate-route',
-  );
+  const live = byLabel.get('live');
+  const generateRoute = byLabel.get('generate_route_live');
+  assert.ok(live, 'no alias labelled "live" was parsed');
+  assert.ok(generateRoute, 'no alias labelled "generate_route_live" was parsed');
+  assert.equal(live.functionName, 'threkir-web-<env>-coach');
+  assert.equal(generateRoute.functionName, 'threkir-web-<env>-generate-route');
   assert.equal(tf.aliases.length, 3);
 });
 
@@ -247,6 +267,35 @@ test('a renamed alias fails on the alias name, not on the function set', () => {
   assert.match(errors[0], /do not agree on the alias name/);
   assert.match(errors[0], /Terraform declares: serving, live/);
   assert.match(errors[0], /the sync script asks for: live/);
+});
+
+// The alias-name comparison is a set union across the three sources, so a
+// source that states no name drops out of it silently and the remaining two
+// agree with each other. Each of the three must therefore be made to speak.
+
+test('a Terraform alias with no literal name is loud, not silently dropped', () => {
+  const tf = fakeTerraform(FNS, ALIASES).replace(
+    'name             = "live"',
+    'name             = var.alias_name',
+  );
+  const { errors } = aligned({ tf });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /aws_lambda_alias\."live" sets no literal/);
+  assert.match(errors[0], /never noticed/);
+});
+
+test('a release step that passes no --name is loud', () => {
+  const rel = fakeRelease(RELEASE).replace('            --name live \\\n', '');
+  const { errors } = aligned({ rel });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /passes no `--name`/);
+});
+
+test('a sync script that names no alias is loud', () => {
+  const sh = fakeScript(SUFFIXES).replaceAll('\t\t--name live \\\n', '');
+  const { errors } = aligned({ sh });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /names no alias/);
 });
 
 test('a prefix rename reports once, not once per function', () => {

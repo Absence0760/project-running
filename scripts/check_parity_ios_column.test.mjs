@@ -54,6 +54,10 @@ A departure states its obstruction.
 const HEADER = `| Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|`;
 
+/**
+ * @param {string[]} rows
+ * @param {string} [extra]
+ */
 const doc = (rows, extra = '') =>
 	`${LEGEND}\n${RULE}\n${extra}\n${HEADER}\n${rows.join('\n')}\n`;
 
@@ -64,6 +68,7 @@ test('reads the Legend symbols and drops the Notes-convention row', () => {
 test('reads the derivation out of the rule block rather than restating it', () => {
 	const { errors, derivation } = readRuleBlock(RULE);
 	assert.deepEqual(errors, []);
+	assert.ok(derivation, 'the fixture rule block carries a derivation table');
 	assert.equal(derivation.get('✓'), 'Partial');
 	assert.equal(derivation.get('✗'), '✗');
 	assert.equal(derivation.get('N/A'), 'N/A');
@@ -81,6 +86,21 @@ test('a rule block with no derivation table is refused', () => {
 	const { errors, derivation } = readRuleBlock(stripped);
 	assert.equal(derivation, null);
 	assert.match(errors[0], /no derivation table/);
+});
+
+// A markdown row that opens fewer columns than its header used to reach
+// `unquote(cells[1])` and die with a TypeError, so a malformed matrix took the
+// guard down instead of failing it — a crashed guard reports no verdict at all.
+test('a derivation row that opens one column is reported, not thrown on', () => {
+	const broken = RULE.replace('| `✗` | `✗` |', '| `✗` |');
+	const { errors, derivation } = readRuleBlock(broken);
+	assert.ok(errors.some((e) => /fewer than two columns/.test(e)));
+	assert.ok(derivation, 'the surviving rows still parse');
+	assert.equal(derivation.has('✗'), false);
+});
+
+test('a Legend line that opens no columns states no symbol', () => {
+	assert.deepEqual(readLegendSymbols(`${LEGEND}|\n`), ['✓', 'Partial', '✗', 'N/A']);
 });
 
 test('the derivation must cover every Legend symbol and invent none', () => {

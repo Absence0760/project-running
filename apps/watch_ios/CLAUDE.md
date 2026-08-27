@@ -66,12 +66,13 @@ All under `WatchApp/` inside `WatchApp.xcodeproj`:
 
 ## Localization
 
-The watch UI is localised to six locales. That was once "the same six as web /
-Flutter / Wear OS"; since 2026-08-27 those three ship European Portuguese
-(`pt-PT`) as a seventh and watchOS does not, so a `pt-PT` wrist falls back here.
-The six:
-**en, de, fr, es, ja, pt-BR**. There is **no in-app language picker** — the watch
-follows the device / paired-iPhone locale (`Locale.current`), as Apple intends.
+The watch UI is localised to seven locales:
+**en, de, fr, es, ja, pt-BR, pt-PT**. There is **no in-app language picker** — the
+watch follows the device / paired-iPhone locale (`Locale.current`), as Apple
+intends. European Portuguese landed 2026-08-27 alongside the server-side mail
+catalogues (decisions § 761); web, Flutter and Wear OS had shipped it the day
+before (§ 755), and until this it was the one surface where a Lisbon wrist fell
+back to Brazilian.
 
 - **String Catalog**: `WatchApp/Localizable.xcstrings` (modern `.xcstrings`, source
   string is the key). SwiftUI `Text("Ready to Run")` is a `LocalizedStringKey` and
@@ -91,14 +92,19 @@ follows the device / paired-iPhone locale (`Locale.current`), as Apple intends.
   (`Complications/ActiveRunComplication.swift`) carries its own copy of the same
   formatting logic because it builds in a **separate** Widget Extension target that
   can't link `RunFormat.swift`; keep the two in lockstep.
-- **`CFBundleLocalizations`** lists all six locales in `WatchApp/Info.plist`; the six
-  locales are also in the project's `knownRegions` (`WatchApp.xcodeproj/project.pbxproj`).
-  `SWIFT_EMIT_LOC_STRINGS = YES` is already set so Xcode keeps the catalog populated
-  from source on build.
-- **Parity check (no Xcode needed)**: `scripts/check_xcstrings_parity.sh` parses the
-  catalog and fails if any string lacks a non-empty translation for all six locales
-  (ja is exempt from the plural `one` category by design). Pure `python3` — runs on
-  Linux / CI without a Mac. Run it after editing the catalog.
+- **`CFBundleLocalizations`** lists every shipped locale in `WatchApp/Info.plist`;
+  the same set is in the project's `knownRegions`
+  (`WatchApp.xcodeproj/project.pbxproj`). Both matter: a translated string the
+  bundle does not declare is never loaded, so the app shows English and nothing
+  fails. `SWIFT_EMIT_LOC_STRINGS = YES` is already set so Xcode keeps the catalog
+  populated from source on build.
+- **Parity check (no Xcode needed)**: `scripts/check_xcstrings_parity.sh` **derives**
+  the shipped locale set from the catalog — it does not restate it — then fails if
+  any string lacks a non-empty translation for one of them (ja is exempt from the
+  plural `one` category by design), or if either declaration site above disagrees
+  with that set. Pure `python3` — runs on Linux / CI without a Mac. It is wired into
+  the `watch-ios-locale-parity` job in `.github/workflows/ci.yml`; before 2026-08-27
+  it ran nowhere but a developer's own shell. Run it after editing the catalog.
 - **Complication caveat**: the complication's `.xcstrings` localisation only takes
   effect once `Localizable.xcstrings` is added to the Widget Extension target's bundle
   — see step 5 in `Complications/README.md`. Until that target exists in Xcode the

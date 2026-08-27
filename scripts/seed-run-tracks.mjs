@@ -25,27 +25,65 @@ import { gzipSync } from 'node:zlib';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
 const SEED_USER_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
+/** @typedef {{ lat: number, lng: number, ele?: number }} Waypoint */
+/** @typedef {{ id: string, startedAt: Date, waypoints: Waypoint[] }} PlannedRun */
+/** @typedef {{ lat: number, lng: number, ele: number | undefined, bpm: number }} TrackSample */
+/** @typedef {TrackSample & { ts: string }} TrackPoint */
+
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+	return typeof value === 'object' && value !== null;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is readonly unknown[]}
+ */
+function isUnknownArray(value) {
+	return Array.isArray(value);
+}
+
+/** @returns {string} */
 function getServiceRoleKey() {
-	if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-		return process.env.SUPABASE_SERVICE_ROLE_KEY;
-	}
+	const fromEnv = process.env.SUPABASE_SERVICE_ROLE_KEY;
+	if (fromEnv) return fromEnv;
+	/** @type {unknown} */
+	let status;
 	try {
 		const out = execSync('supabase --workdir apps/backend status -o json', {
 			stdio: ['ignore', 'pipe', 'ignore'],
 		});
-		return JSON.parse(out.toString()).SERVICE_ROLE_KEY;
-	} catch (e) {
+		status = JSON.parse(out.toString());
+	} catch {
 		console.error('Failed to read service_role key from `supabase status`.');
 		console.error('Set SUPABASE_SERVICE_ROLE_KEY manually or start Supabase first.');
 		process.exit(1);
 	}
+	const key = isRecord(status) ? status.SERVICE_ROLE_KEY : undefined;
+	if (typeof key !== 'string' || key === '') {
+		console.error('`supabase status` reported no SERVICE_ROLE_KEY — every upload would go out as `Bearer undefined`.');
+		console.error('Set SUPABASE_SERVICE_ROLE_KEY manually or start Supabase first.');
+		process.exit(1);
+	}
+	return key;
 }
 
 // Generate a TrackPoint[] by walking the waypoints + interpolating
 // `pointsPerSegment` points between each. Adds small jitter so the
 // polyline looks like real GPS data instead of a straight-edged
 // connect-the-dots line.
+/**
+ * @param {readonly Waypoint[]} waypoints
+ * @param {number} pointsPerSegment
+ * @param {Date} baseTs
+ * @param {number | null | undefined} durationS
+ * @returns {TrackPoint[]}
+ */
 function densifyTrack(waypoints, pointsPerSegment, baseTs, durationS) {
+	/** @type {TrackSample[]} */
 	const pts = [];
 	for (let i = 0; i < waypoints.length - 1; i++) {
 		const a = waypoints[i];
@@ -88,6 +126,7 @@ function densifyTrack(waypoints, pointsPerSegment, baseTs, durationS) {
 // linked by these UUIDs). Tracks generated here will land at
 // `{user_id}/{id}.json.gz` and the seed row's `track_url` column
 // points at the same path.
+/** @type {PlannedRun[]} */
 const PLAN = [
 	{
 		id: 'a1000001-0000-0000-0000-000000000001',
@@ -355,7 +394,7 @@ const PLAN = [
 // per-route counts MUST match the set-based INSERT in
 // apps/backend/supabase/seed.sql (the script + SQL are linked by id).
 const _waypointsByPlanId = Object.fromEntries(
-	PLAN.map((p) => [p.id, p.waypoints]),
+	PLAN.map((p) => /** @type {[string, Waypoint[]]} */ ([p.id, p.waypoints])),
 );
 const REPEAT_SPEC = [
 	{ idx: 0, planId: 'a1000001-0000-0000-0000-000000000001', repeats: 16 }, // Belle Isle (home base — gets hot)
@@ -377,6 +416,10 @@ for (const spec of REPEAT_SPEC) {
 	}
 }
 
+/**
+ * @param {string} serviceRoleKey
+ * @returns {Promise<Record<string, number | null>>}
+ */
 async function fetchRunDurations(serviceRoleKey) {
 	const url = `${SUPABASE_URL}/rest/v1/runs?select=id,duration_s&user_id=eq.${SEED_USER_ID}`;
 	const res = await fetch(url, {
@@ -386,10 +429,32 @@ async function fetchRunDurations(serviceRoleKey) {
 		console.error(`Failed to read run durations: ${res.status} ${await res.text()}`);
 		return {};
 	}
-	const rows = await res.json();
-	return Object.fromEntries(rows.map((r) => [r.id, r.duration_s]));
+	const body = await res.json();
+	// PostgREST answers a select with a row array; anything else here is an
+	// error envelope or a gateway page, and mapping over it throws instead of
+	// falling back to the fixed cadence below.
+	if (!isUnknownArray(body)) {
+		console.error(`Failed to read run durations: expected a row array, got ${JSON.stringify(body)}`);
+		return {};
+	}
+	/** @type {Record<string, number | null>} */
+	const durations = {};
+	for (const row of body) {
+		if (!isRecord(row) || typeof row.id !== 'string') {
+			console.error(`Ignoring unrecognised run row: ${JSON.stringify(row)}`);
+			continue;
+		}
+		durations[row.id] = typeof row.duration_s === 'number' ? row.duration_s : null;
+	}
+	return durations;
 }
 
+/**
+ * @param {string} serviceRoleKey
+ * @param {PlannedRun} run
+ * @param {number | null | undefined} durationS
+ * @returns {Promise<boolean>}
+ */
 async function uploadTrack(serviceRoleKey, run, durationS) {
 	const path = `${SEED_USER_ID}/${run.id}.json.gz`;
 	const track = densifyTrack(run.waypoints, 4, run.startedAt, durationS);

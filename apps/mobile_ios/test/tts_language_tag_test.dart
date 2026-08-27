@@ -28,11 +28,15 @@ void main() {
       expect(ttsLanguageTag('ja'), 'ja-JP');
     });
 
-    test('pt-BR → pt-BR (country code preserved)', () {
+    test('each Portuguese tag speaks its own catalogue, not one shared voice', () {
       expect(ttsLanguageTag('pt-BR'), 'pt-BR');
       expect(ttsLanguageTag('pt_BR'), 'pt-BR');
-      // Bare pt also routes to the one Portuguese voice we ship.
-      expect(ttsLanguageTag('pt'), 'pt-BR');
+      expect(ttsLanguageTag('pt-PT'), 'pt-PT');
+      expect(ttsLanguageTag('pt_PT'), 'pt-PT');
+      // Bare `pt` is the European catalogue, the same way `_baseToLocale`
+      // resolves it. It spoke Brazilian until decisions 760, so a European
+      // reader heard a Brazilian voice reading European text.
+      expect(ttsLanguageTag('pt'), 'pt-PT');
     });
 
     test('case-insensitive on the input tag', () {

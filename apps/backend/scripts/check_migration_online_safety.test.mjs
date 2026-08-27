@@ -96,6 +96,39 @@ test('scanMigrations catches a bare jobs ADD CONSTRAINT after the cutoff', () =>
   assert.equal(caught[0].table, 'jobs');
 });
 
+test('findUnsafeConstraintAdds flags a bare ADD beside a NOT VALID one in the same ALTER', () => {
+  // NOT VALID qualifies only the action it terminates. Testing the whole
+  // statement for it exempted every sibling action in the same
+  // comma-separated list, so the second ADD here took a validating scan of
+  // every row in `runs` while the guard reported the migration clean.
+  const sql = `alter table runs
+    add constraint runs_distance_check check (distance_m >= 0) not valid,
+    add constraint runs_duration_check check (duration_s >= 0);`;
+  const findings = findUnsafeConstraintAdds(sql);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].table, 'runs');
+});
+
+test('findUnsafeConstraintAdds passes a multi-action ALTER whose every ADD is NOT VALID', () => {
+  const sql = `alter table runs
+    add constraint runs_distance_check check (distance_m >= 0) not valid,
+    add constraint runs_duration_check check (duration_s >= 0) not valid;`;
+  assert.deepEqual(findUnsafeConstraintAdds(sql), []);
+});
+
+test('findUnsafeConstraintAdds does not split an action on a comma inside its parens', () => {
+  // The commas in the IN-list and in a multi-column FK are not action
+  // separators; cutting there would strand the trailing NOT VALID.
+  const check = `alter table runs
+    add constraint runs_activity_type_check
+    check (activity_type in ('run', 'walk', 'hike')) not valid;`;
+  assert.deepEqual(findUnsafeConstraintAdds(check), []);
+  const fk = `alter table run_kudos
+    add constraint run_kudos_run_user_fkey
+    foreign key (run_id, user_id) references runs (id, user_id) not valid;`;
+  assert.deepEqual(findUnsafeConstraintAdds(fk), []);
+});
+
 test('findUnsafeConstraintAdds passes the NOT VALID two-step', () => {
   const notValid = `alter table runs
     add constraint runs_activity_type_check

@@ -55,11 +55,25 @@ export const RELEASE_FILE =
 // and a prefix that drifts in one source alone still shows up as a mismatch.
 export const ENV = '<env>';
 
+/**
+ * @typedef {{ label: string, body: string }} HclResource
+ * @typedef {{ label: string, aliasName: string | null, functionLabel: string | null, functionName: string | null }} TerraformAlias
+ * @typedef {{ resourcePrefix: string | null, functions: Map<string, string>, aliases: TerraformAlias[] }} TerraformModule
+ * @typedef {{ functions: string[], loopVar: string | null, template: string | null, prefix: string | null, templateVar: string | null, aliasNames: Set<string> }} SyncScript
+ * @typedef {{ outputKey: string | null, aliasName: string | null, functionName: string | null }} ReleaseEntry
+ * @typedef {{ outputs: Map<string, string>, entries: ReleaseEntry[] }} ReleaseWorkflow
+ */
+
 // ─────────────────────────── HCL block reader ───────────────────────────
 
 // Index of the byte just past the block that opens at `open`, or -1. Braces
 // inside strings and comments do not count, which is what keeps a
 // `"${local.resource_prefix}-coach"` interpolation from unbalancing the scan.
+/**
+ * @param {string} src
+ * @param {number} open
+ * @returns {number}
+ */
 function blockEnd(src, open) {
   let depth = 0;
   let inString = false;
@@ -101,12 +115,19 @@ function blockEnd(src, open) {
   return -1;
 }
 
-// Every `resource "<type>" "<label>" { … }` of one type, as {label, body}.
+/**
+ * Every `resource "<type>" "<label>" { … }` of one type, as {label, body}.
+ *
+ * @param {string} src
+ * @param {string} type
+ * @returns {HclResource[]}
+ */
 export function hclResources(src, type) {
   const re = new RegExp(
     `(?:^|\\n)\\s*resource\\s+"${type}"\\s+"([A-Za-z0-9_-]+)"\\s*\\{`,
     'g',
   );
+  /** @type {HclResource[]} */
   const out = [];
   let m;
   while ((m = re.exec(src)) !== null) {
@@ -124,12 +145,17 @@ export function hclResources(src, type) {
 // and every `aws_lambda_alias` resolved through to the function name it
 // targets. An alias whose `function_name` is not a plain reference resolves
 // to null rather than being guessed at — see compareSources.
+/**
+ * @param {string} src
+ * @returns {TerraformModule}
+ */
 export function parseTerraform(src) {
   const prefixLine = src.match(/^[ \t]*resource_prefix\s*=\s*"([^"]*)"/m);
   const resourcePrefix = prefixLine
     ? prefixLine[1].replaceAll('${var.env}', ENV)
     : null;
 
+  /** @type {Map<string, string>} */
   const functions = new Map();
   for (const { label, body } of hclResources(src, 'aws_lambda_function')) {
     const nm = body.match(/^[ \t]*function_name\s*=\s*"([^"]*)"/m);
@@ -141,6 +167,7 @@ export function parseTerraform(src) {
     functions.set(label, name);
   }
 
+  /** @type {TerraformAlias[]} */
   const aliases = [];
   for (const { label, body } of hclResources(src, 'aws_lambda_alias')) {
     const aliasName = body.match(/^[ \t]*name\s*=\s*"([^"]*)"/m)?.[1] ?? null;
@@ -163,6 +190,10 @@ export function parseTerraform(src) {
 // from, and the alias name the aws calls ask for. The loop variable is read
 // too: a loop that stopped iterating FUNCTIONS would leave the array parsed
 // and meaningless, so the two are checked against each other.
+/**
+ * @param {string} src
+ * @returns {SyncScript}
+ */
 export function parseSyncScript(src) {
   const arr = src.match(/^[ \t]*FUNCTIONS=\(([^)]*)\)/m);
   const functions = arr
@@ -178,7 +209,9 @@ export function parseSyncScript(src) {
     )?.[1] ?? null;
 
   const tmpl = src.match(/^[ \t]*NAME=\s*"([^"]*)"/m)?.[1] ?? null;
+  /** @type {string | null} */
   let prefix = null;
+  /** @type {string | null} */
   let templateVar = null;
   if (tmpl !== null) {
     const t = tmpl.replaceAll('${ENV_NAME}', ENV);
@@ -189,6 +222,7 @@ export function parseSyncScript(src) {
     }
   }
 
+  /** @type {Set<string>} */
   const aliasNames = new Set();
   // `\s` and not `(?:^|\s)`: the pattern requires `aws lambda …-alias`
   // before this point, so a `^` without the `m` flag could only ever match at
@@ -207,7 +241,12 @@ export function parseSyncScript(src) {
 // it repoints, then the `steps.aws.outputs.<key>` reference is resolved back
 // through the `echo "<key>=…" >> "$GITHUB_OUTPUT"` line that defines it — so
 // the function names come out of the workflow rather than out of a list here.
+/**
+ * @param {string} src
+ * @returns {ReleaseWorkflow}
+ */
 export function parseReleaseWorkflow(src) {
+  /** @type {Map<string, string>} */
   const outputs = new Map();
   const outRe =
     /echo\s+"([A-Za-z_][A-Za-z0-9_]*)=([^"]*)"\s*>>\s*"\$GITHUB_OUTPUT"/g;
@@ -216,6 +255,7 @@ export function parseReleaseWorkflow(src) {
     outputs.set(o[1], o[2].replaceAll('${ENV}', ENV));
   }
 
+  /** @type {ReleaseEntry[]} */
   const entries = [];
   const callRe = /aws lambda update-alias\b((?:[^\n]*\\\n)*[^\n]*)/g;
   let m;
@@ -243,6 +283,10 @@ export function parseReleaseWorkflow(src) {
 // prefix `threkir-web-<env>` and suffix `coach`. Null when the name carries no
 // env at all, which would mean an environment-invariant Lambda name — the
 // script could not address it per-env, so that has to be loud.
+/**
+ * @param {string} full
+ * @returns {{ prefix: string, suffix: string } | null}
+ */
 export function splitName(full) {
   const i = full.indexOf(ENV);
   if (i < 0) return null;
@@ -255,9 +299,18 @@ export function splitName(full) {
 
 // The whole verdict as data, so the tests can assert on it without capturing
 // stdout. `errors` fails the build; `warnings` do not.
+/**
+ * @param {TerraformModule} tf
+ * @param {SyncScript} sh
+ * @param {ReleaseWorkflow} rel
+ * @returns {{ errors: string[], warnings: string[], ok: string[] }}
+ */
 export function compareSources(tf, sh, rel) {
+  /** @type {string[]} */
   const errors = [];
+  /** @type {string[]} */
   const warnings = [];
+  /** @type {string[]} */
   const ok = [];
 
   // Vacuity guards. A parser that quietly stops matching would otherwise
@@ -307,6 +360,14 @@ export function compareSources(tf, sh, rel) {
         'iteration.',
     );
   }
+  if (sh.functions.length > 0 && sh.aliasNames.size === 0) {
+    errors.push(
+      'bin/lambda-alias-sync.sh names no alias in its `aws lambda …-alias` ' +
+        'calls.\n' +
+        '  Repointing a named alias is the whole job; with none read here the ' +
+        'comparison below runs on the other two sources alone.',
+    );
+  }
   if (tf.resourcePrefix === null) {
     errors.push(
       'Could not read `local.resource_prefix` out of the Terraform module.\n' +
@@ -316,9 +377,22 @@ export function compareSources(tf, sh, rel) {
   }
 
   // Terraform → the set of (suffix, alias name) pairs it actually declares.
+  /** @type {Map<string, TerraformAlias>} */
   const tfSuffixes = new Map();
+  /** @type {Set<string>} */
   const tfPrefixes = new Set();
   for (const a of tf.aliases) {
+    // An unreadable name drops this alias out of the agreement set below
+    // rather than disagreeing with anything, so the two derived sources are
+    // left agreeing with each other and the source of truth abstains.
+    if (a.aliasName === null) {
+      errors.push(
+        `aws_lambda_alias."${a.label}" sets no literal \`name = "…"\`.\n` +
+          '  Terraform is where the alias name is declared; the other two sources ' +
+          'spell it out by hand. With none read here a rename on this side is ' +
+          'never noticed.',
+      );
+    }
     if (a.functionLabel === null) {
       errors.push(
         `aws_lambda_alias."${a.label}" does not set ` +
@@ -370,9 +444,19 @@ export function compareSources(tf, sh, rel) {
   }
 
   // release-web.yml → the same shape.
+  /** @type {Map<string, ReleaseEntry>} */
   const relSuffixes = new Map();
+  /** @type {Set<string>} */
   const relPrefixes = new Set();
   for (const e of rel.entries) {
+    if (e.aliasName === null) {
+      errors.push(
+        'An `aws lambda update-alias` step in release-web.yml passes no ' +
+          '`--name`.\n' +
+          '  The deploy would fail on a required argument, and this source ' +
+          'abstains from the alias-name comparison below.',
+      );
+    }
     if (e.outputKey === null) {
       errors.push(
         'An `aws lambda update-alias` step in release-web.yml does not name its ' +
@@ -405,6 +489,7 @@ export function compareSources(tf, sh, rel) {
   // Prefix agreement. Checked before the set comparison so a renamed prefix
   // reports as one finding rather than as every function missing from both
   // directions at once.
+  /** @type {Map<string, string>} */
   const prefixes = new Map();
   for (const p of tfPrefixes) prefixes.set(p, 'Terraform');
   if (sh.prefix !== null && !prefixes.has(sh.prefix)) {

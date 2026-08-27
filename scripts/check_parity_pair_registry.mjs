@@ -91,11 +91,23 @@ const REPO_PATH = /`((?:apps|packages)\/[A-Za-z0-9_./-]+\.(?:ts|dart))`/g;
 /// unless it is already repo-relative (core_models' suite is).
 const TEST_PATH = /`([A-Za-z0-9_./-]+(?:\.test\.ts|_test\.dart))`/g;
 
-/// Every pair named in CLAUDE.md's lockstep bullet, mapped to the two paths it
-/// annotates (null when it names none — the bare head entries and the tail
-/// clause carry no paths, and are checked for membership only).
+/**
+ * @typedef {{ ts: string, dart: string }} PairPaths
+ * @typedef {{ line: number, web: string, cells: string[] }} SyncerRow
+ */
+
+/**
+ * Every pair named in CLAUDE.md's lockstep bullet, mapped to the two paths it
+ * annotates (null when it names none — the bare head entries and the tail
+ * clause carry no paths, and are checked for membership only).
+ *
+ * @param {string} text
+ * @returns {{ pairs: Map<string, PairPaths | null>, errors: string[] }}
+ */
 export function parseClaudePairs(text) {
+	/** @type {Map<string, PairPaths | null>} */
 	const pairs = new Map();
+	/** @type {string[]} */
 	const errors = [];
 
 	const bulletAt = text.indexOf(CLAUDE_BULLET);
@@ -153,10 +165,17 @@ export function parseClaudePairs(text) {
 	return { pairs, errors };
 }
 
-/// Every row of the syncer agent's canonical table, keyed by the pair name its
-/// web path ends in, carrying the raw cells so the path checks can read them.
+/**
+ * Every row of the syncer agent's canonical table, keyed by the pair name its
+ * web path ends in, carrying the raw cells so the path checks can read them.
+ *
+ * @param {string} text
+ * @returns {{ rows: Map<string, SyncerRow>, errors: string[] }}
+ */
 export function parseSyncerRows(text) {
+	/** @type {Map<string, SyncerRow>} */
 	const rows = new Map();
+	/** @type {string[]} */
 	const errors = [];
 
 	const headingAt = text.indexOf(SYNCER_HEADING);
@@ -192,9 +211,15 @@ export function parseSyncerRows(text) {
 	return { rows, errors };
 }
 
-/// Repo-relative paths a table cell names, with the mirror-test column's two
-/// relative forms resolved.
+/**
+ * Repo-relative paths a table cell names, with the mirror-test column's two
+ * relative forms resolved.
+ *
+ * @param {string} cell
+ * @returns {string[]}
+ */
 export function pathsInCell(cell) {
+	/** @type {string[]} */
 	const found = [];
 	for (const m of cell.matchAll(REPO_PATH)) found.push(m[1]);
 	for (const m of cell.matchAll(TEST_PATH)) {
@@ -210,14 +235,25 @@ export function pathsInCell(cell) {
 	return [...new Set(found)];
 }
 
+/**
+ * @param {string} full
+ * @param {string} suffix
+ */
 function endsWithPath(full, suffix) {
 	return full === suffix || full.endsWith(`/${suffix}`);
 }
 
+/**
+ * @param {string} claudeText
+ * @param {string} syncerText
+ * @param {(path: string) => boolean} [exists]
+ * @returns {{ errors: string[], ok: string[] }}
+ */
 export function checkRegistries(claudeText, syncerText, exists = (p) => existsSync(join(REPO_ROOT, p))) {
 	const claude = parseClaudePairs(claudeText);
 	const syncer = parseSyncerRows(syncerText);
 	const errors = [...claude.errors, ...syncer.errors];
+	/** @type {string[]} */
 	const ok = [];
 
 	// A parser that failed its anchor checks reports an empty set; comparing it
