@@ -209,7 +209,7 @@ answer; flag it as an open question for the user if they want the cheap path.
   (+ iOS twin) for the monthly builder; keep the test count in lockstep with
   `recap.test.ts`.
 
-## i18n keys to add (all six web locales + all mobile ARBs)
+## i18n keys to add (every web locale + all mobile ARBs)
 Representative new keys (the `recap.*` namespace already exists; add monthly +
 publish):
 - `recap.monthHeroKicker` ("My March 2026 in running")

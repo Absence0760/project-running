@@ -261,7 +261,7 @@ Web unit (`apps/web/src/lib/social/challenge_progress.test.ts`) — `npx tsx --t
 
 CHECK↔union guard: `apps/web/scripts/check_constraint_unions.mjs` extended (covered by the existing `parity-types` job).
 
-## i18n keys to add (all six web locales + all mobile ARBs)
+## i18n keys to add (every web locale + all mobile ARBs)
 
 Representative web keys (`src/lib/i18n/locales/en.ts` template + de/fr/es/ja/pt-BR, real translations — parity test enforces non-empty + placeholder fidelity):
 - `challenges.title`, `challenges.myChallenges`, `challenges.browse`, `challenges.empty`
@@ -321,7 +321,7 @@ Mobile ARB equivalents camelCased (`challengesTitle`, `challengesJoin`, `challen
 4. Write `20270204_001_challenge_progress_rpc.sql` (the leaderboard + my_active + completion RPCs, and the activities-view vert append if Q1 says vert ships now); reset + regen; write the three pgtap files. Commit (piece 2).
 5. Write `apps/web/src/lib/social/challenge_progress.ts` + tests (`npx tsx --test`). Commit (piece 3).
 6. Add `data.ts` helpers + `schema.ts` table names. Commit (piece 4).
-7. Build the web UI (editor → detail/leaderboard → self-hiding panel + /social tab + dashboard strip), i18n keys in all six locales, Playwright specs. Verify `npm run check --workspace=apps/web` and the specs pass. Commit per-sub-piece (piece 5).
+7. Build the web UI (editor → detail/leaderboard → self-hiding panel + /social tab + dashboard strip), i18n keys in every web locale, Playwright specs. Verify `npm run check --workspace=apps/web` and the specs pass. Commit per-sub-piece (piece 5).
 8. Seed challenges (piece 6).
 9. Mirror to mobile: parity helper + tests (piece 7), service methods (piece 8), screens + nav + ARBs + gen-l10n + tests, **mirrored byte-identical to the iOS twin and verified with `diff -rq`** (piece 9).
 10. Docs sweep — roadmap/parity/feature doc/api_database/conventions/decisions/index (piece 10).

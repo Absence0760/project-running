@@ -383,7 +383,7 @@ Dashboard → Auth → Hooks in prod):
   is harmless no-op churn until then). The **opt-in preference toggle** ships on
   web Settings → Preferences (`email-lifecycle-drip` checkbox) + mobile
   Settings → Preferences (`prefsEmailLifecycleDrip` switch, default off),
-  i18n'd across all six locales — the in-app equivalent of the one-click
+  i18n'd across every web locale + every ARB — the in-app equivalent of the one-click
   unsubscribe, mirroring the digest toggle.
 - [x] **Account-deletion receipt** — SHIPPED 2026-06-20 (migration
   `20270217_001`, `account_deleted` template). Built as **enqueue-with-inline-

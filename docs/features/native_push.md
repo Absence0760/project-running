@@ -326,7 +326,7 @@ this explicitly so the implementer doesn't manufacture a pair.
 - **No web e2e** — there is no web UI change beyond an existing toggle; mobile
   has no e2e by design (`docs/testing/testing.md § What's not covered`).
 
-## i18n keys to add (all six web locales + all mobile ARBs)
+## i18n keys to add (every web locale + all mobile ARBs)
 - Push **titles/bodies are NOT new i18n** — they reuse the shared notification
   catalogue the bell + web_push already render (verify; reuse `push_render.go`).
 - Mobile permission-rationale copy may need new ARB keys:

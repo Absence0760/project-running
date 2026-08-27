@@ -123,7 +123,7 @@ Every code milestone honours the house rules, so "seamless" doesn't mean "sloppy
 - **Web-first** ([§24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)); **byte-identical mobile twin** ([§39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)) for any Dart edit.
 - **Parity pairs** for every pure helper (fee math, `expandSessionSteps`, `expandRoutineSteps`, `workoutDraftFromSession`); the `shared-library-syncer` agent after each.
 - **Narrow union + CHECK lockstep** (`check_constraint_unions.mjs`) for `SessionItemKind` and any new status union.
-- **i18n** in all six web locales + seven mobile ARBs for every new string (category/discipline already done; content-engine + attendance strings are new).
+- **i18n** in every web locale + seven mobile ARBs for every new string (category/discipline already done; content-engine + attendance strings are new).
 - **Schema codegen** — both generators after every migration; grow the Dart table list for the new tables ([schema_codegen.md](../architecture/schema_codegen.md)).
 - **Layered resilience** — the follow-along runner's TTS/haptics are L4, wrapped per-effect; a cue failure never stops the timer.
 - **Test hygiene** — review → unit → e2e per milestone ([conventions.md](../architecture/conventions.md#test-hygiene--review-then-unit-then-e2e)).

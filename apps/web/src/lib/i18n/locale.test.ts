@@ -6,6 +6,7 @@ import {
 	isSupportedLocale,
 	negotiateLocale,
 	parseAcceptLanguage,
+	SUPPORTED_LOCALES,
 } from './locale';
 
 test('isSupportedLocale accepts canonical locales only', () => {
@@ -18,7 +19,7 @@ test('isSupportedLocale accepts canonical locales only', () => {
 });
 
 test('dirForLocale is ltr for the starter set, rtl for Arabic/Hebrew bases', () => {
-	for (const l of ['en', 'de', 'fr', 'es', 'ja', 'pt-BR']) {
+	for (const l of SUPPORTED_LOCALES) {
 		assert.equal(dirForLocale(l), 'ltr', l);
 	}
 	assert.equal(dirForLocale('ar'), 'rtl');
@@ -42,8 +43,23 @@ test('negotiateLocale: a stored canonical preference wins outright', () => {
 });
 
 test('negotiateLocale: a stored non-canonical tag resolves by base', () => {
-	assert.equal(negotiateLocale(null, 'pt-PT'), 'pt-BR');
 	assert.equal(negotiateLocale(null, 'fr-CA'), 'fr');
+	// Angola writes the European orthography and we carry no pt-AO catalogue,
+	// so the base fallback is the one that serves it.
+	assert.equal(negotiateLocale(null, 'pt-AO'), 'pt-PT');
+});
+
+test('negotiateLocale: both Portuguese catalogues are reachable by their own tag', () => {
+	// The defect this closes: a Lisbon browser sends pt-PT and used to land on
+	// the Brazilian catalogue, answering differently from the phone, which has
+	// shipped a European catalogue since 2026-08-06.
+	assert.equal(negotiateLocale('pt-PT'), 'pt-PT');
+	assert.equal(negotiateLocale('pt-BR'), 'pt-BR');
+	assert.equal(negotiateLocale(null, 'pt-PT'), 'pt-PT');
+	assert.equal(negotiateLocale(null, 'pt-BR'), 'pt-BR');
+	// A bare `pt` is nobody's real browser tag — every client reports the
+	// region — so it goes to the variant that has no other tag to arrive on.
+	assert.equal(negotiateLocale('pt'), 'pt-PT');
 });
 
 test('negotiateLocale: priority wins — a higher-q tag is matched (exact or base) before a lower-q one', () => {
@@ -61,7 +77,7 @@ test('negotiateLocale: priority wins — a higher-q tag is matched (exact or bas
 test('negotiateLocale: base-language fallback for unshipped regional variants', () => {
 	assert.equal(negotiateLocale('de-AT'), 'de');
 	assert.equal(negotiateLocale('es-MX,es;q=0.9'), 'es');
-	assert.equal(negotiateLocale('pt-PT'), 'pt-BR');
+	assert.equal(negotiateLocale('pt-MZ'), 'pt-PT');
 });
 
 test('negotiateLocale: unsupported languages fall back to the default', () => {

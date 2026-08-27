@@ -66,7 +66,10 @@ All under `WatchApp/` inside `WatchApp.xcodeproj`:
 
 ## Localization
 
-The watch UI is localised to the same six locales as web / Flutter / Wear OS:
+The watch UI is localised to six locales. That was once "the same six as web /
+Flutter / Wear OS"; since 2026-08-27 those three ship European Portuguese
+(`pt-PT`) as a seventh and watchOS does not, so a `pt-PT` wrist falls back here.
+The six:
 **en, de, fr, es, ja, pt-BR**. There is **no in-app language picker** — the watch
 follows the device / paired-iPhone locale (`Locale.current`), as Apple intends.
 

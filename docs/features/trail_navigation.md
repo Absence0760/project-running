@@ -130,7 +130,7 @@ Two new pure pairs (kept in lockstep, matching test counts; the
   - `apps/mobile_android/test/offline_tile_pack_test.dart` (+ twin): downloader with an injected fetcher (mirror `routing.dart`'s `OsrmFetcher` seam) — happy path writes N files, a failing tile is isolated (pack still partially completes), pin-removal deletes the dir, the count cap is enforced.
 
 ## i18n keys to add
-**All six web locales** (`apps/web/src/lib/i18n/` — the dotted-key catalogues) AND
+**Every web locale** (`apps/web/src/lib/i18n/` — the dotted-key catalogues) AND
 **all mobile ARBs** (`app_{en,de,fr,es,ja,pt_BR}.arb` + `pt` base, both twins),
 real translations, then `flutter gen-l10n` + mirror `lib/l10n/gen/`. Representative:
 - `routeConditions.title` / `routeConditionsTitle` → "Conditions"
