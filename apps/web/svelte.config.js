@@ -20,10 +20,9 @@ function defineConfig() {
 			// See https://kit.svelte.dev/docs/adapters for more information about adapters.
 			adapter: adapter({
 				fallback: "index.html",
-				prerender: { default: true },
 			}),
 			paths: {
-				base: process.env.BASE_PATH || '',
+				base: basePath(),
 			},
 			// Hash-based CSP for the one inline script SvelteKit emits (the
 			// per-page hydration-data block). The site is fully prerendered
@@ -75,6 +74,22 @@ function defineConfig() {
 			},
 		},
 	};
+}
+
+/**
+ * SvelteKit takes an empty base or one that starts with `/` and does not end
+ * with one. Anything else is not rejected — it is concatenated into every URL
+ * the app emits, so the whole site 404s with no error naming the cause.
+ * @returns {'' | `/${string}`}
+ */
+function basePath() {
+	const raw = (process.env.BASE_PATH ?? '').replace(/\/+$/, '');
+	if (raw && !raw.startsWith('/')) {
+		throw new Error(
+			`BASE_PATH must be empty or start with "/" — got ${JSON.stringify(process.env.BASE_PATH)}`,
+		);
+	}
+	return /** @type {'' | `/${string}`} */ (raw);
 }
 
 /**

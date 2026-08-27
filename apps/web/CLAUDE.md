@@ -207,7 +207,20 @@ npm run build --workspace=apps/web       # Production build
 npm run preview --workspace=apps/web     # Preview build on :8888
 npm run check --workspace=apps/web       # Type-check src/ + .svelte (svelte-check)
 npm run check:e2e-types --workspace=apps/web  # Type-check tests-e2e/ (tsc; § 749)
+npm run check:node-types --workspace=apps/web # Type-check scripts/ + lambda/ + svelte.config.js (§ 752)
+npm run check:sw-types --workspace=apps/web   # Type-check static/sw.js under the WebWorker lib (§ 752)
+npm run test:tsconfig-coverage --workspace=apps/web  # No compilable file under apps/web is outside all four roots
 ```
+
+`apps/web` has four `tsc` roots and needs them: SvelteKit generates the app's
+`include` (`src/`, `test/`, `tests/`, `vite.config.*`) and TypeScript does not
+merge `include` across `extends`, so anything outside it belongs to no program
+until a root says so. `tsconfig.tests-e2e.json` covers the Playwright tree,
+`tsconfig.node.json` the scripts, the Lambda handlers and `svelte.config.js`,
+and `tsconfig.service-worker.json` `static/sw.js` — separate from the Node one
+because a service worker's globals come from the `WebWorker` lib, which cannot
+share a program with `DOM`. A new tree under `apps/web` fails
+`scripts/tsconfig_coverage.test.mjs` until it is put in one of them.
 
 (`pnpm i / pnpm dev` from inside `apps/web/` still work locally because of the historical `pnpm-lock.yaml`, but CI runs the npm path.)
 

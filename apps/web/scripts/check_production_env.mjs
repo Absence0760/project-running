@@ -42,6 +42,8 @@
  * `check_production_env.test.mjs` suite covers the matcher.
  */
 
+import { isTruthyFlagValue } from '../src/lib/core/env_flag.ts';
+
 const LOCAL_HOST_RE = /^https?:\/\/(127\.0\.0\.1|localhost|10\.0\.2\.2|host\.docker\.internal)(?::\d+)?(?:\/|$)/;
 const PLACEHOLDER_HOST_RE = /\bplaceholder\.supabase\.co\b/i;
 
@@ -97,12 +99,8 @@ export function checkProductionEnv(env) {
 		});
 	}
 
-	// Same truthiness as coach_flag.ts / route_gen_flag.ts.
-	const flagOn = (v) => {
-		const raw = String(v ?? '').trim().toLowerCase();
-		return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
-	};
-	const proSellable = flagOn(env.PUBLIC_COACH_ENABLED) || flagOn(env.PUBLIC_ROUTE_GEN_ENABLED);
+	const proSellable =
+		isTruthyFlagValue(env.PUBLIC_COACH_ENABLED) || isTruthyFlagValue(env.PUBLIC_ROUTE_GEN_ENABLED);
 	const revenueCatCheckout = String(env.PUBLIC_REVENUECAT_WEB_CHECKOUT_URL ?? '').trim();
 	if (proSellable && !revenueCatCheckout) {
 		findings.push({

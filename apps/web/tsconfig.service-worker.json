@@ -1,0 +1,18 @@
+{
+	// `static/sw.js` is the web-push service worker — shipped verbatim to
+	// every browser that registers it, and inside no `include` of any other
+	// config here. It needs its own root rather than a line in
+	// `tsconfig.node.json` because a service worker's globals come from the
+	// `WebWorker` lib, which cannot share a program with `DOM`: both declare
+	// `Event`, `EventTarget` and friends. See decisions § 752.
+	//
+	// Run: `npm run check:sw-types --workspace=apps/web`
+	// CI:  the `parity-types` job in .github/workflows/ci.yml.
+	// The include list is guarded by scripts/tsconfig_coverage.test.mjs.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"lib": ["esnext", "WebWorker"],
+		"types": []
+	},
+	"include": ["static/**/*.js"]
+}

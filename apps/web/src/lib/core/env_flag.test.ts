@@ -56,7 +56,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 		if (e.isDirectory()) {
 			if (e.name === 'node_modules') continue;
 			sourceFiles(p, out);
-		} else if (/\.(ts|svelte)$/.test(e.name)) {
+		} else if (/\.(ts|mjs|svelte)$/.test(e.name)) {
 			out.push(p);
 		}
 	}
@@ -72,11 +72,16 @@ test('env_flag.ts is the only module that spells the affirmative set out', () =>
 			'the parse was rewritten and the guard is now checking nothing.',
 	);
 
+	// `scripts/` is walked because it was outside every guard this repo runs —
+	// including this one — and carried a full inline copy of the set for as
+	// long as it existed (decisions § 752). `.mjs` for the same reason: the
+	// build-env guards there are the flag-reading code that is not `.ts`.
 	const offenders = [
 		...sourceFiles(SRC_ROOT),
 		...sourceFiles(resolve(WEB_ROOT, 'lambda')),
+		...sourceFiles(resolve(WEB_ROOT, 'scripts')),
 	]
-		.filter((p) => p !== canonical && !p.endsWith('.test.ts'))
+		.filter((p) => p !== canonical && !/\.test\.(ts|mjs)$/.test(p))
 		.filter((p) => {
 			const s = readFileSync(p, 'utf-8');
 			return CHAIN_HEAD.test(s) && CHAIN_TAIL.test(s);
