@@ -136,7 +136,7 @@ export function trackedMarkdown() {
 /// one.
 export function linksSurvey(bulletText) {
 	return SURVEY_FILES.some((name) =>
-		new RegExp(`\\]\\([^)]*${name.replace('.', '\\.')}(?:#[^)]*)?\\)`).test(bulletText)
+		new RegExp(`\\]\\([^)]*${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:#[^)]*)?\\)`).test(bulletText)
 	);
 }
 

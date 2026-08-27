@@ -170,7 +170,7 @@ test('every tsc root is reachable as an npm script and runs in CI', () => {
 			`No script in apps/web/package.json names ${root}, so nothing runs that typecheck.`,
 		);
 		const inCi = runners.some(([name]) =>
-			new RegExp(`npm run ${name.replace(/[.:]/g, '\\$&')}(?![\\w:-])`).test(ci),
+			new RegExp(`npm run ${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w:-])`).test(ci),
 		);
 		assert.ok(
 			inCi,
