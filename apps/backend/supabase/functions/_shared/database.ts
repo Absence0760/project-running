@@ -19,13 +19,12 @@
 /// this module lands in `clip-public-track`'s graph, whose worker must boot
 /// with no network — the default esm.sh build carries bare `node:` specifiers
 /// that the runtime resolves from registry.npmjs.org (decisions § 699). Type-
-/// only imports still count; `_shared/offline_worker_boot_guard.test.ts` pins
-/// both files on the probe path.
+/// only imports still count; `_shared/offline_worker_boot_guard.test.ts` walks
+/// that graph and will name this file if the specifier changes.
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0?target=deno';
-import type { Database } from '../../../../web/src/lib/database.types.ts';
+import type { Database, Json } from '../../../../web/src/lib/database.types.ts';
 
-export type { Database };
-export type { Json } from '../../../../web/src/lib/database.types.ts';
+export type { Database, Json };
 
 /// A Supabase client bound to this project's schema.
 ///
@@ -39,10 +38,10 @@ export type { Json } from '../../../../web/src/lib/database.types.ts';
 /// `userClient`), as it already did before these were typed at all.
 export type DbClient = SupabaseClient<Database>;
 
-/// One table's Row / Insert / Update shapes, for a handler that names the row
-/// it is building before it hands it to `.insert()` / `.update()`.
-export type Tables<T extends keyof Database['public']['Tables']> =
-	Database['public']['Tables'][T]['Row'];
+/// One table's Insert / Update shape, for a handler that names the row it is
+/// building before it hands it to `.insert()` / `.update()`. There is no `Row`
+/// alias: a read is inferred from the `.select()` that produced it, and naming
+/// the whole row would claim columns the query did not ask for.
 export type TablesInsert<T extends keyof Database['public']['Tables']> =
 	Database['public']['Tables'][T]['Insert'];
 export type TablesUpdate<T extends keyof Database['public']['Tables']> =
