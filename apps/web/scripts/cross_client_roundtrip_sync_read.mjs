@@ -31,12 +31,18 @@
 
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
+/** @import { SupabaseClient } from '@supabase/supabase-js' */
+/** @import { Database } from '../src/lib/database.types.ts' */
 import { parseRunSource } from '../src/lib/types.ts';
 
 const url = process.env.SUPABASE_TEST_URL;
 const anonKey = process.env.SUPABASE_TEST_ANON_KEY;
 const fixturePath = process.env.CROSS_CLIENT_SYNC_FIXTURE_IN;
 
+/**
+ * @param {string} msg
+ * @returns {never}
+ */
 function fail(msg) {
 	console.error(`✗ cross-client sync round-trip: ${msg}`);
 	process.exit(1);
@@ -47,7 +53,7 @@ if (!fixturePath) fail('CROSS_CLIENT_SYNC_FIXTURE_IN must point to the fixture J
 
 const fixture = JSON.parse(readFileSync(fixturePath, 'utf8'));
 
-const supabase = createClient(url, anonKey);
+const supabase = /** @type {SupabaseClient<Database>} */ (createClient(url, anonKey));
 
 const { data: signIn, error: signInError } = await supabase.auth.signInWithPassword({
 	email: 'runner@test.com',
@@ -72,9 +78,8 @@ let track = null;
 if (data.track_url) {
 	const { data: blob, error: dlErr } = await supabase.storage.from('runs').download(data.track_url);
 	if (dlErr || !blob) fail(`track download failed for ${data.track_url}: ${dlErr?.message ?? 'no data'}`);
-	const buf = await blob.arrayBuffer();
 	const ds = new DecompressionStream('gzip');
-	const decompressed = await new Response(new Response(buf).body.pipeThrough(ds)).arrayBuffer();
+	const decompressed = await new Response(blob.stream().pipeThrough(ds)).arrayBuffer();
 	track = JSON.parse(new TextDecoder().decode(decompressed));
 }
 
@@ -85,8 +90,11 @@ const run = { ...data, source: parseRunSource(data.source), track };
 // float that survives the round-trip but prints differently doesn't
 // false-fail.
 const EPS = 1e-6;
-const steps = run.metadata?.steps;
-const notes = run.metadata?.notes;
+// `runs.metadata` is an unschema'd jsonb bag — docs/backend/metadata.md is the
+// registry of the keys it carries.
+const metadata = /** @type {Record<string, unknown> | null} */ (run.metadata);
+const steps = metadata?.steps;
+const notes = metadata?.notes;
 
 const checks = [
 	['run found', run.id, fixture.run_id, 'string'],

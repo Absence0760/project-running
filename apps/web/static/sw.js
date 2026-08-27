@@ -8,30 +8,41 @@
 /// handler, apps/job_worker/internal/push_render.go) POSTs through Web Push:
 ///
 ///   { title: string, body?: string, url?: string, tag?: string,
-///     icon?: string, data?: object }
+///     icon?: string, badge?: string, data?: object }
 ///
 /// Anything else is ignored. Missing `title` falls back to "Threkir"
 /// so a malformed payload still surfaces something.
 
-self.addEventListener('install', (event) => {
+/**
+ * @typedef {{ title?: string, body?: string, url?: string, tag?: string,
+ *   icon?: string, badge?: string, data?: Record<string, unknown> }} PushPayload
+ */
+
+// `self` in a service worker is a ServiceWorkerGlobalScope; the WebWorker lib
+// types the bare global as the narrower WorkerGlobalScope, which carries
+// neither `clients` nor `registration`.
+const sw = /** @type {ServiceWorkerGlobalScope} */ (/** @type {unknown} */ (self));
+
+sw.addEventListener('install', (event) => {
 	// Activate as soon as the new SW is installed — don't wait for a
 	// reload before push starts working.
-	event.waitUntil(self.skipWaiting());
+	event.waitUntil(sw.skipWaiting());
 });
 
-self.addEventListener('activate', (event) => {
-	event.waitUntil(self.clients.claim());
+sw.addEventListener('activate', (event) => {
+	event.waitUntil(sw.clients.claim());
 });
 
-self.addEventListener('push', (event) => {
+sw.addEventListener('push', (event) => {
+	/** @type {PushPayload} */
 	let payload = {};
 	try {
 		payload = event.data ? event.data.json() : {};
-	} catch (_e) {
+	} catch {
 		// Some senders push plain text — preserve it as the body.
 		try {
 			payload = { body: event.data ? event.data.text() : '' };
-		} catch (_e2) {
+		} catch {
 			payload = {};
 		}
 	}
@@ -45,10 +56,10 @@ self.addEventListener('push', (event) => {
 		data: { url: payload.url || '/dashboard', ...(payload.data || {}) },
 	};
 
-	event.waitUntil(self.registration.showNotification(title, options));
+	event.waitUntil(sw.registration.showNotification(title, options));
 });
 
-self.addEventListener('notificationclick', (event) => {
+sw.addEventListener('notificationclick', (event) => {
 	event.notification.close();
 	const url = event.notification?.data?.url || '/dashboard';
 
@@ -57,19 +68,19 @@ self.addEventListener('notificationclick', (event) => {
 			// Focus an existing tab if one is already open at this URL,
 			// otherwise open a new one. Falls back gracefully when the
 			// browser denies focus (e.g. iOS Safari without user gesture).
-			const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+			const clients = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
 			for (const c of clients) {
 				if (c.url.includes(url) && 'focus' in c) {
 					try {
 						await c.focus();
 						return;
-					} catch (_) {
+					} catch {
 						/* fall through to openWindow */
 					}
 				}
 			}
-			if (self.clients.openWindow) {
-				await self.clients.openWindow(url);
+			if (sw.clients.openWindow) {
+				await sw.clients.openWindow(url);
 			}
 		})(),
 	);

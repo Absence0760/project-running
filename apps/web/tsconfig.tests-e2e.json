@@ -13,5 +13,13 @@
 	// CI:  the `parity-types` job in .github/workflows/ci.yml.
 	// The include list is guarded by tests-e2e/fixtures/tsconfig-coverage.test.ts.
 	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		// Explicit because nothing here pulls @types/node in on its own: the
+		// automatic type-root scan does not fire under this config chain, and
+		// `moduleResolution: bundler` skips `node:`-prefixed specifiers, so the
+		// node globals every spec uses arrived only because `jszip` happens to
+		// carry a `/// <reference types="node" />` (decisions § 752).
+		"types": ["node"]
+	},
 	"include": ["tests-e2e/**/*.ts", "tests-e2e/**/*.mjs"]
 }

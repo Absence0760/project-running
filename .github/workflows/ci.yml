@@ -435,6 +435,29 @@ jobs:
             echo "Reproduce locally with: npm ci && npm run check:e2e-types --workspace=apps/web."
             exit 1
           fi
+      # The same hole as the Playwright tree, in three more places at once:
+      # apps/web/scripts, apps/web/lambda (eight production handlers) and
+      # static/sw.js are outside `.svelte-kit/tsconfig.json`'s include too, so
+      # `npm run check` has never read any of them. Two roots because a
+      # service worker's globals come from the WebWorker lib, which cannot
+      # share a program with DOM; decisions § 752.
+      - name: Node + service-worker tree typecheck
+        run: |
+          if ! npm run check:node-types --workspace=apps/web; then
+            echo "::error::apps/web's Node side (scripts/, lambda/, svelte.config.js) does not typecheck. Nothing here involves the migrations, the schema or the generated row types — read the TS error above."
+            echo "Reproduce locally with: npm ci && npm run check:node-types --workspace=apps/web."
+            exit 1
+          fi
+          if ! npm run check:sw-types --workspace=apps/web; then
+            echo "::error::apps/web/static/sw.js does not typecheck. That file is the web-push service worker, shipped verbatim to every browser that registers it — nothing here is about the schema or the generated types."
+            echo "Reproduce locally with: npm ci && npm run check:sw-types --workspace=apps/web."
+            exit 1
+          fi
+          if ! npm run test:tsconfig-coverage --workspace=apps/web; then
+            echo "::error::A compilable file under apps/web is inside no tsconfig root, so nothing typechecks it. The failing assertion names the files."
+            echo "Reproduce locally with: npm ci && npm run test:tsconfig-coverage --workspace=apps/web."
+            exit 1
+          fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
