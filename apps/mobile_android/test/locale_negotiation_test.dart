@@ -4,6 +4,7 @@
 
 import 'dart:ui';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/locale_support.dart';
@@ -116,6 +117,30 @@ void main() {
     test('a bare pt reaches the European catalogue', () {
       expect(negotiateLocale(null, const [Locale('pt')]),
           const Locale('pt', 'PT'));
+    });
+
+    // Following the device locale means `MaterialApp.locale` is null, so
+    // FLUTTER resolves — against `supportedLocales`, not through
+    // `negotiateLocale` — and it takes the first entry matching on language
+    // alone. The two paths must therefore agree, and they only do while
+    // `pt-PT` precedes `pt-BR` in the list: measured, reversing the pair sends
+    // a bare-`pt` device to Brazilian while `_baseToLocale` still says
+    // European.
+    test('Flutter resolves a device locale the same way negotiateLocale does',
+        () {
+      for (final device in const <Locale>[
+        Locale('pt'),
+        Locale('pt', 'PT'),
+        Locale('pt', 'BR'),
+        Locale('pt', 'AO'),
+      ]) {
+        expect(
+          basicLocaleListResolution(<Locale>[device], supportedLocales),
+          negotiateLocale(null, <Locale>[device]),
+          reason: '$device resolves differently through Flutter than through '
+              'negotiateLocale — check the order of supportedLocales.',
+        );
+      }
     });
 
     test('pt-BR still matches Brazil exactly', () {

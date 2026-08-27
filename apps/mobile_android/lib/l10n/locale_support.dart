@@ -22,6 +22,14 @@ import 'dart:ui';
 /// delegate resolves `Locale('pt', 'PT')` through that base, and the
 /// locale-reach guard holds the two spellings together through `arbTagOverride`
 /// — the same shape it already used for the plist.
+///
+/// ORDER IS LOAD-BEARING. When the user follows the device locale, `main.dart`
+/// passes a null `MaterialApp.locale` and Flutter resolves against THIS list
+/// rather than through [negotiateLocale] — and its resolution takes the first
+/// entry matching on language alone. `pt-PT` before `pt-BR` is therefore what
+/// makes a device reporting a bare `pt` land where [_baseToLocale] says it
+/// should; reversing the two silently sends it to Brazilian instead.
+/// `locale_negotiation_test.dart` pins it against Flutter's own resolver.
 const List<Locale> supportedLocales = <Locale>[
   Locale('en'),
   Locale('de'),
