@@ -9,7 +9,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Carrera activa" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Course en cours" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "アクティブなラン" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Corrida ativa" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Corrida ativa" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Corrida ativa" } }
       }
     },
     "Live pace, distance, and elapsed time during a run." : {
@@ -19,7 +20,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo, distancia y tiempo transcurrido en directo durante una carrera." } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Allure, distance et temps écoulé en direct pendant une course." } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ラン中のペース、距離、経過時間をリアルタイム表示。" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo, distância e tempo decorrido ao vivo durante uma corrida." } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo, distância e tempo decorrido ao vivo durante uma corrida." } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo, distância e tempo decorrido em direto durante uma corrida." } }
       }
     },
     "Begins a new run, starting GPS and heart-rate recording" : {
@@ -29,7 +31,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Inicia una nueva carrera y comienza a registrar el GPS y la frecuencia cardíaca" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Démarre une nouvelle course en activant le GPS et l'enregistrement de la fréquence cardiaque" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "新しいランを開始し、GPSと心拍数の記録を始めます" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Inicia uma nova corrida, ativando o GPS e o registro da frequência cardíaca" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Inicia uma nova corrida, ativando o GPS e o registro da frequência cardíaca" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Inicia uma nova corrida, ativando o GPS e o registo da frequência cardíaca" } }
       }
     },
     "Clear route" : {
@@ -39,7 +42,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar ruta" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer l'itinéraire" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルートを消去" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover rota" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover rota" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Remover rota" } }
       }
     },
     "Clears this synced run from the watch and returns to the start screen" : {
@@ -49,7 +53,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Borra esta carrera sincronizada del reloj y vuelve a la pantalla de inicio" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Efface cette course synchronisée de la montre et revient à l'écran de démarrage" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "同期済みのこのランをウォッチから消去し、開始画面に戻ります" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remove esta corrida sincronizada do relógio e volta à tela inicial" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remove esta corrida sincronizada do relógio e volta à tela inicial" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Remove esta corrida sincronizada do relógio e volta ao ecrã inicial" } }
       }
     },
     "DEBUG: Sync Direct" : {
@@ -59,7 +64,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "DEBUG: Sincronizar directo" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "DEBUG : Synchro directe" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "DEBUG: 直接同期" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "DEBUG: Sincronizar direto" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "DEBUG: Sincronizar direto" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "DEBUG: Sincronizar direto" } }
       }
     },
     "Deletes the unsaved run permanently" : {
@@ -69,7 +75,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Elimina la carrera sin guardar de forma permanente" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprime définitivement la course non enregistrée" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "未保存のランを完全に削除します" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Exclui permanentemente a corrida não salva" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Exclui permanentemente a corrida não salva" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Elimina permanentemente a corrida não guardada" } }
       }
     },
     "Discard" : {
@@ -78,7 +85,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Descartar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "破棄" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Descartar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Descartar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Descartar" } }
       }
     },
     "Distance" : {
@@ -88,7 +96,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Distancia" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Distance" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "距離" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Distância" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Distância" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Distância" } }
       }
     },
     "Ends the run and opens the summary" : {
@@ -98,7 +107,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Finaliza la carrera y abre el resumen" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Termine la course et ouvre le récapitulatif" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ランを終了してサマリーを開きます" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Encerra a corrida e abre o resumo" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Encerra a corrida e abre o resumo" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Termina a corrida e abre o resumo" } }
       }
     },
     "HR" : {
@@ -108,7 +118,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "FC" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "FC" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "心拍" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "FC" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "FC" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "FC" } }
       }
     },
     "None — tap to set" : {
@@ -118,7 +129,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Ninguno — toca para ajustar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune — touchez pour définir" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "なし — タップして設定" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Nenhum — toque para definir" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Nenhum — toque para definir" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Nenhum — toque para definir" } }
       }
     },
     "Off route" : {
@@ -128,7 +140,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Fuera de ruta" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Hors itinéraire" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート外" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota" } }
       }
     },
     "Off route · %@" : {
@@ -138,7 +151,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Fuera de ruta · %@" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Hors itinéraire · %@" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート外 · %@" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota · %@" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota · %@" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Fora da rota · %@" } }
       }
     },
     "Open the Run app" : {
@@ -148,7 +162,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Abre la app Threkir" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir l'app Threkir" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "Threkirアプリを開く" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Abra o app Threkir" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Abra o app Threkir" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Abra a app Threkir" } }
       }
     },
     "Pace" : {
@@ -158,7 +173,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Allure" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ペース" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo" } }
       }
     },
     "Pause" : {
@@ -167,7 +183,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Pausar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Pause" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "一時停止" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pausar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pausar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Pausar" } }
       }
     },
     "Paused" : {
@@ -177,7 +194,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "En pausa" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "En pause" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "一時停止中" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pausado" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pausado" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Em pausa" } }
       }
     },
     "Pauses the recording without ending it" : {
@@ -187,7 +205,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Pausa el registro sin finalizarlo" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Met l'enregistrement en pause sans le terminer" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "記録を終了せずに一時停止します" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pausa o registro sem encerrá-lo" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pausa o registro sem encerrá-lo" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Coloca o registo em pausa sem o terminar" } }
       }
     },
     "Queued — will retry" : {
@@ -197,7 +216,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "En cola — se reintentará" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "En file d'attente — nouvelle tentative" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "キュー登録済み — 再試行します" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Na fila — vai tentar de novo" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Na fila — vai tentar de novo" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Na fila — vai tentar novamente" } }
       }
     },
     "GPS track unavailable — synced without it" : {
@@ -207,7 +227,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Trazado GPS no disponible: sincronizado sin él" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tracé GPS indisponible – synchronisé sans lui" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "GPSトラックがありません。トラックなしで同期しました" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Trajeto GPS indisponível — sincronizado sem ele" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Trajeto GPS indisponível — sincronizado sem ele" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Trajeto GPS indisponível — sincronizado sem ele" } }
       }
     },
     "Heart rate unavailable" : {
@@ -217,7 +238,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Frecuencia cardíaca no disponible" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fréquence cardiaque indisponible" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "心拍数を取得できません" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível" } }
       }
     },
     "Heart rate unavailable — run saved without it" : {
@@ -227,7 +249,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Frecuencia cardíaca no disponible: carrera guardada sin ella" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fréquence cardiaque indisponible – course enregistrée sans elle" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "心拍数を取得できません。心拍数なしでランを保存しました" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível — corrida salva sem ela" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível — corrida salva sem ela" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Frequência cardíaca indisponível — corrida guardada sem ela" } }
       }
     },
     "Phone unavailable — tap Sync Run to retry" : {
@@ -237,7 +260,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Teléfono no disponible: toca Sincronizar carrera para reintentar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Téléphone indisponible – appuyez sur Synchroniser la course pour réessayer" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "スマホに接続できません。「ランを同期」をタップして再試行" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Telefone indisponível — toque em Sincronizar corrida para tentar de novo" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Telefone indisponível — toque em Sincronizar corrida para tentar de novo" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Telemóvel indisponível — toque em Sincronizar corrida para tentar novamente" } }
       }
     },
     "Queued for sync" : {
@@ -247,7 +271,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "En cola para sincronizar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "En file d'attente pour la synchronisation" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "同期待ち" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Na fila para sincronizar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Na fila para sincronizar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Na fila para sincronizar" } }
       }
     },
     "Ready to Run" : {
@@ -257,7 +282,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Listo para correr" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Prêt à courir" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ランの準備完了" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pronto para correr" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pronto para correr" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Pronto para correr" } }
       }
     },
     "Recover" : {
@@ -267,7 +293,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Récupérer" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "復元" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar" } }
       }
     },
     "Recover unsaved run from %@, %@, %@?" : {
@@ -277,7 +304,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Recuperar la carrera sin guardar del %1$@, %2$@, %3$@?" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Récupérer la course non enregistrée du %1$@, %2$@, %3$@ ?" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "%1$@、%2$@、%3$@ の未保存のランを復元しますか？" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar a corrida não salva de %1$@, %2$@, %3$@?" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar a corrida não salva de %1$@, %2$@, %3$@?" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Recuperar a corrida não guardada de %1$@, %2$@, %3$@?" } }
       }
     },
     "Removes the route your iPhone sent, so the next run is unguided" : {
@@ -287,7 +315,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Elimina la ruta enviada desde tu iPhone, de modo que la próxima carrera no tenga guía" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retire l'itinéraire envoyé par votre iPhone : la prochaine course se fera sans guidage" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "iPhoneから送られたルートを削除し、次のランはガイドなしになります" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remove a rota enviada pelo seu iPhone, para que a próxima corrida seja sem orientação" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remove a rota enviada pelo seu iPhone, para que a próxima corrida seja sem orientação" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Remove a rota enviada pelo seu iPhone, para que a próxima corrida seja sem orientação" } }
       }
     },
     "Restores the unsaved run from the last checkpoint" : {
@@ -297,7 +326,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Restaura la carrera sin guardar desde el último punto de control" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Restaure la course non enregistrée depuis le dernier point de contrôle" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "最後のチェックポイントから未保存のランを復元します" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Restaura a corrida não salva a partir do último ponto de verificação" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Restaura a corrida não salva a partir do último ponto de verificação" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Restaura a corrida não guardada a partir do último ponto de controlo" } }
       }
     },
     "Resume" : {
@@ -306,7 +336,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Reanudar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Reprendre" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "再開" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Retomar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Retomar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Retomar" } }
       }
     },
     "Resumes the paused recording" : {
@@ -316,7 +347,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Reanuda el registro en pausa" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Reprend l'enregistrement en pause" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "一時停止中の記録を再開します" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Retoma o registro pausado" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Retoma o registro pausado" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Retoma o registo em pausa" } }
       }
     },
     "Route" : {
@@ -326,7 +358,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Ruta" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Itinéraire" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Rota" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Rota" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Rota" } }
       }
     },
     "Route position unknown" : {
@@ -336,7 +369,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Posición en la ruta desconocida" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Position sur l'itinéraire inconnue" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ルート上の位置が不明です" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Posição na rota desconhecida" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Posição na rota desconhecida" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Posição na rota desconhecida" } }
       }
     },
     "RUN" : {
@@ -346,7 +380,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "CORRER" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "COURIR" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ラン" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "CORRER" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "CORRER" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "CORRER" } }
       }
     },
     "Run" : {
@@ -356,7 +391,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Correr" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Courir" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ラン" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Correr" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Correr" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Correr" } }
       }
     },
     "Run Complete" : {
@@ -366,7 +402,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Carrera completada" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Course terminée" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ラン完了" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Corrida concluída" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Corrida concluída" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Corrida concluída" } }
       }
     },
     "RUN ONWARD" : {
@@ -376,7 +413,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "RUN ONWARD" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "RUN ONWARD" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "RUN ONWARD" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "RUN ONWARD" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "RUN ONWARD" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "RUN ONWARD" } }
       }
     },
     "RUNNING" : {
@@ -386,7 +424,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "EN MARCHA" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "EN COURS" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "実行中" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "CORRENDO" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "CORRENDO" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "A CORRER" } }
       }
     },
     "Sends the completed run to your iPhone over Watch Connectivity" : {
@@ -396,7 +435,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Envía la carrera completada a tu iPhone mediante Watch Connectivity" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Envoie la course terminée à votre iPhone via Watch Connectivity" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "完了したランをWatch Connectivity経由でiPhoneに送信します" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Envia a corrida concluída ao seu iPhone via Watch Connectivity" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Envia a corrida concluída ao seu iPhone via Watch Connectivity" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Envia a corrida concluída para o seu iPhone através do Watch Connectivity" } }
       }
     },
     "Sent to phone" : {
@@ -406,7 +446,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Enviado al teléfono" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Envoyé au téléphone" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "スマホに送信済み" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Enviado ao telefone" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Enviado ao telefone" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Enviado para o telemóvel" } }
       }
     },
     "Start" : {
@@ -416,7 +457,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Empezar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Démarrer" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "開始" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar" } }
       }
     },
     "Start next run" : {
@@ -425,7 +467,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Empezar la siguiente carrera" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Démarrer la course suivante" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "次のランを開始" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar a próxima corrida" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar a próxima corrida" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar a corrida seguinte" } }
       }
     },
     "Stop" : {
@@ -434,7 +477,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Parar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Arrêter" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "停止" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Parar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Parar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Parar" } }
       }
     },
     "Sync Run" : {
@@ -443,7 +487,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Sincronizar carrera" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Synchroniser la course" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ランを同期" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Sincronizar corrida" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Sincronizar corrida" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Sincronizar corrida" } }
       }
     },
     "Tap to start" : {
@@ -453,7 +498,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca para empezar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Toucher pour démarrer" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "タップして開始" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Toque para iniciar" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Toque para iniciar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Toque para iniciar" } }
       }
     },
     "Target pace" : {
@@ -463,7 +509,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo objetivo" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Allure cible" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "目標ペース" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo-alvo" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo-alvo" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Ritmo objetivo" } }
       }
     },
     "Throws away the unsynced run permanently" : {
@@ -473,7 +520,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Descarta de forma permanente la carrera sin sincronizar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprime définitivement la course non synchronisée" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "同期されていないランを完全に破棄します" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Descarta permanentemente a corrida não sincronizada" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Descarta permanentemente a corrida não sincronizada" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Descarta permanentemente a corrida não sincronizada" } }
       }
     },
     "Unsaved Run" : {
@@ -483,7 +531,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Carrera sin guardar" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Course non enregistrée" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "未保存のラン" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Corrida não salva" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Corrida não salva" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Corrida não guardada" } }
       }
     },
     "%@ to go" : {
@@ -493,7 +542,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ restantes" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ restants" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "残り %@" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "faltam %@" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "faltam %@" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "faltam %@" } }
       }
     },
     "%lld bpm" : {
@@ -503,7 +553,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "%lld ppm" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "%lld bpm" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "%lld bpm" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%lld bpm" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%lld bpm" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "%lld bpm" } }
       }
     },
     "%lld GPS pts" : {
@@ -513,7 +564,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "%lld ptos. GPS" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts GPS" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "GPS %lld点" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts GPS" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts GPS" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts GPS" } }
       }
     },
     "%lld pts" : {
@@ -523,7 +575,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "%lld ptos." } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "%lld点" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "%lld pts" } }
       }
     },
     "%lld run queued to sync" : {
@@ -576,6 +629,14 @@
               "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld corridas na fila para sincronizar" } }
             }
           }
+        },
+        "pt-PT" : {
+          "variations" : {
+            "plural" : {
+              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld corrida na fila para sincronizar" } },
+              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld corridas na fila para sincronizar" } }
+            }
+          }
         }
       }
     },
@@ -586,7 +647,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Mapa de la carrera" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Carte de la course" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "ランのマップ" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mapa da corrida" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mapa da corrida" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Mapa da corrida" } }
       }
     },
     "Waiting for GPS" : {
@@ -596,7 +658,8 @@
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Esperando el GPS" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "En attente du GPS" } },
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "GPSを待っています" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Aguardando o GPS" } }
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Aguardando o GPS" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "À espera de GPS" } }
       }
     }
   }
