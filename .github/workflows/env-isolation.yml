@@ -30,16 +30,26 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      # Two sibling guards under one job name, so each says which one broke
+      # (decisions § 764): dev refuses to start against prod endpoints, release
+      # refuses to build against placeholder / loopback ones.
       - name: env_isolation tests (dev-env guard)
-        run: node --test apps/web/scripts/env_isolation.test.mjs
+        run: |
+          if ! node --test apps/web/scripts/env_isolation.test.mjs; then
+            echo "::error::The dev-env isolation guard regressed — the check that 'npm run dev' refuses to start against a production Supabase URL. This is not the release-build guard; that is the step below."
+            echo "Reproduce with: node --test apps/web/scripts/env_isolation.test.mjs. The override and what it does and does not cover are in docs/testing/dev_prod_isolation.md."
+            exit 1
+          fi
       - name: check_production_env tests (release-build guard)
-        # Sibling guard: dev refuses to start against prod endpoints;
-        # release refuses to build against placeholder / loopback
-        # endpoints. Wiring this into CI (instead of only running at
-        # `release-web.yml` time) means a regression to the guard
-        # itself surfaces on the PR that broke it, not weeks later
-        # when someone cuts a release tag.
-        run: node --test apps/web/scripts/check_production_env.test.mjs
+        # Wiring this into CI (instead of only running at `release-web.yml`
+        # time) means a regression to the guard itself surfaces on the PR that
+        # broke it, not weeks later when someone cuts a release tag.
+        run: |
+          if ! node --test apps/web/scripts/check_production_env.test.mjs; then
+            echo "::error::The release-build env guard regressed — the check that a production web build refuses placeholder or loopback endpoints. This is not the dev-env guard; that is the step above."
+            echo "Reproduce with: node --test apps/web/scripts/check_production_env.test.mjs. It also runs at tag time in release-web.yml, where a regression would surface far too late."
+            exit 1
+          fi
 
   env-example-scan:
     name: committed env files must not contain live values

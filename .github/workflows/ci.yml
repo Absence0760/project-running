@@ -160,7 +160,7 @@ jobs:
   workflow-lint:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Workflow lint (actionlint + pin drift)
+    name: Workflow lint (actionlint, toolchain pins, CI diagnoses, guard coverage)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -169,7 +169,13 @@ jobs:
       # the runner image ships shellcheck, whose style findings across every
       # existing run block would fail this job. The gate's purpose is only
       # what GitHub itself enforces — workflow syntax + expression parsing.
-      - run: "$(go env GOPATH)/bin/actionlint -color -shellcheck= -pyflakes="
+      - name: actionlint (workflow syntax + expression parsing)
+        run: |
+          if ! "$(go env GOPATH)/bin/actionlint" -color -shellcheck= -pyflakes=; then
+            echo "::error::A workflow file does not parse the way GitHub parses it — bad YAML, an unknown key, or an expression GitHub would reject. Nothing here is about the toolchain pins, the CI diagnoses or the run-time-download guard; those are the other checks in this job."
+            echo "The failing line above names the file, the line and the rule. Reproduce with: actionlint -shellcheck= -pyflakes= (the two linter integrations are off on purpose)."
+            exit 1
+          fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -185,8 +191,16 @@ jobs:
       # under .github/actions, which Dependabot does not scan at all.
       - name: Toolchain pin drift (Flutter SDK + melos + action SHAs)
         run: |
-          node scripts/check_toolchain_pins.mjs
-          node --test scripts/check_toolchain_pins.test.mjs
+          if ! node scripts/check_toolchain_pins.mjs; then
+            echo "::error::A toolchain this build installs is unpinned or two call sites disagree — a floating Flutter SDK, a melos version that does not match pubspec.lock, an unpinned defmt-print or a stale cache key for it, or a third-party action on a mutable tag instead of a commit SHA. Nothing here is about workflow syntax or the CI diagnoses; those are other checks in this job."
+            echo "The failing line above names the file, the line and the value to pin. decisions § 595 is why the Flutter version is declared once per workflow file rather than inherited from 'channel: stable'."
+            exit 1
+          fi
+          if ! node --test scripts/check_toolchain_pins.test.mjs; then
+            echo "::error::The toolchain-pin guard's own unit tests failed. The pins themselves are fine — the check above just passed — so this is a defect in scripts/check_toolchain_pins.mjs, not pin drift."
+            echo "Reproduce with: node --test scripts/check_toolchain_pins.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # A step's `if: failure()` is true for a failure anywhere earlier in the
       # job, so a diagnosis printed from one speaks for steps it cannot see —
       # parity-types' trailing step reported "database.types.ts is out of sync"
@@ -195,8 +209,16 @@ jobs:
       # added to a bundled job without a diagnosis of its own.
       - name: CI failure diagnoses name what actually failed
         run: |
-          node scripts/check_ci_diagnostics.mjs
-          node --test scripts/check_ci_diagnostics.test.mjs
+          if ! node scripts/check_ci_diagnostics.mjs; then
+            echo "::error::A CI failure would go unattributed or unseen — an '::error::' printed under a bare 'if: failure()', a check step in a job that bundles several guards saying nothing of its own, or a job the 'CI gate' aggregator does not wait for. Nothing here is about workflow syntax or the toolchain pins; those are other checks in this job."
+            echo "The failing line above names the file, the line and the shape to use. decisions § 764 is why the bundled jobs are derived from the guards they run rather than listed."
+            exit 1
+          fi
+          if ! node --test scripts/check_ci_diagnostics.test.mjs; then
+            echo "::error::The CI-diagnosis guard's own unit tests failed. The workflows themselves are fine — the check above just passed — so this is a defect in scripts/check_ci_diagnostics.mjs, not a misattributed diagnosis."
+            echo "Reproduce with: node --test scripts/check_ci_diagnostics.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # The Edge Functions are a Deno program, so no tsconfig root covers them
       # and `scripts/tsconfig_coverage.test.mjs` exempts the tree. What covers
       # it is the `deno check` step in `edge-functions`; this asserts that step
@@ -204,13 +226,40 @@ jobs:
       # out of this file and running it. A lint on a workflow file, hence here
       # — and it needs no deno, no node_modules and no Docker.
       - name: Edge Function typecheck lane covers the whole tree
-        run: node --test scripts/edge_functions_typecheck_coverage.test.mjs
+        run: |
+          if ! node --test scripts/edge_functions_typecheck_coverage.test.mjs; then
+            echo "::error::The 'Edge Function typecheck' step in the edge-functions job no longer reads the whole supabase/functions tree, so some of it is typechecked by nothing (no tsconfig root covers a Deno program). Nothing here is about workflow syntax, the toolchain pins or the CI diagnoses."
+            echo "The failing assertion names the files the lane's own file-list expression now misses. Reproduce with: node --test scripts/edge_functions_typecheck_coverage.test.mjs."
+            exit 1
+          fi
       # The stack-start wait loop is shell inside a composite action, so it
       # runs in no job's test suite. Its accounting (a wall-clock deadline the
       # error string can be trusted to report) and its failure forensics are
       # pinned here by driving it with stub curl/docker on PATH.
       - name: Supabase stack sidecar wait loop
-        run: node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs
+        run: |
+          if ! node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs; then
+            echo "::error::The start-supabase composite action's wait loop regressed — its deadline accounting or its failure forensics. That shell runs inside a composite action, so it is in no job's test suite and this is the only thing that reads it. Nothing here is about workflow syntax, the toolchain pins or the CI diagnoses."
+            echo "Reproduce with: node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs (drives the loop with stub curl/docker on PATH)."
+            exit 1
+          fi
+      # `npx <bin>` runs whatever node_modules/.bin provides — and when nothing
+      # provides it, downloads the newest thing the registry answers with and
+      # executes it against this checkout. The web unit suite ran that way for
+      # its whole life (decisions § 764). A lint on workflow files, hence here,
+      # and it needs no install: it reads the package.json files as text.
+      - name: CI runs no binary it downloads at run time
+        run: |
+          if ! node scripts/check_workflow_binaries.mjs; then
+            echo "::error::A workflow hands a package runner (npx / pnpm exec / dlx) a binary that no package.json in this repo declares, so CI downloads an unpinned copy at run time. Nothing here is about action SHAs, the Flutter pin or the CI diagnoses — those are the other guards in this job."
+            echo "The failing line above names the file, the line and the package to declare. decisions § 764 is why a run-time download is treated like an action pinned to a mutable tag."
+            exit 1
+          fi
+          if ! node --test scripts/check_workflow_binaries.test.mjs; then
+            echo "::error::The run-time-download guard's own unit tests failed. The workflows themselves are fine — the check above just passed — so this is a defect in scripts/check_workflow_binaries.mjs."
+            echo "Reproduce with: node --test scripts/check_workflow_binaries.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
 
   test-packages:
     needs: changes
@@ -300,8 +349,8 @@ jobs:
           # Node 24 to match the Playwright shards. Needed at all
           # because the Web TS unit tests step at the bottom imports
           # third-party packages (e.g. `jszip` in backup_reader.test.ts)
-          # — `npx tsx --test` can't resolve them without a populated
-          # workspace `node_modules/`.
+          # — the runner can't resolve them without a populated workspace
+          # `node_modules/`, and `tsx` itself is one of them.
           node-version: 24
           cache: npm
       - run: npm ci
@@ -420,15 +469,25 @@ jobs:
           fi
       # `src/**`, not `src/lib/**`: the route-level source guards under
       # src/routes (e.g. the preferences i18n guard) were silently never run.
+      # Invokes the package's own `test:unit` script rather than restating its
+      # globs, so the documented reproduce command and the command CI runs are
+      # the same string. They were not: this step spelled the globs out and ran
+      # `npx tsx`, while `test:unit` invoked a bare `tsx` that no lockfile
+      # installed — so the reproduce command failed with `tsx: command not
+      # found` on any clean checkout, and CI fetched an unpinned tsx from the
+      # registry at test time. `tsx` is a declared devDependency of apps/web
+      # now, so this resolves out of `node_modules` after `npm ci`
+      # (decisions § 764).
+      #
+      # tests-e2e/fixtures (in the script's globs) holds the Playwright harness
+      # guards, which run in no Playwright shard — the config ignores
+      # **/fixtures/** — so they are unit tests of the harness itself.
       - name: Web TS unit tests
         working-directory: apps/web
-        # tests-e2e/fixtures holds the Playwright harness guards, which run in
-        # no Playwright shard (the config ignores **/fixtures/**) — they are
-        # unit tests of the harness itself.
         run: |
-          if ! npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts'; then
+          if ! npm run test:unit; then
             echo "::error::The web TypeScript unit suite failed. Nothing here involves the migrations, the Supabase schema, or the generated row types — read the failing test name above."
-            echo "Reproduce locally with: npm ci && npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts' (from apps/web)."
+            echo "Reproduce locally with: npm ci && npm run test:unit --workspace=apps/web."
             exit 1
           fi
       # The Playwright tree is outside `.svelte-kit/tsconfig.json`'s include, so
@@ -551,16 +610,19 @@ jobs:
           BASE_PATH: ""
 
   parity-matrix:
-    name: Doc registry drift (parity matrix, TS↔Dart pairs, checkbox states)
+    name: Doc registry drift (parity matrix, iOS column, TS↔Dart pairs, checkbox states)
     # Lightweight markdown audits of the registries that describe what ships
     # where, which helpers must move together, and how a doc says a thing is
     # only half done.
     #
-    #   check_parity_matrix.dart      — walks docs/product/parity.md, asserts
+    #   check_parity_matrix.dart       — walks docs/product/parity.md, asserts
     #     every row has 7 cells, uses only the legal `✓ / ✗ / Partial / N/A`
     #     symbols, fails on the impossible "iOS ahead of Android" state
     #     (decisions § 39), and flags any `Partial` row missing a Notes
     #     explanation.
+    #   check_parity_ios_column.mjs    — that same column against the ONE rule
+    #     the document states for it, which has exactly one home
+    #     (decisions § 739).
     #   check_parity_pair_registry.mjs — the TS↔Dart parity-pair list says the
     #     same thing in CLAUDE.md and in the shared-library-syncer agent's
     #     table, and every path either names exists (decisions § 604).
@@ -569,15 +631,24 @@ jobs:
     #     the survey file carrying its still-open half. The surveys grep
     #     `- [ ]`, so a third state is invisible to them (decisions § 756).
     #
+    # Four unrelated registries under one job name, so the name cannot say
+    # which drifted and every step says it for itself — the rule
+    # scripts/check_ci_diagnostics.mjs derives for any job running more than
+    # one guard (decisions § 764). Bundled rather than split into four jobs
+    # deliberately: four runners and four checkout+setup pairs to save nothing
+    # a per-step diagnosis does not already say, and each split job would need
+    # its own line in the CI gate's `needs:` list, where an omission makes a
+    # failure invisible rather than merely unlabelled.
+    #
     # Deliberately NOT gated on `needs.changes.outputs.code`. Every file these
-    # two guards read is markdown — docs/product/parity.md,
-    # CLAUDE.md, .claude/agents/shared-library-syncer.md — and the `changes`
-    # filter classifies `docs/`, `.claude/` and `*.md` as a docs-only diff. So
-    # the gate skipped this job on exactly the edits it exists to police, and
-    # the CI gate counts a skip as a pass. The registry drift § 604 records
-    # arrived that way. Both scripts are seconds of work; the Flutter setup is
-    # the only real cost, and it is worth paying on a docs PR that can silently
-    # invalidate a registry.
+    # guards read is markdown — docs/product/parity.md, CLAUDE.md,
+    # .claude/agents/shared-library-syncer.md — and the `changes` filter
+    # classifies `docs/`, `.claude/` and `*.md` as a docs-only diff. So the
+    # gate skipped this job on exactly the edits it exists to police, and the
+    # CI gate counts a skip as a pass. The registry drift § 604 records
+    # arrived that way. The three Node scripts are seconds of work; the Flutter
+    # setup is the only real cost, and it is worth paying on a docs PR that can
+    # silently invalidate a registry.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -586,8 +657,16 @@ jobs:
           node-version: 24
       - name: CLAUDE.md vs shared-library-syncer pair registry
         run: |
-          node scripts/check_parity_pair_registry.mjs
-          node --test scripts/check_parity_pair_registry.test.mjs
+          if ! node scripts/check_parity_pair_registry.mjs; then
+            echo "::error::A TS<->Dart parity pair is registered in CLAUDE.md but not in the shared-library-syncer agent's table (or the reverse), or one of them points at a file that no longer exists. Nothing here is about the parity matrix, its iOS column or the doc checkboxes — those are the other three guards in this job."
+            echo "The failing line above names the pair and which registry is missing it. Both are edited in the same change; decisions § 604 is why a pair in only one of them is a pair whose divergence is never detected."
+            exit 1
+          fi
+          if ! node --test scripts/check_parity_pair_registry.test.mjs; then
+            echo "::error::The parity-pair-registry guard's own unit tests failed. The two registries themselves agree — the check above just passed — so this is a defect in scripts/check_parity_pair_registry.mjs, not registry drift."
+            echo "Reproduce with: node --test scripts/check_parity_pair_registry.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # Lives HERE and not in `parity-types` — a parity.md edit is a docs-only
       # diff, so `needs.changes.outputs.code` is false, every code-gated job
       # skips, and the CI gate counts a skip as a pass. A guard for this file
@@ -625,7 +704,17 @@ jobs:
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
-      - run: dart run scripts/check_parity_matrix.dart
+      # Named and self-diagnosing like the three above it. It was neither: an
+      # unnamed step is displayed by its command, which reads as a diagnosis
+      # right up until the reader has to work out which of four registries
+      # `check_parity_matrix.dart` is about.
+      - name: parity.md table structure + the iOS-ahead-of-Android rule
+        run: |
+          if ! dart run scripts/check_parity_matrix.dart; then
+            echo "::error::docs/product/parity.md's table is malformed — a row without 7 cells, a symbol outside `✓ / ✗ / Partial / N/A`, a `Partial` with no Notes, or the impossible state of iOS ahead of Android (decisions § 39, the byte-identical twin). Nothing here is about the TS<->Dart pairs or the doc checkboxes — those are two of the other guards in this job."
+            echo "The failing line above names the row and the cell. Reproduce with: dart run scripts/check_parity_matrix.dart."
+            exit 1
+          fi
 
   watch-ble-uuids:
     needs: changes
@@ -848,16 +937,14 @@ jobs:
   # could check — so a change that broke the simulator stayed invisible until
   # someone next ran it by hand.
   #
-  # IN the `CI gate` aggregator's `needs:` list, but only for the `smoke`
-  # scenario — that is why this job carries one scenario and `sim-scenarios`
-  # carries the rest. `smoke` is the sequence the 2026-07-19 manual pass stands
-  # behind and it has run green on hosted runners repeatedly; the `pages` and
-  # `alerts` scenarios first executed on 2026-07-26 and are two runs old, so
-  # making them blocking across the whole monorepo would put every PR behind
-  # assertions with no flake history. They live in `sim-scenarios`, which is
-  # strict within itself (a regression is loud) but not required, and moves into
-  # `needs:` once it has accrued history. Splitting costs one extra Renode
-  # install per run and buys a required signal that is actually proven.
+  # Split from `sim-scenarios` because the two entered the `CI gate`
+  # aggregator's `needs:` list at different times: `smoke` is the sequence the
+  # 2026-07-19 manual pass stands behind and was blocking from the start, while
+  # `pages` and `alerts` were two runs old and would have put every PR behind
+  # assertions with no flake history. `sim-scenarios` accrued that history and
+  # was promoted into `needs:` in #637, so BOTH are required now — the split
+  # costs one extra Renode install per run and survives because a scenario
+  # regression still names which sequence broke.
   sim-firmware:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -1839,7 +1926,12 @@ jobs:
         uses: ./.github/actions/start-supabase
       - name: Run pgtap RLS suite
         working-directory: apps/backend
-        run: supabase test db --local
+        run: |
+          if ! supabase test db --local; then
+            echo "::error::A pgtap assertion failed — an RLS policy, a grant or a SECURITY DEFINER RPC no longer behaves the way apps/backend/supabase/tests says it must. Nothing here is about the mutation operators or the refusal-assertion mutation check; those are the two steps below."
+            echo "The failing line above names the test file and the assertion. Reproduce locally with: cd apps/backend && supabase db reset && supabase test db --local."
+            exit 1
+          fi
       # A green pgtap run says every assertion passed, not that every
       # assertion asked anything. Under RLS a refused SELECT returns no rows
       # rather than erroring, so a refusal assertion and a fixture that never
