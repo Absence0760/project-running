@@ -1492,6 +1492,48 @@ with a reason (promote durable ones to `roadmap.md` / `followups.md`); and
 delete a file once every finding is resolved or its references have gone stale.
 Full lifecycle: [`reviews/README.md`](../../reviews/README.md).
 
+## Doc checkboxes — three states, and a partial box names where the rest is tracked
+
+Surveys of open work are built by grepping `- [ ]`. That instrument sees two of
+the three states this repo actually writes, so every `- [~]` is invisible to it:
+issue #789 was assembled that way and missed the category whole. Until now the
+marker also had no stated meaning outside `reviews/`, where
+[`reviews/README.md`](../../reviews/README.md) defines it as *deferred* — close
+to the opposite of the "built, not yet live" sense the docs tree had adopted.
+`docs/custom_watch/roadmap.md` read it a third way again, and one line there
+carried `[~]` while its neighbour, in the same build state, carried `[ ]` under
+that file's own bench-verification rule.
+
+<!-- doc-checkbox-states -->
+
+- `[ ]` open — none of it has shipped
+- `[x]` done — all of it has shipped, and nothing is holding it back
+- `[~]` partial — some has shipped and some has not, which includes a feature
+  whose code is merged but which no user can reach yet: an unset credential, a
+  flag defaulting off, a sign-off still owed. Say in the bullet which half is
+  which, and link the file tracking the open half
+
+<!-- /doc-checkbox-states -->
+
+There is no fourth state. `scripts/check_doc_checkboxes.mjs` reads the block
+above rather than restating it, so a new marker has to be documented here before
+it can appear in a doc, and it holds `reviews/README.md` to the same *set* of
+markers — the two describe different meanings on purpose, but a state added to
+one belongs in the other.
+
+The link is what keeps the category reachable. A `[~]` links
+[`followups.md`](../product/followups.md) or
+[`roadmap.md`](../product/roadmap.md), because those are the files a survey
+reads, and the open half has to exist there as an ordinary `- [ ]` box that a
+grep can find. This is the rule `reviews/README.md` § 2 already states for a
+deferred finding, applied to the tree the surveys walk. A document that is a
+dated snapshot rather than a live list says so with `<!-- doc-checkbox-frozen -->`
+and is exempt from the link — [`followups_archive.md`](../product/followups_archive.md)
+is a verbatim capture of the day it was taken, and rewriting its boxes to satisfy
+a rule written afterwards would destroy the one thing it is for. That
+declaration lives in the file it describes, so the guard carries no list of
+exceptions.
+
 ## A merge gate and an agent name each have exactly one definition
 
 Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/security_guards.test.ts` because both fail *green*:
