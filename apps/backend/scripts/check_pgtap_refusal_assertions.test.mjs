@@ -5,13 +5,17 @@ import assert from 'node:assert/strict';
 
 import {
   DEFINER_NEUTRALISERS,
+  TRANSACTION_LOCAL,
+  TRANSACTION_LOCAL_SQL,
   UNREGISTERED_DEFINER_RELATIONS,
   mine,
 } from './pgtap_definer_neutralisers.mjs';
 import {
   EXPECTED_SURVIVORS,
+  PREAMBLE,
   REFUSAL_VOCABULARY,
   TESTS_DIR,
+  WIDEN_GUC,
   buildMutant,
   definerSpan,
   findCalls,
@@ -279,7 +283,7 @@ test('statementStart and statementEnd bracket the whole assertion statement', ()
   assert.equal(span.trim(), "select is_empty($$ select 1; $$, 'd');");
 });
 
-test('buildMutant wraps only the named assertion and restores the role after it', () => {
+test('buildMutant arms the widening only around the named assertion', () => {
   const sql = [
     'begin;',
     'select plan(2);',
@@ -290,11 +294,60 @@ test('buildMutant wraps only the named assertion and restores the role after it'
   const call = findCalls(sql, 'is_empty')[0];
   const mutant = buildMutant(sql, [{ ...call, description: 'a stranger cannot read t' }]);
   assert.match(mutant, /create extension if not exists pgtap/);
-  const bypassAt = mutant.indexOf("set_config('role','none',true)");
+  const armAt = mutant.indexOf(`set_config('${WIDEN_GUC}','on',true)`);
   const assertAt = mutant.indexOf('is_empty');
-  const restoreAt = mutant.indexOf("set_config('role', current_setting('pgtap_guard.role')");
+  const disarmAt = mutant.indexOf(`set_config('${WIDEN_GUC}','off',true)`);
   const unrelatedAt = mutant.indexOf("ok(true, 'unrelated')");
-  assert.ok(bypassAt < assertAt && assertAt < restoreAt && restoreAt < unrelatedAt);
+  assert.ok(armAt < assertAt && assertAt < disarmAt && disarmAt < unrelatedAt);
+});
+
+// The counterpart of "every permissive replacement is scoped to the rows the
+// transaction wrote", for the operator that has no relation to replace. A role
+// change to the BYPASSRLS owner is what this used to be, and it revealed the
+// whole table (decisions.md 753) — so the base-table span must carry no role
+// change at all, and the policy it arms must carry the transaction-local test.
+test('the base-table operator widens row-level security rather than bypassing it', () => {
+  const sql = [
+    'begin;',
+    "select is_empty($$ select id from t $$, 'a stranger cannot read t');",
+    'rollback;',
+  ].join('\n');
+  const call = findCalls(sql, 'is_empty')[0];
+  const mutant = buildMutant(sql, [{ ...call, description: 'a stranger cannot read t' }]);
+  const span = mutant.slice(
+    mutant.indexOf(`set_config('${WIDEN_GUC}','on',true)`),
+    mutant.indexOf(`set_config('${WIDEN_GUC}','off',true)`),
+  );
+  assert.equal(
+    /set_config\(\s*'role'/.test(span),
+    false,
+    'the base-table span changes role, which bypasses RLS outright and leaves the widening policy unconsulted — every row in the table is then revealed, so a kill says a subject exists in the database rather than that the test built one',
+  );
+  assert.match(PREAMBLE, /create policy pgtap_guard_widen on %s as permissive for select/);
+  assert.ok(
+    PREAMBLE.includes(`${TRANSACTION_LOCAL}(xmin)`),
+    'the widening policy is not scoped to the rows this transaction wrote',
+  );
+  assert.ok(
+    PREAMBLE.includes(TRANSACTION_LOCAL_SQL),
+    'the mutant declares the transaction-local test but never defines it',
+  );
+});
+
+// pgtap's own `lives_ok` / `throws_ok` run their payload in a subtransaction, so
+// a fixture filed the idiomatic way carries a subtransaction's xid rather than
+// the top-level one. § 751's `xmin = pg_current_xact_id()::xid` reads those as
+// foreign, which turns every such assertion into a reported survivor; the
+// end-to-end control files its own subject that way so the scope can never
+// quietly narrow back to top-level writes only.
+test('the transaction-local test is the one that reaches a subtransaction write', () => {
+  assert.match(TRANSACTION_LOCAL_SQL, /pg_xact_status\(w\) = 'in progress'/);
+  assert.match(TRANSACTION_LOCAL_SQL, /security definer/);
+  const guard = readFileSync(
+    join(TESTS_DIR, '..', '..', 'scripts', 'check_pgtap_refusal_assertions.mjs'),
+    'utf8',
+  );
+  assert.match(guard, /select lives_ok\(\$\$ update routes set name = 'guard control/);
 });
 
 test('parseTap keys results by description so a shifted ordinal cannot mislabel one', () => {

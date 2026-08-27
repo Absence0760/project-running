@@ -1688,10 +1688,11 @@ jobs:
       # assertion asked anything. Under RLS a refused SELECT returns no rows
       # rather than erroring, so a refusal assertion and a fixture that never
       # inserted look identical (decisions.md 741). This re-runs each refusal
-      # assertion with the mechanism that could be hiding a row taken away —
-      # the owner bypass for a base table, a permissive replacement for a
-      # relation that filters in its own SQL (decisions.md 745) — and fails if
-      # it still passes.
+      # assertion with the mechanism that could be hiding a row widened to the
+      # rows the transaction itself wrote — a permissive RLS policy for a base
+      # table (decisions.md 753), a permissive replacement for a relation that
+      # filters in its own SQL (decisions.md 745, 751) — and fails if it still
+      # passes.
       #
       # The operator is validated before it is trusted, in its own step: a
       # mutation that changes nothing scores every assertion it touches as
