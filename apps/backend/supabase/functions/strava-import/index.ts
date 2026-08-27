@@ -77,11 +77,12 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 	// The checks and the call sites used to read `body.<field>` independently,
 	// so nothing tied what ran to what had been checked: the bounds test read
 	// `body.lookbackDays` while `handleSync` read it again through `?? 90`,
-	// and a re-ordering of the `||` chain below (putting a bound before the
-	// `Number.isInteger` that is currently the only thing rejecting a JSON
-	// `null`) would have let `null` through to the epoch arithmetic —
-	// `null * 86400_000` is 0, so the backfill would silently look back to
-	// this instant and import nothing.
+	// and the only thing that rejected a JSON `null` was `Number.isInteger`
+	// happening to sit first in the `||` chain below. Re-order that chain so a
+	// bound comes first — the natural edit — and `null` reached the epoch
+	// arithmetic, where `null * 86400_000` is 0: the backfill would look back
+	// to this instant and report success having imported nothing. The explicit
+	// `typeof` test is what makes the refusal deliberate instead.
 	let code = '';
 	let scope = '';
 	let redirectUri = '';
