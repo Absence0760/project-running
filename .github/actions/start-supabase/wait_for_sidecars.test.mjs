@@ -10,6 +10,7 @@ const SCRIPT = fileURLToPath(new URL('./wait_for_sidecars.sh', import.meta.url))
 
 // The edge-runtime probe is the one that failed in CI; the other two answer
 // immediately so each case exercises exactly one behaviour.
+/** @param {string} edgeBody */
 const CURL_STUB = (edgeBody) => `#!/usr/bin/env bash
 url=''
 maxtime=0
@@ -46,6 +47,10 @@ case "$cmd" in
 esac
 `;
 
+/**
+ * @param {{ edge: string, budget: number, maxTime: number, interval: number }} knobs
+ * @returns {{ status: number | null, out: string, calls: string[], wallMs: number }}
+ */
 function run({ edge, budget, maxTime, interval }) {
 	const dir = mkdtempSync(join(tmpdir(), 'wait-sidecars-'));
 	const curlLog = join(dir, 'curl.log');
@@ -81,6 +86,11 @@ function run({ edge, budget, maxTime, interval }) {
 	};
 }
 
+/**
+ * @param {readonly string[]} calls
+ * @param {string} part
+ * @returns {string[]}
+ */
 const attemptsOn = (calls, part) => calls.filter((l) => l.includes(part));
 
 test('every sidecar answering leaves no error and reports the attempt count', () => {

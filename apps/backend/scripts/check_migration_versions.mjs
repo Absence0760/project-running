@@ -30,12 +30,21 @@ export const MIGRATIONS_DIR = join(
 // Mirror of the Supabase CLI's migration-version regex: the leading digit run
 // up to (and consumed by) the first underscore. Returns null for a filename
 // that is not a versioned migration so the caller can ignore it.
+/**
+ * @param {string} filename
+ * @returns {string | null}
+ */
 export function parseVersion(filename) {
   const match = /^([0-9]+)_.*\.sql$/.exec(filename);
   return match ? match[1] : null;
 }
 
+/**
+ * @param {readonly string[]} filenames
+ * @returns {{ version: string, files: string[] }[]}
+ */
 export function findDuplicateVersions(filenames) {
+  /** @type {Map<string, string[]>} */
   const byVersion = new Map();
   for (const name of filenames) {
     const version = parseVersion(name);

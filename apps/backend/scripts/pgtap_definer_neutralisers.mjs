@@ -100,6 +100,7 @@ as $pgtap_guard$
 $pgtap_guard$;
 `;
 
+/** @param {string} alias */
 export const mine = (alias) => `${TRANSACTION_LOCAL}(${alias}.xmin)`;
 
 // The five owner-scoped gym RPCs share one witness, because they read the same

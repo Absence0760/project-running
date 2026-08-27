@@ -61,6 +61,12 @@ const DISTANCES = {
 	'200k': { distanceM: 200000, label: '200 km' },
 };
 
+const SEXES = /** @type {['male', 'female']} */ (['male', 'female']);
+
+/**
+ * @param {string} t
+ * @returns {number}
+ */
 function parseTimeToSeconds(t) {
 	const parts = t.split(':').map((p) => Number(p));
 	if (parts.some((n) => Number.isNaN(n))) throw new Error(`bad time: ${t}`);
@@ -69,10 +75,16 @@ function parseTimeToSeconds(t) {
 	return s;
 }
 
+/**
+ * @param {string} ext
+ * @returns {{ std: { male: number, female: number }, factors: { male: number[], female: number[] } }}
+ */
 function parseFile(ext) {
 	const raw = readFileSync(join(SRC, `AgeGrade.${ext}`), 'utf8');
 	const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+	/** @type {{ male: number | null, female: number | null }} */
 	const std = { male: null, female: null };
+	/** @type {{ male: (number | null)[], female: (number | null)[] }} */
 	const factors = { male: new Array(AGE_MAX - AGE_MIN + 1).fill(null), female: new Array(AGE_MAX - AGE_MIN + 1).fill(null) };
 	for (const line of lines) {
 		const tok = line.split(/\s+/);
@@ -91,12 +103,16 @@ function parseFile(ext) {
 		}
 	}
 	if (std.male == null || std.female == null) throw new Error(`missing standard in ${ext}`);
-	for (const sex of ['male', 'female']) {
+	/** @type {{ male: number[], female: number[] }} */
+	const complete = { male: [], female: [] };
+	for (const sex of SEXES) {
 		for (let i = 0; i < factors[sex].length; i++) {
-			if (factors[sex][i] == null) throw new Error(`missing ${sex} factor age ${i + AGE_MIN} in ${ext}`);
+			const fac = factors[sex][i];
+			if (fac == null) throw new Error(`missing ${sex} factor age ${i + AGE_MIN} in ${ext}`);
+			complete[sex][i] = fac;
 		}
 	}
-	return { std, factors };
+	return { std: { male: std.male, female: std.female }, factors: complete };
 }
 
 // Guard: every file present in the source dir is either mapped or the known
@@ -105,7 +121,7 @@ const present = readdirSync(SRC)
 	.filter((f) => f.startsWith('AgeGrade.'))
 	.map((f) => f.slice('AgeGrade.'.length));
 for (const ext of present) {
-	if (ext !== '26m' && !DISTANCES[ext]) throw new Error(`unmapped source file AgeGrade.${ext} — add it to DISTANCES or exclude it explicitly`);
+	if (ext !== '26m' && !Object.hasOwn(DISTANCES, ext)) throw new Error(`unmapped source file AgeGrade.${ext} — add it to DISTANCES or exclude it explicitly`);
 }
 
 const rows = Object.entries(DISTANCES)
@@ -130,6 +146,10 @@ const PROVENANCE = `USATF MLDR 2025 long-distance running age-grade tables (Alan
  * files in scripts/age_grade/source_2025/ — do not hand-edit; re-run the
  * generator to refresh or swap editions.`;
 
+/**
+ * @param {readonly number[]} arr
+ * @returns {string}
+ */
 function facList(arr) {
 	return arr.join(', ');
 }
@@ -180,6 +200,10 @@ dart += `    required this.openStandardSecMale,\n    required this.openStandardS
 dart += `    required this.maleFactors,\n    required this.femaleFactors,\n  });\n}\n\n`;
 dart += `/// Standard distances ascending by metres. Generated — see header.\n`;
 dart += `const List<AgeGradeDistance> ageGradeDistances = [\n`;
+/**
+ * @param {number} n
+ * @returns {string}
+ */
 function dnum(n) {
 	// Dart needs a decimal point for doubles in a `double` field.
 	return Number.isInteger(n) ? `${n}.0` : `${n}`;

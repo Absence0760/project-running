@@ -238,19 +238,36 @@ export const GUARDED_TABLES = new Set([
 // `YYYYMMDD` and 14-digit `YYYYMMDDHHMMSS` forms to one comparable width so
 // string comparison is monotonic across both (a same-day 14-digit migration
 // sorts AFTER the bare 8-digit day, an earlier day sorts before).
+/**
+ * @param {string} version
+ * @returns {string}
+ */
 function normaliseVersion(version) {
   return version.length >= 14 ? version.slice(0, 14) : version.padEnd(14, '0');
 }
 
+/**
+ * @param {string} version
+ * @param {string} [cutoff]
+ * @returns {boolean}
+ */
 export function isAfterCutoff(version, cutoff = GRANDFATHER_CUTOFF) {
   return normaliseVersion(version) > normaliseVersion(cutoff);
 }
 
+/**
+ * @param {string} sql
+ * @returns {string}
+ */
 function stripSqlComments(sql) {
   return sql.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 // The target table of an `ALTER TABLE [IF EXISTS] [ONLY] [public.]<table> …`.
+/**
+ * @param {string} statement
+ * @returns {string | null}
+ */
 function alterTargetTable(statement) {
   const match =
     /^alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:public\.)?([a-z0-9_]+)/.exec(
@@ -259,18 +276,60 @@ function alterTargetTable(statement) {
   return match ? match[1] : null;
 }
 
-// True when the statement adds a CHECK or FK constraint (named or anonymous)
-// without the NOT VALID escape hatch.
-function addsBlockingConstraint(statement) {
-  const adds =
-    /\badd\s+(?:constraint\s+[a-z0-9_"]+\s+)?(?:check\s*\(|foreign\s+key\b)/.test(
-      statement,
-    );
-  return adds && !statement.includes('not valid');
+// One ALTER TABLE carries a comma-separated list of actions, and NOT VALID
+// qualifies only the ADD CONSTRAINT it terminates — so testing the whole
+// statement for it exempts every sibling action too, and a two-step ADD
+// alongside a bare one passed the guard. Split at paren depth 0 so a
+// `check (kind in ('a', 'b'))` or a multi-column `foreign key (a, b)` is not
+// cut in half.
+/**
+ * @param {string} statement
+ * @returns {string[]}
+ */
+function alterActions(statement) {
+  /** @type {string[]} */
+  const actions = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < statement.length; i++) {
+    const char = statement[i];
+    if (char === '(') depth += 1;
+    else if (char === ')') depth -= 1;
+    else if (char === ',' && depth === 0) {
+      actions.push(statement.slice(start, i));
+      start = i + 1;
+    }
+  }
+  actions.push(statement.slice(start));
+  return actions;
 }
 
+// True when the statement adds a CHECK or FK constraint (named or anonymous)
+// without the NOT VALID escape hatch.
+/**
+ * @param {string} statement
+ * @returns {boolean}
+ */
+function addsBlockingConstraint(statement) {
+  return alterActions(statement).some(
+    (action) =>
+      /\badd\s+(?:constraint\s+[a-z0-9_"]+\s+)?(?:check\s*\(|foreign\s+key\b)/.test(
+        action,
+      ) && !action.includes('not valid'),
+  );
+}
+
+/** @typedef {{ table: string, statement: string }} ConstraintFinding */
+/** @typedef {{ filename: string, sql: string }} MigrationSource */
+/** @typedef {{ filename: string, table: string, statement: string }} ConstraintViolation */
+
 // Returns the guarded-table constraint violations in one migration's SQL.
+/**
+ * @param {string} sql
+ * @returns {ConstraintFinding[]}
+ */
 export function findUnsafeConstraintAdds(sql) {
+  /** @type {ConstraintFinding[]} */
   const findings = [];
   const statements = stripSqlComments(sql).split(';');
   for (const raw of statements) {
@@ -286,7 +345,13 @@ export function findUnsafeConstraintAdds(sql) {
 
 // Every guarded-table violation across a set of {filename, sql} migrations
 // newer than the cutoff.
+/**
+ * @param {readonly MigrationSource[]} migrations
+ * @param {string} [cutoff]
+ * @returns {ConstraintViolation[]}
+ */
 export function scanMigrations(migrations, cutoff = GRANDFATHER_CUTOFF) {
+  /** @type {ConstraintViolation[]} */
   const violations = [];
   for (const { filename, sql } of migrations) {
     const version = parseVersion(filename);

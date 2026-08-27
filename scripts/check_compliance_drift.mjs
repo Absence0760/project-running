@@ -6,15 +6,24 @@ const baseRef = process.env.GITHUB_BASE_REF
 	? `origin/${process.env.GITHUB_BASE_REF}`
 	: 'origin/main';
 
+const mode = (process.env.COMPLIANCE_DRIFT_MODE ?? 'warn').toLowerCase();
+
+// null when git could not answer at all, which is NOT the same as a diff that
+// is genuinely empty: a missing base ref (a shallow clone, an unfetched
+// `origin/<base>`) used to read as "no changed files" and pass every rule.
 function changedFiles() {
 	try {
 		const out = execSync(`git diff --name-only ${baseRef}...HEAD`, { encoding: 'utf8' });
 		return out.split('\n').filter(Boolean);
 	} catch {
-		return [];
+		return null;
 	}
 }
 
+/**
+ * @param {string} path
+ * @returns {string}
+ */
 function readChangedSource(path) {
 	try {
 		return execSync(`git diff ${baseRef}...HEAD -- ${path}`, { encoding: 'utf8' });
@@ -24,6 +33,13 @@ function readChangedSource(path) {
 }
 
 const files = changedFiles();
+if (files === null) {
+	console.log(
+		`::warning::Could not diff against ${baseRef} — the compliance-drift check did NOT run. ` +
+			'Fetch the base ref (actions/checkout with fetch-depth: 0) and re-run.',
+	);
+	process.exit(mode === 'fail' ? 1 : 0);
+}
 if (files.length === 0) {
 	console.log('No changed files vs ' + baseRef + ' — skipping compliance-drift check.');
 	process.exit(0);
@@ -213,6 +229,5 @@ if (process.env.GITHUB_STEP_SUMMARY) {
 	} catch {}
 }
 
-const mode = (process.env.COMPLIANCE_DRIFT_MODE ?? 'warn').toLowerCase();
 if (mode === 'fail') process.exit(1);
 process.exit(0);
