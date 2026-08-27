@@ -13,20 +13,41 @@ import {
   regenerate,
   specsOf,
   stageWorkspace,
+  verdict,
   workspaceMemberPaths,
 } from './sync_deno_lock.mjs';
 
+/**
+ * @typedef {import('./sync_deno_lock.mjs').LockPackageJson} LockPackageJson
+ * @typedef {import('./sync_deno_lock.mjs').WorkspaceSection} WorkspaceSection
+ */
+
 const denoAvailable = spawnSync('deno', ['--version'], { encoding: 'utf8' }).status === 0;
 
+/**
+ * @param {{ root?: string[], overrides?: Record<string, string>, members?: Record<string, string[]> }} [parts]
+ * @returns {WorkspaceSection}
+ */
 function section({ root = [], overrides, members = {} } = {}) {
-  const s = { packageJson: { dependencies: root } };
-  if (overrides) s.packageJson.overrides = overrides;
+  /** @type {LockPackageJson} */
+  const packageJson = { dependencies: root };
+  if (overrides) packageJson.overrides = overrides;
+  /** @type {WorkspaceSection} */
+  const s = { packageJson };
   if (Object.keys(members).length) {
     s.members = Object.fromEntries(
       Object.entries(members).map(([m, deps]) => [m, { packageJson: { dependencies: deps } }]),
     );
   }
   return s;
+}
+
+// A scratch root holding only what stageWorkspace copies, so a `regenerate`
+// call can be driven without the real checkout.
+function fixtureRoot() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'deno-spawn-'));
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'fixture', private: true }));
+  return root;
 }
 
 test('workspaceMemberPaths reads the declared members', () => {
@@ -117,6 +138,57 @@ test('pinnedSectionsMatch guards version, redirects and remote', () => {
   assert.equal(pinnedSectionsMatch(base, { ...base, remote: { 'https://esm.sh/x': 'other' } }), false);
 });
 
+const POPULATED = section({ root: ['npm:svelte@5.56.9'] });
+
+test('verdict reports an unchanged, populated section in sync and writes nothing', () => {
+  const v = verdict({ workspace: POPULATED }, { workspace: POPULATED }, true);
+  assert.equal(v.code, 0);
+  assert.equal(v.write, false);
+  assert.match(v.out[0], /in sync with package\.json \(1 specs\)/);
+});
+
+test('verdict refuses to write when the regeneration moved a pinned section', () => {
+  const v = verdict(
+    { remote: { 'https://esm.sh/x': 'sha' }, workspace: POPULATED },
+    { remote: { 'https://esm.sh/x': 'other' }, workspace: POPULATED },
+    false,
+  );
+  assert.equal(v.code, 1);
+  assert.equal(v.write, false);
+  assert.match(v.err[0], /refusing to write/);
+});
+
+test('verdict reports drift under --check and writes under a plain run', () => {
+  const before = { workspace: section({ root: ['npm:svelte@5.56.7'] }) };
+  const after = { workspace: POPULATED };
+  const checked = verdict(before, after, true);
+  assert.equal(checked.code, 1);
+  assert.equal(checked.write, false);
+  assert.match(checked.err[0], /has drifted from package\.json/);
+
+  const written = verdict(before, after, false);
+  assert.equal(written.code, 0);
+  assert.equal(written.write, true);
+  assert.match(written.out[1], /- npm:svelte@5\.56\.7\n {2}\+ npm:svelte@5\.56\.9/);
+});
+
+// The floor under the comparison itself. Two empty sections diff as identical,
+// so a regeneration that stopped recording specs would be written once and then
+// agree with itself forever — the lock reported clean by a check that read
+// nothing. `pinnedSectionsMatch` refuses the same way for the other half.
+test('verdict refuses a regeneration that produced no specs instead of calling it in sync', () => {
+  const empty = { workspace: section() };
+  assert.equal(diffWorkspaceSections(empty.workspace, empty.workspace).inSync, true);
+
+  const v = verdict(empty, empty, true);
+  assert.equal(v.code, 1);
+  assert.equal(v.write, false);
+  assert.match(v.err[0], /produced no `workspace` specs/);
+
+  // And a lock with no `workspace` key at all is the same nothing.
+  assert.equal(verdict({}, {}, false).code, 1);
+});
+
 test('stageWorkspace copies the lock, a probe and every member that has a package.json', () => {
   const src = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-src-'));
   const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'stage-dest-'));
@@ -135,6 +207,44 @@ test('stageWorkspace copies the lock, a probe and every member that has a packag
   } finally {
     fs.rmSync(src, { recursive: true, force: true });
     fs.rmSync(dest, { recursive: true, force: true });
+  }
+});
+
+// Both spawn failures leave `status` and `stderr` null, so neither can be read
+// off the exit code. The second used to fall through to the exit-code branch
+// and report `deno exited null: ` — a guard failure naming nothing, for a deno
+// sitting on PATH without its execute bit.
+test('regenerate names a deno that is missing from PATH', () => {
+  const root = fixtureRoot();
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'deno-nopath-'));
+  const realPath = process.env.PATH;
+  try {
+    process.env.PATH = bin;
+    assert.throws(() => regenerate(root, '{"version":"5"}\n'), /deno is not installed/);
+  } finally {
+    process.env.PATH = realPath;
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+});
+
+test('regenerate names a deno it could not execute rather than blaming an exit code', () => {
+  const root = fixtureRoot();
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'deno-noexec-'));
+  const realPath = process.env.PATH;
+  try {
+    fs.writeFileSync(path.join(bin, 'deno'), '#!/bin/sh\nexit 0\n', { mode: 0o644 });
+    process.env.PATH = bin;
+    assert.throws(() => regenerate(root, '{"version":"5"}\n'), (err) => {
+      assert.ok(err instanceof Error);
+      assert.match(err.message, /could not run deno \(EACCES\)/);
+      assert.doesNotMatch(err.message, /deno exited null/);
+      return true;
+    });
+  } finally {
+    process.env.PATH = realPath;
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(bin, { recursive: true, force: true });
   }
 });
 
