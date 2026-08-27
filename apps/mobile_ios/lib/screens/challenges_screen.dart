@@ -1,41 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../challenge_list.dart';
+import '../fab_clearance.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
+import '../widgets/challenge_form_sheet.dart';
 import '../widgets/challenge_progress_bar.dart';
 import '../widgets/error_state.dart';
 import 'challenge_detail_screen.dart';
 
-String challengeMetricLabel(AppLocalizations l10n, String metric) {
-  switch (metric) {
-    case 'duration':
-      return l10n.challengesMetricDuration;
-    case 'vert':
-      return l10n.challengesMetricVert;
-    case 'activity_count':
-      return l10n.challengesMetricActivityCount;
-    case 'streak_days':
-      return l10n.challengesMetricStreak;
-    case 'distance':
-    default:
-      return l10n.challengesMetricDistance;
-  }
-}
-
 /// The Social hub's Challenges sub-tab. Browse public challenges + the user's
-/// joined ones. `embedded: true` returns the body only (no Scaffold) so the
-/// SocialScreen host owns the chrome.
+/// joined ones, and author a new one. `embedded: true` returns the body only
+/// (no Scaffold) so the SocialScreen host owns the chrome — including the
+/// create FAB, which it hoists off [ChallengesScreenState] the same way it
+/// hoists Clubs'.
 class ChallengesScreen extends StatefulWidget {
   final SocialService social;
   final bool embedded;
   const ChallengesScreen({super.key, required this.social, this.embedded = false});
 
   @override
-  State<ChallengesScreen> createState() => _ChallengesScreenState();
+  State<ChallengesScreen> createState() => ChallengesScreenState();
 }
 
-class _ChallengesScreenState extends State<ChallengesScreen> {
+class ChallengesScreenState extends State<ChallengesScreen> {
   List<ChallengeView>? _all;
   bool _failed = false;
 
@@ -67,11 +55,29 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
     }
   }
 
-  Future<void> _open(ChallengeView c) async {
+  Future<void> _open(ChallengeView c) => _openById(c.id);
+
+  Future<void> _openById(String id) async {
     await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ChallengeDetailScreen(social: widget.social, challengeId: c.id),
+      builder: (_) => ChallengeDetailScreen(social: widget.social, challengeId: id),
     ));
+    if (!mounted) return;
     _load();
+  }
+
+  /// The create FAB. Public so the embedded host (SocialScreen) can hoist it
+  /// onto its own Scaffold, matching `ClubsScreenState.buildCreateClubFab`.
+  Widget buildCreateChallengeFab(BuildContext context) {
+    return FloatingActionButton.extended(
+      heroTag: 'challenges_create_fab',
+      onPressed: () async {
+        final id = await showChallengeFormSheet(context, social: widget.social);
+        if (id == null || !mounted) return;
+        await _openById(id);
+      },
+      icon: const Icon(Icons.add),
+      label: Text(AppLocalizations.of(context).challengesCreate),
+    );
   }
 
   @override
@@ -88,7 +94,8 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
       body = RefreshIndicator(
             onRefresh: _load,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.fromLTRB(
+                  16, 16, 16, fabScrollClearance(context)),
               children: [
                 _section(
                   context,
@@ -112,6 +119,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.challengesTitle)),
       body: body,
+      floatingActionButton: buildCreateChallengeFab(context),
     );
   }
 

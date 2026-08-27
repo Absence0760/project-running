@@ -13765,4 +13765,67 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get rateLimitWaitSoon => 'un instant';
+
+  @override
+  String get challengesCreate => 'Créer un défi';
+
+  @override
+  String get challengesTitleLabel => 'Titre';
+
+  @override
+  String get challengesDescriptionLabel => 'Description';
+
+  @override
+  String get challengesMetricLabel => 'Mesure';
+
+  @override
+  String get challengesScopeLabel => 'Type';
+
+  @override
+  String get challengesGoalOptional => 'Objectif (facultatif)';
+
+  @override
+  String get challengesActivityTypeLabel => 'Activité';
+
+  @override
+  String get challengesActivityAny => 'Toutes';
+
+  @override
+  String get challengesClubLabel => 'Club';
+
+  @override
+  String get challengesClubNone => 'Ouvert (tout le monde)';
+
+  @override
+  String get challengesStartLabel => 'Début';
+
+  @override
+  String get challengesEndLabel => 'Fin';
+
+  @override
+  String get challengesScopeIndividual => 'Individuel';
+
+  @override
+  String get challengesScopeClubVsClub => 'Club contre club';
+
+  @override
+  String get challengesScopeGroupGoal => 'Objectif de groupe';
+
+  @override
+  String get challengesSuffixHours => 'h';
+
+  @override
+  String get challengesSuffixActivities => 'activités';
+
+  @override
+  String get challengesSuffixDays => 'jours';
+
+  @override
+  String get challengesErrTitle => 'Donnez un titre au défi.';
+
+  @override
+  String get challengesErrGoal => 'Objectif : saisissez un nombre positif';
+
+  @override
+  String get challengesErrWindow => 'La fin doit être postérieure au début.';
 }

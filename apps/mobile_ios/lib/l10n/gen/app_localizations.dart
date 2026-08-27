@@ -22765,6 +22765,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'a few seconds'**
   String get rateLimitWaitSoon;
+
+  /// Label on the create-challenge FAB, the form's app-bar title and its submit button
+  ///
+  /// In en, this message translates to:
+  /// **'Create challenge'**
+  String get challengesCreate;
+
+  /// Title field on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get challengesTitleLabel;
+
+  /// Description field on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get challengesDescriptionLabel;
+
+  /// Metric chip group on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get challengesMetricLabel;
+
+  /// Scope chip group on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get challengesScopeLabel;
+
+  /// Optional goal field on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Goal (optional)'**
+  String get challengesGoalOptional;
+
+  /// Activity-type picker on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get challengesActivityTypeLabel;
+
+  /// The no-filter option in the create-challenge activity-type picker
+  ///
+  /// In en, this message translates to:
+  /// **'Any'**
+  String get challengesActivityAny;
+
+  /// Club-anchor picker on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Club'**
+  String get challengesClubLabel;
+
+  /// The unanchored option in the create-challenge club picker
+  ///
+  /// In en, this message translates to:
+  /// **'Open (anyone)'**
+  String get challengesClubNone;
+
+  /// Window-start row on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Starts'**
+  String get challengesStartLabel;
+
+  /// Window-end row on the create-challenge form
+  ///
+  /// In en, this message translates to:
+  /// **'Ends'**
+  String get challengesEndLabel;
+
+  /// The individual challenge scope
+  ///
+  /// In en, this message translates to:
+  /// **'Individual'**
+  String get challengesScopeIndividual;
+
+  /// The club-vs-club challenge scope
+  ///
+  /// In en, this message translates to:
+  /// **'Club vs club'**
+  String get challengesScopeClubVsClub;
+
+  /// The group-goal challenge scope
+  ///
+  /// In en, this message translates to:
+  /// **'Group goal'**
+  String get challengesScopeGroupGoal;
+
+  /// Unit suffix on the goal field of a time-metric challenge (hours)
+  ///
+  /// In en, this message translates to:
+  /// **'h'**
+  String get challengesSuffixHours;
+
+  /// Unit suffix on the goal field of an activity-count challenge
+  ///
+  /// In en, this message translates to:
+  /// **'activities'**
+  String get challengesSuffixActivities;
+
+  /// Unit suffix on the goal field of an active-days challenge
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get challengesSuffixDays;
+
+  /// Inline error when the create-challenge title is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Give the challenge a title.'**
+  String get challengesErrTitle;
+
+  /// Inline error when the create-challenge goal is not a positive number
+  ///
+  /// In en, this message translates to:
+  /// **'Goal: enter a positive number'**
+  String get challengesErrGoal;
+
+  /// Inline error when the create-challenge window ends at or before it starts
+  ///
+  /// In en, this message translates to:
+  /// **'The end must be after the start.'**
+  String get challengesErrWindow;
 }
 
 class _AppLocalizationsDelegate

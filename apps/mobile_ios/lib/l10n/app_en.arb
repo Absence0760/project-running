@@ -17427,5 +17427,89 @@
   "rateLimitWaitSoon": "a few seconds",
   "@rateLimitWaitSoon": {
     "description": "The wait a rate-limit refusal slots in when the trigger reported no positive figure"
+  },
+  "challengesCreate": "Create challenge",
+  "@challengesCreate": {
+    "description": "Label on the create-challenge FAB, the form's app-bar title and its submit button"
+  },
+  "challengesTitleLabel": "Title",
+  "@challengesTitleLabel": {
+    "description": "Title field on the create-challenge form"
+  },
+  "challengesDescriptionLabel": "Description",
+  "@challengesDescriptionLabel": {
+    "description": "Description field on the create-challenge form"
+  },
+  "challengesMetricLabel": "Metric",
+  "@challengesMetricLabel": {
+    "description": "Metric chip group on the create-challenge form"
+  },
+  "challengesScopeLabel": "Type",
+  "@challengesScopeLabel": {
+    "description": "Scope chip group on the create-challenge form"
+  },
+  "challengesGoalOptional": "Goal (optional)",
+  "@challengesGoalOptional": {
+    "description": "Optional goal field on the create-challenge form"
+  },
+  "challengesActivityTypeLabel": "Activity",
+  "@challengesActivityTypeLabel": {
+    "description": "Activity-type picker on the create-challenge form"
+  },
+  "challengesActivityAny": "Any",
+  "@challengesActivityAny": {
+    "description": "The no-filter option in the create-challenge activity-type picker"
+  },
+  "challengesClubLabel": "Club",
+  "@challengesClubLabel": {
+    "description": "Club-anchor picker on the create-challenge form"
+  },
+  "challengesClubNone": "Open (anyone)",
+  "@challengesClubNone": {
+    "description": "The unanchored option in the create-challenge club picker"
+  },
+  "challengesStartLabel": "Starts",
+  "@challengesStartLabel": {
+    "description": "Window-start row on the create-challenge form"
+  },
+  "challengesEndLabel": "Ends",
+  "@challengesEndLabel": {
+    "description": "Window-end row on the create-challenge form"
+  },
+  "challengesScopeIndividual": "Individual",
+  "@challengesScopeIndividual": {
+    "description": "The individual challenge scope"
+  },
+  "challengesScopeClubVsClub": "Club vs club",
+  "@challengesScopeClubVsClub": {
+    "description": "The club-vs-club challenge scope"
+  },
+  "challengesScopeGroupGoal": "Group goal",
+  "@challengesScopeGroupGoal": {
+    "description": "The group-goal challenge scope"
+  },
+  "challengesSuffixHours": "h",
+  "@challengesSuffixHours": {
+    "description": "Unit suffix on the goal field of a time-metric challenge (hours)"
+  },
+  "challengesSuffixActivities": "activities",
+  "@challengesSuffixActivities": {
+    "description": "Unit suffix on the goal field of an activity-count challenge"
+  },
+  "challengesSuffixDays": "days",
+  "@challengesSuffixDays": {
+    "description": "Unit suffix on the goal field of an active-days challenge"
+  },
+  "challengesErrTitle": "Give the challenge a title.",
+  "@challengesErrTitle": {
+    "description": "Inline error when the create-challenge title is empty"
+  },
+  "challengesErrGoal": "Goal: enter a positive number",
+  "@challengesErrGoal": {
+    "description": "Inline error when the create-challenge goal is not a positive number"
+  },
+  "challengesErrWindow": "The end must be after the start.",
+  "@challengesErrWindow": {
+    "description": "Inline error when the create-challenge window ends at or before it starts"
   }
 }

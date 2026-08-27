@@ -13743,4 +13743,67 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get rateLimitWaitSoon => 'einen Moment';
+
+  @override
+  String get challengesCreate => 'Challenge erstellen';
+
+  @override
+  String get challengesTitleLabel => 'Titel';
+
+  @override
+  String get challengesDescriptionLabel => 'Beschreibung';
+
+  @override
+  String get challengesMetricLabel => 'Metrik';
+
+  @override
+  String get challengesScopeLabel => 'Typ';
+
+  @override
+  String get challengesGoalOptional => 'Ziel (optional)';
+
+  @override
+  String get challengesActivityTypeLabel => 'Aktivität';
+
+  @override
+  String get challengesActivityAny => 'Beliebig';
+
+  @override
+  String get challengesClubLabel => 'Club';
+
+  @override
+  String get challengesClubNone => 'Offen (alle)';
+
+  @override
+  String get challengesStartLabel => 'Beginn';
+
+  @override
+  String get challengesEndLabel => 'Ende';
+
+  @override
+  String get challengesScopeIndividual => 'Einzeln';
+
+  @override
+  String get challengesScopeClubVsClub => 'Club gegen Club';
+
+  @override
+  String get challengesScopeGroupGoal => 'Gruppenziel';
+
+  @override
+  String get challengesSuffixHours => 'Std';
+
+  @override
+  String get challengesSuffixActivities => 'Aktivitäten';
+
+  @override
+  String get challengesSuffixDays => 'Tage';
+
+  @override
+  String get challengesErrTitle => 'Gib der Challenge einen Titel.';
+
+  @override
+  String get challengesErrGoal => 'Ziel: positive Zahl eingeben';
+
+  @override
+  String get challengesErrWindow => 'Das Ende muss nach dem Beginn liegen.';
 }

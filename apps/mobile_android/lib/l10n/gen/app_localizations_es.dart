@@ -13732,4 +13732,67 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get rateLimitWaitSoon => 'un momento';
+
+  @override
+  String get challengesCreate => 'Crear desafío';
+
+  @override
+  String get challengesTitleLabel => 'Título';
+
+  @override
+  String get challengesDescriptionLabel => 'Descripción';
+
+  @override
+  String get challengesMetricLabel => 'Métrica';
+
+  @override
+  String get challengesScopeLabel => 'Tipo';
+
+  @override
+  String get challengesGoalOptional => 'Meta (opcional)';
+
+  @override
+  String get challengesActivityTypeLabel => 'Actividad';
+
+  @override
+  String get challengesActivityAny => 'Cualquiera';
+
+  @override
+  String get challengesClubLabel => 'Club';
+
+  @override
+  String get challengesClubNone => 'Abierto (todos)';
+
+  @override
+  String get challengesStartLabel => 'Inicio';
+
+  @override
+  String get challengesEndLabel => 'Fin';
+
+  @override
+  String get challengesScopeIndividual => 'Individual';
+
+  @override
+  String get challengesScopeClubVsClub => 'Club contra club';
+
+  @override
+  String get challengesScopeGroupGoal => 'Meta de grupo';
+
+  @override
+  String get challengesSuffixHours => 'h';
+
+  @override
+  String get challengesSuffixActivities => 'actividades';
+
+  @override
+  String get challengesSuffixDays => 'días';
+
+  @override
+  String get challengesErrTitle => 'Ponle un título al desafío.';
+
+  @override
+  String get challengesErrGoal => 'Meta: introduce un número positivo';
+
+  @override
+  String get challengesErrWindow => 'El fin debe ser posterior al inicio.';
 }

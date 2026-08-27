@@ -12,8 +12,8 @@
 // discover_screen_test). This file pins the SocialScreen-specific
 // contract: the AppBar TabBar mounts with the right 4 tabs, the
 // initialTab routing works, and the FAB visibility tracks the active
-// tab (Clubs gets "New club"; Feed / People / Discover have no create
-// surface).
+// tab (Clubs gets "New club", Challenges "Create challenge"; Feed /
+// People / Discover have no create surface).
 
 import 'dart:io';
 
@@ -198,8 +198,8 @@ void main() {
   });
 
   testWidgets('the default Feed tab shows no FAB', (tester) async {
-    // Feed / People / Discover have no create surface — only the Clubs
-    // sub-tab hoists a FAB. The default landing (Feed) must show none.
+    // Feed / People / Discover have no create surface — only the Clubs and
+    // Challenges sub-tabs hoist a FAB. The default landing (Feed) shows none.
     await tester.pumpWidget(_wrap(await _socialScreen()));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -207,9 +207,8 @@ void main() {
   });
 
   testWidgets('the Clubs tab hoists the "New club" FAB', (tester) async {
-    // The Clubs sub-tab (index 2) is the only one with a create surface;
-    // SocialScreen hoists its FAB. The FAB resolves off the ClubsScreen
-    // GlobalKey state, which binds via a scheduled post-frame rebuild.
+    // SocialScreen hoists the Clubs sub-tab's FAB. It resolves off the
+    // ClubsScreen GlobalKey state, which binds via a post-frame rebuild.
     await tester.pumpWidget(_wrap(await _socialScreen(initialTab: SocialTab.clubs)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -227,6 +226,33 @@ void main() {
     // Tap the Discover tab and let the controller + Scaffold FAB
     // exit-animation settle (the Scaffold animates the FAB out).
     await tester.tap(find.text('Discover'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
+
+  testWidgets('the Challenges tab hoists the "Create challenge" FAB',
+      (tester) async {
+    // Challenges is the second sub-tab with a create surface. It resolves off
+    // the same GlobalKey + post-frame rebuild the Clubs FAB does.
+    await tester.pumpWidget(
+        _wrap(await _socialScreen(initialTab: SocialTab.challenges)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.text('Create challenge'), findsOneWidget);
+  });
+
+  testWidgets('switching from Challenges to Feed drops the FAB',
+      (tester) async {
+    await tester.pumpWidget(
+        _wrap(await _socialScreen(initialTab: SocialTab.challenges)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+
+    await tester.tap(find.text('Feed'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump(const Duration(milliseconds: 350));

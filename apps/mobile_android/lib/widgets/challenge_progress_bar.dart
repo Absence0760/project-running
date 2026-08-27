@@ -5,6 +5,26 @@ import '../challenge_progress.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 
+/// The metric's own name, localised. The vocabulary is `challenges_metric_ck`'s
+/// (migrations 20270209_001 + 20270302_001) and lives here beside
+/// [challengeValueLabel] so the list, the detail screen and the create form
+/// cannot name the same metric three ways.
+String challengeMetricLabel(AppLocalizations l10n, String metric) {
+  switch (metric) {
+    case 'duration':
+      return l10n.challengesMetricDuration;
+    case 'vert':
+      return l10n.challengesMetricVert;
+    case 'activity_count':
+      return l10n.challengesMetricActivityCount;
+    case 'streak_days':
+      return l10n.challengesMetricStreak;
+    case 'distance':
+    default:
+      return l10n.challengesMetricDistance;
+  }
+}
+
 /// One challenge value in the metric's own units, localised + unit-formatted.
 String challengeValueLabel(AppLocalizations l10n, String metric, num value) {
   switch (metric) {

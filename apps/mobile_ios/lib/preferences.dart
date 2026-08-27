@@ -1109,6 +1109,17 @@ class UnitFormat {
     }
     return '${formatFixed(metres.round().toDouble(), 0, activeLocaleTag)} m';
   }
+
+  /// Elevation unit label, "m" or "ft".
+  static String elevationLabel(DistanceUnit unit) =>
+      unit == DistanceUnit.mi ? 'ft' : 'm';
+
+  /// The inverse of [elevation]'s conversion. An editor that collects a
+  /// gain in the runner's own unit must come back through here before the
+  /// value is stored, so entry and display can't drift on the factor —
+  /// the same entry/exit split [paceSecPerUnit] / [paceSecPerKm] keeps.
+  static double elevationToMetres(double value, DistanceUnit unit) =>
+      unit == DistanceUnit.mi ? value / _feetPerMetre : value;
 }
 
 /// Weight formatting + parsing helpers that respect the user's
