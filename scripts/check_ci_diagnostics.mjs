@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Guardrail: a CI failure names what actually failed.
+// Guardrail: a CI failure is seen, and names what actually failed.
 //
-// Two rules, both from the same incident. `parity-types` ended in a bare
+// Rules 1 and 2 come from one incident; rule 3 is the floor underneath them —
+// a diagnosis nobody is shown is worth no more than a misattributed one. `parity-types` ended in a bare
 // `- if: failure()` step that printed "database.types.ts is out of sync with
 // the Supabase schema" and told the reader to run `npm run gen:types`. A step
 // condition of `failure()` is true for a failure ANYWHERE earlier in the job,
@@ -36,6 +37,16 @@
 // Not applied to every `run:` step in the file: most jobs run one thing, and
 // their name already says what it was. A single-guard job like
 // `watch-ble-uuids` is exactly that case, and is deliberately untouched.
+//
+//   3. Every job in ci.yml is named in the `CI gate` aggregator's `needs:`
+//      list. That aggregator is the single required status check, and it
+//      passes when every job it needs passed OR was skipped — so a job absent
+//      from the list is a check whose RED does not block a merge and shows up
+//      only as one more green-looking row among thirty. Nothing enforced this:
+//      the list was complete by hand, and a job is added to this file far more
+//      often than anyone re-reads the bottom of it. A `needs:` entry naming no
+//      job fails too, because a deleted job leaves a name the aggregator will
+//      never hear from.
 //
 // Line-based rather than YAML-parsed on purpose: the `workflow-lint` job runs
 // `node` against a bare checkout with no `npm ci`, so only the stdlib is
@@ -331,15 +342,161 @@ export function checkStepDiagnoses(files) {
 	return { errors, ok, bundles: derived };
 }
 
+/// The aggregator every branch-protection rule points at.
+export const GATE_JOB = 'ci-gate';
+
+/// Every job key in a workflow, in file order. A job key sits at two spaces
+/// under the file's TOP-LEVEL `jobs:` mapping — the qualifier matters, because
+/// `on:` holds two-space keys of its own and a workflow triggered by
+/// `push`/`pull_request` would otherwise report two jobs the gate must wait
+/// for that do not exist.
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function parseJobKeys(text) {
+	/** @type {string[]} */
+	const jobs = [];
+	let inJobs = false;
+	for (const line of text.split('\n')) {
+		const top = line.match(/^([A-Za-z0-9_-]+):/);
+		if (top) {
+			inJobs = top[1] === 'jobs';
+			continue;
+		}
+		if (!inJobs) continue;
+		const key = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+		if (key) jobs.push(key[1]);
+	}
+	return jobs;
+}
+
+/// One job's `needs:`, in every spelling GitHub accepts: a bare scalar, a flow
+/// sequence, or a block list. `null` when the job declares none at all, which
+/// is a different thing from declaring an empty one.
+/**
+ * @param {string} text
+ * @param {string} job
+ * @returns {string[] | null}
+ */
+export function parseNeeds(text, job) {
+	const lines = text.split('\n');
+	/** @type {string | null} */
+	let current = null;
+	let inJobs = false;
+	for (let i = 0; i < lines.length; i++) {
+		const top = lines[i].match(/^([A-Za-z0-9_-]+):/);
+		if (top) {
+			inJobs = top[1] === 'jobs';
+			current = null;
+			continue;
+		}
+		if (!inJobs) continue;
+		const key = lines[i].match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+		if (key) {
+			current = key[1];
+			continue;
+		}
+		if (current !== job) continue;
+		const needs = lines[i].match(/^ {4}needs:\s*(.*)$/);
+		if (!needs) continue;
+		const inline = needs[1].trim();
+		if (inline.startsWith('[')) {
+			return inline
+				.replace(/^\[|\]$/g, '')
+				.split(',')
+				.map((n) => n.trim())
+				.filter(Boolean);
+		}
+		if (inline !== '') return [inline];
+		/** @type {string[]} */
+		const listed = [];
+		for (let j = i + 1; j < lines.length; j++) {
+			const item = lines[j].match(/^ {6}-\s*(\S+)\s*$/);
+			if (item) {
+				listed.push(item[1]);
+				continue;
+			}
+			if (lines[j].trim() === '' || lines[j].startsWith('      #')) continue;
+			break;
+		}
+		return listed;
+	}
+	return null;
+}
+
+/// Rule 3 — the required check answers for every job in the file.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @returns {{ errors: string[], ok: string[], covered: number }}
+ */
+export function checkGateCoverage(files) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	let covered = 0;
+
+	const hosts = files.filter(({ text }) => parseJobKeys(text).includes(GATE_JOB));
+	if (hosts.length === 0) {
+		errors.push(
+			`no workflow defines a \`${GATE_JOB}\` job. Either the required status check ` +
+				`was renamed — update GATE_JOB — or it is gone, and nothing now aggregates ` +
+				`the jobs a merge depends on.`,
+		);
+		return { errors, ok, covered };
+	}
+
+	for (const { name, text } of hosts) {
+		const jobs = parseJobKeys(text);
+		const needs = parseNeeds(text, GATE_JOB);
+		if (needs === null || needs.length === 0) {
+			errors.push(
+				`${name} — \`${GATE_JOB}\` declares no \`needs:\`, so it passes without ` +
+					`waiting for anything and the required check is green whatever the rest ` +
+					`of the file does.`,
+			);
+			continue;
+		}
+		const listed = new Set(needs);
+		for (const job of jobs) {
+			if (job === GATE_JOB) continue;
+			if (listed.has(job)) {
+				covered++;
+				continue;
+			}
+			errors.push(
+				`${name} — job \`${job}\` is in no \`needs:\` entry of \`${GATE_JOB}\`, so its ` +
+					`failure does not block a merge: the aggregator never waits for it and the ` +
+					`PR shows one more row nobody is gated on. Add \`- ${job}\` to that list.`,
+			);
+		}
+		const defined = new Set(jobs);
+		for (const need of listed) {
+			if (defined.has(need)) continue;
+			errors.push(
+				`${name} — \`${GATE_JOB}\` needs \`${need}\`, which is not a job in this file. ` +
+					`A name the aggregator will never hear from is a dependency it cannot ` +
+					`report on; drop it or fix the spelling.`,
+			);
+		}
+		ok.push(`${name} -> ${GATE_JOB} needs all ${covered} other job(s) in the file`);
+	}
+
+	return { errors, ok, covered };
+}
+
 /** @param {readonly WorkflowFile[]} files */
 export function checkAll(files) {
 	const scoping = checkFailureScoping(files);
 	const diagnoses = checkStepDiagnoses(files);
+	const gate = checkGateCoverage(files);
 	return {
-		errors: [...scoping.errors, ...diagnoses.errors],
-		ok: [...scoping.ok, ...diagnoses.ok],
+		errors: [...scoping.errors, ...diagnoses.errors, ...gate.errors],
+		ok: [...scoping.ok, ...diagnoses.ok, ...gate.ok],
 		scoping,
 		diagnoses,
+		gate,
 	};
 }
 
@@ -356,7 +513,7 @@ export function readWorkflows(dir) {
 
 function main() {
 	const files = readWorkflows(WORKFLOW_DIR);
-	const { errors, ok, diagnoses } = checkAll(files);
+	const { errors, ok, diagnoses, gate } = checkAll(files);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
 	for (const line of errors) console.error(`[FAIL] ${line}`);
@@ -372,7 +529,8 @@ function main() {
 	console.log(
 		`\nNo \`failure()\`-conditioned diagnosis speaks for a step it cannot see; ` +
 			`${diagnoses.ok.length} step(s) across ${diagnoses.bundles.size} derived + ` +
-			`${DIAGNOSING_JOBS.size} listed bundled job(s) diagnose themselves.`,
+			`${DIAGNOSING_JOBS.size} listed bundled job(s) diagnose themselves; ` +
+			`\`${GATE_JOB}\` waits for all ${gate.covered} of them.`,
 	);
 	return 0;
 }

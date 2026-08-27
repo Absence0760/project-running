@@ -210,7 +210,7 @@ jobs:
       - name: CI failure diagnoses name what actually failed
         run: |
           if ! node scripts/check_ci_diagnostics.mjs; then
-            echo "::error::A CI diagnosis speaks for failures it cannot see — either an '::error::' printed under a bare 'if: failure()', or a check step in a job that bundles several guards saying nothing of its own. Nothing here is about workflow syntax or the toolchain pins; those are other checks in this job."
+            echo "::error::A CI failure would go unattributed or unseen — an '::error::' printed under a bare 'if: failure()', a check step in a job that bundles several guards saying nothing of its own, or a job the 'CI gate' aggregator does not wait for. Nothing here is about workflow syntax or the toolchain pins; those are other checks in this job."
             echo "The failing line above names the file, the line and the shape to use. decisions § 764 is why the bundled jobs are derived from the guards they run rather than listed."
             exit 1
           fi

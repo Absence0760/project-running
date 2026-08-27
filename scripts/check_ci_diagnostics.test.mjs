@@ -6,10 +6,14 @@ import {
 	DIAGNOSING_JOBS,
 	WORKFLOW_DIR,
 	checkAll,
+	GATE_JOB,
 	checkFailureScoping,
+	checkGateCoverage,
 	checkStepDiagnoses,
 	derivedBundles,
 	isGuardStep,
+	parseJobKeys,
+	parseNeeds,
 	parseSteps,
 	readWorkflows,
 	runBody,
@@ -292,9 +296,67 @@ test('checkStepDiagnoses fails rather than passing vacuously over no derived bun
 	assert.match(errors[0], /enforces nothing beyond/);
 });
 
+/// A workflow whose `ci-gate` needs exactly the jobs named.
+/**
+ * @param {readonly string[]} jobs
+ * @param {readonly string[]} needs
+ */
+const gated = (jobs, needs) =>
+	`name: CI\non:\n  push:\n  pull_request:\njobs:\n` +
+	jobs.map((job) => `  ${job}:\n    steps:\n      - run: echo hi\n`).join('') +
+	`  ${GATE_JOB}:\n    needs:\n${needs.map((n) => `      - ${n}\n`).join('')}` +
+	`    steps:\n      - run: echo gate\n`;
+
+// `on:` holds two-space keys too. Reading them as jobs would demand the gate
+// wait for `push` and `pull_request`, which are triggers, not work.
+test('parseJobKeys reads the jobs mapping and not the trigger list', () => {
+	assert.deepEqual(parseJobKeys(gated(['a', 'b'], ['a', 'b'])), ['a', 'b', GATE_JOB]);
+});
+
+test('parseNeeds reads a block list, a flow sequence and a bare scalar alike', () => {
+	assert.deepEqual(parseNeeds(gated(['a', 'b'], ['a', 'b']), GATE_JOB), ['a', 'b']);
+	assert.deepEqual(
+		parseNeeds(`name: CI\njobs:\n  ${GATE_JOB}:\n    needs: [a, b]\n`, GATE_JOB),
+		['a', 'b'],
+	);
+	assert.deepEqual(parseNeeds(`name: CI\njobs:\n  ${GATE_JOB}:\n    needs: a\n`, GATE_JOB), ['a']);
+	assert.equal(parseNeeds(`name: CI\njobs:\n  ${GATE_JOB}:\n    steps: []\n`, GATE_JOB), null);
+});
+
+// The failure mode splitting a bundled job into N jobs invites, and the reason
+// this repo keeps the bundles: the aggregator counts a job it never waited for
+// as no result at all, so the new job's RED is a row nobody is gated on.
+test('a job missing from the gate’s needs is the reported bug', () => {
+	const { errors } = checkGateCoverage([{ name: 'ci.yml', text: gated(['a', 'b'], ['a']) }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /job `b` is in no `needs:` entry/);
+});
+
+test('a needs entry naming no job fails rather than waiting forever', () => {
+	const { errors } = checkGateCoverage([{ name: 'ci.yml', text: gated(['a'], ['a', 'deleted']) }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /not a job in this file/);
+});
+
+test('a gate with no needs at all is green whatever the file does, and fails', () => {
+	const { errors } = checkGateCoverage([
+		{ name: 'ci.yml', text: `name: CI\njobs:\n  a:\n    steps:\n      - run: echo hi\n  ${GATE_JOB}:\n    steps:\n      - run: echo gate\n` },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /declares no `needs:`/);
+});
+
+test('checkGateCoverage fails rather than passing vacuously when the gate is gone', () => {
+	const { errors } = checkGateCoverage([
+		{ name: 'ci.yml', text: 'name: CI\njobs:\n  a:\n    steps:\n      - run: echo hi\n' },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /nothing now aggregates/);
+});
+
 test('the repo’s real workflows carry no misattributable diagnosis', () => {
 	const files = readWorkflows(WORKFLOW_DIR);
-	const { errors, diagnoses, scoping } = checkAll(files);
+	const { errors, diagnoses, scoping, gate } = checkAll(files);
 	assert.deepEqual(errors, []);
 	assert.ok(scoping.conditioned >= 5, `expected the on-failure steps, found ${scoping.conditioned}`);
 	assert.ok(
@@ -312,4 +374,5 @@ test('the repo’s real workflows carry no misattributable diagnosis', () => {
 		false,
 		'parity-matrix is derived, so registering it by hand would be the coupling this replaced',
 	);
+	assert.ok(gate.covered >= 20, `expected ci.yml's jobs to be gated, found ${gate.covered}`);
 });
