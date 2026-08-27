@@ -13,7 +13,7 @@ import 'preferences.dart';
 /// `paceSecPerKm` keeps for a typed pace.
 ///
 /// [checkChallengeGoal] is the client half of `challenges_goal_ck` (migration
-/// `20270703_001`): both halves must agree, or a refusal the constraint makes
+/// `20270615_001`): both halves must agree, or a refusal the constraint makes
 /// reaches the author as a raw postgres 23514 naming neither bound.
 
 const int _secondsPerHour = 3600;
