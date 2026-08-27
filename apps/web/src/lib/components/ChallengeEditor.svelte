@@ -177,14 +177,17 @@
 		// rules mirror a CHECK that raises a 23514 naming neither the bound nor
 		// the column (`challenges_goal_ck`, `challenges_window_ck`), so
 		// catching them here is the only way the author is told what to move.
+		const nextWindowError = endMs > startMs ? null : m('challenges.errWindow');
 		const refusal = checkChallengeGoal(storedGoal, metric, startMs, endMs);
+		// An inverted window carries its own message and moving the end is the
+		// fix for both, so a ceiling of zero days beside it is noise rather
+		// than a second thing to correct.
 		const nextGoalError =
 			refusal === 'not_positive'
 				? m('challenges.errGoal')
-				: refusal === 'exceeds_window'
+				: refusal === 'exceeds_window' && nextWindowError === null
 					? m('challenges.goalStreakCeiling', { n: streakCeiling })
 					: null;
-		const nextWindowError = endMs > startMs ? null : m('challenges.errWindow');
 		goalError = nextGoalError;
 		windowError = nextWindowError;
 		if (nextGoalError || nextWindowError) return;
