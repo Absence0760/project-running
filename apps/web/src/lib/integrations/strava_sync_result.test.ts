@@ -94,6 +94,12 @@ test('only a non-negative integer is a count', () => {
 	assert.equal(parseStravaSyncResult({ imported: 0 }).imported, 0);
 });
 
+test('a whole double is a count, as it is on the Dart twin', () => {
+	// JSON has one number type: `Number.isInteger(12.0)` is true, so the Dart
+	// side must not reject a `double` that happens to be whole.
+	assert.equal(parseStravaSyncResult({ imported: 12.0 }).imported, 12);
+});
+
 test('an embedded error forces partial even when the body claims complete', () => {
 	const r = parseStravaSyncResult({
 		error: 'strava_not_connected',
