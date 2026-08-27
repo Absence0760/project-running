@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ui_kit/ui_kit.dart' show ProgressBar;
 
+import '../lib/fab_clearance.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/challenges_screen.dart';
 import '../lib/social_service.dart';
@@ -61,6 +62,14 @@ Widget _app(SocialService social) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(body: ChallengesScreen(social: social, embedded: true)),
+    );
+
+/// Standalone mount — the screen owns its own Scaffold, and with it the
+/// create FAB the embedded mount hands to SocialScreen to hoist.
+Widget _standalone(SocialService social) => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: ChallengesScreen(social: social),
     );
 
 void main() {
@@ -180,6 +189,50 @@ void main() {
       expect(find.text('Public 50k'), findsOneWidget);
       expect(find.byType(ProgressBar), findsNothing);
       expect(find.text('Progress unavailable — open for your result'), findsNothing);
+    });
+  });
+
+  group('create surface', () {
+    testWidgets('the standalone mount carries the create FAB', (tester) async {
+      await tester.pumpWidget(_standalone(_FakeSocial(const [])));
+      await tester.pump();
+
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.text('Create challenge'), findsOneWidget);
+    });
+
+    testWidgets('the embedded mount carries none — SocialScreen hoists it',
+        (tester) async {
+      await tester.pumpWidget(_app(_FakeSocial(const [])));
+      await tester.pump();
+
+      expect(find.byType(FloatingActionButton), findsNothing);
+    });
+
+    testWidgets('the FAB opens the create form', (tester) async {
+      await tester.pumpWidget(_standalone(_FakeSocial(const [])));
+      await tester.pump();
+
+      await tester.tap(find.byType(FloatingActionButton));
+      // The form autofocuses a text field whose caret animates forever, so
+      // pumpAndSettle never returns here.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(find.text('Metric'), findsOneWidget);
+      expect(find.text('Goal (optional)'), findsOneWidget);
+    });
+
+    testWidgets('the list reserves room for the FAB floating over it',
+        (tester) async {
+      await tester.pumpWidget(_standalone(_FakeSocial([
+        _ch(id: 'a', title: 'June 100k', joined: true),
+      ])));
+      await tester.pump();
+
+      final list = tester.widget<ListView>(find.byType(ListView));
+      final pad = (list.padding as EdgeInsets?)!;
+      expect(pad.bottom, greaterThanOrEqualTo(kFabScrollClearance));
     });
   });
 }

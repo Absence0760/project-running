@@ -13731,6 +13731,69 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get rateLimitWaitSoon => 'um momento';
+
+  @override
+  String get challengesCreate => 'Criar desafio';
+
+  @override
+  String get challengesTitleLabel => 'Título';
+
+  @override
+  String get challengesDescriptionLabel => 'Descrição';
+
+  @override
+  String get challengesMetricLabel => 'Métrica';
+
+  @override
+  String get challengesScopeLabel => 'Tipo';
+
+  @override
+  String get challengesGoalOptional => 'Meta (opcional)';
+
+  @override
+  String get challengesActivityTypeLabel => 'Atividade';
+
+  @override
+  String get challengesActivityAny => 'Qualquer';
+
+  @override
+  String get challengesClubLabel => 'Clube';
+
+  @override
+  String get challengesClubNone => 'Aberto (todos)';
+
+  @override
+  String get challengesStartLabel => 'Início';
+
+  @override
+  String get challengesEndLabel => 'Fim';
+
+  @override
+  String get challengesScopeIndividual => 'Individual';
+
+  @override
+  String get challengesScopeClubVsClub => 'Clube contra clube';
+
+  @override
+  String get challengesScopeGroupGoal => 'Meta de grupo';
+
+  @override
+  String get challengesSuffixHours => 'h';
+
+  @override
+  String get challengesSuffixActivities => 'atividades';
+
+  @override
+  String get challengesSuffixDays => 'dias';
+
+  @override
+  String get challengesErrTitle => 'Dê um título ao desafio.';
+
+  @override
+  String get challengesErrGoal => 'Meta: insira um número positivo';
+
+  @override
+  String get challengesErrWindow => 'O fim deve ser depois do início.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -27454,4 +27517,67 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get rateLimitWaitSoon => 'um momento';
+
+  @override
+  String get challengesCreate => 'Criar desafio';
+
+  @override
+  String get challengesTitleLabel => 'Título';
+
+  @override
+  String get challengesDescriptionLabel => 'Descrição';
+
+  @override
+  String get challengesMetricLabel => 'Métrica';
+
+  @override
+  String get challengesScopeLabel => 'Tipo';
+
+  @override
+  String get challengesGoalOptional => 'Meta (opcional)';
+
+  @override
+  String get challengesActivityTypeLabel => 'Atividade';
+
+  @override
+  String get challengesActivityAny => 'Qualquer';
+
+  @override
+  String get challengesClubLabel => 'Clube';
+
+  @override
+  String get challengesClubNone => 'Aberto (todos)';
+
+  @override
+  String get challengesStartLabel => 'Início';
+
+  @override
+  String get challengesEndLabel => 'Fim';
+
+  @override
+  String get challengesScopeIndividual => 'Individual';
+
+  @override
+  String get challengesScopeClubVsClub => 'Clube contra clube';
+
+  @override
+  String get challengesScopeGroupGoal => 'Meta de grupo';
+
+  @override
+  String get challengesSuffixHours => 'h';
+
+  @override
+  String get challengesSuffixActivities => 'atividades';
+
+  @override
+  String get challengesSuffixDays => 'dias';
+
+  @override
+  String get challengesErrTitle => 'Dê um título ao desafio.';
+
+  @override
+  String get challengesErrGoal => 'Meta: insira um número positivo';
+
+  @override
+  String get challengesErrWindow => 'O fim deve ser depois do início.';
 }

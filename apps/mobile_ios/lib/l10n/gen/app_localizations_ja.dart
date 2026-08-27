@@ -13087,4 +13087,67 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get rateLimitWaitSoon => '少し';
+
+  @override
+  String get challengesCreate => 'チャレンジを作成';
+
+  @override
+  String get challengesTitleLabel => 'タイトル';
+
+  @override
+  String get challengesDescriptionLabel => '説明';
+
+  @override
+  String get challengesMetricLabel => '指標';
+
+  @override
+  String get challengesScopeLabel => '種類';
+
+  @override
+  String get challengesGoalOptional => '目標（任意）';
+
+  @override
+  String get challengesActivityTypeLabel => 'アクティビティ';
+
+  @override
+  String get challengesActivityAny => 'すべて';
+
+  @override
+  String get challengesClubLabel => 'クラブ';
+
+  @override
+  String get challengesClubNone => '公開（誰でも）';
+
+  @override
+  String get challengesStartLabel => '開始';
+
+  @override
+  String get challengesEndLabel => '終了';
+
+  @override
+  String get challengesScopeIndividual => '個人';
+
+  @override
+  String get challengesScopeClubVsClub => 'クラブ対抗';
+
+  @override
+  String get challengesScopeGroupGoal => 'グループ目標';
+
+  @override
+  String get challengesSuffixHours => '時間';
+
+  @override
+  String get challengesSuffixActivities => '件';
+
+  @override
+  String get challengesSuffixDays => '日';
+
+  @override
+  String get challengesErrTitle => 'チャレンジにタイトルを付けてください。';
+
+  @override
+  String get challengesErrGoal => '目標：正の数を入力してください';
+
+  @override
+  String get challengesErrWindow => '終了は開始より後にしてください。';
 }
