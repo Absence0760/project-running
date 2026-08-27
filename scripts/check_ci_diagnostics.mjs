@@ -49,6 +49,11 @@ export const DIAGNOSING_JOBS = new Map([
 		'it bundles the migration guards, the CHECK-vs-TS-union guard, the web ' +
 			'unit suite and the type-drift check under one job name',
 	],
+	[
+		'edge-functions',
+		'it bundles a dependency prefetch, the `deno check` typecheck, a live ' +
+			'function-host boot and two unrelated test suites under one job name',
+	],
 ]);
 
 export const ANNOTATION = '::error::';
