@@ -27,8 +27,10 @@ class ActivityTypeVocabularyTest {
     /// phone and web catalogue it answers for. Which catalogue a wrist locale
     /// answers for is a judgement, so the pairing is declared — but the KEY
     /// SET is held to the directories on disk by the test below, so the table
-    /// cannot fall behind the resource set (decisions § 748). Fewer than
-    /// mobile's seven: the wrist has no plain `pt` catalogue, only `pt-BR`.
+    /// cannot fall behind the resource set (decisions § 748). All seven the
+    /// phone ships, since the wrist gained European Portuguese; the phone
+    /// spells that catalogue `app_pt.arb` and the web `pt-PT.ts`, which is
+    /// why the pairing has to be stated rather than derived from the name.
     private val localeCatalogues = linkedMapOf(
         "values" to Catalogues("app_en.arb", "en.ts"),
         "values-de" to Catalogues("app_de.arb", "de.ts"),
@@ -36,14 +38,17 @@ class ActivityTypeVocabularyTest {
         "values-fr" to Catalogues("app_fr.arb", "fr.ts"),
         "values-ja" to Catalogues("app_ja.arb", "ja.ts"),
         "values-b+pt+BR" to Catalogues("app_pt_BR.arb", "pt-BR.ts"),
+        "values-b+pt+PT" to Catalogues("app_pt.arb", "pt-PT.ts"),
     )
 
     private val localeDirs: List<String> get() = localeCatalogues.keys.toList()
 
-    /// The phone catalogue the wrist deliberately does not mirror: European
-    /// Portuguese. Web is short the same one, so a pt-PT reader falls back on
-    /// both — recorded rather than silently absent.
-    private val unmirroredPhoneCatalogues = setOf("app_pt.arb")
+    /// The phone catalogues the wrist does not mirror. Empty since the wrist
+    /// gained European Portuguese: every locale the phone ships, the wrist
+    /// ships. An entry here is a gap being recorded rather than hidden, so
+    /// the test below fails in BOTH directions — a phone locale with no
+    /// values-* directory, and a stale entry the wrist has caught up on.
+    private val unmirroredPhoneCatalogues = emptySet<String>()
 
     /// `hike` reads "Trail run" on web and mobile since decisions § 547 and
     /// still "Hike" on the wrist. That is a product RENAME, not a translation

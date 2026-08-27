@@ -100,8 +100,31 @@ export function listGuideSlugs(entries: GuideIndexEntry[]): string[] {
 	return listGuides(entries).map((e) => e.slug);
 }
 
-/// Resolve a guide by slug for the active locale, falling back to English
-/// when no localized file exists. Returns `null` for an unknown slug.
+/// The language half of a locale tag: `pt-BR` and `pt-PT` are both `pt`.
+function baseLanguage(locale: string): string {
+	return locale.toLowerCase().split('-')[0];
+}
+
+/// A guide written in the reader's LANGUAGE, whatever the region. Sorted so
+/// two same-language variants resolve deterministically rather than by
+/// whichever the glob happened to list first.
+function sameLanguageEntry(
+	entries: GuideIndexEntry[],
+	slug: string,
+	locale: string,
+): GuideIndexEntry | undefined {
+	const base = baseLanguage(locale);
+	return entries
+		.filter((e) => e.slug === slug && baseLanguage(e.locale) === base)
+		.sort((a, b) => a.locale.localeCompare(b.locale))[0];
+}
+
+/// Resolve a guide by slug for the active locale: the exact locale, then any
+/// guide in the same LANGUAGE, then English. The middle step is what keeps a
+/// reader in their own language when we ship two variants of it and only one
+/// has the prose — a Lisbon reader gets the Brazilian guide, which is far
+/// closer to them than English, and gets it silently because it IS their
+/// language. Returns `null` for an unknown slug.
 export function getGuide(
 	entries: GuideIndexEntry[],
 	slug: string,
@@ -109,19 +132,25 @@ export function getGuide(
 ): GuideIndexEntry | null {
 	const localized = entries.find((e) => e.slug === slug && e.locale === locale);
 	if (localized) return localized;
-	return entries.find((e) => e.slug === slug && e.locale === DEFAULT_LOCALE) ?? null;
+	return (
+		sameLanguageEntry(entries, slug, locale) ??
+		entries.find((e) => e.slug === slug && e.locale === DEFAULT_LOCALE) ??
+		null
+	);
 }
 
 /// True when the active-locale guide is being served as the English
-/// fallback (no localized file for this slug). Drives the "this guide is
-/// in English" notice on the article page.
+/// fallback. Drives the "this guide is in English" notice on the article
+/// page, so it must ask whether the reader's LANGUAGE is served, not whether
+/// their exact tag is: a pt-PT reader handed the Brazilian guide is reading
+/// Portuguese, and telling them it is in English would be false.
 export function isEnglishFallback(
 	entries: GuideIndexEntry[],
 	slug: string,
 	locale: string,
 ): boolean {
-	if (locale === DEFAULT_LOCALE) return false;
-	return !entries.some((e) => e.slug === slug && e.locale === locale);
+	if (baseLanguage(locale) === DEFAULT_LOCALE) return false;
+	return !sameLanguageEntry(entries, slug, locale);
 }
 
 /// The localized title + description for a guide card. The hub + category
@@ -139,10 +168,15 @@ export function localizedGuideMeta(
 ): GuideMeta | null {
 	const en = entries.find((e) => e.slug === slug && e.locale === DEFAULT_LOCALE);
 	if (!en) return null;
+	// Same resolution order as getGuide, or the card and the body disagree:
+	// this function exists so a reader never meets an English title above a
+	// localized body, and a pt-PT reader served the Brazilian body would have
+	// got exactly that.
 	const localized =
 		locale === DEFAULT_LOCALE
 			? undefined
-			: entries.find((e) => e.slug === slug && e.locale === locale);
+			: (entries.find((e) => e.slug === slug && e.locale === locale) ??
+				sameLanguageEntry(entries, slug, locale));
 	return {
 		slug,
 		title: localized?.title ?? en.title,

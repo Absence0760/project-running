@@ -28,7 +28,7 @@ This spec builds on shipped infrastructure — **verify each still exists before
 - **The gym routine engine spec** — [gym_programming.md](gym_programming.md): mirror its plan→items relational shape, expand-once helper, planned-vs-actual metadata trio, and self-hiding/gate discipline.
 - **The live-execution runner** — [workout_execution.md](workout_execution.md) + `packages/run_recorder`'s `WorkoutRunner` (step expansion, auto-advance, halfway/last-step progress, skip/abandon, results JSON, `workout_runner_test.dart`). The session runner is a sibling state machine.
 - **The gym log + offline stores** — `gym_workouts` / `gym_sets`, `LocalGymStore` (offline-first, client-minted UUIDs, sets inline), `GymEditor.svelte` / `gym_compose_sheet.dart`. Executing a session writes here.
-- **Conventions** — web-canonical (§24), byte-identical mobile twin (§39), TS↔Dart parity pairs + the `shared-library-syncer` agent, narrow-union+CHECK lockstep (`check_constraint_unions.mjs`), i18n in all six web locales + seven mobile ARBs, layered resilience (L0–L4), no emojis, minimal comments.
+- **Conventions** — web-canonical (§24), byte-identical mobile twin (§39), TS↔Dart parity pairs + the `shared-library-syncer` agent, narrow-union+CHECK lockstep (`check_constraint_unions.mjs`), i18n in every web locale + seven mobile ARBs, layered resilience (L0–L4), no emojis, minimal comments.
 
 ## Why a new engine, not gym routines
 
@@ -184,7 +184,7 @@ P1 (build + save + reuse a plan; no execution):
 - `apps/web/src/lib/components/SessionPlanEditor.svelte` + `apps/web/src/routes/sessions/` (list + `[id]`).
 - `apps/web/src/lib/core/data.ts` — `fetchSessionPlans` / `fetchSessionPlan` / `createSessionPlan` / `updateSessionPlan` / `deleteSessionPlan` / `setEventSessionPlan`.
 - `apps/web/src/lib/types.ts` + `check_constraint_unions.mjs` — `SessionItemKind`.
-- i18n: all six web locales.
+- i18n: every web locale.
 - `apps/mobile_android/lib/session_steps.dart` (+ test, twin) — the Dart parity twin (P1 can ship the helper + a read/list view; the editor can follow in P1.5 or with execution).
 
 P2 (attach + follow-along runner + log): `SessionRunner` (web + a `packages`-level or `lib/` state machine mirroring `WorkoutRunner`), the runner UI (web player + mobile keep-alive page + TTS via `audio_cues`), `workoutDraftFromSession`, the `metadata` keys, and — still unbuilt — `LocalSessionStore` (see [Persistence](#persistence)).

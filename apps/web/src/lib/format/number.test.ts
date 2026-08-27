@@ -11,6 +11,7 @@ test('formatDecimal: fixed fraction digits per locale', () => {
 	assert.equal(formatDecimal(5.21, 2, 'de'), '5,21');
 	assert.equal(formatDecimal(5.21, 2, 'ja'), '5.21');
 	assert.equal(formatDecimal(5.21, 2, 'pt-BR'), '5,21');
+	assert.equal(formatDecimal(5.21, 2, 'pt-PT'), '5,21');
 	// Pads to the requested width like toFixed did.
 	assert.equal(formatDecimal(5, 2, 'en'), '5.00');
 	assert.equal(formatDecimal(6.5, 2, 'de'), '6,50');
@@ -18,7 +19,7 @@ test('formatDecimal: fixed fraction digits per locale', () => {
 });
 
 test('formatDecimal: comma-decimal locales use a comma', () => {
-	for (const loc of ['de', 'fr', 'es', 'pt-BR']) {
+	for (const loc of ['de', 'fr', 'es', 'pt-BR', 'pt-PT']) {
 		assert.match(formatDecimal(5.21, 2, loc), /^5,21$/, loc);
 	}
 });

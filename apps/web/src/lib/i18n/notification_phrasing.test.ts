@@ -11,7 +11,8 @@
 // "あなたのあなたのラン", "à sua sua corrida".
 //
 // The round-14 index called this "2 keys". That is the count of the FRAGMENT
-// keys; the broken renders were 4 templates x 6 locales = 24.
+// keys; the broken renders were 4 templates x 6 locales = 24, in the six
+// locales that shipped at the time.
 //
 // The fix is not a smarter fragment, because no single fragment can be
 // grammatical in both slots: German wants the dative "deinem" after the kudos
@@ -67,6 +68,11 @@ const POSSESSIVES: Record<Locale, string[]> = {
 	fr: ['ton', 'ta', 'tes'],
 	ja: ['あなたの'],
 	'pt-BR': ['seu', 'sua', 'seus', 'suas'],
+	// European Portuguese uses the same third-person possessive as Brazilian in
+	// this catalogue's register; the `tu` forms are listed too so a phrase that
+	// switches register mid-sentence is still counted rather than slipping the
+	// guard by using two different words for the one possessive.
+	'pt-PT': ['seu', 'sua', 'seus', 'suas', 'teu', 'tua', 'teus', 'tuas'],
 };
 
 // Japanese has no word boundaries, so it is counted as a substring; the Latin
@@ -98,8 +104,10 @@ function phraseDefect(s: string, loc: Locale): string | null {
 
 // Must-flag / must-spare, because the whole guard is this predicate and § 503's
 // rule is that a matcher earns a fixture table. The first six are the REAL
-// pre-fix renders, one per locale — so the table proves the guard would have
-// caught the shipped bug in every language, not only in English.
+// pre-fix renders, one per locale as the shipped set stood when the bug landed
+// — so the table proves the guard would have caught it in every language, not
+// only in English. pt-PT arrived later and carries its own rows, including a
+// two-different-words doubling the exact-repeat net cannot see.
 const FIXTURES: Array<[flagged: boolean, loc: Locale, s: string]> = [
 	[true, 'en', 'Alice gave kudos to your your run'],
 	[true, 'de', 'Alice hat deinem deinen Lauf Kudos gegeben'],
@@ -107,13 +115,18 @@ const FIXTURES: Array<[flagged: boolean, loc: Locale, s: string]> = [
 	[true, 'fr', 'Alice a donné des kudos à ton ta course'],
 	[true, 'ja', 'Alice があなたのあなたのランに kudos を送りました'],
 	[true, 'pt-BR', 'Alice deu kudos à sua sua corrida'],
-	// The fixed renders, same six.
+	[true, 'pt-PT', 'Alice deu kudos à sua sua corrida'],
+	// The doubling the `tu` forms exist to catch: two DIFFERENT words for the
+	// one possessive, which an exact-repeat matcher spares.
+	[true, 'pt-PT', 'Alice deu kudos à tua sua corrida'],
+	// The fixed renders.
 	[false, 'en', 'Alice gave kudos to your run'],
 	[false, 'de', 'Alice hat deinem Lauf Kudos gegeben'],
 	[false, 'es', 'Alice dio kudos a tu carrera'],
 	[false, 'fr', 'Alice a donné des kudos à ta course'],
 	[false, 'ja', 'Alice があなたのランに kudos を送りました'],
 	[false, 'pt-BR', 'Alice deu kudos à sua corrida'],
+	[false, 'pt-PT', 'Alice deu kudos à sua corrida'],
 	// The distance branch, which keeps its single possessive.
 	[false, 'en', 'Alice gave kudos to your 5.2 km'],
 	[false, 'fr', 'Alice a commenté ton 5,2 km'],

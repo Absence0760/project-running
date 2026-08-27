@@ -513,7 +513,7 @@ stayed off — their planned route on a live-shared run.
 - **Surfaces.** Mobile: a `safety_off_route_alerts` toggle on Settings → Safety
   contacts (hidden until the flag flips) + a run-screen banner on escalation.
   Web: the same opt-in toggle on `/settings/safety` (web can't record, so no
-  trigger there). Copy localized across six web locales + all mobile ARBs.
+  trigger there). Copy localized across every web locale + all mobile ARBs.
 - **Pre-prod deploy checklist (not a code gate):** CISO/counsel review of the
   `off_route` email/SMS copy + this posture, then set
   `OFF_ROUTE_ESCALATION_ENABLED` on the web build + mobile dotenv. The feature

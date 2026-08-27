@@ -32,12 +32,18 @@
 
 import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
+/** @import { SupabaseClient } from '@supabase/supabase-js' */
+/** @import { Database } from '../src/lib/database.types.ts' */
 import { parseRouteSurface } from '../src/lib/types.ts';
 
 const url = process.env.SUPABASE_TEST_URL;
 const anonKey = process.env.SUPABASE_TEST_ANON_KEY;
 const fixturePath = process.env.CROSS_CLIENT_ROUTE_FIXTURE_IN;
 
+/**
+ * @param {string} msg
+ * @returns {never}
+ */
 function fail(msg) {
 	console.error(`✗ cross-client route round-trip: ${msg}`);
 	process.exit(1);
@@ -48,7 +54,7 @@ if (!fixturePath) fail('CROSS_CLIENT_ROUTE_FIXTURE_IN must point to the fixture 
 
 const fixture = JSON.parse(readFileSync(fixturePath, 'utf8'));
 
-const supabase = createClient(url, anonKey);
+const supabase = /** @type {SupabaseClient<Database>} */ (createClient(url, anonKey));
 
 const { data: signIn, error: signInError } = await supabase.auth.signInWithPassword({
 	email: 'runner@test.com',
@@ -70,9 +76,12 @@ if (error || !data) fail(`route ${fixture.route_id} not found via the web read s
 const { shadow_hidden, ...rest } = data;
 const route = { ...rest, surface: parseRouteSurface(rest.surface) };
 
-const wps = Array.isArray(route.waypoints) ? route.waypoints : [];
-const first = wps[0] ?? {};
-const last = wps.at(-1) ?? {};
+// `routes.waypoints` is jsonb, so the shape the Dart writer emits has to be
+// stated here — this is the shape the assertions below read.
+/** @typedef {{ lat?: number, lng?: number, ele?: number }} Waypoint */
+const wps = /** @type {Waypoint[]} */ (Array.isArray(route.waypoints) ? route.waypoints : []);
+const first = wps.at(0);
+const last = wps.at(-1);
 
 // Field-by-field assertions against the fixture. Each entry is
 // [label, actual, expected, kind]; numbers compare with a tiny epsilon so
@@ -93,12 +102,12 @@ const checks = [
 	['tags array', tagsEqual, true, 'bool'],
 	['description', route.description, fixture.description, 'string'],
 	['waypoint count', wps.length, fixture.waypoint_count, 'number'],
-	['waypoint[0].lat', first.lat, fixture.wp_first_lat, 'number'],
-	['waypoint[0].lng', first.lng, fixture.wp_first_lng, 'number'],
-	['waypoint[0].ele', first.ele, fixture.wp_first_ele, 'number'],
-	['waypoint[last].lat', last.lat, fixture.wp_last_lat, 'number'],
-	['waypoint[last].lng', last.lng, fixture.wp_last_lng, 'number'],
-	['waypoint[last].ele', last.ele, fixture.wp_last_ele, 'number'],
+	['waypoint[0].lat', first?.lat, fixture.wp_first_lat, 'number'],
+	['waypoint[0].lng', first?.lng, fixture.wp_first_lng, 'number'],
+	['waypoint[0].ele', first?.ele, fixture.wp_first_ele, 'number'],
+	['waypoint[last].lat', last?.lat, fixture.wp_last_lat, 'number'],
+	['waypoint[last].lng', last?.lng, fixture.wp_last_lng, 'number'],
+	['waypoint[last].ele', last?.ele, fixture.wp_last_ele, 'number'],
 	// The DB value of shadow_hidden round-trips as false (Dart strips it on
 	// write, the column defaults false)...
 	['shadow_hidden (db value)', shadow_hidden, fixture.shadow_hidden, 'bool'],

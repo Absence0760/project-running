@@ -554,18 +554,19 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
 
 ## Localization (i18n)
 
-The app ships in six locales (`en/de/fr/es/ja/pt-BR`) via **standard Android
-string resources** — no custom framework, no in-app picker (device-locale-follow
-is the platform norm on a tiny screen).
+The app ships in seven locales (`en/de/fr/es/ja/pt-BR/pt-PT`) via **standard
+Android string resources** — no custom framework, no in-app picker
+(device-locale-follow is the platform norm on a tiny screen).
 
 - **Resources**: default English in `res/values/strings.xml`; translations in
-  `res/values-de/`, `-fr/`, `-es/`, `-ja/`, and `res/values-b+pt+BR/`
-  (BCP-47 qualifier for pt-BR). Every user-facing literal in `ui/RunWatchApp.kt`,
+  `res/values-de/`, `-fr/`, `-es/`, `-ja/`, `res/values-b+pt+BR/` and
+  `res/values-b+pt+PT/` (the BCP-47 `b+` qualifier both Portuguese variants
+  need). Every user-facing literal in `ui/RunWatchApp.kt`,
   `recording/RunRecordingService.kt` (notification + ongoing-activity text),
   `tiles/ActiveRunTileService.kt`, and the `Token refresh failed` error in
   `RunViewModel` reads from resources. Compose uses `stringResource` /
   `pluralStringResource`; services/tiles use `context.getString(...)`.
-- **Per-app language**: `res/xml/locales_config.xml` lists the six and is
+- **Per-app language**: `res/xml/locales_config.xml` lists the seven and is
   referenced from `<application android:localeConfig=...>` so Android 13+
   surfaces a per-app language toggle in system settings.
 - **Number formatting + distance unit**: `recording/UnitFormat.kt` is the
@@ -606,7 +607,10 @@ is the platform norm on a tiny screen).
   key set, no empty values, and matching format-arg sets.
   `ActivityTypeVocabularyTest` asserts the activity words equal the ARB's and
   the web catalogue's locale for locale, keeps the `hike` exemption non-stale,
-  and pins the one phone locale the wrist does not carry (`app_pt.arb`).
+  and pins the phone catalogues the wrist does not mirror —
+  `unmirroredPhoneCatalogues` is `emptySet()` since the wrist gained European
+  Portuguese, and it is checked in BOTH directions, so a phone locale with no
+  `values-*` directory and a stale entry the wrist has caught up on each fail.
   `LocaleReachTest` + `WearLocalesTest` hold every site that DECLARES the
   locale set — `locales_config.xml`, the manifest's `localeConfig` reference,
   and both test-side lists — to the `values-*` directories on disk via

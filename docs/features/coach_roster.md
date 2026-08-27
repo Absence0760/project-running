@@ -156,7 +156,7 @@ agree):
 - **Mobile (Flutter)** — `apps/mobile_android/test/coach_load_test.dart` (~10 cases, mirrors web) + a widget test for the
   roster section in `coaching_screen_test.dart` (renders rows from a fake api). Mirror both to iOS twin.
 
-## i18n keys to add (all six web locales + ARBs)
+## i18n keys to add (every web locale + ARBs)
 
 Web (`apps/web/src/lib/i18n/locales/{en,de,fr,es,ja,pt-BR}.ts`), dotted keys; mobile ARBs camelCase
 (`apps/mobile_android/lib/l10n/app_*.arb`, all six + base `pt`, real translations):
@@ -211,7 +211,7 @@ Run `flutter gen-l10n` after ARB edits and mirror `lib/l10n/gen/` to the iOS twi
 2. `feat(web): coach_load injury-risk + load-band helper` — `apps/web/src/lib/training/coach_load.ts` +
    `coach_load.test.ts`.
 3. `feat(web): coach roster dashboard on /coaching` — `+page.svelte` + `fetchCoachRosterSummary` in `data.ts` +
-   i18n keys in all six locales + `apps/web/tests-e2e/coaching/roster.spec.ts`.
+   i18n keys in every web locale + `apps/web/tests-e2e/coaching/roster.spec.ts`.
    Paths: `apps/web/src/routes/coaching/+page.svelte apps/web/src/lib/core/data.ts apps/web/src/lib/i18n/locales/*.ts apps/web/tests-e2e/coaching/roster.spec.ts`
 4. `feat(mobile): coach_load helper + roster on coaching screen` — Dart helper + tests + `coaching_screen.dart` +
    api_client method + core_models model + ARBs + gen-l10n. **Mirror every path to `apps/mobile_ios` in the same
@@ -237,7 +237,7 @@ Run `flutter gen-l10n` after ARB edits and mirror `lib/l10n/gen/` to the iOS twi
    aggregates for the seed link you add.
 2. Run both codegen commands; commit the migration + generated files + pgtap + seed (commit 1).
 3. Write `coach_load.ts` + tests; commit (commit 2).
-4. Add `fetchCoachRosterSummary` + the roster section to `/coaching/+page.svelte`; add i18n keys to all six locales;
+4. Add `fetchCoachRosterSummary` + the roster section to `/coaching/+page.svelte`; add i18n keys to every web locale;
    write the Playwright spec; `npm run check`; commit (commit 3).
 5. Mirror to mobile: api_client method, core_models model, `coach_load.dart` + tests, `coaching_screen.dart` roster
    section, ARBs (+ gen-l10n); diff-verify the iOS twin is byte-identical; commit (commit 4).

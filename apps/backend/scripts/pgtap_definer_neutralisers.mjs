@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 // Permissive replacements for the relations that filter in their OWN SQL.
 //
-// The sibling guard's first operator drops the session to the BYPASSRLS owner
-// for the span of one assertion. That is a complete bypass of row-level
-// security and therefore a complete bypass of the mechanism behind a base
-// table read - but a `security definer` view and a SECURITY DEFINER function
-// already run as their owner, so RLS was never what was hiding anything from
-// them. They filter in their own WHERE. Dropping RLS leaves their result
-// identical, so every refusal assertion that reads only through one would
-// "survive" for a reason that says nothing about the assertion.
+// The sibling guard's first operator widens row-level security for the span of
+// one assertion. That reaches the whole of the mechanism behind a base table
+// read - but a `security definer` view and a SECURITY DEFINER function already
+// run as their owner, so RLS was never what was hiding anything from them. They
+// filter in their own WHERE. Widening RLS leaves their result identical, so
+// every refusal assertion that reads only through one would "survive" for a
+// reason that says nothing about the assertion.
 //
 // The operator for that class is a permissive replacement per relation:
 // `create or replace` the view or function, inside a savepoint, with the same
@@ -66,13 +65,42 @@
 // too. What is left outside is a row the test only ever SELECTed, which is
 // exactly the exposure.
 //
-// Rows written inside a subtransaction (a savepoint, or pgtap's own `throws_ok`
-// / `lives_ok` blocks) carry the SUBtransaction's xid and so read as foreign.
-// That direction is the safe one: the mutation goes inert, the assertion
-// survives, and the guard reports it by name rather than passing it silently.
-// `pg_xact_status` would cover those too and is not usable here - it is
-// superuser-only, and the SECURITY INVOKER replacements run as `authenticated`.
-export const mine = (alias) => `${alias}.xmin = pg_current_xact_id()::xid`;
+// § 751 spelled the test `xmin = pg_current_xact_id()::xid` and recorded what
+// that misses: pgtap's `lives_ok` and `throws_ok` run their payload in a
+// SUBtransaction, so a fixture filed the idiomatic pgtap way carries the
+// subtransaction's xid and reads as foreign. It called that the safe direction -
+// the mutation goes inert, the assertion survives and the guard reports it by
+// name rather than passing it silently - and so it is, but it is still a wrong
+// answer, and operator 1's population is full of them: three of
+// `public_recaps_rls_test`'s refusals rest on one `lives_ok(... update ...)`.
+//
+// It also recorded why the exact test was out of reach: `pg_xact_status` is
+// superuser-only and these predicates run as `authenticated`. A SECURITY DEFINER
+// wrapper owned by `postgres` is the answer to that, and it makes the test exact
+// rather than approximate. Given a row the caller can already SEE, an xmin still
+// IN PROGRESS can only be this transaction's own - every other in-progress
+// transaction's rows are invisible under MVCC - so "visible and in progress" is
+// precisely "written here", subtransactions included.
+//
+// `pg_xact_status` takes an xid8 and `xmin` is a bare 32-bit xid, so the epoch
+// has to be put back: `c - c::xid` is the current xid8 less its own low 32 bits.
+// Anything this transaction wrote shares that epoch, because a wraparound needs
+// 2^32 transactions. The `w >= c` guard is what keeps the reconstruction honest:
+// an xid older than ours may be from an earlier epoch and may have had its clog
+// truncated, and it is never one of ours, so it is answered without asking.
+export const TRANSACTION_LOCAL = 'pgtap_guard_transaction_local';
+
+export const TRANSACTION_LOCAL_SQL = `create function public.${TRANSACTION_LOCAL}(x xid)
+ returns boolean language sql stable security definer set search_path to pg_catalog
+as $pgtap_guard$
+  select w >= c and pg_xact_status(w) = 'in progress'
+    from (select pg_current_xact_id() as c) t,
+         lateral (select (t.c::text::numeric - t.c::xid::text::numeric
+                          + x::text::numeric)::text::xid8 as w) l;
+$pgtap_guard$;
+`;
+
+export const mine = (alias) => `${TRANSACTION_LOCAL}(${alias}.xmin)`;
 
 // The five owner-scoped gym RPCs share one witness, because they read the same
 // two tables and their access control is the same `gw.user_id = auth.uid()`.
@@ -359,10 +387,10 @@ $neutralised$;`,
   //
   // The catalogue's `prosecdef` says which privileges a routine runs with, not
   // whether it carries an access predicate. Every RPC below is SECURITY
-  // INVOKER, so the owner bypass reaches the RLS on the tables it reads — and
+  // INVOKER, so the first operator reaches the RLS on the tables it reads — and
   // is still inert against it, because the refusal is a `= auth.uid()` (or a
   // `shadow_hidden = false`) written into the body. Measured, not assumed: all
-  // seven survived the owner bypass on a database where their fixtures exist,
+  // seven survived the first operator on a database where their fixtures exist,
   // which is how they were found.
   //
   // One thing a kill over these proves less than it does elsewhere. Where the

@@ -59,7 +59,7 @@ enum SocialTab {
 /// own Scaffold/AppBar/FAB. SocialScreen hosts the chrome — a single
 /// AppBar with a TabBar at the bottom, and a single FAB slot that takes
 /// whichever child FAB is appropriate for the active tab (Clubs hoists
-/// "Create club").
+/// "New club", Challenges "Create challenge").
 class SocialScreen extends StatefulWidget {
   /// Nullable like every other tab's client — null means Supabase never
   /// initialised (env missing / init failed). The tab then fails closed
@@ -94,6 +94,7 @@ class _SocialScreenState extends State<SocialScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _controller;
   final _clubsKey = GlobalKey<ClubsScreenState>();
+  final _challengesKey = GlobalKey<ChallengesScreenState>();
 
   @override
   void initState() {
@@ -155,6 +156,7 @@ class _SocialScreenState extends State<SocialScreen>
             embedded: true,
           ),
           ChallengesScreen(
+            key: _challengesKey,
             social: widget.social,
             embedded: true,
           ),
@@ -171,27 +173,33 @@ class _SocialScreenState extends State<SocialScreen>
   Widget? _activeFab() {
     switch (SocialTab.values[_controller.index]) {
       case SocialTab.clubs:
-        return Builder(builder: (ctx) {
-          final state = _clubsKey.currentState;
-          if (state == null) {
-            // The ClubsScreen State binds to the GlobalKey during this same
-            // build pass (the page is mounting in the TabBarView), so its
-            // currentState is null on the first frame the Clubs tab is
-            // active. Without a follow-up rebuild the hoisted FAB would
-            // stay absent forever — schedule one once the element is laid
-            // out so the FAB resolves on the next frame.
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted &&
-                  SocialTab.values[_controller.index] == SocialTab.clubs) {
-                setState(() {});
-              }
-            });
-            return const SizedBox.shrink();
-          }
-          return state.buildCreateClubFab(ctx);
-        });
+        return _hoisted(
+            SocialTab.clubs, () => _clubsKey.currentState?.buildCreateClubFab);
+      case SocialTab.challenges:
+        return _hoisted(SocialTab.challenges,
+            () => _challengesKey.currentState?.buildCreateChallengeFab);
       default:
         return null;
     }
+  }
+
+  /// The sub-screen's State binds to its GlobalKey during this same build
+  /// pass (the page is mounting in the TabBarView), so `currentState` is null
+  /// on the first frame the tab is active. Without a follow-up rebuild the
+  /// hoisted FAB would stay absent forever — schedule one once the element is
+  /// laid out so the FAB resolves on the next frame.
+  Widget _hoisted(SocialTab tab, Widget Function(BuildContext)? Function() fab) {
+    return Builder(builder: (ctx) {
+      final build = fab();
+      if (build == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && SocialTab.values[_controller.index] == tab) {
+            setState(() {});
+          }
+        });
+        return const SizedBox.shrink();
+      }
+      return build(ctx);
+    });
   }
 }

@@ -447,7 +447,7 @@ Mobile widget tests cover the plan editor, the seeded day view, and the adherenc
 
 **Generated (committed):** `apps/web/src/lib/database.types.ts`, `packages/core_models/lib/src/generated/db_rows.dart`.
 
-**Web:** `src/lib/types.ts` (+4 unions), `scripts/check_constraint_unions.mjs` (+4 PAIRS), `src/lib/nutrition/meal_plan.ts`, `nutrition_adherence.ts`, `nutrition_progression.ts` (the `nutrition_budget`/`hydration`/`nutrition_week` mirrors they reuse already exist on mobile), `MealPlanEditor.svelte`, `NutritionPlanLibrary.svelte`, `NutritionPlanCard.svelte`, `NutritionAdherencePanel.svelte`, routes `/nutrition/plans/[id]`, `/nutrition/plans/new`, `/nutrition` (+ seeding + panel), **P3:** `/coaching/clients/[id]` (+ Nutrition panel), `core/data.ts` client API, i18n in all six locales.
+**Web:** `src/lib/types.ts` (+4 unions), `scripts/check_constraint_unions.mjs` (+4 PAIRS), `src/lib/nutrition/meal_plan.ts`, `nutrition_adherence.ts`, `nutrition_progression.ts` (the `nutrition_budget`/`hydration`/`nutrition_week` mirrors they reuse already exist on mobile), `MealPlanEditor.svelte`, `NutritionPlanLibrary.svelte`, `NutritionPlanCard.svelte`, `NutritionAdherencePanel.svelte`, routes `/nutrition/plans/[id]`, `/nutrition/plans/new`, `/nutrition` (+ seeding + panel), **P3:** `/coaching/clients/[id]` (+ Nutrition panel), `core/data.ts` client API, i18n in every web locale.
 
 **Mobile (`mobile_android` → byte-identical `mobile_ios`):** `lib/nutrition/meal_plan.dart`, `nutrition_adherence.dart`, `nutrition_progression.dart`, `lib/stores/local_nutrition_plan_store.dart`, `screens/nutrition_plan_detail_screen.dart`, `widgets/meal_plan_editor_sheet.dart`, `widgets/nutrition_adherence_panel.dart`, extend `nutrition_screen.dart`, ARBs.
 

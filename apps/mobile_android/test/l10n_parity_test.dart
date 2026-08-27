@@ -64,6 +64,36 @@ void main() {
     expect(enKeys, isNotEmpty);
   });
 
+  test('no catalogue declares the same key twice', () {
+    // `jsonDecode` silently keeps the LAST of a duplicated key, so every other
+    // assertion in this file is blind to one — while gen-l10n takes the
+    // getter's POSITION from the first occurrence and its value + description
+    // from the last, so the two halves of a duplicate can disagree and only
+    // one of them ships. `privacyZonesTitle` was declared twice in all seven
+    // catalogues, under two different descriptions (decisions § 754).
+    for (final tag in localeTags) {
+      final counts = <String, int>{};
+      for (final line in File('lib/l10n/app_$tag.arb').readAsLinesSync()) {
+        final m = RegExp(r'^  "(@{0,2}[A-Za-z0-9_]+)"\s*:').firstMatch(line);
+        if (m != null) {
+          counts[m.group(1)!] = (counts[m.group(1)!] ?? 0) + 1;
+        }
+      }
+      // The scan keys on the catalogue's two-space top-level indent. Pin that
+      // it really did see every entry, so a reformat makes this test fail
+      // rather than pass vacuously.
+      expect(counts.keys.toSet(), _readArb(tag).keys.toSet(),
+          reason: 'the duplicate scan did not see app_$tag.arb the way '
+              'jsonDecode does');
+      final dupes = counts.entries
+          .where((e) => e.value > 1)
+          .map((e) => e.key)
+          .toList()
+        ..sort();
+      expect(dupes, isEmpty, reason: 'app_$tag.arb declares these keys twice');
+    }
+  });
+
   for (final tag in localeTags) {
     group('locale $tag', () {
       final arb = _readArb(tag);

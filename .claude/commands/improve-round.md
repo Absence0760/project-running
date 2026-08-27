@@ -39,7 +39,7 @@ Per [CLAUDE.md § Commit cadence](../../CLAUDE.md), each discrete piece is its o
 - **Pure logic** → extract to a testable module (`apps/web/src/lib/<area>/<name>.ts`), unit-test it. If a `.svelte.ts` would trap runes, keep the pure part in a sibling `.ts` (see `apps/web/CLAUDE.md`).
 - **TS↔Dart parity helper** → if mobile already uses the same logic, write the Dart twin in lockstep and run `shared-library-syncer`; register the pair in `CLAUDE.md` + `.claude/agents/shared-library-syncer.md`. If mobile does **not** use it yet, keep it **web-only** (don't create a dead twin) and add a `docs/product/followups.md` mobile-mirror entry instead.
 - **Dart edits** → run `mobile-twin-mirror` to keep `apps/mobile_ios` byte-identical, in the same commit.
-- **User-facing strings** → add the key to all six locales (`apps/web/src/lib/i18n/locales/*`); `messages_parity.test.ts` enforces parity. Run it.
+- **User-facing strings** → add the key to every locale in `apps/web/src/lib/i18n/locales/*` — read the directory, do not assume a count; `messages_parity.test.ts` enforces parity. Run it.
 - **Schema** → use `/safe-migration` instead; this loop is not for migrations.
 - **Docs** → update in the same turn ([CLAUDE.md § Docs hygiene](../../CLAUDE.md)): `apps/web/CLAUDE.md`, `decisions.md` (one paragraph if a non-obvious trade-off), `parity.md` if platforms shift, `followups.md` for any deferred mirror.
 

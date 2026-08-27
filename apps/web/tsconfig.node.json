@@ -1,0 +1,30 @@
+{
+	// The Node side of `apps/web` — the tooling scripts, the AWS Lambda
+	// handlers and their build wrappers, and SvelteKit's own config file.
+	// None of it is inside `.svelte-kit/tsconfig.json`'s `include` (SvelteKit
+	// generates `src/`, `test/`, `tests/` and `vite.config.*`), so `npm run
+	// check` has never read any of it — including eight production Lambda
+	// handlers. A SEPARATE root rather than a wider `include` on
+	// `tsconfig.json` for the reason stated there: TypeScript does not merge
+	// `include` across `extends`, so widening the app's own would mean
+	// pasting SvelteKit's generated list into a committed file and re-pasting
+	// it whenever SvelteKit changes what it generates. See decisions § 752,
+	// and § 749 for the sibling root over the Playwright tree.
+	//
+	// `types` is explicit because nothing here pulls `@types/node` in on its
+	// own, and `moduleResolution: bundler` skips `node:`-prefixed specifiers
+	// outright — without this, every `process` and every `node:fs` import
+	// reads as an unresolved name.
+	//
+	// Run: `npm run check:node-types --workspace=apps/web`
+	// CI:  the `parity-types` job in .github/workflows/ci.yml.
+	// The include list is guarded by scripts/tsconfig_coverage.test.mjs.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"types": ["node"],
+		// The cross-client round-trip scripts import the real web lib by its
+		// `.ts` path and run under `tsx`, which resolves that.
+		"allowImportingTsExtensions": true
+	},
+	"include": ["scripts/**/*.mjs", "lambda/**/*.mjs", "lambda/**/*.ts", "svelte.config.js"]
+}

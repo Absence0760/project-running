@@ -16,10 +16,10 @@
 // mechanisms and therefore two operators, chosen per assertion by what it
 // reads (decisions.md 745):
 //
-//   1. Row-level security, behind a base table read. Every public table is
-//      owned by `postgres`, which holds BYPASSRLS and which no table FORCEs
-//      RLS against, so `reset role` for the duration of one statement is a
-//      complete, lock-free bypass.
+//   1. Row-level security, behind a base table read. RLS is a set of policy
+//      expressions, so the operator is an extra PERMISSIVE policy on every
+//      RLS-enabled table, armed for the span of one statement and revealing
+//      only the rows THIS TRANSACTION wrote.
 //
 //   2. The relation's OWN predicate, behind a read through a view or an RPC. A
 //      `security definer` view and a SECURITY DEFINER function already run as
@@ -34,17 +34,11 @@
 // Either operator can reveal a row the test never filed, and a kill over one of
 // those says a subject exists in the database rather than that the test built
 // one - 741's inversion one remove further out, deterministic here because the
-// seed is committed rather than accumulated Playwright debris. Operator 2
-// rewrites the relation, so it can be scoped, and is (decisions.md 751): every
-// permissive replacement carries a `subject` alias and reveals only the rows
-// THIS TRANSACTION wrote. Without it `gym_exercise_set_history('Bench Press')`
-// is killed by seed.sql's six committed `Bench press` sets whether or not the
-// test inserted anything at all.
-//
-// Operator 1 has no query to add a predicate to - it is a role change, and the
-// bypass reveals the whole table exactly as a dropped WHERE does. That residue
-// is measured rather than assumed: 63 of its 117 assertions read at least one
-// table seed.sql leaves rows in, and it is filed in followups.md.
+// seed is committed rather than accumulated Playwright debris. So both are
+// scoped to the rows this transaction wrote (decisions.md 751 for operator 2,
+// 753 for operator 1). Without it `gym_exercise_set_history('Bench Press')` is
+// killed by seed.sql's six committed `Bench press` sets whether or not the test
+// inserted anything at all.
 //
 // If the rows exist and something was hiding them, the assertion turns red. If
 // it stays green, nothing was hidden because nothing was there - the assertion
@@ -68,6 +62,8 @@ import { fileURLToPath } from 'node:url';
 
 import {
   DEFINER_NEUTRALISERS,
+  TRANSACTION_LOCAL,
+  TRANSACTION_LOCAL_SQL,
   UNREGISTERED_DEFINER_RELATIONS,
 } from './pgtap_definer_neutralisers.mjs';
 
@@ -263,7 +259,7 @@ export function relationsIn(sql) {
 // `selected` is whether its own prose (or an explicit marker) claims a
 // refusal, `neutralise` is the relations a permissive replacement is
 // registered for, and `unmeasurable` is the ones that run as their owner and
-// have none — for which the owner bypass is provably inert, so an assertion is
+// have none — for which the widening policy is provably inert, so an assertion is
 // not measured at all rather than scored on an operator that could not have
 // changed it.
 export function zeroOrEmptyAssertions(text, relations) {
@@ -318,20 +314,62 @@ export function statementEnd(text, offset) {
   return text.length;
 }
 
-const CREATE_PGTAP = 'create extension if not exists pgtap with schema extensions;\n';
-const BYPASS = [
+// Operator 1, scoped the same way § 751 scoped operator 2.
+//
+// It used to be `set role` to the BYPASSRLS owner, and a role change has no
+// query to hang a predicate off — so it revealed the whole table, and a kill
+// said a subject existed in the DATABASE rather than that the test built one.
+// But RLS is not only a role check: it is a set of policy expressions, and a
+// policy IS a query to add a predicate to. So the operator is a permissive
+// policy rather than a role change, the same shape the second operator already
+// has, one layer down: every RLS-enabled table gains an extra permissive SELECT
+// policy revealing only the rows THIS TRANSACTION wrote, and the assertion runs
+// as the role the test gave it rather than as the owner.
+//
+// The policies are created once per file, immediately after its `begin;`, and
+// go with the file's rollback. They are gated on a GUC so they are inert
+// everywhere except inside a mutated span — creating them per span would be
+// ~90 DDL statements per assertion, and leaving them ungated would widen the
+// file's fixtures and its unmutated assertions too.
+export const WIDEN_GUC = 'pgtap_guard.widen';
+export const PREAMBLE =
+  'create extension if not exists pgtap with schema extensions;\n' +
+  TRANSACTION_LOCAL_SQL +
+  `do $pgtap_guard$
+declare t regclass;
+begin
+  for t in select c.oid::regclass from pg_class c
+             join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind in ('r','p') and c.relrowsecurity
+  loop
+    execute format('create policy pgtap_guard_widen on %s as permissive for select'
+      || ' to public using (current_setting(''${WIDEN_GUC}'', true) = ''on'''
+      || ' and ${TRANSACTION_LOCAL}(xmin))', t);
+  end loop;
+end
+$pgtap_guard$;
+`;
+const WIDEN_ON = `select set_config('${WIDEN_GUC}','on',true);\n`;
+const WIDEN_OFF = `select set_config('${WIDEN_GUC}','off',true);\n`;
+
+// `create or replace` needs the relation's owner, so the definer span drops the
+// role for its own length. It does not need the widening: all 51 assertions this
+// operator measures read the replaced relation and nothing else, so the
+// replacement's own transaction-local scope is the whole of their subject
+// selection, and running the read as the owner reaches no base table the
+// assertion asked about.
+const BECOME_OWNER = [
   "select set_config('pgtap_guard.role', current_setting('role'), true);",
   "select set_config('role','none',true);",
   '',
 ].join('\n');
-const RESTORE = "select set_config('role', current_setting('pgtap_guard.role'), true);\n";
 
-// The definer span carries the same owner bypass plus a permissive
-// replacement of every definer relation the assertion reads, and rolls the
-// whole thing back to a savepoint afterwards. `create or replace` is
-// transactional, so the real view or function is restored before the next
-// assertion runs — which is what keeps a whole file measurable in one pass
-// even though this operator is a schema change and the first one is not.
+// The definer span carries the owner bypass plus a permissive replacement of
+// every definer relation the assertion reads, and rolls the whole thing back to
+// a savepoint afterwards. `create or replace` is transactional, so the real view
+// or function is restored before the next assertion runs — which is what keeps a
+// whole file measurable in one pass even though this operator is a schema change
+// and the first one is not.
 export function definerSpan(sql, definer) {
   const mark = 'pgtap_guard_definer';
   const replacements = definer.map((name) => {
@@ -341,7 +379,7 @@ export function definerSpan(sql, definer) {
   });
   return (
     `savepoint ${mark};\n` +
-    BYPASS +
+    BECOME_OWNER +
     replacements.join('\n') +
     '\n' +
     sql +
@@ -350,11 +388,10 @@ export function definerSpan(sql, definer) {
   );
 }
 
-// One mutant per file: each candidate assertion runs with the role dropped to
-// the BYPASSRLS owner for the span of its own statement and restored straight
-// after. The assertions are read-only, so bypassing one changes nothing the
-// next one sees, which is what lets a whole file's candidates be measured in a
-// single run.
+// One mutant per file: each candidate assertion runs with the widening policies
+// armed for the span of its own statement and disarmed straight after. The
+// assertions are read-only, so widening one changes nothing the next one sees,
+// which is what lets a whole file's candidates be measured in a single run.
 export function buildMutant(text, candidates) {
   const beginAt = /^begin;$/m.exec(text);
   if (!beginAt) throw new Error('test file does not open a transaction');
@@ -375,10 +412,10 @@ export function buildMutant(text, candidates) {
       '\n' +
       (span.neutralise.length > 0
         ? definerSpan(statement, span.neutralise)
-        : BYPASS + statement + '\n' + RESTORE);
+        : WIDEN_ON + statement + '\n' + WIDEN_OFF);
     cursor = span.end;
   }
-  return text.slice(0, afterBegin) + CREATE_PGTAP + out + text.slice(cursor);
+  return text.slice(0, afterBegin) + PREAMBLE + out + text.slice(cursor);
 }
 
 export function parseTap(output) {
@@ -496,80 +533,117 @@ export function fetchRelationSecurity() {
   return out;
 }
 
-// The instrument checked end to end, on three assertions written to have known
+// The instrument checked end to end, on assertions written to have known
 // verdicts. § 741's third vacuous refusal was scored *killed* on a dirty
 // database, so "the guard ran and was green" is not evidence the guard works:
-// the three have to come back different. All read the same definer view and go
-// through the real classifier, the real mutant builder and the real TAP parse,
-// and they differ only in WHERE the subject is:
+// they have to come back different. All go through the real classifier, the
+// real mutant builder and the real TAP parse, and within each operator they
+// differ only in WHERE the subject is:
 //
 //   known-good     a private route this transaction filed          must be KILLED
 //   known-bad      no route at all                                 must SURVIVE
 //   known-debris   a private route already committed to the DB     must SURVIVE
 //
-// The third is the one § 751 added, and it is the only one that can tell a
-// scoped replacement from an unscoped one: before the scoping it was killed,
-// which is a refusal scored healthy by a row the test never filed.
+// The known-debris case is the only one that can tell a scoped operator from an
+// unscoped one: before the scoping it was killed, which is a refusal scored
+// healthy by a row the test never filed. Each operator needs its own set,
+// because they are scoped by different mechanisms and neither proves the other
+// — the definer trio reads a view whose replacement carries the scope, the base
+// trio reads the table itself as a stranger and depends on the widening policy.
+// The base trio's known-good is also filed inside a subtransaction, because
+// pgtap's own `lives_ok` is how a test states that a write succeeded and a
+// scope that misses those reports a survivor for every one of them.
 export function validateOperatorEndToEnd(relations) {
   const present = '00000000-0000-0000-0000-0000000e2e01';
   const absent = '00000000-0000-0000-0000-0000000e2e02';
+  const stranger = '00000000-0000-0000-0000-0000000e2e03';
   const failures = [];
-  const committed = psql(
-    'select r.id from routes r' +
+  const [hiddenFromPublicRoutes, privateRoute] = psql(
+    'select coalesce((select r.id::text from routes r' +
       ' where not exists (select 1 from public_routes pr where pr.id = r.id)' +
-      ' order by r.id limit 1;',
+      " order by r.id limit 1), '')" +
+      " || '|' || coalesce((select r.id::text from routes r" +
+      " where r.is_public = false order by r.id limit 1), '');",
   )
     .trim()
-    .split('\n')[0]
-    .trim();
-  if (!/^[0-9a-f-]{36}$/.test(committed)) {
+    .split('|');
+  if (!/^[0-9a-f-]{36}$/.test(hiddenFromPublicRoutes) || !/^[0-9a-f-]{36}$/.test(privateRoute)) {
     failures.push(
-      'the end-to-end control found no COMMITTED route that public_routes hides, so its known-debris case proves nothing. ' +
-        'seed.sql is expected to leave at least one private or shadow-hidden route behind; without one, an unscoped ' +
-        'permissive replacement would pass this validation.',
+      'the end-to-end control found no COMMITTED route that public_routes hides, or none that RLS hides from a ' +
+        'stranger, so its known-debris cases prove nothing. seed.sql is expected to leave at least one private ' +
+        'route behind; without one, an unscoped operator would pass this validation.',
     );
     return failures;
   }
   const file = [
     'begin;',
-    'select plan(3);',
+    'select plan(6);',
     `insert into routes (id, user_id, name, waypoints, distance_m, is_public)
        values ('${present}', (select id from auth.users order by id limit 1),
                'guard control', '[]'::jsonb, 1000, false);`,
+    `select lives_ok($$ update routes set name = 'guard control (subtransaction)'
+       where id = '${present}' $$, 'control: the fixture is filed the way pgtap files one');`,
     `select is((select count(*)::int from public_routes where id = '${present}'), 0,
        'control: a stranger cannot see the private route');`,
     `select is((select count(*)::int from public_routes where id = '${absent}'), 0,
        'control: a stranger cannot see the route nobody filed');`,
-    `select is((select count(*)::int from public_routes where id = '${committed}'), 0,
+    `select is((select count(*)::int from public_routes where id = '${hiddenFromPublicRoutes}'), 0,
        'control: a stranger cannot see the private route this transaction did not file');`,
+    `select set_config('request.jwt.claims', '{"sub":"${stranger}"}', true);`,
+    'set local role authenticated;',
+    `select is((select count(*)::int from routes where id = '${present}'), 0,
+       'control: RLS hides the private route from a stranger');`,
+    `select is((select count(*)::int from routes where id = '${absent}'), 0,
+       'control: RLS hides the route nobody filed from a stranger');`,
+    `select is((select count(*)::int from routes where id = '${privateRoute}'), 0,
+       'control: RLS hides from a stranger the private route this transaction did not file');`,
     'select * from finish();',
     'rollback;',
   ].join('\n');
 
   const candidates = refusalAssertions(file, relations);
-  if (candidates.length !== 3) {
+  if (candidates.length !== 6) {
     failures.push(
-      `the end-to-end control did not classify: ${candidates.length} of its 3 assertions were selected. The population filter, not the operator, is what changed.`,
+      `the end-to-end control did not classify: ${candidates.length} of its 6 assertions were selected. The population filter, not the operator, is what changed.`,
     );
     return failures;
   }
   const tap = parseTap(psql(buildMutant(file, candidates)));
-  const good = tap.get('control: a stranger cannot see the private route');
-  const bad = tap.get('control: a stranger cannot see the route nobody filed');
-  const debris = tap.get('control: a stranger cannot see the private route this transaction did not file');
-  if (good !== false) {
+  const verdicts = [
+    ['a stranger cannot see the private route', false, 'definer', 'KNOWN-GOOD'],
+    ['a stranger cannot see the route nobody filed', true, 'definer', 'KNOWN-BAD'],
+    [
+      'a stranger cannot see the private route this transaction did not file',
+      true,
+      'definer',
+      'KNOWN-DEBRIS',
+    ],
+    ['RLS hides the private route from a stranger', false, 'base', 'KNOWN-GOOD'],
+    ['RLS hides the route nobody filed from a stranger', true, 'base', 'KNOWN-BAD'],
+    [
+      'RLS hides from a stranger the private route this transaction did not file',
+      true,
+      'base',
+      'KNOWN-DEBRIS',
+    ],
+  ];
+  const why = {
+    'KNOWN-GOOD':
+      'A refusal with a real hidden subject must go red under the mutation; if it does not, every survivor this guard reports is unproven.',
+    'KNOWN-BAD':
+      'A refusal with no subject at all must stay green under the mutation; if it goes red, the mutation is revealing rows the assertion never asked about and every kill this guard reports is unproven.',
+    'KNOWN-DEBRIS':
+      'Its subject is a route ALREADY IN THE DATABASE that this transaction never wrote, so a kill means the mutation is revealing rows on the strength of the seed rather than of the fixture — which is what the transaction-local scope exists to stop. Check that the operator still carries it: a `subject` alias on the permissive replacement, and the widening policy on the base table.',
+  };
+  for (const [description, expected, operator, role] of verdicts) {
+    const got = tap.get(`control: ${description}`);
+    if (got === expected) continue;
     failures.push(
-      `the end-to-end control's KNOWN-GOOD assertion was not killed (${good === undefined ? 'it never ran' : 'it survived'}). A refusal with a real hidden subject must go red under the mutation; if it does not, every survivor this guard reports is unproven.`,
-    );
-  }
-  if (bad !== true) {
-    failures.push(
-      `the end-to-end control's KNOWN-BAD assertion did not survive (${bad === undefined ? 'it never ran' : 'it was killed'}). A refusal with no subject at all must stay green under the mutation; if it goes red, the replacement is revealing rows the assertion never asked about and every kill this guard reports is unproven.`,
-    );
-  }
-  if (debris !== true) {
-    failures.push(
-      `the end-to-end control's KNOWN-DEBRIS assertion did not survive (${debris === undefined ? 'it never ran' : 'it was killed'}). Its subject is a route ALREADY IN THE DATABASE that this transaction never wrote, so a kill means the replacement is revealing rows on the strength of the seed rather than of the fixture — which is what every entry's \`subject\` scoping exists to stop. Check that the replacement for public_routes still carries \`mine('r')\`.`,
+      `the end-to-end control's ${operator}-operator ${role} assertion ` +
+        (got === undefined
+          ? 'never ran'
+          : `was ${got ? 'not killed' : 'killed'} where it must ${expected ? 'survive' : 'be killed'}`) +
+        `. ${why[role]}`,
     );
   }
   return failures;
@@ -585,7 +659,7 @@ export function validateNeutralisers() {
   for (const [name, entry] of DEFINER_NEUTRALISERS) {
     const probe = entry.witness.probe.trim().replace(/;$/, '');
     const out = psql(
-      `begin;\n${entry.witness.setup}\nselect 'before=' || (${probe});\n` +
+      `begin;\n${TRANSACTION_LOCAL_SQL}${entry.witness.setup}\nselect 'before=' || (${probe});\n` +
         `${entry.sql}\nselect 'after=' || (${probe});\nrollback;`,
     );
     const read = (key) => {
@@ -697,9 +771,9 @@ function main() {
         ...validateUnregisteredDefinerRelations(relations),
       ],
       `all ${DEFINER_NEUTRALISERS.size} permissive replacements reveal a subject their real relation hides that ` +
-        `THIS transaction filed, the end-to-end control kills its known-good assertion while leaving both its ` +
-        `known-bad and its known-debris one standing, and the ${UNREGISTERED_DEFINER_RELATIONS.length} declared ` +
-        `unreplaced definer relations are still exactly the ones the suite reads`,
+        `THIS transaction filed, both operators' end-to-end controls kill their known-good assertion while leaving ` +
+        `their known-bad and their known-debris one standing, and the ${UNREGISTERED_DEFINER_RELATIONS.length} ` +
+        `declared unreplaced definer relations are still exactly the ones the suite reads`,
     );
     return;
   }
@@ -716,7 +790,7 @@ function main() {
     const unmeasurable = candidates.filter((c) => c.unmeasurable.length > 0);
     for (const c of unmeasurable) {
       failures.push(
-        `${file}:${c.line}  "${c.description}" reads ${c.unmeasurable.join(', ')}, which runs as its own owner and filters in its own SQL — the owner bypass leaves its result identical, so no operator here can tell this assertion's refusal from an empty fixture. Register a permissive replacement in pgtap_definer_neutralisers.mjs.`,
+        `${file}:${c.line}  "${c.description}" reads ${c.unmeasurable.join(', ')}, which runs as its own owner and filters in its own SQL — widening row-level security leaves its result identical, so no operator here can tell this assertion's refusal from an empty fixture. Register a permissive replacement in pgtap_definer_neutralisers.mjs.`,
       );
     }
     const measurable = candidates.filter((c) => c.unmeasurable.length === 0);
@@ -750,8 +824,8 @@ function main() {
     failures.push(
       `${s.file}:${s.line}  "${s.description}" still passes with ` +
         (s.neutralise.length > 0
-          ? `row-level access control removed AND ${s.neutralise.join(', ')} replaced by a permissive definition over the rows THIS TRANSACTION wrote`
-          : 'row-level access control removed') +
+          ? `${s.neutralise.join(', ')} replaced by a permissive definition over the rows THIS TRANSACTION wrote`
+          : 'row-level access control widened to every row THIS TRANSACTION wrote') +
         `, so it cannot tell a hidden row from a row that was never inserted. Give it a subject (file the row the refusal is about, and read it back from a session that may see it) — a row the test only SELECTs is not one it filed, and the permissive replacement is deliberately scoped so a committed seed row cannot stand in for a missing fixture; if the relation it reads filters in its own SQL, register a permissive replacement for it; or add it to EXPECTED_SURVIVORS with the reason its empty result is a real answer.`,
     );
   }
@@ -767,7 +841,8 @@ function main() {
   report(
     failures,
     `${population} refusal assertions mutation-checked across ${files.length} test files ` +
-      `(${population - definerPopulation} under the owner bypass, ${definerPopulation} additionally under a ` +
+      `(${population - definerPopulation} under a permissive policy over the rows this transaction wrote, ` +
+      `${definerPopulation} under a ` +
       `permissive replacement of the relation they read); ` +
       `${survivors.length} survived, all ${EXPECTED_SURVIVORS.length} of them expected`,
   );

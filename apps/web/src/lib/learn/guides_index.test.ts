@@ -97,6 +97,50 @@ test('isEnglishFallback — true when a locale is requested but only English exi
 	assert.equal(isEnglishFallback(entries, 'beta', 'de'), true);
 });
 
+// Two catalogues of one language: the prose is authored for pt-BR only, and a
+// pt-PT reader must not be dropped to English over a regional difference.
+// Before pt-PT was a locale of its own it negotiated onto pt-BR and read the
+// Brazilian guide; making it a real locale must not take that away.
+const twoPortuguese: GuideIndexEntry[] = [
+	entry({ slug: 'gamma', locale: 'en' }),
+	entry({ slug: 'gamma', locale: 'pt-BR', title: 'Gamma BR' }),
+];
+
+test('getGuide — a same-language variant beats the English fallback', () => {
+	assert.equal(getGuide(twoPortuguese, 'gamma', 'pt-PT')?.locale, 'pt-BR');
+});
+
+test('getGuide — the exact locale still wins over a same-language variant', () => {
+	const both = [...twoPortuguese, entry({ slug: 'gamma', locale: 'pt-PT', title: 'Gamma PT' })];
+	assert.equal(getGuide(both, 'gamma', 'pt-PT')?.locale, 'pt-PT');
+});
+
+test('getGuide — an unrelated language still falls back to English', () => {
+	assert.equal(getGuide(twoPortuguese, 'gamma', 'ja')?.locale, 'en');
+});
+
+test('isEnglishFallback — false when a same-language variant is served', () => {
+	// The notice says "this guide is in English". Served the Brazilian file, a
+	// pt-PT reader is reading Portuguese, so the notice would be a lie.
+	assert.equal(isEnglishFallback(twoPortuguese, 'gamma', 'pt-PT'), false);
+});
+
+test('isEnglishFallback — still true for a language with no guide at all', () => {
+	assert.equal(isEnglishFallback(twoPortuguese, 'gamma', 'ja'), true);
+});
+
+test('localizedGuideMeta — a same-language variant titles the card too', () => {
+	// The card and the body must resolve the same way. getGuide serves the
+	// Brazilian body to a pt-PT reader, so an exact-tag-only meta lookup would
+	// put an English title above it — the exact defect this helper exists to
+	// prevent.
+	assert.equal(localizedGuideMeta(twoPortuguese, 'gamma', 'pt-PT')?.title, 'Gamma BR');
+});
+
+test('localizedGuideMeta — an unrelated language still reads the English title', () => {
+	assert.equal(localizedGuideMeta(twoPortuguese, 'gamma', 'ja')?.title, 'A guide');
+});
+
 // ---------------- localizedGuideMeta ----------------
 
 test('localizedGuideMeta — uses the localized title/description, English category', () => {

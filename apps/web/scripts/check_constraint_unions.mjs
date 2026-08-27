@@ -68,7 +68,12 @@ const PAIRS = [
 // `check (<col> in (...))` clause encountered — including the nullable form
 // `check (<col> is null or <col> in (...))`. Returns the LAST occurrence
 // per `<table>.<column>` (later migrations win).
+/**
+ * @param {string} sql
+ * @returns {Map<string, Set<string>>}
+ */
 function parseChecks(sql) {
+	/** @type {Map<string, Set<string>>} */
 	const out = new Map();
 
 	const stripped = sql
@@ -79,7 +84,14 @@ function parseChecks(sql) {
 	const checkRe =
 		/check\s*\(\s*(?:[a-z_][a-z0-9_]*\s+is\s+null\s+or\s+)?([a-z_][a-z0-9_]*)\s+in\s*\(([^)]*)\)\s*\)/gi;
 
+	/**
+	 * A discriminated union, spelled out because an inferred evolving array
+	 * widens `kind` to `string` and then nothing narrows `valuesRaw`.
+	 * @type {({ kind: 'table', index: number, table: string }
+	 *   | { kind: 'check', index: number, column: string, valuesRaw: string })[]}
+	 */
 	const hits = [];
+	/** @type {RegExpExecArray | null} */
 	let m;
 	while ((m = tableRe.exec(stripped)) !== null) {
 		hits.push({ kind: 'table', index: m.index, table: m[1].toLowerCase() });
@@ -94,6 +106,7 @@ function parseChecks(sql) {
 	}
 	hits.sort((a, b) => a.index - b.index);
 
+	/** @type {string | null} */
 	let currentTable = null;
 	for (const h of hits) {
 		if (h.kind === 'table') {
@@ -125,10 +138,16 @@ function loadAllMigrationChecks() {
 
 // Extract the literal-string members of an exported TS union. Handles
 // both single-line (`= 'a' | 'b';`) and multi-line forms.
+/**
+ * @param {string} types
+ * @param {string} name
+ * @returns {Set<string> | null}
+ */
 function parseTsUnion(types, name) {
 	const re = new RegExp(`export\\s+type\\s+${name}\\s*=([^;]+);`, 'm');
 	const m = types.match(re);
 	if (!m) return null;
+	/** @type {Set<string>} */
 	const out = new Set();
 	const valueRe = /'([^']+)'/g;
 	let v;
@@ -136,12 +155,20 @@ function parseTsUnion(types, name) {
 	return out.size === 0 ? null : out;
 }
 
+/**
+ * @param {Set<string>} a
+ * @param {Set<string>} b
+ */
 function setsEqual(a, b) {
 	if (a.size !== b.size) return false;
 	for (const x of a) if (!b.has(x)) return false;
 	return true;
 }
 
+/**
+ * @param {Set<string>} a
+ * @param {Set<string>} b
+ */
 function diff(a, b) {
 	const onlyA = [...a].filter((x) => !b.has(x));
 	const onlyB = [...b].filter((x) => !a.has(x));

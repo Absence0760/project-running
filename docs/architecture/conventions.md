@@ -1099,7 +1099,7 @@ A message that interpolates a fragment carrying its own grammar will double it. 
 
 **Give each branch its own whole-sentence key.** No fragment can be fixed here rather than replaced: German needs the dative "deinem" after the kudos verb and the accusative "deinen" after the comment verb, and French "course" is feminine where an interpolated "5,2 km" is masculine, so one template and one fragment cannot both be grammatical. Interpolate **data** (a name, a distance, a count) and never a phrase that carries a determiner, a preposition, or an inflection the surrounding template also carries.
 
-**Guard it derivationally, and not with a repeat check.** The obvious rule — reject a back-to-back repeated token — **spares German**, whose doubling is two different inflections of the one possessive. `notification_phrasing.test.ts` renders every branch in all six locales, counts second-person possessives, and pins the population (48 renders); the pre-fix string from each of the six locales sits in a must-flag fixture table.
+**Guard it derivationally, and not with a repeat check.** The obvious rule — reject a back-to-back repeated token — **spares German**, whose doubling is two different inflections of the one possessive. `notification_phrasing.test.ts` renders every branch in every shipped locale, counts second-person possessives, and pins the population (`SUPPORTED_LOCALES.length * 8` — 56 renders at seven locales, derived so a new locale widens the guard rather than escaping it); the pre-fix string from each locale sits in a must-flag fixture table.
 
 **A kind is an identifier, not a label.** Hand-capitalising a database enum value prints English on a localized page and loses whatever the catalogue adds — `long` is "Long run", not "Long". Route it through the presentation helper (`workoutKindLabel` / `planPhaseLabel` in `lib/training/workout_labels.ts`), whose map is asserted total over the generated `workout_kind` enum so an unmapped kind fails instead of falling back to the raw string. `workout_labels.test.ts` scans the `x.charAt(0).toUpperCase() + x.slice(1)` **shape** across the tree rather than keying on identifiers containing "kind": the defect it closed was written through a one-letter alias, and a name-keyed matcher demonstrably spares it. The three surviving sites are count-pinned and named, one of them still a defect (`activityLabel` on `/coaching/athletes/[id]`, which has no catalogue vocabulary to route onto yet).
 
@@ -1491,6 +1491,48 @@ When you fix an audit, flip each finding to `[x]` (with the commit hash) in its
 with a reason (promote durable ones to `roadmap.md` / `followups.md`); and
 delete a file once every finding is resolved or its references have gone stale.
 Full lifecycle: [`reviews/README.md`](../../reviews/README.md).
+
+## Doc checkboxes — three states, and a partial box names where the rest is tracked
+
+Surveys of open work are built by grepping `- [ ]`. That instrument sees two of
+the three states this repo actually writes, so every `- [~]` is invisible to it:
+issue #789 was assembled that way and missed the category whole. Until now the
+marker also had no stated meaning outside `reviews/`, where
+[`reviews/README.md`](../../reviews/README.md) defines it as *deferred* — close
+to the opposite of the "built, not yet live" sense the docs tree had adopted.
+`docs/custom_watch/roadmap.md` read it a third way again, and one line there
+carried `[~]` while its neighbour, in the same build state, carried `[ ]` under
+that file's own bench-verification rule.
+
+<!-- doc-checkbox-states -->
+
+- `[ ]` open — none of it has shipped
+- `[x]` done — all of it has shipped, and nothing is holding it back
+- `[~]` partial — some has shipped and some has not, which includes a feature
+  whose code is merged but which no user can reach yet: an unset credential, a
+  flag defaulting off, a sign-off still owed. Say in the bullet which half is
+  which, and link the file tracking the open half
+
+<!-- /doc-checkbox-states -->
+
+There is no fourth state. `scripts/check_doc_checkboxes.mjs` reads the block
+above rather than restating it, so a new marker has to be documented here before
+it can appear in a doc, and it holds `reviews/README.md` to the same *set* of
+markers — the two describe different meanings on purpose, but a state added to
+one belongs in the other.
+
+The link is what keeps the category reachable. A `[~]` links
+[`followups.md`](../product/followups.md) or
+[`roadmap.md`](../product/roadmap.md), because those are the files a survey
+reads, and the open half has to exist there as an ordinary `- [ ]` box that a
+grep can find. This is the rule `reviews/README.md` § 2 already states for a
+deferred finding, applied to the tree the surveys walk. A document that is a
+dated snapshot rather than a live list says so with `<!-- doc-checkbox-frozen -->`
+and is exempt from the link — [`followups_archive.md`](../product/followups_archive.md)
+is a verbatim capture of the day it was taken, and rewriting its boxes to satisfy
+a rule written afterwards would destroy the one thing it is for. That
+declaration lives in the file it describes, so the guard carries no list of
+exceptions.
 
 ## A merge gate and an agent name each have exactly one definition
 
