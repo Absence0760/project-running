@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database } from '../_shared/database.ts';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -27,7 +28,7 @@ Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     publishableKey(),
     { global: { headers: { Authorization: authHeader } } },

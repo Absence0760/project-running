@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { DbClient } from '../_shared/database.ts';
 import { refreshStravaToken } from '../_shared/strava.ts';
 
 /// Proactively refresh Strava integrations whose access token expires within
@@ -11,7 +11,7 @@ import { refreshStravaToken } from '../_shared/strava.ts';
 /// rotated vault row with a stale-old token. The disconnect-on-4xx side effect
 /// is wired through the helper's `onPermanentFailure` callback.
 export async function refreshExpiringStravaTokens(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 ): Promise<{ refreshed: number }> {
 	const { data: expiring } = await supabase
 		.from('integrations')

@@ -24,6 +24,7 @@
 
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database } from '../_shared/database.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { isValidUuid } from '../_shared/input_validation.ts';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
@@ -89,7 +90,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
   // as the caller (anon or user) so a private-anchor fundraiser is unreachable.
   const authHeader = req.headers.get('Authorization');
   const anonKey = publishableKey();
-  const callerClient = createClient(
+  const callerClient = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     anonKey,
     authHeader ? { global: { headers: { Authorization: authHeader } } } : undefined,
@@ -100,7 +101,7 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
     donorUserId = user?.id ?? null;
   }
 
-  const service = createClient(
+  const service = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );

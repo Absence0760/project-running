@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database } from '../_shared/database.ts';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { isValidUuid } from '../_shared/input_validation.ts';
@@ -42,7 +43,7 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
@@ -306,8 +307,13 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     if (!existing || existing.user_id !== user.id) {
       return Response.json({ error: 'run not found' }, { status: 404 });
     }
+    // `runs.metadata` is jsonb, so the column can legally hold an array or a
+    // scalar as well as an object, and spreading a string would splat its
+    // characters in as numeric keys. `typeof x === 'object'` alone is true for
+    // an array (decisions § 662), so both halves of the check are load-bearing.
+    const prior = existing.metadata;
     const merged = {
-      ...((existing.metadata as Record<string, unknown> | null) ?? {}),
+      ...(prior !== null && typeof prior === 'object' && !Array.isArray(prior) ? prior : {}),
       ...result.metadata,
     };
     const { error } = await supabase
@@ -330,7 +336,7 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     .select('external_id')
     .eq('user_id', user.id)
     .in('external_id', externalIds);
-  const seen = new Set((seenRows ?? []).map((r) => r.external_id as string));
+  const seen = new Set((seenRows ?? []).map((r) => r.external_id));
   const fresh = mapped
     .filter((r) => !seen.has(r.external_id))
     .map((r) => ({ ...r, id: crypto.randomUUID(), user_id: user.id }));

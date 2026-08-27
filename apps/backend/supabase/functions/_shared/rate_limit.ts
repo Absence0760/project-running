@@ -21,11 +21,13 @@
 /// `export-data` heavy zips, OAuth code exchange. Fail-closed returns
 /// 503 with a `Retry-After: 60` so the client can back off and retry.
 
-// `?target=deno` even though this is type-only: the specifier still enters the
-// worker's module graph, and the default build's `node:` imports pull
-// `@types/node` over the network at boot. Measured — leaving THIS line at the
-// default re-arms the failure for clip-public-track on its own (decisions § 699).
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0?target=deno';
+// The client type comes from `./database.ts`, which is where this tree's one
+// supabase-js type import now lives — at `?target=deno`, because the specifier
+// enters the worker's module graph even when the import is type-only and the
+// default esm.sh build's `node:` imports are fetched from the network at boot
+// (decisions § 699). `offline_worker_boot_guard.test.ts` walks the probe path
+// and pins it.
+import type { DbClient } from './database.ts';
 
 export interface RateLimitOpts {
   /// When the rate-limit RPC itself errors, return 503 instead of
@@ -72,7 +74,7 @@ function rpcErrorResponse(bucket: string, error: unknown, failClosed: boolean): 
 }
 
 export async function checkRateLimit(
-  supabase: SupabaseClient,
+  supabase: DbClient,
   userId: string,
   bucket: string,
   max: number,
@@ -187,7 +189,7 @@ export async function ipBucketKey(req: Request): Promise<string> {
 /// (including missing-profile rows) gets the free ceiling — the
 /// conservative default if the RevenueCat sync drifts.
 export async function checkRateLimitTiered(
-  supabase: SupabaseClient,
+  supabase: DbClient,
   userId: string,
   bucket: string,
   freeMax: number,

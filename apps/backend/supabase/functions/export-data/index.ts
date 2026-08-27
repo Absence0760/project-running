@@ -52,6 +52,7 @@
 /// the half-hour wait.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database, DbClient } from '../_shared/database.ts';
 import {
 	TextReader,
 	Uint8ArrayReader,
@@ -154,12 +155,12 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	// service-role one to bypass RLS for the export upload (which
 	// writes to a path the user can't normally write to since they
 	// don't own the export rows yet).
-	const authedSupabase = createClient(
+	const authedSupabase = createClient<Database>(
 		Deno.env.get('SUPABASE_URL')!,
 		publishableKey(),
 		{ global: { headers: { Authorization: authHeader } } },
 	);
-	const adminSupabase = createClient(
+	const adminSupabase = createClient<Database>(
 		Deno.env.get('SUPABASE_URL')!,
 		secretKey(),
 	);
@@ -404,7 +405,7 @@ function budgeted<T, R>(
 
 async function writeGpxZip(
 	upload: ResumableUpload,
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	runsPage: PageFetcher<RunRow>,
 	budget: ExportBudget,
 ): Promise<BuildResult> {
@@ -472,7 +473,7 @@ async function writeGpxZip(
 }
 
 async function downloadBlob(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	bucket: string,
 	key: string,
 ): Promise<Blob | null> {
@@ -485,7 +486,7 @@ async function downloadBlob(
 }
 
 async function downloadBytes(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	bucket: string,
 	key: string,
 ): Promise<Uint8Array | null> {
@@ -573,7 +574,7 @@ import {
 
 async function writeBackupZip(
 	upload: ResumableUpload,
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	runsPage: PageFetcher<RunRow>,
 	budget: ExportBudget,
@@ -947,7 +948,7 @@ function keepFromSpec(
 // cap below `pageSize` would otherwise make a stride-by-pageSize loop
 // skip whole blocks of objects straight out of the export.
 async function listAllObjects(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	bucket: string,
 	folder: string,
 ): Promise<string[]> {

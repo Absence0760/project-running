@@ -10,6 +10,7 @@
 /// Supabase service role so it can update any user's tier.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database, TablesUpdate } from '../_shared/database.ts';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { isValidUuid } from '../_shared/input_validation.ts';
@@ -100,7 +101,7 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
     return Response.json({ ok: true, skipped: 'invalid_app_user_id' });
   }
 
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );
@@ -142,7 +143,7 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
       .select('subscription_tier')
       .eq('id', userId)
       .single();
-    currentTier = (data?.subscription_tier as string | null) ?? null;
+    currentTier = data?.subscription_tier ?? null;
   }
 
   const newTier = mapEventToTier(event.type, event.product_id ?? null, currentTier);
@@ -162,7 +163,7 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
   // moved the tier; a stale deactivation matches zero rows atomically (no
   // read-then-write race) and the tier is left as-is. A billing-issue-only
   // write stays unconditional — it doesn't move the tier dimension.
-  const patch: Record<string, unknown> = {};
+  const patch: TablesUpdate<'user_profiles'> = {};
   if (newTier !== null) {
     patch.subscription_tier = newTier;
     patch.tier_updated_event_ts = eventTsMs;

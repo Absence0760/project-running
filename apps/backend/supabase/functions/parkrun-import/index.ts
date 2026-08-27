@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database, TablesInsert } from '../_shared/database.ts';
 import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
@@ -26,7 +27,7 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
@@ -100,7 +101,11 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   const html = htmlResult.text;
 
   const $ = cheerio.load(html);
-  const runs: Record<string, unknown>[] = [];
+  // `external_id` is required here, not merely allowed: the per-user dedupe
+  // below is keyed on it, and a row without one would be re-imported on every
+  // sync. Narrowing the element type is what removes the `as string` casts
+  // that used to stand in for it.
+  const runs: (TablesInsert<'runs'> & { external_id: string })[] = [];
 
   $('table tbody tr').each((_: number, row: cheerio.Element) => {
     // Bound the result set independently of upstream input. /audit/all.
@@ -153,14 +158,14 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   let imported = 0;
   let skipped = 0;
   if (runs.length > 0) {
-    const externalIds = runs.map((r) => r.external_id as string);
+    const externalIds = runs.map((r) => r.external_id);
     const { data: existing } = await supabase
       .from('runs')
       .select('external_id')
       .eq('user_id', user.id)
       .in('external_id', externalIds);
-    const seen = new Set((existing ?? []).map((r) => r.external_id as string));
-    const fresh = runs.filter((r) => !seen.has(r.external_id as string));
+    const seen = new Set((existing ?? []).map((r) => r.external_id));
+    const fresh = runs.filter((r) => !seen.has(r.external_id));
     skipped = runs.length - fresh.length;
     if (fresh.length > 0) {
       const { error } = await supabase.from('runs').insert(fresh);

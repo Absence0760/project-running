@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database } from '../_shared/database.ts';
 import { discardBody } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { timingSafeEqual } from '../_shared/webhook_security.ts';
@@ -35,7 +36,7 @@ Deno.serve(withSentry('refresh-tokens', async (req: Request) => {
     return Response.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );
