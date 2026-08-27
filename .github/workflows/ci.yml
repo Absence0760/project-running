@@ -1660,13 +1660,13 @@ jobs:
       # scripts/edge_functions_typecheck_coverage.test.mjs runs that same
       # expression and fails when it stops covering the tree, so a `.ts` added
       # here cannot land outside this lane.
-      # `deno check` needs node_modules/@types/node on disk: the four Stripe
-      # functions import `https://esm.sh/stripe@17.5.0?target=deno`, whose
-      # declarations reference the node types, so without them the check dies
-      # before reading a file ("Could not find \"@types/node\" in a
-      # node_modules folder"). `deno install` provisions it from the ROOT
-      # package.json's own @types/node devDependency (decisions § 757) — it is
-      # not an npm workspace install and does not need setup-node.
+      # `deno check` needs node_modules/@types/node on disk: `_shared/stripe.ts`
+      # imports `https://esm.sh/stripe@17.5.0?target=deno`, whose declarations
+      # reference the node types, so without them the check dies before reading
+      # a file ("Could not find \"@types/node\" in a node_modules folder").
+      # `deno install` provisions it from the ROOT package.json's own
+      # @types/node devDependency (decisions § 757) — it is not an npm
+      # workspace install and does not need setup-node.
       - name: Provision node types for the typecheck
         run: |
           if ! deno install; then
@@ -1679,7 +1679,7 @@ jobs:
         run: |
           files=$(find supabase/functions -type f -name '*.ts' | sort)
           if ! deno check $files; then
-            echo "::error::The Supabase Edge Functions do not typecheck. Nothing here involves the migrations, the Supabase stack or the Deno test suites below — read the TS error above. A complaint about a .from() column or a .rpc() argument is the generated Database type telling you the name does not exist: find the right one in the migrations, do not cast it away."
+            echo "::error::The Supabase Edge Functions do not typecheck. Nothing here involves the migrations, the Supabase stack or the Deno test suites below — read the TS error above. A complaint about a .from() column or a .rpc() argument is the generated Database type telling you the name does not exist: find the right one in the migrations, do not cast it away. A TS2578 (an unused @ts-expect-error) in _shared/stripe.ts is the opposite failure: the Stripe SDK's declarations have stopped binding, so nothing errors and every Stripe call in the tier is silently unchecked again (decisions § 765)."
             echo "Reproduce locally with: deno install && cd apps/backend && deno check \$(find supabase/functions -type f -name '*.ts' | sort)"
             exit 1
           fi
