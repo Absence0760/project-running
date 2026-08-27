@@ -2045,7 +2045,6 @@
   "gearRotationNextUpIsCurrent": "すでに現在のペアです。",
   "gearRotationAllWorn": "ここにあるすべてのペアが交換の目安に達しています。",
   "gearRotationMakeCurrentFailed": "現在のペアを変更できませんでした: {error}",
-  "privacyZonesTitle": "プライバシーゾーン",
   "privacyZonesSaved": "プライバシーゾーンを保存しました。",
   "privacyZonesSaveFailed": "保存に失敗しました：{error}",
   "privacyZonesLocationUnavailable": "位置情報を利用できません：{error}",

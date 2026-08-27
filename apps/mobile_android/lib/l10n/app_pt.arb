@@ -2045,7 +2045,6 @@
   "gearRotationNextUpIsCurrent": "Já é o par atual.",
   "gearRotationAllWorn": "Todos os pares aqui atingiram ou ultrapassaram a meta de substituição.",
   "gearRotationMakeCurrentFailed": "Não foi possível alterar o par atual: {error}",
-  "privacyZonesTitle": "Zonas de privacidade",
   "privacyZonesSaved": "Zonas de privacidade salvas.",
   "privacyZonesSaveFailed": "Falha ao salvar: {error}",
   "privacyZonesLocationUnavailable": "Localização indisponível: {error}",

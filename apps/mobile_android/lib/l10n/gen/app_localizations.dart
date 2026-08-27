@@ -10713,7 +10713,7 @@ abstract class AppLocalizations {
   /// **'Coach-voice scripted workouts with TTS cues'**
   String get guidedRunsSubtitle;
 
-  /// AppBar title for the Settings > Privacy zones screen
+  /// AppBar title for the Settings > Privacy zones screen, and the title of the Settings tile that opens it
   ///
   /// In en, this message translates to:
   /// **'Privacy zones'**
