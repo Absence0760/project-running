@@ -300,8 +300,8 @@ jobs:
           # Node 24 to match the Playwright shards. Needed at all
           # because the Web TS unit tests step at the bottom imports
           # third-party packages (e.g. `jszip` in backup_reader.test.ts)
-          # — `npx tsx --test` can't resolve them without a populated
-          # workspace `node_modules/`.
+          # — the runner can't resolve them without a populated workspace
+          # `node_modules/`, and `tsx` itself is one of them.
           node-version: 24
           cache: npm
       - run: npm ci
@@ -420,15 +420,25 @@ jobs:
           fi
       # `src/**`, not `src/lib/**`: the route-level source guards under
       # src/routes (e.g. the preferences i18n guard) were silently never run.
+      # Invokes the package's own `test:unit` script rather than restating its
+      # globs, so the documented reproduce command and the command CI runs are
+      # the same string. They were not: this step spelled the globs out and ran
+      # `npx tsx`, while `test:unit` invoked a bare `tsx` that no lockfile
+      # installed — so the reproduce command failed with `tsx: command not
+      # found` on any clean checkout, and CI fetched an unpinned tsx from the
+      # registry at test time. `tsx` is a declared devDependency of apps/web
+      # now, so this resolves out of `node_modules` after `npm ci`
+      # (decisions § 764).
+      #
+      # tests-e2e/fixtures (in the script's globs) holds the Playwright harness
+      # guards, which run in no Playwright shard — the config ignores
+      # **/fixtures/** — so they are unit tests of the harness itself.
       - name: Web TS unit tests
         working-directory: apps/web
-        # tests-e2e/fixtures holds the Playwright harness guards, which run in
-        # no Playwright shard (the config ignores **/fixtures/**) — they are
-        # unit tests of the harness itself.
         run: |
-          if ! npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts'; then
+          if ! npm run test:unit; then
             echo "::error::The web TypeScript unit suite failed. Nothing here involves the migrations, the Supabase schema, or the generated row types — read the failing test name above."
-            echo "Reproduce locally with: npm ci && npx tsx --test 'src/**/*.test.ts' 'tests-e2e/fixtures/**/*.test.ts' (from apps/web)."
+            echo "Reproduce locally with: npm ci && npm run test:unit --workspace=apps/web."
             exit 1
           fi
       # The Playwright tree is outside `.svelte-kit/tsconfig.json`'s include, so
