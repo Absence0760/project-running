@@ -387,10 +387,10 @@ $neutralised$;`,
   //
   // The catalogue's `prosecdef` says which privileges a routine runs with, not
   // whether it carries an access predicate. Every RPC below is SECURITY
-  // INVOKER, so the owner bypass reaches the RLS on the tables it reads — and
+  // INVOKER, so the first operator reaches the RLS on the tables it reads — and
   // is still inert against it, because the refusal is a `= auth.uid()` (or a
   // `shadow_hidden = false`) written into the body. Measured, not assumed: all
-  // seven survived the owner bypass on a database where their fixtures exist,
+  // seven survived the first operator on a database where their fixtures exist,
   // which is how they were found.
   //
   // One thing a kill over these proves less than it does elsewhere. Where the
