@@ -1,0 +1,25 @@
+{
+	// Shared strictness for every tsc root at the repo root. Not a root itself
+	// — it declares no `include`, so nothing extends-less should be pointed at
+	// it — and deliberately the same settings `apps/web/tsconfig.json` layers
+	// onto SvelteKit's generated config, so a guard script is held to exactly
+	// the bar the app is (decisions § 757, and § 752 for the `apps/web` half).
+	//
+	// `checkJs` is the whole point: every file below is plain JavaScript, so
+	// without it tsc reads them and asserts nothing.
+	"compilerOptions": {
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"isolatedModules": true,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"noEmit": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"target": "esnext",
+		"verbatimModuleSyntax": true
+	}
+}
