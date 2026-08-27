@@ -937,16 +937,14 @@ jobs:
   # could check — so a change that broke the simulator stayed invisible until
   # someone next ran it by hand.
   #
-  # IN the `CI gate` aggregator's `needs:` list, but only for the `smoke`
-  # scenario — that is why this job carries one scenario and `sim-scenarios`
-  # carries the rest. `smoke` is the sequence the 2026-07-19 manual pass stands
-  # behind and it has run green on hosted runners repeatedly; the `pages` and
-  # `alerts` scenarios first executed on 2026-07-26 and are two runs old, so
-  # making them blocking across the whole monorepo would put every PR behind
-  # assertions with no flake history. They live in `sim-scenarios`, which is
-  # strict within itself (a regression is loud) but not required, and moves into
-  # `needs:` once it has accrued history. Splitting costs one extra Renode
-  # install per run and buys a required signal that is actually proven.
+  # Split from `sim-scenarios` because the two entered the `CI gate`
+  # aggregator's `needs:` list at different times: `smoke` is the sequence the
+  # 2026-07-19 manual pass stands behind and was blocking from the start, while
+  # `pages` and `alerts` were two runs old and would have put every PR behind
+  # assertions with no flake history. `sim-scenarios` accrued that history and
+  # was promoted into `needs:` in #637, so BOTH are required now — the split
+  # costs one extra Renode install per run and survives because a scenario
+  # regression still names which sequence broke.
   sim-firmware:
     needs: changes
     if: needs.changes.outputs.code == 'true'
