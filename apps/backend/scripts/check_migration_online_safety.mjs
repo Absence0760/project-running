@@ -215,7 +215,15 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // Replacing the function rather than the trigger takes no lock on challenges at
 // all: no table DDL, no constraint, no backfill, so the scanner passes it with
 // zero violations after this bump too. Same bookkeeping, not an exemption.
-export const GRANDFATHER_CUTOFF = '20270610';
+// Bumped to 20270615 for 20270615_001_challenge_goal_check.sql, which adds
+// challenges_goal_ck. `challenges` is not in GUARDED_TABLES, and the migration
+// takes the two-step online-safe form anyway: the constraint is added NOT VALID
+// (a catalogue-only O(1) change under ACCESS EXCLUSIVE) and validated in a
+// separate statement under SHARE UPDATE EXCLUSIVE, which blocks no reader and
+// no writer. The scanner inspected it under the previous cutoff and returned
+// zero violations, so this bump is the max-version bookkeeping this file's own
+// test enforces, not an exemption.
+export const GRANDFATHER_CUTOFF = '20270615';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
