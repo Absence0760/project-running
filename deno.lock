@@ -4,6 +4,7 @@
     "https://esm.sh/@supabase/phoenix@^0.4.1?target=denonext": "https://esm.sh/@supabase/phoenix@0.4.2?target=denonext",
     "https://esm.sh/@supabase/phoenix@^0.4.2?target=denonext": "https://esm.sh/@supabase/phoenix@0.4.2?target=denonext",
     "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.105.1",
+    "https://esm.sh/@types/boolbase@~1.0.3/index.d.ts": "https://esm.sh/@types/boolbase@1.0.3/index.d.ts",
     "https://esm.sh/@types/get-intrinsic@~1.2.3/index.d.ts": "https://esm.sh/@types/get-intrinsic@1.2.3/index.d.ts",
     "https://esm.sh/@types/object-inspect@~1.13.0/index.d.ts": "https://esm.sh/@types/object-inspect@1.13.0/index.d.ts",
     "https://esm.sh/@types/qs@~6.15.1/index.d.ts": "https://esm.sh/@types/qs@6.15.1/index.d.ts",

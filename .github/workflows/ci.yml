@@ -197,6 +197,14 @@ jobs:
         run: |
           node scripts/check_ci_diagnostics.mjs
           node --test scripts/check_ci_diagnostics.test.mjs
+      # The Edge Functions are a Deno program, so no tsconfig root covers them
+      # and `scripts/tsconfig_coverage.test.mjs` exempts the tree. What covers
+      # it is the `deno check` step in `edge-functions`; this asserts that step
+      # still reads the WHOLE tree, by lifting its own `files=$(…)` expression
+      # out of this file and running it. A lint on a workflow file, hence here
+      # — and it needs no deno, no node_modules and no Docker.
+      - name: Edge Function typecheck lane covers the whole tree
+        run: node --test scripts/edge_functions_typecheck_coverage.test.mjs
       # The stack-start wait loop is shell inside a composite action, so it
       # runs in no job's test suite. Its accounting (a wall-clock deadline the
       # error string can be trusted to report) and its failure forensics are
@@ -1615,16 +1623,20 @@ jobs:
           key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
           restore-keys: |
             deno-${{ runner.os }}-
-      # Pre-fetch every test file's deps so `deno test` resolves from the
-      # warm cache instead of cold-fetching esm.sh at test time. A transient
+      # Pre-fetch every module's deps so `deno check` and `deno test` resolve
+      # from the warm cache instead of cold-fetching esm.sh. A transient
       # esm.sh 5xx (CI run 27554982327: a 522 on @supabase/supabase-js)
       # used to fail the pure-helper step opaquely mid-import; retry the
       # FETCH here (not the tests) so a CDN blip is absorbed before any test
       # runs, and fail loudly + early if the deps genuinely can't be had.
+      #
+      # Every `.ts`, not only the test files: the typecheck below reads the
+      # whole tree, and several non-test deps (cheerio in parkrun-import) are
+      # reachable from no test file at all.
       - name: Warm the Deno dependency cache
         working-directory: apps/backend
         run: |
-          files=$(find supabase/functions -name '*.test.ts' | sort)
+          files=$(find supabase/functions -type f -name '*.ts' | sort)
           for attempt in 1 2 3; do
             if deno cache --no-check $files; then
               echo "deno deps cached"
@@ -1635,6 +1647,42 @@ jobs:
           done
           echo "::error::deno dependency fetch failed after 3 attempts"
           exit 1
+      # Nothing type-checked these modules until decisions § 762 — every Deno
+      # invocation in this job passed `--no-check`, and `deno check` appeared
+      # in no workflow, so the tree had accumulated 81 errors by the time
+      # anyone ran it. It goes here, before the Supabase stack starts: the
+      # typecheck needs no database, and behind a Docker start a broken stack
+      # would fail first and take this signal with it.
+      #
+      # The whole tree, test files included — one of the 81 was in a test, and
+      # a test that does not typecheck is as free to assert a lie as any other
+      # module. `files=$(...)` derives the set rather than naming paths;
+      # scripts/edge_functions_typecheck_coverage.test.mjs runs that same
+      # expression and fails when it stops covering the tree, so a `.ts` added
+      # here cannot land outside this lane.
+      # `deno check` needs node_modules/@types/node on disk: the four Stripe
+      # functions import `https://esm.sh/stripe@17.5.0?target=deno`, whose
+      # declarations reference the node types, so without them the check dies
+      # before reading a file ("Could not find \"@types/node\" in a
+      # node_modules folder"). `deno install` provisions it from the ROOT
+      # package.json's own @types/node devDependency (decisions § 757) — it is
+      # not an npm workspace install and does not need setup-node.
+      - name: Provision node types for the typecheck
+        run: |
+          if ! deno install; then
+            echo "::error::Could not provision node_modules for the Edge Function typecheck. Nothing here involves the Edge Functions themselves, the Supabase stack or the Deno test suites — this is dependency resolution against the root package.json and its lockfiles."
+            echo "Reproduce locally with: deno install (from the repo root)."
+            exit 1
+          fi
+      - name: Edge Function typecheck
+        working-directory: apps/backend
+        run: |
+          files=$(find supabase/functions -type f -name '*.ts' | sort)
+          if ! deno check $files; then
+            echo "::error::The Supabase Edge Functions do not typecheck. Nothing here involves the migrations, the Supabase stack or the Deno test suites below — read the TS error above. A complaint about a .from() column or a .rpc() argument is the generated Database type telling you the name does not exist: find the right one in the migrations, do not cast it away."
+            echo "Reproduce locally with: deno install && cd apps/backend && deno check \$(find supabase/functions -type f -name '*.ts' | sort)"
+            exit 1
+          fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
@@ -1739,8 +1787,12 @@ jobs:
           # side-effect tests (plant a fixture, read the written row).
           SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          deno test --no-check --allow-net --allow-env \
-            supabase/functions/_shared/handler_envelope.test.ts
+          if ! deno test --no-check --allow-net --allow-env \
+            supabase/functions/_shared/handler_envelope.test.ts; then
+            echo "::error::The handler-envelope integration tests failed. These drive the LIVE function host booted in the step above (wrong bearers / HMACs / ?secret= must be rejected), so a failure is the envelope's auth gates or the host's env, not the typecheck and not the pure-helper suite below."
+            echo "Reproduce locally with: cd apps/backend && supabase start && supabase functions serve --env-file .env.local, then SUPABASE_TEST_URL=http://127.0.0.1:54321 deno test --no-check --allow-net --allow-env supabase/functions/_shared/handler_envelope.test.ts"
+            exit 1
+          fi
       - name: Run pure-helper unit tests
         working-directory: apps/backend
         # `deno test --no-check <dir>` recurses into the directory and
@@ -1759,7 +1811,12 @@ jobs:
         #     perm). The integration step above runs the same file with
         #     the var actually set; here it's empty so all its tests
         #     skip, which is the expected steady state.
-        run: deno test --no-check --allow-read --allow-env supabase/functions/
+        run: |
+          if ! deno test --no-check --allow-read --allow-env supabase/functions/; then
+            echo "::error::The Edge Function pure-helper suite failed. It runs with --no-check and needs no Supabase stack, so a failure here is a behaviour regression in a helper or a source-grep wiring guard — not the typecheck above and not the live host."
+            echo "Reproduce locally with: cd apps/backend && deno test --no-check --allow-read --allow-env supabase/functions/"
+            exit 1
+          fi
 
   pgtap-rls:
     needs: changes

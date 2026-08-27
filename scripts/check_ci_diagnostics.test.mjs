@@ -12,13 +12,6 @@ import {
 	readWorkflows,
 } from './check_ci_diagnostics.mjs';
 
-/// A job shaped like the real `parity-types`: several named check steps, then
-/// whatever trailing step the caller wants.
-/** @param {string} steps */
-function bundledJob(steps) {
-	return `name: CI\njobs:\n  parity-types:\n    name: Schema / type drift\n    steps:\n${steps}`;
-}
-
 /**
  * @param {string} name
  * @param {string} cmd
@@ -30,6 +23,24 @@ const selfDiagnosing = (name, cmd) =>
 	`            echo "${ANNOTATION}${name} failed."\n` +
 	`            exit 1\n` +
 	`          fi\n`;
+
+/// The job under test in every `checkStepDiagnoses` fixture below.
+const BUNDLED = 'parity-types';
+
+/// A workflow holding a job shaped like the real `parity-types` — several
+/// named check steps, then whatever trailing step the caller wants — plus a
+/// minimal well-formed body for every OTHER registered job. Those have to be
+/// present: `checkStepDiagnoses` also reports a registered job it cannot find,
+/// which is the point of that half, and a fixture naming only one of them
+/// would collect that complaint about all the rest.
+/** @param {string} steps */
+function bundledJob(steps) {
+	const others = [...DIAGNOSING_JOBS.keys()]
+		.filter((job) => job !== BUNDLED)
+		.map((job) => `  ${job}:\n    steps:\n${selfDiagnosing('one', 'a')}${selfDiagnosing('two', 'b')}`)
+		.join('');
+	return `name: CI\njobs:\n  ${BUNDLED}:\n    name: Schema / type drift\n    steps:\n${steps}${others}`;
+}
 
 test('parseSteps splits a job into its steps and reads name / if / run off each', () => {
 	const steps = parseSteps(
@@ -158,7 +169,9 @@ test('a bundled job’s setup steps are not asked to diagnose themselves', () =>
 		},
 	]);
 	assert.deepEqual(errors, []);
-	assert.equal(ok.length, 2);
+	// Two per registered job: the two named `run:` steps each one carries here.
+	// The `uses:` and the unnamed `npm ci` above are not among them.
+	assert.equal(ok.length, 2 * DIAGNOSING_JOBS.size);
 });
 
 test('checkStepDiagnoses fails when a registered job is renamed out from under it', () => {
@@ -168,8 +181,11 @@ test('checkStepDiagnoses fails when a registered job is renamed out from under i
 			text: `name: CI\njobs:\n  renamed:\n    steps:\n${selfDiagnosing('one', 'a')}`,
 		},
 	]);
-	assert.equal(errors.length, 1);
-	assert.match(errors[0], /reading nothing/);
+	// One error per registered job — the synthetic workflow above holds none of
+	// them. Counted off the registry rather than written down, so registering a
+	// second bundled job does not fail this on arithmetic.
+	assert.equal(errors.length, DIAGNOSING_JOBS.size);
+	for (const error of errors) assert.match(error, /reading nothing/);
 });
 
 test('the repo’s real workflows carry no misattributable diagnosis', () => {

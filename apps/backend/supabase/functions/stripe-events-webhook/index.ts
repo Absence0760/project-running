@@ -27,6 +27,7 @@
 /// TEST MODE ONLY in P1. Fails closed (503) if the secret is unset.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database, DbClient } from '../_shared/database.ts';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { capacityDecision } from '../events-checkout/lib.ts';
@@ -71,7 +72,7 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
     return Response.json({ error: 'invalid_event' }, { status: 400 });
   }
 
-  const service = createClient(
+  const service = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );
@@ -112,7 +113,7 @@ Deno.serve(withSentry('stripe-events-webhook', async (req: Request) => {
 /// Give back the insert-first dedupe row so Stripe's retry is processed
 /// instead of being swallowed as a duplicate. Best-effort: if this fails the
 /// event is stuck either way, and logging is all we can usefully do.
-async function releaseDedupe(service: Service, eventId: string): Promise<void> {
+async function releaseDedupe(service: DbClient, eventId: string): Promise<void> {
   const { error } = await service
     .from('webhook_events')
     .delete()
@@ -124,7 +125,7 @@ async function releaseDedupe(service: Service, eventId: string): Promise<void> {
 }
 
 async function dispatchStripeEvent(
-  service: Service,
+  service: DbClient,
   event: { id: string; type: string; data: { object: Record<string, unknown> } },
 ): Promise<Response> {
   const obj = event.data.object;
@@ -158,15 +159,13 @@ async function dispatchStripeEvent(
   return Response.json({ ok: true, ignored: event.type });
 }
 
-type Service = ReturnType<typeof createClient>;
-
 // ── donation handlers (fundraising.md) ─────────────────────────────────────
 // The donation ledger mirrors event_orders: status is CAS-only, the webhook is
 // the sole writer. A donation has no seat, so the completed handler just marks
 // it paid (no capacity recheck, no attendee seat).
 
 async function handleDonationCompleted(
-  service: Service,
+  service: DbClient,
   session: Record<string, unknown>,
 ): Promise<Response> {
   const donationId = donationIdFromSession(session);
@@ -220,7 +219,7 @@ async function handleDonationCompleted(
 }
 
 async function handleDonationExpired(
-  service: Service,
+  service: DbClient,
   session: Record<string, unknown>,
 ): Promise<Response> {
   const donationId = donationIdFromSession(session);
@@ -255,7 +254,7 @@ async function handleDonationExpired(
 /// through to handleOrderRefunded. (A missing payment_intent is a donation-
 /// ledger no-op AND an event-ledger no-op, so it's terminal here too.)
 async function handleDonationRefunded(
-  service: Service,
+  service: DbClient,
   charge: Record<string, unknown>,
 ): Promise<Response | null> {
   // A charge.refunded object carries the payment_intent; resolve the donation
@@ -297,7 +296,7 @@ async function handleDonationRefunded(
 /// the order already `refunded` (orderStatusTransition -> null) and no-ops, so
 /// it can't double-release a seat or double-promote the waitlist.
 async function handleOrderRefunded(
-  service: Service,
+  service: DbClient,
   charge: Record<string, unknown>,
 ): Promise<Response> {
   const paymentIntent = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
@@ -381,7 +380,7 @@ async function handleOrderRefunded(
 }
 
 async function handleCompleted(
-  service: Service,
+  service: DbClient,
   session: Record<string, unknown>,
 ): Promise<Response> {
   const attendee = attendeeRowFromSession(session);
@@ -517,7 +516,7 @@ async function handleCompleted(
 }
 
 async function handleExpired(
-  service: Service,
+  service: DbClient,
   session: Record<string, unknown>,
 ): Promise<Response> {
   const orderId = readMetadataString(session, 'order_id');
@@ -554,7 +553,7 @@ async function handleExpired(
 }
 
 async function handleAccountUpdated(
-  service: Service,
+  service: DbClient,
   account: Record<string, unknown>,
 ): Promise<Response> {
   const accountId = typeof account.id === 'string' ? account.id : null;

@@ -11,6 +11,7 @@
 // caps, and the external_id shape are unit-testable without live credentials
 // (the EF itself returns 503 when a provider's creds are unset — see index.ts).
 
+import type { Json } from '../_shared/database.ts';
 import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
 
 export const MAX_FIELD_LEN = 200;
@@ -65,7 +66,7 @@ export interface MappedRaceRun {
   is_public: boolean;
   external_id: string;
   race_listing_id: string;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, Json>;
 }
 
 /**
@@ -106,7 +107,7 @@ export function mapRunSignUpResult(
   // parkrun-import's parseParkrunDate can't silently diverge.
   const startedAt = `${opts.raceDate}${SYNTHETIC_START_TIME_UTC}`;
 
-  const metadata: Record<string, unknown> = {
+  const metadata: Record<string, Json> = {
     race_name: capField(opts.raceName),
   };
   if (bib) metadata.bib = bib;

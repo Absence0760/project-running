@@ -1,7 +1,5 @@
-import {
-  createClient,
-  type SupabaseClient,
-} from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database, DbClient } from '../_shared/database.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -39,7 +37,7 @@ const PAGE = 1000;
 // Returns the number of objects removed so the caller can record a
 // per-bucket count in the deletion audit trail.
 async function deletePrefix(
-  client: SupabaseClient,
+  client: DbClient,
   bucket: string,
   prefix: string,
 ): Promise<number> {
@@ -91,7 +89,7 @@ async function deletePrefix(
 // (20260603_001), which returns the decrypted tokens to a service_role
 // caller for any user_id.
 async function deauthorizeOAuthProvider(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
   provider: 'strava' | 'garmin',
   revoke: (accessToken: string) => Promise<Response>,
@@ -133,7 +131,7 @@ async function deauthorizeOAuthProvider(
 }
 
 function deauthorizeStrava(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<ThirdPartyOutcome> {
   return deauthorizeOAuthProvider(adminClient, userId, 'strava', (accessToken) =>
@@ -160,7 +158,7 @@ function deauthorizeStrava(
 // `garmin_deauth: 'failed'` (visible in the audit log) instead of a
 // false success. The endpoint must be supplied with that integration.
 function deauthorizeGarmin(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<ThirdPartyOutcome> {
   return deauthorizeOAuthProvider(adminClient, userId, 'garmin', () => {
@@ -209,7 +207,7 @@ async function deleteRevenueCatSubscriber(userId: string): Promise<ThirdPartyOut
 // trail (with the account id in the logs) so an operator can replay
 // once the balance settles.
 async function deleteStripeConnectAccount(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<ThirdPartyOutcome> {
   let accountId: string | null = null;
@@ -264,7 +262,7 @@ async function deleteStripeConnectAccount(
 }
 
 async function invalidatePushTokens(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<ThirdPartyOutcome> {
   // Enumerate every platform's tokens. The DB cascade from
@@ -343,7 +341,7 @@ async function invalidatePushTokens(
 // audit/account-deletion-completeness High: drain pre-cascade.
 // Mandatory — failure aborts the delete so the user can retry.
 async function drainUserJobs(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
@@ -365,7 +363,7 @@ async function drainUserJobs(
 // closes the audit/gdpr High #1 "deleted UUID survives 24h" gap
 // at deletion time; the hourly cron is the long-tail sweep.
 async function drainUserRateLimits(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
@@ -388,7 +386,7 @@ async function drainUserRateLimits(
 // row keeps working but the author identity is unrecoverable.
 // Mandatory — failure aborts the delete.
 async function anonymiseAuthoredSegments(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
@@ -415,7 +413,7 @@ async function anonymiseAuthoredSegments(
 // RPC `delete_user_integration_secrets(p_user_id uuid)` that does
 // the vault.secrets DELETE on behalf of the service-role caller.
 async function cleanupVaultSecrets(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   try {
@@ -435,7 +433,7 @@ async function cleanupVaultSecrets(
 // Delete those rows explicitly before the auth-row cascade so the
 // UUID doesn't outlive the user.
 async function deleteUserReports(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
 ): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
@@ -452,7 +450,7 @@ async function deleteUserReports(
 }
 
 async function recordAudit(
-  adminClient: SupabaseClient,
+  adminClient: DbClient,
   userId: string,
   result: DeletionAuditResult,
   notes: string | null = null,
@@ -493,7 +491,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   if (!authHeader) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const userClient = createClient(
+  const userClient = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
@@ -513,7 +511,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   });
   if (denied) return denied;
 
-  const adminClient = createClient(
+  const adminClient = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );

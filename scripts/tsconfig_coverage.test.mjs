@@ -154,10 +154,13 @@ function globToRegExp(pattern) {
  * It is exempt because it is a DENO program, not a tsc one: its modules import
  * over `npm:`, `jsr:` and `https:` specifiers that tsc's resolver cannot
  * follow, so putting it in a root here would report a hundred unresolved
- * imports and prove nothing. What typechecks it is `deno check` — which
- * nothing in CI currently runs (`deno test --no-check`). That is a real hole
- * and its own slice; this guard exempting the tree is not a claim that
- * something else covers it.
+ * imports and prove nothing. What typechecks it is `deno check`, in the
+ * `Edge Function typecheck` step of the `edge-functions` job — which nothing
+ * ran until decisions § 762, when the tree turned out to hold 81 errors. That
+ * lane has a coverage guard of its own,
+ * `scripts/edge_functions_typecheck_coverage.test.mjs`, standing to it exactly
+ * as this file stands to the tsconfig roots; the exemption here points at it
+ * rather than merely disclaiming the tree.
  */
 function denoFunctionsTree() {
 	const config = 'apps/backend/supabase/config.toml';

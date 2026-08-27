@@ -5,6 +5,7 @@
 // a worker can boot. When that fetch fails the worker never starts, the probe
 // hangs to its timeout, and the job dies before one test runs (decisions § 699).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0?target=deno';
+import type { Database } from '../_shared/database.ts';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -43,7 +44,7 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
     return Response.json({ error: 'missing authorization' }, { status: 401 });
   }
 
-  const userClient = createClient(
+  const userClient = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
@@ -76,7 +77,7 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
   // download + a clip walk over up to 50k points). The admin client
   // is required for the anon path because the user-context guard
   // from migration 20260616_001 rejects synthetic IP-derived keys.
-  const adminClient = createClient(
+  const adminClient = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );
@@ -117,14 +118,23 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
     .select('user_id, is_public')
     .eq('id', runId)
     .maybeSingle();
-  if (runErr || !run) {
+  // `user_id` is NOT NULL on `runs`, but `public_runs` is a view and Postgres
+  // cannot carry the constraint through one, so the generated row type says
+  // `string | null` and every use below has to answer for it. Both would fail
+  // late and wrong: the Storage path would read `null/<id>.json.gz` and 502,
+  // and `clip_track_for_user` takes a NOT NULL owner so the clip would 500
+  // AFTER the track was already decompressed in memory. Fail closed to the
+  // same 404 the missing-row branch gives — a row we cannot attribute to an
+  // owner is a row we will not serve a track for.
+  if (runErr || !run || run.user_id === null) {
     return Response.json({ error: 'not found' }, { status: 404 });
   }
+  const ownerId = run.user_id;
 
   // Derive the Storage path directly from the row owner + runId.
   // Matches the {user_id}/{run_id}.json.gz shape enforced by
   // CHECK on runs.track_url (migration 20260621_001).
-  const trackPath = `${run.user_id}/${runId}.json.gz`;
+  const trackPath = `${ownerId}/${runId}.json.gz`;
 
   // Explicit visibility gate. RLS already filters this row lookup —
   // a non-owner asking for a private run lands in the !run branch
@@ -140,7 +150,7 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
   // `''` or a sentinel would silently treat an anon caller as
   // the owner of a private run. The explicit null check makes
   // the contract loud.
-  const isOwnerBypass = callerId !== null && callerId === run.user_id;
+  const isOwnerBypass = callerId !== null && callerId === ownerId;
   if (!run.is_public && !isOwnerBypass) {
     return Response.json({ error: 'not found' }, { status: 404 });
   }
@@ -177,7 +187,7 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
     return Response.json({ error: 'track too long' }, { status: 502 });
   }
 
-  if (callerId === run.user_id) {
+  if (callerId === ownerId) {
     return Response.json({ points });
   }
 
@@ -192,7 +202,7 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
   // never used for this read, only the row lookup above.
   const { data: clipped, error: clipErr } = await adminClient.rpc(
     'clip_track_for_user',
-    { target_user_id: run.user_id, points },
+    { target_user_id: ownerId, points },
   );
   if (clipErr) {
     return Response.json({ error: 'clip failed' }, { status: 500 });

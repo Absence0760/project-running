@@ -44,6 +44,7 @@
 /// the dedupe check on `metadata.strava_id` short-circuits.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database } from '../_shared/database.ts';
 import {
 	fetchStravaActivity,
 	ingestActivity,
@@ -102,7 +103,7 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 	// for an attacker. Service-role client is required because
 	// `ipBucketKey` returns a synthetic UUID that can't satisfy the
 	// `auth.uid()` guard in `check_rate_limit`.
-	const adminClient = createClient(
+	const adminClient = createClient<Database>(
 		Deno.env.get('SUPABASE_URL')!,
 		secretKey(),
 	);
@@ -199,7 +200,7 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 		return Response.json({ error: 'event_outside_freshness_window' }, { status: 400 });
 	}
 
-	const supabase = createClient(
+	const supabase = createClient<Database>(
 		Deno.env.get('SUPABASE_URL')!,
 		secretKey(),
 	);

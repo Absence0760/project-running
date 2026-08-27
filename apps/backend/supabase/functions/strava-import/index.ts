@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database, DbClient } from '../_shared/database.ts';
 import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -47,7 +48,7 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 	const authHeader = req.headers.get('Authorization');
 	if (!authHeader) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-	const supabase = createClient(
+	const supabase = createClient<Database>(
 		Deno.env.get('SUPABASE_URL')!,
 		publishableKey(),
 		{ global: { headers: { Authorization: authHeader } } },
@@ -71,10 +72,23 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 		);
 	}
 
-	// Validate body shape per action before any side effects. The
-	// later helpers cast straight from `body.<field>` and we don't
-	// want a number-typed `lookbackDays` to drive negative-epoch
-	// arithmetic, or a non-string scope to throw inside .split().
+	// Validate body shape per action before any side effects, and hand each
+	// handler the VALIDATED value rather than let it re-read the untyped bag.
+	// The checks and the call sites used to read `body.<field>` independently,
+	// so nothing tied what ran to what had been checked: the bounds test read
+	// `body.lookbackDays` while `handleSync` read it again through `?? 90`,
+	// and the only thing that rejected a JSON `null` was `Number.isInteger`
+	// happening to sit first in the `||` chain below. Re-order that chain so a
+	// bound comes first — the natural edit — and `null` reached the epoch
+	// arithmetic, where `null * 86400_000` is 0: the backfill would look back
+	// to this instant and report success having imported nothing. The explicit
+	// `typeof` test is what makes the refusal deliberate instead.
+	let code = '';
+	let scope = '';
+	let redirectUri = '';
+	// Absent means the 90-day default, which is what the web + mobile clients
+	// send explicitly anyway.
+	let lookbackDays = 90;
 	if (action === 'connect') {
 		if (typeof body.code !== 'string' || body.code.length === 0) {
 			return Response.json({ error: 'invalid_code' }, { status: 400 });
@@ -85,15 +99,21 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 		if (typeof body.redirect_uri !== 'string') {
 			return Response.json({ error: 'invalid_redirect_uri' }, { status: 400 });
 		}
+		code = body.code;
+		scope = body.scope;
+		redirectUri = body.redirect_uri;
 	} else if (action === 'sync') {
 		if (body.lookbackDays !== undefined) {
+			const requested = body.lookbackDays;
 			if (
-				!Number.isInteger(body.lookbackDays) ||
-				body.lookbackDays <= 0 ||
-				body.lookbackDays > 365
+				typeof requested !== 'number' ||
+				!Number.isInteger(requested) ||
+				requested <= 0 ||
+				requested > 365
 			) {
 				return Response.json({ error: 'invalid_lookback_days' }, { status: 400 });
 			}
+			lookbackDays = requested;
 		}
 	}
 
@@ -121,10 +141,10 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 	if (denied) return denied;
 
 	if (action === 'connect') {
-		return handleConnect(supabase, user.id, body.code, body.scope, body.redirect_uri);
+		return handleConnect(supabase, user.id, code, scope, redirectUri);
 	}
 	if (action === 'sync') {
-		return handleSync(supabase, user.id, body.lookbackDays ?? 90);
+		return handleSync(supabase, user.id, lookbackDays);
 	}
 	if (action === 'disconnect') {
 		return handleDisconnect(supabase, user.id);
@@ -140,7 +160,7 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 // FROM integrations — left vault secrets orphaned + Strava-side
 // connection live indefinitely.
 async function handleDisconnect(
-	_userScopedSupabase: ReturnType<typeof createClient>,
+	_userScopedSupabase: DbClient,
 	userId: string,
 ): Promise<Response> {
 	// `delete_user_provider_secrets` is GRANTed to service_role only
@@ -150,7 +170,7 @@ async function handleDisconnect(
 	// `userId`. The other writes here (vault read via DEFINER RPC,
 	// integrations UPDATE on the user's own row) are reachable from
 	// either, so consolidating on one client keeps the path uniform.
-	const supabase = createClient(
+	const supabase = createClient<Database>(
 		Deno.env.get('SUPABASE_URL')!,
 		secretKey(),
 	);
@@ -230,7 +250,7 @@ async function handleDisconnect(
 }
 
 async function handleConnect(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	code: string,
 	_clientClaimedScope: string,
@@ -369,7 +389,7 @@ async function handleConnect(
 }
 
 async function handleSync(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	lookbackDays: number,
 ): Promise<Response> {
@@ -417,11 +437,11 @@ async function handleSync(
 }
 
 async function backfill(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	accessToken: string,
 	lookbackDays: number,
-): Promise<{ imported: number; skipped: number; failed: number }> {
+): Promise<{ imported: number; skipped: number; failed: number; rate_limited: boolean }> {
 	const afterEpoch = Math.floor((Date.now() - lookbackDays * 86400_000) / 1000);
 	let page = 1;
 	const pageSize = 50;

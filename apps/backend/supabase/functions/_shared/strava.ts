@@ -9,7 +9,7 @@
 // in `docs/backend/metadata.md` (the single source of truth for which keys
 // readers can rely on).
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { DbClient, Json, TablesUpdate } from './database.ts';
 
 export type StravaTokens = {
 	access_token: string;
@@ -56,7 +56,7 @@ export type StravaRefreshFailureReason = 'invalid_grant' | 'unauthorized';
 /// so the row isn't retried forever. A 5xx is transient: no callback, the
 /// caller retries next tick.
 export async function refreshStravaToken(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	refreshToken: string,
 	onPermanentFailure?: (reason: StravaRefreshFailureReason) => Promise<void>,
@@ -157,7 +157,7 @@ export async function fetchStravaActivity(
 /// check via metadata.strava_id. Both EFs use this so a webhook fired
 /// during a backfill doesn't double-insert.
 export async function isAlreadyImported(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	stravaId: number,
 ): Promise<boolean> {
@@ -194,7 +194,7 @@ export function isStravaRunFamily(sport: string | null | undefined): boolean {
 /// `metadata` per docs/backend/metadata.md (matches the apps/web/src/lib/data.ts
 /// saveRun writer used by the Strava + Garmin ZIP importers).
 export async function ingestActivity(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	accessToken: string,
 	act: StravaActivity,
@@ -229,7 +229,7 @@ export async function ingestActivity(
 	// downstream pure-TS readers compare against typeof === 'string'.
 	// /audit/strava L3.
 	const stravaId = String(act.id);
-	const metadata: Record<string, unknown> = {
+	const metadata: Record<string, Json> = {
 		strava_id: stravaId,
 		imported_from: 'strava',
 		imported_at: new Date().toISOString(),
@@ -368,7 +368,7 @@ export function buildTrackFromStreams(
 }
 
 export async function uploadTrack(
-	supabase: ReturnType<typeof createClient>,
+	supabase: DbClient,
 	userId: string,
 	runId: string,
 	track: unknown[],
@@ -487,9 +487,17 @@ export async function collectRunIdentities(
 // matches what a live recording of the same effort would write.
 // ---------------------------------------------------------------------------
 
+/// The four promoted `runs` columns an embedded best effort can land in.
+/// Typed as columns rather than as strings so a typo in the table below fails
+/// to compile instead of writing a key PostgREST would reject at runtime.
+export type EmbeddedBestColumn = Extract<
+	keyof TablesUpdate<'runs'>,
+	`fastest_${string}_s`
+>;
+
 /// Canonical distances (metres) → runs column. Matches the bracket
 /// midpoints the SQL trigger searches (±2 % wide, so 5000 m exactly).
-export const EMBEDDED_BEST_DISTANCES: ReadonlyArray<readonly [string, number]> = [
+export const EMBEDDED_BEST_DISTANCES: ReadonlyArray<readonly [EmbeddedBestColumn, number]> = [
 	['fastest_5k_s', 5000],
 	['fastest_10k_s', 10000],
 	['fastest_half_marathon_s', 21097.5],
@@ -575,8 +583,8 @@ export function fastestWindowSeconds(
 /// promoted runs columns and skip the write when empty.
 export function computeEmbeddedBests(
 	track: readonly EmbeddedTrackPoint[],
-): Record<string, number> {
-	const out: Record<string, number> = {};
+): Partial<Record<EmbeddedBestColumn, number>> {
+	const out: Partial<Record<EmbeddedBestColumn, number>> = {};
 	if (!Array.isArray(track) || track.length < 3) return out;
 	for (const [key, dist] of EMBEDDED_BEST_DISTANCES) {
 		const secs = fastestWindowSeconds(track, dist);
@@ -585,18 +593,24 @@ export function computeEmbeddedBests(
 	return out;
 }
 
-export async function gzipBytes(data: Uint8Array): Promise<Uint8Array> {
-	const cs = new (globalThis as any).CompressionStream('gzip');
+/// `Uint8Array<ArrayBuffer>`, not a bare `Uint8Array`: the bare form is backed
+/// by `ArrayBufferLike`, which includes `SharedArrayBuffer`, and neither
+/// `Response` nor `Blob` accepts a view onto shared memory. Every caller
+/// already hands over an `ArrayBuffer`-backed view (`TextEncoder.encode`), so
+/// this narrows the signature to what the body actually requires rather than
+/// promising a width the first line would throw on.
+export async function gzipBytes(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+	const cs = new CompressionStream('gzip');
 	const stream = new Response(data).body!.pipeThrough(cs);
 	const chunks: Uint8Array[] = [];
 	const reader = stream.getReader();
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) break;
-		chunks.push(value as Uint8Array);
+		chunks.push(value);
 	}
 	const total = chunks.reduce((a, c) => a + c.length, 0);
-	const out = new Uint8Array(total);
+	const out = new Uint8Array(new ArrayBuffer(total));
 	let offset = 0;
 	for (const c of chunks) {
 		out.set(c, offset);

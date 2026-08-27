@@ -159,7 +159,9 @@ Deno.test('walkPages refuses to claim completeness on a failed page', async () =
 	const seen: number[] = [];
 	const summary = await walkPages(
 		(offset, limit) => offset === 0 ? fetchPage(offset, limit) : Promise.resolve(null),
-		(r) => seen.push(r.id),
+		(r) => {
+			seen.push(r.id);
+		},
 		{ pageSize: 1000 },
 	);
 	assertEquals(seen.length, 1000);

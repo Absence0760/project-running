@@ -30,6 +30,7 @@
 
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database, DbClient } from '../_shared/database.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { selectEffectivePricing } from '../_shared/event_instance.ts';
 import { isValidTimestamptz, isValidUuid } from '../_shared/input_validation.ts';
@@ -93,7 +94,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
   if (!authHeader) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const userClient = createClient(
+  const userClient = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
@@ -103,7 +104,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const service = createClient(
+  const service = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );
@@ -360,7 +361,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
 /// decision. Pending orders whose reserved_until has lapsed do not count
 /// (they're swept / released on expiry).
 async function precheckCapacity(
-  service: ReturnType<typeof createClient>,
+  service: DbClient,
   eventId: string,
   instanceStart: string,
   capacity: number | null,

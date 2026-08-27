@@ -152,13 +152,18 @@ export type DeletionAuditResult =
  */
 export type ThirdPartyOutcome = 'ok' | 'skipped' | 'failed';
 
-export interface ThirdPartyOutcomes {
+/// A type alias rather than an interface, and that is load-bearing: this
+/// record is written straight into the `deletion_audit_log.third_party_outcomes`
+/// jsonb column, and TypeScript gives an object-literal type alias an implicit
+/// index signature while an interface gets none — so as an interface it is not
+/// assignable to `Json` and the audit write does not typecheck.
+export type ThirdPartyOutcomes = {
 	strava_deauth: ThirdPartyOutcome;
 	garmin_deauth: ThirdPartyOutcome;
 	revenuecat_delete: ThirdPartyOutcome;
 	fcm_remove: ThirdPartyOutcome;
 	stripe_connect_delete: ThirdPartyOutcome;
-}
+};
 
 // ─── account-deletion receipt enqueue ───
 

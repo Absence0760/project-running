@@ -22,6 +22,7 @@
 
 import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
+import type { Database } from '../_shared/database.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -65,7 +66,7 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   if (!authHeader) {
     return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
-  const userClient = createClient(
+  const userClient = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     publishableKey(),
     { global: { headers: { Authorization: authHeader } } },
@@ -77,7 +78,7 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
 
   // OAuth-grade path: fail closed on rate-limit RPC error so a DB blip
   // can't let an attacker spray account-create churn.
-  const service = createClient(
+  const service = createClient<Database>(
     Deno.env.get('SUPABASE_URL')!,
     secretKey(),
   );
@@ -117,10 +118,19 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
     return Response.json({ error: 'onboard_failed' }, { status: 500 });
   }
 
-  let accountId = existing?.stripe_connect_account_id as string | undefined;
+  // The column is nullable, so the row can exist with no account attached yet
+  // (a create that failed after the upsert). `null` and "no row" are the same
+  // case here — both mean "create one" — but they are not the same as a cast
+  // to `string | undefined`, which is what this used to be: it erased the null
+  // the read can actually return, and every later use read as a string that
+  // was not one.
+  let accountId = existing?.stripe_connect_account_id ?? null;
 
-  if (!accountId) {
-    let account;
+  if (accountId === null) {
+    // The esm.sh build of the Stripe SDK resolves to `any` — `Stripe.Account`
+    // included — so annotate the one field this path reads rather than let an
+    // `any` flow into `accountId` and reset it to `string | null` again.
+    let account: { id: string };
     try {
       account = await stripe.accounts.create(
         buildAccountCreateParams(body.country ?? null, null),

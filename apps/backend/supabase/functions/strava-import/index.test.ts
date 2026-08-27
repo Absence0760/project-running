@@ -9,7 +9,7 @@
 // "Warm the Deno dependency cache" step pre-fetches, so the recursive
 // `deno test --allow-read --allow-env` run resolves them offline.
 
-import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals, assertExists } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
 	CROSS_PROVIDER_DISTANCE_FRACTION,
 	CROSS_PROVIDER_START_TOLERANCE_S,
@@ -142,6 +142,10 @@ Deno.test('computeEmbeddedBests — a track shorter than 5 km has no bests', () 
 Deno.test('computeEmbeddedBests — even 6 km run yields a ~total-time 5k', () => {
 	// 60 × 100 m at 30 s/step = 6 km, 5:00/km. Fastest 5 km window ≈ 1500 s.
 	const bests = computeEmbeddedBests(evenTrack('2026-01-01T09:00:00Z', 60, 100, 30));
+	// A key the helper omits is a real outcome (see the two tests above), so
+	// assert presence before the range — otherwise `undefined >= 1495` is just
+	// `false` and the failure reads as a bad number rather than a missing one.
+	assertExists(bests.fastest_5k_s, 'a 6 km track must yield a 5 km best');
 	assert(bests.fastest_5k_s >= 1495 && bests.fastest_5k_s <= 1505, `got ${bests.fastest_5k_s}`);
 	assertEquals(bests.fastest_10k_s, undefined);
 });
@@ -159,8 +163,10 @@ Deno.test('computeEmbeddedBests — a fast 5 km inside a long run is detected', 
 	}
 	const bests = computeEmbeddedBests(track);
 	// The embedded fast 5k (~1000 s) beats the whole-run-scaled pace (1500 s).
+	assertExists(bests.fastest_5k_s, 'a 10 km track must yield a 5 km best');
 	assert(bests.fastest_5k_s >= 995 && bests.fastest_5k_s <= 1005, `got ${bests.fastest_5k_s}`);
 	// Only one 10k window (the whole track): 1000 + 2000 = 3000 s.
+	assertExists(bests.fastest_10k_s, 'a 10 km track must yield a 10 km best');
 	assert(bests.fastest_10k_s >= 2990 && bests.fastest_10k_s <= 3010, `got ${bests.fastest_10k_s}`);
 	assertEquals(bests.fastest_half_marathon_s, undefined);
 });
