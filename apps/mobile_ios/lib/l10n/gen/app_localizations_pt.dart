@@ -79,7 +79,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get recapShareTooltip => 'Partilhar retrospectiva';
 
   @override
-  String get recapPublishAndShare => 'Publicar e partilhar ligação';
+  String get recapPublishAndShare => 'Publicar e partilhar link';
 
   @override
   String get recapPublishFailed =>
@@ -1001,7 +1001,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Inicia automaticamente a partilha em direto quando uma corrida começa neste telemóvel. A corrida em curso fica visível para qualquer pessoa com a ligação; quando a corrida termina, volta à sua visibilidade predefinida.';
+      'Inicia automaticamente a partilha em direto quando uma corrida começa neste telemóvel. A corrida em curso fica visível para qualquer pessoa com o link; quando a corrida termina, volta à sua visibilidade padrão.';
 
   @override
   String get safetyOffRouteTitle => 'Alerta de saída de rota';
@@ -1020,7 +1020,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runSafetyNudgeSolo =>
-      'Vai correr sozinho(a) depois de escurecer? Partilhe uma ligação em direto com alguém';
+      'Vai correr sozinho(a) depois de escurecer? Partilhe um link em direto com alguém';
 
   @override
   String get runSafetyNudgeShareAction => 'Partilhar';
@@ -1473,7 +1473,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runLiveShareNeedsSignIn =>
-      'Inicie sessão para partilhar uma ligação de rastreio em direto.';
+      'Inicie sessão para partilhar um link de rastreio em direto.';
 
   @override
   String get runLiveShareNotStarted =>
@@ -1503,7 +1503,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runExpectedReturnIntro =>
-      'Escolha a que horas espera terminar. Se esta atividade ainda estiver a decorrer, os seus contactos de segurança confirmados recebem um aviso com a sua ligação em direto.';
+      'Escolha a que horas espera terminar. Se esta atividade ainda estiver a decorrer, os seus contactos de segurança confirmados recebem um aviso com o seu link em direto.';
 
   @override
   String get runExpectedReturnServerNote =>
@@ -2723,7 +2723,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runDetailMakePrivateBody =>
-      'O link público de partilha e a página de espectadores ao vivo deixarão de funcionar. Quem abrir um link antigo deixará de ver esta corrida.';
+      'O link público de partilha e a página de espectadores em direto deixarão de funcionar. Quem abrir um link antigo deixará de ver esta corrida.';
 
   @override
   String runDetailMakePrivateFailed(String error) {
@@ -2801,10 +2801,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get publicRunLiveSub =>
-      'Esta corrida ainda está a decorrer. Acompanhe no rastreador ao vivo.';
+      'Esta corrida ainda está a decorrer. Acompanhe no rastreador em direto.';
 
   @override
-  String get publicRunWatchLive => 'Ver ao vivo';
+  String get publicRunWatchLive => 'Ver em direto';
 
   @override
   String get publicRunTitle => 'Corrida';
@@ -3338,7 +3338,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeDetailShareConfirmBody =>
-      'Partilhar uma ligação torna esta rota pública — qualquer pessoa com a ligação pode abri-la e ela pode aparecer em Explorar. Podes torná-la privada novamente quando quiseres.';
+      'Partilhar um link torna esta rota pública — qualquer pessoa com o link pode abri-la e ela pode aparecer em Explorar. Podes torná-la privada novamente quando quiseres.';
 
   @override
   String get routeDetailShareConfirmCta => 'Tornar pública e partilhar';
@@ -6527,7 +6527,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsAccountAvatarRemoveConfirm =>
-      'Isto remove a tua foto de perfil atual. Podes carregar uma nova a qualquer momento.';
+      'Isto remove a tua fotografia de perfil atual. Podes carregar uma nova a qualquer momento.';
 
   @override
   String get settingsAccountAvatarSaved => 'Fotografia de perfil atualizada.';
@@ -6602,7 +6602,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsAccountAccountExportSubtitle =>
-      'Tudo o que há na sua conta — corridas, rotas, mensagens, pedidos, integrações, contactos de emergência. Criada no nosso servidor; pode fechar a app enquanto isso.';
+      'Tudo o que há na sua conta — corridas, rotas, mensagens, pedidos, integrações, contactos de emergência. Criada no nosso servidor; pode fechar a app entretanto.';
 
   @override
   String get settingsAccountExportQueued =>
@@ -6651,7 +6651,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String settingsAccountExportRateLimited(int seconds) {
-    return 'Limite de exportações atingido — tente de novo dentro de $seconds segundos.';
+    return 'Limite de exportações atingido — tente novamente dentro de $seconds segundos.';
   }
 
   @override
@@ -12653,7 +12653,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Estado em direto do relógio personalizado simulado';
 
   @override
-  String get simWatchTitle => 'Ligação do relógio simulado';
+  String get simWatchTitle => 'Link do relógio simulado';
 
   @override
   String get simWatchHostLabel => 'Anfitrião';
@@ -13305,7 +13305,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get watchLiveTileSubtitle =>
-      'Retransmitir a posição do teu relógio para uma ligação em direto';
+      'Retransmitir a posição do teu relógio para um link em direto';
 
   @override
   String get watchLiveIntro =>
@@ -13354,7 +13354,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get watchLiveRetry => 'Tentar novamente';
 
   @override
-  String get watchLiveShare => 'Partilhar ligação em direto';
+  String get watchLiveShare => 'Partilhar link em direto';
 
   @override
   String get watchLiveStartFailed =>
@@ -13706,7 +13706,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String rateLimitGeneric(String wait) {
-    return 'Está a fazer isso demasiado depressa — aguarde $wait e tente novamente.';
+    return 'Está a fazer isto demasiado depressa — aguarde $wait e tente novamente.';
   }
 
   @override
