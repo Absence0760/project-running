@@ -6759,6 +6759,38 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String integrationsSyncPartial(int imported, int skipped) {
+    return 'La sincronización se detuvo antes de tiempo. $imported nuevas, $skipped ya presentes: algunas actividades no se descargaron. Vuelve a sincronizar para terminar.';
+  }
+
+  @override
+  String integrationsSyncPartialRateLimited(int imported, int skipped) {
+    return 'Strava está limitando las solicitudes, así que la sincronización se detuvo antes de tiempo. $imported nuevas, $skipped ya presentes. Inténtalo de nuevo en unos 15 minutos.';
+  }
+
+  @override
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  ) {
+    return 'Sincronizado. $imported nuevas, $skipped ya presentes, $failed fallidas.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartial(int imported, int skipped) {
+    return 'Strava conectado, pero la primera importación se detuvo antes de tiempo. $imported importadas, $skipped ya presentes: vuelve a sincronizar para terminar.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  ) {
+    return 'Strava conectado, pero Strava está limitando las solicitudes, así que la primera importación se detuvo antes de tiempo. $imported importadas, $skipped ya presentes. Vuelve a sincronizar en unos 15 minutos.';
+  }
+
+  @override
   String integrationsSyncFailed(Object error) {
     return 'Error de sincronización: $error';
   }

@@ -17,4 +17,5 @@ export 'src/run_row_shape.dart';
 export 'src/run_source.dart';
 export 'src/run_summary.dart';
 export 'src/social.dart';
+export 'src/strava_sync_result.dart';
 export 'src/waypoint.dart';

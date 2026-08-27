@@ -49,3 +49,39 @@ Deno.test('the connect handler runs on the validated strings, not a re-read of t
 		'handleConnect must not read the request bag directly',
 	);
 });
+
+Deno.test('only an end-of-window exit may report the backfill as complete', () => {
+	// The page loop has five exits and four of them leave activities in the
+	// lookback window unfetched: Strava throttling us (429/503), an upstream
+	// error, a malformed page body, and the 20-page safety cap. Only the
+	// throttle case ever carried a field, so the other three reported a
+	// truncated import as a finished one. `complete` is the field that says
+	// otherwise, and it may only be raised on the two exits that reached the
+	// end of the window — an empty page and a short page.
+	const raises = SRC.match(/complete = true;/g) ?? [];
+	assert(
+		raises.length === 2,
+		`exactly two exits may set \`complete = true\` (an empty page and a short ` +
+			`page); found ${raises.length}. A new \`complete = true\` on an error or ` +
+			`cap path re-opens the bug: a truncated import reported as a finished one.`,
+	);
+	assert(
+		/return \{ imported, skipped, failed, rate_limited: rateLimited, complete \};/.test(SRC),
+		'`backfill` must return `complete` alongside the counts — a client cannot fail ' +
+			'closed on a field the function never sends',
+	);
+});
+
+Deno.test('last_sync_at is stamped only when the whole window was walked', () => {
+	// Both integration tiles render `last_sync_at` as "Last synced <ago>".
+	// Stamping it after a truncated backfill is a second, independent claim
+	// that the import finished — and it survives the toast the runner
+	// dismissed. On a repeat sync, leaving it alone keeps the previous, true
+	// value; on a first connect that never completed it stays null, which the
+	// tiles already render as "waiting for first sync".
+	assert(
+		/if \(complete\) \{\s*await supabase\s*\n\s*\.from\('integrations'\)\s*\n\s*\.update\(\{ last_sync_at:/
+			.test(SRC),
+		'the `last_sync_at` stamp must sit inside an `if (complete)` guard',
+	);
+});

@@ -441,7 +441,15 @@ async function backfill(
 	userId: string,
 	accessToken: string,
 	lookbackDays: number,
-): Promise<{ imported: number; skipped: number; failed: number; rate_limited: boolean }> {
+): Promise<
+	{
+		imported: number;
+		skipped: number;
+		failed: number;
+		rate_limited: boolean;
+		complete: boolean;
+	}
+> {
 	const afterEpoch = Math.floor((Date.now() - lookbackDays * 86400_000) / 1000);
 	let page = 1;
 	const pageSize = 50;
@@ -503,6 +511,15 @@ async function backfill(
 	);
 
 	let rateLimited = false;
+	// Only an end-of-window exit may claim the lookback window was walked to
+	// its end. Every other `break` below — Strava throttling us, an upstream
+	// error, a malformed page, the 20-page safety cap — leaves activities in
+	// the window unfetched, and only the throttle case had a field to say so.
+	// The window is relative to `Date.now()`, so the unfetched activities stay
+	// reachable by a re-sync ONLY until they age past `lookbackDays`: a sync
+	// that reports "complete" when it is not is a data loss on a 90-day fuse,
+	// because the runner has been told there is nothing left to fetch.
+	let complete = false;
 	while (true) {
 		const url = `https://www.strava.com/api/v3/athlete/activities?after=${afterEpoch}&per_page=${pageSize}&page=${page}`;
 		const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -515,12 +532,19 @@ async function backfill(
 			break;
 		}
 		if (!resp.ok) {
-			// Bail silently on the first non-rate-limit failure rather
-			// than looping forever — partial imports are still useful.
+			// Bail on the first non-rate-limit failure rather than looping
+			// forever — a partial import is still useful, but it is a PARTIAL
+			// one: `complete` stays false so the caller says so.
+			console.warn('strava backfill upstream error', { page, status: resp.status });
 			break;
 		}
 		const activities = (await resp.json()) as StravaActivity[];
-		if (!Array.isArray(activities) || activities.length === 0) break;
+		// A non-array body is a malformed page, not the end of the window.
+		if (!Array.isArray(activities)) break;
+		if (activities.length === 0) {
+			complete = true;
+			break;
+		}
 
 		for (const act of activities) {
 			// Restrict to run-family activities (Run / TrailRun / VirtualRun
@@ -554,16 +578,26 @@ async function backfill(
 			}
 		}
 
-		if (activities.length < pageSize) break;
+		if (activities.length < pageSize) {
+			complete = true;
+			break;
+		}
 		page++;
 		if (page > 20) break; // safety cap — 1000 activities per sync
 	}
 
-	await supabase
-		.from('integrations')
-		.update({ last_sync_at: new Date().toISOString() })
-		.eq('user_id', userId)
-		.eq('provider', 'strava');
+	// `last_sync_at` is the moment the whole window was last walked, and both
+	// tiles render it as "Last synced <ago>". Stamping it after a truncated
+	// backfill is the second sentence telling the runner the import finished;
+	// leaving it alone keeps the previous, true value — or, on a first connect
+	// that never completed, the honest "waiting for first sync".
+	if (complete) {
+		await supabase
+			.from('integrations')
+			.update({ last_sync_at: new Date().toISOString() })
+			.eq('user_id', userId)
+			.eq('provider', 'strava');
+	}
 
-	return { imported, skipped, failed, rate_limited: rateLimited };
+	return { imported, skipped, failed, rate_limited: rateLimited, complete };
 }

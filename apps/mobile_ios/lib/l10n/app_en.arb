@@ -8932,6 +8932,69 @@
       }
     }
   },
+  "integrationsSyncPartial": "Sync stopped early. {imported} new, {skipped} already present — some activities were not fetched. Sync again to finish.",
+  "@integrationsSyncPartial": {
+    "description": "Banner shown when a Strava sync stopped before the end of the lookback window",
+    "placeholders": {
+      "imported": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsSyncPartialRateLimited": "Strava is limiting requests, so the sync stopped early. {imported} new, {skipped} already present. Try again in about 15 minutes.",
+  "@integrationsSyncPartialRateLimited": {
+    "description": "Banner shown when Strava throttled us mid-sync",
+    "placeholders": {
+      "imported": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsSyncResultWithFailed": "Synced. {imported} new, {skipped} already present, {failed} failed.",
+  "@integrationsSyncResultWithFailed": {
+    "description": "Banner summarising a Strava sync in which some activities failed to ingest",
+    "placeholders": {
+      "imported": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsStravaConnectedPartial": "Strava connected, but the first import stopped early. {imported} imported, {skipped} already present — sync again to finish.",
+  "@integrationsStravaConnectedPartial": {
+    "description": "Banner shown when the first import after connecting Strava stopped early",
+    "placeholders": {
+      "imported": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsStravaConnectedPartialRateLimited": "Strava connected, but Strava is limiting requests so the first import stopped early. {imported} imported, {skipped} already present. Sync again in about 15 minutes.",
+  "@integrationsStravaConnectedPartialRateLimited": {
+    "description": "Banner shown when Strava throttled the first import after connecting",
+    "placeholders": {
+      "imported": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
   "integrationsSyncFailed": "Sync failed: {error}",
   "@integrationsSyncFailed": {
     "description": "Banner shown when a Strava sync fails",

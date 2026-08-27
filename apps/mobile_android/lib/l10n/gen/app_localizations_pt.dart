@@ -6758,6 +6758,38 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String integrationsSyncPartial(int imported, int skipped) {
+    return 'A sincronização parou antes do fim. $imported novas, $skipped já presentes — algumas atividades não foram transferidas. Sincronize novamente para concluir.';
+  }
+
+  @override
+  String integrationsSyncPartialRateLimited(int imported, int skipped) {
+    return 'O Strava está a limitar os pedidos, pelo que a sincronização parou antes do fim. $imported novas, $skipped já presentes. Tente novamente dentro de cerca de 15 minutos.';
+  }
+
+  @override
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  ) {
+    return 'Sincronizado. $imported novas, $skipped já presentes, $failed com falha.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartial(int imported, int skipped) {
+    return 'Strava conectado, mas a primeira importação parou antes do fim. $imported importadas, $skipped já presentes — sincronize novamente para concluir.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  ) {
+    return 'Strava conectado, mas o Strava está a limitar os pedidos, pelo que a primeira importação parou antes do fim. $imported importadas, $skipped já presentes. Sincronize novamente dentro de cerca de 15 minutos.';
+  }
+
+  @override
   String integrationsSyncFailed(Object error) {
     return 'Falha na sincronização: $error';
   }
@@ -20557,6 +20589,38 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String integrationsSyncResult(int imported, int skipped) {
     return 'Sincronizado. $imported novas, $skipped já presentes.';
+  }
+
+  @override
+  String integrationsSyncPartial(int imported, int skipped) {
+    return 'A sincronização parou antes do fim. $imported novas, $skipped já presentes — algumas atividades não foram baixadas. Sincronize de novo para concluir.';
+  }
+
+  @override
+  String integrationsSyncPartialRateLimited(int imported, int skipped) {
+    return 'O Strava está limitando as solicitações, então a sincronização parou antes do fim. $imported novas, $skipped já presentes. Tente de novo em cerca de 15 minutos.';
+  }
+
+  @override
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  ) {
+    return 'Sincronizado. $imported novas, $skipped já presentes, $failed com falha.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartial(int imported, int skipped) {
+    return 'Strava conectado, mas a primeira importação parou antes do fim. $imported importadas, $skipped já presentes — sincronize de novo para concluir.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  ) {
+    return 'Strava conectado, mas o Strava está limitando as solicitações, então a primeira importação parou antes do fim. $imported importadas, $skipped já presentes. Sincronize de novo em cerca de 15 minutos.';
   }
 
   @override
