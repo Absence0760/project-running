@@ -20,6 +20,7 @@ import {
   definerSpan,
   findCalls,
   literalOf,
+  parseRelationSecurity,
   parseTap,
   refusalAssertions,
   relationsIn,
@@ -88,6 +89,7 @@ test('refusalAssertions selects zero-or-empty claims over any relation, base tab
     "select is_empty($$ select id from public_routes where id = 'x' $$, 'a stranger cannot read the route');",
     'rollback;',
   ].join('\n');
+  /** @type {import('./check_pgtap_refusal_assertions.mjs').RelationMap} */
   const relations = new Map([
     ['route_markers', 'base'],
     ['notifications', 'base'],
@@ -127,8 +129,8 @@ test('buildMutant reaches for the permissive replacement only where one is regis
     { ...calls[0], neutralise: [] },
     { ...calls[1], neutralise: ['public_routes'] },
   ]);
-  assert.equal(mutant.match(/^savepoint pgtap_guard_definer;$/gm).length, 1);
-  assert.equal(mutant.match(/create or replace view public\.public_routes/g).length, 1);
+  assert.equal(mutant.match(/^savepoint pgtap_guard_definer;$/gm)?.length, 1);
+  assert.equal(mutant.match(/create or replace view public\.public_routes/g)?.length, 1);
   const savepointAt = mutant.search(/^savepoint pgtap_guard_definer;$/m);
   const replaceAt = mutant.indexOf('create or replace view public.public_routes');
   const assertAt = mutant.indexOf('from public_routes $$');
@@ -257,6 +259,7 @@ test('every refusal marker in the suite sits above an assertion the guard then s
     if (markers.length === 0) continue;
     // Every relation is claimed to be a base table so the selection under test
     // is the marker's, not the catalogue's.
+    /** @type {import('./check_pgtap_refusal_assertions.mjs').RelationMap} */
     const relations = new Map(
       [...text.matchAll(/\b(?:from|join)\s+(?:only\s+)?([a-z_][a-z0-9_]*)/gi)].map((m) => [
         m[1].toLowerCase(),
@@ -292,7 +295,7 @@ test('buildMutant arms the widening only around the named assertion', () => {
     'rollback;',
   ].join('\n');
   const call = findCalls(sql, 'is_empty')[0];
-  const mutant = buildMutant(sql, [{ ...call, description: 'a stranger cannot read t' }]);
+  const mutant = buildMutant(sql, [{ ...call }]);
   assert.match(mutant, /create extension if not exists pgtap/);
   const armAt = mutant.indexOf(`set_config('${WIDEN_GUC}','on',true)`);
   const assertAt = mutant.indexOf('is_empty');
@@ -313,7 +316,7 @@ test('the base-table operator widens row-level security rather than bypassing it
     'rollback;',
   ].join('\n');
   const call = findCalls(sql, 'is_empty')[0];
-  const mutant = buildMutant(sql, [{ ...call, description: 'a stranger cannot read t' }]);
+  const mutant = buildMutant(sql, [{ ...call }]);
   const span = mutant.slice(
     mutant.indexOf(`set_config('${WIDEN_GUC}','on',true)`),
     mutant.indexOf(`set_config('${WIDEN_GUC}','off',true)`),
@@ -354,6 +357,27 @@ test('parseTap keys results by description so a shifted ordinal cannot mislabel 
   const tap = parseTap(['1..2', 'ok 1 - alpha', 'not ok 2 - beta', '# Failed test 2'].join('\n'));
   assert.equal(tap.get('alpha'), true);
   assert.equal(tap.get('beta'), false);
+});
+
+// The population is admitted by `relations.has(...)`, so the catalogue read is
+// the one input whose failure would take the population to zero while the
+// guard went on reporting a count — 741's inversion pointed at the instrument.
+test('parseRelationSecurity refuses a catalogue read it cannot use rather than measuring nothing', () => {
+  const good = parseRelationSecurity(
+    ['routes|base', 'public_routes|definer', 'search_user_profiles|invoker', ''].join('\n'),
+  );
+  assert.equal(good.failure, null);
+  assert.equal(good.relations.get('public_routes'), 'definer');
+
+  assert.match(parseRelationSecurity('').failure ?? '', /no relations at all/);
+  assert.match(parseRelationSecurity('\n\n').failure ?? '', /no relations at all/);
+  assert.match(parseRelationSecurity('routes|table').failure ?? '', /not one of/);
+  assert.match(parseRelationSecurity('routes').failure ?? '', /not one of/);
+});
+
+test('parseRelationSecurity lets a table outrank a function of the same name', () => {
+  const { relations } = parseRelationSecurity(['routes|base', 'routes|definer'].join('\n'));
+  assert.equal(relations.get('routes'), 'base');
 });
 
 // The allowlist is only trustworthy while every entry still points at a real
