@@ -211,6 +211,23 @@ jobs:
       # pinned here by driving it with stub curl/docker on PATH.
       - name: Supabase stack sidecar wait loop
         run: node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs
+      # `npx <bin>` runs whatever node_modules/.bin provides — and when nothing
+      # provides it, downloads the newest thing the registry answers with and
+      # executes it against this checkout. The web unit suite ran that way for
+      # its whole life (decisions § 764). A lint on workflow files, hence here,
+      # and it needs no install: it reads the package.json files as text.
+      - name: CI runs no binary it downloads at run time
+        run: |
+          if ! node scripts/check_workflow_binaries.mjs; then
+            echo "::error::A workflow hands a package runner (npx / pnpm exec / dlx) a binary that no package.json in this repo declares, so CI downloads an unpinned copy at run time. Nothing here is about action SHAs, the Flutter pin or the CI diagnoses — those are the other guards in this job."
+            echo "The failing line above names the file, the line and the package to declare. decisions § 764 is why a run-time download is treated like an action pinned to a mutable tag."
+            exit 1
+          fi
+          if ! node --test scripts/check_workflow_binaries.test.mjs; then
+            echo "::error::The run-time-download guard's own unit tests failed. The workflows themselves are fine — the check above just passed — so this is a defect in scripts/check_workflow_binaries.mjs."
+            echo "Reproduce with: node --test scripts/check_workflow_binaries.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
 
   test-packages:
     needs: changes
