@@ -28,8 +28,8 @@ All three also render the **same public-site chrome as the landing page** via th
 apps/web/src/lib/learn/
   guides/*.md          # one .md per guide; filename stem = slug; YAML frontmatter
   guides.ts            # import.meta.glob load; binds the guides_index helpers to the built index (thin, glob-coupled)
-  guides_index.ts      # pure, env-free index ops over the entry set — listGuides/getGuide/guidesByCategory + the English-fallback resolver (getGuide / localizedGuideMeta / isEnglishFallback); tsx-testable
-  guides/<slug>.<locale>.md  # optional per-locale prose variants (de/fr/es/ja/pt-BR); resolver falls back to English when absent
+  guides_index.ts      # pure, env-free index ops over the entry set — listGuides/getGuide/guidesByCategory + the language-then-English fallback resolver (getGuide / localizedGuideMeta / isEnglishFallback); tsx-testable
+  guides/<slug>.<locale>.md  # optional per-locale prose variants (de/fr/es/ja/pt-BR); resolver falls back within the reader's LANGUAGE first (pt-PT → pt-BR), then English
   guides.test.ts       # frontmatter / slug-uniqueness / category / CTA guard (reads .md off disk; tsx-runnable)
   guides_index.test.ts # unit tests for the pure index ops (ordering, locale fallback, empty-category filtering)
   categories.ts        # CATEGORIES catalogue + CTA_TARGETS map (pure; labelKeys typed MessageKey)
@@ -52,7 +52,7 @@ Sitemap entries (hub 0.8 / category 0.6 / guide 0.7 + frontmatter lastmod) are b
 1. Create `apps/web/src/lib/learn/guides/<slug>.md`.
 2. Frontmatter: `title`, `description`, `category` (one of `CATEGORIES`), `slug` (= filename stem), `order`, `updated` (ISO date), optional `heroImage`, optional `cta.feature` (one of `CTA_TARGETS`).
 3. Write the body in markdown (`##`/`###`, lists, links). The end-of-article CTA is auto-appended from `cta.feature`.
-4. New category? Add it to `categories.ts` + its `labelKey` to `en.ts` and all five other locales.
+4. New category? Add it to `categories.ts` + its `labelKey` to `en.ts` and all six other locales.
 5. `npx tsx --test apps/web/src/lib/learn/guides.test.ts` validates frontmatter / slug / category / CTA (and, for localized files, sibling agreement — see below).
 6. `npm run build --workspace=apps/web` then confirm `build/learn/<slug>.html` exists and `build/sitemap.xml` lists it.
 
@@ -60,9 +60,9 @@ No DB migration; no deploy step beyond the normal web build/release.
 
 ### How to translate a guide
 
-1. Copy `apps/web/src/lib/learn/guides/<slug>.md` to `apps/web/src/lib/learn/guides/<slug>.<locale>.md` (`<locale>` ∈ `de/fr/es/ja/pt-BR`). The dash-bearing `pt-BR` is fine — the resolver splits on the FIRST dot, so `road-running-101.pt-BR.md` parses to slug `road-running-101`, locale `pt-BR`.
+1. Copy `apps/web/src/lib/learn/guides/<slug>.md` to `apps/web/src/lib/learn/guides/<slug>.<locale>.md` (`<locale>` ∈ any supported non-`en` locale — `de/fr/es/ja/pt-BR/pt-PT` today; `guides.test.ts` checks the suffix against `SUPPORTED_LOCALES`, so it widens on its own when a locale ships). The dash-bearing `pt-BR` is fine — the resolver splits on the FIRST dot, so `road-running-101.pt-BR.md` parses to slug `road-running-101`, locale `pt-BR`.
 2. Translate the `title`, `description`, and body. Keep `slug`, `category`, `order`, and `cta.feature` **identical to the English source** — `guides.test.ts` fails the build if they drift (the hub card route + section are driven off the English index, so a localized file under a different category/order would mis-file the card).
-3. `import.meta.glob` picks the new file up automatically; no registration. `getGuide(slug, locale)` serves it, `localizedGuideMeta(slug, locale)` localizes its hub/category card, and `isEnglishFallback` stops showing the notice for that locale.
+3. `import.meta.glob` picks the new file up automatically; no registration. `getGuide(slug, locale)` serves it, `localizedGuideMeta(slug, locale)` localizes its hub/category card, and `isEnglishFallback` stops showing the notice for that locale **and for every other locale in the same language**.
 4. Re-run the guides test + a dev-mode build (`npx vite build --mode development --workspace=apps/web`) — the localized prose compiles into a client chunk; the English body still prerenders into the static `build/learn/<slug>.html` (canonical), with the localized component lazy-resolved client-side after hydration.
 
 ## Cross-linking (CTA targets)
@@ -88,15 +88,15 @@ Every route in that table is resolved against the SvelteKit route tree on disk b
 
 Two layers:
 
-1. **Chrome / UI strings** (`learn.*` namespace) — shipped in all six locales (`en, de, fr, es, ja, pt-BR`), enforced by `messages_parity.test.ts`.
+1. **Chrome / UI strings** (`learn.*` namespace) — shipped in all seven locales (`en, de, fr, es, ja, pt-BR, pt-PT`), enforced by `messages_parity.test.ts`.
 2. **Guide prose** — **per-locale lookup with English fallback, shipped** (2026-06-20). `guides.ts` indexes every `<slug>.<locale>.md` variant from the same `import.meta.glob`. The resolution surface:
-   - `getGuide(slug, locale)` → the localized article body when a `<slug>.<locale>.md` exists, else the English entry. Drives the article `<GuideBody/>` + H1.
-   - `localizedGuideMeta(slug, locale)` → the localized `title` + `description`, **falling back field-by-field** to the English frontmatter. Drives the hub + category cards (`GuideCard.svelte`) AND the article H1, so a non-English visitor reads a consistent localized listing → body and never an English title above a localized body.
-   - `isEnglishFallback(slug, locale)` → drives the one-line "this guide is in English" notice, shown only when the active locale has no file for that slug.
+   - `getGuide(slug, locale)` → the exact-locale article body when a `<slug>.<locale>.md` exists, else **any guide in the same LANGUAGE** (a `pt-PT` reader is served the `pt-BR` file; two same-language variants sort by tag so the pick is deterministic rather than glob-order), else the English entry. Drives the article `<GuideBody/>` + H1.
+   - `localizedGuideMeta(slug, locale)` → the localized `title` + `description`, **falling back field-by-field** to the English frontmatter. Drives the hub + category cards (`GuideCard.svelte`), so a non-English visitor reads a localized listing rather than an English title above a body that localizes a click away. It resolves in the **same order as `getGuide`** — exact tag, then same language, then English — because the card and the body disagreeing is the defect this helper exists to prevent: a `pt-PT` reader served the Brazilian body would otherwise have read an English title above it. The article H1 comes from `getGuide`'s entry.
+   - `isEnglishFallback(slug, locale)` → drives the one-line "this guide is in English" notice. It asks whether the reader's **language** is served, not whether their exact tag is, so the notice correctly does not fire for a `pt-PT` reader handed the Brazilian guide — telling them it is in English would be false.
    - The English body still **prerenders** into the static `build/learn/<slug>.html` (the canonical, SEO-indexed copy — `<head>` meta is English by design); the localized component is lazy-resolved client-side after `initLocale` swaps the active locale.
    - `guides.test.ts` guards the localized files: the suffix must be a supported non-default locale, an English source must exist to fall back to, `(slug, locale)` is unique, and the localized frontmatter agrees with its English sibling on `slug`/`category`/`order`/`cta.feature` (only `title`/`description` differ).
 
-   **Localized today:** all eight guides — `road-running-101`, `couch-to-5k`, `choosing-running-shoes`, `weekly-running-routine`, `how-to-pace-your-first-race`, `trail-running-basics`, `what-to-eat-before-a-long-run`, `your-first-race` — in all six locales (`en` source + `de/fr/es/ja/pt-BR`). The prose-localization content is **complete** (2026-06-20); the resolver's field-by-field English fallback stays wired for any future guide added before its translations land. See [decisions.md § 179](../architecture/decisions.md).
+   **Localized today:** all eight guides — `road-running-101`, `couch-to-5k`, `choosing-running-shoes`, `weekly-running-routine`, `how-to-pace-your-first-race`, `trail-running-basics`, `what-to-eat-before-a-long-run`, `your-first-race` — in six languages of record (`en` source + `de/fr/es/ja/pt-BR`), 48 files on disk. That is the **prose** set; the `learn.*` chrome ships in all seven UI locales. `pt-PT` carries no prose of its own and needs none — the same-language step serves it the `pt-BR` guide. The prose-localization content is **complete** (2026-06-20); the resolver's field-by-field English fallback stays wired for any future guide added before its translations land. See [decisions.md § 179](../architecture/decisions.md).
 
 ## Mobile / watch
 
