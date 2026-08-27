@@ -67,6 +67,11 @@ const POSSESSIVES: Record<Locale, string[]> = {
 	fr: ['ton', 'ta', 'tes'],
 	ja: ['あなたの'],
 	'pt-BR': ['seu', 'sua', 'seus', 'suas'],
+	// European Portuguese uses the same third-person possessive as Brazilian in
+	// this catalogue's register; the `tu` forms are listed too so a phrase that
+	// switches register mid-sentence is still counted rather than slipping the
+	// guard by using two different words for the one possessive.
+	'pt-PT': ['seu', 'sua', 'seus', 'suas', 'teu', 'tua', 'teus', 'tuas'],
 };
 
 // Japanese has no word boundaries, so it is counted as a substring; the Latin
@@ -107,6 +112,10 @@ const FIXTURES: Array<[flagged: boolean, loc: Locale, s: string]> = [
 	[true, 'fr', 'Alice a donné des kudos à ton ta course'],
 	[true, 'ja', 'Alice があなたのあなたのランに kudos を送りました'],
 	[true, 'pt-BR', 'Alice deu kudos à sua sua corrida'],
+	[true, 'pt-PT', 'Alice deu kudos à sua sua corrida'],
+	// The doubling the `tu` forms exist to catch: two DIFFERENT words for the
+	// one possessive, which an exact-repeat matcher spares.
+	[true, 'pt-PT', 'Alice deu kudos à tua sua corrida'],
 	// The fixed renders, same six.
 	[false, 'en', 'Alice gave kudos to your run'],
 	[false, 'de', 'Alice hat deinem Lauf Kudos gegeben'],
@@ -114,6 +123,7 @@ const FIXTURES: Array<[flagged: boolean, loc: Locale, s: string]> = [
 	[false, 'fr', 'Alice a donné des kudos à ta course'],
 	[false, 'ja', 'Alice があなたのランに kudos を送りました'],
 	[false, 'pt-BR', 'Alice deu kudos à sua corrida'],
+	[false, 'pt-PT', 'Alice deu kudos à sua corrida'],
 	// The distance branch, which keeps its single possessive.
 	[false, 'en', 'Alice gave kudos to your 5.2 km'],
 	[false, 'fr', 'Alice a commenté ton 5,2 km'],

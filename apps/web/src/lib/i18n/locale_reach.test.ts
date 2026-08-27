@@ -22,12 +22,19 @@ const supported = new Set<string>(SUPPORTED_LOCALES);
 /**
  * Catalogues that no BARE base-language tag resolves to, each with the reason
  * a reader reaches them anyway. BASE_TO_LOCALE names one variant per language,
- * so a language shipping two catalogues necessarily leaves one off it. Empty
- * today — every web catalogue is its language's base target — and the
+ * so a language shipping two catalogues necessarily leaves one off it. The
  * companion test asserts each entry is still exempt, so it cannot rot into a
- * blanket allowance. Mobile carries the pt-BR entry this list is shaped for.
+ * blanket allowance.
  */
-const BASE_FALLBACK_EXEMPT: Record<string, string> = {};
+const BASE_FALLBACK_EXEMPT: Record<string, string> = {
+	'pt-BR':
+		'Portuguese ships two catalogues and BASE_TO_LOCALE points the bare tag at the ' +
+		'European one, so Brazilian is reached through EXACT rather than by base. That ' +
+		'costs a Brazilian reader nothing: Android, iOS and every browser report the ' +
+		'region, so `pt-BR` is the tag that actually arrives. The bare `pt` is worth ' +
+		'more to Portugal, which shares its orthography with pt-AO, pt-MZ and pt-CV — ' +
+		'none of which we carry exactly — and it is what the phone does.',
+};
 
 /** The text between the bracket `marker` ends on and its match. */
 function literalAfter(source: string, marker: string): string {
