@@ -80,7 +80,7 @@ Spawn all fixer agents in one message so they run concurrently. Each is a `gener
 > 1. **Reproduce / locate.** Read the issue body. Find the root cause in the code — cite `file:line`. If you cannot reproduce or the fix needs a product decision, stop and report that instead of guessing.
 > 2. **Fix at the root, web-first.** Web is the canonical surface ([decisions §24](../../docs/architecture/decisions.md)). No band-aids, no widened timeouts/retries/skips to hide a bug ([CLAUDE.md § Always recommend the long-term solution](../../CLAUDE.md)).
 > 3. **Honor the invariants:** twin parity (mirror `apps/mobile_android/lib|test` edits into `apps/mobile_ios`, and keep any TS↔Dart parity helper in lockstep — run `shared-library-syncer`); paywall gates; fail-closed defaults; layered resilience on the recording stack; no emojis; zero-comment default.
-> 4. **i18n:** any new user-facing string → all six web locales + all mobile ARBs.
+> 4. **i18n:** any new user-facing string → every web locale (read `apps/web/src/lib/i18n/locales/`, do not assume a count) + all mobile ARBs.
 > 5. **Tests in the SAME commit as the fix** — a pinning unit test (or Playwright e2e for a web UI path, pgtap/Deno for backend) that fails before and passes after. A fix with no test is not done.
 > 6. **Docs:** update whatever the change touches per [CLAUDE.md § Docs hygiene](../../CLAUDE.md) (roadmap/parity/features/per-app CLAUDE.md), and regenerate both type files if you touched schema.
 > 7. **Commit path-scoped, per piece** (`git commit -m "…" -- <paths>`); conventional-commit messages; **no AI attribution** of any kind.

@@ -1055,7 +1055,7 @@ Web-first per [§ 24](../architecture/decisions.md#24-web-is-the-canonical-featu
 
 1. **Web (smaller):** remove the `/routes` nav item in `+layout.svelte`; add the `Runs · Routes · Plans` sub-tabs to `/runs`; keep `/routes` resolving. Update `tests-e2e/cross-cutting/surfaces.spec.ts` (the sidebar-contract test) + add a Routes-under-Runs nav test.
 2. **Mobile (larger — the real lift):** reshape `home_screen.dart` bottom nav to `Home · Train · + · Social · You`; build the `Train` hub screen with the `All · Runs · Gym · Nutrition` sub-tab strip (All = the existing timeline widgets; Runs = `RunsScreen` + a Routes section); move Settings under a new `You` screen; drop routes from the Social screen. Byte-identical iOS twin per [§ 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) — run `mobile-twin-mirror` after every Dart edit. Pin with Flutter widget tests for the hub sub-tab switch + the relocated Routes entry.
-3. **i18n:** new nav labels (`nav.train`, `nav.you`, the Train sub-tab labels) into all six web gen-l10n catalogues + all mobile ARBs.
+3. **i18n:** new nav labels (`nav.train`, `nav.you`, the Train sub-tab labels) into every web catalogue + all mobile ARBs.
 4. **Docs:** flip the relevant rows here + in [parity.md](../product/parity.md); land the ADR (Appendix); update [clubs.md](clubs.md) (Social no longer hosts routes on mobile) and the per-app CLAUDE.md nav notes.
 
 ### Build order across the open proposals (avoid nav thrash)

@@ -9,7 +9,7 @@
 > - **Threshold contract:** the SQL award function duplicates the catalogue thresholds verbatim; `badges.test.ts` + `achievements_test.sql` pin both sides.
 > - **Narrow unions:** `AchievementTier` + `AchievementSourceKind` in `types.ts` (+ the `Achievement` overlay), both pairs added to `check_constraint_unions.mjs`; `'achievement'` added to `NotificationKind`.
 > - **Web surfaces:** `BadgeGrid.svelte` mounted as a new **Achievements** tab on `/u/[id]` (owner sees private + a per-badge public toggle + share-link; non-owner sees only public via RLS); a recent-badges strip in `SocialFeed.svelte` (`fetchFollowingBadgeAwards`); the public `/share/badge/[id]` page + `/og/badge/[id].png` endpoint + the `apps/web/lambda/share-badge/` SSR handler (mirrors `share-run`). data.ts: `fetchUserBadges` / `fetchMyBadges` / `setBadgeVisibility` / `fetchBadgeForShare` / `fetchFollowingBadgeAwards`. 4 Playwright assertions in `tests-e2e/social/badges.spec.ts`; the share-page chrome (header logo + footer home/sign-in, matching the sibling `/share/*` pages) is pinned in `tests-e2e/share/badge.spec.ts`.
-> - **i18n:** all six web locales (chrome + a label/desc pair per catalogue entry).
+> - **i18n:** every web locale (chrome + a label/desc pair per catalogue entry).
 >
 > ## Shipped state (mobile read surface, 2026-06-20)
 >
@@ -214,7 +214,7 @@ Build after web ships + review (decisions §24). Byte-identical iOS twin in the 
 - **CHECK↔union guard**: the two new pairs in `check_constraint_unions.mjs` are exercised by the existing
   `parity-types` job.
 
-## i18n keys to add (all six web locales + ARBs)
+## i18n keys to add (every web locale + ARBs)
 
 Web dotted / mobile ARB camelCase. Representative subset (one `label` + `desc` per badge family, plus chrome):
 
@@ -227,7 +227,7 @@ Web dotted / mobile ARB camelCase. Representative subset (one `label` + `desc` p
 - `badges.notif` → "You earned a new badge: {badge}"
 - Per badge family (each with `.label` + `.desc`): `badges.distance5k`, `badges.distance100k`,
   `badges.distanceMarathon`, `badges.streak7`, `badges.streak30`, `badges.streak100`, `badges.pr5k`, `badges.prAll`,
-  `badges.segmentKing`, `badges.planFinisher` … (every catalogue entry gets a key pair in all six locales — real
+  `badges.segmentKing`, `badges.planFinisher` … (every catalogue entry gets a key pair in every web locale — real
   translations, `test/l10n_parity_test.dart` + `messages_parity.test.ts` enforce parity).
 
 Run `flutter gen-l10n` after ARB edits; mirror `lib/l10n/gen/` to the iOS twin.
@@ -270,7 +270,7 @@ Run `flutter gen-l10n` after ARB edits; mirror `lib/l10n/gen/` to the iOS twin.
    `check_constraint_unions.mjs` pairs + `achievements_test.sql` + `seed.sql` badge fixture.
 3. `feat(web): badges on profile + share page + feed` — `BadgeGrid.svelte`, `u/[id]/+page.svelte`,
    `share/badge/[id]/+page.svelte`, `og/badge/[id].png/+server.ts`, `lambda/share-badge/`, data.ts helpers, types.ts
-   unions, i18n in all six locales, `apps/web/tests-e2e/social/badges.spec.ts`.
+   unions, i18n in every web locale, `apps/web/tests-e2e/social/badges.spec.ts`.
 4. `feat(mobile): badge catalogue twin + grid + profile/feed surfaces` — `badges.dart` + `badges_test.dart`,
    `badge_grid.dart`, profile/feed/notification branches, api_client + core_models model, ARBs + gen-l10n.
    **Mirror every `lib/`+`test/` path to `apps/mobile_ios` in the same commit.**
@@ -300,7 +300,7 @@ Run `flutter gen-l10n` after ARB edits; mirror `lib/l10n/gen/` to the iOS twin.
    `notifications` kind extension), using the catalogue thresholds; add `achievements` to `_tables`; `supabase db
    reset`; run both codegen commands; add the two CHECK↔union pairs; write pgtap + seed fixture (commit 2).
 3. Build the web surfaces: `BadgeGrid`, profile section, share page + OG + lambda, feed card, data.ts helpers,
-   types.ts unions, i18n in all six locales, Playwright spec; `npm run check` (commit 3).
+   types.ts unions, i18n in every web locale, Playwright spec; `npm run check` (commit 3).
 4. Mirror to mobile: `badges.dart` + tests, `badge_grid.dart`, profile/feed/notification branches, api_client +
    core_models model, ARBs + gen-l10n; diff-verify iOS twin byte-identical (commit 4).
 5. Docs sweep (commit 5).

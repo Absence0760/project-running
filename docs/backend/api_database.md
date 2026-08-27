@@ -981,7 +981,7 @@ disclosure in Settings → Account. Every gate fails closed: no record, a half-w
 unreadable lookup, or an unknown version all deny. Pinned by `ai_disclosure_consent_test.sql`.
 
 **Pre-deploy checklist item (not a code blocker):** counsel / CISO sign-off on the v2
-disclosure copy (`coachPage.consent*` in the six web locales) before it is presented in
+disclosure copy (`coachPage.consent*` in the every web locale) before it is presented in
 production. The code, the gate, and the record ship now.
 
 `height_cm` (migration `20261216_001`, nutrition BMR) is **special-category health data** and shares the `gender`/`date_of_birth` posture: it is **owner-only** — not on the `20260707_001` public-safe column grant, so it's read back through `get_my_profile()` and never exposed to other authenticated callers or anon — and its persistence is gated on `health_data_consent_at` at the client layer, exactly like gender/DOB. Same for the `body_metrics` weight series below.

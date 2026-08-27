@@ -182,7 +182,7 @@ Per `decisions.md §39`, every Dart change lands **byte-identical** in `apps/mob
 - **Flutter (`apps/mobile_android/test/` + iOS twin):** `fundraiser_progress_test.dart` (parity-matched, ≥10), and a `run_detail_screen_test.dart` / `event_detail_screen_test.dart` widget assertion that the read-only card renders.
 - **Parity:** the `fundraiser_progress` pair test counts must match across TS/Dart.
 
-## i18n keys to add (all six web locales + all mobile ARBs)
+## i18n keys to add (every web locale + all mobile ARBs)
 
 Web (`apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`) and mobile (`apps/mobile_android/lib/l10n/app_{en,de,es,fr,ja,pt,pt_BR}.arb`). Representative keys:
 
@@ -250,6 +250,6 @@ Web (`apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`) and mobile (`app
 6. Build the public `/fundraisers/[id]` page + `GoalThermometer` / `DonationFeed` / `FundraiserCard` / `FundraiserEditor` components; wire the success-poll. Add Playwright (incl. test-mode Stripe donate).
 7. Add the attach affordance to run-detail + event-detail (web).
 8. Mirror the read/share card to mobile (`social_service.dart` + the two detail screens), byte-identical across both twins; add widget tests.
-9. Add all i18n keys to six web locales + seven ARBs.
+9. Add all i18n keys to every web locale + seven ARBs.
 10. Docs sweep (roadmap, parity, api_database, club_events cross-ref, integrations, a decisions.md ADR, the CLAUDE.md parity-list entry, GDPR docs).
 11. Run `/check` against the working diff before each commit; keep the live charge path fail-closed (no live keys).

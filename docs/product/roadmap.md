@@ -419,7 +419,7 @@ If during early Phase 4 development it becomes obvious that nutrition has a very
 
 ## Multi-language (i18n) across all clients — landed
 
-Web already shipped six locales (`en/de/fr/es/ja/pt-BR`) — see [decisions.md § 108](../architecture/decisions.md#108-web-i18n-is-detected-client-side-with-a-lazy-loaded-message-catalogue--not-an-accept-language-ssr-framework). This epic brought the same six to mobile + the two watches, each via its platform-standard mechanism, with a per-device locale that defaults to the device locale (never DB-synced). Tracked in [parity.md § App-level settings](parity.md#app-level-settings-not-in-the-registry). Mobile design: [decisions.md § 113](../architecture/decisions.md#113-mobile-i18n-uses-flutter-gen-l10n--arb-with-committed-non-synthetic-output-and-a-per-device-locale).
+Web already shipped seven locales (`en/de/fr/es/ja/pt-BR/pt-PT`) — see [decisions.md § 108](../architecture/decisions.md#108-web-i18n-is-detected-client-side-with-a-lazy-loaded-message-catalogue--not-an-accept-language-ssr-framework). This epic brought the same six to mobile + the two watches, each via its platform-standard mechanism, with a per-device locale that defaults to the device locale (never DB-synced). Tracked in [parity.md § App-level settings](parity.md#app-level-settings-not-in-the-registry). Mobile design: [decisions.md § 113](../architecture/decisions.md#113-mobile-i18n-uses-flutter-gen-l10n--arb-with-committed-non-synthetic-output-and-a-per-device-locale).
 
 - [x] Mobile (Flutter): gen-l10n + ARB framework, `localeNotifier` + per-device `Preferences.locale`, language picker in Settings → Preferences, parity + negotiation + picker tests
 - [x] Mobile: pilot strings migrated (nav + settings section headers) proving the path

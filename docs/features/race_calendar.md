@@ -186,7 +186,7 @@ Byte-identical across `apps/mobile_android/lib/` and `apps/mobile_ios/lib/` (+ t
 - **node:test (web pure):** `apps/web/src/lib/integrations/race_match.test.ts` (≥14).
 - **Flutter (`apps/mobile_android/test/` + iOS twin):** `race_match_test.dart` (parity-matched ≥14); `races_screen_test.dart` widget test (search renders, near-me gated); a `run_detail_screen_test.dart` assertion for the auto-match prompt + matched-result render. **Bake in the mobile-test gotchas**: store I/O needs `tester.runAsync`, avoid `pumpAndSettle` on map/cursor animations.
 
-## i18n keys to add (all six web locales + all mobile ARBs)
+## i18n keys to add (every web locale + all mobile ARBs)
 
 Web `apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`; mobile `apps/mobile_android/lib/l10n/app_{en,de,es,fr,ja,pt,pt_BR}.arb` (+ iOS twin). Representative:
 
@@ -248,6 +248,6 @@ Web `apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`; mobile `apps/mobi
 7. Wire the RunSignUp card in Settings → Integrations; wire run-detail official-result render + "Find my result".
 8. Implement the auto-match-on-record seam: post-save layered-resilience-wrapped candidate check → non-blocking inform-tier prompt → confirm → enrich the run row (web run-detail first, then mobile).
 9. Mirror calendar + auto-match prompt + RunSignUp tile to mobile (both twins, byte-identical); widget tests with the `tester.runAsync` gotchas.
-10. Add all i18n keys (six web locales + seven ARBs).
+10. Add all i18n keys (every web locale + seven ARBs).
 11. Docs sweep (roadmap #10, parity, integrations, metadata.md writer flip, api_database, decisions ADR, CLAUDE.md parity entry, e2e dev accounts).
 12. Run `/check` before each commit; keep RunSignUp fail-closed (no key in CI/dev).
