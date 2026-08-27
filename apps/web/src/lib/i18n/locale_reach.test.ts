@@ -183,6 +183,75 @@ test("every base-fallback exemption still needs its exemption", () => {
 });
 
 /**
+ * Words only one of the two Portuguese variants uses. A catalogue tagged for
+ * one variant containing the other's word is the failure this locale keeps
+ * producing: `pt-PT.ts` shipped with 33 keys still saying `senha` and six
+ * saying `morada` for an e-mail or IP address, because the substitution corpus
+ * § 755 mined was taken from `app_pt.arb`, whose auth block had never been
+ * Europeanised either. Every existing guard here asks whether a catalogue is
+ * REACHABLE; none asked whether it says what its tag claims.
+ *
+ * Deliberately narrow — each is a word the other variant does not use at all,
+ * not one it uses less. A frequency rule needs a threshold and a threshold is
+ * a number nobody can defend. The mobile twin is the `locale reach` group in
+ * apps/mobile_android/test/architecture_guards_test.dart.
+ */
+const BRAZILIAN_ONLY = [
+	"você", "senha", "tela", "arquivo", "celular", "esteira", "excluir",
+	"registrar", "compartilhar", "baixar", "ônibus", "geladeira", "xícara",
+	"aplicativo", "cadastrar", "planejar", "gerenciar", "tênis", "quilômetro",
+	"gênero", "acessar", "câmera", "escanear",
+];
+const EUROPEAN_ONLY = [
+	"palavra-passe", "ecrã", "ficheiro", "telemóvel", "passadeira", "partilhar",
+	"quilómetro", "género", "autocarro", "frigorífico", "chávena", "ginásio",
+];
+const VARIANT_WORDS: Record<string, string[]> = {
+	"pt-PT": BRAZILIAN_ONLY,
+	"pt-BR": EUROPEAN_ONLY,
+};
+/**
+ * `excluir` and `arquivo` carry a second sense in Portugal (exclude, archive)
+ * that is not a Brazilianism, and `vocês` is the plural. Naming the keys keeps
+ * the words in the scan everywhere else, where they are the delete and file
+ * senses.
+ */
+const VARIANT_SENSE_EXEMPT = new Set([
+	"routeDetail.sendDm.intro",
+	"routeDetail.sendDm.relationMutual",
+	"profile.blockConfirmMessage",
+	"clubEditor.descriptionPlaceholder",
+	"settingsAccount.newEmailPlaceholder",
+	"nutrition.targets.exerciseHint",
+	"nutrition.targets.defaultsHint",
+]);
+
+test("a Portuguese catalogue does not read as the variant it is not", async () => {
+	for (const [tag, words] of Object.entries(VARIANT_WORDS)) {
+		assert.ok(supported.has(tag), `${tag} is not a shipped locale.`);
+		const messages = await CATALOGUE_LOADERS[tag as keyof typeof CATALOGUE_LOADERS]();
+		const offenders: string[] = [];
+		for (const [key, value] of Object.entries(messages)) {
+			if (VARIANT_SENSE_EXEMPT.has(key) || typeof value !== "string") continue;
+			for (const word of words) {
+				if (
+					new RegExp(`(?<![a-zà-ÿ])${word}(s|es)?(?![a-zà-ÿ])`, "iu").test(value)
+				) {
+					offenders.push(`${key}: "${word}"`);
+				}
+			}
+		}
+		assert.deepEqual(
+			offenders,
+			[],
+			`locales/${tag}.ts is tagged ${tag} but reads as the other variant. A tag ` +
+				"that disagrees with its content is worse than a missing catalogue: the " +
+				"reader is told this is their Portuguese and it is not.",
+		);
+	}
+});
+
+/**
  * A flat array literal of quoted strings, e.g. `['en', 'de', 'pt-BR']`. Only a
  * FLAT one: a fixture table of tuples names locales too, and each of those rows
  * is a case about one locale rather than a claim about the shipped set.
