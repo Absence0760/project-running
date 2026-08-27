@@ -252,6 +252,68 @@ test("a Portuguese catalogue does not read as the variant it is not", async () =
 });
 
 /**
+ * Words European Portuguese really does use, but for a DIFFERENT sense than the
+ * one Brazilian spends them on. `BRAZILIAN_ONLY` above cannot hold these: its
+ * entries are words Portugal does not use at all, and a deny-list entry for a
+ * word with a legitimate sense would have to be answered by dropping the word,
+ * which blinds the scan everywhere. So the direction is inverted — the word is
+ * banned outright and the sites that mean the other thing are named.
+ *
+ * `padrão` is *standard* and *pattern* in Portugal; the pre-set value is a
+ * `predefinição`. Brazilian spends one word on all three, so a catalogue
+ * derived from it reads as Brazilian at every default. Naming the survivors is
+ * what makes this hold: a NEW string saying `padrão` fails here and forces the
+ * per-site decision rather than inheriting the ambiguity again.
+ *
+ * The mobile twin is the `locale reach` group in
+ * apps/mobile_android/test/architecture_guards_test.dart.
+ */
+const SENSE_SPLIT: Record<string, { word: RegExp; onlyAt: string[] }> = {
+	"pt-PT": {
+		word: /(?<![a-zà-ÿ])padr(ão|ões)(?![a-zà-ÿ])/iu,
+		onlyAt: [
+			// "the world standard for your age and sex"
+			"dash.prAgeGradeTitle",
+			// "the pattern most associated with injury"
+			"loadRamp.meaning_high",
+		],
+	},
+};
+
+test("a sense-split word survives only where the other sense was recorded", async () => {
+	for (const [tag, { word, onlyAt }] of Object.entries(SENSE_SPLIT)) {
+		const messages = await CATALOGUE_LOADERS[tag as keyof typeof CATALOGUE_LOADERS]();
+		const allowed = new Set(onlyAt);
+		const offenders = Object.entries(messages)
+			.filter(([k, v]) => !allowed.has(k) && typeof v === "string" && word.test(v))
+			.map(([k]) => k);
+		assert.deepEqual(
+			offenders,
+			[],
+			`locales/${tag}.ts spends ${word.source} on a sense Portugal does not ` +
+				"use it for. A default is a `predefinição`; `padrão` is a standard or " +
+				"a pattern. If one of these really is the other sense, add it to " +
+				"SENSE_SPLIT.onlyAt with the English source in a comment.",
+		);
+		// A named site that no longer says the word is a dead entry, and a dead
+		// entry is how an allowlist stops being a decision and starts being noise.
+		for (const key of onlyAt) {
+			const value = messages[key as keyof typeof messages];
+			assert.equal(
+				typeof value,
+				"string",
+				`${tag}: SENSE_SPLIT names ${key}, which the catalogue no longer has.`,
+			);
+			assert.ok(
+				word.test(value as string),
+				`${tag}: ${key} no longer says ${word.source} — drop it from ` +
+					"SENSE_SPLIT.onlyAt so the guard covers the key again.",
+			);
+		}
+	}
+});
+
+/**
  * A flat array literal of quoted strings, e.g. `['en', 'de', 'pt-BR']`. Only a
  * FLAT one: a fixture table of tuples names locales too, and each of those rows
  * is a case about one locale rather than a claim about the shipped set.

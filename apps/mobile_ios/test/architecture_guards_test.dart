@@ -5774,6 +5774,67 @@ void main() {
       }
     });
 
+    /// Words European Portuguese really does use, but for a DIFFERENT sense
+    /// than the one Brazilian spends them on. `brazilianOnly` above cannot
+    /// hold these: its entries are words Portugal does not use at all, and a
+    /// deny-list entry for a word with a legitimate sense can only be answered
+    /// by dropping the word, which blinds the scan everywhere else. So the
+    /// direction is inverted — the word is banned outright and the sites that
+    /// mean the other thing are named.
+    ///
+    /// `padrão` is *standard* and *pattern* in Portugal; the pre-set value is a
+    /// `predefinição`. Brazilian spends one word on all three, so a catalogue
+    /// derived from it reads as Brazilian at every default. Naming the
+    /// survivors is what makes this hold: a NEW string saying `padrão` fails
+    /// here and forces the per-site decision rather than inheriting the
+    /// ambiguity again. The web twin is `locale_reach.test.ts`.
+    const senseSplit = <String, (String, List<String>)>{
+      'pt-PT': (
+        r'padr(ão|ões)',
+        // loadRampMeaningHigh is "the pattern most associated with injury".
+        ['loadRampMeaningHigh'],
+      ),
+    };
+
+    test('a sense-split word survives only where the other sense was recorded',
+        () {
+      for (final entry in senseSplit.entries) {
+        final (pattern, onlyAt) = entry.value;
+        final word = RegExp('(?<![a-zà-ÿ])$pattern(?![a-zà-ÿ])',
+            caseSensitive: false, unicode: true);
+        final file = arbTagOverride.entries
+            .where((e) => e.value == entry.key)
+            .map((e) => e.key)
+            .followedBy([entry.key]).first;
+        final arb = File('lib/l10n/app_${file.replaceAll('-', '_')}.arb');
+        final messages =
+            (jsonDecode(arb.readAsStringSync()) as Map<String, dynamic>)
+              ..removeWhere((k, v) => k.startsWith('@') || v is! String);
+        expect(
+            messages.entries
+                .where((m) =>
+                    !onlyAt.contains(m.key) && word.hasMatch(m.value as String))
+                .map((m) => m.key)
+                .toList(),
+            isEmpty,
+            reason: '${arb.path} spends $pattern on a sense Portugal does not '
+                'use it for. A default is a `predefinição`; `padrão` is a '
+                'standard or a pattern. If one of these really is the other '
+                'sense, add it to senseSplit with the English source in a '
+                'comment.');
+        // A named site that no longer says the word is a dead entry, and a dead
+        // entry is how an allowlist stops being a decision and becomes noise.
+        for (final key in onlyAt) {
+          expect(messages, contains(key),
+              reason: '${entry.key}: senseSplit names $key, which the '
+                  'catalogue no longer has.');
+          expect(word.hasMatch(messages[key] as String), isTrue,
+              reason: '${entry.key}: $key no longer says $pattern — drop it '
+                  'from senseSplit so the guard covers the key again.');
+        }
+      }
+    });
+
     test('every base-fallback exemption still needs its exemption', () {
       final reachedByBase =
           localeTags(literalAfter(support, '_baseToLocale = <String, Locale>{'));
