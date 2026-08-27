@@ -35,6 +35,9 @@ String ttsLanguageTag(String localeTag) {
     case 'pt-br':
     case 'pt_br':
       return 'pt-BR';
+    case 'pt-pt':
+    case 'pt_pt':
+      return 'pt-PT';
   }
   switch (base) {
     case 'en':
@@ -47,8 +50,11 @@ String ttsLanguageTag(String localeTag) {
       return 'es-ES';
     case 'ja':
       return 'ja-JP';
+    // Bare `pt` is the European catalogue here, as `_baseToLocale` resolves
+    // it — speaking Brazilian over European text is the same disagreement
+    // between a tag and its content that the catalogue itself carried.
     case 'pt':
-      return 'pt-BR';
+      return 'pt-PT';
     default:
       return 'en-US';
   }

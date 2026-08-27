@@ -4,6 +4,7 @@
 
 import 'dart:ui';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/locale_support.dart';
@@ -90,27 +91,56 @@ void main() {
     test('recognises the seven canonical tags case-insensitively', () {
       expect(isSupportedTag('en'), isTrue);
       expect(isSupportedTag('PT-BR'), isTrue);
-      expect(isSupportedTag('pt'), isTrue);
+      expect(isSupportedTag('pt-PT'), isTrue);
+      // Bare `pt` is a BASE tag, not a canonical one: it negotiates to pt-PT
+      // through `_baseToLocale`, but it is not itself a tag we store.
+      expect(isSupportedTag('pt'), isFalse);
       expect(isSupportedTag('it'), isFalse);
       expect(isSupportedTag(null), isFalse);
     });
   });
 
-  // `app_pt.arb` shipped 3478 European-Portuguese strings, 247 of which
-  // genuinely differ from the Brazilian catalogue, and NONE of them could be
-  // reached: `pt` was absent from `supportedLocales` and `_baseToLocale`
-  // mapped the base onto `pt-BR`, so `negotiate('pt-PT')` measured `pt-BR`.
+  // The European catalogue ships 1164 strings that genuinely differ from the
+  // Brazilian one, and for a long time NONE of them could be reached: `pt` was
+  // absent from `supportedLocales` and `_baseToLocale` mapped the base onto
+  // `pt-BR`, so `negotiate('pt-PT')` measured `pt-BR`. It is tagged `pt-PT`
+  // since round 19, matching web, the wrist and Info.plist.
   // Every case below is one of the measurements taken when closing that.
   group('Portuguese ships as two reachable catalogues', () {
     test('pt-PT reaches the European catalogue, not the Brazilian one', () {
       expect(
         negotiateLocale(null, const [Locale('pt', 'PT')]),
-        const Locale('pt'),
+        const Locale('pt', 'PT'),
       );
     });
 
     test('a bare pt reaches the European catalogue', () {
-      expect(negotiateLocale(null, const [Locale('pt')]), const Locale('pt'));
+      expect(negotiateLocale(null, const [Locale('pt')]),
+          const Locale('pt', 'PT'));
+    });
+
+    // Following the device locale means `MaterialApp.locale` is null, so
+    // FLUTTER resolves — against `supportedLocales`, not through
+    // `negotiateLocale` — and it takes the first entry matching on language
+    // alone. The two paths must therefore agree, and they only do while
+    // `pt-PT` precedes `pt-BR` in the list: measured, reversing the pair sends
+    // a bare-`pt` device to Brazilian while `_baseToLocale` still says
+    // European.
+    test('Flutter resolves a device locale the same way negotiateLocale does',
+        () {
+      for (final device in const <Locale>[
+        Locale('pt'),
+        Locale('pt', 'PT'),
+        Locale('pt', 'BR'),
+        Locale('pt', 'AO'),
+      ]) {
+        expect(
+          basicLocaleListResolution(<Locale>[device], supportedLocales),
+          negotiateLocale(null, <Locale>[device]),
+          reason: '$device resolves differently through Flutter than through '
+              'negotiateLocale — check the order of supportedLocales.',
+        );
+      }
     });
 
     test('pt-BR still matches Brazil exactly', () {
@@ -124,12 +154,12 @@ void main() {
         () {
       expect(
         negotiateLocale(null, const [Locale('pt', 'AO')]),
-        const Locale('pt'),
+        const Locale('pt', 'PT'),
       );
     });
 
     test('both variants are offered, and each has a picker endonym', () {
-      expect(supportedLocales, contains(const Locale('pt')));
+      expect(supportedLocales, contains(const Locale('pt', 'PT')));
       expect(supportedLocales, contains(const Locale('pt', 'BR')));
       // A locale the picker cannot name is a blank row, so the label table is
       // part of shipping a locale, not decoration.

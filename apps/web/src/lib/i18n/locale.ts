@@ -12,7 +12,13 @@
 // the same parser works if a server surface (e.g. the coach Lambda) ever
 // needs it.
 
-export const SUPPORTED_LOCALES = ['en', 'de', 'fr', 'es', 'ja', 'pt-BR', 'pt-PT'] as const;
+// Order matters on the phone — Flutter resolves a device locale against this
+// list directly, so `pt-PT` sitting before `pt-BR` is what makes a device
+// reporting a bare `pt` land where BASE_TO_LOCALE says it should. Web never
+// negotiates off the order (BASE_TO_LOCALE is consulted explicitly) and uses
+// it only to order the picker, but the two lists are kept identical so the
+// twin reads as one thing.
+export const SUPPORTED_LOCALES = ['en', 'de', 'fr', 'es', 'ja', 'pt-PT', 'pt-BR'] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = 'en';
 
