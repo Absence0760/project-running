@@ -12,8 +12,9 @@ import (
 // fallback + the UTC time formatting are shared with the email path
 // (lookupEmailShared / formatTimeUTC), so only the body sentences live here.
 //
-// smsCatalogueParity_test.go pins that every supported locale carries both
-// variants, matching the email catalogue's locale set.
+// TestSmsCatalogueParity (handler_safety_sms_test.go) pins that every supported
+// locale carries every variant, matching the email catalogue's locale set —
+// which emailLocales derives from the catalogue rather than restating.
 type smsStrings struct {
 	// withLastSeen: owner, started-at, last-seen, live-link. Used when at
 	// least one position ping landed.
@@ -64,6 +65,12 @@ var smsCatalogue = map[string]smsStrings{
 		noPing:               "%s pode estar atrasado(a) numa corrida. Início %s, sem posição desde então. Também pode ser perda de sinal. Ao vivo: %s",
 		offRouteWithLastSeen: "%s saiu da rota planejada numa corrida. Início %s, visto %s. Pode ser desvio ou perda de sinal. Ao vivo: %s",
 		offRouteNoPing:       "%s saiu da rota planejada numa corrida. Início %s. Pode ser desvio ou perda de sinal. Ao vivo: %s",
+	},
+	"pt-PT": {
+		withLastSeen:         "%s pode estar atrasado(a) numa corrida. Início %s, visto %s. Também pode ser perda de sinal. Em direto: %s",
+		noPing:               "%s pode estar atrasado(a) numa corrida. Início %s, sem posição desde então. Também pode ser perda de sinal. Em direto: %s",
+		offRouteWithLastSeen: "%s saiu da rota planeada numa corrida. Início %s, visto %s. Pode ser desvio ou perda de sinal. Em direto: %s",
+		offRouteNoPing:       "%s saiu da rota planeada numa corrida. Início %s. Pode ser desvio ou perda de sinal. Em direto: %s",
 	},
 }
 

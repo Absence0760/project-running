@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"sort"
 	"strings"
 	"testing"
 )
@@ -53,11 +54,23 @@ func TestEmailCatalogueParity(t *testing.T) {
 	}
 }
 
+// TestNormalizeEmailLocale pins the tag→catalogue table against the web
+// negotiator's (apps/web/src/lib/i18n/locale.ts). The Portuguese rows used to
+// pin the OPPOSITE rule — `pt` and `pt-PT` both asserted to be "pt-BR" — so
+// the one test covering this function was the thing keeping a Lisbon reader's
+// inbox Brazilian while the browser and the wrist had already moved
+// (decisions § 761).
 func TestNormalizeEmailLocale(t *testing.T) {
 	cases := map[string]string{
-		"en": "en", "de": "de", "fr": "fr", "es": "es", "ja": "ja", "pt-BR": "pt-BR",
-		"de-DE": "de", "en-US": "en", "ja-JP": "ja",
-		"pt": "pt-BR", "pt-PT": "pt-BR", "PT-br": "pt-BR",
+		"en": "en", "de": "de", "fr": "fr", "es": "es", "ja": "ja",
+		"pt-BR": "pt-BR", "pt-PT": "pt-PT",
+		"de-DE": "de", "en-US": "en", "ja-JP": "ja", "de_AT": "de",
+		// Brazilian is reached by its own tag, which every browser, Android
+		// and iOS report. The bare tag and the other European-orthography
+		// regions have nowhere else to land, so they resolve to European —
+		// the same call BASE_TO_LOCALE.pt makes on web.
+		"pt": "pt-PT", "PT-br": "pt-BR", "pt_PT": "pt-PT",
+		"pt-AO": "pt-PT", "pt-MZ": "pt-PT", "pt-CV": "pt-PT",
 		"":   "en",
 		"xx": "en", "zh-CN": "en",
 	}
@@ -66,6 +79,71 @@ func TestNormalizeEmailLocale(t *testing.T) {
 			t.Errorf("normalizeEmailLocale(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+// TestEmailLocaleSetIsDerivedAndReachable is the guard a seventh locale needs
+// and the six shipped ones never had: that the locale set is one set, not four
+// hand-kept ones, and that every catalogue in it can actually be reached.
+//
+// A catalogue nothing normalizes to is dead weight nobody can see — the shape
+// § 740 named on the client side — and a locale in the normalizer's tables
+// with no catalogue behind it renders English while claiming otherwise. Both
+// directions are checked here because emailLocales itself is now derived from
+// emailCatalogue, so the parity test above can no longer catch either.
+func TestEmailLocaleSetIsDerivedAndReachable(t *testing.T) {
+	if len(emailLocales) == 0 {
+		t.Fatal("emailLocales is empty — catalogueLocales() derived nothing")
+	}
+	for i := 1; i < len(emailLocales); i++ {
+		if emailLocales[i-1] >= emailLocales[i] {
+			t.Fatalf("emailLocales is not sorted/unique: %v", emailLocales)
+		}
+	}
+
+	// The three catalogues carry exactly the same locales. Ranging
+	// emailLocales only proves one direction; a locale present in
+	// emailSharedByLocale or smsCatalogue but not in emailCatalogue would
+	// otherwise be invisible to every test in the package.
+	for name, got := range map[string][]string{
+		"emailSharedByLocale": sortedLocaleKeys(emailSharedByLocale),
+		"smsCatalogue":        sortedLocaleKeys(smsCatalogue),
+	} {
+		if strings.Join(got, ",") != strings.Join(emailLocales, ",") {
+			t.Errorf("%s carries %v, emailCatalogue carries %v", name, got, emailLocales)
+		}
+	}
+
+	shipped := map[string]bool{}
+	for _, loc := range emailLocales {
+		shipped[loc] = true
+	}
+	// Nothing in the normalizer may point at a catalogue that does not exist.
+	for tag, loc := range emailExact {
+		if !shipped[loc] {
+			t.Errorf("emailExact[%q] = %q, which has no catalogue", tag, loc)
+		}
+	}
+	for base, loc := range emailBase {
+		if !shipped[loc] {
+			t.Errorf("emailBase[%q] = %q, which has no catalogue", base, loc)
+		}
+	}
+	// And every catalogue is reachable by its own tag — the exact-match row
+	// is what a client writing the canonical value into prefs.locale hits.
+	for _, loc := range emailLocales {
+		if got := normalizeEmailLocale(loc); got != loc {
+			t.Errorf("catalogue %q is unreachable: normalizeEmailLocale(%q) = %q", loc, loc, got)
+		}
+	}
+}
+
+func sortedLocaleKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func TestLocaleFromPrefs(t *testing.T) {
