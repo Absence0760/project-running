@@ -10,6 +10,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { SUPPORTED_LOCALES } from './i18n/locale';
 
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
@@ -254,7 +255,7 @@ test('the segment-detail error copy is localized in all six catalogues', () => {
 		'segmentDetail.loadFailedBody',
 		'segmentDetail.retry',
 	];
-	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+	for (const locale of SUPPORTED_LOCALES) {
 		const source = read(`src/lib/i18n/locales/${locale}.ts`);
 		for (const key of keys) {
 			assert.match(
@@ -379,7 +380,7 @@ test('the catalogue-browse copy is localized in all six catalogues', () => {
 		'segments.browseNoMatches',
 		'segments.browseAll',
 	];
-	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+	for (const locale of SUPPORTED_LOCALES) {
 		const source = read(`src/lib/i18n/locales/${locale}.ts`);
 		for (const key of keys) {
 			assert.match(

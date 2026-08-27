@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { SUPPORTED_LOCALES, LOCALE_LABELS } from "./locale";
@@ -180,4 +180,109 @@ test("every base-fallback exemption still needs its exemption", () => {
     );
     assert.ok(reason.trim().length > 0);
   }
+});
+
+/**
+ * A flat array literal of quoted strings, e.g. `['en', 'de', 'pt-BR']`. Only a
+ * FLAT one: a fixture table of tuples names locales too, and each of those rows
+ * is a case about one locale rather than a claim about the shipped set.
+ */
+const STRING_ARRAY = /\[\s*(?:'[\w-]+'|"[\w-]+")\s*(?:,\s*(?:'[\w-]+'|"[\w-]+")\s*)*,?\s*\]/g;
+
+/** How many members of the shipped set a literal names. */
+function localesNamed(literal: string): number {
+	const quoted = new Set(
+		[...literal.matchAll(/['"]([\w-]+)['"]/g)].map((m) => m[1]),
+	);
+	return [...SUPPORTED_LOCALES].filter((l) => quoted.has(l)).length;
+}
+
+/**
+ * Three is the point at which a literal has stopped being a couple of examples
+ * and started being a claim about the shipped set.
+ */
+const HAND_LIST_MIN = 3;
+
+/**
+ * file -> the reason a deliberate SUBSET of the locales is spelled out there.
+ * The companion assertion below drops an entry that no longer names one, so
+ * this cannot outlive what it covers.
+ */
+const LOCALE_SUBSET_ALLOWED: Record<string, string> = {
+	"lib/format/number.test.ts":
+		"the comma-decimal subset. That is a property OF those locales, not the set " +
+		"we ship — en and ja group differently and belong in neither loop.",
+};
+
+const SCAN_SKIP = new Set(["node_modules", ".svelte-kit", "build", "dist"]);
+
+function sourceFiles(dir: string, out: string[] = []): string[] {
+	for (const entry of readdirSync(dir)) {
+		if (SCAN_SKIP.has(entry)) continue;
+		const full = join(dir, entry);
+		if (statSync(full).isDirectory()) sourceFiles(full, out);
+		else if (entry.endsWith(".ts") || entry.endsWith(".svelte")) out.push(full);
+	}
+	return out;
+}
+
+test("the hand-list matcher flags a spelled-out locale set and spares a fixture row", () => {
+	const FIXTURES: Array<[flagged: boolean, literal: string]> = [
+		// The seven loops this guard was written for, in their original spelling.
+		[true, "['en', 'de', 'es', 'fr', 'ja', 'pt-BR']"],
+		[true, '["en", "de", "fr", "es", "ja", "pt-BR", "pt-PT"]'],
+		// A subset is still a claim about the set — it is allowlisted by FILE
+		// with a reason, not waved through by the matcher.
+		[true, "['de', 'fr', 'es', 'pt-BR', 'pt-PT']"],
+		[true, "['en', 'de', 'fr']"],
+		// Spared: two examples are examples.
+		[false, "['en', 'de']"],
+		[false, "['de-DE', 'de', 'en']"],
+		// Spared: not the shipped set at all.
+		[false, "['road', 'trail', 'mixed']"],
+		[false, "['pt-AO', 'pt-MZ', 'pt-CV']"],
+	];
+	for (const [flagged, literal] of FIXTURES) {
+		const matched = [...literal.matchAll(STRING_ARRAY)].some(
+			(m) => localesNamed(m[0]) >= HAND_LIST_MIN,
+		);
+		assert.equal(
+			matched,
+			flagged,
+			`must ${flagged ? "flag" : "spare"} ${JSON.stringify(literal)}`,
+		);
+	}
+});
+
+test("no source spells the supported locale set out instead of deriving it", () => {
+	const files = sourceFiles(SRC);
+	assert.ok(files.length > 400, `scanned only ${files.length} files`);
+	const found: Record<string, string[]> = {};
+	for (const file of files) {
+		const rel = relative(SRC, file).split(sep).join("/");
+		// locale.ts IS the declaration, and this file's own literals are the
+		// matcher's must-flag fixtures; everything else must read the set.
+		if (rel === "lib/i18n/locale.ts" || rel === "lib/i18n/locale_reach.test.ts") continue;
+		for (const m of readFileSync(file, "utf8").matchAll(STRING_ARRAY)) {
+			if (localesNamed(m[0]) >= HAND_LIST_MIN) (found[rel] ??= []).push(m[0]);
+		}
+	}
+	const strays = Object.keys(found)
+		.filter((rel) => !(rel in LOCALE_SUBSET_ALLOWED))
+		.sort();
+	assert.deepEqual(
+		strays,
+		[],
+		"these spell the locale set out, so they check the locales someone remembered " +
+			"rather than the ones that ship — six suites claiming to cover \"all six " +
+			"catalogues\" silently skipped European Portuguese the day it landed. Import " +
+			"SUPPORTED_LOCALES, or record the subset in LOCALE_SUBSET_ALLOWED with its reason.\n" +
+			strays.map((r) => `  ${r}: ${found[r].join(" ")}`).join("\n"),
+	);
+	for (const rel of Object.keys(LOCALE_SUBSET_ALLOWED)) {
+		assert.ok(
+			found[rel],
+			`${rel} is allowlisted as a deliberate locale subset but no longer names one — drop the entry`,
+		);
+	}
 });

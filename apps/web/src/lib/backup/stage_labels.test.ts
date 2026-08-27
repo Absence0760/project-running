@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { transferStageKey, type TransferStage } from './stage_labels';
+import { SUPPORTED_LOCALES } from '../i18n/locale';
 
 const STAGES: TransferStage[] = [
 	'reading',
@@ -58,7 +59,7 @@ test('the stages the emitters actually fire are all covered', () => {
 });
 
 test('every stage label is localized in all six catalogues', () => {
-	for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'pt-BR']) {
+	for (const locale of SUPPORTED_LOCALES) {
 		const catalogue = read(`src/lib/i18n/locales/${locale}.ts`);
 		for (const stage of STAGES) {
 			const key = transferStageKey(stage);

@@ -6,6 +6,7 @@ import {
 	isSupportedLocale,
 	negotiateLocale,
 	parseAcceptLanguage,
+	SUPPORTED_LOCALES,
 } from './locale';
 
 test('isSupportedLocale accepts canonical locales only', () => {
@@ -18,7 +19,7 @@ test('isSupportedLocale accepts canonical locales only', () => {
 });
 
 test('dirForLocale is ltr for the starter set, rtl for Arabic/Hebrew bases', () => {
-	for (const l of ['en', 'de', 'fr', 'es', 'ja', 'pt-BR', 'pt-PT']) {
+	for (const l of SUPPORTED_LOCALES) {
 		assert.equal(dirForLocale(l), 'ltr', l);
 	}
 	assert.equal(dirForLocale('ar'), 'rtl');
