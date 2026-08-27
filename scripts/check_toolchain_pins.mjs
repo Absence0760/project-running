@@ -95,11 +95,22 @@ const COMMIT_SHA = /^[0-9a-f]{40}$/;
 const ACTION_USES = /^[\s#]*(?:-\s+)?uses:\s*(\S+)\s*(?:#\s*(\S.*?))?\s*$/;
 const ACTION_REF = /^([\w][\w.-]*(?:\/[\w.-]+)+)@(\S+)$/;
 
+/** @typedef {{ name: string, text: string }} WorkflowFile */
+/** @typedef {{ line: number, version: string | null }} VersionedLine */
+/** @typedef {{ error: string, version?: undefined } | { error?: undefined, version: string }} ResolvedFlutter */
+/** @typedef {{ line: number, ref: string, comment: string | null, commented: boolean, local: true }} LocalActionUse */
+/** @typedef {{ line: number, ref: string, comment: string | null, commented: boolean, local: false, action: string, gitRef: string }} RemoteActionUse */
+/** @typedef {LocalActionUse | RemoteActionUse} ActionUse */
+
 /// The workflow-level `env.FLUTTER_VERSION` and every flutter-action step,
 /// each with the raw `flutter-version:` value it carries (null when absent).
 ///
 /// Line-based rather than YAML-parsed on purpose: the guard jobs run `node`
 /// against a bare checkout with no `npm ci`, so only the stdlib is available.
+/**
+ * @param {string} text
+ * @returns {{ declared: string | null, steps: VersionedLine[] }}
+ */
 export function parseWorkflow(text) {
 	const lines = text.split('\n');
 
@@ -120,6 +131,7 @@ export function parseWorkflow(text) {
 		return null;
 	})();
 
+	/** @type {VersionedLine[]} */
 	const steps = [];
 	for (let i = 0; i < lines.length; i++) {
 		const head = lines[i].match(/^(\s*)-\s+uses:\s*\S*subosito\/flutter-action@\S+/);
@@ -143,6 +155,7 @@ export function parseWorkflow(text) {
 	return { declared, steps };
 }
 
+/** @param {string} value */
 function unquote(value) {
 	return value.replace(/\s+#.*$/, '').replace(/^["']|["']$/g, '');
 }
@@ -151,7 +164,12 @@ function unquote(value) {
 /// constraint it passes (null when it passes none and therefore installs
 /// whatever is newest). YAML comments are skipped so prose naming the command
 /// is not mistaken for an invocation of it.
+/**
+ * @param {string} text
+ * @returns {VersionedLine[]}
+ */
 export function parseMelosActivations(text) {
+	/** @type {VersionedLine[]} */
 	const found = [];
 	text.split('\n').forEach((line, i) => {
 		if (line.trimStart().startsWith('#')) return;
@@ -165,6 +183,11 @@ export function parseMelosActivations(text) {
 /// A package's resolved version from a pubspec.lock. The lockfile is the
 /// source of truth for what the workspace actually resolves, which is the
 /// thing `pub global activate` must be told to match.
+/**
+ * @param {string} lockText
+ * @param {string} name
+ * @returns {string | null}
+ */
 export function parseLockedVersion(lockText, name) {
 	const lines = lockText.split('\n');
 	for (let i = 0; i < lines.length; i++) {
@@ -182,6 +205,11 @@ export function parseLockedVersion(lockText, name) {
 
 /// Resolve one step's `flutter-version:` to a concrete version string, or
 /// explain why it cannot be resolved.
+/**
+ * @param {{ version: string | null }} step
+ * @param {string | null} declared
+ * @returns {ResolvedFlutter}
+ */
 export function resolveVersion(step, declared) {
 	if (step.version === null) {
 		return {
@@ -208,10 +236,14 @@ export function resolveVersion(step, declared) {
 	return { version: step.version };
 }
 
+/** @param {WorkflowFile[]} files */
 export function checkFlutter(files) {
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const ok = [];
 	/// version -> the `file:line` sites pinning it.
+	/** @type {Map<string, string[]>} */
 	const versions = new Map();
 
 	for (const { name, text } of files) {
@@ -219,13 +251,14 @@ export function checkFlutter(files) {
 		for (const step of steps) {
 			const where = `${name}:${step.line}`;
 			const resolved = resolveVersion(step, declared);
-			if (resolved.error) {
+			if (resolved.version === undefined) {
 				errors.push(`${where} — ${resolved.error}`);
 				continue;
 			}
 			ok.push(`${where} -> ${resolved.version}`);
-			if (!versions.has(resolved.version)) versions.set(resolved.version, []);
-			versions.get(resolved.version).push(where);
+			const sites = versions.get(resolved.version) ?? [];
+			sites.push(where);
+			versions.set(resolved.version, sites);
 		}
 	}
 
@@ -252,8 +285,14 @@ export function checkFlutter(files) {
 	return { errors, ok, versions };
 }
 
+/**
+ * @param {WorkflowFile[]} files
+ * @param {string} lockText
+ */
 export function checkMelos(files, lockText) {
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const ok = [];
 	const locked = parseLockedVersion(lockText, 'melos');
 
@@ -308,8 +347,14 @@ export function checkMelos(files, lockText) {
 
 /// Every `cargo install defmt-print` and every `actions/cache` key naming it.
 /// A version of null means the install passed no `--version` at all.
+/**
+ * @param {string} text
+ * @returns {{ installs: VersionedLine[], cacheKeys: VersionedLine[] }}
+ */
 export function parseDefmtPrint(text) {
+	/** @type {VersionedLine[]} */
 	const installs = [];
+	/** @type {VersionedLine[]} */
 	const cacheKeys = [];
 	text.split('\n').forEach((line, i) => {
 		if (line.trimStart().startsWith('#')) return;
@@ -318,15 +363,26 @@ export function parseDefmtPrint(text) {
 			installs.push({ line: i + 1, version: m ? m[1] : null });
 			return;
 		}
-		const key = line.match(/^\s*key:\s*defmt-print-(.+?)-\$\{\{/);
-		if (key) cacheKeys.push({ line: i + 1, version: key[1] });
+		// Matched on the cached NAME rather than on a key already shaped the way
+		// this check wants: a key simplified to `defmt-print-${{ runner.os }}` is
+		// precisely the hazard, and a pattern that only recognised a key carrying
+		// a version could not see it.
+		const key = line.match(/^\s*key:\s*(\S*defmt-print\S*)/);
+		if (key) {
+			const version = key[1].match(/defmt-print-(\d+(?:\.\d+)+)/);
+			cacheKeys.push({ line: i + 1, version: version ? version[1] : null });
+		}
 	});
 	return { installs, cacheKeys };
 }
 
+/** @param {WorkflowFile[]} files */
 export function checkDefmtPrint(files) {
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const ok = [];
+	/** @type {Map<string, string[]>} */
 	const versions = new Map();
 	let installCount = 0;
 
@@ -352,8 +408,9 @@ export function checkDefmtPrint(files) {
 				continue;
 			}
 			ok.push(`${where} -> defmt-print ${install.version}`);
-			if (!versions.has(install.version)) versions.set(install.version, []);
-			versions.get(install.version).push(where);
+			const sites = versions.get(install.version) ?? [];
+			sites.push(where);
+			versions.set(install.version, sites);
 		}
 
 		// The cache key must carry the version, or `command -v` keeps the old
@@ -365,6 +422,15 @@ export function checkDefmtPrint(files) {
 		)?.version;
 		for (const key of cacheKeys) {
 			const where = `${name}:${key.line}`;
+			if (key.version === null) {
+				errors.push(
+					`${where} — the defmt-print cache key carries no version, so it cannot ` +
+						`move when the pin does. The install is \`command -v defmt-print || cargo ` +
+						`install ...\`, so this key keeps restoring whatever binary was cached ` +
+						`under it and the pin never runs. Put the pinned version in the key.`,
+				);
+				continue;
+			}
 			if (installed && key.version !== installed) {
 				errors.push(
 					`${where} — cache key names defmt-print ${key.version} but the install ` +
@@ -400,25 +466,35 @@ export function checkDefmtPrint(files) {
 /// Every `uses:` line in a workflow or composite action, commented or not, as
 /// `{ line, ref, comment, commented }`. A line whose value is not shaped like
 /// an action reference is prose mentioning the key, not a use of it.
+/**
+ * @param {string} text
+ * @returns {ActionUse[]}
+ */
 export function parseActionUses(text) {
+	/** @type {ActionUse[]} */
 	const found = [];
 	text.split('\n').forEach((line, i) => {
 		const m = line.match(ACTION_USES);
 		if (!m) return;
 		const ref = unquote(m[1]);
 		const commented = line.trimStart().startsWith('#');
+		const comment = m[2] ?? null;
 		if (ref.startsWith('./') || ref.startsWith('../')) {
-			found.push({ line: i + 1, ref, comment: m[2] ?? null, commented, local: true });
+			found.push({ line: i + 1, ref, comment, commented, local: true });
 			return;
 		}
-		if (!ACTION_REF.test(ref)) return;
-		found.push({ line: i + 1, ref, comment: m[2] ?? null, commented, local: false });
+		const parts = ref.match(ACTION_REF);
+		if (!parts) return;
+		found.push({ line: i + 1, ref, comment, commented, local: false, action: parts[1], gitRef: parts[2] });
 	});
 	return found;
 }
 
+/** @param {WorkflowFile[]} files */
 export function checkActionPins(files) {
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const ok = [];
 	let seen = 0;
 
@@ -427,16 +503,16 @@ export function checkActionPins(files) {
 			if (use.local) continue;
 			seen++;
 			const where = `${name}:${use.line}`;
-			const [, action, ref] = use.ref.match(ACTION_REF);
+			const { action, gitRef } = use;
 			const dead = use.commented ? ' (commented out — which is how this one drifted, not a reason to skip it)' : '';
-			if (!COMMIT_SHA.test(ref)) {
+			if (!COMMIT_SHA.test(gitRef)) {
 				errors.push(
-					`${where} — \`${action}@${ref}\` pins a tag, not a commit${dead}. A tag is ` +
+					`${where} — \`${action}@${gitRef}\` pins a tag, not a commit${dead}. A tag is ` +
 						`mutable: the publisher can move it onto anything, and it then runs with ` +
 						`this repo's GITHUB_TOKEN. Resolve the SHA with \`git ls-remote ` +
 						`https://github.com/${action.split('/').slice(0, 2).join('/')}.git ` +
-						`refs/tags/${ref}\` (dereference an annotated tag to its commit) and ` +
-						`record the version in a trailing \`# ${ref}\` comment.`,
+						`refs/tags/${gitRef}\` (dereference an annotated tag to its commit) and ` +
+						`record the version in a trailing \`# ${gitRef}\` comment.`,
 				);
 				continue;
 			}
@@ -448,7 +524,7 @@ export function checkActionPins(files) {
 				);
 				continue;
 			}
-			ok.push(`${where} -> ${action} @ ${ref.slice(0, 7)} (${use.comment})`);
+			ok.push(`${where} -> ${action} @ ${gitRef.slice(0, 7)} (${use.comment})`);
 		}
 	}
 
@@ -463,6 +539,11 @@ export function checkActionPins(files) {
 	return { errors, ok, seen };
 }
 
+/**
+ * @param {WorkflowFile[]} files
+ * @param {string} lockText
+ * @param {WorkflowFile[]} [compositeFiles]
+ */
 export function checkAll(files, lockText, compositeFiles = []) {
 	const flutter = checkFlutter(files);
 	const melos = checkMelos(files, lockText);
@@ -478,6 +559,7 @@ export function checkAll(files, lockText, compositeFiles = []) {
 	};
 }
 
+/** @param {string} dir */
 function readWorkflows(dir) {
 	return readdirSync(dir)
 		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
@@ -485,6 +567,7 @@ function readWorkflows(dir) {
 		.map((name) => ({ name, text: readFileSync(join(dir, name), 'utf-8') }));
 }
 
+/** @param {string} dir */
 export function readCompositeActions(dir) {
 	return readdirSync(dir, { withFileTypes: true })
 		.filter((e) => e.isDirectory())

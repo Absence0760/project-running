@@ -80,9 +80,19 @@ export const NPM_LOCK = join(REPO_ROOT, 'package-lock.json');
 
 export const FIX_COMMAND = 'pnpm install --lockfile-only';
 
+/** @typedef {{ name: string, version: string, where: string }} Resolution */
+/** @typedef {{ flat: Map<string, string>, problems: string[] }} FlatOverrides */
+/** @typedef {{ major: number, minor: number, patch: number, prerelease: string | null, raw: string }} SemVer */
+/** @typedef {{ ok: boolean, reason?: string, unsupported?: undefined }} Decided */
+/** @typedef {{ unsupported: true, ok?: undefined, reason?: undefined }} Unsupported */
+/** @typedef {Decided | Unsupported} Verdict */
+/** @typedef {{ pnpm?: { overrides?: unknown }, overrides?: unknown }} PackageManifest */
+/** @typedef {{ packages?: Record<string, unknown> }} NpmLockfile */
+
 /// Strip a YAML scalar's quotes. pnpm quotes a key or value only when it must
 /// — `'@sveltejs/kit>cookie'` because of the `@`, `'>=1.2.3'` because a bare
 /// `>` opens a folded scalar — so both quoted and bare forms appear.
+/** @param {string} value */
 function unquote(value) {
 	const trimmed = value.trim();
 	if (
@@ -102,10 +112,15 @@ function unquote(value) {
 /// against a bare checkout with no `npm ci`, so only the stdlib is available —
 /// the same constraint check_toolchain_pins.mjs and check_ci_diagnostics.mjs
 /// work under.
+/**
+ * @param {string} lockText
+ * @returns {Map<string, string> | null}
+ */
 export function parseLockOverrides(lockText) {
 	const lines = lockText.split('\n');
 	for (let i = 0; i < lines.length; i++) {
 		if (!/^overrides:\s*$/.test(lines[i])) continue;
+		/** @type {Map<string, string>} */
 		const found = new Map();
 		for (let j = i + 1; j < lines.length; j++) {
 			const line = lines[j];
@@ -124,8 +139,13 @@ export function parseLockOverrides(lockText) {
 /// section holds one entry per resolved tarball; `snapshots:` re-lists the
 /// same versions with peer suffixes, so reading `packages:` counts each
 /// resolution exactly once.
+/**
+ * @param {string} lockText
+ * @returns {Resolution[]}
+ */
 export function parsePnpmResolutions(lockText) {
 	const lines = lockText.split('\n');
+	/** @type {Resolution[]} */
 	const found = [];
 	let inside = false;
 	for (const line of lines) {
@@ -149,24 +169,38 @@ export function parsePnpmResolutions(lockText) {
 /// nested `node_modules/x/node_modules/cookie` is the exact shape an override
 /// exists to reach (see `_overrides_rationale`), so the path is walked to its
 /// LAST `node_modules/` segment rather than matched at the top level.
+/**
+ * @param {NpmLockfile | null | undefined} lockJson
+ * @returns {Resolution[]}
+ */
 export function parseNpmResolutions(lockJson) {
+	/** @type {Resolution[]} */
 	const found = [];
 	for (const [path, entry] of Object.entries(lockJson?.packages ?? {})) {
 		const at = path.lastIndexOf('node_modules/');
 		if (at < 0) continue;
 		const name = path.slice(at + 'node_modules/'.length);
-		if (!name || typeof entry?.version !== 'string') continue;
-		found.push({ name, version: entry.version, where: 'package-lock.json' });
+		const version = entry && typeof entry === 'object' && 'version' in entry ? entry.version : null;
+		if (!name || typeof version !== 'string') continue;
+		found.push({ name, version, where: 'package-lock.json' });
 	}
 	return found;
 }
 
 /// An npm-style `overrides` object flattened into pnpm's `parent>child`
 /// spelling, so the two declarations become comparable.
+/**
+ * @param {unknown} overrides
+ * @param {string} [prefix]
+ * @returns {FlatOverrides}
+ */
 export function flattenOverrides(overrides, prefix = '') {
+	/** @type {Map<string, string>} */
 	const flat = new Map();
+	/** @type {string[]} */
 	const problems = [];
-	for (const [key, value] of Object.entries(overrides ?? {})) {
+	if (typeof overrides !== 'object' || overrides === null) return { flat, problems };
+	for (const [key, value] of Object.entries(/** @type {Record<string, unknown>} */ (overrides))) {
 		if (key === '.') {
 			problems.push(
 				`\`${prefix || '<root>'}\` uses npm's \`"."\` key to pin the parent's own version. ` +
@@ -191,6 +225,10 @@ export function flattenOverrides(overrides, prefix = '') {
 /// The package a pin applies to, and the parent that scopes it. pnpm reads the
 /// LAST `>` as the boundary, and a parent selector may carry its own range
 /// (`foo@1>bar`), which is not part of the parent's name.
+/**
+ * @param {string} key
+ * @returns {{ target: string, parent: string | null }}
+ */
 export function pinTarget(key) {
 	const at = key.lastIndexOf('>');
 	if (at < 0) return { target: key, parent: null };
@@ -199,12 +237,20 @@ export function pinTarget(key) {
 	return { target: key.slice(at + 1), parent: sep > 0 ? parent.slice(0, sep) : parent };
 }
 
+/**
+ * @param {string} value
+ * @returns {SemVer | null}
+ */
 export function parseVersion(value) {
 	const m = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
 	if (!m) return null;
 	return { major: +m[1], minor: +m[2], patch: +m[3], prerelease: m[4] ?? null, raw: value };
 }
 
+/**
+ * @param {SemVer} a
+ * @param {SemVer} b
+ */
 function compare(a, b) {
 	return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
 }
@@ -213,6 +259,11 @@ function compare(a, b) {
 /// use are implemented — an unrecognised range returns `unsupported`, which
 /// the caller reports as a failure. Answering "satisfied" over a range this
 /// cannot read would be the vacuous pass the whole file is written against.
+/**
+ * @param {string} version
+ * @param {string} range
+ * @returns {Verdict}
+ */
 export function satisfies(version, range) {
 	const v = parseVersion(version);
 	if (!v) return { ok: false, reason: `\`${version}\` is not a plain semver version` };
@@ -239,6 +290,7 @@ export function satisfies(version, range) {
 	}
 }
 
+/** @param {Map<string, string>} map */
 function formatMap(map) {
 	return [...map.entries()]
 		.sort((a, b) => a[0].localeCompare(b[0]))
@@ -246,7 +298,15 @@ function formatMap(map) {
 		.join('\n');
 }
 
+/**
+ * @param {Map<string, string>} expected
+ * @param {Map<string, string>} actual
+ * @param {string} expectedLabel
+ * @param {string} actualLabel
+ * @returns {string[]}
+ */
 function diffMaps(expected, actual, expectedLabel, actualLabel) {
+	/** @type {string[]} */
 	const lines = [];
 	for (const [key, value] of expected) {
 		if (!actual.has(key)) lines.push(`    - ${key}: ${value}  (in ${expectedLabel}, missing from ${actualLabel})`);
@@ -261,8 +321,15 @@ function diffMaps(expected, actual, expectedLabel, actualLabel) {
 }
 
 /// Checks 1-3: the pins are declared, and every declaration of them agrees.
+/**
+ * @param {PackageManifest | null | undefined} pkg
+ * @param {string} pnpmLockText
+ * @returns {{ errors: string[], ok: string[], declared: Map<string, string> }}
+ */
 export function checkDeclarations(pkg, pnpmLockText) {
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const ok = [];
 
 	const declaredRaw = pkg?.pnpm?.overrides;
@@ -342,8 +409,15 @@ export function checkDeclarations(pkg, pnpmLockText) {
 /// Check 4: the pins took effect. A declared override that the tree resolved
 /// around is the whole point — the declaration halves prove intent, this
 /// proves outcome.
+/**
+ * @param {Map<string, string>} declared
+ * @param {Resolution[]} resolutions
+ * @returns {{ errors: string[], ok: string[] }}
+ */
 export function checkResolutions(declared, resolutions) {
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const ok = [];
 
 	if (resolutions.length === 0) {
@@ -356,11 +430,13 @@ export function checkResolutions(declared, resolutions) {
 	// One pinned NAME can be named by several pins (a bare pin plus a scoped
 	// one), and both constrain the same set of resolved copies. Grouping by
 	// target keeps the tree scan to one pass and reports a bad copy once.
+	/** @type {Map<string, { key: string, range: string, parent: string | null }[]>} */
 	const byTarget = new Map();
 	for (const [key, range] of declared) {
 		const { target, parent } = pinTarget(key);
-		if (!byTarget.has(target)) byTarget.set(target, []);
-		byTarget.get(target).push({ key, range, parent });
+		const pins = byTarget.get(target) ?? [];
+		pins.push({ key, range, parent });
+		byTarget.set(target, pins);
 	}
 
 	const present = new Set(resolutions.map((r) => r.name));
@@ -385,6 +461,7 @@ export function checkResolutions(declared, resolutions) {
 						`The pin reaches nothing; drop it or fix the parent's name.`,
 				);
 			}
+			/** @type {{ copy: Resolution, reason: string | undefined }[]} */
 			const bad = [];
 			let unsupported = false;
 			for (const copy of copies) {
@@ -430,6 +507,11 @@ export function checkResolutions(declared, resolutions) {
 	return { errors, ok };
 }
 
+/**
+ * @param {PackageManifest | null | undefined} pkg
+ * @param {string} pnpmLockText
+ * @param {NpmLockfile | null | undefined} npmLockJson
+ */
 export function checkAll(pkg, pnpmLockText, npmLockJson) {
 	const declarations = checkDeclarations(pkg, pnpmLockText);
 	const resolutions = [...parsePnpmResolutions(pnpmLockText), ...parseNpmResolutions(npmLockJson)];

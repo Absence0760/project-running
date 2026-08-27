@@ -24,12 +24,17 @@ const PINS = {
 	'@sveltejs/kit>cookie': '^1.0.2',
 };
 
+/** @typedef {Record<string, string>} PinMap */
+
+/** @param {{ pnpmOverrides?: PinMap, overrides?: Record<string, unknown> }} [opts] */
 function pkg({ pnpmOverrides = PINS, overrides } = {}) {
-	const out = { pnpm: { overrides: pnpmOverrides } };
-	out.overrides = overrides ?? { cookie: '^1.0.2', devalue: '^5.8.1', '@sveltejs/kit': { cookie: '^1.0.2' } };
-	return out;
+	return {
+		pnpm: { overrides: pnpmOverrides },
+		overrides: overrides ?? { cookie: '^1.0.2', devalue: '^5.8.1', '@sveltejs/kit': { cookie: '^1.0.2' } },
+	};
 }
 
+/** @param {{ overrides?: PinMap | null, packages?: string[] }} [opts] */
 function lock({ overrides = PINS, packages = ['cookie@1.1.1', 'devalue@5.9.1', "'@sveltejs/kit@2.70.3'"] } = {}) {
 	const overrideLines =
 		overrides === null
@@ -59,6 +64,7 @@ function lock({ overrides = PINS, packages = ['cookie@1.1.1', 'devalue@5.9.1', "
 	].join('\n');
 }
 
+/** @param {Record<string, string>} [entries] */
 function npmLock(entries = { 'node_modules/cookie': '1.1.1', 'node_modules/devalue': '5.8.1' }) {
 	return {
 		packages: Object.fromEntries([
@@ -70,6 +76,7 @@ function npmLock(entries = { 'node_modules/cookie': '1.1.1', 'node_modules/deval
 
 test('parseLockOverrides reads the block, unquoting the keys pnpm had to quote', () => {
 	const found = parseLockOverrides(lock());
+	assert.ok(found, 'the block must parse, or the checks below assert nothing');
 	assert.equal(found.get('cookie'), '^1.0.2');
 	assert.equal(found.get('@sveltejs/kit>cookie'), '^1.0.2');
 	assert.equal(found.size, 3);
@@ -85,6 +92,7 @@ test('parseLockOverrides returns null when the block is absent, not an empty map
 test('parseLockOverrides stops at the next top-level key', () => {
 	const text = ["overrides:", '  cookie: ^1.0.2', '', 'importers:', '  .:', '    devalue: nope'].join('\n');
 	const found = parseLockOverrides(text);
+	assert.ok(found, 'the block must parse, or the check below asserts nothing');
 	assert.deepEqual([...found.keys()], ['cookie']);
 });
 
@@ -150,9 +158,15 @@ test('pinTarget splits on the LAST > and drops a parent range', () => {
 });
 
 test('parseVersion accepts prerelease and build metadata, rejects anything else', () => {
-	assert.equal(parseVersion('1.2.3').patch, 3);
-	assert.equal(parseVersion('1.2.3-beta.1').prerelease, 'beta.1');
-	assert.equal(parseVersion('1.2.3+build').prerelease, null);
+	const plain = parseVersion('1.2.3');
+	const prerelease = parseVersion('1.2.3-beta.1');
+	const build = parseVersion('1.2.3+build');
+	assert.ok(plain);
+	assert.ok(prerelease);
+	assert.ok(build);
+	assert.equal(plain.patch, 3);
+	assert.equal(prerelease.prerelease, 'beta.1');
+	assert.equal(build.prerelease, null);
 	assert.equal(parseVersion('1.2'), null);
 	assert.equal(parseVersion('https://example.test/x.tgz'), null);
 });
@@ -193,6 +207,7 @@ test('satisfies narrows to exact equality when either side carries a prerelease'
 test('a version the tree could not resolve to semver is reported, not assumed fine', () => {
 	const v = satisfies('file:../local', '^1.0.0');
 	assert.equal(v.ok, false);
+	assert.ok(v.reason, 'a version the parser rejected must say so, not just fail silently');
 	assert.match(v.reason, /not a plain semver version/);
 });
 
