@@ -318,6 +318,85 @@ test("a sense-split word survives only where the other sense was recorded", asyn
 });
 
 /**
+ * The wrist and the watch ship European Portuguese too, and neither had any
+ * lexical guard at all — the two scans above read `lib/i18n/locales/` and the
+ * mobile twin reads `lib/l10n/`, so half the surfaces this locale ships on
+ * were covered and half were not. Both measured clean when this guard landed,
+ * which is the reason to add it now rather than the reason not to: § 755's
+ * wrist set and § 761's watchOS set were written in European Portuguese
+ * directly, and the defect this whole arc is about is a later derivation from
+ * Brazilian quietly undoing that.
+ *
+ * Cross-tier the way `delete-account`'s guard reads the Go worker's catalogue
+ * (§ 761) — these are separate deployment units with no module between them,
+ * so the alternative is four copies of one word list.
+ */
+const OTHER_PT_PT_CATALOGUES: { path: string[]; read: (raw: string) => Record<string, string> }[] = [
+	{
+		path: ["apps", "watch_wear", "android", "app", "src", "main", "res", "values-b+pt+PT", "strings.xml"],
+		read: (raw) =>
+			Object.fromEntries(
+				[...raw.matchAll(/<(string|item)(?:\s+name="([\w.]+)")?[^>]*>([\s\S]*?)<\/\1>/g)].map(
+					(m, i) => [m[2] ?? `item[${i}]`, m[3]],
+				),
+			),
+	},
+	{
+		path: ["apps", "watch_ios", "WatchApp", "Localizable.xcstrings"],
+		read: (raw) => {
+			const out: Record<string, string> = {};
+			const catalogue = JSON.parse(raw) as {
+				strings: Record<string, { localizations?: Record<string, PtUnit> }>;
+			};
+			for (const [key, entry] of Object.entries(catalogue.strings)) {
+				const pt = entry.localizations?.["pt-PT"];
+				if (!pt) continue;
+				if (pt.stringUnit) out[key] = pt.stringUnit.value;
+				for (const [form, unit] of Object.entries(pt.variations?.plural ?? {})) {
+					if (unit.stringUnit) out[`${key}[${form}]`] = unit.stringUnit.value;
+				}
+			}
+			return out;
+		},
+	},
+];
+type PtUnit = {
+	stringUnit?: { value: string };
+	variations?: { plural?: Record<string, { stringUnit?: { value: string } }> };
+};
+
+test("the wrist and watch pt-PT catalogues read as European Portuguese too", () => {
+	const repo = join(SRC, "..", "..", "..");
+	const words = [...BRAZILIAN_ONLY, "padrão"];
+	for (const { path, read } of OTHER_PT_PT_CATALOGUES) {
+		const file = join(repo, ...path);
+		const strings = read(readFileSync(file, "utf8"));
+		// A reader that stops matching finds nothing and reports success, which
+		// is the failure mode a source-shape guard has (decisions § 762). The
+		// catalogues only grow, so an empty read is a broken reader.
+		assert.ok(
+			Object.keys(strings).length > 0,
+			`${path.join("/")} yielded no pt-PT strings — the reader has stopped ` +
+				"matching the file's shape, so this guard is checking nothing.",
+		);
+		const offenders: string[] = [];
+		for (const [key, value] of Object.entries(strings)) {
+			for (const word of words) {
+				if (new RegExp(`(?<![a-zà-ÿ])${word}(s|es|ões)?(?![a-zà-ÿ])`, "iu").test(value)) {
+					offenders.push(`${key}: "${word}"`);
+				}
+			}
+		}
+		assert.deepEqual(
+			offenders,
+			[],
+			`${path.join("/")} is a pt-PT catalogue reading as Brazilian. A default ` +
+				"is a `predefinição`; the rest are words Portugal does not use at all.",
+		);
+	}
+});
+
+/**
  * A flat array literal of quoted strings, e.g. `['en', 'de', 'pt-BR']`. Only a
  * FLAT one: a fixture table of tuples names locales too, and each of those rows
  * is a case about one locale rather than a claim about the shipped set.
