@@ -50,6 +50,10 @@ const PLATFORMS = ['Android', 'iOS', 'Web', 'Wear OS', 'Apple Watch'];
 // column. Park those before splitting, restore them after.
 const PIPE = '\u0000';
 
+/**
+ * @param {string} line
+ * @returns {string[]}
+ */
 export function splitRow(line) {
 	return line
 		.replaceAll('\\|', PIPE)
@@ -58,11 +62,18 @@ export function splitRow(line) {
 		.map((cell) => cell.replaceAll(PIPE, '\\|').trim());
 }
 
+/** @param {string} cell */
 const unquote = (cell) => cell.replace(/^`|`$/g, '').trim();
 
-/// The Legend table's symbol column, in document order. The `🔸 in Notes` row
-/// documents a Notes convention rather than a cell value, so it drops out.
+/**
+ * The Legend table's symbol column, in document order. The `🔸 in Notes` row
+ * documents a Notes convention rather than a cell value, so it drops out.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
 export function readLegendSymbols(text) {
+	/** @type {string[]} */
 	const symbols = [];
 	let inLegend = false;
 	for (const line of text.split('\n')) {
@@ -75,7 +86,7 @@ export function readLegendSymbols(text) {
 			inLegend = true;
 			continue;
 		}
-		if (!inLegend || /^:?-+:?$/.test(cells[0])) continue;
+		if (!inLegend || cells.length === 0 || /^:?-+:?$/.test(cells[0])) continue;
 		const symbol = unquote(cells[0]);
 		if (symbol.includes(' ')) continue;
 		symbols.push(symbol);
@@ -83,8 +94,14 @@ export function readLegendSymbols(text) {
 	return symbols;
 }
 
-/// Rule 1 + the derivation table it carries.
+/**
+ * Rule 1 + the derivation table it carries.
+ *
+ * @param {string} text
+ * @returns {{ errors: string[], block: string | null, derivation: Map<string, string> | null }}
+ */
 export function readRuleBlock(text) {
+	/** @type {string[]} */
 	const errors = [];
 	const opens = text.split(OPEN_MARKER).length - 1;
 	const closes = text.split(CLOSE_MARKER).length - 1;
@@ -106,6 +123,7 @@ export function readRuleBlock(text) {
 	}
 	const block = text.slice(start, end + CLOSE_MARKER.length);
 
+	/** @type {Map<string, string>} */
 	const derivation = new Map();
 	let inTable = false;
 	for (const line of block.split('\n')) {
@@ -119,6 +137,13 @@ export function readRuleBlock(text) {
 			continue;
 		}
 		if (!inTable || /^:?-+:?$/.test(cells[0])) continue;
+		if (cells.length < 2) {
+			errors.push(
+				`the derivation table has a row that opens fewer than two columns, so it ` +
+					`states no mapping: ${line.trim().slice(0, 140)}`,
+			);
+			continue;
+		}
 		const from = unquote(cells[0]);
 		const to = unquote(cells[1]);
 		if (derivation.has(from)) {
@@ -138,9 +163,16 @@ export function readRuleBlock(text) {
 	return { errors, block, derivation };
 }
 
-/// Rule 3 — the derivation speaks about exactly the vocabulary the Legend
-/// defines, so a symbol cannot be introduced or retired on one side only.
+/**
+ * Rule 3 — the derivation speaks about exactly the vocabulary the Legend
+ * defines, so a symbol cannot be introduced or retired on one side only.
+ *
+ * @param {string[]} legend
+ * @param {Map<string, string>} derivation
+ * @returns {string[]}
+ */
 export function checkVocabularyCoverage(legend, derivation) {
+	/** @type {string[]} */
 	const errors = [];
 	for (const symbol of legend) {
 		if (!derivation.has(symbol)) {
@@ -161,10 +193,16 @@ export function checkVocabularyCoverage(legend, derivation) {
 	return errors;
 }
 
-/// Rule 2 — a line of prose that names the iOS column AND a cell symbol is
-/// stating this rule somewhere it does not live. Table rows are exempt: a
-/// Notes cell may carry the `**iOS <symbol>:**` marker, which rule 4 reads.
+/**
+ * Rule 2 — a line of prose that names the iOS column AND a cell symbol is
+ * stating this rule somewhere it does not live. Table rows are exempt: a
+ * Notes cell may carry the `**iOS <symbol>:**` marker, which rule 4 reads.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
 export function checkSingleStatement(text) {
+	/** @type {string[]} */
 	const errors = [];
 	const legend = readLegendSymbols(text);
 	if (legend.length === 0) return errors;
@@ -198,10 +236,21 @@ export function checkSingleStatement(text) {
 	return errors;
 }
 
-/// Every data row of the platform tables, with its line number.
+/**
+ * @typedef {{ line: number, feature: string, android: string, ios: string, notes: string }} ParityRow
+ */
+
+/**
+ * Every data row of the platform tables, with its line number.
+ *
+ * @param {string} text
+ * @returns {ParityRow[]}
+ */
 export function readRows(text) {
 	const lines = text.split('\n');
+	/** @type {ParityRow[]} */
 	const rows = [];
+	/** @type {string[] | null} */
 	let header = null;
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
@@ -229,11 +278,20 @@ export function readRows(text) {
 /// The one cell value a marker can never buy — see `checkColumn`.
 export const UNEARNABLE = '✓';
 
+/** @param {string} symbol */
 export const markerFor = (symbol) => `**iOS ${symbol}:**`;
 
-/// Rule 4 — the column is the derivation, or the row says what obstructs it.
+/**
+ * Rule 4 — the column is the derivation, or the row says what obstructs it.
+ *
+ * @param {ParityRow[]} rows
+ * @param {Map<string, string>} derivation
+ * @returns {{ errors: string[], marked: string[] }}
+ */
 export function checkColumn(rows, derivation) {
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const marked = [];
 	for (const row of rows) {
 		const expected = derivation.get(row.android);
@@ -285,7 +343,12 @@ export function checkColumn(rows, derivation) {
 	return { errors, marked };
 }
 
+/**
+ * @param {string} text
+ * @returns {{ errors: string[], rows: number, marked: string[] }}
+ */
 export function audit(text) {
+	/** @type {string[]} */
 	const errors = [];
 	const legend = readLegendSymbols(text);
 	if (legend.length === 0) {
@@ -296,6 +359,7 @@ export function audit(text) {
 	errors.push(...checkSingleStatement(text));
 	const rows = readRows(text);
 	if (rows.length === 0) errors.push('no platform-table rows parsed — did the table format change?');
+	/** @type {string[]} */
 	let marked = [];
 	if (derivation) {
 		errors.push(...checkVocabularyCoverage(legend, derivation));
