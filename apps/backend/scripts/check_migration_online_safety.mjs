@@ -223,7 +223,7 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // no writer. The scanner inspected it under the previous cutoff and returned
 // zero violations, so this bump is the max-version bookkeeping this file's own
 // test enforces, not an exemption.
-export const GRANDFATHER_CUTOFF = '20270615';
+export const GRANDFATHER_CUTOFF = '20270616';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
