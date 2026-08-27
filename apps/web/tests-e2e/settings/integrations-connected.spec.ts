@@ -145,6 +145,71 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(stravaCard).toHaveClass(/connected/);
 	});
 
+	test('a truncated Strava sync is reported as partial, not as complete', async ({
+		page,
+	}) => {
+		// The backfill has four exits that leave activities in the lookback
+		// window unfetched, and only the throttle case ever carried a field —
+		// which no client declared, so all four rendered as a finished sync.
+		// The window is measured from now, so being told the sync completed is
+		// what stops the runner coming back before the rest ages out of it.
+		await plantIntegration({ provider: 'strava', lastSyncAt: '2026-05-10T08:00:00Z' });
+
+		await page.route('**/functions/v1/strava-import**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					imported: 40,
+					skipped: 2,
+					failed: 0,
+					rate_limited: true,
+					complete: false,
+				}),
+			});
+		});
+
+		await page.goto('/settings/integrations');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
+
+		await stravaCard.getByRole('button', { name: 'Sync now' }).click();
+
+		const toast = page.locator('.toast-info');
+		await expect(toast).toBeVisible({ timeout: 5_000 });
+		await expect(toast).toContainText('limiting requests');
+		await expect(page.locator('.toast-success')).toHaveCount(0);
+	});
+
+	test('a Strava sync that completes keeps the success toast', async ({ page }) => {
+		// The other half of the pair: a finished walk must not be downgraded
+		// to "sync again", or the honesty fix becomes its own false alarm.
+		await plantIntegration({ provider: 'strava', lastSyncAt: '2026-05-10T08:00:00Z' });
+
+		await page.route('**/functions/v1/strava-import**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					imported: 3,
+					skipped: 7,
+					failed: 0,
+					rate_limited: false,
+					complete: true,
+				}),
+			});
+		});
+
+		await page.goto('/settings/integrations');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
+
+		await stravaCard.getByRole('button', { name: 'Sync now' }).click();
+
+		await expect(page.locator('.toast-success')).toBeVisible({ timeout: 5_000 });
+		await expect(page.locator('.toast-info')).toHaveCount(0);
+	});
+
 	test('Connect failure surfaces an error toast', async ({ page }) => {
 		// Non-Strava providers use the placeholder upsert-connect path.
 		await page.route('**/rest/v1/integrations**', async (route) => {
