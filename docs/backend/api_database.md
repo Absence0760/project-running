@@ -1298,8 +1298,8 @@ create table integrations (
   token_expiry             timestamptz,
   external_id              text,                     -- athlete ID on the provider
   scope                    text,                     -- OAuth scopes granted
-  last_sync_at             timestamptz,
-  sync_cursor              text,                     -- pagination cursor for backfill
+  last_sync_at             timestamptz,              -- last COMPLETE walk of the lookback window; a truncated backfill leaves it alone (decisions § 766)
+  sync_cursor              text,                     -- intended as a backfill pagination cursor; NOTHING writes it, and no importer reads it — `strava-import` derives `after=` from now() on every call
   created_at               timestamptz default now(),
   updated_at               timestamptz default now(),
   unique (user_id, provider)
