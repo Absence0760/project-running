@@ -8,8 +8,11 @@ import {
 	checkAll,
 	checkFailureScoping,
 	checkStepDiagnoses,
+	derivedBundles,
+	isGuardStep,
 	parseSteps,
 	readWorkflows,
+	runBody,
 } from './check_ci_diagnostics.mjs';
 
 /**
@@ -27,6 +30,14 @@ const selfDiagnosing = (name, cmd) =>
 /// The job under test in every `checkStepDiagnoses` fixture below.
 const BUNDLED = 'parity-types';
 
+/// A command that reads as one of this repo's guards, so a job carrying two of
+/// them is DERIVED as bundled. Fixtures use it wherever they only need a job to
+/// exist and be well-formed: a fixture whose every job ran `echo hi` would
+/// derive no bundle at all and collect the vacuous-pass complaint, which is a
+/// real error and has its own test below.
+/** @param {string} label */
+const guardCmd = (label) => `node --test scripts/${label}.test.mjs`;
+
 /// A workflow holding a job shaped like the real `parity-types` — several
 /// named check steps, then whatever trailing step the caller wants — plus a
 /// minimal well-formed body for every OTHER registered job. Those have to be
@@ -37,7 +48,11 @@ const BUNDLED = 'parity-types';
 function bundledJob(steps) {
 	const others = [...DIAGNOSING_JOBS.keys()]
 		.filter((job) => job !== BUNDLED)
-		.map((job) => `  ${job}:\n    steps:\n${selfDiagnosing('one', 'a')}${selfDiagnosing('two', 'b')}`)
+		.map(
+			(job) =>
+				`  ${job}:\n    steps:\n` +
+				`${selfDiagnosing('one', guardCmd('one'))}${selfDiagnosing('two', guardCmd('two'))}`,
+		)
 		.join('');
 	return `name: CI\njobs:\n  ${BUNDLED}:\n    name: Schema / type drift\n    steps:\n${steps}${others}`;
 }
@@ -163,8 +178,8 @@ test('a bundled job’s setup steps are not asked to diagnose themselves', () =>
 			text: bundledJob(
 				`      - uses: actions/checkout@abc\n` +
 					`      - run: npm ci\n` +
-					selfDiagnosing('one', 'a') +
-					selfDiagnosing('two', 'b'),
+					selfDiagnosing('one', guardCmd('one')) +
+					selfDiagnosing('two', guardCmd('two')),
 			),
 		},
 	]);
@@ -178,7 +193,9 @@ test('checkStepDiagnoses fails when a registered job is renamed out from under i
 	const { errors } = checkStepDiagnoses([
 		{
 			name: 'ci.yml',
-			text: `name: CI\njobs:\n  renamed:\n    steps:\n${selfDiagnosing('one', 'a')}`,
+			text:
+				`name: CI\njobs:\n  renamed:\n    steps:\n` +
+				`${selfDiagnosing('one', guardCmd('one'))}${selfDiagnosing('two', guardCmd('two'))}`,
 		},
 	]);
 	// One error per registered job — the synthetic workflow above holds none of
@@ -186,6 +203,93 @@ test('checkStepDiagnoses fails when a registered job is renamed out from under i
 	// second bundled job does not fail this on arithmetic.
 	assert.equal(errors.length, DIAGNOSING_JOBS.size);
 	for (const error of errors) assert.match(error, /reading nothing/);
+});
+
+// The derived half of rule 2. A job that runs two of this repo's guards is
+// bundled BY THAT FACT — nothing has to remember to register it, which is how
+// `parity-matrix` bundled four registry guards for its whole life while the
+// registry named neither it nor `workflow-lint`.
+test('a job running two guards is derived as bundled; one guard is not', () => {
+	const bundles = derivedBundles([
+		{
+			name: 'ci.yml',
+			text:
+				`name: CI\njobs:\n` +
+				`  two-guards:\n    steps:\n` +
+				`      - run: node scripts/check_a.mjs\n` +
+				`      - run: node --test scripts/b.test.mjs\n` +
+				`  one-guard:\n    steps:\n` +
+				`      - run: node scripts/check_c.mjs\n` +
+				`      - run: npm ci\n`,
+		},
+	]);
+	assert.deepEqual([...bundles], [['two-guards', 2]]);
+});
+
+// A step called "check_production_env tests" is not a guard invocation because
+// of its LABEL. Matching the whole step body would make the name decide.
+test('a step is a guard by what it runs, not by what it is called', () => {
+	const [named, guard] = parseSteps(
+		`name: CI\njobs:\n  a:\n    steps:\n` +
+			`      - name: check_production_env tests\n        run: echo hi\n` +
+			`      - name: something else\n        run: node scripts/check_x.mjs\n`,
+	);
+	assert.equal(runBody(named).includes('check_production_env'), false);
+	assert.equal(isGuardStep(named), false);
+	assert.equal(isGuardStep(guard), true);
+});
+
+// `parity-matrix`'s Dart matrix check was UNNAMED, so a names-only rule made
+// "delete the name" a way out of the requirement. The step GitHub displays as
+// its own command is still the step a reader has to attribute.
+test('an unnamed guard step in a bundled job must diagnose itself too', () => {
+	const { errors } = checkStepDiagnoses([
+		{
+			name: 'ci.yml',
+			text:
+				`name: CI\njobs:\n  registries:\n    steps:\n` +
+				`${selfDiagnosing('one', guardCmd('one'))}` +
+				`      - run: dart run scripts/check_parity_matrix.dart\n`,
+		},
+	]);
+	const derived = errors.filter((e) => e.includes('check_parity_matrix.dart'));
+	assert.equal(derived.length, 1);
+	assert.match(derived[0], /runs 2 of this repo's guards under one job name/);
+});
+
+// The other side of the same rule: an unnamed step that runs no guard is setup,
+// and setup has nothing to diagnose. Without this the rule would demand an
+// `::error::` from `npm ci`.
+test('an unnamed non-guard step in a derived bundle is left alone', () => {
+	const { errors, ok } = checkStepDiagnoses([
+		{
+			name: 'ci.yml',
+			text: bundledJob(
+				`      - run: npm ci\n` +
+					selfDiagnosing('one', guardCmd('one')) +
+					selfDiagnosing('two', guardCmd('two')),
+			),
+		},
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(
+		ok.some((line) => line.includes('npm ci')),
+		false,
+	);
+});
+
+test('checkStepDiagnoses fails rather than passing vacuously over no derived bundle', () => {
+	const { errors } = checkStepDiagnoses([
+		{
+			name: 'ci.yml',
+			text: bundledJob(selfDiagnosing('one', 'echo a') + selfDiagnosing('two', 'echo b')).replace(
+				/node --test scripts\/\w+\.test\.mjs/g,
+				'echo hi',
+			),
+		},
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /enforces nothing beyond/);
 });
 
 test('the repo’s real workflows carry no misattributable diagnosis', () => {
@@ -196,5 +300,16 @@ test('the repo’s real workflows carry no misattributable diagnosis', () => {
 	assert.ok(
 		diagnoses.ok.length >= 4,
 		`expected every check step of ${[...DIAGNOSING_JOBS.keys()].join(', ')}, found ${diagnoses.ok.length}`,
+	);
+	// The three the registry never named. Pinned by name because each one is a
+	// bundle that shipped un-diagnosed, and a rule that stopped seeing them
+	// would go quiet rather than red.
+	for (const job of ['parity-matrix', 'workflow-lint', 'pgtap-rls']) {
+		assert.ok(diagnoses.bundles.has(job), `${job} should derive as a bundled job`);
+	}
+	assert.equal(
+		DIAGNOSING_JOBS.has('parity-matrix'),
+		false,
+		'parity-matrix is derived, so registering it by hand would be the coupling this replaced',
 	);
 });
