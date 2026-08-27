@@ -43,6 +43,21 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * A value read out of a plist. `unknown` rather than a recursive union
+ * because a `<dict>` nests without bound and TypeScript refuses a self-
+ * referential alias through `Map` — and because the narrowing that costs is
+ * the narrowing this guard wants: the manifest is an input file, and every
+ * read below has to establish the shape before it iterates it.
+ * @typedef {unknown} PlistValue
+ */
+
+/** @typedef {{ kind: 'text', name: string, value: string } | { kind: 'open' | 'close' | 'empty', name: string }} PlistToken */
+
+/** @typedef {{ path: string, text: string }} SourceFile */
+
+/** @typedef {'dart' | 'swift'} SourceKind */
+
 // Overridable so the whole script — exit code and all — can be pointed at a
 // mutated copy of the tree, which is how a guard is shown to fail.
 export const IOS_ROOT =
@@ -71,6 +86,7 @@ export const APS_VALUES = new Set(['development', 'production']);
 /// Review rejects a binary declaring a background capability it does not
 /// exercise, and a mode nothing here claims is either an over-claim or a rule
 /// this table is missing. Both want a human.
+/** @type {{ mode: string, source: SourceKind, pattern: RegExp, needed_by: string, why: string }[]} */
 export const BACKGROUND_MODES = [
 	{
 		mode: 'audio',
@@ -111,9 +127,13 @@ export const BACKGROUND_MODES = [
 /// and expected to stay that way; the escape hatch exists so a genuinely
 /// undetectable capability can be admitted in writing rather than by widening
 /// the over-claim check into a warning that nobody reads.
+/** @type {string[]} */
 export const UNCLAIMED_BACKGROUND_MODES = [];
 
-/// `Runner.entitlements` keys, each derived from the code that needs it.
+/**
+ * `Runner.entitlements` keys, each derived from the code that needs it.
+ * @type {{ key: string, source: SourceKind, pattern: RegExp, needed_by: string, accepts: (value: PlistValue) => boolean, shape: string, why: string }[]}
+ */
 export const ENTITLEMENTS = [
 	{
 		key: 'com.apple.developer.healthkit',
@@ -142,7 +162,7 @@ export const ENTITLEMENTS = [
 		source: 'dart',
 		pattern: /package:firebase_messaging\//,
 		needed_by: 'the push bridge asks firebase_messaging for an APNs token',
-		accepts: (v) => v === APS_SUBSTITUTION || APS_VALUES.has(v),
+		accepts: (v) => v === APS_SUBSTITUTION || (typeof v === 'string' && APS_VALUES.has(v)),
 		shape: `<string>${APS_SUBSTITUTION}</string> (or a literal development / production)`,
 		why:
 			'Without it `registerForRemoteNotifications` never yields a token, so ' +
@@ -156,6 +176,7 @@ export const ENTITLEMENTS = [
 /// missing one is not a build error: iOS denies the permission and the feature
 /// returns empty or never streams, which is the same silent shape as the two
 /// capabilities above.
+/** @type {{ key: string, source: SourceKind, pattern: RegExp, needed_by: string }[]} */
 export const PURPOSE_STRINGS = [
 	{
 		key: 'NSLocationWhenInUseUsageDescription',
@@ -243,6 +264,7 @@ export const FIXED_PLIST_KEYS = [
 /// `PrivacyInfo.xcprivacy`'s required-reason API declarations, derived from
 /// the plugin that touches the API. Apple's upload validation rejects a binary
 /// that uses one of these without an entry.
+/** @type {{ type: string, source: SourceKind, pattern: RegExp, needed_by: string }[]} */
 export const PRIVACY_API_TYPES = [
 	{
 		type: 'NSPrivacyAccessedAPICategoryUserDefaults',
@@ -288,6 +310,7 @@ export const PRIVACY_API_TYPES_FIXED = [
 /// them. A partial `NSPrivacyCollectedDataTypes` array fails Privacy Manifest
 /// validation, and it also has to agree with the App Store Connect nutrition
 /// label, so under-declaring here is a compliance answer as well as a build one.
+/** @type {{ type: string, source: SourceKind, pattern: RegExp, needed_by: string }[]} */
 export const PRIVACY_DATA_TYPES = [
 	{
 		type: 'NSPrivacyCollectedDataTypePreciseLocation',
@@ -365,6 +388,7 @@ export const PRIVACY_DATA_TYPES_FIXED = [
 // Plist reading
 // ---------------------------------------------------------------------------
 
+/** @type {Record<string, string>} */
 const ENTITIES = {
 	'&amp;': '&',
 	'&lt;': '<',
@@ -373,11 +397,17 @@ const ENTITIES = {
 	'&apos;': "'",
 };
 
-const decodeEntities = (s) => s.replace(/&(?:amp|lt|gt|quot|apos);/g, (m) => ENTITIES[m]);
+/** @param {string} s */
+const decodeEntities = (s) =>
+	s.replace(/&(?:amp|lt|gt|quot|apos);/g, (m) => ENTITIES[m]);
 
 /// Tag stream for an XML plist. Comments are dropped BEFORE parsing: the plist
 /// in this repo carries several, and a key mentioned in prose is not a key the
 /// binary declares.
+/**
+ * @param {string} xml
+ * @returns {PlistToken[]}
+ */
 export function tokenizePlist(xml) {
 	// Stripped to a fixpoint, not in one pass: removing a `<!-- ... -->` span can
 	// leave its neighbours spelling a fresh one (`<!--<!-- -->-->` reduces to a
@@ -392,6 +422,7 @@ export function tokenizePlist(xml) {
 		if (next === clean) break;
 		clean = next;
 	}
+	/** @type {PlistToken[]} */
 	const tokens = [];
 	const re = /<\s*(\/?)([A-Za-z][\w.:-]*)\b[^>]*?(\/?)\s*>/g;
 	let last = 0;
@@ -407,6 +438,11 @@ export function tokenizePlist(xml) {
 	return tokens;
 }
 
+/**
+ * @param {PlistToken[]} tokens
+ * @param {number} i
+ * @returns {[PlistValue, number]}
+ */
 function parseValue(tokens, i) {
 	const t = tokens[i];
 	if (!t) return [undefined, i];
@@ -421,11 +457,14 @@ function parseValue(tokens, i) {
 	if (t.kind !== 'open') return [undefined, i + 1];
 
 	if (t.name === 'dict') {
+		/** @type {Map<string, PlistValue>} */
 		const map = new Map();
+
 		let j = i + 1;
 		while (j < tokens.length && !(tokens[j].kind === 'close' && tokens[j].name === 'dict')) {
 			if (tokens[j].kind === 'open' && tokens[j].name === 'key') {
-				const key = tokens[j + 1]?.kind === 'text' ? tokens[j + 1].value : '';
+				const keyToken = tokens[j + 1];
+				const key = keyToken?.kind === 'text' ? keyToken.value : '';
 				let k = j + 1;
 				while (k < tokens.length && !(tokens[k].kind === 'close' && tokens[k].name === 'key')) k++;
 				const [value, next] = parseValue(tokens, k + 1);
@@ -439,6 +478,7 @@ function parseValue(tokens, i) {
 	}
 
 	if (t.name === 'array') {
+		/** @type {PlistValue[]} */
 		const arr = [];
 		let j = i + 1;
 		while (j < tokens.length && !(tokens[j].kind === 'close' && tokens[j].name === 'array')) {
@@ -453,13 +493,18 @@ function parseValue(tokens, i) {
 		return [arr, j + 1];
 	}
 
-	const text = tokens[i + 1]?.kind === 'text' ? tokens[i + 1].value : '';
+	const textToken = tokens[i + 1];
+	const text = textToken?.kind === 'text' ? textToken.value : '';
 	let j = i + 1;
 	while (j < tokens.length && !(tokens[j].kind === 'close' && tokens[j].name === t.name)) j++;
 	return [t.name === 'integer' || t.name === 'real' ? Number(text) : text, j + 1];
 }
 
-/// The plist's root dictionary as a Map, or null when the file is not one.
+/**
+ * The plist's root dictionary as a Map, or null when the file is not one.
+ * @param {string} xml
+ * @returns {Map<string, PlistValue> | null}
+ */
 export function parsePlist(xml) {
 	const tokens = tokenizePlist(xml);
 	const at = tokens.findIndex((t) => t.kind === 'open' && t.name === 'plist');
@@ -478,6 +523,7 @@ export function parsePlist(xml) {
 /// Only whole-line comments are removed, never a trailing one: a trailing
 /// strip would have to guess at `//` inside a string literal, and guessing
 /// wrong there deletes real code and turns the guard silently permissive.
+/** @param {string} src */
 export function stripWholeLineComments(src) {
 	return src
 		.split('\n')
@@ -485,7 +531,15 @@ export function stripWholeLineComments(src) {
 		.join('\n');
 }
 
+/**
+ * @param {string} dir
+ * @param {string} suffix
+ * @param {SourceFile[]} out
+ * @param {((path: string) => boolean) | null} filter
+ * @returns {SourceFile[]}
+ */
 function walk(dir, suffix, out, filter) {
+	/** @type {import('node:fs').Dirent[]} */
 	let entries;
 	try {
 		entries = readdirSync(dir, { withFileTypes: true });
@@ -520,6 +574,7 @@ function walk(dir, suffix, out, filter) {
 /// is filtered to `lib/` so a test fixture importing a plugin cannot conjure a
 /// capability requirement out of nothing.
 export function collectDartSources(root = REPO_ROOT, roots = DART_ROOTS) {
+	/** @type {SourceFile[]} */
 	const out = [];
 	for (const rel of roots) {
 		walk(join(root, rel), '.dart', out, (p) => p.includes(`${'/'}lib${'/'}`));
@@ -531,7 +586,12 @@ export function collectSwiftSources(iosRoot = IOS_ROOT) {
 	return walk(join(iosRoot, SWIFT_ROOT), '.swift', [], null);
 }
 
-/// The first file matching `pattern`, repo-relative, or null.
+/**
+ * The first file matching `pattern`, repo-relative, or null.
+ * @param {SourceFile[]} sources
+ * @param {RegExp} pattern
+ * @param {string} [root]
+ */
 export function firstMatch(sources, pattern, root = REPO_ROOT) {
 	const hit = sources.find((s) => pattern.test(s.text));
 	return hit ? relative(root, hit.path) : null;
@@ -545,7 +605,12 @@ export function firstMatch(sources, pattern, root = REPO_ROOT) {
 /// Brace-counted rather than indentation-matched: the closing `};` of
 /// `buildSettings` and the closing `};` of the configuration differ only by a
 /// tab, and a guard that depends on a tab is a guard one reformat from blind.
+/**
+ * @param {string} pbx
+ * @returns {{ name: string, settings: string }[]}
+ */
 export function parseBuildConfigurations(pbx) {
+	/** @type {{ name: string, settings: string }[]} */
 	const out = [];
 	const marker = 'isa = XCBuildConfiguration;';
 	let from = 0;
@@ -566,15 +631,51 @@ export function parseBuildConfigurations(pbx) {
 	return out;
 }
 
+/**
+ * @param {string} settings
+ * @param {string} key
+ */
 const settingOf = (settings, key) => {
 	const m = settings.match(new RegExp(`\\b${key}\\s*=\\s*([^;\\n]+);`));
 	return m ? m[1].trim().replace(/^"|"$/g, '') : null;
 };
 
+/**
+ * A plist array of dictionaries, or null when the value is present with some
+ * other shape. An ABSENT key reads as the empty array: that is the ordinary
+ * under-declaration the per-rule checks report by name. A key present as a
+ * string used to reach `.filter()` and take the whole guard down with a
+ * TypeError, which reports a manifest problem as a crashed CI job.
+ * @param {PlistValue} value
+ * @returns {Map<string, unknown>[] | null}
+ */
+function dictArray(value) {
+	if (value === undefined || value === null) return [];
+	if (!Array.isArray(value)) return null;
+	return value.every((e) => e instanceof Map) ? value : null;
+}
+
 // ---------------------------------------------------------------------------
 // The verdict
 // ---------------------------------------------------------------------------
 
+/**
+ * @typedef {object} EvaluateInput
+ * @property {Map<string, PlistValue> | null} infoPlist
+ * @property {Map<string, PlistValue> | null} entitlements
+ * @property {string | null} privacyManifest
+ * @property {string | null} appDelegate
+ * @property {string | null} pbxproj
+ * @property {string | null} backgroundSyncDart
+ * @property {SourceFile[]} dartSources
+ * @property {SourceFile[]} swiftSources
+ * @property {string} [root]
+ */
+
+/**
+ * @param {EvaluateInput} input
+ * @returns {{ errors: string[], warnings: string[], ok: string[] }}
+ */
 export function evaluate(input) {
 	const {
 		infoPlist,
@@ -588,8 +689,11 @@ export function evaluate(input) {
 		root = REPO_ROOT,
 	} = input;
 
+	/** @type {string[]} */
 	const errors = [];
+	/** @type {string[]} */
 	const warnings = [];
+	/** @type {string[]} */
 	const ok = [];
 
 	// Blindness checks, in the shape check_watch_ble_uuids.mjs uses: a parser
@@ -620,6 +724,7 @@ export function evaluate(input) {
 		return { errors, warnings, ok };
 	}
 
+	/** @param {SourceKind} kind */
 	const sourcesFor = (kind) => (kind === 'swift' ? swiftSources : dartSources);
 
 	// --- UIBackgroundModes, both directions -------------------------------
@@ -896,7 +1001,15 @@ export function evaluate(input) {
 	// --- PrivacyInfo.xcprivacy --------------------------------------------
 	// Parsed rather than substring-matched: a category named in a comment, or
 	// in the wrong array, satisfies `includes()` while declaring nothing.
-	if (privacyManifest !== null && privacyManifest !== undefined) {
+	if (privacyManifest === null || privacyManifest === undefined) {
+		errors.push(
+			'No PrivacyInfo.xcprivacy was read.\n' +
+				'  Apple requires the manifest for every binary touching a ' +
+				'required-reason API, and every check below it is unconditional — ' +
+				'skipping them because the file is absent reports the strongest ' +
+				'possible failure as nothing at all.',
+		);
+	} else {
 		const manifest = parsePlist(privacyManifest);
 		if (!manifest) {
 			errors.push(
@@ -906,17 +1019,26 @@ export function evaluate(input) {
 					'taught the new form.',
 			);
 		} else {
-			const apiEntries = manifest.get('NSPrivacyAccessedAPITypes') ?? [];
+			const apiEntries = dictArray(manifest.get('NSPrivacyAccessedAPITypes'));
+			const dataEntries = dictArray(manifest.get('NSPrivacyCollectedDataTypes'));
+			if (apiEntries === null || dataEntries === null) {
+				errors.push(
+					'PrivacyInfo.xcprivacy carries NSPrivacyAccessedAPITypes or ' +
+						'NSPrivacyCollectedDataTypes as something other than an array of ' +
+						'dictionaries.\n  Every declaration below is read out of those two ' +
+						'arrays, so the shape has to be established before they can say ' +
+						'anything.',
+				);
+				return { errors, warnings, ok };
+			}
+			/** @type {Map<string, unknown>} */
 			const apiTypes = new Map(
-				apiEntries
-					.filter((e) => e instanceof Map)
-					.map((e) => [e.get('NSPrivacyAccessedAPIType'), e.get('NSPrivacyAccessedAPITypeReasons') ?? []]),
+				apiEntries.map((e) => [
+					String(e.get('NSPrivacyAccessedAPIType')),
+					e.get('NSPrivacyAccessedAPITypeReasons') ?? [],
+				]),
 			);
-			const dataTypes = new Set(
-				(manifest.get('NSPrivacyCollectedDataTypes') ?? [])
-					.filter((e) => e instanceof Map)
-					.map((e) => e.get('NSPrivacyCollectedDataType')),
-			);
+			const dataTypes = new Set(dataEntries.map((e) => e.get('NSPrivacyCollectedDataType')));
 
 			for (const rule of PRIVACY_API_TYPES) {
 				const where = firstMatch(sourcesFor(rule.source), rule.pattern, root);
@@ -935,6 +1057,14 @@ export function evaluate(input) {
 				const reasons = apiTypes.get(type);
 				if (!reasons) {
 					errors.push(`PrivacyInfo.xcprivacy does not declare \`${type}\`.\n  ${why}`);
+					continue;
+				}
+				if (!Array.isArray(reasons)) {
+					errors.push(
+						`PrivacyInfo.xcprivacy declares \`${type}\` with a ` +
+							'NSPrivacyAccessedAPITypeReasons that is not an array.\n  ' +
+							'Apple\'s validation reads it as one, and so does the check below.',
+					);
 					continue;
 				}
 				if (!reasons.includes(reason)) {
@@ -984,6 +1114,10 @@ export function evaluate(input) {
 	return { errors, warnings, ok };
 }
 
+/**
+ * @param {string} path
+ * @returns {string | null}
+ */
 function readOrNull(path) {
 	try {
 		return readFileSync(path, 'utf-8');
