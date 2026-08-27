@@ -131,27 +131,46 @@ export async function signSendEmailHook(
 
 // ─────────────────── locale ───────────────────
 
-export const AUTH_EMAIL_LOCALES = ['en', 'de', 'fr', 'es', 'ja', 'pt-BR'] as const;
+/// Exact-tag and base-language tables, mirroring EXACT / BASE_TO_LOCALE in
+/// apps/web/src/lib/i18n/locale.ts and emailExact / emailBase in the worker's
+/// email_i18n.go. The Portuguese rows are the whole reason the tables exist
+/// rather than a `switch`: `pt-BR` reaches Brazilian by its own tag — which
+/// Android, iOS and every browser report — while the bare `pt` and the other
+/// European-orthography regions (`pt-AO`, `pt-MZ`, `pt-CV`) have nowhere else
+/// to land and so resolve to European. This used to be `startsWith('pt')`
+/// → `pt-BR`, which handed a Lisbon reader European Portuguese in the browser
+/// and Brazilian in their inbox (decisions § 761).
+const AUTH_EMAIL_EXACT: Record<string, string> = {
+  en: 'en',
+  de: 'de',
+  fr: 'fr',
+  es: 'es',
+  ja: 'ja',
+  'pt-br': 'pt-BR',
+  'pt-pt': 'pt-PT',
+};
 
-/// Mirror of the worker's normalizeEmailLocale: region variants collapse
-/// to their base language (de-DE → de), Portuguese collapses to pt-BR
-/// (the only pt we ship), everything unknown → en.
+const AUTH_EMAIL_BASE: Record<string, string> = {
+  en: 'en',
+  de: 'de',
+  fr: 'fr',
+  es: 'es',
+  ja: 'ja',
+  pt: 'pt-PT',
+};
+
+/// Mirror of the worker's normalizeEmailLocale: an exact tag wins, otherwise
+/// the region is dropped and the base language decides (de-DE → de);
+/// everything unknown → en. Underscores separate too — this reads
+/// user_settings.prefs.locale, which is whatever a client wrote.
 export function normalizeEmailLocale(tag: string | null | undefined): string {
-  const t = (tag ?? '').trim().toLowerCase();
+  const t = (tag ?? '').trim().toLowerCase().replaceAll('_', '-');
   if (t === '') return 'en';
-  if (t.startsWith('pt')) return 'pt-BR';
-  const sep = t.search(/[-_]/);
+  const exact = AUTH_EMAIL_EXACT[t];
+  if (exact) return exact;
+  const sep = t.indexOf('-');
   const base = sep >= 0 ? t.slice(0, sep) : t;
-  switch (base) {
-    case 'en':
-    case 'de':
-    case 'fr':
-    case 'es':
-    case 'ja':
-      return base;
-    default:
-      return 'en';
-  }
+  return AUTH_EMAIL_BASE[base] ?? 'en';
 }
 
 /// The recipient's chosen app language (user_settings.prefs.locale,
@@ -378,6 +397,10 @@ export const authEmailShared: Record<string, AuthEmailShared> = {
   'pt-BR': {
     footer: 'Esta é uma mensagem de serviço sobre sua conta Threkir.',
     altCode: 'Ou digite este código:',
+  },
+  'pt-PT': {
+    footer: 'Esta é uma mensagem de serviço sobre a sua conta Threkir.',
+    altCode: 'Em alternativa, introduza este código:',
   },
 };
 
@@ -931,7 +954,108 @@ export const authEmailCatalogue: Record<
       ],
     },
   },
+  'pt-PT': {
+    signup: {
+      subject: 'Confirme o seu endereço de e-mail',
+      preheader: 'Confirme o seu endereço de e-mail para concluir a criação da sua conta Threkir.',
+      heading: 'Confirme o seu endereço de e-mail',
+      cta: 'Confirmar o meu e-mail',
+      body: [
+        'Bem-vindo ao Threkir! Confirme o seu endereço de e-mail no botão abaixo para concluir a criação da sua conta.',
+        'Depois de confirmar, pode registar a sua primeira corrida, criar rotas e seguir amigos.',
+        'Se não criou esta conta, pode ignorar este e-mail.',
+      ],
+    },
+    invite: {
+      subject: 'Foi convidado',
+      preheader: 'Aceite o convite para criar a sua conta Threkir.',
+      heading: 'Foi convidado',
+      cta: 'Aceitar o convite',
+      body: [
+        'Foi convidado a criar uma conta no Threkir. Siga o link abaixo para aceitar o convite.',
+      ],
+    },
+    magiclink: {
+      subject: 'O seu link de acesso',
+      preheader: 'Siga o link para iniciar sessão no Threkir.',
+      heading: 'O seu link mágico',
+      cta: 'Iniciar sessão',
+      body: [
+        'Siga o link abaixo para iniciar sessão na sua conta Threkir.',
+        'Se não pediu este link, pode ignorar este e-mail.',
+      ],
+    },
+    recovery: {
+      subject: 'Redefina a sua palavra-passe',
+      preheader: 'Siga o link para escolher uma nova palavra-passe.',
+      heading: 'Redefina a sua palavra-passe',
+      cta: 'Redefinir palavra-passe',
+      body: [
+        'Siga o link abaixo para redefinir a palavra-passe da sua conta Threkir.',
+        'Se não pediu a redefinição, pode ignorar este e-mail.',
+      ],
+    },
+    email_change: {
+      subject: 'Confirme o seu novo e-mail',
+      preheader: 'Confirme o seu novo endereço de e-mail.',
+      heading: 'Confirme o seu novo endereço de e-mail',
+      cta: 'Confirmar novo e-mail',
+      body: [
+        'Siga o link abaixo para confirmar este endereço como o novo e-mail da sua conta Threkir.',
+        'Se não pediu esta alteração, pode ignorar este e-mail.',
+      ],
+    },
+    email_change_current: {
+      subject: 'Confirme a alteração de e-mail',
+      preheader: 'Aprove a alteração do e-mail da sua conta.',
+      heading: 'Confirme a alteração de e-mail',
+      cta: 'Aprovar a alteração',
+      body: [
+        'Recebemos um pedido para alterar o e-mail da sua conta Threkir. Siga o link abaixo para aprovar a alteração a partir deste endereço.',
+        'Se não pediu esta alteração, ignore este e-mail — nada é alterado sem a sua confirmação.',
+      ],
+    },
+    reauthentication: {
+      subject: 'Confirme a sua identidade',
+      preheader: 'Introduza o código para confirmar a ação.',
+      heading: 'Confirme a sua identidade',
+      cta: '',
+      body: [
+        'Introduza este código para confirmar a ação na sua conta Threkir:',
+        'Se não reconhece este pedido, pode ignorar este e-mail.',
+      ],
+    },
+    password_changed_notification: {
+      subject: 'A sua palavra-passe foi alterada',
+      preheader: 'A palavra-passe da sua conta acabou de ser alterada.',
+      heading: 'A sua palavra-passe foi alterada',
+      cta: '',
+      body: [
+        'A palavra-passe da sua conta Threkir acabou de ser alterada.',
+        'Se a alteração foi sua, não é preciso fazer nada. Caso contrário, redefina a palavra-passe imediatamente na página de início de sessão.',
+      ],
+    },
+    default: {
+      subject: 'Uma mensagem sobre a sua conta',
+      preheader: 'Aviso sobre a sua conta.',
+      heading: 'Aviso sobre a sua conta',
+      cta: '',
+      body: [
+        'Esta mensagem é sobre a sua conta Threkir. Se não estava à espera dela, pode ignorá-la.',
+      ],
+    },
+  },
 };
+
+/// DERIVED from the catalogue rather than restated beside it. A hand-written
+/// list is a second place a locale has to be added, and the one the parity
+/// test then loops over — so a seventh catalogue added to the object below and
+/// missed in the list would be skipped by the guard that exists to see it.
+/// That is the shape decisions § 748 / § 755 found six times on the client
+/// side. Sorted so the order is stable.
+export const AUTH_EMAIL_LOCALES: readonly string[] = Object.keys(
+  authEmailCatalogue,
+).sort();
 
 export function lookupAuthEmailStrings(
   locale: string,
