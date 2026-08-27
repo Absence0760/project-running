@@ -7,6 +7,10 @@ description: Frozen snapshot of followups.md taken 2026-06-14 when the live file
 
 > **This is a frozen snapshot.** It captures the full state of [`followups.md`](followups.md) immediately before it was pruned to open items only on 2026-06-14. Most entries below are completed (`[x]`) or resolved/closed sections kept here for their implementation context; a few still-open items appear too because this is a verbatim snapshot. **For the live, authoritative list of open follow-ups, see [`followups.md`](followups.md).** Do not add new work here — it is not maintained.
 
+<!-- doc-checkbox-frozen -->
+
+The checkbox states here are the ones the live file carried on 2026-06-14, including four `[~]` partials, and they are left exactly as captured. `scripts/check_doc_checkboxes.mjs` reads the marker above and holds this file to the vocabulary only, not to the rule that a partial names where its open half is tracked — that rule was written afterwards, and applying it retroactively would rewrite the snapshot into something other than a snapshot. Each of the four has since been verified complete against the code (see [decisions.md § 756](../architecture/decisions.md)); their live successors, where any work remained, are in [`followups.md`](followups.md).
+
 # Open follow-ups
 
 ## Perf-hunt round 2 deferrals (2026-06-13)

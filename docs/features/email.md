@@ -306,7 +306,7 @@ Dashboard → Auth → Hooks in prod):
 
 ## Planned / not built
 
-- [~] **Weekly digest** (engagement) — **FULLY BUILT INCL. SCHEDULER, SEND STILL GATED
+- [~] **Weekly digest** (engagement) — code complete, send gated; the open half is **Email — production ops** in [`roadmap.md`](../product/roadmap.md). **FULLY BUILT INCL. SCHEDULER, SEND STILL GATED
   ON SMTP + CISO/COUNSEL (2026-06-20, scheduler migration `20270220_001`; decisions §174).**
   The missing piece — a `pg_cron` `enqueue_weekly_digests()` (Monday 08:00 UTC,
   opt-in-only, dedupe-safe) — now ships; the send is fail-closed on the unset
@@ -334,8 +334,10 @@ Dashboard → Auth → Hooks in prod):
   silently dropped every future send while the toggle read 'on' (#392); the
   address-keyed row covers every stream, so re-opting into either engagement
   stream lifts it and the per-stream opt-in prefs become the authoritative gate
-  again. **NOT enabled:** the builder is
-  **UNSCHEDULED** — no `pg_cron` ships (no marketing send fires). The **opt-in
+  again. The Go builder
+  `digest_builder.go` (`EnqueueAllWeeklyDigests`) stays the manual backfill path
+  and is deliberately unscheduled; the scheduled producer is the SQL
+  `enqueue_weekly_digests()` that `20270220_001` puts on `pg_cron`. The **opt-in
   preference toggle** ships on web `/settings/preferences` + mobile Settings →
   Preferences (default off). The **provider bounce/complaint suppression
   webhook** is now built (`POST /v1/email/bounce`, worker
@@ -347,7 +349,7 @@ Dashboard → Auth → Hooks in prod):
   **gated on CISO + counsel sign-off** (bulk/promotional mail under CAN-SPAM +
   GDPR/ePrivacy, unlike the transactional kinds) — the only remaining work for
   an enabled send is that operator-side `pg_cron` schedule + the sign-off.
-- [~] **Lifecycle drip** (engagement) — **FULLY BUILT INCL. SCHEDULER, SEND STILL
+- [~] **Lifecycle drip** (engagement) — code complete, send gated; the open half is **Email — production ops** in [`roadmap.md`](../product/roadmap.md). **FULLY BUILT INCL. SCHEDULER, SEND STILL
   GATED ON SMTP + CISO/COUNSEL (2026-06-20, migration `20270223_001`; decisions
   §177).** Onboarding / re-engagement / streak nudges on the SAME rails as the
   weekly digest — a new `lifecycle_drip` jobs.kind carrying `{user_id, template}`
@@ -402,10 +404,11 @@ Dashboard → Auth → Hooks in prod):
 - [x] **Web push server-side delivery** — SHIPPED 2026-06-04 (migration
   `20261219_001`, `web_push` kind). See the architecture note above. Gated on the
   operator-generated `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (self-generated, not a
-  third-party credential); unset → jobs finish done, rows stay pending. A
-  `push_notifications` category UI toggle (web + mobile) is the small remaining
-  follow-up — gating works on the `important` default without it.
-- [~] **Native push (FCM / APNs)** — backend + client BUILT 2026-06-19 (migration
+  third-party credential); unset → jobs finish done, rows stay pending. The
+  `push_notifications` category toggle ships on both platforms
+  (`settings/preferences/+page.svelte`, `settings_preferences_screen.dart`);
+  gating works on the `important` default without it.
+- [~] **Native push (FCM / APNs)** — code complete, send gated; the open half is **Native push delivery** in [`followups.md`](../product/followups.md). Backend + client BUILT 2026-06-19 (migration
   `20270212_001`, `native_push` kind), **send gated on operator credentials**. Same
   `notifications` source of truth + sibling-consumer pattern the `web_push` kind
   demonstrates; the FCM/APNs sender (`internal/nativepush/`) + handler
