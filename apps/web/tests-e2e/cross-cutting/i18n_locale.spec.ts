@@ -38,6 +38,38 @@ test.describe('i18n locale negotiation', () => {
 		await context.close();
 	});
 
+	test('a European-Portuguese browser resolves to pt-PT, not to Brazilian', async ({
+		browser,
+	}) => {
+		// The two Portuguese catalogues are separate translations, and a
+		// Lisbon browser used to land on the Brazilian one while the phone
+		// answered the same reader in European Portuguese. The assertion is
+		// on the WORDS, not only on <html lang>: a lang attribute proves the
+		// tag negotiated, the skip link proves the catalogue actually loaded
+		// and that it is the European one ("Saltar", where Brazilian says
+		// "Pular").
+		const context = await browser.newContext({ locale: 'pt-PT' });
+		const page = await context.newPage();
+		await page.goto('/privacy');
+		await expect(page.locator('html')).toHaveAttribute('lang', 'pt-PT');
+		await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+		await expect(page.locator('a.skip-link').first()).toHaveText(
+			'Saltar para o conteúdo principal',
+		);
+		await context.close();
+	});
+
+	test('a Portuguese browser with no region gets the European catalogue', async ({ browser }) => {
+		// Brazil reports its region on every client we have seen, so the bare
+		// tag is worth more to Portugal — and to pt-AO / pt-MZ, which share
+		// its orthography and which we carry no catalogue for at all.
+		const context = await browser.newContext({ locale: 'pt' });
+		const page = await context.newPage();
+		await page.goto('/privacy');
+		await expect(page.locator('html')).toHaveAttribute('lang', 'pt-PT');
+		await context.close();
+	});
+
 	test('the login page renders in the browser language (cluster: login)', async ({ browser }) => {
 		const de = await browser.newContext({ locale: 'de-DE' });
 		const p1 = await de.newPage();
