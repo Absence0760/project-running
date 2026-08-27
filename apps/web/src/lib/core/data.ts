@@ -11463,7 +11463,15 @@ export async function createChallenge(input: {
 		})
 		.select()
 		.single();
-	if (error) throw error;
+	if (error) {
+		// Surface the create_challenge rate-limit P0001 (migration
+		// 20270610_001 routed the trigger through the shared helper, so it
+		// finally carries the bucket + retry figure) as the friendly
+		// "wait N minutes" line instead of the editor's generic toast.
+		const friendly = rateLimitErrorMessage(m, error);
+		if (friendly) throw new Error(friendly);
+		throw error;
+	}
 	return challengeFromRow(data);
 }
 

@@ -16,17 +16,12 @@ import org.w3c.dom.Element
 /// instead.
 class L10nResourceParityTest {
 
-    private val resDir = File("src/main/res")
+    private val resDir = WearLocales.resDir()
 
-    /// Default English set + the five translation dirs. pt-BR uses the
-    /// BCP-47 `b+pt+BR` qualifier.
-    private val localeDirs = listOf(
-        "values-de",
-        "values-fr",
-        "values-es",
-        "values-ja",
-        "values-b+pt+BR",
-    )
+    /// Read off the resource set rather than listed: a hand-written list
+    /// checks the locales someone remembered, not the ones that ship
+    /// (`LocaleReachTest`, decisions § 748).
+    private val localeDirs: List<String> get() = WearLocales.translatedDirs()
 
     private fun stringsFile(dir: String): File = File(resDir, "$dir/strings.xml")
 

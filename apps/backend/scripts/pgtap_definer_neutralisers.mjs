@@ -35,10 +35,57 @@
 // as what it is run against.
 
 // Every entry: `sql` is the replacement, `why` names the access control it
-// drops, and `witness` proves the replacement has teeth. `witness.setup` makes
-// a subject the real relation must hide; `witness.probe` counts that subject
-// through the relation and must read 0 before the replacement and more than 0
-// after.
+// drops, `subject` names the relation its revealed rows come from, and
+// `witness` proves the replacement has teeth. `witness.setup` makes a subject
+// the real relation must hide; `witness.probe` counts that subject through the
+// relation and must read 0 before the replacement and more than 0 after.
+
+// Restrict a replacement to the rows THIS transaction wrote.
+//
+// A permissive replacement drops the predicate that decides whether the caller
+// may see a row - so it reveals every row in the table, not only the one the
+// test filed. Where the assertion's own selector is narrow enough to name the
+// test's subject that is the same thing, and where it is not it is emphatically
+// not: `gym_exercise_set_history('Bench Press')` normalises the name, and
+// seed.sql commits six `Bench press` sets, so the mutation kills that assertion
+// whether or not the test inserted anything at all. The kill would then say a
+// subject exists in the database rather than that the test built one, which is
+// § 741's inversion one remove further out - deterministic here, because the
+// seed is committed and reproducible, but still a subject the test did not file.
+//
+// `xmin` is the handle, and it is sound only when it is pointed at the right
+// relation: not the one carrying the access control that was dropped, but the
+// one the replacement's rows COME FROM. For `public_run_gear` those are
+// different tables - the predicate dropped is a visibility check on `runs`,
+// while the rows returned are `run_gear` joined to `gear` - and scoping the
+// access-controlled table would restrict nothing the caller ever sees. So each
+// entry names its own alias, beside the `why` that names what it drops.
+//
+// An UPDATE writes a new row version, so a test that establishes its subject by
+// mutating a seed row ("make this profile shadow-hidden") is transaction-local
+// too. What is left outside is a row the test only ever SELECTed, which is
+// exactly the exposure.
+//
+// Rows written inside a subtransaction (a savepoint, or pgtap's own `throws_ok`
+// / `lives_ok` blocks) carry the SUBtransaction's xid and so read as foreign.
+// That direction is the safe one: the mutation goes inert, the assertion
+// survives, and the guard reports it by name rather than passing it silently.
+// `pg_xact_status` would cover those too and is not usable here - it is
+// superuser-only, and the SECURITY INVOKER replacements run as `authenticated`.
+export const mine = (alias) => `${alias}.xmin = pg_current_xact_id()::xid`;
+
+// The five owner-scoped gym RPCs share one witness, because they read the same
+// two tables and their access control is the same `gw.user_id = auth.uid()`.
+// It files its own workout and set rather than pointing at the seed's: a
+// witness whose subject is committed data proves the replacement reveals the
+// database, which is the very thing `mine` exists to stop it doing. The name is
+// one no seed row carries, so the probe cannot be answered by anything else.
+const GYM_WITNESS_SETUP = `insert into gym_workouts (id, user_id, title, started_at)
+   values ('00000000-0000-0000-0000-00000000c001',
+           (select id from auth.users order by id limit 1), 'guard witness', now());
+ insert into gym_sets (workout_id, set_index, exercise_name, reps, weight_kg)
+   values ('00000000-0000-0000-0000-00000000c001', 0, 'Pgtap Guard Witness', 5, 60);`;
+
 export const DEFINER_NEUTRALISERS = new Map([
   [
     'public_routes',
@@ -48,7 +95,9 @@ export const DEFINER_NEUTRALISERS = new Map([
  select id, user_id, name, distance_m, elevation_m, surface, is_public, slug,
         created_at, updated_at, tags, is_featured, featured_at, run_count,
         case when is_public_club_by_id(club_id) then club_id else null::uuid end as club_id
-   from routes r;`,
+   from routes r
+  where ${mine('r')};`,
+      subject: 'routes r — the route whose publicness was dropped',
       witness: {
         setup: `update routes set is_public = true, shadow_hidden = true
                  where id = (select id from routes order by id limit 1);`,
@@ -62,7 +111,9 @@ export const DEFINER_NEUTRALISERS = new Map([
     {
       why: 'drops `shadow_hidden = false`',
       sql: `create or replace view public.public_profiles as
- select id, display_name, avatar_url from user_profiles;`,
+ select u.id, u.display_name, u.avatar_url from user_profiles u
+  where ${mine('u')};`,
+      subject: 'user_profiles u',
       witness: {
         setup: `update user_profiles set shadow_hidden = true
                  where id = (select id from user_profiles order by id limit 1);`,
@@ -77,7 +128,9 @@ export const DEFINER_NEUTRALISERS = new Map([
       why: 'drops `is_public = true`',
       sql: `create or replace view public.public_gym_workouts as
  select id, user_id, started_at, title, duration_s, is_public, set_count, volume_kg, created_at
-   from gym_workouts w;`,
+   from gym_workouts w
+  where ${mine('w')};`,
+      subject: 'gym_workouts w',
       witness: {
         setup: `update gym_workouts set is_public = false
                  where id = (select id from gym_workouts order by id limit 1);`,
@@ -93,10 +146,14 @@ export const DEFINER_NEUTRALISERS = new Map([
       sql: `create or replace view public.public_gym_sets as
  select s.id, s.workout_id, s.set_index, s.exercise_name, s.reps, s.weight_kg, s.duration_s
    from gym_sets s
-   join gym_workouts w on w.id = s.workout_id;`,
+   join gym_workouts w on w.id = s.workout_id
+  where ${mine('s')};`,
+      subject: 'gym_sets s — the rows the view returns, not the parent workout carrying the dropped `is_public`',
       witness: {
         setup: `update gym_workouts set is_public = false
-                 where id = (select workout_id from gym_sets order by workout_id limit 1);`,
+                 where id = (select workout_id from gym_sets order by workout_id limit 1);
+                update gym_sets set set_index = set_index
+                 where workout_id = (select workout_id from gym_sets order by workout_id limit 1);`,
         probe: `select count(*) from public_gym_sets
                  where workout_id = (select workout_id from gym_sets order by workout_id limit 1);`,
       },
@@ -112,8 +169,10 @@ export const DEFINER_NEUTRALISERS = new Map([
 as $neutralised$
   select u.id, u.display_name, u.avatar_url
   from user_profiles u
-  where u.id = p_id;
+  where u.id = p_id
+    and ${mine('u')};
 $neutralised$;`,
+      subject: 'user_profiles u',
       witness: {
         setup: `update user_profiles set shadow_hidden = true
                  where id = (select id from user_profiles order by id limit 1);`,
@@ -140,9 +199,11 @@ as $neutralised$
         and starts_with(u.handle, lower(ltrim(p_query, '@')))
       )
     )
+    and ${mine('u')}
   order by u.display_name
   limit least(greatest(coalesce(p_limit, 60), 1), 200);
 $neutralised$;`,
+      subject: 'user_profiles u',
       witness: {
         setup: `update user_profiles set shadow_hidden = true
                  where id = (select id from user_profiles
@@ -167,11 +228,15 @@ as $neutralised$
   from run_gear rg
   join gear g on g.id = rg.gear_id
   where rg.run_id = p_run_id
+    and ${mine('rg')}
   order by g.kind, g.name;
 $neutralised$;`,
+      subject: 'run_gear rg — the link rows the RPC returns; the dropped predicate guards the RUN, which is a different table',
       witness: {
         setup: `update runs set is_public = false
-                 where id = (select run_id from run_gear order by run_id limit 1);`,
+                 where id = (select run_id from run_gear order by run_id limit 1);
+                update run_gear set gear_id = gear_id
+                 where run_id = (select run_id from run_gear order by run_id limit 1);`,
         probe: `select count(*) from public_run_gear(
                   (select run_id from run_gear order by run_id limit 1));`,
       },
@@ -191,8 +256,10 @@ as $neutralised$
          sc.created_at
   from safety_contacts sc
   left join user_profiles p on p.id = sc.owner_id
-  where sc.confirmed_at is null;
+  where sc.confirmed_at is null
+    and ${mine('sc')};
 $neutralised$;`,
+      subject: 'safety_contacts sc',
       witness: {
         setup: `insert into safety_contacts (owner_id, contact_email)
                  values ((select id from auth.users order by id limit 1),
@@ -215,8 +282,10 @@ as $neutralised$
   join user_profiles u on u.id = s.user_id
   where s.discoverable_area is not null
     and u.id is distinct from auth.uid()
+    and ${mine('s')}
   limit least(greatest(coalesce(p_limit, 60), 1), 200);
 $neutralised$;`,
+      subject: 'user_settings s — a runner with no settings row was never a candidate, so the settings row is what makes one discoverable',
       witness: {
         setup: `insert into user_settings (user_id, prefs, discoverable_area)
                  values ((select id from auth.users order by id limit 1),
@@ -263,9 +332,11 @@ as $neutralised$
                       then split_part(p_age_band, '-', 2)::integer end)
       )
     )
+    and ${mine('se')}
   order by se.user_id, se.time_seconds asc, se.started_at asc;
 $neutralised$;`,
-        witness: {
+      subject: 'segment_efforts se',
+      witness: {
         setup: `insert into segments (id, route_id, name, start_distance_m, end_distance_m)
                  values ('00000000-0000-0000-0000-0000000f0001',
                          (select id from routes order by id limit 1), 'guard witness', 0, 100);
@@ -335,8 +406,10 @@ as $neutralised$
         and ST_DWithin(c.location_point, center.pt, p_radius_m)
       )
     )
+    and ${mine('c')}
   limit p_limit;
 $neutralised$;`,
+      subject: 'clubs c',
       witness: {
         setup: `update clubs set shadow_hidden = true
                  where id = (select id from clubs where is_public order by id limit 1);`,
@@ -358,12 +431,15 @@ as $neutralised$
   from gym_sets s
   join gym_workouts gw on gw.id = s.workout_id
   where btrim(coalesce(s.exercise_name, '')) <> ''
+    and ${mine('s')}
   group by btrim(s.exercise_name)
   order by count(*) desc, btrim(s.exercise_name);
 $neutralised$;`,
+      subject: 'gym_sets s',
       witness: {
-        setup: `select 1;`,
-        probe: `select count(*) from gym_exercise_names();`,
+        setup: GYM_WITNESS_SETUP,
+        probe: `select count(*) from gym_exercise_names()
+                 where exercise_name = 'Pgtap Guard Witness';`,
       },
     },
   ],
@@ -388,11 +464,14 @@ as $neutralised$
   from gym_sets s
   join gym_workouts gw on gw.id = s.workout_id
   where btrim(coalesce(s.exercise_name, '')) <> ''
+    and ${mine('s')}
   group by regexp_replace(lower(btrim(s.exercise_name)), '\s+', ' ', 'g');
 $neutralised$;`,
+      subject: 'gym_sets s',
       witness: {
-        setup: `select 1;`,
-        probe: `select count(*) from gym_exercise_records();`,
+        setup: GYM_WITNESS_SETUP,
+        probe: `select count(*) from gym_exercise_records()
+                 where exercise_name = 'Pgtap Guard Witness';`,
       },
     },
   ],
@@ -410,13 +489,13 @@ as $neutralised$
   from gym_sets s
   join gym_workouts gw on gw.id = s.workout_id
   where regexp_replace(lower(btrim(s.exercise_name)), '\s+', ' ', 'g')
-      = regexp_replace(lower(btrim(p_name)), '\s+', ' ', 'g');
+      = regexp_replace(lower(btrim(p_name)), '\s+', ' ', 'g')
+    and ${mine('s')};
 $neutralised$;`,
+      subject: 'gym_sets s',
       witness: {
-        setup: `select 1;`,
-        probe: `select count(*) from gym_exercise_set_history(
-                  (select s.exercise_name from gym_sets s
-                    where s.exercise_name is not null order by s.exercise_name limit 1));`,
+        setup: GYM_WITNESS_SETUP,
+        probe: `select count(*) from gym_exercise_set_history('Pgtap Guard Witness');`,
       },
     },
   ],
@@ -438,13 +517,14 @@ as $neutralised$
       select regexp_replace(lower(btrim(n)), '\s+', ' ', 'g')
       from unnest(coalesce(p_names, '{}'::text[])) as n
       where btrim(coalesce(n, '')) <> ''
-    );
+    )
+    and ${mine('s')};
 $neutralised$;`,
+      subject: 'gym_sets s',
       witness: {
-        setup: `select 1;`,
+        setup: GYM_WITNESS_SETUP,
         probe: `select count(*) from gym_exercise_set_history_batch(
-                  array[(select s.exercise_name from gym_sets s
-                          where s.exercise_name is not null order by s.exercise_name limit 1)]);`,
+                  array['Pgtap Guard Witness']);`,
       },
     },
   ],
@@ -457,7 +537,7 @@ $neutralised$;`,
  language sql stable set search_path to 'public'
 as $neutralised$
   with mine as (
-    select gw.id, gw.started_at from gym_workouts gw
+    select gw.id, gw.started_at from gym_workouts gw where ${mine('gw')}
   ),
   listed as (
     select m.id, m.started_at from mine m
@@ -481,9 +561,11 @@ as $neutralised$
   left join counts c on c.workout_id = l.id
   order by l.started_at desc, l.id desc;
 $neutralised$;`,
+      subject: 'gym_workouts gw — the `mine` CTE the whole body hangs off',
       witness: {
-        setup: `select 1;`,
-        probe: `select count(*) from gym_workout_summaries();`,
+        setup: GYM_WITNESS_SETUP,
+        probe: `select count(*) from gym_workout_summaries()
+                 where workout_id = '00000000-0000-0000-0000-00000000c001';`,
       },
     },
   ],
@@ -501,6 +583,7 @@ as $neutralised$
     from runs r
     where (p_source is null or r.source = p_source)
       and (r.started_at at time zone p_tz)::date <= (now() at time zone p_tz)::date
+      and ${mine('r')}
   ),
   islands as (
     select d, d - (row_number() over (order by d))::int as grp from days
@@ -513,10 +596,18 @@ as $neutralised$
                where island_end >= (now() at time zone p_tz)::date - 1), 0),
     coalesce((select max(len) from lens), 0);
 $neutralised$;`,
+      subject: 'runs r',
       witness: {
         // A streak RPC always returns exactly one row, so a row count would
         // read 1 whether or not anything was revealed. The probe is the value.
-        setup: `select 1;`,
+        // The caller is nobody in particular, so the real relation's
+        // `user_id = auth.uid()` hides the run the witness just filed.
+        setup: `insert into runs (id, user_id, started_at, distance_m, duration_s, source)
+                 values ('00000000-0000-0000-0000-00000000c010',
+                         (select id from auth.users order by id limit 1),
+                         now() - interval '400 days', 1000, 600, 'app');
+                select set_config('request.jwt.claims',
+                  '{"sub":"00000000-0000-0000-0000-0000000c0ffe"}', true);`,
         probe: `select best_streak from run_streaks_for_user('UTC');`,
       },
     },
@@ -553,9 +644,11 @@ as $neutralised$
       or c.title ilike '%' || btrim(p_search) || '%'
       or c.description ilike '%' || btrim(p_search) || '%'
     )
+    and ${mine('c')}
   limit greatest(0, least(coalesce(p_limit, 24), 100))
   offset greatest(0, coalesce(p_offset, 0));
 $neutralised$;`,
+      subject: 'challenges c',
       witness: {
         setup: `select set_config('pgtap_guard.witness',
                   (select c.id::text from challenges c
@@ -653,8 +746,10 @@ as $neutralised$
         and ST_DWithin(c.location_point, center.pt, p_radius_m)
       )
     )
+    and ${mine('e')}
   limit greatest(1, least(p_limit, 200));
 $neutralised$;`,
+      subject: 'events e',
       witness: {
         setup: `select set_config('pgtap_guard.witness',
                   (select e.id::text from events e
@@ -680,8 +775,10 @@ as $neutralised$
   select r.user_id, count(*)
   from runs r
   where r.user_id = any(p_user_ids)
+    and ${mine('r')}
   group by r.user_id;
 $neutralised$;`,
+      subject: 'runs r',
       witness: {
         setup: `select set_config('pgtap_guard.witness',
                   (select r.user_id::text from runs r order by r.id limit 1), true);
@@ -704,8 +801,10 @@ as $neutralised$
   from events e
   where e.id = p_event_id
     and e.meet_lat is not null
-    and e.meet_lng is not null;
+    and e.meet_lng is not null
+    and ${mine('e')};
 $neutralised$;`,
+      subject: 'events e',
       witness: {
         setup: `select set_config('pgtap_guard.witness',
                   (select e.id::text from events e order by e.id limit 1), true);
@@ -736,6 +835,7 @@ as $neutralised$
     cross join bbox
     where r.geom is not null
       and r.geom && bbox.g
+      and ${mine('r')}
     limit 200
   ),
   densified as (
@@ -749,6 +849,7 @@ as $neutralised$
   )
   select ST_X(pt), ST_Y(pt) from densified limit p_max_points;
 $neutralised$;`,
+      subject: 'routes r — the `hit_routes` CTE every emitted point is densified from',
       witness: {
         // Every route owner gets a globe-sized privacy zone, so the real
         // relation clips every point it would otherwise emit — the witness
@@ -763,7 +864,8 @@ $neutralised$;`,
                 select distinct r.user_id,
                        '{"privacy_zones":[{"lat":0,"lng":0,"radius_m":100000000}]}'::jsonb
                   from routes r
-                 on conflict (user_id) do update set prefs = excluded.prefs;`,
+                 on conflict (user_id) do update set prefs = excluded.prefs;
+                update routes set updated_at = updated_at where geom is not null;`,
         probe: `select count(*) from heatmap_points_in_bbox(
                   current_setting('pgtap_guard.minlng')::double precision,
                   current_setting('pgtap_guard.minlat')::double precision,
@@ -797,9 +899,11 @@ as $neutralised$
   from routes r, box, centre
   where r.geom is not null
     and ST_Intersects(r.geom, box.g)
+    and ${mine('r')}
   order by r.geom <-> centre.g
   limit max_results;
 $neutralised$;`,
+      subject: 'routes r',
       witness: {
         setup: `select set_config('pgtap_guard.minlng', (ST_XMin(g) - 0.01)::text, true),
                        set_config('pgtap_guard.minlat', (ST_YMin(g) - 0.01)::text, true),
@@ -830,8 +934,10 @@ as $neutralised$
          0, 0::double precision, 0::double precision, 0::double precision,
          null::uuid, 0
   from coach_athletes ca
-  join user_profiles p on p.id = ca.athlete_id;
+  join user_profiles p on p.id = ca.athlete_id
+  where ${mine('ca')};
 $neutralised$;`,
+      subject: 'coach_athletes ca — the roster LINK, not the athlete profile it names',
       witness: {
         // The seed already pairs a coach with an athlete and a unique index
         // forbids a second live pair, so the witness demotes the existing link
@@ -849,3 +955,30 @@ $neutralised$;`,
     },
   ],
 ]);
+
+// Definer relations a zero-or-empty assertion reads and that deliberately have
+// NO permissive replacement, because none of their assertions is a refusal.
+//
+// Registering one costs a copy of a definition to keep in step with the schema,
+// and buys a measurement only where an empty result is a claim about access
+// control. Both of these are outside that, for two different reasons, and both
+// were checked rather than assumed - the operator was pointed at each and the
+// verdict it would produce is recorded beside it. The list is CLOSED: the
+// validation phase re-derives the same set from the suite and fails if a third
+// relation joins it, so the next assertion written over an unmeasured definer
+// relation is a decision someone makes on purpose rather than a chore the guard
+// hands them at merge time.
+export const UNREGISTERED_DEFINER_RELATIONS = [
+  {
+    relation: 'fetch_pending_reports',
+    assertion: 'resolved target is gone from the queue',
+    reason:
+      "the claim is that resolving a report takes it OUT of the moderation queue, which is the RPC's `status = 'pending'` filter - a subject selector, not access control. A replacement may only drop the admin gate, so the resolved report stays absent and the assertion would survive: an EXPECTED_SURVIVORS entry bought with a second copy of the queue query",
+  },
+  {
+    relation: 'challenge_leaderboard',
+    assertion: 'activity_type=run filter excludes a walk (value 0)',
+    reason:
+      'the expectation is a zero VALUE rather than an emptiness - a leaderboard metric that summed nothing - and a widening mutation moves a value, so a kill would say the mutation changed an answer rather than that access control was hiding a row. Same class as the two assertions § 745 left outside the vocabulary',
+  },
+];

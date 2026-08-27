@@ -3945,6 +3945,15 @@
   "rateLimitCreateClub": "Está a criar clubes demasiado depressa — aguarde {wait} e tente novamente.",
   "rateLimitCreateRoute": "Está a criar percursos demasiado depressa — aguarde {wait} e tente novamente.",
   "rateLimitCreateReport": "Está a enviar denúncias demasiado depressa — aguarde {wait} e tente novamente.",
+  "rateLimitCreateChallenge": "Está a criar desafios demasiado depressa — aguarde {wait} e tente novamente.",
+  "@rateLimitCreateChallenge": {
+    "description": "Rate-limit refusal when the create_challenge bucket is spent",
+    "placeholders": {
+      "wait": {
+        "type": "String"
+      }
+    }
+  },
   "rateLimitAdoptPlan": "Está a adotar planos demasiado depressa — aguarde {wait} e tente novamente.",
   "rateLimitAdoptSessionPlan": "Está a adotar planos de sessão demasiado depressa — aguarde {wait} e tente novamente.",
   "rateLimitAdoptGymRoutine": "Está a adotar rotinas de ginásio demasiado depressa — aguarde {wait} e tente novamente.",

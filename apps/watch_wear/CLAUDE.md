@@ -607,11 +607,24 @@ is the platform norm on a tiny screen).
   `ActivityTypeVocabularyTest` asserts the activity words equal the ARB's and
   the web catalogue's locale for locale, keeps the `hike` exemption non-stale,
   and pins the one phone locale the wrist does not carry (`app_pt.arb`).
+  `LocaleReachTest` + `WearLocalesTest` hold every site that DECLARES the
+  locale set — `locales_config.xml`, the manifest's `localeConfig` reference,
+  and both test-side lists — to the `values-*` directories on disk via
+  `WearLocales`, so a new string set cannot ship unlisted or unchecked
+  (decisions § 748). Note the test task takes `src/main/res` as an input only
+  because `app/build.gradle.kts` says so; without that a resource-only change
+  leaves `testDebugUnitTest` UP-TO-DATE.
   `UnitFormatTest` pins the locale decimal separator; `TtsLocaleWiringTest`
   pins the device-locale + resource-phrase wiring.
-- **When you add a user-facing string**: add it to `values/strings.xml` AND all
-  five `values-xx` files (the parity test fails otherwise), keep format args
-  (`%1$s` …) intact and in the right order, and escape apostrophes as `\'`.
+- **When you add a user-facing string**: add it to `values/strings.xml` AND
+  every `values-xx` file (the parity test reads the directory, so it fails on
+  whichever ones exist), keep format args (`%1$s` …) intact and in the right
+  order, and escape apostrophes as `\'`.
+- **When you add a LOCALE**: create `values-xx/strings.xml`, add the tag to
+  `res/xml/locales_config.xml`, and pair the directory with its phone + web
+  catalogue in `ActivityTypeVocabularyTest.localeCatalogues`. Nothing else
+  needs touching — every other site derives. `LocaleReachTest` names whichever
+  step you skipped.
 
 ## Testing convention
 

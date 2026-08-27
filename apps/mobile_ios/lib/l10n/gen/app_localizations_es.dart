@@ -13674,6 +13674,11 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String rateLimitCreateChallenge(String wait) {
+    return 'Estás creando desafíos demasiado rápido: espera $wait e inténtalo de nuevo.';
+  }
+
+  @override
   String rateLimitAdoptPlan(String wait) {
     return 'Estás adoptando planes demasiado rápido: espera $wait e inténtalo de nuevo.';
   }

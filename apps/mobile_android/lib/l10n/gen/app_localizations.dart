@@ -22706,6 +22706,12 @@ abstract class AppLocalizations {
   /// **'You\'re filing reports too quickly — please wait {wait} and try again.'**
   String rateLimitCreateReport(String wait);
 
+  /// Rate-limit refusal when the create_challenge bucket is spent
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re creating challenges too quickly — please wait {wait} and try again.'**
+  String rateLimitCreateChallenge(String wait);
+
   /// Rate-limit refusal when a training-plan adopt bucket is spent
   ///
   /// In en, this message translates to:

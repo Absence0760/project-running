@@ -31,6 +31,7 @@ import {
   validateReturnUrl,
 } from './lib.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
+import { parseRedirectAllowlist } from '../_shared/redirect_allowlist.ts';
 
 Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   if (req.method !== 'POST') {
@@ -45,10 +46,7 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   // Allowlist the return/refresh origins, the strava-import precedent.
   // Fail closed when unset — a missed `supabase secrets set` must not
   // silently allow an open-redirect target.
-  const allowlist = (Deno.env.get('STRIPE_EVENTS_ALLOWED_REDIRECTS') ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const allowlist = parseRedirectAllowlist(Deno.env.get('STRIPE_EVENTS_ALLOWED_REDIRECTS'));
   if (allowlist.length === 0) {
     return Response.json({ error: 'stripe_not_configured' }, { status: 503 });
   }

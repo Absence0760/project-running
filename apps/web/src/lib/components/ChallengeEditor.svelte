@@ -129,7 +129,9 @@
 			}
 		} catch (err) {
 			console.error(err);
-			showToast(m('challenges.createFailed'), 'error');
+			// A PostgrestError is a plain object, so only a message data.ts
+			// deliberately wrapped in an Error reaches the reader.
+			showToast(err instanceof Error ? err.message : m('challenges.createFailed'), 'error');
 		} finally {
 			busy = false;
 		}

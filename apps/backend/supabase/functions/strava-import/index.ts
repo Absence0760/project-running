@@ -13,6 +13,7 @@ import {
 	refreshStravaToken,
 } from '../_shared/strava.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
+import { isExactRedirectAllowed, parseRedirectAllowlist } from '../_shared/redirect_allowlist.ts';
 
 // `strava-import` handles two modes, selected by the `action` field:
 //
@@ -260,14 +261,11 @@ async function handleConnect(
 	// which 503 on missing config. A silent fall-through to "allow
 	// any redirect" would defeat the remediation in a single missed
 	// `supabase secrets set`.
-	const allowed = (Deno.env.get('STRAVA_ALLOWED_REDIRECTS') ?? '')
-		.split(',')
-		.map((s) => s.trim())
-		.filter(Boolean);
+	const allowed = parseRedirectAllowlist(Deno.env.get('STRAVA_ALLOWED_REDIRECTS'));
 	if (allowed.length === 0) {
 		return Response.json({ error: 'strava_not_configured' }, { status: 503 });
 	}
-	if (!redirectUri || !allowed.includes(redirectUri)) {
+	if (!isExactRedirectAllowed(redirectUri, allowed)) {
 		// audit/strava May 2026 Low #1 — debug log only on the host
 		// part of the URL (NOT the path or query — those can carry the
 		// OAuth code in some malformed callers). Lets an operator

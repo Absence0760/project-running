@@ -29,6 +29,7 @@ const BUCKET_KEY: Record<string, MessageKey> = {
 	create_club: 'rateLimit.createClub',
 	create_route: 'rateLimit.createRoute',
 	create_report: 'rateLimit.createReport',
+	create_challenge: 'rateLimit.createChallenge',
 	clone_plan_template: 'rateLimit.adoptPlan',
 	clone_public_plan: 'rateLimit.adoptPlan',
 	clone_session_template: 'rateLimit.adoptSessionPlan',
