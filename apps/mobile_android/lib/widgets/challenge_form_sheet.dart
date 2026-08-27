@@ -133,7 +133,7 @@ class _ChallengeFormState extends State<_ChallengeForm> {
     super.initState();
     final now = DateTime.now();
     _starts = now;
-    _ends = now.add(const Duration(days: 30));
+    _ends = DateTime(now.year, now.month, now.day + 30, now.hour, now.minute);
     _initialSnapshot = _snapshot();
     _loadClubs();
   }
