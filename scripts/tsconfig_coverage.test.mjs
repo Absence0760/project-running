@@ -55,7 +55,8 @@ function sourceFiles() {
 /**
  * Comments are legal in a tsconfig and these carry them.
  * @param {string} absPath
- * @returns {{ extends?: string, include?: string[], exclude?: string[] }}
+ * @returns {{ extends?: string, include?: string[], exclude?: string[],
+ *             compilerOptions?: { types?: string[] } }}
  */
 function readConfig(absPath) {
 	return JSON.parse(readFileSync(absPath, 'utf8').replace(/^\s*\/\/.*$/gm, ''));
@@ -243,4 +244,57 @@ test('the coverage guard itself runs in CI', () => {
 		`.github/workflows/ci.yml must run "${entry[0]}" — a coverage guard nothing runs is not ` +
 			'a guard.',
 	);
+});
+
+/**
+ * A config's effective `compilerOptions.types`, following `extends` until one
+ * declares it. TypeScript does not merge `types` across a chain either — the
+ * nearest declaration wins — so this stops at the first one, exactly as
+ * `effectivePatterns` does for `include`.
+ * @param {string} absPath
+ * @returns {string[] | undefined}
+ */
+function effectiveTypes(absPath) {
+	let current = absPath;
+	const seen = new Set();
+	while (!seen.has(current) && existsSync(current)) {
+		seen.add(current);
+		const config = readConfig(current);
+		const types = config.compilerOptions?.types;
+		if (types) return types;
+		if (!config.extends) return undefined;
+		current = resolve(dirname(current), config.extends);
+	}
+	return undefined;
+}
+
+test('every "types" entry a root names is a dependency the ROOT package.json declares', () => {
+	// `types: ["node"]` makes `@types/node` an entry point of the program, so
+	// tsc fails outright — `TS2688`, no file even read — when it is missing.
+	// npm places a package where the lockfile says, and a workspace's
+	// devDependency is not guaranteed to hoist: `@types/node` was declared by
+	// `apps/web` alone, so `npm ci` put it in `apps/web/node_modules` and a
+	// root-level `tsc` on a clean checkout could not see it. It resolved on a
+	// developer machine whose `node_modules` had drifted from the lockfile,
+	// which is why this only ever failed in CI (decisions § 757).
+	const manifest = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8'));
+	const declared = new Set([
+		...Object.keys(manifest.dependencies ?? {}),
+		...Object.keys(manifest.devDependencies ?? {}),
+	]);
+
+	for (const root of configRoots()) {
+		for (const name of effectiveTypes(join(REPO_ROOT, root)) ?? []) {
+			// A `types` entry is a package name, either bare or an `@types/` one.
+			const candidates = name.startsWith('@types/') ? [name] : [`@types/${name}`, name];
+			assert.ok(
+				candidates.some((c) => declared.has(c)),
+				`${root} names "${name}" in compilerOptions.types, but the root package.json ` +
+					`declares none of ${candidates.join(' / ')}. A workspace declaring it is not ` +
+					'enough — npm may install it under that workspace, and a root tsc then fails ' +
+					'with TS2688 on a clean checkout while passing wherever node_modules has ' +
+					'drifted. Declare it at the root.',
+			);
+		}
+	}
 });
