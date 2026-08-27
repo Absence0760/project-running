@@ -664,6 +664,41 @@ jobs:
             exit 1
           fi
 
+  watch-ios-locale-parity:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: watchOS String Catalog vs its locale declarations
+    # decisions.md § 761 — apps/watch_ios/scripts/check_xcstrings_parity.sh has
+    # existed since the catalog did and ran in NO job: a translation missing
+    # from Localizable.xcstrings, or a locale translated but absent from
+    # CFBundleLocalizations / knownRegions, reached a Mac unchallenged. The
+    # second case is the quiet one — an undeclared locale is never loaded, so
+    # the app shows English and nothing fails.
+    #
+    # The script DERIVES the shipped locale set from the catalog (§ 748 /
+    # § 755) rather than restating it, so a seventh locale cannot ship
+    # half-declared, and it is pure `python3` against a bare checkout — no
+    # Xcode, no Mac, no `npm ci`, seconds on a Linux runner. The Mac job
+    # `test-watch-ios` builds and runs the Swift suite; it does not read the
+    # catalog, and paying for macOS minutes to parse JSON would be silly.
+    #
+    # Gated on `needs.changes.outputs.code` deliberately, and the § 756
+    # objection to that gate does NOT apply here: the three files this reads
+    # (Localizable.xcstrings, Info.plist, project.pbxproj) are none of them
+    # `docs/`, `.claude/` or `*.md`, so any diff that can break this guard
+    # sets `code=true`. `parity-matrix` is ungated for the opposite reason —
+    # everything it reads IS markdown.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: String Catalog coverage vs CFBundleLocalizations + knownRegions
+        run: |
+          if ! bash apps/watch_ios/scripts/check_xcstrings_parity.sh; then
+            echo "::error::apps/watch_ios ships a locale it has not fully declared — a String Catalog entry missing a translation, or a locale the catalog translates that Info.plist's CFBundleLocalizations or the project's knownRegions does not list. An undeclared locale is never loaded at runtime: the watch shows English and nothing throws."
+            echo "The failing line above names the string and the locale, or the declaration site that disagrees. Reproduce with: bash apps/watch_ios/scripts/check_xcstrings_parity.sh (python3 only, no Xcode needed). decisions.md § 761."
+            exit 1
+          fi
+
   lambda-alias-coverage:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -2323,6 +2358,7 @@ jobs:
       - parity-matrix
       - watch-ble-uuids
       - ios-native-declarations
+      - watch-ios-locale-parity
       - lambda-alias-coverage
       - build-watch-wear
       - build-firmware
