@@ -109,11 +109,29 @@ Shared pieces:
 - **Address** — resolved via the GoTrue admin API (email lives only in
   `auth.users`, not a public table).
 - **Localization** — `internal/email_i18n.go` holds a per-locale catalogue for
-  all six app locales (`en/de/fr/es/ja/pt-BR`). The recipient's language comes
-  from `user_settings.prefs.locale`, which web + mobile write as a side effect
-  of the language picker (`decisions.md § 120`). Unknown/region tags normalize
-  to a supported locale; English is the per-key fallback. `<html lang>` is set.
-  A catalogue-parity test mirrors the web/mobile l10n-parity tests.
+  all seven app locales (`en/de/fr/es/ja/pt-BR/pt-PT`). The recipient's language
+  comes from `user_settings.prefs.locale`, which web + mobile write as a side
+  effect of the language picker (`decisions.md § 120`). Unknown/region tags
+  normalize to a supported locale; English is the per-key fallback. `<html lang>`
+  is set. `TestEmailCatalogueParity` (`email_i18n_test.go`) mirrors the
+  web/mobile l10n-parity tests.
+  **The locale set is derived, not listed** (`decisions.md § 761`): `emailLocales`
+  is `emailCatalogue`'s own keys, because four separate test loops range that
+  slice and a locale added to the maps but missed in a hand-written list would be
+  skipped by all of them. `TestEmailLocaleSetIsDerivedAndReachable` additionally
+  holds `emailSharedByLocale` and `smsCatalogue` to the same set and asserts every
+  catalogue is reachable from a tag a client can write — a catalogue nothing
+  normalizes to renders for nobody.
+  **`normalizeEmailLocale` is one chokepoint for eight handlers** — notification
+  email, lifecycle email, lifecycle drip, weekly digest, safety email, safety SMS,
+  web push and native push all resolve through it via `localeFromPrefs`. Its
+  `emailExact` / `emailBase` tables mirror `EXACT` / `BASE_TO_LOCALE` in
+  `apps/web/src/lib/i18n/locale.ts`: `pt-BR` by its own tag, and bare `pt` /
+  `pt-AO` / `pt-MZ` / `pt-CV` → `pt-PT`. It used to be `strings.HasPrefix(t,"pt")`
+  → `pt-BR`, which handed a Lisbon reader European Portuguese in the browser and
+  on the wrist and Brazilian everywhere the worker sends. The one deliberate
+  difference from web: the server reads `_` as a separator too, because
+  `prefs.locale` is whatever a client wrote, not a negotiated `navigator.language`.
 - **Copy coverage** — the catalogue's `"default"` entry ("You have a new
   notification on Threkir." + an "Open Threkir" CTA) exists for a kind a
   *running binary predates* — an older worker draining a queue a newer deploy is
@@ -250,10 +268,14 @@ Dashboard → Auth → Hooks in prod):
   §120 pref the worker uses) → signup-time `user_metadata.locale` → `en`. The
   settings read is auxiliary: if it fails the mail still goes out in the
   fallback locale, never blocks the auth flow. The catalogue covers the same
-  six locales as `email_i18n.go` (`en/de/fr/es/ja/pt-BR`), same normalization
-  (region collapse, `pt* → pt-BR`, unknown → `en`), and the HTML/text layout
-  is a port of the worker's renderer so auth mail is visually identical to
-  product mail.
+  seven locales as `email_i18n.go` (`en/de/fr/es/ja/pt-BR/pt-PT`), the same
+  normalization (exact tag, then base language, unknown → `en`; `pt-BR` by its
+  own tag and bare `pt` / `pt-AO` / `pt-MZ` / `pt-CV` → `pt-PT`), and the
+  HTML/text layout is a port of the worker's renderer so auth mail is visually
+  identical to product mail. `AUTH_EMAIL_LOCALES` is derived from
+  `authEmailCatalogue`'s keys; the parity test compares `authEmailShared`'s key
+  set against it and probes the normalizer in both directions
+  (`decisions.md § 761`).
 - **Actions** — one catalogue entry per `email_action_type`: `signup`,
   `invite`, `magiclink`, `recovery` (+ `email` OTP reusing the magic-link
   copy), `email_change` (a secure email change sends TWO mails from one hook
@@ -398,6 +420,11 @@ Dashboard → Auth → Hooks in prod):
   SHA-256 hash of the address via the non-cascading `account_deletion_receipts`
   table (`lifecycle_email_log` would have cascaded away with the user). The
   receipt copy carries no `/settings/preferences` link (the account is gone).
+  Because the EF holds no catalogue of its own, `normalizeReceiptLocale` can
+  name a locale the worker has no `account_deleted` copy for and the receipt
+  would silently arrive in English. `lib.test.ts` therefore parses the worker's
+  `emailCatalogue` out of the Go source and holds `RECEIPT_LOCALES` to it — the
+  only cross-tier locale guard in the repo (`decisions.md § 761`).
   The deleted address lingers in `jobs.payload` only until the job drains
   (minutes), then in `account_deletion_receipts` only as a hash, pruned at 30
   days. `decisions.md § 121`.

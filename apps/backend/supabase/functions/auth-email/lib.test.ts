@@ -192,18 +192,59 @@ Deno.test('verifySendEmailHook — prefix-less v1,<base64> secret form accepted'
   );
 });
 
+// The three Portuguese assertions here used to pin the OPPOSITE rule — `pt`
+// and `pt-PT` both asserted to resolve to `pt-BR` — so the only test covering
+// this function was what kept a Lisbon reader's auth mail Brazilian after the
+// browser and the wrist had moved (decisions § 761).
 Deno.test('normalizeEmailLocale — mirrors the worker table', () => {
   assertEquals(normalizeEmailLocale(''), 'en');
   assertEquals(normalizeEmailLocale(null), 'en');
   assertEquals(normalizeEmailLocale(undefined), 'en');
   assertEquals(normalizeEmailLocale('de-DE'), 'de');
   assertEquals(normalizeEmailLocale('de_AT'), 'de');
-  assertEquals(normalizeEmailLocale('pt'), 'pt-BR');
-  assertEquals(normalizeEmailLocale('pt-PT'), 'pt-BR');
+  assertEquals(normalizeEmailLocale('pt-BR'), 'pt-BR');
   assertEquals(normalizeEmailLocale('PT-br'), 'pt-BR');
+  assertEquals(normalizeEmailLocale('pt-PT'), 'pt-PT');
+  assertEquals(normalizeEmailLocale('pt_PT'), 'pt-PT');
+  // Brazilian is reached by its own tag, which every client reports. The bare
+  // tag and the other European-orthography regions have nowhere else to land.
+  assertEquals(normalizeEmailLocale('pt'), 'pt-PT');
+  assertEquals(normalizeEmailLocale('pt-AO'), 'pt-PT');
+  assertEquals(normalizeEmailLocale('pt-MZ'), 'pt-PT');
+  assertEquals(normalizeEmailLocale('pt-CV'), 'pt-PT');
   assertEquals(normalizeEmailLocale('ja'), 'ja');
   assertEquals(normalizeEmailLocale('fr-CA'), 'fr');
   assertEquals(normalizeEmailLocale('xx'), 'en');
+});
+
+// AUTH_EMAIL_LOCALES is derived from the catalogue now, so the assertion the
+// parity test opens with can no longer catch a locale that ships without a
+// route to it. A catalogue nothing normalizes to is dead weight nobody can
+// read — the shape decisions § 740 named on the client side.
+Deno.test('every shipped catalogue is reachable, and nothing routes nowhere', () => {
+  assert(AUTH_EMAIL_LOCALES.length > 0, 'no catalogues derived');
+  for (const locale of AUTH_EMAIL_LOCALES) {
+    assertEquals(
+      normalizeEmailLocale(locale),
+      locale,
+      `catalogue ${locale} is unreachable by its own tag`,
+    );
+  }
+  // Nothing the normalizer can return may lack a catalogue. Probing through
+  // the public function keeps the two private tables out of the test surface
+  // while still covering both of them.
+  const probes = [
+    '', 'en', 'de', 'fr', 'es', 'ja', 'pt', 'pt-BR', 'pt-PT',
+    'de-DE', 'fr-CA', 'es-419', 'ja-JP', 'pt-AO', 'pt-MZ', 'pt-CV',
+    'xx', 'zh-CN', 'en-GB',
+  ];
+  for (const probe of probes) {
+    const resolved = normalizeEmailLocale(probe);
+    assert(
+      AUTH_EMAIL_LOCALES.includes(resolved),
+      `${probe || '<empty>'} resolved to ${resolved}, which has no catalogue`,
+    );
+  }
 });
 
 Deno.test('resolveAuthEmailLocale — settings > metadata > en', () => {
@@ -215,9 +256,14 @@ Deno.test('resolveAuthEmailLocale — settings > metadata > en', () => {
 });
 
 Deno.test('catalogue — every locale carries every key, non-empty', () => {
+  // The shared strings are the second map a locale has to be added to, and
+  // the one nothing else looks at: `authEmailShared[locale].footer` below
+  // would throw on a missing entry, but an entry present here and absent from
+  // the catalogue was invisible until this compared the two key sets.
   assertEquals(
-    Object.keys(authEmailCatalogue).sort(),
-    [...AUTH_EMAIL_LOCALES].sort(),
+    Object.keys(authEmailShared).sort(),
+    [...AUTH_EMAIL_LOCALES],
+    'authEmailShared and authEmailCatalogue disagree on the locale set',
   );
   const linkKeys = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email_change_current'];
   for (const locale of AUTH_EMAIL_LOCALES) {
