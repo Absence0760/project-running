@@ -13787,6 +13787,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get challengesSuffixDays => 'dias';
 
   @override
+  String challengesGoalPreview(String value) {
+    return 'Os participantes veem $value';
+  }
+
+  @override
+  String challengesGoalStreakCeiling(int n) {
+    return 'Nesta janela cabem no máximo $n dias ativos.';
+  }
+
+  @override
   String get challengesErrTitle => 'Dê um título ao desafio.';
 
   @override
@@ -27571,6 +27581,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesSuffixDays => 'dias';
+
+  @override
+  String challengesGoalPreview(String value) {
+    return 'Os participantes veem $value';
+  }
+
+  @override
+  String challengesGoalStreakCeiling(int n) {
+    return 'Nesta janela cabem no máximo $n dias ativos.';
+  }
 
   @override
   String get challengesErrTitle => 'Dê um título ao desafio.';

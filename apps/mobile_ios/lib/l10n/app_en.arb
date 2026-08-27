@@ -17496,6 +17496,24 @@
   "@challengesSuffixDays": {
     "description": "Unit suffix on the goal field of an active-days challenge"
   },
+  "challengesGoalPreview": "Entrants see {value}",
+  "@challengesGoalPreview": {
+    "description": "Readback under the create-challenge goal field showing the converted goal as entrants will see it",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "challengesGoalStreakCeiling": "At most {n} active days fit in this window.",
+  "@challengesGoalStreakCeiling": {
+    "description": "The most active days a challenge window can hold — shown as a hint under the goal field and as the inline error when the goal exceeds it",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "challengesErrTitle": "Give the challenge a title.",
   "@challengesErrTitle": {
     "description": "Inline error when the create-challenge title is empty"

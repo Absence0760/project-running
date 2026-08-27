@@ -77,12 +77,22 @@ create table challenges (
   metric        text not null,   -- CHECK below (ChallengeMetric union)
   scope         text not null,   -- CHECK below (ChallengeScope union)
   goal_value    numeric,         -- target in metric base unit; null for pure-ranking individual boards
+                                 -- (positive, and window-bounded for streak_days: challenges_goal_ck)
   activity_type text,            -- null = any; else one of ActivityType ('run'|'walk'|'hike'|'cycle'|'stroller')
   starts_at     timestamptz not null,
   ends_at       timestamptz not null,
   is_public     boolean not null default true,
   created_at    timestamptz not null default now(),
   constraint challenges_window_ck check (ends_at > starts_at),
+  -- 20270615_001. A stored 0 is not "no goal": recompute_challenge_completion
+  -- returns early only on NULL, then compares value >= goal, so it completes
+  -- for every participant. streak_days is the only metric the window bounds;
+  -- a duration sum is over runs whose START is inside it, so one long run can
+  -- exceed the window. Mirrored by checkChallengeGoal on both clients.
+  constraint challenges_goal_ck check (
+    goal_value is null or (goal_value > 0 and (
+      metric <> 'streak_days'
+      or goal_value <= floor(extract(epoch from (ends_at - starts_at)) / 86400) + 1))),
   constraint challenges_metric_ck check (
     metric in ('distance','duration','vert','activity_count','streak_days')),
   constraint challenges_scope_ck check (
@@ -174,7 +184,7 @@ Routes (new, under the run-vs-social split — challenges are a social/engagemen
 - `apps/web/src/routes/challenges/new/` — thin page wrapper around the `ChallengeEditor` modal component (create-flow modal pattern; deep-link parity).
 
 Components (`apps/web/src/lib/components/`):
-- `ChallengeEditor.svelte` — create/edit form (title, description, metric select, scope select, optional goal, optional activity-type filter, club anchor select from `fetchMyClubs` admin subset, start/end pickers). `class="editor-form"`, `oncreated`/`oncancel` callbacks. Hosted by the modal on `/challenges` AND the `/challenges/new` wrapper.
+- `ChallengeEditor.svelte` — create/edit form (title, description, metric select, scope select, optional goal, optional activity-type filter, club anchor select from `fetchMyClubs` admin subset, start/end pickers). `class="editor-form"`, `oncreated`/`oncancel` callbacks. Hosted by the modal on `/challenges` AND the `/challenges/new` wrapper. The goal is typed in the reader's own unit and converted through the `challenge_goal` pair; it reads the stored figure back through the leaderboard's formatter, states the window's active-day ceiling for `streak_days`, clears the number when the metric changes, and names both `challenges_goal_ck` refusals plus the end-after-start rule inline (ADR §758).
 - `ChallengeLeaderboard.svelte` — renders the `challenge_leaderboard` rows; switches layout by scope. Team rows resolve their club name through `teamLabel` (`lib/social/challenge_list.ts`) and never fall back to the raw `team_club_id` — the detail page feeds it `fetchClubNames(board team ids)` merged over `fetchMyClubs()`, because a club-vs-club board is mostly clubs the viewer is not in. ADR §603. Above the list it renders the viewer's **standing** (`standingFor`, `lib/social/leaderboard_standing.ts`): their rank out of the board size, how many share their rank, and the metric gap to the entrants immediately above and below. On a board of any size the viewer's own row can sit off screen, and "#7 of 24" alone doesn't say whether sixth place is 200 m or 40 km away. The detail page supplies `meTeamId` — on a club-vs-club board the entrant is a club, and it is the club the viewer JOINED under, carried on `ChallengeWithMeta.my_team_club_id` off their own `challenge_participants` row. Nothing stops a runner belonging to two clubs that both field a team on one board, so picking whichever of their clubs appears there credits them to the wrong side (and can tell the trailing team it is winning).
 - `ChallengeProgressBar.svelte` — the pure progress bar (value/goal → pct + label).
 - `ChallengesPanel.svelte` — **the self-hiding entry point**: calls `myActiveChallenges()`; renders `null`/nothing when the result is empty. Mounted as a strip on `/dashboard` (above or below the stat grid) AND as a new `?tab=challenges` panel in `/social`.
@@ -229,6 +239,7 @@ Verify twin parity: `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` empty
 One new pair (register it in the conventions parity list + watch with `shared-library-syncer`):
 - **`challenge_progress`** — web `apps/web/src/lib/social/challenge_progress.ts` ↔ mobile `apps/mobile_android/lib/challenge_progress.dart`. Pure functions: `progressFraction(value, goal)` (clamp 0..1, null-goal → null), `formatProgressLabel`-feeding parts (locale/unit-agnostic structured parts, NOT formatted strings — the caller localises), `rankParticipants(entries)` (deterministic sort mirroring `compareLeaderboard`: value desc → user_id asc, assigning dense ranks), and `metricFromActivity(summary, metric, activityTypeFilter)` (the SAME metric-extraction math the SQL aggregate uses — so an offline-optimistic client estimate from local stores can't drift from the server board). Matching test counts both sides (target ~12 each, keep identical).
 - **`challenge_list`** (added 2026-08-19, ADR §694) — web `apps/web/src/lib/social/challenge_list.ts` ↔ mobile `apps/mobile_android/lib/challenge_list.dart`. `mergeMyProgress` folds the `my_active_challenges` aggregate onto a joined-challenge list, `myProgressView` decides what a row may claim (`known` / `notStarted` — the one true zero, the window has not opened — / `unknown`, which must NOT render a bar), and `teamLabel` resolves a club-vs-club row's club without ever falling back to the raw uuid. 18 web / 17 Dart tests: the web unparseable-`starts_at` guard has no analogue against a typed `DateTime`.
+- **`challenge_goal`** (added 2026-08-27, ADR §758) — web `apps/web/src/lib/social/challenge_goal.ts` ↔ mobile `apps/mobile_android/lib/challenge_goal.dart`. `challengeGoalUnit` names the unit the field asks for, `challengeGoalToStored` converts into the column, `maxStreakDaysInWindow` computes the window's active-day ceiling, and `checkChallengeGoal` is the client half of `challenges_goal_ck` — a third rail, since the SQL computes the same ceiling. 16 web / 14 Dart tests: `challengeGoalFromStored` is web-only glue for the edit path, and web's non-finite window guards have no Dart analogue against a typed `int`.
 - Reuse the existing `streaks` pair for the `streak_days` metric — do not re-implement streak math.
 
 ## Tests

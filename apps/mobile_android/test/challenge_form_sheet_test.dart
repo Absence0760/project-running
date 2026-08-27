@@ -17,6 +17,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../lib/challenge_goal.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/social_service.dart';
@@ -338,6 +339,69 @@ void main() {
 
     expect(find.text('Goal: enter a positive number'), findsOneWidget);
     expect(social.calls, isEmpty);
+  });
+
+  testWidgets('the goal reads back as the converted figure entrants will see',
+      (tester) async {
+    // The readback is what makes a mistyped 100 visible before it becomes a
+    // 100 metre goal: it renders the STORED number through the leaderboard's
+    // own formatter, not the number that was typed.
+    await _open(tester, _FakeSocial());
+
+    await tester.enterText(_goal, '100');
+    await _settle(tester);
+    expect(find.text('Entrants see 100.00 km'), findsOneWidget);
+
+    await _tap(tester, find.widgetWithText(ChoiceChip, 'Time'));
+    await tester.enterText(_goal, '5');
+    await _settle(tester);
+    expect(find.text('Entrants see 5h 0m'), findsOneWidget);
+
+    // The two counting metrics store what was typed, so a readback would only
+    // repeat it back.
+    await _tap(tester, find.widgetWithText(ChoiceChip, 'Activities'));
+    await tester.enterText(_goal, '12');
+    await _settle(tester);
+    expect(find.textContaining('Entrants see'), findsNothing);
+  });
+
+  testWidgets('an active-days goal the window cannot hold is refused inline',
+      (tester) async {
+    // `challenges_goal_ck` refuses it with a 23514 naming neither the goal
+    // nor the window; the ceiling is stated before the goal is even typed.
+    final social = _FakeSocial();
+    await _open(tester, social);
+
+    await tester.enterText(_title, 'Impossible streak');
+    await _tap(tester, find.widgetWithText(ChoiceChip, 'Active days'));
+    expect(
+      find.textContaining('active days fit in this window'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(_goal, '400');
+    await _tap(tester, _submit);
+
+    // Now the same sentence is the field's error as well as its hint.
+    expect(
+      find.textContaining('active days fit in this window'),
+      findsNWidgets(2),
+    );
+    expect(social.calls, isEmpty);
+  });
+
+  testWidgets('an active-days goal inside the window is sent through',
+      (tester) async {
+    final social = _FakeSocial();
+    await _open(tester, social);
+
+    await tester.enterText(_title, 'Streak week');
+    await _tap(tester, find.widgetWithText(ChoiceChip, 'Active days'));
+    await tester.enterText(_goal, '7');
+    await _tap(tester, _submit);
+
+    expect(social.calls.single.metric, 'streak_days');
+    expect(social.calls.single.goalValue, 7);
   });
 
   testWidgets('a start pushed past the end is refused inline, not by a 23514',

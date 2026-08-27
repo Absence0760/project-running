@@ -22874,6 +22874,18 @@ abstract class AppLocalizations {
   /// **'days'**
   String get challengesSuffixDays;
 
+  /// Readback under the create-challenge goal field showing the converted goal as entrants will see it
+  ///
+  /// In en, this message translates to:
+  /// **'Entrants see {value}'**
+  String challengesGoalPreview(String value);
+
+  /// The most active days a challenge window can hold — shown as a hint under the goal field and as the inline error when the goal exceeds it
+  ///
+  /// In en, this message translates to:
+  /// **'At most {n} active days fit in this window.'**
+  String challengesGoalStreakCeiling(int n);
+
   /// Inline error when the create-challenge title is empty
   ///
   /// In en, this message translates to:
