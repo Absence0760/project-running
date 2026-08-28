@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Gym / strength-class instructor depth — the two journeys the existing
@@ -86,15 +86,18 @@ test.describe('gym class instructor — recurring capacity class + session-prefi
 		createdEventIds.push(id);
 
 		// All four instructor-critical columns survive the one round-trip.
-		const { data: row } = await getAdminClient()
-			.from('events')
-			.select('category, discipline, capacity, recurrence_freq')
-			.eq('id', id)
-			.single();
-		expect(row?.category).toBe('class');
-		expect(row?.discipline).toBe(discipline);
-		expect(row?.capacity).toBe(8);
-		expect(row?.recurrence_freq).toBe('weekly');
+		const row = await readRow(
+			'events by id',
+			getAdminClient()
+				.from('events')
+				.select('category, discipline, capacity, recurrence_freq')
+				.eq('id', id)
+				.single()
+		);
+		expect(row.category).toBe('class');
+		expect(row.discipline).toBe(discipline);
+		expect(row.capacity).toBe(8);
+		expect(row.recurrence_freq).toBe('weekly');
 
 		// Detail: discipline label + recurring instance chips render; the
 		// athletic affordances stay hidden for a class.

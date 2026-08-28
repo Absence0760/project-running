@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readMaybeRow, readRow } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] — the full request-policy membership lifecycle driven
@@ -84,14 +85,17 @@ test.describe('/clubs/[slug] — request-policy membership lifecycle', () => {
 			await expect(morgan.locator('.post-form textarea')).toHaveCount(0);
 
 			// DB sanity: a pending (not active) row landed.
-			const { data: reqRow } = await admin
-				.from('club_members')
-				.select('status, role')
-				.eq('club_id', TEMPO_TUESDAY_ID)
-				.eq('user_id', USER_C_PRO.id)
-				.single();
-			expect(reqRow?.status).toBe('pending');
-			expect(reqRow?.role).toBe('member');
+			const reqRow = await readRow(
+				'club_members by club_id+user_id',
+				admin
+					.from('club_members')
+					.select('status, role')
+					.eq('club_id', TEMPO_TUESDAY_ID)
+					.eq('user_id', USER_C_PRO.id)
+					.single()
+			);
+			expect(reqRow.status).toBe('pending');
+			expect(reqRow.role).toBe('member');
 
 			// ── Owner: approve from the pending panel ──
 			await owner.goto('/clubs/tempo-tuesday');
@@ -150,12 +154,15 @@ test.describe('/clubs/[slug] — request-policy membership lifecycle', () => {
 			await expect(morgan.locator('.post-form textarea')).toHaveCount(0);
 
 			// DB sanity: the row is gone (leave deletes, not soft-deletes).
-			const { data: gone } = await admin
-				.from('club_members')
-				.select('user_id')
-				.eq('club_id', TEMPO_TUESDAY_ID)
-				.eq('user_id', USER_C_PRO.id)
-				.maybeSingle();
+			const gone = await readMaybeRow(
+				'club_members by club_id+user_id',
+				admin
+					.from('club_members')
+					.select('user_id')
+					.eq('club_id', TEMPO_TUESDAY_ID)
+					.eq('user_id', USER_C_PRO.id)
+					.maybeSingle()
+			);
 			expect(gone).toBeNull();
 		} finally {
 			await ctxMorgan.close();
@@ -289,13 +296,16 @@ test.describe('/clubs/[slug] — request-policy membership lifecycle', () => {
 			// The stored row must still be 'rejected', never downgraded to
 			// 'pending' (which would let a kicked-out user back into the
 			// queue by reloading the page).
-			const { data } = await admin
-				.from('club_members')
-				.select('status')
-				.eq('club_id', TEMPO_TUESDAY_ID)
-				.eq('user_id', USER_C_PRO.id)
-				.single();
-			expect(data?.status).toBe('rejected');
+			const data = await readRow(
+				'club_members by club_id+user_id',
+				admin
+					.from('club_members')
+					.select('status')
+					.eq('club_id', TEMPO_TUESDAY_ID)
+					.eq('user_id', USER_C_PRO.id)
+					.single()
+			);
+			expect(data.status).toBe('rejected');
 		} finally {
 			await ctx.close();
 			// afterEach sweeps the row.

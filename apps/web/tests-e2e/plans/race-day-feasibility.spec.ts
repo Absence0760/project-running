@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /plans/[id] RaceDayPanel goal-feasibility signal (lib/runs/race_day.ts
@@ -43,14 +44,17 @@ test.describe('/plans/[id] race-day goal feasibility', () => {
 			// Precondition: the planted 50:00 10K (marathon projection ~13804s)
 			// must be the runner's best recent effort, or the panel anchors on
 			// a different run and the expected verdict/delta are meaningless.
-			const { data: recent } = await admin
-				.from('runs')
-				.select('distance_m, duration_s')
-				.eq('user_id', USER_C_PRO.id)
-				.gte('started_at', new Date(Date.now() - 90 * dayMs).toISOString())
-				.gte('distance_m', 1000);
+			const recent = await readRows(
+				'runs by user_id+started_at+distance_m',
+				admin
+					.from('runs')
+					.select('distance_m, duration_s')
+					.eq('user_id', USER_C_PRO.id)
+					.gte('started_at', new Date(Date.now() - 90 * dayMs).toISOString())
+					.gte('distance_m', 1000)
+			);
 			const bestExisting = Math.min(
-				...(recent ?? [])
+				...recent
 					.filter((r) => (r.duration_s ?? 0) > 0)
 					.map((r) => r.duration_s! * Math.pow(42195 / r.distance_m!, 1.06)),
 				Infinity

@@ -586,6 +586,20 @@ export function collectSwiftSources(iosRoot = IOS_ROOT) {
 	return walk(join(iosRoot, SWIFT_ROOT), '.swift', [], null);
 }
 
+/// Every rule whose requirement is derived from Swift, named by whatever
+/// identifies it. Derived from the tables rather than counted by hand: a rule
+/// added with `source: 'swift'` is covered by the blindness check the moment
+/// it lands.
+/** @returns {string[]} */
+export function swiftRuleKeys() {
+	return [
+		...BACKGROUND_MODES.filter((r) => r.source === 'swift').map((r) => r.mode),
+		...ENTITLEMENTS.filter((r) => r.source === 'swift').map((r) => r.key),
+		...PURPOSE_STRINGS.filter((r) => r.source === 'swift').map((r) => r.key),
+		...PRIVACY_API_TYPES.filter((r) => r.source === 'swift').map((r) => r.type),
+	];
+}
+
 /**
  * The first file matching `pattern`, repo-relative, or null.
  * @param {SourceFile[]} sources
@@ -723,6 +737,24 @@ export function evaluate(input) {
 		);
 		return { errors, warnings, ok };
 	}
+	// The same check for the other half of the derivation, and the reason it
+	// was owed: `walk` swallows a readdirSync failure, so moving
+	// `CalendarBridge.swift` out of `ios/Runner/` — an ordinary Xcode refactor —
+	// made both EventKit rules stop enforcing and printed nothing at all. Two
+	// fewer `[OK]` lines out of 43 was the whole difference (decisions § 773).
+	// Which rules those are is DERIVED, so deleting the last Swift rule stops
+	// demanding Swift rather than failing over a tree nothing reads.
+	const swiftRules = swiftRuleKeys();
+	if (swiftRules.length > 0 && swiftSources.length === 0) {
+		errors.push(
+			`Found no Swift sources to derive requirements from, but ${swiftRules.length} ` +
+				`rule(s) read them: ${swiftRules.join(', ')}.\n` +
+				`  Looked under ${join(IOS_ROOT, SWIFT_ROOT)}. Those rules would pass ` +
+				'vacuously — the declaration they oblige would stand with nothing ' +
+				'claiming it.',
+		);
+		return { errors, warnings, ok };
+	}
 
 	/** @param {SourceKind} kind */
 	const sourcesFor = (kind) => (kind === 'swift' ? swiftSources : dartSources);
@@ -805,9 +837,12 @@ export function evaluate(input) {
 	}
 
 	// --- Purpose strings ---------------------------------------------------
+	/** @type {Set<string>} */
+	const claimedPurposeStrings = new Set(FIXED_PLIST_KEYS.map((f) => f.key));
 	for (const rule of PURPOSE_STRINGS) {
 		const where = firstMatch(sourcesFor(rule.source), rule.pattern, root);
 		if (!where) continue;
+		claimedPurposeStrings.add(rule.key);
 		const value = infoPlist.get(rule.key);
 		if (typeof value === 'string' && value.trim() !== '') {
 			ok.push(`Info.plist declares \`${rule.key}\` (${where}: ${rule.needed_by})`);
@@ -818,6 +853,29 @@ export function evaluate(input) {
 				`${rule.needed_by}.\n` +
 				'  iOS denies the permission silently when the string is missing or ' +
 				'empty — the feature returns nothing rather than throwing.',
+		);
+	}
+
+	// The other direction, which nothing checked: a usage string standing with
+	// no code claiming it. UIBackgroundModes and the entitlements are both read
+	// both ways; this was the one derived declaration with no reverse, so
+	// deleting the code that needed a permission left the plist asking for it
+	// and no guard noticing — App Review's 5.1.1 rejection cause, and the only
+	// thing that would have caught a Swift rule falling silent while some other
+	// Swift file kept the tree non-empty. FIXED_PLIST_KEYS is the escape hatch
+	// it shares with the over-claimed-background-mode check: an admission in
+	// writing, with the reason.
+	for (const key of infoPlist.keys()) {
+		if (!key.endsWith('UsageDescription')) continue;
+		if (claimedPurposeStrings.has(key)) continue;
+		errors.push(
+			`Info.plist declares \`${key}\` and no rule in this script claims it.\n` +
+				'  A purpose string for a permission the binary never asks for is an ' +
+				'App Review rejection cause, and it is what a rule that quietly ' +
+				'stopped matching looks like from this side. Either the code that ' +
+				'needed it was deleted (drop the key), or a new capability arrived ' +
+				'without a derivation rule (add one to PURPOSE_STRINGS, or name it in ' +
+				'FIXED_PLIST_KEYS with the reason).',
 		);
 	}
 

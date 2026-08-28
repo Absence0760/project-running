@@ -270,3 +270,86 @@ test('the real registries carry the whole pair set, not a fragment of it', () =>
 	assert.ok(rows.size >= 60, `the syncer table parsed only ${rows.size} rows`);
 	assert.equal(pairs.size, rows.size);
 });
+
+// --- Soft wraps. decisions § 774.
+
+/// Reflow every line of `text` longer than `width`, the way a markdown
+/// formatter would: continuation lines indented, no word split.
+/**
+ * @param {string} text
+ * @param {number} width
+ */
+function reflow(text, width) {
+	return text
+		.split('\n')
+		.flatMap((line) => {
+			if (line.length <= width) return [line];
+			/** @type {string[]} */
+			const out = [];
+			let cur = '';
+			for (const word of line.split(' ')) {
+				if (cur && `${cur} ${word}`.length > width) {
+					out.push(cur);
+					cur = `  ${word}`;
+				} else cur = cur ? `${cur} ${word}` : word;
+			}
+			out.push(cur);
+			return out;
+		})
+		.join('\n');
+}
+
+test('a soft-wrapped bullet is read exactly as the one-line form', () => {
+	const claude = fakeClaude({
+		annotated: [
+			['roadbook', 'routes/roadbook.ts', 'roadbook.dart'],
+			['route_snap', 'routes/route_snap.ts', 'route_snap.dart'],
+		],
+	});
+	const flat = parseClaudePairs(claude).pairs;
+	const wrapped = parseClaudePairs(reflow(claude, 40)).pairs;
+
+	assert.ok(flat.size > 0);
+	assert.deepEqual([...wrapped.keys()].sort(), [...flat.keys()].sort());
+	assert.deepEqual(wrapped.get('route_snap'), flat.get('route_snap'));
+});
+
+test('a pair written past a soft wrap is still checked against the syncer table', () => {
+	// The silent case: appending an entry on a continuation line used to leave
+	// the guard reporting a clean tree while the pair sat in no syncer row —
+	// § 604's exact defect, which is what this guard exists to catch.
+	const claude = fakeClaude().replace(
+		'plus the `track_projection.ts`',
+		'\n  `route_snap` (web `routes/route_snap.ts` ↔ mobile `route_snap.dart`), plus the `track_projection.ts`',
+	);
+	const { pairs } = parseClaudePairs(claude);
+	assert.ok(pairs.has('route_snap'));
+
+	const { errors } = checkRegistries(claude, fakeSyncer(), allExist);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /route_snap/);
+	assert.match(errors[0], /no row in the shared-library-syncer table/);
+});
+
+test('losing the blank line before the watch-port paragraph fails loudly', () => {
+	// Without the separator the bullet would swallow the one-way `no_std` Rust
+	// ports below it and report them as enforced web↔mobile pairs.
+	const claude = fakeClaude().replace(/\n\nMany of these/, '\n  Many of these');
+	const { pairs, errors } = parseClaudePairs(claude);
+
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /runs into the watch-port paragraph/);
+	assert.equal(pairs.has('storm'), false);
+});
+
+test('the committed bullet survives being reflowed at 100 columns', () => {
+	const claude = readFileSync(CLAUDE_DOC, 'utf-8');
+	const flat = parseClaudePairs(claude).pairs;
+	const wrapped = parseClaudePairs(reflow(claude, 100)).pairs;
+
+	assert.deepEqual([...wrapped.keys()].sort(), [...flat.keys()].sort());
+	assert.deepEqual(
+		checkRegistries(reflow(claude, 100), readFileSync(SYNCER_DOC, 'utf-8')).errors,
+		[],
+	);
+});

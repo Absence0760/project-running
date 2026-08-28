@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] — admin promotes a member's role.
@@ -111,12 +112,15 @@ test.describe('/clubs/[slug] — admin role change', () => {
 		).toHaveCount(0, { timeout: 10_000 });
 
 		// DB sanity: the row really was deleted, not just hidden.
-		const { data: stillThere } = await getAdminClient()
-			.from('club_members')
-			.select('user_id')
-			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('user_id', USER_C_PRO.id)
-			.maybeSingle();
+		const stillThere = await readMaybeRow(
+			'club_members by club_id+user_id',
+			getAdminClient()
+				.from('club_members')
+				.select('user_id')
+				.eq('club_id', SYDNEY_RUN_CLUB_ID)
+				.eq('user_id', USER_C_PRO.id)
+				.maybeSingle()
+		);
 		expect(stillThere).toBeNull();
 	});
 });

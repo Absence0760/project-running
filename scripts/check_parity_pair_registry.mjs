@@ -58,6 +58,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { foldSoftWraps } from './markdown_lines.mjs';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const CLAUDE_DOC = join(REPO_ROOT, 'CLAUDE.md');
 export const SYNCER_DOC = join(REPO_ROOT, '.claude', 'agents', 'shared-library-syncer.md');
@@ -65,6 +67,11 @@ export const SYNCER_DOC = join(REPO_ROOT, '.claude', 'agents', 'shared-library-s
 const CLAUDE_BULLET = 'TS↔Dart parity helpers must stay in lockstep.';
 const CLAUDE_LIST = 'The pairs are:';
 const SYNCER_HEADING = '## The pairs (canonical list)';
+
+/// The paragraph directly below the lockstep bullet, listing the watch's
+/// one-way `no_std` ports. It is separated from the bullet by a blank line and
+/// must stay that way — see `parseClaudePairs`.
+const WATCH_PARAGRAPH = /third parity rail/;
 
 const WEB_LIB = 'apps/web/src/lib/';
 const MOBILE_ROOT = 'apps/mobile_android/';
@@ -110,6 +117,15 @@ export function parseClaudePairs(text) {
 	/** @type {string[]} */
 	const errors = [];
 
+	// Reading one PHYSICAL line meant a pair written past a soft wrap was
+	// invisible while every anti-vacuity check stayed satisfied by the text
+	// before it — § 604's exact defect, undetected. Measured on the committed
+	// bullet: one wrap mid-list hid 86 of its 99 pairs (loud, but blaming the
+	// syncer table for pairs nobody removed), and a new pair appended on a
+	// continuation line was invisible with zero errors reported.
+	// decisions § 774.
+	text = foldSoftWraps(text);
+
 	const bulletAt = text.indexOf(CLAUDE_BULLET);
 	if (bulletAt === -1) {
 		errors.push(
@@ -119,11 +135,34 @@ export function parseClaudePairs(text) {
 		return { pairs, errors };
 	}
 
-	// The bullet is one line; anything past its newline belongs to the
-	// watch-port paragraph, whose entries are one-way ports and explicitly NOT
-	// part of the enforced web↔mobile lockstep.
+	// The bullet ends at the first BLANK line, not the first newline. Markdown
+	// soft-wraps a list item freely and the wrap changes nothing about what the
+	// document says, so reading one physical line meant a pair written past the
+	// break was invisible while every anti-vacuity check stayed satisfied by the
+	// text before it — § 604's exact defect, undetected. Measured on the
+	// committed bullet: one wrap mid-list hid 86 of 99 pairs (loud, but blaming
+	// the syncer table for pairs nobody removed), and a new pair appended on a
+	// continuation line was invisible with zero errors reported.
+	//
+	// The blank line is what separates this bullet from the watch-port
+	// paragraph below it, whose entries are one-way ports and explicitly NOT
+	// part of the enforced web↔mobile lockstep; `WATCH_PARAGRAPH` below asserts
+	// the separator is still doing that job rather than trusting it.
+	// One folded line. The blank line below it is what separates this bullet
+	// from the watch-port paragraph, whose entries are one-way ports and
+	// explicitly NOT part of the enforced web↔mobile lockstep; the check below
+	// asserts that separator is still doing the job rather than trusting it.
 	const lineEnd = text.indexOf('\n', bulletAt);
 	const bullet = text.slice(bulletAt, lineEnd === -1 ? text.length : lineEnd);
+
+	if (WATCH_PARAGRAPH.test(bullet)) {
+		errors.push(
+			`the CLAUDE.md lockstep bullet runs into the watch-port paragraph with no blank ` +
+				`line between them, so this guard would read one-way \`no_std\` Rust ports as ` +
+				`enforced web↔mobile pairs. Put the blank line back.`,
+		);
+		return { pairs, errors };
+	}
 
 	const listAt = bullet.indexOf(CLAUDE_LIST);
 	if (listAt === -1) {

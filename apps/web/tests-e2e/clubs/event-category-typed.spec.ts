@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Typed club events (slice E) — type-first editor + category-gated detail.
@@ -97,16 +98,19 @@ test.describe('/clubs/[slug] — typed events (slice E)', () => {
 
 		// createEvent persisted both category and discipline.
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('events')
-			.select('category, discipline, distance_m, pace_target_sec, route_id')
-			.eq('id', id)
-			.single();
-		expect(row?.category).toBe('class');
-		expect(row?.discipline).toBe(discipline);
-		expect(row?.distance_m).toBeNull();
-		expect(row?.pace_target_sec).toBeNull();
-		expect(row?.route_id).toBeNull();
+		const row = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('category, discipline, distance_m, pace_target_sec, route_id')
+				.eq('id', id)
+				.single()
+		);
+		expect(row.category).toBe('class');
+		expect(row.discipline).toBe(discipline);
+		expect(row.distance_m).toBeNull();
+		expect(row.pace_target_sec).toBeNull();
+		expect(row.route_id).toBeNull();
 
 		// Detail page: discipline surfaced, athletic affordances absent.
 		await page.goto(`/clubs/richmond-run-club/events/${id}`);

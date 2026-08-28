@@ -10,6 +10,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Race-day roadbook — the full life of ONE race course threaded across
@@ -155,21 +156,27 @@ test.describe('Race-day roadbook — markers → crew sheet → live next cut-of
 
 				// Backend cross-check: route owned by USER_A + public, and both
 				// markers landed with the gate carrying its cutoff limit.
-				const { data: routeRow } = await admin
-					.from('routes')
-					.select('user_id, is_public')
-					.eq('id', courseId)
-					.single();
-				expect(routeRow?.user_id).toBe(USER_A.id);
-				expect(routeRow?.is_public).toBe(true);
+				const routeRow = await readRow(
+					'routes by id',
+					admin
+						.from('routes')
+						.select('user_id, is_public')
+						.eq('id', courseId)
+						.single()
+				);
+				expect(routeRow.user_id).toBe(USER_A.id);
+				expect(routeRow.is_public).toBe(true);
 
-				const { data: markers } = await admin
-					.from('route_markers')
-					.select('kind, label, meta')
-					.eq('route_id', courseId)
-					.order('kind');
+				const markers = await readRows(
+					'route_markers by route_id',
+					admin
+						.from('route_markers')
+						.select('kind, label, meta')
+						.eq('route_id', courseId)
+						.order('kind')
+				);
 				expect(markers).toHaveLength(2);
-				const gate = markers?.find((row) => row.kind === 'cutoff');
+				const gate = markers.find((row) => row.kind === 'cutoff');
 				expect((gate?.meta as { cutoff_elapsed_s?: number } | null)?.cutoff_elapsed_s).toBe(1800);
 			});
 

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Session-plan journey — the full cradle-to-grave life of a single yoga/pilates
@@ -108,14 +109,17 @@ test.describe('session plan journey', () => {
 				});
 				await expect(page.getByTestId('session-steps').locator('li')).toHaveCount(4);
 
-				const { data: planRow } = await admin
-					.from('session_plans')
-					.select('id, author_id, discipline')
-					.eq('title', planTitle)
-					.single();
-				planId = planRow!.id as string;
-				expect(planRow?.author_id).toBe(USER_A.id);
-				expect(planRow?.discipline).toBe(discipline);
+				const planRow = await readRow(
+					'session_plans by title',
+					admin
+						.from('session_plans')
+						.select('id, author_id, discipline')
+						.eq('title', planTitle)
+						.single()
+				);
+				planId = planRow.id as string;
+				expect(planRow.author_id).toBe(USER_A.id);
+				expect(planRow.discipline).toBe(discipline);
 			});
 
 			// ── 2. USER_A publishes the plan (the RLS hinge for the follower) ───
@@ -127,12 +131,15 @@ test.describe('session plan journey', () => {
 					timeout: 10_000
 				});
 
-				const { data: pub } = await admin
-					.from('session_plans')
-					.select('is_public')
-					.eq('id', planId)
-					.single();
-				expect(pub?.is_public).toBe(true);
+				const pub = await readRow(
+					'session_plans by id',
+					admin
+						.from('session_plans')
+						.select('is_public')
+						.eq('id', planId)
+						.single()
+				);
+				expect(pub.is_public).toBe(true);
 			});
 
 			// ── 3. USER_A attaches the plan to a Richmond `class` event ─────────
@@ -160,12 +167,15 @@ test.describe('session plan journey', () => {
 				// The event now surfaces the attached sequence read-only.
 				await expect(sequence.getByText('Low Lunge (Left)')).toBeVisible({ timeout: 10_000 });
 
-				const { data: evRow } = await admin
-					.from('events')
-					.select('session_plan_id')
-					.eq('id', eventId)
-					.single();
-				expect(evRow?.session_plan_id).toBe(planId);
+				const evRow = await readRow(
+					'events by id',
+					admin
+						.from('events')
+						.select('session_plan_id')
+						.eq('id', eventId)
+						.single()
+				);
+				expect(evRow.session_plan_id).toBe(planId);
 			});
 
 			// ── 4 + 5. A SECOND user follows the attached session to completion ─
@@ -239,11 +249,14 @@ test.describe('session plan journey', () => {
 						)
 						.toBe(1);
 
-					const { data: rows } = await admin
-						.from('gym_workouts')
-						.select('id, title, user_id, metadata')
-						.eq('user_id', USER_C_PRO.id);
-					const logged = ((rows ?? []) as Array<{
+					const rows = await readRows(
+						'gym_workouts by user_id',
+						admin
+							.from('gym_workouts')
+							.select('id, title, user_id, metadata')
+							.eq('user_id', USER_C_PRO.id)
+					);
+					const logged = (rows as Array<{
 						id: string;
 						title: string | null;
 						user_id: string;

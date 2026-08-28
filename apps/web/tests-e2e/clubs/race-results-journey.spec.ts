@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readMaybeRow, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Race-event results journey — the full life of a club RACE EVENT from
@@ -141,13 +142,16 @@ test.describe('race-event results journey', () => {
 
 			// Confirm it landed on the seeded club as an athletic 'run'
 			// event (the leaderboard precondition).
-			const { data: eventRow } = await getAdminClient()
-				.from('events')
-				.select('club_id, category')
-				.eq('id', resolvedEventId)
-				.single();
-			expect(eventRow!.club_id).toBe(RICHMOND_RUN_CLUB_ID);
-			expect(eventRow!.category).toBe('run');
+			const eventRow = await readRow(
+				'events by id',
+				getAdminClient()
+					.from('events')
+					.select('club_id, category')
+					.eq('id', resolvedEventId)
+					.single()
+			);
+			expect(eventRow.club_id).toBe(RICHMOND_RUN_CLUB_ID);
+			expect(eventRow.category).toBe('run');
 
 			// The results section renders (leaderboard precondition met).
 			await expect(
@@ -334,11 +338,14 @@ test.describe('race-event results journey', () => {
 
 		// ── 6. Backend cross-check on the full result set ─────────────
 		await test.step('event_results holds the self-submit + the two imported bibs', async () => {
-			const { data: rows } = await getAdminClient()
-				.from('event_results')
-				.select('user_id, bib, finisher_status, organiser_approved')
-				.eq('event_id', resolvedEventId);
-			const all = rows ?? [];
+			const rows = await readRows(
+				'event_results by event_id',
+				getAdminClient()
+					.from('event_results')
+					.select('user_id, bib, finisher_status, organiser_approved')
+					.eq('event_id', resolvedEventId)
+			);
+			const all = rows;
 			// One account result (USER_C_PRO) + two bib-only imports.
 			expect(all.length).toBe(3);
 
@@ -381,11 +388,14 @@ test.describe('race-event results journey', () => {
 			);
 
 			// Backend: the event (and its cascaded results/attendees) is gone.
-			const { data: gone } = await getAdminClient()
-				.from('events')
-				.select('id')
-				.eq('id', resolvedEventId)
-				.maybeSingle();
+			const gone = await readMaybeRow(
+				'events by id',
+				getAdminClient()
+					.from('events')
+					.select('id')
+					.eq('id', resolvedEventId)
+					.maybeSingle()
+			);
 			expect(gone).toBeNull();
 			eventId = null; // UI delete succeeded — no teardown needed.
 		});

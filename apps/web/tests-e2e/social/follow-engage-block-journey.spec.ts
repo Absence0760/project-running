@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { clearNotifications, insertRun } from '../fixtures/simulate';
+import { readCount, readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Social cross-surface journey — the full follow → engage → block arc
@@ -141,19 +142,25 @@ test.describe('social journey — follow → engage → block severs the loop ac
 
 			// ── precondition: no follow edge, no block between A and B ──
 			await test.step('precondition: empty follow graph + no block', async () => {
-				const { data: edge } = await admin
-					.from('user_follows')
-					.select('follower_id')
-					.eq('follower_id', actor.id)
-					.eq('followee_id', poster.id)
-					.maybeSingle();
+				const edge = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', actor.id)
+						.eq('followee_id', poster.id)
+						.maybeSingle()
+				);
 				expect(edge).toBeNull();
-				const { data: block } = await admin
-					.from('user_blocks')
-					.select('blocker_id')
-					.eq('blocker_id', actor.id)
-					.eq('blocked_id', poster.id)
-					.maybeSingle();
+				const block = await readMaybeRow(
+					'user_blocks by blocker_id+blocked_id',
+					admin
+						.from('user_blocks')
+						.select('blocker_id')
+						.eq('blocker_id', actor.id)
+						.eq('blocked_id', poster.id)
+						.maybeSingle()
+				);
 				expect(block).toBeNull();
 			});
 
@@ -173,12 +180,15 @@ test.describe('social journey — follow → engage → block severs the loop ac
 
 				// Edge must land server-side before the follow-scoped feed reads it.
 				await expect(async () => {
-					const { data } = await admin
-						.from('user_follows')
-						.select('follower_id')
-						.eq('follower_id', actor.id)
-						.eq('followee_id', poster.id)
-						.maybeSingle();
+					const data = await readMaybeRow(
+						'user_follows by follower_id+followee_id',
+						admin
+							.from('user_follows')
+							.select('follower_id')
+							.eq('follower_id', actor.id)
+							.eq('followee_id', poster.id)
+							.maybeSingle()
+					);
 					expect(data).toBeTruthy();
 				}).toPass({ timeout: 5_000 });
 			});
@@ -202,11 +212,14 @@ test.describe('social journey — follow → engage → block severs the loop ac
 
 				// The optimistic flip must reflect a real run_kudos write.
 				await expect(async () => {
-					const { count } = await admin
-						.from('run_kudos')
-						.select('*', { count: 'exact', head: true })
-						.eq('run_id', runId!)
-						.eq('user_id', actor.id);
+					const count = await readCount(
+						'run_kudos by run_id+user_id',
+						admin
+							.from('run_kudos')
+							.select('*', { count: 'exact', head: true })
+							.eq('run_id', runId!)
+							.eq('user_id', actor.id)
+					);
 					expect(count).toBe(1);
 				}).toPass({ timeout: 5_000 });
 			});
@@ -221,11 +234,14 @@ test.describe('social journey — follow → engage → block severs the loop ac
 				await expect(composer).toHaveValue('', { timeout: 10_000 });
 
 				await expect(async () => {
-					const { count } = await admin
-						.from('run_comments')
-						.select('*', { count: 'exact', head: true })
-						.eq('run_id', runId!)
-						.eq('author_id', actor.id);
+					const count = await readCount(
+						'run_comments by run_id+author_id',
+						admin
+							.from('run_comments')
+							.select('*', { count: 'exact', head: true })
+							.eq('run_id', runId!)
+							.eq('author_id', actor.id)
+					);
 					expect(count).toBe(1);
 				}).toPass({ timeout: 5_000 });
 			});
@@ -286,24 +302,30 @@ test.describe('social journey — follow → engage → block severs the loop ac
 
 				// block_user persisted + drained the A→B follow edge.
 				await expect(async () => {
-					const { data } = await admin
-						.from('user_blocks')
-						.select('blocker_id')
-						.eq('blocker_id', actor.id)
-						.eq('blocked_id', poster.id)
-						.maybeSingle();
+					const data = await readMaybeRow(
+						'user_blocks by blocker_id+blocked_id',
+						admin
+							.from('user_blocks')
+							.select('blocker_id')
+							.eq('blocker_id', actor.id)
+							.eq('blocked_id', poster.id)
+							.maybeSingle()
+					);
 					expect(data).toBeTruthy();
 				}).toPass({ timeout: 5_000 });
 			});
 
 			// ── 6. The follow edge is gone — block subsumes unfollow ────
 			await test.step('the A→B follow edge was drained by the block', async () => {
-				const { data } = await admin
-					.from('user_follows')
-					.select('follower_id')
-					.eq('follower_id', actor.id)
-					.eq('followee_id', poster.id)
-					.maybeSingle();
+				const data = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', actor.id)
+						.eq('followee_id', poster.id)
+						.maybeSingle()
+				);
 				expect(data).toBeNull();
 			});
 
@@ -349,11 +371,14 @@ test.describe('social journey — follow → engage → block severs the loop ac
 				expect(error?.code).toBe('42501');
 
 				// And no kudos row leaked in past the gate.
-				const { count } = await admin
-					.from('run_kudos')
-					.select('*', { count: 'exact', head: true })
-					.eq('run_id', runId!)
-					.eq('user_id', actor.id);
+				const count = await readCount(
+					'run_kudos by run_id+user_id',
+					admin
+						.from('run_kudos')
+						.select('*', { count: 'exact', head: true })
+						.eq('run_id', runId!)
+						.eq('user_id', actor.id)
+				);
 				expect(count).toBe(0);
 			});
 
@@ -366,7 +391,10 @@ test.describe('social journey — follow → engage → block severs the loop ac
 					email: actor.email,
 					password: actor.password,
 				});
-				const { data } = await asActor.rpc('public_profile_by_id', { p_id: poster.id });
+				const data = await readRows(
+					'the public_profile_by_id() rpc',
+					asActor.rpc('public_profile_by_id', { p_id: poster.id })
+				);
 				expect(Array.isArray(data) ? data.length : 0).toBe(0);
 			});
 		} finally {

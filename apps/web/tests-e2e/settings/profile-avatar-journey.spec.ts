@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Profile + avatar JOURNEY — a user edits their public identity and the
@@ -143,13 +144,16 @@ test.describe('profile + avatar journey', () => {
 
 			// ── 2. Backend cross-check: the row carries name + avatar ─────
 			await test.step('the user_profiles row reflects the new name + avatar', async () => {
-				const { data: row } = await admin
-					.from('user_profiles')
-					.select('display_name, avatar_url')
-					.eq('id', USER_A.id)
-					.single();
-				expect(row?.display_name).toBe(newName);
-				expect(row?.avatar_url).toBe(AVATAR_URL);
+				const row = await readRow(
+					'user_profiles by id',
+					admin
+						.from('user_profiles')
+						.select('display_name, avatar_url')
+						.eq('id', USER_A.id)
+						.single()
+				);
+				expect(row.display_name).toBe(newName);
+				expect(row.avatar_url).toBe(AVATAR_URL);
 			});
 
 			// ── 3. Owner's public profile reflects name + avatar <img> ────

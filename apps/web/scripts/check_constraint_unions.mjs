@@ -9,24 +9,39 @@
 // cross-client audit caught this happening with `runsignup` — the
 // IntegrationProvider TS union had it, the CHECK constraint didn't.
 //
+// The migrations are read through the Postgres statement lexer in
+// `apps/backend/scripts/sql_lex.mjs` rather than a regex strip. Eating `--` to
+// end of line before knowing whether it is a comment is wrong in two
+// directions at once, and both were live here: a `--` inside a string literal
+// deletes the rest of that line, which can be the `check (col in (…))` clause
+// this script exists to read (reported as "no CHECK constraint found" — a
+// false accusation), or the `alter table <t>` header that says which table the
+// NEXT line's clause belongs to (the clause is then filed under the previous
+// table, so one registered pair is certified against another table's
+// constraint). § 770 built the lexer for exactly this defect one directory
+// over; decisions § 774.
+//
 // Run: `npm run check:check-constraints --workspace=apps/web`
 // CI:  invoked from the parity-types job alongside gen:types:check.
+// Unit tests: `node --test apps/web/scripts/check_constraint_unions.test.mjs`
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { splitSqlStatements } from '../../backend/scripts/sql_lex.mjs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..', '..', '..');
-const MIGRATIONS_DIR = join(REPO_ROOT, 'apps/backend/supabase/migrations');
-const TYPES_FILE = join(REPO_ROOT, 'apps/web/src/lib/types.ts');
+export const MIGRATIONS_DIR = join(REPO_ROOT, 'apps/backend/supabase/migrations');
+export const TYPES_FILE = join(REPO_ROOT, 'apps/web/src/lib/types.ts');
 
 // Each entry pairs a Supabase column with its hand-maintained TS union.
 // If you add a new CHECK ... IN (...) constraint AND a TS union for it,
 // append here so the script verifies they stay in lockstep. Key by
 // `<table>.<column>` because some columns share names across tables
 // (e.g. `runs.source` vs `fitness_snapshots.source`).
-const PAIRS = [
+export const PAIRS = [
 	{ tableColumn: 'runs.source', tsUnion: 'RunSource' },
 	{ tableColumn: 'runs.activity_type', tsUnion: 'ActivityType' },
 	{ tableColumn: 'routes.surface', tsUnion: 'RouteSurface' },
@@ -72,13 +87,13 @@ const PAIRS = [
  * @param {string} sql
  * @returns {Map<string, Set<string>>}
  */
-function parseChecks(sql) {
+export function parseChecks(sql) {
 	/** @type {Map<string, Set<string>>} */
 	const out = new Map();
 
-	const stripped = sql
-		.replace(/--[^\n]*/g, '')
-		.replace(/\/\*[\s\S]*?\*\//g, '');
+	// Comments removed by the lexer, literals kept whole: the values this
+	// script reads ARE literals, so blanking them would empty every set.
+	const stripped = splitSqlStatements(sql).join(';');
 
 	const tableRe = /\b(?:create\s+table|alter\s+table)\s+(?:if\s+not\s+exists\s+)?(?:public\.)?([a-z_][a-z0-9_]*)/gi;
 	const checkRe =
@@ -123,14 +138,21 @@ function parseChecks(sql) {
 	return out;
 }
 
-function loadAllMigrationChecks() {
+export function loadAllMigrationChecks() {
 	const merged = new Map();
 	const files = readdirSync(MIGRATIONS_DIR)
 		.filter((f) => f.endsWith('.sql'))
 		.sort();
 	for (const f of files) {
 		const sql = readFileSync(join(MIGRATIONS_DIR, f), 'utf-8');
-		const local = parseChecks(sql);
+		let local;
+		try {
+			local = parseChecks(sql);
+		} catch (err) {
+			// SQL the lexer cannot read is SQL this guard must not report a
+			// verdict about — say which file, rather than skipping it.
+			throw new Error(`${f}: ${err instanceof Error ? err.message : String(err)}`);
+		}
 		for (const [key, values] of local) merged.set(key, values);
 	}
 	return merged;
@@ -143,7 +165,7 @@ function loadAllMigrationChecks() {
  * @param {string} name
  * @returns {Set<string> | null}
  */
-function parseTsUnion(types, name) {
+export function parseTsUnion(types, name) {
 	const re = new RegExp(`export\\s+type\\s+${name}\\s*=([^;]+);`, 'm');
 	const m = types.match(re);
 	if (!m) return null;
@@ -175,46 +197,60 @@ function diff(a, b) {
 	return { onlyA, onlyB };
 }
 
-function main() {
-	const checks = loadAllMigrationChecks();
-	const types = readFileSync(TYPES_FILE, 'utf-8');
+/**
+ * @param {Map<string, Set<string>>} checks
+ * @param {string} types
+ * @param {readonly { tableColumn: string, tsUnion: string }[]} [pairs]
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function audit(checks, types, pairs = PAIRS) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
 
-	let failed = false;
-	for (const { tableColumn, tsUnion } of PAIRS) {
+	if (pairs.length === 0) {
+		errors.push(
+			'the PAIRS list is empty, so this guard compares nothing. Either the narrow ' +
+				'unions were retired — in which case delete this script with them — or the ' +
+				'list was lost.',
+		);
+		return { errors, ok };
+	}
+
+	for (const { tableColumn, tsUnion } of pairs) {
 		const checkValues = checks.get(tableColumn);
 		const tsValues = parseTsUnion(types, tsUnion);
 
 		if (!checkValues) {
-			console.error(
-				`[FAIL] ${tsUnion}: no CHECK constraint found on "${tableColumn}" in migrations.`,
-			);
-			failed = true;
+			errors.push(`${tsUnion}: no CHECK constraint found on "${tableColumn}" in migrations.`);
 			continue;
 		}
 		if (!tsValues) {
-			console.error(
-				`[FAIL] ${tsUnion}: TS union not found in apps/web/src/lib/types.ts.`,
-			);
-			failed = true;
+			errors.push(`${tsUnion}: TS union not found in apps/web/src/lib/types.ts.`);
 			continue;
 		}
 		if (!setsEqual(checkValues, tsValues)) {
 			const { onlyA: onlyInCheck, onlyB: onlyInTs } = diff(checkValues, tsValues);
-			console.error(
-				`[FAIL] ${tsUnion} drift on ${tableColumn}:\n` +
+			errors.push(
+				`${tsUnion} drift on ${tableColumn}:\n` +
 					`  CHECK only: ${onlyInCheck.length ? onlyInCheck.join(', ') : '(none)'}\n` +
 					`  TS only:    ${onlyInTs.length ? onlyInTs.join(', ') : '(none)'}\n` +
 					`  Fix: update the migration AND the TS union so both list the same values.`,
 			);
-			failed = true;
 			continue;
 		}
-		console.log(
-			`[OK] ${tsUnion} (${tableColumn}): ${[...tsValues].sort().join(', ')}`,
-		);
+		ok.push(`${tsUnion} (${tableColumn}): ${[...tsValues].sort().join(', ')}`);
 	}
 
-	return failed ? 1 : 0;
+	return { errors, ok };
 }
 
-process.exit(main());
+function main() {
+	const { errors, ok } = audit(loadAllMigrationChecks(), readFileSync(TYPES_FILE, 'utf-8'));
+	for (const line of ok) console.log(`[OK] ${line}`);
+	for (const line of errors) console.error(`[FAIL] ${line}`);
+	return errors.length > 0 ? 1 : 0;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) process.exit(main());

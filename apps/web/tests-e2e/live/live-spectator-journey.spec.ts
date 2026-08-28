@@ -4,6 +4,7 @@ import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { deleteRun, insertLivePings, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Live-tracking journey — the full life of ONE live broadcast threaded
@@ -109,13 +110,16 @@ test.describe('live-tracking journey', () => {
 					is_public: true
 				});
 
-				const { data: row } = await admin
-					.from('runs')
-					.select('user_id, is_public')
-					.eq('id', runId)
-					.single();
-				expect(row?.user_id).toBe(USER_A.id);
-				expect(row?.is_public).toBe(true);
+				const row = await readRow(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('user_id, is_public')
+						.eq('id', runId)
+						.single()
+				);
+				expect(row.user_id).toBe(USER_A.id);
+				expect(row.is_public).toBe(true);
 			});
 
 			// ── 2. A position update lands (the recorder's backlog) ─────
@@ -335,14 +339,17 @@ test.describe('live-tracking journey', () => {
 
 				// Backend: still the same single row, now with the final
 				// saved totals.
-				const { data: finalRow } = await admin
-					.from('runs')
-					.select('id, distance_m, duration_s')
-					.eq('id', runId)
-					.single();
-				expect(finalRow?.id).toBe(runId);
-				expect(finalRow?.distance_m).toBe(7_500);
-				expect(finalRow?.duration_s).toBe(1_800);
+				const finalRow = await readRow(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('id, distance_m, duration_s')
+						.eq('id', runId)
+						.single()
+				);
+				expect(finalRow.id).toBe(runId);
+				expect(finalRow.distance_m).toBe(7_500);
+				expect(finalRow.duration_s).toBe(1_800);
 			});
 		} finally {
 			await spectatorCtx.close();

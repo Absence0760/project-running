@@ -13,10 +13,12 @@ import {
 	PRIVACY_DATA_TYPES,
 	PURPOSE_STRINGS,
 	collectDartSources,
+	collectSwiftSources,
 	evaluate,
 	parseBuildConfigurations,
 	parsePlist,
 	stripWholeLineComments,
+	swiftRuleKeys,
 } from './check_ios_native_declarations.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -446,6 +448,64 @@ test('an unparseable Info.plist fails rather than passing vacuously', () => {
 	const { errors } = evaluate(baseline({ infoPlist: null }));
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /blind/);
+});
+
+// --- decisions § 773 — the Swift half ---------------------------------------
+
+// `walk` swallows a readdirSync failure, so moving CalendarBridge.swift out of
+// ios/Runner/ made both EventKit rules stop enforcing and printed nothing: two
+// fewer [OK] lines out of 43 and an exit code of 0. dartSources had this check
+// from the day it was written; swiftSources did not.
+test('an empty Swift source set fails rather than passing vacuously', () => {
+	const { errors } = evaluate(baseline({ swiftSources: [] }));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /vacuously/);
+	assert.match(errors[0], /NSCalendarsUsageDescription/);
+});
+
+test('the Swift rules the blindness check names are derived, not counted', () => {
+	assert.deepEqual(swiftRuleKeys(), [
+		...PURPOSE_STRINGS.filter((r) => r.source === 'swift').map((r) => r.key),
+	]);
+	assert.ok(swiftRuleKeys().length > 0, 'a rule reads Swift, so the check has a subject');
+});
+
+// The other half of the same hole: a Swift rule can fall silent while some
+// OTHER Swift file keeps the tree non-empty, and the purpose string it obliged
+// then stands with nothing claiming it. Every other derived declaration was
+// read both ways; this one was not.
+test('a usage string no rule claims is an error', () => {
+	const { errors } = evaluate(
+		baseline({ infoPlist: plistWith('NSCalendarsUsageDescription', 'Threkir files events.') }),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no rule in this script claims it/);
+});
+
+test('deleting the EventKit import obliges deleting the usage string with it', () => {
+	const withEventKit = baseline({
+		swiftSources: swift('import EventKit'),
+		infoPlist: new Map(baseline().infoPlist)
+			.set('NSCalendarsUsageDescription', 'Threkir files events.')
+			.set('NSCalendarsWriteOnlyAccessUsageDescription', 'Threkir files events.'),
+	});
+	assert.deepEqual(evaluate(withEventKit).errors, []);
+	const gone = evaluate({ ...withEventKit, swiftSources: swift('import UIKit') });
+	assert.equal(gone.errors.length, 2);
+	assert.ok(gone.errors.every((e) => /no rule in this script claims it/.test(e)));
+});
+
+test('a usage string named in FIXED_PLIST_KEYS is claimed by that admission', () => {
+	assert.deepEqual(evaluate(baseline()).errors, []);
+	const { errors } = evaluate(
+		baseline({ infoPlist: plistWith('NSRemindersUsageDescription', 'Threkir reminds.') }),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /NSRemindersUsageDescription/);
+});
+
+test('the committed ios/Runner tree is not empty, so the Swift rules have a subject', () => {
+	assert.ok(collectSwiftSources().length > 0);
 });
 
 // --- the committed tree -----------------------------------------------------

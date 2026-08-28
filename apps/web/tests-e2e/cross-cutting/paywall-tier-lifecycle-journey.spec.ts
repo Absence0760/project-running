@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Paywall — full tier LIFECYCLE on one user: gated → upgrade →
@@ -232,12 +233,15 @@ test.describe('paywall — tier lifecycle (gated → upgrade → unlocked → do
 
 				// ── 6. Backend cross-check of the authoritative column ──────
 				await test.step('backend confirms subscription_tier landed back at free', async () => {
-					const { data: row } = await admin
-						.from('user_profiles')
-						.select('subscription_tier')
-						.eq('id', subject.id)
-						.single();
-					expect(row?.subscription_tier).toBe('free');
+					const row = await readRow(
+						'user_profiles by id',
+						admin
+							.from('user_profiles')
+							.select('subscription_tier')
+							.eq('id', subject.id)
+							.single()
+					);
+					expect(row.subscription_tier).toBe('free');
 				});
 			} finally {
 				await ctx.close();

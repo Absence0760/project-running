@@ -90,12 +90,15 @@ test.describe('/runs/new', () => {
 		const newId = await captureCreatedRunId(page);
 		await page.waitForLoadState('networkidle');
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('is_public')
-			.eq('id', newId)
-			.single();
-		expect(row?.is_public).toBe(true);
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('is_public')
+				.eq('id', newId)
+				.single()
+		);
+		expect(row.is_public).toBe(true);
 	});
 
 	test('privacy_default=public makes a new manual run public without touching the toggle', async ({
@@ -123,12 +126,15 @@ test.describe('/runs/new', () => {
 		const newId = await captureCreatedRunId(page);
 		await page.waitForLoadState('networkidle');
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('is_public')
-			.eq('id', newId)
-			.single();
-		expect(row?.is_public).toBe(true);
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('is_public')
+				.eq('id', newId)
+				.single()
+		);
+		expect(row.is_public).toBe(true);
 	});
 
 	test('default (no privacy_default set) keeps a manual run private', async ({ page }) => {
@@ -150,12 +156,15 @@ test.describe('/runs/new', () => {
 		const newId = await captureCreatedRunId(page);
 		await page.waitForLoadState('networkidle');
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('is_public')
-			.eq('id', newId)
-			.single();
-		expect(row?.is_public).toBe(false);
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('is_public')
+				.eq('id', newId)
+				.single()
+		);
+		expect(row.is_public).toBe(false);
 	});
 
 	test('renders page chrome (kicker, h1, tagline, back link)', async ({ page }) => {
@@ -350,13 +359,16 @@ test.describe('/runs/new', () => {
 		await page.getByRole('button', { name: /Save/ }).click();
 		const newId = await captureCreatedRunId(page);
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('activity_type')
-			.eq('id', newId)
-			.single();
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('activity_type')
+				.eq('id', newId)
+				.single()
+		);
 		// activity_type is a real column since 20261207_001 (default 'run').
-		expect(row?.activity_type).toBe('run');
+		expect(row.activity_type).toBe('run');
 	});
 
 	for (const activity of ['walk', 'hike', 'cycle'] as const) {
@@ -381,13 +393,16 @@ test.describe('/runs/new', () => {
 			await page.getByRole('button', { name: /Save/ }).click();
 			const newId = await captureCreatedRunId(page);
 
-			const { data: row } = await admin
-				.from('runs')
-				.select('activity_type')
-				.eq('id', newId)
-				.single();
+			const row = await readRow(
+				'runs by id',
+				admin
+					.from('runs')
+					.select('activity_type')
+					.eq('id', newId)
+					.single()
+			);
 			// activity_type is a real column since 20261207_001.
-			expect(row?.activity_type).toBe(activity);
+			expect(row.activity_type).toBe(activity);
 		});
 	}
 
@@ -409,13 +424,16 @@ test.describe('/runs/new', () => {
 		await page.getByRole('button', { name: /Save/ }).click();
 		const newId = await captureCreatedRunId(page);
 
-		const { data: row } = await admin
-			.from('runs')
-			.select('source, metadata')
-			.eq('id', newId)
-			.single();
-		expect(row?.source).toBe('app');
-		expect((row?.metadata as Record<string, unknown>)?.manual_entry).toBe(
+		const row = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('source, metadata')
+				.eq('id', newId)
+				.single()
+		);
+		expect(row.source).toBe('app');
+		expect((row.metadata as Record<string, unknown>)?.manual_entry).toBe(
 			true
 		);
 	});

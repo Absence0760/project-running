@@ -3,6 +3,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { resolveBaseUrl } from '../fixtures/base-url';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Multi-user coach <-> athlete roster JOURNEY — the full relationship from a
@@ -96,14 +97,17 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 
 				// Cross-check the captured token against the DB row so a clipboard
 				// hiccup can't silently redeem a wrong/empty token downstream.
-				const { data } = await getAdminClient()
-					.from('coach_athletes')
-					.select('invite_token, status, athlete_id')
-					.eq('coach_id', USER_B.id)
-					.is('athlete_id', null)
-					.single();
-				expect(data?.invite_token).toBe(inviteToken);
-				expect(data?.status).toBe('pending');
+				const data = await readRow(
+					'coach_athletes by coach_id+athlete_id',
+					getAdminClient()
+						.from('coach_athletes')
+						.select('invite_token, status, athlete_id')
+						.eq('coach_id', USER_B.id)
+						.is('athlete_id', null)
+						.single()
+				);
+				expect(data.invite_token).toBe(inviteToken);
+				expect(data.status).toBe('pending');
 			});
 
 			await test.step('athlete redeems the invite in a second context', async () => {
@@ -127,14 +131,17 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 
 				// And the link is active in the DB — the invite was consumed by the
 				// athlete, not left pending.
-				const { data } = await getAdminClient()
-					.from('coach_athletes')
-					.select('status, athlete_id')
-					.eq('coach_id', USER_B.id)
-					.eq('invite_token', inviteToken)
-					.single();
-				expect(data?.status).toBe('active');
-				expect(data?.athlete_id).toBe(USER_C_PRO.id);
+				const data = await readRow(
+					'coach_athletes by coach_id+invite_token',
+					getAdminClient()
+						.from('coach_athletes')
+						.select('status, athlete_id')
+						.eq('coach_id', USER_B.id)
+						.eq('invite_token', inviteToken)
+						.single()
+				);
+				expect(data.status).toBe('active');
+				expect(data.athlete_id).toBe(USER_C_PRO.id);
 			});
 
 			await test.step('coach sees the new athlete on the roster', async () => {
@@ -190,13 +197,16 @@ test.describe('coach <-> athlete roster journey (invite -> accept -> review -> r
 				).toBeVisible({ timeout: 10_000 });
 
 				// The link row is ended (not deleted).
-				const { data } = await getAdminClient()
-					.from('coach_athletes')
-					.select('status')
-					.eq('coach_id', USER_B.id)
-					.eq('athlete_id', USER_C_PRO.id)
-					.single();
-				expect(data?.status).toBe('ended');
+				const data = await readRow(
+					'coach_athletes by coach_id+athlete_id',
+					getAdminClient()
+						.from('coach_athletes')
+						.select('status')
+						.eq('coach_id', USER_B.id)
+						.eq('athlete_id', USER_C_PRO.id)
+						.single()
+				);
+				expect(data.status).toBe('ended');
 			});
 
 			await test.step('the athlete no longer sees the coach in their coach list', async () => {

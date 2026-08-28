@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Backup & restore JOURNEY — the full account-data round-trip walked
@@ -246,18 +246,21 @@ test.describe('backup & restore journey', () => {
 				// Backend: the row is back under USER_A with the planted
 				// distance + metadata, and its track_url was re-set (the
 				// gzipped track re-uploaded to the runs bucket).
-				const { data: row } = await admin
-					.from('runs')
-					.select('user_id, distance_m, track_url, metadata')
-					.eq('id', PLANTED_RUN_ID)
-					.single();
-				expect(row?.user_id).toBe(USER_A.id);
-				expect(row?.distance_m).toBe(PLANTED_DISTANCE_M);
-				expect((row?.metadata as { title?: string } | null)?.title).toBe(
+				const row = await readRow(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('user_id, distance_m, track_url, metadata')
+						.eq('id', PLANTED_RUN_ID)
+						.single()
+				);
+				expect(row.user_id).toBe(USER_A.id);
+				expect(row.distance_m).toBe(PLANTED_DISTANCE_M);
+				expect((row.metadata as { title?: string } | null)?.title).toBe(
 					title
 				);
 				expect(
-					row?.track_url,
+					row.track_url,
 					'restore must re-upload the track + set track_url'
 				).toBe(`${USER_A.id}/${PLANTED_RUN_ID}.json.gz`);
 

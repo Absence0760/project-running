@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — admin deletes an event from the
@@ -105,11 +105,14 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 
 		await page.waitForURL(/\/clubs\/richmond-run-club$/, { timeout: 10_000 });
 
-		const { data: eventRow } = await admin
-			.from('events')
-			.select('id')
-			.eq('id', eventId)
-			.maybeSingle();
+		const eventRow = await readMaybeRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('id')
+				.eq('id', eventId)
+				.maybeSingle()
+		);
 		expect(eventRow).toBeNull();
 
 		const attRows = await readRows(

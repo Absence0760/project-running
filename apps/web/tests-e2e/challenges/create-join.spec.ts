@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Challenges create + join lifecycle (challenges.md).
@@ -61,12 +62,15 @@ test.describe('/challenges — create + join', () => {
 		created.push(id);
 
 		// The stored figure is the converted one — the whole point of the field.
-		const { data: row } = await getAdminClient()
-			.from('challenges')
-			.select('goal_value')
-			.eq('id', id)
-			.single();
-		expect(Number(row!.goal_value)).toBe(100_000);
+		const row = await readRow(
+			'challenges by id',
+			getAdminClient()
+				.from('challenges')
+				.select('goal_value')
+				.eq('id', id)
+				.single()
+		);
+		expect(Number(row.goal_value)).toBe(100_000);
 
 		// Creator is not auto-joined → Join is offered.
 		const joinBtn = page.getByRole('button', { name: /^Join$/ });

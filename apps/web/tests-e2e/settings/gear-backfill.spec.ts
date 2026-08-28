@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /settings/gear — post-create backfill.
@@ -124,11 +125,14 @@ test.describe('/settings/gear — backfill past runs onto newly-registered gear'
 		plantedGearId = created!.id;
 
 		await test.step('the run now carries the new pair AND whatever it already had', async () => {
-			const { data: gearAfter } = await admin
-				.from('run_gear')
-				.select('gear_id')
-				.eq('run_id', plantedRunId!);
-			const afterIds = (gearAfter ?? []).map((r) => r.gear_id).sort();
+			const gearAfter = await readRows(
+				'run_gear by run_id',
+				admin
+					.from('run_gear')
+					.select('gear_id')
+					.eq('run_id', plantedRunId!)
+			);
+			const afterIds = gearAfter.map((r) => r.gear_id).sort();
 			expect(afterIds).toContain(plantedGearId);
 			// Additive: every gear id the run carried before is still there.
 			for (const id of beforeIds) expect(afterIds).toContain(id);

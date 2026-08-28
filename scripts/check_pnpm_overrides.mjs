@@ -38,7 +38,12 @@
 //   4. Every version each pin names, in BOTH lockfiles' package trees,
 //      satisfies the pin — including nested copies. A lockfile that declares
 //      an override and resolved around it is the failure this is really about;
-//      the declaration halves above only prove the intent survived.
+//      the declaration halves above only prove the intent survived. A SCOPED
+//      pin is held to what its parent resolved and nothing else: it used to be
+//      enforced against every copy of the name, which accuses a sibling the
+//      override never reached (decisions § 774). The parent edge is read from
+//      the install path on the npm side and from `snapshots:` on the pnpm one,
+//      because `packages:` is flat and records no edges at all.
 //
 // Two spellings, and which is canonical here. pnpm writes a scoped override
 // FLAT — `'@sveltejs/kit>cookie': ^1.0.2` — and npm writes the same thing as a
@@ -80,7 +85,14 @@ export const NPM_LOCK = join(REPO_ROOT, 'package-lock.json');
 
 export const FIX_COMMAND = 'pnpm install --lockfile-only';
 
-/** @typedef {{ name: string, version: string, where: string }} Resolution */
+/// Which lockfile a resolved copy came from. The two carry different parent
+/// information — npm's key IS the install path, pnpm's `packages:` key is flat
+/// and the parent edges live in `snapshots:` — so a scoped pin is narrowed
+/// differently on each side and the label is what selects between them.
+export const NPM_LOCK_LABEL = 'package-lock.json';
+export const PNPM_LOCK_LABEL = 'pnpm-lock.yaml';
+
+/** @typedef {{ name: string, version: string, where: string, parent: string | null }} Resolution */
 /** @typedef {{ flat: Map<string, string>, problems: string[] }} FlatOverrides */
 /** @typedef {{ major: number, minor: number, patch: number, prerelease: string | null, raw: string }} SemVer */
 /** @typedef {{ ok: boolean, reason?: string, unsupported?: undefined }} Decided */
@@ -160,7 +172,12 @@ export function parsePnpmResolutions(lockText) {
 		const key = unquote(m[1]);
 		const at = key.lastIndexOf('@');
 		if (at <= 0) continue;
-		found.push({ name: key.slice(0, at), version: key.slice(at + 1), where: 'pnpm-lock.yaml' });
+		found.push({
+			name: key.slice(0, at),
+			version: key.slice(at + 1),
+			where: PNPM_LOCK_LABEL,
+			parent: null,
+		});
 	}
 	return found;
 }
@@ -168,23 +185,95 @@ export function parsePnpmResolutions(lockText) {
 /// Every resolved package in a package-lock.json, nested copies included. A
 /// nested `node_modules/x/node_modules/cookie` is the exact shape an override
 /// exists to reach (see `_overrides_rationale`), so the path is walked to its
-/// LAST `node_modules/` segment rather than matched at the top level.
+/// LAST `node_modules/` segment rather than matched at the top level — and the
+/// segment BEFORE it is the parent that scoped copy belongs to, which is what
+/// narrows a `parent>child` pin to the copies it actually reaches. A copy with
+/// no enclosing package (`node_modules/cookie`, `apps/web/node_modules/cookie`)
+/// is hoisted, and carries no parent.
 /**
  * @param {NpmLockfile | null | undefined} lockJson
  * @returns {Resolution[]}
  */
 export function parseNpmResolutions(lockJson) {
+	const SEGMENT = 'node_modules/';
 	/** @type {Resolution[]} */
 	const found = [];
 	for (const [path, entry] of Object.entries(lockJson?.packages ?? {})) {
-		const at = path.lastIndexOf('node_modules/');
+		const at = path.lastIndexOf(SEGMENT);
 		if (at < 0) continue;
-		const name = path.slice(at + 'node_modules/'.length);
+		const name = path.slice(at + SEGMENT.length);
 		const version = entry && typeof entry === 'object' && 'version' in entry ? entry.version : null;
 		if (!name || typeof version !== 'string') continue;
-		found.push({ name, version, where: 'package-lock.json' });
+		const enclosing = path.slice(0, at).replace(/\/$/, '');
+		const previous = enclosing.lastIndexOf(SEGMENT);
+		found.push({
+			name,
+			version,
+			where: NPM_LOCK_LABEL,
+			parent: previous < 0 ? null : enclosing.slice(previous + SEGMENT.length),
+		});
 	}
 	return found;
+}
+
+/// pnpm-lock.yaml's `snapshots:` graph as parent name -> child name -> the
+/// versions that parent resolved for it. `packages:` is flat — one entry per
+/// tarball, no edges — so it is the ONLY place a scoped `parent>child` pin's
+/// real subject can be read on the pnpm side. Versions are a Set because one
+/// package can appear at several versions (and under several peer suffixes),
+/// and a pin has to hold for every parent copy, not whichever was written last.
+/**
+ * @param {string} lockText
+ * @returns {Map<string, Map<string, Set<string>>>}
+ */
+export function parsePnpmSnapshotEdges(lockText) {
+	/// `name@version(peer@x)(peer@y)` -> `name@version`. A peer suffix is not
+	/// part of the identity a pin is written against.
+	/** @param {string} value */
+	const withoutPeers = (value) => {
+		const at = value.indexOf('(');
+		return at < 0 ? value : value.slice(0, at);
+	};
+
+	/** @type {Map<string, Map<string, Set<string>>>} */
+	const edges = new Map();
+	let inside = false;
+	/** @type {string | null} */
+	let parent = null;
+	let inDependencies = false;
+
+	for (const line of lockText.split('\n')) {
+		if (/^snapshots:\s*$/.test(line)) {
+			inside = true;
+			continue;
+		}
+		if (!inside) continue;
+		if (line.trim() && !/^\s/.test(line)) break;
+
+		const snapshot = line.match(/^\s{2}(\S.*?):\s*$/);
+		if (snapshot) {
+			const bare = withoutPeers(unquote(snapshot[1]));
+			const at = bare.lastIndexOf('@');
+			parent = at > 0 ? bare.slice(0, at) : null;
+			inDependencies = false;
+			continue;
+		}
+		const section = line.match(/^\s{4}(\S.*?):\s*$/);
+		if (section) {
+			inDependencies = section[1] === 'dependencies' || section[1] === 'optionalDependencies';
+			continue;
+		}
+		if (parent === null || !inDependencies) continue;
+		const dependency = line.match(/^\s{6}(\S.*?):\s+(\S.*?)\s*$/);
+		if (!dependency) continue;
+		const children = edges.get(parent) ?? new Map();
+		const name = unquote(dependency[1]);
+		const versions = children.get(name) ?? new Set();
+		versions.add(withoutPeers(unquote(dependency[2])));
+		children.set(name, versions);
+		edges.set(parent, children);
+	}
+	return edges;
 }
 
 /// An npm-style `overrides` object flattened into pnpm's `parent>child`
@@ -406,15 +495,48 @@ export function checkDeclarations(pkg, pnpmLockText) {
 	return { errors, ok, declared };
 }
 
+/// The copies one pin actually constrains. A BARE pin reaches every copy in
+/// the tree; a SCOPED `parent>child` pin reaches only what that parent
+/// resolved, and enforcing it against every copy of the name accuses a sibling
+/// the override never touched. Read per lockfile because the two record the
+/// edge differently: npm's key is the install path, so a nested copy names its
+/// parent outright and a parent with no nested copy resolves the hoisted one;
+/// pnpm's `packages:` is flat, so the edge comes from `snapshots:`.
+/**
+ * @param {string} target
+ * @param {string | null} parent
+ * @param {Resolution[]} named every resolved copy of `target`, both lockfiles
+ * @param {Map<string, Map<string, Set<string>>>} edges
+ * @returns {Resolution[]}
+ */
+export function copiesForPin(target, parent, named, edges) {
+	if (parent === null) return named;
+
+	const npm = named.filter((r) => r.where === NPM_LOCK_LABEL);
+	const nested = npm.filter((r) => r.parent === parent);
+	const npmCopies = nested.length > 0 ? nested : npm.filter((r) => r.parent === null);
+
+	const pnpmCopies = [...(edges.get(parent)?.get(target) ?? [])].map((version) => ({
+		name: target,
+		version,
+		where: PNPM_LOCK_LABEL,
+		parent,
+	}));
+
+	return [...npmCopies, ...pnpmCopies];
+}
+
 /// Check 4: the pins took effect. A declared override that the tree resolved
 /// around is the whole point — the declaration halves prove intent, this
 /// proves outcome.
 /**
  * @param {Map<string, string>} declared
  * @param {Resolution[]} resolutions
+ * @param {Map<string, Map<string, Set<string>>>} [edges] pnpm's `snapshots:`
+ *   graph, needed to narrow a scoped pin on the pnpm side.
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function checkResolutions(declared, resolutions) {
+export function checkResolutions(declared, resolutions, edges = new Map()) {
 	/** @type {string[]} */
 	const errors = [];
 	/** @type {string[]} */
@@ -441,6 +563,31 @@ export function checkResolutions(declared, resolutions) {
 
 	const present = new Set(resolutions.map((r) => r.name));
 
+	// A scoped pin's pnpm-side subject comes from `snapshots:` and nowhere else,
+	// so an empty graph does not narrow the pin — it silently drops half of what
+	// the pin covers while the npm half keeps the check looking alive. Only
+	// counts against a parent the tree actually resolved; a pin naming a parent
+	// that is gone gets the sharper message below.
+	const orphanedScopes = [...declared.keys()].filter((key) => {
+		const { parent } = pinTarget(key);
+		return parent !== null && present.has(parent);
+	});
+	if (
+		orphanedScopes.length > 0 &&
+		edges.size === 0 &&
+		resolutions.some((r) => r.where === PNPM_LOCK_LABEL)
+	) {
+		return {
+			errors: [
+				`${orphanedScopes.length} pin(s) are scoped to a parent that resolves ` +
+					`(${orphanedScopes.join(', ')}) but pnpm-lock.yaml's \`snapshots:\` graph parsed ` +
+					`as empty, so nothing narrows them on the pnpm side and that half of each pin ` +
+					`is checked against nothing. The section moved or its shape changed.`,
+			],
+			ok,
+		};
+	}
+
 	for (const [target, pins] of [...byTarget.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
 		const copies = resolutions.filter((r) => r.name === target);
 		if (copies.length === 0) {
@@ -452,19 +599,29 @@ export function checkResolutions(declared, resolutions) {
 			);
 			continue;
 		}
-		let clean = true;
 		for (const pin of pins) {
+			let clean = true;
 			if (pin.parent && !present.has(pin.parent)) {
-				clean = false;
 				errors.push(
 					`\`${pin.key}\` scopes a pin to \`${pin.parent}\`, which is in neither lockfile. ` +
 						`The pin reaches nothing; drop it or fix the parent's name.`,
 				);
+				continue;
+			}
+			const scoped = copiesForPin(target, pin.parent, copies, edges);
+			if (scoped.length === 0) {
+				errors.push(
+					`\`${pin.key}\` scopes a pin to \`${pin.parent}\`, which resolves no \`${target}\` ` +
+						`in either lockfile — so the pin is checked against nothing. Either the ` +
+						`parent stopped depending on it and the override should go, or the ` +
+						`lockfile parser stopped reading the dependency graph.`,
+				);
+				continue;
 			}
 			/** @type {{ copy: Resolution, reason: string | undefined }[]} */
 			const bad = [];
 			let unsupported = false;
-			for (const copy of copies) {
+			for (const copy of scoped) {
 				const verdict = satisfies(copy.version, pin.range);
 				if (verdict.unsupported) {
 					unsupported = true;
@@ -494,13 +651,13 @@ export function checkResolutions(declared, resolutions) {
 						`frozen install cannot see. Regenerate with \`${FIX_COMMAND}\`.`,
 				);
 			}
-		}
-		if (clean) {
-			const versions = [...new Set(copies.map((c) => c.version))].sort();
-			ok.push(
-				`${target} resolves to ${versions.join(', ')} across ${copies.length} copy/copies, ` +
-					`satisfying ${pins.map((p) => p.range).join(' + ')}`,
-			);
+			if (clean) {
+				const versions = [...new Set(scoped.map((c) => c.version))].sort();
+				ok.push(
+					`${pin.key} resolves to ${versions.join(', ')} across ${scoped.length} ` +
+						`copy/copies, satisfying ${pin.range}`,
+				);
+			}
 		}
 	}
 
@@ -515,7 +672,11 @@ export function checkResolutions(declared, resolutions) {
 export function checkAll(pkg, pnpmLockText, npmLockJson) {
 	const declarations = checkDeclarations(pkg, pnpmLockText);
 	const resolutions = [...parsePnpmResolutions(pnpmLockText), ...parseNpmResolutions(npmLockJson)];
-	const effect = checkResolutions(declarations.declared, resolutions);
+	const effect = checkResolutions(
+		declarations.declared,
+		resolutions,
+		parsePnpmSnapshotEdges(pnpmLockText),
+	);
 	return {
 		errors: [...declarations.errors, ...effect.errors],
 		ok: [...declarations.ok, ...effect.ok],

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Gym lifecycle journey — the full life of a weighted gym workout walked
@@ -72,12 +73,15 @@ test.describe('gym lifecycle journey — log → PR → records → save-as-rout
 				// First-ever lift of this exercise is always a PR.
 				await expect(row.locator('.pr-badge')).toBeVisible();
 
-				const { data: created } = await admin
-					.from('gym_workouts')
-					.select('id')
-					.eq('user_id', USER_A.id)
-					.eq('title', firstTitle);
-				expect(created?.length).toBe(1);
+				const created = await readRows(
+					'gym_workouts by user_id+title',
+					admin
+						.from('gym_workouts')
+						.select('id')
+						.eq('user_id', USER_A.id)
+						.eq('title', firstTitle)
+				);
+				expect(created.length).toBe(1);
 				workoutIds.push(created![0].id as string);
 			});
 
@@ -124,12 +128,15 @@ test.describe('gym lifecycle journey — log → PR → records → save-as-rout
 					timeout: 10_000,
 				});
 
-				const { data: routines } = await admin
-					.from('gym_routines')
-					.select('id, exercise_count')
-					.eq('author_id', USER_A.id)
-					.eq('title', routineTitle);
-				expect(routines?.length).toBe(1);
+				const routines = await readRows(
+					'gym_routines by author_id+title',
+					admin
+						.from('gym_routines')
+						.select('id, exercise_count')
+						.eq('author_id', USER_A.id)
+						.eq('title', routineTitle)
+				);
+				expect(routines.length).toBe(1);
 				expect(routines![0].exercise_count).toBe(1);
 				routineId = routines![0].id as string;
 			});
@@ -155,12 +162,15 @@ test.describe('gym lifecycle journey — log → PR → records → save-as-rout
 				const row = page.locator('.workout-row', { hasText: secondTitle });
 				await expect(row).toBeVisible({ timeout: 10_000 });
 
-				const { data: created } = await admin
-					.from('gym_workouts')
-					.select('id')
-					.eq('user_id', USER_A.id)
-					.eq('title', secondTitle);
-				expect(created?.length).toBe(1);
+				const created = await readRows(
+					'gym_workouts by user_id+title',
+					admin
+						.from('gym_workouts')
+						.select('id')
+						.eq('user_id', USER_A.id)
+						.eq('title', secondTitle)
+				);
+				expect(created.length).toBe(1);
 				workoutIds.push(created![0].id as string);
 			});
 

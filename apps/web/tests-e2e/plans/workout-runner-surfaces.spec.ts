@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { repurposeTodayWorkout, seedDateToLive } from '../fixtures/plan-today';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Workout-runner-adjacent surfaces (web).
@@ -306,11 +307,14 @@ test.describe('Workout-runner surfaces (web)', () => {
 			// navigation noise.
 			const wo = await findWorkoutByDate('2026-04-08');
 			const admin = getAdminClient();
-			const { data: before } = await admin
-				.from('plan_workouts')
-				.select('target_distance_m')
-				.eq('id', wo.id)
-				.maybeSingle();
+			const before = await readMaybeRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('target_distance_m')
+					.eq('id', wo.id)
+					.maybeSingle()
+			);
 			const beforeDistance = (before as { target_distance_m: number | null })
 				?.target_distance_m;
 			expect(beforeDistance).toBe(7000);
@@ -346,11 +350,14 @@ test.describe('Workout-runner surfaces (web)', () => {
 				await expect(modal).toHaveCount(0);
 
 				// 9 km → 9000 m in canonical storage.
-				const { data: after } = await admin
-					.from('plan_workouts')
-					.select('target_distance_m')
-					.eq('id', wo.id)
-					.maybeSingle();
+				const after = await readMaybeRow(
+					'plan_workouts by id',
+					admin
+						.from('plan_workouts')
+						.select('target_distance_m')
+						.eq('id', wo.id)
+						.maybeSingle()
+				);
 				expect(
 					(after as { target_distance_m: number | null }).target_distance_m
 				).toBe(9000);
@@ -503,11 +510,14 @@ test.describe('Workout-runner surfaces (web)', () => {
 			// completed_run_id non-null.
 			const wo = await findWorkoutByDate('2026-04-05');
 			const admin = getAdminClient();
-			const { data: before } = await admin
-				.from('plan_workouts')
-				.select('completed_run_id')
-				.eq('id', wo.id)
-				.maybeSingle();
+			const before = await readMaybeRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('completed_run_id')
+					.eq('id', wo.id)
+					.maybeSingle()
+			);
 			expect((before as { completed_run_id: string | null }).completed_run_id)
 				.not.toBeNull();
 
@@ -523,11 +533,14 @@ test.describe('Workout-runner surfaces (web)', () => {
 
 			// Cancel — completed_run_id must remain set.
 			await dialog.getByRole('button', { name: 'Cancel' }).click();
-			const { data: after } = await admin
-				.from('plan_workouts')
-				.select('completed_run_id')
-				.eq('id', wo.id)
-				.maybeSingle();
+			const after = await readMaybeRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('completed_run_id')
+					.eq('id', wo.id)
+					.maybeSingle()
+			);
 			expect((after as { completed_run_id: string | null }).completed_run_id)
 				.not.toBeNull();
 		});
@@ -565,11 +578,14 @@ test.describe('Workout-runner surfaces (web)', () => {
 				await expect(page.locator('.completed-card'))
 					.toHaveCount(0, { timeout: 10_000 });
 				// And the DB row reflects it.
-				const { data: after } = await admin
-					.from('plan_workouts')
-					.select('completed_run_id, manually_completed')
-					.eq('id', wo.id)
-					.maybeSingle();
+				const after = await readMaybeRow(
+					'plan_workouts by id',
+					admin
+						.from('plan_workouts')
+						.select('completed_run_id, manually_completed')
+						.eq('id', wo.id)
+						.maybeSingle()
+				);
 				expect((after as { completed_run_id: string | null }).completed_run_id)
 					.toBeNull();
 			} finally {

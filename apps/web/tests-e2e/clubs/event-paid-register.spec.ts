@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow, readRow } from '../fixtures/db-read';
 
 /**
  * Paid event registration (club_events.md slice P1) — NON-charge UI only.
@@ -252,22 +253,28 @@ test.describe('paid registration — non-charge UI (slice P1)', () => {
 		// setEventPricing did not throw.
 		await expect(modal).toHaveCount(0, { timeout: 10_000 });
 
-		const { data: created_ev } = await admin
-			.from('events')
-			.select('id')
-			.eq('title', title)
-			.maybeSingle();
+		const created_ev = await readMaybeRow(
+			'events by title',
+			admin
+				.from('events')
+				.select('id')
+				.eq('title', title)
+				.maybeSingle()
+		);
 		expect(created_ev?.id, 'the event was created').toBeTruthy();
 		created.push(created_ev!.id as string);
 
-		const { data: pricing } = await admin
-			.from('event_pricing')
-			.select('instance_start, price_cents, currency')
-			.eq('event_id', created_ev!.id)
-			.maybeSingle();
+		const pricing = await readRow(
+			'event_pricing by event_id',
+			admin
+				.from('event_pricing')
+				.select('instance_start, price_cents, currency')
+				.eq('event_id', created_ev!.id)
+				.maybeSingle()
+		);
 		expect(pricing, 'setEventPricing wrote a row').toBeTruthy();
-		expect(pricing!.price_cents).toBe(3150);
-		expect(pricing!.instance_start).toBeNull();
+		expect(pricing.price_cents).toBe(3150);
+		expect(pricing.instance_start).toBeNull();
 	});
 
 	test('?paid=1 shows a processing state (no false failure)', async ({ page }) => {

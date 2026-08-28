@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Two gym / strength-class instructor paths the existing specs miss:
@@ -58,13 +59,16 @@ test.describe('gym class instructor — seam gate + routine start', () => {
 		createdEventIds.push(id);
 
 		// Guard the precondition: the seed really produced a null template.
-		const { data: row } = await getAdminClient()
-			.from('events')
-			.select('category, gym_template')
-			.eq('id', id)
-			.single();
-		expect(row?.category).toBe('class');
-		expect(row?.gym_template).toBeNull();
+		const row = await readRow(
+			'events by id',
+			getAdminClient()
+				.from('events')
+				.select('category, gym_template')
+				.eq('id', id)
+				.single()
+		);
+		expect(row.category).toBe('class');
+		expect(row.gym_template).toBeNull();
 
 		await page.goto(`/clubs/richmond-run-club/events/${id}`);
 		await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 10_000 });

@@ -31,6 +31,7 @@ const CI_WORKFLOW = join(REPO_ROOT, '.github', 'workflows', 'ci.yml');
 
 const JOB = 'edge-functions';
 const STEP = 'Edge Function typecheck';
+const WARM_STEP = 'Warm the Deno dependency cache';
 
 /**
  * Extensions Deno compiles as TypeScript. `find -name '*.ts'` covers only the
@@ -52,42 +53,61 @@ function functionsTree() {
 	return 'apps/backend/supabase/functions/';
 }
 
-/// The typecheck step, as `{ workingDirectory, filesExpression, body }`.
-function typecheckStep() {
+/// A step that derives its own file set, as `{ workingDirectory, filesExpression,
+/// body }`. Two steps in this job do: the warm-cache prefetch and the typecheck,
+/// and the pair only holds together while both derive the SAME set.
+/**
+ * @param {string} name
+ * @param {RegExp} command
+ * @param {string} why
+ */
+function derivedFilesStep(name, command, why) {
 	const steps = parseSteps(readFileSync(CI_WORKFLOW, 'utf8')).filter(
-		(s) => s.job === JOB && s.name === STEP,
+		(s) => s.job === JOB && s.name === name,
 	);
 	assert.equal(
 		steps.length,
 		1,
-		`expected exactly one "${STEP}" step in the \`${JOB}\` job of ci.yml, found ` +
+		`expected exactly one "${name}" step in the \`${JOB}\` job of ci.yml, found ` +
 			`${steps.length}. Renaming or removing it is what this guard is here to notice — ` +
 			'if the lane moved, move this with it rather than deleting the check.',
 	);
 	const { body } = steps[0];
 
 	const workdir = body.match(/^\s*working-directory:\s*(\S+)\s*$/m);
-	assert.ok(workdir, `the "${STEP}" step declares no working-directory to resolve paths against.`);
+	assert.ok(workdir, `the "${name}" step declares no working-directory to resolve paths against.`);
 
-	// The one line that decides what gets checked. Lifting it rather than
+	// The one line that decides what the step reads. Lifting it rather than
 	// re-deriving it is the whole point: a rewrite that hardcodes paths has no
 	// such line and fails here instead of quietly shrinking the lane.
 	const expression = body.match(/^\s*files=\$\((.+)\)\s*$/m);
 	assert.ok(
 		expression,
-		`the "${STEP}" step no longer derives its file set with a \`files=$(…)\` line. Naming ` +
+		`the "${name}" step no longer derives its file set with a \`files=$(…)\` line. Naming ` +
 			'paths instead is how the sibling test step in this job came to miss four new ' +
 			'*.test.ts files; keep the derivation and this guard can keep verifying it.',
 	);
-	assert.match(
-		body,
+	assert.match(body, command, why);
+
+	return { workingDirectory: workdir[1], filesExpression: expression[1], body };
+}
+
+const typecheckStep = () =>
+	derivedFilesStep(
+		STEP,
 		/deno check \$files/,
 		`the "${STEP}" step must run \`deno check $files\` — the derived set and the set it ` +
 			'actually checks have to be the same one.',
 	);
 
-	return { workingDirectory: workdir[1], filesExpression: expression[1], body };
-}
+const warmCacheStep = () =>
+	derivedFilesStep(
+		WARM_STEP,
+		/deno cache --no-check \$files/,
+		`the "${WARM_STEP}" step must run \`deno cache --no-check $files\` — it exists to pull ` +
+			'the whole module graph inside the retry wrapper, over the same set the typecheck ' +
+			'then reads.',
+	);
 
 /// What the CI step's own expression selects, repo-relative and sorted.
 /** @param {{ workingDirectory: string, filesExpression: string }} step */
@@ -176,4 +196,42 @@ test('the typecheck lane runs before the Supabase stack starts', () => {
 		`"${STEP}" runs after the Supabase stack starts. Move it above, so a stack that fails ` +
 			'to come up cannot swallow the typecheck result.',
 	);
+});
+
+test('the warm-cache prefetch reads every file the typecheck will', () => {
+	// `deno cache --no-check` skips TYPECHECKING, not type RESOLUTION: it walks
+	// the declaration graph and fetches it. Measured on a cold DENO_DIR, the
+	// warm step downloads 776 URLs, 458 of them `.d.ts` (286 stripe URLs among
+	// them, `stripe@17.5.0/types/index.d.ts` included), and `deno check`
+	// immediately afterwards downloads NOTHING. Run alone with no warm step,
+	// `deno check` downloads 403 URLs, 362 of them `.d.ts` — a strict subset of
+	// the warm step's 776.
+	//
+	// That holds only while the two read the same tree. Narrow the warm step —
+	// to the test files, as the sibling test step once was — and the typecheck
+	// starts fetching declarations OUTSIDE the three-attempt retry that exists
+	// to absorb an esm.sh 5xx, which is a CDN blip failing the lane with a bare
+	// fetch error. So the property is asserted rather than assumed.
+	const warm = new Set(laneFiles(warmCacheStep()));
+	const checked = laneFiles(typecheckStep());
+	assert.ok(checked.length > 0, 'the typecheck step selected no files at all');
+	const unwarmed = checked.filter((f) => !warm.has(f));
+	assert.deepEqual(
+		unwarmed,
+		[],
+		'These modules are typechecked but never prefetched, so `deno check` resolves their ' +
+			'remote dependencies itself — outside the retry wrapper the warm step exists to be. ' +
+			`Widen the "${WARM_STEP}" step's \`files=$(…)\` expression to cover them: ` +
+			`${unwarmed.join(', ')}`,
+	);
+});
+
+test('the warm-cache prefetch runs before the typecheck', () => {
+	// A prefetch after the check it feeds is a prefetch of nothing.
+	const steps = parseSteps(readFileSync(CI_WORKFLOW, 'utf8')).filter((s) => s.job === JOB);
+	const warm = steps.findIndex((s) => s.name === WARM_STEP);
+	const check = steps.findIndex((s) => s.name === STEP);
+	assert.ok(warm >= 0, `the "${WARM_STEP}" step is gone from \`${JOB}\`.`);
+	assert.ok(check >= 0, `the "${STEP}" step is gone from \`${JOB}\`.`);
+	assert.ok(warm < check, `"${WARM_STEP}" must run before "${STEP}", not after it.`);
 });

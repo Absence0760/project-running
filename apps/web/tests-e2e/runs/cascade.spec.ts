@@ -7,6 +7,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readCount, readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Backend boundary: deleting a `runs` row cascades to every child
@@ -68,10 +69,13 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		// Sanity: the trigger fan-out planted notifications for runner
 		// (the run's owner). 1 kudos + 1 comment = 2 unread notifications
 		// referencing this run_id.
-		const { count: notifBefore } = await admin
-			.from('notifications')
-			.select('id', { count: 'exact', head: true })
-			.eq('run_id', runId);
+		const notifBefore = await readCount(
+			'notifications by run_id',
+			admin
+				.from('notifications')
+				.select('id', { count: 'exact', head: true })
+				.eq('run_id', runId)
+		);
 		expect(notifBefore).toBe(2);
 
 		// ── UI delete ──
@@ -96,33 +100,43 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 			'run_matched_tracks'
 		] as const;
 		for (const t of tables) {
-			const { count } = await admin
-				.from(t)
-				.select('run_id', { count: 'exact', head: true })
-				.eq('run_id', runId);
+			const count = await readCount(
+				`${t} by run_id`,
+				admin
+					.from(t)
+					.select('run_id', { count: 'exact', head: true })
+					.eq('run_id', runId)
+			);
 			expect(count, `${t} should have 0 rows for the deleted run`).toBe(0);
 		}
 
 		// notifications.run_id is on delete cascade too.
-		const { count: notifAfter } = await admin
-			.from('notifications')
-			.select('id', { count: 'exact', head: true })
-			.eq('run_id', runId);
+		const notifAfter = await readCount(
+			'notifications by run_id',
+			admin
+				.from('notifications')
+				.select('id', { count: 'exact', head: true })
+				.eq('run_id', runId)
+		);
 		expect(notifAfter).toBe(0);
 
 		// The runs row itself is gone.
-		const { data: stillThere } = await admin
-			.from('runs')
-			.select('id')
-			.eq('id', runId)
-			.maybeSingle();
+		const stillThere = await readMaybeRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('id')
+				.eq('id', runId)
+				.maybeSingle()
+		);
 		expect(stillThere).toBeNull();
 
 		// Storage object swept by deleteRun()'s pre-delete remove.
-		const { data: list } = await admin.storage
-			.from('runs')
-			.list(USER_A.id, { search: runId });
-		expect(list?.find((f) => f.name.startsWith(runId))).toBeUndefined();
+		const list = await readRows(
+			'runs Storage objects under the owner prefix',
+			admin.storage.from('runs').list(USER_A.id, { search: runId })
+		);
+		expect(list.find((f) => f.name.startsWith(runId))).toBeUndefined();
 	});
 
 	test('cascade also sweeps run_photos + their Storage objects when the run is deleted', async ({
@@ -166,11 +180,14 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		});
 
 		// Sanity: photo is reachable via service-role pre-delete.
-		const { data: photoBefore } = await admin
-			.from('run_photos')
-			.select('id')
-			.eq('id', photoId)
-			.maybeSingle();
+		const photoBefore = await readMaybeRow(
+			'run_photos by id',
+			admin
+				.from('run_photos')
+				.select('id')
+				.eq('id', photoId)
+				.maybeSingle()
+		);
 		expect(photoBefore).not.toBeNull();
 
 		// Drive the UI delete.
@@ -183,11 +200,14 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
 
 		// Row gone via cascade.
-		const { data: photoAfter } = await admin
-			.from('run_photos')
-			.select('id')
-			.eq('id', photoId)
-			.maybeSingle();
+		const photoAfter = await readMaybeRow(
+			'run_photos by id',
+			admin
+				.from('run_photos')
+				.select('id')
+				.eq('id', photoId)
+				.maybeSingle()
+		);
 		expect(photoAfter).toBeNull();
 	});
 });

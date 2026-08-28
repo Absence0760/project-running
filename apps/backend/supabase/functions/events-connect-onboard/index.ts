@@ -149,6 +149,14 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
     try {
       account = await stripe.accounts.create(
         buildAccountCreateParams(body.country ?? null, null),
+        // Keyed on the host, because a host has exactly one payout account
+        // (`instructor_payout_accounts.user_id`). Unkeyed, an attempt that
+        // created the account and then failed to persist it — a lost response,
+        // a failed upsert, a second click — created a SECOND Stripe account on
+        // the retry and abandoned the first, live and unreachable, on the
+        // platform. The rate limit put the ceiling at eight of those per host
+        // per hour.
+        { idempotencyKey: `events-connect-onboard:${user.id}` },
       );
     } catch (e) {
       console.error('stripe account create failed:', e instanceof Error ? e.message : 'unknown');
@@ -168,6 +176,11 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
     }
   }
 
+  // No idempotency key on the LINK, deliberately: an account link is
+  // single-use and short-lived, so replaying the first one hands a host
+  // returning to finish their onboarding a URL that Stripe has already spent.
+  // A fresh link per call is the correct answer here and a duplicate costs
+  // nothing.
   let link;
   try {
     link = await stripe.accountLinks.create(

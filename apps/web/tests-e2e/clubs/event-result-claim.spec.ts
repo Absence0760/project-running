@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — bib-result claim flow (#43 follow-up).
@@ -133,12 +134,15 @@ test.describe('bib-result claim — organiser approval', () => {
 		await expect(page.getByRole('heading', { name: /^Result claims/ })).toHaveCount(0, {
 			timeout: 10_000
 		});
-		const { data } = await getAdminClient()
-			.from('event_results')
-			.select('user_id')
-			.eq('event_id', eventId!)
-			.eq('bib', '101')
-			.single();
-		expect(data?.user_id).toBeNull();
+		const data = await readRow(
+			'event_results by event_id+bib',
+			getAdminClient()
+				.from('event_results')
+				.select('user_id')
+				.eq('event_id', eventId!)
+				.eq('bib', '101')
+				.single()
+		);
+		expect(data.user_id).toBeNull();
 	});
 });

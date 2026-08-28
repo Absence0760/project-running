@@ -798,6 +798,7 @@ export type Database = {
       donations: {
         Row: {
           amount_cents: number
+          client_request_id: string | null
           created_at: string
           currency: string
           display_name: string | null
@@ -810,12 +811,14 @@ export type Database = {
           paid_at: string | null
           platform_fee_cents: number
           refunded_at: string | null
+          refunded_cents: number
           status: string
           stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
         }
         Insert: {
           amount_cents: number
+          client_request_id?: string | null
           created_at?: string
           currency?: string
           display_name?: string | null
@@ -828,12 +831,14 @@ export type Database = {
           paid_at?: string | null
           platform_fee_cents?: number
           refunded_at?: string | null
+          refunded_cents?: number
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
         }
         Update: {
           amount_cents?: number
+          client_request_id?: string | null
           created_at?: string
           currency?: string
           display_name?: string | null
@@ -846,6 +851,7 @@ export type Database = {
           paid_at?: string | null
           platform_fee_cents?: number
           refunded_at?: string | null
+          refunded_cents?: number
           status?: string
           stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null

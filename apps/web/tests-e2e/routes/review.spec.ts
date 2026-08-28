@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 function setConsentAccepted() {
 	localStorage.setItem(
@@ -69,14 +70,17 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 		const filled = card.locator('.star-display.filled');
 		await expect(filled).toHaveCount(4);
 
-		const inserted = await admin
-			.from('route_reviews')
-			.select('rating, comment')
-			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
-			.eq('user_id', USER_A.id)
-			.single();
-		expect((inserted.data as { rating: number }).rating).toBe(4);
-		expect((inserted.data as { comment: string }).comment).toBe(comment);
+		const inserted = await readRow(
+			'route_reviews by route_id+user_id',
+			admin
+				.from('route_reviews')
+				.select('rating, comment')
+				.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+				.eq('user_id', USER_A.id)
+				.single()
+		);
+		expect((inserted as { rating: number }).rating).toBe(4);
+		expect((inserted as { comment: string }).comment).toBe(comment);
 
 		await page.getByRole('button', { name: 'Rate', exact: true }).click();
 		const editStars = page.locator('.review-form .star-row .star-btn');
@@ -91,13 +95,16 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 		await expect(editedCard).toBeVisible({ timeout: 10_000 });
 		await expect(editedCard.locator('.star-display.filled')).toHaveCount(5);
 
-		const edited = await admin
-			.from('route_reviews')
-			.select('rating')
-			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
-			.eq('user_id', USER_A.id)
-			.single();
-		expect((edited.data as { rating: number }).rating).toBe(5);
+		const edited = await readRow(
+			'route_reviews by route_id+user_id',
+			admin
+				.from('route_reviews')
+				.select('rating')
+				.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+				.eq('user_id', USER_A.id)
+				.single()
+		);
+		expect((edited as { rating: number }).rating).toBe(5);
 
 		// Delete through the UI: one click on the author's own delete button,
 		// no confirm — the mutation is DEFERRED for the undo window
@@ -158,13 +165,16 @@ test.describe('/routes/[id] reviews — submit, edit, delete', () => {
 
 		// Same id, not a re-insert: nothing was destroyed while the offer
 		// stood, which is the whole point of the deferred contract.
-		const after = await admin
-			.from('route_reviews')
-			.select('id')
-			.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
-			.eq('user_id', USER_A.id)
-			.single();
-		expect((after.data as { id: string }).id).toBe((before.data as { id: string }).id);
+		const after = await readRow(
+			'route_reviews by route_id+user_id',
+			admin
+				.from('route_reviews')
+				.select('id')
+				.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+				.eq('user_id', USER_A.id)
+				.single()
+		);
+		expect((after as { id: string }).id).toBe((before.data as { id: string }).id);
 	});
 
 	test('Submit disables while the upsert is in flight (no double-submit)', async ({ page }) => {

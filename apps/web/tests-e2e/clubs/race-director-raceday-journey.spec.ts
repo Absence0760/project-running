@@ -10,6 +10,7 @@ import {
 	insertRacePings
 } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readCount, readRow } from '../fixtures/db-read';
 
 /**
  * Race-director race-day operations — the full stitched journey
@@ -177,15 +178,18 @@ test.describe('saga: race director runs a race day end-to-end', () => {
 				});
 				await expect(director.getByRole('button', { name: 'GO' })).toBeVisible();
 
-				const { data } = await getAdminClient()
-					.from('race_sessions')
-					.select('status, is_auto_approve')
-					.eq('event_id', eventId!)
-					.eq('instance_start', instance)
-					.single();
-				expect(data?.status).toBe('armed');
+				const data = await readRow(
+					'race_sessions by event_id+instance_start',
+					getAdminClient()
+						.from('race_sessions')
+						.select('status, is_auto_approve')
+						.eq('event_id', eventId!)
+						.eq('instance_start', instance)
+						.single()
+				);
+				expect(data.status).toBe('armed');
 				// Default "Auto-approve submitted results" stays checked.
-				expect(data?.is_auto_approve).toBe(true);
+				expect(data.is_auto_approve).toBe(true);
 			});
 
 			await test.step('start the race — server stamps started_at, panel goes running', async () => {
@@ -195,15 +199,18 @@ test.describe('saga: race director runs a race day end-to-end', () => {
 				});
 				await expect(director.getByRole('button', { name: 'End race' })).toBeVisible();
 
-				const { data } = await getAdminClient()
-					.from('race_sessions')
-					.select('status, started_at, started_by')
-					.eq('event_id', eventId!)
-					.eq('instance_start', instance)
-					.single();
-				expect(data?.status).toBe('running');
-				expect(data?.started_at).not.toBeNull();
-				expect(data?.started_by).toBe(USER_A.id);
+				const data = await readRow(
+					'race_sessions by event_id+instance_start',
+					getAdminClient()
+						.from('race_sessions')
+						.select('status, started_at, started_by')
+						.eq('event_id', eventId!)
+						.eq('instance_start', instance)
+						.single()
+				);
+				expect(data.status).toBe('running');
+				expect(data.started_at).not.toBeNull();
+				expect(data.started_by).toBe(USER_A.id);
 
 				// The board derives each runner's elapsed-since-start from
 				// race_sessions.started_at. handleStart stamps it at ~now, but
@@ -250,11 +257,14 @@ test.describe('saga: race director runs a race day end-to-end', () => {
 						}
 					]
 				});
-				const { count } = await getAdminClient()
-					.from('race_pings')
-					.select('id', { count: 'exact', head: true })
-					.eq('event_id', eventId!)
-					.eq('instance_start', instance);
+				const count = await readCount(
+					'race_pings by event_id+instance_start',
+					getAdminClient()
+						.from('race_pings')
+						.select('id', { count: 'exact', head: true })
+						.eq('event_id', eventId!)
+						.eq('instance_start', instance)
+				);
 				expect(count).toBe(3);
 			});
 
@@ -448,15 +458,18 @@ test.describe('saga: race director runs a race day end-to-end', () => {
 				await expect(adaResult.getByText('PENDING')).toHaveCount(0);
 
 				// DB cross-check: the finisher row is organiser_approved.
-				const { data } = await getAdminClient()
-					.from('event_results')
-					.select('organiser_approved, finisher_status')
-					.eq('event_id', eventId!)
-					.eq('instance_start', instance)
-					.eq('user_id', ada.id)
-					.single();
-				expect(data?.organiser_approved).toBe(true);
-				expect(data?.finisher_status).toBe('finished');
+				const data = await readRow(
+					'event_results by event_id+instance_start+user_id',
+					getAdminClient()
+						.from('event_results')
+						.select('organiser_approved, finisher_status')
+						.eq('event_id', eventId!)
+						.eq('instance_start', instance)
+						.eq('user_id', ada.id)
+						.single()
+				);
+				expect(data.organiser_approved).toBe(true);
+				expect(data.finisher_status).toBe('finished');
 			});
 
 			await test.step('public results page lists finishers + checkpoint splits', async () => {

@@ -4,7 +4,7 @@ import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertRun } from '../fixtures/simulate';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Coach <-> athlete roster lifecycle JOURNEY, told from the angle the existing
@@ -167,14 +167,17 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 				inviteToken = match![1];
 				expect(inviteToken.length).toBeGreaterThan(0);
 
-				const { data } = await getAdminClient()
-					.from('coach_athletes')
-					.select('invite_token, status, athlete_id')
-					.eq('coach_id', coach.id)
-					.is('athlete_id', null)
-					.single();
-				expect(data?.invite_token).toBe(inviteToken);
-				expect(data?.status).toBe('pending');
+				const data = await readRow(
+					'coach_athletes by coach_id+athlete_id',
+					getAdminClient()
+						.from('coach_athletes')
+						.select('invite_token, status, athlete_id')
+						.eq('coach_id', coach.id)
+						.is('athlete_id', null)
+						.single()
+				);
+				expect(data.invite_token).toBe(inviteToken);
+				expect(data.status).toBe('pending');
 			});
 
 			await test.step('athlete redeems the invite in a second context', async () => {
@@ -192,14 +195,17 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 				});
 
 				// The link is active in the DB — the invite was consumed by THIS athlete.
-				const { data } = await getAdminClient()
-					.from('coach_athletes')
-					.select('status, athlete_id')
-					.eq('coach_id', coach.id)
-					.eq('invite_token', inviteToken)
-					.single();
-				expect(data?.status).toBe('active');
-				expect(data?.athlete_id).toBe(athlete.id);
+				const data = await readRow(
+					'coach_athletes by coach_id+invite_token',
+					getAdminClient()
+						.from('coach_athletes')
+						.select('status, athlete_id')
+						.eq('coach_id', coach.id)
+						.eq('invite_token', inviteToken)
+						.single()
+				);
+				expect(data.status).toBe('active');
+				expect(data.athlete_id).toBe(athlete.id);
 
 				await athletePage.close();
 			});
@@ -289,13 +295,16 @@ test.describe('coach <-> athlete roster lifecycle: private-run visibility tier (
 
 				// The link row is ended (not deleted) — `is_active_coach_of` only
 				// matches 'active', so this severs the §98 private-run visibility.
-				const { data } = await getAdminClient()
-					.from('coach_athletes')
-					.select('status')
-					.eq('coach_id', coach.id)
-					.eq('athlete_id', athlete.id)
-					.single();
-				expect(data?.status).toBe('ended');
+				const data = await readRow(
+					'coach_athletes by coach_id+athlete_id',
+					getAdminClient()
+						.from('coach_athletes')
+						.select('status')
+						.eq('coach_id', coach.id)
+						.eq('athlete_id', athlete.id)
+						.single()
+				);
+				expect(data.status).toBe('ended');
 			});
 
 			await test.step('the athlete no longer sees the coach (link ended on both sides)', async () => {

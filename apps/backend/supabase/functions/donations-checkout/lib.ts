@@ -54,19 +54,83 @@ export function clampText(value: unknown, maxLen: number): string | null {
 
 /// Stripe request-idempotency key for the donation Checkout Session create.
 ///
-/// Scoped to ONE invocation, and only that. The donation id it is built from is
-/// minted by `crypto.randomUUID()` inside the request, so there is no "same
-/// row" for a later call to resolve to: the key makes the SDK's own retry of
-/// that single HTTP request safe and provides no dedupe across invocations,
-/// which is what this was documented as doing. A donor double-click therefore
-/// opens two sessions against two pending rows; the unpaid one lapses to
-/// `canceled` on `checkout.session.expired`, but a donor who completes both is
-/// charged twice. events-checkout avoids that by resolving a live hold first
-/// (`resolveHold`) — a donation has no seat to hold and repeat giving is
-/// legitimate, so the same treatment is a product decision rather than an
-/// obvious fix. decisions § 769.
+/// Load-bearing only because the donation id it is built from is now STABLE
+/// across a retry: `resolveDonationIntent` resolves the caller's own
+/// per-attempt key to the pending donation the first attempt opened, and the
+/// second call rebuilds byte-identical params against that same row — so
+/// Stripe replays the original session instead of opening a second one.
+///
+/// It was not stable before (decisions § 769): the id was minted by
+/// `crypto.randomUUID()` inside the request, so no later invocation could
+/// resolve to the same key and the guard covered the SDK's retry of one HTTP
+/// request and nothing more. decisions § 776.
 export function donationIdempotencyKey(donationId: string): string {
   return `donations-checkout:${donationId}`;
+}
+
+/// The pending donation a client idempotency key may resolve to, as read back
+/// from the ledger.
+export interface DonationIntentRow {
+  id: string;
+  status: string;
+  fundraiser_id: string;
+  amount_cents: number;
+  donor_user_id: string | null;
+}
+
+/// What this request is asking for, in the terms the resolution compares.
+export interface DonationIntentRequest {
+  fundraiserId: string;
+  amountCents: number;
+  donorUserId: string | null;
+}
+
+export type DonationIntent =
+  | { action: 'open'; }
+  | { action: 'resume'; donationId: string }
+  | { action: 'conflict'; reason: 'params_changed' | 'already_used' };
+
+/// Decide what a donation checkout carrying a client idempotency key should do.
+///
+/// The three answers are Stripe's own semantics for a reused key, because this
+/// is the same instrument one layer down:
+///
+///   * no row for the key            -> `open` a new donation,
+///   * a PENDING row, same request   -> `resume` it (rebuild the same Stripe
+///                                      params against the same donation id, so
+///                                      Stripe replays the session already
+///                                      open and the donor cannot be charged
+///                                      twice),
+///   * a row for a DIFFERENT request -> `conflict: params_changed`,
+///   * a row that is no longer pending -> `conflict: already_used`.
+///
+/// The comparison is what makes the key safe to accept from a client. A guessed
+/// or replayed key that does not also match the fundraiser, the amount AND the
+/// donor resolves to nothing rather than handing the caller someone else's
+/// open Checkout Session; guessing a v4 UUID is already infeasible, and this
+/// makes the consequence of guessing one nil rather than small.
+///
+/// `already_used` is deliberately a refusal and not a fresh donation. A key
+/// whose row is already `paid` means the donor's client is retrying an attempt
+/// that in fact completed — opening a new donation there would charge them a
+/// second time, which is the exact failure this whole mechanism exists to
+/// prevent. A genuinely new donation carries a genuinely new key.
+export function resolveDonationIntent(
+  existing: DonationIntentRow | null,
+  request: DonationIntentRequest,
+): DonationIntent {
+  if (existing === null) return { action: 'open' };
+  if (
+    existing.fundraiser_id !== request.fundraiserId ||
+    existing.amount_cents !== request.amountCents ||
+    (existing.donor_user_id ?? null) !== request.donorUserId
+  ) {
+    return { action: 'conflict', reason: 'params_changed' };
+  }
+  if (existing.status !== 'pending') {
+    return { action: 'conflict', reason: 'already_used' };
+  }
+  return { action: 'resume', donationId: existing.id };
 }
 
 /// A type ALIAS, not an interface. Stripe's `MetadataParam` is an index

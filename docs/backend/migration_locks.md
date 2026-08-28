@@ -193,24 +193,32 @@ grandfathers them by version.
 
 ## Forward guard
 
-`apps/backend/scripts/check_migration_online_safety.mjs` fails CI if a **new**
-migration adds a CHECK or FK to one of the high-volume tables without `NOT
-VALID`. It is deliberately narrow to stay low-false-positive: it only inspects
-migrations newer than a version cutoff (`GRANDFATHER_CUTOFF`, so the whole
-shipped history is grandfathered) and only guards the high-volume table set
-above (constraints on small config tables don't trip it). It runs in the
-`parity-types` CI job right after the version-uniqueness guard, and
-`check_migration_online_safety.test.mjs` pins the parse + detection logic. Run it
-locally before pushing a new migration:
+`apps/backend/scripts/check_migration_online_safety.mjs` fails CI if a migration
+adds a CHECK or FK to one of the high-volume tables without `NOT VALID`. It
+scans **every** committed migration on every run — 436 today — and it is
+deliberately narrow only in the table set it guards (constraints on small config
+tables don't trip it). It runs in the `parity-types` CI job right after the
+version-uniqueness guard, and `check_migration_online_safety.test.mjs` pins the
+parse + detection logic. Run it locally before pushing a new migration:
 
 ```bash
 node apps/backend/scripts/check_migration_online_safety.mjs
 ```
 
+**Adding a migration requires no edit to the guard.** The already-applied
+blocking constraints are grandfathered one at a time in
+`GRANDFATHERED_VIOLATIONS` — 32 entries, each naming a `{filename, table,
+constraint}` triple — rather than by a version cutoff. The cutoff it replaces
+had to be bumped past the newest migration by its own test, and the bump was
+what removed that migration from the scan, so the scanned set was empty at rest
+([decisions § 775](../architecture/decisions.md)). A name cannot do that: it
+exempts exactly the constraint it spells, and an entry that matches nothing in
+the tree fails the guard rather than sitting there as unused cover.
+
 If it flags a constraint you are certain is safe to validate inline (a genuinely
-small or empty table the guard's table set happens to include), bump
-`GRANDFATHER_CUTOFF` in the script and say why in the PR — the bump is the
-conscious, reviewed escape hatch, not a silent bypass.
+small or empty table the guard's table set happens to include), add that one
+constraint to `GRANDFATHERED_VIOLATIONS` and say why in the PR — a named entry
+is the conscious, reviewed escape hatch, not a silent bypass.
 
 ## Pre-merge checklist
 

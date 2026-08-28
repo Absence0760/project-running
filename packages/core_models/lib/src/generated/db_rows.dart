@@ -854,6 +854,8 @@ class DonationRow {
   static const String colCreatedAt = 'created_at';
   static const String colPaidAt = 'paid_at';
   static const String colRefundedAt = 'refunded_at';
+  static const String colClientRequestId = 'client_request_id';
+  static const String colRefundedCents = 'refunded_cents';
 
   final String id;
   final String fundraiserId;
@@ -871,6 +873,8 @@ class DonationRow {
   final DateTime createdAt;
   final DateTime? paidAt;
   final DateTime? refundedAt;
+  final String? clientRequestId;
+  final int refundedCents;
 
   const DonationRow({
     required this.id,
@@ -889,6 +893,8 @@ class DonationRow {
     required this.createdAt,
     this.paidAt,
     this.refundedAt,
+    this.clientRequestId,
+    required this.refundedCents,
   });
 
   factory DonationRow.fromJson(Map<String, dynamic> json) => DonationRow(
@@ -908,6 +914,8 @@ class DonationRow {
     createdAt: DateTime.parse(json['created_at'] as String),
     paidAt: json['paid_at'] == null ? null : DateTime.parse(json['paid_at'] as String),
     refundedAt: json['refunded_at'] == null ? null : DateTime.parse(json['refunded_at'] as String),
+    clientRequestId: json['client_request_id'] as String?,
+    refundedCents: (json['refunded_cents'] as num).toInt(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -927,6 +935,8 @@ class DonationRow {
     colCreatedAt: createdAt.toIso8601String(),
     colPaidAt: paidAt?.toIso8601String(),
     colRefundedAt: refundedAt?.toIso8601String(),
+    colClientRequestId: clientRequestId,
+    colRefundedCents: refundedCents,
   };
 }
 

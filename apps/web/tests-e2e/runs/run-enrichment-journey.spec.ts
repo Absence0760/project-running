@@ -7,6 +7,7 @@ import {
 	type SagaUser,
 } from '../fixtures/saga-users';
 import { deleteRun, deleteRoute, insertRun, insertRoute } from '../fixtures/simulate';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Single-run ENRICHMENT lifecycle — the arc a GPS-recorded run takes
@@ -272,13 +273,16 @@ test.describe('single-run enrichment journey', () => {
 					).toBeVisible({ timeout: 5_000 });
 
 					// Backend cross-check + capture the Storage path for teardown.
-					const { data: photoRows } = await admin
-						.from('run_photos')
-						.select('storage_path, caption')
-						.eq('run_id', runId);
-					expect(photoRows?.length).toBe(1);
-					expect((photoRows?.[0] as { caption: string }).caption).toBe(caption);
-					photoStoragePath = (photoRows?.[0] as { storage_path: string })
+					const photoRows = await readRows(
+						'run_photos by run_id',
+						admin
+							.from('run_photos')
+							.select('storage_path, caption')
+							.eq('run_id', runId)
+					);
+					expect(photoRows.length).toBe(1);
+					expect((photoRows[0] as { caption: string }).caption).toBe(caption);
+					photoStoragePath = (photoRows[0] as { storage_path: string })
 						.storage_path;
 
 					// Gear: the saga user has no gear yet, so plant one shoe via
@@ -323,11 +327,14 @@ test.describe('single-run enrichment journey', () => {
 					).toBeVisible({ timeout: 10_000 });
 
 					// Backend cross-check on the run_gear link.
-					const { data: linkRows } = await admin
-						.from('run_gear')
-						.select('gear_id')
-						.eq('run_id', runId);
-					expect(linkRows?.some((r) => (r as { gear_id: string }).gear_id === gearId))
+					const linkRows = await readRows(
+						'run_gear by run_id',
+						admin
+							.from('run_gear')
+							.select('gear_id')
+							.eq('run_id', runId)
+					);
+					expect(linkRows.some((r) => (r as { gear_id: string }).gear_id === gearId))
 						.toBe(true);
 				});
 

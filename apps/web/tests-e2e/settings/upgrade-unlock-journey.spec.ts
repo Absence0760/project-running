@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Upgrade-unlock journey — one free user walks the whole "I hit a
@@ -164,12 +165,15 @@ test.describe('upgrade-unlock journey', () => {
 
 			// ── 6. Backend cross-check of the authoritative column ──────
 			await test.step('backend confirms subscription_tier is pro', async () => {
-				const { data: row } = await admin
-					.from('user_profiles')
-					.select('subscription_tier')
-					.eq('id', USER_A.id)
-					.single();
-				expect(row?.subscription_tier).toBe('pro');
+				const row = await readRow(
+					'user_profiles by id',
+					admin
+						.from('user_profiles')
+						.select('subscription_tier')
+						.eq('id', USER_A.id)
+						.single()
+				);
+				expect(row.subscription_tier).toBe('pro');
 			});
 		} finally {
 			// ── 7. RESTORE: USER_A must go back to free, usage row gone ──

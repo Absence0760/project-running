@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { clearNotifications, deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readCount } from '../fixtures/db-read';
 
 /**
  * Notifications journey — cross-user engagement drives ONE notification
@@ -209,11 +210,14 @@ test.describe('notifications journey — engagement → bell → inbox → read'
 			await test.step('three unread notifications landed for runner', async () => {
 				const admin = getAdminClient();
 				await expect(async () => {
-					const { count } = await admin
-						.from('notifications')
-						.select('*', { count: 'exact', head: true })
-						.eq('user_id', USER_A.id)
-						.is('read_at', null);
+					const count = await readCount(
+						'notifications by user_id+read_at',
+						admin
+							.from('notifications')
+							.select('*', { count: 'exact', head: true })
+							.eq('user_id', USER_A.id)
+							.is('read_at', null)
+					);
 					expect(count).toBe(3);
 				}).toPass({ timeout: 10_000 });
 			});

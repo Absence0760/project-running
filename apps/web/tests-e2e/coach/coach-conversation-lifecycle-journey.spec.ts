@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readCount } from '../fixtures/db-read';
 
 /**
  * AI-coach conversation-LIFECYCLE journey — one fresh runner walks the
@@ -272,11 +273,14 @@ test.describe('AI coach — conversation lifecycle (active → archive → Histo
 				await expect(archiveRow).toHaveCount(0, { timeout: 10_000 });
 
 				// ...and gone from the backend — both planted rows deleted.
-				const { count } = await admin
-					.from('coach_messages')
-					.select('id', { count: 'exact', head: true })
-					.eq('user_id', user.id);
-				expect(count ?? 0).toBe(0);
+				const count = await readCount(
+					'coach_messages by user_id',
+					admin
+						.from('coach_messages')
+						.select('id', { count: 'exact', head: true })
+						.eq('user_id', user.id)
+				);
+				expect(count).toBe(0);
 			});
 		} finally {
 			// Teardown: drop every coach_messages row + the planted run for

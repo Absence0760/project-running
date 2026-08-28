@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Session follow-along player (session_planner.md P2 / instructor M5) — drives
@@ -248,11 +249,14 @@ test.describe('/sessions/[id] — follow-along player', () => {
 
 		// Nothing was logged for this plan.
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('gym_workouts')
-			.select('id, metadata')
-			.eq('user_id', USER_A.id);
-		const matches = ((rows ?? []) as { id: string; metadata: Record<string, unknown> }[]).filter(
+		const rows = await readRows(
+			'gym_workouts by user_id',
+			admin
+				.from('gym_workouts')
+				.select('id, metadata')
+				.eq('user_id', USER_A.id)
+		);
+		const matches = (rows as { id: string; metadata: Record<string, unknown> }[]).filter(
 			(w) => w.metadata?.session_plan_id === planId
 		);
 		expect(matches.length).toBe(0);

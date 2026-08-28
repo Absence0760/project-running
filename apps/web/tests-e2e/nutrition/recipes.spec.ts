@@ -80,21 +80,27 @@ test.describe('/nutrition — recipes', () => {
 			await expect(recipeRow).toBeVisible({ timeout: 10_000 });
 
 			// Backend rows landed owner-scoped, with both ingredients nested.
-			const { data: rec } = await admin
-				.from('recipes')
-				.select('id, name, servings, ingredient_count, meal_slot, user_id')
-				.eq('user_id', USER_A.id)
-				.eq('name', recipeName);
-			expect(rec?.length).toBe(1);
+			const rec = await readRows(
+				'recipes by user_id+name',
+				admin
+					.from('recipes')
+					.select('id, name, servings, ingredient_count, meal_slot, user_id')
+					.eq('user_id', USER_A.id)
+					.eq('name', recipeName)
+			);
+			expect(rec.length).toBe(1);
 			recipeId = rec![0].id;
 			expect(rec![0].ingredient_count).toBe(2);
 			expect(Number(rec![0].servings)).toBe(2);
 			expect(rec![0].meal_slot).toBe('dinner');
-			const { data: ings } = await admin
-				.from('recipe_ingredients')
-				.select('item_name, calories')
-				.eq('recipe_id', recipeId);
-			expect(ings?.length).toBe(2);
+			const ings = await readRows(
+				'recipe_ingredients by recipe_id',
+				admin
+					.from('recipe_ingredients')
+					.select('item_name, calories')
+					.eq('recipe_id', recipeId)
+			);
+			expect(ings.length).toBe(2);
 
 			// One-tap log: a SINGLE food_log row appears under the recipe name,
 			// carrying the per-serving summed macros — (300+200)/2 = 250 kcal,
@@ -113,14 +119,17 @@ test.describe('/nutrition — recipes', () => {
 					{ timeout: 10_000 },
 				)
 				.toBe(1);
-			const { data: logged } = await admin
-				.from('food_log')
-				.select('calories, protein_g, meal_slot')
-				.eq('user_id', USER_A.id)
-				.eq('item_name', recipeName);
-			expect(Number(logged![0].calories)).toBe(250);
-			expect(Number(logged![0].protein_g)).toBe(25);
-			expect(logged![0].meal_slot).toBe('dinner');
+			const logged = await readRows(
+				'food_log by user_id+item_name',
+				admin
+					.from('food_log')
+					.select('calories, protein_g, meal_slot')
+					.eq('user_id', USER_A.id)
+					.eq('item_name', recipeName)
+			);
+			expect(Number(logged[0].calories)).toBe(250);
+			expect(Number(logged[0].protein_g)).toBe(25);
+			expect(logged[0].meal_slot).toBe('dinner');
 
 			// Delete the recipe behind the confirm dialog.
 			await recipeRow.getByRole('button', { name: `Delete ${recipeName}` }).click();

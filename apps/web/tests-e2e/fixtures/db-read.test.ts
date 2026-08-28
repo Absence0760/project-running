@@ -73,11 +73,28 @@ test('a null payload with no error is still refused rather than coalesced', asyn
 });
 
 /*
- * Source guard. The class this module exists to kill is a destructure that
- * drops `error` and then coalesces the absence into a value an `expect`
- * compares against — `expect(Number(row?.total ?? 0)).toBe(6000)` blames the
- * feature for a read that never ran, and `expect(rows ?? []).toEqual([])` is
- * SATISFIED by one. Both shapes are mechanical, so both are checkable.
+ * Source guard.
+ *
+ * The first version of this guard banned one shape: a destructured `{ data }`
+ * coalesced into a literal on the same line as an `expect`. That is how the
+ * defect was first met — `expect(Number(row?.total ?? 0)).toBe(6000)` blaming
+ * a mileage trigger for a service-role read that never ran — but it is only
+ * how it was first met. Sweeping the tree for the whole class found the same
+ * swallow wearing four other costumes: a bare `?.` into the assertion, a
+ * `!`, a `(row as { field: T })` cast, and no absorber at all, where the
+ * read's own `null` was already the value the matcher wanted. Thirty of
+ * those PASSED on a read that never reached the table, most of them RLS
+ * negatives and Art 17 cascade checks (decisions.md § 777).
+ *
+ * So the rule here is not a taxonomy of absorbers — a taxonomy only ever
+ * catches the costumes someone has already seen. It is the shape underneath:
+ * a binding taken from a Supabase read whose `error` is never consulted may
+ * not appear inside an `expect(...)` at all. Read it through readRow /
+ * readRows / readMaybeRow / readCount, and the read fails as itself.
+ *
+ * A read whose result is used for something other than an assertion (an id
+ * captured for teardown, a value fed to the next insert) is out of scope:
+ * it has no cross-check to corrupt, and it fails loudly on its own.
  */
 
 /** Source with comments removed, so prose describing the bug never trips it. */
@@ -89,59 +106,122 @@ function withoutComments(source: string): string {
 		.join('\n');
 }
 
-const DESTRUCTURE = /const\s*\{([^}]*)\}\s*=\s*await\b/g;
-/** A coalesce that manufactures a concrete, legitimate-looking value. */
-const FABRICATES = /(\?\?|\|\|)\s*(0\b|\[\]|''|"")/;
-const ASSERTS = /expect\(|toBe|toEqual|toContain|toHaveLength|toHaveCount/;
+/**
+ * String CONTENTS replaced by spaces, offsets preserved. Two things need it:
+ * a table name is not a reference to a like-named binding (`'routine-history'`
+ * is not the binding `history`), and a paren inside a message would otherwise
+ * unbalance the walk that finds where an `expect(` argument ends.
+ */
+function blankStringContents(source: string): string {
+	return source.replace(/'[^'\n]*'|"[^"\n]*"/g, (m) => m[0] + ' '.repeat(m.length - 2) + m[0]);
+}
 
-function typescriptSources(dir: string, out: string[] = []): string[] {
-	for (const entry of readdirSync(dir)) {
-		if (entry === 'node_modules' || entry === '.auth') continue;
-		const full = join(dir, entry);
-		if (statSync(full).isDirectory()) typescriptSources(full, out);
-		else if (full.endsWith('.ts')) out.push(full);
+/** The argument text of every `expect(...)`, by matching paren. */
+function expectArguments(source: string): Array<{ from: number; text: string }> {
+	const out: Array<{ from: number; text: string }> = [];
+	const call = /\bexpect\s*\(/g;
+	let match: RegExpExecArray | null;
+	while ((match = call.exec(source))) {
+		let depth = 1;
+		let i = call.lastIndex;
+		while (i < source.length && depth > 0) {
+			if (source[i] === '(') depth++;
+			else if (source[i] === ')') depth--;
+			i++;
+		}
+		out.push({ from: match.index, text: source.slice(call.lastIndex, i - 1) });
 	}
 	return out;
 }
 
+/** A supabase read, as opposed to any other awaited call. */
+const READS_THE_DB = /\.(from|rpc)\s*\(|\.storage\b|auth\.admin\./;
+/** Already routed through this module — the whole point, not an offence. */
+const THROUGH_FIXTURE = /^\s*(readRow|readRows|readMaybeRow|readCount)\s*\(/;
+const DECLARATION = /\b(?:const|let)\s+(\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*await\s([\s\S]*?);/g;
+
 /**
- * Lines where a binding taken from an awaited `{ data }` — with no `error`
- * beside it — is fabricated into a value inside an assertion.
+ * Lines where a binding from a read that dropped its error is judged by an
+ * `expect`. The binding is live from its declaration until the name is
+ * declared again, which is as much scope as a source-level scan can see and
+ * errs towards reporting rather than missing.
  */
 function swallowedReadLines(file: string): number[] {
-	const source = withoutComments(readFileSync(file, 'utf8'));
-	const lines = source.split('\n');
-	const hits: number[] = [];
+	const source = blankStringContents(withoutComments(readFileSync(file, 'utf8')));
+	const lineOf = (index: number) => source.slice(0, index).split('\n').length;
+	const asserts = expectArguments(source);
+	const hits = new Set<number>();
 	let match: RegExpExecArray | null;
-	DESTRUCTURE.lastIndex = 0;
-	while ((match = DESTRUCTURE.exec(source))) {
-		const bound = match[1];
-		if (/\berror\b/.test(bound)) continue;
-		if (!/\bdata\b/.test(bound)) continue;
-		const alias = /\bdata\s*:\s*([A-Za-z_$][\w$]*)/.exec(bound)?.[1] ?? 'data';
-		const declLine = source.slice(0, match.index).split('\n').length;
-		const mentions = new RegExp(`\\b${alias}\\b`);
-		const rebinds = new RegExp(`const\\s*\\{[^}]*\\b${alias}\\b`);
-		for (let i = declLine; i < lines.length; i++) {
-			if (!mentions.test(lines[i])) continue;
-			if (rebinds.test(lines[i])) break;
-			if (FABRICATES.test(lines[i]) && ASSERTS.test(lines[i])) hits.push(i + 1);
+	DECLARATION.lastIndex = 0;
+	while ((match = DECLARATION.exec(source))) {
+		const [, bound, initializer] = match;
+		if (!READS_THE_DB.test(initializer) || THROUGH_FIXTURE.test(initializer)) continue;
+
+		let binding: string | null = null;
+		let viaData = false;
+		if (bound.startsWith('{')) {
+			const named = (prop: string) =>
+				new RegExp(`\\b${prop}\\b\\s*(?::\\s*([A-Za-z_$][\\w$]*))?`).exec(bound);
+			const error = named('error');
+			// An error that is read somewhere is an error that was not dropped.
+			if (error) {
+				const local = error[1] ?? 'error';
+				if ([...source.matchAll(new RegExp(`\\b${local}\\b`, 'g'))].length > 1) continue;
+			}
+			const data = named('data') ?? named('count');
+			if (!data) continue;
+			binding = data[1] ?? data[0].trim();
+		} else {
+			binding = bound;
+			viaData = true;
+			if (new RegExp(`\\b${binding}\\s*\\.\\s*error\\b`).test(source)) continue;
+		}
+
+		const declaredAt = match.index;
+		const redeclared = new RegExp(`\\b(?:const|let)\\s+(?:\\{[^}]*\\b${binding}\\b|${binding}\\b)`, 'g');
+		redeclared.lastIndex = declaredAt + match[0].length;
+		const until = redeclared.exec(source)?.index ?? source.length;
+		const reference = viaData
+			? new RegExp(`\\b${binding}\\s*\\.\\s*data\\b`)
+			: new RegExp(`\\b${binding}\\b`);
+
+		for (const { from, text } of asserts) {
+			if (from <= declaredAt || from >= until) continue;
+			if (reference.test(text)) hits.add(lineOf(from));
 		}
 	}
-	return hits;
+	return [...hits].sort((a, b) => a - b);
 }
 
 /**
- * Specs allowed to keep the shape, each with why. Every entry is asserted to
- * still match, so the list cannot rot into a set of stale exemptions — a
- * converted file must be deleted from it, and a new one may not be added
- * without a reason that survives being read out loud.
+ * Reads allowed to keep the raw shape, each with why. Every entry is
+ * asserted to still match and to carry a reason, so the list cannot rot into
+ * a set of stale exemptions — a converted file must be deleted from it, and a
+ * new one may not be added without a reason that survives being read aloud.
+ *
+ * Empty, and it should stay that way: an exemption here is a cross-check that
+ * cannot say whether it looked. The one read whose error genuinely IS the
+ * answer — GoTrue reports a deleted user with a 404 rather than a null row —
+ * asserts that the status is 404 before reading the absence, which is a fix
+ * rather than an exemption.
  */
 const SWALLOWED_READ_ALLOWED: Record<string, string> = {};
 
-test('no spec asserts against a value fabricated from a read whose error it dropped', () => {
+const SCANNED = ['.ts', '.mjs'];
+
+function scannedSources(dir: string, out: string[] = []): string[] {
+	for (const entry of readdirSync(dir)) {
+		if (entry === 'node_modules' || entry === '.auth') continue;
+		const full = join(dir, entry);
+		if (statSync(full).isDirectory()) scannedSources(full, out);
+		else if (SCANNED.some((ext) => full.endsWith(ext))) out.push(full);
+	}
+	return out;
+}
+
+test('no spec judges a feature by a read whose error it dropped', () => {
 	const offenders: string[] = [];
-	for (const file of typescriptSources(E2E_ROOT)) {
+	for (const file of scannedSources(E2E_ROOT)) {
 		const rel = relative(E2E_ROOT, file);
 		if (rel === 'fixtures/db-read.ts' || rel === 'fixtures/db-read.test.ts') continue;
 		if (rel in SWALLOWED_READ_ALLOWED) continue;
@@ -151,16 +231,20 @@ test('no spec asserts against a value fabricated from a read whose error it drop
 	assert.deepEqual(
 		offenders,
 		[],
-		'These lines drop a read error and then coalesce the absence into the value an assertion ' +
-			'compares against. Against a non-zero expectation that blames the feature for a read ' +
-			'that never ran; against a zero/empty one the assertion PASSES and stops testing ' +
-			'anything (decisions.md § 732). Read through fixtures/db-read.ts — readRow / readRows / ' +
+		'These assertions judge the feature by a read whose error was discarded. Against a ' +
+			'non-zero expectation the read failing blames the feature; against a zero, empty or ' +
+			'null one the assertion PASSES and the cross-check stops testing anything ' +
+			'(decisions.md § 777). Read through fixtures/db-read.ts — readRow / readRows / ' +
 			`readMaybeRow / readCount — so the read fails as itself: ${offenders.join(' ')}`
 	);
 });
 
-test('every allowed swallowed read still exists and still matches', () => {
+test('every allowed swallowed read still exists, still matches, and says why', () => {
 	for (const [rel, reason] of Object.entries(SWALLOWED_READ_ALLOWED)) {
+		assert.ok(
+			reason.trim().length > 0,
+			`${rel} is exempt from the swallowed-read guard with no reason given — say why, or convert it.`
+		);
 		const file = join(E2E_ROOT, rel);
 		assert.ok(
 			statSync(file).isFile(),

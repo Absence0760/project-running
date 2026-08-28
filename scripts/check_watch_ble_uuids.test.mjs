@@ -233,3 +233,86 @@ test('a parse that reads nothing fails loudly instead of passing vacuously', () 
 	assert.match(blind.errors[0], /Parsed no GATT rows/);
 	assert.match(blind.errors[1], /Parsed no Uuid constants/);
 });
+
+// ───────────── decisions § 773 — both parsers read comments ─────────────
+
+// The service match was not global, so the first `gatt_service(uuid = "…")`
+// ANYWHERE in ble.rs won — and the module doc is above the declaration.
+test('a UUID quoted in the firmware module doc does not answer for the declaration', () => {
+	const src =
+		`//! The service is \`gatt_service(uuid = "aaaaaaaa-0000-0000-0000-000000000000")\`.\n` +
+		fakeFirmware(ALIGNED_ROWS);
+	assert.equal(parseFirmware(src).get('service'), U(0));
+});
+
+// The characteristic scan is last-writer-wins, so a table preserved in a
+// TRAILING comment overwrote every live row.
+test('a table preserved in a trailing firmware comment does not overwrite the live one', () => {
+	const shifted = ALIGNED_ROWS.map(([name], i) => /** @type {Row} */ ([name, U(i + 2)]));
+	const src =
+		fakeFirmware(shifted) +
+		'\n// Previous layout, kept while the migration lands:\n' +
+		fakeFirmware(ALIGNED_ROWS)
+			.split('\n')
+			.map((l) => `// ${l}`)
+			.join('\n');
+	const parsed = parseFirmware(src);
+	assert.equal(parsed.get('frame'), U(2));
+	assert.equal(parsed.get('run_manifest'), U(3));
+});
+
+// The whole point: this is § 410's one-row shift, and before the fix it
+// produced zero errors and a full set of [OK] lines.
+test('a shifted firmware table with the old one in a comment is caught, not certified', () => {
+	const shifted = ALIGNED_ROWS.map(([name], i) => /** @type {Row} */ ([name, U(i + 2)]));
+	const src =
+		fakeFirmware(shifted) +
+		'\n' +
+		fakeFirmware(ALIGNED_ROWS)
+			.split('\n')
+			.map((l) => `// ${l}`)
+			.join('\n');
+	const { errors, ok } = compareTables(parseFirmware(src), parseDart(fakeDart(ALIGNED_CONSTS)));
+	assert.ok(errors.length > 0, 'a one-row shift must not read as agreement');
+	assert.ok(errors.some((e) => /UUID drift on "frame"/.test(e)));
+	assert.equal(ok.length, 1, 'only the service, whose UUID did not move, still agrees');
+});
+
+// The Dart window is 40 characters, which crosses the `//` of a commented-out
+// declaration and reads its initialiser as live.
+test('a commented-out Dart constant is not read as a live one', () => {
+	const src =
+		`class X {\n` +
+		`  // static final Uuid frameCharUuid =\n` +
+		`  //     Uuid.parse('${U(1)}');\n` +
+		`  static final Uuid frameCharUuid =\n      Uuid.parse('${U('f')}');\n` +
+		`}\n`;
+	assert.deepEqual([...parseDart(src)], [['frameCharUuid', U('f')]]);
+});
+
+test('a UUID inside a Dart doc comment is not a constant', () => {
+	const src =
+		`/// The table mirrors the firmware: \`..e1\` frame.\n` +
+		`/// static final Uuid frameCharUuid = Uuid.parse('${U(1)}');\n` +
+		`class X {}\n`;
+	assert.deepEqual([...parseDart(src)], []);
+});
+
+// Which of two GATT tables the phone talks to is not something this parser can
+// know, and the first-match-wins read was answering anyway.
+test('a second gatt_service declaration throws rather than picking one', () => {
+	assert.throws(
+		() => parseFirmware(fakeFirmware(ALIGNED_ROWS) + fakeFirmware(ALIGNED_ROWS)),
+		/2 gatt_service declarations/,
+	);
+});
+
+// Measured while fixing it: the committed files carry no UUID in a comment, so
+// the misread was latent — a measurement rather than a claim.
+test('blanking comments changes nothing about the committed tables', () => {
+	const fw = parseFirmware(readFileSync(FIRMWARE_FILE, 'utf-8'));
+	const dt = parseDart(readFileSync(DART_FILE, 'utf-8'));
+	assert.equal(fw.size, PAIRS.length + UNCLAIMED.length);
+	assert.equal(dt.size, PAIRS.length);
+	assert.deepEqual(compareTables(fw, dt).errors, []);
+});

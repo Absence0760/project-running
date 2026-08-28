@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { waterStorageKey } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Nutrition day-in-the-life journey — one long, multi-step walk through the
@@ -126,12 +127,15 @@ test.describe('/nutrition — day-in-the-life journey', () => {
 			await expect.poll(consumedKcal).toBe(baseKcal + ITEM_KCAL);
 
 			// Backend row exists, owned by USER_A, in the chosen slot.
-			const { data: created } = await admin
-				.from('food_log')
-				.select('id, meal_slot')
-				.eq('user_id', USER_A.id)
-				.eq('item_name', item);
-			expect(created?.length).toBe(1);
+			const created = await readRows(
+				'food_log by user_id+item_name',
+				admin
+					.from('food_log')
+					.select('id, meal_slot')
+					.eq('user_id', USER_A.id)
+					.eq('item_name', item)
+			);
+			expect(created.length).toBe(1);
 			expect(created![0].meal_slot).toBe('lunch');
 		});
 

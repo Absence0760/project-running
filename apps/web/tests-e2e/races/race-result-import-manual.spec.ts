@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Auto-match-on-record + manual paste import (race_calendar.md). A same-day,
@@ -84,22 +85,28 @@ test.describe('/runs/[id] — race result import', () => {
 		// No duplicate run was created; the existing run carries the metadata +
 		// the race_listing_id link (owner-only fields).
 		const admin = getAdminClient();
-		const { data: runs } = await admin
-			.from('runs')
-			.select('id, metadata, race_listing_id')
-			.eq('id', runId);
-		expect(runs?.length).toBe(1);
+		const runs = await readRows(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('id, metadata, race_listing_id')
+				.eq('id', runId)
+		);
+		expect(runs.length).toBe(1);
 		const meta = (runs![0].metadata ?? {}) as Record<string, unknown>;
 		expect(meta.chip_time).toBe('3:21:45');
 		expect(meta.race_name).toBe(raceName);
 		expect(runs![0].race_listing_id).toBe(listingId);
 
 		// The owner-only race keys are stripped from the public projection.
-		const { data: pub } = await admin
-			.from('public_runs')
-			.select('metadata, race_listing_id')
-			.eq('id', runId)
-			.maybeSingle();
+		const pub = await readMaybeRow(
+			'public_runs by id',
+			admin
+				.from('public_runs')
+				.select('metadata, race_listing_id')
+				.eq('id', runId)
+				.maybeSingle()
+		);
 		// Private run → not in public_runs at all; either way no chip_time leaks.
 		if (pub) {
 			const pmeta = (pub.metadata ?? {}) as Record<string, unknown>;

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /runs[id] — the NON-OWNER branch (issue #666).
@@ -129,12 +130,15 @@ test.describe('/runs/[id] — non-owner branch', () => {
 
 		// Wire-level: the row exists with alex as author. Rules out a purely
 		// optimistic render.
-		const { data } = await getAdminClient()
-			.from('run_comments')
-			.select('author_id, body')
-			.eq('run_id', publicRunId)
-			.eq('body', body)
-			.maybeSingle();
+		const data = await readMaybeRow(
+			'run_comments by run_id+body',
+			getAdminClient()
+				.from('run_comments')
+				.select('author_id, body')
+				.eq('run_id', publicRunId)
+				.eq('body', body)
+				.maybeSingle()
+		);
 		expect(data?.author_id).toBe(USER_B.id);
 	});
 
@@ -156,12 +160,15 @@ test.describe('/runs/[id] — non-owner branch', () => {
 		await kudosBtn.click();
 		await expect(kudosBtn).toHaveClass(/given/);
 
-		const { data } = await getAdminClient()
-			.from('run_kudos')
-			.select('user_id')
-			.eq('run_id', publicRunId)
-			.eq('user_id', USER_B.id)
-			.maybeSingle();
+		const data = await readMaybeRow(
+			'run_kudos by run_id+user_id',
+			getAdminClient()
+				.from('run_kudos')
+				.select('user_id')
+				.eq('run_id', publicRunId)
+				.eq('user_id', USER_B.id)
+				.maybeSingle()
+		);
 		expect(data?.user_id).toBe(USER_B.id);
 	});
 

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /gym programming engine — DEPTH coverage of the routines → supersets →
@@ -150,12 +151,15 @@ test.describe('/gym programming — routines → supersets → runner → progre
 			timeout: 10_000,
 		});
 
-		const { data: routines } = await admin
-			.from('gym_routines')
-			.select('id')
-			.eq('author_id', USER_A.id)
-			.eq('title', title);
-		expect(routines?.length).toBe(1);
+		const routines = await readRows(
+			'gym_routines by author_id+title',
+			admin
+				.from('gym_routines')
+				.select('id')
+				.eq('author_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(routines.length).toBe(1);
 		const routineId = routines![0].id as string;
 		seededRoutineIds.push(routineId);
 
@@ -167,20 +171,23 @@ test.describe('/gym programming — routines → supersets → runner → progre
 		// 2) Its detail reuses the promoted exercise + two planned sets.
 		await page.goto(`/gym/routines/${routineId}`);
 		await expect(page.getByTestId('routine-exercises')).toContainText(exercise, { timeout: 10_000 });
-		const { data: planSets } = await admin
-			.from('gym_routine_sets')
-			.select('target_reps_min, target_weight_kg')
-			.eq(
-				'routine_exercise_id',
-				(
-					await admin
-						.from('gym_routine_exercises')
-						.select('id')
-						.eq('routine_id', routineId)
-						.single()
-				).data!.id,
-			);
-		expect(planSets?.length).toBe(2);
+		const planSets = await readRows(
+			'gym_routine_sets by routine_exercise_id+routine_id',
+			admin
+				.from('gym_routine_sets')
+				.select('target_reps_min, target_weight_kg')
+				.eq(
+					'routine_exercise_id',
+					(
+						await admin
+							.from('gym_routine_exercises')
+							.select('id')
+							.eq('routine_id', routineId)
+							.single()
+					).data!.id,
+				)
+		);
+		expect(planSets.length).toBe(2);
 		expect(Number(planSets![0].target_weight_kg)).toBe(100);
 
 		// 3) Starting the promoted routine prefills the runner from those targets
@@ -387,12 +394,15 @@ test.describe('/gym programming — routines → supersets → runner → progre
 		await expect(page.getByTestId('gym-review-verdict')).toHaveText('Partial');
 
 		// And metadata.gym_adherence persists 'partial' on the workout row.
-		const { data: created } = await admin
-			.from('gym_workouts')
-			.select('metadata')
-			.eq('user_id', USER_A.id)
-			.eq('title', title);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'gym_workouts by user_id+title',
+			admin
+				.from('gym_workouts')
+				.select('metadata')
+				.eq('user_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(created.length).toBe(1);
 		const metadata = created![0].metadata as {
 			gym_adherence: string;
 			gym_step_results: Array<{ set_index: number; status: string }>;

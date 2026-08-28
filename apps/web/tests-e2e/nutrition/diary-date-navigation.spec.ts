@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDate, browserDateOf, noonOnBrowserDay } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /nutrition day navigation — the diary is no longer today-only.
@@ -106,12 +107,15 @@ test.describe('/nutrition — diary day navigation', () => {
 		await expect(page.getByTestId('diary-day')).toBeVisible();
 		await expect(page.getByText(item)).toBeVisible();
 
-		const { data: created } = await admin
-			.from('food_log')
-			.select('id, started_at')
-			.eq('user_id', USER_A.id)
-			.eq('item_name', item);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'food_log by user_id+item_name',
+			admin
+				.from('food_log')
+				.select('id, started_at')
+				.eq('user_id', USER_A.id)
+				.eq('item_name', item)
+		);
+		expect(created.length).toBe(1);
 		expect(browserDateOf(created![0].started_at)).toBe(twoDaysAgo);
 
 		// And today's view does not show it.

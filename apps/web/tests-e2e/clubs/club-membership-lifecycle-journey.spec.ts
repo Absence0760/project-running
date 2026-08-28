@@ -7,6 +7,7 @@ import {
 } from '../fixtures/saga-users';
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { deleteClub, setClubMemberRole } from '../fixtures/simulate';
+import { readCount, readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Club membership + role-operations LIFECYCLE journey.
@@ -162,12 +163,15 @@ test.describe('saga: request-to-join → approve → post → promote → remove
 				await expect(joinerPage.locator('form.post-form textarea')).toHaveCount(0);
 
 				// DB sanity: the row exists with status='pending', role='member'.
-				const { data: m } = await getAdminClient()
-					.from('club_members')
-					.select('status, role')
-					.eq('club_id', clubId!)
-					.eq('user_id', joiner.id)
-					.maybeSingle();
+				const m = await readMaybeRow(
+					'club_members by club_id+user_id',
+					getAdminClient()
+						.from('club_members')
+						.select('status, role')
+						.eq('club_id', clubId!)
+						.eq('user_id', joiner.id)
+						.maybeSingle()
+				);
 				expect(m).not.toBeNull();
 				expect((m as { status: string }).status).toBe('pending');
 				expect((m as { role: string }).role).toBe('member');
@@ -189,12 +193,15 @@ test.describe('saga: request-to-join → approve → post → promote → remove
 				await expect(pendingPanel).toHaveCount(0, { timeout: 10_000 });
 
 				// approveMember flipped status→'active'.
-				const { data: m } = await getAdminClient()
-					.from('club_members')
-					.select('status')
-					.eq('club_id', clubId!)
-					.eq('user_id', joiner.id)
-					.maybeSingle();
+				const m = await readMaybeRow(
+					'club_members by club_id+user_id',
+					getAdminClient()
+						.from('club_members')
+						.select('status')
+						.eq('club_id', clubId!)
+						.eq('user_id', joiner.id)
+						.maybeSingle()
+				);
 				expect((m as { status: string }).status).toBe('active');
 			});
 
@@ -256,12 +263,15 @@ test.describe('saga: request-to-join → approve → post → promote → remove
 				};
 				await expect.poll(readRole, { timeout: 10_000 }).toBe('admin');
 				// Status is unchanged by a role promotion.
-				const { data: m } = await getAdminClient()
-					.from('club_members')
-					.select('status')
-					.eq('club_id', clubId!)
-					.eq('user_id', joiner.id)
-					.maybeSingle();
+				const m = await readMaybeRow(
+					'club_members by club_id+user_id',
+					getAdminClient()
+						.from('club_members')
+						.select('status')
+						.eq('club_id', clubId!)
+						.eq('user_id', joiner.id)
+						.maybeSingle()
+				);
 				expect((m as { status: string }).status).toBe('active');
 			});
 
@@ -283,12 +293,15 @@ test.describe('saga: request-to-join → approve → post → promote → remove
 				await expect(joinerRow).toHaveCount(0, { timeout: 10_000 });
 
 				// removeMember deleted the row entirely.
-				const { data: m } = await getAdminClient()
-					.from('club_members')
-					.select('user_id')
-					.eq('club_id', clubId!)
-					.eq('user_id', joiner.id)
-					.maybeSingle();
+				const m = await readMaybeRow(
+					'club_members by club_id+user_id',
+					getAdminClient()
+						.from('club_members')
+						.select('user_id')
+						.eq('club_id', clubId!)
+						.eq('user_id', joiner.id)
+						.maybeSingle()
+				);
 				expect(m).toBeNull();
 			});
 
@@ -334,11 +347,14 @@ test.describe('saga: request-to-join → approve → post → promote → remove
 
 				// And the negative: no club_posts row authored by the joiner
 				// leaked through (admin client bypasses RLS to read truth).
-				const { count } = await getAdminClient()
-					.from('club_posts')
-					.select('id', { count: 'exact', head: true })
-					.eq('club_id', clubId!)
-					.eq('author_id', joiner.id);
+				const count = await readCount(
+					'club_posts by club_id+author_id',
+					getAdminClient()
+						.from('club_posts')
+						.select('id', { count: 'exact', head: true })
+						.eq('club_id', clubId!)
+						.eq('author_id', joiner.id)
+				);
 				// The one post they made WHILE a member is still there (1);
 				// the ghost post after removal never landed.
 				expect(count).toBe(1);

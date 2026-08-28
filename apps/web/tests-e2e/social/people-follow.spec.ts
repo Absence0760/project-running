@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /social?tab=people — follow toggle FAILURE path + the follow→feed
@@ -80,12 +81,15 @@ test.describe('/social?tab=people — follow failure rolls back', () => {
 
 		// No row was written server-side.
 		const admin = getAdminClient();
-		const { data: edge } = await admin
-			.from('user_follows')
-			.select('follower_id')
-			.eq('follower_id', USER_A.id)
-			.eq('followee_id', USER_B.id)
-			.maybeSingle();
+		const edge = await readMaybeRow(
+			'user_follows by follower_id+followee_id',
+			admin
+				.from('user_follows')
+				.select('follower_id')
+				.eq('follower_id', USER_A.id)
+				.eq('followee_id', USER_B.id)
+				.maybeSingle()
+		);
 		expect(edge).toBeNull();
 	});
 });
@@ -159,12 +163,15 @@ test.describe('/social — follow graph drives feed contents', () => {
 		// Wait for the edge to land before reading the feed.
 		const admin = getAdminClient();
 		await expect(async () => {
-			const { data } = await admin
-				.from('user_follows')
-				.select('follower_id')
-				.eq('follower_id', USER_A.id)
-				.eq('followee_id', USER_B.id)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'user_follows by follower_id+followee_id',
+				admin
+					.from('user_follows')
+					.select('follower_id')
+					.eq('follower_id', USER_A.id)
+					.eq('followee_id', USER_B.id)
+					.maybeSingle()
+			);
 			expect(data).toBeTruthy();
 		}).toPass({ timeout: 5_000 });
 
@@ -185,12 +192,15 @@ test.describe('/social — follow graph drives feed contents', () => {
 		await expect(unfollowBtn).toContainText('Follow', { timeout: 5_000 });
 		await expect(unfollowBtn).not.toContainText('Following');
 		await expect(async () => {
-			const { data } = await admin
-				.from('user_follows')
-				.select('follower_id')
-				.eq('follower_id', USER_A.id)
-				.eq('followee_id', USER_B.id)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'user_follows by follower_id+followee_id',
+				admin
+					.from('user_follows')
+					.select('follower_id')
+					.eq('follower_id', USER_A.id)
+					.eq('followee_id', USER_B.id)
+					.maybeSingle()
+			);
 			expect(data).toBeNull();
 		}).toPass({ timeout: 5_000 });
 
