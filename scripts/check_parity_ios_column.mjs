@@ -48,7 +48,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { foldedLines, markdownTables, splitRow, tableLines, unclaimedRowLines } from './markdown_lines.mjs';
+import { foldedLines, markdownTables, tableLines, unclaimedRowLines } from './markdown_lines.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MATRIX_PATH = join(REPO_ROOT, 'docs', 'product', 'parity.md');
