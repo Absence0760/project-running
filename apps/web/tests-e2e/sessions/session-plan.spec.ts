@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Session planner P1 (session_planner.md) — build + save + reuse a session
@@ -188,12 +188,15 @@ test.describe('/sessions — session plan build, read, attach', () => {
 		await expect(sequence.getByText('Low Lunge (Right)')).toBeVisible();
 
 		// And the attachment persisted on the event row.
-		const { data: evRow } = await admin
-			.from('events')
-			.select('session_plan_id')
-			.eq('id', eventId)
-			.single();
-		expect(evRow?.session_plan_id).toBe(planId);
+		const evRow = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('session_plan_id')
+				.eq('id', eventId)
+				.single()
+		);
+		expect(evRow.session_plan_id).toBe(planId);
 	});
 
 	test('the list shows club-owned plans but not a stranger\'s public plan', async ({

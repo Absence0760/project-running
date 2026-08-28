@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Gym routine → guided runner → progression journey — the gym-programming
@@ -100,34 +101,43 @@ test.describe('gym routine runner journey — author → guided run → adherenc
 				// Lands on the detail screen.
 				await expect(page.getByTestId('routine-exercises')).toBeVisible({ timeout: 10_000 });
 
-				const { data: routines } = await admin
-					.from('gym_routines')
-					.select('id, exercise_count')
-					.eq('author_id', USER_A.id)
-					.eq('title', routineTitle);
-				expect(routines?.length).toBe(1);
+				const routines = await readRows(
+					'gym_routines by author_id+title',
+					admin
+						.from('gym_routines')
+						.select('id, exercise_count')
+						.eq('author_id', USER_A.id)
+						.eq('title', routineTitle)
+				);
+				expect(routines.length).toBe(1);
 				expect(routines![0].exercise_count).toBe(2);
 				routineId = routines![0].id as string;
 
 				// The plan persisted: a shared superset group, ordered, with the
 				// main lift carrying the linear scheme.
-				const { data: exRows } = await admin
-					.from('gym_routine_exercises')
-					.select('id, exercise_name, position, superset_group, superset_order, progression')
-					.eq('routine_id', routineId)
-					.order('position', { ascending: true });
-				expect(exRows?.length).toBe(2);
+				const exRows = await readRows(
+					'gym_routine_exercises by routine_id',
+					admin
+						.from('gym_routine_exercises')
+						.select('id, exercise_name, position, superset_group, superset_order, progression')
+						.eq('routine_id', routineId)
+						.order('position', { ascending: true })
+				);
+				expect(exRows.length).toBe(2);
 				expect(exRows![0].superset_group).not.toBeNull();
 				expect(exRows![0].superset_group).toBe(exRows![1].superset_group);
 				expect(exRows![0].superset_order).toBe(0);
 				expect(exRows![1].superset_order).toBe(1);
 				expect(exRows![0].progression).toBe('linear');
 
-				const { data: mainSets } = await admin
-					.from('gym_routine_sets')
-					.select('target_reps_min, target_weight_kg')
-					.eq('routine_exercise_id', exRows![0].id);
-				expect(mainSets?.length).toBe(2);
+				const mainSets = await readRows(
+					'gym_routine_sets by routine_exercise_id',
+					admin
+						.from('gym_routine_sets')
+						.select('target_reps_min, target_weight_kg')
+						.eq('routine_exercise_id', exRows![0].id)
+				);
+				expect(mainSets.length).toBe(2);
 				expect(Number(mainSets![0].target_weight_kg)).toBe(100);
 			});
 
@@ -205,11 +215,14 @@ test.describe('gym routine runner journey — author → guided run → adherenc
 				// Cross-check the logged workout + sets, linked to the routine — by
 				// the id we navigated to, so the backend row and the rendered review
 				// are provably the same workout.
-				const { data: created } = await admin
-					.from('gym_workouts')
-					.select('id, metadata')
-					.eq('id', workoutId);
-				expect(created?.length).toBe(1);
+				const created = await readRows(
+					'gym_workouts by id',
+					admin
+						.from('gym_workouts')
+						.select('id, metadata')
+						.eq('id', workoutId)
+				);
+				expect(created.length).toBe(1);
 				expect(created![0].id).toBe(workoutId);
 
 				const metadata = created![0].metadata as {
@@ -222,16 +235,19 @@ test.describe('gym routine runner journey — author → guided run → adherenc
 				// All three step results recorded as hit.
 				expect(metadata.gym_step_results.every((s) => s.status === 'hit')).toBe(true);
 
-				const { data: sets } = await admin
-					.from('gym_sets')
-					.select('exercise_name, reps, weight_kg')
-					.eq('workout_id', workoutId);
-				expect(sets?.length).toBe(3);
-				const mainSets = sets!.filter((s) => s.exercise_name === mainLift);
+				const sets = await readRows(
+					'gym_sets by workout_id',
+					admin
+						.from('gym_sets')
+						.select('exercise_name, reps, weight_kg')
+						.eq('workout_id', workoutId)
+				);
+				expect(sets.length).toBe(3);
+				const mainSets = sets.filter((s) => s.exercise_name === mainLift);
 				expect(mainSets.length).toBe(2);
 				// Weight stored canonical kg (100), not lbs.
 				expect(Number(mainSets[0].weight_kg)).toBe(100);
-				expect(sets!.filter((s) => s.exercise_name === accessory).length).toBe(1);
+				expect(sets.filter((s) => s.exercise_name === accessory).length).toBe(1);
 			});
 
 			// ── 5. The next-session progression suggestion (nextPrescription) ─

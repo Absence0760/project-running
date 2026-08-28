@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — organiser bulk results import (#43).
@@ -160,12 +161,15 @@ test.describe('bulk results import — re-import preserves a claimed owner', () 
 		await expect(page.getByText('Bob Bibonly')).toBeVisible({ timeout: 10_000 });
 
 		// The claimed row (bib 101) must still belong to USER_B, not revert to NULL.
-		const { data } = await getAdminClient()
-			.from('event_results')
-			.select('user_id')
-			.eq('id', resultId)
-			.single();
-		expect(data?.user_id).toBe(USER_B.id);
+		const data = await readRow(
+			'event_results by id',
+			getAdminClient()
+				.from('event_results')
+				.select('user_id')
+				.eq('id', resultId)
+				.single()
+		);
+		expect(data.user_id).toBe(USER_B.id);
 	});
 });
 

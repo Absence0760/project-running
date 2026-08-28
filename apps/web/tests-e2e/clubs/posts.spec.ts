@@ -79,12 +79,15 @@ test.describe('/clubs/[slug] — threaded replies', () => {
 			// asserting reply_count on the runner reload — that
 			// counter is computed at fetchClubPosts time and racing
 			// the realtime debounce (250ms) makes the assertion flaky.
-			const { data: replies } = await admin
-				.from('club_posts')
-				.select('id, parent_post_id, body')
-				.eq('parent_post_id', parentId)
-				.eq('body', replyBody);
-			expect(replies?.length).toBe(1);
+			const replies = await readRows(
+				'club_posts by parent_post_id+body',
+				admin
+					.from('club_posts')
+					.select('id, parent_post_id, body')
+					.eq('parent_post_id', parentId)
+					.eq('body', replyBody)
+			);
+			expect(replies.length).toBe(1);
 
 			// ── Runner side: open the thread, see alex's reply ──
 			await runner.reload();
@@ -223,12 +226,15 @@ test.describe('/clubs/[slug] — reply double-submit guard', () => {
 				timeout: 10_000
 			});
 
-			const { data: replies } = await admin
-				.from('club_posts')
-				.select('id')
-				.eq('parent_post_id', parentId)
-				.eq('body', replyBody);
-			expect(replies?.length).toBe(1);
+			const replies = await readRows(
+				'club_posts by parent_post_id+body',
+				admin
+					.from('club_posts')
+					.select('id')
+					.eq('parent_post_id', parentId)
+					.eq('body', replyBody)
+			);
+			expect(replies.length).toBe(1);
 		} finally {
 			await admin.from('club_posts').delete().eq('id', parentId);
 		}

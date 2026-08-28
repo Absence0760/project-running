@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /plans/new built-in starter library (Training P3). The engine
@@ -52,12 +53,15 @@ test.describe('/plans/new starter library', () => {
 		await page.waitForURL(/\/plans\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
 		// The 12-week half-marathon starter persisted as USER_A's active plan.
-		const { data } = await getAdminClient()
-			.from('training_plans')
-			.select('name, status, goal_event')
-			.eq('user_id', USER_A.id)
-			.eq('status', 'active')
-			.maybeSingle();
+		const data = await readMaybeRow(
+			'training_plans by user_id+status',
+			getAdminClient()
+				.from('training_plans')
+				.select('name, status, goal_event')
+				.eq('user_id', USER_A.id)
+				.eq('status', 'active')
+				.maybeSingle()
+		);
 		expect(data?.name).toContain('Half Marathon');
 		expect(data?.goal_event).toBe('distance_half');
 	});

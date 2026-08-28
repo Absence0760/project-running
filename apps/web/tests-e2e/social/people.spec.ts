@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /social?tab=people — discover other runners.
@@ -231,12 +232,15 @@ test.describe('full saga — freshly-planted users', () => {
 			//    optimistic so the DELETE may still be in-flight; poll
 			//    briefly until the row disappears.
 			await expect(async () => {
-				const { data: gone } = await admin
-					.from('user_follows')
-					.select('follower_id, followee_id')
-					.eq('follower_id', alpha.id)
-					.eq('followee_id', bravo.id)
-					.maybeSingle();
+				const gone = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id, followee_id')
+						.eq('follower_id', alpha.id)
+						.eq('followee_id', bravo.id)
+						.maybeSingle()
+				);
 				expect(gone).toBeNull();
 			}).toPass({ timeout: 5_000 });
 		} finally {

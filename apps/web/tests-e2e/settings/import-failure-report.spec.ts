@@ -195,11 +195,14 @@ test.describe('bulk-import failure report', () => {
 
 			// The row that promised nothing still imports — the strictness is
 			// about a broken promise, not about a missing track.
-			const { data: landed } = await admin
-				.from('runs')
-				.select('external_id')
-				.in('external_id', externalIds);
-			const ids = (landed ?? []).map((r) => r.external_id);
+			const landed = await readRows(
+				'runs by external_id',
+				admin
+					.from('runs')
+					.select('external_id')
+					.in('external_id', externalIds)
+			);
+			const ids = landed.map((r) => r.external_id);
 			expect(ids).toContain(`strava:${present.stravaId}`);
 			expect(ids).not.toContain(`strava:${missing.stravaId}`);
 		} finally {

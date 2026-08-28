@@ -7,6 +7,7 @@ import {
 } from '../fixtures/saga-users';
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { deleteClub, setClubMemberRole } from '../fixtures/simulate';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Club membership + role-operations LIFECYCLE journey.
@@ -162,12 +163,15 @@ test.describe('saga: request-to-join → approve → post → promote → remove
 				await expect(joinerPage.locator('form.post-form textarea')).toHaveCount(0);
 
 				// DB sanity: the row exists with status='pending', role='member'.
-				const { data: m } = await getAdminClient()
-					.from('club_members')
-					.select('status, role')
-					.eq('club_id', clubId!)
-					.eq('user_id', joiner.id)
-					.maybeSingle();
+				const m = await readMaybeRow(
+					'club_members by club_id+user_id',
+					getAdminClient()
+						.from('club_members')
+						.select('status, role')
+						.eq('club_id', clubId!)
+						.eq('user_id', joiner.id)
+						.maybeSingle()
+				);
 				expect(m).not.toBeNull();
 				expect((m as { status: string }).status).toBe('pending');
 				expect((m as { role: string }).role).toBe('member');
@@ -283,12 +287,15 @@ test.describe('saga: request-to-join → approve → post → promote → remove
 				await expect(joinerRow).toHaveCount(0, { timeout: 10_000 });
 
 				// removeMember deleted the row entirely.
-				const { data: m } = await getAdminClient()
-					.from('club_members')
-					.select('user_id')
-					.eq('club_id', clubId!)
-					.eq('user_id', joiner.id)
-					.maybeSingle();
+				const m = await readMaybeRow(
+					'club_members by club_id+user_id',
+					getAdminClient()
+						.from('club_members')
+						.select('user_id')
+						.eq('club_id', clubId!)
+						.eq('user_id', joiner.id)
+						.maybeSingle()
+				);
 				expect(m).toBeNull();
 			});
 

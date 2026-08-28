@@ -176,12 +176,15 @@ test.describe('avatar upload', () => {
 				await expect(page.locator('.toast-success')).toContainText(/removed/i, {
 					timeout: 10_000,
 				});
-				const { data: cleared } = await admin
-					.from('user_profiles')
-					.select('avatar_url')
-					.eq('id', USER_A.id)
-					.single();
-				expect((cleared?.avatar_url as string | null) ?? null).toBeNull();
+				const cleared = await readRow(
+					'user_profiles by id',
+					admin
+						.from('user_profiles')
+						.select('avatar_url')
+						.eq('id', USER_A.id)
+						.single()
+				);
+				expect((cleared.avatar_url as string | null) ?? null).toBeNull();
 				expect(await avatarNames()).toHaveLength(0);
 			});
 		} finally {

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { repurposeTodayWorkout, seedDateToLive } from '../fixtures/plan-today';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Workout-runner-adjacent surfaces (web).
@@ -306,11 +307,14 @@ test.describe('Workout-runner surfaces (web)', () => {
 			// navigation noise.
 			const wo = await findWorkoutByDate('2026-04-08');
 			const admin = getAdminClient();
-			const { data: before } = await admin
-				.from('plan_workouts')
-				.select('target_distance_m')
-				.eq('id', wo.id)
-				.maybeSingle();
+			const before = await readMaybeRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('target_distance_m')
+					.eq('id', wo.id)
+					.maybeSingle()
+			);
 			const beforeDistance = (before as { target_distance_m: number | null })
 				?.target_distance_m;
 			expect(beforeDistance).toBe(7000);

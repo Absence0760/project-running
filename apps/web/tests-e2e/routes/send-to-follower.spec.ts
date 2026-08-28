@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /routes/[id] — in-app "Send a route to a follower" (route_direct_share.md).
@@ -61,13 +62,16 @@ test.describe('/routes/[id] — send to a follower', () => {
 		await expect(page.getByTestId('send-route-sent')).toContainText('Alex Chen');
 
 		// The row that actually landed carries the public share URL as its body.
-		const { data } = await getAdminClient()
-			.from('direct_messages')
-			.select('body, recipient_id')
-			.eq('sender_id', USER_A.id);
+		const data = await readRows(
+			'direct_messages by sender_id',
+			getAdminClient()
+				.from('direct_messages')
+				.select('body, recipient_id')
+				.eq('sender_id', USER_A.id)
+		);
 		expect(data).toHaveLength(1);
-		expect(data?.[0].recipient_id).toBe(USER_B.id);
-		expect(data?.[0].body).toContain(SHARE_PATH);
+		expect(data[0].recipient_id).toBe(USER_B.id);
+		expect(data[0].body).toContain(SHARE_PATH);
 
 		// And the recipient can open it from their own conversation. The bubble
 		// renders the typed attachment as a card rather than the URL, so the
@@ -100,11 +104,14 @@ test.describe('/routes/[id] — send to a follower', () => {
 		await dialog.getByRole('button', { name: /Morgan Lee/ }).click();
 		await expect(page.getByTestId('send-route-sent')).toContainText('Morgan Lee');
 
-		const { data } = await getAdminClient()
-			.from('direct_messages')
-			.select('recipient_id')
-			.eq('sender_id', USER_A.id);
-		expect(data?.[0].recipient_id).toBe(USER_C_PRO.id);
+		const data = await readRows(
+			'direct_messages by sender_id',
+			getAdminClient()
+				.from('direct_messages')
+				.select('recipient_id')
+				.eq('sender_id', USER_A.id)
+		);
+		expect(data[0].recipient_id).toBe(USER_C_PRO.id);
 	});
 
 	test('a private route confirms the public flip before the picker opens', async ({ page }) => {
@@ -124,12 +131,15 @@ test.describe('/routes/[id] — send to a follower', () => {
 		await confirm.getByRole('button', { name: 'Cancel' }).click();
 		await expect(page.getByTestId('send-route-dialog')).toBeHidden();
 		{
-			const { data } = await admin
-				.from('routes')
-				.select('is_public')
-				.eq('id', RUNNER_PUBLIC_ROUTE_ID)
-				.single();
-			expect(data?.is_public).toBe(false);
+			const data = await readRow(
+				'routes by id',
+				admin
+					.from('routes')
+					.select('is_public')
+					.eq('id', RUNNER_PUBLIC_ROUTE_ID)
+					.single()
+			);
+			expect(data.is_public).toBe(false);
 		}
 
 		// Confirming flips it public and then opens the picker.
@@ -137,12 +147,15 @@ test.describe('/routes/[id] — send to a follower', () => {
 		await confirm.getByRole('button', { name: 'Make public & share' }).click();
 		await expect(page.getByTestId('send-route-dialog')).toBeVisible({ timeout: 10_000 });
 		{
-			const { data } = await admin
-				.from('routes')
-				.select('is_public')
-				.eq('id', RUNNER_PUBLIC_ROUTE_ID)
-				.single();
-			expect(data?.is_public).toBe(true);
+			const data = await readRow(
+				'routes by id',
+				admin
+					.from('routes')
+					.select('is_public')
+					.eq('id', RUNNER_PUBLIC_ROUTE_ID)
+					.single()
+			);
+			expect(data.is_public).toBe(true);
 		}
 	});
 

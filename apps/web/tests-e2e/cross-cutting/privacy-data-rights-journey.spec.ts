@@ -4,6 +4,7 @@ import { isInAnyZone } from '../../src/lib/routes/privacy';
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { deleteRun, insertRun, setUserSetting } from '../fixtures/simulate';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Privacy + data-rights JOURNEY — ONE public run with a real GPS track
@@ -121,15 +122,18 @@ test.describe('privacy + data-rights journey', () => {
 					track: FULL_TRACK
 				});
 
-				const { data: row } = await admin
-					.from('runs')
-					.select('user_id, is_public, track_url')
-					.eq('id', runId)
-					.single();
-				expect(row?.user_id).toBe(USER_A.id);
-				expect(row?.is_public).toBe(true);
+				const row = await readRow(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('user_id, is_public, track_url')
+						.eq('id', runId)
+						.single()
+				);
+				expect(row.user_id).toBe(USER_A.id);
+				expect(row.is_public).toBe(true);
 				// Canonical track path the export's path-shape guard expects.
-				expect(row?.track_url).toBe(`${USER_A.id}/${runId}.json.gz`);
+				expect(row.track_url).toBe(`${USER_A.id}/${runId}.json.gz`);
 			});
 
 			// ── 1. Non-owner sees a CLIPPED track on /share/run/[id] ───────

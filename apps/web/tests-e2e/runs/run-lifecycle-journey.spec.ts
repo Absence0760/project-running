@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Run-lifecycle journey — the full cradle-to-grave life of a single
@@ -104,13 +104,16 @@ test.describe('run lifecycle journey', () => {
 				// Settle the client-side INSERT before the service-role read
 				// (no Playwright auto-wait on a raw SELECT).
 				await page.waitForLoadState('networkidle');
-				const { data: row } = await admin
-					.from('runs')
-					.select('user_id, is_public')
-					.eq('id', runId)
-					.single();
-				expect(row?.user_id).toBe(USER_A.id);
-				expect(row?.is_public).toBe(true);
+				const row = await readRow(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('user_id, is_public')
+						.eq('id', runId)
+						.single()
+				);
+				expect(row.user_id).toBe(USER_A.id);
+				expect(row.is_public).toBe(true);
 			});
 
 			// ── 2. It appears in the /runs list ─────────────────────────
@@ -258,11 +261,14 @@ test.describe('run lifecycle journey', () => {
 
 				// Backend: the row is gone (the delete cascades the guest's
 				// kudos + comment rows via FK ON DELETE CASCADE).
-				const { data: gone } = await admin
-					.from('runs')
-					.select('id')
-					.eq('id', runId)
-					.maybeSingle();
+				const gone = await readMaybeRow(
+					'runs by id',
+					admin
+						.from('runs')
+						.select('id')
+						.eq('id', runId)
+						.maybeSingle()
+				);
 				expect(gone).toBeNull();
 				runId = ''; // delete succeeded — no teardown needed.
 			});

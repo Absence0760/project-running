@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Session planner P3 (session_planner.md) — create a club-owned session template
@@ -67,12 +68,15 @@ test.describe('/clubs — create session template via the hub', () => {
 
 		// It persisted as a club-owned plan (club_id set, author = the admin).
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('session_plans')
-			.select('id, club_id, author_id')
-			.eq('title', title);
-		expect(rows?.length).toBe(1);
-		expect(rows?.[0].club_id).toBe(RICHMOND_CLUB_ID);
-		expect(rows?.[0].author_id).toBe(USER_A.id);
+		const rows = await readRows(
+			'session_plans by title',
+			admin
+				.from('session_plans')
+				.select('id, club_id, author_id')
+				.eq('title', title)
+		);
+		expect(rows.length).toBe(1);
+		expect(rows[0].club_id).toBe(RICHMOND_CLUB_ID);
+		expect(rows[0].author_id).toBe(USER_A.id);
 	});
 });

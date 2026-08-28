@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Gym programming — create a club-owned gym-routine template from the club
@@ -71,12 +72,15 @@ test.describe('/clubs — create gym-routine template via the hub', () => {
 
 		// The published club copy persisted (club_id set, author = the admin).
 		const admin = getAdminClient();
-		const { data: clubRows } = await admin
-			.from('gym_routines')
-			.select('id, club_id, author_id')
-			.eq('club_id', RICHMOND_CLUB_ID)
-			.eq('title', title);
-		expect(clubRows?.length).toBe(1);
-		expect(clubRows?.[0].author_id).toBe(USER_A.id);
+		const clubRows = await readRows(
+			'gym_routines by club_id+title',
+			admin
+				.from('gym_routines')
+				.select('id, club_id, author_id')
+				.eq('club_id', RICHMOND_CLUB_ID)
+				.eq('title', title)
+		);
+		expect(clubRows.length).toBe(1);
+		expect(clubRows[0].author_id).toBe(USER_A.id);
 	});
 });

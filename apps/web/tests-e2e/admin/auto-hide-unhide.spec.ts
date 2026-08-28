@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Auto-hide + admin Unhide surface (/admin/reports, migration 20270212_001).
@@ -82,11 +83,14 @@ test.describe('auto-hide — admin sees the hidden badge and can unhide', () => 
 
 		// And the DB reflects the unhide.
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('user_profiles')
-			.select('shadow_hidden')
-			.eq('id', TARGET_ID)
-			.single();
-		expect(data?.shadow_hidden).toBe(false);
+		const data = await readRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('shadow_hidden')
+				.eq('id', TARGET_ID)
+				.single()
+		);
+		expect(data.shadow_hidden).toBe(false);
 	});
 });

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Event create via UI — admin creates an event from /clubs/[slug].
@@ -118,11 +119,14 @@ test.describe('/clubs/[slug] — admin event create', () => {
 
 		// DB confirms the event is still there.
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('events')
-			.select('id')
-			.eq('id', eventId)
-			.maybeSingle();
+		const row = await readMaybeRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('id')
+				.eq('id', eventId)
+				.maybeSingle()
+		);
 		expect(row).not.toBeNull();
 	});
 });

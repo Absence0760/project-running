@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deletePlan, setPlanStatus } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * /plans/new — the standalone wizard route.
@@ -87,11 +87,14 @@ test.describe('/plans/new — standalone wizard', () => {
 			.toBeVisible({ timeout: 10_000 });
 
 		const admin = getAdminClient();
-		const { data: newRow } = await admin
-			.from('training_plans')
-			.select('id, name, status, is_template')
-			.eq('id', plantedPlanId)
-			.single();
+		const newRow = await readMaybeRow(
+			'training_plans by id',
+			admin
+				.from('training_plans')
+				.select('id, name, status, is_template')
+				.eq('id', plantedPlanId)
+				.single()
+		);
 		expect(newRow).not.toBeNull();
 		expect(newRow!.name).toBe(name);
 		expect(newRow!.status).toBe('active');

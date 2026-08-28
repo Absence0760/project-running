@@ -49,12 +49,15 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await expect(row.locator('.item-kcal')).toHaveText('350');
 
 		// Backend row exists, owned by USER_A.
-		const { data: created } = await admin
-			.from('food_log')
-			.select('id, item_name, calories, meal_slot')
-			.eq('user_id', USER_A.id)
-			.eq('item_name', item);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'food_log by user_id+item_name',
+			admin
+				.from('food_log')
+				.select('id, item_name, calories, meal_slot')
+				.eq('user_id', USER_A.id)
+				.eq('item_name', item)
+		);
+		expect(created.length).toBe(1);
 		expect(created![0].meal_slot).toBe('breakfast');
 
 		// Water tracker increments by one 250 ml unit.
@@ -92,12 +95,15 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await expect(row).toBeVisible();
 		await expect(row.locator('.item-kcal')).toHaveText('420');
 
-		const { data: created } = await admin
-			.from('food_log')
-			.select('id, meal_slot')
-			.eq('user_id', USER_A.id)
-			.eq('item_name', item);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'food_log by user_id+item_name',
+			admin
+				.from('food_log')
+				.select('id, meal_slot')
+				.eq('user_id', USER_A.id)
+				.eq('item_name', item)
+		);
+		expect(created.length).toBe(1);
 		expect(created![0].meal_slot).toBe('lunch');
 
 		await admin.from('food_log').delete().eq('id', created![0].id);
@@ -158,12 +164,15 @@ test.describe('/nutrition — manual log, render, water', () => {
 
 		// The logged row carries the extended nutrients with sodium/cholesterol
 		// stored in mg.
-		const { data: created } = await admin
-			.from('food_log')
-			.select('id, fiber_g, sugar_g, sodium_mg, saturated_fat_g, cholesterol_mg')
-			.eq('user_id', USER_A.id)
-			.eq('item_name', item);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'food_log by user_id+item_name',
+			admin
+				.from('food_log')
+				.select('id, fiber_g, sugar_g, sodium_mg, saturated_fat_g, cholesterol_mg')
+				.eq('user_id', USER_A.id)
+				.eq('item_name', item)
+		);
+		expect(created.length).toBe(1);
 		expect(Number(created![0].fiber_g)).toBe(4);
 		expect(Number(created![0].sugar_g)).toBe(10);
 		expect(Number(created![0].sodium_mg)).toBe(500);

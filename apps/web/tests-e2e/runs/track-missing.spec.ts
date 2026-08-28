@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /runs/[id] graceful render when the runs row points at a Storage
@@ -58,10 +59,11 @@ test.describe('/runs/[id] — graceful render when track_url is broken', () => {
 			// Confirm the Storage object actually doesn't exist (so
 			// we're testing the right thing, not an accidentally-planted
 			// blob from a previous run).
-			const { data: list } = await admin.storage
-				.from('runs')
-				.list(USER_A.id, { search: runId });
-			const matched = list?.find((f) => f.name.startsWith(runId));
+			const list = await readRows(
+				'runs Storage objects under the owner prefix',
+				admin.storage.from('runs').list(USER_A.id, { search: runId })
+			);
+			const matched = list.find((f) => f.name.startsWith(runId));
 			expect(matched, 'no Storage object should exist for this run').toBeUndefined();
 
 			// Capture browser-side errors so a regression that throws

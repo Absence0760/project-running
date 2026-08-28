@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDayAt, waterStorageKey } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /nutrition daily view — meal-slot grouping, per-slot calorie headers, the
@@ -120,12 +121,15 @@ test.describe('/nutrition — daily grouping + water decrement', () => {
 		const row = page.locator('.meal-list li', { hasText: item });
 		await expect(row).toBeVisible({ timeout: 10_000 });
 
-		const { data: created } = await admin
-			.from('food_log')
-			.select('id, meal_slot')
-			.eq('user_id', USER_A.id)
-			.eq('item_name', item);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'food_log by user_id+item_name',
+			admin
+				.from('food_log')
+				.select('id, meal_slot')
+				.eq('user_id', USER_A.id)
+				.eq('item_name', item)
+		);
+		expect(created.length).toBe(1);
 		expect(created![0].meal_slot).toBe('breakfast');
 
 		await admin.from('food_log').delete().eq('id', created![0].id);

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deletePlan, deleteRun, insertRun, setPlanStatus } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Starter-ADOPTION → RE-LINK → ADHERENCE-DRIFT → RE-PLAN journey.
@@ -109,13 +109,16 @@ test.describe('plan adherence + re-plan journey', () => {
 			plantedPlanId = page.url().match(/\/plans\/([0-9a-f-]+)$/)![1];
 
 			// The 12-week half starter persisted as USER_A's active plan.
-			const { data } = await admin
-				.from('training_plans')
-				.select('name, status, goal_event')
-				.eq('id', plantedPlanId)
-				.single();
-			expect(data?.goal_event).toBe('distance_half');
-			expect(data?.status).toBe('active');
+			const data = await readRow(
+				'training_plans by id',
+				admin
+					.from('training_plans')
+					.select('name, status, goal_event')
+					.eq('id', plantedPlanId)
+					.single()
+			);
+			expect(data.goal_event).toBe('distance_half');
+			expect(data.status).toBe('active');
 		});
 
 		// ── 2. The generated grid renders on the adopted plan ──────────
@@ -328,12 +331,15 @@ test.describe('plan adherence + re-plan journey', () => {
 				.toBe(25_300);
 
 			// Both PAST long runs are frozen — re-plan never mutates the past.
-			const { data: pastRows } = await admin
-				.from('plan_workouts')
-				.select('id, target_distance_m')
-				.in('id', [relinkLongId, missedLongId]);
+			const pastRows = await readRows(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('id, target_distance_m')
+					.in('id', [relinkLongId, missedLongId])
+			);
 			const byId = new Map(
-				(pastRows ?? []).map((r) => [
+				pastRows.map((r) => [
 					(r as { id: string }).id,
 					(r as { target_distance_m: number }).target_distance_m
 				])
@@ -344,12 +350,15 @@ test.describe('plan adherence + re-plan journey', () => {
 
 		// ── 7. Backend cross-check the plan + its rows ─────────────────
 		await test.step('backend cross-check the plan, link, and distances', async () => {
-			const { data: planRow } = await admin
-				.from('training_plans')
-				.select('id, status, goal_event')
-				.eq('id', plantedPlanId)
-				.single();
-			expect(planRow?.status).toBe('active');
+			const planRow = await readRow(
+				'training_plans by id',
+				admin
+					.from('training_plans')
+					.select('id, status, goal_event')
+					.eq('id', plantedPlanId)
+					.single()
+			);
+			expect(planRow.status).toBe('active');
 
 			const weekRows = await readRows(
 				'plan_weeks by plan_id',
@@ -362,28 +371,37 @@ test.describe('plan adherence + re-plan journey', () => {
 
 			// The re-link landed on the target run; the missed long stayed
 			// uncompleted; the future long carries the bumped distance.
-			const { data: relinkRow } = await admin
-				.from('plan_workouts')
-				.select('completed_run_id, target_distance_m')
-				.eq('id', relinkLongId)
-				.single();
-			expect(relinkRow?.completed_run_id).toBe(relinkTargetId);
-			expect(relinkRow?.target_distance_m).toBe(20_000);
+			const relinkRow = await readRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('completed_run_id, target_distance_m')
+					.eq('id', relinkLongId)
+					.single()
+			);
+			expect(relinkRow.completed_run_id).toBe(relinkTargetId);
+			expect(relinkRow.target_distance_m).toBe(20_000);
 
-			const { data: missedRow } = await admin
-				.from('plan_workouts')
-				.select('completed_run_id, target_distance_m')
-				.eq('id', missedLongId)
-				.single();
-			expect(missedRow?.completed_run_id).toBeNull();
-			expect(missedRow?.target_distance_m).toBe(28_000);
+			const missedRow = await readRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('completed_run_id, target_distance_m')
+					.eq('id', missedLongId)
+					.single()
+			);
+			expect(missedRow.completed_run_id).toBeNull();
+			expect(missedRow.target_distance_m).toBe(28_000);
 
-			const { data: futureRow } = await admin
-				.from('plan_workouts')
-				.select('target_distance_m')
-				.eq('id', futureLongId)
-				.single();
-			expect(futureRow?.target_distance_m).toBe(25_300);
+			const futureRow = await readRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('target_distance_m')
+					.eq('id', futureLongId)
+					.single()
+			);
+			expect(futureRow.target_distance_m).toBe(25_300);
 		});
 	});
 });

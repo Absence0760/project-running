@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Server-side permission backstop. The club detail UI hides the post
@@ -100,13 +100,16 @@ test.describe('club write-path RLS — UI gates are not the security boundary', 
 			expect(data).toEqual([]);
 
 			// Authoritative check: the status is still pending.
-			const { data: row } = await admin
-				.from('club_members')
-				.select('status')
-				.eq('club_id', RICHMOND_ID)
-				.eq('user_id', USER_C_PRO.id)
-				.single();
-			expect(row?.status).toBe('pending');
+			const row = await readRow(
+				'club_members by club_id+user_id',
+				admin
+					.from('club_members')
+					.select('status')
+					.eq('club_id', RICHMOND_ID)
+					.eq('user_id', USER_C_PRO.id)
+					.single()
+			);
+			expect(row.status).toBe('pending');
 		} finally {
 			await admin
 				.from('club_members')
@@ -132,13 +135,16 @@ test.describe('club write-path RLS — UI gates are not the security boundary', 
 		);
 		expect(data).toEqual([]);
 
-		const { data: row } = await admin
-			.from('club_members')
-			.select('role')
-			.eq('club_id', RICHMOND_ID)
-			.eq('user_id', USER_B.id)
-			.single();
-		expect(row?.role).toBe('member');
+		const row = await readRow(
+			'club_members by club_id+user_id',
+			admin
+				.from('club_members')
+				.select('role')
+				.eq('club_id', RICHMOND_ID)
+				.eq('user_id', USER_B.id)
+				.single()
+		);
+		expect(row.role).toBe('member');
 	});
 
 	test('a plain member cannot remove a different member (DELETE only self or admin)', async () => {
@@ -161,13 +167,16 @@ test.describe('club write-path RLS — UI gates are not the security boundary', 
 		expect(data).toEqual([]);
 
 		// The owner row is intact.
-		const { data: owner } = await admin
-			.from('club_members')
-			.select('role, status')
-			.eq('club_id', RICHMOND_ID)
-			.eq('user_id', USER_A.id)
-			.single();
-		expect(owner?.role).toBe('owner');
-		expect(owner?.status).toBe('active');
+		const owner = await readRow(
+			'club_members by club_id+user_id',
+			admin
+				.from('club_members')
+				.select('role, status')
+				.eq('club_id', RICHMOND_ID)
+				.eq('user_id', USER_A.id)
+				.single()
+		);
+		expect(owner.role).toBe('owner');
+		expect(owner.status).toBe('active');
 	});
 });

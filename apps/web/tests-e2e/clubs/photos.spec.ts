@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] Photos tab — the club photo gallery (roadmap backlog
@@ -75,12 +76,15 @@ test.describe('/clubs/[slug] — ClubPhotos upload + delete (member/owner)', () 
 		).toBeVisible({ timeout: 5_000 });
 
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('club_photos')
-			.select('id, club_id, caption, storage_path')
-			.eq('club_id', RICHMOND_CLUB_ID);
-		expect(rows?.length).toBe(1);
-		const row = rows?.[0] as {
+		const rows = await readRows(
+			'club_photos by club_id',
+			admin
+				.from('club_photos')
+				.select('id, club_id, caption, storage_path')
+				.eq('club_id', RICHMOND_CLUB_ID)
+		);
+		expect(rows.length).toBe(1);
+		const row = rows[0] as {
 			id: string;
 			club_id: string;
 			caption: string | null;
@@ -89,7 +93,10 @@ test.describe('/clubs/[slug] — ClubPhotos upload + delete (member/owner)', () 
 		expect(row.caption).toBe('e2e club caption');
 		expect(row.storage_path).toContain(USER_A.id);
 
-		const { data: dl } = await admin.storage.from('club-photos').download(row.storage_path);
+		const dl = await readMaybeRow(
+			'club-photos',
+			admin.storage.from('club-photos').download(row.storage_path)
+		);
 		expect(dl).not.toBeNull();
 	});
 

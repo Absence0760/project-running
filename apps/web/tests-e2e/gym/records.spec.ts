@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /gym/records — the personal-records surface (lib/gym/exercise_records.ts,
@@ -38,12 +39,15 @@ test.describe('/gym/records — per-exercise current bests', () => {
 		const row = page.locator('.workout-row', { hasText: title });
 		await expect(row).toBeVisible({ timeout: 10_000 });
 
-		const { data: created } = await admin
-			.from('gym_workouts')
-			.select('id')
-			.eq('user_id', USER_A.id)
-			.eq('title', title);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'gym_workouts by user_id+title',
+			admin
+				.from('gym_workouts')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(created.length).toBe(1);
 		const workoutId = created![0].id as string;
 
 		try {

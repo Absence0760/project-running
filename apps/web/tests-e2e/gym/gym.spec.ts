@@ -49,12 +49,15 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		await expect(row.locator('.pr-badge')).toBeVisible();
 
 		// Backend row exists, owned by USER_A.
-		const { data: created } = await admin
-			.from('gym_workouts')
-			.select('id, title')
-			.eq('user_id', USER_A.id)
-			.eq('title', title);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'gym_workouts by user_id+title',
+			admin
+				.from('gym_workouts')
+				.select('id, title')
+				.eq('user_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(created.length).toBe(1);
 		const workoutId = created![0].id as string;
 
 		// Detail screen: the exercise block, its PR chip, and the set value.
@@ -175,20 +178,26 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		const row = page.locator('.workout-row', { hasText: title });
 		await expect(row).toBeVisible({ timeout: 10_000 });
 
-		const { data: created } = await admin
-			.from('gym_workouts')
-			.select('id')
-			.eq('user_id', USER_A.id)
-			.eq('title', title);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'gym_workouts by user_id+title',
+			admin
+				.from('gym_workouts')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(created.length).toBe(1);
 		const workoutId = created![0].id as string;
 
 		try {
-			const { data: sets } = await admin
-				.from('gym_sets')
-				.select('duration_s, reps, weight_kg')
-				.eq('workout_id', workoutId);
-			expect(sets?.length).toBe(1);
+			const sets = await readRows(
+				'gym_sets by workout_id',
+				admin
+					.from('gym_sets')
+					.select('duration_s, reps, weight_kg')
+					.eq('workout_id', workoutId)
+			);
+			expect(sets.length).toBe(1);
 			expect(sets![0].duration_s).toBe(90);
 			expect(sets![0].reps).toBeNull();
 			expect(sets![0].weight_kg).toBeNull();
@@ -241,20 +250,26 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		const row = page.locator('.workout-row', { hasText: title });
 		await expect(row).toBeVisible({ timeout: 10_000 });
 
-		const { data: created } = await admin
-			.from('gym_workouts')
-			.select('id')
-			.eq('user_id', USER_A.id)
-			.eq('title', title);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'gym_workouts by user_id+title',
+			admin
+				.from('gym_workouts')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(created.length).toBe(1);
 		const workoutId = created![0].id as string;
 
 		try {
-			const { data: sets } = await admin
-				.from('gym_sets')
-				.select('exercise_name, exercise_id')
-				.eq('workout_id', workoutId);
-			expect(sets?.length).toBe(1);
+			const sets = await readRows(
+				'gym_sets by workout_id',
+				admin
+					.from('gym_sets')
+					.select('exercise_name, exercise_id')
+					.eq('workout_id', workoutId)
+			);
+			expect(sets.length).toBe(1);
 			expect(sets![0].exercise_name).toBe('Bench Press');
 			// The catalogue link was bound from the typed name.
 			expect(sets![0].exercise_id).toBe(benchId);
@@ -314,20 +329,26 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		const row = page.locator('.workout-row', { hasText: title });
 		await expect(row).toBeVisible({ timeout: 10_000 });
 
-		const { data: created } = await admin
-			.from('gym_workouts')
-			.select('id')
-			.eq('user_id', USER_A.id)
-			.eq('title', title);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'gym_workouts by user_id+title',
+			admin
+				.from('gym_workouts')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(created.length).toBe(1);
 		const workoutId = created![0].id as string;
 
 		try {
-			const { data: sets } = await admin
-				.from('gym_sets')
-				.select('exercise_name, exercise_id')
-				.eq('workout_id', workoutId);
-			expect(sets?.length).toBe(1);
+			const sets = await readRows(
+				'gym_sets by workout_id',
+				admin
+					.from('gym_sets')
+					.select('exercise_name, exercise_id')
+					.eq('workout_id', workoutId)
+			);
+			expect(sets.length).toBe(1);
 			expect(sets![0].exercise_name).toBe('Deadlift');
 			expect(sets![0].exercise_id).toBe(deadliftId);
 		} finally {
@@ -383,11 +404,14 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		const workoutId = created![0].id as string;
 
 		try {
-			const { data: sets } = await admin
-				.from('gym_sets')
-				.select('exercise_name, exercise_id')
-				.eq('workout_id', workoutId);
-			expect(sets?.length).toBe(1);
+			const sets = await readRows(
+				'gym_sets by workout_id',
+				admin
+					.from('gym_sets')
+					.select('exercise_name, exercise_id')
+					.eq('workout_id', workoutId)
+			);
+			expect(sets.length).toBe(1);
 			expect(sets![0].exercise_id).toBe(customId);
 		} finally {
 			await admin.from('gym_workouts').delete().eq('id', workoutId);
@@ -425,21 +449,27 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 			const row = page.locator('.workout-row', { hasText: title });
 			await expect(row).toBeVisible({ timeout: 10_000 });
 
-			const { data: created } = await admin
-				.from('gym_workouts')
-				.select('id')
-				.eq('user_id', USER_A.id)
-				.eq('title', title);
-			expect(created?.length).toBe(1);
+			const created = await readRows(
+				'gym_workouts by user_id+title',
+				admin
+					.from('gym_workouts')
+					.select('id')
+					.eq('user_id', USER_A.id)
+					.eq('title', title)
+			);
+			expect(created.length).toBe(1);
 			const workoutId = created![0].id as string;
 
 			try {
 				// 135 lbs -> ~61.23 kg stored (canonical), not 135.
-				const { data: sets } = await admin
-					.from('gym_sets')
-					.select('weight_kg')
-					.eq('workout_id', workoutId);
-				expect(sets?.length).toBe(1);
+				const sets = await readRows(
+					'gym_sets by workout_id',
+					admin
+						.from('gym_sets')
+						.select('weight_kg')
+						.eq('workout_id', workoutId)
+				);
+				expect(sets.length).toBe(1);
 				expect(sets![0].weight_kg).toBeGreaterThan(61);
 				expect(sets![0].weight_kg).toBeLessThan(61.5);
 

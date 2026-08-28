@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — an organiser edits an existing event (issue #335).
@@ -88,13 +88,16 @@ test.describe('/clubs/[slug]/events/[id] — organiser event edit', () => {
 		await expect(page.getByText('Tan track, boathouse end')).toBeVisible({ timeout: 5_000 });
 
 		// The row was UPDATEd, not delete-and-recreated: same id, new fields.
-		const { data: row } = await admin
-			.from('events')
-			.select('title, meet_label')
-			.eq('id', eventId)
-			.single();
-		expect(row?.title).toBe(newTitle);
-		expect(row?.meet_label).toBe('Tan track, boathouse end');
+		const row = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('title, meet_label')
+				.eq('id', eventId)
+				.single()
+		);
+		expect(row.title).toBe(newTitle);
+		expect(row.meet_label).toBe('Tan track, boathouse end');
 
 		// Attendee + result rows survive the edit (the whole point of #335).
 		const attRows = await readRows(
@@ -163,12 +166,15 @@ test.describe('/clubs/[slug]/events/[id] — organiser event edit', () => {
 		// row off the warning's disappearance races the request.
 		await expect(warn).toBeHidden({ timeout: 5_000 });
 		await expect(modal).toBeHidden({ timeout: 10_000 });
-		const { data: row } = await admin
-			.from('events')
-			.select('category')
-			.eq('id', eventId)
-			.single();
-		expect(row?.category).toBe('class');
+		const row = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('category')
+				.eq('id', eventId)
+				.single()
+		);
+		expect(row.category).toBe('class');
 
 		// The result row is orphaned, not destroyed — the warning was about
 		// hiding it, and the edit path must never silently delete it.

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_B, USER_C_PRO } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 // USER_B (alex) is the coach; USER_C_PRO (morgan) is the linked athlete.
 const INVITE_TOKEN = 'e2eassignplantoken00000000000001';
@@ -60,12 +61,15 @@ test.describe('/coaching/athletes/[id] — assign a plan', () => {
 
 		// And it really landed in the athlete's account, owned by them.
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('training_plans')
-			.select('user_id, status, assigned_by_coach_id')
-			.eq('user_id', USER_C_PRO.id)
-			.eq('status', 'active')
-			.maybeSingle();
+		const data = await readMaybeRow(
+			'training_plans by user_id+status',
+			admin
+				.from('training_plans')
+				.select('user_id, status, assigned_by_coach_id')
+				.eq('user_id', USER_C_PRO.id)
+				.eq('status', 'active')
+				.maybeSingle()
+		);
 		expect(data?.assigned_by_coach_id).toBe(USER_B.id);
 	});
 

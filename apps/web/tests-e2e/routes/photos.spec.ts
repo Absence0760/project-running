@@ -4,6 +4,7 @@ import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { deleteRoute } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * /routes/[id] — photo upload + caption + delete via the RoutePhotos
@@ -84,12 +85,15 @@ test.describe('/routes/[id] — RoutePhotos upload + caption + delete', () => {
 		).toBeVisible({ timeout: 5_000 });
 
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('route_photos')
-			.select('id, route_id, caption, storage_path')
-			.eq('route_id', routeId);
-		expect(rows?.length).toBe(1);
-		const row = rows?.[0] as {
+		const rows = await readRows(
+			'route_photos by route_id',
+			admin
+				.from('route_photos')
+				.select('id, route_id, caption, storage_path')
+				.eq('route_id', routeId)
+		);
+		expect(rows.length).toBe(1);
+		const row = rows[0] as {
 			id: string;
 			route_id: string;
 			caption: string | null;
@@ -98,9 +102,12 @@ test.describe('/routes/[id] — RoutePhotos upload + caption + delete', () => {
 		expect(row.caption).toBe('e2e route caption');
 		expect(row.storage_path).toContain(USER_A.id);
 
-		const { data: dl } = await admin.storage
-			.from('route-photos')
-			.download(row.storage_path);
+		const dl = await readMaybeRow(
+			'route-photos',
+			admin.storage
+				.from('route-photos')
+				.download(row.storage_path)
+		);
 		expect(dl).not.toBeNull();
 	});
 

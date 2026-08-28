@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Depth coverage for the coach <-> athlete relationship that the existing
@@ -99,12 +100,15 @@ test.describe('/coaching — a coach with two active athletes (USER_B)', () => {
 		await expect(jaredLink).toBeVisible();
 
 		// DB: Morgan ended, Jared still active.
-		const { data } = await getAdminClient()
-			.from('coach_athletes')
-			.select('athlete_id, status')
-			.eq('coach_id', USER_B.id)
-			.in('athlete_id', [USER_C_PRO.id, USER_A.id]);
-		const byAthlete = new Map((data ?? []).map((r) => [r.athlete_id, r.status]));
+		const data = await readRows(
+			'coach_athletes by coach_id+athlete_id',
+			getAdminClient()
+				.from('coach_athletes')
+				.select('athlete_id, status')
+				.eq('coach_id', USER_B.id)
+				.in('athlete_id', [USER_C_PRO.id, USER_A.id])
+		);
+		const byAthlete = new Map(data.map((r) => [r.athlete_id, r.status]));
 		expect(byAthlete.get(USER_C_PRO.id)).toBe('ended');
 		expect(byAthlete.get(USER_A.id)).toBe('active');
 	});
@@ -146,13 +150,16 @@ test.describe('/coaching/accept/[token] — redeem_coach_invite error branches',
 			await expect(page).toHaveURL(/\/coaching\/accept\//);
 
 			// The invite stays pending + athlete-less — self-redemption did not consume it.
-			const { data } = await getAdminClient()
-				.from('coach_athletes')
-				.select('status, athlete_id')
-				.eq('invite_token', TOKEN)
-				.single();
-			expect(data?.status).toBe('pending');
-			expect(data?.athlete_id).toBeNull();
+			const data = await readRow(
+				'coach_athletes by invite_token',
+				getAdminClient()
+					.from('coach_athletes')
+					.select('status, athlete_id')
+					.eq('invite_token', TOKEN)
+					.single()
+			);
+			expect(data.status).toBe('pending');
+			expect(data.athlete_id).toBeNull();
 		});
 	});
 
@@ -192,13 +199,16 @@ test.describe('/coaching/accept/[token] — redeem_coach_invite error branches',
 			// The second invite is untouched (still pending) and the athlete still
 			// has exactly one live link to this coach — the original active one.
 			const admin = getAdminClient();
-			const { data: second } = await admin
-				.from('coach_athletes')
-				.select('status, athlete_id')
-				.eq('invite_token', SECOND_TOKEN)
-				.single();
-			expect(second?.status).toBe('pending');
-			expect(second?.athlete_id).toBeNull();
+			const second = await readRow(
+				'coach_athletes by invite_token',
+				admin
+					.from('coach_athletes')
+					.select('status, athlete_id')
+					.eq('invite_token', SECOND_TOKEN)
+					.single()
+			);
+			expect(second.status).toBe('pending');
+			expect(second.athlete_id).toBeNull();
 
 			const { data: live } = await admin
 				.from('coach_athletes')

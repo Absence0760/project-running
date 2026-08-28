@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] — owner vs admin vs plain-member permission boundaries.
@@ -210,12 +211,15 @@ test.describe('/clubs/[slug] — role demote round-trip (admin → member)', () 
 		});
 
 		// DB sanity.
-		const { data } = await getAdminClient()
-			.from('club_members')
-			.select('role')
-			.eq('club_id', RICHMOND_ID)
-			.eq('user_id', USER_C_PRO.id)
-			.single();
-		expect(data?.role).toBe('member');
+		const data = await readRow(
+			'club_members by club_id+user_id',
+			getAdminClient()
+				.from('club_members')
+				.select('role')
+				.eq('club_id', RICHMOND_ID)
+				.eq('user_id', USER_C_PRO.id)
+				.single()
+		);
+		expect(data.role).toBe('member');
 	});
 });

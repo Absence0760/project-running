@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 const SAGA_PASSWORD = 'sagatest123';
 
@@ -163,12 +164,15 @@ test.describe('social journey — seeded actor discovers a stranger, follows + e
 		// Sanity: USER_A does NOT already follow the Stranger going in
 		// (proves the search result's "Follow" state is real, not stale).
 		await test.step('precondition: no pre-existing follow edge', async () => {
-			const { data } = await admin
-				.from('user_follows')
-				.select('follower_id')
-				.eq('follower_id', USER_A.id)
-				.eq('followee_id', strangerId)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'user_follows by follower_id+followee_id',
+				admin
+					.from('user_follows')
+					.select('follower_id')
+					.eq('follower_id', USER_A.id)
+					.eq('followee_id', strangerId)
+					.maybeSingle()
+			);
 			expect(data).toBeNull();
 		});
 

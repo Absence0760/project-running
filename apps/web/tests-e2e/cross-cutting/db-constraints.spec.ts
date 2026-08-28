@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Backend boundary: hard database guards that protect a security or
@@ -28,12 +29,15 @@ test.describe('database constraints', () => {
 		const admin = getAdminClient();
 
 		// Sanity: runner already has Richmond Half active (per seed).
-		const { data: existing } = await admin
-			.from('training_plans')
-			.select('id, status')
-			.eq('user_id', USER_A.id)
-			.eq('status', 'active');
-		expect(existing?.length).toBeGreaterThanOrEqual(1);
+		const existing = await readRows(
+			'training_plans by user_id+status',
+			admin
+				.from('training_plans')
+				.select('id, status')
+				.eq('user_id', USER_A.id)
+				.eq('status', 'active')
+		);
+		expect(existing.length).toBeGreaterThanOrEqual(1);
 
 		// Try to insert a SECOND active plan for runner. We let the
 		// auto-generator skip plan_weeks/plan_workouts; the index is
@@ -64,7 +68,7 @@ test.describe('database constraints', () => {
 			.select('id', { count: 'exact', head: true })
 			.eq('user_id', USER_A.id)
 			.eq('status', 'active');
-		expect(count).toBe(existing?.length);
+		expect(count).toBe(existing.length);
 	});
 
 	test('subscription_tier is read-only for non-service-role callers (no self-upgrade to Pro)', async () => {
@@ -82,12 +86,15 @@ test.describe('database constraints', () => {
 		// upgrade, expect a Postgres exception, then verify via
 		// service-role that the row never changed.
 		const admin = getAdminClient();
-		const { data: before } = await admin
-			.from('user_profiles')
-			.select('subscription_tier, subscription_at')
-			.eq('id', USER_A.id)
-			.single();
-		expect(before?.subscription_tier).toBe('free');
+		const before = await readRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('subscription_tier, subscription_at')
+				.eq('id', USER_A.id)
+				.single()
+		);
+		expect(before.subscription_tier).toBe('free');
 
 		const userClient = await getUserClient({
 			email: USER_A.email,
@@ -105,13 +112,16 @@ test.describe('database constraints', () => {
 		expect(error?.message ?? '').toMatch(/read-only|service-role/i);
 
 		// Verify via service-role that the row didn't change.
-		const { data: after } = await admin
-			.from('user_profiles')
-			.select('subscription_tier, subscription_at')
-			.eq('id', USER_A.id)
-			.single();
-		expect(after?.subscription_tier).toBe('free');
-		expect(after?.subscription_at).toBe(before?.subscription_at ?? null);
+		const after = await readRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('subscription_tier, subscription_at')
+				.eq('id', USER_A.id)
+				.single()
+		);
+		expect(after.subscription_tier).toBe('free');
+		expect(after.subscription_at).toBe(before.subscription_at ?? null);
 	});
 
 	test('run_kudos UNIQUE rejects a duplicate (user_id, run_id) pair', async () => {

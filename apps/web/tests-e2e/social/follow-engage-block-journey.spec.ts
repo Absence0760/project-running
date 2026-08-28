@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { clearNotifications, insertRun } from '../fixtures/simulate';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Social cross-surface journey — the full follow → engage → block arc
@@ -141,19 +142,25 @@ test.describe('social journey — follow → engage → block severs the loop ac
 
 			// ── precondition: no follow edge, no block between A and B ──
 			await test.step('precondition: empty follow graph + no block', async () => {
-				const { data: edge } = await admin
-					.from('user_follows')
-					.select('follower_id')
-					.eq('follower_id', actor.id)
-					.eq('followee_id', poster.id)
-					.maybeSingle();
+				const edge = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', actor.id)
+						.eq('followee_id', poster.id)
+						.maybeSingle()
+				);
 				expect(edge).toBeNull();
-				const { data: block } = await admin
-					.from('user_blocks')
-					.select('blocker_id')
-					.eq('blocker_id', actor.id)
-					.eq('blocked_id', poster.id)
-					.maybeSingle();
+				const block = await readMaybeRow(
+					'user_blocks by blocker_id+blocked_id',
+					admin
+						.from('user_blocks')
+						.select('blocker_id')
+						.eq('blocker_id', actor.id)
+						.eq('blocked_id', poster.id)
+						.maybeSingle()
+				);
 				expect(block).toBeNull();
 			});
 
@@ -298,12 +305,15 @@ test.describe('social journey — follow → engage → block severs the loop ac
 
 			// ── 6. The follow edge is gone — block subsumes unfollow ────
 			await test.step('the A→B follow edge was drained by the block', async () => {
-				const { data } = await admin
-					.from('user_follows')
-					.select('follower_id')
-					.eq('follower_id', actor.id)
-					.eq('followee_id', poster.id)
-					.maybeSingle();
+				const data = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', actor.id)
+						.eq('followee_id', poster.id)
+						.maybeSingle()
+				);
 				expect(data).toBeNull();
 			});
 

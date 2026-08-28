@@ -7,6 +7,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Backend boundary: deleting a `runs` row cascades to every child
@@ -111,18 +112,22 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		expect(notifAfter).toBe(0);
 
 		// The runs row itself is gone.
-		const { data: stillThere } = await admin
-			.from('runs')
-			.select('id')
-			.eq('id', runId)
-			.maybeSingle();
+		const stillThere = await readMaybeRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('id')
+				.eq('id', runId)
+				.maybeSingle()
+		);
 		expect(stillThere).toBeNull();
 
 		// Storage object swept by deleteRun()'s pre-delete remove.
-		const { data: list } = await admin.storage
-			.from('runs')
-			.list(USER_A.id, { search: runId });
-		expect(list?.find((f) => f.name.startsWith(runId))).toBeUndefined();
+		const list = await readRows(
+			'runs Storage objects under the owner prefix',
+			admin.storage.from('runs').list(USER_A.id, { search: runId })
+		);
+		expect(list.find((f) => f.name.startsWith(runId))).toBeUndefined();
 	});
 
 	test('cascade also sweeps run_photos + their Storage objects when the run is deleted', async ({
@@ -166,11 +171,14 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		});
 
 		// Sanity: photo is reachable via service-role pre-delete.
-		const { data: photoBefore } = await admin
-			.from('run_photos')
-			.select('id')
-			.eq('id', photoId)
-			.maybeSingle();
+		const photoBefore = await readMaybeRow(
+			'run_photos by id',
+			admin
+				.from('run_photos')
+				.select('id')
+				.eq('id', photoId)
+				.maybeSingle()
+		);
 		expect(photoBefore).not.toBeNull();
 
 		// Drive the UI delete.
@@ -183,11 +191,14 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
 
 		// Row gone via cascade.
-		const { data: photoAfter } = await admin
-			.from('run_photos')
-			.select('id')
-			.eq('id', photoId)
-			.maybeSingle();
+		const photoAfter = await readMaybeRow(
+			'run_photos by id',
+			admin
+				.from('run_photos')
+				.select('id')
+				.eq('id', photoId)
+				.maybeSingle()
+		);
 		expect(photoAfter).toBeNull();
 	});
 });

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /gym/routines/library — the public gym-routine library (migration
@@ -107,26 +108,35 @@ test.describe('/gym/routines/library — publish, browse, preview, adopt', () =>
 			await expect(page.getByTestId('routine-exercises')).toContainText(exercise);
 
 			// A new personal (club-less, non-public) routine is owned by USER_A.
-			const { data: clones } = await admin
-				.from('gym_routines')
-				.select('id, club_id, is_public_template, exercise_count')
-				.eq('author_id', USER_A.id)
-				.eq('title', title);
-			expect(clones?.length).toBe(1);
+			const clones = await readRows(
+				'gym_routines by author_id+title',
+				admin
+					.from('gym_routines')
+					.select('id, club_id, is_public_template, exercise_count')
+					.eq('author_id', USER_A.id)
+					.eq('title', title)
+			);
+			expect(clones.length).toBe(1);
 			adoptedId = clones![0].id as string;
 			expect(clones![0].club_id).toBeNull();
 			expect(clones![0].is_public_template).toBe(false);
 
-			const { data: clonedEx } = await admin
-				.from('gym_routine_exercises')
-				.select('id, exercise_key')
-				.eq('routine_id', adoptedId);
-			expect(clonedEx?.length).toBe(1);
-			const { data: clonedSets } = await admin
-				.from('gym_routine_sets')
-				.select('target_weight_kg')
-				.eq('routine_exercise_id', clonedEx![0].id);
-			expect(clonedSets?.length).toBe(2);
+			const clonedEx = await readRows(
+				'gym_routine_exercises by routine_id',
+				admin
+					.from('gym_routine_exercises')
+					.select('id, exercise_key')
+					.eq('routine_id', adoptedId)
+			);
+			expect(clonedEx.length).toBe(1);
+			const clonedSets = await readRows(
+				'gym_routine_sets by routine_exercise_id',
+				admin
+					.from('gym_routine_sets')
+					.select('target_weight_kg')
+					.eq('routine_exercise_id', clonedEx![0].id)
+			);
+			expect(clonedSets.length).toBe(2);
 			expect(Number(clonedSets![0].target_weight_kg)).toBe(100);
 		} finally {
 			if (adoptedId) await admin.from('gym_routines').delete().eq('id', adoptedId);

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /plans/[id]/workouts/[wid] — single-workout drill-down.
@@ -30,20 +31,26 @@ test.describe('/plans/[id]/workouts/[wid]', () => {
 		// one off the plan's first week so we have a deterministic
 		// target. The admin client bypasses RLS — fine for fixture
 		// setup, never for the assertion (we navigate as runner).
-		const { data: weekRow } = await getAdminClient()
-			.from('plan_weeks')
-			.select('id')
-			.eq('plan_id', SEED_PLAN_ID)
-			.eq('week_index', 0)
-			.maybeSingle();
+		const weekRow = await readMaybeRow(
+			'plan_weeks by plan_id+week_index',
+			getAdminClient()
+				.from('plan_weeks')
+				.select('id')
+				.eq('plan_id', SEED_PLAN_ID)
+				.eq('week_index', 0)
+				.maybeSingle()
+		);
 		expect(weekRow).not.toBeNull();
-		const { data: woRow } = await getAdminClient()
-			.from('plan_workouts')
-			.select('id, kind')
-			.eq('week_id', (weekRow as { id: string }).id)
-			.order('scheduled_date', { ascending: true })
-			.limit(1)
-			.maybeSingle();
+		const woRow = await readMaybeRow(
+			'plan_workouts by week_id',
+			getAdminClient()
+				.from('plan_workouts')
+				.select('id, kind')
+				.eq('week_id', (weekRow as { id: string }).id)
+				.order('scheduled_date', { ascending: true })
+				.limit(1)
+				.maybeSingle()
+		);
 		expect(woRow).not.toBeNull();
 		const wo = woRow as { id: string; kind: string };
 
@@ -83,15 +90,18 @@ test.describe('/plans/[id]/workouts/[wid]', () => {
 			.eq('plan_id', SEED_PLAN_ID)
 			.eq('week_index', 0)
 			.maybeSingle();
-		const { data: woRow } = await admin
-			.from('plan_workouts')
-			.select('id, kind')
-			.eq('week_id', (weekRow as { id: string }).id)
-			.neq('kind', 'rest')
-			.is('completed_run_id', null)
-			.order('scheduled_date', { ascending: true })
-			.limit(1)
-			.maybeSingle();
+		const woRow = await readMaybeRow(
+			'plan_workouts by week_id+kind+completed_run_id',
+			admin
+				.from('plan_workouts')
+				.select('id, kind')
+				.eq('week_id', (weekRow as { id: string }).id)
+				.neq('kind', 'rest')
+				.is('completed_run_id', null)
+				.order('scheduled_date', { ascending: true })
+				.limit(1)
+				.maybeSingle()
+		);
 		expect(woRow).not.toBeNull();
 		const wo = woRow as { id: string };
 

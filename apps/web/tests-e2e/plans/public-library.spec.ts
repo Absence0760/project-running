@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Public plan library — publish → browse → clone round-trip.
@@ -83,12 +84,15 @@ test.describe('Public plan library — publish → browse → clone', () => {
 		});
 
 		// Exactly one public copy exists; source untouched.
-		const { data: templates } = await admin
-			.from('training_plans')
-			.select('id, is_public_template, is_template, user_id, vdot, current_5k_seconds')
-			.eq('is_public_template', true)
-			.eq('name', PLAN_NAME);
-		expect(templates?.length).toBe(1);
+		const templates = await readRows(
+			'training_plans by is_public_template+name',
+			admin
+				.from('training_plans')
+				.select('id, is_public_template, is_template, user_id, vdot, current_5k_seconds')
+				.eq('is_public_template', true)
+				.eq('name', PLAN_NAME)
+		);
+		expect(templates.length).toBe(1);
 		const tmpl = templates![0] as {
 			id: string;
 			is_public_template: boolean;
@@ -136,12 +140,15 @@ test.describe('Public plan library — publish → browse → clone', () => {
 		await pageB.getByRole('button', { name: 'Clone into my plans' }).click();
 		await pageB.waitForURL(/\/plans\/[0-9a-f-]+$/, { timeout: 15_000 });
 
-		const { data: clones } = await admin
-			.from('training_plans')
-			.select('user_id, status, is_template, is_public_template, parent_template_id, vdot, current_5k_seconds')
-			.eq('user_id', USER_B.id)
-			.eq('parent_template_id', tmpl.id);
-		expect(clones?.length).toBe(1);
+		const clones = await readRows(
+			'training_plans by user_id+parent_template_id',
+			admin
+				.from('training_plans')
+				.select('user_id, status, is_template, is_public_template, parent_template_id, vdot, current_5k_seconds')
+				.eq('user_id', USER_B.id)
+				.eq('parent_template_id', tmpl.id)
+		);
+		expect(clones.length).toBe(1);
 		const clone = clones![0] as {
 			user_id: string;
 			status: string;

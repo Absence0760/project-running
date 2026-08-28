@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { USER_C_PRO } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Private-club RLS negative cases.
@@ -76,11 +76,14 @@ test.describe('private club — PostgREST wire-level RLS', () => {
 		});
 		expect(signInErr).toBeNull();
 
-		const { data } = await client
-			.from('clubs')
-			.select('id, name, slug')
-			.eq('id', FRIENDS_OF_JARED_ID)
-			.maybeSingle();
+		const data = await readMaybeRow(
+			'clubs by id',
+			client
+				.from('clubs')
+				.select('id, name, slug')
+				.eq('id', FRIENDS_OF_JARED_ID)
+				.maybeSingle()
+		);
 
 		// RLS filters the row out for a non-member: zero rows, not an error.
 		expect(data).toBeNull();
@@ -92,19 +95,25 @@ test.describe('private club — PostgREST wire-level RLS', () => {
 			auth: { persistSession: false, autoRefreshToken: false }
 		});
 
-		const { data } = await anon
-			.from('clubs')
-			.select('id, name, slug')
-			.eq('id', FRIENDS_OF_JARED_ID)
-			.maybeSingle();
+		const data = await readMaybeRow(
+			'clubs by id',
+			anon
+				.from('clubs')
+				.select('id, name, slug')
+				.eq('id', FRIENDS_OF_JARED_ID)
+				.maybeSingle()
+		);
 		expect(data).toBeNull();
 
 		// And the private club must never appear in a broad public list.
-		const { data: list } = await anon
-			.from('clubs')
-			.select('id, slug')
-			.limit(50);
-		const slugs = (list ?? []).map((r) => r.slug);
+		const list = await readRows(
+			'clubs',
+			anon
+				.from('clubs')
+				.select('id, slug')
+				.limit(50)
+		);
+		const slugs = list.map((r) => r.slug);
 		expect(slugs).not.toContain('friends-of-jared');
 	});
 

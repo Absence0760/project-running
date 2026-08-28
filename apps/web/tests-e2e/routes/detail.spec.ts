@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * /routes/[id] — owner-only route detail page.
@@ -82,12 +83,15 @@ test.describe('/routes/[id]', () => {
 		await expect(dialog).toBeHidden();
 		await expect(shareBar).toBeHidden();
 		{
-			const { data } = await admin
-				.from('routes')
-				.select('is_public')
-				.eq('id', RUNNER_PUBLIC_ROUTE_ID)
-				.single();
-			expect(data?.is_public).toBe(false);
+			const data = await readRow(
+				'routes by id',
+				admin
+					.from('routes')
+					.select('is_public')
+					.eq('id', RUNNER_PUBLIC_ROUTE_ID)
+					.single()
+			);
+			expect(data.is_public).toBe(false);
 		}
 
 		// Confirm flips it public, discloses the flip, and reveals the link.
@@ -99,12 +103,15 @@ test.describe('/routes/[id]', () => {
 		).toBeVisible();
 		await expect(shareBar).toBeVisible();
 		{
-			const { data } = await admin
-				.from('routes')
-				.select('is_public')
-				.eq('id', RUNNER_PUBLIC_ROUTE_ID)
-				.single();
-			expect(data?.is_public).toBe(true);
+			const data = await readRow(
+				'routes by id',
+				admin
+					.from('routes')
+					.select('is_public')
+					.eq('id', RUNNER_PUBLIC_ROUTE_ID)
+					.single()
+			);
+			expect(data.is_public).toBe(true);
 		}
 	});
 

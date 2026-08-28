@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow, readRow } from '../fixtures/db-read';
 
 /**
  * Personal-records / PB journey — a run that sets a new personal best
@@ -147,12 +148,15 @@ test.describe('personal records journey', () => {
 				// best-time-wins: the cache's 5k row recomputes to the faster time.
 				await expect.poll(cached5kBest, { timeout: 10_000 }).toBe(NEW_PB_S);
 				// And it points at the faster run, not the slower baseline.
-				const { data: pbRow } = await admin
-					.from('personal_records')
-					.select('run_id')
-					.eq('user_id', USER_A.id)
-					.eq('distance', '5k')
-					.maybeSingle();
+				const pbRow = await readMaybeRow(
+					'personal_records by user_id+distance',
+					admin
+						.from('personal_records')
+						.select('run_id')
+						.eq('user_id', USER_A.id)
+						.eq('distance', '5k')
+						.maybeSingle()
+				);
 				expect(pbRow?.run_id).toBe(pbRunId);
 
 				// The PB card reflects the improved time (a reload, not stale
@@ -172,14 +176,17 @@ test.describe('personal records journey', () => {
 				// baseline (still faster than the pre-existing seed best) —
 				// NOT left orphaned at the deleted run's faster time.
 				await expect.poll(cached5kBest, { timeout: 10_000 }).toBe(BASELINE_S);
-				const { data: afterRow } = await admin
-					.from('personal_records')
-					.select('run_id')
-					.eq('user_id', USER_A.id)
-					.eq('distance', '5k')
-					.maybeSingle();
-				expect(afterRow?.run_id).toBe(baselineRunId);
-				expect(afterRow?.run_id).not.toBe(deletedPbId);
+				const afterRow = await readRow(
+					'personal_records by user_id+distance',
+					admin
+						.from('personal_records')
+						.select('run_id')
+						.eq('user_id', USER_A.id)
+						.eq('distance', '5k')
+						.maybeSingle()
+				);
+				expect(afterRow.run_id).toBe(baselineRunId);
+				expect(afterRow.run_id).not.toBe(deletedPbId);
 
 				// Dashboard re-reads the recomputed cache and shows 25:00.
 				await page.goto('/dashboard');

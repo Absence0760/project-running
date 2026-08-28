@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Coach <-> athlete link lifecycle boundaries the existing coaching specs don't
@@ -77,13 +78,16 @@ test.describe('/coaching — coach side (USER_B)', () => {
 		});
 
 		// And the link row is ended (not deleted).
-		const { data } = await getAdminClient()
-			.from('coach_athletes')
-			.select('status')
-			.eq('coach_id', USER_B.id)
-			.eq('athlete_id', USER_C_PRO.id)
-			.single();
-		expect(data?.status).toBe('ended');
+		const data = await readRow(
+			'coach_athletes by coach_id+athlete_id',
+			getAdminClient()
+				.from('coach_athletes')
+				.select('status')
+				.eq('coach_id', USER_B.id)
+				.eq('athlete_id', USER_C_PRO.id)
+				.single()
+		);
+		expect(data.status).toBe('ended');
 	});
 
 	test('an assigned plan shows compliance counts and done/missed pills', async ({ page }) => {
@@ -163,13 +167,16 @@ test.describe('/coaching — athlete side (USER_C_PRO)', () => {
 
 		await expect(coachLink).toHaveCount(0, { timeout: 10_000 });
 
-		const { data } = await getAdminClient()
-			.from('coach_athletes')
-			.select('status')
-			.eq('coach_id', USER_B.id)
-			.eq('athlete_id', USER_C_PRO.id)
-			.single();
-		expect(data?.status).toBe('ended');
+		const data = await readRow(
+			'coach_athletes by coach_id+athlete_id',
+			getAdminClient()
+				.from('coach_athletes')
+				.select('status')
+				.eq('coach_id', USER_B.id)
+				.eq('athlete_id', USER_C_PRO.id)
+				.single()
+		);
+		expect(data.status).toBe('ended');
 	});
 });
 

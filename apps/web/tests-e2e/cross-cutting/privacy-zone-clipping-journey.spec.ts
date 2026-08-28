@@ -5,6 +5,7 @@ import { expect, test, type BrowserContext } from '@playwright/test';
 import { clipPointsToZones, isInAnyZone } from '../../src/lib/routes/privacy';
 import { getAdminClient, getUserClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 import {
 	insertRun,
 	deleteRun,
@@ -178,9 +179,12 @@ test.describe('privacy-zone clipping — every viewer surface', () => {
 				// truth, what /runs/[id]'s owner Storage read renders) holds
 				// EVERY planted point, including the in-zone ones.
 				const admin = getAdminClient();
-				const dl = await admin.storage.from('runs').download(`${owner.id}/${runId}.json.gz`);
-				expect(dl.data, 'owner track blob must exist in Storage').not.toBeNull();
-				const raw = await dl.data!.arrayBuffer();
+				const dl = await readMaybeRow(
+					'runs',
+					admin.storage.from('runs').download(`${owner.id}/${runId}.json.gz`)
+				);
+				expect(dl, 'owner track blob must exist in Storage').not.toBeNull();
+				const raw = await dl!.arrayBuffer();
 				const stored = JSON.parse(gunzipSync(Buffer.from(raw)).toString('utf-8')) as {
 					lat: number;
 					lng: number;
@@ -340,11 +344,14 @@ test.describe('privacy-zone clipping — every viewer surface', () => {
 				// Data layer: the 5 out-of-zone pings verbatim + exactly ONE
 				// coarsened last-seen row (the two in-zone pings collapse to it).
 				const admin = getAdminClient();
-				const { data: rows } = await admin
-					.from('live_run_pings')
-					.select('lat, lng')
-					.eq('run_id', runId!);
-				const persisted = (rows ?? []) as { lat: number; lng: number }[];
+				const rows = await readRows(
+					'live_run_pings by run_id',
+					admin
+						.from('live_run_pings')
+						.select('lat, lng')
+						.eq('run_id', runId!)
+				);
+				const persisted = rows as { lat: number; lng: number }[];
 				expect(persisted.length).toBe(OUT_OF_ZONE.length + 1);
 
 				// The load-bearing privacy assertion: NO persisted ping carries a

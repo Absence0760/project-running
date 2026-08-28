@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertRun } from '../fixtures/simulate';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Social cross-surface journey — discover → follow → feed → engage →
@@ -251,12 +252,15 @@ test.describe('social journey — discover → follow → feed → engage → un
 
 			// The edge is gone server-side.
 			await expect(async () => {
-				const { data } = await admin
-					.from('user_follows')
-					.select('follower_id')
-					.eq('follower_id', alpha.id)
-					.eq('followee_id', bravo.id)
-					.maybeSingle();
+				const data = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', alpha.id)
+						.eq('followee_id', bravo.id)
+						.maybeSingle()
+				);
 				expect(data).toBeNull();
 			}).toPass({ timeout: 5_000 });
 

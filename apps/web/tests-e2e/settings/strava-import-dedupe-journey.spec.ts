@@ -241,13 +241,16 @@ test.describe('Strava bulk-import — multi-activity, track-bearing, partial re-
 				await expect(page.locator('.toast-success')).toContainText(/not imported/i);
 
 				// Backend: exactly the two foot activities landed; the ride did not.
-				const { data: rows } = await admin
-					.from('runs')
-					.select('id, source, external_id, activity_type, track_url, metadata')
-					.eq('user_id', saga.id)
-					.in('external_id', [`strava:${runId}`, `strava:${walkId}`, `strava:${rideId}`]);
+				const rows = await readRows(
+					'runs by user_id+external_id',
+					admin
+						.from('runs')
+						.select('id, source, external_id, activity_type, track_url, metadata')
+						.eq('user_id', saga.id)
+						.in('external_id', [`strava:${runId}`, `strava:${walkId}`, `strava:${rideId}`])
+				);
 				const byExt = new Map(
-					(rows ?? []).map((r) => [r.external_id as string, r])
+					rows.map((r) => [r.external_id as string, r])
 				);
 				expect(byExt.size, 'run + walk imported, ride filtered out').toBe(2);
 

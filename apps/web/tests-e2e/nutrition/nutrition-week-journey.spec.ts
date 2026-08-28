@@ -169,12 +169,15 @@ test.describe('/nutrition — multi-day week journey', () => {
 			await expect.poll(consumedKcal).toBe(baseKcal + TODAY_KCAL);
 
 			// Backend row exists today, owned by USER_A, in the chosen slot.
-			const { data: created } = await admin
-				.from('food_log')
-				.select('id, meal_slot')
-				.eq('user_id', USER_A.id)
-				.eq('item_name', TODAY_ITEM);
-			expect(created?.length).toBe(1);
+			const created = await readRows(
+				'food_log by user_id+item_name',
+				admin
+					.from('food_log')
+					.select('id, meal_slot')
+					.eq('user_id', USER_A.id)
+					.eq('item_name', TODAY_ITEM)
+			);
+			expect(created.length).toBe(1);
 			expect(created![0].meal_slot).toBe('dinner');
 		});
 

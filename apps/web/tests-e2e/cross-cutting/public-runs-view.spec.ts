@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { loadSupabaseEnv } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * `public_runs` view contract — the privacy boundary between owner-
@@ -166,11 +167,14 @@ test.describe('public_runs view — privacy strip contract', () => {
 			const anon = createClient(url, anonKey, {
 				auth: { persistSession: false }
 			});
-			const { data } = await anon
-				.from('public_runs')
-				.select('id')
-				.eq('id', planted)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'public_runs by id',
+				anon
+					.from('public_runs')
+					.select('id')
+					.eq('id', planted)
+					.maybeSingle()
+			);
 			expect(data).toBeNull();
 		} finally {
 			await deleteRun(planted);

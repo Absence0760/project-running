@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Gym routine + progression-signal journey — the progressive-overload story
@@ -81,12 +82,15 @@ test.describe('gym routine + progression-signal journey — log → save-as-rout
 		}
 
 		async function captureWorkoutId(userId: string, title: string): Promise<string> {
-			const { data } = await admin
-				.from('gym_workouts')
-				.select('id')
-				.eq('user_id', userId)
-				.eq('title', title);
-			expect(data?.length).toBe(1);
+			const data = await readRows(
+				'gym_workouts by user_id+title',
+				admin
+					.from('gym_workouts')
+					.select('id')
+					.eq('user_id', userId)
+					.eq('title', title)
+			);
+			expect(data.length).toBe(1);
 			return data![0].id as string;
 		}
 
@@ -137,12 +141,15 @@ test.describe('gym routine + progression-signal journey — log → save-as-rout
 						timeout: 10_000,
 					});
 
-					const { data: routines } = await admin
-						.from('gym_routines')
-						.select('id, exercise_count')
-						.eq('author_id', user.id)
-						.eq('title', routineTitle);
-					expect(routines?.length).toBe(1);
+					const routines = await readRows(
+						'gym_routines by author_id+title',
+						admin
+							.from('gym_routines')
+							.select('id, exercise_count')
+							.eq('author_id', user.id)
+							.eq('title', routineTitle)
+					);
+					expect(routines.length).toBe(1);
 					expect(routines![0].exercise_count).toBe(1);
 					routineId = routines![0].id as string;
 				});
@@ -276,14 +283,17 @@ test.describe('gym routine + progression-signal journey — log → save-as-rout
 
 					// Backend cross-check: three weighted workouts for this exercise,
 					// one routine, all owned by the saga user.
-					const { data: sets } = await admin
-						.from('gym_sets')
-						.select('weight_kg, reps')
-						.in('workout_id', workoutIds)
-						.eq('exercise_name', exercise)
-						.order('weight_kg', { ascending: true });
-					expect(sets?.length).toBe(3);
-					expect(sets!.map((s) => Number(s.weight_kg))).toEqual([100, 110, 120]);
+					const sets = await readRows(
+						'gym_sets by workout_id+exercise_name',
+						admin
+							.from('gym_sets')
+							.select('weight_kg, reps')
+							.in('workout_id', workoutIds)
+							.eq('exercise_name', exercise)
+							.order('weight_kg', { ascending: true })
+					);
+					expect(sets.length).toBe(3);
+					expect(sets.map((s) => Number(s.weight_kg))).toEqual([100, 110, 120]);
 				});
 			} finally {
 				await ctx.close();

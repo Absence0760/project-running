@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Behaviour tests — cheap, focused checks on specific data-layer
@@ -119,12 +120,15 @@ test.describe('trigger fan-out — UI-driven', () => {
 			page.locator('article.post', { hasText: body })
 		).toBeVisible({ timeout: 10_000 });
 
-		const { data: rows } = await admin
-			.from('club_posts')
-			.select('club_id, author_id, body, parent_post_id')
-			.eq('body', body);
-		expect(rows?.length).toBe(1);
-		const row = rows?.[0] as {
+		const rows = await readRows(
+			'club_posts by body',
+			admin
+				.from('club_posts')
+				.select('club_id, author_id, body, parent_post_id')
+				.eq('body', body)
+		);
+		expect(rows.length).toBe(1);
+		const row = rows[0] as {
 			club_id: string;
 			author_id: string;
 			body: string;

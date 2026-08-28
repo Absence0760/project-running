@@ -11,6 +11,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Multi-source notifications inbox lifecycle — the STITCHED journey the
@@ -215,11 +216,14 @@ test.describe('notifications multi-source journey — four triggers → one inbo
 				// can't be confused with a missing trigger. Asserts the exact
 				// set of kinds so a duplicate/missing source is caught here.
 				await expect(async () => {
-					const { data } = await admin
-						.from('notifications')
-						.select('kind, read_at')
-						.eq('user_id', recipient.id);
-					const rows = data ?? [];
+					const data = await readRows(
+						'notifications by user_id',
+						admin
+							.from('notifications')
+							.select('kind, read_at')
+							.eq('user_id', recipient.id)
+					);
+					const rows = data;
 					expect(rows).toHaveLength(4);
 					expect(rows.every((r) => r.read_at == null)).toBe(true);
 					expect([...rows.map((r) => r.kind as string)].sort()).toEqual([

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — organiser results CSV export + bib-only approval
@@ -134,13 +135,16 @@ test.describe('/clubs/[slug]/events/[id] — bib-only approval', () => {
 
 		await expect(row.getByText('PENDING')).toHaveCount(0, { timeout: 10_000 });
 
-		const { data } = await getAdminClient()
-			.from('event_results')
-			.select('organiser_approved, organiser_approved_by')
-			.eq('id', resultId)
-			.single();
-		expect(data?.organiser_approved).toBe(true);
-		expect(data?.organiser_approved_by).toBe(USER_A.id);
+		const data = await readRow(
+			'event_results by id',
+			getAdminClient()
+				.from('event_results')
+				.select('organiser_approved, organiser_approved_by')
+				.eq('id', resultId)
+				.single()
+		);
+		expect(data.organiser_approved).toBe(true);
+		expect(data.organiser_approved_by).toBe(USER_A.id);
 	});
 
 	// Double-submit guard: the Approve button must disable itself while the
@@ -172,12 +176,15 @@ test.describe('/clubs/[slug]/events/[id] — bib-only approval', () => {
 		await expect(row.getByText('PENDING')).toHaveCount(0, { timeout: 10_000 });
 
 		// Exactly one approval landed (no double write).
-		const { data } = await getAdminClient()
-			.from('event_results')
-			.select('organiser_approved, organiser_approved_by')
-			.eq('id', resultId)
-			.single();
-		expect(data?.organiser_approved).toBe(true);
-		expect(data?.organiser_approved_by).toBe(USER_A.id);
+		const data = await readRow(
+			'event_results by id',
+			getAdminClient()
+				.from('event_results')
+				.select('organiser_approved, organiser_approved_by')
+				.eq('id', resultId)
+				.single()
+		);
+		expect(data.organiser_approved).toBe(true);
+		expect(data.organiser_approved_by).toBe(USER_A.id);
 	});
 });
