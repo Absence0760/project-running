@@ -12,6 +12,14 @@
 //      than observed and the document explains the whole column once —
 //      see decisions § 739; a per-row restatement there is the habit
 //      that sweep removed, not a missing explanation.)
+//   4. A line that opens with a pipe and belongs to no table. It renders
+//      as raw pipes in a paragraph, so a reader sees it is broken, but
+//      every row under it had stopped existing in silence.
+//
+// None of the four can be evaded by writing a row differently: rows come
+// from a GFM-faithful table walk, `scripts/markdown_lines.mjs`'s
+// `markdownTables` in Dart, and the two must agree — they read the same
+// file in the same job. decisions § 779.
 //
 // The whole iOS column — its derivation, its one prose statement, and the
 // marker a departing cell carries — is `scripts/check_parity_ios_column.mjs`,
@@ -19,8 +27,14 @@
 // rule about it ("iOS `✓` while Android isn't"); that rule is subsumed, since
 // the derivation now forbids a bare iOS `✓` outright.
 //
-// Wired into CI via the `parity-matrix` job in `.github/workflows/ci.yml`.
+// Wired into CI via the `parity-matrix` job in `.github/workflows/ci.yml`,
+// where it runs AFTER `check_parity_ios_column.mjs` — so it is not a
+// backstop for that guard, and a defect the two share is reported there
+// first or not at all (decisions § 774).
 // Run locally with `dart run scripts/check_parity_matrix.dart`.
+// Unit tests: `node --test scripts/check_parity_matrix.test.mjs` (they
+// drive this script over fixture files; there is no Dart test package at
+// the repo root and the guard is a bare `dart:io` script).
 //
 // Out of scope (v1): cross-checking that a `✓` cell corresponds to a real
 // file in the codebase. The Notes column is free-form prose — extracting
@@ -124,72 +138,181 @@ void main(List<String> args) {
   exit(1);
 }
 
-/// Walk the markdown lines, pull out every parity-table data row.
+/// One GFM table: the header row's cells and every row a renderer draws
+/// under it.
+class _Table {
+  final int headerLine;
+  final List<String> header;
+  final List<_RawRow> rows = [];
+
+  _Table({required this.headerLine, required this.header});
+}
+
+class _RawRow {
+  final int lineNumber;
+  final String text;
+  final List<String> cells;
+
+  _RawRow(this.lineNumber, this.text, this.cells);
+}
+
+/// Split one row on unescaped `|` only. Markdown rows look like
+/// `| a | b | c |` — but a cell may carry a literal pipe written as `\|`
+/// (the GFM escape), which must NOT start a new column. GFM makes BOTH
+/// wrapping pipes optional, so an empty end is dropped only where a pipe
+/// actually produced one.
+List<String> _splitRow(String line) {
+  final parts = line
+      .trim()
+      .split(RegExp(r'(?<!\\)\|'))
+      .map((s) => s.replaceAll(r'\|', '|').trim())
+      .toList();
+  if (parts.isNotEmpty && line.trim().startsWith('|')) parts.removeAt(0);
+  if (parts.isNotEmpty && line.trim().endsWith('|')) parts.removeLast();
+  return parts;
+}
+
+bool _isDelimiter(String line) {
+  if (!line.contains('|')) return false;
+  final cells = _splitRow(line);
+  return cells.isNotEmpty &&
+      cells.every((c) => RegExp(r'^:?-+:?$').hasMatch(c));
+}
+
+/// A line that opens a new markdown block rather than continuing the
+/// table above it.
+final _blockStart = RegExp(r'^\s*(?:[-*+] |\d+[.)] |#{1,6} |>|\||```|~~~|<!--)');
+
+/// Every GFM table in the document.
 ///
-/// Heuristic: a parity row is a markdown table row (starts with `|`) that
-/// (a) has at least 7 cells when split on `|`, and (b) is NOT a header
-/// or separator row. Header / separator detection: any cell containing
-/// only `:` / `-` / whitespace is a separator; a row whose feature cell
-/// is literally "Feature" is the table header. Other tables in the doc
-/// (Legend, Notes-style summaries) have different column counts and
-/// drop out naturally.
+/// This is `scripts/markdown_lines.mjs`'s `markdownTables` in Dart, and the
+/// two have to agree — they read the same file in the same CI job. The rule
+/// is GFM's own and it is STATEFUL: a table opens on a header plus a
+/// delimiter row of the SAME width, and every line after it is a row until a
+/// blank line or another block. Detecting a row as `line.startsWith('|')`
+/// instead made a row written without its leading pipe — which GFM renders
+/// identically — invisible to this guard and to the iOS-column guard beside
+/// it, so no cell of it was ever checked. decisions § 779.
+List<_Table> _markdownTables(List<String> lines) {
+  final tables = <_Table>[];
+  _Table? open;
+  String? fence;
+
+  for (var i = 0; i < lines.length; i++) {
+    final line = lines[i];
+    final edge = RegExp(r'^\s*(`{3,}|~{3,})').firstMatch(line);
+    if (edge != null) {
+      final glyph = edge.group(1)![0];
+      if (fence == null) {
+        fence = glyph;
+      } else if (fence == glyph) {
+        fence = null;
+      }
+      open = null;
+      continue;
+    }
+    if (fence != null) continue;
+
+    if (open != null) {
+      // A blank line or another block ends the table — but a leading pipe
+      // is what makes a row look like a block to `_blockStart`.
+      if (line.trim().isNotEmpty &&
+          (!_blockStart.hasMatch(line) || line.trimLeft().startsWith('|'))) {
+        open.rows.add(_RawRow(i + 1, line, _splitRow(line)));
+        continue;
+      }
+      open = null;
+    }
+
+    if (line.trim().isEmpty || !line.contains('|') || i + 1 >= lines.length) {
+      continue;
+    }
+    final next = lines[i + 1];
+    if (!_isDelimiter(next)) continue;
+    final header = _splitRow(line);
+    if (header.length != _splitRow(next).length) continue;
+    open = _Table(headerLine: i + 1, header: header);
+    tables.add(open);
+    i++;
+  }
+  return tables;
+}
+
+/// Every parity-table data row, plus the lines that look like a row and
+/// landed in no table.
+///
+/// A parity table is one whose header names all five platforms — structure,
+/// not a `parts[0] == 'Feature'` guess, so the Legend and the iOS derivation
+/// table drop out because they have different columns rather than because
+/// they are pattern-matched out. Nothing is skipped for being the wrong
+/// shape: a row of a parity table that is not seven cells wide is the whole
+/// point of rule 1, and a pipe-leading line in no table at all is a row a
+/// reader sees as raw pipes in a paragraph.
 List<_Row> _parseRows(List<String> lines, List<_Issue> issues) {
   final rows = <_Row>[];
+  final claimed = <int>{};
+  final fenced = <int>{};
+  String? fence;
   for (var i = 0; i < lines.length; i++) {
-    final line = lines[i].trim();
-    if (!line.startsWith('|')) continue;
-    // Split on unescaped `|` only. Markdown rows look like `| a | b | c |`
-    // — but a cell may carry a literal pipe written as `\|` (the GFM
-    // escape), which must NOT start a new column. Split on `|` not
-    // preceded by a backslash, then unescape and trim each cell.
-    final parts = line
-        .split(RegExp(r'(?<!\\)\|'))
-        .map((s) => s.replaceAll(r'\|', '|').trim())
-        .toList();
-    // Drop empties at both ends (artefacts of the wrapping pipes).
-    if (parts.isNotEmpty && parts.first.isEmpty) parts.removeAt(0);
-    if (parts.isNotEmpty && parts.last.isEmpty) parts.removeLast();
-
-    // Separator row (`|---|---|...`)? Every cell is dashes / colons /
-    // whitespace.
-    final isSeparator = parts.every((p) =>
-        p.isNotEmpty && RegExp(r'^[:\-\s]+$').hasMatch(p));
-    if (isSeparator) continue;
-
-    // Header rows for parity-style tables: the first column is the
-    // human label (Feature, Key, …) and the rest are the platform
-    // names. Skip anything whose first cell is "Feature" or "Key" with
-    // the right column count.
-    if (parts.length >= 7 &&
-        (parts[0] == 'Feature' || parts[0] == 'Key')) {
+    final edge = RegExp(r'^\s*(`{3,}|~{3,})').firstMatch(lines[i]);
+    if (edge != null) {
+      final glyph = edge.group(1)![0];
+      if (fence == null) {
+        fence = glyph;
+      } else if (fence == glyph) {
+        fence = null;
+      }
+      fenced.add(i + 1);
       continue;
     }
+    if (fence != null) fenced.add(i + 1);
+  }
 
-    // Wrong column count — only flag when it looks like *somebody*
-    // tried to make a parity row (>= 5 cells). Other tables in the
-    // doc (Legend) have 2 cells and just drop out silently.
-    if (parts.length < 5) continue;
-    if (parts.length != 7) {
-      // Skip if this is a multi-column header for an unrelated table.
-      // Heuristic: contains the legend symbols, treat as legend.
-      final joined = parts.join(' ');
-      if (joined.contains('Meaning') || joined.contains('Symbol')) continue;
-      issues.add(_Issue(
-        i + 1,
-        parts.first,
-        'row has ${parts.length} columns (expected 7: Feature, '
-            'Android, iOS, Web, Wear OS, Apple Watch, Notes). The whole '
-            'row was: $line',
+  for (final table in _markdownTables(lines)) {
+    claimed.add(table.headerLine);
+    claimed.add(table.headerLine + 1);
+    for (final row in table.rows) {
+      claimed.add(row.lineNumber);
+    }
+    if (!_platforms.every(table.header.contains)) continue;
+
+    for (final row in table.rows) {
+      final parts = row.cells;
+      // (1) Column count.
+      if (parts.length != 7) {
+        issues.add(_Issue(
+          row.lineNumber,
+          parts.isEmpty ? '?' : parts.first,
+          'row has ${parts.length} columns (expected 7: Feature, '
+              'Android, iOS, Web, Wear OS, Apple Watch, Notes). The whole '
+              'row was: ${row.text.trim()}',
+        ));
+        continue;
+      }
+      rows.add(_Row(
+        lineNumber: row.lineNumber,
+        feature: parts[0],
+        platformCells: [
+          for (final p in _platforms) parts[table.header.indexOf(p)],
+        ],
+        notes: parts[6],
       ));
-      continue;
     }
+  }
 
-    rows.add(_Row(
-      lineNumber: i + 1,
-      feature: parts[0],
-      platformCells: parts.sublist(1, 6),
-      notes: parts[6],
+  for (var i = 0; i < lines.length; i++) {
+    if (!lines[i].trimLeft().startsWith('|')) continue;
+    if (claimed.contains(i + 1) || fenced.contains(i + 1)) continue;
+    issues.add(_Issue(
+      i + 1,
+      '?',
+      'this line opens with a pipe but belongs to no table, so a reader '
+          'sees raw pipes in a paragraph and this guard sees no row. A '
+          'table needs a header and a delimiter row of the SAME width, '
+          'and a blank line inside one ends it. The whole line was: '
+          '${lines[i].trim()}',
     ));
   }
+
   return rows;
 }
