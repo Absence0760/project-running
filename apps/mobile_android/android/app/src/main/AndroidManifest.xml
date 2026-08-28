@@ -46,6 +46,11 @@
          import lands summary-only; the importer degrades to a trackless
          run rather than failing. Plural, unlike WRITE_EXERCISE_ROUTE. -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTES" />
+    <!-- The step count behind an imported workout. The `health` plugin
+         builds a workout's totalSteps by summing every StepsRecord in the
+         session window, so without this grant that sub-read yields nothing
+         and no imported activity can ever show steps or cadence (#664). -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
     <!-- Write recorded runs back to Health Connect (persona #36). Opt-in
          per-device; the workout session + its distance record need these. -->
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />

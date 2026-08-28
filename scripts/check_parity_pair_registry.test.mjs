@@ -353,3 +353,35 @@ test('the committed bullet survives being reflowed at 100 columns', () => {
 		[],
 	);
 });
+
+// --- Optional wrapping pipes. decisions § 779.
+//
+// `parseSyncerRows` found its rows with `startsWith('|')` and cut them with a
+// flat `slice(1, -1)`. GFM makes both wrapping pipes optional, so the first
+// dropped a row whole — reporting the pair as one CLAUDE.md registers and the
+// table does not, which is the § 604 defect the guard exists to catch, pointed
+// at a table that carries it — and the second ate the MIRROR-TEST column, so
+// every path in it went unchecked with nothing said.
+
+const SYNCER_TABLE = [
+	'## The pairs (canonical list)',
+	'',
+	'| Web (TypeScript) | Mobile (Dart) | Mirror test pair |',
+	'|---|---|---|',
+];
+
+const PAIR_ROW =
+	'`apps/web/src/lib/training/training.ts` | `apps/mobile_android/lib/training.dart` | ' +
+	'`training/training.test.ts` ↔ `test/training_test.dart`';
+
+test('a syncer row keeps every column however its wrapping pipes are written', () => {
+	for (const row of [`| ${PAIR_ROW} |`, `| ${PAIR_ROW}`, `${PAIR_ROW} |`, PAIR_ROW]) {
+		const { rows, errors } = parseSyncerRows([...SYNCER_TABLE, row].join('\n'));
+		assert.deepEqual(errors, [], row);
+		assert.equal(rows.size, 1, row);
+		const parsed = rows.get('training');
+		assert.equal(parsed?.web, 'apps/web/src/lib/training/training.ts', row);
+		assert.equal(parsed?.cells.length, 3, row);
+		assert.match(parsed?.cells[2] ?? '', /training_test\.dart/, row);
+	}
+});

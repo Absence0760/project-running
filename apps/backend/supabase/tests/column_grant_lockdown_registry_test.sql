@@ -1,12 +1,27 @@
 -- Class guard for the column-level SELECT lockdowns: which public tables
 -- withhold which columns from anon + authenticated, and why.
 --
--- Four tables revoke table-level SELECT from anon/authenticated and re-grant
+-- Six tables revoke table-level SELECT from anon/authenticated and re-grant
 -- column by column (user_profiles 20260707_001 + 20260810_001, clubs + events
 -- 20260818_001 redoing 20260801_001 / 20260723_001 / 20260806_001,
--- checkpoint_crossings 20270201_001, matrix re-asserted by 20270408_001).
--- Every withholding below is a security decision with a named replacement read
--- path, not an accident of reaching for `grant select (a, b, c)`.
+-- checkpoint_crossings 20270201_001, donations + instructor_payout_accounts
+-- 20270621_001, matrix re-asserted by 20270408_001). Every withholding below
+-- is a security decision with a named replacement read path, not an accident
+-- of reaching for `grant select (a, b, c)`.
+--
+-- The last two arrived a year after the prescription because the shape has a
+-- third failure mode, the one 20260707_001's own header warns about: writing
+-- the revoke at COLUMN level. `revoke select (col) on t from authenticated` while
+-- authenticated holds a table-level SELECT reports REVOKE, creates no column
+-- ACL, and changes nothing — Postgres resolves a privilege from the broadest
+-- grant. 20261229_001 and 20270213_001 both did that and both described it as
+-- defence in depth; on instructor_payout_accounts, whose own-row SELECT policy
+-- is permissive, the host could read their raw Stripe Connect account id for
+-- as long as the table existed. Nothing detected it, because a no-op revoke
+-- leaves attacl null and this registry's assertion (2) only sees tables that
+-- DO carve columns out. What detects it now is a static guard over the
+-- migrations tree, apps/backend/scripts/check_migration_column_revoke_noop.mjs
+-- (decisions.md 781); the registry's job is the state, not the statement.
 --
 -- The shape has one real failure mode and it has fired in prod twice. A
 -- re-grant is CUMULATIVE, so a column added to one of these tables after its
@@ -68,6 +83,27 @@ insert into lockdown_registry (tbl, col, reason) values
   ('events',               'meet_lat',             'precise meet-point coordinate; read through get_event_meet_point() after a visibility check'),
   ('events',               'meet_lng',             'precise meet-point coordinate; read through get_event_meet_point() after a visibility check'),
   ('events',               'host_user_id',         'Stripe Connect payout recipient; no client read site (also pinned by event_gym_template_grants_test)'),
+
+  -- donations — 20270621_001, making 20270213_001's column revoke real. The
+  -- table carries NO permissive client SELECT policy: every client read is
+  -- fundraiser_feed / fundraiser_totals, both SECURITY DEFINER, so nothing
+  -- here has a client read site and the whole set is defence in depth against
+  -- a permissive policy landing later. refunded_cents + client_request_id are
+  -- withheld because they arrived after the lockdown was meant to exist and a
+  -- re-grant is cumulative, and for the reasons below.
+  ('donations',            'donor_user_id',        'donor identity; the feed serves a display name, never the account behind it'),
+  ('donations',            'owner_user_id',        'the fundraiser owner receiving the money; joined from fundraisers where a client may read it'),
+  ('donations',            'display_name',         'fundraiser_feed nulls this on an is_anonymous row and a column grant cannot be conditional on the row — granting it hands the client the name the feed exists to hide'),
+  ('donations',            'stripe_checkout_session_id', 'Stripe object reference on the donor payment'),
+  ('donations',            'stripe_payment_intent_id',   'Stripe object reference on the donor payment'),
+  ('donations',            'platform_fee_cents',   'our cut of the donation; the feed reports what the charity kept'),
+  ('donations',            'refunded_cents',       'the refund ledger figure; the feed reports the NET (amount - refunded) and never the components'),
+  ('donations',            'client_request_id',    'the donor client''s per-attempt idempotency key; resolved only by donations-checkout under the service role'),
+
+  -- instructor_payout_accounts — 20270621_001, making 20261229_001's column
+  -- revoke real. The own-row SELECT policy stays; the capability boolean the
+  -- payout UI needs is host_can_take_payment(), SECURITY DEFINER.
+  ('instructor_payout_accounts', 'stripe_connect_account_id', 'identifies the host''s Stripe merchant account; 20261229_001 says even the own-row policy must not hand the client the raw id'),
 
   -- user_profiles — 20260707_001, narrowed by 20260810_001. Self-reads go
   -- through get_my_profile(), SECURITY DEFINER, which returns the full row.

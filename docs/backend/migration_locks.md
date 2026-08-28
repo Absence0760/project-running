@@ -146,7 +146,16 @@ touched row, bloats the table, and holds those locks for the whole statement.
 | `CREATE INDEX` | `ACCESS EXCLUSIVE` (blocks writes for the build) | **No** — but `CONCURRENTLY` can't run in Supabase's wrapped txn (see below) |
 | `CREATE TRIGGER` | `SHARE ROW EXCLUSIVE`, catalogue-only | Yes for readers, no for writers — blocks concurrent INSERT/UPDATE/DELETE on that table only, for an O(1) change |
 | `CREATE OR REPLACE FUNCTION` (incl. a trigger's function) | none on any table | Yes — swapping a trigger's *body* never touches the table the trigger is on |
+| `GRANT` / `REVOKE` (table- or column-level) | none on the target relation — an `AccessShareLock` on the catalogue object only | Yes — no scan, no rewrite, no reader or writer blocked |
 | unbounded `UPDATE`/`DELETE` | row locks on every touched row | **No** — batch in id-range chunks |
+
+The `GRANT`/`REVOKE` row is measured on PG 17.6, not inferred: a table-level
+`REVOKE` plus a column-level `GRANT` in one transaction holds no `pg_locks` row
+against the relation at all. A privilege change is therefore never the reason a
+migration needs the online-DDL machinery — but it still needs the **shape** to be
+right, because a column-level revoke under a table-level grant revokes nothing
+(see `apps/backend/CLAUDE.md` § A column-level `revoke` is a no-op under a
+table-level grant, and `check_migration_column_revoke_noop.mjs`).
 
 `SHARE ROW EXCLUSIVE` does **not** conflict with `ACCESS SHARE` or `ROW SHARE`,
 and a *queued* request only blocks later requests that conflict with it — so a

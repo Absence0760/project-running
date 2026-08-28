@@ -22,8 +22,8 @@ import {
 	readLegendSymbols,
 	readRows,
 	readRuleBlock,
-	splitRow,
 } from './check_parity_ios_column.mjs';
+import { splitRow } from './markdown_lines.mjs';
 
 const LEGEND = `## Legend
 
@@ -147,7 +147,7 @@ const derivation = new Map([
 ]);
 
 test('a derived column passes', () => {
-	const rows = readRows(
+	const { rows } = readRows(
 		doc([
 			'| Shipped | ✓ | Partial | ✓ | N/A | N/A | Notes. |',
 			'| Unbuilt | ✗ | ✗ | ✓ | N/A | N/A | Notes. |',
@@ -160,7 +160,7 @@ test('a derived column passes', () => {
 });
 
 test('the § 707 failure: iOS `✗` under an Android `✓` with nothing obstructing', () => {
-	const rows = readRows(doc(['| Backup restore | ✓ | ✗ | ✓ | N/A | N/A | Same BackupService. |']));
+	const { rows } = readRows(doc(['| Backup restore | ✓ | ✗ | ✓ | N/A | N/A | Same BackupService. |']));
 	const { errors } = checkColumn(rows, derivation);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /iOS is `✗` but Android is `✓`/);
@@ -168,14 +168,14 @@ test('the § 707 failure: iOS `✗` under an Android `✓` with nothing obstruct
 });
 
 test('a bare iOS `✓` is refused — the derivation never produces one', () => {
-	const rows = readRows(doc(['| Anything | ✓ | ✓ | ✓ | N/A | N/A | Notes. |']));
+	const { rows } = readRows(doc(['| Anything | ✓ | ✓ | ✓ | N/A | N/A | Notes. |']));
 	const { errors } = checkColumn(rows, derivation);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /asserts someone ran this row/);
 });
 
 test('a marker cannot buy the `✓` — only the derivation table can', () => {
-	const rows = readRows(doc(['| Anything | ✓ | ✓ | ✓ | N/A | N/A | **iOS ✓:** trust me. |']));
+	const { rows } = readRows(doc(['| Anything | ✓ | ✓ | ✓ | N/A | N/A | **iOS ✓:** trust me. |']));
 	const { errors, marked } = checkColumn(rows, derivation);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /No Notes marker can grant it/);
@@ -184,12 +184,12 @@ test('a marker cannot buy the `✓` — only the derivation table can', () => {
 
 test('a verified column is expressible — the derivation table is the one edit', () => {
 	const verified = new Map(derivation).set('✓', '✓');
-	const rows = readRows(doc(['| Anything | ✓ | ✓ | ✓ | N/A | N/A | Notes. |']));
+	const { rows } = readRows(doc(['| Anything | ✓ | ✓ | ✓ | N/A | N/A | Notes. |']));
 	assert.deepEqual(checkColumn(rows, verified).errors, []);
 });
 
 test('a departure passes once its Notes name the obstruction', () => {
-	const rows = readRows(
+	const { rows } = readRows(
 		doc(['| Lock screen | ✓ | ✗ | N/A | ✓ | ✓ | **iOS ✗:** the channel has an Android handler only. |']),
 	);
 	const { errors, marked } = checkColumn(rows, derivation);
@@ -199,14 +199,14 @@ test('a departure passes once its Notes name the obstruction', () => {
 });
 
 test('the marker must name the symbol the cell actually carries', () => {
-	const rows = readRows(doc(['| Lock screen | ✓ | ✗ | N/A | ✓ | ✓ | **iOS N/A:** wrong symbol. |']));
+	const { rows } = readRows(doc(['| Lock screen | ✓ | ✗ | N/A | ✓ | ✓ | **iOS N/A:** wrong symbol. |']));
 	const { errors } = checkColumn(rows, derivation);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /iOS is `✗`/);
 });
 
 test('a marker on a cell that is merely the derivation is the per-row habit, and fails', () => {
-	const rows = readRows(doc(['| Anything | ✓ | Partial | ✓ | N/A | N/A | **iOS Partial:** pending a Mac. |']));
+	const { rows } = readRows(doc(['| Anything | ✓ | Partial | ✓ | N/A | N/A | **iOS Partial:** pending a Mac. |']));
 	const { errors } = checkColumn(rows, derivation);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /restates the rule per row/);
@@ -217,7 +217,7 @@ test('markerFor spells the marker the failure message tells you to write', () =>
 });
 
 test('rows survive an escaped pipe in the Notes column', () => {
-	const rows = readRows(doc(['| Thing | ✓ | Partial | ✓ | N/A | N/A | `all \\| important \\| off`. |']));
+	const { rows } = readRows(doc(['| Thing | ✓ | Partial | ✓ | N/A | N/A | `all \\| important \\| off`. |']));
 	assert.equal(rows.length, 1);
 	assert.equal(rows[0].ios, 'Partial');
 	assert.match(rows[0].notes, /all \\\| important/);
@@ -230,7 +230,7 @@ test('the committed docs/product/parity.md passes every rule', () => {
 });
 
 test('the committed matrix carries no iOS `✓`, which is the rule in one assertion', () => {
-	const rows = readRows(readFileSync(MATRIX_PATH, 'utf8'));
+	const { rows } = readRows(readFileSync(MATRIX_PATH, 'utf8'));
 	assert.deepEqual(rows.filter((r) => r.ios === '✓'), []);
 });
 
@@ -268,7 +268,8 @@ test('a row written without its trailing pipe keeps its Notes cell', () => {
 	const { derivation } = readRuleBlock(RULE);
 	assert.ok(derivation);
 	for (const row of [`${cells} |`, cells]) {
-		const parsed = readRows(doc([row]));
+		const { rows: parsed, errors: rowErrors } = readRows(doc([row]));
+		assert.deepEqual(rowErrors, []);
 		assert.equal(parsed.length, 1);
 		assert.equal(parsed[0].notes, notes);
 		assert.deepEqual(checkColumn(parsed, derivation).errors, []);
@@ -278,4 +279,73 @@ test('a row written without its trailing pipe keeps its Notes cell', () => {
 test('a row written without either wrapping pipe still parses', () => {
 	assert.deepEqual(splitRow('a | b | c'), ['a', 'b', 'c']);
 	assert.deepEqual(splitRow('| a | b | c |'), ['a', 'b', 'c']);
+});
+
+// --- The optional LEADING pipe. decisions § 779.
+//
+// GFM makes it optional exactly as it makes the trailing one optional, and the
+// row renders identically. All three of this script's readers found their rows
+// with `line.startsWith('|')`, so such a row was invisible to every one of them
+// rather than misgraded by one — and `readRows` reset its header on it, so the
+// whole rest of the table went with it.
+
+test('a row written without its leading pipe is graded, not skipped', () => {
+	const { rows, errors } = readRows(doc(['Anything | ✓ | ✓ | ✓ | N/A | N/A | Notes. |']));
+	assert.deepEqual(errors, []);
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].ios, '✓');
+	assert.match(checkColumn(rows, derivation).errors[0], /asserts someone ran this row/);
+});
+
+test('a row written with no pipe at either end is graded too', () => {
+	const { rows } = readRows(doc(['Anything | ✓ | ✓ | ✓ | N/A | N/A | Notes.']));
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].notes, 'Notes.');
+});
+
+test('one leading-pipe-less row does not take the rest of its table with it', () => {
+	const { rows } = readRows(
+		doc([
+			'| Before | ✓ | Partial | ✓ | N/A | N/A | Notes. |',
+			'Middle | ✓ | Partial | ✓ | N/A | N/A | Notes. |',
+			'| After | ✓ | Partial | ✓ | N/A | N/A | Notes. |',
+		]),
+	);
+	assert.deepEqual(rows.map((r) => r.feature), ['Before', 'Middle', 'After']);
+});
+
+test('the Legend and the derivation survive a row of their own written that way', () => {
+	assert.deepEqual(readLegendSymbols(LEGEND.replace('| `✗` |', '`✗` |')), ['✓', 'Partial', '✗', 'N/A']);
+	const { errors, derivation: parsed } = readRuleBlock(RULE.replace('| `✗` | `✗` |', '`✗` | `✗` |'));
+	assert.deepEqual(errors, []);
+	assert.equal(parsed?.get('✗'), '✗');
+});
+
+test('such a row is exempt from rule 2, which grades prose', () => {
+	const notes = `${markerFor('✗')} no iOS handler for the method channel.`;
+	assert.deepEqual(checkSingleStatement(doc([`Lock screen | ✓ | ✗ | N/A | ✓ | ✓ | ${notes} |`])), []);
+});
+
+test('a row whose columns do not line up with its header is reported, not skipped', () => {
+	const { rows, errors } = readRows(doc(['| Short | ✓ | Partial | ✓ |']));
+	assert.deepEqual(rows, []);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /opens 4 column\(s\) where the table's header opens 7/);
+});
+
+// A table-aware reader gains a way to lose rows the old walk did not have:
+// break the delimiter's width and GFM opens no table at all, so every row under
+// it stops existing. Two committed docs are in that state today.
+test('a table whose delimiter went wrong is reported rather than silently lost', () => {
+	const { rows, errors } = readRows(
+		`${LEGEND}\n${RULE}\n${HEADER.replace('|---|---|---|---|---|---|---|', '|---|---|')}\n` +
+			'| Thing | ✓ | Partial | ✓ | N/A | N/A | Notes. |\n',
+	);
+	assert.deepEqual(rows, []);
+	assert.equal(errors.length, 3);
+	for (const e of errors) assert.match(e, /belongs to no table/);
+});
+
+test('the committed matrix leaves no pipe-leading line outside a table', () => {
+	assert.deepEqual(readRows(readFileSync(MATRIX_PATH, 'utf8')).errors, []);
 });

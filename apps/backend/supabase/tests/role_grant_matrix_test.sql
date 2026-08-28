@@ -14,10 +14,18 @@
 --      onboarding needs.
 --   3. The column-SELECT lockdown on user_profiles is preserved (no
 --      table-level SELECT leaked back in).
+--   4. The same for the two payment tables, which this migration granted a
+--      table-level SELECT while its own header claimed it "never grants
+--      table-level SELECT on a column-locked table". It was generated from
+--      the fully-migrated schema, and 20261229_001 / 20270213_001 had written
+--      their lockdowns as COLUMN-level revokes — a no-op under a table-level
+--      grant, leaving no column ACL for the generator to see. 20270621_001
+--      re-cut both to the prescribed shape; these pin that the matrix does not
+--      widen them back, and that the columns the payout UI reads survived.
 
 begin;
 
-select plan(7);
+select plan(12);
 
 -- (1) Catch-all — readability. Only app_quota, deletion_audit_log and
 -- data_export_jobs are intentionally service_role-only (no anon/authenticated
@@ -72,6 +80,34 @@ select ok(
 select ok(
   has_column_privilege('authenticated', 'public.user_profiles', 'display_name', 'SELECT'),
   'user_profiles.display_name stays column-readable by authenticated'
+);
+
+-- (4) The two payment tables 20270621_001 re-cut. Assertion (1) above is
+-- satisfied by their per-column grants, so it cannot tell a lockdown from a
+-- table-wide grant; these say which one is in force.
+select ok(
+  not has_table_privilege('authenticated', 'public.donations', 'SELECT'),
+  'donations has NO table-level SELECT for authenticated — 20270213_001''s '
+  'column revoke bites now instead of being absorbed by a table grant'
+);
+select ok(
+  not has_column_privilege('authenticated', 'public.donations', 'stripe_payment_intent_id', 'SELECT'),
+  'donations.stripe_payment_intent_id is withheld from authenticated'
+);
+select ok(
+  has_column_privilege('authenticated', 'public.donations', 'amount_cents', 'SELECT'),
+  'donations.amount_cents keeps the column grant that satisfies the catch-all above'
+);
+select ok(
+  not has_column_privilege('authenticated', 'public.instructor_payout_accounts',
+                           'stripe_connect_account_id', 'SELECT'),
+  'the raw Stripe Connect account id is withheld from the host''s own-row read'
+);
+select ok(
+  has_column_privilege('authenticated', 'public.instructor_payout_accounts',
+                       'charges_enabled', 'SELECT'),
+  'instructor_payout_accounts.charges_enabled stays readable — fetchPayoutAccount '
+  'selects it on /settings/payouts'
 );
 
 select * from finish();

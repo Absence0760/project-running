@@ -30,11 +30,16 @@
 // The asset ceiling closes a hole the other three could not see. The walk
 // matched `*.js` and `*.css` only, so everything else the build emits was
 // outside the metric entirely: measured, 33 files and 4058 KB gzipped, of which
-// ONE file is 3866 KB — the unsubsetted `material-symbols-outlined.woff2`,
-// declared `font-display: block` in the ROOT layout's stylesheet, so it is
-// blocking weight for every reader and 1.8x the whole code ceiling. It is
-// exempted by name below rather than absorbed, because a ceiling that would
-// admit it silently admits the next one too.
+// ONE file was 3866 KB — the unsubsetted `material-symbols-outlined.woff2`,
+// declared `font-display: block` in the ROOT layout's stylesheet, so it was
+// blocking weight for every reader and 1.8x the whole code ceiling. It shipped
+// for one measurement under a named exemption rather than being absorbed,
+// because a ceiling that would admit it silently admits the next one too, and
+// the exemption is now gone: the font is subset to the icons the app names
+// (decisions § 780) and clears the same 100 KB every other asset is held to.
+// ASSET_EXEMPTIONS is deliberately left in place and EMPTY — the arithmetic it
+// carries is worth keeping, and an empty list is the honest statement that
+// nothing currently needs covering.
 //
 // Per file and never summed is the right arithmetic here for the catalogues'
 // reason: a reader loads ONE prerendered page, ONE favicon. That also answers
@@ -79,11 +84,12 @@
 // MAX_LARGEST_CHUNK_KB stays 350, unchanged: 245 KB * the 33% headroom that
 // number was always justified by is 326, so the existing figure still states
 // the rule. What changed is the population it measures, not the ceiling.
-// MAX_ASSET_KB is 100, the same per-file payload figure as a catalogue: ~47%
-// over the largest non-exempt asset (icon-512.png, 68 KB) and 20x over the
-// largest prerendered page (5 KB). Assets measured 2026-08-28: font 3866 KB,
-// icon-512 68, og-default 20, icon-192 11, apple-touch-icon 10, then the 16
-// HTML pages at 5 KB and below and everything else at 1.
+// MAX_ASSET_KB is 100, the same per-file payload figure as a catalogue: ~35%
+// over the largest asset (the subset font, 74 KB) and 20x over the largest
+// prerendered page (5 KB). Assets re-measured after subsetting: 33 files and
+// 266 KB gzipped in total (was 4058) — font 74 KB, icon-512 68, og-default 20,
+// icon-192 11, apple-touch-icon 10, then the 16 HTML pages at 5 KB and below
+// and everything else at 1.
 //
 // Run: `node scripts/check_web_bundle_budget.mjs` (after a production build of
 //      apps/web — it reads build output, it does not produce any).
@@ -126,19 +132,7 @@ export const MAX_ASSET_KB = 100;
  * @typedef {{ pattern: RegExp, maxKb: number, why: string }} AssetExemption
  * @type {readonly AssetExemption[]}
  */
-export const ASSET_EXEMPTIONS = [
-	{
-		pattern: /^_app\/immutable\/assets\/material-symbols-outlined\.[^/]+\.woff2$/,
-		maxKb: 3900,
-		why:
-			'the full unsubsetted Material Symbols Outlined variable font (3866 KB gzipped, ' +
-			'measured 2026-08-28). `app.css` imports the npm package\'s stylesheet, so the ' +
-			'@font-face lands in the ROOT layout chunk with `font-display: block` — every ' +
-			'reader who renders an icon waits on it. Subsetting to the glyphs actually used ' +
-			'is the fix and it is a web-source change, not a budget one; the ceiling here is ' +
-			'sized to stop it growing, not to bless it.',
-	},
-];
+export const ASSET_EXEMPTIONS = [];
 
 /// The manifest keys a catalogue by its source path. `pt-BR` carries a hyphen,
 /// so the tag is everything between the directory and the extension.

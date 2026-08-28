@@ -5843,6 +5843,202 @@ void main() {
       }
     });
 
+
+    /// Which SECOND PERSON a catalogue addresses its reader in. Portuguese has
+    /// two and they do not mix inside one catalogue: `tu` takes `teu`/`tua`,
+    /// the enclitic `-te` and a second-person-singular verb, while `você` — the
+    /// register European Portuguese software uses, and the one § 755 chose for
+    /// every Portuguese surface derived since — takes `seu`/`sua`, `-lhe` and a
+    /// third-person verb. `app_pt.arb` used both: 39 strings on the tu
+    /// possessive against 203 on `seu`/`sua`, plus 7 tu-only finite verbs, 6
+    /// enclitics and one `contigo`. Web's `pt-PT.ts` is unanimous on the
+    /// possessive axis (335 `seu`/`sua`, zero of these) and `app_pt_BR.arb`
+    /// carries none at all, so the phone was the one surface telling one reader
+    /// it was two products.
+    ///
+    /// The markers split into two kinds and only one kind can be listed, so
+    /// this is two tests. A [tuOnlyMarker] is a form no other person, tense or
+    /// part of speech spells the same way, which makes a token list exact. The
+    /// affirmative imperative is the other kind and is unlistable: its tu form
+    /// is letter-for-letter the third-person present indicative, so `Adiciona
+    /// um peso` (tu, *add a weight*) and `a app adiciona um peso` (*the app
+    /// adds a weight*) are the same word, and any token banning it fires on
+    /// ordinary prose. That half is derived against the Brazilian catalogue
+    /// instead — see the second test.
+    ///
+    /// `precisas` is deliberately absent: it is `precisar` in the tu form AND
+    /// the feminine plural of `preciso`, and `zonas precisas` is a live string
+    /// in both catalogues. Bare `tu` is absent for the opposite reason — a
+    /// label whose whole value names the reader is not a possessive in running
+    /// prose, and web pt-PT ships those same two keys as `(tu)` and `Tu: `
+    /// after § 760 put the pronoun back into them.
+    const tuOnlyMarkers = <String>[
+      'teu', 'tua', 'teus', 'tuas',
+      'podes', 'estás', 'tens', 'queres', 'vais', 'deves', 'sabes', 'fazes',
+      'és', 'vês', 'dizes', 'escolhes', 'alteras', 'tomas',
+      'tiveres', 'estiveres', 'quiseres', 'puderes', 'fizeres',
+      'fizeste', 'foste', 'tiveste', 'estiveste',
+      'tenhas', 'estejas', 'sejas', 'possas', 'vás', 'faças',
+      'contigo',
+    ];
+
+    /// The enclitic object pronoun. `você` takes `-lhe` or `-o`/`-a`, never
+    /// this, so a hyphen followed by exactly `te` is a tu marker wherever it
+    /// lands. Verified to fire on nothing else across all seven catalogues.
+    final tuEnclitic =
+        RegExp(r'(?<![a-zà-ÿ])[a-zà-ÿ]+-te(?![a-zà-ÿ])',
+            caseSensitive: false, unicode: true);
+
+    /// Key prefixes allowed to address the reader as `tu`, with the reason.
+    /// **Empty, and that is the finding.** § 760 unified the `tts*` voice cues
+    /// on tu — correctly observing that a spoken coach cannot address one
+    /// runner two ways mid-run — but measured only inside that block. The
+    /// OTHER spoken block, the 44 `guided*` coach scripts, was already `você`
+    /// ("Comece leve", "Mantenha o ritmo"), so the two halves of one voice
+    /// disagreed: the guided coach said `Comece` and the pace cue said
+    /// `Acelera`, in the same run, through the same engine. Applying § 760's
+    /// own principle one block wider reverses its choice of variant, because
+    /// the catalogue-wide register is § 755's `você`. Both blocks are now that.
+    ///
+    /// Each prefix added here is asserted below to still cover a key the guard
+    /// would otherwise flag, so an exemption cannot outlive the strings it was
+    /// written for.
+    const registerExemptPrefixes = <String>[];
+
+    /// European/Brazilian word pairs that differ by the same one-letter ending
+    /// an imperative does and are not verbs at all, so the derived scan below
+    /// cannot tell them apart on shape. `equipa`/`equipe` is *team*;
+    /// `este`/`esta` and `deste`/`desta` are demonstratives agreeing with a
+    /// noun whose gender the variants disagree on (`o ecrã` against `a tela`,
+    /// the § 760 rule). Each is asserted to still be in use.
+    const variantWordPairs = <String, String>{
+      'equipa': 'equipe',
+      'este': 'esta',
+      'deste': 'desta',
+    };
+
+    Map<String, String> arbMessages(String path) {
+      final file = File(path);
+      expect(file.existsSync(), isTrue, reason: '$path is missing.');
+      final raw = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+      return <String, String>{
+        for (final e in raw.entries)
+          if (!e.key.startsWith('@') && e.value is String)
+            e.key: e.value as String,
+      };
+    }
+
+    bool registerExempt(String key) =>
+        registerExemptPrefixes.any((p) => key.startsWith(p));
+
+    List<String> tuMarkersIn(String value) => [
+          for (final marker in tuOnlyMarkers)
+            if (RegExp('(?<![a-zà-ÿ])$marker(?![a-zà-ÿ])',
+                    caseSensitive: false, unicode: true)
+                .hasMatch(value))
+              '"$marker"',
+          if (tuEnclitic.hasMatch(value)) 'the "-te" enclitic',
+        ];
+
+    test('a Portuguese catalogue addresses its reader in one register', () {
+      // Both catalogues, not just the European one. `app_pt_BR.arb` is the
+      // reference the derived imperative scan below measures against, so a tu
+      // marker landing in IT makes that scan blind rather than merely wrong —
+      // the two words would cancel and the pair would never be reported.
+      for (final tag in ['pt', 'pt_BR']) {
+        final offenders = <String>[];
+        for (final message in arbMessages('lib/l10n/app_$tag.arb').entries) {
+          if (registerExempt(message.key)) continue;
+          for (final marker in tuMarkersIn(message.value)) {
+            offenders.add('${message.key}: $marker');
+          }
+        }
+        expect(offenders, isEmpty,
+            reason: 'app_$tag.arb addresses its reader as `tu` here and as '
+                '`você` everywhere else. One catalogue cannot be two products '
+                'to one reader: use `seu`/`sua`, `-lhe` and a third-person '
+                'verb, per decisions § 755. If a string really must be tu, it '
+                'belongs in the spoken-cue block or in registerExemptPrefixes '
+                'with the reason written down.');
+      }
+    });
+
+    test('the pt-PT catalogue uses no tu imperative its Brazilian twin does not',
+        () {
+      // Derived rather than listed, because the tu affirmative imperative is
+      // spelled exactly like the third-person present indicative and no token
+      // can separate them. `app_pt_BR.arb` is uniformly `você` (pinned by the
+      // test above), so a word this catalogue uses where Brazilian uses the
+      // same stem with the imperative's other ending IS the tu form: `Tenta`
+      // against `Tente`, `Adiciona` against `Adicione`, `Escolhe` against
+      // `Escolha`. No threshold, no vocabulary list, and a new one fails here
+      // the day it lands.
+      final european = arbMessages('lib/l10n/app_pt.arb');
+      final brazilian = arbMessages('lib/l10n/app_pt_BR.arb');
+      final word = RegExp(r'[a-zà-ÿ]+', caseSensitive: false, unicode: true);
+      Set<String> wordsOf(String v) =>
+          word.allMatches(v).map((m) => m.group(0)!.toLowerCase()).toSet();
+
+      final offenders = <String>[];
+      for (final message in european.entries) {
+        if (registerExempt(message.key)) continue;
+        final other = brazilian[message.key];
+        if (other == null) continue;
+        final ours = wordsOf(message.value);
+        final theirs = wordsOf(other);
+        for (final a in ours.difference(theirs)) {
+          if (a.length < 4) continue;
+          for (final b in theirs.difference(ours)) {
+            if (b.length < 4) continue;
+            if (a.substring(0, a.length - 1) != b.substring(0, b.length - 1)) {
+              continue;
+            }
+            final swap = '${a[a.length - 1]}${b[b.length - 1]}';
+            if (swap != 'ae' && swap != 'ea') continue;
+            if (variantWordPairs[a] == b) continue;
+            offenders.add('${message.key}: "$a" where pt-BR says "$b"');
+          }
+        }
+      }
+      expect(offenders, isEmpty,
+          reason: 'app_pt.arb gives an imperative in the tu form. Portugal '
+              'says `Tente`, not `Tenta`, in the register this catalogue uses '
+              'everywhere else (decisions § 755). If the word is not a verb, '
+              'add the pair to variantWordPairs with what it means.');
+    });
+
+    test('every register exemption still needs its exemption', () {
+      // An exemption that covers nothing has stopped being a decision and
+      // become noise — the shape senseSplit above already uses for its named
+      // sites. The spoken-cue prefixes must still name a key the guard would
+      // otherwise flag, and each variant pair must still be a word both
+      // catalogues use.
+      final european = arbMessages('lib/l10n/app_pt.arb');
+      final brazilian = arbMessages('lib/l10n/app_pt_BR.arb');
+      for (final prefix in registerExemptPrefixes) {
+        final covered = european.entries.where(
+            (e) => e.key.startsWith(prefix) && tuMarkersIn(e.value).isNotEmpty);
+        expect(covered, isNotEmpty,
+            reason: 'registerExemptPrefixes carries "$prefix", but no key '
+                'under it says `tu` any more. Drop the prefix so the guard '
+                'covers those keys again.');
+      }
+      final whole = <String>[
+        ...european.values,
+        ...brazilian.values,
+      ].join('\n');
+      for (final pair in variantWordPairs.entries) {
+        for (final word in [pair.key, pair.value]) {
+          expect(
+              RegExp('(?<![a-zà-ÿ])$word(?![a-zà-ÿ])',
+                      caseSensitive: false, unicode: true)
+                  .hasMatch(whole),
+              isTrue,
+              reason: 'variantWordPairs names "$word", which neither '
+                  'Portuguese catalogue uses any more.');
+        }
+      }
+    });
     test('every base-fallback exemption still needs its exemption', () {
       final reachedByBase =
           localeTags(literalAfter(support, '_baseToLocale = <String, Locale>{'));

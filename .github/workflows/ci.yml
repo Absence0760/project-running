@@ -413,6 +413,26 @@ jobs:
             echo "Split it into ADD CONSTRAINT ... NOT VALID plus a later VALIDATE CONSTRAINT — the playbook is docs/backend/migration_locks.md."
             exit 1
           fi
+      # `revoke select (col) on t from authenticated` revokes nothing while the
+      # role still holds SELECT on the whole table — Postgres resolves a
+      # privilege from the broadest grant. 20260707_001 warns about it in its
+      # own header; 20261229_001 and 20270213_001 shipped it anyway, and on
+      # instructor_payout_accounts the host could read their raw Stripe Connect
+      # id for the life of the table. No allowlist: the set is replayed and a
+      # column revoke is reported only if the table-level grant survives to the
+      # end, so a repair is a migration rather than an edit here.
+      - name: Migration column revokes are not no-ops
+        run: |
+          if ! node --test apps/backend/scripts/check_migration_column_revoke_noop.test.mjs; then
+            echo "::error::The column-revoke guard's own unit tests failed, so its verdict on the migration set cannot be trusted. This is not schema drift and not a lock-safety failure."
+            echo "Fix apps/backend/scripts/check_migration_column_revoke_noop.mjs (or its tests) first, then re-read what it says about the migrations."
+            exit 1
+          fi
+          if ! node apps/backend/scripts/check_migration_column_revoke_noop.mjs; then
+            echo "::error::A migration revokes a privilege on named columns while the role still holds it on the whole table, so the revoke locks nothing down. Nothing here is about version keys, blocking locks or the generated types."
+            echo "Use the shape 20260707_001 prescribes — revoke the TABLE-level privilege, then re-grant column by column — and register the withheld columns in apps/backend/supabase/tests/column_grant_lockdown_registry_test.sql."
+            exit 1
+          fi
       # The four `pnpm.overrides` entries are security pins, and a bot can drop
       # them. Dependabot #812 regenerated pnpm-lock.yaml without its top-level
       # `overrides:` block, and all 17 pnpm jobs then died at
@@ -641,6 +661,21 @@ jobs:
             exit 1
           fi
       - run: npm ci
+      # The icon font apps/web ships is a SUBSET, cut to the icons the sources
+      # name (decisions § 780). Nothing in a build can tell that an icon is
+      # missing from it — a name with no ligature renders as the name — so the
+      # coverage claim is checked here instead, by re-deriving the icon set from
+      # the same sources the generator read and comparing it with the manifest
+      # committed beside the font. Needs no font tooling, and runs after the
+      # install so it can also confirm the upstream font has not moved under the
+      # subset.
+      - name: Verify the web icon-font subset covers every icon the sources name
+        run: |
+          if ! node --test scripts/web_icon_font.test.mjs; then
+            echo "::error::The committed icon-font subset does not match apps/web's sources. Nothing here is about the bundle's size or the Svelte build — an icon named in the source and absent from the subset renders as its own name, and this is the only gate that can see that."
+            echo "Reproduce with: node --test scripts/web_icon_font.test.mjs; fix with: node scripts/gen_web_icon_font.mjs (needs fontTools) and commit the font + manifest."
+            exit 1
+          fi
       # svelte-check is the only gate that type-checks INSIDE .svelte files:
       # `tsx --test` never loads them, and the vite build below compiles
       # Svelte without cross-module type checking. It caught a real
@@ -696,9 +731,10 @@ jobs:
     #
     #   check_parity_matrix.dart       — walks docs/product/parity.md, asserts
     #     every row has 7 cells, uses only the legal `✓ / ✗ / Partial / N/A`
-    #     symbols, fails on the impossible "iOS ahead of Android" state
-    #     (decisions § 39), and flags any `Partial` row missing a Notes
-    #     explanation.
+    #     symbols, flags any `Partial` row missing a Notes explanation, and
+    #     refuses a pipe-leading line that belongs to no table (§ 779). It no
+    #     longer carries an "iOS ahead of Android" rule — the derivation the
+    #     guard below reads forbids a bare iOS `✓` outright, which subsumes it.
     #   check_parity_ios_column.mjs    — that same column against the ONE rule
     #     the document states for it, which has exactly one home
     #     (decisions § 739).
@@ -737,7 +773,7 @@ jobs:
       - name: CLAUDE.md vs shared-library-syncer pair registry
         run: |
           if ! node --test scripts/markdown_lines.test.mjs; then
-            echo "::error::The markdown soft-wrap folder that both this job's pair-registry and iOS-column guards read prose through failed its own tests, so every verdict below it is a guess. This is not registry drift."
+            echo "::error::The markdown lexer every guard in this job reads its input through — the soft-wrap folder and the GFM table walk — failed its own tests, so every verdict below it is a guess. This is not registry drift."
             echo "Reproduce with: node --test scripts/markdown_lines.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
@@ -792,11 +828,16 @@ jobs:
       # unnamed step is displayed by its command, which reads as a diagnosis
       # right up until the reader has to work out which of four registries
       # `check_parity_matrix.dart` is about.
-      - name: parity.md table structure + the iOS-ahead-of-Android rule
+      - name: parity.md table structure — columns, symbols, Partial needs Notes
         run: |
           if ! dart run scripts/check_parity_matrix.dart; then
-            echo "::error::docs/product/parity.md's table is malformed — a row without 7 cells, a symbol outside `✓ / ✗ / Partial / N/A`, a `Partial` with no Notes, or the impossible state of iOS ahead of Android (decisions § 39, the byte-identical twin). Nothing here is about the TS<->Dart pairs or the doc checkboxes — those are two of the other guards in this job."
+            echo "::error::docs/product/parity.md's table is malformed — a row without 7 cells, a symbol outside `✓ / ✗ / Partial / N/A`, a `Partial` with no Notes, or a pipe-leading line belonging to no table at all. Nothing here is about the TS<->Dart pairs or the doc checkboxes — those are two of the other guards in this job."
             echo "The failing line above names the row and the cell. Reproduce with: dart run scripts/check_parity_matrix.dart."
+            exit 1
+          fi
+          if ! node --test scripts/check_parity_matrix.test.mjs; then
+            echo "::error::The matrix guard's own unit tests failed. The matrix itself is fine — the check above just passed — so this is a defect in scripts/check_parity_matrix.dart, not table drift."
+            echo "Reproduce with: node --test scripts/check_parity_matrix.test.mjs (stdlib only, but it drives the guard as a process, so it needs the Dart SDK the step above already set up)."
             exit 1
           fi
 
