@@ -5,6 +5,8 @@ on:
     paths:
       - 'apps/web/**'
       - 'packages/**'
+      - 'scripts/check_web_bundle_budget.mjs'
+      - 'scripts/check_web_bundle_budget.test.mjs'
       - '.github/workflows/web-bundle-budget.yml'
 
 permissions:
@@ -12,83 +14,22 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # Hard ceilings (kilobytes, transferred = gzipped) for the public web
-  # bundle, summed across every JS+CSS file emitted into build/. When a
-  # PR pushes either over the limit, the job fails so a reviewer has to
-  # acknowledge the increase before merging.
-  #
-  # 2026-06-10 — total raised 1500 → 1900. The app crossed 1500 through
-  # ordinary cumulative growth since the 2026-05 ~972 KB baseline (gym,
-  # nutrition, clubs, coaching, social, route-builder all shipped), NOT
-  # a regression. Measured total at the bump: 1689 KB across 66 surfaces.
-  #
-  # 2026-06-20 — total lowered 1900 → 1720. The ~178 KB
-  # `@revenuecat/purchases-js` web SDK was removed: the /settings/upgrade
-  # Pro flow now uses RevenueCat's hosted-checkout redirect (no embedded
-  # SDK) — see docs/product/followups.md "Web bundle weight". That drops
-  # the SDK from the summed metric (1689 → ~1511 KB), so the ceiling is
-  # re-tightened to keep ~12% headroom rather than banking the saving as
-  # slack. maplibre-gl ~263 KB (the map) is now the only feature-essential
-  # large single lib. The gate still catches a major single-PR regression
-  # (a second map-scale lib, a duplicated dep) while allowing ordinary
-  # 20-80 KB feature additions.
-  #
-  # IMPORTANT: this metric sums ALL chunks, including lazy ones, so
-  # code-splitting a dep does NOT lower it — only removing weight does.
-  #
-  # 2026-07-11 — total raised 1720 → 2200. Measured total 2009 KB across
-  # the surfaces shipped since the ~1511 KB re-tighten (learn guides, the
-  # public share/OG entity pages, recap/badges/achievements, challenges,
-  # gym routines + session plans, the expanded nutrition surfaces, race
-  # calendar). Ordinary cumulative feature growth, NOT a regression: the
-  # largest single chunk is 264 KB (well under the 350 ceiling), so no
-  # rogue dep / duplicated lib — the weight is spread across many new
-  # lazy route chunks. Re-set to ~9% headroom over 2009. The durable
-  # follow-up is a dedicated bundle-trim pass (route-level code-split
-  # audit + dep dedupe), tracked separately — not folded into an
-  # unrelated firmware PR.
-  #
-  # 2026-07-27 — total raised 2200 → 2400. maplibre-gl v6 splits the map
-  # worker out of the main bundle into its own module graph, which the
-  # bundler must make self-contained, so the shared style/tile-parsing code
-  # is now on disk twice: once in the map chunk, once in the emitted
-  # worker (126 KB gzipped). v5's UMD carried the worker inline and counted
-  # it once. Measured total 2196 KB — i.e. the old 2200 ceiling passed with
-  # 4 KB to spare, which is noise-level and would flap. Not feature growth
-  # and not a rogue dep: largest single chunk is 244 KB, still well under
-  # the 350 ceiling. Re-set to ~9% headroom over 2196, matching the
-  # 2026-07-11 precedent. The dedicated bundle-trim pass noted above is
-  # still the durable follow-up and is where this 126 KB should be
-  # revisited — a self-hosted worker + shared pair would de-duplicate it.
-  #
-  # 2026-08-27 — total raised 2400 → 2700. A seventh locale catalogue
-  # (European Portuguese, decisions § 755) landed. Measured total 2462 KB
-  # against the 2376 KB the previous round measured on the same tree: the
-  # whole +86 KB is that one catalogue, and the largest single chunk is
-  # unchanged at 248 KB (byte-identical hash), so this is neither feature
-  # sprawl nor a rogue dep. It cannot be trimmed without deleting the
-  # feature: a catalogue is pure translated string data.
-  #
-  # Worth stating plainly, because it will recur: this metric sums ALL
-  # chunks (see above), and locale catalogues scale linearly with locale
-  # count at ~86 KB gzipped each — ~609 KB, roughly a QUARTER of the
-  # measured bundle, is translation data of which any one reader downloads
-  # exactly one. Every future locale costs another ~86 KB against a
-  # ceiling whose purpose is catching payload drift and rogue deps. That
-  # tension is real and belongs in the dedicated bundle-trim pass tracked
-  # in followups.md, which should decide whether catalogues are measured
-  # apart from code rather than having this ceiling climb per language.
-  # Re-set to ~9.7% headroom over 2462, matching the 2026-07-11 and
-  # 2026-07-27 precedents.
-  #
-  # 33% headroom on largest (≥350) → keeps the main entry bundle from
-  # quietly drifting toward code-split territory. Bump deliberately when
-  # the right answer is "ship the feature", not casually because the job
-  # failed.
-  MAX_TOTAL_KB: 2700
-  MAX_LARGEST_CHUNK_KB: 350
 
 jobs:
+  # Stdlib-only and needs neither an install nor a build, so it runs beside the
+  # measurement rather than after it: a broken guard should say so in seconds,
+  # not three minutes into a vite build whose verdict it owns.
+  budget-script-tests:
+    name: Web bundle budget (guard tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Unit-test the budget guard
+        run: node --test scripts/check_web_bundle_budget.test.mjs
+
   bundle-budget:
     name: Web bundle budget
     runs-on: ubuntu-latest
@@ -106,50 +47,10 @@ jobs:
           PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
           PUBLIC_MAPTILER_KEY: placeholder
           BASE_PATH: ""
+      # Three ceilings over two populations — code (every reader, any language)
+      # and message catalogues (one fetched per reader, so budgeted per
+      # catalogue and never summed). The numbers, the measurements behind them
+      # and the history of the single total ceiling this replaces all live in
+      # the script's header, next to the arithmetic they govern.
       - name: Measure + assert budget
-        shell: bash
-        run: |
-          set -euo pipefail
-          BUILD_DIR=apps/web/build
-          if [ ! -d "$BUILD_DIR" ]; then
-            echo "::error::No build output at $BUILD_DIR"
-            exit 1
-          fi
-
-          shopt -s globstar nullglob
-          total_kb=0
-          largest_kb=0
-          largest_path=""
-
-          while IFS= read -r -d '' f; do
-            gz_size=$(gzip -c "$f" | wc -c)
-            kb=$(( (gz_size + 1023) / 1024 ))
-            total_kb=$(( total_kb + kb ))
-            if [ "$kb" -gt "$largest_kb" ]; then
-              largest_kb="$kb"
-              largest_path="$f"
-            fi
-          done < <(find "$BUILD_DIR" \( -name '*.js' -o -name '*.css' \) -print0)
-
-          echo "Total gzipped JS+CSS: ${total_kb} KB (budget ${MAX_TOTAL_KB} KB)"
-          echo "Largest chunk:       ${largest_kb} KB — ${largest_path} (budget ${MAX_LARGEST_CHUNK_KB} KB)"
-
-          {
-            echo "## Web bundle budget"
-            echo ""
-            echo "| Metric | Size | Budget |"
-            echo "|---|---|---|"
-            echo "| Total gzipped JS+CSS | ${total_kb} KB | ${MAX_TOTAL_KB} KB |"
-            echo "| Largest single chunk | ${largest_kb} KB | ${MAX_LARGEST_CHUNK_KB} KB |"
-            echo ""
-            echo "Largest chunk path: \`${largest_path#$BUILD_DIR/}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if [ "$total_kb" -gt "$MAX_TOTAL_KB" ]; then
-            echo "::error::Total gzipped bundle ${total_kb} KB exceeds budget ${MAX_TOTAL_KB} KB. Either trim deps or bump the env in .github/workflows/web-bundle-budget.yml with a justification."
-            exit 1
-          fi
-          if [ "$largest_kb" -gt "$MAX_LARGEST_CHUNK_KB" ]; then
-            echo "::error::Largest single chunk ${largest_kb} KB exceeds budget ${MAX_LARGEST_CHUNK_KB} KB. Split it (dynamic import) or bump the env."
-            exit 1
-          fi
+        run: node scripts/check_web_bundle_budget.mjs
