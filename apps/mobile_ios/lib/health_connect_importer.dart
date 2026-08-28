@@ -103,6 +103,12 @@ class HealthConnectImporter {
       // privacy labels have to declare. That is a decision of its own, not
       // a side effect of fixing the Health Connect import.
       if (Platform.isAndroid) HealthDataType.WORKOUT_ROUTE,
+      // Android-only for the same reason as WORKOUT_ROUTE above, though the
+      // asymmetry is the other way round: the plugin's Health Connect
+      // workout handler sums a StepsRecord read into totalSteps, while its
+      // HealthKit one never populates that field at all. So on iOS this
+      // would widen what the build collects and buy nothing back.
+      if (Platform.isAndroid) HealthDataType.STEPS,
       HealthDataType.DISTANCE_DELTA,
       HealthDataType.HEART_RATE,
       // Read body weight so the import can seed the user's body_weight_kg
@@ -182,6 +188,13 @@ class HealthConnectImporter {
           MetadataKeys.activityType: activityType,
         };
         if (avgBpm != null) metadata[MetadataKeys.avgBpm] = avgBpm;
+
+        final steps = stepsForWorkout(
+          activityType: activityType,
+          totalSteps: value.totalSteps,
+          duration: point.dateTo.difference(point.dateFrom),
+        );
+        if (steps != null) metadata[MetadataKeys.steps] = steps;
 
         // Both the workout point and its route point carry the same
         // ExerciseSessionRecord id, so that is the join key.
@@ -380,6 +393,46 @@ class HealthConnectImporter {
     }
     return out;
   }
+
+  /// The step count worth recording for an imported workout, or null when
+  /// there isn't a believable one.
+  ///
+  /// Health Connect has no per-session step field: the plugin derives
+  /// `totalSteps` by summing every `StepsRecord` overlapping the session
+  /// window, whoever wrote it. Two things follow. A ride with the phone in
+  /// a jersey pocket comes back with a real step count that is not the
+  /// rider's cadence, and the run-detail tile divides whatever is stored by
+  /// moving time and calls the result spm — so `cycle` is excluded, matching
+  /// the "pedometer not meaningful for cycling" stride table. The exclusion
+  /// names the bike rather than listing the foot-powered types, for the
+  /// reason decisions § 598 records against `gearBackfillCandidates`: an
+  /// allowlist of `{run, walk, hike}` silently drops a real activity_type
+  /// nobody remembered, and a step count is wrong only where there are no
+  /// steps.
+  ///
+  /// A count implying a cadence no human sustains is window contamination
+  /// (a whole-day total overlapping a short session), not a step count, and
+  /// is dropped whole — the same call the HR average makes on a sample
+  /// outside 30-230 bpm. Dropping it leaves the run exactly as it imports
+  /// today rather than publishing a fabricated cadence.
+  @visibleForTesting
+  static int? stepsForWorkout({
+    required String activityType,
+    required int? totalSteps,
+    required Duration duration,
+  }) {
+    if (totalSteps == null || totalSteps <= 0) return null;
+    if (activityType == 'cycle') return null;
+    final minutes = duration.inSeconds / 60;
+    if (minutes <= 0) return null;
+    if (totalSteps / minutes > _maxPlausibleCadenceSpm) return null;
+    return totalSteps;
+  }
+
+  /// Steps per minute past which a count is contamination rather than a
+  /// cadence. Elite track sprinters peak near 300; nothing sustains it over
+  /// a whole session, so this only ever rejects a summed foreign record.
+  static const int _maxPlausibleCadenceSpm = 300;
 
   static bool _isPlausibleFix(HcRoutePoint p) =>
       p.lat.isFinite &&
