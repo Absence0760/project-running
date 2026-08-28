@@ -58,7 +58,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { foldSoftWraps } from './markdown_lines.mjs';
+import { foldSoftWraps, markdownTables } from './markdown_lines.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const CLAUDE_DOC = join(REPO_ROOT, 'CLAUDE.md');
@@ -206,7 +206,14 @@ export function parseClaudePairs(text) {
 
 /**
  * Every row of the syncer agent's canonical table, keyed by the pair name its
- * web path ends in, carrying the raw cells so the path checks can read them.
+ * web path ends in, carrying the cells so the path checks can read them.
+ *
+ * The rows come from `markdownTables`, not from `startsWith('|')` plus a flat
+ * `slice(1, -1)`. That pairing is the § 774 defect verbatim: GFM makes both
+ * wrapping pipes optional, so a row written without its trailing pipe lost its
+ * MIRROR-TEST column and every path in it went unchecked in silence, and a row
+ * written without its leading pipe was read as a pair the table does not carry.
+ * decisions § 779.
  *
  * @param {string} text
  * @returns {{ rows: Map<string, SyncerRow>, errors: string[] }}
@@ -226,19 +233,14 @@ export function parseSyncerRows(text) {
 		return { rows, errors };
 	}
 
-	const lines = text.slice(headingAt).split('\n');
-	lines.forEach((line, i) => {
-		if (!line.startsWith('|')) return;
-		const cells = line.split('|').slice(1, -1);
-		if (cells.length < 3) return;
-		const web = cells[0].match(/`(apps\/web\/src\/lib\/[A-Za-z0-9_./-]+\/([A-Za-z0-9_]+)\.ts)`/);
-		if (web === null) return;
-		rows.set(web[2], {
-			line: i + 1,
-			web: web[1],
-			cells,
-		});
-	});
+	for (const table of markdownTables(text.slice(headingAt))) {
+		for (const { line, cells } of table.rows) {
+			if (cells.length < 3) continue;
+			const web = cells[0].match(/`(apps\/web\/src\/lib\/[A-Za-z0-9_./-]+\/([A-Za-z0-9_]+)\.ts)`/);
+			if (web === null) continue;
+			rows.set(web[2], { line, web: web[1], cells });
+		}
+	}
 
 	if (rows.size === 0) {
 		errors.push(
