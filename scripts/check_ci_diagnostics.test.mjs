@@ -354,6 +354,39 @@ test('checkGateCoverage fails rather than passing vacuously when the gate is gon
 	assert.match(errors[0], /nothing now aggregates/);
 });
 
+// Rule 2's blind spot, reported rather than only described in an ADR. The
+// followup that asked for it said nobody had measured how many steps a
+// widening would newly catch; the guard now states the set at every run, so
+// the next reader does not have to derive it again.
+test('an unnamed non-guard step in a bundled job is reported as exempt, not silently skipped', () => {
+	const { errors, exempt } = checkStepDiagnoses([
+		{
+			name: 'ci.yml',
+			text: bundledJob(
+				`      - run: npm ci\n` +
+					selfDiagnosing('one', guardCmd('one')) +
+					selfDiagnosing('two', guardCmd('two')) +
+					`      - if: failure()\n        run: echo done\n`,
+			),
+		},
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(exempt.length, 2);
+	assert.match(exempt[0], /job `parity-types` runs `npm ci` unnamed/);
+	assert.match(exempt[1], /runs `echo done` unnamed/);
+	assert.match(exempt[0], /rule 2 does not ask it to diagnose itself/);
+});
+
+test('the exempt set over the real workflows is unnamed setup, and nothing else', () => {
+	const { exempt } = checkStepDiagnoses(readWorkflows(WORKFLOW_DIR));
+	// Not a pinned count: the assertion is that nothing in the blind spot runs
+	// anything from THIS repo. A step invoking a repo-local path is a check
+	// whose failure the job name cannot explain, and would have to be named.
+	for (const line of exempt) {
+		assert.doesNotMatch(line, /\bbin\/|\bscripts\/|\bapps\/|\binfra\/|\.github\//, line);
+	}
+});
+
 test('the repo’s real workflows carry no misattributable diagnosis', () => {
 	const files = readWorkflows(WORKFLOW_DIR);
 	const { errors, diagnoses, scoping, gate } = checkAll(files);
