@@ -128,3 +128,30 @@ Deno.test('last_sync_at is stamped, and the resume point cleared, only on a fini
 		'a resume point may only be written on a truncated walk',
 	);
 });
+
+Deno.test('the dev allow-list carries the callback the mobile clients send', async () => {
+	// The mobile connect flow posts `kStravaCallbackUri`, and the comparison in
+	// `_shared/redirect_allowlist.ts` is whole-string. A list carrying only the
+	// web callback answers an in-app connect with 400 `invalid_redirect_uri`
+	// whatever the developer registered with Strava — and `.env.example` is
+	// what an operator copies to configure production.
+	const dart = await Deno.readTextFile(
+		new URL('../../../../mobile_android/lib/strava.dart', import.meta.url),
+	);
+	const scheme = dart.match(/kStravaCallbackScheme = '([^']+)'/)?.[1];
+	assert(scheme, 'mobile_android/lib/strava.dart no longer declares kStravaCallbackScheme');
+	const expected = `${scheme}://strava-callback`;
+	assert(
+		dart.includes(`kStravaCallbackUri = '$kStravaCallbackScheme://strava-callback'`),
+		'kStravaCallbackUri is no longer the scheme plus /strava-callback — this guard ' +
+			'reconstructs it and would now be pinning the wrong URI',
+	);
+	for (const envFile of ['.env.development', '.env.example']) {
+		const src = await Deno.readTextFile(new URL(`../../../${envFile}`, import.meta.url));
+		const line = src.match(/^STRAVA_ALLOWED_REDIRECTS=(.*)$/m)?.[1] ?? '';
+		assert(
+			line.split(',').map((v) => v.trim()).includes(expected),
+			`${envFile}'s STRAVA_ALLOWED_REDIRECTS must contain ${expected}. Found: ${line}`,
+		);
+	}
+});
