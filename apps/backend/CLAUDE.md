@@ -247,6 +247,34 @@ grant select, insert, update, delete on public.<table> to service_role;   -- alw
 
 Two catch-alls fail the pgtap job when this is skipped: `role_grant_matrix_test.sql` on the read side (every public base table must be readable by `authenticated`, table- or column-level) and `global_segment_grants_test.sql` on the write side (every public base table must carry full `service_role` DML — the check a zero-grant table trips).
 
+### A column-level `revoke` is a no-op under a table-level grant
+
+The mirror-image of the rule above, and the one that ships looking correct.
+Postgres resolves a privilege from the BROADEST grant, so
+`revoke select (secret) on t from authenticated` while `authenticated` still
+holds `select` on the whole table reports `REVOKE`, writes no column ACL, and
+leaves `has_column_privilege` true. `20260707_001` documents the trap in its
+own header; `20261229_001` and `20270213_001` shipped it anyway, and on
+`instructor_payout_accounts` — whose own-row SELECT policy is permissive — the
+host could read their raw Stripe Connect account id for the life of the table
+(repaired by `20270621_001`, decisions § 779). Always the two-step:
+
+```sql
+revoke select on public.<table> from anon, authenticated;
+grant select (col, col, ...) on public.<table> to anon, authenticated;
+```
+
+Two things enforce it. `apps/backend/scripts/check_migration_column_revoke_noop.mjs`
+(in the `parity-types` CI job, beside the version-key and online-safety guards)
+replays the migration set and fails on a column revoke whose role still holds
+the table-level privilege at the end — it carries no allowlist, because a
+repair is a later migration rather than a bookkeeping edit here. And
+`column_grant_lockdown_registry_test.sql` pins the resulting STATE: every
+withheld column of a column-locked table must be registered with the reason it
+is withheld, so a column added after a lockdown (deny-by-default, since a
+re-grant is cumulative) or a table-wide `grant select` landing on a locked
+table both fail the pgtap job.
+
 ### Every new function must pin `search_path`
 
 `create function` / `create or replace function` bodies must carry `set search_path = public` (add `, extensions` if the body references postgis/pg_trgm objects) — for SECURITY DEFINER functions it's a hijack defence, for plain invoker functions it silences the Supabase security advisor's "Function Search Path Mutable" lint and keeps resolution independent of the caller's session. The backfill was `20270415_001` (via `ALTER FUNCTION … SET`, never a body rewrite); `function_search_path_test.sql` is a pg_proc catch-all that fails the pgtap suite on any unpinned public function. The eight `public_*` views the same advisor flags as "Security Definer View" are intentional and stay definer — see decisions.md §244 before "fixing" them.
