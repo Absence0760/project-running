@@ -58,6 +58,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { foldSoftWraps } from './markdown_lines.mjs';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const CLAUDE_DOC = join(REPO_ROOT, 'CLAUDE.md');
 export const SYNCER_DOC = join(REPO_ROOT, '.claude', 'agents', 'shared-library-syncer.md');
@@ -70,31 +72,6 @@ const SYNCER_HEADING = '## The pairs (canonical list)';
 /// one-way `no_std` ports. It is separated from the bullet by a blank line and
 /// must stay that way — see `parseClaudePairs`.
 const WATCH_PARAGRAPH = /third parity rail/;
-
-/// A line that opens a new markdown block rather than continuing the previous
-/// one: a list item, heading, table row, quote, fence or HTML comment.
-const BLOCK_START = /^\s*(?:[-*+] |\d+[.)] |#{1,6} |>|\||```|~~~|<!--)/;
-
-/// Markdown's lazy continuation, applied: a line that neither is blank nor
-/// opens a block belongs to the line above it, and the renderer shows them as
-/// one. Folding here means every pattern below reads what a human reads,
-/// instead of each one having to be taught about line breaks separately — the
-/// one that was not would be the pair that goes missing.
-/**
- * @param {string} text
- * @returns {string}
- */
-export function foldSoftWraps(text) {
-	/** @type {string[]} */
-	const out = [];
-	for (const line of text.split('\n')) {
-		const previous = out.at(-1);
-		if (previous !== undefined && previous.trim() !== '' && line.trim() !== '' && !BLOCK_START.test(line)) {
-			out[out.length - 1] = `${previous} ${line.trim()}`;
-		} else out.push(line);
-	}
-	return out.join('\n');
-}
 
 const WEB_LIB = 'apps/web/src/lib/';
 const MOBILE_ROOT = 'apps/mobile_android/';
@@ -140,14 +117,12 @@ export function parseClaudePairs(text) {
 	/** @type {string[]} */
 	const errors = [];
 
-	// Markdown soft-wraps a list item freely and the wrap changes nothing about
-	// what the document says, so the continuation lines are folded back before
-	// anything is matched. Reading one PHYSICAL line meant a pair written past
-	// a break was invisible while every anti-vacuity check stayed satisfied by
-	// the text before it — § 604's exact defect, undetected. Measured on the
-	// committed bullet: one wrap mid-list hid 86 of its 99 pairs (loud, but
-	// blaming the syncer table for pairs nobody removed), and a new pair
-	// appended on a continuation line was invisible with zero errors reported.
+	// Reading one PHYSICAL line meant a pair written past a soft wrap was
+	// invisible while every anti-vacuity check stayed satisfied by the text
+	// before it — § 604's exact defect, undetected. Measured on the committed
+	// bullet: one wrap mid-list hid 86 of its 99 pairs (loud, but blaming the
+	// syncer table for pairs nobody removed), and a new pair appended on a
+	// continuation line was invisible with zero errors reported.
 	// decisions § 774.
 	text = foldSoftWraps(text);
 

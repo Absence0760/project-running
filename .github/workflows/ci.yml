@@ -671,6 +671,11 @@ jobs:
           node-version: 24
       - name: CLAUDE.md vs shared-library-syncer pair registry
         run: |
+          if ! node --test scripts/markdown_lines.test.mjs; then
+            echo "::error::The markdown soft-wrap folder that both this job's pair-registry and iOS-column guards read prose through failed its own tests, so every verdict below it is a guess. This is not registry drift."
+            echo "Reproduce with: node --test scripts/markdown_lines.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
           if ! node scripts/check_parity_pair_registry.mjs; then
             echo "::error::A TS<->Dart parity pair is registered in CLAUDE.md but not in the shared-library-syncer agent's table (or the reverse), or one of them points at a file that no longer exists. Nothing here is about the parity matrix, its iOS column or the doc checkboxes — those are the other three guards in this job."
             echo "The failing line above names the pair and which registry is missing it. Both are edited in the same change; decisions § 604 is why a pair in only one of them is a pair whose divergence is never detected."
