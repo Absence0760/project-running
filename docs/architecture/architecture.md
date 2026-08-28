@@ -554,7 +554,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 | Wear OS | Native Kotlin + Jetpack Compose-for-Wear | Separate Gradle project in monorepo, schema-codegen'd Kotlin row classes — see [decisions.md § 15](decisions.md) |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to AWS S3 + CloudFront with `/api/coach` on Lambda — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) |
 | Web maps | MapLibre GL JS | Route builder, run GPS trace, live spectator |
-| Web icons | unplugin-icons + Iconify | Material Symbols icon set |
+| Web icons | Self-hosted Material Symbols webfont, rendered as ligatures | Subset to the 347 icons the tree names by `scripts/gen_web_icon_font.mjs` — see [decisions.md § 780](decisions.md). `unplugin-icons` + `@iconify-json/material-symbols` are configured in `vite.config.ts` but no `~icons/` import exists; no rendered icon comes from them. |
 | Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
 
 | Monorepo tooling | Melos (Flutter) + npm workspaces (web + backend) | Separate toolchains, same repo. `pnpm` lockfile is committed for local convenience; CI runs `npm`. |

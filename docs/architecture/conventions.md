@@ -549,6 +549,8 @@ The web app loads Material Symbols Outlined as a webfont and renders icons via *
 
 The class is always **`material-symbols`** — the one styled in `app.css` with the fixed sizing box and FOUC-clipping (`overflow: hidden`). Don't use `material-symbols-outlined`: that's the bare class the `material-symbols` npm package ships, so icons still render with it, but they skip the app's sizing/clip treatment and fall out of step with every other page. (The gym pages once drifted onto it — see git history.)
 
+**The font is a subset, so adding a new icon means regenerating it.** `apps/web/src/lib/assets/material-symbols-subset.woff2` carries only the icons this tree names — 347 of the font's 4271, 74 KB against the full font's 3866 KB ([decisions § 780](decisions.md)). The set is derived from the source, not hand-listed: element text at every render site, plus every quoted `[a-z0-9_]+` literal under `src` that the upstream font can render, which is how a name reaching the span through `{item.icon}` gets found. Adding an icon the subset does not carry fails `build-web` with the name in the message; fix it with `pnpm gen:icon-font` and commit the regenerated `.woff2` **and** its `.json` manifest. `@font-face` and `font-display: block` live in `app.css` — `block` is deliberate, because for a ligature font every other value paints the icon's NAME in the fallback face while it loads.
+
 ## Mobile in-app notifications — `showTopBanner`
 
 On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical transient notification primitive is `showTopBanner(context, message, ...)` from `lib/widgets/top_banner.dart`. It renders a top-anchored pill via `Overlay`, auto-positions below an `AppBar` when one is present, and coalesces to a single banner at a time.
