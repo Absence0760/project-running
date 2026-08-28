@@ -1560,6 +1560,17 @@ Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/
 
 Both have been breached by an automated sync from the `templates` repo, which is additive by path and therefore blind to a name it collides with, so neither rule can rely on review alone.
 
+## A guard parses its input, or refuses it — it never pattern-matches a language
+
+A CI guard's whole value is that its verdict is true, so a guard that reads its input approximately is worse than no guard: it is a green tick over text nobody looked at. Four of them were found doing exactly that ([decisions § 770](decisions.md), after [§ 757](decisions.md)), and the repair is the same four rules every time.
+
+- **A delimiter that can be quoted, nested or escaped is not a splitter.** `split(';')` over SQL fragments every `$$` body — 3441 real statements became 7366 pieces across the committed migrations — and a `--` eaten before anything knew whether it opened a comment swallowed a statement's own terminator. Lex the language (`apps/backend/scripts/sql_lex.mjs` does it for Postgres) or do not claim to read it.
+- **Ask the tool that already knows.** git knows which files a diff ADDED (`--diff-filter=A`); inferring it from a `@@ … +1` hunk header was wrong 22 times in 28. The same goes for a version a lockfile resolves, a job list a workflow declares, a path a `package.json` names.
+- **Two facts in the same file are not two facts in the same scope.** A cache key belongs to its job, a `NOT VALID` to its action, an `env:` to its file. Matching per file because that is what a `readFileSync` hands you produces a verdict about a pairing that does not exist.
+- **Input the guard cannot read is refused, loudly, naming the file.** Never consumed to end of input, never caught into an empty result, never skipped. A guard that reports a clean tree over something it failed to parse is the failure mode all three rules above collapse into.
+
+And where a rule genuinely has a blind spot, the guard **reports the blind spot** — `check_ci_diagnostics.mjs` lists the steps it does not ask to diagnose themselves — rather than leaving its boundary in a paragraph someone has to re-derive.
+
 ## Exceptions
 
 Every rule here has escape hatches for the cases where it genuinely doesn't fit. If you're about to violate one of these rules:
