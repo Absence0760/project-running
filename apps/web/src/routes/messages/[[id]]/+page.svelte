@@ -6,6 +6,8 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
+	import DmRouteAttachment from '$lib/components/DmRouteAttachment.svelte';
+	import { bodyRestatesAttachment, hasDmRouteAttachment } from '$lib/social/dm_attachment';
 	import {
 		fetchDmThreads,
 		fetchDmThread,
@@ -223,8 +225,16 @@
 							<p class="muted center">{tr('messages.emptyConversation')}</p>
 						{:else}
 							{#each messages as m (m.id)}
+								{@const attached = m.route_id}
 								<div class="bubble" class:mine={m.sender_id === me}>
-									<span class="text">{m.body}</span>
+									{#if hasDmRouteAttachment(attached)}
+										<DmRouteAttachment routeId={attached} />
+										{#if !bodyRestatesAttachment(m.body, attached)}
+											<span class="text">{m.body}</span>
+										{/if}
+									{:else}
+										<span class="text">{m.body}</span>
+									{/if}
 									<span class="when">{fmtTime(m.created_at)}</span>
 								</div>
 							{/each}
@@ -401,6 +411,11 @@
 	.bubble .when {
 		font-size: var(--font-size-section-label);
 		opacity: 0.7;
+	}
+	/* The attachment card carries its own surface + border, so it must not
+	   inherit the sent-bubble's inverted foreground. */
+	.bubble.mine :global(.attachment) {
+		color: var(--color-text);
 	}
 	.send-error {
 		color: var(--color-danger-text);

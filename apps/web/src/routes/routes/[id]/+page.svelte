@@ -1019,6 +1019,7 @@
 	<SendRouteDialog
 		open={showSendDm}
 		shareUrl={shareLink}
+		routeId={route.id}
 		onclose={() => (showSendDm = false)}
 	/>
 {/if}

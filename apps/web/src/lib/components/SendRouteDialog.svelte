@@ -13,13 +13,19 @@
 	interface Props {
 		open: boolean;
 		/// The public /share/route/[id] URL, already made reachable by the
-		/// host's ensure-public step. Sent verbatim as the message body —
-		/// route_direct_share.md v1 carries no typed attachment.
+		/// host's ensure-public step. Still sent verbatim as the message body:
+		/// it is the forwardable artifact the dialog's own copy promises the
+		/// recipient gets, and it is what the inbox preview line and the Art 20
+		/// export read, neither of which resolves the attachment below.
 		shareUrl: string;
+		/// The typed attachment (route_direct_share.md v2). The thread renders
+		/// it as a card whose polyline is clipped for the reader; the INSERT
+		/// policy refuses an id the sender cannot see.
+		routeId: string;
 		onclose: () => void;
 	}
 
-	let { open, shareUrl, onclose }: Props = $props();
+	let { open, shareUrl, routeId, onclose }: Props = $props();
 
 	let loading = $state(false);
 	let loadFailed = $state(false);
@@ -81,7 +87,7 @@
 		sendingTo = recipient.id;
 		sendError = null;
 		try {
-			await sendDm(recipient.id, shareUrl);
+			await sendDm(recipient.id, shareUrl, routeId);
 			sentTo = recipient;
 		} catch (e) {
 			sendError = e instanceof Error ? e.message : `${e}`;
