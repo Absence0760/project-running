@@ -136,9 +136,12 @@ lock reference, the #409/#410/#411 worked examples, and a pre-merge checklist
 live in **[../../docs/backend/migration_locks.md](../../docs/backend/migration_locks.md)**.
 Read it before writing a migration that adds a constraint or touches many rows.
 `scripts/check_migration_online_safety.mjs` (in the `parity-types` CI job,
-alongside the version-keys guard) fails a NEW migration that adds a CHECK/FK to
-a guarded table without `NOT VALID`; run it locally with `node
-apps/backend/scripts/check_migration_online_safety.mjs`. **`jobs` is in the
+alongside the version-keys guard) fails a migration that adds a CHECK/FK to a
+guarded table without `NOT VALID`; run it locally with `node
+apps/backend/scripts/check_migration_online_safety.mjs`. It scans **every**
+committed migration on every run, and the already-applied violations are
+grandfathered by name in `GRANDFATHERED_VIOLATIONS`, so **adding a migration
+needs no edit to the guard** ([decisions § 775](../../docs/architecture/decisions.md)). **`jobs` is in the
 guarded set** (#394 follow-up): a bare `DROP CONSTRAINT jobs_kind_chk` +
 `ADD CONSTRAINT … CHECK (…)` widening now fails CI just like the
 `notifications` case, because the Go `job_worker` polls `jobs` continuously and
@@ -175,10 +178,9 @@ Model it on `20260621_001_runs_track_url_path_check.sql` and
 `20261124_001_content_length_caps.sql`, which already split the `ADD … NOT
 VALID` from a later `VALIDATE CONSTRAINT`. Re-emit the **complete** union each
 time — a CHECK rebuild replaces the whole allowlist, so the same "bare-body
-strips prior fixes" trap applies (see below). Note `check_migration_online_safety.mjs`
-catches the missing `NOT VALID` on `notifications` (a guarded table — the
-add-half trips its check), but **`jobs` is not in that guard's `GUARDED_TABLES`
-set**, so on `jobs` the two-step is on you, not CI.
+strips prior fixes" trap applies (see below). `check_migration_online_safety.mjs` catches
+the missing `NOT VALID` on **both** — `notifications` and `jobs` are each in its
+`GUARDED_TABLES` set, and the add-half trips its check.
 
 ### Migrations that reference postgis / pg_trgm objects must set search_path themselves
 
