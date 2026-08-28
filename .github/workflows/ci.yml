@@ -243,6 +243,22 @@ jobs:
             echo "Reproduce with: node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs (drives the loop with stub curl/docker on PATH)."
             exit 1
           fi
+      # `npm run test:scripts` was the only caller of check_root_scripts.mjs and
+      # no job invoked it, so the guard enforced nothing for as long as it had
+      # existed (§ 439). It reads package.json and the workspace manifests as
+      # text, so it belongs in this install-free job like the rest.
+      - name: Root package.json scripts name targets that exist
+        run: |
+          if ! node scripts/check_root_scripts.mjs; then
+            echo "::error::A script in the root package.json cds into a directory that does not exist, or hands a package runner a script target its package.json does not declare. Nothing here is about action SHAs, workflow syntax, the toolchain pins or the CI diagnoses — those are the other guards in this job."
+            echo "The failing line above names the script and the missing directory or target. Reproduce with: npm run test:scripts."
+            exit 1
+          fi
+          if ! node --test scripts/check_root_scripts.test.mjs scripts/shell_lex.test.mjs; then
+            echo "::error::The root-script guard or the shell lexer it reads commands with regressed. The manifest itself is fine — the check above just passed — so this is a defect in scripts/check_root_scripts.mjs or scripts/shell_lex.mjs, not a broken script target."
+            echo "Reproduce with: node --test scripts/check_root_scripts.test.mjs scripts/shell_lex.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # `npx <bin>` runs whatever node_modules/.bin provides — and when nothing
       # provides it, downloads the newest thing the registry answers with and
       # executes it against this checkout. The web unit suite ran that way for
