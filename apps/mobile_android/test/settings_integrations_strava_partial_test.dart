@@ -75,6 +75,7 @@ void main() {
       failed: 0,
       rateLimited: true,
       complete: false,
+      resumable: false,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
@@ -99,6 +100,7 @@ void main() {
       failed: 0,
       rateLimited: false,
       complete: false,
+      resumable: true,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
@@ -116,6 +118,7 @@ void main() {
       failed: 0,
       rateLimited: false,
       complete: true,
+      resumable: false,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
@@ -136,6 +139,7 @@ void main() {
       failed: 2,
       rateLimited: false,
       complete: true,
+      resumable: false,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
