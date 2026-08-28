@@ -23,7 +23,13 @@ jobs:
         with:
           node-version: '24'
       - name: Run compliance-drift detector
-        run: node scripts/check_compliance_drift.mjs
+        run: |
+          if ! node --test scripts/check_compliance_drift.test.mjs; then
+            echo "::error::The compliance-drift detector's own unit tests failed, so whatever it says about this PR's diff cannot be trusted. This is not a compliance finding."
+            echo "Reproduce with: node --test scripts/check_compliance_drift.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
+          node scripts/check_compliance_drift.mjs
         env:
           # 'warn' = print findings + summary, never fail the job.
           # 'fail' = exit 1 when findings exist. Flip when the team is

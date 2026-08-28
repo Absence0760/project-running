@@ -14,6 +14,7 @@ import {
 	checkMelos,
 	parseActionUses,
 	parseDefmtPrint,
+	parseDefmtPrintByJob,
 	parseLockedVersion,
 	parseMelosActivations,
 	parseWorkflow,
@@ -336,8 +337,85 @@ test('checkDefmtPrint fails a cache key that lags the pinned version', () => {
 		{ name: 'ci.yml', text: defmtWorkflow({ install: '1.2.0', key: '1.1.0' }) },
 	]);
 	assert.equal(errors.length, 1);
-	assert.match(errors[0], /cache key names defmt-print 1\.1\.0 but the install pins 1\.2\.0/);
+	assert.match(errors[0], /cache key names defmt-print 1\.1\.0 but job `sim` installs 1\.2\.0/);
 	assert.match(errors[0], /the pin would never run/);
+});
+
+/// Two sim jobs in one file, each with its own cache key and its own pin.
+/// ci.yml has held two of them since the day it was written; they agree only
+/// by hand.
+/**
+ * @param {{ a: string, aKey?: string, b: string, bKey?: string }} spec
+ */
+function twoSimJobs({ a, aKey = a, b, bKey = b }) {
+	const job = (/** @type {string} */ name, /** @type {string} */ install, /** @type {string} */ key) =>
+		`  ${name}:\n    steps:\n` +
+		`      - name: Cache defmt-print\n` +
+		`        uses: actions/cache@abc\n` +
+		`        with:\n` +
+		`          path: ~/.cargo/bin/defmt-print\n` +
+		`          key: defmt-print-${key}-\${{ runner.os }}\n` +
+		`      - name: Install defmt-print\n` +
+		`        run: command -v defmt-print || cargo install defmt-print --locked --version ${install}\n`;
+	return `name: Fake\njobs:\n` + job('sim-a', a, aKey) + job('sim-b', b, bKey);
+}
+
+test('parseDefmtPrintByJob groups by job and reports file-absolute lines', () => {
+	const byJob = parseDefmtPrintByJob(twoSimJobs({ a: '1.1.0', b: '2.0.0' }));
+	assert.deepEqual([...byJob.keys()], ['sim-a', 'sim-b']);
+	assert.deepEqual(byJob.get('sim-a'), {
+		installs: [{ line: 11, version: '1.1.0' }],
+		cacheKeys: [{ line: 9, version: '1.1.0' }],
+	});
+	assert.deepEqual(byJob.get('sim-b'), {
+		installs: [{ line: 20, version: '2.0.0' }],
+		cacheKeys: [{ line: 18, version: '2.0.0' }],
+	});
+});
+
+// Read per FILE, every key was compared against the FIRST install in it, so
+// the second job's correct key read as stale.
+test('a cache key correct for its own job is not reported stale', () => {
+	const { errors, ok } = checkDefmtPrint([
+		{ name: 'ci.yml', text: twoSimJobs({ a: '1.1.0', b: '2.0.0' }) },
+	]);
+	assert.equal(
+		errors.filter((e) => e.includes('cache key')).length,
+		0,
+		errors.join('\n'),
+	);
+	assert.equal(ok.filter((o) => o.includes('cache key')).length, 2);
+	// The two jobs really do disagree, and that is still reported.
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /2 different defmt-print versions/);
+});
+
+// The mirror, and the worse half: job B's key restores job A's binary, so
+// `command -v defmt-print` wins and B's pin never executes — run 31623789083
+// exactly. Per FILE this key EQUALLED the first install and was reported OK.
+test('a cache key that defeats its own job\'s pin is not reported OK', () => {
+	const { errors, ok } = checkDefmtPrint([
+		{ name: 'ci.yml', text: twoSimJobs({ a: '1.1.0', b: '2.0.0', bKey: '1.1.0' }) },
+	]);
+	assert.equal(ok.filter((o) => o.includes('cache key')).length, 1);
+	const stale = errors.filter((e) => e.includes('cache key'));
+	assert.equal(stale.length, 1);
+	assert.match(stale[0], /cache key names defmt-print 1\.1\.0 but job `sim-b` installs 2\.0\.0/);
+});
+
+test('a job that caches defmt-print but never installs it is named', () => {
+	const text =
+		`name: Fake\njobs:\n  sim:\n    steps:\n` +
+		`      - name: Cache defmt-print\n` +
+		`        uses: actions/cache@abc\n` +
+		`        with:\n` +
+		`          key: defmt-print-1.1.0-\${{ runner.os }}\n` +
+		`  other:\n    steps:\n` +
+		`      - name: Install defmt-print\n` +
+		`        run: command -v defmt-print || cargo install defmt-print --locked --version 1.1.0\n`;
+	const { errors } = checkDefmtPrint([{ name: 'ci.yml', text }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /job `sim` restores a defmt-print cache but never runs/);
 });
 
 // The cache half going blind. A key simplified to `defmt-print-${{ runner.os }}`

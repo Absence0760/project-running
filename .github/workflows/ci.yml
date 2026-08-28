@@ -382,6 +382,11 @@ jobs:
       # shipped history; see docs/backend/migration_locks.md.
       - name: Migration online-safety (NOT VALID on guarded tables)
         run: |
+          if ! node --test apps/backend/scripts/sql_lex.test.mjs; then
+            echo "::error::The Postgres statement lexer the online-safety guard reads migrations with failed its own tests, so every verdict below it is a guess. This is not schema drift."
+            echo "Reproduce with: node --test apps/backend/scripts/sql_lex.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
           if ! node --test apps/backend/scripts/check_migration_online_safety.test.mjs; then
             echo "::error::The migration online-safety guard's own unit tests failed, so its verdict on the migration set cannot be trusted. This is not schema drift."
             echo "Fix apps/backend/scripts/check_migration_online_safety.mjs (or its tests) first, then re-read what it says about the migrations."

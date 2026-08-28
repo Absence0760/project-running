@@ -284,11 +284,22 @@ export function derivedBundles(files) {
 /// this rule can ask to diagnose itself and is left alone.
 /**
  * @param {readonly WorkflowFile[]} files
- * @returns {{ errors: string[], ok: string[], bundles: Map<string, number> }}
+ * @returns {{ errors: string[], ok: string[], exempt: string[], bundles: Map<string, number> }}
  */
 export function checkStepDiagnoses(files) {
 	const errors = [];
 	const ok = [];
+	/// The unnamed non-guard `run:` steps inside a bundled job — the rule's
+	/// blind spot, named rather than only described. Reporting it costs nothing
+	/// and is the whole of what a widening would have to justify: measured over
+	/// the committed workflows it is TWO steps, `npm ci` and a `go install`,
+	/// which is exactly the setup § 764 declined to demand a diagnosis from.
+	/// Widening the SUBJECT to "an unnamed step naming a repo-local path" would
+	/// newly catch none of them; widening `isGuardStep` instead — the obvious
+	/// implementation, since it is also what decides bundling — takes the
+	/// bundled set from 6 jobs to 15 and the subject from 31 steps to 127, 89
+	/// of which print no `::error::` today (decisions § 770).
+	const exempt = [];
 	const derived = derivedBundles(files);
 	/** @type {Map<string, number>} */
 	const seen = new Map();
@@ -299,7 +310,16 @@ export function checkStepDiagnoses(files) {
 			if (!listed && !derived.has(step.job)) continue;
 			if (!step.hasRun) continue;
 			if (listed && step.name) seen.set(step.job, (seen.get(step.job) ?? 0) + 1);
-			if (!step.name && !isGuardStep(step)) continue;
+			if (!step.name && !isGuardStep(step)) {
+				exempt.push(
+					`${name}:${step.line} — job \`${step.job}\` runs \`${runBody(step)
+						.split('\n')[0]
+						.replace(/^\s*(?:-\s+)?run:\s*/, '')
+						.trim()
+						.slice(0, 60)}\` unnamed, so rule 2 does not ask it to diagnose itself`,
+				);
+				continue;
+			}
 			const where = `${name}:${step.line}`;
 			const label = step.name ?? runBody(step).split('\n')[0].replace(/^\s*(?:-\s+)?run:\s*/, '');
 			if (step.body.includes(ANNOTATION)) {
@@ -339,7 +359,7 @@ export function checkStepDiagnoses(files) {
 		);
 	}
 
-	return { errors, ok, bundles: derived };
+	return { errors, ok, exempt, bundles: derived };
 }
 
 /// The aggregator every branch-protection rule points at.
@@ -516,6 +536,7 @@ function main() {
 	const { errors, ok, diagnoses, gate } = checkAll(files);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
+	for (const line of diagnoses.exempt) console.log(`[SKIP] ${line}`);
 	for (const line of errors) console.error(`[FAIL] ${line}`);
 
 	if (files.length < 5) {
@@ -529,7 +550,8 @@ function main() {
 	console.log(
 		`\nNo \`failure()\`-conditioned diagnosis speaks for a step it cannot see; ` +
 			`${diagnoses.ok.length} step(s) across ${diagnoses.bundles.size} derived + ` +
-			`${DIAGNOSING_JOBS.size} listed bundled job(s) diagnose themselves; ` +
+			`${DIAGNOSING_JOBS.size} listed bundled job(s) diagnose themselves, with ` +
+			`${diagnoses.exempt.length} unnamed non-guard step(s) outside the rule; ` +
 			`\`${GATE_JOB}\` waits for all ${gate.covered} of them.`,
 	);
 	return 0;
