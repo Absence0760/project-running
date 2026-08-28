@@ -209,22 +209,37 @@ export type DonationStatus = 'pending' | 'paid' | 'refunded' | 'failed' | 'cance
 /// The idempotency backbone (mirrors orderStatusTransition): a replayed
 /// `checkout.session.completed` finds the donation already `paid` and gets
 /// `null`, so it cannot double-count. A `paid` donation may move to `refunded`
-/// (charge.refunded); a still-`pending` donation expires to `canceled`.
+/// (a FULL charge.refunded); a still-`pending` donation expires to `canceled`.
 ///
 ///   pending + checkout.session.completed -> paid
 ///   pending + checkout.session.expired   -> canceled
-///   paid    + charge.refunded            -> refunded
+///   paid    + charge.refunded (full)     -> refunded
 ///   everything else                      -> null
+///
+/// A PARTIAL refund returns null rather than `refunded`, and the difference is
+/// a public number. `fundraiser_totals` sums `amount_cents` filtered on
+/// `status = 'paid'` (20270213_001), so flipping a partly-returned donation to
+/// `refunded` removed its WHOLE amount from the charity's thermometer: a 5 USD
+/// goodwill refund on a 500 USD donation erased 500 USD of it. The donations
+/// ledger carries no `partially_refunded` state and no refunded-amount column,
+/// so neither answer is exact — but overstating by the 5 USD that came back is
+/// a far smaller lie than understating by the 495 USD that did not, and it is
+/// the only one of the two that is also true about the STATUS: the donation was
+/// not refunded. The completing refund, whose charge reports `refunded: true`,
+/// still moves it on. decisions § 769.
 export function donationStatusTransition(
   currentStatus: string,
   eventType: string,
+  refund: RefundScope = 'full',
 ): DonationStatus | null {
   if (currentStatus === 'pending') {
     if (eventType === 'checkout.session.completed') return 'paid';
     if (eventType === 'checkout.session.expired') return 'canceled';
     return null;
   }
-  if (currentStatus === 'paid' && eventType === 'charge.refunded') return 'refunded';
+  if (currentStatus === 'paid' && eventType === 'charge.refunded') {
+    return refund === 'full' ? 'refunded' : null;
+  }
   return null;
 }
 

@@ -272,7 +272,20 @@ async function handleDonationRefunded(
     // Not a donation charge — fall through to the paid-event refund path.
     return null;
   }
-  if (donationStatusTransition(donation.status as string, 'charge.refunded') === null) {
+  const scope = refundScopeOfCharge(charge);
+  if (donationStatusTransition(donation.status as string, 'charge.refunded', scope) === null) {
+    if (scope === 'partial' && donation.status === 'paid') {
+      // Money moved and the ledger cannot say so: `donations` has no
+      // partially-refunded state and no refunded-amount column, so the
+      // thermometer still counts the full donation. Logged for reconciliation
+      // rather than written, because the alternative — flipping to `refunded`
+      // — erases the whole donation from the charity's total over a part of it.
+      console.error(
+        'donation partially refunded; total overstates by the refunded part. donation:',
+        donation.id,
+      );
+      return Response.json({ ok: true, donation_partially_refunded: true, donation_id: donation.id });
+    }
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
   const { error: updErr } = await service

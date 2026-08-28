@@ -53,8 +53,18 @@ export function clampText(value: unknown, maxLen: number): string | null {
 }
 
 /// Stripe request-idempotency key for the donation Checkout Session create.
-/// Keyed on the server-generated donation row id so a retried EF call (same
-/// row) reuses the same Stripe session instead of opening a second one.
+///
+/// Scoped to ONE invocation, and only that. The donation id it is built from is
+/// minted by `crypto.randomUUID()` inside the request, so there is no "same
+/// row" for a later call to resolve to: the key makes the SDK's own retry of
+/// that single HTTP request safe and provides no dedupe across invocations,
+/// which is what this was documented as doing. A donor double-click therefore
+/// opens two sessions against two pending rows; the unpaid one lapses to
+/// `canceled` on `checkout.session.expired`, but a donor who completes both is
+/// charged twice. events-checkout avoids that by resolving a live hold first
+/// (`resolveHold`) — a donation has no seat to hold and repeat giving is
+/// legitimate, so the same treatment is a product decision rather than an
+/// obvious fix. decisions § 769.
 export function donationIdempotencyKey(donationId: string): string {
   return `donations-checkout:${donationId}`;
 }
