@@ -9436,10 +9436,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get ttsOffRoute => 'Fora da rota';
 
   @override
-  String get ttsPaceAlertFast => 'Acelera o ritmo';
+  String get ttsPaceAlertFast => 'Acelere o ritmo';
 
   @override
-  String get ttsPaceAlertSlow => 'Abranda o ritmo';
+  String get ttsPaceAlertSlow => 'Abrande o ritmo';
 
   @override
   String get ttsWorkoutComplete => 'Treino concluído. Bom trabalho.';
@@ -9452,12 +9452,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String ttsPaceDriftAhead(int delta) {
-    return 'Alivia um pouco — $delta segundos demasiado depressa.';
+    return 'Alivie um pouco — $delta segundos demasiado depressa.';
   }
 
   @override
   String ttsPaceDriftBehind(int delta) {
-    return 'Acelera um pouco — $delta segundos demasiado devagar.';
+    return 'Acelere um pouco — $delta segundos demasiado devagar.';
   }
 
   @override
@@ -12465,28 +12465,28 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String ttsTurnLeftIn(String distance) {
-    return 'Em $distance, vira à esquerda';
+    return 'Em $distance, vire à esquerda';
   }
 
   @override
   String ttsTurnRightIn(String distance) {
-    return 'Em $distance, vira à direita';
+    return 'Em $distance, vire à direita';
   }
 
   @override
-  String get ttsTurnLeftNow => 'Vira à esquerda';
+  String get ttsTurnLeftNow => 'Vire à esquerda';
 
   @override
-  String get ttsTurnRightNow => 'Vira à direita';
+  String get ttsTurnRightNow => 'Vire à direita';
 
   @override
-  String get ttsSlightLeft => 'Mantém-te à esquerda';
+  String get ttsSlightLeft => 'Mantenha-se à esquerda';
 
   @override
-  String get ttsSlightRight => 'Mantém-te à direita';
+  String get ttsSlightRight => 'Mantenha-se à direita';
 
   @override
-  String get ttsUturn => 'Faz inversão de marcha';
+  String get ttsUturn => 'Faça inversão de marcha';
 
   @override
   String routeOfflinePackDownloading(int done, int total) {
@@ -12892,27 +12892,27 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String ttsPaceAlertSpeedUpByKm(int sec) {
-    return 'Acelera $sec segundos por quilómetro';
+    return 'Acelere $sec segundos por quilómetro';
   }
 
   @override
   String ttsPaceAlertSpeedUpByMi(int sec) {
-    return 'Acelera $sec segundos por milha';
+    return 'Acelere $sec segundos por milha';
   }
 
   @override
   String ttsPaceAlertSlowDownByKm(int sec) {
-    return 'Abranda $sec segundos por quilómetro';
+    return 'Abrande $sec segundos por quilómetro';
   }
 
   @override
   String ttsPaceAlertSlowDownByMi(int sec) {
-    return 'Abranda $sec segundos por milha';
+    return 'Abrande $sec segundos por milha';
   }
 
   @override
   String ttsCutoffCatchUp(String distance, String pace) {
-    return 'Próximo corte em $distance. Precisas de $pace para conseguir.';
+    return 'Próximo corte em $distance. Precisa de $pace para conseguir.';
   }
 
   @override
@@ -12940,16 +12940,16 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get ttsPhaseHoldBack => 'Contém-te. Mantém o controlo.';
+  String get ttsPhaseHoldBack => 'Contenha-se. Mantenha o controlo.';
 
   @override
-  String get ttsPhaseSettle => 'Assenta no teu ritmo objetivo.';
+  String get ttsPhaseSettle => 'Assente no seu ritmo objetivo.';
 
   @override
-  String get ttsPhaseRace => 'Hora de correr. Dá o que te resta.';
+  String get ttsPhaseRace => 'Hora de correr. Dê o que lhe resta.';
 
   @override
-  String get ttsPhaseEven => 'Mantém um esforço constante.';
+  String get ttsPhaseEven => 'Mantenha um esforço constante.';
 
   @override
   String ttsPhaseTargetPace(String pace) {
