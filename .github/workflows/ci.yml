@@ -1774,6 +1774,18 @@ jobs:
       # Every `.ts`, not only the test files: the typecheck below reads the
       # whole tree, and several non-test deps (cheerio in parkrun-import) are
       # reachable from no test file at all.
+      #
+      # `--no-check` skips TYPECHECKING, not type RESOLUTION — this step walks
+      # the declaration graph and fetches it, so the typecheck below adds no
+      # network of its own. Measured on a cold DENO_DIR (decisions § 775): this
+      # step downloads 776 URLs, 458 of them `.d.ts`, including
+      # stripe@17.5.0/types/index.d.ts and 285 more stripe URLs; `deno check`
+      # straight afterwards downloads nothing at all; and `deno check` run with
+      # no warm step downloads 403 URLs, a strict subset of these 776. So every
+      # fetch the lane makes is inside this retry, and nothing needs one of its
+      # own. That holds only while both steps derive the SAME file set, which
+      # scripts/edge_functions_typecheck_coverage.test.mjs asserts by running
+      # both `files=$(…)` expressions rather than restating either.
       - name: Warm the Deno dependency cache
         working-directory: apps/backend
         run: |
