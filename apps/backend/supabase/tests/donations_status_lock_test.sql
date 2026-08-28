@@ -7,10 +7,13 @@
 --   * fundraiser_totals sums only paid donations;
 --   * a PARTIAL refund is representable (20270620_001) — the thermometer and
 --     the feed both report what the charity KEPT, and the refunded amount is
---     bounded, coupled to the status, and writable only by the webhook.
+--     bounded, coupled to the status, and writable only by the webhook;
+--   * a donor's checkout idempotency key (20270620_002) can identify at most
+--     one donation, so a retry resolves to the attempt already open rather
+--     than opening a second one the donor could also pay.
 
 begin;
-select plan(18);
+select plan(20);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -138,6 +141,14 @@ values
    'fd000000-0000-0000-0000-000000000001', 'Whole W.', 'All came back',
    4000, 'refunded', 4000, false, now());
 
+-- The row the idempotency-key assertions at the foot of this file collide
+-- with. Pending, so it is invisible to the totals and feed assertions above.
+insert into donations (id, fundraiser_id, owner_user_id, amount_cents, status,
+                       client_request_id)
+values ('fd000000-0000-0000-0000-0000000000d6', 'fd000000-0000-0000-0000-0000000000f1',
+        'fd000000-0000-0000-0000-000000000001', 2500, 'pending',
+        'fd000000-0000-0000-0000-0000000000c1');
+
 select is(
   (select raised_cents::int from fundraiser_totals('fd000000-0000-0000-0000-0000000000f1')),
   16300,
@@ -222,6 +233,30 @@ select lives_ok(
   $$ update donations set refunded_cents = 3000
        where id = 'fd000000-0000-0000-0000-0000000000d4' $$,
   'the service role (webhook) can record a refunded amount'
+);
+
+-- ── one donation per client idempotency key ─────────────────────────────────
+-- 20270620_002. Without the unique index two concurrent attempts carrying one
+-- key both open a donation, and the key stops meaning anything.
+select throws_ok(
+  $$ insert into donations (fundraiser_id, owner_user_id, amount_cents, status, client_request_id)
+     values ('fd000000-0000-0000-0000-0000000000f1',
+             'fd000000-0000-0000-0000-000000000001', 2500, 'pending',
+             'fd000000-0000-0000-0000-0000000000c1') $$,
+  '23505',
+  'duplicate key value violates unique constraint "donations_client_request_idx"',
+  'a client idempotency key can identify at most one donation'
+);
+
+-- The index is partial: every row written before 20270620_002 carries a null
+-- key, and nulls must not collide with each other.
+select lives_ok(
+  $$ insert into donations (fundraiser_id, owner_user_id, amount_cents, status)
+     values ('fd000000-0000-0000-0000-0000000000f1',
+             'fd000000-0000-0000-0000-000000000001', 2500, 'pending'),
+            ('fd000000-0000-0000-0000-0000000000f1',
+             'fd000000-0000-0000-0000-000000000001', 2500, 'pending') $$,
+  'donations carrying no key do not collide with one another'
 );
 
 select * from finish();

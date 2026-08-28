@@ -15,8 +15,14 @@
 /// a logged-out stranger donates fine.
 ///
 /// PCI: Checkout is fully Stripe-hosted — SAQ A. No card form here.
-/// Idempotency: the Stripe create call carries a stable key derived from the
-/// server-generated donation row id.
+/// Idempotency: the caller mints one `idempotency_key` per donation attempt and
+/// re-sends it on a retry. It is persisted as `donations.client_request_id`
+/// (unique), so a retry resolves to the pending donation the first attempt
+/// opened and rebuilds byte-identical Stripe params against it — Stripe then
+/// replays the session already open rather than charging the donor twice. The
+/// key HAS to come from the client: a donor may be anonymous, so the server has
+/// no identity to reconstruct one from, and repeat giving is legitimate so the
+/// amount is not a natural key either. decisions § 776.
 ///
 /// GATING: live charges require operator sk_live_ keys (default unset → 503
 /// stripe_not_configured) AND owner+CISO+counsel sign-off. TEST MODE ONLY in
@@ -37,9 +43,11 @@ import {
   buildDonationSessionParams,
   clampText,
   computeApplicationFeeCents,
+  type DonationIntentRow,
   donationIdempotencyKey,
   MAX_DISPLAY_NAME_LEN,
   MAX_MESSAGE_LEN,
+  resolveDonationIntent,
   validateDonationAmount,
 } from './lib.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
@@ -60,6 +68,7 @@ type DonationParamsAreStripeParams = AssertNoUnknownParamKeys<
 
 interface DonationBody {
   fundraiser_id?: string;
+  idempotency_key?: string;
   amount_cents?: number;
   display_name?: string;
   message?: string;
@@ -94,6 +103,15 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
   // 500 on the `.eq('id', …)` cast nor burn an anon bucket slot.
   if (!isValidUuid(fundraiserId)) {
     return Response.json({ error: 'invalid_fundraiser' }, { status: 400 });
+  }
+  // Checked here for the same reason as the fundraiser id above: a malformed
+  // key must not burn an anon bucket slot. Required rather than optional — the
+  // whole donation surface is gated off in prod (PUBLIC_FUNDRAISING_ENABLED
+  // unset + no Stripe keys), so there is no deployed caller to keep working,
+  // and an optional dedupe key is one an omission silently disables.
+  const idempotencyKey = typeof body.idempotency_key === 'string' ? body.idempotency_key : null;
+  if (!idempotencyKey || !isValidUuid(idempotencyKey)) {
+    return Response.json({ error: 'invalid_idempotency_key' }, { status: 400 });
   }
   const amountOutcome = validateDonationAmount(body.amount_cents);
   if (amountOutcome !== 'ok') {
@@ -205,9 +223,66 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
   const displayName = isAnonymous ? null : clampText(body.display_name, MAX_DISPLAY_NAME_LEN);
   const message = clampText(body.message, MAX_MESSAGE_LEN);
 
-  // Generate the row id server-side before the Stripe call so the idempotency
-  // key + the session metadata both reference it.
-  const donationId = crypto.randomUUID();
+  // Resolve the caller's key to the donation it already opened, if any. Read
+  // before the Stripe call so a retry rebuilds the same params against the same
+  // row and Stripe replays rather than opening a second session.
+  const { data: existing, error: existingErr } = await service
+    .from('donations')
+    .select('id, status, fundraiser_id, amount_cents, donor_user_id')
+    .eq('client_request_id', idempotencyKey)
+    .maybeSingle();
+  if (existingErr) {
+    console.error('donation idempotency read failed (code):', existingErr?.code ?? 'unknown');
+    return Response.json({ error: 'checkout_failed' }, { status: 500 });
+  }
+  const intent = resolveDonationIntent((existing ?? null) as DonationIntentRow | null, {
+    fundraiserId,
+    amountCents,
+    donorUserId,
+  });
+  if (intent.action === 'conflict') {
+    return Response.json({ error: `idempotency_${intent.reason}` }, { status: 409 });
+  }
+
+  // Persist BEFORE the Stripe call, so a crash between the two is repairable:
+  // the retry finds this row by its key, rebuilds the same params, and Stripe
+  // replays the session. Writing the row afterwards left the only record of the
+  // attempt at Stripe, where the next call could not find it. Mirrors
+  // events-checkout, which persists its pending order the same way and repairs
+  // the session id on the next attempt.
+  let donationId: string;
+  if (intent.action === 'resume') {
+    donationId = intent.donationId;
+  } else {
+    donationId = crypto.randomUUID();
+    const { error: insErr } = await service
+      .from('donations')
+      .insert({
+        id: donationId,
+        client_request_id: idempotencyKey,
+        fundraiser_id: fundraiserId,
+        donor_user_id: donorUserId,
+        owner_user_id: ownerUserId,
+        display_name: displayName,
+        message,
+        amount_cents: amountCents,
+        currency,
+        platform_fee_cents: applicationFee,
+        status: 'pending',
+        is_anonymous: isAnonymous,
+      });
+    if (insErr) {
+      // 23505 on the unique key: a concurrent attempt with the same key won the
+      // race. It opened the donation this call would have, so answer 409 and
+      // let the client retry onto the row that now exists rather than opening a
+      // second one against a fresh id.
+      if (insErr.code === '23505') {
+        return Response.json({ error: 'idempotency_in_progress' }, { status: 409 });
+      }
+      console.error('donation insert failed (code):', insErr?.code ?? 'unknown');
+      return Response.json({ error: 'checkout_failed' }, { status: 500 });
+    }
+  }
 
   const successUrl = body.success_url && validateReturnUrl(body.success_url, allowlist)
     ? body.success_url
@@ -244,24 +319,26 @@ Deno.serve(withSentry('donations-checkout', async (req: Request) => {
     return Response.json({ error: 'stripe_checkout_failed' }, { status: 502 });
   }
 
-  const { error: insErr } = await service
+  // Attach the session to the row. Also the repair path: a first attempt that
+  // died between the Stripe create and this write left the row session-less,
+  // and the retry lands here with the replayed session. The three presentation
+  // fields ride along so a resumed attempt keeps the donor's LATEST name and
+  // message rather than the abandoned attempt's — they are not part of what
+  // `resolveDonationIntent` compares precisely because they do not change the
+  // charge. Still CAS'd on `pending` so a confirmed donation can never have its
+  // session or its feed entry rewritten.
+  const { error: sessionErr } = await service
     .from('donations')
-    .insert({
-      id: donationId,
-      fundraiser_id: fundraiserId,
-      donor_user_id: donorUserId,
-      owner_user_id: ownerUserId,
+    .update({
+      stripe_checkout_session_id: session.id,
       display_name: displayName,
       message,
-      stripe_checkout_session_id: session.id,
-      amount_cents: amountCents,
-      currency,
-      platform_fee_cents: applicationFee,
-      status: 'pending',
       is_anonymous: isAnonymous,
-    });
-  if (insErr) {
-    console.error('donation insert failed (code):', insErr?.code ?? 'unknown');
+    })
+    .eq('id', donationId)
+    .eq('status', 'pending');
+  if (sessionErr) {
+    console.error('donation session attach failed (code):', sessionErr?.code ?? 'unknown');
     return Response.json({ error: 'checkout_failed' }, { status: 500 });
   }
 

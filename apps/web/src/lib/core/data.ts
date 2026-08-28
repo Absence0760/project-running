@@ -11746,15 +11746,28 @@ export async function fetchFundraiserFeed(
 /// inserts a pending donation row, and returns a hosted destination-charge
 /// Checkout URL. The caller redirects the browser there. The donor may be
 /// anonymous — no auth required.
+///
+/// `idempotencyKey` is required and the caller owns its lifetime: mint one per
+/// donation ATTEMPT and re-send the same value on a retry, so the function
+/// resolves back to the pending donation it already opened instead of opening a
+/// second Checkout Session the donor could also pay. It cannot be minted here —
+/// this function is the retry — and the server cannot derive one, because a
+/// donor may be anonymous and repeat giving is legitimate (decisions § 776).
 export async function startDonationCheckout(
 	fundraiserId: string,
 	amountCents: number,
-	opts: { displayName?: string | null; message?: string | null; isAnonymous?: boolean } = {}
+	opts: {
+		idempotencyKey: string;
+		displayName?: string | null;
+		message?: string | null;
+		isAnonymous?: boolean;
+	}
 ): Promise<{ url: string }> {
 	const { data, error } = await supabase.functions.invoke('donations-checkout', {
 		body: {
 			fundraiser_id: fundraiserId,
 			amount_cents: amountCents,
+			idempotency_key: opts.idempotencyKey,
 			display_name: opts.displayName ?? null,
 			message: opts.message ?? null,
 			is_anonymous: opts.isAnonymous ?? false

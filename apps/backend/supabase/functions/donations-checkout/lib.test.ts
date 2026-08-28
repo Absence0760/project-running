@@ -12,6 +12,7 @@ import {
   MAX_DONATION_CENTS,
   MAX_DISPLAY_NAME_LEN,
   MIN_DONATION_CENTS,
+  resolveDonationIntent,
   validateDonationAmount,
 } from './lib.ts';
 
@@ -53,6 +54,88 @@ Deno.test('donationIdempotencyKey — stable function of the donation id', () =>
   assertStrictEquals(donationIdempotencyKey('abc'), 'donations-checkout:abc');
   // different rows -> different keys
   assertStrictEquals(donationIdempotencyKey('abc') === donationIdempotencyKey('def'), false);
+});
+
+const REQ = { fundraiserId: 'f1', amountCents: 2500, donorUserId: 'u1' };
+const ROW = {
+  id: 'd1',
+  status: 'pending',
+  fundraiser_id: 'f1',
+  amount_cents: 2500,
+  donor_user_id: 'u1' as string | null,
+};
+
+Deno.test('resolveDonationIntent — no row for the key opens a new donation', () => {
+  assertEquals(resolveDonationIntent(null, REQ), { action: 'open' });
+});
+
+Deno.test('resolveDonationIntent — a pending row for the same request is resumed', () => {
+  // The whole point: the retry rebuilds the same Stripe params against the same
+  // donation id, so Stripe replays the session already open instead of opening
+  // a second one the donor could also pay. decisions § 776.
+  assertEquals(resolveDonationIntent({ ...ROW }, REQ), { action: 'resume', donationId: 'd1' });
+});
+
+Deno.test('resolveDonationIntent — an anonymous donor resumes on a null donor id', () => {
+  // A donation needs no JWT (fundraising.md), which is exactly why the key has
+  // to come from the client — there is no identity for the server to key on.
+  const anon = { ...ROW, donor_user_id: null };
+  assertEquals(
+    resolveDonationIntent(anon, { ...REQ, donorUserId: null }),
+    { action: 'resume', donationId: 'd1' },
+  );
+  // …and an anonymous key does not resolve for a signed-in caller, or the
+  // reverse: those are different donors presenting the same key.
+  assertEquals(
+    resolveDonationIntent(anon, REQ),
+    { action: 'conflict', reason: 'params_changed' },
+  );
+  assertEquals(
+    resolveDonationIntent({ ...ROW }, { ...REQ, donorUserId: null }),
+    { action: 'conflict', reason: 'params_changed' },
+  );
+});
+
+Deno.test('resolveDonationIntent — a key presented against a different request conflicts', () => {
+  // A guessed or replayed key must not hand its bearer someone else's open
+  // Checkout Session. Guessing a v4 UUID is already infeasible; this makes the
+  // consequence of guessing one nil rather than small.
+  assertEquals(
+    resolveDonationIntent({ ...ROW, fundraiser_id: 'other' }, REQ),
+    { action: 'conflict', reason: 'params_changed' },
+  );
+  assertEquals(
+    resolveDonationIntent({ ...ROW, amount_cents: 9900 }, REQ),
+    { action: 'conflict', reason: 'params_changed' },
+  );
+  assertEquals(
+    resolveDonationIntent({ ...ROW, donor_user_id: 'someone_else' }, REQ),
+    { action: 'conflict', reason: 'params_changed' },
+  );
+});
+
+Deno.test('resolveDonationIntent — a spent key is refused, never reopened', () => {
+  // A key whose row is already `paid` means the client is retrying an attempt
+  // that in fact completed. Opening a new donation there charges the donor a
+  // second time — the exact failure the key exists to prevent. A new donation
+  // carries a new key.
+  for (const status of ['paid', 'partially_refunded', 'refunded', 'canceled', 'failed']) {
+    assertEquals(
+      resolveDonationIntent({ ...ROW, status }, REQ),
+      { action: 'conflict', reason: 'already_used' },
+      `status=${status} must not resume`,
+    );
+  }
+});
+
+Deno.test('resolveDonationIntent — a wrong-request check outranks a spent key', () => {
+  // Both are 409s, but they are different sentences: the caller who changed
+  // the amount is told the key does not match this request, not that their
+  // donation already went through.
+  assertEquals(
+    resolveDonationIntent({ ...ROW, status: 'paid', amount_cents: 100 }, REQ),
+    { action: 'conflict', reason: 'params_changed' },
+  );
 });
 
 Deno.test('buildDonationSessionParams — destination charge with owner account + metadata', () => {
