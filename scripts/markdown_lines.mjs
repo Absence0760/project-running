@@ -168,6 +168,40 @@ export function tableLines(text) {
 }
 
 /**
+ * Lines that open with a pipe and belong to no table — a row a reader sees as
+ * raw pipes in a paragraph.
+ *
+ * A table-aware reader gains a way to lose rows that a `startsWith('|')` walk
+ * did not have: break the delimiter's width and GFM opens no table, so every
+ * row under it stops existing. Two committed docs are in that state today
+ * (`architecture.md`, `multi_modal.md`, both from a blank line splitting a
+ * table), neither read by a guard. A caller that must not lose a table asserts
+ * this comes back empty. decisions § 779.
+ *
+ * @param {string} text
+ * @returns {{ line: number, text: string }[]}
+ */
+export function unclaimedRowLines(text) {
+	const claimed = tableLines(text);
+	/** @type {{ line: number, text: string }[]} */
+	const orphans = [];
+	/** @type {string | null} */
+	let fence = null;
+	text.split('\n').forEach((line, index) => {
+		const edge = line.match(/^\s*(`{3,}|~{3,})/);
+		if (edge) {
+			const glyph = edge[1][0];
+			if (fence === null) fence = glyph;
+			else if (fence === glyph) fence = null;
+			return;
+		}
+		if (fence !== null || !line.trimStart().startsWith('|')) return;
+		if (!claimed.has(index + 1)) orphans.push({ line: index + 1, text: line });
+	});
+	return orphans;
+}
+
+/**
  * The document's lines with soft wraps folded back, each carrying the 1-based
  * number of the line it STARTS on — a guard that names a line has to name the
  * one a reader would open the file to.
