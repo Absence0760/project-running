@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
-import { readMaybeRow, readRows } from '../fixtures/db-read';
+import { readCount, readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * /settings/gear — current-gear (is_default) star toggle.
@@ -502,10 +502,13 @@ test.describe('/settings/gear — wear log', () => {
 			});
 			// Asserted AFTER the undo so it cannot race the window: the row
 			// never left the database, so the restore is byte-identical.
-			const { count: afterUndo } = await admin
-				.from('gear_wear_logs')
-				.select('id', { count: 'exact', head: true })
-				.eq('gear_id', gear!.id);
+			const afterUndo = await readCount(
+				'gear_wear_logs by gear_id',
+				admin
+					.from('gear_wear_logs')
+					.select('id', { count: 'exact', head: true })
+					.eq('gear_id', gear!.id)
+			);
 			expect(afterUndo).toBe(1);
 
 			// Dismiss commits the held delete.
@@ -582,10 +585,13 @@ test.describe('/settings/gear — wear log', () => {
 			await expect(
 				dialog.getByTestId('wear-log').locator('.wear-item', { hasText: note })
 			).toHaveCount(1, { timeout: 5_000 });
-			const { count } = await admin
-				.from('gear_wear_logs')
-				.select('id', { count: 'exact', head: true })
-				.eq('gear_id', gear!.id);
+			const count = await readCount(
+				'gear_wear_logs by gear_id',
+				admin
+					.from('gear_wear_logs')
+					.select('id', { count: 'exact', head: true })
+					.eq('gear_id', gear!.id)
+			);
 			expect(count).toBe(1);
 		} finally {
 			await admin.from('gear').delete().eq('id', gear!.id);
@@ -753,10 +759,13 @@ test.describe('/settings/gear — rotations', () => {
 				{ timeout: 5_000 }
 			)
 			.toBe(0);
-		const { count: ghostStillThere } = await admin
-			.from('gear')
-			.select('id', { count: 'exact', head: true })
-			.eq('id', GHOST_ID);
+		const ghostStillThere = await readCount(
+			'gear by id',
+			admin
+				.from('gear')
+				.select('id', { count: 'exact', head: true })
+				.eq('id', GHOST_ID)
+		);
 		expect(ghostStillThere).toBe(1);
 	});
 

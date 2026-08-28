@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Public plan library — publish → browse → clone round-trip.
@@ -106,11 +106,14 @@ test.describe('Public plan library — publish → browse → clone', () => {
 		expect(tmpl.vdot).toBeNull();
 		expect(tmpl.current_5k_seconds).toBeNull();
 
-		const { data: source } = await admin
-			.from('training_plans')
-			.select('is_template, is_public_template')
-			.eq('id', SOURCE_PLAN_ID)
-			.maybeSingle();
+		const source = await readMaybeRow(
+			'training_plans by id',
+			admin
+				.from('training_plans')
+				.select('is_template, is_public_template')
+				.eq('id', SOURCE_PLAN_ID)
+				.maybeSingle()
+		);
 		expect((source as { is_template: boolean }).is_template).toBe(false);
 		expect((source as { is_public_template: boolean }).is_public_template).toBe(false);
 

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readCount, readRow } from '../fixtures/db-read';
 
 /**
  * Backend boundary: invite-token rotation. The "Rotate" button on a
@@ -53,11 +54,14 @@ test.describe('/clubs/[slug] — invite token rotation', () => {
 		const admin = getAdminClient();
 
 		// Snapshot starting state.
-		const { data: before } = await admin
-			.from('clubs')
-			.select('invite_token')
-			.eq('id', FRIENDS_OF_JARED_ID)
-			.single();
+		const before = await readRow(
+			'clubs by id',
+			admin
+				.from('clubs')
+				.select('invite_token')
+				.eq('id', FRIENDS_OF_JARED_ID)
+				.single()
+		);
 		expect((before as { invite_token: string }).invite_token).toBe(
 			ORIGINAL_TOKEN
 		);
@@ -105,12 +109,15 @@ test.describe('/clubs/[slug] — invite token rotation', () => {
 		// Sanity: NO new club_members row was inserted from the old-
 		// token attempt (a regression where the RPC inserted before
 		// validating would surface here).
-		const { count } = await admin
-			.from('club_members')
-			.select('user_id', { count: 'exact', head: true })
-			.eq('club_id', FRIENDS_OF_JARED_ID)
-			.eq('user_id', USER_A.id)
-			.eq('role', 'member');
+		const count = await readCount(
+			'club_members by club_id+user_id+role',
+			admin
+				.from('club_members')
+				.select('user_id', { count: 'exact', head: true })
+				.eq('club_id', FRIENDS_OF_JARED_ID)
+				.eq('user_id', USER_A.id)
+				.eq('role', 'member')
+		);
 		expect(count).toBe(0);
 	});
 });

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
-import { readMaybeRow } from '../fixtures/db-read';
+import { readCount, readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /clubs/join/[token] — branch coverage for the polished invite
@@ -252,11 +252,14 @@ test.describe('/clubs/join/[token] — already-a-member (existing member upsert)
 			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
-		const { count } = await getAdminClient()
-			.from('club_members')
-			.select('user_id', { count: 'exact', head: true })
-			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('user_id', USER_B.id);
+		const count = await readCount(
+			'club_members by club_id+user_id',
+			getAdminClient()
+				.from('club_members')
+				.select('user_id', { count: 'exact', head: true })
+				.eq('club_id', SYDNEY_RUN_CLUB_ID)
+				.eq('user_id', USER_B.id)
+		);
 		expect(count).toBe(1);
 	});
 });

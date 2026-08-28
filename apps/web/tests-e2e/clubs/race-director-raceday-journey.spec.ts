@@ -10,7 +10,7 @@ import {
 	insertRacePings
 } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readRow } from '../fixtures/db-read';
+import { readCount, readRow } from '../fixtures/db-read';
 
 /**
  * Race-director race-day operations — the full stitched journey
@@ -257,11 +257,14 @@ test.describe('saga: race director runs a race day end-to-end', () => {
 						}
 					]
 				});
-				const { count } = await getAdminClient()
-					.from('race_pings')
-					.select('id', { count: 'exact', head: true })
-					.eq('event_id', eventId!)
-					.eq('instance_start', instance);
+				const count = await readCount(
+					'race_pings by event_id+instance_start',
+					getAdminClient()
+						.from('race_pings')
+						.select('id', { count: 'exact', head: true })
+						.eq('event_id', eventId!)
+						.eq('instance_start', instance)
+				);
 				expect(count).toBe(3);
 			});
 

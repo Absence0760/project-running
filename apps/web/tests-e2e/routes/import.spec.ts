@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { deleteRoute } from '../fixtures/simulate';
 import { getAdminClient, resetRateLimit } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
-import { readRow } from '../fixtures/db-read';
+import { readCount, readRow } from '../fixtures/db-read';
 
 const MULTI_ROUTE_GPX = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="e2e-import-spec" xmlns="http://www.topografix.com/GPX/1/1">
@@ -265,11 +265,14 @@ test.describe('/routes — Import route modal', () => {
 			// stamp (the original parsed name was "e2e-multi-B" — left
 			// unchanged after deselecting; confirm the un-stamped name
 			// also isn't there).
-			const { count: bCount } = await admin
-				.from('routes')
-				.select('id', { count: 'exact', head: true })
-				.eq('user_id', USER_A.id)
-				.eq('name', 'e2e-multi-B');
+			const bCount = await readCount(
+				'routes by user_id+name',
+				admin
+					.from('routes')
+					.select('id', { count: 'exact', head: true })
+					.eq('user_id', USER_A.id)
+					.eq('name', 'e2e-multi-B')
+			);
 			expect(bCount).toBe(0);
 		} finally {
 			for (const id of createdIds) {

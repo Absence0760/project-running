@@ -345,12 +345,15 @@ test.describe('/routes/[id]', () => {
 			).toBeVisible({ timeout: 10_000 });
 
 			// Backend confirms the row.
-			const { data: row } = await admin
-				.from('route_reviews')
-				.select('rating, comment')
-				.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
-				.eq('user_id', USER_A.id)
-				.single();
+			const row = await readRow(
+				'route_reviews by route_id+user_id',
+				admin
+					.from('route_reviews')
+					.select('rating, comment')
+					.eq('route_id', RUNNER_PUBLIC_ROUTE_ID)
+					.eq('user_id', USER_A.id)
+					.single()
+			);
 			expect((row as { rating: number }).rating).toBe(3);
 			expect((row as { comment: string }).comment).toBe(comment);
 		} finally {

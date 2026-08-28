@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readMaybeRow } from '../fixtures/db-read';
+import { readCount, readMaybeRow } from '../fixtures/db-read';
 
 const SAGA_PASSWORD = 'sagatest123';
 
@@ -212,12 +212,15 @@ test.describe('social journey — seeded actor discovers a stranger, follows + e
 			// The edge must land server-side before the follow-scoped feed
 			// can read it.
 			await expect(async () => {
-				const { data } = await admin
-					.from('user_follows')
-					.select('follower_id')
-					.eq('follower_id', USER_A.id)
-					.eq('followee_id', strangerId)
-					.maybeSingle();
+				const data = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', USER_A.id)
+						.eq('followee_id', strangerId)
+						.maybeSingle()
+				);
 				expect(data).toBeTruthy();
 			}).toPass({ timeout: 5_000 });
 		});
@@ -241,11 +244,14 @@ test.describe('social journey — seeded actor discovers a stranger, follows + e
 
 			// The optimistic flip must reflect a real run_kudos write.
 			await expect(async () => {
-				const { count } = await admin
-					.from('run_kudos')
-					.select('*', { count: 'exact', head: true })
-					.eq('run_id', runId!)
-					.eq('user_id', USER_A.id);
+				const count = await readCount(
+					'run_kudos by run_id+user_id',
+					admin
+						.from('run_kudos')
+						.select('*', { count: 'exact', head: true })
+						.eq('run_id', runId!)
+						.eq('user_id', USER_A.id)
+				);
 				expect(count).toBe(1);
 			}).toPass({ timeout: 5_000 });
 		});
@@ -269,11 +275,14 @@ test.describe('social journey — seeded actor discovers a stranger, follows + e
 
 			// And it persisted server-side.
 			await expect(async () => {
-				const { count } = await admin
-					.from('run_comments')
-					.select('*', { count: 'exact', head: true })
-					.eq('run_id', runId!)
-					.eq('author_id', USER_A.id);
+				const count = await readCount(
+					'run_comments by run_id+author_id',
+					admin
+						.from('run_comments')
+						.select('*', { count: 'exact', head: true })
+						.eq('run_id', runId!)
+						.eq('author_id', USER_A.id)
+				);
 				expect(count).toBe(1);
 			}).toPass({ timeout: 5_000 });
 		});

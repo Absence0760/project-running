@@ -4,7 +4,7 @@ import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
-import { readMaybeRow } from '../fixtures/db-read';
+import { readCount, readMaybeRow, readRow } from '../fixtures/db-read';
 
 /**
  * Cross-user write boundary — UPDATE and DELETE attempts.
@@ -59,11 +59,14 @@ test.describe('cross-user mutation boundaries', () => {
 			expect((data as unknown[])?.length).toBe(0);
 		}
 
-		const { data: after } = await admin
-			.from('runs')
-			.select('distance_m')
-			.eq('id', RUNNER_PUBLIC_RUN_ID)
-			.single();
+		const after = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('distance_m')
+				.eq('id', RUNNER_PUBLIC_RUN_ID)
+				.single()
+		);
 		expect((after as { distance_m: number }).distance_m).toBe(beforeDistance);
 	});
 
@@ -136,11 +139,14 @@ test.describe('cross-user mutation boundaries', () => {
 			expect((data as unknown[])?.length).toBe(0);
 		}
 
-		const { data: after } = await admin
-			.from('routes')
-			.select('is_starred')
-			.eq('id', r.id)
-			.single();
+		const after = await readRow(
+			'routes by id',
+			admin
+				.from('routes')
+				.select('is_starred')
+				.eq('id', r.id)
+				.single()
+		);
 		expect((after as { is_starred: boolean }).is_starred).toBe(beforeStarred);
 	});
 
@@ -229,11 +235,14 @@ test.describe('cross-user mutation boundaries', () => {
 		expect(error?.code).toMatch(/^(42501|PGRST|P0001)/);
 
 		// Belt + braces: no row landed.
-		const { count } = await admin
-			.from('club_posts')
-			.select('id', { count: 'exact', head: true })
-			.eq('club_id', FRIENDS_CLUB_ID)
-			.eq('author_id', USER_C_PRO.id);
+		const count = await readCount(
+			'club_posts by club_id+author_id',
+			admin
+				.from('club_posts')
+				.select('id', { count: 'exact', head: true })
+				.eq('club_id', FRIENDS_CLUB_ID)
+				.eq('author_id', USER_C_PRO.id)
+		);
 		expect(count).toBe(0);
 	});
 

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { browserDate } from '../fixtures/dates';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
-import { readRow } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Coach <-> athlete link lifecycle boundaries the existing coaching specs don't
@@ -216,12 +216,15 @@ test.describe('/coaching/accept/[token] — already redeemed', () => {
 		await expect(page).toHaveURL(/\/coaching\/accept\//);
 
 		// The existing link is untouched — USER_A did not get linked.
-		const { data } = await getAdminClient()
-			.from('coach_athletes')
-			.select('athlete_id, status')
-			.eq('coach_id', USER_B.id);
+		const data = await readRows(
+			'coach_athletes by coach_id',
+			getAdminClient()
+				.from('coach_athletes')
+				.select('athlete_id, status')
+				.eq('coach_id', USER_B.id)
+		);
 		expect(data).toHaveLength(1);
-		expect(data![0].athlete_id).toBe(USER_C_PRO.id);
-		expect(data![0].status).toBe('active');
+		expect(data[0].athlete_id).toBe(USER_C_PRO.id);
+		expect(data[0].status).toBe('active');
 	});
 });

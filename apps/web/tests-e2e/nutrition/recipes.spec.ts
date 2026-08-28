@@ -119,14 +119,17 @@ test.describe('/nutrition — recipes', () => {
 					{ timeout: 10_000 },
 				)
 				.toBe(1);
-			const { data: logged } = await admin
-				.from('food_log')
-				.select('calories, protein_g, meal_slot')
-				.eq('user_id', USER_A.id)
-				.eq('item_name', recipeName);
-			expect(Number(logged![0].calories)).toBe(250);
-			expect(Number(logged![0].protein_g)).toBe(25);
-			expect(logged![0].meal_slot).toBe('dinner');
+			const logged = await readRows(
+				'food_log by user_id+item_name',
+				admin
+					.from('food_log')
+					.select('calories, protein_g, meal_slot')
+					.eq('user_id', USER_A.id)
+					.eq('item_name', recipeName)
+			);
+			expect(Number(logged[0].calories)).toBe(250);
+			expect(Number(logged[0].protein_g)).toBe(25);
+			expect(logged[0].meal_slot).toBe('dinner');
 
 			// Delete the recipe behind the confirm dialog.
 			await recipeRow.getByRole('button', { name: `Delete ${recipeName}` }).click();

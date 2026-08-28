@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Event-level visibility (migration 20270113_001): a PUBLIC club can mark an
@@ -57,11 +58,14 @@ test.describe('/clubs — event-level visibility', () => {
 
 			// DB confirms the write.
 			const admin = getAdminClient();
-			const { data } = await admin
-				.from('events')
-				.select('is_public')
-				.eq('id', eventId)
-				.single();
+			const data = await readRow(
+				'events by id',
+				admin
+					.from('events')
+					.select('is_public')
+					.eq('id', eventId)
+					.single()
+			);
 			expect((data as { is_public: boolean }).is_public).toBe(false);
 		} finally {
 			if (eventId) await getAdminClient().from('events').delete().eq('id', eventId);

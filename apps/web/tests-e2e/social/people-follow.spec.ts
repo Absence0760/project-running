@@ -163,12 +163,15 @@ test.describe('/social — follow graph drives feed contents', () => {
 		// Wait for the edge to land before reading the feed.
 		const admin = getAdminClient();
 		await expect(async () => {
-			const { data } = await admin
-				.from('user_follows')
-				.select('follower_id')
-				.eq('follower_id', USER_A.id)
-				.eq('followee_id', USER_B.id)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'user_follows by follower_id+followee_id',
+				admin
+					.from('user_follows')
+					.select('follower_id')
+					.eq('follower_id', USER_A.id)
+					.eq('followee_id', USER_B.id)
+					.maybeSingle()
+			);
 			expect(data).toBeTruthy();
 		}).toPass({ timeout: 5_000 });
 

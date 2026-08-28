@@ -11,7 +11,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
-import { readRows } from '../fixtures/db-read';
+import { readCount, readRows } from '../fixtures/db-read';
 
 /**
  * Multi-source notifications inbox lifecycle — the STITCHED journey the
@@ -297,10 +297,13 @@ test.describe('notifications multi-source journey — four triggers → one inbo
 				// so nothing has been destroyed yet — all four rows are still
 				// on the server while the offer stands, which is what makes
 				// Undo unable to fail.
-				const { count: whilePending } = await admin
-					.from('notifications')
-					.select('*', { count: 'exact', head: true })
-					.eq('user_id', recipient.id);
+				const whilePending = await readCount(
+					'notifications by user_id',
+					admin
+						.from('notifications')
+						.select('*', { count: 'exact', head: true })
+						.eq('user_id', recipient.id)
+				);
 				expect(whilePending).toBe(4);
 
 				// Dismissing the undo bar commits the held delete now rather
@@ -312,10 +315,13 @@ test.describe('notifications multi-source journey — four triggers → one inbo
 				// client filter. A reload re-fetches and must still show 3 — and
 				// the badge falls to 3 (dismiss of an unread row decrements).
 				await expect(async () => {
-					const { count } = await admin
-						.from('notifications')
-						.select('*', { count: 'exact', head: true })
-						.eq('user_id', recipient.id);
+					const count = await readCount(
+						'notifications by user_id',
+						admin
+							.from('notifications')
+							.select('*', { count: 'exact', head: true })
+							.eq('user_id', recipient.id)
+					);
 					expect(count).toBe(3);
 				}).toPass({ timeout: 10_000 });
 

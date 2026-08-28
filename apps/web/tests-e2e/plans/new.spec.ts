@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deletePlan, setPlanStatus } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readMaybeRow, readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /plans/new — the standalone wizard route.
@@ -100,12 +100,15 @@ test.describe('/plans/new — standalone wizard', () => {
 		expect(newRow!.status).toBe('active');
 		expect(newRow!.is_template).toBe(false);
 
-		const { data: oldRow } = await admin
-			.from('training_plans')
-			.select('status')
-			.eq('id', SEED_PLAN_ID)
-			.single();
-		expect(oldRow!.status).toBe('completed');
+		const oldRow = await readRow(
+			'training_plans by id',
+			admin
+				.from('training_plans')
+				.select('status')
+				.eq('id', SEED_PLAN_ID)
+				.single()
+		);
+		expect(oldRow.status).toBe('completed');
 	});
 
 	test('edit a week before save → workout distance persists on detail page', async ({ page }) => {

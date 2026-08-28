@@ -4,7 +4,7 @@ import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { deleteRoute } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readMaybeRow, readRows } from '../fixtures/db-read';
+import { readCount, readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * /routes/[id] — photo upload + caption + delete via the RoutePhotos
@@ -141,10 +141,13 @@ test.describe('/routes/[id] — RoutePhotos upload + caption + delete', () => {
 
 		await expect(page.locator('.tile')).toHaveCount(0, { timeout: 10_000 });
 
-		const { count } = await admin
-			.from('route_photos')
-			.select('id', { count: 'exact', head: true })
-			.eq('route_id', routeId);
+		const count = await readCount(
+			'route_photos by route_id',
+			admin
+				.from('route_photos')
+				.select('id', { count: 'exact', head: true })
+				.eq('route_id', routeId)
+		);
 		expect(count).toBe(0);
 	});
 });

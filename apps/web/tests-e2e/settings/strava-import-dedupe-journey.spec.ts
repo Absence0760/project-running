@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
-import { readRows } from '../fixtures/db-read';
+import { readCount, readRows } from '../fixtures/db-read';
 
 /**
  * Strava bulk-export ZIP import — the MULTI-activity, track-bearing,
@@ -352,21 +352,27 @@ test.describe('Strava bulk-import — multi-activity, track-bearing, partial re-
 				// the per-id dedupe held across a mixed ZIP, not just the
 				// all-or-nothing single-row case the sibling pins.
 				for (const ext of [`strava:${runId}`, `strava:${walkId}`]) {
-					const { count } = await admin
-						.from('runs')
-						.select('*', { count: 'exact', head: true })
-						.eq('user_id', saga.id)
-						.eq('external_id', ext);
+					const count = await readCount(
+						'runs by user_id+external_id',
+						admin
+							.from('runs')
+							.select('*', { count: 'exact', head: true })
+							.eq('user_id', saga.id)
+							.eq('external_id', ext)
+					);
 					expect(count, `${ext} stays a single row after re-import`).toBe(1);
 				}
 
 				// Total strava runs for this user: exactly 3 (run + walk + new
 				// run); the ride was never saved on either pass.
-				const { count: stravaCount } = await admin
-					.from('runs')
-					.select('*', { count: 'exact', head: true })
-					.eq('user_id', saga.id)
-					.eq('source', 'strava');
+				const stravaCount = await readCount(
+					'runs by user_id+source',
+					admin
+						.from('runs')
+						.select('*', { count: 'exact', head: true })
+						.eq('user_id', saga.id)
+						.eq('source', 'strava')
+				);
 				expect(stravaCount, 'run + walk + 1 new run, ride filtered both passes').toBe(3);
 
 				// UI: still exactly one card for the original GPS run.

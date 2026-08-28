@@ -4,7 +4,7 @@ import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
-import { readMaybeRow, readRows } from '../fixtures/db-read';
+import { readCount, readMaybeRow, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /runs/[id] — photo upload + delete via the RunPhotos component.
@@ -169,11 +169,14 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		});
 
 		// Backend confirms.
-		const { data: row } = await admin
-			.from('run_photos')
-			.select('caption')
-			.eq('id', photoId)
-			.single();
+		const row = await readRow(
+			'run_photos by id',
+			admin
+				.from('run_photos')
+				.select('caption')
+				.eq('id', photoId)
+				.single()
+		);
 		expect((row as { caption: string }).caption).toBe(newCaption);
 	});
 
@@ -225,10 +228,13 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		});
 
 		// Backend: row gone.
-		const { count } = await admin
-			.from('run_photos')
-			.select('id', { count: 'exact', head: true })
-			.eq('run_id', runId);
+		const count = await readCount(
+			'run_photos by run_id',
+			admin
+				.from('run_photos')
+				.select('id', { count: 'exact', head: true })
+				.eq('run_id', runId)
+		);
 		expect(count).toBe(0);
 	});
 

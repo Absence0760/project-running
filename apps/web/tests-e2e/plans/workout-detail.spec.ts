@@ -122,11 +122,14 @@ test.describe('/plans/[id]/workouts/[wid]', () => {
 			await expect(unskip).toBeVisible();
 
 			// Server-side: skipped_at stamped.
-			const { data: afterSkip } = await admin
-				.from('plan_workouts')
-				.select('skipped_at')
-				.eq('id', wo.id)
-				.maybeSingle();
+			const afterSkip = await readMaybeRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('skipped_at')
+					.eq('id', wo.id)
+					.maybeSingle()
+			);
 			expect((afterSkip as { skipped_at: string | null }).skipped_at).not.toBeNull();
 
 			// Un-skip returns it to a plain to-do (the Skip button is back).
@@ -134,11 +137,14 @@ test.describe('/plans/[id]/workouts/[wid]', () => {
 			await expect(
 				page.getByRole('button', { name: /^Skip this workout$/i })
 			).toBeVisible({ timeout: 10_000 });
-			const { data: afterUnskip } = await admin
-				.from('plan_workouts')
-				.select('skipped_at')
-				.eq('id', wo.id)
-				.maybeSingle();
+			const afterUnskip = await readMaybeRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('skipped_at')
+					.eq('id', wo.id)
+					.maybeSingle()
+			);
 			expect((afterUnskip as { skipped_at: string | null }).skipped_at).toBeNull();
 		} finally {
 			await admin

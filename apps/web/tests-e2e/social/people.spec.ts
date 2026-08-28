@@ -180,12 +180,15 @@ test.describe('full saga — freshly-planted users', () => {
 			// can race the in-flight insert.
 			const admin = getAdminClient();
 			await expect(async () => {
-				const { data: edge } = await admin
-					.from('user_follows')
-					.select('follower_id, followee_id')
-					.eq('follower_id', alpha.id)
-					.eq('followee_id', bravo.id)
-					.maybeSingle();
+				const edge = await readMaybeRow(
+					'user_follows by follower_id+followee_id',
+					admin
+						.from('user_follows')
+						.select('follower_id, followee_id')
+						.eq('follower_id', alpha.id)
+						.eq('followee_id', bravo.id)
+						.maybeSingle()
+				);
 				expect(edge).toBeTruthy();
 			}).toPass({ timeout: 5_000 });
 
@@ -209,12 +212,15 @@ test.describe('full saga — freshly-planted users', () => {
 			).toBeVisible({ timeout: 10_000 });
 
 			// 6. DB sanity — user_follows row exists.
-			const { data: edge } = await admin
-				.from('user_follows')
-				.select('follower_id, followee_id')
-				.eq('follower_id', alpha.id)
-				.eq('followee_id', bravo.id)
-				.maybeSingle();
+			const edge = await readMaybeRow(
+				'user_follows by follower_id+followee_id',
+				admin
+					.from('user_follows')
+					.select('follower_id, followee_id')
+					.eq('follower_id', alpha.id)
+					.eq('followee_id', bravo.id)
+					.maybeSingle()
+			);
 			expect(edge).toBeTruthy();
 
 			// 7. Reverse: search again, click Following → flips to Follow.

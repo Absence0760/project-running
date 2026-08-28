@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
-import { readRow, readRows } from '../fixtures/db-read';
+import { readCount, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Backend boundary: hard database guards that protect a security or
@@ -63,11 +63,14 @@ test.describe('database constraints', () => {
 
 		// Sanity: runner still has exactly the seeded count of active
 		// plans — no half-inserted row leaked.
-		const { count } = await admin
-			.from('training_plans')
-			.select('id', { count: 'exact', head: true })
-			.eq('user_id', USER_A.id)
-			.eq('status', 'active');
+		const count = await readCount(
+			'training_plans by user_id+status',
+			admin
+				.from('training_plans')
+				.select('id', { count: 'exact', head: true })
+				.eq('user_id', USER_A.id)
+				.eq('status', 'active')
+		);
 		expect(count).toBe(existing.length);
 	});
 

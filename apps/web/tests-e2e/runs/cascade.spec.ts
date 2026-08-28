@@ -7,7 +7,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
-import { readMaybeRow, readRows } from '../fixtures/db-read';
+import { readCount, readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Backend boundary: deleting a `runs` row cascades to every child
@@ -69,10 +69,13 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		// Sanity: the trigger fan-out planted notifications for runner
 		// (the run's owner). 1 kudos + 1 comment = 2 unread notifications
 		// referencing this run_id.
-		const { count: notifBefore } = await admin
-			.from('notifications')
-			.select('id', { count: 'exact', head: true })
-			.eq('run_id', runId);
+		const notifBefore = await readCount(
+			'notifications by run_id',
+			admin
+				.from('notifications')
+				.select('id', { count: 'exact', head: true })
+				.eq('run_id', runId)
+		);
 		expect(notifBefore).toBe(2);
 
 		// ── UI delete ──
@@ -97,18 +100,24 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 			'run_matched_tracks'
 		] as const;
 		for (const t of tables) {
-			const { count } = await admin
-				.from(t)
-				.select('run_id', { count: 'exact', head: true })
-				.eq('run_id', runId);
+			const count = await readCount(
+				`${t} by run_id`,
+				admin
+					.from(t)
+					.select('run_id', { count: 'exact', head: true })
+					.eq('run_id', runId)
+			);
 			expect(count, `${t} should have 0 rows for the deleted run`).toBe(0);
 		}
 
 		// notifications.run_id is on delete cascade too.
-		const { count: notifAfter } = await admin
-			.from('notifications')
-			.select('id', { count: 'exact', head: true })
-			.eq('run_id', runId);
+		const notifAfter = await readCount(
+			'notifications by run_id',
+			admin
+				.from('notifications')
+				.select('id', { count: 'exact', head: true })
+				.eq('run_id', runId)
+		);
 		expect(notifAfter).toBe(0);
 
 		// The runs row itself is gone.

@@ -210,14 +210,17 @@ test.describe('/coaching/accept/[token] — redeem_coach_invite error branches',
 			expect(second.status).toBe('pending');
 			expect(second.athlete_id).toBeNull();
 
-			const { data: live } = await admin
-				.from('coach_athletes')
-				.select('invite_token, status')
-				.eq('coach_id', USER_B.id)
-				.eq('athlete_id', USER_C_PRO.id);
+			const live = await readRows(
+				'coach_athletes by coach_id+athlete_id',
+				admin
+					.from('coach_athletes')
+					.select('invite_token, status')
+					.eq('coach_id', USER_B.id)
+					.eq('athlete_id', USER_C_PRO.id)
+			);
 			expect(live).toHaveLength(1);
-			expect(live![0].invite_token).toBe(ACTIVE_TOKEN);
-			expect(live![0].status).toBe('active');
+			expect(live[0].invite_token).toBe(ACTIVE_TOKEN);
+			expect(live[0].status).toBe('active');
 		});
 	});
 });

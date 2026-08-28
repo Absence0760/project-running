@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
-import { readMaybeRow, readRows } from '../fixtures/db-read';
+import { readCount, readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] Photos tab — the club photo gallery (roadmap backlog
@@ -128,10 +128,13 @@ test.describe('/clubs/[slug] — ClubPhotos upload + delete (member/owner)', () 
 
 		await expect(page.locator('.tile')).toHaveCount(0, { timeout: 10_000 });
 
-		const { count } = await admin
-			.from('club_photos')
-			.select('id', { count: 'exact', head: true })
-			.eq('club_id', RICHMOND_CLUB_ID);
+		const count = await readCount(
+			'club_photos by club_id',
+			admin
+				.from('club_photos')
+				.select('id', { count: 'exact', head: true })
+				.eq('club_id', RICHMOND_CLUB_ID)
+		);
 		expect(count).toBe(0);
 	});
 });

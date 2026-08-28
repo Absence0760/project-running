@@ -190,11 +190,14 @@ test.describe('Workout structured-interval edit (web)', () => {
 			await modal.getByRole('button', { name: /^Save/ }).click();
 			await expect(modal).toHaveCount(0);
 
-			const { data: after } = await admin
-				.from('plan_workouts')
-				.select('kind, structure')
-				.eq('id', workoutId)
-				.maybeSingle();
+			const after = await readMaybeRow(
+				'plan_workouts by id',
+				admin
+					.from('plan_workouts')
+					.select('kind, structure')
+					.eq('id', workoutId)
+					.maybeSingle()
+			);
 			expect((after as { kind: string }).kind).toBe('easy');
 			expect((after as { structure: unknown }).structure).toBeNull();
 		} finally {

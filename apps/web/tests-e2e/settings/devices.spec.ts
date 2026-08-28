@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /settings/devices — per-device prefs registry. Each browser mints a
@@ -291,11 +292,14 @@ test.describe('/settings/devices', () => {
 
 		await expect(plantedRow).toHaveCount(0, { timeout: 10_000 });
 
-		const { data } = await admin
-			.from('user_device_settings')
-			.select('device_id')
-			.eq('user_id', USER_A.id)
-			.eq('device_id', plantedDeviceId);
+		const data = await readRows(
+			'user_device_settings by user_id+device_id',
+			admin
+				.from('user_device_settings')
+				.select('device_id')
+				.eq('user_id', USER_A.id)
+				.eq('device_id', plantedDeviceId)
+		);
 		expect(data).toEqual([]);
 	});
 });

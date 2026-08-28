@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /gym/routines/library — the public gym-routine library (migration
@@ -36,22 +36,28 @@ test.describe('/gym/routines/library — publish, browse, preview, adopt', () =>
 			// Publish.
 			await page.getByTestId('routine-toggle-public').click();
 			await expect(page.getByTestId('routine-public-badge')).toBeVisible({ timeout: 10_000 });
-			let { data: after } = await admin
-				.from('gym_routines')
-				.select('is_public_template')
-				.eq('id', routineId)
-				.single();
-			expect(after!.is_public_template).toBe(true);
+			let after = await readRow(
+				'gym_routines by id',
+				admin
+					.from('gym_routines')
+					.select('is_public_template')
+					.eq('id', routineId)
+					.single()
+			);
+			expect(after.is_public_template).toBe(true);
 
 			// Unpublish.
 			await page.getByTestId('routine-toggle-public').click();
 			await expect(page.getByTestId('routine-public-badge')).toHaveCount(0, { timeout: 10_000 });
-			({ data: after } = await admin
-				.from('gym_routines')
-				.select('is_public_template')
-				.eq('id', routineId)
-				.single());
-			expect(after!.is_public_template).toBe(false);
+			after = await readRow(
+				'gym_routines by id',
+				admin
+					.from('gym_routines')
+					.select('is_public_template')
+					.eq('id', routineId)
+					.single()
+			);
+			expect(after.is_public_template).toBe(false);
 		} finally {
 			await admin.from('gym_routines').delete().eq('id', routineId);
 		}

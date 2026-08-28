@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
-import { readMaybeRow, readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Race-event results journey — the full life of a club RACE EVENT from
@@ -142,13 +142,16 @@ test.describe('race-event results journey', () => {
 
 			// Confirm it landed on the seeded club as an athletic 'run'
 			// event (the leaderboard precondition).
-			const { data: eventRow } = await getAdminClient()
-				.from('events')
-				.select('club_id, category')
-				.eq('id', resolvedEventId)
-				.single();
-			expect(eventRow!.club_id).toBe(RICHMOND_RUN_CLUB_ID);
-			expect(eventRow!.category).toBe('run');
+			const eventRow = await readRow(
+				'events by id',
+				getAdminClient()
+					.from('events')
+					.select('club_id, category')
+					.eq('id', resolvedEventId)
+					.single()
+			);
+			expect(eventRow.club_id).toBe(RICHMOND_RUN_CLUB_ID);
+			expect(eventRow.category).toBe('run');
 
 			// The results section renders (leaderboard precondition met).
 			await expect(

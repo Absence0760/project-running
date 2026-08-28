@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertComment, insertKudos, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readCount } from '../fixtures/db-read';
 
 /**
  * /social?tab=feed — in-feed engagement (the SocialFeed `.kudos-pill`
@@ -80,11 +81,14 @@ test.describe('/social?tab=feed — kudos pill + comment count', () => {
 		// survive (proves it wasn't a paint-only flip).
 		const admin = getAdminClient();
 		await expect(async () => {
-			const { count } = await admin
-				.from('run_kudos')
-				.select('*', { count: 'exact', head: true })
-				.eq('run_id', runId!)
-				.eq('user_id', USER_B.id);
+			const count = await readCount(
+				'run_kudos by run_id+user_id',
+				admin
+					.from('run_kudos')
+					.select('*', { count: 'exact', head: true })
+					.eq('run_id', runId!)
+					.eq('user_id', USER_B.id)
+			);
 			expect(count).toBe(1);
 		}).toPass({ timeout: 5_000 });
 
@@ -102,11 +106,14 @@ test.describe('/social?tab=feed — kudos pill + comment count', () => {
 		});
 		await expect(cardAfter.locator('.kudos-pill')).toContainText('0');
 		await expect(async () => {
-			const { count } = await admin
-				.from('run_kudos')
-				.select('*', { count: 'exact', head: true })
-				.eq('run_id', runId!)
-				.eq('user_id', USER_B.id);
+			const count = await readCount(
+				'run_kudos by run_id+user_id',
+				admin
+					.from('run_kudos')
+					.select('*', { count: 'exact', head: true })
+					.eq('run_id', runId!)
+					.eq('user_id', USER_B.id)
+			);
 			expect(count).toBe(0);
 		}).toPass({ timeout: 5_000 });
 	});

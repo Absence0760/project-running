@@ -369,14 +369,17 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 			await page.getByRole('button', { name: 'Save workout' }).click();
 			await expect(page).toHaveURL(/\/gym$/, { timeout: 10_000 });
 
-			const { data: logged } = await admin
-				.from('gym_workouts')
-				.select('id, title')
-				.eq('user_id', USER_A.id)
-				.eq('title', title);
+			const logged = await readRows(
+				'gym_workouts by user_id+title',
+				admin
+					.from('gym_workouts')
+					.select('id, title')
+					.eq('user_id', USER_A.id)
+					.eq('title', title)
+			);
 			// Two workouts with this title now: the seed + the repeated log.
-			expect(logged!.length).toBe(2);
-			createdId = (logged!.find((r) => r.id !== workoutId)?.id as string) ?? null;
+			expect(logged.length).toBe(2);
+			createdId = (logged.find((r) => r.id !== workoutId)?.id as string) ?? null;
 			expect(createdId).not.toBeNull();
 		} finally {
 			if (createdId) await admin.from('gym_workouts').delete().eq('id', createdId);

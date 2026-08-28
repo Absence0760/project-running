@@ -480,7 +480,7 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 			];
 			for (const { table, col, label } of tables) {
 				const data = await readRows(
-					'the rows',
+					`${table} by ${col}`,
 					admin.from(table).select(col).eq(col, user.id)
 				);
 				expect(

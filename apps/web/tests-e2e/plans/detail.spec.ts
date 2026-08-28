@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readCount, readRows } from '../fixtures/db-read';
 
 /**
  * /plans/[id] — plan-detail surface. Split out from plans/list.spec.ts
@@ -240,10 +240,13 @@ test.describe('/plans/[id]', () => {
 		);
 		const srcWeekIds = srcWeeks.map((w) => (w as { id: string }).id);
 		expect(srcWeekIds.length).toBeGreaterThan(0);
-		const { count: srcWorkoutCount } = await admin
-			.from('plan_workouts')
-			.select('id', { count: 'exact', head: true })
-			.in('week_id', srcWeekIds);
+		const srcWorkoutCount = await readCount(
+			'plan_workouts by week_id',
+			admin
+				.from('plan_workouts')
+				.select('id', { count: 'exact', head: true })
+				.in('week_id', srcWeekIds)
+		);
 		expect(srcWorkoutCount).toBeGreaterThan(0);
 
 		// Drive the publish UI.

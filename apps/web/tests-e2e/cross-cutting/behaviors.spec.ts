@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { USER_A, USER_B } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readCount, readRows } from '../fixtures/db-read';
 
 /**
  * Behaviour tests — cheap, focused checks on specific data-layer
@@ -42,11 +42,14 @@ test.describe('engagement uniqueness via UI toggle', () => {
 		await expect(btn).not.toHaveClass(/given/);
 
 		const admin = getAdminClient();
-		const { count } = await admin
-			.from('run_kudos')
-			.select('user_id', { count: 'exact', head: true })
-			.eq('run_id', RUNNER_PUBLIC_RUN_ID)
-			.eq('user_id', USER_B.id);
+		const count = await readCount(
+			'run_kudos by run_id+user_id',
+			admin
+				.from('run_kudos')
+				.select('user_id', { count: 'exact', head: true })
+				.eq('run_id', RUNNER_PUBLIC_RUN_ID)
+				.eq('user_id', USER_B.id)
+		);
 		expect(count).toBe(0);
 	});
 });

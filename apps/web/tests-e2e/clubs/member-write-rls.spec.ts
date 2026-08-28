@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
-import { readRow, readRows } from '../fixtures/db-read';
+import { readCount, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * Server-side permission backstop. The club detail UI hides the post
@@ -65,11 +65,14 @@ test.describe('club write-path RLS — UI gates are not the security boundary', 
 
 		// Belt-and-braces: this exact body never landed.
 		const admin = getAdminClient();
-		const { count } = await admin
-			.from('club_posts')
-			.select('id', { count: 'exact', head: true })
-			.eq('club_id', RICHMOND_ID)
-			.eq('body', body);
+		const count = await readCount(
+			'club_posts by club_id+body',
+			admin
+				.from('club_posts')
+				.select('id', { count: 'exact', head: true })
+				.eq('club_id', RICHMOND_ID)
+				.eq('body', body)
+		);
 		expect(count).toBe(0);
 	});
 

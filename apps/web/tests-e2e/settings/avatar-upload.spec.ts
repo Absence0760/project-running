@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
-import { readRow } from '../fixtures/db-read';
+import { readMaybeRow, readRow } from '../fixtures/db-read';
 
 /**
  * Avatar upload — the in-app profile-picture feature (data.ts uploadAvatar /
@@ -145,9 +145,12 @@ test.describe('avatar upload', () => {
 				// The prior .png object was swept on the format switch.
 				expect(names).not.toContain('avatar.png');
 
-				const { data: jpgDl } = await admin.storage
-					.from('avatars')
-					.download(`${USER_A.id}/avatar.jpg`);
+				const jpgDl = await readMaybeRow(
+					'avatars',
+					admin.storage
+						.from('avatars')
+						.download(`${USER_A.id}/avatar.jpg`)
+				);
 				expect(jpgDl).toBeTruthy();
 				const jpgBytes = Buffer.from(await jpgDl!.arrayBuffer());
 				// The APP1 "Exif" segment (and its GPS) is gone from the stored blob.
