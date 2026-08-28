@@ -66,8 +66,10 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(stravaCard.getByText(/Last synced/i)).toBeVisible();
 		await expect(stravaCard.getByRole('button', { name: /Sync/i })).toBeVisible();
 		await expect(stravaCard.getByRole('button', { name: 'Disconnect' })).toBeVisible();
-		// Sync-history cap notice points to the full-history ZIP path (#20).
-		await expect(stravaCard.getByText(/last 90 days/i)).toBeVisible();
+		// Sync-history notice points to the full-history ZIP path for anything
+		// older than the widest window the sync itself can ask for.
+		await expect(stravaCard.getByText(/up to a year back/i)).toBeVisible();
+		await expect(stravaCard.getByTestId('strava-lookback')).toHaveValue('90');
 	});
 
 	test('Disconnect Strava → confirm → card flips to disconnected + DB row gone', async ({
@@ -179,6 +181,111 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(toast).toBeVisible({ timeout: 5_000 });
 		await expect(toast).toContainText('limiting requests');
 		await expect(page.locator('.toast-success')).toHaveCount(0);
+	});
+
+	test('a widened lookback is what the sync asks the function for', async ({ page }) => {
+		// Neither client could ask for more than 90 days, so a truncation left
+		// long enough for the missed activities to age out of that window had no
+		// in-app recovery at all — the only remaining path was the bulk export.
+		await plantIntegration({ provider: 'strava', lastSyncAt: '2026-05-10T08:00:00Z' });
+
+		const requested: unknown[] = [];
+		await page.route('**/functions/v1/strava-import**', async (route) => {
+			requested.push(route.request().postDataJSON());
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					imported: 12,
+					skipped: 0,
+					failed: 0,
+					rate_limited: false,
+					complete: true,
+					resumable: false,
+				}),
+			});
+		});
+
+		await page.goto('/settings/integrations');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
+
+		await stravaCard.getByTestId('strava-lookback').selectOption('365');
+		await stravaCard.getByRole('button', { name: 'Sync now' }).click();
+		await expect(page.locator('.toast-success')).toBeVisible({ timeout: 5_000 });
+
+		expect(requested).toHaveLength(1);
+		expect(requested[0]).toMatchObject({ action: 'sync', lookbackDays: 365 });
+	});
+
+	test('a truncated sync leaves a note on the card, and a finished one clears it', async ({
+		page,
+	}) => {
+		// The toast says it once and the runner dismisses it. The window is
+		// measured from now, so the record of "there is more to fetch" has to
+		// outlive the toast or the rest ages out unnoticed.
+		await plantIntegration({ provider: 'strava', lastSyncAt: '2026-05-10T08:00:00Z' });
+
+		let complete = false;
+		await page.route('**/functions/v1/strava-import**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					imported: 1000,
+					skipped: 0,
+					failed: 0,
+					rate_limited: false,
+					complete,
+					resumable: !complete,
+				}),
+			});
+		});
+
+		await page.goto('/settings/integrations');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
+		await expect(stravaCard.getByTestId('strava-partial-note')).toHaveCount(0);
+
+		await stravaCard.getByRole('button', { name: 'Sync now' }).click();
+		const note = stravaCard.getByTestId('strava-partial-note');
+		await expect(note).toBeVisible({ timeout: 5_000 });
+		await expect(note).toContainText(/picks up where it stopped/i);
+
+		complete = true;
+		await stravaCard.getByRole('button', { name: 'Sync now' }).click();
+		await expect(page.locator('.toast-success')).toBeVisible({ timeout: 5_000 });
+		await expect(stravaCard.getByTestId('strava-partial-note')).toHaveCount(0);
+	});
+
+	test('a truncation that recorded no restart point says so', async ({ page }) => {
+		// A throttle on the first page advances nothing, so "carry on from where
+		// we stopped" would be a claim about a point that does not exist.
+		await plantIntegration({ provider: 'strava', lastSyncAt: '2026-05-10T08:00:00Z' });
+
+		await page.route('**/functions/v1/strava-import**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					imported: 0,
+					skipped: 0,
+					failed: 0,
+					rate_limited: true,
+					complete: false,
+					resumable: false,
+				}),
+			});
+		});
+
+		await page.goto('/settings/integrations');
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(stravaCard).toHaveClass(/connected/, { timeout: 10_000 });
+
+		await stravaCard.getByRole('button', { name: 'Sync now' }).click();
+		const note = stravaCard.getByTestId('strava-partial-note');
+		await expect(note).toBeVisible({ timeout: 5_000 });
+		await expect(note).toContainText(/no restart point/i);
 	});
 
 	test('a Strava sync that completes keeps the success toast', async ({ page }) => {
