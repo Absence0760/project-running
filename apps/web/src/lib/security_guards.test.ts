@@ -3227,3 +3227,56 @@ test('every .claude agent declares a unique name', () => {
 			`rename one — a path difference does not separate them.`,
 	);
 });
+
+test('the DM route attachment card reads through the owner-aware fetchRouteById', () => {
+	// Reason: a route attached to a direct message renders in the RECIPIENT's
+	// thread, which is a non-owner surface showing someone else's polyline —
+	// exactly the class /routes/[id], the routes list and the clubs Routes tab
+	// are already pinned for above. fetchRouteById is the owner-aware gateway:
+	// the bare `routes` table under RLS for the owner and active club members,
+	// the `public_routes` view plus fetchClippedRouteForViewer for everyone
+	// else, so the line a recipient sees has had the sender's privacy zones
+	// removed server-side. Reading `routes` directly here — or passing a
+	// waypoints array in from the message row — would hand the recipient the
+	// unclipped polyline. See decisions §33 + §772.
+	const source = read('src/lib/components/DmRouteAttachment.svelte');
+	assert.match(
+		source,
+		/fetchRouteById/,
+		'DmRouteAttachment must resolve the route through fetchRouteById — it is the only read that clips for a non-owner recipient. See decisions §33.',
+	);
+	assert.doesNotMatch(
+		source,
+		/from\(['"]routes['"]\)/,
+		'DmRouteAttachment must not read the bare `routes` table — that returns the unclipped waypoints column.',
+	);
+	assert.match(
+		source,
+		/CACHE_MAX/,
+		'DmRouteAttachment must have a bounded cache — see RouteTrackPreview for the LRU shape.',
+	);
+	assert.match(
+		source,
+		/auth\.user\?\.id/,
+		'the attachment cache key must include the viewer: what fetchRouteById returns IS the viewer\'s own clipped view, so a viewer-blind key can serve one reader another reader\'s clip.',
+	);
+});
+
+test('the message thread renders a route attachment through DmRouteAttachment', () => {
+	// Reason: the bubble used to render `{m.body}` and nothing else, so v1's
+	// share URL arrived as inert text. The typed attachment (migration
+	// 20270619_001) must reach the guarded card above rather than being
+	// resolved inline in the page — an inline read here would sit outside the
+	// clip guard entirely.
+	const source = read('src/routes/messages/[[id]]/+page.svelte');
+	assert.match(
+		source,
+		/<DmRouteAttachment\b[^/>]*routeId=/s,
+		'the /messages thread must mount <DmRouteAttachment routeId={…}> for a message carrying route_id.',
+	);
+	assert.doesNotMatch(
+		source,
+		/fetchClippedRouteForViewer|fetchRouteById/,
+		'the thread page must not resolve a route itself — it goes through DmRouteAttachment, which is the surface the clip guard covers.',
+	);
+});
