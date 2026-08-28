@@ -10,14 +10,16 @@
 ///   pending order -> expire the Checkout Session at Stripe. Stripe fires
 ///     `checkout.session.expired` -> the webhook CAS's pending->canceled,
 ///     releasing the soft reservation (no charge was captured).
-///   paid order, refund-eligible per event_pricing.refund_policy -> create
-///     a Stripe refund (refund_application_fee: true, so the platform fee
-///     is clawed back — we don't profit on a cancelled class). Stripe fires
-///     `charge.refunded` -> the webhook CAS's paid->refunded, deletes the
-///     buyer's seat (freeing it for waitlist promotion), and reverses the
+///   charged order (paid | partially_refunded), refund-eligible per
+///     event_pricing.refund_policy -> create a Stripe refund for the whole
+///     remaining balance, reversing the destination transfer and pushing the
+///     application fee back to the host (see buildRefundParams — both flags,
+///     or the platform pays for the cancellation out of its own balance).
+///     Stripe fires `charge.refunded` -> the webhook CAS's ->refunded, deletes
+///     the buyer's seat (freeing it for waitlist promotion), and reverses the
 ///     reservation. We stamp event_orders.refund_initiated_at here so the UI
 ///     can show "refund in progress" during the async gap.
-///   paid order, NOT refund-eligible (inside the no-refund window) -> 409
+///   charged order, NOT refund-eligible (inside the no-refund window) -> 409
 ///     policy_no_refund; the buyer keeps the seat (we never free a seat
 ///     without refunding the money).
 ///
@@ -29,7 +31,10 @@
 /// Mirrors events-checkout's auth + rate-limit shape. SAQ A — no card data.
 /// TEST MODE ONLY in P1/P2: STRIPE_SECRET_KEY must be an sk_test_ key.
 
-import Stripe from '../_shared/stripe.ts';
+import Stripe, {
+  type AssertNoUnknownParamKeys,
+  type UnknownParamKeys,
+} from '../_shared/stripe.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import type { Database } from '../_shared/database.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
@@ -37,8 +42,25 @@ import { selectEffectivePricing } from '../_shared/event_instance.ts';
 import { isValidTimestamptz, isValidUuid } from '../_shared/input_validation.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
-import { cancelAction, resolveRefundEligibility, type RefundPolicy } from './lib.ts';
+import {
+  buildRefundParams,
+  cancelAction,
+  resolveRefundEligibility,
+  type RefundPolicy,
+} from './lib.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
+
+/// Every key of the hand-shaped params must be one Stripe declares. This is
+/// the only money-MOVING call in the tier and was the one call site without
+/// the guard: what is handed to `create` is a function return, not a fresh
+/// object literal, so no excess-property check runs and a misspelled
+/// `reverse_transfers` would compile and come back from Stripe as `Received
+/// unknown parameter` — leaving the transfer un-reversed, which is exactly the
+/// state this refund exists to stop being in. Nothing references the alias;
+/// declaring it is the check.
+type RefundParamsAreStripeParams = AssertNoUnknownParamKeys<
+  UnknownParamKeys<ReturnType<typeof buildRefundParams>, Stripe.RefundCreateParams>
+>;
 
 interface CancelBody {
   event_id?: string;
@@ -183,12 +205,16 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
 
   // Stamp refund_initiated_at first so the UI reflects "refund in progress"
   // even if the charge.refunded webhook is slow. NOT a status write — status
-  // stays 'paid' until the webhook confirms (sole-writer invariant).
+  // stays where it is until the webhook confirms (sole-writer invariant).
+  // Guarded on the status we READ, not a hardcoded 'paid': a refundable order
+  // may be 'partially_refunded', and matching only 'paid' silently stamped
+  // nothing while reporting success.
+  const orderStatus = order.status as string;
   const { error: stampErr } = await service
     .from('event_orders')
     .update({ refund_initiated_at: new Date().toISOString() })
     .eq('id', order.id)
-    .eq('status', 'paid');
+    .eq('status', orderStatus);
   if (stampErr) {
     console.error('refund stamp failed (code):', stampErr?.code ?? 'unknown');
     return Response.json({ error: 'cancel_failed' }, { status: 500 });
@@ -196,12 +222,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
 
   try {
     await stripe.refunds.create(
-      {
-        payment_intent: paymentIntent,
-        // Claw back the platform application fee — the platform doesn't
-        // profit on a cancelled class (club_events.md § Refunds).
-        refund_application_fee: true,
-      },
+      buildRefundParams(paymentIntent),
       // Stable idempotency key: a buyer double-click or a retried cancel
       // must not create a second refund.
       { idempotencyKey: `events-cancel:${order.id}` },
@@ -215,7 +236,7 @@ Deno.serve(withSentry('events-cancel', async (req: Request) => {
       .from('event_orders')
       .update({ refund_initiated_at: null })
       .eq('id', order.id)
-      .eq('status', 'paid');
+      .eq('status', orderStatus);
     console.error('stripe refund create failed:', e instanceof Error ? e.message : 'unknown');
     return Response.json({ error: 'stripe_refund_failed' }, { status: 502 });
   }
