@@ -571,24 +571,50 @@ jobs:
   build-web:
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    name: Web build compile check (no deploy)
+    name: Web build compile check + bundle budget (no deploy)
     runs-on: ubuntu-latest
     # A route that fails to compile under the pinned Svelte/Vite was only
     # caught here by chance: the main CI never production-built the web app
-    # (web-bundle-budget.yml runs the only `vite build`, and only on
-    # pull_request — a direct push to main skipped it entirely). So a Svelte
-    # compile error reached main and surfaced only because one Playwright
-    # shard happened to navigate the broken route (run 26844715187: the
-    # Svelte 5.56.0 `{type === ...}` text-expression regression in
-    # dashboard/period/[type]/[date]). This job rebuilds every route through
-    # rolldown on push AND PR, so a compile error fails loudly and early
-    # instead of probabilistically through e2e sharding.
+    # (the retired web-bundle-budget.yml ran the only `vite build`, and only
+    # on pull_request — a direct push to main skipped it entirely). So a
+    # Svelte compile error reached main and surfaced only because one
+    # Playwright shard happened to navigate the broken route (run
+    # 26844715187: the Svelte 5.56.0 `{type === ...}` text-expression
+    # regression in dashboard/period/[type]/[date]). This job rebuilds every
+    # route through rolldown on push AND PR, so a compile error fails loudly
+    # and early instead of probabilistically through e2e sharding.
+    #
+    # The bundle budget measures the output of THAT build, here, rather than
+    # in a workflow of its own. It used to live in web-bundle-budget.yml,
+    # which was in no `needs:` of the `CI gate` aggregator — the single
+    # required check — so a red budget did not block a merge however tight
+    # the ceilings were (decisions § 771, § 764). Moving it costs the
+    # measurement's own runtime, 0.2 s against a build already running:
+    # the budget's old job spent 47 s repeating the `npm ci` + `vite build`
+    # this job spends 69 s on, and deleting that duplicate gives a runner
+    # slot back. Wall-clock on the gate is unchanged either way — the
+    # critical path is `test-packages` at 17 min (run 33175862509) and every
+    # candidate here is two orders of magnitude under it — so the choice is
+    # about runner-minutes and about a failure the gate actually waits for.
+    # Bundling rather than splitting is what `parity-matrix` already decided
+    # for four unrelated guards: a separate job buys a second checkout and a
+    # second install to say nothing a per-step diagnosis does not.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
+      # Stdlib-only, so it runs before the install: a broken guard should say
+      # so in seconds rather than three minutes into a build whose verdict it
+      # owns.
+      - name: Unit-test the bundle-budget guard
+        run: |
+          if ! node --test scripts/check_web_bundle_budget.test.mjs; then
+            echo "::error::The web bundle-budget guard's own unit tests failed, so its verdict on the build below cannot be trusted. Nothing here is about the Svelte sources, the vite build or the bundle's actual size."
+            echo "Reproduce with: node --test scripts/check_web_bundle_budget.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       - run: npm ci
       # svelte-check is the only gate that type-checks INSIDE .svelte files:
       # `tsx --test` never loads them, and the vite build below compiles
@@ -598,21 +624,44 @@ jobs:
       # key that matches a logged set to its planned one. Warnings do not
       # affect its exit code, so this stays green under the two pre-existing
       # PlanEditor warnings without suppressing future ones from the log.
-      - run: npm run check --workspace=apps/web
+      - name: Type-check the Svelte sources (svelte-check)
+        run: |
+          if ! npm run check --workspace=apps/web; then
+            echo "::error::svelte-check reports type errors inside apps/web. Nothing here is about the production build below or the bundle's size — this is the only gate that reads types across .svelte boundaries, so a route can compile and still be wrong here."
+            echo "Reproduce with: npm ci && npm run check --workspace=apps/web"
+            exit 1
+          fi
       # This is a COMPILE GATE, not a deploy — it never uploads or
       # releases anything (the prod/preview release is tag-gated in
       # release-web.yml). The SvelteKit build resolves the PUBLIC_* keys
       # through `$env/static/public` at build time, so without them every
       # importing module fails with MISSING_EXPORT before the compiler is
-      # even reached. Feed the same placeholder values web-bundle-budget.yml
-      # uses — real secrets are irrelevant to a compile check and must never
-      # appear here.
-      - run: npm run build --workspace=apps/web
+      # even reached. Feed placeholder values — real secrets are irrelevant
+      # to a compile check and must never appear here.
+      - name: Build web (production)
+        run: |
+          if ! npm run build --workspace=apps/web; then
+            echo "::error::The production vite build of apps/web failed. This is a compile gate and it deploys nothing — read the compiler error above. A route that fails only here and not under svelte-check is usually a Svelte/rolldown regression against the pinned versions, not a type error."
+            echo "Reproduce with: npm ci && npm run build --workspace=apps/web (with the PUBLIC_* placeholders this step sets)."
+            exit 1
+          fi
         env:
           PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
           PUBLIC_MAPTILER_KEY: placeholder
           BASE_PATH: ""
+      # Four ceilings over three populations — code (every reader, any
+      # language), message catalogues (one fetched per reader) and assets
+      # (fonts, images, prerendered pages: one loaded per reader). The
+      # numbers and the measurements behind them live in the script's header,
+      # next to the arithmetic they govern.
+      - name: Measure + assert the bundle budget
+        run: |
+          if ! node scripts/check_web_bundle_budget.mjs; then
+            echo "::error::The web bundle is over one of its budgets. The build itself succeeded — the step above is the compile gate — so this is about size, and the failing line names which population and by how much."
+            echo "Reproduce with: npm run build --workspace=apps/web && node scripts/check_web_bundle_budget.mjs"
+            exit 1
+          fi
 
   parity-matrix:
     name: Doc registry drift (parity matrix, iOS column, TS↔Dart pairs, checkbox states)

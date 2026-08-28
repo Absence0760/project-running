@@ -1376,6 +1376,20 @@ mapping comes from vite's manifest, and a chunk that stops being separately
 loadable disappears from it — which the guard fails on by name rather than
 letting the bytes land in the other budget under the wrong diagnosis.
 
+**A budget's population is every file the build emits, not the file types
+someone thought of.** The same walk matched `*.js` and `*.css` only, so fonts,
+images and prerendered HTML — 33 files and 4057 KB gzipped, one of them a
+3865 KB unsubsetted icon font — were outside all three ceilings entirely
+(decisions § 775). `MAX_ASSET_KB` now holds every non-JS/CSS emitted file, per
+file for the reason catalogues are per catalogue: a reader loads one prerendered
+page and one favicon. Where one artifact genuinely has to exceed a ceiling,
+**exempt it by name with its own number, never by widening the ceiling** — and
+make the exemption fail when it stops describing the build, both when it matches
+nothing and when the artifact it covers has shrunk back under the general
+ceiling. The same shape governs `GRANDFATHERED_VIOLATIONS` in
+`apps/backend/scripts/check_migration_online_safety.mjs`, and for the same
+reason: a moving boundary exempts things nobody has read, a name cannot.
+
 ## A tab index is an ordered enum, never a raw int
 
 `initialTab` on a tab host takes a named enum whose declaration order IS the

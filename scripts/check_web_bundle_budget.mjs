@@ -87,7 +87,8 @@
 //
 // Run: `node scripts/check_web_bundle_budget.mjs` (after a production build of
 //      apps/web — it reads build output, it does not produce any).
-// CI:  the `bundle-budget` job in .github/workflows/web-bundle-budget.yml.
+// CI:  the `build-web` job in .github/workflows/ci.yml, which is in the
+//      `CI gate` aggregator's `needs:` list (decisions § 775).
 // Unit tests: `node --test scripts/check_web_bundle_budget.test.mjs`
 
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
