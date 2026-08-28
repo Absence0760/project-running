@@ -27,15 +27,14 @@
 		<meta name="apple-mobile-web-app-title" content="Threkir" />
 		<title>Threkir</title>
 		<!--
-		Material Symbols Outlined: self-hosted via the `material-symbols`
-		npm package, imported from app.css (`@import 'material-symbols/outlined.css'`).
-		Prior shape loaded the font from fonts.googleapis.com /
-		fonts.gstatic.com unconditionally on every page hit, which
-		audit/cookie-consent (May 2026) flagged as a critical ePrivacy
-		Art 5(3) violation: EU users' IPs reached a US sub-processor
-		before the consent banner had rendered. Self-hosting moves the
-		fetch onto our own origin (CloudFront) so no third-party data
-		flow occurs.
+		Material Symbols Outlined: self-hosted, @font-face'd from app.css
+		against a subset built by scripts/gen_web_icon_font.mjs. Prior shape
+		loaded the font from fonts.googleapis.com / fonts.gstatic.com
+		unconditionally on every page hit, which audit/cookie-consent
+		(May 2026) flagged as a critical ePrivacy Art 5(3) violation: EU
+		users' IPs reached a US sub-processor before the consent banner had
+		rendered. Self-hosting moves the fetch onto our own origin
+		(CloudFront) so no third-party data flow occurs.
 		-->
 		%sveltekit.head%
 	</head>

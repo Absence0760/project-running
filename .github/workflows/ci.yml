@@ -641,6 +641,21 @@ jobs:
             exit 1
           fi
       - run: npm ci
+      # The icon font apps/web ships is a SUBSET, cut to the icons the sources
+      # name (decisions § 779). Nothing in a build can tell that an icon is
+      # missing from it — a name with no ligature renders as the name — so the
+      # coverage claim is checked here instead, by re-deriving the icon set from
+      # the same sources the generator read and comparing it with the manifest
+      # committed beside the font. Needs no font tooling, and runs after the
+      # install so it can also confirm the upstream font has not moved under the
+      # subset.
+      - name: Verify the web icon-font subset covers every icon the sources name
+        run: |
+          if ! node --test scripts/web_icon_font.test.mjs; then
+            echo "::error::The committed icon-font subset does not match apps/web's sources. Nothing here is about the bundle's size or the Svelte build — an icon named in the source and absent from the subset renders as its own name, and this is the only gate that can see that."
+            echo "Reproduce with: node --test scripts/web_icon_font.test.mjs; fix with: node scripts/gen_web_icon_font.mjs (needs fontTools) and commit the font + manifest."
+            exit 1
+          fi
       # svelte-check is the only gate that type-checks INSIDE .svelte files:
       # `tsx --test` never loads them, and the vite build below compiles
       # Svelte without cross-module type checking. It caught a real

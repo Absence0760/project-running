@@ -27,8 +27,9 @@ import {
 /// rule could not show one.
 const RETIRED_TOTAL_KB = 2700;
 /// The retired walk matched `*.js` and `*.css`, so it is scored over those —
-/// which is also the hole the asset ceiling closes: the 3866 KB font below was
-/// invisible to that total as well as to the three ceilings that replaced it.
+/// which is also the hole the asset ceiling closes: the 3866 KB font this
+/// population was written for was invisible to that total as well as to the
+/// three ceilings that replaced it.
 /** @param {readonly {path: string, kb: number}[]} files */
 const retiredTotalPasses = (files) =>
 	files.filter((f) => isCodeFile(f.path)).reduce((sum, f) => sum + f.kb, 0) <=
@@ -41,12 +42,14 @@ const retiredTotalPasses = (files) =>
 const CATALOGUE_KB = { de: 88, es: 85, fr: 88, ja: 91, 'pt-BR': 85, 'pt-PT': 85 };
 const LOCALES = ['de', 'en', 'es', 'fr', 'ja', 'pt-BR', 'pt-PT'];
 
-/// The non-JS/CSS half of the same build: 33 files, 4058 KB gzipped, collapsed
+/// The non-JS/CSS half of the same build: 33 files, 266 KB gzipped, collapsed
 /// to the nine that carry all but a kilobyte of it. The font is the whole
-/// reason this population exists — 3866 KB, 1.8x the code ceiling, and outside
-/// every metric until it was measured.
+/// reason this population exists — it was 3866 KB, 1.8x the code ceiling, and
+/// outside every metric until it was measured; subsetting it to the icons the
+/// app names (decisions § 779) is what took it to 74 KB and retired the
+/// exemption that carried it in the meantime.
 const ASSET_KB = [
-	{ path: '_app/immutable/assets/material-symbols-outlined.CqIkmgaP.woff2', kb: 3866 },
+	{ path: '_app/immutable/assets/material-symbols-subset.CFBkXaJ5.woff2', kb: 74 },
 	{ path: 'icon-512.png', kb: 68 },
 	{ path: 'og-default.png', kb: 20 },
 	{ path: 'icon-192.png', kb: 11 },
@@ -95,8 +98,8 @@ test('the shipped ceilings pass against the measured build', () => {
 	assert.equal(summary.catalogueFiles.length, 6);
 	assert.equal(summary.largest.kb, 245);
 	assert.equal(summary.assetFileCount, 9);
-	assert.equal(summary.assetKb, 3991);
-	assert.equal(summary.largestAsset.kb, 3866);
+	assert.equal(summary.assetKb, 199);
+	assert.equal(summary.largestAsset.kb, 74);
 });
 
 test('three more languages move no budget, where the retired total ceiling fails', () => {
@@ -264,8 +267,8 @@ test('the summary states the catalogue total without gating on it', () => {
 	assert.match(text, /Code \(every reader, any language\) \| 1934 KB across 9 files \| 2120 KB/);
 	assert.match(text, /Largest message catalogue \(ja\) \| 91 KB \| 100 KB, per catalogue/);
 	assert.match(text, /ungated in total \(522 KB across 6, one fetched per reader\)/);
-	assert.match(text, /Largest single asset[^|]*\| 3866 KB \| 100 KB, per asset/);
-	assert.match(text, /ungated in total too \(3991 KB across 9/);
+	assert.match(text, /Largest single asset[^|]*\| 74 KB \| 100 KB, per asset/);
+	assert.match(text, /ungated in total too \(199 KB across 9/);
 });
 
 test('the shipped ceilings are the ones this suite reasons about', () => {
@@ -273,7 +276,13 @@ test('the shipped ceilings are the ones this suite reasons about', () => {
 	assert.equal(MAX_CATALOGUE_KB, 100);
 	assert.equal(MAX_LARGEST_CHUNK_KB, 350);
 	assert.equal(MAX_ASSET_KB, 100);
-	assert.equal(ASSET_EXEMPTIONS.length, 1);
+	assert.equal(
+		ASSET_EXEMPTIONS.length,
+		0,
+		'every emitted asset clears the ceiling on its own. The list stays for the ' +
+			'next one that cannot, and the cases below exercise it with fixtures — an ' +
+			'exemption nothing needs is a hole nobody is watching.',
+	);
 });
 
 test('an oversized asset the exemptions do not name is reported', () => {
@@ -297,45 +306,67 @@ test('prerendering /learn once per language moves no ceiling', () => {
 	const { errors, summary } = checkBudgets(grown);
 	assert.deepEqual(errors, []);
 	assert.equal(summary.assetFileCount, 63);
-	assert.equal(summary.assetKb, 4261);
-	assert.equal(summary.largestAsset.kb, 3866, 'the largest asset is still the font');
+	assert.equal(summary.assetKb, 469);
+	assert.equal(summary.largestAsset.kb, 74, 'the largest asset is still the font');
 });
 
-test('the exempt font is held to its own ceiling, and a version bump keeps it', () => {
-	const font = ASSET_KB[0];
-	const rehashed = { path: font.path.replace('CqIkmgaP', 'Zq7Kb2Lm'), kb: 3870 };
+/// The shipped list is empty, so the three cases below drive the mechanism with
+/// the entry that used to be in it — the unsubsetted font at its 3900 KB
+/// ceiling. Keeping the real shape means the arithmetic is still tested against
+/// a plausible exemption rather than a synthetic one.
+const RETIRED_FONT_EXEMPTION = Object.freeze({
+	pattern: /^_app\/immutable\/assets\/material-symbols-outlined\.[^/]+\.woff2$/,
+	maxKb: 3900,
+	why: 'the full unsubsetted Material Symbols Outlined variable font',
+});
+const UNSUBSET_FONT = {
+	path: '_app/immutable/assets/material-symbols-outlined.CqIkmgaP.woff2',
+	kb: 3866,
+};
+/** @param {{path: string, kb: number}[]} assets */
+const withRetiredExemption = (assets) => ({
+	...fixture({ assets }),
+	assetExemptions: [RETIRED_FONT_EXEMPTION],
+});
+
+test('an exempt asset is held to its own ceiling, and a version bump keeps it', () => {
+	const rehashed = { path: UNSUBSET_FONT.path.replace('CqIkmgaP', 'Zq7Kb2Lm'), kb: 3870 };
 	assert.deepEqual(
-		checkBudgets(fixture({ assets: [rehashed, ...ASSET_KB.slice(1)] })).errors,
+		checkBudgets(withRetiredExemption([rehashed, ...ASSET_KB.slice(1)])).errors,
 		[],
 		'vite content-hashes the asset, so the exemption must survive a font update',
 	);
 
-	const grown = { path: font.path, kb: 4100 };
-	const { errors } = checkBudgets(fixture({ assets: [grown, ...ASSET_KB.slice(1)] }));
+	const grown = { path: UNSUBSET_FONT.path, kb: 4100 };
+	const { errors } = checkBudgets(withRetiredExemption([grown, ...ASSET_KB.slice(1)]));
 	assert.deepEqual(errors.map((e) => e.budget), ['asset-exemption']);
 	assert.match(errors[0].message, /over its own 3900 KB exemption ceiling by 200 KB/);
 });
 
 test('an exemption that names nothing in the build is reported', () => {
-	const { errors } = checkBudgets(fixture({ assets: ASSET_KB.slice(1) }));
+	const { errors } = checkBudgets(withRetiredExemption(ASSET_KB.slice(1)));
 	assert.deepEqual(errors.map((e) => e.budget), ['asset-exemption']);
 	assert.match(errors[0].message, /emits no such file/);
 });
 
 test('an exempt asset that has shrunk under the ceiling loses its exemption', () => {
-	// Subsetting the font to the glyphs actually used is the fix; when it lands,
-	// the entry carrying it has to go rather than sit there covering nothing.
-	const subset = { path: ASSET_KB[0].path, kb: 42 };
-	const { errors } = checkBudgets(fixture({ assets: [subset, ...ASSET_KB.slice(1)] }));
+	// This is the case that actually fired: the subset landed at 74 KB under an
+	// exemption written for 3900, and the guard demanded the entry go rather
+	// than sit there covering nothing.
+	const subset = { path: UNSUBSET_FONT.path, kb: 74 };
+	const { errors } = checkBudgets(withRetiredExemption([subset, ...ASSET_KB.slice(1)]));
 	assert.deepEqual(errors.map((e) => e.budget), ['asset-exemption']);
 	assert.match(errors[0].message, /no longer needs the exemption/);
 });
 
 test('assets are outside the code and largest-chunk budgets, not silently inside them', () => {
-	// The font is 1.8x MAX_CODE_KB on its own. If the widened walk let it into
-	// the code population, the code ceiling would fail on the first run and the
-	// largest-chunk one would name a woff2.
-	const { errors, summary } = checkBudgets(fixture());
+	// The font this population was written for is 1.8x MAX_CODE_KB on its own.
+	// If the widened walk let it into the code population, the code ceiling
+	// would fail on the first run and the largest-chunk one would name a woff2.
+	const { errors, summary } = checkBudgets(withRetiredExemption([
+		UNSUBSET_FONT,
+		...ASSET_KB.slice(1),
+	]));
 	assert.deepEqual(errors, []);
 	assert.equal(summary.codeKb, 1934);
 	assert.match(summary.largest.path, /\.js$/);

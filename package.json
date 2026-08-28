@@ -81,11 +81,12 @@
     "watch:preview": "bin/watch-preview.sh",
     "watch:monitor": "bin/watch-monitor.sh",
 
-    "//-- gen --": "Schema codegen — run gen:all after every migration; both outputs are committed and CI's parity-types job fails on drift (docs/architecture/schema_codegen.md).",
+    "//-- gen --": "Committed generated artifacts. Schema codegen: run gen:all after every migration; both outputs are committed and CI's parity-types job fails on drift (docs/architecture/schema_codegen.md). gen:icon-font re-cuts the web icon font when an icon is added; the build-web job fails on drift (decisions § 779).",
     "gen:all": "pnpm gen:types && pnpm gen:dart",
     "gen:types": "pnpm -C apps/backend gen:types",
     "gen:types:check": "pnpm -C apps/backend gen:types:check",
     "gen:dart": "dart run scripts/gen_dart_models.dart",
+		"gen:icon-font": "node scripts/gen_web_icon_font.mjs",
 
     "//-- sync --": "deno.lock's `workspace` section is generated from the npm workspace's package.json files — re-sync it after any npm dep bump. Needs deno, but no network, no node_modules and no Docker. CI's parity-types job runs the :check half.",
     "sync:deno-lock": "node scripts/sync_deno_lock.mjs",

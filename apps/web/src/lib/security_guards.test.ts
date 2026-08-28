@@ -2448,9 +2448,11 @@ test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical
 	// shape fetched the Material Symbols font from fonts.googleapis.com
 	// / fonts.gstatic.com unconditionally on every page hit. EU IPs
 	// reached a US sub-processor before the consent banner rendered —
-	// ePrivacy Art 5(3) Critical. Self-hosted via the material-symbols
-	// npm package (Apache 2.0); the JS-side import in +layout.svelte
-	// pulls both the package CSS and the .woff2 into the build.
+	// ePrivacy Art 5(3) Critical. Self-hosted since, and since
+	// decisions § 779 from a subset built by scripts/gen_web_icon_font.mjs
+	// and @font-face'd by app.css against a repo-relative path — so what
+	// this guard has to hold is that the src stays local, not that any
+	// particular module imports any particular stylesheet.
 	const stripRepeatedly = (s: string, re: RegExp): string => {
 		let prev;
 		let next = s;
@@ -2495,10 +2497,15 @@ test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical
 		);
 	}
 	assert.match(
+		css,
+		/@font-face\s*\{[^}]*src:\s*url\('\.\/lib\/assets\/material-symbols-subset\.woff2'\)/,
+		'app.css must @font-face the self-hosted subset by a repo-relative path, so ' +
+			'the .woff2 is emitted from our own origin and never fetched from a CDN.',
+	);
+	assert.doesNotMatch(
 		layout,
-		/import\s+['"]material-symbols\/outlined\.css['"]/,
-		'+layout.svelte must import material-symbols/outlined.css so the ' +
-			'self-hosted @font-face + .woff2 are bundled.',
+		/from\s+['"]https?:/,
+		'+layout.svelte must not pull the font from anywhere but the bundle.',
 	);
 });
 

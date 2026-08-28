@@ -717,14 +717,34 @@ body, .sidebar, .login-card {
 }
 
 /*
- * Material Symbols Outlined font is self-hosted via the
- * `material-symbols` npm package (Apache 2.0). The package's CSS +
- * .woff2 are pulled into the bundle by a JS-side import in
- * +layout.svelte (Vite's CSS-side @import didn't reliably propagate
- * the package's @font-face declaration). The font ends up served
- * from our own origin (CloudFront), never from third-party CDNs.
- * audit/cookie-consent (May 2026) Critical fix.
+ * Material Symbols Outlined, Apache 2.0, self-hosted so the font is served
+ * from our own origin (CloudFront) and never from a third-party CDN —
+ * audit/cookie-consent (May 2026) Critical fix, and the reason this file
+ * must not grow a fonts.googleapis.com URL (pinned in security_guards).
+ *
+ * The face is SUBSET to the 347 icons this app names, built from the
+ * `material-symbols` package by scripts/gen_web_icon_font.mjs. Importing the
+ * package's own stylesheet instead — which is what +layout.svelte used to do —
+ * @font-face'd the complete 3866 KB variable font on the root layout, 1.8x the
+ * whole code budget, in front of every reader (decisions § 779).
+ *
+ * `font-display: block` is deliberate and stays. It is the only value whose
+ * failure mode is "no icon yet" rather than "the word `arrow_back` where the
+ * icon goes": `swap` paints the ligature TEXT in the fallback face until the
+ * font lands, and `optional` / `fallback` can leave it there for the rest of
+ * the page's life. Blocking was only ever a problem because the face was 3.9
+ * MB and the ~3 s block period was reachable; at 74 KB it is not.
+ *
+ * The `wght` and `FILL` axes are live (components vary both); `GRAD` and
+ * `opsz` are pinned into the file at the values the source already asks for.
  */
+@font-face {
+	font-family: 'Material Symbols Outlined';
+	font-style: normal;
+	font-weight: 100 700;
+	font-display: block;
+	src: url('./lib/assets/material-symbols-subset.woff2') format('woff2');
+}
 
 /* Hide material icon text until font loads */
 .material-symbols {
