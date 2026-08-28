@@ -1344,6 +1344,38 @@ Distinct from key parity, which `messages_parity.test.ts` and
 `l10n_parity_test.dart` already own: those prove a *shipped* locale is
 complete, this proves the shipped set is the set that exists.
 
+## A size budget measures what one reader downloads, not what the build emits
+
+A total over every emitted file is the right metric for a dependency: a dep
+splits into two lazy chunks and every reader still fetches both eventually, so
+summing them is what stops code-splitting being mistaken for a saving. It is
+the wrong metric for an artifact only *some* readers ever request. The web
+bundle ceiling summed the message catalogues, of which a reader fetches one, so
+each new language charged every reader ~88 KB they would never download and the
+ceiling had to be raised — pt-PT moved it 2400 → 2700 while the largest chunk
+stayed byte-identical, and the gate's sensitivity to a rogue dep fell by one
+language's worth every time (decisions § 771).
+
+So the rule is that **a build artifact only some readers fetch gets a budget of
+its own, sized per artifact rather than summed**, and the shared budget keeps
+only what every reader downloads whatever they are. `MAX_CATALOGUE_KB` in
+`scripts/check_web_bundle_budget.mjs` is per catalogue and never totalled, so a
+new locale cannot move it and a bloated one still trips it; `MAX_CODE_KB` holds
+everything unconditional and stays fixed as languages ship. The total of the
+optional population is still *reported*, deliberately — a number nobody may
+gate on is the one that cannot silently become a ceiling again.
+
+Two things decide which side an artifact falls on, and neither is its file
+type. **Ask what a reader actually fetches**: the English catalogue is
+statically imported as the synchronous fallback dict, so it is in the shared
+chunk every reader downloads before a locale is negotiated — it is
+unconditional weight and it sits in the code budget, even though it is a
+translation. And **classify from the build's own module graph, not from a
+filename**: client chunks are content-hashed with no name component, so the
+mapping comes from vite's manifest, and a chunk that stops being separately
+loadable disappears from it — which the guard fails on by name rather than
+letting the bytes land in the other budget under the wrong diagnosis.
+
 ## A tab index is an ordered enum, never a raw int
 
 `initialTab` on a tab host takes a named enum whose declaration order IS the
