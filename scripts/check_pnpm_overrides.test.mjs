@@ -13,6 +13,7 @@ import {
 	parseLockOverrides,
 	parseNpmResolutions,
 	parsePnpmResolutions,
+	parsePnpmSnapshotEdges,
 	parseVersion,
 	pinTarget,
 	satisfies,
@@ -60,6 +61,10 @@ function lock({ overrides = PINS, packages = ['cookie@1.1.1', 'devalue@5.9.1', "
 		'snapshots:',
 		'',
 		'  cookie@1.1.1: {}',
+		'',
+		"  '@sveltejs/kit@2.70.3':",
+		'    dependencies:',
+		'      cookie: 1.1.1',
 		'',
 	].join('\n');
 }
@@ -276,14 +281,14 @@ test('declaring pnpm.overrides with no npm-style block fails, because npm ci rea
 // and the tree resolved around it anyway.
 test('a declared override the tree resolved around fails, in either lockfile', () => {
 	const declared = new Map([['cookie', '^1.0.2']]);
-	const pnpmSide = checkResolutions(declared, [{ name: 'cookie', version: '0.6.0', where: 'pnpm-lock.yaml' }]);
+	const pnpmSide = checkResolutions(declared, [{ name: 'cookie', version: '0.6.0', where: 'pnpm-lock.yaml', parent: null }]);
 	assert.equal(pnpmSide.errors.length, 1);
 	assert.match(pnpmSide.errors[0], /declared and NOT in effect/);
 	assert.match(pnpmSide.errors[0], /cookie@0\.6\.0 \(pnpm-lock\.yaml\)/);
 
 	const npmSide = checkResolutions(declared, [
-		{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml' },
-		{ name: 'cookie', version: '0.6.0', where: 'package-lock.json' },
+		{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml', parent: null },
+		{ name: 'cookie', version: '0.6.0', where: 'package-lock.json', parent: null },
 	]);
 	assert.equal(npmSide.errors.length, 1);
 	assert.match(npmSide.errors[0], /cookie@0\.6\.0 \(package-lock\.json\)/);
@@ -291,7 +296,7 @@ test('a declared override the tree resolved around fails, in either lockfile', (
 
 test('a pinned package absent from both trees is an error, not a silent skip', () => {
 	const { errors } = checkResolutions(new Map([['cookie', '^1.0.2']]), [
-		{ name: 'devalue', version: '5.9.1', where: 'pnpm-lock.yaml' },
+		{ name: 'devalue', version: '5.9.1', where: 'pnpm-lock.yaml', parent: null },
 	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /appears in neither lockfile's package tree/);
@@ -299,7 +304,7 @@ test('a pinned package absent from both trees is an error, not a silent skip', (
 
 test('a scoped pin whose parent is gone is reported, because it reaches nothing', () => {
 	const { errors } = checkResolutions(new Map([['@sveltejs/kit>cookie', '^1.0.2']]), [
-		{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml' },
+		{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml', parent: null },
 	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /scopes a pin to `@sveltejs\/kit`, which is in neither lockfile/);
@@ -307,7 +312,7 @@ test('a scoped pin whose parent is gone is reported, because it reaches nothing'
 
 test('an unevaluatable range is an error rather than a pass', () => {
 	const { errors } = checkResolutions(new Map([['cookie', '>=1.0.0 <2.0.0']]), [
-		{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml' },
+		{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml', parent: null },
 	]);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /cannot evaluate/);
@@ -319,19 +324,147 @@ test('an empty resolution set is an error, so a broken parser cannot report succ
 	assert.match(errors[0], /parser matched nothing/);
 });
 
-test('two pins over one package are both applied to every copy of it', () => {
+test('a bare pin reaches every copy; a scoped one reaches only its parent\'s', () => {
+	// The bare pin covers both copies and fails on the 1.0.5 one. The scoped
+	// pin's subject is what @sveltejs/kit resolved — 1.1.1 per the snapshot
+	// edge — so it passes. Enforcing it against every copy of the NAME accuses
+	// a sibling the override never touched: decisions § 774.
 	const declared = new Map([
-		['cookie', '^1.0.2'],
+		['cookie', '^1.1.0'],
 		['@sveltejs/kit>cookie', '^1.1.0'],
 	]);
 	const resolutions = [
-		{ name: 'cookie', version: '1.0.5', where: 'pnpm-lock.yaml' },
-		{ name: '@sveltejs/kit', version: '2.70.3', where: 'pnpm-lock.yaml' },
+		{ name: 'cookie', version: '1.0.5', where: 'pnpm-lock.yaml', parent: null },
+		{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml', parent: null },
+		{ name: '@sveltejs/kit', version: '2.70.3', where: 'pnpm-lock.yaml', parent: null },
 	];
-	const { errors, ok } = checkResolutions(declared, resolutions);
-	assert.equal(ok.length, 0);
+	const edges = new Map([['@sveltejs/kit', new Map([['cookie', new Set(['1.1.1'])]])]]);
+
+	const { errors, ok } = checkResolutions(declared, resolutions, edges);
 	assert.equal(errors.length, 1);
-	assert.match(errors[0], /`@sveltejs\/kit>cookie` pins `\^1\.1\.0`/);
+	assert.match(errors[0], /`cookie` pins `\^1\.1\.0`/);
+	assert.match(errors[0], /cookie@1\.0\.5/);
+	assert.deepEqual(ok, ['@sveltejs/kit>cookie resolves to 1.1.1 across 1 copy/copies, satisfying ^1.1.0']);
+});
+
+test('a scoped pin does not accuse a copy under a different parent', () => {
+	// The reproduction: `@sveltejs/kit>cookie` used to fail on express's own
+	// nested cookie@0.6.0, which the override never reached. Latent on the
+	// committed tree only because package.json declares a bare `cookie` pin
+	// beside the scoped one — dropping that, a reasonable change once
+	// SvelteKit bumps, turns it on.
+	const resolutions = parseNpmResolutions({
+		packages: {
+			'': { version: '1.0.0' },
+			'node_modules/@sveltejs/kit': { version: '2.70.3' },
+			'node_modules/@sveltejs/kit/node_modules/cookie': { version: '1.1.1' },
+			'node_modules/express': { version: '5.0.0' },
+			'node_modules/express/node_modules/cookie': { version: '0.6.0' },
+		},
+	});
+	const { errors, ok } = checkResolutions(new Map([['@sveltejs/kit>cookie', '^1.0.2']]), resolutions);
+
+	assert.deepEqual(errors, []);
+	assert.deepEqual(ok, ['@sveltejs/kit>cookie resolves to 1.1.1 across 1 copy/copies, satisfying ^1.0.2']);
+});
+
+test('a scoped pin still reaches the hoisted copy when the parent has no nested one', () => {
+	// npm dedupes an override into the top level whenever it can, which is the
+	// state the committed package-lock.json is in — narrowing to nested copies
+	// alone would check the pin against nothing.
+	const resolutions = parseNpmResolutions({
+		packages: {
+			'node_modules/@sveltejs/kit': { version: '2.70.3' },
+			'node_modules/cookie': { version: '0.6.0' },
+		},
+	});
+	const { errors } = checkResolutions(new Map([['@sveltejs/kit>cookie', '^1.0.2']]), resolutions);
+
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /declared and NOT in effect/);
+	assert.match(errors[0], /cookie@0\.6\.0/);
+});
+
+test('a scoped pin whose parent resolves no copy of the target is reported', () => {
+	const resolutions = parseNpmResolutions({
+		packages: {
+			'node_modules/@sveltejs/kit': { version: '2.70.3' },
+			'node_modules/express/node_modules/cookie': { version: '1.1.1' },
+		},
+	});
+	const { errors } = checkResolutions(new Map([['@sveltejs/kit>cookie', '^1.0.2']]), resolutions);
+
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /resolves no `cookie` in either lockfile/);
+});
+
+test('a scoped pin over a resolving parent is not checked against an empty snapshots graph', () => {
+	const { errors } = checkResolutions(
+		new Map([['@sveltejs/kit>cookie', '^1.0.2']]),
+		[
+			{ name: 'cookie', version: '1.1.1', where: 'pnpm-lock.yaml', parent: null },
+			{ name: '@sveltejs/kit', version: '2.70.3', where: 'pnpm-lock.yaml', parent: null },
+		],
+		new Map(),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /`snapshots:` graph parsed as empty/);
+});
+
+test('parseNpmResolutions names the package that encloses a nested copy', () => {
+	assert.deepEqual(
+		parseNpmResolutions({
+			packages: {
+				'node_modules/cookie': { version: '1.1.1' },
+				'apps/web/node_modules/cookie': { version: '1.1.1' },
+				'node_modules/@sveltejs/kit/node_modules/cookie': { version: '0.6.0' },
+			},
+		}).map((r) => [r.name, r.parent]),
+		[
+			['cookie', null],
+			['cookie', null],
+			['cookie', '@sveltejs/kit'],
+		],
+	);
+});
+
+test('parsePnpmSnapshotEdges reads the dependency graph, peer suffixes stripped', () => {
+	const edges = parsePnpmSnapshotEdges(
+		[
+			'packages:',
+			'',
+			'  cookie@1.1.1:',
+			'',
+			'snapshots:',
+			'',
+			"  '@sveltejs/kit@2.70.3(svelte@5.56.10)':",
+			'    dependencies:',
+			'      cookie: 1.1.1',
+			'      devalue: 5.9.1(svelte@5.56.10)',
+			'    optionalDependencies:',
+			'      undici: 7.29.0',
+			'',
+			'  cookie@1.1.1: {}',
+			'',
+		].join('\n'),
+	);
+	assert.deepEqual(
+		[...(edges.get('@sveltejs/kit') ?? [])].map(([k, v]) => [k, [...v]]),
+		[
+			['cookie', ['1.1.1']],
+			['devalue', ['5.9.1']],
+			['undici', ['7.29.0']],
+		],
+	);
+	assert.equal(edges.has('cookie'), false);
+});
+
+test('the committed pnpm-lock.yaml carries the edges the scoped pins are read through', () => {
+	const edges = parsePnpmSnapshotEdges(readFileSync(PNPM_LOCK, 'utf-8'));
+	assert.ok(edges.size > 50, `only ${edges.size} parents parsed from snapshots:`);
+	const kit = edges.get('@sveltejs/kit');
+	assert.ok(kit, 'no @sveltejs/kit snapshot parsed, so both scoped pins would be unnarrowed');
+	assert.ok(kit.has('cookie') && kit.has('devalue'));
 });
 
 test('checkAll composes both halves and passes on a well-formed pair', () => {
