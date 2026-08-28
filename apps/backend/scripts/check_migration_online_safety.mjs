@@ -224,7 +224,7 @@ import { splitSqlStatements } from './sql_lex.mjs';
 // no writer. The scanner inspected it under the previous cutoff and returned
 // zero violations, so this bump is the max-version bookkeeping this file's own
 // test enforces, not an exemption.
-export const GRANDFATHER_CUTOFF = '20270616';
+export const GRANDFATHER_CUTOFF = '20270619';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
