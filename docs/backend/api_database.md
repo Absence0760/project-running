@@ -1304,7 +1304,7 @@ create table integrations (
   external_id              text,                     -- athlete ID on the provider
   scope                    text,                     -- OAuth scopes granted
   last_sync_at             timestamptz,              -- last COMPLETE walk of the lookback window; a truncated backfill leaves it alone (decisions § 766)
-  sync_cursor              text,                     -- intended as a backfill pagination cursor; NOTHING writes it, and no importer reads it — `strava-import` derives `after=` from now() on every call
+  sync_cursor              text,                     -- resume point for a truncated `strava-import` walk: {"v":1,"from","after","before"} epoch seconds. Written on a truncation that made progress, cleared on a finished window / connect / disconnect (decisions § 768)
   created_at               timestamptz default now(),
   updated_at               timestamptz default now(),
   unique (user_id, provider)
@@ -1640,6 +1640,10 @@ Authentication: most functions require a valid Supabase JWT in the `Authorizatio
 ### `POST /strava-import`
 
 Initiates the Strava OAuth flow and backfills the last 90 days of activities.
+A subsequent `{ "action": "sync", "lookbackDays": n }` walks the last `n` days
+instead — `n` must be an integer in `1..365` or the function answers 400
+`invalid_lookback_days`. Both clients offer 90 / 180 / 365; the maximum is
+pinned to this bound by a guard in `strava_sync_result.test.ts`.
 
 **Request:**
 ```json
@@ -1655,6 +1659,10 @@ Initiates the Strava OAuth flow and backfills the last 90 days of activities.
 4. Register Strava webhook subscription (if not already registered)
 5. Backfill: fetch paginated activities from past 90 days
 6. For each activity: fetch GPS stream, map to `Run`, upsert
+7. Report `complete` (the window was walked to its end) and `resumable` (a
+   resume point was recorded on `sync_cursor`, so a re-sync continues rather
+   than restarting). `last_sync_at` is stamped, and `sync_cursor` cleared,
+   only on a `complete` walk — see [decisions § 766 + § 768](../architecture/decisions.md).
 
 **Response:**
 ```json
