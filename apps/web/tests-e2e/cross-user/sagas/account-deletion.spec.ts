@@ -285,7 +285,9 @@ test.describe('saga: account deletion via /settings/account', () => {
 			'personal_records by user_id',
 			admin
 				.from('personal_records')
-				.select('id')
+				// keyed on (user_id, distance) — it has no `id`, and selecting
+				// one errored on every run while the discarded error read as []
+				.select('user_id')
 				.eq('user_id', user.id)
 		);
 		expect(
