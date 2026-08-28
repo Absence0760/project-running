@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readCount, readRows } from '../fixtures/db-read';
 
 /**
  * /plans/[id] — plan-detail surface. Split out from plans/list.spec.ts
@@ -230,16 +231,22 @@ test.describe('/plans/[id]', () => {
 
 		// Snapshot: how many weeks + workouts does the source plan
 		// have? The clone must end up with the same counts.
-		const { data: srcWeeks } = await admin
-			.from('plan_weeks')
-			.select('id')
-			.eq('plan_id', SYDNEY_HALF_PLAN_ID);
-		const srcWeekIds = (srcWeeks ?? []).map((w) => (w as { id: string }).id);
+		const srcWeeks = await readRows(
+			'plan_weeks by plan_id',
+			admin
+				.from('plan_weeks')
+				.select('id')
+				.eq('plan_id', SYDNEY_HALF_PLAN_ID)
+		);
+		const srcWeekIds = srcWeeks.map((w) => (w as { id: string }).id);
 		expect(srcWeekIds.length).toBeGreaterThan(0);
-		const { count: srcWorkoutCount } = await admin
-			.from('plan_workouts')
-			.select('id', { count: 'exact', head: true })
-			.in('week_id', srcWeekIds);
+		const srcWorkoutCount = await readCount(
+			'plan_workouts by week_id',
+			admin
+				.from('plan_workouts')
+				.select('id', { count: 'exact', head: true })
+				.in('week_id', srcWeekIds)
+		);
 		expect(srcWorkoutCount).toBeGreaterThan(0);
 
 		// Drive the publish UI.
@@ -259,13 +266,16 @@ test.describe('/plans/[id]', () => {
 		});
 
 		// Find the cloned template.
-		const { data: clones } = await admin
-			.from('training_plans')
-			.select('id, status, is_template')
-			.eq('is_template', true)
-			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('name', 'Richmond Half 2026');
-		expect(clones?.length).toBe(1);
+		const clones = await readRows(
+			'training_plans by is_template+club_id+name',
+			admin
+				.from('training_plans')
+				.select('id, status, is_template')
+				.eq('is_template', true)
+				.eq('club_id', SYDNEY_RUN_CLUB_ID)
+				.eq('name', 'Richmond Half 2026')
+		);
+		expect(clones.length).toBe(1);
 		const cloneId = (clones![0] as { id: string }).id;
 
 		try {
@@ -277,21 +287,27 @@ test.describe('/plans/[id]', () => {
 			expect((clones![0] as { status: string }).status).not.toBe('active');
 
 			// Same number of plan_weeks rows as the source.
-			const { data: cloneWeeks } = await admin
-				.from('plan_weeks')
-				.select('id')
-				.eq('plan_id', cloneId);
-			const cloneWeekIds = (cloneWeeks ?? []).map((w) => (w as { id: string }).id);
+			const cloneWeeks = await readRows(
+				'plan_weeks by plan_id',
+				admin
+					.from('plan_weeks')
+					.select('id')
+					.eq('plan_id', cloneId)
+			);
+			const cloneWeekIds = cloneWeeks.map((w) => (w as { id: string }).id);
 			expect(cloneWeekIds.length).toBe(srcWeekIds.length);
 
 			// Same number of plan_workouts rows as the source, and
 			// EVERY clone's completion fields are reset.
-			const { data: cloneWorkouts } = await admin
-				.from('plan_workouts')
-				.select('manually_completed, completed_run_id, completed_at')
-				.in('week_id', cloneWeekIds);
-			expect(cloneWorkouts?.length).toBe(srcWorkoutCount);
-			for (const w of cloneWorkouts ?? []) {
+			const cloneWorkouts = await readRows(
+				'plan_workouts by week_id',
+				admin
+					.from('plan_workouts')
+					.select('manually_completed, completed_run_id, completed_at')
+					.in('week_id', cloneWeekIds)
+			);
+			expect(cloneWorkouts.length).toBe(srcWorkoutCount);
+			for (const w of cloneWorkouts) {
 				const row = w as {
 					manually_completed: boolean;
 					completed_run_id: string | null;

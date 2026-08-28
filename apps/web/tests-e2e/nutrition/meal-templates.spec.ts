@@ -88,20 +88,26 @@ test.describe('/nutrition — meal templates', () => {
 					{ timeout: 10_000 },
 				)
 				.toBe(1);
-			const { data: tmpl } = await admin
-				.from('meal_templates')
-				.select('id, name, item_count, meal_slot, user_id')
-				.eq('user_id', USER_A.id)
-				.eq('name', templateName);
-			expect(tmpl?.length).toBe(1);
+			const tmpl = await readRows(
+				'meal_templates by user_id+name',
+				admin
+					.from('meal_templates')
+					.select('id, name, item_count, meal_slot, user_id')
+					.eq('user_id', USER_A.id)
+					.eq('name', templateName)
+			);
+			expect(tmpl.length).toBe(1);
 			templateId = tmpl![0].id;
 			expect(tmpl![0].item_count).toBe(1);
 			expect(tmpl![0].meal_slot).toBe('breakfast');
-			const { data: items } = await admin
-				.from('meal_template_items')
-				.select('item_name, calories, meal_slot')
-				.eq('template_id', templateId);
-			expect(items?.length).toBe(1);
+			const items = await readRows(
+				'meal_template_items by template_id',
+				admin
+					.from('meal_template_items')
+					.select('item_name, calories, meal_slot')
+					.eq('template_id', templateId)
+			);
+			expect(items.length).toBe(1);
 			expect(items![0].item_name).toBe(item);
 			expect(Number(items![0].calories)).toBe(300);
 

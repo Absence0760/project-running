@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /settings/safety — safety-contact double opt-in (migration
@@ -119,12 +119,15 @@ test.describe('/settings/safety', () => {
 
 			// The opt-in stamp is persisted server-side.
 			const admin = getAdminClient();
-			const { data: after } = await admin
-				.from('safety_contacts')
-				.select('sms_opt_in_at, contact_phone')
-				.eq('owner_id', USER_A.id)
-				.eq('contact_email', USER_B.email)
-				.single();
+			const after = await readRow(
+				'safety_contacts by owner_id+contact_email',
+				admin
+					.from('safety_contacts')
+					.select('sms_opt_in_at, contact_phone')
+					.eq('owner_id', USER_A.id)
+					.eq('contact_email', USER_B.email)
+					.single()
+			);
 			expect((after as { sms_opt_in_at: string | null }).sms_opt_in_at).not.toBeNull();
 			expect((after as { contact_phone: string | null }).contact_phone).toBe('+447700900123');
 		} finally {
@@ -236,12 +239,15 @@ test.describe('/settings/safety', () => {
 
 			// The row is now confirmed in the DB, with the SMS opt-in stamped
 			// because the owner had stored a phone.
-			const { data: after } = await admin
-				.from('safety_contacts')
-				.select('confirmed_at, sms_opt_in_at')
-				.eq('owner_id', USER_A.id)
-				.eq('contact_email', email)
-				.single();
+			const after = await readRow(
+				'safety_contacts by owner_id+contact_email',
+				admin
+					.from('safety_contacts')
+					.select('confirmed_at, sms_opt_in_at')
+					.eq('owner_id', USER_A.id)
+					.eq('contact_email', email)
+					.single()
+			);
 			expect((after as { confirmed_at: string | null }).confirmed_at).not.toBeNull();
 			expect((after as { sms_opt_in_at: string | null }).sms_opt_in_at).not.toBeNull();
 
@@ -300,12 +306,15 @@ test.describe('/settings/safety', () => {
 
 			// The opt-in tick survived hydration — proving the checkbox
 			// gate keeps bind:checked and the DOM in agreement.
-			const { data: after } = await admin
-				.from('safety_contacts')
-				.select('sms_opt_in_at')
-				.eq('owner_id', USER_A.id)
-				.eq('contact_email', email)
-				.single();
+			const after = await readRow(
+				'safety_contacts by owner_id+contact_email',
+				admin
+					.from('safety_contacts')
+					.select('sms_opt_in_at')
+					.eq('owner_id', USER_A.id)
+					.eq('contact_email', email)
+					.single()
+			);
 			expect((after as { sms_opt_in_at: string | null }).sms_opt_in_at).not.toBeNull();
 		} finally {
 			await ctx.close();

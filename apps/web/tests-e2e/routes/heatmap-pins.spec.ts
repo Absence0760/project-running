@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Heatmap discoverable-pin layers (clubs + popular/featured routes)
@@ -90,13 +91,16 @@ test.describe('Heatmap pin RPCs (backend contract)', () => {
 		async () => {
 			const admin = getAdminClient();
 			// Box over the Pacific — no clubs there.
-			const { data } = await admin.rpc('clubs_in_bbox', {
-				p_min_lng: -160,
-				p_min_lat: 10,
-				p_max_lng: -140,
-				p_max_lat: 30,
-				p_limit: 100,
-			});
+			const data = await readRows(
+				'the clubs_in_bbox() rpc',
+				admin.rpc('clubs_in_bbox', {
+					p_min_lng: -160,
+					p_min_lat: 10,
+					p_max_lng: -140,
+					p_max_lat: 30,
+					p_limit: 100,
+				})
+			);
 			expect((data as unknown[]).length).toBe(0);
 		});
 
@@ -141,10 +145,13 @@ test.describe('Heatmap pin RPCs (backend contract)', () => {
 
 	test('discoverable_routes_in_bbox limit caps the result set', async () => {
 		const admin = getAdminClient();
-		const { data } = await admin.rpc('discoverable_routes_in_bbox', {
-			...VA_BBOX,
-			p_limit: 2,
-		});
+		const data = await readRows(
+			'the discoverable_routes_in_bbox() rpc',
+			admin.rpc('discoverable_routes_in_bbox', {
+				...VA_BBOX,
+				p_limit: 2,
+			})
+		);
 		expect((data as unknown[]).length).toBeLessThanOrEqual(2);
 	});
 });

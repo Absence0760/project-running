@@ -69,12 +69,15 @@ test.describe('/gym/routines — club gym-routine templates', () => {
 		await expect(publishRow.locator('select')).toHaveValue('', { timeout: 10_000 });
 
 		// A club-owned copy now exists, with the set copied across.
-		const { data: clubCopies } = await admin
-			.from('gym_routines')
-			.select('id')
-			.eq('club_id', RICHMOND_CLUB_ID)
-			.eq('title', title);
-		expect(clubCopies?.length).toBe(1);
+		const clubCopies = await readRows(
+			'gym_routines by club_id+title',
+			admin
+				.from('gym_routines')
+				.select('id')
+				.eq('club_id', RICHMOND_CLUB_ID)
+				.eq('title', title)
+		);
+		expect(clubCopies.length).toBe(1);
 
 		// It surfaces on the club's Templates tab, and Adopt clones it.
 		await page.goto('/clubs/richmond-run-club?tab=templates');

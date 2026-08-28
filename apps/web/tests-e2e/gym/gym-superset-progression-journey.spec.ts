@@ -2,6 +2,7 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Gym P2 supersets + P4 progression journey — the gym-programming engine's
@@ -148,24 +149,30 @@ test.describe('gym superset + progression journey — 3-member chain → guided 
 					await page.getByTestId('routine-save').click();
 					await expect(page.getByTestId('routine-exercises')).toBeVisible({ timeout: 10_000 });
 
-					const { data: routines } = await admin
-						.from('gym_routines')
-						.select('id, exercise_count')
-						.eq('author_id', user.id)
-						.eq('title', routineTitle);
-					expect(routines?.length).toBe(1);
+					const routines = await readRows(
+						'gym_routines by author_id+title',
+						admin
+							.from('gym_routines')
+							.select('id, exercise_count')
+							.eq('author_id', user.id)
+							.eq('title', routineTitle)
+					);
+					expect(routines.length).toBe(1);
 					expect(routines![0].exercise_count).toBe(4);
 					routineId = routines![0].id as string;
 
 					// The plan persisted: A,B,C share ONE non-null superset_group with
 					// orders 0/1/2; D is standalone (both null). This is the
 					// gym_routine_exercises_superset_chk both-arms check, in one routine.
-					const { data: exRows } = await admin
-						.from('gym_routine_exercises')
-						.select('exercise_name, position, superset_group, superset_order, progression')
-						.eq('routine_id', routineId)
-						.order('position', { ascending: true });
-					expect(exRows?.length).toBe(4);
+					const exRows = await readRows(
+						'gym_routine_exercises by routine_id',
+						admin
+							.from('gym_routine_exercises')
+							.select('exercise_name, position, superset_group, superset_order, progression')
+							.eq('routine_id', routineId)
+							.order('position', { ascending: true })
+					);
+					expect(exRows.length).toBe(4);
 					const [a, b, c, d] = exRows!;
 					// The chain: one shared group across the first three, ordered.
 					expect(a.superset_group).not.toBeNull();
@@ -263,11 +270,14 @@ test.describe('gym superset + progression journey — 3-member chain → guided 
 
 					// Backend cross-check: the workout is linked to the routine and the
 					// adherence verdict is persisted as 'partial'.
-					const { data: created } = await admin
-						.from('gym_workouts')
-						.select('id, metadata')
-						.eq('id', workoutId);
-					expect(created?.length).toBe(1);
+					const created = await readRows(
+						'gym_workouts by id',
+						admin
+							.from('gym_workouts')
+							.select('id, metadata')
+							.eq('id', workoutId)
+					);
+					expect(created.length).toBe(1);
 					const metadata = created![0].metadata as {
 						routine_id: string;
 						gym_adherence: string;
@@ -281,17 +291,20 @@ test.describe('gym superset + progression journey — 3-member chain → guided 
 
 					// The flat log holds the three PERFORMED sets only (each skip wrote
 					// no gym_set): A1, B1, C1. A2 (skipped) and D (skipped) are absent.
-					const { data: sets } = await admin
-						.from('gym_sets')
-						.select('exercise_name, reps, weight_kg')
-						.eq('workout_id', workoutId);
-					expect(sets?.length).toBe(3);
-					const aSets = sets!.filter((s) => s.exercise_name === exA);
+					const sets = await readRows(
+						'gym_sets by workout_id',
+						admin
+							.from('gym_sets')
+							.select('exercise_name, reps, weight_kg')
+							.eq('workout_id', workoutId)
+					);
+					expect(sets.length).toBe(3);
+					const aSets = sets.filter((s) => s.exercise_name === exA);
 					expect(aSets.length).toBe(1);
 					// Weight stored canonical kg (100), not lbs.
 					expect(Number(aSets[0].weight_kg)).toBe(100);
 					// D was skipped → no logged set for it.
-					expect(sets!.filter((s) => s.exercise_name === exD).length).toBe(0);
+					expect(sets.filter((s) => s.exercise_name === exD).length).toBe(0);
 				});
 
 				// ── 5. The double-progression next-target: a REP CLIMB, not load ─

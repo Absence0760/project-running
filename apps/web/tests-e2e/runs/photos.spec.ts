@@ -4,6 +4,7 @@ import { getAdminClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readCount, readMaybeRow, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /runs/[id] — photo upload + delete via the RunPhotos component.
@@ -89,12 +90,15 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		// Backend assertion: a run_photos row exists, points at the
 		// right run, and has the caption we set.
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('run_photos')
-			.select('id, run_id, caption, storage_path')
-			.eq('run_id', runId);
-		expect(rows?.length).toBe(1);
-		const row = rows?.[0] as {
+		const rows = await readRows(
+			'run_photos by run_id',
+			admin
+				.from('run_photos')
+				.select('id, run_id, caption, storage_path')
+				.eq('run_id', runId)
+		);
+		expect(rows.length).toBe(1);
+		const row = rows[0] as {
 			id: string;
 			run_id: string;
 			caption: string | null;
@@ -104,9 +108,12 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		expect(row.storage_path).toContain(USER_A.id);
 
 		// Storage object exists at the path the row points to.
-		const { data: dl } = await admin.storage
-			.from('run-photos')
-			.download(row.storage_path);
+		const dl = await readMaybeRow(
+			'run-photos',
+			admin.storage
+				.from('run-photos')
+				.download(row.storage_path)
+		);
 		expect(dl).not.toBeNull();
 	});
 
@@ -162,11 +169,14 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		});
 
 		// Backend confirms.
-		const { data: row } = await admin
-			.from('run_photos')
-			.select('caption')
-			.eq('id', photoId)
-			.single();
+		const row = await readRow(
+			'run_photos by id',
+			admin
+				.from('run_photos')
+				.select('caption')
+				.eq('id', photoId)
+				.single()
+		);
 		expect((row as { caption: string }).caption).toBe(newCaption);
 	});
 
@@ -218,10 +228,13 @@ test.describe('/runs/[id] — RunPhotos upload + delete', () => {
 		});
 
 		// Backend: row gone.
-		const { count } = await admin
-			.from('run_photos')
-			.select('id', { count: 'exact', head: true })
-			.eq('run_id', runId);
+		const count = await readCount(
+			'run_photos by run_id',
+			admin
+				.from('run_photos')
+				.select('id', { count: 'exact', head: true })
+				.eq('run_id', runId)
+		);
 		expect(count).toBe(0);
 	});
 

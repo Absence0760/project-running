@@ -5,7 +5,7 @@ import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 import type { TrackPoint } from '../../src/lib/types';
-import { readRows } from '../fixtures/db-read';
+import { readMaybeRow, readRow, readRows } from '../fixtures/db-read';
 
 /**
  * /runs/[id] — owner-only run detail page.
@@ -200,11 +200,14 @@ test.describe('/runs/[id]', () => {
 		const adminCheck = await import('../fixtures/local-supabase').then((m) =>
 			m.getAdminClient()
 		);
-		const { data: stillThere } = await adminCheck
-			.from('runs')
-			.select('id')
-			.eq('id', planted)
-			.maybeSingle();
+		const stillThere = await readMaybeRow(
+			'runs by id',
+			adminCheck
+				.from('runs')
+				.select('id')
+				.eq('id', planted)
+				.maybeSingle()
+		);
 		expect(stillThere).toBeNull();
 	});
 
@@ -255,12 +258,15 @@ test.describe('/runs/[id]', () => {
 
 			// Backend assertion: runs.is_public flipped.
 			const admin = getAdminClient();
-			const { data: row } = await admin
-				.from('runs')
-				.select('is_public')
-				.eq('id', planted)
-				.single();
-			expect(row?.is_public).toBe(true);
+			const row = await readRow(
+				'runs by id',
+				admin
+					.from('runs')
+					.select('is_public')
+					.eq('id', planted)
+					.single()
+			);
+			expect(row.is_public).toBe(true);
 
 			// Anon /share/run/[id] now resolves (vs the 404 it would
 			// have hit while is_public=false). Use a fresh anon context
@@ -318,12 +324,15 @@ test.describe('/runs/[id]', () => {
 
 			// is_public must STILL be false after cancel.
 			const admin = getAdminClient();
-			const { data: row } = await admin
-				.from('runs')
-				.select('is_public')
-				.eq('id', planted)
-				.single();
-			expect(row?.is_public).toBe(false);
+			const row = await readRow(
+				'runs by id',
+				admin
+					.from('runs')
+					.select('is_public')
+					.eq('id', planted)
+					.single()
+			);
+			expect(row.is_public).toBe(false);
 
 			// No success toast either — the share never happened.
 			await expect(
@@ -375,12 +384,15 @@ test.describe('/runs/[id]', () => {
 
 			// Backend: runs.is_public flipped off.
 			const admin = getAdminClient();
-			const { data: row } = await admin
-				.from('runs')
-				.select('is_public')
-				.eq('id', planted)
-				.single();
-			expect(row?.is_public).toBe(false);
+			const row = await readRow(
+				'runs by id',
+				admin
+					.from('runs')
+					.select('is_public')
+					.eq('id', planted)
+					.single()
+			);
+			expect(row.is_public).toBe(false);
 
 			// Anon /share/run/[id] no longer resolves — the whole point
 			// of the revoke. Fresh anon context so we don't carry auth.
@@ -424,12 +436,15 @@ test.describe('/runs/[id]', () => {
 			await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 
 			const admin = getAdminClient();
-			const { data: row } = await admin
-				.from('runs')
-				.select('is_public')
-				.eq('id', planted)
-				.single();
-			expect(row?.is_public).toBe(true);
+			const row = await readRow(
+				'runs by id',
+				admin
+					.from('runs')
+					.select('is_public')
+					.eq('id', planted)
+					.single()
+			);
+			expect(row.is_public).toBe(true);
 
 			await expect(
 				page.locator('.toast', { hasText: /Run is now private/ })

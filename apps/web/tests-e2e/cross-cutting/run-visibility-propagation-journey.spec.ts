@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
+import { readMaybeRow } from '../fixtures/db-read';
 import {
 	insertRun,
 	deleteRun,
@@ -162,11 +163,14 @@ test.describe('run visibility (public/private) propagation across surfaces', () 
 		await test.step('anon public_runs read returns nothing for the private run', async () => {
 			// The wire-level gate every non-owner surface sits on top of.
 			const anon = createClient(url, anonKey, { auth: { persistSession: false } });
-			const { data } = await anon
-				.from('public_runs')
-				.select('id')
-				.eq('id', runId!)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'public_runs by id',
+				anon
+					.from('public_runs')
+					.select('id')
+					.eq('id', runId!)
+					.maybeSingle()
+			);
 			expect(data).toBeNull();
 		});
 
@@ -263,11 +267,14 @@ test.describe('run visibility (public/private) propagation across surfaces', () 
 
 		await test.step('public_runs now returns the run (wire-level confirmation of the flip)', async () => {
 			const anon = createClient(url, anonKey, { auth: { persistSession: false } });
-			const { data } = await anon
-				.from('public_runs')
-				.select('id, is_public')
-				.eq('id', runId!)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'public_runs by id',
+				anon
+					.from('public_runs')
+					.select('id, is_public')
+					.eq('id', runId!)
+					.maybeSingle()
+			);
 			expect(data?.id).toBe(runId);
 		});
 
@@ -349,11 +356,14 @@ test.describe('run visibility (public/private) propagation across surfaces', () 
 			expect(error).toBeNull();
 			// Confirm the gate closed at the wire.
 			const anon = createClient(url, anonKey, { auth: { persistSession: false } });
-			const { data } = await anon
-				.from('public_runs')
-				.select('id')
-				.eq('id', runId!)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'public_runs by id',
+				anon
+					.from('public_runs')
+					.select('id')
+					.eq('id', runId!)
+					.maybeSingle()
+			);
 			expect(data).toBeNull();
 		});
 

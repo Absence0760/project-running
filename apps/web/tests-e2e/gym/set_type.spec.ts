@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * gym_sets.set_type — the per-LOGGED-set role (warmup / working / dropset /
@@ -44,22 +45,28 @@ test.describe('/gym — logged set_type', () => {
 		const row = page.locator('.workout-row', { hasText: title });
 		await expect(row).toBeVisible({ timeout: 10_000 });
 
-		const { data: created } = await admin
-			.from('gym_workouts')
-			.select('id')
-			.eq('user_id', USER_A.id)
-			.eq('title', title);
-		expect(created?.length).toBe(1);
+		const created = await readRows(
+			'gym_workouts by user_id+title',
+			admin
+				.from('gym_workouts')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(created.length).toBe(1);
 		const workoutId = created![0].id as string;
 
 		try {
 			// Persisted set_type values, in set_index order.
-			const { data: sets } = await admin
-				.from('gym_sets')
-				.select('set_index, set_type')
-				.eq('workout_id', workoutId)
-				.order('set_index', { ascending: true });
-			expect(sets?.map((s) => s.set_type)).toEqual(['warmup', 'working']);
+			const sets = await readRows(
+				'gym_sets by workout_id',
+				admin
+					.from('gym_sets')
+					.select('set_index, set_type')
+					.eq('workout_id', workoutId)
+					.order('set_index', { ascending: true })
+			);
+			expect(sets.map((s) => s.set_type)).toEqual(['warmup', 'working']);
 
 			// Detail: the warmup set shows a chip; the working set shows none.
 			await page.goto(`/gym/${workoutId}`);

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteClub } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug] — admin edits the club's website + social links
@@ -65,12 +66,15 @@ test.describe('/clubs/[slug] — club links', () => {
 		await expect(page.getByRole('link', { name: 'Instagram' })).toHaveCount(0);
 
 		// And it never reached the database.
-		const { data } = await getAdminClient()
-			.from('clubs')
-			.select('instagram_url, website_url')
-			.eq('id', club.id)
-			.single();
-		expect(data?.website_url).toBe('https://example.com');
-		expect(data?.instagram_url).toBeNull();
+		const data = await readRow(
+			'clubs by id',
+			getAdminClient()
+				.from('clubs')
+				.select('instagram_url, website_url')
+				.eq('id', club.id)
+				.single()
+		);
+		expect(data.website_url).toBe('https://example.com');
+		expect(data.instagram_url).toBeNull();
 	});
 });

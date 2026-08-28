@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { USER_A } from '../fixtures/users';
 import { getAdminClient } from '../fixtures/local-supabase';
+import { readMaybeRow, readRow } from '../fixtures/db-read';
 
 /**
  * /onboarding — post-signup wizard.
@@ -141,12 +142,15 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		// Verify `onboarded_at` was actually written, not just a
 		// client-side navigation.
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('user_profiles')
-			.select('onboarded_at')
-			.eq('id', USER_A.id)
-			.maybeSingle();
-		expect(data?.onboarded_at).not.toBeNull();
+		const data = await readRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('onboarded_at')
+				.eq('id', USER_A.id)
+				.maybeSingle()
+		);
+		expect(data.onboarded_at).not.toBeNull();
 	});
 
 	test('step-by-step Continue flow writes the answers and exits to /dashboard', async ({
@@ -234,20 +238,26 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 
 		// Verify the writes landed.
 		const admin = getAdminClient();
-		const { data: profile } = await admin
-			.from('user_profiles')
-			.select('display_name, preferred_unit, onboarded_at')
-			.eq('id', USER_A.id)
-			.maybeSingle();
-		expect(profile?.display_name).toBe('E2E Onboarded');
-		expect(profile?.preferred_unit).toBe('mi');
-		expect(profile?.onboarded_at).not.toBeNull();
+		const profile = await readRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('display_name, preferred_unit, onboarded_at')
+				.eq('id', USER_A.id)
+				.maybeSingle()
+		);
+		expect(profile.display_name).toBe('E2E Onboarded');
+		expect(profile.preferred_unit).toBe('mi');
+		expect(profile.onboarded_at).not.toBeNull();
 
-		const { data: settings } = await admin
-			.from('user_settings')
-			.select('prefs')
-			.eq('user_id', USER_A.id)
-			.maybeSingle();
+		const settings = await readMaybeRow(
+			'user_settings by user_id',
+			admin
+				.from('user_settings')
+				.select('prefs')
+				.eq('user_id', USER_A.id)
+				.maybeSingle()
+		);
 		const p = (settings?.prefs ?? {}) as Record<string, unknown>;
 		expect(p.preferred_unit).toBe('mi');
 		expect(p.primary_goal).toBe('10k');
@@ -311,11 +321,14 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
 
 		const admin = getAdminClient();
-		const { data: settings } = await admin
-			.from('user_settings')
-			.select('prefs')
-			.eq('user_id', USER_A.id)
-			.maybeSingle();
+		const settings = await readMaybeRow(
+			'user_settings by user_id',
+			admin
+				.from('user_settings')
+				.select('prefs')
+				.eq('user_id', USER_A.id)
+				.maybeSingle()
+		);
 		const p = (settings?.prefs ?? {}) as Record<string, unknown>;
 		// The chosen distance unit propagated to the weight_unit pref…
 		expect(p.weight_unit).toBe('lbs');
@@ -363,11 +376,14 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
 
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('user_profiles')
-			.select('date_of_birth, health_data_consent_at, gender')
-			.eq('id', USER_A.id)
-			.maybeSingle();
+		const data = await readMaybeRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('date_of_birth, health_data_consent_at, gender')
+				.eq('id', USER_A.id)
+				.maybeSingle()
+		);
 		// DOB persisted despite no consent — the safety floor has its input.
 		expect(data?.date_of_birth).toBe('2010-06-15');
 		// Art 9 fields stay null without the consent tick.
@@ -428,11 +444,14 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
 
 		const admin = getAdminClient();
-		const { data: settings } = await admin
-			.from('user_settings')
-			.select('prefs')
-			.eq('user_id', USER_A.id)
-			.maybeSingle();
+		const settings = await readMaybeRow(
+			'user_settings by user_id',
+			admin
+				.from('user_settings')
+				.select('prefs')
+				.eq('user_id', USER_A.id)
+				.maybeSingle()
+		);
 		const p = (settings?.prefs ?? {}) as Record<string, unknown>;
 		expect(p.body_weight_kg).toBe(70);
 	});
@@ -465,12 +484,15 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 
 		// The stamp landed server-side — the layout gate's input.
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('user_profiles')
-			.select('onboarded_at')
-			.eq('id', USER_A.id)
-			.maybeSingle();
-		expect(data?.onboarded_at).not.toBeNull();
+		const data = await readRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('onboarded_at')
+				.eq('id', USER_A.id)
+				.maybeSingle()
+		);
+		expect(data.onboarded_at).not.toBeNull();
 
 		// A fresh load of a protected route stays put — no bounce back to
 		// the wizard's step 1.

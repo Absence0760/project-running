@@ -8,6 +8,7 @@ import {
 	type SagaUser,
 } from '../fixtures/saga-users';
 import { insertComment, insertKudos, insertRun } from '../fixtures/simulate';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Account data-rights JOURNEY — the GDPR cradle-to-grave arc for a user
@@ -207,12 +208,15 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 			// role, only RLS is). No manual insert (which dup-keys the
 			// trigger's row); confirm the membership row the cascade assertion
 			// needs is present.
-			const { data: memberRow } = await admin
-				.from('club_members')
-				.select('user_id')
-				.eq('club_id', clubId)
-				.eq('user_id', user.id)
-				.maybeSingle();
+			const memberRow = await readMaybeRow(
+				'club_members by club_id+user_id',
+				admin
+					.from('club_members')
+					.select('user_id')
+					.eq('club_id', clubId)
+					.eq('user_id', user.id)
+					.maybeSingle()
+			);
 			expect(memberRow, 'club owner membership row must exist').not.toBeNull();
 
 			// 6) Engagement the subject AUTHORED: a kudos + a comment on the
@@ -237,17 +241,21 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 			// Confirm the planted state via service-role BEFORE the rights
 			// flows, so a later "it's gone" assertion is "I had X, now I
 			// don't" rather than "did X ever exist?".
-			const runBefore = await admin
-				.from('runs')
-				.select('id')
-				.eq('id', plantedRunId)
-				.maybeSingle();
-			expect(runBefore.data?.id).toBe(plantedRunId);
-			const trackBefore = await admin.storage
-				.from('runs')
-				.list(user.id, { search: plantedRunId });
+			const runBefore = await readMaybeRow(
+				'runs by id',
+				admin
+					.from('runs')
+					.select('id')
+					.eq('id', plantedRunId)
+					.maybeSingle()
+			);
+			expect(runBefore?.id).toBe(plantedRunId);
+			const trackBefore = await readRows(
+				'runs Storage objects under the subject prefix',
+				admin.storage.from('runs').list(user.id, { search: plantedRunId })
+			);
 			expect(
-				trackBefore.data?.find((f) => f.name.startsWith(plantedRunId!)),
+				trackBefore.find((f) => f.name.startsWith(plantedRunId!)),
 			).toBeDefined();
 		});
 
@@ -447,8 +455,16 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 
 		await test.step('erasure is complete across every modality + Storage + audit', async () => {
 			// auth row gone.
-			const { data: authUser } = await admin.auth.admin.getUserById(user.id);
-			expect(authUser?.user, 'auth.users row must be gone').toBeNull();
+		// GoTrue answers a deleted user with a 404 rather than a null row, so
+			// this read's error IS part of the answer — but only that one error is.
+			const goneUser = await admin.auth.admin.getUserById(user.id);
+			if (goneUser.error) {
+				expect(
+					goneUser.error.status,
+					'the auth.users read failed for a reason other than the row being gone'
+				).toBe(404);
+			}
+			expect(goneUser.data?.user ?? null, 'auth.users row must be gone').toBeNull();
 
 			// Each query is service-role so RLS can't mask a surviving row.
 			// A non-empty result here is a real Art 17 erasure gap.
@@ -463,9 +479,12 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 				{ table: 'user_profiles', col: 'id', label: 'user_profiles (identity)' },
 			];
 			for (const { table, col, label } of tables) {
-				const { data } = await admin.from(table).select(col).eq(col, user.id);
+				const data = await readRows(
+					`${table} by ${col}`,
+					admin.from(table).select(col).eq(col, user.id)
+				);
 				expect(
-					data ?? [],
+					data,
 					`${label} must cascade away on auth.users delete`,
 				).toEqual([]);
 			}
@@ -476,12 +495,15 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 			// the orphan level: every set whose workout no longer exists is
 			// itself gone). The parent gym_workouts assertion above already
 			// proves the workouts are gone; this guards the deeper cascade.
-			const orphanSets = await admin
-				.from('gym_sets')
-				.select('id, workout_id')
-				.is('workout_id', null);
+			const orphanSets = await readRows(
+				'gym_sets by workout_id',
+				admin
+					.from('gym_sets')
+					.select('id, workout_id')
+					.is('workout_id', null)
+			);
 			expect(
-				orphanSets.data ?? [],
+				orphanSets,
 				'no gym_sets may be orphaned by the workout cascade',
 			).toEqual([]);
 
@@ -490,33 +512,38 @@ test.describe('saga: account data-rights cradle-to-grave (export → delete)', (
 			// export blob lives under {user.id}/exports/ — the recursive
 			// deletePrefix walk is the only thing that reaps it (a flat
 			// list().remove() would leak it; audit/storage Pass-3).
-			const trackList = await admin.storage
-				.from('runs')
-				.list(user.id, { search: plantedRunId! });
+			const trackList = await readRows(
+				'runs Storage objects under the subject prefix',
+				admin.storage.from('runs').list(user.id, { search: plantedRunId! })
+			);
 			expect(
-				trackList.data?.find((f) => f.name.startsWith(plantedRunId!)),
+				trackList.find((f) => f.name.startsWith(plantedRunId!)),
 				'gzipped track must be drained from the runs Storage bucket',
 			).toBeUndefined();
-			const exportList = await admin.storage
-				.from('runs')
-				.list(`${user.id}/exports`);
+			const exportList = await readRows(
+				'runs Storage objects under the subject exports prefix',
+				admin.storage.from('runs').list(`${user.id}/exports`)
+			);
 			// An empty/absent prefix returns [] (or a not-found error data:null);
 			// either way there must be no surviving export blob.
 			expect(
-				exportList.data ?? [],
+				exportList,
 				'the export blob under {user}/exports must be drained (recursive walk)',
 			).toEqual([]);
 
 			// Audit trail: the deletion is recorded as result='ok' under the
 			// pseudonymous (legacy salted) hash of the user id. This is the
 			// Art 5(2) accountability evidence the regulator reads.
-			const auditRow = await admin
-				.from('deletion_audit_log')
-				.select('result')
-				.eq('hashed_user_id', legacyAuditHash(user.id))
-				.maybeSingle();
+			const auditRow = await readMaybeRow(
+				'deletion_audit_log by hashed_user_id',
+				admin
+					.from('deletion_audit_log')
+					.select('result')
+					.eq('hashed_user_id', legacyAuditHash(user.id))
+					.maybeSingle()
+			);
 			expect(
-				auditRow.data?.result,
+				auditRow?.result,
 				'deletion must be audited as result="ok" (Art 5(2) accountability)',
 			).toBe('ok');
 

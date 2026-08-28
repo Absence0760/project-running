@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /sessions/[id] — the "couldn't save your session" retry must log the session
@@ -114,11 +115,14 @@ test.describe('/sessions/[id] — save-retry double submit', () => {
 		await expect(banner).toHaveCount(0, { timeout: 20_000 });
 
 		const admin = getAdminClient();
-		const { data } = await admin
-			.from('gym_workouts')
-			.select('id, metadata')
-			.eq('user_id', USER_A.id);
-		const logged = ((data ?? []) as { id: string; metadata: Record<string, unknown> }[]).filter(
+		const data = await readRows(
+			'gym_workouts by user_id',
+			admin
+				.from('gym_workouts')
+				.select('id, metadata')
+				.eq('user_id', USER_A.id)
+		);
+		const logged = (data as { id: string; metadata: Record<string, unknown> }[]).filter(
 			(w) => w.metadata?.session_plan_id === plan.id
 		);
 		expect(logged).toHaveLength(1);

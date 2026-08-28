@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { USER_C_PRO } from '../fixtures/users';
+import { readCount, readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Invite-token redemption security — the `join_club_by_token` RPC
@@ -72,11 +73,14 @@ test.describe('invite-token redemption — failure + cross-club isolation', () =
 		// No membership row was created on ANY club for morgan from the
 		// failed redemption.
 		const admin = getAdminClient();
-		const { count } = await admin
-			.from('club_members')
-			.select('user_id', { count: 'exact', head: true })
-			.eq('user_id', USER_C_PRO.id)
-			.in('club_id', [FRIENDS_OF_JARED_ID, TEMPO_TUESDAY_ID]);
+		const count = await readCount(
+			'club_members by user_id+club_id',
+			admin
+				.from('club_members')
+				.select('user_id', { count: 'exact', head: true })
+				.eq('user_id', USER_C_PRO.id)
+				.in('club_id', [FRIENDS_OF_JARED_ID, TEMPO_TUESDAY_ID])
+		);
 		expect(count).toBe(0);
 	});
 
@@ -95,21 +99,27 @@ test.describe('invite-token redemption — failure + cross-club isolation', () =
 		expect(joinedClub).toBe(FRIENDS_OF_JARED_ID);
 
 		const admin = getAdminClient();
-		const { data: fojRow } = await admin
-			.from('club_members')
-			.select('status')
-			.eq('club_id', FRIENDS_OF_JARED_ID)
-			.eq('user_id', USER_C_PRO.id)
-			.maybeSingle();
+		const fojRow = await readMaybeRow(
+			'club_members by club_id+user_id',
+			admin
+				.from('club_members')
+				.select('status')
+				.eq('club_id', FRIENDS_OF_JARED_ID)
+				.eq('user_id', USER_C_PRO.id)
+				.maybeSingle()
+		);
 		expect(fojRow?.status).toBe('active');
 
 		// Crucially: no membership leaked into the OTHER club.
-		const { data: tempoRow } = await admin
-			.from('club_members')
-			.select('user_id')
-			.eq('club_id', TEMPO_TUESDAY_ID)
-			.eq('user_id', USER_C_PRO.id)
-			.maybeSingle();
+		const tempoRow = await readMaybeRow(
+			'club_members by club_id+user_id',
+			admin
+				.from('club_members')
+				.select('user_id')
+				.eq('club_id', TEMPO_TUESDAY_ID)
+				.eq('user_id', USER_C_PRO.id)
+				.maybeSingle()
+		);
 		expect(tempoRow).toBeNull();
 	});
 
@@ -125,11 +135,14 @@ test.describe('invite-token redemption — failure + cross-club isolation', () =
 		// Belt-and-braces: confirm via service-role that no anon-attributed
 		// row was created (auth.uid() is null, so nothing could insert).
 		const admin = getAdminClient();
-		const { count } = await admin
-			.from('club_members')
-			.select('user_id', { count: 'exact', head: true })
-			.eq('club_id', FRIENDS_OF_JARED_ID)
-			.eq('user_id', USER_C_PRO.id);
+		const count = await readCount(
+			'club_members by club_id+user_id',
+			admin
+				.from('club_members')
+				.select('user_id', { count: 'exact', head: true })
+				.eq('club_id', FRIENDS_OF_JARED_ID)
+				.eq('user_id', USER_C_PRO.id)
+		);
 		expect(count).toBe(0);
 	});
 });

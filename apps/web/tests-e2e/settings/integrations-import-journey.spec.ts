@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { switchRunsToAllTime } from '../fixtures/helpers';
 import { USER_A } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readCount, readRows } from '../fixtures/db-read';
 
 /**
  * Third-party-import journey — the full life of a single imported
@@ -297,11 +297,14 @@ test.describe('third-party import journey', () => {
 
 				// Backend: the dedupe held — exactly one row for the key,
 				// not two. This is THE contract this journey exists to thread.
-				const { count } = await admin
-					.from('runs')
-					.select('*', { count: 'exact', head: true })
-					.eq('user_id', USER_A.id)
-					.eq('external_id', externalId);
+				const count = await readCount(
+					'runs by user_id+external_id',
+					admin
+						.from('runs')
+						.select('*', { count: 'exact', head: true })
+						.eq('user_id', USER_A.id)
+						.eq('external_id', externalId)
+				);
 				expect(count).toBe(1);
 			});
 

@@ -10,6 +10,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readCount } from '../fixtures/db-read';
 
 /**
  * /u/[me]?tab=notifications — full inbox surface.
@@ -291,10 +292,13 @@ test.describe('/u/[me]?tab=notifications — undo a dismiss', () => {
 
 		// Asserted AFTER the undo so it cannot race the window: the delete
 		// was never performed, so there is nothing for the restore to fake.
-		const { count } = await admin
-			.from('notifications')
-			.select('*', { count: 'exact', head: true })
-			.eq('user_id', USER_A.id);
+		const count = await readCount(
+			'notifications by user_id',
+			admin
+				.from('notifications')
+				.select('*', { count: 'exact', head: true })
+				.eq('user_id', USER_A.id)
+		);
 		expect(count).toBe(1);
 	});
 
@@ -324,10 +328,13 @@ test.describe('/u/[me]?tab=notifications — undo a dismiss', () => {
 		await expect(groups).toHaveCount(1, { timeout: 5_000 });
 		await expect(groups.first()).toContainText('and 1 other');
 
-		const { count } = await admin
-			.from('notifications')
-			.select('*', { count: 'exact', head: true })
-			.eq('user_id', USER_A.id);
+		const count = await readCount(
+			'notifications by user_id',
+			admin
+				.from('notifications')
+				.select('*', { count: 'exact', head: true })
+				.eq('user_id', USER_A.id)
+		);
 		expect(count).toBe(2);
 	});
 

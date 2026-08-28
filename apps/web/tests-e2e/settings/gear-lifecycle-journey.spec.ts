@@ -99,15 +99,18 @@ test.describe('gear lifecycle journey', () => {
 
 				// Capture the id for the picker step + teardown. It must be
 				// non-default so the auto-tag trigger leaves new runs alone.
-				const { data: created } = await admin
-					.from('gear')
-					.select('id, is_default, target_distance_m')
-					.eq('owner_id', USER_A.id)
-					.eq('name', shoeName)
-					.single();
-				gearId = created!.id;
-				expect(created?.is_default).toBe(false);
-				expect(created?.target_distance_m).toBe(500_000);
+				const created = await readRow(
+					'gear by owner_id+name',
+					admin
+						.from('gear')
+						.select('id, is_default, target_distance_m')
+						.eq('owner_id', USER_A.id)
+						.eq('name', shoeName)
+						.single()
+				);
+				gearId = created.id;
+				expect(created.is_default).toBe(false);
+				expect(created.target_distance_m).toBe(500_000);
 			});
 
 			// ── 2 + 3. Tag the pair onto a fresh run via the picker ─────
@@ -203,12 +206,15 @@ test.describe('gear lifecycle journey', () => {
 				).toBeVisible();
 
 				// Backend: retired_at is now set.
-				const { data: g } = await admin
-					.from('gear')
-					.select('retired_at')
-					.eq('id', gearId)
-					.single();
-				expect(g?.retired_at).not.toBeNull();
+				const g = await readRow(
+					'gear by id',
+					admin
+						.from('gear')
+						.select('retired_at')
+						.eq('id', gearId)
+						.single()
+				);
+				expect(g.retired_at).not.toBeNull();
 
 				// The run-detail picker filters `!retired_at`, so a retired pair
 				// can't be tagged onto a NEW run. Open the picker on our run and

@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /clubs/[slug]/events/[id] — event detail + per-instance RSVP +
@@ -101,13 +102,16 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		await expect(declineBtn).toHaveClass(/active/, { timeout: 10_000 });
 
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('event_attendees')
-			.select('status, instance_start')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_A.id);
-		expect(rows?.length).toBe(1);
-		expect(rows?.[0]?.status).toBe('declined');
+		const rows = await readRows(
+			'event_attendees by event_id+user_id',
+			admin
+				.from('event_attendees')
+				.select('status, instance_start')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_A.id)
+		);
+		expect(rows.length).toBe(1);
+		expect(rows[0]?.status).toBe('declined');
 
 		await admin.from('event_attendees')
 			.delete()
@@ -168,14 +172,17 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		}, { timeout: 10_000 }).toBe(3);
 
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('event_attendees')
-			.select('status, instance_start')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_A.id)
-			.order('instance_start', { ascending: true });
-		expect(rows?.map((r) => r.status)).toEqual(['going', 'maybe', 'declined']);
-		const distinctInstances = new Set(rows?.map((r) => r.instance_start));
+		const rows = await readRows(
+			'event_attendees by event_id+user_id',
+			admin
+				.from('event_attendees')
+				.select('status, instance_start')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_A.id)
+				.order('instance_start', { ascending: true })
+		);
+		expect(rows.map((r) => r.status)).toEqual(['going', 'maybe', 'declined']);
+		const distinctInstances = new Set(rows.map((r) => r.instance_start));
 		expect(distinctInstances.size).toBe(3);
 
 		await page.reload();
@@ -240,15 +247,18 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		await expect(page.locator('.result.me')).toBeVisible({ timeout: 10_000 });
 
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('event_results')
-			.select('user_id, finisher_status, run_id, duration_s, distance_m')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_A.id);
-		expect(rows?.length).toBe(1);
-		expect(rows?.[0]?.finisher_status).toBe('finished');
-		expect(rows?.[0]?.run_id).not.toBeNull();
-		expect(rows?.[0]?.duration_s).toBeGreaterThan(0);
+		const rows = await readRows(
+			'event_results by event_id+user_id',
+			admin
+				.from('event_results')
+				.select('user_id, finisher_status, run_id, duration_s, distance_m')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_A.id)
+		);
+		expect(rows.length).toBe(1);
+		expect(rows[0]?.finisher_status).toBe('finished');
+		expect(rows[0]?.run_id).not.toBeNull();
+		expect(rows[0]?.duration_s).toBeGreaterThan(0);
 
 		await admin
 			.from('event_results')
@@ -283,14 +293,17 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		});
 
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('event_results')
-			.select('finisher_status, duration_s, distance_m, run_id')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_A.id);
-		expect(rows?.length).toBe(1);
-		expect(rows?.[0]?.finisher_status).toBe('dnf');
-		expect(rows?.[0]?.duration_s).toBe(0);
+		const rows = await readRows(
+			'event_results by event_id+user_id',
+			admin
+				.from('event_results')
+				.select('finisher_status, duration_s, distance_m, run_id')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_A.id)
+		);
+		expect(rows.length).toBe(1);
+		expect(rows[0]?.finisher_status).toBe('dnf');
+		expect(rows[0]?.duration_s).toBe(0);
 
 		await admin
 			.from('event_results')
@@ -327,13 +340,16 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 		await expect(post.locator('.when')).toBeVisible();
 
 		const admin = getAdminClient();
-		const { data: rows } = await admin
-			.from('club_posts')
-			.select('body, event_id, author_id')
-			.eq('event_id', eventId)
-			.eq('body', body);
-		expect(rows?.length).toBe(1);
-		expect(rows?.[0]?.author_id).toBe(USER_A.id);
+		const rows = await readRows(
+			'club_posts by event_id+body',
+			admin
+				.from('club_posts')
+				.select('body, event_id, author_id')
+				.eq('event_id', eventId)
+				.eq('body', body)
+		);
+		expect(rows.length).toBe(1);
+		expect(rows[0]?.author_id).toBe(USER_A.id);
 
 		await admin.from('club_posts').delete().eq('event_id', eventId);
 	});

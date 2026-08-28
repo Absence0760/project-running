@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { createClient } from '@supabase/supabase-js';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Wire-format pin for migration 20260801_001_clubs_invite_token_lockdown.sql.
@@ -64,9 +65,12 @@ test.describe('clubs.invite_token wire-format lockdown', () => {
 			auth: { persistSession: false, autoRefreshToken: false }
 		});
 
-		const { data } = await anon.rpc('get_club_invite_token', {
-			target_club: FRIENDS_OF_JARED_ID
-		});
+		const data = await readMaybeRow(
+			'the get_club_invite_token() rpc',
+			anon.rpc('get_club_invite_token', {
+				target_club: FRIENDS_OF_JARED_ID
+			})
+		);
 
 		// The function is SECURITY DEFINER with an `is_club_admin`
 		// gate. For anon, `auth.uid() is null`, the gate is false, and

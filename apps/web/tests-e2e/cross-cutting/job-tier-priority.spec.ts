@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * Tier-aware job scheduling — Pro / lifetime users jump the
@@ -232,18 +233,21 @@ test.describe('jobs queue — Pro tier jumps the line', () => {
 			);
 			expect(rerrM).toBeNull();
 
-			const { data: rows } = await admin
-				.from('jobs')
-				.select('payload, scheduled_at')
-				.eq('kind', 'map_match')
-				.eq('status', 'queued')
-				.in('payload->>run_id', [runnerRunId, morganRunId]);
-			expect(rows?.length).toBe(2);
+			const rows = await readRows(
+				'jobs by kind+status+payload->>run_id',
+				admin
+					.from('jobs')
+					.select('payload, scheduled_at')
+					.eq('kind', 'map_match')
+					.eq('status', 'queued')
+					.in('payload->>run_id', [runnerRunId, morganRunId])
+			);
+			expect(rows.length).toBe(2);
 
-			const runnerJob = rows?.find(
+			const runnerJob = rows.find(
 				(r) => (r.payload as { run_id: string }).run_id === runnerRunId
 			);
-			const morganJob = rows?.find(
+			const morganJob = rows.find(
 				(r) => (r.payload as { run_id: string }).run_id === morganRunId
 			);
 			const gap =

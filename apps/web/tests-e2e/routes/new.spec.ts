@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient, resetRateLimit } from '../fixtures/local-supabase';
 import { deleteRoute } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * /routes/new — Save-Route round-trip.
@@ -87,11 +88,14 @@ test.describe('/routes/new — save round-trip', () => {
 		await expect(page.locator('.btn', { hasText: 'Public' })).toBeVisible();
 
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('routes')
-			.select('id, name, description, is_public, user_id')
-			.eq('id', plantedRouteId)
-			.single();
+		const row = await readMaybeRow(
+			'routes by id',
+			admin
+				.from('routes')
+				.select('id, name, description, is_public, user_id')
+				.eq('id', plantedRouteId)
+				.single()
+		);
 		expect(row).not.toBeNull();
 		expect(row!.name).toBe(uniqueName);
 		expect(row!.description).toBe(description);

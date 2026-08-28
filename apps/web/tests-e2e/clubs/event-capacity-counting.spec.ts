@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Event capacity headcount semantics (migration 20261018_001).
@@ -71,14 +72,17 @@ test.describe('/clubs/[slug]/events/[id] — capacity headcount', () => {
 			timeout: 10_000
 		});
 
-		const { data } = await admin
-			.from('event_attendees')
-			.select('status')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_A.id)
-			.eq('instance_start', INSTANCE)
-			.single();
-		expect(data?.status).toBe('going');
+		const data = await readRow(
+			'event_attendees by event_id+user_id+instance_start',
+			admin
+				.from('event_attendees')
+				.select('status')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_A.id)
+				.eq('instance_start', INSTANCE)
+				.single()
+		);
+		expect(data.status).toBe('going');
 	});
 
 	test('downgrading the sole going attendee to maybe frees the capped seat', async ({ page }) => {
@@ -124,13 +128,16 @@ test.describe('/clubs/[slug]/events/[id] — capacity headcount', () => {
 			status: 'going',
 			instance_start: INSTANCE
 		});
-		const { data: bRow } = await admin
-			.from('event_attendees')
-			.select('status')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_B.id)
-			.eq('instance_start', INSTANCE)
-			.single();
-		expect(bRow?.status).toBe('going');
+		const bRow = await readRow(
+			'event_attendees by event_id+user_id+instance_start',
+			admin
+				.from('event_attendees')
+				.select('status')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_B.id)
+				.eq('instance_start', INSTANCE)
+				.single()
+		);
+		expect(bRow.status).toBe('going');
 	});
 });

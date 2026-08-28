@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * `BillingIssueBanner` — global "Update your card" banner mounted on
@@ -136,13 +137,16 @@ test.describe('BillingIssueBanner — global grace-period surface', () => {
 		// Confirm via service-role: the flag is still set. Postgres
 		// returns timestamps in `+00:00` ISO form; compare as Date to
 		// be format-agnostic.
-		const { data: row } = await admin
-			.from('user_profiles')
-			.select('billing_issue_at')
-			.eq('id', USER_C_PRO.id)
-			.single();
-		expect(row?.billing_issue_at).toBeTruthy();
-		expect(new Date(row?.billing_issue_at as string).toISOString()).toBe(
+		const row = await readRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('billing_issue_at')
+				.eq('id', USER_C_PRO.id)
+				.single()
+		);
+		expect(row.billing_issue_at).toBeTruthy();
+		expect(new Date(row.billing_issue_at as string).toISOString()).toBe(
 			oneHourAgo
 		);
 	});

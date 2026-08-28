@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Event capacity + waitlist (event-organizer persona #42, migration
@@ -65,14 +66,17 @@ test.describe('/clubs/[slug]/events/[id] — capacity + waitlist', () => {
 		await expect(page.getByText(/on waitlist/)).toBeVisible();
 
 		// Verify the persisted status, then free the slot by removing USER_B.
-		const { data: before } = await admin
-			.from('event_attendees')
-			.select('status')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_A.id)
-			.eq('instance_start', INSTANCE)
-			.single();
-		expect(before?.status).toBe('waitlisted');
+		const before = await readRow(
+			'event_attendees by event_id+user_id+instance_start',
+			admin
+				.from('event_attendees')
+				.select('status')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_A.id)
+				.eq('instance_start', INSTANCE)
+				.single()
+		);
+		expect(before.status).toBe('waitlisted');
 
 		await admin
 			.from('event_attendees')
@@ -82,14 +86,17 @@ test.describe('/clubs/[slug]/events/[id] — capacity + waitlist', () => {
 			.eq('instance_start', INSTANCE);
 
 		// The promote trigger should have flipped USER_A to going.
-		const { data: after } = await admin
-			.from('event_attendees')
-			.select('status')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_A.id)
-			.eq('instance_start', INSTANCE)
-			.single();
-		expect(after?.status).toBe('going');
+		const after = await readRow(
+			'event_attendees by event_id+user_id+instance_start',
+			admin
+				.from('event_attendees')
+				.select('status')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_A.id)
+				.eq('instance_start', INSTANCE)
+				.single()
+		);
+		expect(after.status).toBe('going');
 
 		// UI reflects the promotion after a reload.
 		await page.reload();

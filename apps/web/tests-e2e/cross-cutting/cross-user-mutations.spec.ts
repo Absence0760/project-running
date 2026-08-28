@@ -4,6 +4,7 @@ import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readCount, readMaybeRow, readRow } from '../fixtures/db-read';
 
 /**
  * Cross-user write boundary — UPDATE and DELETE attempts.
@@ -58,11 +59,14 @@ test.describe('cross-user mutation boundaries', () => {
 			expect((data as unknown[])?.length).toBe(0);
 		}
 
-		const { data: after } = await admin
-			.from('runs')
-			.select('distance_m')
-			.eq('id', RUNNER_PUBLIC_RUN_ID)
-			.single();
+		const after = await readRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('distance_m')
+				.eq('id', RUNNER_PUBLIC_RUN_ID)
+				.single()
+		);
 		expect((after as { distance_m: number }).distance_m).toBe(beforeDistance);
 	});
 
@@ -90,11 +94,14 @@ test.describe('cross-user mutation boundaries', () => {
 			}
 
 			// Row still there.
-			const { data: row } = await admin
-				.from('runs')
-				.select('id')
-				.eq('id', planted)
-				.maybeSingle();
+			const row = await readMaybeRow(
+				'runs by id',
+				admin
+					.from('runs')
+					.select('id')
+					.eq('id', planted)
+					.maybeSingle()
+			);
 			expect(row).not.toBeNull();
 		} finally {
 			await deleteRun(planted);
@@ -132,11 +139,14 @@ test.describe('cross-user mutation boundaries', () => {
 			expect((data as unknown[])?.length).toBe(0);
 		}
 
-		const { data: after } = await admin
-			.from('routes')
-			.select('is_starred')
-			.eq('id', r.id)
-			.single();
+		const after = await readRow(
+			'routes by id',
+			admin
+				.from('routes')
+				.select('is_starred')
+				.eq('id', r.id)
+				.single()
+		);
 		expect((after as { is_starred: boolean }).is_starred).toBe(beforeStarred);
 	});
 
@@ -171,11 +181,14 @@ test.describe('cross-user mutation boundaries', () => {
 				expect(error.code).not.toBe('00000');
 			}
 
-			const { data: row } = await admin
-				.from('run_comments')
-				.select('id')
-				.eq('id', commentId)
-				.maybeSingle();
+			const row = await readMaybeRow(
+				'run_comments by id',
+				admin
+					.from('run_comments')
+					.select('id')
+					.eq('id', commentId)
+					.maybeSingle()
+			);
 			expect(row).not.toBeNull();
 		} finally {
 			await admin.from('run_comments').delete().eq('id', commentId);
@@ -193,12 +206,15 @@ test.describe('cross-user mutation boundaries', () => {
 		const FRIENDS_CLUB_ID = 'c2222222-0000-0000-0000-000000000002';
 
 		// Sanity: morgan is not in this club (per seed).
-		const { data: membership } = await admin
-			.from('club_members')
-			.select('user_id')
-			.eq('club_id', FRIENDS_CLUB_ID)
-			.eq('user_id', USER_C_PRO.id)
-			.maybeSingle();
+		const membership = await readMaybeRow(
+			'club_members by club_id+user_id',
+			admin
+				.from('club_members')
+				.select('user_id')
+				.eq('club_id', FRIENDS_CLUB_ID)
+				.eq('user_id', USER_C_PRO.id)
+				.maybeSingle()
+		);
 		expect(membership).toBeNull();
 
 		const morgan = await getUserClient({
@@ -219,11 +235,14 @@ test.describe('cross-user mutation boundaries', () => {
 		expect(error?.code).toMatch(/^(42501|PGRST|P0001)/);
 
 		// Belt + braces: no row landed.
-		const { count } = await admin
-			.from('club_posts')
-			.select('id', { count: 'exact', head: true })
-			.eq('club_id', FRIENDS_CLUB_ID)
-			.eq('author_id', USER_C_PRO.id);
+		const count = await readCount(
+			'club_posts by club_id+author_id',
+			admin
+				.from('club_posts')
+				.select('id', { count: 'exact', head: true })
+				.eq('club_id', FRIENDS_CLUB_ID)
+				.eq('author_id', USER_C_PRO.id)
+		);
 		expect(count).toBe(0);
 	});
 
@@ -255,12 +274,15 @@ test.describe('cross-user mutation boundaries', () => {
 				expect(error.code).not.toBe('00000');
 			}
 
-			const { data: row } = await admin
-				.from('run_kudos')
-				.select('user_id')
-				.eq('run_id', RUNNER_PUBLIC_RUN_ID)
-				.eq('user_id', USER_A.id)
-				.maybeSingle();
+			const row = await readMaybeRow(
+				'run_kudos by run_id+user_id',
+				admin
+					.from('run_kudos')
+					.select('user_id')
+					.eq('run_id', RUNNER_PUBLIC_RUN_ID)
+					.eq('user_id', USER_A.id)
+					.maybeSingle()
+			);
 			expect(row).not.toBeNull();
 		} finally {
 			await admin

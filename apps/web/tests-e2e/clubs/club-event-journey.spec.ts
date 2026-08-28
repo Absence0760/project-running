@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient, resetRateLimit } from '../fixtures/local-supabase';
 import { deleteClub, insertRun } from '../fixtures/simulate';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Club-event journey — the full lifecycle of a brand-new club EVENT,
@@ -111,15 +112,18 @@ test.describe('club-event journey', () => {
 
 			slug = new URL(page.url()).pathname.split('/').pop()!;
 			const admin = getAdminClient();
-			const { data: clubRow } = await admin
-				.from('clubs')
-				.select('id, is_public')
-				.eq('slug', slug)
-				.single();
-			clubId = clubRow!.id as string;
+			const clubRow = await readRow(
+				'clubs by slug',
+				admin
+					.from('clubs')
+					.select('id, is_public')
+					.eq('slug', slug)
+					.single()
+			);
+			clubId = clubRow.id as string;
 			// The journey relies on the default open/public club so USER_C_PRO
 			// can SELECT (and therefore RSVP to) the event without joining.
-			expect(clubRow!.is_public).toBe(true);
+			expect(clubRow.is_public).toBe(true);
 		});
 
 		// ── 2. Create a dated one-off run event ───────────────────────

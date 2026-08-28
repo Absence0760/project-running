@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
 
@@ -75,15 +76,18 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		});
 
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('events')
-			.select('recurrence_freq, recurrence_byday, recurrence_until, title')
-			.eq('id', eventId)
-			.single();
-		expect(row?.recurrence_freq).toBe('weekly');
-		expect(row?.recurrence_byday).toEqual(expect.arrayContaining(['MO', 'WE', 'FR']));
-		expect(row?.recurrence_byday).toHaveLength(3);
-		expect(row?.recurrence_until).not.toBeNull();
+		const row = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('recurrence_freq, recurrence_byday, recurrence_until, title')
+				.eq('id', eventId)
+				.single()
+		);
+		expect(row.recurrence_freq).toBe('weekly');
+		expect(row.recurrence_byday).toEqual(expect.arrayContaining(['MO', 'WE', 'FR']));
+		expect(row.recurrence_byday).toHaveLength(3);
+		expect(row.recurrence_until).not.toBeNull();
 
 		const recurrenceLabel = page.locator('.hero-eyebrow', {
 			hasText: /every week/i
@@ -115,13 +119,16 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		await page.waitForURL(/\/clubs\/richmond-run-club\/events\/[0-9a-f-]+$/, { timeout: 10_000 });
 		eventId = page.url().match(/\/events\/([0-9a-f-]+)$/)![1];
 
-		const { data: row } = await getAdminClient()
-			.from('events')
-			.select('recurrence_freq, recurrence_count')
-			.eq('id', eventId)
-			.single();
-		expect(row?.recurrence_freq).toBe('weekly');
-		expect(row?.recurrence_count).toBe(6);
+		const row = await readRow(
+			'events by id',
+			getAdminClient()
+				.from('events')
+				.select('recurrence_freq, recurrence_count')
+				.eq('id', eventId)
+				.single()
+		);
+		expect(row.recurrence_freq).toBe('weekly');
+		expect(row.recurrence_count).toBe(6);
 	});
 
 	test('unbounded weekly series exposes far more than the old 6-instance cap (persona #40)', async ({
@@ -192,13 +199,16 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		eventId = match![1];
 
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('events')
-			.select('recurrence_freq, recurrence_byday')
-			.eq('id', eventId)
-			.single();
-		expect(row?.recurrence_freq).toBe('monthly');
-		expect(row?.recurrence_byday).toBeNull();
+		const row = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('recurrence_freq, recurrence_byday')
+				.eq('id', eventId)
+				.single()
+		);
+		expect(row.recurrence_freq).toBe('monthly');
+		expect(row.recurrence_byday).toBeNull();
 
 		await expect(
 			page.locator('.hero-eyebrow', { hasText: /repeats monthly/i })
@@ -277,12 +287,15 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		eventId = match![1];
 
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('events')
-			.select('recurrence_freq, recurrence_byday')
-			.eq('id', eventId)
-			.single();
-		expect(row?.recurrence_freq).toBe('weekly');
-		expect(row?.recurrence_byday).toEqual(['MO']);
+		const row = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('recurrence_freq, recurrence_byday')
+				.eq('id', eventId)
+				.single()
+		);
+		expect(row.recurrence_freq).toBe('weekly');
+		expect(row.recurrence_byday).toEqual(['MO']);
 	});
 });

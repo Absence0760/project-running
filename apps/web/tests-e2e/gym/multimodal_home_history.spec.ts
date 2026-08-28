@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Multi-modal Home + History (docs/features/multi_modal.md §§ Home,
@@ -252,17 +253,20 @@ test.describe('multi-modal Home + History', () => {
 		const admin = getAdminClient();
 		const yStamp = Date.now();
 		const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-		const { data: yw } = await admin
-			.from('gym_workouts')
-			.insert({
-				user_id: USER_A.id,
-				title: `E2E MM Yesterday ${yStamp}`,
-				started_at: yesterday,
-				last_modified_at: yesterday,
-			})
-			.select('id')
-			.single();
-		const yId = (yw?.id as string) ?? null;
+		const yw = await readRow(
+			'gym_workouts',
+			admin
+				.from('gym_workouts')
+				.insert({
+					user_id: USER_A.id,
+					title: `E2E MM Yesterday ${yStamp}`,
+					started_at: yesterday,
+					last_modified_at: yesterday,
+				})
+				.select('id')
+				.single()
+		);
+		const yId = (yw.id as string) ?? null;
 		expect(yId).not.toBeNull();
 		await admin.from('gym_sets').insert({
 			workout_id: yId,

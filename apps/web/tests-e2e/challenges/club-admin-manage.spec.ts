@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_C_PRO } from '../fixtures/users';
+import { readRows } from '../fixtures/db-read';
 
 /**
  * /challenges/[id] — a club admin who is NOT the creator can manage a
@@ -81,10 +82,13 @@ test.describe('/challenges/[id] — non-creator club admin can manage', () => {
 
 		await expect(page).toHaveURL(/\/challenges$/, { timeout: 10_000 });
 
-		const { data } = await getAdminClient()
-			.from('challenges')
-			.select('id')
-			.eq('id', challengeId!);
+		const data = await readRows(
+			'challenges by id',
+			getAdminClient()
+				.from('challenges')
+				.select('id')
+				.eq('id', challengeId!)
+		);
 		expect(data).toEqual([]);
 		challengeId = null;
 	});

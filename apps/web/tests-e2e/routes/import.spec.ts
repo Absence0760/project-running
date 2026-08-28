@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { deleteRoute } from '../fixtures/simulate';
 import { getAdminClient, resetRateLimit } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readCount, readRow } from '../fixtures/db-read';
 
 const MULTI_ROUTE_GPX = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="e2e-import-spec" xmlns="http://www.topografix.com/GPX/1/1">
@@ -189,14 +190,17 @@ test.describe('/routes — Import route modal', () => {
 		// import default per ImportRoute.svelte handleSave) and the
 		// correct user_id.
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('routes')
-			.select('user_id, surface, name')
-			.eq('id', routeId)
-			.single();
-		expect(row?.user_id).toBe(USER_A.id);
-		expect(row?.surface).toBe('road');
-		expect(row?.name).toBe(name);
+		const row = await readRow(
+			'routes by id',
+			admin
+				.from('routes')
+				.select('user_id, surface, name')
+				.eq('id', routeId)
+				.single()
+		);
+		expect(row.user_id).toBe(USER_A.id);
+		expect(row.surface).toBe('road');
+		expect(row.name).toBe(name);
 	});
 
 	test('multi-route GPX import: 3 tracks → multi-preview → import 2 selected', async ({
@@ -261,11 +265,14 @@ test.describe('/routes — Import route modal', () => {
 			// stamp (the original parsed name was "e2e-multi-B" — left
 			// unchanged after deselecting; confirm the un-stamped name
 			// also isn't there).
-			const { count: bCount } = await admin
-				.from('routes')
-				.select('id', { count: 'exact', head: true })
-				.eq('user_id', USER_A.id)
-				.eq('name', 'e2e-multi-B');
+			const bCount = await readCount(
+				'routes by user_id+name',
+				admin
+					.from('routes')
+					.select('id', { count: 'exact', head: true })
+					.eq('user_id', USER_A.id)
+					.eq('name', 'e2e-multi-B')
+			);
 			expect(bCount).toBe(0);
 		} finally {
 			for (const id of createdIds) {
@@ -317,13 +324,16 @@ test.describe('/routes — Import route modal', () => {
 		// lat=151.X, lng=-33.X (i.e. somewhere in the Pacific east of
 		// Russia) and the next assertion would fail.
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('routes')
-			.select('user_id, name, waypoints')
-			.eq('id', routeId)
-			.single();
-		expect(row?.user_id).toBe(USER_A.id);
-		expect(row?.name).toBe(name);
+		const row = await readRow(
+			'routes by id',
+			admin
+				.from('routes')
+				.select('user_id, name, waypoints')
+				.eq('id', routeId)
+				.single()
+		);
+		expect(row.user_id).toBe(USER_A.id);
+		expect(row.name).toBe(name);
 		const wp = (row as { waypoints: Array<{ lat: number; lng: number }> }).waypoints;
 		expect(wp.length).toBeGreaterThan(0);
 		expect(wp[0].lat).toBeLessThan(0); // southern hemisphere
@@ -364,12 +374,15 @@ test.describe('/routes — Import route modal', () => {
 			.toBeVisible({ timeout: 10_000 });
 
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('routes')
-			.select('user_id, waypoints')
-			.eq('id', routeId)
-			.single();
-		expect(row?.user_id).toBe(USER_A.id);
+		const row = await readRow(
+			'routes by id',
+			admin
+				.from('routes')
+				.select('user_id, waypoints')
+				.eq('id', routeId)
+				.single()
+		);
+		expect(row.user_id).toBe(USER_A.id);
 		const wp = (row as { waypoints: Array<{ lat: number; lng: number }> }).waypoints;
 		expect(wp.length).toBeGreaterThan(0);
 		// Same hemisphere check — GeoJSON lng-first must not flip to

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { BrowserContext } from '@playwright/test';
 
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
+import { readRows } from '../fixtures/db-read';
 import {
 	createSagaUsers,
 	deleteSagaUsers,
@@ -131,12 +132,15 @@ test.describe('content moderation — report → review → action', () => {
 			// The report exists, pending, attributed to the reporter.
 			await test.step('the report lands as a pending row attributed to the reporter', async () => {
 				const admin = getAdminClient();
-				const { data } = await admin
-					.from('reports')
-					.select('reporter_id, target_kind, target_id, reason, notes, status')
-					.eq('target_kind', 'user')
-					.eq('target_id', author.id);
-				expect(data?.length).toBe(1);
+				const data = await readRows(
+					'reports by target_kind+target_id',
+					admin
+						.from('reports')
+						.select('reporter_id, target_kind, target_id, reason, notes, status')
+						.eq('target_kind', 'user')
+						.eq('target_id', author.id)
+				);
+				expect(data.length).toBe(1);
 				const row = data![0];
 				expect(row.reporter_id).toBe(reporter.id);
 				expect(row.reason).toBe('harassment');
@@ -194,12 +198,15 @@ test.describe('content moderation — report → review → action', () => {
 			// ── 4. The resolution is reflected in the DB + back to the reporter ──
 			await test.step('the DB reflects the moderator as reviewer + the resolution note', async () => {
 				const admin = getAdminClient();
-				const { data } = await admin
-					.from('reports')
-					.select('status, reviewed_by, resolution')
-					.eq('target_kind', 'user')
-					.eq('target_id', author.id);
-				expect(data?.length).toBe(1);
+				const data = await readRows(
+					'reports by target_kind+target_id',
+					admin
+						.from('reports')
+						.select('status, reviewed_by, resolution')
+						.eq('target_kind', 'user')
+						.eq('target_id', author.id)
+				);
+				expect(data.length).toBe(1);
 				const row = data![0];
 				expect(row.status).toBe('reviewed');
 				expect(row.reviewed_by).toBe(moderator.id);
@@ -302,12 +309,15 @@ test.describe('content moderation — report → review → action', () => {
 
 			await test.step('the report is recorded as dismissed', async () => {
 				const admin = getAdminClient();
-				const { data } = await admin
-					.from('reports')
-					.select('status, reviewed_by')
-					.eq('target_kind', 'user')
-					.eq('target_id', author.id);
-				expect(data?.length).toBe(1);
+				const data = await readRows(
+					'reports by target_kind+target_id',
+					admin
+						.from('reports')
+						.select('status, reviewed_by')
+						.eq('target_kind', 'user')
+						.eq('target_id', author.id)
+				);
+				expect(data.length).toBe(1);
 				expect(data![0].status).toBe('dismissed');
 				expect(data![0].reviewed_by).toBe(moderator.id);
 			});

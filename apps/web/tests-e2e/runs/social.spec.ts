@@ -8,6 +8,7 @@ import {
 	insertRun
 } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * /runs/[id] — owner-side engagement panel.
@@ -138,12 +139,15 @@ test.describe('/runs/[id] — owner-side engagement panel', () => {
 
 		// Backend assertion: author_id is the owner, run_id is right.
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('run_comments')
-			.select('id, run_id, author_id, body')
-			.eq('run_id', runId)
-			.eq('author_id', USER_A.id)
-			.single();
-		expect(row?.body).toBe(body);
+		const row = await readRow(
+			'run_comments by run_id+author_id',
+			admin
+				.from('run_comments')
+				.select('id, run_id, author_id, body')
+				.eq('run_id', runId)
+				.eq('author_id', USER_A.id)
+				.single()
+		);
+		expect(row.body).toBe(body);
 	});
 });

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * SSO / OAuth login — full flow against a mock OIDC provider.
@@ -116,8 +117,11 @@ test.describe('SSO OAuth — mock OIDC full flow', () => {
 
 		// The session is real: the admin API now sees the keycloak user.
 		const admin = getAdminClient();
-		const { data } = await admin.auth.admin.listUsers({ perPage: 200 });
-		const created = data?.users?.find((u) => u.email === NEW_USER.email);
+		const data = await readRow(
+			'the auth.users admin listing',
+			admin.auth.admin.listUsers({ perPage: 200 })
+		);
+		const created = data.users.find((u) => u.email === NEW_USER.email);
 		expect(created, 'GoTrue created the OAuth user').toBeTruthy();
 		expect(created?.app_metadata?.provider).toBe('keycloak');
 	});
@@ -135,8 +139,11 @@ test.describe('SSO OAuth — mock OIDC full flow', () => {
 		await page.waitForURL(/\/auth\/confirm-age/, { timeout: 20_000 });
 
 		const admin = getAdminClient();
-		const { data: list } = await admin.auth.admin.listUsers({ perPage: 200 });
-		const uid = list?.users?.find((u) => u.email === RETURNING.email)?.id;
+		const list = await readRow(
+			'the auth.users admin listing',
+			admin.auth.admin.listUsers({ perPage: 200 })
+		);
+		const uid = list.users.find((u) => u.email === RETURNING.email)?.id;
 		expect(uid, 'first sign-in created the keycloak user').toBeTruthy();
 		const now = new Date().toISOString();
 		const { error: upErr } = await admin.from('user_profiles').upsert({

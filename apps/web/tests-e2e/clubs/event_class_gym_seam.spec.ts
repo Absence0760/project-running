@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * The class -> gym seam (club_events.md). A class host attaches an optional
@@ -84,13 +85,16 @@ test.describe('/clubs/[slug]/events/[id] — class -> gym seam', () => {
 
 		// gym_template persisted with the typed {discipline, duration_min} shape.
 		const admin = getAdminClient();
-		const { data: row } = await admin
-			.from('events')
-			.select('category, gym_template')
-			.eq('id', id)
-			.single();
-		expect(row?.category).toBe('class');
-		expect(row?.gym_template).toEqual({ discipline, duration_min: 60 });
+		const row = await readRow(
+			'events by id',
+			admin
+				.from('events')
+				.select('category, gym_template')
+				.eq('id', id)
+				.single()
+		);
+		expect(row.category).toBe('class');
+		expect(row.gym_template).toEqual({ discipline, duration_min: 60 });
 
 		// Detail page: the inform-tier action is offered.
 		await page.goto(`/clubs/richmond-run-club/events/${id}`);

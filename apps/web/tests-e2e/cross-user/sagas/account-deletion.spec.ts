@@ -7,6 +7,7 @@ import {
 	type SagaUser
 } from '../../fixtures/saga-users';
 import { insertRun } from '../../fixtures/simulate';
+import { readMaybeRow, readRows } from '../../fixtures/db-read';
 
 /**
  * Account deletion saga — full /settings/account UI round-trip
@@ -92,17 +93,21 @@ test.describe('saga: account deletion via /settings/account', () => {
 		// "did X ever exist?".
 		const admin = getAdminClient();
 
-		const before = await admin
-			.from('runs')
-			.select('id')
-			.eq('id', plantedRunId)
-			.maybeSingle();
-		expect(before.data?.id).toBe(plantedRunId);
+		const before = await readMaybeRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('id')
+				.eq('id', plantedRunId)
+				.maybeSingle()
+		);
+		expect(before?.id).toBe(plantedRunId);
 
-		const beforeList = await admin.storage
-			.from('runs')
-			.list(user.id, { search: plantedRunId });
-		expect(beforeList.data?.find((f) => f.name.startsWith(plantedRunId)))
+		const beforeList = await readRows(
+			'runs Storage objects under the subject prefix',
+			admin.storage.from('runs').list(user.id, { search: plantedRunId })
+		);
+		expect(beforeList.find((f) => f.name.startsWith(plantedRunId)))
 			.toBeDefined();
 
 		// Plant a representative row in every personal-data table the
@@ -213,31 +218,46 @@ test.describe('saga: account deletion via /settings/account', () => {
 		}
 
 		// 3) Verify the deletion landed everywhere.
-		const after = await admin
-			.from('runs')
-			.select('id')
-			.eq('id', plantedRunId)
-			.maybeSingle();
-		expect(after.data, 'runs row must cascade away on auth.users delete')
+		const after = await readMaybeRow(
+			'runs by id',
+			admin
+				.from('runs')
+				.select('id')
+				.eq('id', plantedRunId)
+				.maybeSingle()
+		);
+		expect(after, 'runs row must cascade away on auth.users delete')
 			.toBeNull();
 
-		const profileAfter = await admin
-			.from('user_profiles')
-			.select('id')
-			.eq('id', user.id)
-			.maybeSingle();
+		const profileAfter = await readMaybeRow(
+			'user_profiles by id',
+			admin
+				.from('user_profiles')
+				.select('id')
+				.eq('id', user.id)
+				.maybeSingle()
+		);
 		expect(
-			profileAfter.data,
+			profileAfter,
 			'user_profiles row must cascade away'
 		).toBeNull();
 
-		const { data: authUser } = await admin.auth.admin.getUserById(user.id);
-		expect(authUser?.user, 'auth.users row must be gone').toBeNull();
+		// GoTrue answers a deleted user with a 404 rather than a null row, so
+		// this read's error IS part of the answer — but only that one error is.
+		const goneUser = await admin.auth.admin.getUserById(user.id);
+		if (goneUser.error) {
+			expect(
+				goneUser.error.status,
+				'the auth.users read failed for a reason other than the row being gone'
+			).toBe(404);
+		}
+		expect(goneUser.data?.user ?? null, 'auth.users row must be gone').toBeNull();
 
-		const afterList = await admin.storage
-			.from('runs')
-			.list(user.id, { search: plantedRunId });
-		const orphan = afterList.data?.find((f) =>
+		const afterList = await readRows(
+			'runs Storage objects under the subject prefix',
+			admin.storage.from('runs').list(user.id, { search: plantedRunId })
+		);
+		const orphan = afterList.find((f) =>
 			f.name.startsWith(plantedRunId)
 		);
 		expect(
@@ -249,51 +269,69 @@ test.describe('saga: account deletion via /settings/account', () => {
 		// audit/account-deletion-completeness (2026-05-25) — assert
 		// the load-bearing personal-data tables all cascade. Each
 		// query is service-role so RLS doesn't mask a surviving row.
-		const cm = await admin
-			.from('coach_messages')
-			.select('id')
-			.eq('user_id', user.id);
+		const cm = await readRows(
+			'coach_messages by user_id',
+			admin
+				.from('coach_messages')
+				.select('id')
+				.eq('user_id', user.id)
+		);
 		expect(
-			cm.data ?? [],
+			cm,
 			'coach_messages must cascade — chat history is the densest non-track PII'
 		).toEqual([]);
 
-		const pr = await admin
-			.from('personal_records')
-			.select('id')
-			.eq('user_id', user.id);
+		const pr = await readRows(
+			'personal_records by user_id',
+			admin
+				.from('personal_records')
+				.select('id')
+				.eq('user_id', user.id)
+		);
 		expect(
-			pr.data ?? [],
+			pr,
 			'personal_records must cascade — derived achievement history'
 		).toEqual([]);
 
-		const notes = await admin
-			.from('notifications')
-			.select('id')
-			.eq('user_id', user.id);
+		const notes = await readRows(
+			'notifications by user_id',
+			admin
+				.from('notifications')
+				.select('id')
+				.eq('user_id', user.id)
+		);
 		expect(
-			notes.data ?? [],
+			notes,
 			'notifications must cascade — actor + target metadata'
 		).toEqual([]);
 
 		// audit-findings 2026-05-30 Medium: the relational tables must
 		// cascade off the deleted user's FK column too.
-		const dms = await admin
-			.from('direct_messages')
-			.select('id')
-			.eq('sender_id', user.id);
-		expect(dms.data ?? [], 'direct_messages must cascade on sender delete').toEqual([]);
+		const dms = await readRows(
+			'direct_messages by sender_id',
+			admin
+				.from('direct_messages')
+				.select('id')
+				.eq('sender_id', user.id)
+		);
+		expect(dms, 'direct_messages must cascade on sender delete').toEqual([]);
 
-		const blocks = await admin
-			.from('user_blocks')
-			.select('blocker_id')
-			.eq('blocker_id', user.id);
-		expect(blocks.data ?? [], 'user_blocks must cascade on blocker delete').toEqual([]);
+		const blocks = await readRows(
+			'user_blocks by blocker_id',
+			admin
+				.from('user_blocks')
+				.select('blocker_id')
+				.eq('blocker_id', user.id)
+		);
+		expect(blocks, 'user_blocks must cascade on blocker delete').toEqual([]);
 
-		const coaching = await admin
-			.from('coach_athletes')
-			.select('id')
-			.eq('coach_id', user.id);
-		expect(coaching.data ?? [], 'coach_athletes must cascade on coach delete').toEqual([]);
+		const coaching = await readRows(
+			'coach_athletes by coach_id',
+			admin
+				.from('coach_athletes')
+				.select('id')
+				.eq('coach_id', user.id)
+		);
+		expect(coaching, 'coach_athletes must cascade on coach delete').toEqual([]);
 	});
 });

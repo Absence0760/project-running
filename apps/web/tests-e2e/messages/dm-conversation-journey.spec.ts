@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
-import { readRows } from '../fixtures/db-read';
+import { readRow, readRows } from '../fixtures/db-read';
 
 /**
  * DM-conversation journey — the full life of a two-user direct-message
@@ -198,14 +198,17 @@ test.describe('DM conversation journey', () => {
 			await expect(thread.locator('.badge')).toBeVisible();
 
 			// Backend: C's reply is still unread before A opens the thread.
-			const { data: preOpen } = await admin
-				.from('direct_messages')
-				.select('read_at')
-				.eq('sender_id', USER_C_PRO.id)
-				.eq('recipient_id', USER_A.id)
-				.eq('body', replyBody)
-				.single();
-			expect(preOpen?.read_at ?? null).toBeNull();
+			const preOpen = await readRow(
+				'direct_messages by sender_id+recipient_id+body',
+				admin
+					.from('direct_messages')
+					.select('read_at')
+					.eq('sender_id', USER_C_PRO.id)
+					.eq('recipient_id', USER_A.id)
+					.eq('body', replyBody)
+					.single()
+			);
+			expect(preOpen.read_at ?? null).toBeNull();
 		});
 
 		// ── 6. USER_A opens the thread: it reads in order + badge clears ─

@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readCount } from '../fixtures/db-read';
 
 /**
  * `runs.external_id` UNIQUE-constraint resilience under concurrent
@@ -107,10 +108,13 @@ test.describe('runs.external_id — concurrent insert resilience', () => {
 			).toEqual([]);
 
 			// Service-role count: exactly one row landed.
-			const { count } = await admin
-				.from('runs')
-				.select('*', { count: 'exact', head: true })
-				.eq('external_id', externalId);
+			const count = await readCount(
+				'runs by external_id',
+				admin
+					.from('runs')
+					.select('*', { count: 'exact', head: true })
+					.eq('external_id', externalId)
+			);
 			expect(count, 'exactly one runs row must persist').toBe(1);
 		} finally {
 			// Cleanup the surviving row.
@@ -153,10 +157,13 @@ test.describe('runs.external_id — concurrent insert resilience', () => {
 			);
 
 			// Still exactly one row.
-			const { count } = await admin
-				.from('runs')
-				.select('*', { count: 'exact', head: true })
-				.eq('external_id', externalId);
+			const count = await readCount(
+				'runs by external_id',
+				admin
+					.from('runs')
+					.select('*', { count: 'exact', head: true })
+					.eq('external_id', externalId)
+			);
 			expect(count).toBe(1);
 		} finally {
 			await admin.from('runs').delete().eq('external_id', externalId);

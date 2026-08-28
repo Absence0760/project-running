@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient, getUserClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Class-event lifecycle, depth tier — the corners the existing club specs
@@ -287,14 +288,17 @@ test.describe('/clubs/[slug]/events/[id] — attendance no-show + sole write pat
 		expect(rpcErr).not.toBeNull();
 
 		// Nothing landed: the column stays NULL.
-		const { data: after } = await admin
-			.from('event_attendees')
-			.select('attendance')
-			.eq('event_id', eventId)
-			.eq('user_id', USER_C_PRO.id)
-			.eq('instance_start', instance)
-			.single();
-		expect(after?.attendance).toBeNull();
+		const after = await readRow(
+			'event_attendees by event_id+user_id+instance_start',
+			admin
+				.from('event_attendees')
+				.select('attendance')
+				.eq('event_id', eventId)
+				.eq('user_id', USER_C_PRO.id)
+				.eq('instance_start', instance)
+				.single()
+		);
+		expect(after.attendance).toBeNull();
 	});
 });
 

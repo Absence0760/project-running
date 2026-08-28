@@ -72,27 +72,36 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 
 		// Lands on the detail screen; backend rows exist.
 		await expect(page.getByTestId('routine-exercises')).toBeVisible({ timeout: 10_000 });
-		const { data: routines } = await admin
-			.from('gym_routines')
-			.select('id, title, exercise_count')
-			.eq('author_id', USER_A.id)
-			.eq('title', title);
-		expect(routines?.length).toBe(1);
+		const routines = await readRows(
+			'gym_routines by author_id+title',
+			admin
+				.from('gym_routines')
+				.select('id, title, exercise_count')
+				.eq('author_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(routines.length).toBe(1);
 		const routineId = routines![0].id as string;
 		expect(routines![0].exercise_count).toBe(1);
 
-		const { data: exRows } = await admin
-			.from('gym_routine_exercises')
-			.select('id, exercise_name, exercise_key, position')
-			.eq('routine_id', routineId);
-		expect(exRows?.length).toBe(1);
+		const exRows = await readRows(
+			'gym_routine_exercises by routine_id',
+			admin
+				.from('gym_routine_exercises')
+				.select('id, exercise_name, exercise_key, position')
+				.eq('routine_id', routineId)
+		);
+		expect(exRows.length).toBe(1);
 		expect(exRows![0].exercise_key).toBe(exercise.trim().toLowerCase());
 
-		const { data: setRows } = await admin
-			.from('gym_routine_sets')
-			.select('target_reps_min, target_weight_kg')
-			.eq('routine_exercise_id', exRows![0].id);
-		expect(setRows?.length).toBe(1);
+		const setRows = await readRows(
+			'gym_routine_sets by routine_exercise_id',
+			admin
+				.from('gym_routine_sets')
+				.select('target_reps_min, target_weight_kg')
+				.eq('routine_exercise_id', exRows![0].id)
+		);
+		expect(setRows.length).toBe(1);
 		expect(Number(setRows![0].target_reps_min)).toBe(5);
 		expect(Number(setRows![0].target_weight_kg)).toBe(80);
 
@@ -146,26 +155,35 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 
 		await expect(page.getByTestId('routine-exercises')).toBeVisible({ timeout: 10_000 });
 
-		const { data: routines } = await admin
-			.from('gym_routines')
-			.select('id')
-			.eq('author_id', USER_A.id)
-			.eq('title', title);
-		expect(routines?.length).toBe(1);
+		const routines = await readRows(
+			'gym_routines by author_id+title',
+			admin
+				.from('gym_routines')
+				.select('id')
+				.eq('author_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(routines.length).toBe(1);
 		const routineId = routines![0].id as string;
 
 		try {
-			const { data: exRows } = await admin
-				.from('gym_routine_exercises')
-				.select('id')
-				.eq('routine_id', routineId);
-			expect(exRows?.length).toBe(1);
+			const exRows = await readRows(
+				'gym_routine_exercises by routine_id',
+				admin
+					.from('gym_routine_exercises')
+					.select('id')
+					.eq('routine_id', routineId)
+			);
+			expect(exRows.length).toBe(1);
 
-			const { data: setRows } = await admin
-				.from('gym_routine_sets')
-				.select('target_rpe')
-				.eq('routine_exercise_id', exRows![0].id);
-			expect(setRows?.length).toBe(1);
+			const setRows = await readRows(
+				'gym_routine_sets by routine_exercise_id',
+				admin
+					.from('gym_routine_sets')
+					.select('target_rpe')
+					.eq('routine_exercise_id', exRows![0].id)
+			);
+			expect(setRows.length).toBe(1);
 			// The authored RPE round-trips as a non-null numeric — not the
 			// hardcoded null the editor used to write for every set.
 			expect(Number(setRows![0].target_rpe)).toBe(8.5);
@@ -211,12 +229,15 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 				timeout: 10_000,
 			});
 
-			const { data: routines } = await admin
-				.from('gym_routines')
-				.select('id, exercise_count')
-				.eq('author_id', USER_A.id)
-				.eq('title', title);
-			expect(routines?.length).toBe(1);
+			const routines = await readRows(
+				'gym_routines by author_id+title',
+				admin
+					.from('gym_routines')
+					.select('id, exercise_count')
+					.eq('author_id', USER_A.id)
+					.eq('title', title)
+			);
+			expect(routines.length).toBe(1);
 			expect(routines![0].exercise_count).toBe(1);
 
 			// Two logged sets → two planned sets on the promoted exercise.
@@ -224,11 +245,14 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 				.from('gym_routine_exercises')
 				.select('id')
 				.eq('routine_id', routines![0].id);
-			const { data: setRows } = await admin
-				.from('gym_routine_sets')
-				.select('id')
-				.eq('routine_exercise_id', exRows![0].id);
-			expect(setRows?.length).toBe(2);
+			const setRows = await readRows(
+				'gym_routine_sets by routine_exercise_id',
+				admin
+					.from('gym_routine_sets')
+					.select('id')
+					.eq('routine_exercise_id', exRows![0].id)
+			);
+			expect(setRows.length).toBe(2);
 
 			await admin.from('gym_routines').delete().eq('id', routines![0].id);
 		} finally {
@@ -273,21 +297,27 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 		await page.getByTestId('routine-save').click();
 		await expect(page.getByTestId('routine-exercises')).toBeVisible({ timeout: 10_000 });
 
-		const { data: routines } = await admin
-			.from('gym_routines')
-			.select('id')
-			.eq('author_id', USER_A.id)
-			.eq('title', title);
-		expect(routines?.length).toBe(1);
+		const routines = await readRows(
+			'gym_routines by author_id+title',
+			admin
+				.from('gym_routines')
+				.select('id')
+				.eq('author_id', USER_A.id)
+				.eq('title', title)
+		);
+		expect(routines.length).toBe(1);
 		const routineId = routines![0].id as string;
 
 		try {
-			const { data: exRows } = await admin
-				.from('gym_routine_exercises')
-				.select('id, exercise_name, position, superset_group, superset_order, progression')
-				.eq('routine_id', routineId)
-				.order('position', { ascending: true });
-			expect(exRows?.length).toBe(2);
+			const exRows = await readRows(
+				'gym_routine_exercises by routine_id',
+				admin
+					.from('gym_routine_exercises')
+					.select('id, exercise_name, position, superset_group, superset_order, progression')
+					.eq('routine_id', routineId)
+					.order('position', { ascending: true })
+			);
+			expect(exRows.length).toBe(2);
 			// Both exercises share one superset group, ordered 0 then 1.
 			expect(exRows![0].superset_group).not.toBeNull();
 			expect(exRows![0].superset_group).toBe(exRows![1].superset_group);
@@ -295,11 +325,14 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 			expect(exRows![1].superset_order).toBe(1);
 			expect(exRows![0].progression).toBe('linear');
 
-			const { data: setA } = await admin
-				.from('gym_routine_sets')
-				.select('set_type, rest_s, target_weight_kg')
-				.eq('routine_exercise_id', exRows![0].id);
-			expect(setA?.length).toBe(1);
+			const setA = await readRows(
+				'gym_routine_sets by routine_exercise_id',
+				admin
+					.from('gym_routine_sets')
+					.select('set_type, rest_s, target_weight_kg')
+					.eq('routine_exercise_id', exRows![0].id)
+			);
+			expect(setA.length).toBe(1);
 			expect(setA![0].set_type).toBe('warmup');
 			expect(setA![0].rest_s).toBe(60);
 			expect(Number(setA![0].target_weight_kg)).toBe(40);
@@ -336,14 +369,17 @@ test.describe('/gym/routines — build, library, detail, promote, repeat', () =>
 			await page.getByRole('button', { name: 'Save workout' }).click();
 			await expect(page).toHaveURL(/\/gym$/, { timeout: 10_000 });
 
-			const { data: logged } = await admin
-				.from('gym_workouts')
-				.select('id, title')
-				.eq('user_id', USER_A.id)
-				.eq('title', title);
+			const logged = await readRows(
+				'gym_workouts by user_id+title',
+				admin
+					.from('gym_workouts')
+					.select('id, title')
+					.eq('user_id', USER_A.id)
+					.eq('title', title)
+			);
 			// Two workouts with this title now: the seed + the repeated log.
-			expect(logged!.length).toBe(2);
-			createdId = (logged!.find((r) => r.id !== workoutId)?.id as string) ?? null;
+			expect(logged.length).toBe(2);
+			createdId = (logged.find((r) => r.id !== workoutId)?.id as string) ?? null;
 			expect(createdId).not.toBeNull();
 		} finally {
 			if (createdId) await admin.from('gym_workouts').delete().eq('id', createdId);

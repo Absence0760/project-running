@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
 import { USER_A } from '../fixtures/users';
+import { readMaybeRow, readRows } from '../fixtures/db-read';
 
 /**
  * Plan publish-as-template — saga complement.
@@ -70,11 +71,14 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		page
 	}) => {
 		const admin = getAdminClient();
-		const { data: before } = await admin
-			.from('training_plans')
-			.select('name, is_template, status, club_id, parent_template_id')
-			.eq('id', SYDNEY_HALF_PLAN_ID)
-			.maybeSingle();
+		const before = await readMaybeRow(
+			'training_plans by id',
+			admin
+				.from('training_plans')
+				.select('name, is_template, status, club_id, parent_template_id')
+				.eq('id', SYDNEY_HALF_PLAN_ID)
+				.maybeSingle()
+		);
 		expect(before).not.toBeNull();
 		const srcBefore = before as {
 			name: string;
@@ -129,13 +133,16 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		// the href so a regression that broke the adopt surface
 		// (template list lost the Adopt button, or the link lost the
 		// `from=` query param) is caught here, not silently in prod.
-		const { data: clones } = await admin
-			.from('training_plans')
-			.select('id')
-			.eq('is_template', true)
-			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('name', 'Richmond Half 2026');
-		expect(clones?.length).toBe(1);
+		const clones = await readRows(
+			'training_plans by is_template+club_id+name',
+			admin
+				.from('training_plans')
+				.select('id')
+				.eq('is_template', true)
+				.eq('club_id', SYDNEY_RUN_CLUB_ID)
+				.eq('name', 'Richmond Half 2026')
+		);
+		expect(clones.length).toBe(1);
 		const cloneId = (clones![0] as { id: string }).id;
 		const adoptLink = templateRow.getByRole('link', { name: /Adopt/ });
 		await expect(adoptLink).toBeVisible();
@@ -164,13 +171,16 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		});
 
 		const admin = getAdminClient();
-		const { data: clones } = await admin
-			.from('training_plans')
-			.select('id')
-			.eq('is_template', true)
-			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('name', 'Richmond Half 2026');
-		expect(clones?.length).toBe(1);
+		const clones = await readRows(
+			'training_plans by is_template+club_id+name',
+			admin
+				.from('training_plans')
+				.select('id')
+				.eq('is_template', true)
+				.eq('club_id', SYDNEY_RUN_CLUB_ID)
+				.eq('name', 'Richmond Half 2026')
+		);
+		expect(clones.length).toBe(1);
 		const cloneId = (clones![0] as { id: string }).id;
 
 		await page.goto(`/plans/new?from=${cloneId}`);
@@ -251,13 +261,16 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		});
 
 		const admin = getAdminClient();
-		const { data: clones } = await admin
-			.from('training_plans')
-			.select('id')
-			.eq('is_template', true)
-			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('name', 'Richmond Half 2026');
-		expect(clones?.length).toBe(1);
+		const clones = await readRows(
+			'training_plans by is_template+club_id+name',
+			admin
+				.from('training_plans')
+				.select('id')
+				.eq('is_template', true)
+				.eq('club_id', SYDNEY_RUN_CLUB_ID)
+				.eq('name', 'Richmond Half 2026')
+		);
+		expect(clones.length).toBe(1);
 		const cloneId = (clones![0] as { id: string }).id;
 
 		await page.goto(`/plans/${cloneId}`);

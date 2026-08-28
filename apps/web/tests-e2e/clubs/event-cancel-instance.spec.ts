@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+import { readRow } from '../fixtures/db-read';
 
 /**
  * Per-instance cancellation web flow (parkrun / social-group persona #39,
@@ -77,13 +78,16 @@ test.describe('/clubs/[slug]/events/[id] — cancel one occurrence', () => {
 				{ timeout: 10_000 }
 			)
 			.toBe(1);
-		const { data: exc } = await admin
-			.from('event_exceptions')
-			.select('reason, cancelled_by')
-			.eq('event_id', eventId)
-			.single();
-		expect(exc?.reason).toBe('Marshal shortage');
-		expect(exc?.cancelled_by).toBe(USER_A.id);
+		const exc = await readRow(
+			'event_exceptions by event_id',
+			admin
+				.from('event_exceptions')
+				.select('reason, cancelled_by')
+				.eq('event_id', eventId)
+				.single()
+		);
+		expect(exc.reason).toBe('Marshal shortage');
+		expect(exc.cancelled_by).toBe(USER_A.id);
 
 		// The list stays expanded across the reload, so the cancelled
 		// occurrence simply drops out: one fewer chip, and the cancelled

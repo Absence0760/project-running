@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import { createSagaUsers, deleteSagaUsers, type SagaUser } from '../fixtures/saga-users';
 import { insertEvent, deleteEvent, deleteClub } from '../fixtures/simulate';
+import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Social cross-surface journey — EVENT discovery via the /social Discover
@@ -161,12 +162,15 @@ test.describe('social journey — non-member discovers a public-club event + RSV
 
 		// ── precondition: the discoverer is NOT a member of the host club ──
 		await test.step('precondition: discoverer is outside the hosting club', async () => {
-			const { data } = await admin
-				.from('club_members')
-				.select('user_id')
-				.eq('club_id', clubId!)
-				.eq('user_id', discoverer.id)
-				.maybeSingle();
+			const data = await readMaybeRow(
+				'club_members by club_id+user_id',
+				admin
+					.from('club_members')
+					.select('user_id')
+					.eq('club_id', clubId!)
+					.eq('user_id', discoverer.id)
+					.maybeSingle()
+			);
 			expect(data).toBeNull();
 		});
 
@@ -265,12 +269,15 @@ test.describe('social journey — non-member discovers a public-club event + RSV
 				// The RSVP must land server-side as a `going` attendee row for
 				// the discoverer on this event.
 				await expect(async () => {
-					const { data } = await admin
-						.from('event_attendees')
-						.select('status')
-						.eq('event_id', eventId!)
-						.eq('user_id', discoverer.id)
-						.maybeSingle();
+					const data = await readMaybeRow(
+						'event_attendees by event_id+user_id',
+						admin
+							.from('event_attendees')
+							.select('status')
+							.eq('event_id', eventId!)
+							.eq('user_id', discoverer.id)
+							.maybeSingle()
+					);
 					expect(data?.status).toBe('going');
 				}).toPass({ timeout: 10_000 });
 			});
