@@ -375,3 +375,88 @@ test('one source going blind on its own still fails', () => {
     3,
   );
 });
+
+// ─────────────────── decisions § 773 — first-match-wins ───────────────────
+
+// The filed reproduction, verbatim: a script that sets FUNCTIONS per
+// environment parsed as the FIRST array alone and reported the second Lambda
+// "synced and deployed" on a branch that never repoints it.
+const perEnvScript = (prod, preview) =>
+  `#!/usr/bin/env bash\nset -euo pipefail\n\n` +
+  `if [[ "$ENV_NAME" == "prod" ]]; then\n` +
+  `\tFUNCTIONS=(${prod.join(' ')})\n` +
+  `else\n` +
+  `\tFUNCTIONS=(${preview.join(' ')})\n` +
+  `fi\n\n` +
+  `for fn in "\${FUNCTIONS[@]}"; do\n` +
+  `\tNAME="threkir-web-\${ENV_NAME}-\${fn}"\n` +
+  `\taws lambda update-alias \\\n` +
+  `\t\t--function-name "$NAME" \\\n` +
+  `\t\t--name live \\\n` +
+  `\t\t--function-version "$NEWEST" >/dev/null\n` +
+  `done\n`;
+
+test('every FUNCTIONS assignment is read, not only the first', () => {
+  const sh = parseSyncScript(perEnvScript(SUFFIXES, ['coach']));
+  assert.deepEqual(sh.assignments, [SUFFIXES, ['coach']]);
+  assert.deepEqual(sh.functions.sort(), [...SUFFIXES].sort());
+});
+
+test('a Lambda missing from one branch’s array is not certified as synced', () => {
+  const { errors, ok } = aligned({ sh: perEnvScript(SUFFIXES, ['coach']) });
+  assert.deepEqual(
+    ok.map((l) => l.split(' ')[0]),
+    ['coach'],
+  );
+  const missed = errors.filter((e) => /never repoints it/.test(e));
+  assert.equal(missed.length, 2);
+  assert.ok(missed.every((e) => /1 of the 2 FUNCTIONS arrays \(#2\)/.test(e)));
+});
+
+test('a Lambda in every branch’s array is still certified', () => {
+  const { errors, ok } = aligned({ sh: perEnvScript(SUFFIXES, SUFFIXES) });
+  assert.deepEqual(errors, []);
+  assert.equal(ok.length, 3);
+});
+
+test('two disagreeing NAME templates are reported rather than the first winning', () => {
+  const sh = fakeScript(SUFFIXES).replace(
+    'done\n',
+    'NAME="threkir-web-${ENV_NAME}-legacy-${fn}"\ndone\n',
+  );
+  const { errors } = aligned({ sh });
+  assert.ok(errors.some((e) => /builds its function name from more than one template/.test(e)));
+});
+
+// The alias name used to be read out of a 400-character window that crossed
+// command boundaries, so the first `--name` in it won — here a decoy inside
+// the alias call's own argument list, while the real `--name` sat past it.
+test('the alias name comes from the alias call, not from a decoy inside it', () => {
+  const sh =
+    `FUNCTIONS=(${SUFFIXES.join(' ')})\n` +
+    `for fn in "\${FUNCTIONS[@]}"; do\n` +
+    `\tNAME="threkir-web-\${ENV_NAME}-\${fn}"\n` +
+    `\taws lambda update-alias \\\n` +
+    `\t\t--function-name "$(aws ssm get-parameter --name live --query X)" \\\n` +
+    `\t\t--name stable \\\n` +
+    `\t\t--function-version "$NEWEST"\n` +
+    `done\n`;
+  assert.deepEqual([...parseSyncScript(sh).aliasNames], ['stable']);
+  const { errors } = aligned({ sh });
+  assert.ok(errors.some((e) => /do not agree on the alias name/.test(e)));
+});
+
+test('quoting an alias name is not a disagreement', () => {
+  const sh = fakeScript(SUFFIXES).replaceAll('--name live', '--name "live"');
+  assert.deepEqual([...parseSyncScript(sh).aliasNames], ['live']);
+  assert.deepEqual(aligned({ sh }).errors, []);
+});
+
+// Measured while fixing it: the committed script has one flat array, so the
+// misread was latent — which has to be a measurement rather than a claim.
+test('the committed sync script carries exactly one FUNCTIONS assignment', () => {
+  const sh = parseSyncScript(readFileSync(SCRIPT_FILE, 'utf-8'));
+  assert.equal(sh.assignments.length, 1);
+  assert.equal(sh.templates.length, 1);
+  assert.deepEqual([...sh.aliasNames], ['live']);
+});

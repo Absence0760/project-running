@@ -35,6 +35,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { splitShellCommands } from './shell_lex.mjs';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Overridable so the whole script — exit code and all — can be pointed at
@@ -59,7 +61,7 @@ export const ENV = '<env>';
  * @typedef {{ label: string, body: string }} HclResource
  * @typedef {{ label: string, aliasName: string | null, functionLabel: string | null, functionName: string | null }} TerraformAlias
  * @typedef {{ resourcePrefix: string | null, functions: Map<string, string>, aliases: TerraformAlias[] }} TerraformModule
- * @typedef {{ functions: string[], loopVar: string | null, template: string | null, prefix: string | null, templateVar: string | null, aliasNames: Set<string> }} SyncScript
+ * @typedef {{ functions: string[], assignments: string[][], loopVar: string | null, templates: string[], template: string | null, prefix: string | null, templateVar: string | null, aliasNames: Set<string> }} SyncScript
  * @typedef {{ outputKey: string | null, aliasName: string | null, functionName: string | null }} ReleaseEntry
  * @typedef {{ outputs: Map<string, string>, entries: ReleaseEntry[] }} ReleaseWorkflow
  */
@@ -186,29 +188,50 @@ export function parseTerraform(src) {
   return { resourcePrefix, functions, aliases };
 }
 
-// `FUNCTIONS=(…)`, the `NAME="…"` template the loop builds each function name
-// from, and the alias name the aws calls ask for. The loop variable is read
-// too: a loop that stopped iterating FUNCTIONS would leave the array parsed
-// and meaningless, so the two are checked against each other.
+// EVERY `FUNCTIONS=(…)`, every `NAME="…"` template the loop builds each
+// function name from, and the alias name the aws calls ask for. The loop
+// variable is read too: a loop that stopped iterating FUNCTIONS would leave the
+// array parsed and meaningless, so the two are checked against each other.
+//
+// Every assignment, not the first one (decisions § 773). Both reads used to be
+// non-global, so a script setting the array per environment — `prod` two
+// lambdas, `preview` one — parsed as the prod list alone and certified the
+// second lambda "synced and deployed" on a branch that never repoints it,
+// which is issue #590 defect 2 / § 433 verbatim. `assignments` keeps them
+// apart because the two directions want different sets: a Lambda has to be in
+// EVERY branch's array to be repointed on every path, and any branch naming
+// one Terraform does not declare is a stale entry.
+//
+// The alias name is read out of the LEXED command rather than out of a
+// 400-character window, which crossed command boundaries: the window's first
+// `--name` won, so a decoy inside the alias call's own arguments answered for
+// it while the real `--name` further along went unread.
 /**
  * @param {string} src
  * @returns {SyncScript}
  */
 export function parseSyncScript(src) {
-  const arr = src.match(/^[ \t]*FUNCTIONS=\(([^)]*)\)/m);
-  const functions = arr
-    ? arr[1]
+  /** @type {string[][]} */
+  const assignments = [];
+  const arrRe = /^[ \t]*FUNCTIONS=\(([^)]*)\)/gm;
+  let a;
+  while ((a = arrRe.exec(src)) !== null) {
+    assignments.push(
+      a[1]
         .split(/\s+/)
         .filter(Boolean)
-        .map((s) => s.replace(/^['"]|['"]$/g, ''))
-    : [];
+        .map((s) => s.replace(/^['"]|['"]$/g, '')),
+    );
+  }
+  const functions = [...new Set(assignments.flat())];
 
   const loopVar =
     src.match(
       /\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+"\$\{FUNCTIONS\[@\]\}"/,
     )?.[1] ?? null;
 
-  const tmpl = src.match(/^[ \t]*NAME=\s*"([^"]*)"/m)?.[1] ?? null;
+  const templates = [...src.matchAll(/^[ \t]*NAME=\s*"([^"]*)"/gm)].map((m) => m[1]);
+  const tmpl = templates[0] ?? null;
   /** @type {string | null} */
   let prefix = null;
   /** @type {string | null} */
@@ -224,16 +247,23 @@ export function parseSyncScript(src) {
 
   /** @type {Set<string>} */
   const aliasNames = new Set();
-  // `\s` and not `(?:^|\s)`: the pattern requires `aws lambda …-alias`
-  // before this point, so a `^` without the `m` flag could only ever match at
-  // offset 0 and never here — a dead alternative, which is precisely the
-  // silently-stops-matching failure this whole guard exists to prevent.
-  // A newline is whitespace, so `\s` already covers the start-of-line case.
-  const re = /aws\s+lambda\s+(?:get|update)-alias\b[\s\S]{0,400}?\s--name\s+(\S+)/g;
-  let m;
-  while ((m = re.exec(src)) !== null) aliasNames.add(m[1]);
+  for (const { words } of splitShellCommands(src)) {
+    if (words[0] !== 'aws' || words[1] !== 'lambda') continue;
+    if (words[2] !== 'get-alias' && words[2] !== 'update-alias') continue;
+    const at = words.indexOf('--name');
+    if (at !== -1 && at + 1 < words.length) aliasNames.add(words[at + 1]);
+  }
 
-  return { functions, loopVar, template: tmpl, prefix, templateVar, aliasNames };
+  return {
+    functions,
+    assignments,
+    loopVar,
+    templates,
+    template: tmpl,
+    prefix,
+    templateVar,
+    aliasNames,
+  };
 }
 
 // The release workflow's per-function deploy steps. Each `aws lambda
@@ -358,6 +388,14 @@ export function compareSources(tf, sh, rel) {
         `but loops over \${${sh.loopVar}}.\n` +
         '  One of the two is wrong; the script would address the same name every ' +
         'iteration.',
+    );
+  }
+  if (sh.templates.length > 1 && new Set(sh.templates).size > 1) {
+    errors.push(
+      'bin/lambda-alias-sync.sh builds its function name from more than one ' +
+        `template: ${[...new Set(sh.templates)].map((t) => `"${t}"`).join(', ')}.\n` +
+        '  Only the first is compared below, so every name the others build ' +
+        'goes unchecked.',
     );
   }
   if (sh.functions.length > 0 && sh.aliasNames.size === 0) {
@@ -537,14 +575,27 @@ export function compareSources(tf, sh, rel) {
   }
 
   // The finding this guard exists for, in both directions.
+  //
+  // Asked of EVERY FUNCTIONS assignment, not of their union: a script setting
+  // the array per environment repoints only what the branch it took names, so
+  // a Lambda present in one array and absent from another is unrepointed on
+  // that path — the § 433 drift, reachable one environment at a time.
   for (const [suffix, a] of tfSuffixes) {
-    if (sh.functions.includes(suffix)) continue;
+    const missing = sh.assignments
+      .map((list, i) => ({ list, i }))
+      .filter(({ list }) => !list.includes(suffix));
+    if (missing.length === 0) continue;
+    const which =
+      sh.assignments.length === 1
+        ? 'the FUNCTIONS array'
+        : `${missing.length} of the ${sh.assignments.length} FUNCTIONS arrays ` +
+          `(#${missing.map(({ i }) => i + 1).join(', #')})`;
     errors.push(
       `Terraform declares aws_lambda_alias."${a.label}" on ` +
         `"${a.functionName}", but bin/lambda-alias-sync.sh never repoints it.\n` +
         `  After an env-only \`terraform apply\` this Lambda keeps serving the ` +
         `previous version's frozen env — issue #590 defect 2, decisions.md § 433.\n` +
-        `  Fix: add "${suffix}" to the FUNCTIONS array.`,
+        `  Fix: add "${suffix}" to ${which}.`,
     );
   }
   for (const suffix of sh.functions) {
@@ -580,7 +631,8 @@ export function compareSources(tf, sh, rel) {
   }
 
   for (const [suffix, a] of tfSuffixes) {
-    if (!sh.functions.includes(suffix) || !relSuffixes.has(suffix)) continue;
+    if (!sh.assignments.every((list) => list.includes(suffix))) continue;
+    if (!relSuffixes.has(suffix)) continue;
     ok.push(`${suffix} — aws_lambda_alias."${a.label}", synced and deployed`);
   }
 
