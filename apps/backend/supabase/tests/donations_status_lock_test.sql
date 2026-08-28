@@ -13,7 +13,7 @@
 --     than opening a second one the donor could also pay.
 
 begin;
-select plan(20);
+select plan(19);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -169,17 +169,15 @@ select is(
   3,
   'fundraiser_feed keeps a partially refunded donation and drops a fully refunded one'
 );
+-- The whole set, not a count of the gross amount's absence: an emptiness over a
+-- definer relation reads as an access-control claim to the refusal-assertion
+-- guard, and this one is about which NUMBER the feed reports, not who may see
+-- the row. Pinning every amount says the gross is absent AND the net present.
 select is(
-  (select count(*)::int from fundraiser_feed('fd000000-0000-0000-0000-0000000000f1', 50)
-     where amount_cents = 10000),
-  0,
-  'fundraiser_feed never shows the GROSS amount of a partially refunded donation'
-);
-select is(
-  (select count(*)::int from fundraiser_feed('fd000000-0000-0000-0000-0000000000f1', 50)
-     where amount_cents = 8800),
-  1,
-  'fundraiser_feed shows what the charity kept (10000 - 1200)'
+  (select array_agg(amount_cents::int order by amount_cents)
+     from fundraiser_feed('fd000000-0000-0000-0000-0000000000f1', 50)),
+  array[2500, 5000, 8800],
+  'fundraiser_feed reports what the charity kept (10000 - 1200), never the gross'
 );
 
 -- ── the refunded amount is bounded and coupled to the status ─────────────────
