@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
-	import { showToast } from '$lib/stores/toast.svelte';
 	import GoalThermometer from './GoalThermometer.svelte';
-	import { startDonationCheckout } from '$lib/core/data';
 	import type { Fundraiser, FundraiserTotals } from '$lib/types';
 
 	let {
@@ -20,33 +18,15 @@
 		compact?: boolean;
 	} = $props();
 
-	let donating = $state(false);
-
 	const raised = $derived(totals?.raised_cents ?? 0);
 	const goal = $derived(totals?.goal_cents ?? fundraiser.goal_cents);
 	const donorCount = $derived(totals?.donor_count ?? 0);
 	const closed = $derived(fundraiser.status === 'closed');
 
-	async function donate() {
+	function donate() {
 		// The compact card hands off to the full fundraiser page, which hosts the
 		// amount picker. A bare "Donate" here just routes there.
 		window.location.href = `/fundraisers/${fundraiser.id}`;
-	}
-
-	export async function donateAmount(
-		amountCents: number,
-		opts: { displayName?: string | null; message?: string | null; isAnonymous?: boolean }
-	) {
-		if (donating || closed) return;
-		donating = true;
-		try {
-			const { url } = await startDonationCheckout(fundraiser.id, amountCents, opts);
-			window.location.href = url;
-		} catch (e) {
-			showToast(m('fundraiser.donateFailed'), 'error');
-			console.error('donation checkout failed', e);
-			donating = false;
-		}
 	}
 </script>
 
@@ -73,7 +53,7 @@
 	{#if closed}
 		<p class="closed">{m('fundraiser.closed')}</p>
 	{:else}
-		<button type="button" class="btn btn-primary" onclick={donate} disabled={donating}>
+		<button type="button" class="btn btn-primary" onclick={donate}>
 			{m('fundraiser.donate')}
 		</button>
 	{/if}

@@ -114,13 +114,22 @@
 		}
 	});
 
+	// The donation attempt's idempotency key, kept across retries so a second
+	// call resolves to the pending donation the first one opened rather than
+	// opening a session the donor could also pay. Re-minted when the AMOUNT
+	// changes, because that is a different donation and the server refuses a key
+	// presented against a different request. decisions § 776.
+	let attempt: { cents: number; key: string } | null = null;
+
 	async function submitDonation() {
 		if (donating || !fundraiser) return;
 		const cents = amountMajor != null ? toMinorUnits(amountMajor, fundraiser.currency) : 0;
 		if (cents <= 0) return;
+		if (attempt?.cents !== cents) attempt = { cents, key: crypto.randomUUID() };
 		donating = true;
 		try {
 			const { url } = await startDonationCheckout(fundraiser.id, cents, {
+				idempotencyKey: attempt.key,
 				displayName: anonymous ? null : donorName.trim() || null,
 				message: donorMessage.trim() || null,
 				isAnonymous: anonymous

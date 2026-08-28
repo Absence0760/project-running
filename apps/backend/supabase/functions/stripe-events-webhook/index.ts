@@ -38,6 +38,7 @@ import {
   isDonationSession,
   orderStatusTransition,
   parseStripeEventEnvelope,
+  refundedCentsOfCharge,
   refundScopeOfCharge,
   shouldReleaseDedupe,
   verifyStripeSignature,
@@ -226,11 +227,18 @@ async function handleDonationExpired(
   if (!donationId) {
     return Response.json({ ok: true, skipped: 'missing_donation_id' });
   }
-  const { data: donation } = await service
+  const { data: donation, error: readErr } = await service
     .from('donations')
     .select('status')
     .eq('id', donationId)
     .maybeSingle();
+  if (readErr) {
+    // A failed read is not "no such donation". Reporting 200 here closed the
+    // delivery for good and left the donation `pending` forever, because
+    // nothing sweeps a lapsed donation reservation.
+    console.error('donation expiry read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_read_failed' }, { status: 500 });
+  }
   if (!donation) {
     return Response.json({ ok: true, skipped: 'unknown_donation' });
   }
@@ -263,39 +271,73 @@ async function handleDonationRefunded(
   if (!paymentIntent) {
     return Response.json({ ok: true, skipped: 'missing_payment_intent' });
   }
-  const { data: donation } = await service
+  const { data: donation, error: readErr } = await service
     .from('donations')
-    .select('id, status')
+    .select('id, status, amount_cents')
     .eq('stripe_payment_intent_id', paymentIntent)
     .maybeSingle();
+  if (readErr) {
+    // A failed read is not "not a donation". Falling through on it handed the
+    // charge to the event-order path, which found no order either and answered
+    // 200 — so a transient database error looked to Stripe like a refund we had
+    // processed, and no retry ever came.
+    console.error('donation refund read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_read_failed' }, { status: 500 });
+  }
   if (!donation) {
     // Not a donation charge — fall through to the paid-event refund path.
     return null;
   }
   const scope = refundScopeOfCharge(charge);
-  if (donationStatusTransition(donation.status as string, 'charge.refunded', scope) === null) {
-    if (scope === 'partial' && donation.status === 'paid') {
-      // Money moved and the ledger cannot say so: `donations` has no
-      // partially-refunded state and no refunded-amount column, so the
-      // thermometer still counts the full donation. Logged for reconciliation
-      // rather than written, because the alternative — flipping to `refunded`
-      // — erases the whole donation from the charity's total over a part of it.
-      console.error(
-        'donation partially refunded; total overstates by the refunded part. donation:',
-        donation.id,
-      );
-      return Response.json({ ok: true, donation_partially_refunded: true, donation_id: donation.id });
-    }
+  const nextStatus = donationStatusTransition(donation.status as string, 'charge.refunded', scope);
+  if (nextStatus === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
-  const { error: updErr } = await service
+  const refundedCents = refundedCentsOfCharge(charge, donation.amount_cents as number, scope);
+  if (refundedCents === null) {
+    // The charge reports no amount this column can hold. Recording the status
+    // without the amount would state that money came back and then count all
+    // of it as raised, which is the § 769 overstatement again.
+    console.error(
+      'donation refund carried no usable amount; nothing recorded. donation:',
+      donation.id,
+    );
+    return Response.json({ ok: true, skipped: 'unreadable_refund_amount' });
+  }
+
+  // Compound CAS. `.eq('status', …)` is the status we READ, not a hardcoded
+  // 'paid', so a completing refund can move a partially-refunded donation on.
+  // `.lte('refunded_cents', …)` is the second half and it is what makes two
+  // instalments order-insensitive: `amount_refunded` is a running total, so a
+  // delivery carrying a SMALLER total than the ledger already holds is a stale
+  // one and must not walk the figure back.
+  const { data: updated, error: updErr } = await service
     .from('donations')
-    .update({ status: 'refunded', refunded_at: new Date().toISOString() })
+    .update({
+      status: nextStatus,
+      refunded_cents: refundedCents,
+      refunded_at: new Date().toISOString(),
+    })
     .eq('id', donation.id)
-    .eq('status', 'paid');
+    .eq('status', donation.status as string)
+    .lte('refunded_cents', refundedCents)
+    .select('id')
+    .maybeSingle();
   if (updErr) {
     console.error('donation refund update failed (code):', updErr?.code ?? 'unknown');
     return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
+  }
+  if (!updated) {
+    // Either a concurrent delivery recorded it, or this one arrived out of
+    // order carrying a smaller cumulative total than the ledger already holds.
+    return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+  if (nextStatus === 'partially_refunded') {
+    return Response.json({
+      ok: true,
+      donation_partially_refunded: true,
+      donation_id: donation.id,
+    });
   }
   return Response.json({ ok: true, donation_refunded: true, donation_id: donation.id });
 }

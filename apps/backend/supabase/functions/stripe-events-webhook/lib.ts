@@ -203,30 +203,42 @@ export function donationIdFromSession(session: Record<string, unknown>): string 
   return typeof id === 'string' ? id : null;
 }
 
-export type DonationStatus = 'pending' | 'paid' | 'refunded' | 'failed' | 'canceled';
+export type DonationStatus =
+  | 'pending'
+  | 'paid'
+  | 'partially_refunded'
+  | 'refunded'
+  | 'failed'
+  | 'canceled';
 
 /// The legal CAS transitions for a donation, keyed on the Stripe event type.
 /// The idempotency backbone (mirrors orderStatusTransition): a replayed
 /// `checkout.session.completed` finds the donation already `paid` and gets
-/// `null`, so it cannot double-count. A `paid` donation may move to `refunded`
-/// (a FULL charge.refunded); a still-`pending` donation expires to `canceled`.
+/// `null`, so it cannot double-count. A still-`pending` donation expires to
+/// `canceled`.
 ///
-///   pending + checkout.session.completed -> paid
-///   pending + checkout.session.expired   -> canceled
-///   paid    + charge.refunded (full)     -> refunded
-///   everything else                      -> null
+///   pending             + checkout.session.completed -> paid
+///   pending             + checkout.session.expired   -> canceled
+///   paid                + charge.refunded (partial)  -> partially_refunded
+///   paid                + charge.refunded (full)     -> refunded
+///   partially_refunded  + charge.refunded (partial)  -> partially_refunded
+///   partially_refunded  + charge.refunded (full)     -> refunded
+///   everything else                                  -> null
 ///
-/// A PARTIAL refund returns null rather than `refunded`, and the difference is
-/// a public number. `fundraiser_totals` sums `amount_cents` filtered on
-/// `status = 'paid'` (20270213_001), so flipping a partly-returned donation to
-/// `refunded` removed its WHOLE amount from the charity's thermometer: a 5 USD
-/// goodwill refund on a 500 USD donation erased 500 USD of it. The donations
-/// ledger carries no `partially_refunded` state and no refunded-amount column,
-/// so neither answer is exact — but overstating by the 5 USD that came back is
-/// a far smaller lie than understating by the 495 USD that did not, and it is
-/// the only one of the two that is also true about the STATUS: the donation was
-/// not refunded. The completing refund, whose charge reports `refunded: true`,
-/// still moves it on. decisions § 769.
+/// The last-but-one arm is a SELF-transition, and it is the one place this
+/// deliberately diverges from `orderStatusTransition`, which returns null for
+/// the same input. An order records only a seat, so a second instalment on an
+/// already-partially-refunded order has nothing to write and must not release
+/// the seat. A donation records an AMOUNT (`refunded_cents`, 20270620_001), so
+/// the second instalment does have something to write, and returning null here
+/// would leave the charity's thermometer overstating by the difference.
+///
+/// Before 20270620_001 a partial refund returned null outright, because
+/// `fundraiser_totals` summed `amount_cents` filtered on `status = 'paid'` and
+/// flipping a partly-returned donation to `refunded` removed its WHOLE amount
+/// from the thermometer — a 5 USD goodwill refund on a 500 USD donation erased
+/// 500 USD of it. That was the lesser of two lies, not an answer; the ledger
+/// can now state the real one. decisions § 769, § 776.
 export function donationStatusTransition(
   currentStatus: string,
   eventType: string,
@@ -237,10 +249,41 @@ export function donationStatusTransition(
     if (eventType === 'checkout.session.expired') return 'canceled';
     return null;
   }
-  if (currentStatus === 'paid' && eventType === 'charge.refunded') {
-    return refund === 'full' ? 'refunded' : null;
+  if (eventType !== 'charge.refunded') return null;
+  if (currentStatus === 'paid' || currentStatus === 'partially_refunded') {
+    return refund === 'full' ? 'refunded' : 'partially_refunded';
   }
   return null;
+}
+
+/// How many cents of a donation have come back in total, as a figure the
+/// ledger can store — or null when the charge does not say.
+///
+/// `charge.amount_refunded` is CUMULATIVE across every refund on the charge,
+/// not the size of the refund that raised this event. That is what makes the
+/// write idempotent and order-insensitive: two instalments delivered out of
+/// order carry 1000 and 3000, and the larger is always the true total.
+///
+/// A FULL refund is answered with the donation's own `amount_cents` rather
+/// than with the charge's figure. `refunded` means the whole donation came
+/// back, and the ledger's own column is the only amount the invariant
+/// `refunded_cents <= amount_cents` is stated against — reading Stripe's
+/// `amount` instead would let a charge whose total differs from ours (a
+/// currency or capture discrepancy) write a refund larger than the donation.
+///
+/// Everything else fails closed to null: a non-integer, negative or absent
+/// `amount_refunded` on a partial refund is not a number to put in a money
+/// column, and the caller records nothing rather than guessing.
+export function refundedCentsOfCharge(
+  charge: Record<string, unknown>,
+  amountCents: number,
+  refund: RefundScope,
+): number | null {
+  if (!Number.isInteger(amountCents) || amountCents < 0) return null;
+  if (refund === 'full') return amountCents;
+  const refunded = charge.amount_refunded;
+  if (typeof refunded !== 'number' || !Number.isInteger(refunded) || refunded <= 0) return null;
+  return Math.min(refunded, amountCents);
 }
 
 export interface AttendeeRow {

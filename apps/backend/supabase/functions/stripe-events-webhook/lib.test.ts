@@ -12,6 +12,7 @@ import {
   donationStatusTransition,
   isDonationSession,
   orderStatusTransition,
+  refundedCentsOfCharge,
   refundScopeOfCharge,
   parseStripeEventEnvelope,
   shouldReleaseDedupe,
@@ -243,13 +244,102 @@ Deno.test('donationStatusTransition — a PARTIAL refund does not erase the dona
   // `fundraiser_totals` sums amount_cents filtered on status = 'paid', so
   // flipping a partly-returned donation to `refunded` took its WHOLE amount off
   // the charity's thermometer: 5 USD back on a 500 USD donation erased 500 USD.
-  // The donations ledger has no partially-refunded state, so the honest answer
-  // is to leave the status alone — it is also the only one of the two that is
-  // TRUE about the status. decisions § 769.
-  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded', 'partial'), null);
+  // Before 20270620_001 the ledger had no partially-refunded state, so the
+  // honest answer was to leave the status alone (decisions § 769); it has one
+  // now, and the donation lands there instead of nowhere.
+  assertStrictEquals(
+    donationStatusTransition('paid', 'charge.refunded', 'partial'),
+    'partially_refunded',
+  );
   // The completing refund still moves it on, so the seat-less donation ledger
   // reaches the same terminal state once the whole charge is back.
   assertStrictEquals(donationStatusTransition('paid', 'charge.refunded', 'full'), 'refunded');
+});
+
+Deno.test('donationStatusTransition — a second instalment is a self-transition, unlike an order', () => {
+  // The one deliberate divergence from orderStatusTransition. An order records
+  // a seat, so a second partial has nothing to write and must not release it.
+  // A donation records an AMOUNT, so the second instalment does have something
+  // to write — returning null would leave the thermometer overstating by it.
+  assertStrictEquals(
+    donationStatusTransition('partially_refunded', 'charge.refunded', 'partial'),
+    'partially_refunded',
+  );
+  assertStrictEquals(
+    orderStatusTransition('partially_refunded', 'charge.refunded', 'partial'),
+    null,
+  );
+});
+
+Deno.test('donationStatusTransition — the completing refund moves a partially refunded donation on', () => {
+  assertStrictEquals(
+    donationStatusTransition('partially_refunded', 'charge.refunded', 'full'),
+    'refunded',
+  );
+  // …and nothing else can move it. A partially refunded donation is not a
+  // pending one: it can neither be confirmed nor expired.
+  assertStrictEquals(
+    donationStatusTransition('partially_refunded', 'checkout.session.completed'),
+    null,
+  );
+  assertStrictEquals(
+    donationStatusTransition('partially_refunded', 'checkout.session.expired'),
+    null,
+  );
+});
+
+Deno.test('donationStatusTransition — a refunded donation is terminal', () => {
+  assertStrictEquals(donationStatusTransition('refunded', 'charge.refunded', 'full'), null);
+  assertStrictEquals(donationStatusTransition('refunded', 'charge.refunded', 'partial'), null);
+  assertStrictEquals(donationStatusTransition('canceled', 'charge.refunded'), null);
+  assertStrictEquals(donationStatusTransition('failed', 'charge.refunded'), null);
+});
+
+Deno.test('refundedCentsOfCharge — a full refund is the DONATION\'s amount, not the charge\'s', () => {
+  // `refunded` means the whole donation came back, and `refunded_cents <=
+  // amount_cents` is stated against our own column. A charge whose total
+  // disagrees with ours must not be able to write a refund larger than the
+  // donation it is refunding.
+  assertStrictEquals(
+    refundedCentsOfCharge({ amount: 60000, amount_refunded: 60000, refunded: true }, 50000, 'full'),
+    50000,
+  );
+  // …and it does not depend on the charge saying anything at all.
+  assertStrictEquals(refundedCentsOfCharge({}, 50000, 'full'), 50000);
+});
+
+Deno.test('refundedCentsOfCharge — a partial refund is the charge\'s CUMULATIVE amount', () => {
+  // amount_refunded is a running total across every refund on the charge, not
+  // the size of the one that raised this event — which is what makes the write
+  // idempotent and order-insensitive.
+  assertStrictEquals(
+    refundedCentsOfCharge({ amount: 50000, amount_refunded: 500, refunded: false }, 50000, 'partial'),
+    500,
+  );
+  assertStrictEquals(
+    refundedCentsOfCharge({ amount: 50000, amount_refunded: 1500, refunded: false }, 50000, 'partial'),
+    1500,
+  );
+  // Clamped to the donation: the CHECK refuses more coming back than went in,
+  // and a 23514 from the webhook is a delivery Stripe retries forever.
+  assertStrictEquals(
+    refundedCentsOfCharge({ amount_refunded: 99999 }, 50000, 'partial'),
+    50000,
+  );
+});
+
+Deno.test('refundedCentsOfCharge — an unusable amount is null, never a guess', () => {
+  for (const bad of [undefined, null, '500', Number.NaN, 12.5, 0, -100]) {
+    assertStrictEquals(
+      refundedCentsOfCharge({ amount_refunded: bad }, 50000, 'partial'),
+      null,
+      `amount_refunded=${String(bad)} must not reach a money column`,
+    );
+  }
+  // A donation amount that is not a whole number of cents is not a bound to
+  // clamp against either — both directions fail closed.
+  assertStrictEquals(refundedCentsOfCharge({ amount_refunded: 500 }, 12.5, 'partial'), null);
+  assertStrictEquals(refundedCentsOfCharge({}, -1, 'full'), null);
 });
 
 Deno.test('donationStatusTransition — the scope default is full, matching the event ledger', () => {

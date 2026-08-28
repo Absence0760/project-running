@@ -279,8 +279,17 @@ export type EventModality = 'in_person';
 // fundraisers.status — open until the owner closes it.
 export type FundraiserStatus = 'open' | 'closed';
 // donations.status — the donation ledger lifecycle, written only by the
-// stripe-events webhook donation branch (service role).
-export type DonationStatus = 'pending' | 'paid' | 'refunded' | 'failed' | 'canceled';
+// stripe-events webhook donation branch (service role). `partially_refunded`
+// (20270620_001) is the state a donation is in when part of the charge came
+// back and the rest did not; `donations.refunded_cents` carries how much, and
+// `fundraiser_totals` sums the difference.
+export type DonationStatus =
+	| 'pending'
+	| 'paid'
+	| 'partially_refunded'
+	| 'refunded'
+	| 'failed'
+	| 'canceled';
 // session_plan_items.kind — a yoga/pilates movement is a timed hold, a counted
 // set of reps, or a continuous flow. Enforced by the session_plan_items_kind_check
 // CHECK constraint (migration 20270103_001) — keep this union in lockstep
