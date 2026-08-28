@@ -74,6 +74,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parseSteps } from './check_ci_diagnostics.mjs';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const WORKFLOW_DIR = join(REPO_ROOT, '.github', 'workflows');
 // Composite actions are the one place a third-party `uses:` can hide from
@@ -345,8 +347,9 @@ export function checkMelos(files, lockText) {
 	return { errors, ok, locked };
 }
 
-/// Every `cargo install defmt-print` and every `actions/cache` key naming it.
-/// A version of null means the install passed no `--version` at all.
+/// Every `cargo install defmt-print` and every `actions/cache` key naming it,
+/// within one span of YAML. A version of null means the install passed no
+/// `--version` at all, or the key carried no version.
 /**
  * @param {string} text
  * @returns {{ installs: VersionedLine[], cacheKeys: VersionedLine[] }}
@@ -376,6 +379,39 @@ export function parseDefmtPrint(text) {
 	return { installs, cacheKeys };
 }
 
+/// The same, grouped by the JOB whose steps hold them, with file-absolute
+/// line numbers.
+///
+/// A cache key and the install it must agree with are a property of ONE job:
+/// the key restores `~/.cargo/bin/defmt-print` for that runner and that
+/// runner's `command -v defmt-print ||` then decides whether the pin executes.
+/// Reading the whole FILE compared every key against the first install in it,
+/// which is right only while every job in the file happens to pin the same
+/// version. Two sim jobs pinning different ones — this file has held two sim
+/// jobs since the day it was written, and they agree only by hand — made the
+/// check wrong in both directions at once: a key correct for its own job was
+/// reported stale, and a key that WOULD defeat its own job's pin was reported
+/// `[OK]`, which is the exact failure (run 31623789083) the header above
+/// records. The step boundaries come from check_ci_diagnostics.mjs, which
+/// already parses them and is tested on them.
+/**
+ * @param {string} text
+ * @returns {Map<string, { installs: VersionedLine[], cacheKeys: VersionedLine[] }>}
+ */
+export function parseDefmtPrintByJob(text) {
+	/** @type {Map<string, { installs: VersionedLine[], cacheKeys: VersionedLine[] }>} */
+	const byJob = new Map();
+	for (const step of parseSteps(text)) {
+		const { installs, cacheKeys } = parseDefmtPrint(step.body);
+		if (installs.length === 0 && cacheKeys.length === 0) continue;
+		const entry = byJob.get(step.job) ?? { installs: [], cacheKeys: [] };
+		for (const i of installs) entry.installs.push({ line: step.line + i.line - 1, version: i.version });
+		for (const k of cacheKeys) entry.cacheKeys.push({ line: step.line + k.line - 1, version: k.version });
+		byJob.set(step.job, entry);
+	}
+	return byJob;
+}
+
 /** @param {WorkflowFile[]} files */
 export function checkDefmtPrint(files) {
 	/** @type {string[]} */
@@ -387,66 +423,83 @@ export function checkDefmtPrint(files) {
 	let installCount = 0;
 
 	for (const { name, text } of files) {
-		const { installs, cacheKeys } = parseDefmtPrint(text);
-		for (const install of installs) {
-			installCount++;
-			const where = `${name}:${install.line}`;
-			if (install.version === null) {
-				errors.push(
-					`${where} — \`${CARGO_INSTALL}\` passes no \`--version\`, so it installs ` +
-						`whatever defmt-print is newest when the job runs.`,
-				);
-				continue;
+		for (const [job, { installs, cacheKeys }] of parseDefmtPrintByJob(text)) {
+			for (const install of installs) {
+				installCount++;
+				const where = `${name}:${install.line}`;
+				if (install.version === null) {
+					errors.push(
+						`${where} — \`${CARGO_INSTALL}\` passes no \`--version\`, so it installs ` +
+							`whatever defmt-print is newest when the job runs.`,
+					);
+					continue;
+				}
+				if (!EXACT_VERSION.test(install.version)) {
+					errors.push(
+						`${where} — \`--version ${install.version}\` is a range, not a pin; it still ` +
+							`admits any release matching it. Pass a bare MAJOR.MINOR.PATCH, which ` +
+							`\`cargo install\` reads as an exact version (unlike a Cargo.toml ` +
+							`dependency, it is NOT a caret there).`,
+					);
+					continue;
+				}
+				ok.push(`${where} -> defmt-print ${install.version}`);
+				const sites = versions.get(install.version) ?? [];
+				sites.push(where);
+				versions.set(install.version, sites);
 			}
-			if (!EXACT_VERSION.test(install.version)) {
-				errors.push(
-					`${where} — \`--version ${install.version}\` is a range, not a pin; it still ` +
-						`admits any release matching it. Pass a bare MAJOR.MINOR.PATCH, which ` +
-						`\`cargo install\` reads as an exact version (unlike a Cargo.toml ` +
-						`dependency, it is NOT a caret there).`,
-				);
-				continue;
-			}
-			ok.push(`${where} -> defmt-print ${install.version}`);
-			const sites = versions.get(install.version) ?? [];
-			sites.push(where);
-			versions.set(install.version, sites);
-		}
 
-		// The cache key must carry the version, or `command -v` keeps the old
-		// binary and the pin never executes. Compared only against an install
-		// that is already a valid pin — against a range the comparison means
-		// nothing, and reporting it would bury the error worth acting on.
-		const installed = installs.find(
-			(i) => i.version !== null && EXACT_VERSION.test(i.version),
-		)?.version;
-		for (const key of cacheKeys) {
-			const where = `${name}:${key.line}`;
-			if (key.version === null) {
-				errors.push(
-					`${where} — the defmt-print cache key carries no version, so it cannot ` +
-						`move when the pin does. The install is \`command -v defmt-print || cargo ` +
-						`install ...\`, so this key keeps restoring whatever binary was cached ` +
-						`under it and the pin never runs. Put the pinned version in the key.`,
-				);
-				continue;
-			}
-			if (installed && key.version !== installed) {
-				errors.push(
-					`${where} — cache key names defmt-print ${key.version} but the install ` +
-						`pins ${installed}. The install is \`command -v defmt-print || cargo ` +
-						`install ...\`, so this key would restore the old binary and the pin ` +
-						`would never run. Put the pinned version in the key.`,
-				);
-			} else if (installed) {
-				ok.push(`${where} -> cache key matches defmt-print ${installed}`);
+			// The cache key must carry the version its OWN job installs, or
+			// `command -v` keeps the restored binary and the pin never executes.
+			// Compared only against an install that is already a valid pin —
+			// against a range the comparison means nothing, and reporting it would
+			// bury the error worth acting on.
+			const installed = installs.find(
+				(i) => i.version !== null && EXACT_VERSION.test(i.version),
+			)?.version;
+			for (const key of cacheKeys) {
+				const where = `${name}:${key.line}`;
+				if (key.version === null) {
+					errors.push(
+						`${where} — the defmt-print cache key carries no version, so it cannot ` +
+							`move when the pin does. The install is \`command -v defmt-print || cargo ` +
+							`install ...\`, so this key keeps restoring whatever binary was cached ` +
+							`under it and the pin never runs. Put the pinned version in the key.`,
+					);
+					continue;
+				}
+				if (installed === undefined) {
+					// An install that exists but is not a valid pin has already been
+					// reported; comparing a key against a range means nothing, and a
+					// second line here would bury the error worth acting on. A job that
+					// caches the binary and never installs it is a different thing:
+					// nothing in it states which binary the key may hold.
+					if (installs.length === 0) {
+						errors.push(
+							`${where} — job \`${job}\` restores a defmt-print cache but never runs ` +
+								`\`${CARGO_INSTALL}\`, so nothing in the job says which binary the key ` +
+								`is allowed to hold. Install it here too, or drop the cache step.`,
+						);
+					}
+					continue;
+				}
+				if (key.version !== installed) {
+					errors.push(
+						`${where} — cache key names defmt-print ${key.version} but job \`${job}\` ` +
+							`installs ${installed}. The install is \`command -v defmt-print || cargo ` +
+							`install ...\`, so this key would restore the old binary and the pin ` +
+							`would never run. Put the pinned version in the key.`,
+					);
+					continue;
+				}
+				ok.push(`${where} -> cache key matches job \`${job}\`'s defmt-print ${installed}`);
 			}
 		}
 	}
 
 	if (installCount === 0) {
 		errors.push(
-			`no \`${CARGO_INSTALL}\` lines found in any workflow. Either the firmware sim ` +
+			`no \`${CARGO_INSTALL}\` lines found in any workflow job. Either the firmware sim ` +
 				`no longer decodes defmt, or the command was reworded and this check now ` +
 				`enforces nothing.`,
 		);
