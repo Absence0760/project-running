@@ -1,6 +1,6 @@
 # Fundraising / donation pages on a run or event — implementation plan
 
-> **Status:** **Built web + mobile-read (gated)** — landed 2026-06-19 (migration `20270213_001_fundraisers.sql`, ADR §167). The full code path ships behind a fail-closed prod gate (live Stripe keys unset + owner/CISO/counsel sign-off — see § Gating). **Client UI gate (2026-07-11, §223):** the whole donation surface is additionally hidden behind the fail-closed `PUBLIC_FUNDRAISING_ENABLED` flag (`src/lib/social/fundraising_flag.ts`) — unset in prod, so `FundraiserSection` renders nothing on run/event detail and the public `/fundraisers/[id]` page falls to its not-found state, and no user reaches a donate button that would 503 on the unconfigured Edge Function. Local dev + e2e set it truthy in `.env.development`. Flip it on the same day Stripe + the sign-off land. **Web:** public `/fundraisers/[id]` page (thermometer + donation feed + amount-picker → Stripe-hosted destination-charge Checkout), create/edit/close via `FundraiserEditor`, attach affordance on run-detail + event-detail. **Mobile (Android + iOS twin):** read + web-handoff card on run-detail + event-detail (donate opens the web page). The sections below were the implementation plan; they now describe shipped behaviour except where a step is explicitly deferred (e.g. mobile authoring, direct-to-charity payout). Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
+> **Status:** **Built web + mobile-read (gated)** — landed 2026-06-19 (migration `20270213_001_fundraisers.sql`, ADR §167). The full code path ships behind a fail-closed prod gate (live Stripe keys unset + owner/CISO/counsel sign-off — see § Gating). **Client UI gate (2026-07-11, §223):** the whole donation surface is additionally hidden behind the fail-closed `PUBLIC_FUNDRAISING_ENABLED` flag (`src/lib/social/fundraising_flag.ts`) — unset in prod, so `FundraiserSection` renders nothing on run/event detail and the public `/fundraisers/[id]` page falls to its not-found state, and no user reaches a donate button that would 503 on the unconfigured Edge Function. Local dev + e2e set it truthy in `.env.development`. Flip it on the same day Stripe + the sign-off land. **Web:** public `/fundraisers/[id]` page (thermometer + donation feed + amount-picker → Stripe-hosted destination-charge Checkout), create/edit/close via `FundraiserEditor`, attach affordance on run-detail + event-detail. **Mobile (Android + iOS twin):** read + web-handoff card on run-detail + event-detail (donate opens the web page). The sections below were the implementation plan; they now describe shipped behaviour except where a step is explicitly deferred (e.g. mobile authoring, direct-to-charity payout). **Money-rail corrections (2026-08-28, migrations `20270620_001` + `20270620_002`, [decisions § 776](../architecture/decisions.md)):** a partial refund is now representable and both public numbers are net of it, and the donor checkout's idempotency key comes from the client so a retry cannot open a second Checkout Session — see § The money numbers, as shipped. Tracked in [roadmap.md § Planned features](../product/roadmap.md#planned-features--specced-2026-06-15).
 
 ## Goal & user value
 
@@ -203,6 +203,108 @@ Web (`apps/web/src/lib/i18n/locales/{en,de,es,fr,ja,pt-BR}.ts`) and mobile (`app
 - `docs/architecture/decisions.md` — one new ADR: *"Charity fundraising pages reuse the paid-events Stripe Connect destination-charge rail (one shared webhook + the user-level payout account); a fundraiser is polymorphic over (run | event); donation status is service-role-only; live charges are gated on the same owner+CISO+counsel sign-off + live Stripe keys as paid events."*
 - Root `CLAUDE.md` — add `fundraiser_progress` to the parity-pair lockstep list.
 - GDPR posture / sub-processor docs — `donations` is a new personal-data table (covered by the existing Stripe sub-processor entry; add the table to Art 20 export + Art 17 deletion, with the same financial-retention caveat as `event_orders`).
+
+## The money numbers, as shipped
+
+Two things the original build could not state, both corrected 2026-08-28
+([decisions § 776](../architecture/decisions.md)). Neither has been run against
+Stripe in any mode — the whole surface is still gated off (§ Gating).
+
+### `raised_cents` is what the charity KEPT
+
+`fundraiser_totals` used to sum `amount_cents` filtered on `status = 'paid'`,
+and the webhook flipped `paid -> refunded` on any `charge.refunded`. A $5
+goodwill refund on a $500 donation therefore removed **$500** from the public
+thermometer ([§ 769](../architecture/decisions.md)). That entry stopped the
+status moving on a partial refund, which overstates by the $5 instead — the
+smaller of two lies, because the ledger had no third answer: no
+`partially_refunded` status, no refunded-amount column.
+
+It has both now (`20270620_001`):
+
+- `donations.refunded_cents` holds Stripe's **cumulative** `charge.amount_refunded`
+  for the charge, so the write is idempotent and order-insensitive — two
+  instalments delivered out of order carry 1000 and 3000, and the larger is
+  always the true total. The webhook CASes on the status it read **and** on
+  `refunded_cents <= the reported total`, so a stale delivery cannot walk the
+  figure back.
+- `fundraiser_totals.raised_cents = sum(amount_cents - refunded_cents)` over
+  `('paid', 'partially_refunded')`. `donor_count` counts the same two — a
+  partially refunded donor is still a donor.
+- `fundraiser_feed` shows each donor's **net** amount and includes partially
+  refunded rows, because a gross figure in the feed beside a net total is two
+  public numbers that do not add up.
+- A fully `refunded` row is **excluded** rather than netted to zero. For a
+  correctly recorded full refund those are the same number; for a row written
+  before `20270620_001` (`refunded_cents = 0`, real amount unknown) netting
+  would add the whole donation back to the total.
+- Two CHECKs bind the column: `refunded_cents between 0 and amount_cents`, and
+  `partially_refunded` implies `refunded_cents > 0`. The `lock_donation_status`
+  trigger now refuses a non-service-role write to it, as it already did for
+  `status`.
+
+The one arm that deliberately differs from the event ledger:
+`partially_refunded + charge.refunded(partial)` is a **self-transition** for a
+donation and `null` for an order. An order records a seat and has nothing to
+write on a second instalment; a donation records an amount and does.
+
+#### Reconciling pre-§769 refunds
+
+A donation that the old whole-refund behaviour flipped to `refunded` over a
+*partial* refund is **not recoverable from this database**. Nothing recorded how
+much came back; the only record is at Stripe. The migration deliberately does
+not backfill, which leaves the cohort exactly identifiable:
+
+```sql
+select id, amount_cents, refunded_at
+  from donations
+ where status = 'refunded' and refunded_cents = 0;
+```
+
+Every row that predates `20270620_001` matches, and no row written after it
+does (a full refund now always writes `refunded_cents = amount_cents`). For each
+one, read `amount_refunded` off the charge in the Stripe dashboard: if it is
+less than the donation, the row belongs in `partially_refunded` with that
+figure and the charity's total is understating by the difference. **Nil today**
+— the surface has never taken a live payment — so this is a runbook item for
+whenever it stops being nil, listed on the money-flow checklist in
+[club_events.md § Refunds](club_events.md#refunds--cancellation-coupling).
+
+### The donor client owns the idempotency key
+
+`donations-checkout` built its Stripe idempotency key from a donation id minted
+by `crypto.randomUUID()` **inside** the request, so no later invocation could
+resolve to it. It covered the SDK's retry of one HTTP request and nothing more,
+while its comment claimed a retried call reused the same session.
+
+The key has to be derived from something that survives the retry, and the
+server has nothing that does. `events-checkout` reconstructs its own from
+`(buyer, event, instance)` because the buyer is authenticated; **a donor may be
+anonymous**, which is the whole point of this flow, so there is no identity to
+key on — and repeat giving is legitimate, so the amount is not a natural key
+either. The only thing that survives is a value the client mints once per
+donation attempt and re-sends.
+
+- `idempotency_key` is a **required** body field (a UUID; missing or malformed
+  is a 400). The surface has never been live, so there is no deployed caller
+  to keep working and no reason to make a money-safety field optional.
+- It is persisted as `donations.client_request_id` under a partial unique index
+  (`20270620_002`), so two concurrent attempts carrying one key cannot both open
+  a donation.
+- `resolveDonationIntent` resolves it **before** the Stripe call: a pending row
+  for the same request is *resumed* (the same donation id rebuilds
+  byte-identical Stripe params, so Stripe replays the session already open), a
+  row for a different fundraiser/amount/donor is a 409 `params_changed`, and a
+  row that is no longer pending is a 409 `already_used` — reopening that one
+  would charge a donor who has already paid.
+- The row is written **before** the Stripe call, mirroring `events-checkout`.
+  Writing it afterwards left the only record of the attempt at Stripe, where the
+  next call could not find it, so a crash between the two made the retry open a
+  second session against a second row. The cost is an inert `pending` row with
+  no session when Stripe fails; nothing reads it, and the retry repairs it.
+- Web mints the key per **amount** in `/fundraisers/[id]`, so a retry after a
+  failed submit re-sends it and an edited amount gets a fresh one (the server
+  would otherwise 409 the edit as `params_changed`).
 
 ## Gating / compliance
 
