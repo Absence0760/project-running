@@ -496,18 +496,42 @@ export function buildMutant(text, candidates) {
   return text.slice(0, afterBegin) + PREAMBLE + out + text.slice(cursor);
 }
 
+/// Every verdict the mutant emitted, keyed by description and kept as a LIST.
+/// A `Map<description, boolean>` collapsed two assertions sharing a
+/// description to whichever ran last, in both directions: `ok` then `not ok`
+/// scored the surviving — vacuous — one as killed, and the reverse scored a
+/// genuinely killed one as a survivor. The description is the only handle the
+/// TAP stream offers on a call site, so a repeated one is a verdict this guard
+/// cannot attribute, and `verdictFor` says so rather than picking. decisions
+/// § 774.
 /**
  * @param {string} output
- * @returns {Map<string, boolean>}
+ * @returns {Map<string, boolean[]>}
  */
 export function parseTap(output) {
-  /** @type {Map<string, boolean>} */
+  /** @type {Map<string, boolean[]>} */
   const results = new Map();
   for (const line of output.split('\n')) {
     const m = /^(ok|not ok) (\d+) - (.*)$/.exec(line.trim());
-    if (m) results.set(m[3].trim(), m[1] === 'ok');
+    if (!m) continue;
+    const description = m[3].trim();
+    const verdicts = results.get(description) ?? [];
+    verdicts.push(m[1] === 'ok');
+    results.set(description, verdicts);
   }
   return results;
+}
+
+/**
+ * @param {Map<string, boolean[]>} tap
+ * @param {string} description
+ * @returns {{ status: 'unreached' | 'survived' | 'killed' | 'ambiguous', count: number }}
+ */
+export function verdictFor(tap, description) {
+  const verdicts = tap.get(description);
+  if (verdicts === undefined || verdicts.length === 0) return { status: 'unreached', count: 0 };
+  if (verdicts.length > 1) return { status: 'ambiguous', count: verdicts.length };
+  return { status: verdicts[0] ? 'survived' : 'killed', count: 1 };
 }
 
 // Refusal assertions whose empty result is a real answer rather than a hidden
@@ -517,6 +541,11 @@ export function parseTap(output) {
 // in the database but this transaction did not write it" is NOT a reason to
 // add one: that is a fixture the test owes, and the entry would excuse exactly
 // the vacuity the guard exists to find.
+//
+// An entry keys on `file + description`, which is one assertion only because
+// `verdictFor` refuses a repeated description outright — two assertions
+// sharing one would never reach the survivor list, so no entry can excuse a
+// second assertion it was not written for.
 export const EXPECTED_SURVIVORS = [
   {
     file: 'auto_hide_reports_test.sql',
@@ -768,13 +797,15 @@ export function validateOperatorEndToEnd(relations) {
       'Its subject is a route ALREADY IN THE DATABASE that this transaction never wrote, so a kill means the mutation is revealing rows on the strength of the seed rather than of the fixture — which is what the transaction-local scope exists to stop. Check that the operator still carries it: a `subject` alias on the permissive replacement, and the widening policy on the base table.',
   };
   for (const [description, expected, operator, role] of verdicts) {
-    const got = tap.get(`control: ${description}`);
-    if (got === expected) continue;
+    const { status } = verdictFor(tap, `control: ${description}`);
+    if (status === (expected ? 'survived' : 'killed')) continue;
     failures.push(
       `the end-to-end control's ${operator}-operator ${role} assertion ` +
-        (got === undefined
+        (status === 'unreached'
           ? 'never ran'
-          : `was ${got ? 'not killed' : 'killed'} where it must ${expected ? 'survive' : 'be killed'}`) +
+          : status === 'ambiguous'
+            ? 'reported more than once, so its verdict cannot be attributed — the control fixture built two assertions with one description'
+            : `was ${status === 'survived' ? 'not killed' : 'killed'} where it must ${expected ? 'survive' : 'be killed'}`) +
         `. ${why[role]}`,
     );
   }
@@ -946,15 +977,21 @@ function main() {
     definerPopulation += measurable.filter((c) => c.neutralise.length > 0).length;
     const tap = parseTap(psql(buildMutant(text, measurable)));
     for (const candidate of measurable) {
-      const passed = tap.get(candidate.description);
-      if (passed === undefined) {
+      const { status, count } = verdictFor(tap, candidate.description);
+      if (status === 'unreached') {
         failures.push(
           `${file}:${candidate.line}  the mutant run never reached "${candidate.description}", so the guard could not measure it.` +
             (lastPsqlErrors.length > 0 ? ` psql said: ${lastPsqlErrors.join(' / ')}` : ''),
         );
         continue;
       }
-      if (passed) {
+      if (status === 'ambiguous') {
+        failures.push(
+          `${file}:${candidate.line}  ${count} assertions in this file report under the description "${candidate.description}", and the TAP stream offers no other handle on a call site — so the guard cannot tell which verdict belongs to this one, and a vacuous refusal would be scored on its twin's result. Give each assertion a description of its own. EXPECTED_SURVIVORS keys on the same string, so a duplicate would also let one entry excuse two assertions.`,
+        );
+        continue;
+      }
+      if (status === 'survived') {
         survivors.push({
           file,
           line: candidate.line,

@@ -28,6 +28,7 @@ import {
   statementEnd,
   statementStart,
   throwsPinsItsError,
+  verdictFor,
 } from './check_pgtap_refusal_assertions.mjs';
 
 test('findCalls ignores a call name that only appears inside a dollar-quoted body', () => {
@@ -355,8 +356,67 @@ test('the transaction-local test is the one that reaches a subtransaction write'
 
 test('parseTap keys results by description so a shifted ordinal cannot mislabel one', () => {
   const tap = parseTap(['1..2', 'ok 1 - alpha', 'not ok 2 - beta', '# Failed test 2'].join('\n'));
-  assert.equal(tap.get('alpha'), true);
-  assert.equal(tap.get('beta'), false);
+  assert.deepEqual(tap.get('alpha'), [true]);
+  assert.deepEqual(tap.get('beta'), [false]);
+  assert.deepEqual(verdictFor(tap, 'alpha'), { status: 'survived', count: 1 });
+  assert.deepEqual(verdictFor(tap, 'beta'), { status: 'killed', count: 1 });
+  assert.deepEqual(verdictFor(tap, 'gamma'), { status: 'unreached', count: 0 });
+});
+
+// The description is the only handle the TAP stream offers on a call site, so
+// a repeated one is a verdict that cannot be attributed. It used to be
+// resolved last-writer-wins, wrongly in BOTH directions: `ok` then `not ok`
+// scored the surviving — vacuous — assertion as killed, which is the § 741
+// inversion pointed at the instrument, and the reverse scored a genuinely
+// killed one as a survivor. decisions § 774.
+test('two assertions sharing a description are ambiguous, not silently collapsed', () => {
+  const desc = 'other user cannot read the row';
+  for (const order of [
+    [`ok 1 - ${desc}`, `not ok 2 - ${desc}`],
+    [`not ok 1 - ${desc}`, `ok 2 - ${desc}`],
+  ]) {
+    const tap = parseTap(order.join('\n'));
+    assert.equal(tap.get(desc)?.length, 2);
+    assert.deepEqual(verdictFor(tap, desc), { status: 'ambiguous', count: 2 });
+  }
+});
+
+test('agreeing duplicates are ambiguous too, because EXPECTED_SURVIVORS keys on the same string', () => {
+  const desc = 'nobody else sees it';
+  const tap = parseTap([`ok 1 - ${desc}`, `ok 2 - ${desc}`].join('\n'));
+  assert.deepEqual(verdictFor(tap, desc), { status: 'ambiguous', count: 2 });
+});
+
+// The population the guard actually runs over. A duplicate is a real failure
+// once one exists, so the guard is only free of that noise while this holds.
+test('no committed pgtap file reuses an assertion description', () => {
+  const KINDS = [
+    'is_empty', 'is', 'isnt', 'results_eq', 'results_ne', 'ok', 'throws_ok', 'lives_ok',
+    'set_eq', 'set_has', 'bag_eq', 'row_eq', 'matches', 'cmp_ok', 'isa_ok',
+    'has_table', 'has_column', 'col_is_pk', 'policies_are',
+  ];
+  let descriptions = 0;
+  /** @type {string[]} */
+  const duplicates = [];
+  const files = readdirSync(TESTS_DIR).filter((f) => f.endsWith('.sql'));
+  for (const file of files) {
+    const text = readFileSync(join(TESTS_DIR, file), 'utf8');
+    /** @type {Map<string, number>} */
+    const counts = new Map();
+    for (const kind of KINDS) {
+      for (const call of findCalls(text, kind)) {
+        const description = literalOf(call.argv.at(-1) ?? '');
+        if (description === null) continue;
+        descriptions += 1;
+        counts.set(description, (counts.get(description) ?? 0) + 1);
+      }
+    }
+    for (const [description, n] of counts) {
+      if (n > 1) duplicates.push(`${file}: "${description}" × ${n}`);
+    }
+  }
+  assert.ok(descriptions > 1000, `only ${descriptions} descriptions scanned across ${files.length} files`);
+  assert.deepEqual(duplicates, []);
 });
 
 // The population is admitted by `relations.has(...)`, so the catalogue read is
