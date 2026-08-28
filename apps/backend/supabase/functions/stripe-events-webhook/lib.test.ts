@@ -239,6 +239,29 @@ Deno.test('donationStatusTransition — pending expires to canceled', () => {
   assertStrictEquals(donationStatusTransition('pending', 'checkout.session.expired'), 'canceled');
 });
 
+Deno.test('donationStatusTransition — a PARTIAL refund does not erase the donation', () => {
+  // `fundraiser_totals` sums amount_cents filtered on status = 'paid', so
+  // flipping a partly-returned donation to `refunded` took its WHOLE amount off
+  // the charity's thermometer: 5 USD back on a 500 USD donation erased 500 USD.
+  // The donations ledger has no partially-refunded state, so the honest answer
+  // is to leave the status alone — it is also the only one of the two that is
+  // TRUE about the status. decisions § 769.
+  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded', 'partial'), null);
+  // The completing refund still moves it on, so the seat-less donation ledger
+  // reaches the same terminal state once the whole charge is back.
+  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded', 'full'), 'refunded');
+});
+
+Deno.test('donationStatusTransition — the scope default is full, matching the event ledger', () => {
+  // Same default as orderStatusTransition: a caller that cannot read a scope
+  // treats the refund as whole, which is the direction that never overstates
+  // what a charity has raised.
+  assertStrictEquals(
+    donationStatusTransition('paid', 'charge.refunded'),
+    donationStatusTransition('paid', 'charge.refunded', 'full'),
+  );
+});
+
 Deno.test('donationStatusTransition — paid refunds, pending does not', () => {
   assertStrictEquals(donationStatusTransition('paid', 'charge.refunded'), 'refunded');
   assertStrictEquals(donationStatusTransition('pending', 'charge.refunded'), null);

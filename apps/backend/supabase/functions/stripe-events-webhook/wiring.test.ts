@@ -61,3 +61,20 @@ Deno.test('the refund CAS matches the status it read, not a hardcoded paid', () 
     'a hardcoded paid CAS cannot complete a partially refunded order',
   );
 });
+
+Deno.test('the donation refund arm reads the scope too, not just the event name', () => {
+  // `donationStatusTransition`'s scope parameter DEFAULTS to 'full', so a call
+  // site that forgets to pass it silently restores the bug the default exists
+  // to describe: a partial refund erasing a whole donation from the charity's
+  // thermometer. The lib test cannot see which arguments index.ts passes.
+  const call = SRC.match(/donationStatusTransition\(\s*donation\.status as string,\s*'charge\.refunded'([^)]*)\)/);
+  assert(call, "the donation charge.refunded transition call is gone — has the arm moved?");
+  assert(
+    /,\s*scope\b/.test(call[1]),
+    `the donation refund transition must be given the charge's refund scope, got: ${call[1]}`,
+  );
+  assert(
+    /const scope = refundScopeOfCharge\(charge\);/.test(SRC),
+    'the scope must be derived from the charge via refundScopeOfCharge',
+  );
+});
