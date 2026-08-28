@@ -29,8 +29,8 @@
 //
 // The asset ceiling closes a hole the other three could not see. The walk
 // matched `*.js` and `*.css` only, so everything else the build emits was
-// outside the metric entirely: measured, 33 files and 4057 KB gzipped, of which
-// ONE file is 3865 KB — the unsubsetted `material-symbols-outlined.woff2`,
+// outside the metric entirely: measured, 33 files and 4058 KB gzipped, of which
+// ONE file is 3866 KB — the unsubsetted `material-symbols-outlined.woff2`,
 // declared `font-display: block` in the ROOT layout's stylesheet, so it is
 // blocking weight for every reader and 1.8x the whole code ceiling. It is
 // exempted by name below rather than absorbed, because a ceiling that would
@@ -81,7 +81,7 @@
 // the rule. What changed is the population it measures, not the ceiling.
 // MAX_ASSET_KB is 100, the same per-file payload figure as a catalogue: ~47%
 // over the largest non-exempt asset (icon-512.png, 68 KB) and 20x over the
-// largest prerendered page (5 KB). Assets measured 2026-08-28: font 3865 KB,
+// largest prerendered page (5 KB). Assets measured 2026-08-28: font 3866 KB,
 // icon-512 68, og-default 20, icon-192 11, apple-touch-icon 10, then the 16
 // HTML pages at 5 KB and below and everything else at 1.
 //
@@ -131,7 +131,7 @@ export const ASSET_EXEMPTIONS = [
 		pattern: /^_app\/immutable\/assets\/material-symbols-outlined\.[^/]+\.woff2$/,
 		maxKb: 3900,
 		why:
-			'the full unsubsetted Material Symbols Outlined variable font (3865 KB gzipped, ' +
+			'the full unsubsetted Material Symbols Outlined variable font (3866 KB gzipped, ' +
 			'measured 2026-08-28). `app.css` imports the npm package\'s stylesheet, so the ' +
 			'@font-face lands in the ROOT layout chunk with `font-display: block` — every ' +
 			'reader who renders an icon waits on it. Subsetting to the glyphs actually used ' +
@@ -188,7 +188,7 @@ export function isCodeFile(path) {
 
 /// EVERY emitted file, path relative to the build root and posix-spelled so it
 /// compares against a manifest entry directly. The walk used to skip anything
-/// that was not JS or CSS, which is how a 3865 KB font sat outside all three
+/// that was not JS or CSS, which is how a 3866 KB font sat outside all three
 /// ceilings; classification is checkBudgets' job, not the walk's.
 /**
  * @param {string} root

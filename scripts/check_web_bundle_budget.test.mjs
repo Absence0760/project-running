@@ -27,7 +27,7 @@ import {
 /// rule could not show one.
 const RETIRED_TOTAL_KB = 2700;
 /// The retired walk matched `*.js` and `*.css`, so it is scored over those —
-/// which is also the hole the asset ceiling closes: the 3865 KB font below was
+/// which is also the hole the asset ceiling closes: the 3866 KB font below was
 /// invisible to that total as well as to the three ceilings that replaced it.
 /** @param {readonly {path: string, kb: number}[]} files */
 const retiredTotalPasses = (files) =>
@@ -41,12 +41,12 @@ const retiredTotalPasses = (files) =>
 const CATALOGUE_KB = { de: 88, es: 85, fr: 88, ja: 91, 'pt-BR': 85, 'pt-PT': 85 };
 const LOCALES = ['de', 'en', 'es', 'fr', 'ja', 'pt-BR', 'pt-PT'];
 
-/// The non-JS/CSS half of the same build: 33 files, 4057 KB gzipped, collapsed
+/// The non-JS/CSS half of the same build: 33 files, 4058 KB gzipped, collapsed
 /// to the nine that carry all but a kilobyte of it. The font is the whole
-/// reason this population exists — 3865 KB, 1.8x the code ceiling, and outside
+/// reason this population exists — 3866 KB, 1.8x the code ceiling, and outside
 /// every metric until it was measured.
 const ASSET_KB = [
-	{ path: '_app/immutable/assets/material-symbols-outlined.D4PiVfdc.woff2', kb: 3865 },
+	{ path: '_app/immutable/assets/material-symbols-outlined.CqIkmgaP.woff2', kb: 3866 },
 	{ path: 'icon-512.png', kb: 68 },
 	{ path: 'og-default.png', kb: 20 },
 	{ path: 'icon-192.png', kb: 11 },
@@ -95,8 +95,8 @@ test('the shipped ceilings pass against the measured build', () => {
 	assert.equal(summary.catalogueFiles.length, 6);
 	assert.equal(summary.largest.kb, 245);
 	assert.equal(summary.assetFileCount, 9);
-	assert.equal(summary.assetKb, 3990);
-	assert.equal(summary.largestAsset.kb, 3865);
+	assert.equal(summary.assetKb, 3991);
+	assert.equal(summary.largestAsset.kb, 3866);
 });
 
 test('three more languages move no budget, where the retired total ceiling fails', () => {
@@ -264,8 +264,8 @@ test('the summary states the catalogue total without gating on it', () => {
 	assert.match(text, /Code \(every reader, any language\) \| 1934 KB across 9 files \| 2120 KB/);
 	assert.match(text, /Largest message catalogue \(ja\) \| 91 KB \| 100 KB, per catalogue/);
 	assert.match(text, /ungated in total \(522 KB across 6, one fetched per reader\)/);
-	assert.match(text, /Largest single asset[^|]*\| 3865 KB \| 100 KB, per asset/);
-	assert.match(text, /ungated in total too \(3990 KB across 9/);
+	assert.match(text, /Largest single asset[^|]*\| 3866 KB \| 100 KB, per asset/);
+	assert.match(text, /ungated in total too \(3991 KB across 9/);
 });
 
 test('the shipped ceilings are the ones this suite reasons about', () => {
@@ -297,13 +297,13 @@ test('prerendering /learn once per language moves no ceiling', () => {
 	const { errors, summary } = checkBudgets(grown);
 	assert.deepEqual(errors, []);
 	assert.equal(summary.assetFileCount, 63);
-	assert.equal(summary.assetKb, 4260);
-	assert.equal(summary.largestAsset.kb, 3865, 'the largest asset is still the font');
+	assert.equal(summary.assetKb, 4261);
+	assert.equal(summary.largestAsset.kb, 3866, 'the largest asset is still the font');
 });
 
 test('the exempt font is held to its own ceiling, and a version bump keeps it', () => {
 	const font = ASSET_KB[0];
-	const rehashed = { path: font.path.replace('D4PiVfdc', 'Zq7Kb2Lm'), kb: 3870 };
+	const rehashed = { path: font.path.replace('CqIkmgaP', 'Zq7Kb2Lm'), kb: 3870 };
 	assert.deepEqual(
 		checkBudgets(fixture({ assets: [rehashed, ...ASSET_KB.slice(1)] })).errors,
 		[],

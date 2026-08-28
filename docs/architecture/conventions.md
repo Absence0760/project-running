@@ -1378,8 +1378,8 @@ letting the bytes land in the other budget under the wrong diagnosis.
 
 **A budget's population is every file the build emits, not the file types
 someone thought of.** The same walk matched `*.js` and `*.css` only, so fonts,
-images and prerendered HTML — 33 files and 4057 KB gzipped, one of them a
-3865 KB unsubsetted icon font — were outside all three ceilings entirely
+images and prerendered HTML — 33 files and 4058 KB gzipped, one of them a
+3866 KB unsubsetted icon font — were outside all three ceilings entirely
 (decisions § 775). `MAX_ASSET_KB` now holds every non-JS/CSS emitted file, per
 file for the reason catalogues are per catalogue: a reader loads one prerendered
 page and one favicon. Where one artifact genuinely has to exceed a ceiling,
