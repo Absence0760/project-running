@@ -1,0 +1,104 @@
+/// What the `strava-import` Edge Function says about a backfill, and how
+/// much of it a client may believe.
+///
+/// The function walks Strava's activity pages until it reaches the end of
+/// the lookback window — or until Strava throttles us (429/503), an
+/// upstream call fails, a page comes back malformed, or the 20-page safety
+/// cap trips. Four of those five exits leave activities in the window
+/// unfetched. [StravaSyncResult.complete] separates them from a finished
+/// walk; [StravaSyncResult.rateLimited] names the one cause the runner can
+/// act on (wait ~15 minutes) rather than merely retry.
+///
+/// This matters more than a missing count. The window is measured from the
+/// moment of the call, so the activities a truncated sync skipped stay
+/// reachable by a later sync ONLY until they age past `lookbackDays` (90 by
+/// default, and neither client offers a way to ask for more). A sync that
+/// reports "complete" when it is not is therefore a data loss on a 90-day
+/// fuse: it is the report, not the truncation, that stops the runner from
+/// syncing again.
+///
+/// Hence the fail-closed direction — anything this parser cannot read as an
+/// explicit `true` is reported as partial.
+///
+/// TS↔Dart parity pair with `apps/web/src/lib/integrations/strava_sync_result.ts`.
+/// Lives in the SHARED core_models package rather than under
+/// `apps/mobile_android/lib/` because `api_client` consumes it, so it needs
+/// no iOS-twin mirror — same placement as `profile_query.dart`.
+library;
+
+class StravaSyncResult {
+  const StravaSyncResult({
+    required this.imported,
+    required this.skipped,
+    required this.failed,
+    required this.rateLimited,
+    required this.complete,
+    this.athleteId,
+    this.error,
+  });
+
+  final int imported;
+  final int skipped;
+  final int failed;
+
+  /// Strava throttled us mid-walk. Implies [complete] is false.
+  final bool rateLimited;
+
+  /// The lookback window was walked to its end. Only an explicit `true`
+  /// from the function earns this.
+  final bool complete;
+
+  /// Present on the `connect` response only.
+  final String? athleteId;
+
+  /// An error the function embedded in an otherwise-2xx body. Forces
+  /// [complete] false — a body that reports a failure is not evidence that
+  /// a window was walked.
+  final String? error;
+}
+
+/// A count the function sent. Only a non-negative integer is a count;
+/// anything else (a fraction, a negative, a string, null, absent) is a
+/// malformed payload and reads as 0 rather than as a number the banner
+/// would then state as fact.
+///
+/// A whole `double` counts, because JSON has one number type and the web
+/// twin's `Number.isInteger` cannot tell `12` from `12.0` — rejecting it
+/// here would be a divergence rather than a stricter contract.
+int _count(Object? value) {
+  if (value is! num || !value.isFinite || value < 0) return 0;
+  if (value != value.roundToDouble()) return 0;
+  return value.toInt();
+}
+
+String? _text(Object? value) {
+  if (value is! String) return null;
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+/// Grade the function's response. Never throws: an unrecognised shape — null,
+/// a list, a string, a body from a deployment that predates `complete` —
+/// yields zeroed counts and `complete: false`, which every caller renders as
+/// "sync again to finish".
+StravaSyncResult stravaSyncResultFromResponse(Object? data) {
+  if (data is! Map) {
+    return const StravaSyncResult(
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      rateLimited: false,
+      complete: false,
+    );
+  }
+  final error = _text(data['error']);
+  return StravaSyncResult(
+    imported: _count(data['imported']),
+    skipped: _count(data['skipped']),
+    failed: _count(data['failed']),
+    rateLimited: data['rate_limited'] == true,
+    complete: error == null && data['complete'] == true,
+    athleteId: _text(data['athlete_id']),
+    error: error,
+  );
+}

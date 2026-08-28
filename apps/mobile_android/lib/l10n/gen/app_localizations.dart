@@ -11025,6 +11025,43 @@ abstract class AppLocalizations {
   /// **'Synced. {imported} new, {skipped} already present.'**
   String integrationsSyncResult(int imported, int skipped);
 
+  /// Banner shown when a Strava sync stopped before the end of the lookback window
+  ///
+  /// In en, this message translates to:
+  /// **'Sync stopped early. {imported} new, {skipped} already present — some activities were not fetched. Sync again to finish.'**
+  String integrationsSyncPartial(int imported, int skipped);
+
+  /// Banner shown when Strava throttled us mid-sync
+  ///
+  /// In en, this message translates to:
+  /// **'Strava is limiting requests, so the sync stopped early. {imported} new, {skipped} already present. Try again in about 15 minutes.'**
+  String integrationsSyncPartialRateLimited(int imported, int skipped);
+
+  /// Banner summarising a Strava sync in which some activities failed to ingest
+  ///
+  /// In en, this message translates to:
+  /// **'Synced. {imported} new, {skipped} already present, {failed} failed.'**
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  );
+
+  /// Banner shown when the first import after connecting Strava stopped early
+  ///
+  /// In en, this message translates to:
+  /// **'Strava connected, but the first import stopped early. {imported} imported, {skipped} already present — sync again to finish.'**
+  String integrationsStravaConnectedPartial(int imported, int skipped);
+
+  /// Banner shown when Strava throttled the first import after connecting
+  ///
+  /// In en, this message translates to:
+  /// **'Strava connected, but Strava is limiting requests so the first import stopped early. {imported} imported, {skipped} already present. Sync again in about 15 minutes.'**
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  );
+
   /// Banner shown when a Strava sync fails
   ///
   /// In en, this message translates to:

@@ -391,6 +391,8 @@ git ls-remote https://github.com/<owner>/<repo>.git 'refs/tags/v5*'
 
 A release tag is often **annotated**, so its own object hash is not the commit — take the `refs/tags/v5^{}` row, or dereference through the API (`git/ref/tags/v5` → `git/tags/<sha>` → `.object.sha`). Update both the SHA and the `# vN` comment together; don't update one without the other. `scripts/check_toolchain_pins.mjs`, in the `workflow-lint` job, fails the build on a tag pin and on a SHA pin with no version comment.
 
+The same principle covers the programs a step runs, not just the actions it uses: **`npx <bin>` / `pnpm exec <bin>` may only name a binary a declared dependency provides.** When nothing declares it, `npx` resolves the name against the public registry and executes the newest answer — no pin, no lockfile entry, no integrity hash, in a job holding this checkout and its `GITHUB_TOKEN`. The web unit suite ran that way for its whole life ([decisions.md § 764](decisions.md)); `scripts/check_workflow_binaries.mjs`, in the same job, now refuses it, and an unmapped binary fails rather than being skipped.
+
 ## Fix bugs, don't code around them
 
 When a test fails or a behaviour is wrong, fix the **root cause** in the code under test. Don't:
@@ -443,9 +445,10 @@ The sibling on the reporting side, and the same class of confident-but-wrong sen
 
 - **A diagnosis lives in the step it describes**, as `if ! cmd; then echo "::error::<what broke>"; echo "<how to fix it>"; exit 1; fi` — the form the `twin-parity` and `schema-codegen-drift` jobs already use. Scoping a trailing step with `steps.<id>.outcome == 'failure'` is the other legal shape; a bare `failure()` is not.
 - **An on-failure step that claims nothing is fine.** Uploading a Playwright report or staging a sim log under `if: failure()` asserts nothing about which step failed. The rule is about claims, not about running on failure.
-- **A job whose name cannot say which check broke owes a diagnosis per step.** Splitting such a job so its name does the work is the alternative, and it costs a hosted-runner slot on every PR; per-step annotations surface on the checks summary for free.
+- **A job whose name cannot say which check broke owes a diagnosis per step, and which jobs those are is derived rather than listed.** A job running two or more of this repo's own guards is bundled by that fact — nothing has to remember to register it, which is how three such jobs went years without one ([decisions.md § 764](decisions.md)). The steps asked are its named `run:` steps plus every guard step named or not, so deleting a step's name is not a way out. Splitting such a job so its name does the work is the alternative, and it costs a hosted-runner slot on every PR *and* a line in the `CI gate`'s `needs:` list; per-step annotations surface on the checks summary for free.
+- **Every job in `ci.yml` is named in the `CI gate` aggregator's `needs:` list.** That aggregator is the single required status check and it passes when every job it needs passed **or was skipped**, so a job outside the list has a red that blocks nothing and reads as one more green row. A `needs:` entry naming no job fails too.
 
-`scripts/check_ci_diagnostics.mjs`, in the `workflow-lint` job, fails the build on both halves.
+`scripts/check_ci_diagnostics.mjs`, in the `workflow-lint` job, fails the build on all three.
 
 ## If you see something wrong, fix it
 

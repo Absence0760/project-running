@@ -6377,6 +6377,38 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String integrationsSyncPartial(int imported, int skipped) {
+    return '同期が途中で停止しました。新規 $imported 件、既存 $skipped 件 — 一部のアクティビティは取得されていません。もう一度同期して完了させてください。';
+  }
+
+  @override
+  String integrationsSyncPartialRateLimited(int imported, int skipped) {
+    return 'Strava がリクエストを制限しているため、同期が途中で停止しました。新規 $imported 件、既存 $skipped 件。約 15 分後にもう一度お試しください。';
+  }
+
+  @override
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  ) {
+    return '同期しました。新規 $imported 件、既存 $skipped 件、失敗 $failed 件。';
+  }
+
+  @override
+  String integrationsStravaConnectedPartial(int imported, int skipped) {
+    return 'Strava を連携しましたが、最初のインポートが途中で停止しました。$imported 件をインポート、$skipped 件は既に存在します — もう一度同期して完了させてください。';
+  }
+
+  @override
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  ) {
+    return 'Strava を連携しましたが、Strava がリクエストを制限しているため最初のインポートが途中で停止しました。$imported 件をインポート、$skipped 件は既に存在します。約 15 分後にもう一度同期してください。';
+  }
+
+  @override
   String integrationsSyncFailed(Object error) {
     return '同期に失敗しました：$error';
   }

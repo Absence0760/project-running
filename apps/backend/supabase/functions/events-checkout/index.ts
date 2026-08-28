@@ -28,7 +28,10 @@
 ///
 /// TEST MODE ONLY in P1: STRIPE_SECRET_KEY must be an sk_test_ key.
 
-import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
+import Stripe, {
+  type AssertNoUnknownParamKeys,
+  type UnknownParamKeys,
+} from '../_shared/stripe.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import type { Database, DbClient } from '../_shared/database.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
@@ -50,6 +53,19 @@ import {
 import { validateReturnUrl } from '../events-connect-onboard/lib.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 import { parseRedirectAllowlist } from '../_shared/redirect_allowlist.ts';
+
+/// Every key of the hand-shaped params must be one Stripe declares.
+/// Assignability at the call site does not check that: what is handed to
+/// `create` is a function return, not a fresh object literal, so no
+/// excess-property check runs and a misspelled optional field would
+/// compile and come back from Stripe as `Received unknown parameter`.
+/// Nothing references the alias — declaring it is the check.
+type CheckoutParamsAreStripeParams = AssertNoUnknownParamKeys<
+  UnknownParamKeys<
+    ReturnType<typeof buildCheckoutSessionParams>,
+    Stripe.Checkout.SessionCreateParams
+  >
+>;
 
 interface CheckoutBody {
   event_id?: string;

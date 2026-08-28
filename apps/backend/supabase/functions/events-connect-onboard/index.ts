@@ -20,19 +20,37 @@
 /// TEST MODE ONLY in P1: STRIPE_SECRET_KEY must be an sk_test_ key. The
 /// function fails closed (503) when Stripe is unconfigured.
 
-import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
+import Stripe, {
+  type AssertNoUnknownParamKeys,
+  type UnknownParamKeys,
+} from '../_shared/stripe.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import type { Database } from '../_shared/database.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
+  type AccountCreateParams,
+  type AccountLinkParams,
   buildAccountCreateParams,
   buildAccountLinkParams,
   validateReturnUrl,
 } from './lib.ts';
 import { publishableKey, secretKey } from '../_shared/api_keys.ts';
 import { parseRedirectAllowlist } from '../_shared/redirect_allowlist.ts';
+
+/// Every key of the hand-shaped params must be one Stripe declares.
+/// Assignability at the call site does not check that: what is handed to
+/// `create` is a function return, not a fresh object literal, so no
+/// excess-property check runs and a misspelled optional field would
+/// compile and come back from Stripe as `Received unknown parameter`.
+/// Nothing references the alias — declaring it is the check.
+type AccountParamsAreStripeParams = AssertNoUnknownParamKeys<
+  UnknownParamKeys<AccountCreateParams, Stripe.AccountCreateParams>
+>;
+type AccountLinkParamsAreStripeParams = AssertNoUnknownParamKeys<
+  UnknownParamKeys<AccountLinkParams, Stripe.AccountLinkCreateParams>
+>;
 
 Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   if (req.method !== 'POST') {
@@ -127,10 +145,7 @@ Deno.serve(withSentry('events-connect-onboard', async (req: Request) => {
   let accountId = existing?.stripe_connect_account_id ?? null;
 
   if (accountId === null) {
-    // The esm.sh build of the Stripe SDK resolves to `any` — `Stripe.Account`
-    // included — so annotate the one field this path reads rather than let an
-    // `any` flow into `accountId` and reset it to `string | null` again.
-    let account: { id: string };
+    let account: Stripe.Account;
     try {
       account = await stripe.accounts.create(
         buildAccountCreateParams(body.country ?? null, null),

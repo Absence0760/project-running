@@ -78,11 +78,37 @@ test('the unit-test glob covers every suite under src', () => {
 			`outside it are silently skipped (got: ${pkg.scripts?.['test:unit']}).`,
 	);
 
+	// CI reaches the glob through the script rather than restating it (decisions
+	// § 764), so what has to hold is the CHAIN: the lane invokes `test:unit`, and
+	// no step quietly substitutes a narrower glob of its own. Asserting the
+	// literal here instead is what went stale the moment the glob moved — the
+	// same shape as § 762's `createClient(` guard.
 	const ci = readFileSync(resolve(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf-8');
+	// Prose is stripped first, comments AND echoed text: the reproduce hint inside
+	// this very lane echoes the command being looked for, so matching the raw file
+	// would pass on prose alone even if the lane stopped running the suite at all.
+	// Same distinction `scripts/check_workflow_binaries.mjs` draws (decisions § 764).
+	const code = ci
+		.split('\n')
+		.filter((l) => {
+			const t = l.trimStart();
+			return !t.startsWith('#') && !t.startsWith('echo ') && !t.startsWith('printf ');
+		})
+		.join('\n');
 	assert.ok(
-		ci.includes(RECURSIVE),
-		`.github/workflows/ci.yml must run the recursive glob '${RECURSIVE}'.`,
+		code.includes('npm run test:unit') || code.includes(RECURSIVE),
+		`.github/workflows/ci.yml must reach the recursive glob '${RECURSIVE}', ` +
+			`either by running \`npm run test:unit\` or by spelling the glob itself.`,
 	);
+
+	const inline = [...code.matchAll(/tsx --test ([^\n]*)/g)].map((m) => m[1]);
+	for (const args of inline) {
+		assert.ok(
+			args.includes(RECURSIVE),
+			`.github/workflows/ci.yml invokes 'tsx --test' with a glob that is not ` +
+				`'${RECURSIVE}' (got: ${args}). A narrower glob silently skips suites.`,
+		);
+	}
 });
 
 test('every $lib/<segment> reference in src resolves to a real lib folder or root module', () => {

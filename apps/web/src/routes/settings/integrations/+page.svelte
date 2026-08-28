@@ -102,9 +102,19 @@
 			try {
 				const result = await completeStravaOAuth(params, $page.url.origin);
 				await refreshIntegrations();
+				// A first-connect backfill that Strava throttled — or that hit
+				// any other early exit — is a PARTIAL import. Saying "connected,
+				// N imported" is what stops the runner coming back for the rest,
+				// and the rest is only reachable until it ages out of the
+				// 90-day lookback window.
+				const counts = { imported: result.imported, skipped: result.skipped };
 				showToast(
-					m('settingsIntegrations.stravaConnected', { imported: result.imported, skipped: result.skipped }),
-					'success',
+					result.complete
+						? m('settingsIntegrations.stravaConnected', counts)
+						: result.rateLimited
+							? m('settingsIntegrations.stravaConnectedPartialRateLimited', counts)
+							: m('settingsIntegrations.stravaConnectedPartial', counts),
+					result.complete ? 'success' : 'info',
 				);
 			} catch (err) {
 				showToast(m('settingsIntegrations.stravaConnectFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
@@ -300,11 +310,16 @@
 		try {
 			const result = await syncStrava();
 			await refreshIntegrations();
+			const counts = { imported: result.imported, skipped: result.skipped };
 			showToast(
-				result.failed
-					? m('settingsIntegrations.stravaSyncCompleteWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
-					: m('settingsIntegrations.stravaSyncComplete', { imported: result.imported, skipped: result.skipped }),
-				'success',
+				!result.complete
+					? result.rateLimited
+						? m('settingsIntegrations.stravaSyncPartialRateLimited', counts)
+						: m('settingsIntegrations.stravaSyncPartial', counts)
+					: result.failed
+						? m('settingsIntegrations.stravaSyncCompleteWithFailed', { ...counts, failed: result.failed })
+						: m('settingsIntegrations.stravaSyncComplete', counts),
+				result.complete ? 'success' : 'info',
 			);
 		} catch (err) {
 			showToast(m('settingsIntegrations.stravaSyncFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');

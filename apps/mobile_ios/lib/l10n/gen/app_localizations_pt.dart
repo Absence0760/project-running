@@ -641,7 +641,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsLanguage => 'Idioma';
 
   @override
-  String get prefsLanguageSystem => 'Padrão do sistema';
+  String get prefsLanguageSystem => 'Predefinição do sistema';
 
   @override
   String get localeNameEn => 'English';
@@ -1001,7 +1001,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get safetyAutoLiveShareSubtitle =>
-      'Inicia automaticamente a partilha em direto quando uma corrida começa neste telemóvel. A corrida em curso fica visível para qualquer pessoa com o link; quando a corrida termina, volta à sua visibilidade padrão.';
+      'Inicia automaticamente a partilha em direto quando uma corrida começa neste telemóvel. A corrida em curso fica visível para qualquer pessoa com o link; quando a corrida termina, volta à sua visibilidade predefinida.';
 
   @override
   String get safetyOffRouteTitle => 'Alerta de saída de rota';
@@ -1259,7 +1259,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get onboardingPrivacyBody =>
-      'Escolha um padrão para novas corridas. Pode alterá-lo a qualquer momento nas Definições e substituí-lo em qualquer corrida específica.';
+      'Escolha uma predefinição para novas corridas. Pode alterá-la a qualquer momento nas Definições e substituí-la em qualquer corrida específica.';
 
   @override
   String get onboardingGrantPermission => 'Conceder permissão';
@@ -1412,7 +1412,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get setupPrivacyHint =>
-      'Escolha um padrão para novas corridas. Pode alterá-lo a qualquer momento e substituí-lo em cada corrida.';
+      'Escolha uma predefinição para novas corridas. Pode alterá-la a qualquer momento e substituí-la em cada corrida.';
 
   @override
   String get setupNotificationsTitle => 'Fique por dentro';
@@ -1561,7 +1561,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get runLiveShareEndedBody =>
-      'O link em direto já não é atualizado. Manter a corrida guardada pública para que qualquer pessoa com o link a possa ver? Caso contrário, segue a sua visibilidade padrão.';
+      'O link em direto já não é atualizado. Manter a corrida guardada pública para que qualquer pessoa com o link a possa ver? Caso contrário, segue a sua visibilidade predefinida.';
 
   @override
   String get runLiveShareKeepPublic => 'Manter pública';
@@ -2596,7 +2596,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String runDetailRunTooShortSplit(String unit) {
-    return 'Corrida curta demais para um parcial completo de $unit';
+    return 'Corrida demasiado curta para um parcial completo de $unit';
   }
 
   @override
@@ -5132,10 +5132,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get liveSpectatorStatRaceTime => 'Tempo de prova';
 
   @override
-  String get liveSpectatorStatTimer => 'Cronômetro';
+  String get liveSpectatorStatTimer => 'Cronómetro';
 
   @override
-  String get liveSpectatorStatTimerStale => 'Cronômetro, último sinal';
+  String get liveSpectatorStatTimerStale => 'Cronómetro, último sinal';
 
   @override
   String get liveSpectatorRecentPace => 'Recente';
@@ -5356,14 +5356,14 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planNewRecent5kWarning =>
-      'Até si confirmar, os ritmos permanecem na estimativa conservadora baseada na meta. Basear-se num resultado antigo pode prescrever ritmos rápidos demais para quem está a voltar.';
+      'Até confirmar, os ritmos permanecem na estimativa conservadora baseada na meta. Basear-se num resultado antigo pode prescrever ritmos demasiado rápidos para quem está a voltar.';
 
   @override
   String get planNewOverrideHint => 'Substituir o total de semanas';
 
   @override
   String planNewOverrideLabel(int count) {
-    return 'Substituir semanas (padrão: $count)';
+    return 'Substituir semanas (predefinição: $count)';
   }
 
   @override
@@ -5373,15 +5373,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planNewRacePast =>
-      'Essa corrida já aconteceu, então as datas abaixo são as padrão.';
+      'Essa corrida já aconteceu, então as datas abaixo são as predefinidas.';
 
   @override
   String get planNewRaceTooSoon =>
-      'Essa corrida está próxima demais para montar um plano completo, então as datas abaixo são as padrão.';
+      'Essa corrida está demasiado próxima para montar um plano completo, então as datas abaixo são as predefinidas.';
 
   @override
   String get planNewRaceUnreadable =>
-      'Não conseguimos ler a data dessa corrida, então as datas abaixo são as padrão.';
+      'Não conseguimos ler a data dessa corrida, então as datas abaixo são as predefinidas.';
 
   @override
   String get planNewCancel => 'Cancelar';
@@ -5669,7 +5669,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String planDetailDriftOverFlag(int pct) {
-    return 'Esta semana $pct% acima do plano — pegue leve nos dias fáceis para não cavar um buraco de fadiga.';
+    return 'Esta semana $pct% acima do plano — vá com calma nos dias fáceis para não cavar um buraco de fadiga.';
   }
 
   @override
@@ -5683,7 +5683,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planDetailMissedLongTaper =>
-      'Perdeu um longão, mas está em polimento — deixe pra lá e chegue descansado para a prova.';
+      'Perdeu um longão, mas está em polimento — deixe para lá e chegue descansado para a prova.';
 
   @override
   String get planDetailMissedLongRecovery =>
@@ -6005,7 +6005,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get coachConsentProcessing =>
-      'A Anthropic processa os dados em nome da Threkir conforme os seus termos de processamento; por padrão, não treinam os seus modelos com dados de clientes da Threkir. Todos os detalhes — incluindo o mecanismo de transferência, a retenção e os seus direitos de retirada — estão na nossa política de privacidade.';
+      'A Anthropic processa os dados em nome da Threkir conforme os seus termos de processamento; por predefinição, não treinam os seus modelos com dados de clientes da Threkir. Todos os detalhes — incluindo o mecanismo de transferência, a retenção e os seus direitos de retirada — estão na nossa política de privacidade.';
 
   @override
   String get coachConsentAction =>
@@ -6758,6 +6758,38 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String integrationsSyncPartial(int imported, int skipped) {
+    return 'A sincronização parou antes do fim. $imported novas, $skipped já presentes — algumas atividades não foram transferidas. Sincronize novamente para concluir.';
+  }
+
+  @override
+  String integrationsSyncPartialRateLimited(int imported, int skipped) {
+    return 'O Strava está a limitar os pedidos, pelo que a sincronização parou antes do fim. $imported novas, $skipped já presentes. Tente novamente dentro de cerca de 15 minutos.';
+  }
+
+  @override
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  ) {
+    return 'Sincronizado. $imported novas, $skipped já presentes, $failed com falha.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartial(int imported, int skipped) {
+    return 'Strava conectado, mas a primeira importação parou antes do fim. $imported importadas, $skipped já presentes — sincronize novamente para concluir.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  ) {
+    return 'Strava conectado, mas o Strava está a limitar os pedidos, pelo que a primeira importação parou antes do fim. $imported importadas, $skipped já presentes. Sincronize novamente dentro de cerca de 15 minutos.';
+  }
+
+  @override
   String integrationsSyncFailed(Object error) {
     return 'Falha na sincronização: $error';
   }
@@ -7240,7 +7272,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Unidade de distância para todos os ecrãs.';
 
   @override
-  String get devicesKeyDefaultActivityLabel => 'Atividade padrão';
+  String get devicesKeyDefaultActivityLabel => 'Atividade predefinida';
 
   @override
   String get devicesKeyDefaultActivityHint =>
@@ -7568,11 +7600,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsSplitInterval => 'Intervalo de parciais';
 
   @override
-  String get prefsSplitIntervalDefault => 'Padrão';
+  String get prefsSplitIntervalDefault => 'Predefinição';
 
   @override
   String get prefsSplitIntervalDefaultSubtitle =>
-      'Padrão (1 km ao correr, 5 km ao pedalar)';
+      'Predefinição (1 km ao correr, 5 km ao pedalar)';
 
   @override
   String get prefsSplitPaceMode => 'Anúncio de parciais';
@@ -7674,7 +7706,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsMapStyleDark => 'Escuro';
 
   @override
-  String get prefsDefaultRunVisibility => 'Visibilidade padrão das corridas';
+  String get prefsDefaultRunVisibility =>
+      'Visibilidade predefinida das corridas';
 
   @override
   String get prefsCoachPersonality => 'Personalidade do treinador';
@@ -7720,14 +7753,14 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get prefsEmailWeeklyDigestHint =>
-      'Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por padrão; separado dos seus e-mails de notificação.';
+      'Inscreva-se para receber um resumo semanal do seu treino e dos destaques da comunidade. Desativado por predefinição; separado dos seus e-mails de notificação.';
 
   @override
   String get prefsEmailLifecycleDrip => 'E-mail de dicas e incentivo';
 
   @override
   String get prefsEmailLifecycleDripHint =>
-      'Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por padrão; separado do seu resumo semanal e dos seus e-mails de notificação.';
+      'Inscreva-se para receber lembretes ocasionais de integração, reengajamento e sequência. Desativado por predefinição; separado do seu resumo semanal e dos seus e-mails de notificação.';
 
   @override
   String get prefsEmailReOptInFailed =>
@@ -7743,7 +7776,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsWeekStartSunday => 'Domingo';
 
   @override
-  String get prefsDefaultActivity => 'Atividade padrão';
+  String get prefsDefaultActivity => 'Atividade predefinida';
 
   @override
   String get prefsDateOfBirth => 'Data de nascimento';
@@ -7860,10 +7893,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get prefsShowCaloriesHint =>
-      'Estimadas a partir da distância e do peso corporal (padrão de 70 kg quando não definido). Desative para ocultar as calorias nas páginas de corrida.';
+      'Estimadas a partir da distância e do peso corporal (predefinição de 70 kg quando não definido). Desative para ocultar as calorias nas páginas de corrida.';
 
   @override
-  String get prefsDefaultRunPrivacy => 'Privacidade padrão das corridas';
+  String get prefsDefaultRunPrivacy => 'Privacidade predefinida das corridas';
 
   @override
   String get prefsStravaAutoShare => 'Partilha automático no Strava';
@@ -8252,7 +8285,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get fitnessStatVo2MaxTooltip =>
-      'O seu motor aeróbico: quanto oxigênio o seu corpo consegue utilizar por minuto. Quanto maior, melhor a forma.';
+      'O seu motor aeróbico: quanto oxigénio o seu corpo consegue utilizar por minuto. Quanto maior, melhor a forma.';
 
   @override
   String get fitnessStatVdot => 'VDOT';
@@ -9646,7 +9679,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get guidedFirst15Description =>
-      'Novo na corrida? Três séries de um minuto correndo e um minuto caminhando, mais aquecimento e desaquecimento. Uma entrada suave; todo mundo começa aqui.';
+      'Novo na corrida? Três séries de um minuto correndo e um minuto caminhando, mais aquecimento e desaquecimento. Uma entrada suave; toda a gente começa aqui.';
 
   @override
   String get guidedFirst15Cue0 =>
@@ -10830,7 +10863,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get prefsExcludeGymFromReadinessHint =>
-      'Por padrão, as sessões de ginásio aumentam a tua fadiga e reduzem o teu preparo, como uma corrida. Ativa isto para que o teu condicionamento, fadiga e forma se baseiem apenas nas corridas.';
+      'Por predefinição, as sessões de ginásio aumentam a tua fadiga e reduzem o teu preparo, como uma corrida. Ativa isto para que o teu condicionamento, fadiga e forma se baseiem apenas nas corridas.';
 
   @override
   String get nutritionEmptyTitle => 'Nada registado hoje';
@@ -11754,7 +11787,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get roadbookTitle => 'Roadbook';
 
   @override
-  String get roadbookCrewSheet => 'Roadbook (planilha da equipa)';
+  String get roadbookCrewSheet => 'Roadbook (folha da equipa)';
 
   @override
   String get roadbookGoalTime => 'Tempo-alvo';
@@ -12446,7 +12479,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routeOfflinePackTooLarge =>
-      'Esta rota é grande demais para guardar offline';
+      'Esta rota é demasiado grande para guardar offline';
 
   @override
   String get badgesSectionTitle => 'Conquistas';
@@ -20556,6 +20589,38 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String integrationsSyncResult(int imported, int skipped) {
     return 'Sincronizado. $imported novas, $skipped já presentes.';
+  }
+
+  @override
+  String integrationsSyncPartial(int imported, int skipped) {
+    return 'A sincronização parou antes do fim. $imported novas, $skipped já presentes — algumas atividades não foram baixadas. Sincronize de novo para concluir.';
+  }
+
+  @override
+  String integrationsSyncPartialRateLimited(int imported, int skipped) {
+    return 'O Strava está limitando as solicitações, então a sincronização parou antes do fim. $imported novas, $skipped já presentes. Tente de novo em cerca de 15 minutos.';
+  }
+
+  @override
+  String integrationsSyncResultWithFailed(
+    int imported,
+    int skipped,
+    int failed,
+  ) {
+    return 'Sincronizado. $imported novas, $skipped já presentes, $failed com falha.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartial(int imported, int skipped) {
+    return 'Strava conectado, mas a primeira importação parou antes do fim. $imported importadas, $skipped já presentes — sincronize de novo para concluir.';
+  }
+
+  @override
+  String integrationsStravaConnectedPartialRateLimited(
+    int imported,
+    int skipped,
+  ) {
+    return 'Strava conectado, mas o Strava está limitando as solicitações, então a primeira importação parou antes do fim. $imported importadas, $skipped já presentes. Sincronize de novo em cerca de 15 minutos.';
   }
 
   @override

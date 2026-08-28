@@ -29,7 +29,7 @@
 /// Mirrors events-checkout's auth + rate-limit shape. SAQ A — no card data.
 /// TEST MODE ONLY in P1/P2: STRIPE_SECRET_KEY must be an sk_test_ key.
 
-import Stripe from 'https://esm.sh/stripe@17.5.0?target=deno';
+import Stripe from '../_shared/stripe.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
 import type { Database } from '../_shared/database.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';

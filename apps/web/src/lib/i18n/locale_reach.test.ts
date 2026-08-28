@@ -201,6 +201,10 @@ const BRAZILIAN_ONLY = [
 	"registrar", "compartilhar", "baixar", "ônibus", "geladeira", "xícara",
 	"aplicativo", "cadastrar", "planejar", "gerenciar", "tênis", "quilômetro",
 	"gênero", "acessar", "câmera", "escanear",
+	// `quilômetro` and `gênero` were one class caught one word at a time: every
+	// Brazilian proparoxytone that takes ô/ê where Portugal takes ó/é.
+	"cronômetro", "oxigênio", "autônomo", "autônoma",
+	"planilha", "usuário", "deletar", "esporte",
 ];
 const EUROPEAN_ONLY = [
 	"palavra-passe", "ecrã", "ficheiro", "telemóvel", "passadeira", "partilhar",
@@ -247,6 +251,147 @@ test("a Portuguese catalogue does not read as the variant it is not", async () =
 			`locales/${tag}.ts is tagged ${tag} but reads as the other variant. A tag ` +
 				"that disagrees with its content is worse than a missing catalogue: the " +
 				"reader is told this is their Portuguese and it is not.",
+		);
+	}
+});
+
+/**
+ * Words European Portuguese really does use, but for a DIFFERENT sense than the
+ * one Brazilian spends them on. `BRAZILIAN_ONLY` above cannot hold these: its
+ * entries are words Portugal does not use at all, and a deny-list entry for a
+ * word with a legitimate sense would have to be answered by dropping the word,
+ * which blinds the scan everywhere. So the direction is inverted — the word is
+ * banned outright and the sites that mean the other thing are named.
+ *
+ * `padrão` is *standard* and *pattern* in Portugal; the pre-set value is a
+ * `predefinição`. Brazilian spends one word on all three, so a catalogue
+ * derived from it reads as Brazilian at every default. Naming the survivors is
+ * what makes this hold: a NEW string saying `padrão` fails here and forces the
+ * per-site decision rather than inheriting the ambiguity again.
+ *
+ * The mobile twin is the `locale reach` group in
+ * apps/mobile_android/test/architecture_guards_test.dart.
+ */
+const SENSE_SPLIT: Record<string, { word: RegExp; onlyAt: string[] }> = {
+	"pt-PT": {
+		word: /(?<![a-zà-ÿ])padr(ão|ões)(?![a-zà-ÿ])/iu,
+		onlyAt: [
+			// "the world standard for your age and sex"
+			"dash.prAgeGradeTitle",
+			// "the pattern most associated with injury"
+			"loadRamp.meaning_high",
+		],
+	},
+};
+
+test("a sense-split word survives only where the other sense was recorded", async () => {
+	for (const [tag, { word, onlyAt }] of Object.entries(SENSE_SPLIT)) {
+		const messages = await CATALOGUE_LOADERS[tag as keyof typeof CATALOGUE_LOADERS]();
+		const allowed = new Set(onlyAt);
+		const offenders = Object.entries(messages)
+			.filter(([k, v]) => !allowed.has(k) && typeof v === "string" && word.test(v))
+			.map(([k]) => k);
+		assert.deepEqual(
+			offenders,
+			[],
+			`locales/${tag}.ts spends ${word.source} on a sense Portugal does not ` +
+				"use it for. A default is a `predefinição`; `padrão` is a standard or " +
+				"a pattern. If one of these really is the other sense, add it to " +
+				"SENSE_SPLIT.onlyAt with the English source in a comment.",
+		);
+		// A named site that no longer says the word is a dead entry, and a dead
+		// entry is how an allowlist stops being a decision and starts being noise.
+		for (const key of onlyAt) {
+			const value = messages[key as keyof typeof messages];
+			assert.equal(
+				typeof value,
+				"string",
+				`${tag}: SENSE_SPLIT names ${key}, which the catalogue no longer has.`,
+			);
+			assert.ok(
+				word.test(value as string),
+				`${tag}: ${key} no longer says ${word.source} — drop it from ` +
+					"SENSE_SPLIT.onlyAt so the guard covers the key again.",
+			);
+		}
+	}
+});
+
+/**
+ * The wrist and the watch ship European Portuguese too, and neither had any
+ * lexical guard at all — the two scans above read `lib/i18n/locales/` and the
+ * mobile twin reads `lib/l10n/`, so half the surfaces this locale ships on
+ * were covered and half were not. Both measured clean when this guard landed,
+ * which is the reason to add it now rather than the reason not to: § 755's
+ * wrist set and § 761's watchOS set were written in European Portuguese
+ * directly, and the defect this whole arc is about is a later derivation from
+ * Brazilian quietly undoing that.
+ *
+ * Cross-tier the way `delete-account`'s guard reads the Go worker's catalogue
+ * (§ 761) — these are separate deployment units with no module between them,
+ * so the alternative is four copies of one word list.
+ */
+const OTHER_PT_PT_CATALOGUES: { path: string[]; read: (raw: string) => Record<string, string> }[] = [
+	{
+		path: ["apps", "watch_wear", "android", "app", "src", "main", "res", "values-b+pt+PT", "strings.xml"],
+		read: (raw) =>
+			Object.fromEntries(
+				[...raw.matchAll(/<(string|item)(?:\s+name="([\w.]+)")?[^>]*>([\s\S]*?)<\/\1>/g)].map(
+					(m, i) => [m[2] ?? `item[${i}]`, m[3]],
+				),
+			),
+	},
+	{
+		path: ["apps", "watch_ios", "WatchApp", "Localizable.xcstrings"],
+		read: (raw) => {
+			const out: Record<string, string> = {};
+			const catalogue = JSON.parse(raw) as {
+				strings: Record<string, { localizations?: Record<string, PtUnit> }>;
+			};
+			for (const [key, entry] of Object.entries(catalogue.strings)) {
+				const pt = entry.localizations?.["pt-PT"];
+				if (!pt) continue;
+				if (pt.stringUnit) out[key] = pt.stringUnit.value;
+				for (const [form, unit] of Object.entries(pt.variations?.plural ?? {})) {
+					if (unit.stringUnit) out[`${key}[${form}]`] = unit.stringUnit.value;
+				}
+			}
+			return out;
+		},
+	},
+];
+type PtUnit = {
+	stringUnit?: { value: string };
+	variations?: { plural?: Record<string, { stringUnit?: { value: string } }> };
+};
+
+test("the wrist and watch pt-PT catalogues read as European Portuguese too", () => {
+	const repo = join(SRC, "..", "..", "..");
+	const words = [...BRAZILIAN_ONLY, "padrão"];
+	for (const { path, read } of OTHER_PT_PT_CATALOGUES) {
+		const file = join(repo, ...path);
+		const strings = read(readFileSync(file, "utf8"));
+		// A reader that stops matching finds nothing and reports success, which
+		// is the failure mode a source-shape guard has (decisions § 762). The
+		// catalogues only grow, so an empty read is a broken reader.
+		assert.ok(
+			Object.keys(strings).length > 0,
+			`${path.join("/")} yielded no pt-PT strings — the reader has stopped ` +
+				"matching the file's shape, so this guard is checking nothing.",
+		);
+		const offenders: string[] = [];
+		for (const [key, value] of Object.entries(strings)) {
+			for (const word of words) {
+				if (new RegExp(`(?<![a-zà-ÿ])${word}(s|es|ões)?(?![a-zà-ÿ])`, "iu").test(value)) {
+					offenders.push(`${key}: "${word}"`);
+				}
+			}
+		}
+		assert.deepEqual(
+			offenders,
+			[],
+			`${path.join("/")} is a pt-PT catalogue reading as Brazilian. A default ` +
+				"is a `predefinição`; the rest are words Portugal does not use at all.",
 		);
 	}
 });

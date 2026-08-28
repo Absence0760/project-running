@@ -171,12 +171,29 @@ class _SettingsIntegrationsScreenState
         redirectUri: kStravaCallbackUri,
       );
       if (!mounted) return;
-      final err = res['error'];
-      if (err is String) {
+      final err = res.error;
+      if (err != null) {
         showTopBanner(context, l10n.integrationsStravaConnectFailed(err));
         return;
       }
-      showTopBanner(context, l10n.integrationsStravaConnected);
+      // Connecting triggers a 90-day backfill, and Strava can throttle it
+      // (or the walk can stop early for three other reasons). Saying only
+      // "Strava connected" is what stops the runner coming back for the
+      // rest — which stays fetchable only until it ages out of the window.
+      showTopBanner(
+        context,
+        res.complete
+            ? l10n.integrationsStravaConnected
+            : res.rateLimited
+                ? l10n.integrationsStravaConnectedPartialRateLimited(
+                    res.imported,
+                    res.skipped,
+                  )
+                : l10n.integrationsStravaConnectedPartial(
+                    res.imported,
+                    res.skipped,
+                  ),
+      );
       await _refreshIntegrations();
     } catch (e) {
       if (!mounted) return;
@@ -194,9 +211,23 @@ class _SettingsIntegrationsScreenState
     try {
       final res = await api.syncStrava();
       if (!mounted) return;
-      final imported = (res['imported'] as num?)?.toInt() ?? 0;
-      final skipped = (res['skipped'] as num?)?.toInt() ?? 0;
-      showTopBanner(context, l10n.integrationsSyncResult(imported, skipped));
+      showTopBanner(
+        context,
+        !res.complete
+            ? res.rateLimited
+                ? l10n.integrationsSyncPartialRateLimited(
+                    res.imported,
+                    res.skipped,
+                  )
+                : l10n.integrationsSyncPartial(res.imported, res.skipped)
+            : res.failed > 0
+                ? l10n.integrationsSyncResultWithFailed(
+                    res.imported,
+                    res.skipped,
+                    res.failed,
+                  )
+                : l10n.integrationsSyncResult(res.imported, res.skipped),
+      );
       await _refreshIntegrations();
     } catch (e) {
       if (!mounted) return;
