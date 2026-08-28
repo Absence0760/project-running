@@ -15,7 +15,7 @@ Deployed to AWS — S3 (static SvelteKit build) + CloudFront + Route 53 for ever
 - **Package manager**: npm via the root workspace (`npm run <script> --workspace=apps/web`). The repo bootstrapped with pnpm originally and `apps/web/pnpm-lock.yaml` still exists; CI and the canonical build path are npm — see [decisions.md § 7](../../docs/architecture/decisions.md). Either works locally; just don't mix.
 - **Adapter**: `@sveltejs/adapter-static` for the bulk; `/api/coach/+server.ts` is reused as the body of a hand-rolled Node 24 Lambda handler (no SvelteKit AWS adapter — see [decisions.md § 53](../../docs/architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages))
 - **Styling**: normalize.css + custom CSS in `src/app.css`
-- **Icons**: unplugin-icons with `@iconify-json/material-symbols`
+- **Icons**: self-hosted Material Symbols webfont, rendered as ligatures (`<span class="material-symbols">close</span>`), subset to the icons this tree names — regenerate with `pnpm gen:icon-font` after adding one, see [decisions.md § 779](../../docs/architecture/decisions.md) and [conventions.md § Material Symbols icons](../../docs/architecture/conventions.md#material-symbols-icons). `unplugin-icons` + `@iconify-json/material-symbols` are wired into `vite.config.ts` but unused — no `~icons/` import exists.
 - **Markdown**: mdsvex
 
 ## Folder Structure
