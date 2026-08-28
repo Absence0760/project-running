@@ -6483,6 +6483,29 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get integrationsStravaSyncHistory => '過去の履歴を同期…';
+
+  @override
+  String get integrationsStravaLookbackTitle => 'さかのぼる期間';
+
+  @override
+  String get integrationsStravaLookback90 => '直近 90 日';
+
+  @override
+  String get integrationsStravaLookback180 => '直近 6 か月';
+
+  @override
+  String get integrationsStravaLookback365 => '直近 1 年';
+
+  @override
+  String get integrationsSyncPartialNoteResumable =>
+      '前回の同期は期間の終わりまで届かずに停止しました。もう一度同期すると、停止した続きから再開します。';
+
+  @override
+  String get integrationsSyncPartialNote =>
+      '前回の同期は期間の終わりまで届かずに停止し、再開位置は記録されていません。もう一度同期してやり直してください。';
+
+  @override
   String get integrationsSyncNow => '今すぐ同期';
 
   @override

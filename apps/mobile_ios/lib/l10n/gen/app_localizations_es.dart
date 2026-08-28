@@ -6870,6 +6870,30 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get integrationsStravaSyncHistory =>
+      'Sincronizar historial más antiguo…';
+
+  @override
+  String get integrationsStravaLookbackTitle => 'Hasta cuándo sincronizar';
+
+  @override
+  String get integrationsStravaLookback90 => 'Últimos 90 días';
+
+  @override
+  String get integrationsStravaLookback180 => 'Últimos 6 meses';
+
+  @override
+  String get integrationsStravaLookback365 => 'Último año';
+
+  @override
+  String get integrationsSyncPartialNoteResumable =>
+      'La última sincronización se detuvo antes del final del periodo. Al sincronizar de nuevo continuará donde se quedó.';
+
+  @override
+  String get integrationsSyncPartialNote =>
+      'La última sincronización se detuvo antes del final del periodo y no guardó ningún punto de reanudación. Sincroniza de nuevo para volver a intentarlo.';
+
+  @override
   String get integrationsSyncNow => 'Sincronizar ahora';
 
   @override

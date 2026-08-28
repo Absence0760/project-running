@@ -51,6 +51,12 @@ class _SettingsIntegrationsScreenState
     extends State<SettingsIntegrationsScreen> {
   List<IntegrationRow> _integrations = const [];
   bool _stravaBusy = false;
+
+  /// A truncated sync is a state of the connection, not a moment. The banner
+  /// says it once and slides away; the lookback window is measured from now,
+  /// so the record of "there is more to fetch" has to outlive it or the rest
+  /// ages out unnoticed. Null once a walk has reached the end of the window.
+  bool? _stravaResumable;
   final RaceService _raceService = RaceService();
   bool _runSignUpAvailable = false;
   bool _chronoTrackAvailable = false;
@@ -203,14 +209,21 @@ class _SettingsIntegrationsScreenState
     }
   }
 
-  Future<void> _syncStrava() async {
+  /// The window a manual sync asks for defaults to 90 days. Strava's per-user
+  /// budget is 100 requests / 15 minutes and the walk spends one per 50
+  /// activities, so raising it for every routine sync would be several times
+  /// heavier for history the runner already has. Widening is the recovery path
+  /// for a truncation left long enough that the missed activities have aged
+  /// out of the default window.
+  Future<void> _syncStrava({int lookbackDays = kStravaLookbackDefaultDays}) async {
     final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null) return;
     setState(() => _stravaBusy = true);
     try {
-      final res = await api.syncStrava();
+      final res = await api.syncStrava(lookbackDays: lookbackDays);
       if (!mounted) return;
+      setState(() => _stravaResumable = res.complete ? null : res.resumable);
       showTopBanner(
         context,
         !res.complete
@@ -388,6 +401,53 @@ class _SettingsIntegrationsScreenState
     }
   }
 
+  String _lookbackLabel(AppLocalizations l10n, int days) => switch (days) {
+        180 => l10n.integrationsStravaLookback180,
+        365 => l10n.integrationsStravaLookback365,
+        _ => l10n.integrationsStravaLookback90,
+      };
+
+  /// Ask for a window wider than the default. Neither client could raise the
+  /// lookback above 90 days, so a truncation left long enough for the missed
+  /// activities to age out of that window had no in-app recovery at all — the
+  /// only remaining path was the Strava bulk export.
+  Future<void> _pickStravaLookback() async {
+    final l10n = AppLocalizations.of(context);
+    var choice = kStravaLookbackDefaultDays;
+    final picked = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(l10n.integrationsStravaLookbackTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final days in kStravaLookbackOptions)
+                RadioListTile<int>(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(_lookbackLabel(l10n, days)),
+                  value: days,
+                  groupValue: choice,
+                  onChanged: (v) => setLocal(() => choice = v ?? choice),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(l10n.commonCancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(choice),
+              child: Text(l10n.integrationsSyncNow),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) await _syncStrava(lookbackDays: picked);
+  }
+
   Widget _buildStravaTile() {
     final l10n = AppLocalizations.of(context);
     final s = _strava();
@@ -398,10 +458,27 @@ class _SettingsIntegrationsScreenState
         : last == null
             ? l10n.integrationsStravaWaitingFirstSync
             : l10n.integrationsStravaLastSync(_relTime(last, l10n));
+    final resumable = _stravaResumable;
     return ListTile(
       leading: const Icon(Icons.sync, color: Color(0xFFFC4C02)),
       title: Text(l10n.integrationsStravaName),
-      subtitle: Text(subtitle),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(subtitle),
+          if (connected && resumable != null)
+            Text(
+              resumable
+                  ? l10n.integrationsSyncPartialNoteResumable
+                  : l10n.integrationsSyncPartialNote,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+        ],
+      ),
       trailing: _stravaBusy
           ? const SizedBox(
               width: 20,
@@ -412,11 +489,15 @@ class _SettingsIntegrationsScreenState
               ? PopupMenuButton<String>(
                   onSelected: (v) {
                     if (v == 'sync') _syncStrava();
+                    if (v == 'history') _pickStravaLookback();
                     if (v == 'disconnect') _disconnectStrava();
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(
                         value: 'sync', child: Text(l10n.integrationsSyncNow)),
+                    PopupMenuItem(
+                        value: 'history',
+                        child: Text(l10n.integrationsStravaSyncHistory)),
                     PopupMenuItem(
                         value: 'disconnect',
                         child: Text(l10n.integrationsDisconnect)),

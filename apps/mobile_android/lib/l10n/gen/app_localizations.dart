@@ -11176,6 +11176,48 @@ abstract class AppLocalizations {
   /// **'Connected · last sync {time}'**
   String integrationsStravaLastSync(String time);
 
+  /// Popup-menu item opening the wider-lookback picker for Strava
+  ///
+  /// In en, this message translates to:
+  /// **'Sync older history…'**
+  String get integrationsStravaSyncHistory;
+
+  /// Title of the dialog choosing how far back a Strava sync reaches
+  ///
+  /// In en, this message translates to:
+  /// **'How far back to sync'**
+  String get integrationsStravaLookbackTitle;
+
+  /// Strava lookback option: the default 90-day window
+  ///
+  /// In en, this message translates to:
+  /// **'Last 90 days'**
+  String get integrationsStravaLookback90;
+
+  /// Strava lookback option: six months
+  ///
+  /// In en, this message translates to:
+  /// **'Last 6 months'**
+  String get integrationsStravaLookback180;
+
+  /// Strava lookback option: one year, the maximum the function accepts
+  ///
+  /// In en, this message translates to:
+  /// **'Last year'**
+  String get integrationsStravaLookback365;
+
+  /// Strava tile note after a truncated sync that recorded a resume point
+  ///
+  /// In en, this message translates to:
+  /// **'The last sync stopped before the end of the window. Syncing again picks up where it stopped.'**
+  String get integrationsSyncPartialNoteResumable;
+
+  /// Strava tile note after a truncated sync that recorded no resume point
+  ///
+  /// In en, this message translates to:
+  /// **'The last sync stopped before the end of the window and recorded no restart point. Sync again to retry it.'**
+  String get integrationsSyncPartialNote;
+
   /// Popup-menu item to trigger a Strava sync
   ///
   /// In en, this message translates to:

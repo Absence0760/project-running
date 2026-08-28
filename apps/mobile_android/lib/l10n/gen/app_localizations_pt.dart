@@ -6869,6 +6869,30 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get integrationsStravaSyncHistory =>
+      'Sincronizar histórico mais antigo…';
+
+  @override
+  String get integrationsStravaLookbackTitle => 'Até quando sincronizar';
+
+  @override
+  String get integrationsStravaLookback90 => 'Últimos 90 dias';
+
+  @override
+  String get integrationsStravaLookback180 => 'Últimos 6 meses';
+
+  @override
+  String get integrationsStravaLookback365 => 'Último ano';
+
+  @override
+  String get integrationsSyncPartialNoteResumable =>
+      'A última sincronização parou antes do fim do período. Sincronizar novamente continua a partir do ponto onde parou.';
+
+  @override
+  String get integrationsSyncPartialNote =>
+      'A última sincronização parou antes do fim do período e não registou nenhum ponto de retoma. Sincronize novamente para tentar outra vez.';
+
+  @override
   String get integrationsSyncNow => 'Sincronizar agora';
 
   @override
@@ -20701,6 +20725,30 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String integrationsStravaLastSync(String time) {
     return 'Conectado · última sincronização $time';
   }
+
+  @override
+  String get integrationsStravaSyncHistory =>
+      'Sincronizar histórico mais antigo…';
+
+  @override
+  String get integrationsStravaLookbackTitle => 'Até quando sincronizar';
+
+  @override
+  String get integrationsStravaLookback90 => 'Últimos 90 dias';
+
+  @override
+  String get integrationsStravaLookback180 => 'Últimos 6 meses';
+
+  @override
+  String get integrationsStravaLookback365 => 'Último ano';
+
+  @override
+  String get integrationsSyncPartialNoteResumable =>
+      'A última sincronização parou antes do fim do período. Sincronizar de novo continua de onde parou.';
+
+  @override
+  String get integrationsSyncPartialNote =>
+      'A última sincronização parou antes do fim do período e não registrou nenhum ponto de retomada. Sincronize de novo para tentar outra vez.';
 
   @override
   String get integrationsSyncNow => 'Sincronizar agora';
