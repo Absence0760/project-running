@@ -22,6 +22,7 @@ import {
 	readLegendSymbols,
 	readRows,
 	readRuleBlock,
+	splitRow,
 } from './check_parity_ios_column.mjs';
 
 const LEGEND = `## Legend
@@ -231,4 +232,50 @@ test('the committed docs/product/parity.md passes every rule', () => {
 test('the committed matrix carries no iOS `✓`, which is the rule in one assertion', () => {
 	const rows = readRows(readFileSync(MATRIX_PATH, 'utf8'));
 	assert.deepEqual(rows.filter((r) => r.ios === '✓'), []);
+});
+
+// --- Soft wraps and optional pipes. decisions § 774.
+
+test('rule 2 catches a second statement that has been soft-wrapped', () => {
+	// Markdown wraps a paragraph freely and the wrap changes nothing about what
+	// the document says. Requiring `iOS` and the symbol on one PHYSICAL line
+	// let the wrapped form of the exact sentence this rule exists to catch
+	// walk past it.
+	const flat = 'Note that on iOS a `Partial` cell means the Dart shipped but nobody ran it.';
+	const wrapped = 'Note that on iOS a cell reading\n`Partial` means the Dart shipped but nobody ran it.';
+
+	assert.equal(checkSingleStatement(doc([], flat)).length, 1);
+	const errors = checkSingleStatement(doc([], wrapped));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /Partial/);
+});
+
+test('rule 2 does not join two unrelated list items into one statement', () => {
+	const list = '- The iOS build is deferred.\n- A Web cell may be `N/A`.';
+	assert.deepEqual(checkSingleStatement(doc([], list)), []);
+});
+
+test('a row written without its trailing pipe keeps its Notes cell', () => {
+	// GFM makes the wrapping pipes optional. `slice(1, -1)` ate the last cell,
+	// so rule 4 read the Apple Watch column as the notes and demanded a marker
+	// that was already there.
+	const notes = `${markerFor('✗')} no iOS handler for the method channel.`;
+	const cells = `| Thing | ✓ | ✗ | ✓ | N/A | N/A | ${notes}`;
+
+	assert.equal(splitRow(`${cells} |`).length, 7);
+	assert.equal(splitRow(cells).length, 7);
+
+	const { derivation } = readRuleBlock(RULE);
+	assert.ok(derivation);
+	for (const row of [`${cells} |`, cells]) {
+		const parsed = readRows(doc([row]));
+		assert.equal(parsed.length, 1);
+		assert.equal(parsed[0].notes, notes);
+		assert.deepEqual(checkColumn(parsed, derivation).errors, []);
+	}
+});
+
+test('a row written without either wrapping pipe still parses', () => {
+	assert.deepEqual(splitRow('a | b | c'), ['a', 'b', 'c']);
+	assert.deepEqual(splitRow('| a | b | c |'), ['a', 'b', 'c']);
 });

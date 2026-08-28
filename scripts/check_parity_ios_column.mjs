@@ -39,6 +39,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { foldedLines } from './markdown_lines.mjs';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const MATRIX_PATH = join(REPO_ROOT, 'docs', 'product', 'parity.md');
 
@@ -51,15 +53,25 @@ const PLATFORMS = ['Android', 'iOS', 'Web', 'Wear OS', 'Apple Watch'];
 const PIPE = '\u0000';
 
 /**
+ * GFM makes the leading and trailing pipes optional, so the empty ends are
+ * dropped only where a pipe actually produced one. A flat `slice(1, -1)` ate
+ * the LAST CELL of a row written without its trailing pipe — which is the
+ * Notes column, so rule 4 read the Apple Watch cell as the notes, found no
+ * `**iOS <symbol>:**` marker, and demanded the author add one that was already
+ * there. `check_parity_matrix.dart` does not catch that first: it drops its own
+ * end-empties conditionally, so the same row parses to seven cells and passes
+ * its structural check, and it runs after this guard in the job besides.
+ * decisions § 774.
+ *
  * @param {string} line
  * @returns {string[]}
  */
 export function splitRow(line) {
-	return line
-		.replaceAll('\\|', PIPE)
-		.split('|')
-		.slice(1, -1)
-		.map((cell) => cell.replaceAll(PIPE, '\\|').trim());
+	const parked = line.replaceAll('\\|', PIPE).trim();
+	const cells = parked.split('|');
+	if (parked.startsWith('|')) cells.shift();
+	if (parked.endsWith('|')) cells.pop();
+	return cells.map((cell) => cell.replaceAll(PIPE, '\\|').trim());
 }
 
 /** @param {string} cell */
@@ -194,9 +206,16 @@ export function checkVocabularyCoverage(legend, derivation) {
 }
 
 /**
- * Rule 2 — a line of prose that names the iOS column AND a cell symbol is
+ * Rule 2 — a passage of prose that names the iOS column AND a cell symbol is
  * stating this rule somewhere it does not live. Table rows are exempt: a
  * Notes cell may carry the `**iOS <symbol>:**` marker, which rule 4 reads.
+ *
+ * The unit is a folded markdown line, not a physical one. Markdown soft-wraps
+ * a paragraph freely and the wrap changes nothing about what the document
+ * says, so requiring `iOS` and the symbol on the same physical line meant the
+ * wrapped form of the exact sentence this rule exists to catch walked past it
+ * — and parity.md already carries 5 multi-line prose blocks outside the rule
+ * block, so the habit is in the document. decisions § 774.
  *
  * @param {string} text
  * @returns {string[]}
@@ -209,10 +228,8 @@ export function checkSingleStatement(text) {
 	const symbolPattern = new RegExp(
 		`(\`)?(${legend.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\1?`,
 	);
-	const lines = text.split('\n');
 	let inBlock = false;
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i];
+	for (const { line: lineNumber, text: line } of foldedLines(text)) {
 		if (line.includes(OPEN_MARKER)) inBlock = true;
 		if (line.includes(CLOSE_MARKER)) {
 			inBlock = false;
@@ -223,7 +240,7 @@ export function checkSingleStatement(text) {
 		const hit = line.match(symbolPattern);
 		if (!hit) continue;
 		errors.push(
-			`docs/product/parity.md:${i + 1} — this line names the iOS column and the ` +
+			`docs/product/parity.md:${lineNumber} — this passage names the iOS column and the ` +
 				`symbol \`${hit[2]}\`, so it states a rule about what an iOS cell means. ` +
 				`That rule lives in the \`${OPEN_MARKER}\` block and nowhere else; the ` +
 				`three copies that disagreed are what decisions § 739 removed. Exempting ` +

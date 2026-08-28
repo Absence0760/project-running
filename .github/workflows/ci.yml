@@ -481,11 +481,20 @@ jobs:
       # i18n string-extraction work landed unnoticed and only surfaced once
       # the stack was fixed. Running them up front makes web-unit / constraint
       # regressions fail fast and independent of stack health.
+      #
+      # Drift first, then the guard's own suite — this suite's last two cases
+      # read the committed migrations and types, so running it first would
+      # report "the guard is broken" over an ordinary stale union.
       - name: CHECK constraints vs TS unions
         run: |
           if ! npm run check:check-constraints --workspace=apps/web; then
             echo "::error::A narrow-union CHECK constraint and its TypeScript union have drifted apart, so one client can write a value the other rejects (postgres 23514). This is not database.types.ts drift."
             echo "Update the TS union in apps/web/src/lib/types.ts and the CHECK in its migration together; a new pair also goes in the PAIRS array of apps/web/scripts/check_constraint_unions.mjs."
+            exit 1
+          fi
+          if ! node --test apps/web/scripts/check_constraint_unions.test.mjs; then
+            echo "::error::The CHECK-constraint guard's own unit tests failed. The constraints and unions themselves agree — the check above just passed — so this is a defect in apps/web/scripts/check_constraint_unions.mjs, not union drift."
+            echo "Reproduce with: node --test apps/web/scripts/check_constraint_unions.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
       # `src/**`, not `src/lib/**`: the route-level source guards under
@@ -678,6 +687,11 @@ jobs:
           node-version: 24
       - name: CLAUDE.md vs shared-library-syncer pair registry
         run: |
+          if ! node --test scripts/markdown_lines.test.mjs; then
+            echo "::error::The markdown soft-wrap folder that both this job's pair-registry and iOS-column guards read prose through failed its own tests, so every verdict below it is a guess. This is not registry drift."
+            echo "Reproduce with: node --test scripts/markdown_lines.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
           if ! node scripts/check_parity_pair_registry.mjs; then
             echo "::error::A TS<->Dart parity pair is registered in CLAUDE.md but not in the shared-library-syncer agent's table (or the reverse), or one of them points at a file that no longer exists. Nothing here is about the parity matrix, its iOS column or the doc checkboxes — those are the other three guards in this job."
             echo "The failing line above names the pair and which registry is missing it. Both are edited in the same change; decisions § 604 is why a pair in only one of them is a pair whose divergence is never detected."

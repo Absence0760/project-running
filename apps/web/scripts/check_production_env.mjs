@@ -7,14 +7,26 @@
  * silently bakes a broken config into the static artifact.
  *
  * Rules enforced for a production build:
- *   - PUBLIC_SUPABASE_URL must be a real https://*.supabase.co URL.
- *     Empty, `placeholder.supabase.co`, or `http://127.0.0.1:54321`
- *     all abort the build. Without this guard, a missing secret in
- *     the release workflow would deploy a static site whose
- *     `entries()` calls return [] (the og:image + share-page
- *     prerender then ships without any prerendered ids), and our
- *     handleUnseenRoutes: 'warn' config quietly accepts the empty
- *     set rather than failing loud.
+ *   - PUBLIC_SUPABASE_URL must PARSE as an https URL on a public host.
+ *     Empty, unparseable, plaintext http, `placeholder.supabase.co`,
+ *     and any loopback / private / link-local / dotless host all abort
+ *     the build. Without this guard, a missing secret in the release
+ *     workflow would deploy a static site whose `entries()` calls
+ *     return [] (the og:image + share-page prerender then ships
+ *     without any prerendered ids), and our handleUnseenRoutes: 'warn'
+ *     config quietly accepts the empty set rather than failing loud.
+ *
+ *     This rule used to be written as "a real https://*.supabase.co
+ *     URL" and implemented as two deny-lists, which let through every
+ *     misconfiguration that was not on them: a bare project ref, a
+ *     `postgresql://user:password@…` connection string (Vite inlines
+ *     PUBLIC_* into every client bundle, so that one publishes a
+ *     database password), plaintext `http://…supabase.co`, a Docker
+ *     service host like `http://kong:8000`, a LAN address, and the
+ *     literal `TODO-set-me`. All six are refused now (decisions § 774).
+ *     `*.supabase.co` is deliberately NOT required — a self-hosted
+ *     Supabase behind a custom domain is a legitimate prod config, and
+ *     a guard has to enforce the rule it can actually state.
  *   - PUBLIC_SUPABASE_ANON_KEY must be non-empty.
  *   - PUBLIC_MAPTILER_KEY must be non-empty. Used by the og:image
  *     PNG renderer at prerender time and by the maplibre tile
@@ -44,8 +56,65 @@
 
 import { isTruthyFlagValue } from '../src/lib/core/env_flag.ts';
 
-const LOCAL_HOST_RE = /^https?:\/\/(127\.0\.0\.1|localhost|10\.0\.2\.2|host\.docker\.internal)(?::\d+)?(?:\/|$)/;
 const PLACEHOLDER_HOST_RE = /\bplaceholder\.supabase\.co\b/i;
+
+/// Hosts that exist only inside a developer's machine or network. A production
+/// bundle is served to browsers on the public internet, so any of them means
+/// the release picked up a dev value.
+const PRIVATE_HOST_RE =
+	/^(?:localhost|.*\.localhost|.*\.local|.*\.internal|host\.docker\.internal|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+|172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+|\[?::1\]?)$/i;
+
+/**
+ * Why this value cannot be a production Supabase URL, or null if it can be.
+ *
+ * @param {string} url
+ * @returns {string | null}
+ */
+export function productionUrlProblem(url) {
+	/** @type {URL} */
+	let parsed;
+	try {
+		parsed = new URL(url);
+	} catch {
+		return 'Not a URL. A bare project ref or a placeholder string inlines into every client bundle as a broken endpoint.';
+	}
+	// Host before scheme: a dev value is far more often `http://127.0.0.1` than
+	// a plaintext public host, and "points at a loopback host" is the diagnosis
+	// that names what the operator actually did.
+	if (PLACEHOLDER_HOST_RE.test(parsed.hostname)) {
+		return 'Looks like the CI bundle-budget placeholder (`placeholder.supabase.co`). The release workflow needs the real prod URL.';
+	}
+	if (PRIVATE_HOST_RE.test(parsed.hostname)) {
+		return 'Points at a loopback / private / emulator host. Production builds must use a remotely reachable Supabase URL.';
+	}
+	if (!parsed.hostname.includes('.')) {
+		return 'Host has no dot, so it resolves only inside a container network (a Docker service name such as `kong`). Production builds must use a publicly resolvable host.';
+	}
+	if (parsed.protocol !== 'https:') {
+		return `Scheme is \`${parsed.protocol}\`, not https. Vite inlines PUBLIC_* into the client bundle, so a plaintext endpoint ships to every browser — and a \`postgresql://\` connection string would publish the database password with it.`;
+	}
+	return null;
+}
+
+/// What a finding may print. The guard reports the value it refused, and one
+/// of the values it now refuses is a `postgresql://user:password@…` connection
+/// string pasted into the wrong secret — which must not be echoed into a CI
+/// log on its way to being rejected.
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+export function redactCredentials(url) {
+	try {
+		const parsed = new URL(url);
+		if (!parsed.username && !parsed.password) return url;
+		if (parsed.username) parsed.username = '***';
+		if (parsed.password) parsed.password = '***';
+		return parsed.toString();
+	} catch {
+		return url;
+	}
+}
 
 /**
  * @typedef {{ envVar: string; value: string; reason: string }} Finding
@@ -67,18 +136,15 @@ export function checkProductionEnv(env) {
 			value: '<empty>',
 			reason: 'Missing / empty. Production builds must inline a real Supabase URL or every share-page / og-image prerender ships empty.',
 		});
-	} else if (PLACEHOLDER_HOST_RE.test(url)) {
-		findings.push({
-			envVar: 'PUBLIC_SUPABASE_URL',
-			value: url,
-			reason: 'Looks like the CI bundle-budget placeholder (`placeholder.supabase.co`). The release workflow needs the real prod URL.',
-		});
-	} else if (LOCAL_HOST_RE.test(url)) {
-		findings.push({
-			envVar: 'PUBLIC_SUPABASE_URL',
-			value: url,
-			reason: 'Points at a loopback / emulator host. Production builds must use a remote Supabase URL.',
-		});
+	} else {
+		const problem = productionUrlProblem(url);
+		if (problem) {
+			findings.push({
+				envVar: 'PUBLIC_SUPABASE_URL',
+				value: redactCredentials(url),
+				reason: problem,
+			});
+		}
 	}
 
 	const anonKey = String(env.PUBLIC_SUPABASE_ANON_KEY ?? '').trim();

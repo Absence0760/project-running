@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { checkProductionEnv } from './check_production_env.mjs';
+import { checkProductionEnv, productionUrlProblem, redactCredentials } from './check_production_env.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./check_production_env.mjs', import.meta.url));
 
@@ -270,4 +270,59 @@ test('CLI exits 1 on the CI placeholder URL', () => {
 	});
 	assert.equal(r.status, 1);
 	assert.match(r.stderr, /placeholder/i);
+});
+
+// --- What the two deny-lists let through. decisions § 774.
+//
+// The rule read "must be a real https://*.supabase.co URL" and was implemented
+// as a placeholder-host match plus a four-entry loopback list, so every
+// misconfiguration outside those two lists passed. All of these did.
+
+test('refuses a value that is not a URL at all', () => {
+	for (const url of ['abcdefghijklmnopqrst', 'TODO-set-me', 'db.abcd.supabase.co']) {
+		assert.match(productionUrlProblem(url) ?? '', /Not a URL/, url);
+	}
+});
+
+test('refuses a plaintext endpoint on an otherwise real host', () => {
+	assert.match(productionUrlProblem('http://abcd.supabase.co') ?? '', /not https/);
+	assert.equal(productionUrlProblem('https://abcd.supabase.co'), null);
+});
+
+test('refuses a Postgres connection string, and does not echo its password', () => {
+	// PUBLIC_* is inlined into every client bundle by Vite, so this one
+	// publishes a database password — and the finding that refuses it must not
+	// print the password into a CI log either.
+	const url = 'postgresql://postgres:hunter2@db.abcd.supabase.co:5432/postgres';
+	const r = checkProductionEnv({
+		PUBLIC_SUPABASE_URL: url,
+		PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+		PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+		PUBLIC_REVENUECAT_WEB_CHECKOUT_URL: 'https://pay.rev.cat/abc123',
+	});
+	assert.equal(r.ok, false);
+	assert.match(r.findings[0].reason, /not https/);
+	assert.doesNotMatch(r.findings[0].value, /hunter2/);
+	assert.doesNotMatch(r.findings[0].value, /postgres:/);
+	assert.equal(redactCredentials('https://abcd.supabase.co/x'), 'https://abcd.supabase.co/x');
+});
+
+test('refuses a host that resolves only on a private network or inside a container', () => {
+	for (const url of [
+		'http://192.168.1.10:54321',
+		'https://172.16.4.4',
+		'http://169.254.1.1',
+		'https://supabase.internal',
+		'https://db.local',
+		'http://[::1]:54321',
+	]) {
+		assert.match(productionUrlProblem(url) ?? '', /loopback \/ private \/ emulator/, url);
+	}
+	assert.match(productionUrlProblem('http://kong:8000') ?? '', /no dot/);
+});
+
+test('a public https host on a domain that is not supabase.co is allowed', () => {
+	// A self-hosted Supabase behind a custom domain is a legitimate production
+	// config, so the rule is https-on-a-public-host, not `*.supabase.co`.
+	assert.equal(productionUrlProblem('https://supabase.threkir.com'), null);
 });
