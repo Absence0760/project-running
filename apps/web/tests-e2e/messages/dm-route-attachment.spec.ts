@@ -83,10 +83,18 @@ test.describe('DM route attachment', () => {
 			await expect(card).toHaveAttribute('href', `/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
 			await expect(card).toContainText('E2E demo public route');
 
-			// The URL the card replaced is gone from the bubble — that is the
-			// whole point of v2 — while still sitting in the row above.
+			// The URL the card replaced is gone from the BUBBLE — that is the
+			// whole point of v2 — while still sitting in the inbox preview, which
+			// reads `dm_threads()`'s `last_body` and resolves no attachment. Both
+			// halves are asserted: a page-wide count would fail on the preview and
+			// read as the suppression being broken.
 			await expect(recipientPage.locator('.bubble .text')).toHaveCount(0);
-			await expect(recipientPage.getByText(SHARE_PATH, { exact: false })).toHaveCount(0);
+			await expect(
+				recipientPage.locator('.bubble').getByText(SHARE_PATH, { exact: false })
+			).toHaveCount(0);
+			await expect(
+				recipientPage.locator('.preview').getByText(SHARE_PATH, { exact: false })
+			).toHaveCount(1);
 
 			// And the card is the way through to the route.
 			await card.click();
@@ -133,8 +141,11 @@ test.describe('DM route attachment', () => {
 			});
 			await expect(recipientPage.getByTestId('dm-route-attachment')).toHaveCount(0);
 			// It must not fall back to the body: a URL that 404s for this reader
-			// is indistinguishable from a link someone typed.
-			await expect(recipientPage.getByText(PRIVATE_ROUTE_ID, { exact: false })).toHaveCount(0);
+			// is indistinguishable from a link someone typed. Scoped to the bubble
+			// for the same reason as above — the inbox preview still carries it.
+			await expect(
+				recipientPage.locator('.bubble').getByText(PRIVATE_ROUTE_ID, { exact: false })
+			).toHaveCount(0);
 		} finally {
 			await recipient.close();
 		}
