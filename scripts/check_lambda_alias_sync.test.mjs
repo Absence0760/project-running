@@ -381,6 +381,10 @@ test('one source going blind on its own still fails', () => {
 // The filed reproduction, verbatim: a script that sets FUNCTIONS per
 // environment parsed as the FIRST array alone and reported the second Lambda
 // "synced and deployed" on a branch that never repoints it.
+/**
+ * @param {string[]} prod
+ * @param {string[]} preview
+ */
 const perEnvScript = (prod, preview) =>
   `#!/usr/bin/env bash\nset -euo pipefail\n\n` +
   `if [[ "$ENV_NAME" == "prod" ]]; then\n` +

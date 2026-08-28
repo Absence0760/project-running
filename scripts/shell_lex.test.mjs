@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { splitShellCommands } from './shell_lex.mjs';
 
+/** @param {string} src */
 const words = (src) => splitShellCommands(src).map((c) => c.words);
 
 test('splits on every operator a shell splits on', () => {

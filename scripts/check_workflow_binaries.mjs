@@ -114,7 +114,7 @@ const FOLDED_HEADER = /^([ \t]*)(?:-[ \t]+)?(?:[A-Za-z_][A-Za-z0-9_.-]*[ \t]*:[ 
 
 /** @param {string} line */
 function indentOf(line) {
-	return /^[ \t]*/.exec(line)[0].length;
+	return (/^[ \t]*/.exec(line)?.[0] ?? '').length;
 }
 
 /// The file's physical lines as the commands a shell would actually run, each
