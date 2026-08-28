@@ -8,7 +8,7 @@
 --   * a PARTIAL refund is representable (20270620_001) — the thermometer and
 --     the feed both report what the charity KEPT, and the refunded amount is
 --     bounded, coupled to the status, and writable only by the webhook;
---   * a donor's checkout idempotency key (20270620_002) can identify at most
+--   * a donor's checkout idempotency key (20270620000002) can identify at most
 --     one donation, so a retry resolves to the attempt already open rather
 --     than opening a second one the donor could also pay.
 
@@ -236,7 +236,7 @@ select lives_ok(
 );
 
 -- ── one donation per client idempotency key ─────────────────────────────────
--- 20270620_002. Without the unique index two concurrent attempts carrying one
+-- 20270620000002. Without the unique index two concurrent attempts carrying one
 -- key both open a donation, and the key stops meaning anything.
 select throws_ok(
   $$ insert into donations (fundraiser_id, owner_user_id, amount_cents, status, client_request_id)
@@ -248,7 +248,7 @@ select throws_ok(
   'a client idempotency key can identify at most one donation'
 );
 
--- The index is partial: every row written before 20270620_002 carries a null
+-- The index is partial: every row written before 20270620000002 carries a null
 -- key, and nulls must not collide with each other.
 select lives_ok(
   $$ insert into donations (fundraiser_id, owner_user_id, amount_cents, status)

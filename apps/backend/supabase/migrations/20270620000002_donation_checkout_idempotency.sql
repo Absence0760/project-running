@@ -30,7 +30,7 @@ comment on column donations.client_request_id is
   'The donor client''s per-attempt idempotency key, echoed back by a retry so '
   'donations-checkout can resolve it to the pending donation it already '
   'opened rather than opening a second one. Null on rows written before '
-  '20270620_002.';
+  '20270620000002.';
 
 create unique index donations_client_request_idx
   on donations (client_request_id)
