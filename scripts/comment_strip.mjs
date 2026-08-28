@@ -32,9 +32,6 @@
 /// closing quote at all.
 const RUST_CHAR = /^'(?:\\(?:u\{[0-9a-fA-F]{1,6}\}|x[0-9a-fA-F]{2}|.)|[^\\'])'/;
 
-/** @param {string} s @param {number} n */
-const spaces = (s, n) => ' '.repeat(n);
-
 /**
  * @param {string} src
  * @param {'rust' | 'dart'} lang
