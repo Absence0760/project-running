@@ -12,6 +12,7 @@ import {
 	binaryOf,
 	checkWorkflowBinaries,
 	declaredPackages,
+	logicalLines,
 	parseInvocations,
 	readCompositeActions,
 	readWorkflows,
@@ -181,5 +182,79 @@ test('tsx is declared as a real dependency, not merely as somebody’s optional 
 	assert.ok(
 		web.scripts['test:unit'].startsWith('tsx '),
 		'test:unit is the command the CI diagnosis tells a reader to reproduce with',
+	);
+});
+
+
+// decisions § 773. Both layers that put a runner and its binary on different
+// physical lines dropped the invocation entirely: `binaryOf('\\')` is null and
+// the caller continued, so the file's other invocations kept the
+// `invocations.length === 0` blindness check quiet and nothing was printed.
+test('a binary on a shell continuation line is still read', () => {
+	const text = [
+		'      - run: |',
+		'          npx \\',
+		'            totally-unpinned-cli --do-something',
+	].join('\n');
+	assert.deepEqual(parseInvocations([{ name: 'w.yml', text }]), [
+		{ file: 'w.yml', line: 2, runner: 'npx', bin: 'totally-unpinned-cli' },
+	]);
+});
+
+test('a binary on the next line of a folded scalar is still read', () => {
+	const text = ['      - run: >-', '          pnpm exec', '          totally-unpinned-cli'].join('\n');
+	assert.deepEqual(parseInvocations([{ name: 'w.yml', text }]), [
+		{ file: 'w.yml', line: 2, runner: 'pnpm exec', bin: 'totally-unpinned-cli' },
+	]);
+});
+
+// The unpinned binary is what has to reach the error list, not merely the
+// parse: the whole defect was that it never became an error.
+test('an unpinned binary reached over a continuation still fails the check', () => {
+	const text = [everyBin(), '      - run: |', '          npx \\', '            unpinned-cli'].join('\n');
+	const { errors } = checkWorkflowBinaries([{ name: 'w.yml', text }], allProviders);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /unpinned-cli/);
+});
+
+// A blank line inside a folded scalar is a newline, not a space, so folding
+// across one would invent a command nothing runs.
+test('a folded scalar does not fold across its paragraph breaks', () => {
+	const text = ['      - run: >-', '          npx', '', '          totally-unpinned-cli'].join('\n');
+	assert.deepEqual(parseInvocations([{ name: 'w.yml', text }]), []);
+});
+
+// `|` keeps its newlines, so each line IS its own command; joining them would
+// read `npx` and the next unrelated command as one invocation.
+test('a literal block scalar is not folded', () => {
+	const text = ['      - run: |', '          npx', '          totally-unpinned-cli'].join('\n');
+	assert.deepEqual(parseInvocations([{ name: 'w.yml', text }]), []);
+});
+
+test('logicalLines leaves an ordinary file line-for-line', () => {
+	const text = ['a: 1', 'b: 2', 'c: 3'].join('\n');
+	assert.deepEqual(logicalLines(text), [
+		{ line: 1, text: 'a: 1' },
+		{ line: 2, text: 'b: 2' },
+		{ line: 3, text: 'c: 3' },
+	]);
+});
+
+// Measured while fixing it: the joining changes nothing about the committed
+// tree, which is what "latent" has to mean rather than be assumed to.
+test('joining logical lines finds the same invocations in the committed workflows', () => {
+	const files = [...readWorkflows(WORKFLOW_DIR), ...readCompositeActions(ACTION_DIR)];
+	const found = parseInvocations(files);
+	const raw = files.flatMap(({ name, text }) =>
+		text.split('\n').flatMap((line, i) =>
+			[...line.matchAll(/(?:^|[^\w./@-])(npx|pnpm\s+exec)\s+(\S[^\n]*)/g)]
+				.map((m) => binaryOf(m[2]))
+				.filter((b) => b !== null)
+				.map((b) => `${name}:${i + 1} ${b}`),
+		),
+	);
+	assert.deepEqual(
+		found.map((i) => `${i.file}:${i.line} ${i.bin}`),
+		raw,
 	);
 });

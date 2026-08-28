@@ -35,6 +35,14 @@
 // making the same claim the command makes, and it was the half that was wrong
 // last time.
 //
+// What is read is the LOGICAL command, not the physical line. Two layers put a
+// runner and its binary on different lines: YAML folds a `>`-headed scalar's
+// lines into one before any shell sees them, and the shell then joins a line
+// ending in a backslash with the next. Scanning raw lines dropped both — the
+// binary landed on a line with no runner on it and the runner's own line
+// carried nothing that could be a command name, so `binaryOf` returned null
+// and the invocation vanished with no output at all (decisions § 773).
+//
 // Run: `node scripts/check_workflow_binaries.mjs`
 // CI:  the `workflow-lint` job in .github/workflows/ci.yml, which is in the
 //      `CI gate` aggregator's `needs:` list.
@@ -98,6 +106,74 @@ export function binaryOf(rest) {
 	return null;
 }
 
+/// A `>`-headed block scalar: `run: >-`, `description: >`, a bare `- >`. YAML
+/// joins its lines with spaces, so what the shell receives is one command per
+/// paragraph rather than one per physical line. `|` is deliberately absent —
+/// a literal block keeps its newlines and each line IS its own command.
+const FOLDED_HEADER = /^([ \t]*)(?:-[ \t]+)?(?:[A-Za-z_][A-Za-z0-9_.-]*[ \t]*:[ \t]*)?>[+-]?[0-9]*[ \t]*$/;
+
+/** @param {string} line */
+function indentOf(line) {
+	return /^[ \t]*/.exec(line)[0].length;
+}
+
+/// The file's physical lines as the commands a shell would actually run, each
+/// tagged with the 1-based line its FIRST physical line sits on.
+///
+/// A blank line inside a folded scalar is a paragraph break — YAML turns it
+/// into a newline, not a space — so folding across one would invent a command
+/// nothing runs. Backslash continuation is applied afterwards because that is
+/// the order the two layers happen in: YAML hands the shell a string, and the
+/// shell then joins its continuations.
+/**
+ * @param {string} text
+ * @returns {{ line: number, text: string }[]}
+ */
+export function logicalLines(text) {
+	const lines = text.split('\n');
+	/** @type {{ line: number, text: string }[]} */
+	const folded = [];
+	for (let i = 0; i < lines.length; i++) {
+		const header = FOLDED_HEADER.exec(lines[i]);
+		if (header === null) {
+			folded.push({ line: i + 1, text: lines[i] });
+			continue;
+		}
+		folded.push({ line: i + 1, text: lines[i] });
+		const base = header[1].length;
+		let j = i + 1;
+		/** @type {string[]} */
+		let run = [];
+		let runStart = j + 1;
+		const flush = () => {
+			if (run.length > 0) folded.push({ line: runStart, text: run.join(' ') });
+			run = [];
+		};
+		while (j < lines.length && (lines[j].trim() === '' || indentOf(lines[j]) > base)) {
+			if (lines[j].trim() === '') flush();
+			else {
+				if (run.length === 0) runStart = j + 1;
+				run.push(lines[j].trim());
+			}
+			j++;
+		}
+		flush();
+		i = j - 1;
+	}
+
+	/** @type {{ line: number, text: string }[]} */
+	const out = [];
+	for (let i = 0; i < folded.length; i++) {
+		let { line, text: acc } = folded[i];
+		while (/\\[ \t]*$/.test(acc) && i + 1 < folded.length) {
+			acc = `${acc.replace(/\\[ \t]*$/, '')} ${folded[i + 1].text.trim()}`;
+			i++;
+		}
+		out.push({ line, text: acc });
+	}
+	return out;
+}
+
 /**
  * @param {readonly SourceFile[]} files
  * @returns {Invocation[]}
@@ -106,14 +182,13 @@ export function parseInvocations(files) {
 	/** @type {Invocation[]} */
 	const found = [];
 	for (const { name, text } of files) {
-		const lines = text.split('\n');
-		for (let i = 0; i < lines.length; i++) {
-			for (const match of lines[i].matchAll(RUNNER)) {
+		for (const { line, text: command } of logicalLines(text)) {
+			for (const match of command.matchAll(RUNNER)) {
 				const bin = binaryOf(match[2]);
 				if (bin === null) continue;
 				found.push({
 					file: name,
-					line: i + 1,
+					line,
 					runner: match[1].replace(/\s+/g, ' '),
 					bin,
 				});
