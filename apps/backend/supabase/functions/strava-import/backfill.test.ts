@@ -2,7 +2,7 @@
 // each. `complete` is the field the two clients grade a sync on, so an exit
 // that never reaches the return statement is an exit the flag cannot describe.
 
-import { assert, assertEquals, assertRejects } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import type { DbClient } from '../_shared/database.ts';
 import { backfill } from './backfill.ts';
 
@@ -132,33 +132,32 @@ Deno.test('the 20-page cap truncates after exactly 20 fetches', async () => {
 	});
 });
 
-// The two exits `complete` cannot describe, because neither reaches the
-// return statement. A DNS failure or a dropped TLS handshake throws out of
-// `fetch`; an HTML error page from anything in front of Strava throws out of
-// `resp.json()`. Both propagate past `handleSync` into `withSentry`, which
-// answers 500 `internal_error` — so every activity the walk had already
-// ingested is in the database and absent from the report. These two tests pin
-// the behaviour as it stands; see the commit that follows.
-Deno.test('a thrown fetch mid-walk escapes the walk entirely', async () => {
+// A transport failure is a truncation, not a crash. `fetch` rejects on
+// DNS / TLS / a dropped connection and `resp.json()` on an HTML error page
+// from anything in front of Strava; both used to propagate past `handleSync`
+// into `withSentry`, which answers 500 `internal_error` and discards every
+// count the walk had earned.
+Deno.test('a thrown fetch mid-walk truncates and keeps the counts', async () => {
 	await withFetch(
 		(_u, i) => {
 			if (i === 1) throw new TypeError('error sending request');
 			return json(page(1, 50, 'Run'));
 		},
 		async () => {
-			await assertRejects(
-				() => backfill(dbStub({ stravaIds: ['1000'] }), 'u1', 'tok', 90),
-				TypeError,
-			);
+			const r = await backfill(dbStub({ stravaIds: ['1000'] }), 'u1', 'tok', 90);
+			assertEquals(r.complete, false);
+			assertEquals(r.rate_limited, false);
+			assertEquals(r.skipped, 1);
 		},
 	);
 });
 
-Deno.test('a body that is not JSON at all escapes the walk entirely', async () => {
+Deno.test('a body that is not JSON at all truncates rather than throwing', async () => {
 	await withFetch(
 		() => new Response('<html>502</html>', { status: 200, headers: { 'Content-Type': 'text/html' } }),
 		async () => {
-			await assertRejects(() => backfill(dbStub(), 'u1', 'tok', 90), SyntaxError);
+			const r = await backfill(dbStub(), 'u1', 'tok', 90);
+			assertEquals(r.complete, false);
 		},
 	);
 });

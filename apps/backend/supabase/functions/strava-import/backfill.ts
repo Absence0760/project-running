@@ -88,8 +88,8 @@ export async function backfill(
 	let rateLimited = false;
 	// Only an end-of-window exit may claim the lookback window was walked to
 	// its end. Every other `break` below — Strava throttling us, an upstream
-	// error, a malformed page, the 20-page safety cap — leaves activities in
-	// the window unfetched, and only the throttle case had a field to say so.
+	// error, a transport failure, a malformed page, the 20-page safety cap —
+	// leaves activities in the window unfetched.
 	// The window is relative to `Date.now()`, so the unfetched activities stay
 	// reachable by a re-sync ONLY until they age past `lookbackDays`: a sync
 	// that reports "complete" when it is not is a data loss on a 90-day fuse,
@@ -97,23 +97,40 @@ export async function backfill(
 	let complete = false;
 	while (true) {
 		const url = `https://www.strava.com/api/v3/athlete/activities?after=${afterEpoch}&per_page=${pageSize}&page=${page}`;
-		const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-		if (resp.status === 429 || resp.status === 503) {
-			// Strava rate-limit / maintenance — surface to the caller so
-			// the client can show "Strava is rate-limiting us, try again
-			// in 15 minutes" rather than treating partial as success.
-			console.warn('strava backfill rate-limited', { page, status: resp.status });
-			rateLimited = true;
+		// A transport failure is a truncation like any other, not a reason to
+		// throw away the walk. `fetch` rejects on DNS / TLS / a dropped
+		// connection and `resp.json()` on an HTML error page served by
+		// anything sitting in front of Strava; both used to propagate past
+		// `handleSync` into `withSentry`, which answers 500 `internal_error`.
+		// The activities ingested so far are in the database either way, so
+		// the only thing that changes is whether the runner is told about
+		// them — and a 500 tells them the sync failed outright.
+		let activities: StravaActivity[];
+		try {
+			const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+			if (resp.status === 429 || resp.status === 503) {
+				// Strava rate-limit / maintenance — surface to the caller so
+				// the client can show "Strava is rate-limiting us, try again
+				// in 15 minutes" rather than treating partial as success.
+				console.warn('strava backfill rate-limited', { page, status: resp.status });
+				rateLimited = true;
+				break;
+			}
+			if (!resp.ok) {
+				// Bail on the first non-rate-limit failure rather than looping
+				// forever — a partial import is still useful, but it is a PARTIAL
+				// one: `complete` stays false so the caller says so.
+				console.warn('strava backfill upstream error', { page, status: resp.status });
+				break;
+			}
+			activities = (await resp.json()) as StravaActivity[];
+		} catch (err) {
+			console.warn('strava backfill transport error', {
+				page,
+				error: err instanceof Error ? err.name : 'unknown',
+			});
 			break;
 		}
-		if (!resp.ok) {
-			// Bail on the first non-rate-limit failure rather than looping
-			// forever — a partial import is still useful, but it is a PARTIAL
-			// one: `complete` stays false so the caller says so.
-			console.warn('strava backfill upstream error', { page, status: resp.status });
-			break;
-		}
-		const activities = (await resp.json()) as StravaActivity[];
 		// A non-array body is a malformed page, not the end of the window.
 		if (!Array.isArray(activities)) break;
 		if (activities.length === 0) {
