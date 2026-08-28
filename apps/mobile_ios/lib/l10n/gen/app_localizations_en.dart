@@ -6798,6 +6798,29 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get integrationsStravaSyncHistory => 'Sync older history…';
+
+  @override
+  String get integrationsStravaLookbackTitle => 'How far back to sync';
+
+  @override
+  String get integrationsStravaLookback90 => 'Last 90 days';
+
+  @override
+  String get integrationsStravaLookback180 => 'Last 6 months';
+
+  @override
+  String get integrationsStravaLookback365 => 'Last year';
+
+  @override
+  String get integrationsSyncPartialNoteResumable =>
+      'The last sync stopped before the end of the window. Syncing again picks up where it stopped.';
+
+  @override
+  String get integrationsSyncPartialNote =>
+      'The last sync stopped before the end of the window and recorded no restart point. Sync again to retry it.';
+
+  @override
   String get integrationsSyncNow => 'Sync now';
 
   @override

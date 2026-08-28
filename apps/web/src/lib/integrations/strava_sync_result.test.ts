@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { parseStravaSyncResult } from './strava_sync_result';
+import { readFileSync } from 'node:fs';
+import {
+	STRAVA_LOOKBACK_DEFAULT_DAYS,
+	STRAVA_LOOKBACK_MAX_DAYS,
+	STRAVA_LOOKBACK_OPTIONS,
+	isStravaLookbackReachable,
+	parseStravaSyncResult,
+} from './strava_sync_result';
 
 test('a finished walk is the only shape that reports complete', () => {
 	const r = parseStravaSyncResult({
@@ -71,8 +78,17 @@ test('an unrecognised payload zeroes the counts and reports partial', () => {
 	for (const payload of [null, undefined, 'ok', 42, [], [{ imported: 9 }]]) {
 		const r = parseStravaSyncResult(payload);
 		assert.deepEqual(
-			[r.imported, r.skipped, r.failed, r.rateLimited, r.complete, r.athleteId, r.error],
-			[0, 0, 0, false, false, null, null],
+			[
+				r.imported,
+				r.skipped,
+				r.failed,
+				r.rateLimited,
+				r.complete,
+				r.resumable,
+				r.athleteId,
+				r.error,
+			],
+			[0, 0, 0, false, false, false, null, null],
 			`payload ${JSON.stringify(payload)} must not read as a sync`,
 		);
 	}
@@ -123,4 +139,56 @@ test('athlete_id is carried through only as a non-empty string', () => {
 	assert.equal(parseStravaSyncResult({ athlete_id: '' }).athleteId, null);
 	assert.equal(parseStravaSyncResult({ athlete_id: 12345 }).athleteId, null);
 	assert.equal(parseStravaSyncResult({}).athleteId, null);
+});
+
+test('resumable must be the boolean true to claim a resume point', () => {
+	// Same fail-closed direction as `complete`: telling a runner "sync again to
+	// carry on" when nothing was recorded sends them back to a walk that will
+	// restart from the beginning and stop in the same place.
+	for (const value of ['true', 1, {}, null, undefined]) {
+		assert.equal(parseStravaSyncResult({ resumable: value }).resumable, false);
+	}
+	assert.equal(parseStravaSyncResult({ resumable: true }).resumable, true);
+});
+
+test('a finished walk is never resumable, whatever the body says', () => {
+	// A finished window subsumes any point inside it, and the function clears
+	// the cursor when it reaches the end. A body claiming both is malformed;
+	// resolving it here keeps every surface from having to.
+	const r = parseStravaSyncResult({ complete: true, resumable: true });
+	assert.equal(r.complete, true);
+	assert.equal(r.resumable, false);
+});
+
+test('an embedded error leaves a resume point readable', () => {
+	// `complete` is forced false by an error, and that must not drag the
+	// resume point down with it: a walk that recorded one still has it.
+	const r = parseStravaSyncResult({ error: 'partial', complete: true, resumable: true });
+	assert.equal(r.complete, false);
+	assert.equal(r.resumable, true);
+});
+
+test('the lookback options are ascending, start at the default and end at the max', () => {
+	assert.equal(STRAVA_LOOKBACK_OPTIONS[0], STRAVA_LOOKBACK_DEFAULT_DAYS);
+	assert.equal(STRAVA_LOOKBACK_OPTIONS.at(-1), STRAVA_LOOKBACK_MAX_DAYS);
+	for (let i = 1; i < STRAVA_LOOKBACK_OPTIONS.length; i++) {
+		assert.ok(STRAVA_LOOKBACK_OPTIONS[i] > STRAVA_LOOKBACK_OPTIONS[i - 1]);
+	}
+	assert.ok(STRAVA_LOOKBACK_OPTIONS.every((d) => isStravaLookbackReachable(d)));
+	assert.equal(isStravaLookbackReachable(STRAVA_LOOKBACK_MAX_DAYS + 1), false);
+	assert.equal(isStravaLookbackReachable(0), false);
+	assert.equal(isStravaLookbackReachable(Number.NaN), false);
+});
+
+test('the maximum is the bound the Edge Function actually enforces', () => {
+	// A third rail like `nearby`'s: the function answers 400
+	// `invalid_lookback_days` above its own bound, so a client offering a
+	// wider window would hand the runner a refusal naming neither number.
+	const src = readFileSync(
+		new URL('../../../../backend/supabase/functions/strava-import/index.ts', import.meta.url),
+		'utf8',
+	);
+	const bound = src.match(/requested > (\d+)/)?.[1];
+	assert.ok(bound, 'strava-import no longer bounds `lookbackDays` with `requested > <n>`');
+	assert.equal(Number(bound), STRAVA_LOOKBACK_MAX_DAYS);
 });

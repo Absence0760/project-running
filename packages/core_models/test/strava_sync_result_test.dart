@@ -93,10 +93,11 @@ void main() {
           r.failed,
           r.rateLimited,
           r.complete,
+          r.resumable,
           r.athleteId,
           r.error,
         ],
-        [0, 0, 0, false, false, null, null],
+        [0, 0, 0, false, false, false, null, null],
         reason: 'payload $payload must not read as a sync',
       );
     }
@@ -153,5 +154,56 @@ void main() {
     expect(stravaSyncResultFromResponse({'athlete_id': ''}).athleteId, isNull);
     expect(stravaSyncResultFromResponse({'athlete_id': 12345}).athleteId, isNull);
     expect(stravaSyncResultFromResponse(<String, Object?>{}).athleteId, isNull);
+  });
+
+  test('resumable must be the boolean true to claim a resume point', () {
+    // Same fail-closed direction as `complete`: telling a runner "sync again
+    // to carry on" when nothing was recorded sends them back to a walk that
+    // will restart from the beginning and stop in the same place.
+    for (final value in <Object?>['true', 1, <String, Object?>{}, null]) {
+      expect(
+        stravaSyncResultFromResponse({'resumable': value}).resumable,
+        isFalse,
+      );
+    }
+    expect(
+      stravaSyncResultFromResponse({'resumable': true}).resumable,
+      isTrue,
+    );
+  });
+
+  test('a finished walk is never resumable, whatever the body says', () {
+    // A finished window subsumes any point inside it, and the function clears
+    // the cursor when it reaches the end. A body claiming both is malformed;
+    // resolving it here keeps every surface from having to.
+    final r = stravaSyncResultFromResponse({
+      'complete': true,
+      'resumable': true,
+    });
+    expect(r.complete, isTrue);
+    expect(r.resumable, isFalse);
+  });
+
+  test('an embedded error leaves a resume point readable', () {
+    // `complete` is forced false by an error, and that must not drag the
+    // resume point down with it: a walk that recorded one still has it.
+    final r = stravaSyncResultFromResponse({
+      'error': 'partial',
+      'complete': true,
+      'resumable': true,
+    });
+    expect(r.complete, isFalse);
+    expect(r.resumable, isTrue);
+  });
+
+  test('the lookback options are ascending, start at the default and end at the max', () {
+    expect(kStravaLookbackOptions.first, kStravaLookbackDefaultDays);
+    expect(kStravaLookbackOptions.last, kStravaLookbackMaxDays);
+    for (var i = 1; i < kStravaLookbackOptions.length; i++) {
+      expect(kStravaLookbackOptions[i], greaterThan(kStravaLookbackOptions[i - 1]));
+    }
+    expect(kStravaLookbackOptions.every(isStravaLookbackReachable), isTrue);
+    expect(isStravaLookbackReachable(kStravaLookbackMaxDays + 1), isFalse);
+    expect(isStravaLookbackReachable(0), isFalse);
   });
 }

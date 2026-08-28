@@ -61,9 +61,9 @@ export type CancelAction =
   /// A still-`pending` order (no charge captured yet): release the soft
   /// reservation, no Stripe refund.
   | 'release_reservation'
-  /// A `paid` order whose policy allows a refund: initiate the Stripe refund.
+  /// A charged order whose policy allows a refund: initiate the Stripe refund.
   | 'refund'
-  /// A `paid` order whose policy denies a refund (e.g. inside the no-refund
+  /// A charged order whose policy denies a refund (e.g. inside the no-refund
   /// window): nothing to do — the buyer keeps the seat (we don't free a seat
   /// without refunding their money), the caller reports policy_no_refund.
   | 'policy_no_refund'
@@ -71,17 +71,62 @@ export type CancelAction =
   | 'noop';
 
 /// Decide what the cancel EF should do, given the order's current status and
-/// (for a paid order) its refund eligibility. Pure so the branch logic is
+/// (for a charged order) its refund eligibility. Pure so the branch logic is
 /// unit-tested independently of Stripe.
-///   pending                         -> release_reservation
-///   paid + eligible                 -> refund
-///   paid + not eligible             -> policy_no_refund
-///   anything else (terminal status) -> noop
+///   pending                             -> release_reservation
+///   paid | partially_refunded + eligible-> refund
+///   paid | partially_refunded + not     -> policy_no_refund
+///   anything else (terminal status)     -> noop
+///
+/// `partially_refunded` decides EXACTLY as `paid` does, because it is still a
+/// held seat: `enforce_paid_order_for_priced_event` accepts it as backing a
+/// registration (20270522_001) and the webhook keeps the seat on a partial
+/// refund by design. Reading it as terminal instead was a silent money bug —
+/// the caller's `.in('status', [...])` had already been widened to select such
+/// an order, and the buyer policy in 20270522_001 widened to admit it, so a
+/// buyer cancelling a partially-refunded registration reached here, was told
+/// `noop`, and the web toast reported success while no refund was created and
+/// the seat was never released (decisions § 769). A partial refund is not the
+/// buyer giving up their place; it is money coming back on a place they kept.
 export function cancelAction(
   status: string,
   refundEligible: boolean,
 ): CancelAction {
   if (status === 'pending') return 'release_reservation';
-  if (status === 'paid') return refundEligible ? 'refund' : 'policy_no_refund';
+  if (status === 'paid' || status === 'partially_refunded') {
+    return refundEligible ? 'refund' : 'policy_no_refund';
+  }
   return 'noop';
+}
+
+/// Shape the `stripe.refunds.create` params for a DESTINATION-charge refund.
+///
+/// Both flags are load-bearing and Stripe couples them: "If you refund the
+/// application fee for a destination charge, you must also reverse the
+/// transfer."
+///
+///   - `reverse_transfer` pulls the host's share back out of their connected
+///     account. Without it, "by default the destination account keeps the funds
+///     that were transferred to it, leaving the platform account to cover the
+///     negative balance from the refund" — so the buyer was made whole out of
+///     the PLATFORM's balance and the host kept the whole ticket.
+///   - `refund_application_fee` does NOT claw our cut back to us, which is what
+///     this call was written believing: it "push[es] the application fee funds
+///     back to the connected account". It is the half that leaves the host
+///     whole once the transfer above has been reversed off them.
+///
+/// Together they net every party to zero on a full refund. Set alone, as it was
+/// (decisions § 769), the second one pays the host our fee ON TOP of the ticket
+/// they already kept, so a cancelled $50 class cost the platform the full $50
+/// and paid the host $50 for a class nobody attended.
+///
+/// No `amount`: Stripe refunds the whole remaining unrefunded balance of the
+/// charge, which is what both refundable statuses want — the entire ticket for
+/// a `paid` order, and only what is still owed for a `partially_refunded` one.
+export function buildRefundParams(paymentIntentId: string) {
+  return {
+    payment_intent: paymentIntentId,
+    refund_application_fee: true,
+    reverse_transfer: true,
+  };
 }

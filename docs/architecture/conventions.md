@@ -1344,6 +1344,38 @@ Distinct from key parity, which `messages_parity.test.ts` and
 `l10n_parity_test.dart` already own: those prove a *shipped* locale is
 complete, this proves the shipped set is the set that exists.
 
+## A size budget measures what one reader downloads, not what the build emits
+
+A total over every emitted file is the right metric for a dependency: a dep
+splits into two lazy chunks and every reader still fetches both eventually, so
+summing them is what stops code-splitting being mistaken for a saving. It is
+the wrong metric for an artifact only *some* readers ever request. The web
+bundle ceiling summed the message catalogues, of which a reader fetches one, so
+each new language charged every reader ~88 KB they would never download and the
+ceiling had to be raised — pt-PT moved it 2400 → 2700 while the largest chunk
+stayed byte-identical, and the gate's sensitivity to a rogue dep fell by one
+language's worth every time (decisions § 771).
+
+So the rule is that **a build artifact only some readers fetch gets a budget of
+its own, sized per artifact rather than summed**, and the shared budget keeps
+only what every reader downloads whatever they are. `MAX_CATALOGUE_KB` in
+`scripts/check_web_bundle_budget.mjs` is per catalogue and never totalled, so a
+new locale cannot move it and a bloated one still trips it; `MAX_CODE_KB` holds
+everything unconditional and stays fixed as languages ship. The total of the
+optional population is still *reported*, deliberately — a number nobody may
+gate on is the one that cannot silently become a ceiling again.
+
+Two things decide which side an artifact falls on, and neither is its file
+type. **Ask what a reader actually fetches**: the English catalogue is
+statically imported as the synchronous fallback dict, so it is in the shared
+chunk every reader downloads before a locale is negotiated — it is
+unconditional weight and it sits in the code budget, even though it is a
+translation. And **classify from the build's own module graph, not from a
+filename**: client chunks are content-hashed with no name component, so the
+mapping comes from vite's manifest, and a chunk that stops being separately
+loadable disappears from it — which the guard fails on by name rather than
+letting the bytes land in the other budget under the wrong diagnosis.
+
 ## A tab index is an ordered enum, never a raw int
 
 `initialTab` on a tab host takes a named enum whose declaration order IS the
@@ -1559,6 +1591,17 @@ Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/
 - **An agent's `name:` is unique across `.claude/agents/**`.** Claude resolves a subagent by that frontmatter name, never by path, so two files declaring one name are two definitions of one agent and which answers is unpredictable. Putting a copy in a different directory does not separate them.
 
 Both have been breached by an automated sync from the `templates` repo, which is additive by path and therefore blind to a name it collides with, so neither rule can rely on review alone.
+
+## A guard parses its input, or refuses it — it never pattern-matches a language
+
+A CI guard's whole value is that its verdict is true, so a guard that reads its input approximately is worse than no guard: it is a green tick over text nobody looked at. Four of them were found doing exactly that ([decisions § 770](decisions.md), after [§ 757](decisions.md)), and the repair is the same four rules every time.
+
+- **A delimiter that can be quoted, nested or escaped is not a splitter.** `split(';')` over SQL fragments every `$$` body — 3441 real statements became 7366 pieces across the committed migrations — and a `--` eaten before anything knew whether it opened a comment swallowed a statement's own terminator. Lex the language (`apps/backend/scripts/sql_lex.mjs` does it for Postgres) or do not claim to read it.
+- **Ask the tool that already knows.** git knows which files a diff ADDED (`--diff-filter=A`); inferring it from a `@@ … +1` hunk header was wrong 22 times in 28. The same goes for a version a lockfile resolves, a job list a workflow declares, a path a `package.json` names.
+- **Two facts in the same file are not two facts in the same scope.** A cache key belongs to its job, a `NOT VALID` to its action, an `env:` to its file. Matching per file because that is what a `readFileSync` hands you produces a verdict about a pairing that does not exist.
+- **Input the guard cannot read is refused, loudly, naming the file.** Never consumed to end of input, never caught into an empty result, never skipped. A guard that reports a clean tree over something it failed to parse is the failure mode all three rules above collapse into.
+
+And where a rule genuinely has a blind spot, the guard **reports the blind spot** — `check_ci_diagnostics.mjs` lists the steps it does not ask to diagnose themselves — rather than leaving its boundary in a paragraph someone has to re-derive.
 
 ## Exceptions
 

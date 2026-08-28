@@ -178,8 +178,20 @@ export interface BuildCheckoutSessionArgs {
 /// charge: the buyer's card is charged on the platform account,
 /// `application_fee_amount` is the platform's cut, and
 /// `transfer_data.destination` routes the rest to the host's connected
-/// account — making the HOST the merchant of record, not the platform.
-/// `mode: 'payment'` is a one-off charge (not a subscription).
+/// account. `mode: 'payment'` is a one-off charge (not a subscription).
+///
+/// This does NOT make the host the merchant of record, which is what these
+/// params were documented as doing. That is `on_behalf_of`, which is absent
+/// here, and Stripe is explicit: "If `on_behalf_of` is omitted, the platform is
+/// the business of record for the payment." So the buyer sees the PLATFORM's
+/// statement descriptor, the charge settles in the platform's country and fee
+/// structure, and — independently of the parameter — "For destination charges,
+/// with or without `on_behalf_of`, Stripe debits dispute amounts and fees from
+/// your platform account." Whether to become the host's settlement merchant is
+/// a live sign-off question, not an oversight to patch in silently: it moves
+/// settlement currency and card-statement identity. It is also REQUIRED for a
+/// host outside the platform's region, which `buildAccountCreateParams`
+/// already lets a caller onboard. decisions § 769.
 export function buildCheckoutSessionParams(args: BuildCheckoutSessionArgs) {
   return {
     mode: 'payment' as const,

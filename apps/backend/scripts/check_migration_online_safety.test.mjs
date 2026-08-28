@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { MIGRATIONS_DIR } from './check_migration_versions.mjs';
 import {
   GRANDFATHER_CUTOFF,
+  UnlexableMigration,
   isAfterCutoff,
   findUnsafeConstraintAdds,
   scanMigrations,
@@ -169,6 +170,54 @@ test('scanMigrations grandfathers a pre-cutoff violation but catches a post-cuto
   assert.equal(caught.length, 1);
   assert.equal(caught[0].filename, `${AFTER_CUTOFF}_001_new_runs_check.sql`);
   assert.equal(caught[0].table, 'runs');
+});
+
+// The four below are the shapes a `;` split and a comment-strip that ran
+// before it got wrong. Two of them are FALSE NEGATIVES on the guarded tables
+// this file exists to protect — the filing that reported the parser said it
+// "fails in the safe direction", and it does not.
+test('a `--` inside a literal cannot borrow the next statement\'s NOT VALID', () => {
+  const sql = [
+    "alter table runs add constraint runs_note_chk check (note not like '%--%');",
+    'alter table runs add constraint runs_v_chk check (v > 0) not valid;',
+  ].join('\n');
+  const findings = findUnsafeConstraintAdds(sql);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].table, 'runs');
+  assert.match(findings[0].statement, /runs_note_chk/);
+});
+
+test('a NOT VALID spelled inside a string literal vouches for nothing', () => {
+  const findings = findUnsafeConstraintAdds(
+    "alter table runs add constraint runs_state_chk check (state <> 'not valid');",
+  );
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].table, 'runs');
+});
+
+test('DDL inside a function body is not the migration taking the lock', () => {
+  const sql = [
+    'create or replace function rebuild() returns void language plpgsql as $$',
+    'begin',
+    "  insert into audit(note) values ('ran; ok');",
+    "  alter table notifications add constraint notifications_kind_check check (kind in ('a','b'));",
+    'end;',
+    '$$;',
+  ].join('\n');
+  assert.deepEqual(findUnsafeConstraintAdds(sql), []);
+});
+
+test('a migration whose SQL does not lex is named, not skipped', () => {
+  assert.throws(
+    () =>
+      scanMigrations([
+        { filename: `${AFTER_CUTOFF}_001_broken.sql`, sql: "select 'unclosed" },
+      ]),
+    (/** @type {unknown} */ error) =>
+      error instanceof UnlexableMigration &&
+      error.filename === `${AFTER_CUTOFF}_001_broken.sql` &&
+      /unterminated string literal/.test(error.message),
+  );
 });
 
 test('the committed migrations directory is clean under the guard', () => {

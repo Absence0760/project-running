@@ -11,8 +11,11 @@
 /// Params for `stripe.accounts.create`. We onboard hosts as Express
 /// accounts (Stripe-hosted dashboard + KYC, the P1 assumption — open
 /// question #4 in club_events.md leaves Express-vs-Standard open).
-/// `transfers` is the capability destination charges need; `card_payments`
-/// lets the host be the merchant of record on the charge.
+/// `transfers` is the capability destination charges need; `card_payments` is
+/// the capability an account must hold to be named as the settlement merchant
+/// at all. It does not by itself make the host one — that is `on_behalf_of` on
+/// the charge, which events-checkout does not send (see its
+/// `buildCheckoutSessionParams`).
 export interface AccountCreateParams {
   type: 'express';
   country?: string;

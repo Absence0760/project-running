@@ -18,7 +18,8 @@ import '../lib/screens/settings_integrations_screen.dart';
 class _FakeApi extends ApiClient {
   _FakeApi(this.result);
 
-  final StravaSyncResult result;
+  StravaSyncResult result;
+  final List<int> lookbacks = [];
 
   @override
   String? get userId => 'u1';
@@ -34,10 +35,17 @@ class _FakeApi extends ApiClient {
       ];
 
   @override
-  Future<StravaSyncResult> syncStrava({int lookbackDays = 90}) async => result;
+  Future<StravaSyncResult> syncStrava({int lookbackDays = 90}) async {
+    lookbacks.add(lookbackDays);
+    return result;
+  }
 }
 
-Future<AppLocalizations> _pump(WidgetTester tester, StravaSyncResult r) async {
+Future<AppLocalizations> _pump(
+  WidgetTester tester,
+  StravaSyncResult r, {
+  _FakeApi? api,
+}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = Preferences();
   await prefs.init();
@@ -47,7 +55,7 @@ Future<AppLocalizations> _pump(WidgetTester tester, StravaSyncResult r) async {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: SettingsIntegrationsScreen(
-        apiClient: _FakeApi(r),
+        apiClient: api ?? _FakeApi(r),
         heartRate: BleHeartRate(),
         treadmill: BleTreadmill(),
         preferences: prefs,
@@ -75,6 +83,7 @@ void main() {
       failed: 0,
       rateLimited: true,
       complete: false,
+      resumable: false,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
@@ -99,6 +108,7 @@ void main() {
       failed: 0,
       rateLimited: false,
       complete: false,
+      resumable: true,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
@@ -116,6 +126,7 @@ void main() {
       failed: 0,
       rateLimited: false,
       complete: true,
+      resumable: false,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
@@ -136,6 +147,7 @@ void main() {
       failed: 2,
       rateLimited: false,
       complete: true,
+      resumable: false,
     );
     final l10n = await _pump(tester, r);
     await _tapSync(tester, l10n);
@@ -145,6 +157,128 @@ void main() {
       findsOneWidget,
     );
     expect(find.text(l10n.integrationsSyncResult(5, 1)), findsNothing);
+
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('a truncated sync leaves a note on the tile, and a finished one clears it',
+      (tester) async {
+    // The banner says it once and slides away. The lookback window is measured
+    // from now, so the record of "there is more to fetch" has to outlive it or
+    // the rest ages out unnoticed.
+    final api = _FakeApi(const StravaSyncResult(
+      imported: 1000,
+      skipped: 0,
+      failed: 0,
+      rateLimited: false,
+      complete: false,
+      resumable: true,
+    ));
+    final l10n = await _pump(tester, api.result, api: api);
+    expect(find.text(l10n.integrationsSyncPartialNoteResumable), findsNothing);
+
+    await _tapSync(tester, l10n);
+    expect(
+      find.text(l10n.integrationsSyncPartialNoteResumable),
+      findsOneWidget,
+    );
+
+    await tester.pump(const Duration(seconds: 4));
+    api.result = const StravaSyncResult(
+      imported: 5,
+      skipped: 0,
+      failed: 0,
+      rateLimited: false,
+      complete: true,
+      resumable: false,
+    );
+    await _tapSync(tester, l10n);
+    expect(find.text(l10n.integrationsSyncPartialNoteResumable), findsNothing);
+
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('a truncation that recorded no restart point says so', (tester) async {
+    // A throttle on the first page advances nothing, so "carry on from where we
+    // stopped" would be a claim about a point that does not exist.
+    const r = StravaSyncResult(
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      rateLimited: true,
+      complete: false,
+      resumable: false,
+    );
+    final l10n = await _pump(tester, r);
+    await _tapSync(tester, l10n);
+
+    expect(find.text(l10n.integrationsSyncPartialNote), findsOneWidget);
+    expect(find.text(l10n.integrationsSyncPartialNoteResumable), findsNothing);
+
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('the history picker offers every window and syncs with the one chosen',
+      (tester) async {
+    // Neither client could ask for more than 90 days, so a truncation left long
+    // enough for the missed activities to age out of that window had no in-app
+    // recovery at all — the only remaining path was the bulk export.
+    final api = _FakeApi(const StravaSyncResult(
+      imported: 12,
+      skipped: 0,
+      failed: 0,
+      rateLimited: false,
+      complete: true,
+      resumable: false,
+    ));
+    final l10n = await _pump(tester, api.result, api: api);
+
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.integrationsStravaSyncHistory));
+    await tester.pumpAndSettle();
+
+    for (final label in [
+      l10n.integrationsStravaLookback90,
+      l10n.integrationsStravaLookback180,
+      l10n.integrationsStravaLookback365,
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
+
+    await tester.tap(find.text(l10n.integrationsStravaLookback365));
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text(l10n.integrationsSyncNow),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(api.lookbacks, [365]);
+
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('the plain Sync now path still asks for the default window',
+      (tester) async {
+    // Widening is an explicit act: Strava's per-user budget is 100 requests /
+    // 15 minutes and the walk spends one per 50 activities, so a wider default
+    // would make every routine sync several times heavier.
+    final api = _FakeApi(const StravaSyncResult(
+      imported: 1,
+      skipped: 0,
+      failed: 0,
+      rateLimited: false,
+      complete: true,
+      resumable: false,
+    ));
+    final l10n = await _pump(tester, api.result, api: api);
+    await _tapSync(tester, l10n);
+
+    expect(api.lookbacks, [90]);
 
     await tester.pump(const Duration(seconds: 4));
   });

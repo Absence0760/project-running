@@ -9096,6 +9096,34 @@
       }
     }
   },
+  "integrationsStravaSyncHistory": "Sync older history…",
+  "@integrationsStravaSyncHistory": {
+    "description": "Popup-menu item opening the wider-lookback picker for Strava"
+  },
+  "integrationsStravaLookbackTitle": "How far back to sync",
+  "@integrationsStravaLookbackTitle": {
+    "description": "Title of the dialog choosing how far back a Strava sync reaches"
+  },
+  "integrationsStravaLookback90": "Last 90 days",
+  "@integrationsStravaLookback90": {
+    "description": "Strava lookback option: the default 90-day window"
+  },
+  "integrationsStravaLookback180": "Last 6 months",
+  "@integrationsStravaLookback180": {
+    "description": "Strava lookback option: six months"
+  },
+  "integrationsStravaLookback365": "Last year",
+  "@integrationsStravaLookback365": {
+    "description": "Strava lookback option: one year, the maximum the function accepts"
+  },
+  "integrationsSyncPartialNoteResumable": "The last sync stopped before the end of the window. Syncing again picks up where it stopped.",
+  "@integrationsSyncPartialNoteResumable": {
+    "description": "Strava tile note after a truncated sync that recorded a resume point"
+  },
+  "integrationsSyncPartialNote": "The last sync stopped before the end of the window and recorded no restart point. Sync again to retry it.",
+  "@integrationsSyncPartialNote": {
+    "description": "Strava tile note after a truncated sync that recorded no resume point"
+  },
   "integrationsSyncNow": "Sync now",
   "@integrationsSyncNow": {
     "description": "Popup-menu item to trigger a Strava sync"

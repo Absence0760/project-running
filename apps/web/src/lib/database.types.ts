@@ -757,6 +757,7 @@ export type Database = {
           id: string
           read_at: string | null
           recipient_id: string
+          route_id: string | null
           sender_id: string
         }
         Insert: {
@@ -765,6 +766,7 @@ export type Database = {
           id?: string
           read_at?: string | null
           recipient_id: string
+          route_id?: string | null
           sender_id: string
         }
         Update: {
@@ -773,9 +775,25 @@ export type Database = {
           id?: string
           read_at?: string | null
           recipient_id?: string
+          route_id?: string | null
           sender_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "public_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "direct_messages_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "routes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       donations: {
         Row: {

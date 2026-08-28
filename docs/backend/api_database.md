@@ -487,11 +487,14 @@ create table direct_messages (
   body          text not null check (length(btrim(body)) between 1 and 4000),
   created_at    timestamptz not null default now(),
   read_at       timestamptz,
+  route_id      uuid references routes(id) on delete set null,  -- 20270619_001
   check (sender_id <> recipient_id)
 );
 ```
 
 1:1 direct messages (very-social persona #55, migration `20261026_001`). A "thread" is the unordered participant pair — no separate threads table; indexes use `least/greatest(sender_id, recipient_id)` so A→B and B→A share a symmetric thread index. RLS: each participant reads their own threads; **INSERT is gated on `not is_blocked_either_way(sender, recipient)` AND an existing follow in either direction** — a plain `user_blocks` subquery would be hidden from the sender by that table's owner-read RLS, so the SECURITY DEFINER helper is load-bearing here, not a convenience. The recipient marks read (UPDATE); either party deletes. A `message` notification fires to the recipient only on the first unread message of a burst (the trigger checks for an existing unread from the same sender) so an active thread doesn't flood the bell. Deferred: realtime delivery, a non-follower "message requests" inbox, mobile.
+
+**Typed route attachment (migration `20270619_001`, [decisions § 772](../architecture/decisions.md)).** `route_id` carries the optional route a message shares, replacing the raw share URL v1 put in the body as the thing the thread *renders* (the body keeps the URL: `dm_threads()` returns only `last_body` and the Art 20 export selects `*`, so both read the body and neither resolves an attachment). `on delete set null`, not cascade — a message is the sender's own correspondence and must outlive the route it named, so a third party tidying up their routes cannot delete someone's private conversation. The INSERT policy gained `route_id is null or private.is_route_visible_to(route_id, auth.uid())`: **sender-side**, because a recipient-side check would accept or refuse the identical insert depending on the addressee (a club route is visible to a club-mate and to nobody else) and raise a 42501 the sender cannot act on. What the *recipient* may see is decided at read time — the web card resolves through the owner-aware `fetchRouteById`, so a non-owner gets the `public_routes` view plus `clip_route_for_viewer`'s privacy-zone clip, and a route they may not see renders as unavailable rather than as a dead link. Covering partial index `direct_messages_route_id`. pgtap: `direct_message_route_attachment_test.sql`.
 
 **Send throttle (migration `20270608_001`).** The BEFORE INSERT trigger `direct_messages_enforce_send_rate_limit` calls the shared `enforce_create_rate_limit` helper twice per row, against **two** buckets: `send_direct_message` at 250/hour and `send_direct_message_burst` at 30/minute. Two windows because `check_rate_limit` is fixed-window, so one "N per hour" either admits the whole allowance in a single instant or trips a real back-and-forth — the burst bucket bounds how *fast* messages arrive, the hour bucket how *many*. The hour bucket is checked first so a sender who has spent both is told the binding wait rather than a 40-second one. The throttle lives on the table because `direct_messages` has exactly one write path (a PostgREST INSERT — no RPC, no Edge Function, no Go worker), so every entry point inherits it; [decisions § 734](../architecture/decisions.md) declined a per-affordance throttle for that reason and [§ 737](../architecture/decisions.md) records the sizing. Unlike the standalone RPC path, a *refused* send does not spend budget: the raise aborts the statement and rolls the increment back with it, so the counters count sent messages. Web `sendDm` routes the P0001 through the shared parser, which since [decisions § 744](../architecture/decisions.md) returns `{bucket, seconds}` and leaves the sentence to the locale catalogue — both send buckets resolve to the same "sending messages" wording, since which of the two windows refused is our accounting rather than the sender's. pgtap: `direct_message_rate_limit_test.sql`.
 
@@ -1304,7 +1307,7 @@ create table integrations (
   external_id              text,                     -- athlete ID on the provider
   scope                    text,                     -- OAuth scopes granted
   last_sync_at             timestamptz,              -- last COMPLETE walk of the lookback window; a truncated backfill leaves it alone (decisions § 766)
-  sync_cursor              text,                     -- intended as a backfill pagination cursor; NOTHING writes it, and no importer reads it — `strava-import` derives `after=` from now() on every call
+  sync_cursor              text,                     -- resume point for a truncated `strava-import` walk: {"v":1,"from","after","before"} epoch seconds. Written on a truncation that made progress, cleared on a finished window / connect / disconnect (decisions § 768)
   created_at               timestamptz default now(),
   updated_at               timestamptz default now(),
   unique (user_id, provider)
@@ -1640,6 +1643,10 @@ Authentication: most functions require a valid Supabase JWT in the `Authorizatio
 ### `POST /strava-import`
 
 Initiates the Strava OAuth flow and backfills the last 90 days of activities.
+A subsequent `{ "action": "sync", "lookbackDays": n }` walks the last `n` days
+instead — `n` must be an integer in `1..365` or the function answers 400
+`invalid_lookback_days`. Both clients offer 90 / 180 / 365; the maximum is
+pinned to this bound by a guard in `strava_sync_result.test.ts`.
 
 **Request:**
 ```json
@@ -1655,6 +1662,10 @@ Initiates the Strava OAuth flow and backfills the last 90 days of activities.
 4. Register Strava webhook subscription (if not already registered)
 5. Backfill: fetch paginated activities from past 90 days
 6. For each activity: fetch GPS stream, map to `Run`, upsert
+7. Report `complete` (the window was walked to its end) and `resumable` (a
+   resume point was recorded on `sync_cursor`, so a re-sync continues rather
+   than restarting). `last_sync_at` is stamped, and `sync_cursor` cleared,
+   only on a `complete` walk — see [decisions § 766 + § 768](../architecture/decisions.md).
 
 **Response:**
 ```json

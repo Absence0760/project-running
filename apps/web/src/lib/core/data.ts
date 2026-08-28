@@ -8477,6 +8477,10 @@ export interface DirectMessage {
 	body: string;
 	created_at: string;
 	read_at: string | null;
+	/// Typed route attachment (migration 20270619_001). Null on an ordinary
+	/// message. What the reader is allowed to SEE of the route it names is
+	/// decided at read time by [fetchRouteById], never by holding this id.
+	route_id: string | null;
 }
 
 export interface DmThread {
@@ -8566,14 +8570,27 @@ export async function fetchDmThread(otherId: string, limit = 200): Promise<Direc
 /// the rail's two send buckets (migration 20270608_001) raise the same
 /// P0001 every other create-rate-limit does, so they go through the
 /// shared parser rather than reaching a composer as a raw exception.
-export async function sendDm(recipientId: string, body: string): Promise<DirectMessage> {
+///
+/// `routeId` attaches a route to the message (route_direct_share.md v2).
+/// The same INSERT policy also refuses an attachment the SENDER cannot see
+/// (migration 20270619_001), which surfaces through the same 42501 branch.
+export async function sendDm(
+	recipientId: string,
+	body: string,
+	routeId?: string,
+): Promise<DirectMessage> {
 	const me = auth.user?.id;
 	if (!me) throw new Error('Not signed in');
 	const trimmed = body.trim();
 	if (!trimmed) throw new Error('Message is empty');
 	const { data, error } = await supabase
 		.from(TABLES.direct_messages)
-		.insert({ sender_id: me, recipient_id: recipientId, body: trimmed })
+		.insert({
+			sender_id: me,
+			recipient_id: recipientId,
+			body: trimmed,
+			route_id: routeId?.trim() || null,
+		})
 		.select('*')
 		.single();
 	if (error || !data) {

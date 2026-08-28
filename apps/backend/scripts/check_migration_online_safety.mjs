@@ -28,6 +28,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
+import { splitSqlStatements } from './sql_lex.mjs';
 
 // Every migration at or below this version predates the migration-locks
 // playbook and is grandfathered. Bump this ONLY when you deliberately and
@@ -223,7 +224,7 @@ import { MIGRATIONS_DIR, parseVersion } from './check_migration_versions.mjs';
 // no writer. The scanner inspected it under the previous cutoff and returned
 // zero violations, so this bump is the max-version bookkeeping this file's own
 // test enforces, not an exemption.
-export const GRANDFATHER_CUTOFF = '20270616';
+export const GRANDFATHER_CUTOFF = '20270619';
 
 // High-volume / unbounded-growth tables where a validating ADD CONSTRAINT scan
 // is real downtime against prod. Mirrors the table list in
@@ -261,14 +262,6 @@ function normaliseVersion(version) {
  */
 export function isAfterCutoff(version, cutoff = GRANDFATHER_CUTOFF) {
   return normaliseVersion(version) > normaliseVersion(cutoff);
-}
-
-/**
- * @param {string} sql
- * @returns {string}
- */
-function stripSqlComments(sql) {
-  return sql.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 // The target table of an `ALTER TABLE [IF EXISTS] [ONLY] [public.]<table> …`.
@@ -327,6 +320,18 @@ function addsBlockingConstraint(statement) {
   );
 }
 
+export class UnlexableMigration extends Error {
+  /**
+   * @param {string} filename
+   * @param {unknown} cause
+   */
+  constructor(filename, cause) {
+    super(`${filename}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'UnlexableMigration';
+    this.filename = filename;
+  }
+}
+
 /** @typedef {{ table: string, statement: string }} ConstraintFinding */
 /** @typedef {{ filename: string, sql: string }} MigrationSource */
 /** @typedef {{ filename: string, table: string, statement: string }} ConstraintViolation */
@@ -335,11 +340,15 @@ function addsBlockingConstraint(statement) {
 /**
  * @param {string} sql
  * @returns {ConstraintFinding[]}
+ * @throws when the SQL cannot be lexed; a verdict over text the lexer could
+ *   not read would be a guess.
  */
 export function findUnsafeConstraintAdds(sql) {
   /** @type {ConstraintFinding[]} */
   const findings = [];
-  const statements = stripSqlComments(sql).split(';');
+  // Literals are blanked as well as split correctly: a `check (note <> 'not
+  // valid')` otherwise reads as a statement that carries the escape hatch.
+  const statements = splitSqlStatements(sql, { blankLiterals: true });
   for (const raw of statements) {
     const statement = raw.replace(/\s+/g, ' ').trim().toLowerCase();
     if (!statement.startsWith('alter table')) continue;
@@ -357,6 +366,9 @@ export function findUnsafeConstraintAdds(sql) {
  * @param {readonly MigrationSource[]} migrations
  * @param {string} [cutoff]
  * @returns {ConstraintViolation[]}
+ * @throws an {@link UnlexableMigration} naming the file whose SQL could not be
+ *   read. Skipping it instead would report the whole tree clean over a file
+ *   nothing inspected.
  */
 export function scanMigrations(migrations, cutoff = GRANDFATHER_CUTOFF) {
   /** @type {ConstraintViolation[]} */
@@ -364,7 +376,14 @@ export function scanMigrations(migrations, cutoff = GRANDFATHER_CUTOFF) {
   for (const { filename, sql } of migrations) {
     const version = parseVersion(filename);
     if (version === null || !isAfterCutoff(version, cutoff)) continue;
-    for (const finding of findUnsafeConstraintAdds(sql)) {
+    /** @type {ConstraintFinding[]} */
+    let findings;
+    try {
+      findings = findUnsafeConstraintAdds(sql);
+    } catch (cause) {
+      throw new UnlexableMigration(filename, cause);
+    }
+    for (const finding of findings) {
       violations.push({ filename, ...finding });
     }
   }
@@ -377,7 +396,21 @@ function main() {
     filename,
     sql: readFileSync(join(MIGRATIONS_DIR, filename), 'utf8'),
   }));
-  const violations = scanMigrations(migrations);
+  /** @type {ConstraintViolation[]} */
+  let violations;
+  try {
+    violations = scanMigrations(migrations);
+  } catch (error) {
+    if (!(error instanceof UnlexableMigration)) throw error;
+    console.error(
+      `::error file=apps/backend/supabase/migrations/${error.filename}::${error.message}. ` +
+        `The online-safety scanner reads this file as Postgres does — tracking dollar-quoted ` +
+        `bodies, string literals and nested block comments — and it does not close. Postgres ` +
+        `would reject the migration too. Fix the quoting; the scan cannot report on a file it ` +
+        `could not read.`,
+    );
+    process.exit(1);
+  }
   if (violations.length === 0) {
     console.log(
       `OK: no guarded-table CHECK/FK added without NOT VALID after ${GRANDFATHER_CUTOFF}.`,

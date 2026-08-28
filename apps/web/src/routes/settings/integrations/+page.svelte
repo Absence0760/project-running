@@ -23,6 +23,10 @@
 		syncStrava,
 		isStravaConfigured,
 	} from '$lib/integrations/strava';
+	import {
+		STRAVA_LOOKBACK_DEFAULT_DAYS,
+		STRAVA_LOOKBACK_OPTIONS,
+	} from '$lib/integrations/strava_sync_result';
 	import { importStravaZip, type StravaZipProgress } from '$lib/integrations/strava-zip';
 	import { importGarminBundle, type GarminZipProgress } from '$lib/integrations/garmin-zip';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -304,12 +308,25 @@
 		}
 	}
 
+	// The window a manual sync asks for. The default stays at 90 — Strava's
+	// per-user budget is 100 requests / 15 minutes and the walk spends one per
+	// 50 activities, so raising it for every routine sync would be several
+	// times heavier for history the runner already has. Widening is the
+	// recovery path for a truncation left long enough that the missed
+	// activities have aged out of the default window.
+	let stravaLookbackDays = $state<number>(STRAVA_LOOKBACK_DEFAULT_DAYS);
+	// A truncated sync is a state of the connection, not a moment. The toast
+	// says it once and the runner dismisses it; this outlives that, so "sync
+	// again" is still on the card when they come back.
+	let stravaPartial = $state<{ resumable: boolean } | null>(null);
+
 	async function handleSyncStrava(index: number) {
 		const item = integrations[index];
 		item.loading = true;
 		try {
-			const result = await syncStrava();
+			const result = await syncStrava(stravaLookbackDays);
 			await refreshIntegrations();
+			stravaPartial = result.complete ? null : { resumable: result.resumable };
 			const counts = { imported: result.imported, skipped: result.skipped };
 			showToast(
 				!result.complete
@@ -390,10 +407,31 @@
 							<p class="sync-note">
 								{m('settingsIntegrations.syncNotePrefix')}<strong>{m('settingsIntegrations.syncNoteBold')}</strong>{m('settingsIntegrations.syncNoteSuffix')}
 							</p>
+							{#if stravaPartial}
+								<p class="sync-partial" role="status" data-testid="strava-partial-note">
+									{stravaPartial.resumable
+										? m('settingsIntegrations.stravaSyncPartialNoteResumable')
+										: m('settingsIntegrations.stravaSyncPartialNote')}
+								</p>
+							{/if}
 						{/if}
 					</div>
 					<div class="btn-group">
 						{#if integration.connected && integration.provider === 'strava'}
+							<label class="lookback">
+								<span class="sr-only">{m('settingsIntegrations.stravaLookbackLabel')}</span>
+								<select
+									bind:value={stravaLookbackDays}
+									disabled={integration.loading}
+									data-testid="strava-lookback"
+								>
+									{#each STRAVA_LOOKBACK_OPTIONS as days (days)}
+										<option value={days}>
+											{m(`settingsIntegrations.stravaLookback${days}` as MessageKey)}
+										</option>
+									{/each}
+								</select>
+							</label>
 							<button
 								class="btn btn-sync"
 								disabled={integration.loading}
@@ -919,6 +957,22 @@
 		color: var(--color-text-secondary);
 		margin: var(--space-sm) 0 0;
 		line-height: 1.4;
+	}
+	.sync-partial {
+		font-size: 0.78rem;
+		color: var(--color-warning-text);
+		margin: var(--space-xs) 0 0;
+		line-height: 1.4;
+		font-weight: 600;
+	}
+	.lookback select {
+		padding: 0.4rem 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-family: inherit;
+		font-size: 0.85rem;
 	}
 	.card-sub a {
 		color: var(--color-primary);
