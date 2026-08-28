@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
+	ASSET_EXEMPTIONS,
 	CATALOGUE_SOURCE,
+	MAX_ASSET_KB,
 	MAX_CATALOGUE_KB,
 	MAX_CODE_KB,
 	MAX_LARGEST_CHUNK_KB,
@@ -13,6 +15,7 @@ import {
 	checkBudgets,
 	collectEmitted,
 	gzipKb,
+	isCodeFile,
 	localeTags,
 	renderSummary,
 } from './check_web_bundle_budget.mjs';
@@ -23,9 +26,13 @@ import {
 /// is better" is a claim about a disagreement, and a test that only ran the new
 /// rule could not show one.
 const RETIRED_TOTAL_KB = 2700;
+/// The retired walk matched `*.js` and `*.css`, so it is scored over those —
+/// which is also the hole the asset ceiling closes: the 3865 KB font below was
+/// invisible to that total as well as to the three ceilings that replaced it.
 /** @param {readonly {path: string, kb: number}[]} files */
 const retiredTotalPasses = (files) =>
-	files.reduce((sum, f) => sum + f.kb, 0) <= RETIRED_TOTAL_KB;
+	files.filter((f) => isCodeFile(f.path)).reduce((sum, f) => sum + f.kb, 0) <=
+	RETIRED_TOTAL_KB;
 
 /// apps/web as measured on 2026-08-28: 1934 KB of code in 403 files (largest
 /// chunk 245 KB) plus six lazily-imported catalogues. Collapsed to a handful of
@@ -34,10 +41,30 @@ const retiredTotalPasses = (files) =>
 const CATALOGUE_KB = { de: 88, es: 85, fr: 88, ja: 91, 'pt-BR': 85, 'pt-PT': 85 };
 const LOCALES = ['de', 'en', 'es', 'fr', 'ja', 'pt-BR', 'pt-PT'];
 
+/// The non-JS/CSS half of the same build: 33 files, 4057 KB gzipped, collapsed
+/// to the nine that carry all but a kilobyte of it. The font is the whole
+/// reason this population exists — 3865 KB, 1.8x the code ceiling, and outside
+/// every metric until it was measured.
+const ASSET_KB = [
+	{ path: '_app/immutable/assets/material-symbols-outlined.D4PiVfdc.woff2', kb: 3865 },
+	{ path: 'icon-512.png', kb: 68 },
+	{ path: 'og-default.png', kb: 20 },
+	{ path: 'icon-192.png', kb: 11 },
+	{ path: 'apple-touch-icon.png', kb: 10 },
+	{ path: 'learn/couch-to-5k.html', kb: 5 },
+	{ path: 'learn.html', kb: 5 },
+	{ path: 'learn/category/gear.html', kb: 4 },
+	{ path: 'index.html', kb: 2 },
+];
+
 /**
- * @param {{ extraCatalogues?: Record<string, number>, extraCode?: {path: string, kb: number}[] }} [opts]
+ * @param {{
+ *   extraCatalogues?: Record<string, number>,
+ *   extraCode?: {path: string, kb: number}[],
+ *   assets?: {path: string, kb: number}[],
+ * }} [opts]
  */
-function fixture({ extraCatalogues = {}, extraCode = [] } = {}) {
+function fixture({ extraCatalogues = {}, extraCode = [], assets = ASSET_KB } = {}) {
 	/** @type {Map<string, string>} */
 	const catalogues = new Map();
 	const files = [
@@ -55,7 +82,7 @@ function fixture({ extraCatalogues = {}, extraCode = [] } = {}) {
 		catalogues.set(locale, path);
 		files.push({ path, kb });
 	}
-	files.push(...extraCode);
+	files.push(...extraCode, ...assets);
 	const locales = [...new Set([...LOCALES, ...Object.keys(extraCatalogues)])].sort();
 	return { files, catalogues, locales };
 }
@@ -67,6 +94,9 @@ test('the shipped ceilings pass against the measured build', () => {
 	assert.equal(summary.catalogueKb, 522);
 	assert.equal(summary.catalogueFiles.length, 6);
 	assert.equal(summary.largest.kb, 245);
+	assert.equal(summary.assetFileCount, 9);
+	assert.equal(summary.assetKb, 3990);
+	assert.equal(summary.largestAsset.kb, 3865);
 });
 
 test('three more languages move no budget, where the retired total ceiling fails', () => {
@@ -197,16 +227,29 @@ test('localeTags reads the catalogue directory and skips its tests', () => {
 	}
 });
 
-test('collectEmitted walks nested output and gzips JS+CSS only', () => {
+test('collectEmitted walks nested output and returns every emitted file', () => {
+	// It used to return JS and CSS only, which is how a font twice the size of
+	// the whole code budget sat outside all three ceilings. Classification is
+	// checkBudgets' job; the walk's job is to miss nothing.
 	const dir = mkdtempSync(join(tmpdir(), 'budget-build-'));
 	try {
 		mkdirSync(join(dir, '_app', 'immutable', 'chunks'), { recursive: true });
 		writeFileSync(join(dir, '_app', 'immutable', 'chunks', 'a.js'), 'x'.repeat(4096));
 		writeFileSync(join(dir, '_app', 'b.css'), 'y'.repeat(4096));
+		writeFileSync(join(dir, '_app', 'font.woff2'), 'w'.repeat(4096));
 		writeFileSync(join(dir, 'index.html'), 'z'.repeat(4096));
 		const files = collectEmitted(dir);
-		assert.deepEqual(files.map((f) => f.path), ['_app/b.css', '_app/immutable/chunks/a.js']);
+		assert.deepEqual(files.map((f) => f.path), [
+			'_app/b.css',
+			'_app/font.woff2',
+			'_app/immutable/chunks/a.js',
+			'index.html',
+		]);
 		for (const f of files) assert.equal(f.kb, 1, 'a compressible 4 KiB file ceils to 1 KB');
+		assert.deepEqual(files.filter((f) => !isCodeFile(f.path)).map((f) => f.path), [
+			'_app/font.woff2',
+			'index.html',
+		]);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -221,10 +264,80 @@ test('the summary states the catalogue total without gating on it', () => {
 	assert.match(text, /Code \(every reader, any language\) \| 1934 KB across 9 files \| 2120 KB/);
 	assert.match(text, /Largest message catalogue \(ja\) \| 91 KB \| 100 KB, per catalogue/);
 	assert.match(text, /ungated in total \(522 KB across 6, one fetched per reader\)/);
+	assert.match(text, /Largest single asset[^|]*\| 3865 KB \| 100 KB, per asset/);
+	assert.match(text, /ungated in total too \(3990 KB across 9/);
 });
 
 test('the shipped ceilings are the ones this suite reasons about', () => {
 	assert.equal(MAX_CODE_KB, 2120);
 	assert.equal(MAX_CATALOGUE_KB, 100);
 	assert.equal(MAX_LARGEST_CHUNK_KB, 350);
+	assert.equal(MAX_ASSET_KB, 100);
+	assert.equal(ASSET_EXEMPTIONS.length, 1);
+});
+
+test('an oversized asset the exemptions do not name is reported', () => {
+	const { errors } = checkBudgets(
+		fixture({ assets: [...ASSET_KB, { path: 'hero-photo.png', kb: 240 }] }),
+	);
+	assert.deepEqual(errors.map((e) => e.budget), ['asset']);
+	assert.match(errors[0].message, /hero-photo\.png is 240 KB gzipped, over the 100 KB/);
+	assert.match(errors[0].message, /never summed/);
+});
+
+test('prerendering /learn once per language moves no ceiling', () => {
+	// The question this population was added for. Eight guides plus a category
+	// index across six more languages is 54 more prerendered pages and ~250 KB
+	// of HTML nobody downloads together, because a reader loads ONE page.
+	const perLocale = [];
+	for (const tag of ['de', 'es', 'fr', 'ja', 'pt-BR', 'pt-PT']) {
+		for (let i = 0; i < 9; i++) perLocale.push({ path: `${tag}/learn/guide-${i}.html`, kb: 5 });
+	}
+	const grown = fixture({ assets: [...ASSET_KB, ...perLocale] });
+	const { errors, summary } = checkBudgets(grown);
+	assert.deepEqual(errors, []);
+	assert.equal(summary.assetFileCount, 63);
+	assert.equal(summary.assetKb, 4260);
+	assert.equal(summary.largestAsset.kb, 3865, 'the largest asset is still the font');
+});
+
+test('the exempt font is held to its own ceiling, and a version bump keeps it', () => {
+	const font = ASSET_KB[0];
+	const rehashed = { path: font.path.replace('D4PiVfdc', 'Zq7Kb2Lm'), kb: 3870 };
+	assert.deepEqual(
+		checkBudgets(fixture({ assets: [rehashed, ...ASSET_KB.slice(1)] })).errors,
+		[],
+		'vite content-hashes the asset, so the exemption must survive a font update',
+	);
+
+	const grown = { path: font.path, kb: 4100 };
+	const { errors } = checkBudgets(fixture({ assets: [grown, ...ASSET_KB.slice(1)] }));
+	assert.deepEqual(errors.map((e) => e.budget), ['asset-exemption']);
+	assert.match(errors[0].message, /over its own 3900 KB exemption ceiling by 200 KB/);
+});
+
+test('an exemption that names nothing in the build is reported', () => {
+	const { errors } = checkBudgets(fixture({ assets: ASSET_KB.slice(1) }));
+	assert.deepEqual(errors.map((e) => e.budget), ['asset-exemption']);
+	assert.match(errors[0].message, /emits no such file/);
+});
+
+test('an exempt asset that has shrunk under the ceiling loses its exemption', () => {
+	// Subsetting the font to the glyphs actually used is the fix; when it lands,
+	// the entry carrying it has to go rather than sit there covering nothing.
+	const subset = { path: ASSET_KB[0].path, kb: 42 };
+	const { errors } = checkBudgets(fixture({ assets: [subset, ...ASSET_KB.slice(1)] }));
+	assert.deepEqual(errors.map((e) => e.budget), ['asset-exemption']);
+	assert.match(errors[0].message, /no longer needs the exemption/);
+});
+
+test('assets are outside the code and largest-chunk budgets, not silently inside them', () => {
+	// The font is 1.8x MAX_CODE_KB on its own. If the widened walk let it into
+	// the code population, the code ceiling would fail on the first run and the
+	// largest-chunk one would name a woff2.
+	const { errors, summary } = checkBudgets(fixture());
+	assert.deepEqual(errors, []);
+	assert.equal(summary.codeKb, 1934);
+	assert.match(summary.largest.path, /\.js$/);
+	assert.ok(summary.largestAsset.kb > MAX_CODE_KB, 'the font outweighs the entire code ceiling');
 });

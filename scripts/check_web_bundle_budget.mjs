@@ -23,6 +23,28 @@
 //                         a catalogue is already its own lazy chunk and cannot
 //                         be split further, so it is governed by its own
 //                         ceiling and by nothing else.
+//   MAX_ASSET_KB          per emitted file that is neither JS nor CSS — a font,
+//                         an icon, a prerendered page, the manifest — and, like
+//                         a catalogue, never summed.
+//
+// The asset ceiling closes a hole the other three could not see. The walk
+// matched `*.js` and `*.css` only, so everything else the build emits was
+// outside the metric entirely: measured, 33 files and 4057 KB gzipped, of which
+// ONE file is 3865 KB — the unsubsetted `material-symbols-outlined.woff2`,
+// declared `font-display: block` in the ROOT layout's stylesheet, so it is
+// blocking weight for every reader and 1.8x the whole code ceiling. It is
+// exempted by name below rather than absorbed, because a ceiling that would
+// admit it silently admits the next one too.
+//
+// Per file and never summed is the right arithmetic here for the catalogues'
+// reason: a reader loads ONE prerendered page, ONE favicon. That also answers
+// the question this population was added for — whether prerendered HTML needs a
+// budget. It does, and this is it: 16 HTML files today (15 of them under
+// `/learn`), 71 KB gzipped in total, largest 5 KB. A per-locale prerender of
+// `/learn` would multiply the file count and move no ceiling, exactly as a
+// seventh language moves no catalogue ceiling. (The filing that asked for this
+// assumed the 8 guides already prerendered once per language; they do not —
+// prose localization has not shipped, and the tree holds one language's HTML.)
 //
 // The English catalogue is deliberately on the CODE side, and that is not an
 // accounting convenience. `store.svelte.ts` imports it statically as the
@@ -57,6 +79,11 @@
 // MAX_LARGEST_CHUNK_KB stays 350, unchanged: 245 KB * the 33% headroom that
 // number was always justified by is 326, so the existing figure still states
 // the rule. What changed is the population it measures, not the ceiling.
+// MAX_ASSET_KB is 100, the same per-file payload figure as a catalogue: ~47%
+// over the largest non-exempt asset (icon-512.png, 68 KB) and 20x over the
+// largest prerendered page (5 KB). Assets measured 2026-08-28: font 3865 KB,
+// icon-512 68, og-default 20, icon-192 11, apple-touch-icon 10, then the 16
+// HTML pages at 5 KB and below and everything else at 1.
 //
 // Run: `node scripts/check_web_bundle_budget.mjs` (after a production build of
 //      apps/web — it reads build output, it does not produce any).
@@ -84,6 +111,33 @@ export const LOCALES_DIR = join(WEB_DIR, 'src', 'lib', 'i18n', 'locales');
 export const MAX_CODE_KB = 2120;
 export const MAX_CATALOGUE_KB = 100;
 export const MAX_LARGEST_CHUNK_KB = 350;
+export const MAX_ASSET_KB = 100;
+
+/// Assets already over MAX_ASSET_KB, named one at a time with the ceiling each
+/// is allowed and why. Vite content-hashes emitted assets, so the pattern skips
+/// the hash segment — a font version bump keeps the same exemption, a font that
+/// GROWS past `maxKb` does not.
+///
+/// An exemption that matches no emitted file fails the guard, and so does one
+/// whose file now fits under MAX_ASSET_KB: a list of exemptions that has
+/// stopped describing the build is cover for nothing.
+/**
+ * @typedef {{ pattern: RegExp, maxKb: number, why: string }} AssetExemption
+ * @type {readonly AssetExemption[]}
+ */
+export const ASSET_EXEMPTIONS = [
+	{
+		pattern: /^_app\/immutable\/assets\/material-symbols-outlined\.[^/]+\.woff2$/,
+		maxKb: 3900,
+		why:
+			'the full unsubsetted Material Symbols Outlined variable font (3865 KB gzipped, ' +
+			'measured 2026-08-28). `app.css` imports the npm package\'s stylesheet, so the ' +
+			'@font-face lands in the ROOT layout chunk with `font-display: block` — every ' +
+			'reader who renders an icon waits on it. Subsetting to the glyphs actually used ' +
+			'is the fix and it is a web-source change, not a budget one; the ceiling here is ' +
+			'sized to stop it growing, not to bless it.',
+	},
+];
 
 /// The manifest keys a catalogue by its source path. `pt-BR` carries a hyphen,
 /// so the tag is everything between the directory and the extension.
@@ -124,8 +178,17 @@ export function localeTags(dir) {
 		.sort();
 }
 
-/// Every emitted JS/CSS file, path relative to the build root and posix-spelled
-/// so it compares against a manifest entry directly.
+/// True for a file the CODE budget measures. Everything else the build emits —
+/// fonts, images, prerendered HTML, the manifest — is an asset.
+/** @param {string} path */
+export function isCodeFile(path) {
+	return path.endsWith('.js') || path.endsWith('.css');
+}
+
+/// EVERY emitted file, path relative to the build root and posix-spelled so it
+/// compares against a manifest entry directly. The walk used to skip anything
+/// that was not JS or CSS, which is how a 3865 KB font sat outside all three
+/// ceilings; classification is checkBudgets' job, not the walk's.
 /**
  * @param {string} root
  * @returns {EmittedFile[]}
@@ -146,7 +209,6 @@ export function collectEmitted(root) {
 				walk(abs);
 				continue;
 			}
-			if (!entry.name.endsWith('.js') && !entry.name.endsWith('.css')) continue;
 			out.push({
 				path: abs.slice(root.length + 1).split(sep).join('/'),
 				kb: gzipKb(readFileSync(abs)),
@@ -165,6 +227,8 @@ export function collectEmitted(root) {
  *   maxCodeKb?: number,
  *   maxCatalogueKb?: number,
  *   maxLargestChunkKb?: number,
+ *   maxAssetKb?: number,
+ *   assetExemptions?: readonly AssetExemption[],
  * }} input
  */
 export function checkBudgets({
@@ -174,6 +238,8 @@ export function checkBudgets({
 	maxCodeKb = MAX_CODE_KB,
 	maxCatalogueKb = MAX_CATALOGUE_KB,
 	maxLargestChunkKb = MAX_LARGEST_CHUNK_KB,
+	maxAssetKb = MAX_ASSET_KB,
+	assetExemptions = ASSET_EXEMPTIONS,
 }) {
 	/** @type {BudgetError[]} */
 	const errors = [];
@@ -210,7 +276,8 @@ export function checkBudgets({
 	}
 
 	const cataloguePaths = new Set(catalogueFiles.map((c) => c.path));
-	const code = files.filter((f) => !cataloguePaths.has(f.path));
+	const code = files.filter((f) => isCodeFile(f.path) && !cataloguePaths.has(f.path));
+	const assets = files.filter((f) => !isCodeFile(f.path));
 	const codeKb = code.reduce((sum, f) => sum + f.kb, 0);
 	const catalogueKb = catalogueFiles.reduce((sum, c) => sum + c.kb, 0);
 	const largest = code.reduce(
@@ -255,6 +322,64 @@ export function checkBudgets({
 		});
 	}
 
+	/** @type {Set<AssetExemption>} */
+	const usedExemptions = new Set();
+	for (const asset of assets) {
+		const exemption = assetExemptions.find((e) => e.pattern.test(asset.path));
+		if (!exemption) {
+			if (asset.kb <= maxAssetKb) continue;
+			errors.push({
+				budget: 'asset',
+				message:
+					`${asset.path} is ${asset.kb} KB gzipped, over the ${maxAssetKb} KB ` +
+					`per-asset ceiling by ${asset.kb - maxAssetKb} KB. This ceiling is per ` +
+					`emitted file and never summed, so adding a page or an icon cannot trip ` +
+					`it — one file got big. Shrink it (subset the font, re-encode the image, ` +
+					`stop inlining data into the prerendered page), or name it in ` +
+					`ASSET_EXEMPTIONS in scripts/check_web_bundle_budget.mjs with the ` +
+					`measurement and the reason.`,
+			});
+			continue;
+		}
+		usedExemptions.add(exemption);
+		if (asset.kb <= maxAssetKb) {
+			errors.push({
+				budget: 'asset-exemption',
+				message:
+					`${asset.path} is ${asset.kb} KB gzipped, which is under the ${maxAssetKb} KB ` +
+					`ceiling every other asset is held to — it no longer needs the exemption ` +
+					`carrying it. Delete that entry from ASSET_EXEMPTIONS in ` +
+					`scripts/check_web_bundle_budget.mjs.`,
+			});
+			continue;
+		}
+		if (asset.kb > exemption.maxKb) {
+			errors.push({
+				budget: 'asset-exemption',
+				message:
+					`${asset.path} is ${asset.kb} KB gzipped, over its own ${exemption.maxKb} KB ` +
+					`exemption ceiling by ${asset.kb - exemption.maxKb} KB. It is exempt from the ` +
+					`${maxAssetKb} KB asset ceiling because ${exemption.why} — exempt from growing, ` +
+					`it is not.`,
+			});
+		}
+	}
+	for (const exemption of assetExemptions) {
+		if (usedExemptions.has(exemption)) continue;
+		errors.push({
+			budget: 'asset-exemption',
+			message:
+				`ASSET_EXEMPTIONS carries an entry for ${exemption.pattern} and the build emits ` +
+				`no such file. An exemption that matches nothing is cover for nothing — the ` +
+				`asset was removed or renamed. Delete the entry or correct its pattern.`,
+		});
+	}
+
+	const largestAsset = assets.reduce(
+		(best, f) => (f.kb > best.kb ? f : best),
+		/** @type {EmittedFile} */ ({ path: '', kb: 0 }),
+	);
+
 	return {
 		errors,
 		summary: {
@@ -262,11 +387,15 @@ export function checkBudgets({
 			catalogueKb,
 			catalogueFiles,
 			largest,
+			largestAsset,
+			assetKb: assets.reduce((sum, f) => sum + f.kb, 0),
+			assetFileCount: assets.length,
 			fileCount: files.length,
 			codeFileCount: code.length,
 			maxCodeKb,
 			maxCatalogueKb,
 			maxLargestChunkKb,
+			maxAssetKb,
 		},
 	};
 }
@@ -285,11 +414,15 @@ export function renderSummary(s) {
 		`| Code (every reader, any language) | ${s.codeKb} KB across ${s.codeFileCount} files | ${s.maxCodeKb} KB |`,
 		`| Largest single code chunk | ${s.largest.kb} KB | ${s.maxLargestChunkKb} KB |`,
 		`| Largest message catalogue (${worst.locale}) | ${worst.kb} KB | ${s.maxCatalogueKb} KB, per catalogue |`,
+		`| Largest single asset (font / image / prerendered page) | ${s.largestAsset.kb} KB | ${s.maxAssetKb} KB, per asset |`,
 		'',
 		`Catalogues are ungated in total (${s.catalogueKb} KB across ${s.catalogueFiles.length}, one fetched per reader): ` +
 			s.catalogueFiles.map((c) => `${c.locale} ${c.kb} KB`).join(', ') + '.',
 		'',
+		`Assets are ungated in total too (${s.assetKb} KB across ${s.assetFileCount}, a reader loads one page and one icon).`,
+		'',
 		`Largest code chunk: \`${s.largest.path}\``,
+		`Largest asset: \`${s.largestAsset.path}\``,
 	].join('\n');
 }
 
@@ -325,6 +458,11 @@ function main() {
 				`${summary.maxCatalogueKb} KB, per catalogue — never summed)`,
 		);
 	}
+	console.log(
+		`Largest asset:                     ${summary.largestAsset.kb} KB — ` +
+			`${summary.largestAsset.path} (ceiling ${summary.maxAssetKb} KB per asset, ` +
+			`never summed; ${summary.assetFileCount} assets, ${summary.assetKb} KB in total)`,
+	);
 	if (process.env.GITHUB_STEP_SUMMARY) {
 		appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${renderSummary(summary)}\n`);
 	}
@@ -336,7 +474,8 @@ function main() {
 	console.log(
 		`Web bundle budget passed: code ${summary.codeKb}/${summary.maxCodeKb} KB, ` +
 			`largest code chunk ${summary.largest.kb}/${summary.maxLargestChunkKb} KB, ` +
-			`${summary.catalogueFiles.length} catalogues each under ${summary.maxCatalogueKb} KB.`,
+			`${summary.catalogueFiles.length} catalogues each under ${summary.maxCatalogueKb} KB, ` +
+			`${summary.assetFileCount} assets each under ${summary.maxAssetKb} KB or a named exemption.`,
 	);
 }
 
