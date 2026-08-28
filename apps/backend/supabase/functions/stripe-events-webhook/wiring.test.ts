@@ -11,6 +11,14 @@ import { assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 
 const SRC = await Deno.readTextFile(new URL('./index.ts', import.meta.url));
 
+function donationRefundHandler(): string {
+  const start = SRC.indexOf('async function handleDonationRefunded');
+  assert(start !== -1, 'handleDonationRefunded is gone — has the donation refund arm moved?');
+  const end = SRC.indexOf('async function handleOrderRefunded', start);
+  assert(end > start, 'could not find the end of handleDonationRefunded');
+  return SRC.slice(start, end);
+}
+
 function refundHandler(): string {
   const start = SRC.indexOf('async function handleOrderRefunded');
   assert(start !== -1, 'handleOrderRefunded is gone — has the refund arm moved?');
@@ -77,4 +85,78 @@ Deno.test('the donation refund arm reads the scope too, not just the event name'
     /const scope = refundScopeOfCharge\(charge\);/.test(SRC),
     'the scope must be derived from the charge via refundScopeOfCharge',
   );
+});
+
+Deno.test('the donation refund arm records the AMOUNT, not just the status', () => {
+  // A status alone cannot say how much came back, which is the whole reason
+  // 20270620_001 exists. An update that moves the status and leaves
+  // refunded_cents behind puts the donation in `partially_refunded` with
+  // nothing refunded — a state the CHECK refuses, so the delivery would 23514
+  // and Stripe would retry it forever.
+  const src = donationRefundHandler();
+  assert(
+    /refundedCentsOfCharge\(\s*charge,\s*donation\.amount_cents as number,\s*scope,?\s*\)/.test(src),
+    'the refunded amount must be derived from the charge and the donation amount',
+  );
+  assert(
+    src.includes('refunded_cents: refundedCents'),
+    'the update must write the refunded amount alongside the status',
+  );
+  assert(
+    src.includes('status: nextStatus'),
+    'the update must write the status the transition resolved, not a literal',
+  );
+});
+
+Deno.test('the donation refund CAS cannot walk the refunded total back', () => {
+  // charge.amount_refunded is CUMULATIVE, and Stripe does not promise ordered
+  // delivery. Two instalments arriving out of order carry 3000 then 1000; a
+  // CAS on the status alone lets the second overwrite the first and the
+  // thermometer silently gains 2000 the charity does not have.
+  const src = donationRefundHandler();
+  assert(
+    src.includes(".lte('refunded_cents', refundedCents)"),
+    'the CAS must refuse a delivery reporting less than the ledger already holds',
+  );
+  assert(
+    src.includes(".eq('status', donation.status as string)"),
+    'the CAS must match the status it read, so a completing refund can move a ' +
+      'partially refunded donation on',
+  );
+  assert(
+    !src.includes(".eq('status', 'paid')"),
+    'a hardcoded paid CAS cannot complete a partially refunded donation',
+  );
+});
+
+Deno.test('both donation reads fail loudly instead of reading as "no such donation"', () => {
+  // `const { data } = await …` drops the error. On the refund arm that made a
+  // transient database failure fall through to the event-order path, which
+  // found nothing either and answered 200 — so Stripe recorded the refund as
+  // delivered and never retried. On the expiry arm it left the donation
+  // `pending` forever; nothing sweeps a lapsed donation reservation.
+  for (const [name, src] of [
+    ['handleDonationRefunded', donationRefundHandler()],
+    ['handleDonationExpired', (() => {
+      const start = SRC.indexOf('async function handleDonationExpired');
+      assert(start !== -1, 'handleDonationExpired is gone');
+      const end = SRC.indexOf('async function handleDonationRefunded', start);
+      assert(end > start, 'could not find the end of handleDonationExpired');
+      return SRC.slice(start, end);
+    })()],
+  ] as const) {
+    assert(
+      !/const \{ data: donation \} = await/.test(src),
+      `${name} drops the read error — an error is not "no such donation"`,
+    );
+    assert(
+      /const \{ data: donation, error: readErr \} = await/.test(src),
+      `${name} must destructure the read error`,
+    );
+    assert(
+      src.includes("{ status: 500 }"),
+      `${name} must answer 5xx on a failed read so the dedupe row is released ` +
+        'and Stripe retries',
+    );
+  }
 });
