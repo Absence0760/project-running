@@ -9,9 +9,9 @@
 -- is a security decision with a named replacement read path, not an accident
 -- of reaching for `grant select (a, b, c)`.
 --
--- The last two arrived seventeen months late because the shape has a third
--- failure mode, the one 20260707_001's own header warns about: writing the
--- revoke at COLUMN level. `revoke select (col) on t from authenticated` while
+-- The last two arrived a year after the prescription because the shape has a
+-- third failure mode, the one 20260707_001's own header warns about: writing
+-- the revoke at COLUMN level. `revoke select (col) on t from authenticated` while
 -- authenticated holds a table-level SELECT reports REVOKE, creates no column
 -- ACL, and changes nothing — Postgres resolves a privilege from the broadest
 -- grant. 20261229_001 and 20270213_001 both did that and both described it as
