@@ -5,10 +5,14 @@ import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
 
 /**
- * /routes/[id] — in-app "Send a route to a follower" (route_direct_share.md v1).
+ * /routes/[id] — in-app "Send a route to a follower" (route_direct_share.md).
  *
- * v1 sends the public /share/route/[id] URL as a plain DM body on the existing
- * direct_messages rail — no schema change, no typed attachment (that is v2).
+ * The send still puts the public /share/route/[id] URL in the DM body — it is
+ * the forwardable artifact the dialog's copy promises the recipient gets, and
+ * the only thing the inbox preview line and the Art 20 export read. Since v2
+ * (migration 20270619_001) it ALSO carries a typed route_id, and the thread
+ * draws that as a card; what the card renders, and what a recipient who cannot
+ * see the route gets instead, is pinned by messages/dm-route-attachment.spec.ts.
  *
  * Seed follow graph, which the picker's union is built on:
  *   USER_A <-> USER_B (Alex Chen)   mutual
@@ -65,13 +69,16 @@ test.describe('/routes/[id] — send to a follower', () => {
 		expect(data?.[0].recipient_id).toBe(USER_B.id);
 		expect(data?.[0].body).toContain(SHARE_PATH);
 
-		// And the recipient can open it from their own conversation.
+		// And the recipient can open it from their own conversation. The bubble
+		// renders the typed attachment as a card rather than the URL, so the
+		// route is reached through the card's own link.
 		const recipient = await browser.newContext({ storageState: USER_B.storageStatePath });
 		try {
 			const recipientPage = await recipient.newPage();
 			await recipientPage.goto(`/messages/${USER_A.id}`);
-			const bubble = recipientPage.locator('.bubble .text', { hasText: SHARE_PATH });
-			await expect(bubble).toBeVisible({ timeout: 10_000 });
+			const card = recipientPage.getByTestId('dm-route-attachment');
+			await expect(card).toBeVisible({ timeout: 15_000 });
+			await expect(card).toHaveAttribute('href', `/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
 		} finally {
 			await recipient.close();
 		}
