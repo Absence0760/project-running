@@ -63,7 +63,7 @@
 // CI:  the `bundle-budget` job in .github/workflows/web-bundle-budget.yml.
 // Unit tests: `node --test scripts/check_web_bundle_budget.test.mjs`
 
-import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -135,13 +135,18 @@ export function collectEmitted(root) {
 	const out = [];
 	/** @param {string} dir */
 	const walk = (dir) => {
-		for (const name of readdirSync(dir).sort()) {
-			const abs = join(dir, name);
-			if (statSync(abs).isDirectory()) {
+		// Types come off the directory entry rather than a separate stat: a
+		// stat-then-read pair is a check the read cannot rely on, and the build
+		// output this walks is written by a concurrent vite process.
+		const entries = readdirSync(dir, { withFileTypes: true });
+		entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+		for (const entry of entries) {
+			const abs = join(dir, entry.name);
+			if (entry.isDirectory()) {
 				walk(abs);
 				continue;
 			}
-			if (!name.endsWith('.js') && !name.endsWith('.css')) continue;
+			if (!entry.name.endsWith('.js') && !entry.name.endsWith('.css')) continue;
 			out.push({
 				path: abs.slice(root.length + 1).split(sep).join('/'),
 				kb: gzipKb(readFileSync(abs)),
