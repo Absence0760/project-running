@@ -17,6 +17,85 @@ export interface BackfillResult {
 	failed: number;
 	rate_limited: boolean;
 	complete: boolean;
+	/// A re-sync continues from where this walk stopped rather than starting
+	/// the window again. Implies `complete === false`.
+	resumable: boolean;
+}
+
+/// The slice of Strava's activity list a walk still has to cover, in epoch
+/// seconds. `before` is null for "up to now".
+///
+/// `from` is the oldest instant the JOB covers, which is not the same as the
+/// oldest instant still to fetch: everything between `from` and `after` has
+/// already been walked by an earlier attempt. Without it a resume cannot tell
+/// whether the caller's window is contained in the job's — and the two are
+/// never equal, because `after` is recomputed from the clock on every call, so
+/// comparing against it refuses every same-lookback re-sync there is.
+export interface WalkWindow {
+	from: number;
+	after: number;
+	before: number | null;
+}
+
+/// What a walk actually saw, which is what lets the next one skip it. The
+/// direction is MEASURED off the page rather than assumed: Strava returns the
+/// activity list oldest-first when `after` is set and newest-first otherwise,
+/// and which of those a resume has to trust decides which end of the walked
+/// span is the frontier. Reading it off the page costs one comparison and
+/// removes the assumption.
+export interface WalkedSpan {
+	min: number;
+	max: number;
+	ascending: boolean;
+}
+
+const SYNC_CURSOR_VERSION = 1;
+
+/// Read a stored resume point. Fails closed on anything it cannot read as one
+/// — an older shape, a truncated write, a hand-edited row — because the
+/// fallback is walking the whole window again, which is correct and merely
+/// costs Strava request budget. Believing a malformed cursor would skip runs.
+export function parseSyncCursor(raw: unknown): WalkWindow | null {
+	if (typeof raw !== 'string' || raw.length === 0) return null;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(raw);
+	} catch (_) {
+		return null;
+	}
+	if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+	const o = parsed as Record<string, unknown>;
+	if (o.v !== SYNC_CURSOR_VERSION) return null;
+	const from = o.from;
+	const after = o.after;
+	const before = o.before ?? null;
+	if (typeof from !== 'number' || !Number.isInteger(from) || from <= 0) return null;
+	if (typeof after !== 'number' || !Number.isInteger(after) || after < from) return null;
+	if (before !== null) {
+		if (typeof before !== 'number' || !Number.isInteger(before) || before <= after) return null;
+	}
+	return { from, after, before: before as number | null };
+}
+
+export function serialiseSyncCursor(w: WalkWindow): string {
+	return JSON.stringify({ v: SYNC_CURSOR_VERSION, from: w.from, after: w.after, before: w.before });
+}
+
+/// The window a resume should walk, given the one this walk was covering and
+/// the span it got through. Returns null when the remainder is not strictly
+/// smaller than what we started with — a cursor that does not narrow is a
+/// resume that makes no progress, and storing one would loop a runner between
+/// two syncs forever.
+export function nextWalkWindow(window: WalkWindow, walked: WalkedSpan | null): WalkWindow | null {
+	if (!walked) return null;
+	if (walked.ascending) {
+		if (walked.max <= window.after) return null;
+		if (window.before !== null && walked.max >= window.before) return null;
+		return { from: window.from, after: walked.max, before: window.before };
+	}
+	if (window.before !== null && walked.min >= window.before) return null;
+	if (walked.min <= window.after) return null;
+	return { from: window.from, after: window.after, before: walked.min };
 }
 
 export async function backfill(
@@ -25,7 +104,7 @@ export async function backfill(
 	accessToken: string,
 	lookbackDays: number,
 ): Promise<BackfillResult> {
-	const afterEpoch = Math.floor((Date.now() - lookbackDays * 86400_000) / 1000);
+	const requestedAfter = Math.floor((Date.now() - lookbackDays * 86400_000) / 1000);
 	let page = 1;
 	const pageSize = 50;
 	let imported = 0;
@@ -85,6 +164,30 @@ export async function backfill(
 			.then(({ data, error }): RawRunRow[] | null => (error ? null : (data as RawRunRow[]))),
 	);
 
+	// Resume where the last walk stopped. A stored cursor is honoured only when
+	// the caller has not asked to reach FURTHER BACK than it does: a runner
+	// widening `lookbackDays` is asking for history the cursor's window does
+	// not contain, and the wider walk covers the cursor's remainder anyway, so
+	// silently narrowing them to it would answer a different question. When it
+	// is honoured the window is strictly larger than the request, which is the
+	// point — the job gets finished rather than restarted.
+	const { data: integrationRow } = await supabase
+		.from('integrations')
+		.select('sync_cursor')
+		.eq('user_id', userId)
+		.eq('provider', 'strava')
+		.maybeSingle();
+	const storedCursor = parseSyncCursor(integrationRow?.sync_cursor);
+	const resumedFrom = storedCursor && requestedAfter >= storedCursor.from ? storedCursor : null;
+	const window: WalkWindow = resumedFrom ??
+		{ from: requestedAfter, after: requestedAfter, before: null };
+
+	// The frontier a resume measures from, accumulated across every page the
+	// walk got through — every activity on the page, not just the run-family
+	// ones, because the cursor describes what was FETCHED rather than what was
+	// ingested.
+	let walked: WalkedSpan | null = null;
+
 	let rateLimited = false;
 	// Only an end-of-window exit may claim the lookback window was walked to
 	// its end. Every other `break` below — Strava throttling us, an upstream
@@ -96,7 +199,10 @@ export async function backfill(
 	// because the runner has been told there is nothing left to fetch.
 	let complete = false;
 	while (true) {
-		const url = `https://www.strava.com/api/v3/athlete/activities?after=${afterEpoch}&per_page=${pageSize}&page=${page}`;
+		const beforeParam = window.before === null ? '' : `&before=${window.before}`;
+		const url =
+			`https://www.strava.com/api/v3/athlete/activities?after=${window.after}${beforeParam}` +
+			`&per_page=${pageSize}&page=${page}`;
 		// A transport failure is a truncation like any other, not a reason to
 		// throw away the walk. `fetch` rejects on DNS / TLS / a dropped
 		// connection and `resp.json()` on an HTML error page served by
@@ -137,6 +243,7 @@ export async function backfill(
 			complete = true;
 			break;
 		}
+		walked = extendWalkedSpan(walked, activities);
 
 		for (const act of activities) {
 			// Restrict to run-family activities (Run / TrailRun / VirtualRun
@@ -183,13 +290,54 @@ export async function backfill(
 	// backfill is the second sentence telling the runner the import finished;
 	// leaving it alone keeps the previous, true value — or, on a first connect
 	// that never completed, the honest "waiting for first sync".
+	const nextCursor = complete ? null : nextWalkWindow(window, walked);
+	const patch: { last_sync_at?: string; sync_cursor?: string | null } = {};
 	if (complete) {
+		patch.last_sync_at = new Date().toISOString();
+		// A finished window subsumes any resume point inside it.
+		patch.sync_cursor = null;
+	} else if (nextCursor) {
+		patch.sync_cursor = serialiseSyncCursor(nextCursor);
+	}
+	// A truncation that got nowhere writes nothing, so a cursor this walk
+	// resumed from and failed to advance survives for the next attempt.
+	if (Object.keys(patch).length > 0) {
 		await supabase
 			.from('integrations')
-			.update({ last_sync_at: new Date().toISOString() })
+			.update(patch)
 			.eq('user_id', userId)
 			.eq('provider', 'strava');
 	}
 
-	return { imported, skipped, failed, rate_limited: rateLimited, complete };
+	return {
+		imported,
+		skipped,
+		failed,
+		rate_limited: rateLimited,
+		complete,
+		resumable: !complete && (nextCursor !== null || resumedFrom !== null),
+	};
+}
+
+function extendWalkedSpan(
+	current: WalkedSpan | null,
+	activities: StravaActivity[],
+): WalkedSpan | null {
+	const stamps: number[] = [];
+	for (const act of activities) {
+		const ms = Date.parse(act.start_date);
+		if (Number.isFinite(ms)) stamps.push(Math.floor(ms / 1000));
+	}
+	if (stamps.length === 0) return current;
+	const min = Math.min(...stamps);
+	const max = Math.max(...stamps);
+	// Direction off THIS page: Strava orders the list oldest-first when
+	// `after` is set and newest-first otherwise, and a page of one cannot say
+	// which, so a tie reads as oldest-first — the shape the walk always
+	// requests. Later pages overwrite the reading; the frontier is only ever
+	// consulted for the last page a walk got through.
+	const ascending = stamps[stamps.length - 1] >= stamps[0];
+	return current === null
+		? { min, max, ascending }
+		: { min: Math.min(current.min, min), max: Math.max(current.max, max), ascending };
 }

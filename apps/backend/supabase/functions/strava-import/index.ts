@@ -132,16 +132,18 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 			: await checkRateLimitTiered(supabase, user.id, 'strava-import:sync', 4, 16, 3600);
 	if (denied) return denied;
 
-	if (action === 'connect') {
-		return handleConnect(supabase, user.id, code, scope, redirectUri);
+	// A switch over the narrowed union rather than three `if`s and a trailing
+	// `unknown_action`: that fallthrough was as unreachable as `handleConnect`'s
+	// own `if (!code)` was, and a shape the compiler proves exhaustive cannot
+	// grow a fourth one.
+	switch (action) {
+		case 'connect':
+			return handleConnect(supabase, user.id, code, scope, redirectUri);
+		case 'sync':
+			return handleSync(supabase, user.id, lookbackDays);
+		case 'disconnect':
+			return handleDisconnect(supabase, user.id);
 	}
-	if (action === 'sync') {
-		return handleSync(supabase, user.id, lookbackDays);
-	}
-	if (action === 'disconnect') {
-		return handleDisconnect(supabase, user.id);
-	}
-	return Response.json({ error: 'unknown_action' }, { status: 400 });
 }));
 
 // audit/strava May 2026 High #1 — user-initiated Disconnect must
@@ -230,6 +232,7 @@ async function handleDisconnect(
 		.update({
 			disconnected_at: new Date().toISOString(),
 			disconnected_reason: 'user_initiated',
+			sync_cursor: null,
 		})
 		.eq('user_id', userId)
 		.eq('provider', 'strava');
@@ -246,10 +249,8 @@ async function handleConnect(
 	userId: string,
 	code: string,
 	_clientClaimedScope: string,
-	redirectUri: string | undefined,
+	redirectUri: string,
 ): Promise<Response> {
-	if (!code) return Response.json({ error: 'missing_code' }, { status: 400 });
-
 	// We don't trust the client-supplied `scope` field — it's just a
 	// hint Strava's redirect echoed back, and a man-in-the-middle on
 	// that redirect could rewrite it. The authoritative scope comes
@@ -336,12 +337,18 @@ async function handleConnect(
 	// Upsert non-secret fields (external_id, scope) directly; the
 	// access / refresh tokens go to Vault via set_integration_tokens.
 	// Persist the *granted* scope, not the client-claimed value.
+	//
+	// `sync_cursor` is cleared because a connect starts a fresh 90-day walk:
+	// a resume point left by the previous connection describes a window of a
+	// possibly different athlete's list, and honouring it would skip the
+	// backfill this connect exists to run.
 	const { error: upsertErr } = await supabase.from('integrations').upsert(
 		{
 			user_id: userId,
 			provider: 'strava',
 			external_id: String(tokens.athlete.id),
 			scope: tokens.scope ?? '',
+			sync_cursor: null,
 		},
 		{ onConflict: 'user_id,provider' },
 	);
