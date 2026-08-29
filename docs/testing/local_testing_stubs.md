@@ -158,13 +158,20 @@ Point the Stripe CLI at **this** endpoint (not the RevenueCat one). It prints a 
 stripe listen --forward-to http://127.0.0.1:54321/functions/v1/stripe-events-webhook
 ```
 
-Then trigger the three handled event types:
+Then trigger the handled event types:
 
 ```bash
-stripe trigger checkout.session.completed   # CAS pending->paid + seat the 'going' attendee
-stripe trigger checkout.session.expired     # CAS pending->canceled + release the soft reservation
-stripe trigger account.updated              # mirror charges_enabled / payouts_enabled / details_submitted
+stripe trigger checkout.session.completed                # CAS pending->paid + seat the 'going' attendee, IF payment_status says the money arrived
+stripe trigger checkout.session.async_payment_succeeded  # the same path, for a delayed-notification method settling days later
+stripe trigger checkout.session.async_payment_failed     # CAS pending->failed + release the soft reservation
+stripe trigger checkout.session.expired                  # CAS pending->canceled + release the soft reservation
+stripe trigger charge.refunded                           # CAS the donation or the order; the seat is released only on a FULL refund
+stripe trigger account.updated                           # mirror charges_enabled / payouts_enabled / details_submitted
 ```
+
+A dashboard endpoint that does not subscribe to the two async types silently
+never hears a delayed payment's real outcome: the order sits `pending`
+forever, holding a seat it never issues (decisions § 785).
 
 `stripe trigger`'s canned fixtures won't carry our `metadata` (`event_id` / `instance_start` / `buyer_user_id` / `order_id`) or a real `order_id`, so the completed/expired handlers log "missing metadata" / "unknown order" and 200-skip — that confirms signature verification + dedupe + dispatch work. The full seat-an-attendee path needs a real `events-checkout` call first (which sets the metadata) and then the matching `checkout.session.completed` for that session.
 

@@ -163,7 +163,7 @@ Flow:
 
 - **Onboard:** `events-connect-onboard` Edge Function → Stripe Account Link (Express account) → hosted KYC/bank/tax. `account.updated` webhook flips `charges_enabled` / `payouts_enabled` in `instructor_payout_accounts`.
 - **Checkout:** `events-checkout` validates the sales window + capacity, creates a destination-charge Checkout Session against the host's account with the platform fee, inserts a `pending` order holding a reserved slot (TTL).
-- **Confirm:** `stripe-events-webhook` (separate from `revenuecat-webhook`, own HMAC secret, idempotent on Stripe event id) handles `checkout.session.completed` → `paid` + write attendee row; `charge.refunded` → demote + promote waitlist; `account.updated` → sync flags; `checkout.session.expired` → release slot.
+- **Confirm:** `stripe-events-webhook` (separate from `revenuecat-webhook`, own HMAC secret, idempotent on Stripe event id) handles `checkout.session.completed` → `paid` + write attendee row, **but only once `payment_status` says the money arrived** (a delayed-notification method completes the Session `unpaid`, decisions § 785); `checkout.session.async_payment_succeeded` → the same path days later; `checkout.session.async_payment_failed` → `failed` + release slot; `charge.refunded` → demote + promote waitlist; `account.updated` → sync flags; `checkout.session.expired` → release slot.
 - **Payouts:** Stripe's job, on the host's schedule. The platform fee is new company marketplace revenue — **loop in finance** (distinct from subscription revenue, new tax treatment).
 
 ## Capacity, waitlist & the payment race

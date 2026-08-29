@@ -66,9 +66,14 @@ cd apps/backend && supabase functions serve --env-file .env.local
 # forward Stripe events to the webhook (prints the whsec_ to paste above, then restart)
 stripe listen --forward-to http://127.0.0.1:54321/functions/v1/stripe-events-webhook
 
-# the three handled event types
+# the handled event types (the dashboard endpoint must subscribe to all of
+# these — a delayed-notification payment's real outcome arrives on the two
+# async ones, and nothing else ever reports it)
 stripe trigger checkout.session.completed
+stripe trigger checkout.session.async_payment_succeeded
+stripe trigger checkout.session.async_payment_failed
 stripe trigger checkout.session.expired
+stripe trigger charge.refunded
 stripe trigger account.updated
 ```
 
