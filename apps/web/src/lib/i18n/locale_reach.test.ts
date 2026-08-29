@@ -611,6 +611,97 @@ test("every register exemption still needs its exemption", async () => {
 });
 
 /**
+ * A sentence assembled from several catalogue keys around a link or a `<strong>`
+ * carries its own spacing: `coachPage.consentActionSuffix` is ` to continue. …`
+ * with a LEADING space, because a `<strong>Eu consinto</strong>` renders
+ * immediately before it. The § 755 derivation walked `pt-BR.ts` word by word and
+ * treated each value as a sentence of its own, so 19 of these lost the space and
+ * were sentence-cased — "Clique em **Eu consinto**Para continuar." — and three
+ * more lost their last word entirely when the subject-pronoun elision deleted
+ * `você` and left the trailing space behind ("Um pouco sobre ").
+ *
+ * Measured against `pt-BR.ts` rather than against English, and only for these
+ * two: an en-anchored rule needs exemptions the moment it meets German (a
+ * fragment attaching with a comma needs no space) or Japanese (which sets no
+ * word spaces at all), while the two Portuguese catalogues share a syntax and
+ * pt-PT is a derivation OF pt-BR, so an edge that differs is an artifact of the
+ * derivation and never a translation choice. No list, no threshold.
+ *
+ * The initial CASE is deliberately not checked here even though the same 19
+ * strings carried it: `pt-PT.ts` differs from Brazilian on the first letter of
+ * 248 values, nearly all of them standalone labels where either case is
+ * defensible, and a guard firing on those to reach these would be an allowlist
+ * of 248 entries. The whitespace edge is the part that is unambiguous.
+ */
+test("a pt-PT fragment keeps the spacing its Brazilian twin assembles with", async () => {
+	const european = await catalogue("pt-PT");
+	const brazilian = await catalogue("pt-BR");
+	const offenders: string[] = [];
+	for (const [key, value] of Object.entries(brazilian)) {
+		const ours = european[key];
+		if (typeof value !== "string" || typeof ours !== "string") continue;
+		if (/^\s/.test(value) !== /^\s/.test(ours)) offenders.push(`${key}: leading space`);
+		if (/\s$/.test(value) !== /\s$/.test(ours)) offenders.push(`${key}: trailing space`);
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		"locales/pt-PT.ts joins an assembled sentence differently from locales/pt-BR.ts. " +
+			"A fragment's edge whitespace is what puts a space either side of the link it " +
+			"wraps; dropping it renders the two halves glued, and a trailing space left " +
+			"where a word was deleted renders a sentence that stops mid-air.",
+	);
+});
+
+/**
+ * European Portuguese substitutions that change the noun's GENDER, which the
+ * § 755 corpus applied word-for-word and did not carry into the article or the
+ * adjective agreeing with it: Brazilian `a tela` is European `o ecrã`, and `os
+ * compartilhamentos` are `as partilhas`. Both were live — "Manter a ecrã
+ * ligada", "ocultado dos partilhas públicos".
+ *
+ * Determiners only. They are closed classes, so the scan is exact; an adjective
+ * would need a morphology this guard has no business carrying, and the
+ * determiner is already immediately before the noun in every one of these.
+ */
+const GENDER_FLIPPED_NOUNS: { noun: RegExp; wrong: string[]; gender: string }[] = [
+	{
+		noun: /ecrãs?/,
+		gender: "masculine in Portugal, where Brazilian `tela` is feminine",
+		wrong: ["a", "as", "da", "das", "na", "nas", "à", "às", "uma", "umas", "esta", "estas", "essa", "essas"],
+	},
+	{
+		noun: /partilhas?/,
+		gender: "feminine, where Brazilian `compartilhamento` is masculine",
+		wrong: ["o", "os", "do", "dos", "no", "nos", "ao", "aos", "pelo", "pelos", "um", "uns", "este", "estes", "esse", "esses"],
+	},
+];
+
+test("a gender-flipped European noun agrees with what governs it", async () => {
+	const messages = await catalogue("pt-PT");
+	const offenders: string[] = [];
+	for (const { noun, wrong, gender } of GENDER_FLIPPED_NOUNS) {
+		const re = new RegExp(
+			`(?<![a-zà-ÿ])(${wrong.join("|")})\\s+(${noun.source})(?![a-zà-ÿ])`,
+			"giu",
+		);
+		for (const [key, value] of Object.entries(messages)) {
+			if (typeof value !== "string") continue;
+			for (const m of value.matchAll(re)) {
+				offenders.push(`${key}: "${m[0]}" — ${noun.source} is ${gender}`);
+			}
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		"locales/pt-PT.ts carries a European word inside its Brazilian counterpart's " +
+			"agreement. Substituting the noun is half the change; the article and the " +
+			"adjective agreeing with it have to move too.",
+	);
+});
+
+/**
  * A flat array literal of quoted strings, e.g. `['en', 'de', 'pt-BR']`. Only a
  * FLAT one: a fixture table of tuples names locales too, and each of those rows
  * is a case about one locale rather than a claim about the shipped set.
