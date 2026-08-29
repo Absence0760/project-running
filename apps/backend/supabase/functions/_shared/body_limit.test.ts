@@ -180,44 +180,46 @@ Deno.test('readTextWithLimit — rejects a chunked-transfer body over the cap', 
 // stream at the start of the handler so the runtime + client see "no
 // more bytes please" immediately.
 
-Deno.test('discardBody — cancels the body stream so no bytes are read', async () => {
-  const req = new Request('http://x.test/', {
-    method: 'POST',
-    body: 'should-not-be-read',
-  });
+// `bodyUsed` is the discriminator, and it is the only one that answers
+// synchronously and in one state: `cancel()` disturbs the stream the moment it
+// is called, so a helper that did nothing leaves it false. Reading the stream
+// instead was what made the first of these vacuous — a cancelled stream may
+// return `{done: true}` or throw, so the read was wrapped in a `try/catch`
+// that swallowed the AssertionError along with the throw it was written for,
+// and the test passed whether or not anything had been cancelled.
+function bodied(): Request {
+  return new Request('http://x.test/', { method: 'POST', body: 'should-not-be-read' });
+}
+
+Deno.test('discardBody — cancels the body stream so no bytes are read', () => {
+  const req = bodied();
+  const control = bodied();
   discardBody(req);
-  // After cancel, reading from req.body should fail or return done.
-  // We just assert the function doesn't throw — the cancel is
-  // best-effort by contract.
-  const reader = req.body?.getReader();
-  if (reader) {
-    // A cancelled stream returns done immediately or throws — either
-    // is the "no more bytes" outcome we want. Catch both.
-    try {
-      const r = await reader.read();
-      assertStrictEquals(r.done, true);
-    } catch {
-      /* the cancel propagated as an error read — also fine */
-    }
-  }
+  assertStrictEquals(req.bodyUsed, true, 'the body stream was never disturbed');
+  assertStrictEquals(control.bodyUsed, false, 'an untouched request must read false');
 });
 
 Deno.test('discardBody — no body present is a clean no-op', () => {
   // GET / HEAD / OPTIONS requests don't carry a body; the helper
   // must not throw when req.body is null.
   const req = new Request('http://x.test/', { method: 'GET' });
+  assertStrictEquals(req.body, null, 'the fixture must actually be bodyless');
   discardBody(req);
-  // No assertion needed — the test passes if the call didn't throw.
+  // Not throwing is the whole claim here, and an absent throw is also what a
+  // helper that does nothing produces — so the claim is only worth anything
+  // beside a positive control proving this same helper does act when there IS
+  // a body.
+  const control = bodied();
+  discardBody(control);
+  assertStrictEquals(control.bodyUsed, true, 'the control body was never disturbed');
 });
 
 Deno.test('discardBody — second call on an already-cancelled body does not throw', () => {
   // The helper swallows the "already cancelled" rejection so it can
   // be called defensively (e.g. once at the top of the handler, again
   // in a finally block).
-  const req = new Request('http://x.test/', {
-    method: 'POST',
-    body: 'x',
-  });
+  const req = bodied();
   discardBody(req);
   discardBody(req);
+  assertStrictEquals(req.bodyUsed, true, 'the first cancel must still have taken');
 });
