@@ -97,18 +97,7 @@ export const MATERIALISED = [FUNCTIONS_REL, ...NEUTERED_ARTIFACTS.map((a) => a.p
 // each entry has to say which, because "it reads something else" is also what
 // a genuinely vacuous test looks like from here.
 /** @type {{ file: string, name: string, reason: string }[]} */
-export const EXPECTED_SURVIVORS = [
-  {
-    file: './supabase/functions/stripe-events-webhook/lib.test.ts',
-    name: 'donationStatusTransition — the scope default is full, matching the event ledger',
-    reason:
-      'It compares two calls of donationStatusTransition to each other and asserts nothing about ' +
-      'the shared answer, so a function with no answers at all satisfies it - the same ' +
-      'self-comparison shape the ipBucketKey determinism test carried. Asserting the pair equals ' +
-      "'refunded' closes it. Filed in docs/product/followups.md rather than fixed here: " +
-      'stripe-events-webhook was owned by another change in the same round.',
-  },
-];
+export const EXPECTED_SURVIVORS = [];
 
 /**
  * @param {string} src

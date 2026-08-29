@@ -351,10 +351,8 @@ Deno.test('donationStatusTransition — the scope default is full, matching the 
   // Same default as orderStatusTransition: a caller that cannot read a scope
   // treats the refund as whole, which is the direction that never overstates
   // what a charity has raised.
-  assertStrictEquals(
-    donationStatusTransition('paid', 'charge.refunded'),
-    donationStatusTransition('paid', 'charge.refunded', 'full'),
-  );
+  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded'), 'refunded');
+  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded', 'full'), 'refunded');
 });
 
 Deno.test('donationStatusTransition — paid refunds, pending does not', () => {
