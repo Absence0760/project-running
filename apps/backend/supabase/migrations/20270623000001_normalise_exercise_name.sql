@@ -87,7 +87,16 @@ comment on function public.normalise_exercise_name(text) is
 -- normalise_exercise_name_test.sql pins both roles so the omission cannot
 -- come back silently. `anon` is deliberately absent: RLS lets it write
 -- neither table, and a CHECK is only ever evaluated on a write.
-revoke execute on function public.normalise_exercise_name(text) from public;
+--
+-- `anon` has to be revoked BY NAME, and a `from public` alone does not reach
+-- it. Supabase ships an `alter default privileges` for the `postgres` role in
+-- schema public that grants EXECUTE on every new function to anon,
+-- authenticated and service_role, so a function created here arrives with an
+-- EXPLICIT anon grant that revoking PUBLIC leaves standing -- the § 781 shape
+-- one object class over. Measured on a fresh `db reset`: with `from public`
+-- alone, pg_proc.proacl carried `anon=X`. The 31 migrations that already
+-- write `from public, anon` are the house form for exactly this reason.
+revoke execute on function public.normalise_exercise_name(text) from public, anon;
 grant  execute on function public.normalise_exercise_name(text) to authenticated;
 grant  execute on function public.normalise_exercise_name(text) to service_role;
 
