@@ -543,10 +543,12 @@ jobs:
             echo "Reproduce with: node --test apps/web/scripts/check_constraint_unions.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
-      # The sibling of the step above, one class wider: a CHECK's value set
-      # against a TS union is ONE shape of a value with more than one home, and
-      # the guard above reads only that one. This reads the rest — a threshold
-      # copied into SQL, a vocabulary copied out of it into two clients, an
+      # The sibling of the step above, and the boundary between them is the
+      # rails, not the subject: a CHECK's value set against the CLIENT
+      # declarations that enumerate it is the step above's whole scope
+      # (decisions § 791), so nothing here re-registers one. This reads every
+      # other shape of a value with more than one home — a threshold copied
+      # into SQL, a vocabulary copied out of it into a second SQL function, an
       # eligibility list copied from one SQL function into the next — and it is
       # code-gated with the rest of this job on purpose: every rail it reads is
       # a source file, so a docs-only diff cannot move one (decisions § 787).
