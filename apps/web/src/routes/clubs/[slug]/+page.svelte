@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+	import { lengthLimit } from '$lib/core/column_limits';
 	import { activeFormatLocale } from '$lib/format/time';
 	import { m as tr } from '$lib/i18n/store.svelte';
 	import { clubRoleLabel, joinPolicyLabel, routeSurfaceLabel, rsvpStatusLabel } from '$lib/i18n/enum_labels.svelte';
@@ -1135,7 +1136,7 @@
 						bind:value={draftPost}
 						placeholder={tr('clubHome.postPlaceholder')}
 						rows="3"
-						maxlength="1200"
+						maxlength={lengthLimit('club_posts.body')}
 					></textarea>
 					<button class="btn-primary" type="submit" disabled={!draftPost.trim() || postingBusy}>
 						{postingBusy ? tr('clubHome.posting') : tr('clubHome.post')}

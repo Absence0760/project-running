@@ -542,6 +542,42 @@ test.describe('/settings/preferences', () => {
 		await consent.uncheck();
 	});
 
+	test('an out-of-range height or weight is refused in the field, not by postgres', async ({
+		page
+	}) => {
+		// `body_metrics.weight_kg` is CHECK-bounded `> 0 and <= 500` and
+		// `user_profiles.height_cm` `> 0 and <= 300`, and this card saves from a
+		// button's onclick rather than a form submit — so `min`/`max` never run
+		// and a typed 600 kg used to round-trip as a raw postgres 23514 naming a
+		// constraint and no field (decisions § 792). All in-memory: the Save
+		// button is disabled throughout, so nothing is written for USER_A.
+		await page.goto('/settings/preferences');
+		const consent = page
+			.locator('label.consent-checkbox', { hasText: 'date of birth' })
+			.locator('input[type="checkbox"]');
+		if (!(await consent.isChecked())) await consent.check();
+
+		const weight = page.getByTestId('weight');
+		await weight.fill('600');
+		await expect(page.getByTestId('weight-error')).toBeVisible();
+		await expect(page.getByTestId('save-demographics')).toBeDisabled();
+
+		// And the field accepts a real one again.
+		await weight.fill('72');
+		await expect(page.getByTestId('weight-error')).toHaveCount(0);
+		await expect(page.getByTestId('save-demographics')).toBeEnabled();
+
+		const height = page.getByTestId('height-cm');
+		await height.fill('500');
+		await expect(page.getByTestId('height-cm-error')).toBeVisible();
+		await expect(page.getByTestId('save-demographics')).toBeDisabled();
+
+		// Leave the card clean and unsaved.
+		await height.fill('');
+		await weight.fill('');
+		await consent.uncheck();
+	});
+
 	test('the DOB field stays reachable with health-data consent off', async ({
 		page
 	}) => {
