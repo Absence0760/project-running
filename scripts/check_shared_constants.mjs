@@ -194,12 +194,19 @@ function runsSourceFilterSites(ctx) {
 // Anchored on the declaration's own name rather than on "the first array in
 // the file": both rails are ordinary source files that will grow other arrays,
 // and a guard that silently starts reading a different one is a guard that
-// certifies the wrong value.
+// certifies the wrong value. The optional `<T>` absorbs Dart's explicit list
+// type argument (`= <String>[…]`), which TypeScript writes on the other side
+// of the `=` and Dart writes on this one.
+/** @param {string} src @param {string} declName @returns {string | null} */
+function bracketList(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]*=\\s*(?:<[^>]*>\\s*)?\\[([^\\]]*)\\]`).exec(src);
+	return decl ? decl[1] : null;
+}
+
 /** @param {string} src @param {string} declName @returns {string[]} */
 export function parseNumberList(src, declName) {
-	const decl = new RegExp(`\\b${declName}\\b[^=\\n]*=\\s*\\[([^\\]]*)\\]`).exec(src);
-	if (!decl) return [];
-	return [...decl[1].matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => m[0]);
+	const inner = bracketList(src, declName);
+	return inner === null ? [] : [...inner.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => m[0]);
 }
 
 /** @param {string} body @returns {string[]} */
@@ -244,6 +251,51 @@ export function parseAwarderLadders(body) {
 		if (thresholds.length > 0) out.push({ key: branches[i][1], where: `${branches[i][1]} branch`, values: thresholds });
 	}
 	return out;
+}
+
+// ── Entry: the strippable-image MIME allowlist ─────────────────────────────
+
+// The photo buckets whose accepted types must BE the set the clients can strip
+// (decisions § 557). `runs` and `exports` hold non-image payloads and are not
+// in this class.
+/** @type {readonly string[]} */
+export const PHOTO_BUCKETS = ['run-photos', 'route-photos', 'club-photos', 'avatars'];
+
+// A bucket's allowlist is set by an `insert into storage.buckets … values (…)`
+// on creation and narrowed by `update storage.buckets set allowed_mime_types`
+// later, so the value is the LAST statement that names both the bucket and the
+// column — the same replay the function index does, one table over.
+/** @param {SqlIndex} sql @param {readonly string[]} [buckets] @returns {Site[]} */
+export function bucketMimeSites(sql, buckets = PHOTO_BUCKETS) {
+	/** @type {Site[]} */
+	const out = [];
+	for (const bucket of buckets) {
+		/** @type {Site | null} */
+		let last = null;
+		for (const { file, sql: statement } of sql.statements) {
+			if (!/storage\.buckets/i.test(statement)) continue;
+			if (!statement.includes(`'${bucket}'`)) continue;
+			const arr = /allowed_mime_types[\s\S]{0,80}?array\s*\[([^\]]*)\]/i.exec(statement);
+			if (!arr) continue;
+			last = { key: bucket, where: `${bucket} in ${file}`, values: sqlStringList(arr[1]) };
+		}
+		if (last !== null) out.push(last);
+	}
+	return out;
+}
+
+/** @param {string} src @param {string} declName @returns {string[]} */
+export function parseStringList(src, declName) {
+	const inner = bracketList(src, declName);
+	return inner === null ? [] : [...inner.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+}
+
+// ── Entry: the Wear OS route push/persist cap ──────────────────────────────
+
+/** @param {string} src @param {string} declName @returns {string[]} */
+export function parseNamedInt(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]*=\\s*(-?\\d+)`).exec(src);
+	return decl ? [decl[1]] : [];
 }
 
 // ── Entry: the rate-limit bucket vocabulary ─────────────────────────────────
@@ -379,6 +431,75 @@ export const REGISTRY = [
 						values: [...ctx.read('apps/mobile_android/lib/rate_limit_message.dart').matchAll(/case\s+'([a-z_]+)':/g)].map(
 							(m) => m[1],
 						),
+					},
+				],
+			},
+		],
+	},
+	{
+		name: 'photo-bucket MIME allowlist',
+		why:
+			'decisions § 557 made the accepted image formats BE the formats the ' +
+			'EXIF stripper can clean, because an accepted-but-unstrippable upload ' +
+			'serves a geotagged original back through a signed URL. The bucket is ' +
+			'the rail a raw storage upload actually meets, so a type listed there ' +
+			'and nowhere else is the whole gap that ADR closes.',
+		match: 'all',
+		compare: 'set',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/util/exif_strip.ts)',
+				sites: (ctx) => [
+					{
+						key: 'mime',
+						where: 'STRIPPABLE_IMAGE_MIME_TYPES',
+						values: parseStringList(ctx.read('apps/web/src/lib/util/exif_strip.ts'), 'STRIPPABLE_IMAGE_MIME_TYPES'),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/exif_strip.dart)',
+				sites: (ctx) => [
+					{
+						key: 'mime',
+						where: 'kStrippableImageMimeTypes',
+						values: parseStringList(ctx.read('apps/mobile_android/lib/exif_strip.dart'), 'kStrippableImageMimeTypes'),
+					},
+				],
+			},
+			{ label: 'sql (storage.buckets)', sites: (ctx) => bucketMimeSites(ctx.sql) },
+		],
+	},
+	{
+		name: 'Wear OS saved-route cap',
+		why:
+			'The watch persists at most this many routes, and the phone pushes at ' +
+			'most this many. When the push cap was the larger of the two the watch ' +
+			'showed the whole push in its live picker and kept only the first N, so ' +
+			'the surplus vanished at the next restart with nothing reported.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'watch (apps/watch_wear .../LocalRouteStore.kt)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'LocalRouteStore.MAX_ROUTES',
+						values: parseNamedInt(
+							ctx.read('apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/LocalRouteStore.kt'),
+							'MAX_ROUTES',
+						),
+					},
+				],
+			},
+			{
+				label: 'phone (apps/mobile_android/lib/wear_routes_bridge.dart)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'WearRoutesBridge.kMaxRoutesPerPush',
+						values: parseNamedInt(ctx.read('apps/mobile_android/lib/wear_routes_bridge.dart'), 'kMaxRoutesPerPush'),
 					},
 				],
 			},

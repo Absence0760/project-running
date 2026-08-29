@@ -17,14 +17,17 @@ import { join } from 'node:path';
 
 import {
 	REGISTRY,
+	bucketMimeSites,
 	check,
 	checkEntry,
 	defaultContext,
 	indexMigrations,
 	parseAwarderLadders,
 	parseBadgeCatalogue,
+	parseNamedInt,
 	parseNearbyCase,
 	parseNumberList,
+	parseStringList,
 } from './check_shared_constants.mjs';
 
 /** @param {Record<string, string>} files */
@@ -161,6 +164,42 @@ test('the awarder ladder is keyed by the family the branch selects', () => {
 		{ key: 'streak', where: 'streak branch', values: ['7', '30'] },
 		{ key: 'pr', where: 'pr branch', values: ['1'] },
 	]);
+});
+
+test('a Dart list written with an explicit type argument is read like the TS one', () => {
+	const ts = "export const MIME: readonly string[] = ['image/jpeg', 'image/png'];";
+	const dart = "const List<String> kMime = <String>[\n  'image/jpeg',\n  'image/png',\n];";
+	assert.deepEqual(parseStringList(ts, 'MIME'), ['image/jpeg', 'image/png']);
+	assert.deepEqual(parseStringList(dart, 'kMime'), ['image/jpeg', 'image/png']);
+});
+
+test('a named integer is read from its declaration in Dart and in Kotlin', () => {
+	assert.deepEqual(parseNamedInt('  static const kMaxRoutesPerPush = 30;', 'kMaxRoutesPerPush'), ['30']);
+	assert.deepEqual(parseNamedInt('        const val MAX_ROUTES = 30', 'MAX_ROUTES'), ['30']);
+	assert.deepEqual(parseNamedInt('const val OTHER = 30', 'MAX_ROUTES'), []);
+});
+
+// A bucket's allowlist is created by an insert and narrowed by a later update,
+// so reading the creating migration alone reports the value the bucket had
+// before the narrowing — which is the drift, not the state.
+test('a bucket allowlist is the last statement that set it, not the first', () => {
+	const dir = migrationsFixture({
+		'20260101_001_create.sql':
+			"insert into storage.buckets (id, name, allowed_mime_types) values ('run-photos', 'run-photos', array['image/jpeg', 'image/heic']);\n" +
+			'create or replace function f() returns int language sql as $$ select 1; $$;',
+		'20260102_001_narrow.sql':
+			"update storage.buckets set allowed_mime_types = array['image/jpeg'] where id in ('run-photos');",
+	});
+	assert.deepEqual(bucketMimeSites(indexMigrations(dir), ['run-photos']), [
+		{ key: 'run-photos', where: 'run-photos in 20260102_001_narrow.sql', values: ['image/jpeg'] },
+	]);
+});
+
+test('a bucket nothing ever set produces no site, which the caller reports', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql': 'create or replace function f() returns int language sql as $$ select 1; $$;',
+	});
+	assert.deepEqual(bucketMimeSites(indexMigrations(dir), ['run-photos']), []);
 });
 
 // ── Comparison: match 'all' ────────────────────────────────────────────────
