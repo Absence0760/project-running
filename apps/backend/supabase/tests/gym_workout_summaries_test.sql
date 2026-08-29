@@ -8,7 +8,7 @@
 --
 -- Fixture (oldest -> newest), chosen to separate the three PR metrics:
 --   w1  Bench 60x5, Bench 60x8, OHP 40x8, Pull-up 10xnull   first of everything
---   w2  Bench 60x5, " " 5x50                                beats nothing
+--   w2  <TAB>Bench 60x5, <TAB> 5x50                          beats nothing
 --   w3  "bench  press" 62.5x3                               weight PR only
 --   w4  Pull-up 12xnull                                     bodyweight, no PR
 --   w5  Back Squat 100x5                                    new exercise
@@ -72,9 +72,16 @@ values
   ('dddddddd-dddd-dddd-dddd-dddddddddd01', 1, 'Bench Press', 8, 60),
   ('dddddddd-dddd-dddd-dddd-dddddddddd01', 2, 'Overhead Press', 8, 40),
   ('dddddddd-dddd-dddd-dddd-dddddddddd01', 3, 'Pull-up', 10, null),
-  ('dddddddd-dddd-dddd-dddd-dddddddddd02', 0, 'Bench Press', 5, 60),
-  -- A whitespace-only name passes the length(1..120) CHECK.
-  ('dddddddd-dddd-dddd-dddd-dddddddddd02', 1, ' ', 5, 50),
+  -- Tab-prefixed on purpose. btrim(text) strips U+0020 alone, so before
+  -- migration 20270623000001 this keyed as ' bench press' here and
+  -- 'bench press' in the TS half — a brand-new exercise to the RPC, and a
+  -- first sighting is a PR on all three metrics, so w2 joined this side's
+  -- is_pr set and not that one (decisions § 790).
+  ('dddddddd-dddd-dddd-dddd-dddddddddd02', 0, chr(9) || 'Bench Press', 5, 60),
+  -- A whitespace-only name passes the length(1..120) CHECK. A TAB rather than
+  -- a space for the same reason: the old blank-name filter
+  -- btrim(coalesce(name,'')) <> '' kept it as an exercise named " ".
+  ('dddddddd-dddd-dddd-dddd-dddddddddd02', 1, chr(9), 5, 50),
   ('dddddddd-dddd-dddd-dddd-dddddddddd03', 0, 'bench  press', 3, 62.5),
   ('dddddddd-dddd-dddd-dddd-dddddddddd04', 0, 'Pull-up', 12, null),
   ('dddddddd-dddd-dddd-dddd-dddddddddd05', 0, 'Back Squat', 5, 100),

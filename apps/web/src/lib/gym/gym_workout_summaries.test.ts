@@ -18,7 +18,7 @@ import { RunningPrTracker, normaliseExerciseName, type GymSetLike } from './gym_
  *
  * Fixture (oldest → newest), chosen to separate the three PR metrics:
  *   w1  Bench 60x5, Bench 60x8, OHP 40x8, Pull-up 10xnull   first of everything
- *   w2  Bench 60x5, " " 5x50                                beats nothing
+ *   w2  <TAB>Bench 60x5, <TAB> 5x50                          beats nothing
  *   w3  "bench  press" 62.5x3                               weight PR only
  *   w4  Pull-up 12xnull                                     bodyweight, no PR
  *   w5  Back Squat 100x5                                    new exercise
@@ -44,11 +44,17 @@ const FIXTURE: FixtureWorkout[] = [
 	{
 		id: 'w2',
 		sets: [
-			{ exercise_name: 'Bench Press', reps: 5, weight_kg: 60 },
+			// Tab-prefixed on purpose. Postgres `btrim(text)` strips U+0020 alone,
+			// so before migration 20270623000001 this keyed as ' bench press'
+			// server-side and 'bench press' here — a brand-new exercise to the
+			// RPC, and a first sighting is a PR on all three metrics, so w2
+			// joined the SQL side's is_pr set and not this one (decisions § 790).
+			{ exercise_name: '\u0009Bench Press', reps: 5, weight_kg: 60 },
 			// A whitespace-only name passes the length(1..120) CHECK. It carries
 			// weight into the volume stat but is not an exercise and can never
-			// set a PR.
-			{ exercise_name: ' ', reps: 5, weight_kg: 50 },
+			// set a PR. A TAB rather than a space for the same reason: the old
+			// blank-name filter `btrim(coalesce(name,'')) <> ''` kept it.
+			{ exercise_name: '\u0009', reps: 5, weight_kg: 50 },
 		],
 	},
 	{ id: 'w3', sets: [{ exercise_name: 'bench  press', reps: 3, weight_kg: 62.5 }] },
