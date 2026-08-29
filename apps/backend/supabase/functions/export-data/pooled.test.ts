@@ -79,13 +79,23 @@ Deno.test('pooledPipeline consumes in input order despite out-of-order loads', a
 Deno.test('pooledPipeline is faster than the serial loop it replaces', async () => {
 	const items = Array.from({ length: 36 }, (_, i) => i);
 	const perItemMs = 10;
+	let loaded = 0;
+	let consumed = 0;
 	const started = Date.now();
 	await pooledPipeline(items, 6, async () => {
 		await sleep(perItemMs);
+		loaded++;
 		return 1;
-	}, async () => {});
+	}, async () => {
+		consumed++;
+	});
 	const elapsed = Date.now() - started;
 	const serial = items.length * perItemMs;
+	// A speed claim on its own is satisfied by a pipeline that skipped the
+	// work: the fastest possible implementation of this loop is one that
+	// never calls anything. Assert the work first, then the clock.
+	assertEquals(loaded, items.length, 'every item must still be loaded');
+	assertEquals(consumed, items.length, 'every load must still be consumed');
 	assert(
 		elapsed < serial / 2,
 		`36 x ${perItemMs}ms at width 6 took ${elapsed}ms; the serial loop is ${serial}ms`,
@@ -174,14 +184,23 @@ const indexSource = Deno.readTextFileSync(new URL('./index.ts', import.meta.url)
 Deno.test('no export loop awaits a Storage download inside a bare for-of', () => {
 	// Reason: every one of these was a serial N+1 — 5,000 runs meant
 	// 5,000 sequential downloads, which does not fit the 150 s budget.
+	// An empty offender list is also what an empty file produces, and an
+	// unreadable or renamed index.ts is the likelier of the two: pin that the
+	// scan saw the loops it polices and a download to police them for.
+	assert(
+		/await .*\.download\(/.test(indexSource),
+		'index.ts awaits no Storage download at all — this guard is scanning the wrong file',
+	);
 	const lines = indexSource.split('\n');
 	const offenders: string[] = [];
+	let loops = 0;
 	let loopDepth = 0;
 	let braceDepthAtLoop = 0;
 	let braces = 0;
 	for (const line of lines) {
 		if (loopDepth > 0 && braces <= braceDepthAtLoop) loopDepth = 0;
 		if (/^\s*for \(const .+ of /.test(line)) {
+			loops++;
 			loopDepth = 1;
 			braceDepthAtLoop = braces;
 		}
@@ -199,6 +218,7 @@ Deno.test('no export loop awaits a Storage download inside a bare for-of', () =>
 		`Serial Storage/REST fetch inside a for-of loop: ${offenders.join(' | ')}. ` +
 			'Route it through pooledPipeline instead.',
 	);
+	assert(loops > 0, 'the scan found no for-of loop to police');
 });
 
 Deno.test('every fetch sweep in index.ts uses the shared width', () => {
