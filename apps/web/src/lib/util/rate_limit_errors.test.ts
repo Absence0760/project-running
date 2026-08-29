@@ -106,8 +106,8 @@ test('parses the publish_gym_routine_as_template bucket', () => {
 
 test('parses both direct-message buckets', () => {
 	// Migration 20270608_001 debits two windows per send (decisions § 737):
-	// a 30/60 s burst and a 250/3600 s hour cap, the hour one checked
-	// first so the sender is told the binding wait. Both must parse — the
+	// a burst window and an hour cap, the hour one checked first so the
+	// sender is told the binding wait. Both must parse — the
 	// helper used to fall through to the generic sentence for them on
 	// BOTH platforms, so a throttled sender read "You're doing that too
 	// quickly" about a message they had just tried to send.
