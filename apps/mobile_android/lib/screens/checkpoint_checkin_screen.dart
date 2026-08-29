@@ -12,7 +12,6 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart' show activeLocaleTag;
 import '../l10n/number_format.dart' show formatFixed;
 import '../preferences.dart' show WeightFormat, activeWeightUnit;
-import '../typed_decimal.dart';
 import '../widgets/top_banner.dart';
 
 /// P3 weigh-in fields are Art 9 health data — gated fail-closed behind this
