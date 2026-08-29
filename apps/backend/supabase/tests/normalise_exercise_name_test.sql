@@ -20,11 +20,13 @@
 --   * that the four live RPCs bucket the variant spellings with the plain one
 --   * that a workout re-logging a lift under a variant spelling is not scored
 --     as a fresh personal record
---   * that the two CHECK constraints reject a non-canonical stored key
+--   * that the two CHECK constraints reject a non-canonical stored key, and
+--     that every role able to write the keyed tables may evaluate them -- a
+--     CHECK naming a function ACL-checks it against the INSERTING role
 
 begin;
 
-select plan(13);
+select plan(15);
 
 -- ── The pure derivation ─────────────────────────────────────────────────────
 
@@ -201,6 +203,27 @@ select throws_ok(
   '23514',
   null,
   'a stored exercise_key that is not the canonical derivation is rejected'
+);
+
+-- 14. The CHECK is evaluated as the role doing the INSERT, and it names a
+--     function, so that role needs EXECUTE on it. Granted to `authenticated`
+--     alone, every service_role write to these two tables failed with 42501 --
+--     the Playwright gym fixtures insert exactly this way. `anon` is correctly
+--     absent: RLS lets it write neither table, and a CHECK only runs on a write.
+select is(
+  (select array_agg(r order by r)
+   from (values ('authenticated'), ('service_role'), ('anon')) as t(r)
+   where has_function_privilege(r, 'public.normalise_exercise_name(text)', 'EXECUTE')),
+  array['authenticated', 'service_role'],
+  'exactly the roles that can write the two keyed tables may evaluate the CHECK'
+);
+
+-- 15. And the write itself, as service_role, which is what 14 is about.
+set local role service_role;
+select lives_ok(
+  $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
+    values ('00000000-0000-0000-0000-0000000b2001', 'Front Squat', 'front squat', 1)$$,
+  'a service_role insert satisfying the constraint is not refused by it'
 );
 
 select * from finish();

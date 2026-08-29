@@ -76,8 +76,20 @@ $$;
 comment on function public.normalise_exercise_name(text) is
   'The exercise grouping key: lower-cased, every run of whitespace collapsed to one space, trimmed. The whitespace class is Unicode White_Space plus U+FEFF, written by code point so it does not depend on the database locale provider. Must stay identical to normaliseExerciseName in apps/web/src/lib/gym/gym_prs.ts and apps/mobile_android/lib/gym_prs.dart; scripts/check_shared_constants.mjs compares the three.';
 
+-- The grant list is decided by who WRITES the two tables below, not by who
+-- calls the four RPCs. A CHECK constraint naming a function ACL-checks that
+-- function against the role performing the insert (decisions § 746 records the
+-- same trap one layer over, inside a SECURITY INVOKER body), so a grant that
+-- covered only `authenticated` made every service_role write to
+-- gym_routine_exercises / exercises fail with 42501 -- the Playwright gym
+-- fixtures included. Measured, not reasoned about: the insert was run as
+-- service_role and refused before the grant was widened, and
+-- normalise_exercise_name_test.sql pins both roles so the omission cannot
+-- come back silently. `anon` is deliberately absent: RLS lets it write
+-- neither table, and a CHECK is only ever evaluated on a write.
 revoke execute on function public.normalise_exercise_name(text) from public;
 grant  execute on function public.normalise_exercise_name(text) to authenticated;
+grant  execute on function public.normalise_exercise_name(text) to service_role;
 
 -- ── The four live derivations, re-emitted against the function ──────────────
 -- Bodies are otherwise verbatim. The blank-name filter moves with the key: a
