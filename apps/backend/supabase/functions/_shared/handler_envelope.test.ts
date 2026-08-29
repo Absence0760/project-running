@@ -1037,6 +1037,11 @@ Deno.test({
           object: {
             metadata: { kind: 'donation', donation_id: donationId },
             payment_intent: paymentIntent,
+            // A completed Session is not a payment: a delayed-notification
+            // method completes it `unpaid` and the money lands days later, so
+            // the confirm arm requires an explicit settlement (decisions
+            // § 785). Every real Stripe payload carries this field.
+            payment_status: 'paid',
           },
         },
       };
@@ -1167,9 +1172,12 @@ Deno.test({
         type: 'checkout.session.expired',
         data: { object: { metadata: { order_id: orderId } } },
       });
-      if (r.status !== 200 || r.json?.canceled !== true) {
+      // The arm handles `expired` and `async_payment_failed` together and
+      // reports the state it resolved, since `canceled: true` would be a lie
+      // for the second (decisions § 785).
+      if (r.status !== 200 || r.json?.order_status !== 'canceled') {
         throw new Error(
-          `expected 200 canceled=true, got ${r.status} ${JSON.stringify(r.json)}`,
+          `expected 200 order_status=canceled, got ${r.status} ${JSON.stringify(r.json)}`,
         );
       }
       const read = await svc(
