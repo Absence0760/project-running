@@ -7,7 +7,9 @@ import {
 	FIRMWARE_FILE,
 	PAIRS,
 	UNCLAIMED,
+	compareAdvertisedUuid,
 	compareTables,
+	parseAdvertisedServiceUuid,
 	parseDart,
 	parseFirmware,
 } from './check_watch_ble_uuids.mjs';
@@ -315,4 +317,50 @@ test('blanking comments changes nothing about the committed tables', () => {
 	assert.equal(fw.size, PAIRS.length + UNCLAIMED.length);
 	assert.equal(dt.size, PAIRS.length);
 	assert.deepEqual(compareTables(fw, dt).errors, []);
+});
+
+
+test('the advertised u128 is read without depending on where its underscores fall', () => {
+	assert.equal(
+		parseAdvertisedServiceUuid(
+			'const LINK_SERVICE_UUID: u128 = 0xd1f6a7e0_5b2c_4e9a_9c3d_1a2b3c4d5e6f;',
+		),
+		'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f',
+	);
+	assert.equal(
+		parseAdvertisedServiceUuid(
+			'const LINK_SERVICE_UUID: u128 = 0xd1f6a7e05b2c_4e9a9c3d1a2b3c4d5e6f;',
+		),
+		'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f',
+	);
+	assert.equal(parseAdvertisedServiceUuid('let x = 1;'), null);
+});
+
+test('a u128 quoted only in a comment is not the declaration', () => {
+	assert.equal(
+		parseAdvertisedServiceUuid('// const LINK_SERVICE_UUID: u128 = 0xdead;\n'),
+		null,
+	);
+});
+
+test('an advertised UUID that has drifted from the gatt_service attribute fails', () => {
+	const fw = new Map([['service', 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f']]);
+	assert.equal(compareAdvertisedUuid(fw, 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f').errors.length, 0);
+	const drifted = compareAdvertisedUuid(fw, 'd1f6a7e1-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
+	assert.equal(drifted.errors.length, 1);
+	assert.match(drifted.errors[0], /never finds the service/);
+});
+
+test('a u128 the parser cannot find is an error, not a silent pass', () => {
+	const fw = new Map([['service', 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f']]);
+	assert.equal(compareAdvertisedUuid(fw, null).errors.length, 1);
+	// With no service attribute parsed at all, compareTables already fails on
+	// the empty table; this check stays quiet rather than piling on.
+	assert.equal(compareAdvertisedUuid(new Map(), null).errors.length, 0);
+});
+
+test('the live firmware advertises the service it declares', () => {
+	const src = readFileSync(FIRMWARE_FILE, 'utf-8');
+	const { errors } = compareAdvertisedUuid(parseFirmware(src), parseAdvertisedServiceUuid(src));
+	assert.deepEqual(errors, []);
 });

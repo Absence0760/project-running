@@ -122,6 +122,71 @@ export function parseFirmware(src) {
 	return out;
 }
 
+// The service UUID has a THIRD copy in the same file, in a form `parseFirmware`
+// cannot see: `LINK_SERVICE_UUID: u128`, which is what the scan response
+// advertises. Its own comment says it "must stay byte-for-byte the same value
+// as the service string below" — an instruction, and the same shape decisions
+// § 793 records for the watch's golden vectors. A phone filtering its scan on
+// the advertised value would find nothing at all if the two parted company,
+// and every UUID this guard already compares would still line up.
+//
+// Grouping is ignored: the underscores in the literal happen to fall on the
+// dash positions today, and reading it as though they always would is a
+// coincidence to depend on, not a rule.
+/**
+ * @param {string} src
+ * @returns {string | null} the advertised UUID in canonical dashed form.
+ */
+export function parseAdvertisedServiceUuid(src) {
+	const m = stripComments(src, 'rust').match(
+		/\bconst\s+LINK_SERVICE_UUID\s*:\s*u128\s*=\s*0x([0-9a-fA-F_]+)\s*;/,
+	);
+	if (!m) return null;
+	const hex = m[1].replace(/_/g, '').toLowerCase().padStart(32, '0');
+	if (hex.length !== 32) return null;
+	return [
+		hex.slice(0, 8),
+		hex.slice(8, 12),
+		hex.slice(12, 16),
+		hex.slice(16, 20),
+		hex.slice(20),
+	].join('-');
+}
+
+/**
+ * The advertised u128 against the `gatt_service` attribute it must equal.
+ * @param {Map<string, string>} firmware
+ * @param {string | null} advertised
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function compareAdvertisedUuid(firmware, advertised) {
+	const declared = firmware.get('service');
+	if (!declared) return { errors: [], ok: [] };
+	if (advertised === null) {
+		return {
+			errors: [
+				'the scan-response service UUID (LINK_SERVICE_UUID: u128) was not found ' +
+					'in ble.rs.\n  It moved or changed shape, and this check is blind until ' +
+					'parseAdvertisedServiceUuid() is taught the new form.',
+			],
+			ok: [],
+		};
+	}
+	if (advertised !== declared) {
+		return {
+			errors: [
+				`the advertised service UUID and the GATT service disagree:\n` +
+					`  gatt_service attribute:  ${declared}\n` +
+					`  LINK_SERVICE_UUID u128:  ${advertised}\n` +
+					`  A phone filtering its scan on the advertised value never finds the ` +
+					`service it then connects to. Set the u128 to the attribute.`,
+			],
+			ok: [],
+		};
+	}
+	return { errors: [], ok: [`advertised service u128 = gatt_service (${advertised})`] };
+}
+
 // `static final Uuid <name> = Uuid.parse('…');` — the newline between the
 // declaration and the initialiser is why this can't be a one-line regex, and
 // why the 40-character window crossed a trailing `//` and read a commented-out
@@ -271,10 +336,18 @@ export function compareTables(
 }
 
 function main() {
+	const firmwareSrc = readFileSync(FIRMWARE_FILE, 'utf-8');
+	const firmware = parseFirmware(firmwareSrc);
 	const { errors, warnings, ok } = compareTables(
-		parseFirmware(readFileSync(FIRMWARE_FILE, 'utf-8')),
+		firmware,
 		parseDart(readFileSync(DART_FILE, 'utf-8')),
 	);
+	const advertised = compareAdvertisedUuid(
+		firmware,
+		parseAdvertisedServiceUuid(firmwareSrc),
+	);
+	errors.push(...advertised.errors);
+	ok.push(...advertised.ok);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
 	for (const line of warnings) console.warn(`[WARN] ${line}`);
