@@ -17,7 +17,7 @@
  * A value bound is inclusive at both ends and stated in the column's own
  * CANONICAL unit — kilograms for a weight, centimetres for a height. A field
  * that takes input in the reader's unit converts the bound for display; see
- * `format/weight.ts`'s `bodyWeightBoundsIn`.
+ * `format/weight.ts`'s `weightBoundsIn`.
  *
  * Mirrored in `apps/mobile_android/lib/column_limits.dart`.
  */
