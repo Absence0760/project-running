@@ -3,11 +3,20 @@
 /// idempotent order-state machine, and envelope parsing can be unit-
 /// tested without the Stripe SDK or the Supabase stack.
 ///
-/// Keep this file dependency-free — no `Deno.env`, no `createClient`, no
-/// `fetch`, no Stripe import. It reuses `hmacHex` + `timingSafeEqual`
-/// from _shared/webhook_security.ts (Web Crypto, zero supply-chain
-/// surface) so the verifier is testable against constructed fixtures.
+/// Keep this file free of RUNTIME dependencies — no `Deno.env`, no
+/// `createClient`, no `fetch`, no Stripe value import. It reuses `hmacHex`
+/// + `timingSafeEqual` from _shared/webhook_security.ts (Web Crypto, zero
+/// supply-chain surface) so the verifier is testable against constructed
+/// fixtures.
+///
+/// The Stripe import below is TYPE-ONLY and is erased before anything is
+/// bundled. That distinction is the whole of decisions § 785: a VALUE
+/// import of the SDK takes this function's eszip from 761,148 to 3,373,077
+/// bytes, and a type-only one takes it to 761,378 — the 230 bytes of source
+/// text added here. Measured with `edge-runtime bundle`, both ways, on this
+/// entrypoint. `wiring.test.ts` fails the moment it stops being type-only.
 
+import type Stripe from '../_shared/stripe.ts';
 import { hmacHex, timingSafeEqual } from '../_shared/webhook_security.ts';
 import {
   type CapacityOutcome,
@@ -18,6 +27,175 @@ import {
 // shared capacity decision (single source of math — see events-checkout/lib.ts).
 export { capacityDecision };
 export type { CapacityOutcome };
+
+/// A compile-time assertion that Stripe's own declared shape is assignable
+/// to the narrow shape this webhook reads it as. Instantiating it with a
+/// `From` that no longer fits reports a TS2344 naming both types — the same
+/// negative-assertion mechanism `_shared/stripe.ts` uses, for the same
+/// reason: nothing about a field that has been renamed, retyped or made
+/// nullable produces a runtime error here. It reads as `undefined`, which on
+/// this function means "not a full refund" or "no payment intent" — a
+/// silently different order status, not a crash.
+type AssertAssignable<From extends To, To> = From;
+
+/// Exactly the Checkout Session fields this webhook reads, spelled with
+/// Stripe's own names and types. This is not an approximation of the SDK
+/// (decisions § 765 refused one of those for the whole 450-file surface):
+/// it is three fields, and the assertion under it is what makes the compiler
+/// re-derive it from the SDK on every check.
+interface CheckoutSessionSource {
+  metadata: Record<string, string> | null;
+  payment_intent: string | { id: string } | null;
+  payment_status: 'no_payment_required' | 'paid' | 'unpaid';
+}
+type CheckoutSessionSourceIsStripes = AssertAssignable<
+  Stripe.Checkout.Session,
+  CheckoutSessionSource
+>;
+
+interface ChargeSource {
+  payment_intent: string | { id: string } | null;
+  refunded: boolean;
+  amount: number;
+  amount_refunded: number;
+}
+type ChargeSourceIsStripes = AssertAssignable<Stripe.Charge, ChargeSource>;
+
+interface ConnectAccountSource {
+  id: string;
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  details_submitted: boolean;
+}
+type ConnectAccountSourceIsStripes = AssertAssignable<Stripe.Account, ConnectAccountSource>;
+
+/// The Stripe event types this webhook acts on, checked against Stripe's own
+/// event union. A mistyped comparison string does not fail — it silently
+/// matches nothing, and on the sole writer of `event_orders.status` that
+/// means a charged card whose order never leaves `pending` and no corrective
+/// event coming. Both the dispatcher and the transition tables spell the
+/// types from here, so the two cannot drift apart either.
+export const STRIPE_EVENT = {
+  checkoutCompleted: 'checkout.session.completed',
+  checkoutAsyncPaid: 'checkout.session.async_payment_succeeded',
+  checkoutAsyncFailed: 'checkout.session.async_payment_failed',
+  checkoutExpired: 'checkout.session.expired',
+  chargeRefunded: 'charge.refunded',
+  accountUpdated: 'account.updated',
+} as const satisfies Record<string, Stripe.Event.Type>;
+
+/// Metadata as it can actually be read. Stripe declares it
+/// `{ [name: string]: string }`, and TypeScript hands back `string` for a
+/// key that is not there unless the read is typed to admit it — which is a
+/// lie the four required seat keys are read through.
+export type StripeMetadata = Readonly<Record<string, string | undefined>>;
+
+export interface CheckoutSession {
+  paymentIntentId: string | null;
+  paymentStatus: CheckoutSessionSource['payment_status'] | null;
+  metadata: StripeMetadata;
+}
+
+export interface Charge {
+  paymentIntentId: string | null;
+  refunded: boolean | null;
+  amountCents: number | null;
+  amountRefundedCents: number | null;
+}
+
+export interface ConnectAccount {
+  id: string | null;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+}
+
+/// Stripe serialises a reference either as the bare id or, when the webhook
+/// endpoint is configured to expand it, as the whole object — which is what
+/// the SDK's `string | Stripe.PaymentIntent | null` says and a
+/// `typeof x === 'string'` read does not. Under the expanded form that read
+/// yields null, and null on a refund is answered `missing_payment_intent`
+/// with a 200: the refund is recorded at Stripe as delivered, the order keeps
+/// its seat, and no retry comes.
+function referenceId(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null) {
+    const id = (value as { id?: unknown }).id;
+    if (typeof id === 'string') return id;
+  }
+  return null;
+}
+
+function metadataOf(value: unknown): StripeMetadata {
+  if (typeof value !== 'object' || value === null) return {};
+  const out: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry === 'string') out[key] = entry;
+  }
+  return out;
+}
+
+const PAYMENT_STATUSES: readonly CheckoutSessionSource['payment_status'][] = [
+  'no_payment_required',
+  'paid',
+  'unpaid',
+];
+
+/// Narrow one `data.object` from the wire into the fields above. The event
+/// body is HMAC-verified, so it is FROM Stripe — but its shape is still
+/// whatever arrived, so every field is checked rather than asserted. A value
+/// that does not check reads as absent, never as a default that would move
+/// money: an unreadable `payment_status` is null, and null is not settled.
+export function readCheckoutSession(object: Record<string, unknown>): CheckoutSession {
+  const status = object.payment_status;
+  return {
+    paymentIntentId: referenceId(object.payment_intent),
+    paymentStatus: PAYMENT_STATUSES.find((known) => known === status) ?? null,
+    metadata: metadataOf(object.metadata),
+  };
+}
+
+export function readCharge(object: Record<string, unknown>): Charge {
+  return {
+    paymentIntentId: referenceId(object.payment_intent),
+    refunded: typeof object.refunded === 'boolean' ? object.refunded : null,
+    amountCents: typeof object.amount === 'number' ? object.amount : null,
+    amountRefundedCents: typeof object.amount_refunded === 'number'
+      ? object.amount_refunded
+      : null,
+  };
+}
+
+export function readConnectAccount(object: Record<string, unknown>): ConnectAccount {
+  return {
+    id: typeof object.id === 'string' ? object.id : null,
+    chargesEnabled: object.charges_enabled === true,
+    payoutsEnabled: object.payouts_enabled === true,
+    detailsSubmitted: object.details_submitted === true,
+  };
+}
+
+/// Whether the money behind a Checkout Session has actually arrived.
+///
+/// `checkout.session.completed` does NOT mean paid. Stripe fires it the
+/// moment the Session completes, and for a delayed-notification payment
+/// method the money is still in flight: `payment_status` is `unpaid` and the
+/// outcome arrives days later as `checkout.session.async_payment_succeeded`
+/// or `checkout.session.async_payment_failed`. The Checkout Sessions this
+/// tier opens declare no `payment_method_types`, so the set is whatever the
+/// account has enabled in its dashboard — the delayed methods are one
+/// checkbox away and nothing in this repo would notice.
+///
+/// Fails closed on anything that is not an explicit settlement, including a
+/// `payment_status` this build has never heard of: seating an attendee is
+/// giving away a place, and giving one away for money that has not arrived
+/// is the failure that cannot be undone from here. The CHECK on the other
+/// side is `CheckoutSessionSourceIsStripes` — a fourth value added to
+/// Stripe's own union fails the typecheck rather than reaching a runtime
+/// default.
+export function isPaymentSettled(status: CheckoutSession['paymentStatus']): boolean {
+  return status === 'paid' || status === 'no_payment_required';
+}
 
 /// Verify a Stripe webhook signature.
 ///
@@ -136,18 +314,18 @@ export function orderStatusTransition(
   refund: RefundScope = 'full',
 ): OrderStatus | null {
   if (currentStatus === 'pending') {
-    if (eventType === 'checkout.session.completed') return 'paid';
-    if (eventType === 'checkout.session.expired') return 'canceled';
+    if (eventType === STRIPE_EVENT.checkoutCompleted) return 'paid';
+    if (eventType === STRIPE_EVENT.checkoutExpired) return 'canceled';
     return null;
   }
-  if (currentStatus === 'paid' && eventType === 'charge.refunded') {
+  if (currentStatus === 'paid' && eventType === STRIPE_EVENT.chargeRefunded) {
     return refund === 'partial' ? 'partially_refunded' : 'refunded';
   }
   // A partially-refunded order still holds its seat, so it is NOT terminal: the
   // rest of the money can come back later, and that completing refund has to be
   // able to release the seat. Only a FULL refund moves it on — a second partial
   // returns null so the seat is not released by an instalment.
-  if (currentStatus === 'partially_refunded' && eventType === 'charge.refunded') {
+  if (currentStatus === 'partially_refunded' && eventType === STRIPE_EVENT.chargeRefunded) {
     return refund === 'full' ? 'refunded' : null;
   }
   return null;
@@ -170,10 +348,10 @@ export function orderStatusTransition(
 /// and lose the seat) rather than for us.
 export type RefundScope = 'full' | 'partial';
 
-export function refundScopeOfCharge(charge: Record<string, unknown>): RefundScope {
+export function refundScopeOfCharge(charge: Charge): RefundScope {
   if (charge.refunded === true) return 'full';
-  const amount = typeof charge.amount === 'number' ? charge.amount : null;
-  const refunded = typeof charge.amount_refunded === 'number' ? charge.amount_refunded : null;
+  const amount = charge.amountCents;
+  const refunded = charge.amountRefundedCents;
   if (charge.refunded === false) {
     // Explicitly not fully refunded. Only call it partial when some money
     // actually moved — a `refunded:false` with no refunded amount is not a
@@ -187,20 +365,15 @@ export function refundScopeOfCharge(charge: Record<string, unknown>): RefundScop
 /// Is this Checkout Session a donation (vs a paid-event seat)? The
 /// donations-checkout EF stamps metadata.kind='donation'; events-checkout does
 /// not set `kind`. One webhook, one secret — the branch is keyed on this.
-export function isDonationSession(session: Record<string, unknown>): boolean {
-  const md = session.metadata;
-  if (typeof md !== 'object' || md === null) return false;
-  return (md as Record<string, unknown>).kind === 'donation';
+export function isDonationSession(session: CheckoutSession): boolean {
+  return session.metadata.kind === 'donation';
 }
 
 /// Extract the donation id from a Checkout Session's metadata (set by
 /// donations-checkout). Returns null if absent — the caller treats that as a
 /// malformed session it can't confirm.
-export function donationIdFromSession(session: Record<string, unknown>): string | null {
-  const md = session.metadata;
-  if (typeof md !== 'object' || md === null) return null;
-  const id = (md as Record<string, unknown>).donation_id;
-  return typeof id === 'string' ? id : null;
+export function donationIdFromSession(session: CheckoutSession): string | null {
+  return session.metadata.donation_id ?? null;
 }
 
 export type DonationStatus =
@@ -245,11 +418,11 @@ export function donationStatusTransition(
   refund: RefundScope = 'full',
 ): DonationStatus | null {
   if (currentStatus === 'pending') {
-    if (eventType === 'checkout.session.completed') return 'paid';
-    if (eventType === 'checkout.session.expired') return 'canceled';
+    if (eventType === STRIPE_EVENT.checkoutCompleted) return 'paid';
+    if (eventType === STRIPE_EVENT.checkoutExpired) return 'canceled';
     return null;
   }
-  if (eventType !== 'charge.refunded') return null;
+  if (eventType !== STRIPE_EVENT.chargeRefunded) return null;
   if (currentStatus === 'paid' || currentStatus === 'partially_refunded') {
     return refund === 'full' ? 'refunded' : 'partially_refunded';
   }
@@ -275,14 +448,14 @@ export function donationStatusTransition(
 /// `amount_refunded` on a partial refund is not a number to put in a money
 /// column, and the caller records nothing rather than guessing.
 export function refundedCentsOfCharge(
-  charge: Record<string, unknown>,
+  charge: Charge,
   amountCents: number,
   refund: RefundScope,
 ): number | null {
   if (!Number.isInteger(amountCents) || amountCents < 0) return null;
   if (refund === 'full') return amountCents;
-  const refunded = charge.amount_refunded;
-  if (typeof refunded !== 'number' || !Number.isInteger(refunded) || refunded <= 0) return null;
+  const refunded = charge.amountRefundedCents;
+  if (refunded === null || !Number.isInteger(refunded) || refunded <= 0) return null;
   return Math.min(refunded, amountCents);
 }
 
@@ -296,25 +469,10 @@ export interface AttendeeRow {
 /// Extract the attendee row from a Checkout Session's metadata (set by
 /// events-checkout). Returns null if any required key is missing — the
 /// caller treats that as a malformed session it can't seat.
-export function attendeeRowFromSession(
-  session: Record<string, unknown>,
-): AttendeeRow | null {
-  const md = session.metadata;
-  if (typeof md !== 'object' || md === null) return null;
-  const m = md as Record<string, unknown>;
-  const event_id = m.event_id;
-  const user_id = m.buyer_user_id;
-  const instance_start = m.instance_start;
-  const order_id = m.order_id;
-  if (
-    typeof event_id !== 'string' ||
-    typeof user_id !== 'string' ||
-    typeof instance_start !== 'string' ||
-    typeof order_id !== 'string'
-  ) {
-    return null;
-  }
-  return { event_id, user_id, instance_start, order_id };
+export function attendeeRowFromSession(session: CheckoutSession): AttendeeRow | null {
+  const { event_id, buyer_user_id, instance_start, order_id } = session.metadata;
+  if (!event_id || !buyer_user_id || !instance_start || !order_id) return null;
+  return { event_id, user_id: buyer_user_id, instance_start, order_id };
 }
 
 /// Whether a dispatched handler's response means the insert-first dedupe row

@@ -33,14 +33,23 @@ import { withSentry } from '../_shared/sentry.ts';
 import { capacityDecision } from '../events-checkout/lib.ts';
 import {
   attendeeRowFromSession,
+  type Charge,
+  type CheckoutSession,
+  type ConnectAccount,
   donationIdFromSession,
   donationStatusTransition,
   isDonationSession,
+  isPaymentSettled,
   orderStatusTransition,
   parseStripeEventEnvelope,
+  readCharge,
+  readCheckoutSession,
+  readConnectAccount,
   refundedCentsOfCharge,
   refundScopeOfCharge,
   shouldReleaseDedupe,
+  STRIPE_EVENT,
+  type StripeEventEnvelope,
   verifyStripeSignature,
 } from './lib.ts';
 import { secretKey } from '../_shared/api_keys.ts';
@@ -127,33 +136,36 @@ async function releaseDedupe(service: DbClient, eventId: string): Promise<void> 
 
 async function dispatchStripeEvent(
   service: DbClient,
-  event: { id: string; type: string; data: { object: Record<string, unknown> } },
+  event: StripeEventEnvelope,
 ): Promise<Response> {
   const obj = event.data.object;
 
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === STRIPE_EVENT.checkoutCompleted) {
     // One webhook, one secret. A donation session (metadata.kind='donation')
     // confirms a donations row; a seat session confirms an event_orders row.
-    return isDonationSession(obj)
-      ? await handleDonationCompleted(service, obj)
-      : await handleCompleted(service, obj);
+    const session = readCheckoutSession(obj);
+    return isDonationSession(session)
+      ? await handleDonationCompleted(service, session)
+      : await handleCompleted(service, session);
   }
-  if (event.type === 'checkout.session.expired') {
-    return isDonationSession(obj)
-      ? await handleDonationExpired(service, obj)
-      : await handleExpired(service, obj);
+  if (event.type === STRIPE_EVENT.checkoutExpired) {
+    const session = readCheckoutSession(obj);
+    return isDonationSession(session)
+      ? await handleDonationExpired(service, session)
+      : await handleExpired(service, session);
   }
-  if (event.type === 'account.updated') {
-    return await handleAccountUpdated(service, obj);
+  if (event.type === STRIPE_EVENT.accountUpdated) {
+    return await handleAccountUpdated(service, readConnectAccount(obj));
   }
-  if (event.type === 'charge.refunded') {
+  if (event.type === STRIPE_EVENT.chargeRefunded) {
     // One charge.refunded handler for both ledgers, resolved by payment
     // intent. A donation refund CAS's the donations row (fundraising.md); a
     // paid-event refund (P2 buyer self-cancel) CAS's the event_orders row and
     // releases the seat. Try the donation ledger first; null = "this charge is
     // not a donation" -> fall through to the event-order refund path.
-    const donationRes = await handleDonationRefunded(service, obj);
-    return donationRes ?? await handleOrderRefunded(service, obj);
+    const charge = readCharge(obj);
+    const donationRes = await handleDonationRefunded(service, charge);
+    return donationRes ?? await handleOrderRefunded(service, charge);
   }
 
   // Unhandled types — recorded (dedupe) but no side effect.
@@ -167,7 +179,7 @@ async function dispatchStripeEvent(
 
 async function handleDonationCompleted(
   service: DbClient,
-  session: Record<string, unknown>,
+  session: CheckoutSession,
 ): Promise<Response> {
   const donationId = donationIdFromSession(session);
   if (!donationId) {
@@ -189,11 +201,11 @@ async function handleDonationCompleted(
     return Response.json({ ok: true, skipped: 'unknown_donation' });
   }
 
-  if (donationStatusTransition(donation.status as string, 'checkout.session.completed') === null) {
+  if (donationStatusTransition(donation.status, STRIPE_EVENT.checkoutCompleted) === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
 
-  const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+  const paymentIntent = session.paymentIntentId;
 
   // Compound match on status='pending' makes the UPDATE itself the CAS — a
   // replayed delivery can't double-count.
@@ -221,7 +233,7 @@ async function handleDonationCompleted(
 
 async function handleDonationExpired(
   service: DbClient,
-  session: Record<string, unknown>,
+  session: CheckoutSession,
 ): Promise<Response> {
   const donationId = donationIdFromSession(session);
   if (!donationId) {
@@ -242,7 +254,7 @@ async function handleDonationExpired(
   if (!donation) {
     return Response.json({ ok: true, skipped: 'unknown_donation' });
   }
-  if (donationStatusTransition(donation.status as string, 'checkout.session.expired') === null) {
+  if (donationStatusTransition(donation.status, STRIPE_EVENT.checkoutExpired) === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
   const { error: updErr } = await service
@@ -263,11 +275,11 @@ async function handleDonationExpired(
 /// ledger no-op AND an event-ledger no-op, so it's terminal here too.)
 async function handleDonationRefunded(
   service: DbClient,
-  charge: Record<string, unknown>,
+  charge: Charge,
 ): Promise<Response | null> {
   // A charge.refunded object carries the payment_intent; resolve the donation
   // through stripe_payment_intent_id (set when the donation was marked paid).
-  const paymentIntent = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+  const paymentIntent = charge.paymentIntentId;
   if (!paymentIntent) {
     return Response.json({ ok: true, skipped: 'missing_payment_intent' });
   }
@@ -289,11 +301,11 @@ async function handleDonationRefunded(
     return null;
   }
   const scope = refundScopeOfCharge(charge);
-  const nextStatus = donationStatusTransition(donation.status as string, 'charge.refunded', scope);
+  const nextStatus = donationStatusTransition(donation.status, STRIPE_EVENT.chargeRefunded, scope);
   if (nextStatus === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
-  const refundedCents = refundedCentsOfCharge(charge, donation.amount_cents as number, scope);
+  const refundedCents = refundedCentsOfCharge(charge, donation.amount_cents, scope);
   if (refundedCents === null) {
     // The charge reports no amount this column can hold. Recording the status
     // without the amount would state that money came back and then count all
@@ -319,7 +331,7 @@ async function handleDonationRefunded(
       refunded_at: new Date().toISOString(),
     })
     .eq('id', donation.id)
-    .eq('status', donation.status as string)
+    .eq('status', donation.status)
     .lte('refunded_cents', refundedCents)
     .select('id')
     .maybeSingle();
@@ -352,9 +364,9 @@ async function handleDonationRefunded(
 /// it can't double-release a seat or double-promote the waitlist.
 async function handleOrderRefunded(
   service: DbClient,
-  charge: Record<string, unknown>,
+  charge: Charge,
 ): Promise<Response> {
-  const paymentIntent = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
+  const paymentIntent = charge.paymentIntentId;
   if (!paymentIntent) {
     return Response.json({ ok: true, skipped: 'missing_payment_intent' });
   }
@@ -376,7 +388,7 @@ async function handleOrderRefunded(
   // keeps the registration: the buyer is still going, so the seat must not be
   // released to the waitlist.
   const scope = refundScopeOfCharge(charge);
-  const nextStatus = orderStatusTransition(order.status as string, 'charge.refunded', scope);
+  const nextStatus = orderStatusTransition(order.status, STRIPE_EVENT.chargeRefunded, scope);
   if (nextStatus === null) {
     // Not paid (already refunded / canceled) — idempotent no-op.
     return Response.json({ ok: true, skipped: 'no_transition' });
@@ -391,7 +403,7 @@ async function handleOrderRefunded(
     .from('event_orders')
     .update({ status: nextStatus, refunded_at: new Date().toISOString() })
     .eq('id', order.id)
-    .eq('status', order.status as string)
+    .eq('status', order.status)
     .select('id')
     .maybeSingle();
   if (updErr) {
@@ -436,7 +448,7 @@ async function handleOrderRefunded(
 
 async function handleCompleted(
   service: DbClient,
-  session: Record<string, unknown>,
+  session: CheckoutSession,
 ): Promise<Response> {
   const attendee = attendeeRowFromSession(session);
   if (!attendee) {
@@ -461,15 +473,13 @@ async function handleCompleted(
     return Response.json({ ok: true, skipped: 'unknown_order' });
   }
 
-  const next = orderStatusTransition(order.status as string, 'checkout.session.completed');
+  const next = orderStatusTransition(order.status, STRIPE_EVENT.checkoutCompleted);
   if (next === null) {
     // Already paid / terminal — idempotent no-op.
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
 
-  const paymentIntent = typeof session.payment_intent === 'string'
-    ? session.payment_intent
-    : null;
+  const paymentIntent = session.paymentIntentId;
 
   // Mark the order paid (compound match on status='pending' makes the
   // UPDATE itself a CAS — a concurrent webhook can't both flip it).
@@ -499,7 +509,7 @@ async function handleCompleted(
     .select('capacity')
     .eq('id', attendee.event_id)
     .maybeSingle();
-  const capacity = (event?.capacity as number | null) ?? null;
+  const capacity = event?.capacity ?? null;
 
   if (capacity !== null) {
     const { count: goingCount } = await service
@@ -572,9 +582,9 @@ async function handleCompleted(
 
 async function handleExpired(
   service: DbClient,
-  session: Record<string, unknown>,
+  session: CheckoutSession,
 ): Promise<Response> {
-  const orderId = readMetadataString(session, 'order_id');
+  const orderId = session.metadata.order_id ?? null;
   if (!orderId) {
     return Response.json({ ok: true, skipped: 'missing_order_id' });
   }
@@ -587,7 +597,7 @@ async function handleExpired(
   if (!order) {
     return Response.json({ ok: true, skipped: 'unknown_order' });
   }
-  const next = orderStatusTransition(order.status as string, 'checkout.session.expired');
+  const next = orderStatusTransition(order.status, STRIPE_EVENT.checkoutExpired);
   if (next === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
@@ -609,9 +619,9 @@ async function handleExpired(
 
 async function handleAccountUpdated(
   service: DbClient,
-  account: Record<string, unknown>,
+  account: ConnectAccount,
 ): Promise<Response> {
-  const accountId = typeof account.id === 'string' ? account.id : null;
+  const accountId = account.id;
   if (!accountId) {
     return Response.json({ ok: true, skipped: 'missing_account_id' });
   }
@@ -622,9 +632,9 @@ async function handleAccountUpdated(
   const { error: updErr } = await service
     .from('instructor_payout_accounts')
     .update({
-      charges_enabled: account.charges_enabled === true,
-      payouts_enabled: account.payouts_enabled === true,
-      details_submitted: account.details_submitted === true,
+      charges_enabled: account.chargesEnabled,
+      payouts_enabled: account.payoutsEnabled,
+      details_submitted: account.detailsSubmitted,
       updated_at: new Date().toISOString(),
     })
     .eq('stripe_connect_account_id', accountId);
@@ -639,7 +649,7 @@ async function handleAccountUpdated(
   // `.is('onboarded_at', null)` filter makes the UPDATE itself the guard — a
   // later delivery finds it non-null and no-ops, and a second concurrent
   // first-onboarding delivery can't race it either.
-  if (account.details_submitted === true) {
+  if (account.detailsSubmitted) {
     const { error: stampErr } = await service
       .from('instructor_payout_accounts')
       .update({ onboarded_at: new Date().toISOString() })
@@ -654,9 +664,3 @@ async function handleAccountUpdated(
   return Response.json({ ok: true, account_synced: true });
 }
 
-function readMetadataString(obj: Record<string, unknown>, key: string): string | null {
-  const md = obj.metadata;
-  if (typeof md !== 'object' || md === null) return null;
-  const v = (md as Record<string, unknown>)[key];
-  return typeof v === 'string' ? v : null;
-}
