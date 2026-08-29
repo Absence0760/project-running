@@ -45,7 +45,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -200,12 +199,19 @@ export function applyNeuter(dest, modules) {
   }
   for (const { path, marker } of NEUTERED_ARTIFACTS) {
     const target = join(dest, path);
-    if (statSync(target).isDirectory()) {
-      for (const entry of readdirSync(target, { withFileTypes: true })) {
-        if (entry.isFile()) writeFileSync(join(target, entry.name), `${marker}\n`);
-      }
-    } else {
+    // Branch on what the read actually returns rather than on a preceding
+    // stat: a stat-then-write pair is a check the write does not re-verify.
+    /** @type {import('node:fs').Dirent[]} */
+    let entries;
+    try {
+      entries = readdirSync(target, { withFileTypes: true });
+    } catch (err) {
+      if (/** @type {NodeJS.ErrnoException} */ (err).code !== 'ENOTDIR') throw err;
       writeFileSync(target, `${marker}\n`);
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isFile()) writeFileSync(join(target, entry.name), `${marker}\n`);
     }
   }
 }
