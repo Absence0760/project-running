@@ -153,6 +153,9 @@ Deno.test('mapEventToBillingIssue — events that don\'t move the dimension → 
   assertStrictEquals(mapEventToBillingIssue('TRANSFER'), undefined);
   assertStrictEquals(mapEventToBillingIssue('SUBSCRIBER_ALIAS'), undefined);
   assertStrictEquals(mapEventToBillingIssue(''), undefined);
+  // `undefined` for everything is the same answer a mapper that decides
+  // nothing gives, and it would silently stop the flag ever being set.
+  assertStrictEquals(typeof mapEventToBillingIssue('BILLING_ISSUE'), 'string');
 });
 
 Deno.test('billing-issue + tier branches are independent for BILLING_ISSUE', () => {

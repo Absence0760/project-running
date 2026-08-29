@@ -192,16 +192,22 @@ async function* sourceFiles(dir: URL): AsyncGenerator<URL> {
 
 Deno.test('no Edge Function re-spells the allowlist parse inline', async () => {
   const offenders: string[] = [];
+  let reads = 0;
   for await (const file of sourceFiles(new URL('../', import.meta.url))) {
     if (file.pathname.endsWith('_shared/redirect_allowlist.ts')) continue;
     const src = await Deno.readTextFile(file);
     for (const m of src.matchAll(/Deno\.env\.get\('[A-Z_]*ALLOWED_REDIRECTS'\)/g)) {
+      reads++;
       const statement = src.slice(m.index ?? 0, (m.index ?? 0) + 200);
       if (statement.includes('.split(')) {
         offenders.push(file.pathname.split('/functions/')[1]);
       }
     }
   }
+  // Nobody re-spelling the parse is also what a tree with no callers looks
+  // like — and the four callers are exactly what this guard exists for, so
+  // their disappearance must not read as compliance.
+  assert(reads > 0, 'no function reads an *_ALLOWED_REDIRECTS var at all');
   assertEquals(
     offenders,
     [],
