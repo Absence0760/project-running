@@ -11219,6 +11219,20 @@ the guard that would keep them — a round of its own, not a line in this one.
 
 **Verification.** `node scripts/check_shared_constants.mjs` reports 7 registered constants and 29 checks, green. Its suite is 44 tests, 15 of them new, and the guard is proved by mutation in eight directions: a cap raised above its CHECK, a range leaving the CHECK at the top, the same at the exclusive bottom, the two clients disagreeing on one field, a field bounded on one client only, a client module the extractor can no longer read (reported as blindness, not agreement), a doc row stating a ceiling the SQL does not enforce, and a bucket the SQL raises that the table omits. Each fails with the field named; each passes again when reverted. Web: 4,323 `tsx --test` cases pass, `svelte-check` reports 0 errors over 2,441 files, `tsc -p tsconfig.scripts.json` exits 0, and a new Playwright case pins the preferences gate. Mobile: `column_limits_test.dart` (9), `settings_body_metrics_screen_test.dart` (11, two new — one pinning the lbs range as 44.1..551.1), `checkpoint_checkin_screen_test.dart` and `nutrition_screen_test.dart` all pass; `dart analyze` adds no warning or error; `diff -r` is clean between the twins. `nutrition/recipes.spec.ts` fails on this branch and on `main` alike, for an unrelated reason filed below: the recipe is built from *today's* food log, and whether a seed row falls in the browser's UTC "today" depends on the hour the suite is run.
 
+**CodeQL found two high alerts in this round's own new guards, and both were real.**
+`findInitializers` escaped `$` and nothing else, so any other metacharacter reaching the
+pattern changed what the guard matched rather than failing — a `.` matches any character
+and would certify the wrong list. It now refuses a non-identifier outright and escapes
+the whole set anyway. And `rustVectors`' `(?:[0-9a-fA-F]+|\\\s*)+` nested two
+quantifiers over overlapping input: **measured at 703 ms for a 24-character
+unterminated hex run**, which is minutes by 32 characters and a hung CI job on any Rust
+file the guard could not parse. The branches are now disjoint on their first character,
+so the match is linear and the language is unchanged. Both are pinned by tests. Neither
+ships to a user — these are build-time guards reading repo files — but a guard that can
+hang CI or silently match the wrong declaration is the same class of defect the guards
+exist to catch, and § 786 and § 788 both record that proving a guard finds its own
+first-draft bugs.
+
 ## 793. The watch's golden wire vectors were pinned twice and compared never, and the two docs that read as contracts about the radio were both wrong
 
 **Decided 2026-08-29.** [§ 787](#787)'s shared-constant sweep filed two watch-rail items. Both were real; both were also wrong about their own scope, in the direction that mattered.
