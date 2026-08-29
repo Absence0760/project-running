@@ -296,10 +296,20 @@ export type OrderStatus =
 /// `pending`) and gets `null` — so it cannot re-grant a slot or
 /// double-count revenue even if the webhook_events dedupe were bypassed.
 ///
-///   pending  + checkout.session.completed -> paid
-///   pending  + checkout.session.expired   -> canceled
-///   paid     + charge.refunded            -> refunded
-///   everything else                       -> null (no transition)
+///   pending  + checkout.session.completed              -> paid
+///   pending  + checkout.session.async_payment_succeeded -> paid
+///   pending  + checkout.session.expired                 -> canceled
+///   pending  + checkout.session.async_payment_failed    -> failed
+///   paid     + charge.refunded                          -> refunded
+///   everything else                                     -> null
+///
+/// The two async arms are the delayed-notification half of Checkout: the
+/// money behind a completed Session has not necessarily arrived, so a session
+/// whose `payment_status` is `unpaid` transitions on nothing and the outcome
+/// lands days later as one of those two events. Neither has an arm out of
+/// `paid`: with `isPaymentSettled` gating the confirm, no paid order can be
+/// waiting on an async outcome, and a paid->failed arm would owe a seat
+/// release this table cannot perform.
 ///
 /// Only `pending` (the unpaid states) and `paid` (the refund) transition;
 /// every terminal state (refunded / canceled / failed) is immovable. The
@@ -314,8 +324,14 @@ export function orderStatusTransition(
   refund: RefundScope = 'full',
 ): OrderStatus | null {
   if (currentStatus === 'pending') {
-    if (eventType === STRIPE_EVENT.checkoutCompleted) return 'paid';
+    if (
+      eventType === STRIPE_EVENT.checkoutCompleted ||
+      eventType === STRIPE_EVENT.checkoutAsyncPaid
+    ) {
+      return 'paid';
+    }
     if (eventType === STRIPE_EVENT.checkoutExpired) return 'canceled';
+    if (eventType === STRIPE_EVENT.checkoutAsyncFailed) return 'failed';
     return null;
   }
   if (currentStatus === 'paid' && eventType === STRIPE_EVENT.chargeRefunded) {
@@ -390,8 +406,10 @@ export type DonationStatus =
 /// `null`, so it cannot double-count. A still-`pending` donation expires to
 /// `canceled`.
 ///
-///   pending             + checkout.session.completed -> paid
-///   pending             + checkout.session.expired   -> canceled
+///   pending             + checkout.session.completed              -> paid
+///   pending             + checkout.session.async_payment_succeeded -> paid
+///   pending             + checkout.session.expired                 -> canceled
+///   pending             + checkout.session.async_payment_failed    -> failed
 ///   paid                + charge.refunded (partial)  -> partially_refunded
 ///   paid                + charge.refunded (full)     -> refunded
 ///   partially_refunded  + charge.refunded (partial)  -> partially_refunded
@@ -418,8 +436,14 @@ export function donationStatusTransition(
   refund: RefundScope = 'full',
 ): DonationStatus | null {
   if (currentStatus === 'pending') {
-    if (eventType === STRIPE_EVENT.checkoutCompleted) return 'paid';
+    if (
+      eventType === STRIPE_EVENT.checkoutCompleted ||
+      eventType === STRIPE_EVENT.checkoutAsyncPaid
+    ) {
+      return 'paid';
+    }
     if (eventType === STRIPE_EVENT.checkoutExpired) return 'canceled';
+    if (eventType === STRIPE_EVENT.checkoutAsyncFailed) return 'failed';
     return null;
   }
   if (eventType !== STRIPE_EVENT.chargeRefunded) return null;

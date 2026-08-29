@@ -1,13 +1,21 @@
 /// Stripe Connect events webhook — the ONE idempotent writer of order
 /// status (club_events.md slice P1).
 ///
-/// Handles exactly three event types; everything else is 200-ignored:
-///   checkout.session.completed -> CAS pending->paid, confirm-time
-///     capacity recheck, seat the 'going' attendee with order_id. If the
-///     class filled via another path, the order is left paid + logged +
-///     flagged for MANUAL refund (P1 has no automated refund).
+/// Handles six event types; everything else is 200-ignored:
+///   checkout.session.completed -> only once `payment_status` says the money
+///     arrived: CAS pending->paid, confirm-time capacity recheck, seat the
+///     'going' attendee with order_id. If the class filled via another path,
+///     the order is left paid + logged + flagged for MANUAL refund (P1 has no
+///     automated refund).
+///   checkout.session.async_payment_succeeded -> the same path, for the
+///     delayed-notification methods whose money arrives days after the
+///     Session completes.
+///   checkout.session.async_payment_failed    -> CAS pending->failed; the
+///     money never came, and no seat was ever issued for it.
 ///   checkout.session.expired   -> CAS pending->canceled, releasing the
 ///     soft reservation (the pending row stops counting toward capacity).
+///   charge.refunded            -> CAS the donation or the order, releasing
+///     the seat only on a full refund.
 ///   account.updated            -> mirror charges_enabled / payouts_enabled
 ///     / details_submitted into instructor_payout_accounts.
 ///
@@ -140,19 +148,28 @@ async function dispatchStripeEvent(
 ): Promise<Response> {
   const obj = event.data.object;
 
-  if (event.type === STRIPE_EVENT.checkoutCompleted) {
+  if (
+    event.type === STRIPE_EVENT.checkoutCompleted ||
+    event.type === STRIPE_EVENT.checkoutAsyncPaid
+  ) {
     // One webhook, one secret. A donation session (metadata.kind='donation')
     // confirms a donations row; a seat session confirms an event_orders row.
+    // The two event types share a handler because they mean the same thing —
+    // this Session's money has arrived — and `isPaymentSettled` is what
+    // decides whether it has, not which of them delivered the news.
     const session = readCheckoutSession(obj);
     return isDonationSession(session)
-      ? await handleDonationCompleted(service, session)
-      : await handleCompleted(service, session);
+      ? await handleDonationCompleted(service, session, event.type)
+      : await handleCompleted(service, session, event.type);
   }
-  if (event.type === STRIPE_EVENT.checkoutExpired) {
+  if (
+    event.type === STRIPE_EVENT.checkoutExpired ||
+    event.type === STRIPE_EVENT.checkoutAsyncFailed
+  ) {
     const session = readCheckoutSession(obj);
     return isDonationSession(session)
-      ? await handleDonationExpired(service, session)
-      : await handleExpired(service, session);
+      ? await handleDonationNotPaid(service, session, event.type)
+      : await handleNotPaid(service, session, event.type);
   }
   if (event.type === STRIPE_EVENT.accountUpdated) {
     return await handleAccountUpdated(service, readConnectAccount(obj));
@@ -180,7 +197,20 @@ async function dispatchStripeEvent(
 async function handleDonationCompleted(
   service: DbClient,
   session: CheckoutSession,
+  eventType: string,
 ): Promise<Response> {
+  if (!isPaymentSettled(session.paymentStatus)) {
+    // A delayed-notification method: the Session completed, the money has not
+    // arrived. Recording the donation as paid here would put it on the
+    // charity's thermometer before it exists, and if the payment then fails
+    // nothing takes it back off.
+    console.error(
+      'donation checkout session completed unpaid; awaiting async outcome. payment_status:',
+      session.paymentStatus ?? 'absent',
+    );
+    return Response.json({ ok: true, skipped: 'payment_not_settled' });
+  }
+
   const donationId = donationIdFromSession(session);
   if (!donationId) {
     console.error('donation checkout.session.completed missing donation_id');
@@ -201,7 +231,7 @@ async function handleDonationCompleted(
     return Response.json({ ok: true, skipped: 'unknown_donation' });
   }
 
-  if (donationStatusTransition(donation.status, STRIPE_EVENT.checkoutCompleted) === null) {
+  if (donationStatusTransition(donation.status, eventType) === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
 
@@ -231,9 +261,10 @@ async function handleDonationCompleted(
   return Response.json({ ok: true, donation_paid: true, donation_id: donationId });
 }
 
-async function handleDonationExpired(
+async function handleDonationNotPaid(
   service: DbClient,
   session: CheckoutSession,
+  eventType: string,
 ): Promise<Response> {
   const donationId = donationIdFromSession(session);
   if (!donationId) {
@@ -254,19 +285,20 @@ async function handleDonationExpired(
   if (!donation) {
     return Response.json({ ok: true, skipped: 'unknown_donation' });
   }
-  if (donationStatusTransition(donation.status, STRIPE_EVENT.checkoutExpired) === null) {
+  const next = donationStatusTransition(donation.status, eventType);
+  if (next === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
   const { error: updErr } = await service
     .from('donations')
-    .update({ status: 'canceled' })
+    .update({ status: next })
     .eq('id', donationId)
     .eq('status', 'pending');
   if (updErr) {
     console.error('donation cancel update failed (code):', updErr?.code ?? 'unknown');
     return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
   }
-  return Response.json({ ok: true, donation_canceled: true });
+  return Response.json({ ok: true, donation_status: next });
 }
 
 /// Returns a Response when the charge IS a donation (handled, terminally),
@@ -449,7 +481,22 @@ async function handleOrderRefunded(
 async function handleCompleted(
   service: DbClient,
   session: CheckoutSession,
+  eventType: string,
 ): Promise<Response> {
+  if (!isPaymentSettled(session.paymentStatus)) {
+    // `checkout.session.completed` is not a payment. For a delayed-
+    // notification method the money is still in flight and the outcome lands
+    // days later as async_payment_succeeded / _failed. Seating here gives a
+    // place away for money that may never arrive — and once seated there is
+    // no event that takes it back, because the failure arm below transitions
+    // out of `pending`, not out of `paid`.
+    console.error(
+      'checkout session completed unpaid; awaiting async outcome. payment_status:',
+      session.paymentStatus ?? 'absent',
+    );
+    return Response.json({ ok: true, skipped: 'payment_not_settled' });
+  }
+
   const attendee = attendeeRowFromSession(session);
   if (!attendee) {
     // No metadata to seat against — record + 200 so Stripe stops
@@ -473,7 +520,7 @@ async function handleCompleted(
     return Response.json({ ok: true, skipped: 'unknown_order' });
   }
 
-  const next = orderStatusTransition(order.status, STRIPE_EVENT.checkoutCompleted);
+  const next = orderStatusTransition(order.status, eventType);
   if (next === null) {
     // Already paid / terminal — idempotent no-op.
     return Response.json({ ok: true, skipped: 'no_transition' });
@@ -580,9 +627,10 @@ async function handleCompleted(
   return Response.json({ ok: true, seated: true, order_id: order.id });
 }
 
-async function handleExpired(
+async function handleNotPaid(
   service: DbClient,
   session: CheckoutSession,
+  eventType: string,
 ): Promise<Response> {
   const orderId = session.metadata.order_id ?? null;
   if (!orderId) {
@@ -605,24 +653,24 @@ async function handleExpired(
   if (!order) {
     return Response.json({ ok: true, skipped: 'unknown_order' });
   }
-  const next = orderStatusTransition(order.status, STRIPE_EVENT.checkoutExpired);
+  const next = orderStatusTransition(order.status, eventType);
   if (next === null) {
     return Response.json({ ok: true, skipped: 'no_transition' });
   }
 
-  // CAS pending->canceled; releasing the soft reservation (a canceled
-  // order no longer counts toward capacity — the sweep index keys on
-  // status='pending').
+  // CAS pending->canceled (expired) or pending->failed (the async payment
+  // never landed); either releases the soft reservation, since the sweep
+  // index and the capacity count both key on status='pending'.
   const { error: updErr } = await service
     .from('event_orders')
-    .update({ status: 'canceled' })
+    .update({ status: next })
     .eq('id', orderId)
     .eq('status', 'pending');
   if (updErr) {
     console.error('order cancel update failed (code):', updErr?.code ?? 'unknown');
     return Response.json({ ok: false, error: 'order_update_failed' }, { status: 500 });
   }
-  return Response.json({ ok: true, canceled: true });
+  return Response.json({ ok: true, order_status: next });
 }
 
 async function handleAccountUpdated(

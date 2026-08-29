@@ -140,11 +140,11 @@ Deno.test('both donation reads fail loudly instead of reading as "no such donati
   // `pending` forever; nothing sweeps a lapsed donation reservation.
   for (const [name, src] of [
     ['handleDonationRefunded', donationRefundHandler()],
-    ['handleDonationExpired', (() => {
-      const start = SRC.indexOf('async function handleDonationExpired');
-      assert(start !== -1, 'handleDonationExpired is gone');
+    ['handleDonationNotPaid', (() => {
+      const start = SRC.indexOf('async function handleDonationNotPaid');
+      assert(start !== -1, 'handleDonationNotPaid is gone');
       const end = SRC.indexOf('async function handleDonationRefunded', start);
-      assert(end > start, 'could not find the end of handleDonationExpired');
+      assert(end > start, 'could not find the end of handleDonationNotPaid');
       return SRC.slice(start, end);
     })()],
   ] as const) {
@@ -244,4 +244,55 @@ Deno.test('every ledger read fails loudly instead of reading as "no such row"', 
       'read this guard exempts. If that one was hardened too, delete the ' +
       'exemption rather than leaving a list that matches nothing.',
   );
+});
+
+Deno.test('nothing is written until the money has arrived', () => {
+  // The settlement gate has to come BEFORE the first write in each confirm
+  // handler, not beside it: the CAS is `pending -> paid`, so a write that
+  // lands first has already spent the only transition the async outcome could
+  // have used, and the seat follows immediately after it.
+  for (const [name, end] of [
+    ['handleDonationCompleted', 'async function handleDonationNotPaid'],
+    ['handleCompleted', 'async function handleNotPaid'],
+  ] as const) {
+    const start = SRC.indexOf(`async function ${name}`);
+    assert(start !== -1, `${name} is gone — has the confirm arm moved?`);
+    const stop = SRC.indexOf(end, start);
+    assert(stop > start, `could not find the end of ${name}`);
+    const src = SRC.slice(start, stop);
+
+    const gate = src.indexOf('isPaymentSettled(session.paymentStatus)');
+    const firstWrite = src.indexOf('.update(');
+    assert(
+      gate !== -1,
+      `${name} confirms without checking payment_status. checkout.session.completed ` +
+        'fires for a delayed-notification method with the money still in flight',
+    );
+    assert(firstWrite !== -1, `${name} no longer writes anything — has the CAS moved?`);
+    assert(
+      gate < firstWrite,
+      `${name} writes before it checks whether the payment settled`,
+    );
+  }
+});
+
+Deno.test('the async payment outcomes are dispatched, not 200-ignored', () => {
+  // Without these two arms the settlement gate above is a leak, not a fix: a
+  // delayed payment that later succeeds would leave the order `pending`
+  // forever, holding a seat and never issuing one, because nothing sweeps a
+  // lapsed reservation.
+  const dispatch = SRC.slice(SRC.indexOf('async function dispatchStripeEvent'));
+  for (const [constant, arm] of [
+    ['STRIPE_EVENT.checkoutAsyncPaid', 'handleCompleted'],
+    ['STRIPE_EVENT.checkoutAsyncFailed', 'handleNotPaid'],
+  ] as const) {
+    assert(
+      dispatch.includes(constant),
+      `${constant} is not dispatched, so a delayed payment's real outcome is ignored`,
+    );
+    assert(
+      dispatch.includes(`await ${arm}(`),
+      `${constant} has no ${arm} arm to reach`,
+    );
+  }
 });

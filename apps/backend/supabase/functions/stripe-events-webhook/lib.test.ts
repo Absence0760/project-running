@@ -634,3 +634,59 @@ Deno.test('STRIPE_EVENT — the dispatcher and the transition tables share one s
     'refunded',
   );
 });
+
+// ── delayed-notification payments (decisions § 785) ───────────────────────
+
+Deno.test('isPaymentSettled — only an explicit settlement seats an attendee', () => {
+  // `checkout.session.completed` is not a payment. For a delayed-notification
+  // method (SEPA debit, Bacs, boleto, OXXO, a bank redirect) the Session
+  // completes with `payment_status: 'unpaid'` and the money arrives days later
+  // — or does not. The Checkout Sessions this tier opens declare no
+  // `payment_method_types`, so which methods are live is a dashboard setting
+  // no code here would notice changing.
+  assertStrictEquals(isPaymentSettled('paid'), true);
+  assertStrictEquals(isPaymentSettled('no_payment_required'), true);
+  assertStrictEquals(isPaymentSettled('unpaid'), false);
+  // Absent, or a value this build has never heard of: not a settlement. A
+  // place given away cannot be taken back from here.
+  assertStrictEquals(isPaymentSettled(null), false);
+});
+
+Deno.test('orderStatusTransition — the async outcome, not the completion, pays the order', () => {
+  assertStrictEquals(
+    orderStatusTransition('pending', STRIPE_EVENT.checkoutAsyncPaid),
+    'paid',
+  );
+  assertStrictEquals(
+    orderStatusTransition('pending', STRIPE_EVENT.checkoutAsyncFailed),
+    'failed',
+  );
+  // A failed order releases its reservation the same way a canceled one does:
+  // capacity and the sweep index both key on status='pending'.
+  assertStrictEquals(
+    orderStatusTransition('failed', STRIPE_EVENT.checkoutAsyncPaid),
+    null,
+  );
+  // No arm out of `paid`. With the settlement gate in front of the confirm, a
+  // paid order is never waiting on an async outcome — and a paid->failed arm
+  // would owe a seat release this table cannot perform.
+  assertStrictEquals(
+    orderStatusTransition('paid', STRIPE_EVENT.checkoutAsyncFailed),
+    null,
+  );
+});
+
+Deno.test('donationStatusTransition — the async outcome, not the completion, pays the donation', () => {
+  assertStrictEquals(
+    donationStatusTransition('pending', STRIPE_EVENT.checkoutAsyncPaid),
+    'paid',
+  );
+  assertStrictEquals(
+    donationStatusTransition('pending', STRIPE_EVENT.checkoutAsyncFailed),
+    'failed',
+  );
+  assertStrictEquals(
+    donationStatusTransition('paid', STRIPE_EVENT.checkoutAsyncFailed),
+    null,
+  );
+});
