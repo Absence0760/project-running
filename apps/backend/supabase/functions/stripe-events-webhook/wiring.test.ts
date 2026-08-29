@@ -183,8 +183,8 @@ Deno.test('the Stripe import stays TYPE-ONLY, because a value import is 4.4x the
   assertEquals(
     valueImports,
     [],
-    'these bring the Stripe SDK into the webhook at RUNTIME, taking the eszip ' +
-      `from 761 KB to 3.4 MB for a type-level benefit: ${valueImports.join(', ')}`,
+    'these bring the Stripe SDK into the webhook at RUNTIME, adding ~2.6 MB of ' +
+      `SDK and node-polyfill tree for a type-level benefit: ${valueImports.join(', ')}`,
   );
   assert(
     !/^import[^\n]*esm\.sh\/stripe@/m.test(LIB) && !/^import[^\n]*esm\.sh\/stripe@/m.test(SRC),
