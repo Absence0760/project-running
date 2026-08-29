@@ -40,8 +40,11 @@ import 'sim_watch_sync.dart' show crc32;
 /// names exactly one field set. Only the present fields are written, so a
 /// partial update is a shorter frame; a fully populated frame is 196 bytes,
 /// still one write at the watch's 256-byte ATT MTU, with ~60 bytes of
-/// headroom left. The firmware still decodes v1-v7 frames, but the phone
-/// always encodes the current version.
+/// headroom left. The firmware decodes v3 through v8, so a phone a few
+/// releases behind keeps configuring the watch; v1 and v2 are refused
+/// outright, because the CRC trailer arrived at v3 and a version accepted
+/// without one leaves the checksum decorative. The phone always encodes the
+/// current version.
 ///
 /// Deliberately pure — no BLE, no platform channels — so [encode] is
 /// unit-testable against a frozen golden vector shared with the Rust test.

@@ -520,7 +520,7 @@ ticks and asserts the lap counter never moves.
 
 **Two rails carry the choice.** The phone reaches it over **`SET1` v7** — both presence bytes were
 saturated and v6's `KNOWN_FLAGS2 == u8::MAX` const-assert existed precisely to force this bump, so
-`flags3` arrives exactly as `flags2` did at v2; `decode` accepts v1–v7 side by side and the frozen
+`flags3` arrives exactly as `flags2` did at v2; `decode` accepts v3–v7 side by side (this entry originally wrote v1–v7; v1 and v2 had already been withdrawn at §403, when the CRC became mandatory) and the frozen
 v6 golden vector is pinned as still decoding, its absent trigger leaving whatever the watch holds
 standing rather than resetting a race's splits to a default. Flash keeps it in `CFG1`'s flags byte
 behind a set-marker plus three discriminant bits — the §351/§353 drill a third time, no
