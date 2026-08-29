@@ -5551,6 +5551,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      normalise_exercise_name: { Args: { p_name: string }; Returns: string }
       notify_data_export_ready: {
         Args: { p_export_job_id: string }
         Returns: boolean
