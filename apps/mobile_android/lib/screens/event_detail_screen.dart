@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../column_limits.dart';
 import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../calendar_intent.dart';
@@ -1410,7 +1411,7 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
           TextField(
             controller: _ctrl,
             maxLines: 3,
-            maxLength: 1200,
+            maxLength: columnLength('club_posts.body'),
             decoration: InputDecoration(
               hintText: AppLocalizations.of(context).eventUpdateHint,
               border: InputBorder.none,

@@ -22982,6 +22982,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The end must be after the start.'**
   String get challengesErrWindow;
+
+  /// Inline error when a typed body weight is outside the range its column accepts
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a weight between {min} and {max} {unit}.'**
+  String limitsWeightOutOfRange(String min, String max, String unit);
+
+  /// Inline error when a typed height is outside the range its column accepts
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a height between {min} and {max} cm.'**
+  String limitsHeightOutOfRange(String min, String max);
+
+  /// Inline error when a typed serving count is outside the range its column accepts
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number of servings between {min} and {max}.'**
+  String limitsServingsOutOfRange(String min, String max);
 }
 
 class _AppLocalizationsDelegate

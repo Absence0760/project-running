@@ -34,7 +34,9 @@
 		displayToKg,
 		roundWeight,
 		defaultWeightUnitForDistanceUnit,
+		weightBoundsIn,
 	} from '$lib/format/weight';
+	import { valueLimit, withinValueLimit } from '$lib/core/column_limits';
 	import {
 		ACTIVITY_LEVELS,
 		type ActivityLevel,
@@ -358,6 +360,20 @@
 	// empty) — never call string methods on them.
 	let heightCm = $state<number | null>(null);
 	let weightInput = $state<number | null>(null); // in the user's weight unit
+	// `min`/`max` on the inputs below are COSMETIC: the card saves from a
+	// button's onclick, not a form submit, so the browser's constraint
+	// validation never runs — the same trap issue #677 hit in the onboarding
+	// wizard. These are the real gates, and both columns are CHECK-bounded, so
+	// without them a typed 600 kg or 500 cm round-trips as a raw postgres
+	// 23514 (decisions § 792).
+	const weightBounds = $derived(weightBoundsIn('body_metrics.weight_kg', weightUnit));
+	const heightBounds = valueLimit('user_profiles.height_cm');
+	const weightOutOfRange = $derived(
+		weightInput != null && !withinValueLimit('body_metrics.weight_kg', displayToKg(weightInput, weightUnit)),
+	);
+	const heightOutOfRange = $derived(
+		heightCm != null && !withinValueLimit('user_profiles.height_cm', heightCm),
+	);
 	let loadedWeightKg = $state<number | null>(null);
 	// Activity level + goal are nutrition preferences (not special-category),
 	// so they auto-save to the prefs bag like everything else above.
@@ -593,6 +609,18 @@
 		const hasDemographic = !!(gender || heightVal != null || weightDisplay != null);
 		if (hasDemographic && !healthDataConsent) {
 			showToast(m('prefs.demographicsConsentRequired'), 'error');
+			return;
+		}
+		// Checked here as well as on the button's disabled state so a value
+		// out of the column's range cannot reach the insert through any other
+		// path into this handler.
+		if (weightOutOfRange || heightOutOfRange) {
+			showToast(
+				weightOutOfRange
+					? m('limits.weightOutOfRange', { ...weightBounds, unit: weightUnit })
+					: m('limits.heightOutOfRange', heightBounds),
+				'error',
+			);
 			return;
 		}
 		savingDemographics = true;
@@ -1087,24 +1115,37 @@
 					<span class="label-text">{m('prefs.heightCm')}</span>
 					<input
 						type="number"
-						min="0"
-						max="300"
+						min={heightBounds.min}
+						max={heightBounds.max}
 						inputmode="numeric"
 						bind:value={heightCm}
 						disabled={!healthDataConsent}
+						aria-invalid={heightOutOfRange}
 						data-testid="height-cm"
 					/>
+					{#if heightOutOfRange}
+						<span class="field-error" data-testid="height-cm-error">
+							{m('limits.heightOutOfRange', heightBounds)}
+						</span>
+					{/if}
 				</label>
 				<label>
 					<span class="label-text">{m('prefs.weight')} ({weightUnit})</span>
 					<input
 						type="number"
-						min="0"
+						min={weightBounds.min}
+						max={weightBounds.max}
 						inputmode="decimal"
 						bind:value={weightInput}
 						disabled={!healthDataConsent}
+						aria-invalid={weightOutOfRange}
 						data-testid="weight"
 					/>
+					{#if weightOutOfRange}
+						<span class="field-error" data-testid="weight-error">
+							{m('limits.weightOutOfRange', { ...weightBounds, unit: weightUnit })}
+						</span>
+					{/if}
 				</label>
 			</div>
 			<p class="field-hint" id="dob-purpose">{m('prefs.dateOfBirthPurpose')}</p>
@@ -1120,7 +1161,7 @@
 				class="btn btn-primary btn-save"
 				type="button"
 				onclick={requestSaveDemographics}
-				disabled={savingDemographics}
+				disabled={savingDemographics || weightOutOfRange || heightOutOfRange}
 				data-testid="save-demographics"
 			>
 				{savingDemographics ? m('prefs.saving') : demographicsSaved ? m('prefs.demographicsSavedBtn') : m('prefs.saveDemographics')}
@@ -1547,6 +1588,7 @@
 	.muted { color: var(--color-text-tertiary); }
 	.section-hint { color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0 0 var(--space-md) 0; }
 	.field-hint { color: var(--color-text-secondary); font-size: 0.8rem; line-height: 1.4; margin: 0 0 var(--space-md) 0; }
+	.field-error { display: block; font-size: 0.78rem; color: var(--color-danger-text); line-height: 1.45; margin-block-start: var(--space-2xs); }
 	.zone-list { list-style: none; padding: 0; margin: 0 0 var(--space-md) 0; display: flex; flex-direction: column; gap: var(--space-sm); }
 	.zone-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); padding: var(--space-sm) var(--space-md); background: var(--color-bg-tertiary); border-radius: var(--radius-md); }
 	.zone-coords { font-variant-numeric: tabular-nums; font-weight: 600; }

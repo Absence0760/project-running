@@ -27,10 +27,13 @@ String rateLimitWait(AppLocalizations l10n, int? seconds) {
 }
 
 /// Every bucket `enforce_create_rate_limit` is called with today. The two
-/// direct-message buckets (a 30/60 s burst and a 250/3600 s hour cap,
-/// decisions § 737) share one sentence: which of the two windows refused
-/// is our accounting, not something to explain to a sender. So do the two
-/// plan-adopt paths, which are the same act from two libraries.
+/// direct-message buckets — a burst window and an hour cap, decisions § 737 —
+/// share one sentence: which of the two windows refused is our accounting,
+/// not something to explain to a sender. So do the two plan-adopt paths,
+/// which are the same act from two libraries. The ceilings themselves are
+/// deliberately absent here: they live at the SQL call site, with one
+/// checked second home in `api_database.md`'s bucket table (§ 792), and a
+/// third copy in a comment nothing reads is what § 792 was filed about.
 String rateLimitMessage(AppLocalizations l10n, RateLimitInfo info) {
   final wait = rateLimitWait(l10n, info.seconds);
   switch (info.bucket) {

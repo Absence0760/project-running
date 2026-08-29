@@ -17616,5 +17616,44 @@
   "challengesErrWindow": "The end must be after the start.",
   "@challengesErrWindow": {
     "description": "Inline error when the create-challenge window ends at or before it starts"
+  },
+  "limitsWeightOutOfRange": "Enter a weight between {min} and {max} {unit}.",
+  "@limitsWeightOutOfRange": {
+    "description": "Inline error when a typed body weight is outside the range its column accepts",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "limitsHeightOutOfRange": "Enter a height between {min} and {max} cm.",
+  "@limitsHeightOutOfRange": {
+    "description": "Inline error when a typed height is outside the range its column accepts",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "limitsServingsOutOfRange": "Enter a number of servings between {min} and {max}.",
+  "@limitsServingsOutOfRange": {
+    "description": "Inline error when a typed serving count is outside the range its column accepts",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
   }
 }

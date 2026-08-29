@@ -354,6 +354,345 @@ export function parseWhitespaceClass(src, anchor) {
 		.sort((a, b) => a - b)
 		.map((cp) => `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`);
 }
+
+// ── Bounds: a client input bound against the column the database bounds ────
+
+// A second registry, with a different comparison. The entries above ask
+// whether every home says the SAME thing; these ask whether the client's bound
+// sits INSIDE the database's, which is not the same question and is not
+// symmetric. A client capped BELOW the column is merely conservative; one
+// capped above — or not capped at all — hands the runner a raw postgres 23514
+// (or a 22003 from the column's own `numeric(p,s)` precision, the same defect
+// wearing a different SQLSTATE) that names a constraint and no field.
+//
+// The registry is the client module itself: `COLUMN_LIMITS` / `kColumnLimits`
+// are keyed by `<table>.<column>`, so the key IS the locator and this file
+// holds no copy of any number. decisions.md § 792.
+
+export const WEB_COLUMN_LIMITS = 'apps/web/src/lib/core/column_limits.ts';
+export const MOBILE_COLUMN_LIMITS = 'apps/mobile_android/lib/column_limits.dart';
+
+/**
+ * One extractor for both clients, the way `parseBadgeCatalogue` reads two
+ * catalogues written in different languages: a quoted `<table>.<column>` key,
+ * then the kind and the integers of whichever form its language spells the
+ * bound in — a TS object literal or a Dart const constructor.
+ * @param {string} src
+ * @returns {Map<string, { kind: string, values: number[] }>}
+ */
+export function parseColumnLimits(src) {
+	/** @type {Map<string, { kind: string, values: number[] }>} */
+	const out = new Map();
+	const re = /'([a-z_]+\.[a-z_]+)':\s*(\{[^}]*\}|ColumnLimit\.[a-z]+\([^)]*\))/g;
+	/** @type {RegExpExecArray | null} */
+	let m;
+	while ((m = re.exec(src)) !== null) {
+		const body = m[2];
+		const kind = /'value'|\.value\(/.test(body) ? 'value' : /'length'|\.length\(/.test(body) ? 'length' : '';
+		if (kind === '') continue;
+		out.set(m[1], { kind, values: [...body.matchAll(/-?\d+(?:\.\d+)?/g)].map((n) => Number(n[0])) });
+	}
+	return out;
+}
+
+/**
+ * Every balanced `check ( … )` in a statement, with the constraint's name when
+ * it has one. Balanced rather than `[^)]*` because every bound on a nullable
+ * column is written `col is null or (col > 0 and col <= 300)`.
+ * @param {string} sql
+ * @returns {{ name: string | null, body: string }[]}
+ */
+export function checkBodies(sql) {
+	/** @type {{ name: string | null, body: string }[]} */
+	const out = [];
+	let i = 0;
+	for (;;) {
+		const opener = /\bcheck\s*\(/i.exec(sql.slice(i));
+		if (!opener) break;
+		const start = i + opener.index + opener[0].length;
+		let depth = 1;
+		let j = start;
+		while (j < sql.length && depth > 0) {
+			if (sql[j] === '(') depth++;
+			else if (sql[j] === ')') depth--;
+			j++;
+		}
+		const named = /constraint\s+([a-z_][a-z0-9_]*)\s+check\s*\($/i.exec(sql.slice(0, start));
+		out.push({ name: named ? named[1] : null, body: sql.slice(start, j - 1) });
+		i = j;
+	}
+	return out;
+}
+
+/**
+ * The bound a single CHECK body puts on one column: a value range, a
+ * `char_length` cap, or neither.
+ * @param {string} body
+ * @param {string} column
+ * @returns {{ min: number | null, minExclusive: boolean, max: number | null, maxExclusive: boolean, lengthMax: number | null }}
+ */
+export function boundFromCheck(body, column) {
+	const ref = `(?:char_length|length)\\s*\\(\\s*(?:[a-z_]+\\.)?${column}\\s*\\)|(?:[a-z_]+\\.)?\\b${column}\\b`;
+	const bound = {
+		/** @type {number | null} */ min: null,
+		minExclusive: false,
+		/** @type {number | null} */ max: null,
+		maxExclusive: false,
+		/** @type {number | null} */ lengthMax: null,
+	};
+	/** @type {RegExpExecArray | null} */
+	let m;
+	const between = new RegExp(`(${ref})\\s+between\\s+(-?\\d+(?:\\.\\d+)?)\\s+and\\s+(-?\\d+(?:\\.\\d+)?)`, 'gi');
+	while ((m = between.exec(body)) !== null) {
+		if (/length/i.test(m[1])) bound.lengthMax = Number(m[3]);
+		else {
+			bound.min = Number(m[2]);
+			bound.max = Number(m[3]);
+		}
+	}
+	const compare = new RegExp(`(${ref})\\s*(<=|>=|<|>)\\s*(-?\\d+(?:\\.\\d+)?)`, 'gi');
+	while ((m = compare.exec(body)) !== null) {
+		const n = Number(m[3]);
+		if (/length/i.test(m[1])) {
+			if (m[2] === '<=') bound.lengthMax = n;
+			else if (m[2] === '<') bound.lengthMax = n - 1;
+			continue;
+		}
+		if (m[2] === '<=') bound.max = n;
+		else if (m[2] === '<') {
+			bound.max = n;
+			bound.maxExclusive = true;
+		} else if (m[2] === '>=') bound.min = n;
+		else {
+			bound.min = n;
+			bound.minExclusive = true;
+		}
+	}
+	return bound;
+}
+
+/** The largest magnitude a `numeric(p, s)` column can hold. */
+/** @param {number} precision @param {number} scale @returns {number} */
+export function numericCeiling(precision, scale) {
+	return 10 ** (precision - scale) - 10 ** -scale;
+}
+
+/**
+ * The bound the migration set leaves on one column, by REPLAY: every live CHECK
+ * that names it, intersected, plus the ceiling its `numeric(p, s)` declaration
+ * imposes on its own. A `drop constraint` removes the named one it drops, the
+ * same replay the function index does one object over.
+ * @param {SqlIndex} sql
+ * @param {string} table
+ * @param {string} column
+ */
+export function sqlColumnBound(sql, table, column) {
+	const touches = new RegExp(
+		`(?:create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?|alter\\s+table\\s+(?:if\\s+exists\\s+)?(?:only\\s+)?)(?:public\\.)?${table}\\b`,
+		'i',
+	);
+	/** @type {{ name: string | null, file: string, bound: ReturnType<typeof boundFromCheck> }[]} */
+	let live = [];
+	/** @type {number | null} */
+	let precisionMax = null;
+	/** @type {string[]} */
+	const files = [];
+	for (const { file, sql: statement } of sql.statements) {
+		if (!touches.test(statement)) continue;
+		const dropped = /drop\s+constraint\s+(?:if\s+exists\s+)?([a-z_][a-z0-9_]*)/gi;
+		/** @type {RegExpExecArray | null} */
+		let d;
+		while ((d = dropped.exec(statement)) !== null) {
+			const name = d[1].toLowerCase();
+			live = live.filter((c) => c.name !== name);
+		}
+		const declared = new RegExp(`\\b${column}\\s+numeric\\s*\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)`, 'i').exec(statement);
+		if (declared) precisionMax = numericCeiling(Number(declared[1]), Number(declared[2]));
+		for (const { name, body } of checkBodies(statement)) {
+			const bound = boundFromCheck(body, column);
+			if (bound.min === null && bound.max === null && bound.lengthMax === null) continue;
+			live.push({ name: name === null ? null : name.toLowerCase(), file, bound });
+			if (!files.includes(file)) files.push(file);
+		}
+	}
+	/** @type {number | null} */
+	let min = null;
+	let minExclusive = false;
+	/** @type {number | null} */
+	let max = precisionMax;
+	let maxExclusive = false;
+	/** @type {number | null} */
+	let lengthMax = null;
+	for (const { bound } of live) {
+		if (bound.min !== null && (min === null || bound.min > min)) {
+			min = bound.min;
+			minExclusive = bound.minExclusive;
+		}
+		if (bound.max !== null && (max === null || bound.max < max)) {
+			max = bound.max;
+			maxExclusive = bound.maxExclusive;
+		}
+		if (bound.lengthMax !== null && (lengthMax === null || bound.lengthMax < lengthMax)) {
+			lengthMax = bound.lengthMax;
+		}
+	}
+	return { min, minExclusive, max, maxExclusive, lengthMax, precisionMax, sites: live.length, files };
+}
+
+/**
+ * @param {Ctx} ctx
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkColumnBounds(ctx) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	const web = parseColumnLimits(ctx.read(WEB_COLUMN_LIMITS));
+	const mobile = parseColumnLimits(ctx.read(MOBILE_COLUMN_LIMITS));
+	if (web.size === 0 || mobile.size === 0) {
+		errors.push(
+			`column limits: read ${web.size} entries from ${WEB_COLUMN_LIMITS} and ` +
+				`${mobile.size} from ${MOBILE_COLUMN_LIMITS}.\n` +
+				`  A rail that reads nothing agrees with every other one, so this is ` +
+				`reported as the guard going blind rather than as a match.`,
+		);
+		return { errors, ok };
+	}
+	for (const key of [...new Set([...web.keys(), ...mobile.keys()])].sort()) {
+		const w = web.get(key);
+		const mo = mobile.get(key);
+		if (!w || !mo) {
+			errors.push(
+				`column limits: "${key}" is bounded on ${w ? 'web' : 'mobile'} only.\n` +
+					`  The unbounded client is the one that hands the runner a raw 23514.`,
+			);
+			continue;
+		}
+		if (w.kind !== mo.kind || w.values.join(',') !== mo.values.join(',')) {
+			errors.push(
+				`column limits: "${key}" disagrees between the clients.\n` +
+					`  web:    ${w.kind} [${w.values.join(', ')}]\n` +
+					`  mobile: ${mo.kind} [${mo.values.join(', ')}]\n` +
+					`  One number per field: a stricter phone silently truncates what the ` +
+					`web accepted, and a looser one refuses what the web stored.`,
+			);
+			continue;
+		}
+		const [table, column] = key.split('.');
+		const db = sqlColumnBound(ctx.sql, table, column);
+		if (db.sites === 0 && db.precisionMax === null) {
+			errors.push(
+				`column limits: "${key}" has no CHECK and no numeric precision in the ` +
+					`migrations.\n  Either the column moved or its bound was dropped; ` +
+					`this guard certifies nothing about that key until one exists.`,
+			);
+			continue;
+		}
+		if (w.kind === 'length') {
+			const [clientMax] = w.values;
+			if (db.lengthMax === null) {
+				errors.push(`column limits: "${key}" is capped at ${clientMax} characters on both clients, but no char_length CHECK bounds the column.`);
+				continue;
+			}
+			if (clientMax > db.lengthMax) {
+				errors.push(
+					`column limits: "${key}" is capped ABOVE its own CHECK.\n` +
+						`  clients: ${clientMax} characters\n  database: ${db.lengthMax} (${db.files.join(', ')})\n` +
+						`  A composer capped above the constraint hands the user a 23514 they cannot act on.`,
+				);
+				continue;
+			}
+			ok.push(`column limits / ${key}: clients ${clientMax} <= database ${db.lengthMax} characters`);
+			continue;
+		}
+		const [clientMin, clientMax] = w.values;
+		/** @type {string[]} */
+		const failed = [];
+		if (db.min !== null && (db.minExclusive ? !(clientMin > db.min) : !(clientMin >= db.min))) {
+			failed.push(`min ${clientMin} is not ${db.minExclusive ? '>' : '>='} the database's ${db.min}`);
+		}
+		if (db.max === null) failed.push('the database bounds this column from below only, and nothing caps the client');
+		else if (db.maxExclusive ? !(clientMax < db.max) : !(clientMax <= db.max)) {
+			failed.push(`max ${clientMax} is not ${db.maxExclusive ? '<' : '<='} the database's ${db.max}`);
+		}
+		if (failed.length > 0) {
+			errors.push(
+				`column limits: "${key}" is not inside its own CHECK.\n` +
+					`  ${failed.join('\n  ')}\n` +
+					`  database: ${db.min === null ? '(none)' : `${db.minExclusive ? '>' : '>='} ${db.min}`}, ` +
+					`${db.max === null ? '(none)' : `${db.maxExclusive ? '<' : '<='} ${db.max}`}` +
+					`${db.precisionMax !== null ? ` (numeric precision ceiling ${db.precisionMax})` : ''}` +
+					`${db.files.length > 0 ? ` — ${db.files.join(', ')}` : ''}\n` +
+					`  A value the client admits and the column rejects is a raw postgres ` +
+					`error the runner cannot act on.`,
+			);
+			continue;
+		}
+		ok.push(
+			`column limits / ${key}: clients [${clientMin}, ${clientMax}] inside database ` +
+				`(${db.min === null ? '-inf' : db.min}, ${db.max === null ? 'inf' : db.max})`,
+		);
+	}
+	return { errors, ok };
+}
+
+// ── Bounds: the create rate-limit ceilings ─────────────────────────────────
+
+// `enforce_create_rate_limit(bucket, user, max, window_s)` carries its numbers
+// at the call site, and `check_rate_limit` keys the counter by BUCKET — so two
+// live call sites debiting one bucket with two different ceilings give the
+// caller a limit that depends on which path they took last, and the refusal
+// can name neither. The doc table is the second home the numbers already had
+// in prose; this reads it rather than trusting it.
+
+export const RATE_LIMIT_DOC = 'docs/backend/api_database.md';
+
+const RATE_LIMIT_ENFORCE =
+	/enforce_create_rate_limit\s*\(\s*'([a-z_]+)'\s*,\s*[^,]+,\s*(\d+)\s*,\s*(\d+)\s*\)/gi;
+
+/** @param {Ctx} ctx @returns {Site[]} */
+export function rateLimitCeilingSqlSites(ctx) {
+	/** @type {Map<string, Site>} */
+	const byBucket = new Map();
+	/** @type {string[]} */
+	const conflicts = [];
+	for (const [name, { file, sql }] of ctx.sql.live) {
+		RATE_LIMIT_ENFORCE.lastIndex = 0;
+		/** @type {RegExpExecArray | null} */
+		let m;
+		while ((m = RATE_LIMIT_ENFORCE.exec(sql)) !== null) {
+			const values = [m[2], m[3]];
+			const seen = byBucket.get(m[1]);
+			if (seen && seen.values.join('/') !== values.join('/')) {
+				conflicts.push(`${m[1]}: ${seen.where} says ${seen.values.join('/')}, ${name}() says ${values.join('/')}`);
+				continue;
+			}
+			byBucket.set(m[1], { key: m[1], where: `${name}() in ${file}`, values });
+		}
+	}
+	if (conflicts.length > 0) {
+		throw new Error(
+			`check_shared_constants: one rate-limit bucket, two ceilings — ${conflicts.join('; ')}. ` +
+				`check_rate_limit keys the counter by bucket, so the caller's real limit ` +
+				`is whichever call site ran, and the refusal names neither.`,
+		);
+	}
+	return [...byBucket.values()];
+}
+
+// A row of the "Create rate-limit buckets" table: `| \`bucket\` | 30 | 60 |`.
+// Anchored on the backticked bucket name, which is what makes the guard read
+// the row it means rather than the third number on the line.
+/** @param {Ctx} ctx @returns {Site[]} */
+export function rateLimitCeilingDocSites(ctx) {
+	const doc = ctx.read(RATE_LIMIT_DOC);
+	return [...doc.matchAll(/^\|\s*`([a-z_]+)`\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|/gm)].map((m) => ({
+		key: m[1],
+		where: `${RATE_LIMIT_DOC} bucket table`,
+		values: [m[2], m[3]],
+	}));
+}
 // ── The registry ───────────────────────────────────────────────────────────
 
 /** @type {readonly Entry[]} */
@@ -472,6 +811,21 @@ export const REGISTRY = [
 					},
 				],
 			},
+		],
+	},
+	{
+		name: 'create rate-limit ceilings',
+		why:
+			'The bucket vocabulary entry above proves every bucket has a sentence; ' +
+			'this proves the sentence is about the limit the database actually ' +
+			'enforces. The numbers live at the SQL call site and were transcribed ' +
+			'into prose that nothing read, which is the shape that outlives the ' +
+			'number it describes.',
+		match: 'key',
+		compare: 'ordered',
+		rails: [
+			{ label: 'sql (live enforce_create_rate_limit call sites)', sites: rateLimitCeilingSqlSites },
+			{ label: `docs (${RATE_LIMIT_DOC})`, sites: rateLimitCeilingDocSites },
 		],
 	},
 	{
@@ -723,6 +1077,9 @@ export function check(registry = REGISTRY, ctx = defaultContext()) {
 		errors.push(...result.errors);
 		ok.push(...result.ok);
 	}
+	const bounds = checkColumnBounds(ctx);
+	errors.push(...bounds.errors);
+	ok.push(...bounds.ok);
 	return { errors, ok };
 }
 
@@ -746,7 +1103,11 @@ function main() {
 		);
 		return 1;
 	}
-	console.log(`\n${REGISTRY.length} registered shared constants agree across every home (${ok.length} checks).`);
+	console.log(
+		`\n${REGISTRY.length} registered shared constants agree across every home, and ` +
+			`every registered client bound sits inside its column's own CHECK ` +
+			`(${ok.length} checks).`,
+	);
 	return 0;
 }
 

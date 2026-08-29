@@ -16,12 +16,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+	MOBILE_COLUMN_LIMITS,
+	RATE_LIMIT_DOC,
 	REGISTRY,
+	WEB_COLUMN_LIMITS,
+	boundFromCheck,
 	bucketMimeSites,
 	check,
+	checkColumnBounds,
 	checkEntry,
 	defaultContext,
 	indexMigrations,
+	numericCeiling,
+	parseColumnLimits,
+	rateLimitCeilingDocSites,
+	rateLimitCeilingSqlSites,
+	sqlColumnBound,
 	parseAwarderLadders,
 	parseBadgeCatalogue,
 	parseNamedInt,
@@ -436,4 +446,223 @@ test('a run-source filter that missed a widening is caught in the real entry sha
 	assert.match(errors[0], /runs_source_check/);
 	assert.match(errors[0], /personal_records\(\) in 20260710_001_hardening\.sql/);
 	assert.match(errors[0], /missing there: watch, parkrun/);
+});
+
+// ── Column bounds: a client input against the column's own CHECK ───────────
+
+test('one extractor reads the bound out of both languages', () => {
+	const ts = parseColumnLimits(
+		"'body_metrics.weight_kg': { kind: 'value', min: 20, max: 250 },\n" +
+			"'club_posts.body': { kind: 'length', max: 1200 },",
+	);
+	const dart = parseColumnLimits(
+		"'body_metrics.weight_kg': ColumnLimit.value(20, 250),\n" +
+			"'club_posts.body': ColumnLimit.length(1200),",
+	);
+	assert.deepEqual([...ts.entries()], [...dart.entries()]);
+	assert.deepEqual(ts.get('body_metrics.weight_kg'), { kind: 'value', values: [20, 250] });
+	assert.deepEqual(ts.get('club_posts.body'), { kind: 'length', values: [1200] });
+});
+
+test('boundFromCheck reads every form the migrations write a bound in', () => {
+	assert.deepEqual(boundFromCheck('weight_kg > 0 and weight_kg <= 500', 'weight_kg'), {
+		min: 0,
+		minExclusive: true,
+		max: 500,
+		maxExclusive: false,
+		lengthMax: null,
+	});
+	assert.deepEqual(
+		boundFromCheck('body_weight_kg is null or body_weight_kg between 20 and 400', 'body_weight_kg'),
+		{ min: 20, minExclusive: false, max: 400, maxExclusive: false, lengthMax: null },
+	);
+	assert.equal(boundFromCheck('description is null or char_length(description) <= 2000', 'description').lengthMax, 2000);
+	// A bound on a DIFFERENT column in the same body is not this column's.
+	assert.deepEqual(boundFromCheck('reps >= 0 and rpe <= 10', 'reps'), {
+		min: 0,
+		minExclusive: false,
+		max: null,
+		maxExclusive: false,
+		lengthMax: null,
+	});
+});
+
+test('numericCeiling is the largest magnitude the declaration can hold', () => {
+	assert.equal(numericCeiling(5, 2), 999.99);
+	assert.equal(numericCeiling(5, 1), 9999.9);
+});
+
+test('a column bound is the intersection of every live CHECK, and a drop removes one', () => {
+	const dir = migrationsFixture({
+		'0001_create.sql': 'create table body_metrics (weight_kg numeric(5, 2) not null check (weight_kg > 0));',
+		'0002_cap.sql': 'alter table body_metrics add constraint bm_cap check (weight_kg <= 500);',
+		'0003_tighter.sql': 'alter table body_metrics add constraint bm_tight check (weight_kg <= 300);',
+	});
+	const sql = indexMigrations2(dir);
+	assert.equal(sqlColumnBound(sql, 'body_metrics', 'weight_kg').max, 300);
+	const dropped = indexMigrations2(
+		migrationsFixture({
+			'0001_create.sql': 'create table body_metrics (weight_kg numeric(5, 2) not null check (weight_kg > 0));',
+			'0002_cap.sql': 'alter table body_metrics add constraint bm_cap check (weight_kg <= 300);',
+			'0003_drop.sql': 'alter table body_metrics drop constraint bm_cap;',
+		}),
+	);
+	// With the cap gone the only ceiling left is what numeric(5, 2) can hold.
+	assert.equal(sqlColumnBound(dropped, 'body_metrics', 'weight_kg').max, 999.99);
+});
+
+/**
+ * indexMigrations needs a function to exist; these fixtures are DDL only.
+ * @param {string} dir
+ */
+function indexMigrations2(dir) {
+	writeFileSync(join(dir, '9999_fn.sql'), 'create function noop() returns int language sql as $$ select 1 $$;');
+	return indexMigrations(dir);
+}
+
+/**
+ * The committed clients, with one entry rewritten.
+ * @param {(rel: string, src: string) => string} mutate
+ * @returns {any}
+ */
+function boundsCtx(mutate) {
+	const real = defaultContext();
+	return {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) => mutate(rel, real.read(rel)),
+	};
+}
+
+test('the committed clients bound every registered column inside its own CHECK', () => {
+	const { errors, ok } = checkColumnBounds(defaultContext());
+	assert.deepEqual(errors, []);
+	assert.ok(ok.length >= 8);
+});
+
+test('MUTATION: a client cap raised above the column CHECK fails', () => {
+	const { errors } = checkColumnBounds(
+		boundsCtx((rel, src) =>
+			rel === WEB_COLUMN_LIMITS || rel === MOBILE_COLUMN_LIMITS ? src.replace(/\b1200\b/g, '9999') : src,
+		),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /club_posts\.body/);
+	assert.match(errors[0], /capped ABOVE its own CHECK/);
+});
+
+test('MUTATION: a value range that leaves the column CHECK fails at either end', () => {
+	const above = checkColumnBounds(
+		boundsCtx((rel, src) =>
+			rel === WEB_COLUMN_LIMITS || rel === MOBILE_COLUMN_LIMITS
+				? src.replace(/(weight_kg'[^\n]*?)\b250\b/g, '$1600')
+				: src,
+		),
+	);
+	assert.equal(above.errors.length, 1);
+	assert.match(above.errors[0], /body_metrics\.weight_kg/);
+	assert.match(above.errors[0], /max 600 is not <= the database's 500/);
+
+	// The exclusive `> 0` half: a client floor of 0 is admitted by the client
+	// and rejected by the column, which is what `min="0"` did on the web.
+	const below = checkColumnBounds(
+		boundsCtx((rel, src) =>
+			rel === WEB_COLUMN_LIMITS || rel === MOBILE_COLUMN_LIMITS
+				? src.replace(/(height_cm'[^\n]*?)\b50\b/g, '$10')
+				: src,
+		),
+	);
+	assert.equal(below.errors.length, 1);
+	assert.match(below.errors[0], /user_profiles\.height_cm/);
+	assert.match(below.errors[0], /min 0 is not > the database's 0/);
+});
+
+test('MUTATION: the two clients disagreeing on one field fails, naming both', () => {
+	const { errors } = checkColumnBounds(
+		boundsCtx((rel, src) => (rel === MOBILE_COLUMN_LIMITS ? src.replace("ColumnLimit.length(32)", 'ColumnLimit.length(20)') : src)),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /user_profiles\.parkrun_number/);
+	assert.match(errors[0], /web:\s+length \[32\]/);
+	assert.match(errors[0], /mobile:\s+length \[20\]/);
+});
+
+test('MUTATION: a field bounded on one client only fails', () => {
+	const { errors } = checkColumnBounds(
+		boundsCtx((rel, src) =>
+			rel === MOBILE_COLUMN_LIMITS ? src.replace(/'recipes\.servings':[^\n]*\n/, '') : src,
+		),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /recipes\.servings/);
+	assert.match(errors[0], /bounded on web only/);
+});
+
+test('a client module the extractor can no longer read is reported as blindness', () => {
+	const { errors } = checkColumnBounds(boundsCtx((rel, src) => (rel === WEB_COLUMN_LIMITS ? '' : src)));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /guard going blind/);
+});
+
+// ── Rate-limit ceilings ────────────────────────────────────────────────────
+
+test('one bucket debited with two different ceilings throws rather than picking one', () => {
+	const dir = migrationsFixture({
+		'0001_a.sql':
+			"create function a() returns void language plpgsql as $$ begin perform enforce_create_rate_limit('create_club', x, 5, 3600); end $$;",
+		'0002_b.sql':
+			"create function b() returns void language plpgsql as $$ begin perform enforce_create_rate_limit('create_club', x, 50, 3600); end $$;",
+	});
+	assert.throws(
+		() => rateLimitCeilingSqlSites({ read: () => '', sql: indexMigrations(dir) }),
+		/two ceilings/,
+	);
+});
+
+test('a re-issued function replaces its own ceiling rather than conflicting with it', () => {
+	const dir = migrationsFixture({
+		'0001_a.sql':
+			"create function a() returns void language plpgsql as $$ begin perform enforce_create_rate_limit('create_club', x, 5, 3600); end $$;",
+		'0002_a.sql':
+			"create or replace function a() returns void language plpgsql as $$ begin perform enforce_create_rate_limit('create_club', x, 9, 3600); end $$;",
+	});
+	const sites = rateLimitCeilingSqlSites({ read: () => '', sql: indexMigrations(dir) });
+	assert.deepEqual(sites, [{ key: 'create_club', where: 'a() in 0002_a.sql', values: ['9', '3600'] }]);
+});
+
+test('the doc table row is read off the backticked bucket, not the first numbers on the line', () => {
+	const sites = rateLimitCeilingDocSites({
+		read: () => '| Bucket | Max | Window |\n|---|---|---|\n| `create_club` | 5 | 3600 | see 20260907_001 |\n',
+		sql: /** @type {any} */ ({}),
+	});
+	assert.deepEqual(sites, [
+		{ key: 'create_club', where: `${RATE_LIMIT_DOC} bucket table`, values: ['5', '3600'] },
+	]);
+});
+
+test('MUTATION: the doc table stating a ceiling the SQL does not enforce fails', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'create rate-limit ceilings'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === RATE_LIMIT_DOC
+				? real.read(rel).replace('| `send_direct_message_burst` | 30 | 60 |', '| `send_direct_message_burst` | 60 | 60 |')
+				: real.read(rel),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /send_direct_message_burst/);
+	assert.match(errors[0], /\[30, 60\]/);
+	assert.match(errors[0], /\[60, 60\]/);
+});
+
+test('MUTATION: a bucket the SQL raises and the doc table omits fails', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'create rate-limit ceilings'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === RATE_LIMIT_DOC ? real.read(rel).replace(/^\| `create_club` \|.*$/m, '') : real.read(rel),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /"create_club" is written on 1 of 2 rails/);
 });

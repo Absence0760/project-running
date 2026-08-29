@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { lengthLimit } from '$lib/core/column_limits';
 	import Modal from './Modal.svelte';
 	import { updatePlanMeta } from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -85,7 +86,7 @@
 	>
 		<label class="field">
 			<span class="field-label">{m('planMeta.name')}</span>
-			<input type="text" bind:value={name} maxlength="80" required />
+			<input type="text" bind:value={name} maxlength={lengthLimit('training_plans.name')} required />
 		</label>
 
 		<label class="field">
