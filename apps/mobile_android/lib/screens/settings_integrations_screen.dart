@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../column_limits.dart';
 import '../ble_heart_rate.dart';
 import '../ble_treadmill.dart';
 import '../health_connect_exporter.dart';
@@ -345,7 +346,7 @@ class _SettingsIntegrationsScreenState
             TextField(
               controller: ctrl,
               autofocus: true,
-              maxLength: 20,
+              maxLength: columnLength('user_profiles.parkrun_number'),
               decoration: InputDecoration(
                 labelText: l10n.integrationsParkrunFieldLabel,
                 hintText: 'A123456',

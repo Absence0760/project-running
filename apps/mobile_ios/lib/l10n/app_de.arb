@@ -3996,5 +3996,8 @@
   "challengesErrGoal": "Ziel: positive Zahl eingeben",
   "challengesGoalPreview": "Teilnehmende sehen {value}",
   "challengesGoalStreakCeiling": "In diesen Zeitraum passen höchstens {n} aktive Tage.",
-  "challengesErrWindow": "Das Ende muss nach dem Beginn liegen."
+  "challengesErrWindow": "Das Ende muss nach dem Beginn liegen.",
+  "limitsWeightOutOfRange": "Gib ein Gewicht zwischen {min} und {max} {unit} ein.",
+  "limitsHeightOutOfRange": "Gib eine Größe zwischen {min} und {max} cm ein.",
+  "limitsServingsOutOfRange": "Gib eine Portionszahl zwischen {min} und {max} ein."
 }

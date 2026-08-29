@@ -13861,4 +13861,19 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get challengesErrWindow => 'El fin debe ser posterior al inicio.';
+
+  @override
+  String limitsWeightOutOfRange(String min, String max, String unit) {
+    return 'Introduce un peso entre $min y $max $unit.';
+  }
+
+  @override
+  String limitsHeightOutOfRange(String min, String max) {
+    return 'Introduce una altura entre $min y $max cm.';
+  }
+
+  @override
+  String limitsServingsOutOfRange(String min, String max) {
+    return 'Introduce un número de raciones entre $min y $max.';
+  }
 }

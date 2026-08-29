@@ -181,6 +181,61 @@ void main() {
       expect(find.text('Weight'), findsOneWidget);
     });
 
+    testWidgets('a height or weight outside the column range is refused here',
+        (tester) async {
+      // `body_metrics.weight_kg` is CHECK-bounded `> 0 and <= 500` and
+      // `user_profiles.height_cm` `> 0 and <= 300`; this screen guarded only
+      // `> 0`, so a typed 600 kg reached the insert as a raw 23514 naming a
+      // constraint and no field (decisions § 792).
+      await _pump(tester, await _prefs());
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pump();
+
+      final weight = find.widgetWithText(TextField, 'Weight');
+      await tester.enterText(weight, '600');
+      await tester.pump();
+      expect(find.text('Enter a weight between 20 and 250 kg.'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+
+      await tester.enterText(weight, '72');
+      await tester.pump();
+      expect(find.text('Enter a weight between 20 and 250 kg.'), findsNothing);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNotNull,
+      );
+
+      await tester.enterText(find.widgetWithText(TextField, 'Height'), '500');
+      await tester.pump();
+      expect(find.text('Enter a height between 50 and 300 cm.'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull,
+      );
+    });
+
+    testWidgets('the refused range is stated in the unit the field is typed in',
+        (tester) async {
+      // The field takes lbs when the runner's weight unit is lbs but the
+      // column is kilograms, so a bound stated in kg would name numbers the
+      // field never shows. The floor rounds UP through the conversion, so the
+      // number offered is one the kg gate actually accepts.
+      SharedPreferences.setMockInitialValues({'weight_unit': 'lbs'});
+      final prefs = Preferences();
+      await prefs.init();
+      await _pump(tester, prefs);
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pump();
+
+      await tester.enterText(find.widgetWithText(TextField, 'Weight'), '1200');
+      await tester.pump();
+      expect(find.text('Enter a weight between 44.1 and 551.1 lbs.'),
+          findsOneWidget);
+    });
+
     testWidgets('activity level + goal show defaults and open a picker',
         (tester) async {
       await _pump(tester, await _prefs());

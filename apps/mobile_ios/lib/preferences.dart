@@ -1159,18 +1159,18 @@ class WeightFormat {
   static String label(WeightUnit unit) =>
       unit == WeightUnit.lbs ? 'lbs' : 'kg';
 
-  /// The `body_metrics.weight_kg` client bound expressed in the unit the
-  /// field is TYPED in, for the out-of-range sentence.
+  /// A weight column's client bound expressed in the unit the field is TYPED
+  /// in, for the out-of-range sentence.
   ///
   /// Rounding is directional on purpose: the floor rounds UP and the ceiling
   /// DOWN, so every value the displayed range admits converts back to a
   /// kilogram figure [withinColumnLimit] also accepts. Rounding both to
   /// nearest would put 44.0 lb (19.96 kg) inside a range whose real gate then
   /// refuses it, which is the shape of error the range exists to prevent.
-  /// Mirrors web's `bodyWeightBoundsIn` in `format/weight.ts`.
-  static ({double min, double max}) boundsIn(WeightUnit unit) {
-    final min = columnMin('body_metrics.weight_kg').toDouble();
-    final max = columnMax('body_metrics.weight_kg').toDouble();
+  /// Mirrors web's `weightBoundsIn` in `format/weight.ts`.
+  static ({double min, double max}) boundsIn(String key, WeightUnit unit) {
+    final min = columnMin(key).toDouble();
+    final max = columnMax(key).toDouble();
     if (unit == WeightUnit.kg) return (min: min, max: max);
     return (
       min: (toDisplay(min, unit) * 10).ceil() / 10,

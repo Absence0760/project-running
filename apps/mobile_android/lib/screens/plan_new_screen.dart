@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart';
 
+import '../column_limits.dart';
 import '../backend_timeout.dart';
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -181,10 +182,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     final raceName = widget.raceName?.trim();
     if (_racePreset?.ok == true && raceName != null && raceName.isNotEmpty) {
       _nameDefaulted = true;
-      // The field is `maxLength: 80`; a programmatic write bypasses that, so
-      // clamp what the listing hands us to the same budget.
+      // The field is capped; a programmatic write bypasses that, so clamp
+      // what the listing hands us to the same budget.
+      final cap = columnLength('training_plans.name');
       _nameCtrl.text =
-          raceName.length > 80 ? raceName.substring(0, 80) : raceName;
+          raceName.length > cap ? raceName.substring(0, cap) : raceName;
       return;
     }
     if (widget.initialGoal != null || widget.initialBeginnerWalkRun) {
@@ -480,7 +482,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               labelText: l10n.planNewNameLabel,
               hintText: l10n.planNewNameHint,
             ),
-            maxLength: 80,
+            maxLength: columnLength('training_plans.name'),
             // Re-evaluate the Create button's enabled state as the name is
             // typed — without this the button (which gates on a non-empty
             // name) only un-disables on the next unrelated rebuild.

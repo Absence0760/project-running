@@ -73,7 +73,7 @@ void main() {
         if (!f.path.endsWith('.dart')) continue;
         final src = f.readAsStringSync();
         for (final m in RegExp(
-                r"""\b(?:columnMin|columnMax|columnLength|withinColumnLimit)\(\s*'([^']+)'""")
+                r"""\b(?:columnMin|columnMax|columnLength|withinColumnLimit|boundsIn)\(\s*'([a-z_]+\.[a-z_]+)'""")
             .allMatches(src)) {
           asked.add(m.group(1)!);
         }
@@ -88,7 +88,7 @@ void main() {
 
   group('WeightFormat.boundsIn', () {
     test('kg is the stored bound unchanged', () {
-      final b = WeightFormat.boundsIn(WeightUnit.kg);
+      final b = WeightFormat.boundsIn('body_metrics.weight_kg', WeightUnit.kg);
       expect(b.min, columnMin('body_metrics.weight_kg'));
       expect(b.max, columnMax('body_metrics.weight_kg'));
     });
@@ -97,7 +97,7 @@ void main() {
       // The whole point of rounding the floor up and the ceiling down: every
       // value the displayed range admits must survive the real kg gate, or
       // the field advertises a bound its own validator refuses.
-      final b = WeightFormat.boundsIn(WeightUnit.lbs);
+      final b = WeightFormat.boundsIn('body_metrics.weight_kg', WeightUnit.lbs);
       expect(
           withinColumnLimit('body_metrics.weight_kg',
               WeightFormat.toKg(b.min, WeightUnit.lbs)),
