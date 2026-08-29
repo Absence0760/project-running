@@ -531,11 +531,11 @@ jobs:
       # Drift first, then the guard's own suite — this suite's last two cases
       # read the committed migrations and types, so running it first would
       # report "the guard is broken" over an ordinary stale union.
-      - name: CHECK constraints vs TS unions
+      - name: CHECK constraints vs client vocabularies
         run: |
           if ! npm run check:check-constraints --workspace=apps/web; then
-            echo "::error::A narrow-union CHECK constraint and its TypeScript union have drifted apart, so one client can write a value the other rejects (postgres 23514). This is not database.types.ts drift."
-            echo "Update the TS union in apps/web/src/lib/types.ts and the CHECK in its migration together; a new pair also goes in the PAIRS array of apps/web/scripts/check_constraint_unions.mjs."
+            echo "::error::A set-shaped CHECK constraint and a client vocabulary that enumerates it have drifted apart, so one client can write a value the other rejects (postgres 23514) — or a dropdown silently lacks a value the column admits. This is not database.types.ts drift. The failure names the file and the declaration, and the client may be a TS union, a const array, a Svelte option list, or a Dart enum / const list (decisions § 791)."
+            echo "Update the CHECK in its migration and EVERY rail the failure names. A brand-new set-shaped CHECK column also needs a PAIRS entry in apps/web/scripts/check_constraint_unions.mjs — with its client rails, or an empty clients list plus a note saying no client enumerates it."
             exit 1
           fi
           if ! node --test apps/web/scripts/check_constraint_unions.test.mjs; then
