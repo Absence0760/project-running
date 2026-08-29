@@ -1450,6 +1450,22 @@ create table rate_limits (
 
 `check_rate_limit(p_user_id, p_bucket, p_max, p_window_seconds) returns table(allowed bool, retry_after_seconds int)` — atomic increment-and-check; even denied calls increment, but the user just stays at ceiling+N until the window rolls (no extra punishment). Cron job `cleanup-stale-rate-limits` deletes rows older than 24 h hourly. RLS is enabled with no policies so direct REST access returns zero rows; the EF helper bypasses RLS via the SECURITY DEFINER grant.
 
+**Create rate-limit buckets.** Every live `enforce_create_rate_limit(bucket, user, max, window_s)` call site, which is the wrapper the write paths use over `check_rate_limit`. The counter is keyed by **bucket**, so one bucket debited with two different ceilings would give a caller a limit that depends on which path they took — `scripts/check_shared_constants.mjs` resolves the call sites by replaying every migration, refuses that case, and fails the PR when this table and the SQL disagree ([decisions § 792](../architecture/decisions.md)). The bucket → sentence mapping a throttled caller reads is a separate registry, [§ 744](../architecture/decisions.md).
+
+| Bucket | Max | Window (s) | Raised by |
+|---|---|---|---|
+| `clone_gym_routine_template` | 20 | 3600 | `clone_gym_routine_template()` |
+| `clone_plan_template` | 20 | 3600 | `clone_plan_template()` |
+| `clone_public_plan` | 20 | 3600 | `clone_public_plan()` |
+| `clone_session_template` | 20 | 3600 | `clone_session_template()` |
+| `create_challenge` | 30 | 3600 | `enforce_challenge_create_rate_limit()` (before-insert trigger) |
+| `create_club` | 5 | 3600 | `clubs_create_rate_limit_trigger()` |
+| `create_report` | 10 | 3600 | `submit_report()` |
+| `create_route` | 30 | 3600 | `routes_create_rate_limit_trigger()` |
+| `publish_gym_routine_as_template` | 20 | 3600 | `publish_gym_routine_as_template()` |
+| `send_direct_message` | 250 | 3600 | `direct_messages_rate_limit_trigger()` |
+| `send_direct_message_burst` | 30 | 60 | `direct_messages_rate_limit_trigger()` |
+
 ---
 
 #### `data_export_jobs`
