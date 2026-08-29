@@ -47,18 +47,19 @@ After both succeed, run `git diff` on:
 
 Confirm the diff matches what the migration introduced. Unexpected churn means a generator bug or a dirty DB.
 
-### 4. Run the constraint-vs-union guard
+### 4. Run the constraint-vs-client-vocabulary guard
 
 ```
 npm run check:check-constraints --workspace=apps/web
 ```
 
-If the guard reports drift, the migration added or removed a CHECK enum value that doesn't have a matching TS union update. Two things to do:
+The guard reads every client declaration that enumerates a set-shaped CHECK column — TS unions, const arrays, Svelte option lists, Dart enums and const lists (decisions § 791) — not just `types.ts`. Each failure names the file and the declaration. Three things to do:
 
-1. Edit `apps/web/src/lib/types.ts` to bring the union in lockstep.
-2. If the CHECK is on a NEW column with no existing TS union: append a new entry to the `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs`.
+1. Fix **every** rail the failure names. A widened CHECK typically fails a TS union, a Svelte `<select>` array AND a Dart dropdown list at once; updating only the first leaves the phone unable to offer the new value.
+2. If the CHECK is on a NEW column: append an entry to the `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs`. The guard fails on an unregistered set-shaped CHECK column, so this is not optional. Register every client rail, or an empty `clients` list plus a `note` saying no client enumerates it.
+3. Never widen the guard by deleting a rail or adding a blanket exemption. A value a client carries that the column cannot hold goes in that rail's `allowExtra` with a reason; a column value a client deliberately omits goes in `allowMissing`.
 
-Re-run the guard after editing.
+Re-run the guard after editing, then `node --test apps/web/scripts/check_constraint_unions.test.mjs`.
 
 ### 5. Surface the doc updates
 

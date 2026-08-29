@@ -531,11 +531,11 @@ jobs:
       # Drift first, then the guard's own suite — this suite's last two cases
       # read the committed migrations and types, so running it first would
       # report "the guard is broken" over an ordinary stale union.
-      - name: CHECK constraints vs TS unions
+      - name: CHECK constraints vs client vocabularies
         run: |
           if ! npm run check:check-constraints --workspace=apps/web; then
-            echo "::error::A narrow-union CHECK constraint and its TypeScript union have drifted apart, so one client can write a value the other rejects (postgres 23514). This is not database.types.ts drift."
-            echo "Update the TS union in apps/web/src/lib/types.ts and the CHECK in its migration together; a new pair also goes in the PAIRS array of apps/web/scripts/check_constraint_unions.mjs."
+            echo "::error::A set-shaped CHECK constraint and a client vocabulary that enumerates it have drifted apart, so one client can write a value the other rejects (postgres 23514) — or a dropdown silently lacks a value the column admits. This is not database.types.ts drift. The failure names the file and the declaration, and the client may be a TS union, a const array, a Svelte option list, or a Dart enum / const list (decisions § 791)."
+            echo "Update the CHECK in its migration and EVERY rail the failure names. A brand-new set-shaped CHECK column also needs a PAIRS entry in apps/web/scripts/check_constraint_unions.mjs — with its client rails, or an empty clients list plus a note saying no client enumerates it."
             exit 1
           fi
           if ! node --test apps/web/scripts/check_constraint_unions.test.mjs; then
@@ -543,10 +543,12 @@ jobs:
             echo "Reproduce with: node --test apps/web/scripts/check_constraint_unions.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
-      # The sibling of the step above, one class wider: a CHECK's value set
-      # against a TS union is ONE shape of a value with more than one home, and
-      # the guard above reads only that one. This reads the rest — a threshold
-      # copied into SQL, a vocabulary copied out of it into two clients, an
+      # The sibling of the step above, and the boundary between them is the
+      # rails, not the subject: a CHECK's value set against the CLIENT
+      # declarations that enumerate it is the step above's whole scope
+      # (decisions § 791), so nothing here re-registers one. This reads every
+      # other shape of a value with more than one home — a threshold copied
+      # into SQL, a vocabulary copied out of it into a second SQL function, an
       # eligibility list copied from one SQL function into the next — and it is
       # code-gated with the rest of this job on purpose: every rail it reads is
       # a source file, so a docs-only diff cannot move one (decisions § 787).
