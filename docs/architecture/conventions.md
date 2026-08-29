@@ -521,6 +521,33 @@ When you write a value that a second language also has to know:
   live-ping window against the 24 h Redis TTL) are not an equality. Pin those
   with mirror suites and say so where the numbers are written.
 
+## A client input bound goes in `column_limits`, and it has to sit inside the column's CHECK
+
+A composer or numeric field whose column carries a CHECK is one edit away from a
+raw postgres error the runner cannot act on — a `23514` naming a constraint and
+no field, or a `22003` when the column's `numeric(p, s)` precision is the
+binding ceiling. Four fields were in that state when the class was swept
+([decisions § 792](decisions.md)).
+
+- **State the bound once per client**, in `apps/web/src/lib/core/column_limits.ts`
+  and `apps/mobile_android/lib/column_limits.dart`, keyed by
+  `<table>.<column>`. The key is the locator: `check_shared_constants.mjs`
+  splits it, resolves that column's live CHECKs by replaying every migration,
+  intersects them with the precision ceiling, and proves the client's bound sits
+  inside. Nothing restates a number the database owns.
+- **Stricter than the column is fine; looser is the bug.** The comparison is
+  containment, not equality — a club post capped at 1200 against a 4096 column
+  is a product decision. What is not fine is the two clients disagreeing, which
+  the guard checks separately: a stricter phone silently truncates what the web
+  accepted.
+- **`min` / `max` on a web input are only real inside a form.** A card that
+  saves from a button's `onclick` never runs the browser's constraint
+  validation, so the attributes are decoration and the gate has to be in the
+  code (issue #677, and § 792 again). Mobile has no native validation at all.
+- **A bound is stated in the unit the field is TYPED in.** A weight column is
+  kilograms and the field may be pounds, so convert — rounding the floor UP and
+  the ceiling DOWN, or the range advertises a value its own gate refuses.
+
 ## Feature gates — one parser, and a define a release build can actually read
 
 Every fail-closed feature gate on either client parses its env string through the

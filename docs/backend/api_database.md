@@ -1011,7 +1011,7 @@ create table body_metrics (
 -- index (user_id, recorded_at desc); RLS: owner-only for all four commands.
 ```
 
-RLS + range CHECK + cascade-delete + the owner-only `height_cm` grant are pinned by `body_metrics_rls_test.sql`.
+RLS + range CHECK + cascade-delete + the owner-only `height_cm` grant are pinned by `body_metrics_rls_test.sql`. The client-side bound both platforms put on the field — narrower than the column, and stated in the unit the runner types in — lives in `core/column_limits.ts` / `column_limits.dart`, and `scripts/check_shared_constants.mjs` proves it sits inside this CHECK and inside `numeric(5,2)` ([decisions § 792](../architecture/decisions.md)). Same for `user_profiles.height_cm` and `checkpoint_crossings.body_weight_kg`.
 
 #### `gym_routines` / `gym_routine_exercises` / `gym_routine_sets`
 
