@@ -28,6 +28,7 @@ import {
 	parseNearbyCase,
 	parseNumberList,
 	parseStringList,
+	parseWhitespaceClass,
 } from './check_shared_constants.mjs';
 
 /** @param {Record<string, string>} files */
@@ -171,6 +172,38 @@ test('a Dart list written with an explicit type argument is read like the TS one
 	const dart = "const List<String> kMime = <String>[\n  'image/jpeg',\n  'image/png',\n];";
 	assert.deepEqual(parseStringList(ts, 'MIME'), ['image/jpeg', 'image/png']);
 	assert.deepEqual(parseStringList(dart, 'kMime'), ['image/jpeg', 'image/png']);
+});
+
+// The class has three spellings - a JS regex literal, a Dart RegExp source
+// string (backslashes doubled), and a Postgres ARE inside a SQL literal - and
+// the registered value is the SET OF CODE POINTS behind them. Reading all
+// three with one parser is what makes "the three rails agree" a property of
+// the parse rather than of three regexes that could drift the way their
+// subjects can.
+test('the exercise whitespace class is read the same way from JS, Dart and SQL', () => {
+	const ts = 'const EXERCISE_WS =\n\t/[\\u0009-\\u000b\\u00a0]+/g;';
+	const dart = "final RegExp kExerciseWhitespace = RegExp(\n  '[\\\\u0009-\\\\u000b\\\\u00a0]+',\n);";
+	const sql = "as $$ select btrim(regexp_replace(lower(p_name), '[\\u0009-\\u000b\\u00a0]+', ' ', 'g'), ' '); $$";
+	const expected = ['U+0009', 'U+000A', 'U+000B', 'U+00A0'];
+	assert.deepEqual(parseWhitespaceClass(ts, 'EXERCISE_WS ='), expected);
+	assert.deepEqual(parseWhitespaceClass(dart, 'kExerciseWhitespace ='), expected);
+	assert.deepEqual(parseWhitespaceClass(sql, 'regexp_replace'), expected);
+});
+
+// A range and the code points it covers are the same set. If the parser
+// compared spellings, rewriting one rail's range as separate escapes would
+// read as a disagreement and a rail quietly dropping a code point out of a
+// range would not.
+test('a range expands, so two spellings of one set compare equal', () => {
+	const ranged = '/[\\u2000-\\u2003]+/g';
+	const spelled = '/[\\u2000\\u2001\\u2002\\u2003]+/g';
+	assert.deepEqual(parseWhitespaceClass(ranged, '/['), parseWhitespaceClass(spelled, '/['));
+	assert.deepEqual(parseWhitespaceClass(ranged, '/['), ['U+2000', 'U+2001', 'U+2002', 'U+2003']);
+});
+
+test('a whitespace class whose anchor moved reads as no values, which the caller reports', () => {
+	assert.deepEqual(parseWhitespaceClass('/[\\u0009]+/g', 'RENAMED ='), []);
+	assert.deepEqual(parseWhitespaceClass('const RENAMED = 3;', 'RENAMED ='), []);
 });
 
 test('a named integer is read from its declaration in Dart and in Kotlin', () => {

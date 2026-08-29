@@ -316,6 +316,44 @@ function rateLimitSqlSites(ctx) {
 	return [{ key: 'buckets', where: 'live rate-limit call sites in the migrations', values: [...buckets] }];
 }
 
+// ── Entry: the exercise-name whitespace class ──────────────────────
+
+// The class is a character class on all three rails — a JS regex literal, a
+// Dart RegExp source string (which doubles every backslash), and a Postgres
+// ARE inside a SQL string literal — so one parser reads all three once the
+// Dart doubling is collapsed. Ranges are EXPANDED, because the registered
+// value is the set of code points and not its spelling: `\u2000-\u200a` on one
+// rail and eleven separate escapes on another mean the same thing and must
+// compare equal, while a rail that quietly drops U+2007 must not.
+//
+// The SQL rail is written with code-point escapes rather than `\s` for a
+// reason this guard cannot check and the ADR records (decisions § 790): `\s`
+// past ASCII is `[[:space:]]`, whose membership is the database's locale
+// provider's opinion, so the old expression's answer moved between two
+// deployments running the same migration set.
+/** @param {string} src @param {string} anchor @returns {string[]} */
+export function parseWhitespaceClass(src, anchor) {
+	const at = src.indexOf(anchor);
+	if (at < 0) return [];
+	const open = src.indexOf('[', at);
+	const close = src.indexOf(']', open);
+	if (open < 0 || close < 0) return [];
+	const body = src.slice(open + 1, close).replace(/\\\\/g, '\\');
+	/** @type {number[]} */
+	const out = [];
+	const token = /\\u([0-9a-f]{4})(?:-\\u([0-9a-f]{4}))?/gi;
+	/** @type {RegExpExecArray | null} */
+	let m;
+	while ((m = token.exec(body)) !== null) {
+		const lo = parseInt(m[1], 16);
+		const hi = m[2] === undefined ? lo : parseInt(m[2], 16);
+		if (hi < lo || hi - lo > 0x400) return [];
+		for (let cp = lo; cp <= hi; cp++) out.push(cp);
+	}
+	return [...new Set(out)]
+		.sort((a, b) => a - b)
+		.map((cp) => `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`);
+}
 // ── The registry ───────────────────────────────────────────────────────────
 
 /** @type {readonly Entry[]} */
@@ -502,6 +540,59 @@ export const REGISTRY = [
 						values: parseNamedInt(ctx.read('apps/mobile_android/lib/wear_routes_bridge.dart'), 'kMaxRoutesPerPush'),
 					},
 				],
+			},
+		],
+	},
+	{
+		name: 'exercise-name whitespace class',
+		why:
+			'The exercise grouping key is derived on three rails and PERSISTED by ' +
+			'the clients as gym_routine_exercises.exercise_key and ' +
+			'exercises.name_key, while four SQL RPCs re-derive it from ' +
+			'gym_sets.exercise_name at read time. A name one rail folds and another ' +
+			'does not splits one exercise into two buckets: the local PR tracker ' +
+			'says PR where gym_workout_summaries.is_pr says no, and ' +
+			'gym_exercise_set_history returns an empty history for a lift that ' +
+			'has one. Nothing rejects either row.',
+		match: 'all',
+		compare: 'set',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/gym/gym_prs.ts)',
+				sites: (ctx) => [
+					{
+						key: 'whitespace',
+						where: 'EXERCISE_WS',
+						values: parseWhitespaceClass(ctx.read('apps/web/src/lib/gym/gym_prs.ts'), 'EXERCISE_WS ='),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				sites: (ctx) => [
+					{
+						key: 'whitespace',
+						where: 'kExerciseWhitespace',
+						values: parseWhitespaceClass(
+							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							'kExerciseWhitespace =',
+						),
+					},
+				],
+			},
+			{
+				label: 'sql (normalise_exercise_name)',
+				sites: (ctx) => {
+					const fn = ctx.sql.live.get('normalise_exercise_name');
+					if (!fn) return [];
+					return [
+						{
+							key: 'whitespace',
+							where: `normalise_exercise_name() in ${fn.file}`,
+							values: parseWhitespaceClass(fn.sql, 'regexp_replace'),
+						},
+					];
+				},
 			},
 		],
 	},

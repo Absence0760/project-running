@@ -61,19 +61,35 @@ export function normaliseExerciseName(name: string): string {
 	return name.replace(EXERCISE_WS, ' ').trim().toLowerCase().replace(/ +/g, ' ');
 }
 
-/// The whitespace class both platforms fold, spelled out rather than left to
-/// each runtime's default.
+/// The whitespace class every rail folds, spelled out by code point rather
+/// than left to a runtime's default.
 ///
-/// This value is PERSISTED as `gym_routine_exercises.exercise_key`, so web and
-/// mobile must derive the identical key — otherwise one exercise buckets into
-/// two PRs depending on which platform logged it. Dart's `String.trim()`
-/// strips every Unicode `White_Space` code point, including U+0085 (NEL);
-/// JS's `trim()` and `\s` do not. A name carrying one keyed as `bench` on
-/// mobile and `bench\u0085` on web. Naming the set on both sides removes the
-/// dependency on that difference. Mirrors `kExerciseWhitespace` in
-/// `gym_prs.dart`.
+/// This value is PERSISTED as `gym_routine_exercises.exercise_key` and
+/// `exercises.name_key`, and four SQL RPCs re-derive it from
+/// `gym_sets.exercise_name` at read time, so all three rails must produce an
+/// identical key or one exercise buckets as two: the local PR tracker says PR
+/// where `gym_workout_summaries.is_pr` says no, and
+/// `gym_exercise_set_history(p_name)` returns an empty history for a lift that
+/// has one.
+///
+/// Naming the set is what removes the dependency on each runtime's idea of
+/// whitespace, and the three ideas genuinely differ. Dart's `String.trim()`
+/// strips every Unicode `White_Space` code point including U+0085 (NEL) where
+/// JS's `trim()` and `\s` do not. Postgres is worse than either: `btrim(text)`
+/// with no second argument strips U+0020 ALONE, and `\s` is `[[:space:]]`,
+/// whose membership past ASCII is decided by the database's locale provider —
+/// measured on PG 17.6, the ICU provider folds U+00A0 / U+2007 / U+202F /
+/// U+001C-U+001F and the libc `en_US.utf8` provider folds none of them. A
+/// persisted key cannot be a function of the server's collation.
+///
+/// The class is Unicode `White_Space` plus U+FEFF, which is not White_Space but
+/// is invisible and must not split a bucket. U+001C-U+001F are deliberately
+/// absent: they are control characters, not spaces, and Postgres folding them
+/// under one provider was a divergence to close, not a rule to copy. The SQL
+/// mirror is `public.normalise_exercise_name` (migration 20270623000001);
+/// `scripts/check_shared_constants.mjs` compares all three. decisions § 790.
 const EXERCISE_WS =
-	/[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+/g;
+	/[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+/g;
 
 function round1(n: number): number {
 	return Math.round(n * 10) / 10;

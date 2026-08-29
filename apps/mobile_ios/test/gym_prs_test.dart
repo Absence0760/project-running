@@ -173,4 +173,30 @@ void main() {
     expect(normaliseExerciseName('\u00a0Bench\u2003Press\u2028'), 'bench press');
     expect(normaliseExerciseName('  Bench   press '), 'bench press');
   });
+
+  test('the whitespace class folds what the SQL rail folds, and nothing more',
+      () {
+    // The key is derived on three rails and PERSISTED, so a name the server
+    // buckets differently from the clients splits one exercise into two: the
+    // local PR tracker says PR where gym_workout_summaries.is_pr says no.
+    // Every case here disagreed before migration 20270623000001
+    // (decisions § 790).
+    //
+    // btrim(text) strips U+0020 alone, so any other edge whitespace survived
+    // the trim and the \s+ pass then turned it into a leading/trailing SPACE.
+    expect(normaliseExerciseName('\u0009Bench Press'), 'bench press');
+    expect(normaliseExerciseName('Bench Press\u000a'), 'bench press');
+    // Postgres \s past ASCII is the locale provider's opinion, not Unicode's:
+    // the ICU provider folds NBSP and the libc one does not. Neither folds
+    // U+FEFF, which is invisible and must not split a bucket.
+    expect(normaliseExerciseName('Bench\u00a0Press'), 'bench press');
+    expect(normaliseExerciseName('Bench\ufeffPress'), 'bench press');
+    // A name that is nothing but whitespace is not an exercise. The server's
+    // btrim(coalesce(name,'')) <> '' filter kept a lone tab as an exercise
+    // named " "; both clients always dropped it.
+    expect(normaliseExerciseName('\u0009\u00a0'), '');
+    // The ICU provider also folds U+001C-U+001F. Those are control characters,
+    // not spaces — the clients must NOT start folding them to match.
+    expect(normaliseExerciseName('Bench\u001cPress'), 'bench\u001cpress');
+  });
 }
