@@ -282,6 +282,20 @@ Deno.test('count-returning drains request an exact row count', () => {
 Deno.test('handler uses the shared lib.ts helpers (no duplicated URL constants)', () => {
 	// If the URL constants are inlined here, a future audit pass
 	// will silently miss a URL-string change in lib.ts.
+	//
+	// Each `!` below is also satisfied by a handler that no longer calls the
+	// third party at all, which is the more likely regression of the two — so
+	// the positive is asserted first: the shared helper is actually used.
+	for (
+		const helper of [
+			'STRAVA_DEAUTHORIZE_URL',
+			'revenueCatSubscriberUrl(',
+			'stripeAccountUrl(',
+			'FCM_BATCH_REMOVE_URL',
+		]
+	) {
+		assert(SRC.includes(helper), `the handler no longer uses ${helper} from ./lib.ts`);
+	}
 	assert(
 		!/['"]https:\/\/www\.strava\.com\/oauth\/deauthorize['"]/.test(SRC),
 		'handler must use STRAVA_DEAUTHORIZE_URL from ./lib.ts, not an inline string',

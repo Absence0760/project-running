@@ -1,5 +1,4 @@
 import { sveltekit } from "@sveltejs/kit/vite";
-import Icons from "unplugin-icons/vite";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
 import { checkEnvIsolation, formatGuardError } from "./scripts/env_isolation.mjs";
@@ -30,9 +29,5 @@ export default defineConfig({
 	plugins: [
 		envIsolationGuard(),
 		sveltekit(),
-		Icons({
-			autoInstall: true,
-			compiler: "svelte",
-		}),
 	],
 });

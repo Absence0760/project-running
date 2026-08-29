@@ -373,14 +373,15 @@ void main() {
     });
 
     test('default maxRoutes is the published constant', () {
-      expect(WearRoutesBridge.kMaxRoutesPerPush, 50,
-          reason: 'changing the cap is a wire-format-adjacent decision; '
-              'update the watch DataLayer 100 KB budget calc if you change it');
+      expect(WearRoutesBridge.kMaxRoutesPerPush, 30,
+          reason: 'the cap is the watch store\'s LocalRouteStore.MAX_ROUTES; '
+              'pushing past it shows routes the watch drops on the next '
+              'restart. scripts/check_shared_constants.mjs reads both rails');
       final routes = [
         for (var i = 0; i < 60; i++) _makeRoute(id: 'r-$i', isStarred: true),
       ];
       final picked = WearRoutesBridge.pickRoutesForWatchPush(routes);
-      expect(picked, hasLength(50));
+      expect(picked, hasLength(30));
     });
 
     test('mixed starred + plain over the cap honours both filters', () {
@@ -872,7 +873,7 @@ void main() {
       final payload = jsonDecode(
         channel.pushCalls.single['routes_json'] as String,
       ) as List;
-      expect(payload, hasLength(50));
+      expect(payload, hasLength(WearRoutesBridge.kMaxRoutesPerPush));
     });
 
     test('detach mid-burst stops further pushes', () async {

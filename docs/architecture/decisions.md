@@ -10880,3 +10880,225 @@ Neither was the right answer, and the guard's own framing is why. **A replacemen
 **No import-failure reason was added, and that is deliberate.** `import_failures` entries name an activity that did **not** import and exist to tell a runner whether re-running is worth it. A session with no steps has imported fine, and cycling sessions legitimately have none — routing either into the report would fill it with entries no one can act on, and the route path already reports the one Health Connect failure that is genuinely indistinguishable from an absence (`readFailure`).
 
 **Verification.** `dart analyze` on the changed files exits **0** — four `info` diagnostics, all of them the acknowledged `always_use_package_imports` / `avoid_relative_lib_imports` debt the twin convention creates, and no `warning` or `error`. `flutter test` over the six Health Connect and import specs: **72 passed, 0 failed**, of which 7 are the new `health_connect_steps_test.dart` (a foot-powered session, an unreadable count, zero and negative, an impossible cadence beside a plausible one at the same duration, a zero-length session, the `cycle` exclusion, and the unknown-activity-type pin). `diff -r` is clean across `apps/mobile_android/{lib,test}` ↔ `apps/mobile_ios/{lib,test}`. `check_parity_ios_column.mjs` and `check_parity_matrix.dart` both exit 0 (337 rows, no issues); no parity cell changed, only the Notes. **Nothing was run against a device, and no claim here rests on one** — the route and step paths are host-tested against fixtures only, both grants and the `SecurityException` question above remain device-gated, and the follow-up says exactly what must be checked.
+## 784. The web residue was 15 strings on paper and 42 in the file, its Brazilian reference was speaking tu in the one block that mattered, and the same derivation had glued nineteen sentences shut and cut three off mid-word
+
+**Decided 2026-08-28.** [§ 782](#782) closed the phone's half of the mixed-register defect and filed web's, measuring `locales/pt-PT.ts` at "a **15-string tu residue** — 8 finite verbs, 6 enclitics, one `ti`". The possessive half of that filing held exactly: **335 singular `seu`/`sua` as filed, 458 counting the plurals, and zero of the `teu` family**, so aligning the catalogue was a consistency repair and not a native-speaker call, as § 782 argued. **The residue was 42 strings**, and the shortfall was not one axis being undercounted but three axes not being counted at all.
+
+**What the filed marker list could not see.** § 782's token list was built from what `app_pt.arb` happened to contain, so it carries `podes`, `estás`, `vais`, `alteras`, `tiveres` and stops. Web's catalogue also spends `usas`, `digitas` (twice), `corres`, `participas` and `registares`, none of them on that list; and it carries a **second-person preterite** the phone had none of — `Ganhaste`, `Completaste`, `confirmaste`, `selecionaste`. That last one is a suffix rather than a vocabulary, so it is scanned as `-aste`/`-este`/`-iste` with the nine words that end the same way and are not verbs in that tense named beside it (`este`, `deste`, `neste`, `oeste`, `leste`, `existe`, `arraste`, `desgaste`, `registe`). Unlike the exemptions further down that list, those nine cannot rot: `este` is a demonstrative whatever copy we ship. Four more strings carry the **proclitic** `te` ("Como devemos te chamar?"), which the phone's guard never had to consider because it only ever banned the enclitic.
+
+**The proclitic is the one marker scanned in `pt-PT` alone, and the reason is recorded rather than assumed.** `pt-BR.ts` spends it on five strings that read as ordinary Brazilian ("Outros podem te encontrar por ele"), so a shared list carrying it would accuse those five instead of reporting a defect. European `você` has no such tolerance — it takes `o`/`a`/`lhe` — so in `pt-PT.ts` the same word is the mixed register the guard is about.
+
+**Two markers were excluded on measurement, and web has one more trap than the phone did.** § 782 excluded `precisas` because it is also the feminine plural of `preciso` and `zonas precisas` is live in both catalogues; the filing asked whether web had the same trap. It does — `runDetail.hrDisclaimerSuffix` — **and a second nobody had named**: `aceitas` is `aceitar` in the tu form and the feminine plural participle, and `settingsAccount.aiConsentUpdatedToast` reads "Informações de IA atualizadas aceitas" in both. A list carrying either accuses the one string that is correct in both. Bare `tu` stays out for § 782's reason, unchanged: `clubEvent.youTag` is `(tu)` and `messages.youPrefix` is `Tu: ` by § 760's decision.
+
+**The reference was not clean, and the blindness § 782 predicted was live rather than theoretical.** `pt-BR.ts` addressed its reader as tu in **13 strings, every one under `coachPage.*`** — the consent disclosure, which is the most legally-loaded copy we render and was reading in two registers inside one paragraph ("por padrão, eles não treinam **seus** modelos … o **teu** direito de retirada"). Four of those strings are **byte-identical to pt-PT's**, so the derived imperative scan saw no difference and reported nothing: `coachPage.guidedSub` ("visualiza aqui, corre no telemóvel") and `mobileCtaAria`/`mobileCtaTitle` ("Corre estas no telemóvel") are tu imperatives that only became visible **after** the Brazilian side was fixed, at which point the scan named all three. That is the measured form of § 782's claim that a tu marker in the reference makes the derived half blind rather than merely wrong. The brief for this change said to leave `pt-BR.ts` alone because `teu`/`tua` is correct there; measurement says otherwise on both counts — Brazilian UI register is `você` + `seu`/`sua`, the rest of that catalogue is unanimous on it at 452 `seu`/`sua` against those 6, and the block could not be left as the reference for a scan that depends on it. Fixed as Brazilian `você`, with the Brazilian vocabulary (`gênero`, `por padrão`, `celular`, `recursos`) untouched.
+
+**The derived scan is symmetric, and reading it the other way found a defect nobody had filed.** Nine pt-PT words differ from their Brazilian twin by an `a`/`e` ending on a shared stem. Five are the tu imperative the scan exists for (`Importa` ×3, `Ativa`, `descarta`). **Four are the same rule misfiring in the opposite direction** — a `você` imperative ending applied to a third-person present indicative, which is not a register error but broken Portuguese: "adicione um contacto por e-mail, ele **confirme** e passa a receber", "Isto **adicione** ou sobrescreve corridas", "Os marcadores que **adicione** aqui", "Registar uma porção **adicione** uma única entrada". Keeping the swap symmetric costs nothing and is what caught them. The four remaining pairs are `equipa`/`equipe` (*team*), which is a noun and goes in `VARIANT_WORD_PAIRS`; `este`/`esta` and `deste`/`desta`, which the phone's guard carries, do not arise here.
+
+**Two further classes fell out of the measurement, both closed sets, both worse to leave than to fix.** § 755 derived this catalogue by walking `pt-BR.ts` word by word, and a word-for-word walk does not repair what a word governs. **(1) Assembled sentences.** A fragment sitting after a link or a `<strong>` carries its own leading space; **19 of them lost it and were sentence-cased in its place**, so the AI-consent gate renders "Clique em **Eu consinto**Para continuar." and the sign-in prompt "Inicie sessão **aqui**Para dar kudos e comentar." **Three more lost their last word entirely** when the subject-pronoun elision deleted `você` and left the trailing space behind: `onboarding.step4Title` reads "Um pouco sobre ", `coachingAthlete.assignedByYou` "Atribuído por ", `routeDetail.sendDm.relationFollowsYou` "Segue ". **(2) Agreement.** A substitution that changes the noun's gender left the article behind — "Manter **a** ecrã ligada" (`ecrã` is masculine where `tela` is feminine), "ocultado **dos** partilhas públicos" ×5 (`partilha` is feminine where `compartilhamento` is masculine).
+
+**Both new guards measure pt-PT against pt-BR, not against English, and that is the whole reason they need no exemption list.** An en-anchored spacing rule fails the moment it meets German (a fragment attaching with a comma needs no space: 7 hits) or Japanese (which sets no word spaces at all: 16), so it would ship an allowlist. The two Portuguese catalogues share a syntax and one is a derivation of the other, so an edge that differs is an artifact and never a translation choice — 22 hits, 22 real. The agreement guard scans determiners only, because they are a closed class; an adjective would need morphology a locale guard has no business carrying, and in all seven cases the determiner is already immediately before the noun.
+
+**One thing measured and deliberately left.** The same 19 fragments were also sentence-cased, and a case rule would catch that — but `pt-PT.ts` differs from Brazilian on the **first letter of 248 values**, nearly all standalone labels where either case is defensible. A guard firing on 248 strings to reach 19 would ship as an allowlist of 248, which is not a decision. The whitespace edge is the unambiguous part; the case class is filed.
+
+**Verification.** 71 strings rewritten in `pt-PT.ts` (42 register, 22 fragment, 7 agreement) and 13 in `pt-BR.ts`; key sets proved identical before and after on both (5,069 each) and placeholder sets identical on every changed string. `tsx --test` over the web unit suite: **4,371 passed, 0 failed** (4,369 before the two new guards). `npm run check`: **2,441 files, 0 errors**, 5 warnings, all pre-existing in `PlanEditor.svelte`. **Every guard proved to fail**, each naming its offenders and nothing else: against the pre-fix `pt-PT.ts` the register half names 32 offences over 31 strings and the derived half 9; against the pre-fix `pt-BR.ts` — with pt-PT already fixed — the register half names 13 and the derived half names the 4 shared imperatives that had been invisible; the fragment guard names all 22 and the agreement guard all 7; planting one `tua` into `challenges.standingTitle` and one `Tenta` into `races.submitFailed` fails each half naming exactly that key; and adding a `tts` prefix to `REGISTER_EXEMPT_PREFIXES` fails the liveness test, which is the point of it being empty.
+
+**What this does not claim.** The copy is model-authored and not natively reviewed, as § 755's, § 760's and § 782's were; the native-review box already names this catalogue and still does. The derived imperative scan matches on a shared stem, so it catches the regular conjugations and **not** a stem-changing irregular — `Mantém` against `Mantenha` shares no stem — which is § 782's limit unchanged; the nine sentence-initial irregulars in this catalogue were read by hand and are all indicative. And a tu form present in *both* catalogues is still invisible to the derived half by construction; the token half is what covers it, which is exactly how the `coachPage.*` block was found. No Playwright, no Flutter, no build was run — this round's constraints did not allow them, and no claim above rests on one.
+
+## 785. The 10x was measured for a value import; a type-only one costs 230 bytes, and what the untyped bag had been hiding was that a completed Checkout Session is not a payment
+
+**Decided 2026-08-28, issue #789.** [§ 765](#765) bound the Stripe SDK's declarations for the four OUTBOUND payment functions and filed the fifth — `stripe-events-webhook`, the inbound half — as deliberately left hand-typed, on the grounds that typing it "means putting `?target=deno` in its graph, which § 699 measured at 228 KB -> 2.4 MB per eszip". **That reasoning priced the wrong import.** § 699's figure is a VALUE import of a runtime module; a reader needs only the declarations, and a type-only import is erased before anything is bundled. The premise was never tested, so it is tested here first.
+
+**Measured with `edge-runtime bundle`, the tool § 699 used, on this entrypoint, three ways.** No Stripe import: **761,148 bytes**. `import type Stripe from '../_shared/stripe.ts'` plus four type aliases using it: **761,378** — **+230 bytes**, which is the source text of the lines themselves, since the eszip stores each module's source. A value import of the same module: **3,373,077** — **+2.61 MB, 4.43x**. The shipped eszip carries **zero** `esm.sh/stripe` module references and **zero** of the `deno.land/std@0.177.1` node-polyfill tree, against the value variant's 6 and 131. So the entry's cost claim was off by four orders of magnitude for the import that was actually needed, and the deferral it justified was not a trade-off at all. The shipped tree measures **782,441 bytes** — +21,293 on base, all of it the readers, the guards' prose and the new handling, none of it Stripe.
+
+**The second half of § 699's argument — that a type-only import re-arms the offline worker boot — is true in general and void here, and that was measured too rather than assumed.** `deno info` on `_shared/stripe.ts` reports a bare `node:http` in its graph, which is exactly the specifier `offline_worker_boot_guard.test.ts` exists to keep off the probe path. But `stripe-events-webhook` already imports `@supabase/supabase-js` at the **default** esm.sh target and therefore already carries `node:buffer` and `node:process`: it is one of the seventeen functions § 699 deliberately left un-converted, and it could not boot offline before this change either. No property is lost. The guard's own `PROBE_ENTRY` is `clip-public-track`, which this does not touch.
+
+**The shape is § 765's, not a third pattern.** A narrow source interface per object — three fields for a Checkout Session, four for a Charge, four for an Account — each instantiated through `type AssertAssignable<From extends To, To> = From;` against `Stripe.Checkout.Session` / `Stripe.Charge` / `Stripe.Account`. It is not the "hand-maintained approximation of a 450-file SDK" § 765 refused: the compiler re-derives it from the SDK on every run of the `deno check` lane, and all three assertions were proved live rather than assumed — renaming `amount_refunded` in the Charge shape reports `TS2344: Type 'Charge' does not satisfy the constraint 'ChargeSource'`, and dropping `'unpaid'` from the payment-status union reports `Type 'PaymentStatus' is not assignable`. `STRIPE_EVENT` carries the six dispatched event types `as const satisfies Record<string, Stripe.Event.Type>`, so a mistyped comparison string fails the typecheck; injecting `'charge.refunded.completed'` reports `TS2820` and, instructively, suggests `'charge.refund.updated'`. The runtime narrowing is still a **check**, never a cast — the body is HMAC-verified, so it is from Stripe, but its shape is whatever arrived.
+
+**The defect the typing was for.** `checkout.session.completed` is not a payment. Stripe fires it when the Session completes, and for a delayed-notification method (SEPA debit, Bacs, boleto, OXXO, a bank redirect) the money is still in flight: `payment_status` is `unpaid` and the outcome lands days later as `checkout.session.async_payment_succeeded` or `_failed`. The webhook marked the order `paid`, seated the attendee and set the donation's `paid_at` regardless, and handled neither async event — so a payment that never arrived left a paid order holding a seat, permanently, with no corrective event and nothing sweeping a lapsed reservation. It is reachable by configuration alone: `buildCheckoutSessionParams` and its donation twin declare no `payment_method_types`, so the live set is whatever the account has enabled in its dashboard, and no code in this repo would notice that checkbox moving. Both confirm arms now gate on `isPaymentSettled` **before any write** — the CAS is `pending -> paid` and a write that lands first has already spent the only transition the real outcome could have used — and both async types are dispatched. Gating without dispatching would have been the worse half: a payment that did settle would then leave the order `pending` forever. Neither transition table has an arm out of `paid`, because with the gate in front no paid order is waiting on an async outcome and a `paid -> failed` arm would owe a seat release the table cannot perform.
+
+**Three more, each smaller and each the same class.** A `payment_intent` serialised in its EXPANDED form — the SDK declares `string | Stripe.PaymentIntent | null`, and a webhook endpoint can be configured to expand it — read as null under `typeof x === 'string'`, and null on the refund arm is answered `200 missing_payment_intent`: Stripe records the refund as delivered, the order keeps its seat, no retry comes. An empty-string metadata value passed `typeof x === 'string'` and reached `.eq('id', '')`, which PostgREST answers 22P02 — a 500, a released dedupe row, and a retry that fails identically forever. And `handleExpired` dropped its read error, so a transient database failure read as `skipped: unknown_order` with a 200; both **donation** reads had been hardened against precisely this and the order twin was left, which is why the guard now enumerates every read that drops its error with the one best-effort capacity read exempted by name.
+
+**Verification.** `deno check` over the whole tree — the `edge-functions` lane's own `find` expression — exits **0**, as it did at base; the four injected-error probes above each fail it by name. `deno test --no-check --allow-read --allow-env supabase/functions/`: **596 passed, 0 failed, 23 ignored**, against a **581/0/23** baseline at `82062cffe`; the fifteen added are the typed readers, the settlement gate, the async transitions and four source guards. **Every new assertion was proved to fail against the code it fixes rather than assumed to** — the three async transitions run against `HEAD`'s `lib.ts` in a scratch tree return `null` where the shipped suite expects `paid` / `failed`; the settlement-gate guard finds no `isPaymentSettled` in either confirm handler at `HEAD`, evaluated against `HEAD`'s own function delimiters so it cannot fail for the wrong reason; the dropped-read guard finds `['event', 'order']` where it now requires `['event']`; and the two new wiring guards were each run against a deliberately broken tree (`import type` demoted to `import`, and a handler parameter put back to `Record<string, unknown>`).
+
+**What this does not claim.** Nothing was run against Stripe, in test mode or otherwise — the evidence is the type-checker, the pure-helper suite, the source guards and `edge-runtime bundle`. The two async event types have to be **subscribed on the Stripe endpoint**; a dashboard that does not list them hears no outcome at all, which is a deploy-checklist item the docs now carry rather than something code can enforce. Two fixtures in `_shared/handler_envelope.test.ts` had to move with the gate — the donation `checkout.session.completed` payload carried no `payment_status`, and the not-paid arm now reports the state it resolved instead of `canceled: true`, which would be a lie for an `async_payment_failed` — and **that lane was not executed**: it needs the local Supabase stack, which another slice held this round. The edits are a field every real Stripe payload carries and an assertion tracking a renamed response key; nothing else in the file moved. And one gap is filed rather than closed: an asynchronous refund that FAILS arrives as `charge.refund.updated` with `status: 'failed'` and `amount_refunded` walked back, which this webhook does not handle — the order stays `refunded` with its seat already released and possibly re-promoted to a waitlisted runner. That needs a seat-reinstatement decision, not a handler.
+
+## 786. The dead-plugin filing was right, three more of the same class sat beside it, and the guard that would have caught them all reads the icon set rather than the plugin
+
+`docs/product/followups.md` filed it exactly: *"`unplugin-icons` is configured for `apps/web` with `autoInstall: true` and nothing imports it."* Verified independently and true in every particular. No `~icons/` specifier exists in any extension the build compiles — `.ts`, `.svelte`, `.svelte.ts`, `.md`, `.css`, generated files included — and the only two occurrences of the name in `apps/web/src` are a row in `LicenseList.svelte` and its mirror in `licenses.spec.ts`, both strings. The plugin was registered, resolved nothing, and contributed nothing: the production build after deletion contains no trace of `unplugin`, `iconify` or the `normalize.css` package, and the asset population is the same 33 files / 266 KB, largest 74 KB, that [§ 780](#780) left with an empty `ASSET_EXEMPTIONS`.
+
+**`autoInstall: true` is why leaving it was worse than idle, and the tree shows what that option actually was.** Deleting the two packages took **21 entries out of the npm tree (423 → 402)**, and the transitives are the mechanism itself: `@antfu/install-pkg`, `package-manager-detector`, `tinyexec`, `local-pkg`. A build reaching a `~icons/` miss would have run a package manager against the registry and installed whatever it found, with no lockfile entry and no integrity hash — the same species of hazard `check_workflow_binaries.mjs` refuses for `npx` ([§ 764](#764)).
+
+**Three more of the class sat beside it, and the filing had no reason to name them.** `normalize.css` was declared in the scaffold commit `943f6af6e` and imported by nothing, ever — not `app.css`, not `+layout.svelte`, not any component — while `apps/web/CLAUDE.md` and `apps/web/README.md` both listed it as the styling stack for the entire life of the repo. Root `package.json` carried `html-to-image`, which only `apps/web` imports and only `apps/web` needs to declare; `10b5ec519` added it in both manifests at once, which is what `npm install <pkg>` from a workspace root leaves behind. And `apps/web/vercel.json` configured a deploy platform [§ 53](#53) decided against before the first deploy, with a `buildCommand` that is not this repo's build command; nothing reads it.
+
+**What separates dead from indirectly-used is the part worth writing down, because a wrong answer here deletes a working build.** `material-symbols` is imported by nothing and is load-bearing: `scripts/web_icon_font.mjs` reads the upstream `.woff2` straight out of `node_modules` and subsets it. `@types/geojson` is reached as `geojson`, `@types/aws-lambda` as `aws-lambda`, `@types/node` only through `node:`-prefixed specifiers and a tsconfig `types` array. `tsx`, `typescript` and `svelte-check` are binaries whose names do not match their packages. Root `svelte` is a hoist pin with a rationale key already beside it ([`_svelte_root_pin_rationale`](../../package.json)). Every one of those looks identical to the four deletions from the manifest alone.
+
+**The guard therefore derives, and what it cannot derive it records falsifiably.** `scripts/check_dead_dependencies.mjs` passes a dependency that is imported, reached by a `node_modules/<p>` path, or backs a `@types` whose module is used; everything else is one of four `INDIRECT` entries. Those are not an allowlist: a binary entry fails once no `package.json` script and no workflow runs the binary, the hoist pin fails once no workspace member declares the package, and any entry naming a package no manifest declares fails as stale — the shape `PROVIDERS` uses in `check_workflow_binaries.mjs`, for the same reason.
+
+**It would have caught the filed state, but not by reading the plugin.** Run against `82062cffe`, the guard reports `unplugin-icons -> imported`, which is a true statement about `vite.config.ts` — and then fails on `@iconify-json/material-symbols`, whose only consumer was the plugin resolving it by name at build time. That is the honest limit: this guard finds a package nothing reads, not a live import wired to a plugin that serves no one. It caught this instance because a dead plugin's *payload* is dead too, and it is the payload that shows.
+
+**Two design constraints came out of the mutation proof rather than out of thinking.** `docs/` is not scanned, because ADRs quote import statements in prose and a guard reading `decisions.md` would have called all four deletions live. And comments do not count, because a commented-out import is precisely the shape dead configuration takes when someone disables it instead of deleting it — and because the guard's own first-draft fixtures named real packages, which made three of these deletions read as `imported` from a file inside `scripts/`. Both failures were observed, not predicted; the fixtures now name only packages this repo does not declare, and a source guard case pins each.
+
+**Where it runs.** The `parity-types` job in `ci.yml`, beside `check_pnpm_overrides.mjs` — a manifest-versus-reality check that reads source as text, needs no install, and costs milliseconds. Drift first, then the guard's own suite, because that suite's last case runs the guard over the committed tree and running it first would report "the tool is broken" over an ordinary dead dependency. `parity-types` is already in the `CI gate` aggregator's `needs:`, and the step prints its own `::error::` as [§ 764](#764) requires of a bundled job.
+
+**Verification.** Web unit suite **4366 passed, 0 failed**. `svelte-check` **2439 files, 0 errors**, 5 warnings, all pre-existing `state_referenced_locally` notes in `PlanEditor.svelte`, a file this change does not touch. `check:script-types`, `check:cloudfront-types`, `check:tsconfig-coverage`, `check:node-types`, `check:sw-types`, `check:e2e-types` and `test:tsconfig-coverage` all exit 0. Guard suite **24 passed**; mutation proof re-added all four deletions and the guard failed naming each one separately with the right diagnosis. One production `vite build`, 30.1 s: **code 1944/2120 KB, largest chunk 248/350 KB, six catalogues each under 100 KB, largest asset 74/100 KB across 33 assets totalling 266 KB** — § 780's figures, unregressed, exemptions still empty. Both lockfiles regenerated with `--lockfile-only` / `--package-lock-only`; `check_pnpm_overrides.mjs` confirms all six CVE pins survive and resolve, and `sync_deno_lock.mjs --check` is clean. **No Playwright ran** — five agents share this workstation — so the three rows removed from `licenses.spec.ts`'s `KNOWN_DEPS` are unexecuted; the list is iterated with no count assertion anywhere, so removing entries can only narrow what that spec asserts.
+
+## 787. The class between the two registries: a constant with more than one home, where one home is not TypeScript — four of them had already drifted
+
+[§ 641](#641) records `turn_cues` diverging in all three of its implementations
+at once and states why nothing caught it: *the pair was registered in neither
+registry, so its divergence was never detectable*. [§ 604](#604) is the rule
+that came out of it, and it covers **TS↔Dart function pairs**.
+`apps/web/scripts/check_constraint_unions.mjs` covers a second shape, **a CHECK
+constraint's value set against its narrow TS union**. This entry is about what
+sits between them: a **threshold, bucket boundary, vocabulary, size cap or
+eligibility list duplicated across a language boundary where at least one rail
+is SQL, Kotlin, Swift, Rust or Go.** The root `CLAUDE.md` already calls several
+of these "third rails" by name. The class had **no registry**, and the sweep
+found **four live divergences** in it.
+
+**What was measured.** Every rail was read and compared, never assumed; SQL was
+resolved by *replay* — the last `create or replace function` for each name
+across all 441 migrations — because the body a function has in production is
+routinely written by a migration named after something else. The two existing
+registries were measured too: `check_constraint_unions.mjs` parses **68**
+set-shaped CHECK columns out of the migrations and its `PAIRS` array claimed
+**34** of them, and its own suite asserts only `checks.size >= PAIRS.length`, so
+nothing ever said the array was complete. Six named "third rails" were checked
+individually: `nearby`'s buckets, `badges`' tier ladders, the rate-limit bucket
+vocabulary, `ai_disclosure`'s version ladder, `challenge_goal`'s ceiling and
+`strava_sync_result`'s lookback maximum. The last three are genuinely guarded —
+each has a mirror suite that *parses* the other rail — and the first three were
+guarded by nothing at all, though all three happen to agree today.
+
+**Divergence 1 — `personal_records()` lost `'watch'` in a hardening pass, and
+never gained `'parkrun'` / `'race'`.** `20260504_001` added `'watch'` to that
+RPC's eligible-source filter and said why: without it "the migration that fixes
+the source value would silently drop all watch-recorded runs from PB
+calculations". `20260710_001` then re-issued the function to add `set
+search_path = public` — and re-issued the **original `20260406_001` body** to do
+it, dropping `'watch'` straight back out. Nothing rejected anything; a narrower
+`in` list is valid SQL. #378's later widening to `'parkrun'` + `'race'` reached
+`refresh_personal_records_for_user` and `award_achievements_for_user` and never
+reached here, because nothing tied the three filters together. The RPC is still
+granted and still documented as staying "in place for callers that haven't
+migrated". Fixed in `20270622000001`; the vocabulary is now the `runs_source_check`
+value set at all four sites.
+
+**Divergence 2 — three photo buckets still advertise HEIC/HEIF.** [§ 557](#557)
+made the accepted image formats **be** the formats the EXIF stripper can clean,
+because an accepted-but-unstrippable upload serves a geotagged original back
+through a signed URL — "§ 33's home coordinate handed over by a different door".
+That landed on the client rails and on a guard asserting accepted ⊆ strippable
+*among the client rails*. It did not land on `run-photos` (`20260620_001`),
+`route-photos` (`20270114_001`) or `club-photos` (`20270301_001`), all written
+before it. Those three migrations exist **precisely** because "a raw
+`supabase.storage.from(...).upload(...)` call bypasses the client filter" — so
+the one door § 557 could not close from the client was the one still open.
+Narrowed in `20270622000002`; `avatars` already carried exactly the three.
+
+**Divergence 3 — the Wear OS route cap was 50 on the phone and 30 on the
+watch, and each file documented the other's number.** `LocalRouteStore.save`
+truncates to `MAX_ROUTES = 30` while `WearRoutesBridge.kMaxRoutesPerPush` was
+50, and `RunViewModel` puts the *whole* push into the live picker — so a large
+push showed routes the watch had not kept, which vanished at the next restart
+with nothing reported. The Kotlin said both inbound sources were "nominally
+capped at 30, but a phone running an older/looser bridge could push more"; the
+current bridge is the looser one. The Dart called 50 "headroom … enough that the
+bridge isn't the limiting factor". Two green unit tests transcribed the two
+different numbers, and `architecture_guards_test` named them as a paired
+constant and then checked neither value. **The phone now follows the watch**,
+which is the rail that owns the constraint — a Preferences DataStore rewritten
+whole on every save, and a 1.4-inch picker.
+
+**Divergence 4 — `club_members.status` admits `'rejected'` and the TS union did
+not.** `20261210_001` wrote the CHECK and three RLS policies read the value;
+`MembershipStatus` carried `'active' | 'pending'`, and `fetchMyClubStatuses`
+casts real rows through it. No writer produces one today — a reject-request flow
+would have been the first, written against a union that already said the value
+was impossible. Seven columns joined `PAIRS` with it, two of which carried a
+comment asserting a coverage they did not have: `RsvpStatus` said "No DB CHECK
+exists on event_attendees.status", false for the eight months since
+`20261210_001` and read as "widening the union is enough" when it also needs a
+migration, and `CoachAthleteStatus` said the guard kept it in lockstep. Both are
+now true rather than edited to be quieter. `PAIRS` is 41 of 68.
+
+**The registry is `scripts/check_shared_constants.mjs`, and it lives in the
+script.** Six entries — the run-source vocabulary, the runners-nearby buckets,
+the achievement tier ladders, the rate-limit bucket vocabulary, the photo-bucket
+MIME allowlist and the Wear route cap — spanning SQL, TypeScript, Dart and
+Kotlin. Every rail is **read from source**; nothing is transcribed, which is
+`check_watch_ble_uuids.mjs`'s design ("parses both sources rather than
+transcribing either") generalised from one table to a class. A markdown registry
+was rejected: a registry written down twice can disagree with itself — the exact
+defect § 604 records about the parity-pair list — and a markdown one could only
+be checked for self-consistency, never against the values. Anti-vacuity is
+enforced in both directions: a rail yielding no sites **and** a site yielding no
+values are each reported as the guard going blind, the second added after the
+first version of the nearby extractor silently returned an empty list and was
+about to certify agreement with it.
+
+**What was deliberately left out.** `challenge_goal`'s streak ceiling is a
+*formula* — `floor(window / one day) + 1` written three times — not a literal;
+extracting the `86400` would certify nothing about the shape around it, and its
+two mirror suites plus a pgtap test pin it. `ai_disclosure` and the Strava
+lookback maximum already have guards that parse the other rail. The GATT UUIDs
+have their own job. And the live-ping retention pair is not an equality at all:
+Postgres purges at 48 h and `RedisHub.ttl()` defaults to 24 h, deliberately —
+what had drifted there was the *documentation*, with `retention.md`,
+`sub-processors.md` and `dpia.md` all asserting the two matched, the last of them
+closing a DPIA risk item on the claim. The numbers stay; the three documents now
+state both.
+
+**Filed, not fixed.** The exercise-name normalisation key is derived by
+`regexp_replace(lower(btrim(name)), '\s+', ' ', 'g')` in seven live SQL
+functions and by an explicitly-spelled Unicode whitespace class on both clients,
+and the two disagree in two independent ways — Postgres `btrim` strips only
+U+0020, so a tab-prefixed name keeps a leading space through the collapse, and
+Postgres `\s` excludes U+00A0 and U+202F, which both clients fold by name
+*because the value is persisted* as `gym_routine_exercises.exercise_key`. The
+existing two-sided fixture pins only ASCII spacing, so nothing sees it. Changing
+it rewrites a persisted grouping key's behaviour and belongs in its own change.
+The Dart rail of the CHECK-union class is also unguarded: nineteen Dart enums
+and const lists enumerate a CHECK-constrained set, all agreeing today, and the
+root `CLAUDE.md` asserted the opposite ("Dart treats these columns as raw
+`String`") until this entry.
+
+**Verification.** `node scripts/check_shared_constants.mjs` — 6 entries, 10
+checks, exit 0; removing each of the four fixes makes it exit 1 naming both
+homes and the differing values, verified one at a time. Guard suites:
+`node --test scripts/*.test.mjs` — **449 passed, 0 failed** across 22 files
+(420 across 21 before). `node --test apps/web/scripts/check_constraint_unions.test.mjs`
+12 passed; `npm run check:check-constraints` exit 0 across 41 pairs, and exit 1
+naming `CHECK only: rejected` with the union reverted. The three migration guards
+pass over 441 migrations. `npx tsc -p tsconfig.scripts.json` exit 0;
+`actionlint` clean; `node scripts/check_ci_diagnostics.mjs` exit 0 with the new
+`parity-types` step counted among the 41 self-diagnosing steps. Mobile:
+`flutter test test/wear_routes_bridge_test.dart` **65 passed**,
+`test/architecture_guards_test.dart` **213 passed**, `dart analyze` on the
+changed files exits 0 (five `info`, all the acknowledged twin-import debt), and
+`diff -rq` is clean across `apps/mobile_android/{lib,test}` ↔
+`apps/mobile_ios/{lib,test}`. **Nothing was run against a database**: the local
+Supabase stack belongs to another session this round, so the two new migrations
+are guard-verified and source-verified only, and neither changes a signature the
+type generators read — `personal_records()` keeps its arguments and return table,
+and `storage.buckets` is not in the generated schema. Kotlin was not compiled
+here; the watch-side change is a constant's two doc comments, with the value
+itself unchanged.
+
+## 788. Twenty-one Edge Function tests passed with their subject taken away, and the four costumes they wore
+
+**Decided 2026-08-28.** [§ 741](#741) measured this class in the pgtap suite and [§ 777](#777) in the Playwright suite. Both tiers now carry a guard; the Deno Edge Function suite carried none, and its 581 green tests had never been asked whether any of them would notice their subject disappearing. **21 of the 581 would not.**
+
+**The operator is different from the other two tiers, because what hides a subject here is different.** RLS hides a row by returning none, so the pgtap operator widens the policy; a Playwright read hides a failure by producing a falsy value, so the fixture throws instead. In a Deno unit suite nothing is hidden by access control at all. The operator is therefore the bluntest honest one: every non-test module under `supabase/functions` is replaced by a **neutered twin** — same exported names, same runtime shapes, no behaviour, and no source text for a grep to read — and the whole suite runs against it. A test that still passes was testing none of them. `edge_function_neuter.mjs` builds the twin from a brace-depth scan rather than a regex, because a `}` inside `_shared/input_validation.ts`'s timestamptz regex moves the depth and depth is what separates a top-level `export` from one nested in a block.
+
+**Shape preservation is the design constraint, and it points the opposite way to intuition.** A stub that threw, or that turned an `async function` into a sync one, would make a vacuous test fail for a reason it never earned — and a vacuous test hidden behind an unearned kill is one this guard never reports. So an async function stays async, a class stays a class, a function stays callable at any arity, and only the ANSWER is taken away. The measurement says it worked: **all 581 baseline cases appear in the mutant report**, so every one of the 560 kills is a red assertion rather than a module that failed to load. The guard now asserts that outright — a baseline case absent from the mutant is *unmeasured*, and scoring it as a kill would be § 741's inversion turned on the guard itself. Proved by breaking the neuterer on purpose: emit no exports and the run reports 513 unmeasured cases and exits 1, instead of reporting a clean tree.
+
+**Four costumes, and the security assertions were the ones wearing them.** (1) **A `try/catch` that swallowed its own assertion.** `discardBody — cancels the body stream` wrapped `assertStrictEquals(r.done, true)` in a `catch` written to tolerate a cancelled stream *throwing*, so it swallowed the AssertionError along with the throw and passed whether or not anything had been cancelled. Its two siblings asserted nothing at all — one says so in a comment. All three now key off `req.bodyUsed`, which `cancel()` sets synchronously, with a control proving an untouched request reads false. (2) **An equality between two of the subject's own outputs**, which any constant satisfies. All four surviving `ipBucketKey` tests were this, and they are the rate limiter's anti-spoofing assertions: "untrusted headers must not shift the bucket", "spoofable headers all collapse to one bucket", "a non-IP value fails closed", "deterministic". *A helper that reads no header at all passes every one of them* — and that helper is a live failure mode, not a hypothesis, because it puts every anonymous caller in one bucket and lets one client's traffic throttle everybody. Each now also asserts the trusted header still establishes a bucket of its own. `hashUserIdForAudit is stable across calls` was the same shape; its stable value is now a known-answer vector, which fixes the primitive, the salt and the hex encoding the `deletion_audit_log` CHECK demands. (3) **A negative source grep, which an empty file satisfies for free.** Five of them: the Stripe-boundary sweep asserted the boundary module still *existed* but not that it still carried the import its whole purpose is to concentrate; the allowlist sweep reports a clean tree when no function reads an `*_ALLOWED_REDIRECTS` var at all, which is exactly the disappearance it exists to catch; `delete-account`'s four inline-URL negatives are equally satisfied by a handler that dropped the third-party call. Each now pins its positive first. (4) **A claim about the clock and none about the work.** `pooledPipeline is faster than the serial loop it replaces` measured elapsed time against a serial baseline, and the fastest possible implementation of that loop is one that calls nothing; it now counts the loads and the consumes before it reads the clock.
+
+**Four survivors were legitimate and are still killed, because the operator was widened rather than excused.** A guard over `config.toml`'s `verify_jwt` posture, or over the committed `.env.development` allowlist, or over the exports-bucket migration, is not testing a TypeScript module — so neutering the tree leaves it passing while proving nothing. An argued exemption for those is indistinguishable from a genuinely vacuous test, so the four non-TypeScript artifacts a test reads **as its subject** are blanked too (`NEUTERED_ARTIFACTS`, each with the test that reads it). That is what lets the guard demand zero unexplained survivors rather than keeping a list.
+
+**One survivor is filed rather than fixed, and it is one line.** `donationStatusTransition — the scope default is full` compares two calls of the function to each other and asserts nothing about the shared answer, so a function with no answers satisfies it — the ipBucketKey shape again. Asserting the pair equals `'refunded'` closes it. `stripe-events-webhook` was owned by another change in the same round, so it is in `EXPECTED_SURVIVORS` with that reason and in `followups.md`; the entry's own staleness check fails the build once the test is fixed, which is what forces the entry out rather than leaving it as a standing excuse.
+
+**No handler defect was found, and two candidates were measured rather than assumed.** `discardBody`'s `req.body?.cancel().catch(...)` was checked against the case its comment claims to cover: after `req.json()` the stream is *locked*, and a synchronous throw there would have made the "call it again in a `finally`" contract false — Deno returns a rejected promise, so the `.catch` holds. Every positive control added above was verified to be true of the real code before it was asserted (the four shared `delete-account` helpers are used at four `fetch` call sites, the boundary module does carry the esm.sh import, four functions do read an `*_ALLOWED_REDIRECTS` var). The honest reading is that this tier's *code* was in better shape than its tests.
+
+**Verification.** `deno test --no-check --allow-read --allow-env supabase/functions/`: **581 passed, 0 failed, 23 ignored** before and after — the fixes strengthen assertions rather than change behaviour. `deno check` over all 51 modules exits **0** (no `deno install` was run: the worktree's `node_modules` symlink already carries `@types/node`, and a `deno install` from a worktree has corrupted the shared tree before). `tsc -p tsconfig.scripts.json` exits **0** over the three new `.mjs` files, and `scripts/tsconfig_coverage.test.mjs` still passes, so they are inside a tsc program. The guard's own 10 unit tests pass, including the one that neuters **every real module in the tree** and asserts the stub exports exactly the names the original did. `check_ci_diagnostics.mjs` accepts both new steps and still reports `ci-gate` waiting on all 28 jobs — no job was added, so the aggregator's `needs:` list is unchanged, and `edge-functions` was already a listed bundled job whose every check step carries its own `::error::`. `actionlint` is clean. The guard runs in **7.8 s** (measured over three runs; it runs the whole Deno suite twice), which is why it runs in full rather than as the static detector § 777 had to settle for. It is proved in both directions: against `82062cffe` it exits 1 naming all 16 fixed tests by file, line and name; against this tree it exits 0. **The 23 ignored tests are not measured by any of this** — they are `handler_envelope.test.ts`'s live-host integration tests, which skip without `SUPABASE_TEST_URL`, and neutering the modules would not neuter the separately-booted function host they drive. No Supabase stack was started and no migration was written or applied.

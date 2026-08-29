@@ -397,6 +397,311 @@ test("the wrist and watch pt-PT catalogues read as European Portuguese too", () 
 });
 
 /**
+ * Which SECOND PERSON a Portuguese catalogue addresses its reader in. Portuguese
+ * has two and they do not mix inside one catalogue: `tu` takes `teu`/`tua`, the
+ * clitic `te` and a second-person-singular verb, while `você` — the register
+ * European Portuguese software uses, and the one § 755 chose for every
+ * Portuguese surface derived since — takes `seu`/`sua`, `-lhe`/`-o`/`-a` and a
+ * third-person verb. The mobile twin is the `locale reach` group in
+ * apps/mobile_android/test/architecture_guards_test.dart (decisions § 782); this
+ * is web's half of the same pair (§ 784).
+ *
+ * The markers split into two kinds and only one kind can be listed, so this is
+ * two tests. A [TU_MARKERS] entry is a form no other person, tense or part of
+ * speech spells the same way, which makes a token list exact. The affirmative
+ * imperative is the other kind and is unlistable: its tu form is letter-for-
+ * letter the third-person present indicative, so `Adiciona um peso` (tu, *add a
+ * weight*) and `a app adiciona um peso` (*the app adds a weight*) are the same
+ * word, and any token banning it fires on ordinary prose. That half is derived
+ * against the Brazilian catalogue instead — see the second test.
+ *
+ * Two words are deliberately absent because they are NOT tu-only here, and both
+ * are live in both catalogues: `precisas` is `precisar` in the tu form and the
+ * feminine plural of `preciso` (`runDetail.hrDisclaimerSuffix`, "para zonas
+ * precisas"), and `aceitas` is `aceitar` in the tu form and the feminine plural
+ * participle (`settingsAccount.aiConsentUpdatedToast`, "Informações de IA
+ * atualizadas aceitas"). Bare `tu` is absent for the opposite reason — a label
+ * whose whole value names the reader is not a possessive in running prose, and
+ * pt-PT deliberately ships `clubEvent.youTag` as `(tu)` and `messages.youPrefix`
+ * as `Tu: ` after § 760 put the pronoun back into them.
+ */
+const TU_MARKERS = [
+	"teu", "tua", "teus", "tuas", "ti", "contigo",
+	"podes", "estás", "tens", "queres", "vais", "deves", "sabes", "fazes",
+	"és", "vês", "dizes", "escolhes", "alteras", "tomas", "usas", "utilizas",
+	"digitas", "corres", "participas",
+	"tiveres", "estiveres", "quiseres", "puderes", "fizeres", "registares",
+	"tenhas", "estejas", "sejas", "possas", "vás", "faças",
+];
+
+/**
+ * The enclitic object pronoun. `você` takes `-lhe` or `-o`/`-a`, never this, so
+ * a hyphen followed by exactly `te` is a tu marker wherever it lands.
+ */
+const TU_ENCLITIC = /(?<![a-zà-ÿ])[a-zà-ÿ]+-te(?![a-zà-ÿ])/giu;
+
+/**
+ * The PROCLITIC `te`, scanned in `pt-PT` only. Brazilian written register mixes
+ * `você` with a proclitic `te` widely enough that `pt-BR.ts` spends it on five
+ * strings that read as ordinary Brazilian ("Outros podem te encontrar por ele"),
+ * so a shared list carrying it would accuse those five rather than report a
+ * defect. European `você` has no such tolerance — it takes `o`/`a`/`lhe` — so in
+ * `pt-PT.ts` the word is the same mixed register the rest of this guard is about.
+ */
+const TU_PROCLITIC = /(?<![a-zà-ÿ-])te(?![a-zà-ÿ])/giu;
+
+/**
+ * The second-person-singular preterite, which is a SUFFIX rather than a list —
+ * `-aste`/`-este`/`-iste` is that tense and no other. The words below end the
+ * same way and are not verbs in that tense, so they are named rather than
+ * letting the pattern go. Unlike the exemptions further down, this is a fact
+ * about Portuguese and not about our copy: `este` is a demonstrative and
+ * `desgaste` a noun whatever strings we ship, so an entry here cannot rot.
+ */
+const TU_PRETERITE = /(?<![a-zà-ÿ])[a-zà-ÿ]{3,}(?:aste|este|iste)(?![a-zà-ÿ])/giu;
+const NOT_A_PRETERITE = new Set([
+	"arraste", "desgaste", "deste", "este", "existe", "leste", "neste",
+	"oeste", "registe",
+]);
+
+/**
+ * Key prefixes allowed to address the reader as `tu`, with the reason.
+ * **Empty, and that is the finding**, exactly as on the phone (§ 782): no string
+ * in either Portuguese catalogue addresses its reader as `tu`, and the mechanism
+ * survives for a future surface that genuinely must. Each prefix added here is
+ * asserted below to still cover a key the guard would otherwise flag, so an
+ * exemption cannot outlive the strings it was written for.
+ */
+const REGISTER_EXEMPT_PREFIXES: string[] = [];
+
+/**
+ * European/Brazilian word pairs that differ by the same one-letter ending an
+ * imperative does and are not verbs at all, so the derived scan below cannot
+ * tell them apart on shape. `equipa`/`equipe` is *team*. Each is asserted to
+ * still be in use.
+ */
+const VARIANT_WORD_PAIRS: Record<string, string> = {
+	equipa: "equipe",
+};
+
+function registerExempt(key: string): boolean {
+	return REGISTER_EXEMPT_PREFIXES.some((p) => key.startsWith(p));
+}
+
+function tuMarkersIn(value: string, tag: string): string[] {
+	const found: string[] = [];
+	for (const marker of TU_MARKERS) {
+		if (new RegExp(`(?<![a-zà-ÿ])${marker}(?![a-zà-ÿ])`, "iu").test(value)) {
+			found.push(`"${marker}"`);
+		}
+	}
+	for (const m of value.matchAll(TU_PRETERITE)) {
+		if (!NOT_A_PRETERITE.has(m[0].toLowerCase())) found.push(`"${m[0]}"`);
+	}
+	if (TU_ENCLITIC.test(value)) found.push('the "-te" enclitic');
+	TU_ENCLITIC.lastIndex = 0;
+	if (tag === "pt-PT" && TU_PROCLITIC.test(value)) found.push('the proclitic "te"');
+	TU_PROCLITIC.lastIndex = 0;
+	return found;
+}
+
+const PORTUGUESE = ["pt-PT", "pt-BR"] as const;
+
+async function catalogue(tag: (typeof PORTUGUESE)[number]) {
+	return CATALOGUE_LOADERS[tag]() as Promise<Record<string, unknown>>;
+}
+
+test("a Portuguese catalogue addresses its reader in one register", async () => {
+	// Both catalogues, not just the European one. `pt-BR.ts` is the reference the
+	// derived imperative scan below measures against, so a tu marker landing in
+	// IT makes that scan blind rather than merely wrong — the two words would
+	// cancel and the pair would never be reported. That was live: the whole
+	// `coachPage.*` consent block spoke tu in BOTH catalogues (§ 784).
+	for (const tag of PORTUGUESE) {
+		const messages = await catalogue(tag);
+		const offenders: string[] = [];
+		for (const [key, value] of Object.entries(messages)) {
+			if (typeof value !== "string" || registerExempt(key)) continue;
+			for (const marker of tuMarkersIn(value, tag)) offenders.push(`${key}: ${marker}`);
+		}
+		assert.deepEqual(
+			offenders,
+			[],
+			`locales/${tag}.ts addresses its reader as \`tu\` here and as \`você\` ` +
+				"everywhere else. One catalogue cannot be two products to one reader: use " +
+				"`seu`/`sua`, `-lhe` and a third-person verb, per decisions § 755. If a " +
+				"string really must be tu, add its prefix to REGISTER_EXEMPT_PREFIXES with " +
+				"the reason written down.",
+		);
+	}
+});
+
+test("the pt-PT catalogue uses no tu imperative its Brazilian twin does not", async () => {
+	// Derived rather than listed, because the tu affirmative imperative is spelled
+	// exactly like the third-person present indicative and no token can separate
+	// them. `pt-BR.ts` is uniformly `você` (pinned by the test above), so a word
+	// this catalogue uses where Brazilian uses the same stem with the imperative's
+	// other ending IS the tu form: `Importa` against `Importe`, `Ativa` against
+	// `Ative`, `descarta` against `descarte`. Symmetric on purpose — the same scan
+	// read the other way catches a `você` ending applied to a third-person
+	// indicative, which is how "ele confirme e passa a receber" and "Isto adicione
+	// ou sobrescreve" reached the catalogue. No threshold, no vocabulary list.
+	const european = await catalogue("pt-PT");
+	const brazilian = await catalogue("pt-BR");
+	const word = /[a-zà-ÿ]+/giu;
+	const wordsOf = (v: string) =>
+		new Set([...v.matchAll(word)].map((m) => m[0].toLowerCase()));
+
+	const offenders: string[] = [];
+	for (const [key, value] of Object.entries(european)) {
+		if (typeof value !== "string" || registerExempt(key)) continue;
+		const other = brazilian[key];
+		if (typeof other !== "string") continue;
+		const ours = wordsOf(value);
+		const theirs = wordsOf(other);
+		for (const a of ours) {
+			if (theirs.has(a) || a.length < 4) continue;
+			for (const b of theirs) {
+				if (ours.has(b) || b.length < 4) continue;
+				if (a.slice(0, -1) !== b.slice(0, -1)) continue;
+				const swap = a[a.length - 1] + b[b.length - 1];
+				if (swap !== "ae" && swap !== "ea") continue;
+				if (VARIANT_WORD_PAIRS[a] === b) continue;
+				offenders.push(`${key}: "${a}" where pt-BR says "${b}"`);
+			}
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		"locales/pt-PT.ts gives an imperative in the tu form. Portugal says " +
+			"`Importe`, not `Importa`, in the register this catalogue uses everywhere " +
+			"else (decisions § 755). If the word is not a verb, add the pair to " +
+			"VARIANT_WORD_PAIRS with what it means.",
+	);
+});
+
+test("every register exemption still needs its exemption", async () => {
+	// An exemption that covers nothing has stopped being a decision and become
+	// noise — the shape SENSE_SPLIT above already uses for its named sites.
+	const european = await catalogue("pt-PT");
+	const brazilian = await catalogue("pt-BR");
+	for (const prefix of REGISTER_EXEMPT_PREFIXES) {
+		const covered = Object.entries(european).some(
+			([k, v]) =>
+				k.startsWith(prefix) && typeof v === "string" && tuMarkersIn(v, "pt-PT").length > 0,
+		);
+		assert.ok(
+			covered,
+			`REGISTER_EXEMPT_PREFIXES carries "${prefix}", but no key under it says ` +
+				"`tu` any more. Drop the prefix so the guard covers those keys again.",
+		);
+	}
+	const whole = [...Object.values(european), ...Object.values(brazilian)]
+		.filter((v): v is string => typeof v === "string")
+		.join("\n");
+	for (const [a, b] of Object.entries(VARIANT_WORD_PAIRS)) {
+		for (const w of [a, b]) {
+			assert.ok(
+				new RegExp(`(?<![a-zà-ÿ])${w}(?![a-zà-ÿ])`, "iu").test(whole),
+				`VARIANT_WORD_PAIRS names "${w}", which neither Portuguese catalogue uses any more.`,
+			);
+		}
+	}
+});
+
+/**
+ * A sentence assembled from several catalogue keys around a link or a `<strong>`
+ * carries its own spacing: `coachPage.consentActionSuffix` is ` to continue. …`
+ * with a LEADING space, because a `<strong>Eu consinto</strong>` renders
+ * immediately before it. The § 755 derivation walked `pt-BR.ts` word by word and
+ * treated each value as a sentence of its own, so 19 of these lost the space and
+ * were sentence-cased — "Clique em **Eu consinto**Para continuar." — and three
+ * more lost their last word entirely when the subject-pronoun elision deleted
+ * `você` and left the trailing space behind ("Um pouco sobre ").
+ *
+ * Measured against `pt-BR.ts` rather than against English, and only for these
+ * two: an en-anchored rule needs exemptions the moment it meets German (a
+ * fragment attaching with a comma needs no space) or Japanese (which sets no
+ * word spaces at all), while the two Portuguese catalogues share a syntax and
+ * pt-PT is a derivation OF pt-BR, so an edge that differs is an artifact of the
+ * derivation and never a translation choice. No list, no threshold.
+ *
+ * The initial CASE is deliberately not checked here even though the same 19
+ * strings carried it: `pt-PT.ts` differs from Brazilian on the first letter of
+ * 248 values, nearly all of them standalone labels where either case is
+ * defensible, and a guard firing on those to reach these would be an allowlist
+ * of 248 entries. The whitespace edge is the part that is unambiguous.
+ */
+test("a pt-PT fragment keeps the spacing its Brazilian twin assembles with", async () => {
+	const european = await catalogue("pt-PT");
+	const brazilian = await catalogue("pt-BR");
+	const offenders: string[] = [];
+	for (const [key, value] of Object.entries(brazilian)) {
+		const ours = european[key];
+		if (typeof value !== "string" || typeof ours !== "string") continue;
+		if (/^\s/.test(value) !== /^\s/.test(ours)) offenders.push(`${key}: leading space`);
+		if (/\s$/.test(value) !== /\s$/.test(ours)) offenders.push(`${key}: trailing space`);
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		"locales/pt-PT.ts joins an assembled sentence differently from locales/pt-BR.ts. " +
+			"A fragment's edge whitespace is what puts a space either side of the link it " +
+			"wraps; dropping it renders the two halves glued, and a trailing space left " +
+			"where a word was deleted renders a sentence that stops mid-air.",
+	);
+});
+
+/**
+ * European Portuguese substitutions that change the noun's GENDER, which the
+ * § 755 corpus applied word-for-word and did not carry into the article or the
+ * adjective agreeing with it: Brazilian `a tela` is European `o ecrã`, and `os
+ * compartilhamentos` are `as partilhas`. Both were live — "Manter a ecrã
+ * ligada", "ocultado dos partilhas públicos".
+ *
+ * Determiners only. They are closed classes, so the scan is exact; an adjective
+ * would need a morphology this guard has no business carrying, and the
+ * determiner is already immediately before the noun in every one of these.
+ */
+const GENDER_FLIPPED_NOUNS: { noun: RegExp; wrong: string[]; gender: string }[] = [
+	{
+		noun: /ecrãs?/,
+		gender: "masculine in Portugal, where Brazilian `tela` is feminine",
+		wrong: ["a", "as", "da", "das", "na", "nas", "à", "às", "uma", "umas", "esta", "estas", "essa", "essas"],
+	},
+	{
+		noun: /partilhas?/,
+		gender: "feminine, where Brazilian `compartilhamento` is masculine",
+		wrong: ["o", "os", "do", "dos", "no", "nos", "ao", "aos", "pelo", "pelos", "um", "uns", "este", "estes", "esse", "esses"],
+	},
+];
+
+test("a gender-flipped European noun agrees with what governs it", async () => {
+	const messages = await catalogue("pt-PT");
+	const offenders: string[] = [];
+	for (const { noun, wrong, gender } of GENDER_FLIPPED_NOUNS) {
+		const re = new RegExp(
+			`(?<![a-zà-ÿ])(${wrong.join("|")})\\s+(${noun.source})(?![a-zà-ÿ])`,
+			"giu",
+		);
+		for (const [key, value] of Object.entries(messages)) {
+			if (typeof value !== "string") continue;
+			for (const m of value.matchAll(re)) {
+				offenders.push(`${key}: "${m[0]}" — ${noun.source} is ${gender}`);
+			}
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		"locales/pt-PT.ts carries a European word inside its Brazilian counterpart's " +
+			"agreement. Substituting the noun is half the change; the article and the " +
+			"adjective agreeing with it have to move too.",
+	);
+});
+
+/**
  * A flat array literal of quoted strings, e.g. `['en', 'de', 'pt-BR']`. Only a
  * FLAT one: a fixture table of tuples names locales too, and each of those rows
  * is a case about one locale rather than a claim about the shipped set.

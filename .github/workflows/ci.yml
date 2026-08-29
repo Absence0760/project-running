@@ -460,6 +460,32 @@ jobs:
             echo "Fix scripts/check_pnpm_overrides.mjs (or its tests); reproduce with: node --test scripts/check_pnpm_overrides.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
+      # A dependency nothing imports is not merely clutter. `unplugin-icons`
+      # sat in apps/web with `autoInstall: true` and no `~icons/` import
+      # anywhere the build compiles, so on a miss the plugin would install a
+      # package the lockfile does not carry, at build time; `normalize.css` was
+      # declared in the scaffold commit and never imported at all. Both were
+      # DESCRIBED as live by docs a reader would consult, which is why a
+      # periodic sweep is not the answer — the sweep is the thing nobody runs
+      # (decisions § 786). Reads the source trees as text, so it sits with the
+      # other manifest-vs-reality checks here rather than behind an install.
+      #
+      # Drift first, then the tool's own suite, for the deno step's reason
+      # below: this suite's last case runs the guard over the committed tree,
+      # so running it first would report "the tool is broken" over an ordinary
+      # dead dependency.
+      - name: Declared dependencies are read by something
+        run: |
+          if ! node scripts/check_dead_dependencies.mjs; then
+            echo "::error::A package.json declares a dependency nothing in this repo imports, reads out of node_modules, or needs for its types. Nothing here is about the Supabase schema, the migrations, the generated row types or the security overrides — those are the other checks in this job."
+            echo "The failing line above names the manifest and the package. Delete it and commit both lockfiles, or add it to INDIRECT in scripts/check_dead_dependencies.mjs saying how it is consumed."
+            exit 1
+          fi
+          if ! node --test scripts/check_dead_dependencies.test.mjs; then
+            echo "::error::The dead-dependency guard's own unit tests failed. The manifests themselves are fine — the check above just passed — so this is a defect in scripts/check_dead_dependencies.mjs, not a dead dependency."
+            echo "Fix scripts/check_dead_dependencies.mjs (or its tests); reproduce with: node --test scripts/check_dead_dependencies.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # deno.lock's `workspace` section is generated from the npm workspace's
       # package.json files, and drifted on every web dep bump because nothing
       # looked — six hand-sync commits between 2026-05 and 2026-07, each a
@@ -515,6 +541,29 @@ jobs:
           if ! node --test apps/web/scripts/check_constraint_unions.test.mjs; then
             echo "::error::The CHECK-constraint guard's own unit tests failed. The constraints and unions themselves agree — the check above just passed — so this is a defect in apps/web/scripts/check_constraint_unions.mjs, not union drift."
             echo "Reproduce with: node --test apps/web/scripts/check_constraint_unions.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
+      # The sibling of the step above, one class wider: a CHECK's value set
+      # against a TS union is ONE shape of a value with more than one home, and
+      # the guard above reads only that one. This reads the rest — a threshold
+      # copied into SQL, a vocabulary copied out of it into two clients, an
+      # eligibility list copied from one SQL function into the next — and it is
+      # code-gated with the rest of this job on purpose: every rail it reads is
+      # a source file, so a docs-only diff cannot move one (decisions § 787).
+      #
+      # Drift first, then the guard's own suite, for the reason the step above
+      # gives: that suite's last cases read the committed tree, so running it
+      # first would report "the guard is broken" over ordinary drift.
+      - name: Shared constants agree across every home
+        run: |
+          if ! node scripts/check_shared_constants.mjs; then
+            echo "::error::A registered constant with more than one home no longer says the same thing in all of them — a threshold, a bucket boundary, a vocabulary or an eligible-source list written in SQL and in a client, or in two SQL functions. Nothing here is about a CHECK against its TS union (the step above), database.types.ts drift or the web unit tests."
+            echo "The failing lines above name every home and the values each carries. The rails are read from source, so the fix is to make them agree — not to update a transcription; decisions § 787."
+            exit 1
+          fi
+          if ! node --test scripts/check_shared_constants.test.mjs; then
+            echo "::error::The shared-constant guard's own unit tests failed. The constants themselves agree — the check above just passed — so this is a defect in scripts/check_shared_constants.mjs, not constant drift."
+            echo "Reproduce with: node --test scripts/check_shared_constants.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
       # `src/**`, not `src/lib/**`: the route-level source guards under
@@ -1923,6 +1972,38 @@ jobs:
           if ! deno check $files; then
             echo "::error::The Supabase Edge Functions do not typecheck. Nothing here involves the migrations, the Supabase stack or the Deno test suites below — read the TS error above. A complaint about a .from() column or a .rpc() argument is the generated Database type telling you the name does not exist: find the right one in the migrations, do not cast it away. A TS2578 (an unused @ts-expect-error) in _shared/stripe.ts is the opposite failure: the Stripe SDK's declarations have stopped binding, so nothing errors and every Stripe call in the tier is silently unchecked again (decisions § 765)."
             echo "Reproduce locally with: deno install && cd apps/backend && deno check \$(find supabase/functions -type f -name '*.ts' | sort)"
+            exit 1
+          fi
+      # For the vacuity guard below. Like the pgtap refusal guard it imports
+      # nothing outside node:*, so no workspace install is needed — only a
+      # pinned runtime.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # A green Deno suite says every assertion passed, not that any of them
+      # asked anything. decisions § 741 found that shape in the pgtap suite and
+      # § 777 in the Playwright suite; this is the third tier, and what hides a
+      # subject here is a swallowing try/catch, an assertion comparing two of
+      # the subject's own outputs, or a source grep whose absence an empty file
+      # supplies for free. The guard neuters every module in the tree and every
+      # artifact a test reads as its subject, then re-runs the suite: a test
+      # that still passes was testing none of them.
+      #
+      # It goes here, before the Supabase stack starts — it needs no database,
+      # and behind a Docker start a broken stack would fail first and take this
+      # signal with it. Measured at ~8 s: it runs the whole Deno suite twice.
+      - name: Validate the vacuity guard's own mutation operator
+        run: |
+          if ! node --test apps/backend/scripts/check_edge_function_test_vacuity.test.mjs; then
+            echo "::error::The Edge Function vacuity guard's own tests fail. Nothing here involves the Edge Functions, the typecheck or the Supabase stack — fix apps/backend/scripts/edge_function_neuter.mjs (or its tests) first. A failure in the 'neutered twin exports exactly the names the original did' case means the mutation operator has gone lossy, and a lossy operator scores every test in an importing file as a kill nobody proved."
+            echo "Reproduce locally with: node --test apps/backend/scripts/check_edge_function_test_vacuity.test.mjs"
+            exit 1
+          fi
+      - name: Mutation-check the Edge Function suite for vacuity
+        run: |
+          if ! node apps/backend/scripts/check_edge_function_test_vacuity.mjs; then
+            echo "::error::An Edge Function test still passes with every module in the tree neutered, so it cannot tell a working handler from a missing one. The failure above names the file, line and test. Give the assertion something the subject alone can satisfy — a positive control beside the negative, the actual value beside the equality — or add it to EXPECTED_SURVIVORS with the reason its answer is real."
+            echo "Reproduce locally with: node apps/backend/scripts/check_edge_function_test_vacuity.mjs --report"
             exit 1
           fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0

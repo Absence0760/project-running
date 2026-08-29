@@ -116,9 +116,6 @@
     "test:worker": "cd apps/job_worker && go test ./...",
     "test:scripts": "node scripts/check_root_scripts.mjs"
   },
-  "dependencies": {
-    "html-to-image": "^1.11.13"
-  },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "svelte": "5.56.10"

@@ -61,6 +61,11 @@ Deno.test('ipBucketKey: only the trusted header names the client', async () => {
   );
   const justCf = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '1.1.1.1' }));
   assertEquals(withNoise, justCf, 'untrusted headers must not shift the bucket');
+  // The equality above is also what a helper that reads no header at all
+  // produces, and that helper is a live failure mode: it puts every anon
+  // caller in one bucket, so one client's traffic throttles everybody.
+  const none = await ipBucketKey(reqWithHeaders({}));
+  assert(justCf !== none, 'the trusted header must establish its own bucket');
 });
 
 Deno.test('ipBucketKey: spoofable headers alone all collapse to one bucket', async () => {
@@ -74,9 +79,11 @@ Deno.test('ipBucketKey: spoofable headers alone all collapse to one bucket', asy
   const forwarded = await ipBucketKey(
     reqWithHeaders({ 'x-forwarded-for': '4.4.4.4, 10.0.0.1, 192.168.1.1' }),
   );
+  const trusted = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '1.1.1.1' }));
   assertEquals(realIp, none, 'x-real-ip must not establish a bucket');
   assertEquals(otherRealIp, none, 'rotating x-real-ip must not mint a new bucket');
   assertEquals(forwarded, none, 'x-forwarded-for must not establish a bucket');
+  assert(trusted !== none, 'the trusted header must still establish its own bucket');
 });
 
 Deno.test('ipBucketKey: a trusted header carrying a forwarded chain is discarded', async () => {
@@ -97,8 +104,10 @@ Deno.test('ipBucketKey: a non-IP trusted header value fails closed', async () =>
   const junk = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': 'not-an-ip' }));
   const blank = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '   ' }));
   const none = await ipBucketKey(reqWithHeaders({}));
+  const good = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '1.1.1.1' }));
   assertEquals(junk, none, 'a non-IP value must not establish a bucket');
   assertEquals(blank, none, 'a whitespace-only value must not establish a bucket');
+  assert(good !== none, 'a well-formed value must still establish its own bucket');
 });
 
 Deno.test('ipBucketKey: IPv6 is accepted and case-normalised', async () => {
@@ -161,6 +170,10 @@ Deno.test('ipBucketKey: deterministic — same IP → same UUID', async () => {
   const a = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '8.8.8.8' }));
   const b = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '8.8.8.8' }));
   assertEquals(a, b);
+  // Determinism on its own is satisfied by a constant, which is the same
+  // collapse the header tests above guard against from the other side.
+  const other = await ipBucketKey(reqWithHeaders({ 'cf-connecting-ip': '8.8.4.4' }));
+  assert(a !== other, 'a stable key must still be a key, not a constant');
 });
 
 Deno.test('ipBucketKey: distinct IPs produce distinct UUIDs', async () => {

@@ -46,9 +46,9 @@ data class RoutesPush(
 /// `[{id, name, distance_m, waypoints:[{lat,lng}]}]` array the
 /// phone's `LocalRouteStore` exposes filtered to `isStarred==true`)
 /// plus `updated_at_ms` (epoch millis when the phone serialised the
-/// push). The cap on the phone side is 50 routes per DataItem to
-/// stay under the ~100 KB Wearable Data Layer limit; the parser
-/// here just accepts whatever lands.
+/// push). The phone caps a push at `LocalRouteStore.MAX_ROUTES`, which
+/// is also what `save` persists and is well under the ~100 KB Wearable
+/// Data Layer limit; the parser here just accepts whatever lands.
 class RoutesBridge(context: Context) {
     private val dataClient: DataClient = Wearable.getDataClient(context)
     private val json = Json { ignoreUnknownKeys = true }

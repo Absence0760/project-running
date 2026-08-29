@@ -55,10 +55,12 @@ class LocalRouteStore(private val context: Context) {
     ///
     /// 1. **Bounded** to [MAX_ROUTES] (= the server-side `limit=30` the
     ///    watch's `fetchRoutes` query uses). Both inbound sources — the
-    ///    Supabase fetch and the phone's Data Layer push — are nominally
-    ///    capped at 30, but a phone running an older/looser bridge could
-    ///    push more; capping here keeps the backing file bounded and the
-    ///    1.4-inch picker un-scrollable past what fits.
+    ///    Supabase fetch and the phone's Data Layer push — are capped at
+    ///    30; capping here keeps the backing file bounded and the
+    ///    1.4-inch picker un-scrollable past what fits. The phone's
+    ///    `WearRoutesBridge.kMaxRoutesPerPush` was 50 against this 30
+    ///    while both files described the other's number, so a large push
+    ///    filled the live picker and lost its tail at the next restart.
     /// 2. **Dedup'd**: skip the rewrite when the encoded list is
     ///    byte-identical to what's already on disk. The pre-run screen
     ///    re-saves on every open and the phone re-pushes on every Data
@@ -98,11 +100,15 @@ class LocalRouteStore(private val context: Context) {
         private val KEY_RECENT_IDS: Preferences.Key<String> = stringPreferencesKey("recent_route_ids_v1")
         private const val MAX_RECENTS = 10
 
-        /// Local cap on the persisted route cache. Mirrors the
-        /// `limit=30` on the watch's `fetchRoutes` Supabase query — see
-        /// `RunWatchApp` / `SupabaseClient.fetchRoutes`. Keeps the
-        /// DataStore backing file (rewritten whole on every save)
-        /// bounded regardless of how many routes a source hands us.
+        /// Local cap on the persisted route cache, and the value the
+        /// phone's `WearRoutesBridge.kMaxRoutesPerPush` must equal —
+        /// `scripts/check_shared_constants.mjs` reads both rails, so
+        /// lifting the cap is one deliberate change on two of them
+        /// (decisions.md § 787). Mirrors the `limit=30` on the watch's
+        /// `fetchRoutes` Supabase query — see `RunWatchApp` /
+        /// `SupabaseClient.fetchRoutes`. Keeps the DataStore backing file
+        /// (rewritten whole on every save) bounded regardless of how many
+        /// routes a source hands us.
         const val MAX_ROUTES = 30
     }
 }

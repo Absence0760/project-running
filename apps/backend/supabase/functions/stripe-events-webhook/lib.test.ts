@@ -12,10 +12,15 @@ import {
   donationStatusTransition,
   isDonationSession,
   orderStatusTransition,
+  isPaymentSettled,
+  parseStripeEventEnvelope,
+  readCharge,
+  readCheckoutSession,
+  readConnectAccount,
   refundedCentsOfCharge,
   refundScopeOfCharge,
-  parseStripeEventEnvelope,
   shouldReleaseDedupe,
+  STRIPE_EVENT,
   verifyStripeSignature,
 } from './lib.ts';
 
@@ -177,14 +182,14 @@ Deno.test('orderStatusTransition — unknown event type -> null', () => {
 });
 
 Deno.test('attendeeRowFromSession — metadata -> row', () => {
-  const row = attendeeRowFromSession({
+  const row = attendeeRowFromSession(readCheckoutSession({
     metadata: {
       event_id: 'e1',
       buyer_user_id: 'b1',
       instance_start: '2026-06-11T18:00:00Z',
       order_id: 'o1',
     },
-  });
+  }));
   assertEquals(row, {
     event_id: 'e1',
     user_id: 'b1',
@@ -194,10 +199,10 @@ Deno.test('attendeeRowFromSession — metadata -> row', () => {
 });
 
 Deno.test('attendeeRowFromSession — missing metadata / keys -> null', () => {
-  assertStrictEquals(attendeeRowFromSession({}), null);
-  assertStrictEquals(attendeeRowFromSession({ metadata: null }), null);
+  assertStrictEquals(attendeeRowFromSession(readCheckoutSession({})), null);
+  assertStrictEquals(attendeeRowFromSession(readCheckoutSession({ metadata: null })), null);
   assertStrictEquals(
-    attendeeRowFromSession({ metadata: { event_id: 'e1', buyer_user_id: 'b1' } }),
+    attendeeRowFromSession(readCheckoutSession({ metadata: { event_id: 'e1', buyer_user_id: 'b1' } })),
     null,
   ); // missing instance_start + order_id
 });
@@ -212,20 +217,20 @@ Deno.test('capacityDecision — re-exported from the shared helper', () => {
 // ── donation branch (fundraising.md) ───────────────────────────────────────
 
 Deno.test('isDonationSession — keyed on metadata.kind', () => {
-  assertStrictEquals(isDonationSession({ metadata: { kind: 'donation' } }), true);
+  assertStrictEquals(isDonationSession(readCheckoutSession({ metadata: { kind: 'donation' } })), true);
   // an event seat session has no kind
-  assertStrictEquals(isDonationSession({ metadata: { order_id: 'o1' } }), false);
-  assertStrictEquals(isDonationSession({}), false);
-  assertStrictEquals(isDonationSession({ metadata: null }), false);
+  assertStrictEquals(isDonationSession(readCheckoutSession({ metadata: { order_id: 'o1' } })), false);
+  assertStrictEquals(isDonationSession(readCheckoutSession({})), false);
+  assertStrictEquals(isDonationSession(readCheckoutSession({ metadata: null })), false);
 });
 
 Deno.test('donationIdFromSession — extracts donation_id, null when absent', () => {
   assertStrictEquals(
-    donationIdFromSession({ metadata: { kind: 'donation', donation_id: 'd1' } }),
+    donationIdFromSession(readCheckoutSession({ metadata: { kind: 'donation', donation_id: 'd1' } })),
     'd1',
   );
-  assertStrictEquals(donationIdFromSession({ metadata: { kind: 'donation' } }), null);
-  assertStrictEquals(donationIdFromSession({}), null);
+  assertStrictEquals(donationIdFromSession(readCheckoutSession({ metadata: { kind: 'donation' } })), null);
+  assertStrictEquals(donationIdFromSession(readCheckoutSession({})), null);
 });
 
 Deno.test('donationStatusTransition — pending confirms to paid', () => {
@@ -301,11 +306,11 @@ Deno.test('refundedCentsOfCharge — a full refund is the DONATION\'s amount, no
   // disagrees with ours must not be able to write a refund larger than the
   // donation it is refunding.
   assertStrictEquals(
-    refundedCentsOfCharge({ amount: 60000, amount_refunded: 60000, refunded: true }, 50000, 'full'),
+    refundedCentsOfCharge(readCharge({ amount: 60000, amount_refunded: 60000, refunded: true }), 50000, 'full'),
     50000,
   );
   // …and it does not depend on the charge saying anything at all.
-  assertStrictEquals(refundedCentsOfCharge({}, 50000, 'full'), 50000);
+  assertStrictEquals(refundedCentsOfCharge(readCharge({}), 50000, 'full'), 50000);
 });
 
 Deno.test('refundedCentsOfCharge — a partial refund is the charge\'s CUMULATIVE amount', () => {
@@ -313,17 +318,17 @@ Deno.test('refundedCentsOfCharge — a partial refund is the charge\'s CUMULATIV
   // the size of the one that raised this event — which is what makes the write
   // idempotent and order-insensitive.
   assertStrictEquals(
-    refundedCentsOfCharge({ amount: 50000, amount_refunded: 500, refunded: false }, 50000, 'partial'),
+    refundedCentsOfCharge(readCharge({ amount: 50000, amount_refunded: 500, refunded: false }), 50000, 'partial'),
     500,
   );
   assertStrictEquals(
-    refundedCentsOfCharge({ amount: 50000, amount_refunded: 1500, refunded: false }, 50000, 'partial'),
+    refundedCentsOfCharge(readCharge({ amount: 50000, amount_refunded: 1500, refunded: false }), 50000, 'partial'),
     1500,
   );
   // Clamped to the donation: the CHECK refuses more coming back than went in,
   // and a 23514 from the webhook is a delivery Stripe retries forever.
   assertStrictEquals(
-    refundedCentsOfCharge({ amount_refunded: 99999 }, 50000, 'partial'),
+    refundedCentsOfCharge(readCharge({ amount_refunded: 99999 }), 50000, 'partial'),
     50000,
   );
 });
@@ -331,25 +336,23 @@ Deno.test('refundedCentsOfCharge — a partial refund is the charge\'s CUMULATIV
 Deno.test('refundedCentsOfCharge — an unusable amount is null, never a guess', () => {
   for (const bad of [undefined, null, '500', Number.NaN, 12.5, 0, -100]) {
     assertStrictEquals(
-      refundedCentsOfCharge({ amount_refunded: bad }, 50000, 'partial'),
+      refundedCentsOfCharge(readCharge({ amount_refunded: bad }), 50000, 'partial'),
       null,
       `amount_refunded=${String(bad)} must not reach a money column`,
     );
   }
   // A donation amount that is not a whole number of cents is not a bound to
   // clamp against either — both directions fail closed.
-  assertStrictEquals(refundedCentsOfCharge({ amount_refunded: 500 }, 12.5, 'partial'), null);
-  assertStrictEquals(refundedCentsOfCharge({}, -1, 'full'), null);
+  assertStrictEquals(refundedCentsOfCharge(readCharge({ amount_refunded: 500 }), 12.5, 'partial'), null);
+  assertStrictEquals(refundedCentsOfCharge(readCharge({}), -1, 'full'), null);
 });
 
 Deno.test('donationStatusTransition — the scope default is full, matching the event ledger', () => {
   // Same default as orderStatusTransition: a caller that cannot read a scope
   // treats the refund as whole, which is the direction that never overstates
   // what a charity has raised.
-  assertStrictEquals(
-    donationStatusTransition('paid', 'charge.refunded'),
-    donationStatusTransition('paid', 'charge.refunded', 'full'),
-  );
+  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded'), 'refunded');
+  assertStrictEquals(donationStatusTransition('paid', 'charge.refunded', 'full'), 'refunded');
 });
 
 Deno.test('donationStatusTransition — paid refunds, pending does not', () => {
@@ -390,24 +393,24 @@ Deno.test('shouldReleaseDedupe — a 4xx is the caller\'s fault and stays dedupe
 });
 
 Deno.test('refundScopeOfCharge — refunded:true is a full refund', () => {
-  assertStrictEquals(refundScopeOfCharge({ refunded: true, amount: 5000, amount_refunded: 5000 }), 'full');
+  assertStrictEquals(refundScopeOfCharge(readCharge({ refunded: true, amount: 5000, amount_refunded: 5000 })), 'full');
 });
 
 Deno.test('refundScopeOfCharge — a goodwill part-refund is partial', () => {
   // Stripe emits charge.refunded for a PARTIAL refund too; `refunded` is the
   // discriminator and is false until the whole charge is returned.
-  assertStrictEquals(refundScopeOfCharge({ refunded: false, amount: 5000, amount_refunded: 500 }), 'partial');
+  assertStrictEquals(refundScopeOfCharge(readCharge({ refunded: false, amount: 5000, amount_refunded: 500 })), 'partial');
 });
 
 Deno.test('refundScopeOfCharge — refunded:false with nothing refunded is not a partial refund', () => {
   // Must not become a status change on the strength of a zero refund.
-  assertStrictEquals(refundScopeOfCharge({ refunded: false, amount: 5000, amount_refunded: 0 }), 'full');
+  assertStrictEquals(refundScopeOfCharge(readCharge({ refunded: false, amount: 5000, amount_refunded: 0 })), 'full');
 });
 
 Deno.test('refundScopeOfCharge — unknown amounts fall back to full', () => {
   // Historical behaviour, and the safe direction for the buyer.
-  assertStrictEquals(refundScopeOfCharge({}), 'full');
-  assertStrictEquals(refundScopeOfCharge({ amount: 5000 }), 'full');
+  assertStrictEquals(refundScopeOfCharge(readCharge({})), 'full');
+  assertStrictEquals(refundScopeOfCharge(readCharge({ amount: 5000 })), 'full');
 });
 
 Deno.test('orderStatusTransition — a partial refund keeps the registration', () => {
@@ -493,7 +496,7 @@ Deno.test('charge.refunded envelope — a goodwill part-refund keeps the seat', 
   const event = parseStripeEventEnvelope(chargeRefundedEvent(5000, 500));
   assertStrictEquals(event?.type, 'charge.refunded');
   const charge = event!.data.object;
-  const scope = refundScopeOfCharge(charge);
+  const scope = refundScopeOfCharge(readCharge(charge));
   assertStrictEquals(scope, 'partial');
   assertStrictEquals(
     orderStatusTransition('paid', event!.type, scope),
@@ -504,9 +507,9 @@ Deno.test('charge.refunded envelope — a goodwill part-refund keeps the seat', 
 Deno.test('charge.refunded envelope — the whole charge back releases the seat', () => {
   const event = parseStripeEventEnvelope(chargeRefundedEvent(5000, 5000));
   const charge = event!.data.object;
-  assertStrictEquals(refundScopeOfCharge(charge), 'full');
+  assertStrictEquals(refundScopeOfCharge(readCharge(charge)), 'full');
   assertStrictEquals(
-    orderStatusTransition('paid', event!.type, refundScopeOfCharge(charge)),
+    orderStatusTransition('paid', event!.type, refundScopeOfCharge(readCharge(charge))),
     'refunded',
   );
 });
@@ -516,11 +519,172 @@ Deno.test('charge.refunded envelope — the balance of a part-refund completes i
   const status = orderStatusTransition(
     'paid',
     first.type,
-    refundScopeOfCharge(first.data.object),
+    refundScopeOfCharge(readCharge(first.data.object)),
   );
   const second = parseStripeEventEnvelope(chargeRefundedEvent(5000, 5000))!;
   assertStrictEquals(
-    orderStatusTransition(status!, second.type, refundScopeOfCharge(second.data.object)),
+    orderStatusTransition(status!, second.type, refundScopeOfCharge(readCharge(second.data.object))),
     'refunded',
+  );
+});
+
+// ── the typed read of a Stripe object (decisions § 785) ────────────────────
+
+Deno.test('readCharge — an EXPANDED payment_intent still resolves to its id', () => {
+  // Stripe serialises a reference as the bare id or, on an endpoint with
+  // expansions configured, as the whole object — `string | Stripe.PaymentIntent
+  // | null` in the SDK's own declaration. Reading only the string form yields
+  // null for the expanded one, and null on a refund is answered
+  // `missing_payment_intent` with a 200: Stripe records the refund as
+  // delivered, the order keeps its seat, and no retry ever comes.
+  assertStrictEquals(readCharge({ payment_intent: 'pi_1' }).paymentIntentId, 'pi_1');
+  assertStrictEquals(
+    readCharge({ payment_intent: { id: 'pi_1', object: 'payment_intent' } }).paymentIntentId,
+    'pi_1',
+  );
+  assertStrictEquals(readCharge({ payment_intent: null }).paymentIntentId, null);
+  assertStrictEquals(readCharge({}).paymentIntentId, null);
+  // An object with no id is not a reference to anything.
+  assertStrictEquals(readCharge({ payment_intent: { object: 'payment_intent' } }).paymentIntentId, null);
+});
+
+Deno.test('readCheckoutSession — an EXPANDED payment_intent still resolves to its id', () => {
+  assertStrictEquals(readCheckoutSession({ payment_intent: 'pi_1' }).paymentIntentId, 'pi_1');
+  assertStrictEquals(
+    readCheckoutSession({ payment_intent: { id: 'pi_1' } }).paymentIntentId,
+    'pi_1',
+  );
+  // The order is stamped with whatever this returns, and the refund arm
+  // resolves the order back through it — a null here is an order no refund
+  // can ever find.
+  assertStrictEquals(readCheckoutSession({}).paymentIntentId, null);
+});
+
+Deno.test('readCheckoutSession — metadata keeps only the string values Stripe declares', () => {
+  const session = readCheckoutSession({
+    metadata: { order_id: 'o1', quantity: 2, nested: { a: 1 }, missing: null },
+  });
+  assertStrictEquals(session.metadata.order_id, 'o1');
+  assertStrictEquals(session.metadata.quantity, undefined);
+  assertStrictEquals(session.metadata.nested, undefined);
+  assertStrictEquals(session.metadata.missing, undefined);
+  // A session with no metadata at all reads as empty, not as a throw.
+  assertEquals(readCheckoutSession({}).metadata, {});
+  assertEquals(readCheckoutSession({ metadata: null }).metadata, {});
+});
+
+Deno.test('attendeeRowFromSession — an EMPTY metadata value is not a seat', () => {
+  // `typeof x === 'string'` accepts ''. An empty order_id then reached
+  // `.eq('id', '')`, which PostgREST answers 22P02 (invalid uuid) — a 500, a
+  // released dedupe row and a retry that fails identically, forever.
+  assertStrictEquals(
+    attendeeRowFromSession(readCheckoutSession({
+      metadata: { event_id: 'e1', buyer_user_id: 'b1', instance_start: '2026-06-11T18:00:00Z', order_id: '' },
+    })),
+    null,
+  );
+});
+
+Deno.test('readConnectAccount — an absent capability flag reads as off', () => {
+  const account = readConnectAccount({
+    id: 'acct_1',
+    charges_enabled: true,
+    details_submitted: true,
+  });
+  assertStrictEquals(account.id, 'acct_1');
+  assertStrictEquals(account.chargesEnabled, true);
+  assertStrictEquals(account.payoutsEnabled, false);
+  assertStrictEquals(account.detailsSubmitted, true);
+  assertStrictEquals(readConnectAccount({}).id, null);
+});
+
+Deno.test('readCheckoutSession — an unrecognised payment_status is not a settlement', () => {
+  // The three values are Stripe's own union, pinned against the SDK by
+  // `CheckoutSessionSourceIsStripes`. Anything else is a value this build has
+  // never heard of on the money field of a payment, and seating an attendee
+  // against one gives a place away for money that may never arrive.
+  assertStrictEquals(readCheckoutSession({ payment_status: 'paid' }).paymentStatus, 'paid');
+  assertStrictEquals(readCheckoutSession({ payment_status: 'unpaid' }).paymentStatus, 'unpaid');
+  assertStrictEquals(
+    readCheckoutSession({ payment_status: 'no_payment_required' }).paymentStatus,
+    'no_payment_required',
+  );
+  assertStrictEquals(readCheckoutSession({ payment_status: 'settling' }).paymentStatus, null);
+  assertStrictEquals(readCheckoutSession({}).paymentStatus, null);
+});
+
+Deno.test('STRIPE_EVENT — the dispatcher and the transition tables share one spelling', () => {
+  // The values are checked against Stripe's own event union at compile time
+  // (`satisfies Record<string, Stripe.Event.Type>`); this pins that the
+  // transition tables are keyed on the same constants the dispatcher branches
+  // on, which is what a mistyped literal in either place used to break
+  // silently — nothing errors, the branch simply never matches.
+  assertStrictEquals(
+    orderStatusTransition('pending', STRIPE_EVENT.checkoutCompleted),
+    'paid',
+  );
+  assertStrictEquals(
+    orderStatusTransition('pending', STRIPE_EVENT.checkoutExpired),
+    'canceled',
+  );
+  assertStrictEquals(
+    donationStatusTransition('paid', STRIPE_EVENT.chargeRefunded, 'full'),
+    'refunded',
+  );
+});
+
+// ── delayed-notification payments (decisions § 785) ───────────────────────
+
+Deno.test('isPaymentSettled — only an explicit settlement seats an attendee', () => {
+  // `checkout.session.completed` is not a payment. For a delayed-notification
+  // method (SEPA debit, Bacs, boleto, OXXO, a bank redirect) the Session
+  // completes with `payment_status: 'unpaid'` and the money arrives days later
+  // — or does not. The Checkout Sessions this tier opens declare no
+  // `payment_method_types`, so which methods are live is a dashboard setting
+  // no code here would notice changing.
+  assertStrictEquals(isPaymentSettled('paid'), true);
+  assertStrictEquals(isPaymentSettled('no_payment_required'), true);
+  assertStrictEquals(isPaymentSettled('unpaid'), false);
+  // Absent, or a value this build has never heard of: not a settlement. A
+  // place given away cannot be taken back from here.
+  assertStrictEquals(isPaymentSettled(null), false);
+});
+
+Deno.test('orderStatusTransition — the async outcome, not the completion, pays the order', () => {
+  assertStrictEquals(
+    orderStatusTransition('pending', STRIPE_EVENT.checkoutAsyncPaid),
+    'paid',
+  );
+  assertStrictEquals(
+    orderStatusTransition('pending', STRIPE_EVENT.checkoutAsyncFailed),
+    'failed',
+  );
+  // A failed order releases its reservation the same way a canceled one does:
+  // capacity and the sweep index both key on status='pending'.
+  assertStrictEquals(
+    orderStatusTransition('failed', STRIPE_EVENT.checkoutAsyncPaid),
+    null,
+  );
+  // No arm out of `paid`. With the settlement gate in front of the confirm, a
+  // paid order is never waiting on an async outcome — and a paid->failed arm
+  // would owe a seat release this table cannot perform.
+  assertStrictEquals(
+    orderStatusTransition('paid', STRIPE_EVENT.checkoutAsyncFailed),
+    null,
+  );
+});
+
+Deno.test('donationStatusTransition — the async outcome, not the completion, pays the donation', () => {
+  assertStrictEquals(
+    donationStatusTransition('pending', STRIPE_EVENT.checkoutAsyncPaid),
+    'paid',
+  );
+  assertStrictEquals(
+    donationStatusTransition('pending', STRIPE_EVENT.checkoutAsyncFailed),
+    'failed',
+  );
+  assertStrictEquals(
+    donationStatusTransition('paid', STRIPE_EVENT.checkoutAsyncFailed),
+    null,
   );
 });
