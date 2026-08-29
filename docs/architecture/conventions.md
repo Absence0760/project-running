@@ -486,6 +486,41 @@ Specifically:
 - Don't build a plugin system for importers when `health_connect_importer.dart` and `strava_importer.dart` are the only two and they share ~zero code.
 - Don't refactor in a bug-fix PR. Split the refactor into its own change.
 
+## A constant with more than one home is registered, and the guard reads every home
+
+A value written in two places drifts. The repo already enforces two shapes of
+this — `scripts/check_parity_pair_registry.mjs` for a TS↔Dart function pair,
+`apps/web/scripts/check_constraint_unions.mjs` for a CHECK's value set against
+its TS union — and between them sits every threshold, bucket boundary,
+vocabulary, size cap and eligibility list copied into SQL, out of SQL into two
+clients, from one SQL function into the next, or across the Rust / Kotlin /
+Swift / Go rails. Four of those had already diverged when the class was first
+swept ([decisions § 787](decisions.md)).
+
+When you write a value that a second language also has to know:
+
+- **Register it in `scripts/check_shared_constants.mjs`.** An entry names every
+  home, extracts the value from each, and states what a drift costs. The
+  registry lives in the script rather than in markdown so it has exactly one
+  home itself.
+- **Read the rails; never transcribe one.** A test that restates the other
+  side's number is a snapshot: it stays green while the thing it describes
+  moves. `scripts/check_watch_ble_uuids.mjs` is the model — it parses both
+  sources.
+- **A rail that extracts nothing is a failure, not a match.** Two empty sets
+  agree. Both the guard and any hand-written mirror must fail loudly when the
+  shape they read changes.
+- **Resolve SQL by replay, not by filename.** The body a function has in
+  production is the one the last `create or replace function` wrote, and that
+  is routinely in a migration named after something else. Reading the migration
+  that first introduced a value certifies the value it used to have.
+- **Some shapes do not belong in the registry.** A formula written three times
+  (`challenge_goal`'s ceiling) is not a literal, and extracting one constant out
+  of it certifies nothing about the shape around it; two homes that hold
+  deliberately *different* numbers in a stated relation (the 48 h Postgres
+  live-ping window against the 24 h Redis TTL) are not an equality. Pin those
+  with mirror suites and say so where the numbers are written.
+
 ## Feature gates — one parser, and a define a release build can actually read
 
 Every fail-closed feature gate on either client parses its env string through the
