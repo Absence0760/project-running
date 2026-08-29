@@ -199,3 +199,24 @@ test('every file the registries name exists', () => {
     assert.ok(existsSync(join(REPO_ROOT, f)), `${f} is named by the registry but does not exist`);
   }
 });
+
+test('an unterminated hex run is parsed in linear time, not exponential', () => {
+  // The first draft nested two quantifiers over overlapping input
+  // (`(?:[0-9a-fA-F]+|\\\s*)+`), so a long hex run with no closing quote
+  // backtracked exponentially: measured at 703 ms for 24 characters, which is
+  // minutes by 32 and a hung CI job on any Rust file the guard cannot parse.
+  // 200 chars is far past where the old pattern stopped returning at all.
+  const src = `let s = "${'a'.repeat(200)};`;
+  const started = Date.now();
+  const out = rustVectors(src);
+  assert.ok(
+    Date.now() - started < 1000,
+    'rustVectors backtracked on an unterminated hex run',
+  );
+  assert.deepEqual(out, []);
+});
+
+test('a line-continued hex vector still reads as one value', () => {
+  const src = `const V: &str = "0011223344556677\\\n     8899aabbccddeeff";`;
+  assert.deepEqual(rustVectors(src), ['00112233445566778899aabbccddeeff']);
+});

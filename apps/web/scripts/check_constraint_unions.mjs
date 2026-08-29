@@ -880,10 +880,19 @@ export function topLevelChunks(slice) {
  * @returns {string[]}
  */
 export function findInitializers(src, decl) {
+	// A registered declaration name is an identifier on both rails, and anything
+	// else reaching the regex would be a registry typo silently changing what the
+	// guard matches -- a `.` would match any character and an unbalanced `(` would
+	// throw from inside a loop. Refuse it here, then escape the whole
+	// metacharacter set anyway rather than the `$` an identifier may legally
+	// carry: a partial escape is the defect, not a shorter one.
+	if (!/^[A-Za-z_$][\w$]*$/.test(decl)) {
+		throw new Error(`findInitializers: ${JSON.stringify(decl)} is not an identifier`);
+	}
 	const declRe = new RegExp(
 		String.raw`(?:^|[\n;{}])[ \t]*(?:export\s+)?(?:static\s+)?(?:const|final|let|var)\s+` +
 			String.raw`(?:[A-Za-z_$][\w$]*(?:<[^>=;]*>)?\s+)?` +
-			decl.replace(/[$]/g, '\\$') +
+			decl.replace(/[\\^$.*+?()[\]{}|/-]/g, '\\$&') +
 			String.raw`\b`,
 		'gm',
 	);

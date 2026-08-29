@@ -551,7 +551,12 @@ export function rustVectors(src) {
   // spaces — "deadbeef cafe decade" — reads as a byte vector, which in a test
   // whose vector is spelled some other way is a wrong answer rather than a
   // loud one. Caught by this file's own unit tests on the first draft.
-  for (const m of src.matchAll(/"((?:[0-9a-fA-F]+|\\\s*)+)"/g)) {
+  // One character per alternation branch, not a run inside a second quantifier:
+  // `(?:[0-9a-fA-F]+|\\\s*)+` is two nested quantifiers over overlapping input, so
+  // a long unterminated hex run backtracks exponentially and hangs the guard on a
+  // file it cannot even parse. The branches here are disjoint on their first
+  // character, so the match is linear and the language is unchanged.
+  for (const m of src.matchAll(/"((?:[0-9a-fA-F]|\\\s*)*)"/g)) {
     const hex = m[1].replace(/\\\s*/g, '').toLowerCase();
     if (hex.length >= 16 && hex.length % 2 === 0 && HEX_ONLY.test(hex)) out.push(hex);
   }

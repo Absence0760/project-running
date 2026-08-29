@@ -412,3 +412,19 @@ test('the committed tree agrees', () => {
 test('the exported TYPES_FILE still points at the web overlay unions', () => {
 	assert.ok(parseTsUnion(readFileSync(TYPES_FILE, 'utf-8'), 'RunSource'));
 });
+
+test('a declaration name that is not an identifier is refused, not interpolated', () => {
+	// `decl` was escaped for `$` alone, so any other metacharacter reaching the
+	// pattern changed what the guard matched rather than failing: a `.` matches
+	// any character and would certify the wrong list, an unbalanced `(` throws
+	// from inside the scan loop, and a `\` escapes whatever follows it. The
+	// registry only ever holds identifiers, so the honest answer is to say so.
+	for (const bad of ['A.B', 'A(B', 'A\\w', 'A|B', '', 'A B']) {
+		assert.throws(
+			() => findInitializers('const AB = [1];', bad),
+			/is not an identifier/,
+			`${JSON.stringify(bad)} should be refused`,
+		);
+	}
+	assert.doesNotThrow(() => findInitializers('const $A_1 = [1];', '$A_1'));
+});
