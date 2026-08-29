@@ -15,10 +15,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      html-to-image:
-        specifier: ^1.11.13
-        version: 1.11.13
     devDependencies:
       '@types/node':
         specifier: ^26.2.0

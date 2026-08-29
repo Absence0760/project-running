@@ -402,7 +402,6 @@
     "packageJson": {
       "dependencies": [
         "npm:@types/node@^26.2.0",
-        "npm:html-to-image@^1.11.13",
         "npm:svelte@5.56.10"
       ],
       "overrides": {
