@@ -1,7 +1,7 @@
 /// Stripe Connect events webhook — the ONE idempotent writer of order
 /// status (club_events.md slice P1).
 ///
-/// Handles six event types; everything else is 200-ignored:
+/// Handles nine event types; everything else is 200-ignored:
 ///   checkout.session.completed -> only once `payment_status` says the money
 ///     arrived: CAS pending->paid, confirm-time capacity recheck, seat the
 ///     'going' attendee with order_id. If the class filled via another path,
@@ -16,6 +16,13 @@
 ///     soft reservation (the pending row stops counting toward capacity).
 ///   charge.refunded            -> CAS the donation or the order, releasing
 ///     the seat only on a full refund.
+///   refund.failed / refund.updated / charge.refund.updated
+///                              -> the refund-lifecycle trio. Stripe fires
+///     charge.refunded when a refund is CREATED, so on a delayed rail the seat
+///     is already released when the bank rejects it days later. Gated on the
+///     refund's OWN status (`refundReversed`), then CAS refunded->refund_failed
+///     on whichever ledger owns the payment intent. Seats are NOT touched —
+///     see decisions § 789 for why re-seating is the wrong answer.
 ///   account.updated            -> mirror charges_enabled / payouts_enabled
 ///     / details_submitted into instructor_payout_accounts.
 ///
@@ -48,12 +55,16 @@ import {
   donationStatusTransition,
   isDonationSession,
   isPaymentSettled,
+  isRefundLifecycleEvent,
   orderStatusTransition,
   parseStripeEventEnvelope,
   readCharge,
   readCheckoutSession,
   readConnectAccount,
+  readRefund,
+  type Refund,
   refundedCentsOfCharge,
+  refundReversed,
   refundScopeOfCharge,
   shouldReleaseDedupe,
   STRIPE_EVENT,
@@ -183,6 +194,20 @@ async function dispatchStripeEvent(
     const charge = readCharge(obj);
     const donationRes = await handleDonationRefunded(service, charge);
     return donationRes ?? await handleOrderRefunded(service, charge);
+  }
+  if (isRefundLifecycleEvent(event.type)) {
+    // All three carry a Refund, and NONE of them means a failure by itself:
+    // `refund.updated` fires whenever Stripe attaches an acquirer reference
+    // number, and acting on the event type alone would walk a correctly
+    // refunded order back the moment that happened. The refund's own status is
+    // the discriminator, and anything but an explicit `failed` / `canceled`
+    // leaves every ledger untouched.
+    const refund = readRefund(obj);
+    if (!refundReversed(refund)) {
+      return Response.json({ ok: true, ignored: event.type, refund_status: refund.status });
+    }
+    const donationRes = await handleDonationRefundReversed(service, refund);
+    return donationRes ?? await handleOrderRefundReversed(service, refund);
   }
 
   // Unhandled types — recorded (dedupe) but no side effect.
@@ -476,6 +501,159 @@ async function handleOrderRefunded(
   }
 
   return Response.json({ ok: true, order_refunded: true, order_id: order.id });
+}
+
+/// A refund the bank sent back, on the donation ledger. Mirrors
+/// handleDonationRefunded's resolve-by-payment-intent + CAS shape, and returns
+/// `null` when the charge is not a donation so the dispatcher falls through to
+/// the event-order ledger.
+///
+/// `refunded_cents` is deliberately NOT walked back. It is Stripe's cumulative
+/// `charge.amount_refunded` as last reported, and subtracting this refund's
+/// amount from it would be arithmetic on a running total — the exact thing
+/// § 769 avoided so an at-least-once redelivery cannot double-apply. On a
+/// `refund_failed` row the figure reads as the amount that came back to us and
+/// is owed to the donor, which is what an operator settling it needs.
+async function handleDonationRefundReversed(
+  service: DbClient,
+  refund: Refund,
+): Promise<Response | null> {
+  const paymentIntent = refund.paymentIntentId;
+  if (!paymentIntent) {
+    return Response.json({ ok: true, skipped: 'missing_payment_intent' });
+  }
+  const { data: donation, error: readErr } = await service
+    .from('donations')
+    .select('id, status')
+    .eq('stripe_payment_intent_id', paymentIntent)
+    .maybeSingle();
+  if (readErr) {
+    // A failed read is not "not a donation" — falling through on it would hand
+    // the refund to the order ledger, find no order either, and answer 200,
+    // closing the delivery on the one event that says the money never left.
+    console.error('donation refund-reversal read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_read_failed' }, { status: 500 });
+  }
+  if (!donation) return null;
+
+  const nextStatus = donationStatusTransition(donation.status, STRIPE_EVENT.refundFailed);
+  if (nextStatus === null) {
+    // Not a fully-refunded donation. A failed PARTIAL refund lands here: the
+    // ledger keeps `partially_refunded`, which understates what the charity
+    // raised rather than erasing the part that was never returned.
+    console.error(
+      'refund reversal on a donation that is not fully refunded; reconcile by hand. donation:',
+      donation.id,
+      'status:',
+      donation.status,
+      'refund:',
+      refund.id ?? 'unknown',
+    );
+    return Response.json({ ok: true, skipped: 'no_transition' });
+  }
+
+  const { data: updated, error: updErr } = await service
+    .from('donations')
+    .update({ status: nextStatus })
+    .eq('id', donation.id)
+    .eq('status', donation.status)
+    .select('id')
+    .maybeSingle();
+  if (updErr) {
+    console.error('donation refund-reversal update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
+  }
+  if (!updated) {
+    return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+  console.error(
+    'REFUND FAILED: donation money is still ours and the donor is owed it. donation:',
+    donation.id,
+    'refund:',
+    refund.id ?? 'unknown',
+    'reason:',
+    refund.failureReason ?? 'unknown',
+  );
+  return Response.json({ ok: true, donation_refund_failed: true, donation_id: donation.id });
+}
+
+/// A refund the bank sent back, on the event-order ledger.
+///
+/// The seat is deliberately left alone. `handleOrderRefunded` deleted the
+/// buyer's `going` row when the refund was created, and `promote_event_waitlist`
+/// may already have given the mat to the next person — so re-seating here would
+/// either oversell the class or take a seat back off someone who has since been
+/// told they are in. It would also be answering a question nobody asked: the
+/// buyer cancelled, they want their money, and Stripe's own guidance for a
+/// failed refund is to "arrange an alternative way to provide your customer
+/// with a refund". `refund_failed` is that worklist. decisions § 789.
+async function handleOrderRefundReversed(
+  service: DbClient,
+  refund: Refund,
+): Promise<Response> {
+  const paymentIntent = refund.paymentIntentId;
+  if (!paymentIntent) {
+    return Response.json({ ok: true, skipped: 'missing_payment_intent' });
+  }
+  const { data: order, error: readErr } = await service
+    .from('event_orders')
+    .select('id, status, buyer_user_id')
+    .eq('stripe_payment_intent_id', paymentIntent)
+    .maybeSingle();
+  if (readErr) {
+    console.error('order refund-reversal read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'order_read_failed' }, { status: 500 });
+  }
+  if (!order) {
+    // A refund on a charge neither ledger knows (a dashboard refund for
+    // something else). 200 so Stripe stops retrying.
+    return Response.json({ ok: true, skipped: 'no_order_for_refund' });
+  }
+
+  const nextStatus = orderStatusTransition(order.status, STRIPE_EVENT.refundFailed);
+  if (nextStatus === null) {
+    // A failed PARTIAL refund lands here. `partially_refunded` still backs the
+    // seat and still lets the buyer cancel (20270522_001), and this failure
+    // cost them neither — so the status stays and the money discrepancy is a
+    // reconciliation item.
+    console.error(
+      'refund reversal on an order that is not fully refunded; reconcile by hand. order:',
+      order.id,
+      'status:',
+      order.status,
+      'refund:',
+      refund.id ?? 'unknown',
+    );
+    return Response.json({ ok: true, skipped: 'no_transition' });
+  }
+
+  // CAS on the status we READ — a replayed delivery finds `refund_failed` and
+  // gets null from the table above, so this cannot double-apply.
+  const { data: updated, error: updErr } = await service
+    .from('event_orders')
+    .update({ status: nextStatus })
+    .eq('id', order.id)
+    .eq('status', order.status)
+    .select('id')
+    .maybeSingle();
+  if (updErr) {
+    console.error('order refund-reversal update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'order_update_failed' }, { status: 500 });
+  }
+  if (!updated) {
+    return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+  console.error(
+    'REFUND FAILED: buyer has neither the seat nor the money, and is owed a payout. order:',
+    order.id,
+    'buyer:',
+    order.buyer_user_id,
+    'refund:',
+    refund.id ?? 'unknown',
+    'reason:',
+    refund.failureReason ?? 'unknown',
+  );
+  return Response.json({ ok: true, order_refund_failed: true, order_id: order.id });
 }
 
 async function handleCompleted(

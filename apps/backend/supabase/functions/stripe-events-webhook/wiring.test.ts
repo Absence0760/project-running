@@ -23,8 +23,16 @@ function donationRefundHandler(): string {
 function refundHandler(): string {
   const start = SRC.indexOf('async function handleOrderRefunded');
   assert(start !== -1, 'handleOrderRefunded is gone — has the refund arm moved?');
-  const end = SRC.indexOf('async function handleCompleted', start);
+  const end = SRC.indexOf('async function handleDonationRefundReversed', start);
   assert(end > start, 'could not find the end of handleOrderRefunded');
+  return SRC.slice(start, end);
+}
+
+function reversalHandlers(): string {
+  const start = SRC.indexOf('async function handleDonationRefundReversed');
+  assert(start !== -1, 'handleDonationRefundReversed is gone — has the reversal arm moved?');
+  const end = SRC.indexOf('async function handleCompleted', start);
+  assert(end > start, 'could not find the end of the refund-reversal handlers');
   return SRC.slice(start, end);
 }
 
@@ -208,7 +216,14 @@ Deno.test('no handler reads a Stripe object as an untyped bag', () => {
     `these handler parameters are untyped Stripe payloads again: ${bagged.join(', ')}. ` +
       'Read them through readCheckoutSession / readCharge / readConnectAccount instead.',
   );
-  for (const reader of ['readCheckoutSession(', 'readCharge(', 'readConnectAccount(']) {
+  for (
+    const reader of [
+      'readCheckoutSession(',
+      'readCharge(',
+      'readConnectAccount(',
+      'readRefund(',
+    ]
+  ) {
     assert(
       SRC.includes(reader),
       `${reader} is not called from index.ts, so some event object is reaching a ` +
@@ -293,6 +308,70 @@ Deno.test('the async payment outcomes are dispatched, not 200-ignored', () => {
     assert(
       dispatch.includes(`await ${arm}(`),
       `${constant} has no ${arm} arm to reach`,
+    );
+  }
+});
+
+// ── the refund the bank sent back (decisions § 789) ────────────────────────
+
+Deno.test('a reversed refund never touches a seat', () => {
+  // The seat was released when the refund was CREATED and
+  // promote_event_waitlist may already have given it to the next person, so
+  // re-seating here would either oversell the class or take a seat back off
+  // someone who has been told they are in. The buyer cancelled and wants their
+  // money; the answer is a payout by another route, which is a human action.
+  const src = reversalHandlers();
+  assert(
+    !src.includes(".from('event_attendees')"),
+    'the refund-reversal arm must not write event_attendees — re-seating is a ' +
+      'product decision, not a transition-table row (decisions § 789)',
+  );
+  assert(
+    !src.includes('.delete()'),
+    'the refund-reversal arm deletes a row — it may only move a status',
+  );
+});
+
+Deno.test('the reversal is gated on the REFUND status, not on the event type', () => {
+  // `refund.updated` fires whenever Stripe attaches an acquirer reference
+  // number to a perfectly good refund. Dispatching on the event type alone
+  // would walk a correctly refunded order back the moment that happened.
+  const dispatch = SRC.indexOf('isRefundLifecycleEvent(event.type)');
+  assert(dispatch !== -1, 'the refund-lifecycle arm is not dispatched at all');
+  const gate = SRC.indexOf('refundReversed(refund)', dispatch);
+  const donationCall = SRC.indexOf('handleDonationRefundReversed(service', dispatch);
+  const orderCall = SRC.indexOf('handleOrderRefundReversed(service', dispatch);
+  assert(gate !== -1, 'nothing checks the refund status before dispatching');
+  assert(donationCall > gate, 'the donation ledger is reached before the status gate');
+  assert(orderCall > gate, 'the order ledger is reached before the status gate');
+});
+
+Deno.test('both reversal CASs match the status they read', () => {
+  // A hardcoded `.eq('status', 'refunded')` would be right today and wrong the
+  // moment the table grows another arm into refund_failed; matching the status
+  // that was read is what makes an at-least-once redelivery a no-op.
+  const src = reversalHandlers();
+  assertEquals(
+    [...src.matchAll(/\.eq\('status', (\w+(?:\.\w+)*)\)/g)].map((m) => m[1]),
+    ['donation.status', 'order.status'],
+  );
+  assert(
+    !/\.eq\('status', '/.test(src),
+    'a reversal CAS hardcodes a status literal instead of the one it read',
+  );
+});
+
+Deno.test('a reversal that is not a transition is logged, never silently dropped', () => {
+  // A failed PARTIAL refund transitions on nothing by design (the seat-bearing
+  // status must survive), so the only record of the money discrepancy is the
+  // log line — which makes its absence a real loss, not a style point.
+  const src = reversalHandlers();
+  const noTransition = [...src.matchAll(/skipped: 'no_transition'/g)];
+  assertEquals(noTransition.length, 2, 'both ledgers must have a no-transition arm');
+  for (const ledger of ['donation:', 'order:']) {
+    assert(
+      src.includes(`'refund reversal on a`) && src.includes(ledger),
+      `the ${ledger} no-transition arm does not log the row it declined to move`,
     );
   }
 });

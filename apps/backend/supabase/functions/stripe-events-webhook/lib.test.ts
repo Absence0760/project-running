@@ -14,10 +14,14 @@ import {
   orderStatusTransition,
   isPaymentSettled,
   parseStripeEventEnvelope,
+  isRefundLifecycleEvent,
   readCharge,
   readCheckoutSession,
   readConnectAccount,
+  readRefund,
+  REFUND_LIFECYCLE_EVENTS,
   refundedCentsOfCharge,
+  refundReversed,
   refundScopeOfCharge,
   shouldReleaseDedupe,
   STRIPE_EVENT,
@@ -687,4 +691,268 @@ Deno.test('donationStatusTransition — the async outcome, not the completion, p
     donationStatusTransition('paid', STRIPE_EVENT.checkoutAsyncFailed),
     null,
   );
+});
+
+// ── the refund the bank sent back (decisions § 789) ────────────────────────
+//
+// Stripe fires `charge.refunded` when a refund is CREATED, including one whose
+// status is still `pending`. On a delayed-notification rail the seat is
+// therefore released days before the money's fate is known, and the outcome
+// lands later as one of the three refund-lifecycle events.
+
+/// A refund-lifecycle event body, the way Stripe serialises one: the Refund
+/// object in `data.object`, carrying the payment intent both ledgers resolve on.
+function refundEvent(
+  type: string,
+  status: string | null,
+  extra: Record<string, unknown> = {},
+): string {
+  return JSON.stringify({
+    id: 'evt_refund_1',
+    type,
+    data: {
+      object: {
+        id: 're_1',
+        object: 'refund',
+        amount: 5000,
+        charge: 'ch_1',
+        payment_intent: 'pi_1',
+        status,
+        ...extra,
+      },
+    },
+  });
+}
+
+Deno.test('STRIPE_EVENT — the three refund-lifecycle types are spelled as Stripe sends them', () => {
+  // Checked against Stripe's own event union at compile time (`satisfies
+  // Record<string, Stripe.Event.Type>`), which is what proves all three exist
+  // in the pinned SDK. This pins the literals themselves: a constant that
+  // matches nothing does not error, the branch simply never fires, and on this
+  // function that means a failed refund is never noticed at all.
+  assertStrictEquals(STRIPE_EVENT.refundFailed, 'refund.failed');
+  assertStrictEquals(STRIPE_EVENT.refundUpdated, 'refund.updated');
+  assertStrictEquals(STRIPE_EVENT.chargeRefundUpdated, 'charge.refund.updated');
+  assertEquals([...REFUND_LIFECYCLE_EVENTS].sort(), [
+    'charge.refund.updated',
+    'refund.failed',
+    'refund.updated',
+  ]);
+});
+
+Deno.test('isRefundLifecycleEvent — both eras of the event, and nothing else', () => {
+  // `refund.failed` is what Stripe's own guide names, available for refunds
+  // WITH a charge from API version 2024-10-28.acacia. `charge.refund.updated`
+  // is deprecated in Stripe's refund-events table but is what a webhook
+  // endpoint still pinned below that version receives — which version an
+  // endpoint is on is dashboard configuration this repo cannot read.
+  assertStrictEquals(isRefundLifecycleEvent('refund.failed'), true);
+  assertStrictEquals(isRefundLifecycleEvent('refund.updated'), true);
+  assertStrictEquals(isRefundLifecycleEvent('charge.refund.updated'), true);
+  // `charge.refunded` is the refund being CREATED and has its own handler;
+  // `refund.created` says nothing about the outcome.
+  assertStrictEquals(isRefundLifecycleEvent('charge.refunded'), false);
+  assertStrictEquals(isRefundLifecycleEvent('refund.created'), false);
+  assertStrictEquals(isRefundLifecycleEvent('account.updated'), false);
+});
+
+Deno.test('readRefund — every field is checked, and an EXPANDED payment_intent resolves', () => {
+  const event = parseStripeEventEnvelope(
+    refundEvent('refund.failed', 'failed', { failure_reason: 'declined' }),
+  );
+  assertEquals(readRefund(event!.data.object), {
+    id: 're_1',
+    paymentIntentId: 'pi_1',
+    status: 'failed',
+    failureReason: 'declined',
+  });
+  // The endpoint may be configured to expand the reference into the whole
+  // object, which a `typeof x === 'string'` read would resolve to null — and
+  // null on this path means the ledger is never found.
+  assertEquals(
+    readRefund({
+      id: 're_2',
+      payment_intent: { id: 'pi_2', object: 'payment_intent' },
+      status: 'canceled',
+    }),
+    { id: 're_2', paymentIntentId: 'pi_2', status: 'canceled', failureReason: null },
+  );
+});
+
+Deno.test('readRefund — a value that does not check reads as absent, never as a default', () => {
+  assertEquals(readRefund({ id: 42, payment_intent: 7, status: { code: 'failed' } }), {
+    id: null,
+    paymentIntentId: null,
+    status: null,
+    failureReason: null,
+  });
+  assertEquals(readRefund({}), {
+    id: null,
+    paymentIntentId: null,
+    status: null,
+    failureReason: null,
+  });
+});
+
+Deno.test('refundReversed — only failed and canceled mean the money came back to us', () => {
+  // Stripe: "As cancellations are a type of refund failure, the attributes
+  // failure_reason and failure_balance_transaction are included on the Refund."
+  assertStrictEquals(refundReversed(readRefund({ status: 'failed' })), true);
+  assertStrictEquals(refundReversed(readRefund({ status: 'canceled' })), true);
+});
+
+Deno.test('refundReversed — an in-flight or settled refund moves nothing', () => {
+  // `requires_action` is the bank handing money back for CORRECTED details:
+  // Stripe re-emails the customer and the refund is still in flight, so calling
+  // it a failure would walk a ledger back that is about to settle on its own.
+  assertStrictEquals(refundReversed(readRefund({ status: 'pending' })), false);
+  assertStrictEquals(refundReversed(readRefund({ status: 'requires_action' })), false);
+  assertStrictEquals(refundReversed(readRefund({ status: 'succeeded' })), false);
+  // Stripe declares `status` as a bare `string | null`, so there is no
+  // compile-time union to lean on: an unheard-of value, an absent one and an
+  // unreadable one all have to fail closed at runtime.
+  assertStrictEquals(refundReversed(readRefund({ status: 'quiesced' })), false);
+  assertStrictEquals(refundReversed(readRefund({})), false);
+  assertStrictEquals(refundReversed(readRefund({ status: 'FAILED' })), false);
+});
+
+Deno.test('orderStatusTransition — a reversed refund states that the money never left', () => {
+  // The seat is already gone and promote_event_waitlist may already have given
+  // it away; `refunded` is now a claim about money that is provably false.
+  assertStrictEquals(
+    orderStatusTransition('refunded', STRIPE_EVENT.refundFailed),
+    'refund_failed',
+  );
+});
+
+Deno.test('orderStatusTransition — a failed refund does NOT strip a seat-bearing order', () => {
+  // `partially_refunded` backs a live seat on enforce_paid_order_for_priced_event
+  // and keeps the buyer's cancel affordance (20270522_001). The failure cost
+  // that buyer nothing — they are still attending — so moving them to a
+  // terminal status would take the roster entry and the cancel button away
+  // over a discrepancy that is ours to reconcile, not theirs to absorb.
+  assertStrictEquals(
+    orderStatusTransition('partially_refunded', STRIPE_EVENT.refundFailed),
+    null,
+  );
+  // Nor does it touch an order that never had a refund to fail.
+  assertStrictEquals(orderStatusTransition('paid', STRIPE_EVENT.refundFailed), null);
+  assertStrictEquals(orderStatusTransition('pending', STRIPE_EVENT.refundFailed), null);
+  assertStrictEquals(orderStatusTransition('canceled', STRIPE_EVENT.refundFailed), null);
+  assertStrictEquals(orderStatusTransition('failed', STRIPE_EVENT.refundFailed), null);
+});
+
+Deno.test('orderStatusTransition — a REPLAYED reversal cannot double-apply', () => {
+  // Stripe delivers at least once. The CAS matches the status that was read,
+  // and the second delivery reads `refund_failed` and transitions on nothing.
+  const first = orderStatusTransition('refunded', STRIPE_EVENT.refundFailed);
+  assertStrictEquals(first, 'refund_failed');
+  assertStrictEquals(orderStatusTransition(first!, STRIPE_EVENT.refundFailed), null);
+});
+
+Deno.test('orderStatusTransition — the table keys on refund.failed, not on the update events', () => {
+  // `refund.updated` fires whenever Stripe attaches an acquirer reference
+  // number to a perfectly good refund. Keying the table on the event type
+  // alone would walk a correctly refunded order back the moment that happened,
+  // so the dispatcher gates on `refundReversed` and normalises onto the one
+  // constant that unambiguously means a failure.
+  assertStrictEquals(orderStatusTransition('refunded', STRIPE_EVENT.refundUpdated), null);
+  assertStrictEquals(
+    orderStatusTransition('refunded', STRIPE_EVENT.chargeRefundUpdated),
+    null,
+  );
+});
+
+Deno.test('orderStatusTransition — a refund paid another way settles a refund_failed order', () => {
+  // `refund_failed` is terminal against everything EXCEPT the refund actually
+  // landing, or the ledger would be stuck denying a refund that has happened.
+  assertStrictEquals(
+    orderStatusTransition('refund_failed', STRIPE_EVENT.chargeRefunded, 'full'),
+    'refunded',
+  );
+  // A PARTIAL refund does not resurrect the seat-bearing status: there is no
+  // attendee row left to bear, and `partially_refunded` would tell every seat
+  // predicate and the buyer's cancel button otherwise.
+  assertStrictEquals(
+    orderStatusTransition('refund_failed', STRIPE_EVENT.chargeRefunded, 'partial'),
+    null,
+  );
+  assertStrictEquals(
+    orderStatusTransition('refund_failed', STRIPE_EVENT.checkoutCompleted),
+    null,
+  );
+});
+
+Deno.test('donationStatusTransition — the donation ledger reverses on the same terms', () => {
+  assertStrictEquals(
+    donationStatusTransition('refunded', STRIPE_EVENT.refundFailed),
+    'refund_failed',
+  );
+  assertStrictEquals(
+    donationStatusTransition('refund_failed', STRIPE_EVENT.refundFailed),
+    null,
+  );
+  assertStrictEquals(
+    donationStatusTransition('refund_failed', STRIPE_EVENT.chargeRefunded, 'full'),
+    'refunded',
+  );
+  assertStrictEquals(
+    donationStatusTransition('refund_failed', STRIPE_EVENT.chargeRefunded, 'partial'),
+    null,
+  );
+});
+
+Deno.test('donationStatusTransition — a failed PARTIAL refund leaves the thermometer alone', () => {
+  // fundraiser_totals sums `amount_cents - refunded_cents` over ('paid',
+  // 'partially_refunded'), so moving a partly-refunded donation to the excluded
+  // `refund_failed` would drop the WHOLE donation off the charity's total
+  // including the part that was never refunded. The remaining alternative —
+  // subtracting this instalment from `refunded_cents` — is arithmetic on a
+  // running total, which is what § 769 avoided so a redelivery cannot
+  // double-apply. Understating what was raised is the smaller, safe lie.
+  assertStrictEquals(
+    donationStatusTransition('partially_refunded', STRIPE_EVENT.refundFailed),
+    null,
+  );
+  assertStrictEquals(donationStatusTransition('paid', STRIPE_EVENT.refundFailed), null);
+  assertStrictEquals(donationStatusTransition('pending', STRIPE_EVENT.refundFailed), null);
+});
+
+Deno.test('refund.failed envelope — end to end from the wire to the new status', () => {
+  const event = parseStripeEventEnvelope(
+    refundEvent('refund.failed', 'failed', { failure_reason: 'expired_or_canceled_card' }),
+  );
+  assertStrictEquals(isRefundLifecycleEvent(event!.type), true);
+  const refund = readRefund(event!.data.object);
+  assertStrictEquals(refundReversed(refund), true);
+  assertStrictEquals(refund.paymentIntentId, 'pi_1');
+  assertStrictEquals(
+    orderStatusTransition('refunded', STRIPE_EVENT.refundFailed),
+    'refund_failed',
+  );
+  assertStrictEquals(
+    donationStatusTransition('refunded', STRIPE_EVENT.refundFailed),
+    'refund_failed',
+  );
+});
+
+Deno.test('refund.updated envelope — a benign reference-number update changes nothing', () => {
+  // The same event type carries both "here is the ARN" and "the bank rejected
+  // it". Only the refund's own status separates them.
+  const benign = parseStripeEventEnvelope(refundEvent('refund.updated', 'succeeded'));
+  assertStrictEquals(isRefundLifecycleEvent(benign!.type), true);
+  assertStrictEquals(refundReversed(readRefund(benign!.data.object)), false);
+
+  const reversed = parseStripeEventEnvelope(refundEvent('refund.updated', 'canceled'));
+  assertStrictEquals(refundReversed(readRefund(reversed!.data.object)), true);
+});
+
+Deno.test('charge.refund.updated envelope — the deprecated event carries the same Refund', () => {
+  // A webhook endpoint pinned below 2024-10-28.acacia receives this one and
+  // not `refund.failed`, so both eras resolve to the same ledger row.
+  const event = parseStripeEventEnvelope(refundEvent('charge.refund.updated', 'failed'));
+  assertStrictEquals(isRefundLifecycleEvent(event!.type), true);
+  const refund = readRefund(event!.data.object);
+  assertStrictEquals(refundReversed(refund), true);
+  assertStrictEquals(refund.paymentIntentId, 'pi_1');
 });
