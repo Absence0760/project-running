@@ -35,9 +35,6 @@ const KNOWN_DEPS: { name: string; license: string }[] = [
 	// verified MIT — pinned so the row (and the verification note) can't drift.
 	{ name: '@mapbox/jsonlint-lines-primitives', license: 'MIT (verified upstream)' },
 	{ name: 'mdsvex', license: 'MIT' },
-	{ name: 'normalize.css', license: 'MIT' },
-	{ name: 'unplugin-icons', license: 'MIT' },
-	{ name: '@iconify-json/material-symbols', license: 'Apache-2.0' },
 	{ name: 'MapTiler tiles', license: 'Commercial (MapTiler Cloud)' },
 	{ name: 'html-to-image', license: 'MIT' },
 ];

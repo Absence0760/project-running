@@ -129,26 +129,6 @@
 			fullText: 'MIT License. See upstream repository for the full text.',
 		},
 		{
-			name: 'normalize.css',
-			license: 'MIT',
-			url: 'https://github.com/necolas/normalize.css',
-			fullText: 'MIT License. Copyright (c) Nicolas Gallagher and Jonathan Neal. See upstream repository for the full text.',
-		},
-		{
-			name: 'unplugin-icons',
-			license: 'MIT',
-			url: 'https://github.com/unplugin/unplugin-icons',
-			fullText: 'MIT License. See upstream repository for the full text.',
-		},
-		{
-			name: '@iconify-json/material-symbols',
-			license: 'Apache-2.0',
-			url: 'https://github.com/iconify/icon-sets',
-			fullText:
-				'Apache License 2.0. Material Symbols are released by Google under Apache 2.0. ' +
-				'See upstream repository for the full text.',
-		},
-		{
 			name: 'MapTiler tiles',
 			license: 'Commercial (MapTiler Cloud)',
 			url: 'https://www.maptiler.com/',
