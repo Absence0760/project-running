@@ -589,11 +589,19 @@ async function handleExpired(
     return Response.json({ ok: true, skipped: 'missing_order_id' });
   }
 
-  const { data: order } = await service
+  const { data: order, error: readErr } = await service
     .from('event_orders')
     .select('status')
     .eq('id', orderId)
     .maybeSingle();
+  if (readErr) {
+    // A failed read is not "no such order". Answering 200 here closed the
+    // delivery for good and left the order `pending` forever, holding a seat
+    // nobody bought — nothing sweeps a lapsed reservation. The donation twin
+    // of this read was hardened; this one was left.
+    console.error('order expiry read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'order_read_failed' }, { status: 500 });
+  }
   if (!order) {
     return Response.json({ ok: true, skipped: 'unknown_order' });
   }

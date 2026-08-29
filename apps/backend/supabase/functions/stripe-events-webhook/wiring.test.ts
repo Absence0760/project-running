@@ -216,3 +216,32 @@ Deno.test('no handler reads a Stripe object as an untyped bag', () => {
     );
   }
 });
+
+Deno.test('every ledger read fails loudly instead of reading as "no such row"', () => {
+  // `const { data: x } = await …` drops the error, and a dropped error on a
+  // `maybeSingle()` is indistinguishable from "no such row" — which every
+  // handler answers 200. Stripe then records the delivery as processed and
+  // never retries: the order stays `pending` forever, holding a seat nobody
+  // bought, because nothing sweeps a lapsed reservation. Both donation reads
+  // were hardened for exactly this; the ORDER expiry read was left.
+  //
+  // One exemption, which is why this is a list rather than a bare regex: the
+  // confirm-time capacity read is best-effort by design. It only shortcuts an
+  // already-full event, and the advisory-locked enforce_event_capacity trigger
+  // is the authoritative guard — so a failed read degrades to the slow path,
+  // not to a wrong answer.
+  const EXEMPT = ['event'];
+  const dropped = [...SRC.matchAll(/const \{ data: (\w+) \} = await/g)].map((m) => m[1]);
+  assertEquals(
+    dropped.filter((name) => !EXEMPT.includes(name)),
+    [],
+    `these reads drop their error: ${dropped.join(', ')}. Destructure ` +
+      '`error` and answer 5xx, so the dedupe row is released and Stripe retries.',
+  );
+  assert(
+    dropped.length > 0,
+    'no read in index.ts drops its error any more — including the capacity ' +
+      'read this guard exempts. If that one was hardened too, delete the ' +
+      'exemption rather than leaving a list that matches nothing.',
+  );
+});
