@@ -8,6 +8,8 @@
 /// with `npx tsx --test` and mirrors the mobile Dart `Preferences` weight
 /// helpers byte-for-byte in behaviour. Do not add reactive state here.
 
+import { valueLimit, withinValueLimit } from '../core/column_limits';
+
 export type WeightUnit = 'kg' | 'lbs';
 
 const LBS_PER_KG = 2.2046226218;
@@ -73,8 +75,13 @@ export function parseWeightToKg(
 	return displayToKg(value, unit);
 }
 
-export const BODY_WEIGHT_MIN_KG = 20;
-export const BODY_WEIGHT_MAX_KG = 250;
+/// Re-exported from `core/column_limits.ts`, which is where the bound is
+/// stated once against the `body_metrics.weight_kg` CHECK it has to sit
+/// inside — the same re-export shape `core/auth_gates.ts` uses for the
+/// password floor, so the field keeps its own named constant while the
+/// number keeps one home (decisions § 792).
+export const BODY_WEIGHT_MIN_KG = valueLimit('body_metrics.weight_kg').min;
+export const BODY_WEIGHT_MAX_KG = valueLimit('body_metrics.weight_kg').max;
 
 /// A plausible HUMAN body-weight bound, not a generic weight bound —
 /// `parseWeightToKg` above also parses gym-load weights (a barbell one-rep
@@ -82,5 +89,22 @@ export const BODY_WEIGHT_MAX_KG = 250;
 /// separate, narrower check callers opt into for a body-weight field
 /// specifically (e.g. onboarding, Settings demographics).
 export function isBodyWeightInRangeKg(kg: number): boolean {
-	return Number.isFinite(kg) && kg >= BODY_WEIGHT_MIN_KG && kg <= BODY_WEIGHT_MAX_KG;
+	return withinValueLimit('body_metrics.weight_kg', kg);
+}
+
+/// The same bound expressed in the unit the field is TYPED in, for the
+/// `min`/`max` attributes and the out-of-range sentence.
+///
+/// Rounding is directional on purpose: the floor rounds UP and the ceiling
+/// DOWN, so every value the displayed range admits converts back to a
+/// kilogram figure `isBodyWeightInRangeKg` also accepts. Rounding both to
+/// nearest would put 44.0 lb (19.96 kg) inside a range whose real gate then
+/// refuses it, which is the shape of error the range exists to prevent.
+export function bodyWeightBoundsIn(unit: WeightUnit): { min: number; max: number } {
+	const { min, max } = valueLimit('body_metrics.weight_kg');
+	if (unit === 'kg') return { min, max };
+	return {
+		min: Math.ceil(kgToDisplay(min, unit) * 10) / 10,
+		max: Math.floor(kgToDisplay(max, unit) * 10) / 10
+	};
 }

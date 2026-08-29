@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'column_limits.dart';
 import 'goals.dart';
 import 'l10n/locale_support.dart';
 import 'l10n/number_format.dart';
@@ -1157,6 +1158,25 @@ class WeightFormat {
   /// Unit label, "kg" or "lbs".
   static String label(WeightUnit unit) =>
       unit == WeightUnit.lbs ? 'lbs' : 'kg';
+
+  /// The `body_metrics.weight_kg` client bound expressed in the unit the
+  /// field is TYPED in, for the out-of-range sentence.
+  ///
+  /// Rounding is directional on purpose: the floor rounds UP and the ceiling
+  /// DOWN, so every value the displayed range admits converts back to a
+  /// kilogram figure [withinColumnLimit] also accepts. Rounding both to
+  /// nearest would put 44.0 lb (19.96 kg) inside a range whose real gate then
+  /// refuses it, which is the shape of error the range exists to prevent.
+  /// Mirrors web's `bodyWeightBoundsIn` in `format/weight.ts`.
+  static ({double min, double max}) boundsIn(WeightUnit unit) {
+    final min = columnMin('body_metrics.weight_kg').toDouble();
+    final max = columnMax('body_metrics.weight_kg').toDouble();
+    if (unit == WeightUnit.kg) return (min: min, max: max);
+    return (
+      min: (toDisplay(min, unit) * 10).ceil() / 10,
+      max: (toDisplay(max, unit) * 10).floor() / 10,
+    );
+  }
 
   /// Parse a user-entered display-unit string into canonical kg. Tolerates
   /// the active locale's decimal comma and a trailing unit suffix. Returns
