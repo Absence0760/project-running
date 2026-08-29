@@ -460,6 +460,32 @@ jobs:
             echo "Fix scripts/check_pnpm_overrides.mjs (or its tests); reproduce with: node --test scripts/check_pnpm_overrides.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
+      # A dependency nothing imports is not merely clutter. `unplugin-icons`
+      # sat in apps/web with `autoInstall: true` and no `~icons/` import
+      # anywhere the build compiles, so on a miss the plugin would install a
+      # package the lockfile does not carry, at build time; `normalize.css` was
+      # declared in the scaffold commit and never imported at all. Both were
+      # DESCRIBED as live by docs a reader would consult, which is why a
+      # periodic sweep is not the answer — the sweep is the thing nobody runs
+      # (decisions § 786). Reads the source trees as text, so it sits with the
+      # other manifest-vs-reality checks here rather than behind an install.
+      #
+      # Drift first, then the tool's own suite, for the deno step's reason
+      # below: this suite's last case runs the guard over the committed tree,
+      # so running it first would report "the tool is broken" over an ordinary
+      # dead dependency.
+      - name: Declared dependencies are read by something
+        run: |
+          if ! node scripts/check_dead_dependencies.mjs; then
+            echo "::error::A package.json declares a dependency nothing in this repo imports, reads out of node_modules, or needs for its types. Nothing here is about the Supabase schema, the migrations, the generated row types or the security overrides — those are the other checks in this job."
+            echo "The failing line above names the manifest and the package. Delete it and commit both lockfiles, or add it to INDIRECT in scripts/check_dead_dependencies.mjs saying how it is consumed."
+            exit 1
+          fi
+          if ! node --test scripts/check_dead_dependencies.test.mjs; then
+            echo "::error::The dead-dependency guard's own unit tests failed. The manifests themselves are fine — the check above just passed — so this is a defect in scripts/check_dead_dependencies.mjs, not a dead dependency."
+            echo "Fix scripts/check_dead_dependencies.mjs (or its tests); reproduce with: node --test scripts/check_dead_dependencies.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       # deno.lock's `workspace` section is generated from the npm workspace's
       # package.json files, and drifted on every web dep bump because nothing
       # looked — six hand-sync commits between 2026-05 and 2026-07, each a
