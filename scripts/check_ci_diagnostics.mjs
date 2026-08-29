@@ -79,8 +79,9 @@ export const DIAGNOSING_JOBS = new Map([
 	// itself reported.
 	[
 		'edge-functions',
-		'it bundles a dependency prefetch, the `deno check` typecheck, a live ' +
-			'function-host boot and two unrelated test suites under one job name',
+		'it bundles a dependency prefetch, the `deno check` typecheck, the suite ' +
+			'vacuity guard, a live function-host boot and two unrelated test suites ' +
+			'under one job name',
 	],
 ]);
 

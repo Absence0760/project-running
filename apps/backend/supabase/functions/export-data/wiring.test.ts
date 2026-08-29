@@ -34,6 +34,10 @@ Deno.test('the archive is streamed, never buffered into a Blob', () => {
 });
 
 Deno.test('no run cap and no per-section row ceiling survive', () => {
+	// Three absences, and an empty or renamed index.ts satisfies all three. The
+	// caps were replaced by the wall-clock budget, so its presence is what says
+	// the file being scanned is still the export handler.
+	assert(SRC.includes('createExportBudget()'), 'this is not the export handler');
 	assert(!SRC.includes('MAX_RUNS'), 'the 5000-run cap is gone; it was a memory bound');
 	assert(!SRC.includes('EXPORT_ROW_CEILING'), 'the per-section row ceiling is gone');
 	assert(!SRC.includes('fetchAllPages'), 'collecting a whole section is what the caps existed for');

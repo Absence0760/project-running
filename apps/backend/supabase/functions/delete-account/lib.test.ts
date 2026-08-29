@@ -127,6 +127,10 @@ Deno.test('hashUserIdForAudit is stable across calls', async () => {
 	const a = await hashUserIdForAudit('abc');
 	const b = await hashUserIdForAudit('abc');
 	assertEquals(a, b);
+	// Stability alone is what a constant satisfies, so the stable value is
+	// pinned too: SHA-256 of `<default salt>:abc`, which fixes the primitive,
+	// the salt and the hex encoding the deletion_audit_log CHECK expects.
+	assertEquals(a, '72aeadc1a0a0ca346d19d51e7fd169f32271333afc6787a50721fe607680c14b');
 });
 
 Deno.test('hashUserIdForAudit differentiates inputs', async () => {
@@ -169,6 +173,10 @@ Deno.test('hashUserIdForAudit empty-string key falls back to unkeyed mode', asyn
 	const empty = await hashUserIdForAudit('user', { key: '' });
 	const unset = await hashUserIdForAudit('user');
 	assertEquals(empty, unset);
+	// And that the shared answer is the UNKEYED one rather than both calls
+	// having quietly engaged HMAC with a zero-length key.
+	const keyed = await hashUserIdForAudit('user', { key: 'secret-a-32-bytes-min-yyyyyyyyyy' });
+	assert(empty !== keyed, 'an empty key must not engage HMAC');
 });
 
 // The two Portuguese rows here used to pin the OPPOSITE rule — `pt` and, by

@@ -1951,6 +1951,38 @@ jobs:
             echo "Reproduce locally with: deno install && cd apps/backend && deno check \$(find supabase/functions -type f -name '*.ts' | sort)"
             exit 1
           fi
+      # For the vacuity guard below. Like the pgtap refusal guard it imports
+      # nothing outside node:*, so no workspace install is needed — only a
+      # pinned runtime.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # A green Deno suite says every assertion passed, not that any of them
+      # asked anything. decisions § 741 found that shape in the pgtap suite and
+      # § 777 in the Playwright suite; this is the third tier, and what hides a
+      # subject here is a swallowing try/catch, an assertion comparing two of
+      # the subject's own outputs, or a source grep whose absence an empty file
+      # supplies for free. The guard neuters every module in the tree and every
+      # artifact a test reads as its subject, then re-runs the suite: a test
+      # that still passes was testing none of them.
+      #
+      # It goes here, before the Supabase stack starts — it needs no database,
+      # and behind a Docker start a broken stack would fail first and take this
+      # signal with it. Measured at ~8 s: it runs the whole Deno suite twice.
+      - name: Validate the vacuity guard's own mutation operator
+        run: |
+          if ! node --test apps/backend/scripts/check_edge_function_test_vacuity.test.mjs; then
+            echo "::error::The Edge Function vacuity guard's own tests fail. Nothing here involves the Edge Functions, the typecheck or the Supabase stack — fix apps/backend/scripts/edge_function_neuter.mjs (or its tests) first. A failure in the 'neutered twin exports exactly the names the original did' case means the mutation operator has gone lossy, and a lossy operator scores every test in an importing file as a kill nobody proved."
+            echo "Reproduce locally with: node --test apps/backend/scripts/check_edge_function_test_vacuity.test.mjs"
+            exit 1
+          fi
+      - name: Mutation-check the Edge Function suite for vacuity
+        run: |
+          if ! node apps/backend/scripts/check_edge_function_test_vacuity.mjs; then
+            echo "::error::An Edge Function test still passes with every module in the tree neutered, so it cannot tell a working handler from a missing one. The failure above names the file, line and test. Give the assertion something the subject alone can satisfy — a positive control beside the negative, the actual value beside the equality — or add it to EXPECTED_SURVIVORS with the reason its answer is real."
+            echo "Reproduce locally with: node apps/backend/scripts/check_edge_function_test_vacuity.mjs --report"
+            exit 1
+          fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2

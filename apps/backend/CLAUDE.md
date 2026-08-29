@@ -299,6 +299,21 @@ Two pgtap catch-alls enforce the performance-advisor posture (decisions §245): 
 
 Older `supabase/setup-cli` versions on CI **silently skip** migrations that collide on the `YYYYMMDD` version key (rather than erroring like the local CLI). A `Result: PASS` on the pgtap CI job does NOT prove your migration ran. The Round 2 persona-fix migrations sat in `main` for weeks "passing" CI before anyone noticed they hadn't been applied in any environment. **Always verify a new migration with `cd apps/backend && supabase db reset --local` locally before trusting CI.** If the local CLI errors with `duplicate key value violates unique constraint "schema_migrations_pkey"`, CI is probably just hiding the same error.
 
+## Edge Function test gotchas
+
+### A test that passes with its handler deleted is not a test, and CI now checks
+
+Nothing in a Deno pure-helper suite is hidden by access control, so the ways an assertion goes vacuous here are different from the pgtap ones above: a `try/catch` that swallows its own `assert`, an equality between two of the subject's own outputs (which any constant satisfies), a negative source grep that an empty file satisfies for free, and a claim about the clock that makes none about the work. All four were live in this tree — 21 of 581 tests, including every one of `ipBucketKey`'s anti-spoofing assertions ([decisions.md § 788](../../docs/architecture/decisions.md)).
+
+`apps/backend/scripts/check_edge_function_test_vacuity.mjs` enforces it in the `edge-functions` job. It replaces every non-test module under `supabase/functions` with a neutered twin — same exported names, same runtime shapes, no behaviour and no source text — blanks the four non-TypeScript artifacts a test reads *as its subject* (`config.toml`, both `.env` files, the migrations), and re-runs the suite. Run it locally with `node apps/backend/scripts/check_edge_function_test_vacuity.mjs` (~8 s, no stack needed) or `--report` to list survivors with file and line.
+
+Two things to know before you touch it:
+
+- **When you write a negative — `assert(!SRC.includes(...))`, an empty `offenders` array — pin the positive first.** "Nothing re-spells the parse" and "no file was read" are the same result, and the second is the likelier regression.
+- **The neutered twin must keep every export's shape.** A stub that threw, or that turned an `async function` into a sync one, would make a vacuous test fail for a reason it never earned and hide it — so the guard fails when a baseline test case is *absent* from the mutant report, not only when one survives. If you change `edge_function_neuter.mjs`, `node --test apps/backend/scripts/check_edge_function_test_vacuity.test.mjs` is what proves it stayed lossless.
+
+A survivor whose subject genuinely is not in this tree goes in `EXPECTED_SURVIVORS` with its reason, and a stale entry fails the guard too — but prefer widening `NEUTERED_ARTIFACTS` to name the artifact instead, since an argued exemption reads exactly like a vacuous test.
+
 ## pgtap test gotchas
 
 ### A refusal assertion needs a row to refuse, and CI now checks that it has one

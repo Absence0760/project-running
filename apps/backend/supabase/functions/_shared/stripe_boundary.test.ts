@@ -52,6 +52,16 @@ Deno.test('only the shared boundary module imports Stripe from a URL', async () 
 			'and gets `any` for it.',
 	);
 
+	// The boundary existing as a FILE is not the same as the boundary carrying
+	// the import — an emptied one satisfies every `offenders` check below while
+	// leaving the tier with no Stripe import to bind declarations to.
+	const boundarySrc = await Deno.readTextFile(new URL(BOUNDARY, FUNCTIONS_ROOT));
+	assert(
+		new RegExp(STRIPE_URL.source).test(boundarySrc),
+		`${BOUNDARY} no longer imports Stripe from esm.sh — the pattern this guard hunts ` +
+			'matches nothing anywhere, so it would report a clean tree either way',
+	);
+
 	const offenders: string[] = [];
 	for (const file of files) {
 		if (file === BOUNDARY || file === DECLARATIONS) continue;
