@@ -3763,9 +3763,10 @@ void main() {
           reason: 'updated_at_ms data-map key — drives the stale-push '
               'protection on the watch side');
       expect(src, contains('kMaxRoutesPerPush'),
-          reason: 'the 50-route Wearable Data Layer 100 KB cap is '
-              'load-bearing; do not remove the constant without a '
-              'corresponding bump on the watch picker side');
+          reason: 'the push cap is load-bearing and must equal the watch '
+              'store\'s LocalRouteStore.MAX_ROUTES, which '
+              'scripts/check_shared_constants.mjs reads on both rails; do '
+              'not remove the constant');
     });
 
     test('Phone-side WearRoutesBridge.kt mirrors the Dart channel + path',

@@ -24,18 +24,23 @@ import 'local_route_store.dart';
 class WearRoutesBridge {
   static const _channel = MethodChannel('run_app/wear_routes');
 
-  /// Wearable Data Layer caps a single DataItem at ~100 KB. At ~2 KB
-  /// per route (id + name + waypoints × 8 bytes for lat + lng each,
-  /// plus JSON overhead), 50 routes comfortably fits under that
-  /// ceiling with headroom for unusually-long route names. The watch
-  /// picker already caps its server-side fetch at 30 starred routes
-  /// (`is_starred=eq.true&limit=30`); 50 here gives the phone push a
-  /// little more — enough that the bridge isn't the limiting factor
-  /// when the picker someday lifts its own cap. Routes beyond the
-  /// cap are dropped from the push silently; `LocalRouteStore` still
-  /// holds the full set on the phone.
+  /// The watch's own cap, not a second one. `LocalRouteStore.MAX_ROUTES`
+  /// in `apps/watch_wear` bounds what the watch PERSISTS — its Preferences
+  /// DataStore rewrites the whole backing file on every save, and its
+  /// 1.4-inch picker cannot usefully scroll further — so anything this
+  /// pushes beyond that number is dropped on arrival. It used to be 50
+  /// against the watch's 30, which is not headroom: `RunViewModel` puts
+  /// the whole push into the live picker while `save()` truncates, so the
+  /// last 20 were visible until the watch app was next killed and then
+  /// gone. Both files claimed the other's number and neither was reading
+  /// it; `scripts/check_shared_constants.mjs` reads both now, so lifting
+  /// the cap is one deliberate change on two rails (decisions.md § 787).
+  ///
+  /// Well under the Wearable Data Layer's ~100 KB per-DataItem ceiling at
+  /// ~2 KB a route. Routes beyond the cap are dropped from the push
+  /// silently; `LocalRouteStore` still holds the full set on the phone.
   @visibleForTesting
-  static const kMaxRoutesPerPush = 50;
+  static const kMaxRoutesPerPush = 30;
 
   /// How long the bridge waits after a [LocalRouteStore] notification
   /// before actually firing the push. Coalesces rapid bursts — when

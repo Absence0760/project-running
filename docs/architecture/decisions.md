@@ -10942,6 +10942,149 @@ Neither was the right answer, and the guard's own framing is why. **A replacemen
 
 **Verification.** Web unit suite **4366 passed, 0 failed**. `svelte-check` **2439 files, 0 errors**, 5 warnings, all pre-existing `state_referenced_locally` notes in `PlanEditor.svelte`, a file this change does not touch. `check:script-types`, `check:cloudfront-types`, `check:tsconfig-coverage`, `check:node-types`, `check:sw-types`, `check:e2e-types` and `test:tsconfig-coverage` all exit 0. Guard suite **24 passed**; mutation proof re-added all four deletions and the guard failed naming each one separately with the right diagnosis. One production `vite build`, 30.1 s: **code 1944/2120 KB, largest chunk 248/350 KB, six catalogues each under 100 KB, largest asset 74/100 KB across 33 assets totalling 266 KB** — § 780's figures, unregressed, exemptions still empty. Both lockfiles regenerated with `--lockfile-only` / `--package-lock-only`; `check_pnpm_overrides.mjs` confirms all six CVE pins survive and resolve, and `sync_deno_lock.mjs --check` is clean. **No Playwright ran** — five agents share this workstation — so the three rows removed from `licenses.spec.ts`'s `KNOWN_DEPS` are unexecuted; the list is iterated with no count assertion anywhere, so removing entries can only narrow what that spec asserts.
 
+## 787. The class between the two registries: a constant with more than one home, where one home is not TypeScript — four of them had already drifted
+
+[§ 641](#641) records `turn_cues` diverging in all three of its implementations
+at once and states why nothing caught it: *the pair was registered in neither
+registry, so its divergence was never detectable*. [§ 604](#604) is the rule
+that came out of it, and it covers **TS↔Dart function pairs**.
+`apps/web/scripts/check_constraint_unions.mjs` covers a second shape, **a CHECK
+constraint's value set against its narrow TS union**. This entry is about what
+sits between them: a **threshold, bucket boundary, vocabulary, size cap or
+eligibility list duplicated across a language boundary where at least one rail
+is SQL, Kotlin, Swift, Rust or Go.** The root `CLAUDE.md` already calls several
+of these "third rails" by name. The class had **no registry**, and the sweep
+found **four live divergences** in it.
+
+**What was measured.** Every rail was read and compared, never assumed; SQL was
+resolved by *replay* — the last `create or replace function` for each name
+across all 441 migrations — because the body a function has in production is
+routinely written by a migration named after something else. The two existing
+registries were measured too: `check_constraint_unions.mjs` parses **68**
+set-shaped CHECK columns out of the migrations and its `PAIRS` array claimed
+**34** of them, and its own suite asserts only `checks.size >= PAIRS.length`, so
+nothing ever said the array was complete. Six named "third rails" were checked
+individually: `nearby`'s buckets, `badges`' tier ladders, the rate-limit bucket
+vocabulary, `ai_disclosure`'s version ladder, `challenge_goal`'s ceiling and
+`strava_sync_result`'s lookback maximum. The last three are genuinely guarded —
+each has a mirror suite that *parses* the other rail — and the first three were
+guarded by nothing at all, though all three happen to agree today.
+
+**Divergence 1 — `personal_records()` lost `'watch'` in a hardening pass, and
+never gained `'parkrun'` / `'race'`.** `20260504_001` added `'watch'` to that
+RPC's eligible-source filter and said why: without it "the migration that fixes
+the source value would silently drop all watch-recorded runs from PB
+calculations". `20260710_001` then re-issued the function to add `set
+search_path = public` — and re-issued the **original `20260406_001` body** to do
+it, dropping `'watch'` straight back out. Nothing rejected anything; a narrower
+`in` list is valid SQL. #378's later widening to `'parkrun'` + `'race'` reached
+`refresh_personal_records_for_user` and `award_achievements_for_user` and never
+reached here, because nothing tied the three filters together. The RPC is still
+granted and still documented as staying "in place for callers that haven't
+migrated". Fixed in `20270622000001`; the vocabulary is now the `runs_source_check`
+value set at all four sites.
+
+**Divergence 2 — three photo buckets still advertise HEIC/HEIF.** [§ 557](#557)
+made the accepted image formats **be** the formats the EXIF stripper can clean,
+because an accepted-but-unstrippable upload serves a geotagged original back
+through a signed URL — "§ 33's home coordinate handed over by a different door".
+That landed on the client rails and on a guard asserting accepted ⊆ strippable
+*among the client rails*. It did not land on `run-photos` (`20260620_001`),
+`route-photos` (`20270114_001`) or `club-photos` (`20270301_001`), all written
+before it. Those three migrations exist **precisely** because "a raw
+`supabase.storage.from(...).upload(...)` call bypasses the client filter" — so
+the one door § 557 could not close from the client was the one still open.
+Narrowed in `20270622000002`; `avatars` already carried exactly the three.
+
+**Divergence 3 — the Wear OS route cap was 50 on the phone and 30 on the
+watch, and each file documented the other's number.** `LocalRouteStore.save`
+truncates to `MAX_ROUTES = 30` while `WearRoutesBridge.kMaxRoutesPerPush` was
+50, and `RunViewModel` puts the *whole* push into the live picker — so a large
+push showed routes the watch had not kept, which vanished at the next restart
+with nothing reported. The Kotlin said both inbound sources were "nominally
+capped at 30, but a phone running an older/looser bridge could push more"; the
+current bridge is the looser one. The Dart called 50 "headroom … enough that the
+bridge isn't the limiting factor". Two green unit tests transcribed the two
+different numbers, and `architecture_guards_test` named them as a paired
+constant and then checked neither value. **The phone now follows the watch**,
+which is the rail that owns the constraint — a Preferences DataStore rewritten
+whole on every save, and a 1.4-inch picker.
+
+**Divergence 4 — `club_members.status` admits `'rejected'` and the TS union did
+not.** `20261210_001` wrote the CHECK and three RLS policies read the value;
+`MembershipStatus` carried `'active' | 'pending'`, and `fetchMyClubStatuses`
+casts real rows through it. No writer produces one today — a reject-request flow
+would have been the first, written against a union that already said the value
+was impossible. Seven columns joined `PAIRS` with it, two of which carried a
+comment asserting a coverage they did not have: `RsvpStatus` said "No DB CHECK
+exists on event_attendees.status", false for the eight months since
+`20261210_001` and read as "widening the union is enough" when it also needs a
+migration, and `CoachAthleteStatus` said the guard kept it in lockstep. Both are
+now true rather than edited to be quieter. `PAIRS` is 41 of 68.
+
+**The registry is `scripts/check_shared_constants.mjs`, and it lives in the
+script.** Six entries — the run-source vocabulary, the runners-nearby buckets,
+the achievement tier ladders, the rate-limit bucket vocabulary, the photo-bucket
+MIME allowlist and the Wear route cap — spanning SQL, TypeScript, Dart and
+Kotlin. Every rail is **read from source**; nothing is transcribed, which is
+`check_watch_ble_uuids.mjs`'s design ("parses both sources rather than
+transcribing either") generalised from one table to a class. A markdown registry
+was rejected: a registry written down twice can disagree with itself — the exact
+defect § 604 records about the parity-pair list — and a markdown one could only
+be checked for self-consistency, never against the values. Anti-vacuity is
+enforced in both directions: a rail yielding no sites **and** a site yielding no
+values are each reported as the guard going blind, the second added after the
+first version of the nearby extractor silently returned an empty list and was
+about to certify agreement with it.
+
+**What was deliberately left out.** `challenge_goal`'s streak ceiling is a
+*formula* — `floor(window / one day) + 1` written three times — not a literal;
+extracting the `86400` would certify nothing about the shape around it, and its
+two mirror suites plus a pgtap test pin it. `ai_disclosure` and the Strava
+lookback maximum already have guards that parse the other rail. The GATT UUIDs
+have their own job. And the live-ping retention pair is not an equality at all:
+Postgres purges at 48 h and `RedisHub.ttl()` defaults to 24 h, deliberately —
+what had drifted there was the *documentation*, with `retention.md`,
+`sub-processors.md` and `dpia.md` all asserting the two matched, the last of them
+closing a DPIA risk item on the claim. The numbers stay; the three documents now
+state both.
+
+**Filed, not fixed.** The exercise-name normalisation key is derived by
+`regexp_replace(lower(btrim(name)), '\s+', ' ', 'g')` in seven live SQL
+functions and by an explicitly-spelled Unicode whitespace class on both clients,
+and the two disagree in two independent ways — Postgres `btrim` strips only
+U+0020, so a tab-prefixed name keeps a leading space through the collapse, and
+Postgres `\s` excludes U+00A0 and U+202F, which both clients fold by name
+*because the value is persisted* as `gym_routine_exercises.exercise_key`. The
+existing two-sided fixture pins only ASCII spacing, so nothing sees it. Changing
+it rewrites a persisted grouping key's behaviour and belongs in its own change.
+The Dart rail of the CHECK-union class is also unguarded: nineteen Dart enums
+and const lists enumerate a CHECK-constrained set, all agreeing today, and the
+root `CLAUDE.md` asserted the opposite ("Dart treats these columns as raw
+`String`") until this entry.
+
+**Verification.** `node scripts/check_shared_constants.mjs` — 6 entries, 10
+checks, exit 0; removing each of the four fixes makes it exit 1 naming both
+homes and the differing values, verified one at a time. Guard suites:
+`node --test scripts/*.test.mjs` — **449 passed, 0 failed** across 22 files
+(420 across 21 before). `node --test apps/web/scripts/check_constraint_unions.test.mjs`
+12 passed; `npm run check:check-constraints` exit 0 across 41 pairs, and exit 1
+naming `CHECK only: rejected` with the union reverted. The three migration guards
+pass over 441 migrations. `npx tsc -p tsconfig.scripts.json` exit 0;
+`actionlint` clean; `node scripts/check_ci_diagnostics.mjs` exit 0 with the new
+`parity-types` step counted among the 41 self-diagnosing steps. Mobile:
+`flutter test test/wear_routes_bridge_test.dart` **65 passed**,
+`test/architecture_guards_test.dart` **213 passed**, `dart analyze` on the
+changed files exits 0 (five `info`, all the acknowledged twin-import debt), and
+`diff -rq` is clean across `apps/mobile_android/{lib,test}` ↔
+`apps/mobile_ios/{lib,test}`. **Nothing was run against a database**: the local
+Supabase stack belongs to another session this round, so the two new migrations
+are guard-verified and source-verified only, and neither changes a signature the
+type generators read — `personal_records()` keeps its arguments and return table,
+and `storage.buckets` is not in the generated schema. Kotlin was not compiled
+here; the watch-side change is a constant's two doc comments, with the value
+itself unchanged.
+
 ## 788. Twenty-one Edge Function tests passed with their subject taken away, and the four costumes they wore
 
 **Decided 2026-08-28.** [§ 741](#741) measured this class in the pgtap suite and [§ 777](#777) in the Playwright suite. Both tiers now carry a guard; the Deno Edge Function suite carried none, and its 581 green tests had never been asked whether any of them would notice their subject disappearing. **21 of the 581 would not.**

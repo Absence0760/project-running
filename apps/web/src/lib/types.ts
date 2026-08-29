@@ -234,7 +234,10 @@ export type SubscriptionTier = 'free' | 'pro' | 'lifetime';
 export type ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member';
 // 'waitlisted' is assigned server-side by the event-capacity trigger
 // (migration 20261018_001) when a 'going' RSVP exceeds events.capacity; the
-// client never writes it directly. No DB CHECK exists on event_attendees.status.
+// client never writes it directly. `event_attendees_status_check` (migration
+// 20261210_001) constrains the column to these four — this comment said no
+// CHECK existed for the eight months after that migration landed, which reads
+// as "widening the union is enough" when it also needs a migration.
 export type RsvpStatus = 'going' | 'maybe' | 'declined' | 'waitlisted';
 // Attendance is orthogonal to RSVP status (instructor_business.md M6): a
 // host marks who actually showed up, NULL until then. Host-written via the
@@ -242,7 +245,14 @@ export type RsvpStatus = 'going' | 'maybe' | 'declined' | 'waitlisted';
 // event_attendees_attendance_check CHECK (migration 20270102_001) — keep this
 // union in lockstep (check_constraint_unions.mjs PAIRS).
 export type EventAttendance = 'attended' | 'no_show';
-export type MembershipStatus = 'active' | 'pending';
+// 'rejected' is a value `club_members_status_check` (migration 20261210_001)
+// admits and three RLS policies read (20260926_001, 20270402000001,
+// 20270416_001), and this union did not carry it — so `fetchMyClubStatuses`
+// casts a real row through a type that cannot describe it, and every
+// `status === 'pending'` branch misfiles it. No writer produces one today; a
+// reject-request flow would be the first, and would have shipped against a
+// union that already told it the value was impossible.
+export type MembershipStatus = 'active' | 'pending' | 'rejected';
 export type JoinPolicy = 'open' | 'request' | 'invite';
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
