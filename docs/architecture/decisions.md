@@ -11153,6 +11153,28 @@ The `#789` sweep filed the exercise-name key as "seven live SQL functions" disag
 
 **One thing measured and deliberately not changed.** `lower()` is collation-dependent too, and the key has always used it. Postgres `lower(U+0130)` on this stack returns `i` + U+0307, which is exactly what JS and Dart `toLowerCase()` return, so the one case worth checking agrees. The whitespace half is now provider-independent; the case-folding half is not, and making it so would mean not using `lower()` at all. Filed rather than done.
 
+**Found on the integration branch, and it is § 781's shape one object class over.**
+The migration's grant block revoked EXECUTE `from public` and named `anon` only in a
+comment saying it was "deliberately absent". It was not absent: on a fresh `db reset`
+`pg_proc.proacl` carried `anon=X`. Supabase ships an `alter default privileges` for the
+`postgres` role in schema `public` granting EXECUTE on every new function to `anon`,
+`authenticated` and `service_role`, so a function created by a migration arrives with an
+**explicit** anon grant, and revoking PUBLIC leaves it standing — exactly the reason
+§ 781 gave for a column-level `revoke select` being a no-op while the role holds the
+table-level grant. The 31 migrations that already write `from public, anon` are the
+house form, and this one now matches them. `normalise_exercise_name_test.sql`'s
+fourteenth assertion is what caught it, on the integrated tree rather than on the
+branch, because the branch had not been reset against the merged migration set.
+
+**The class is 83 functions wide and is filed, not fixed here.** Measured against the
+live catalog: of the 242 functions in `public`, 186 carry `anon=X`, and **83 of those
+appear in a migration that explicitly revoked them `from public`** — `claim_next_job`,
+`block_user`, `coach_roster_summary`, `enforce_create_rate_limit` and
+`admin_unhide_target` among them. Each of those revokes states an intent that has never
+held. Whether any is reachable in a way that matters depends on that function's own
+`auth.uid()` check and on RLS beneath it, so closing it is 83 separate judgements plus
+the guard that would keep them — a round of its own, not a line in this one.
+
 ## 791. The CHECK-constraint guard read one file of one client: 41 columns of 67, no Dart at all, and a `>=` that 26 uncovered columns satisfied
 
 **Decided 2026-08-29.** [§ 787](#787) built the sibling registry for constants with more than one home and recorded that this guard's `PAIRS` array "covered 34 of 68". Both halves of that sentence needed re-measuring, and both were close but not right.
