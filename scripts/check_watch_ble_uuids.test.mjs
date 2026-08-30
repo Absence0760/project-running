@@ -4,9 +4,11 @@ import assert from 'node:assert/strict';
 
 import {
 	DART_FILE,
+	DOC_FILE,
 	FIRMWARE_FILE,
 	PAIRS,
 	UNCLAIMED,
+	checkDoc,
 	compareTables,
 	parseDart,
 	parseFirmware,
@@ -315,4 +317,42 @@ test('blanking comments changes nothing about the committed tables', () => {
 	assert.equal(fw.size, PAIRS.length + UNCLAIMED.length);
 	assert.equal(dt.size, PAIRS.length);
 	assert.deepEqual(compareTables(fw, dt).errors, []);
+});
+
+test('checkDoc catches a count claim the firmware table has outgrown', () => {
+	const firmware = new Map([
+		['service', U(0)],
+		['frame', U(1)],
+		['run_manifest', U(2)],
+		['run_chunk', U(3)],
+	]);
+	const stale =
+		'What shipped is two on one service: `frame`, `run_manifest`, `run_chunk`.';
+	const staleResult = checkDoc(firmware, stale);
+	assert.equal(staleResult.errors.length, 1);
+	assert.match(staleResult.errors[0], /says the GATT service carries "two"/);
+
+	const fixed = stale.replace('is two on', 'is three on');
+	assert.deepEqual(checkDoc(firmware, fixed).errors, []);
+	assert.deepEqual(checkDoc(firmware, fixed.replace('is three', 'is 3')).errors, []);
+});
+
+test('checkDoc reports a row the doc never names', () => {
+	const firmware = new Map([['service', U(0)], ['frame', U(1)], ['roadbook', U(8)]]);
+	const doc = 'What shipped is two on one service: `frame`.';
+	const { errors } = checkDoc(firmware, doc);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /never names the "roadbook" characteristic/);
+});
+
+test('checkDoc fails rather than passes when its anchor phrase is gone', () => {
+	const firmware = new Map([['service', U(0)], ['frame', U(1)]]);
+	const { errors } = checkDoc(firmware, 'The service has some characteristics: `frame`.');
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no longer carries the .* count claim/);
+});
+
+test('the committed doc agrees with the committed GATT table', () => {
+	const firmware = parseFirmware(readFileSync(FIRMWARE_FILE, 'utf-8'));
+	assert.deepEqual(checkDoc(firmware, readFileSync(DOC_FILE, 'utf-8')).errors, []);
 });

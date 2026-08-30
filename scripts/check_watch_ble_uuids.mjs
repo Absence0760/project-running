@@ -38,6 +38,8 @@ export const FIRMWARE_FILE =
 export const DART_FILE =
 	process.env.WATCH_BLE_DART ??
 	join(REPO_ROOT, 'apps/mobile_android/lib/reactive_ble_watch_transport.dart');
+export const DOC_FILE =
+	process.env.WATCH_BLE_DOC ?? join(REPO_ROOT, 'docs/custom_watch/firmware.md');
 
 // firmware GATT field name → the Dart constant that must carry the same UUID.
 // `service` is the synthetic name for the `gatt_service` attribute itself.
@@ -270,11 +272,76 @@ export function compareTables(
 	return { errors, warnings, ok };
 }
 
+// The doc that describes this table is read as a contract by everyone who has
+// not opened `ble.rs` — decisions.md § 793 found it claiming SEVEN
+// characteristics while nine were declared, two whole push rails invisible to
+// a reader. Prose drifts the way a transcribed UUID does, so it is read here
+// against the same parse: the count claim and the name of every row.
+//
+// The count is matched as a word or a numeral because the sentence is prose,
+// and a table that outgrows this ladder should be described by listing its
+// rows rather than by counting them anyway. A missing anchor phrase is an
+// ERROR, not a pass: a reworded paragraph this parser stops understanding is
+// exactly a paragraph nothing is checking.
+const COUNT_WORDS = [
+	'zero', 'one', 'two', 'three', 'four', 'five', 'six',
+	'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
+];
+
+/**
+ * @param {Map<string, string>} firmware
+ * @param {string} doc
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkDoc(firmware, doc) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	const rows = [...firmware.keys()].filter((n) => n !== 'service');
+
+	const claim = /What shipped is ([A-Za-z]+|\d+) on one service/.exec(doc);
+	if (!claim) {
+		errors.push(
+			'firmware.md no longer carries the "What shipped is N on one service" ' +
+				'count claim this guard reads. Restore the phrasing or teach the ' +
+				'parser the new one — a paragraph nothing parses is a paragraph ' +
+				'nothing checks.',
+		);
+	} else {
+		const claimed = /^\d+$/.test(claim[1])
+			? Number(claim[1])
+			: COUNT_WORDS.indexOf(claim[1].toLowerCase());
+		if (claimed !== rows.length) {
+			errors.push(
+				`firmware.md says the GATT service carries "${claim[1]}" ` +
+					`characteristics; ble.rs declares ${rows.length}.`,
+			);
+		} else {
+			ok.push(`firmware.md's characteristic count (${rows.length}) matches ble.rs`);
+		}
+	}
+
+	for (const name of rows) {
+		if (doc.includes(`\`${name}\``)) continue;
+		errors.push(
+			`firmware.md never names the "${name}" characteristic. A row absent from ` +
+				'the doc is a rail a reader does not know exists.',
+		);
+	}
+	if (errors.length === 0) ok.push(`firmware.md names all ${rows.length} GATT rows`);
+	return { errors, ok };
+}
+
 function main() {
+	const firmware = parseFirmware(readFileSync(FIRMWARE_FILE, 'utf-8'));
 	const { errors, warnings, ok } = compareTables(
-		parseFirmware(readFileSync(FIRMWARE_FILE, 'utf-8')),
+		firmware,
 		parseDart(readFileSync(DART_FILE, 'utf-8')),
 	);
+	const doc = checkDoc(firmware, readFileSync(DOC_FILE, 'utf-8'));
+	errors.push(...doc.errors);
+	ok.push(...doc.ok);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
 	for (const line of warnings) console.warn(`[WARN] ${line}`);
