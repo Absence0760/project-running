@@ -5,6 +5,7 @@ import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 import '../auth_error.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../nutrition_targets.dart' show activityLevels, goalKcalDelta;
+import '../numeric_limits.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import '../typed_decimal.dart';
@@ -125,6 +126,15 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     showTopBanner(context, msg);
   }
 
+  /// The plausible-human range restated in the unit the field is typed in, so
+  /// a runner entering pounds is bounded in pounds rather than by the kilogram
+  /// figure the column stores.
+  NumericLimit _weightBounds() => numericBoundsIn(kBodyWeightRangeKg,
+      toDisplay: (kg) => WeightFormat.toDisplay(kg, _unit));
+
+  String _boundLabel(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context);
     final api = widget.api;
@@ -136,6 +146,27 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
 
     if ((heightVal != null || weightVal != null) && !_consent) {
       _snack(l10n.bodyMetricsConsentRequired);
+      return;
+    }
+    // Refuse out-of-range here rather than letting the column do it: the CHECK
+    // answers with a 23514 naming a constraint, and when the field is typed in
+    // pounds the number in that error is not even the number the runner typed
+    // (decisions § 792).
+    final heightLimit = kNumericLimits['profileHeightCm']!;
+    if (heightVal != null &&
+        checkNumericLimit(heightLimit, heightVal) != NumericLimitVerdict.ok) {
+      _snack(l10n.numericLimitRange(l10n.bodyMetricsHeight,
+          _boundLabel(heightLimit.min), _boundLabel(heightLimit.max)));
+      return;
+    }
+    if (weightVal != null &&
+        checkNumericLimit(kBodyWeightRangeKg, weightVal) !=
+            NumericLimitVerdict.ok) {
+      final shown = _weightBounds();
+      _snack(l10n.numericLimitRange(
+          '${l10n.bodyMetricsWeight} (${WeightFormat.label(_unit)})',
+          _boundLabel(shown.min),
+          _boundLabel(shown.max)));
       return;
     }
     // Withdrawing consent erases the saved height + the entire weight

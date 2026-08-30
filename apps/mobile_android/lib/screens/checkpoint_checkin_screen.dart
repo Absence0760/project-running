@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../auth_error.dart';
 import '../env_flag.dart';
 import '../local_crossings_store.dart';
+import '../numeric_limits.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../typed_decimal.dart';
 import '../widgets/top_banner.dart';
@@ -396,6 +397,28 @@ class _WeighInSheetState extends State<_WeighInSheet> {
   final TextEditingController _weight = TextEditingController();
   bool _consent = false;
   bool _medicalHold = false;
+  String? _weightError;
+
+  static final NumericLimit _limit = kNumericLimits['checkpointBodyWeightKg']!;
+
+  /// Refuse out of range here rather than letting the column do it: a raw
+  /// 23514 at an aid station names a constraint and nothing a volunteer can
+  /// act on (decisions § 792).
+  bool _validate(AppLocalizations l10n) {
+    final raw = _weight.text.trim();
+    if (!_consent || raw.isEmpty) {
+      setState(() => _weightError = null);
+      return true;
+    }
+    final value = parseTypedDecimal(raw);
+    final ok = value != null &&
+        checkNumericLimit(_limit, value) == NumericLimitVerdict.ok;
+    setState(() => _weightError = ok
+        ? null
+        : l10n.numericLimitRange(l10n.checkpointWeighInWeightKg,
+            _limit.min.toStringAsFixed(0), _limit.max.toStringAsFixed(0)));
+    return ok;
+  }
 
   @override
   void dispose() {
@@ -438,6 +461,7 @@ class _WeighInSheetState extends State<_WeighInSheet> {
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: l10n.checkpointWeighInWeightKg,
+                errorText: _weightError,
               ),
             ),
             const SizedBox(height: 8),
@@ -461,6 +485,7 @@ class _WeighInSheetState extends State<_WeighInSheet> {
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: () {
+                  if (!_validate(l10n)) return;
                   Navigator.of(context).pop(_WeighInResult(
                     consent: _consent,
                     bodyWeightKg: _consent

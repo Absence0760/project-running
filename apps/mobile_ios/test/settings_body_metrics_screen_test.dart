@@ -68,6 +68,28 @@ class _ConsentedWithDobApi extends ApiClient {
       ageRecordCalls++;
 }
 
+/// Consented, and records the two write calls the bound has to stop.
+class _RecordingWriteApi extends ApiClient {
+  final List<double> weights = [];
+  final List<double?> heights = [];
+
+  @override
+  String? get userId => 'u1';
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async => UserProfileRow(
+        shadowHidden: false,
+        id: 'u1',
+        healthDataConsentAt: DateTime.utc(2026, 1, 1),
+        heightCm: 175,
+      );
+  @override
+  Future<double?> fetchLatestBodyWeightKg() async => 70.0;
+  @override
+  Future<void> setMyHeightCm(double? heightCm) async => heights.add(heightCm);
+  @override
+  Future<void> recordBodyWeightKg(double kg) async => weights.add(kg);
+}
+
 /// Records the universal-bag writes so the Art 9 mirror clear is observable.
 class _RecordingSync extends SettingsSyncService {
   _RecordingSync(Preferences prefs) : super(preferences: prefs);
@@ -328,6 +350,61 @@ void main() {
       expect(api.withdrawCalled, isTrue);
 
       // Drain the showTopBanner auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('an out-of-range weight or height never reaches the column',
+        (tester) async {
+      // decisions § 792: `body_metrics.weight_kg` is 0 < x <= 500 and
+      // `user_profiles.height_cm` is 0 < x <= 300, and the screen guarded only
+      // `> 0` — so 600 kg (or 1200 lb, which is 544 kg) and a 400 cm height
+      // reached the database and came back as a raw 23514 naming a constraint.
+      final prefs = await _prefs();
+      final api = _RecordingWriteApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: SettingsBodyMetricsScreen(
+            api: api,
+            settingsSync: null,
+            preferences: prefs,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      await tester.enterText(find.widgetWithText(TextField, 'Weight'), '600');
+      await tester.pump();
+      await tester
+          .runAsync(() => tester.tap(find.widgetWithText(FilledButton, 'Save')));
+      await tester.pump();
+      expect(find.textContaining('between 20 and 250'), findsOneWidget);
+      expect(api.weights, isEmpty);
+      await tester.pump(const Duration(seconds: 4));
+
+      // The height half of the same class, which the filing never named.
+      await tester.enterText(find.widgetWithText(TextField, 'Weight'), '71');
+      await tester.enterText(find.widgetWithText(TextField, 'Height'), '400');
+      await tester.pump();
+      await tester
+          .runAsync(() => tester.tap(find.widgetWithText(FilledButton, 'Save')));
+      await tester.pump();
+      expect(find.textContaining('between 0.1 and 300'), findsOneWidget);
+      expect(api.heights, isEmpty);
+      await tester.pump(const Duration(seconds: 4));
+
+      // An in-range pair still writes. The weight has to DIFFER from the
+      // loaded 70 kg or the append-only-on-change guard suppresses it.
+      await tester.enterText(find.widgetWithText(TextField, 'Weight'), '72');
+      await tester.enterText(find.widgetWithText(TextField, 'Height'), '175');
+      await tester.pump();
+      await tester
+          .runAsync(() => tester.tap(find.widgetWithText(FilledButton, 'Save')));
+      await tester.pumpAndSettle();
+      expect(api.weights, [72.0]);
+      expect(api.heights, [175.0]);
       await tester.pump(const Duration(seconds: 4));
     });
 

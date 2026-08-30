@@ -761,6 +761,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bodyMetricsWeight => 'Weight';
 
   @override
+  String numericLimitRange(String field, String min, String max) {
+    return '$field must be between $min and $max.';
+  }
+
+  @override
   String get bodyMetricsActivityLevel => 'Activity level';
 
   @override
