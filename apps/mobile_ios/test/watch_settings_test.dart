@@ -461,6 +461,18 @@ void main() {
       );
     });
 
+    test('the min10 auto-lap rung matches the firmware golden', () {
+      // The one auto-lap frame frozen on both rails, as
+      // `golden_vector_auto_lap_only`. The rungs the test above pins are the
+      // phone's own choices; without a shared rung nothing compared the two
+      // sides of the newest field in the frame (decisions § 793).
+      const min10 = WatchSettings(autoLap: WatchAutoLap.min10);
+      expect(
+        min10.encode(),
+        _hex('53455431' '08' '00' '00' '01' '06' '8d631f14'),
+      );
+    });
+
     test('the auto-lap rung index is the wire contract, in firmware order', () {
       // The watch reads this byte as its `AutoLap` declaration index, so
       // reordering this enum re-points every trigger already pushed — and the
