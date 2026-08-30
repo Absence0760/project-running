@@ -1001,13 +1001,13 @@
     "description": "Label for the height input (centimetres)"
   },
   "bodyMetricsWeight": "Weight",
+  "@bodyMetricsWeight": {
+    "description": "Label for the weight input (user's weight unit)"
+  },
   "numericLimitRange": "{field} must be between {min} and {max}.",
   "@numericLimitRange": {
     "description": "Refusal shown when a typed number falls outside the bound its column enforces",
     "placeholders": {"field": {"type": "String"}, "min": {"type": "String"}, "max": {"type": "String"}}
-  },
-  "@bodyMetricsWeight": {
-    "description": "Label for the weight input (user's weight unit)"
   },
   "bodyMetricsActivityLevel": "Activity level",
   "@bodyMetricsActivityLevel": {
