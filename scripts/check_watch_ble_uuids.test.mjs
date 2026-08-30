@@ -8,6 +8,7 @@ import {
 	FIRMWARE_FILE,
 	PAIRS,
 	UNCLAIMED,
+	checkAdvertisedUuid,
 	checkDoc,
 	compareTables,
 	parseDart,
@@ -355,4 +356,28 @@ test('checkDoc fails rather than passes when its anchor phrase is gone', () => {
 test('the committed doc agrees with the committed GATT table', () => {
 	const firmware = parseFirmware(readFileSync(FIRMWARE_FILE, 'utf-8'));
 	assert.deepEqual(checkDoc(firmware, readFileSync(DOC_FILE, 'utf-8')).errors, []);
+});
+
+test('checkAdvertisedUuid catches a scan-response UUID that has drifted', () => {
+	const src = 'const LINK_SERVICE_UUID: u128 = 0xd1f6a7e1_5b2c_4e9a_9c3d_1a2b3c4d5e6f;';
+	const { errors } = checkAdvertisedUuid(src, 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /never finds the watch at all/);
+	const aligned = src.replace('a7e1', 'a7e0');
+	assert.deepEqual(
+		checkAdvertisedUuid(aligned, 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f').errors,
+		[],
+	);
+});
+
+test('checkAdvertisedUuid fails rather than passes when the constant is gone', () => {
+	const { errors } = checkAdvertisedUuid('// nothing here', 'd1f6a7e0-5b2c-4e9a-9c3d-1a2b3c4d5e6f');
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /is gone from ble\.rs/);
+});
+
+test('the committed scan-response UUID matches the committed service attribute', () => {
+	const src = readFileSync(FIRMWARE_FILE, 'utf-8');
+	const firmware = parseFirmware(src);
+	assert.deepEqual(checkAdvertisedUuid(src, firmware.get('service')).errors, []);
 });

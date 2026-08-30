@@ -24,7 +24,10 @@ import {
 	indexMigrations,
 	parseAwarderLadders,
 	parseBadgeCatalogue,
+	parseMinettiCoefficients,
 	parseNamedInt,
+	parseWearOffRoute,
+	resolveNumber,
 	parseNearbyCase,
 	parseNumberList,
 	parseStringList,
@@ -403,4 +406,50 @@ test('a run-source filter that missed a widening is caught in the real entry sha
 	assert.match(errors[0], /runs_source_check/);
 	assert.match(errors[0], /personal_records\(\) in 20260710_001_hardening\.sql/);
 	assert.match(errors[0], /missing there: watch, parkrun/);
+});
+
+test('resolveNumber reads a literal and resolves a derived one', () => {
+	const src = [
+		'pub const OFF_COURSE_THRESHOLD_M: f64 = 40.0;',
+		'pub const OFF_COURSE_REARM_M: f64 = OFF_COURSE_THRESHOLD_M / 2.0;',
+	].join('\n');
+	assert.equal(resolveNumber(src, 'OFF_COURSE_THRESHOLD_M'), 40);
+	assert.equal(resolveNumber(src, 'OFF_COURSE_REARM_M'), 20);
+	// A threshold change carries the derived half with it, which is precisely
+	// what the hand-written rail cannot do.
+	const moved = src.replace('= 40.0', '= 50.0');
+	assert.equal(resolveNumber(moved, 'OFF_COURSE_REARM_M'), 25);
+	assert.equal(resolveNumber(src, 'NOT_DECLARED'), null);
+});
+
+test('parseWearOffRoute reads the comparisons, not the comment above them', () => {
+	const src = [
+		'    // Off-route hysteresis: alert above 40 m, clear below 20 m.',
+		'    val currentlyOffRoute = offRouteDistanceM != null && offRouteDistanceM > 55',
+		'    val backOnRoute = offRouteDistanceM != null && offRouteDistanceM < 25',
+	].join('\n');
+	assert.deepEqual(parseWearOffRoute(src), ['55', '25']);
+	assert.deepEqual(parseWearOffRoute('nothing here'), []);
+});
+
+test('parseMinettiCoefficients keeps signs and ignores the i5..i2 identifiers', () => {
+	const dart = [
+		'  final i2 = i * i;',
+		'  final i5 = i4 * i;',
+		'  return 155.4 * i5 - 30.4 * i4 - 43.3 * i3 + 46.3 * i2 + 19.5 * i + 3.6;',
+	].join('\n');
+	assert.deepEqual(parseMinettiCoefficients(dart), [
+		'155.4',
+		'-30.4',
+		'-43.3',
+		'46.3',
+		'19.5',
+		'3.6',
+	]);
+	// Rust writes the same expression as a trailing value, no `return`, no `;`.
+	const rust = dart
+		.replace('  return ', '    ')
+		.replace('+ 3.6;', '+ 3.6');
+	assert.deepEqual(parseMinettiCoefficients(rust), parseMinettiCoefficients(dart));
+	assert.deepEqual(parseMinettiCoefficients('nothing here'), []);
 });

@@ -272,6 +272,53 @@ export function compareTables(
 	return { errors, warnings, ok };
 }
 
+// The service UUID has a THIRD home in the same file, in a form `parseFirmware`
+// cannot see: `const LINK_SERVICE_UUID: u128` is what the scan response
+// advertises, and its own comment says it "must stay byte-for-byte the same
+// value as the service string below" — an instruction, which is what this
+// guard exists to replace (decisions.md § 793). A drift here is invisible in a
+// way the characteristic drift is not: the phone would filter for a service
+// nothing advertises, so it never connects at all, on a path that has never run
+// on hardware and cannot be simulated (§ 210).
+/**
+ * @param {string} src
+ * @param {string | undefined} serviceUuid the dashed UUID from the attribute
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkAdvertisedUuid(src, serviceUuid) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	const code = stripComments(src, 'rust');
+	const decl = /\bLINK_SERVICE_UUID\s*:\s*u128\s*=\s*0x([0-9a-fA-F_]+)/.exec(code);
+	if (!decl) {
+		errors.push(
+			'LINK_SERVICE_UUID is gone from ble.rs, or changed shape. It is the ' +
+				'value the scan response advertises; this guard is blind until the ' +
+				'parser is taught the new form.',
+		);
+		return { errors, ok };
+	}
+	const advertised = decl[1].replace(/_/g, '').toLowerCase().padStart(32, '0');
+	if (serviceUuid === undefined) {
+		errors.push('no gatt_service UUID to compare LINK_SERVICE_UUID against.');
+		return { errors, ok };
+	}
+	const service = serviceUuid.replace(/-/g, '').toLowerCase();
+	if (advertised !== service) {
+		errors.push(
+			`LINK_SERVICE_UUID advertises ${advertised}, but the gatt_service ` +
+				`attribute declares ${service}. The phone filters the scan response ` +
+				'for the advertised value and connects to the declared one, so these ' +
+				'disagreeing means the phone never finds the watch at all.',
+		);
+		return { errors, ok };
+	}
+	ok.push(`LINK_SERVICE_UUID = the gatt_service attribute (${serviceUuid})`);
+	return { errors, ok };
+}
+
 // The doc that describes this table is read as a contract by everyone who has
 // not opened `ble.rs` — decisions.md § 793 found it claiming SEVEN
 // characteristics while nine were declared, two whole push rails invisible to
@@ -342,6 +389,12 @@ function main() {
 	const doc = checkDoc(firmware, readFileSync(DOC_FILE, 'utf-8'));
 	errors.push(...doc.errors);
 	ok.push(...doc.ok);
+	const advertised = checkAdvertisedUuid(
+		readFileSync(FIRMWARE_FILE, 'utf-8'),
+		firmware.get('service'),
+	);
+	errors.push(...advertised.errors);
+	ok.push(...advertised.ok);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
 	for (const line of warnings) console.warn(`[WARN] ${line}`);
