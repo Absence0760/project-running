@@ -26,7 +26,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/routes/distance_bands.ts` | `apps/mobile_android/lib/distance_bands.dart` | `routes/distance_bands.test.ts` ↔ `test/distance_bands_test.dart` |
 | `apps/web/src/lib/util/exif_strip.ts` (`stripJpegExif`) | `apps/mobile_android/lib/exif_strip.dart` | `util/exif_strip.test.ts` ↔ `test/exif_strip_test.dart` |
 | `apps/web/src/lib/runs/grade_adjusted_pace.ts` | `apps/mobile_android/lib/grade_adjusted_pace.dart` | `runs/grade_adjusted_pace.test.ts` ↔ `test/grade_adjusted_pace_test.dart` |
-| `apps/web/src/lib/gym/gym_prs.ts` | `apps/mobile_android/lib/gym_prs.dart` | `gym/gym_prs.test.ts` ↔ `test/gym_prs_test.dart` |
+| `apps/web/src/lib/gym/gym_prs.ts` | `apps/mobile_android/lib/gym_prs.dart` | `gym/gym_prs.test.ts` ↔ `test/gym_prs_test.dart` (`normaliseExerciseName` has a THIRD rail in SQL — `normalise_exercise_name()`, migration `20270623000001` — and its whitespace class + case-fold table are read across all three by `scripts/check_shared_constants.mjs`; decisions.md § 790) |
 | `apps/web/src/lib/nutrition/nutrition_targets.ts` | `apps/mobile_android/lib/nutrition_targets.dart` | `nutrition/nutrition_targets.test.ts` ↔ `test/nutrition_targets_test.dart` |
 | `apps/web/src/lib/gym/lift_load.ts` (`liftsFromSetHistory`) | `apps/mobile_android/lib/lift_load.dart` | `gym/lift_load.test.ts` ↔ `test/lift_load_test.dart` |
 | `apps/web/src/lib/nutrition/exercise_calories.ts` | `apps/mobile_android/lib/exercise_calories.dart` | `nutrition/exercise_calories.test.ts` ↔ `test/exercise_calories_test.dart` |
