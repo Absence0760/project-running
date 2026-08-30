@@ -31,9 +31,11 @@ loop-poor (the web client turns `found:false` into a round_trip fallback).
 ### Route-design preferences
 
 `preference` is optional and takes exactly `"quiet"`, `"scenic"` or
-`"cul_de_sac"`. Absent, empty or unrecognised means **no preference** and behaves
-byte-identically to a request without the field — never a 400, so a stale knob on
-an older client cannot deny route generation.
+`"cul_de_sac"`. Absent, `null`, empty or unrecognised means **no preference** and
+behaves byte-identically to a request without the field, so a stale knob on an
+older client cannot deny route generation. That covers every *string* the field
+can carry; a non-string (`123`, `[]`, `{}`) is a JSON type error like any other
+malformed body, and is a 400.
 
 A preference is a **soft** per-edge weight (never 0, never infinite, never an
 edge removal — a hard filter can disconnect a buildable neighbourhood) plus a

@@ -191,13 +191,21 @@ func TestCycleUnrecognisedPreferenceIsDropped(t *testing.T) {
 	if plain.Code != http.StatusOK {
 		t.Fatalf("plain status = %d", plain.Code)
 	}
-	for _, pref := range []string{"", "banana", "QUIET", "cul-de-sac"} {
-		rec := do(t, s, http.MethodPost, "/cycle", start+`,"preference":"`+pref+`"}`)
+	for _, pref := range []string{`""`, `"banana"`, `"QUIET"`, `"cul-de-sac"`, `null`} {
+		rec := do(t, s, http.MethodPost, "/cycle", start+`,"preference":`+pref+`}`)
 		if rec.Code != http.StatusOK {
-			t.Fatalf("%q: status = %d, want 200", pref, rec.Code)
+			t.Fatalf("%s: status = %d, want 200", pref, rec.Code)
 		}
 		if rec.Body.String() != plain.Body.String() {
-			t.Fatalf("%q: response differs from an unpreferenced request", pref)
+			t.Fatalf("%s: response differs from an unpreferenced request", pref)
+		}
+	}
+	// The degrade covers every string the field can carry. A non-string is a
+	// JSON type error like any other malformed body, and the README says so.
+	for _, pref := range []string{`123`, `[]`, `{}`, `true`} {
+		rec := do(t, s, http.MethodPost, "/cycle", start+`,"preference":`+pref+`}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want 400", pref, rec.Code)
 		}
 	}
 }
