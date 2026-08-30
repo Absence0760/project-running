@@ -191,12 +191,18 @@ void main() {
   //   apps/watch_ios/WatchApp/ArmedRoute.swift                (watch decoder)
   //
   // A renamed key or a drifting point cap fails silently at runtime — the
-  // watch simply never arms a route — so pin them here. Each guard
-  // auto-skips when the sibling app isn't checked out.
+  // watch simply never arms a route — so pin them here. A missing file is a
+  // hard failure, not a skip: both sibling apps are in this monorepo, so the
+  // only way a path stops resolving is a rename or a move, which is precisely
+  // the drift these guards exist to catch (decisions § 793).
   group('Apple Watch route-push cross-language wiring guards', () {
-    String? read(String path) {
+    String read(String path) {
       final file = File(path);
-      return file.existsSync() ? file.readAsStringSync() : null;
+      if (!file.existsSync()) {
+        fail('$path is gone. If it moved, move this guard with it — a guard '
+            'that skips on a missing file certifies nothing.');
+      }
+      return file.readAsStringSync();
     }
 
     const payloadKeys = [
@@ -209,7 +215,6 @@ void main() {
 
     test('the phone bridge serves the same channel and payload keys', () {
       final swift = read('../mobile_ios/ios/Runner/WatchIngestBridge.swift');
-      if (swift == null) return;
       expect(swift, contains('"${AppleWatchRouteBridge.channelName}"'),
           reason: 'WatchIngestBridge.swift must register the same '
               'MethodChannel name the Dart bridge invokes.');
@@ -225,7 +230,6 @@ void main() {
 
     test('the watch decoder reads the same payload keys', () {
       final swift = read('../watch_ios/WatchApp/ArmedRoute.swift');
-      if (swift == null) return;
       for (final key in payloadKeys) {
         expect(swift, contains('"$key"'),
             reason: 'ArmedRoute.decode must read "$key".');
@@ -235,7 +239,6 @@ void main() {
     test('the point cap is the same number in all three languages', () {
       final phone = read('../mobile_ios/ios/Runner/WatchIngestBridge.swift');
       final watch = read('../watch_ios/WatchApp/ArmedRoute.swift');
-      if (phone == null || watch == null) return;
       expect(phone, contains('maxRoutePoints = $kMaxAppleWatchRoutePoints'),
           reason: 'A phone cap above the watch cap queues a durable transfer '
               'the watch will reject on every retry.');
@@ -245,7 +248,7 @@ void main() {
     });
 
     test('route detail offers the push and shapes the route first', () {
-      final screen = read('lib/screens/route_detail_screen.dart')!;
+      final screen = read('lib/screens/route_detail_screen.dart');
       expect(screen, contains('appleWatchRouteFromWaypoints(_displayWaypoints)'),
           reason: 'The push must read the privacy-clipped polyline '
               '(decisions §33) and go through the shaping helper, so an '
@@ -263,7 +266,6 @@ void main() {
     test('the watch consumes the navigator during a run', () {
       final content = read('../watch_ios/WatchApp/ContentView.swift');
       final workout = read('../watch_ios/WatchApp/WorkoutManager.swift');
-      if (content == null || workout == null) return;
       expect(content, contains('RouteGuidanceView(navigator:'),
           reason: 'The running screen must render the RouteNavigator '
               'outputs — an engine with no surface is unreachable.');

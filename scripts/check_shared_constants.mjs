@@ -505,6 +505,61 @@ export const REGISTRY = [
 			},
 		],
 	},
+	{
+		name: 'Apple Watch route point budget',
+		why:
+			'The phone thins a route to this many positions, the native bridge ' +
+			're-checks the shape before queueing a durable WCSession transfer, and ' +
+			'the watch drops the whole payload above it. A phone cap above the ' +
+			"watch's queues a transfer the watch rejects on every retry, forever — " +
+			'`transferUserInfo` is durable, so nothing gives up. The number lived in ' +
+			'three languages behind a Dart test that read the two Swift files off ' +
+			'disk and RETURNED SILENTLY when it could not (decisions § 793), so a ' +
+			'rename on either Swift side left the pair unchecked and green.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'phone dart (apps/mobile_android/lib/apple_watch_route_bridge.dart)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'kMaxAppleWatchRoutePoints',
+						values: parseNamedInt(
+							ctx.read('apps/mobile_android/lib/apple_watch_route_bridge.dart'),
+							'kMaxAppleWatchRoutePoints',
+						),
+					},
+				],
+			},
+			{
+				label: 'phone swift (apps/mobile_ios/ios/Runner/WatchIngestBridge.swift)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'WatchIngestBridge.maxRoutePoints',
+						values: parseNamedInt(
+							ctx.read('apps/mobile_ios/ios/Runner/WatchIngestBridge.swift'),
+							'maxRoutePoints',
+						),
+					},
+				],
+			},
+			{
+				label: 'watch swift (apps/watch_ios/WatchApp/ArmedRoute.swift)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'ArmedRoute.maxPoints',
+						values: parseNamedInt(
+							ctx.read('apps/watch_ios/WatchApp/ArmedRoute.swift'),
+							'maxPoints',
+						),
+					},
+				],
+			},
+		],
+	},
 ];
 
 // ── Comparison ─────────────────────────────────────────────────────────────
