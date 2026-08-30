@@ -49,7 +49,7 @@ import {
 	type LoopCandidate,
 	type RoutePreference,
 } from './graphhopper';
-import { fetchGraphCycle } from './graph_cycle';
+import { fetchGraphCycle, GraphCycleError } from './graph_cycle';
 import { pickBestLoop } from './select';
 import { isValidTargetDistance } from '../route_loop';
 import { checkRouteRateLimit } from '../rate_limit';
@@ -335,27 +335,51 @@ export async function handleGenerate(
 	// quality upgrade, not a hard dependency — so we swallow the throw and let
 	// round_trip serve.
 	if (config.graphCycleUrl) {
-		try {
-			const result = await fetchGraphCycle(
+		const searchGraphCycle = (preference?: RoutePreference) =>
+			fetchGraphCycle(
 				{
 					baseUrl: config.graphCycleUrl,
 					start: req.start,
 					targetDistanceM: req.targetDistanceM,
 					apiKey: config.graphCycleApiKey,
-					preference: req.preference,
+					preference,
 				},
 				fetcher,
 			);
+		try {
+			const result = await searchGraphCycle(req.preference).catch((e: unknown) => {
+				// A sidecar that ANSWERED and refused is a version skew, not an
+				// outage: its decoder rejects unknown fields, so one deployed
+				// before this preference existed 400s the whole request. Retry
+				// once without the preference — the same never-deny rule the
+				// round_trip race below applies, and without it a preference is
+				// the sole reason a buildable route is denied (a 502, which pages
+				// the on-call, on a deploy carrying no round_trip fallback).
+				if (
+					req.preference &&
+					e instanceof GraphCycleError &&
+					e.status !== undefined &&
+					e.status >= 400 &&
+					e.status < 500
+				) {
+					return searchGraphCycle();
+				}
+				throw e;
+			});
 			largestCleanM = result.largestCleanM;
 			if (result.loop) {
 				const body: GenerateBody = {
 					coordinates: result.loop.coordinates,
 					distanceM: result.loop.distanceM,
 				};
-				// Only the sidecar's own verdict, never the ask: it retries
-				// unweighted when the weighted search comes up empty, so echoing
-				// req.preference here would claim a quiet loop for an arterial one.
-				if (result.preferenceApplied) body.preferenceApplied = result.preferenceApplied;
+				// Only the sidecar's own verdict, and only where it agrees with the
+				// ask: the sidecar retries unweighted when the weighted search comes
+				// up empty, and it is a separately deployed service, so neither an
+				// echo of req.preference nor a bare echo of its answer can be
+				// trusted to describe the loop actually served.
+				if (req.preference && result.preferenceApplied === req.preference) {
+					body.preferenceApplied = req.preference;
+				}
 				return { status: 200, body };
 			}
 		} catch (e) {
@@ -387,21 +411,25 @@ export async function handleGenerate(
 		req.preference,
 	);
 
+	// Whether the race that just ran was preference-aware at all. `cul_de_sac` has
+	// no custom model, so its race was already the plain one — which is what makes
+	// both the claim below and the retry meaningless for it.
+	const racedWithModel = req.preference !== undefined && buildCustomModel(req.preference) !== null;
+
 	// What round_trip may claim it honoured: a preference GraphHopper could express
 	// as a custom model, whose race is the one that produced these candidates. Read
 	// before the retry below, which deliberately drops the preference — a loop found
 	// without the model was never shaped by it.
-	const roundTripPreference =
-		req.preference && buildCustomModel(req.preference) && candidates.length > 0
-			? req.preference
-			: undefined;
+	const roundTripPreference = racedWithModel && candidates.length > 0 ? req.preference : undefined;
 
 	// Graceful fallback: a preference-aware (custom_model) race that produced
 	// nothing — the engine rejected the model, or the down-weighting found no loop —
 	// must never deny a route the plain generator could build. Retry once without
 	// the preference. Layered resilience: the preference is an enhancement, the
-	// route itself is the contract.
-	if (req.preference && candidates.length === 0) {
+	// route itself is the contract. Gated on the model because an unmodelled
+	// preference already raced plain: retrying would re-send a byte-identical
+	// request, doubling the upstream fan-out exactly when the engine is failing.
+	if (racedWithModel && candidates.length === 0) {
 		({ candidates, lastError } = await raceRoundTrip(
 			req.start,
 			req.targetDistanceM,

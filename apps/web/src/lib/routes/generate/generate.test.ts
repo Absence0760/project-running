@@ -11,7 +11,7 @@ import {
 	ROUTE_PREFERENCES,
 	type Fetcher,
 } from './graphhopper';
-import { areaEfficiency, enclosedAreaM2, inBandScore, pickBestLoop, preferenceFactor } from './select';
+import { areaEfficiency, enclosedAreaM2, inBandScore, pickBestLoop } from './select';
 import { DEFAULT_SEEDS, handleGenerate, parseGenerateRequest, REQUEST_MULTIPLIERS } from './handler';
 
 const BASE = 'http://gh.local';
@@ -275,25 +275,11 @@ test('pickBestLoop picks the closest-to-target when nothing is in-band', () => {
 	assert.equal(best, nearSpur);
 });
 
-test('preferenceFactor is neutral without a measured share, rewarding with one', () => {
-	const base = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
-	assert.equal(preferenceFactor(base), 1);
-	// An unmeasured candidate must score exactly as it did before the term
-	// existed — the round_trip rail reports no share and must not be punished
-	// for the sidecar's honesty.
-	assert.equal(preferenceFactor({ ...base, preferenceShare: 0 }), 1);
-	assert.ok(preferenceFactor({ ...base, preferenceShare: 1 }) > 1);
-	assert.ok(
-		preferenceFactor({ ...base, preferenceShare: 0.8 }) <
-			preferenceFactor({ ...base, preferenceShare: 1 }),
-	);
-	// A garbled share is not a measurement.
-	assert.equal(preferenceFactor({ ...base, preferenceShare: Number.NaN }), 1);
-});
-
-test('pickBestLoop is unchanged when no candidate carries a share', () => {
-	// The default generator is the regression nothing else here would catch:
-	// every in-band score must be identical with the preference term in place.
+test('inBandScore is roundness discounted by distance, and nothing else', () => {
+	// The default generator is the regression nothing else here would catch, and
+	// a preference must not reach this score at all: the sidecar returns its one
+	// chosen loop straight to the caller, so selection only ever ranks the
+	// unmeasured round_trip pool.
 	const a = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
 	const b = { coordinates: squareLoop(0, 0, 0.006231), distanceM: 5550 };
 	const spur = { coordinates: spurLoop(0, 0, 0.01), distanceM: 5000 };
@@ -301,16 +287,6 @@ test('pickBestLoop is unchanged when no candidate carries a share', () => {
 	for (const c of [a, b, spur]) {
 		assert.equal(inBandScore(c, 5000), areaEfficiency(c) * (1 - Math.abs(c.distanceM - 5000) / 5000));
 	}
-});
-
-test('pickBestLoop lets a measured preference share break a shape-and-distance tie', () => {
-	const plain = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
-	const preferred = { ...plain, preferenceShare: 0.9 };
-	assert.equal(pickBestLoop([plain, preferred], 5000), preferred);
-	// The term is capped well below the shape signal: a spur can't buy the win.
-	const roundish = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
-	const quietSpur = { coordinates: spurLoop(0, 0, 0.01), distanceM: 5000, preferenceShare: 1 };
-	assert.equal(pickBestLoop([roundish, quietSpur], 5000), roundish);
 });
 
 test('pickBestLoop returns null when no candidate is usable', () => {
@@ -711,6 +687,100 @@ test('parseGenerateRequest keeps every known preference, drops an unknown one', 
 	}
 });
 
+test('a sidecar that REFUSES the preference field still serves a route', async () => {
+	// Version skew: the Lambda and the sidecar deploy separately, and the
+	// sidecar's decoder rejects unknown fields, so one deployed before this
+	// preference existed answers 400. On a graph-cycle-only deploy that used to
+	// turn the whole request into a 502 — the alarm-driving status — with the
+	// preference as the sole reason a buildable route was denied.
+	const bodies: string[] = [];
+	const fetcher: Fetcher = async (_url, init) => {
+		const body = String(init?.body ?? '');
+		bodies.push(body);
+		if (body.includes('preference')) {
+			return new Response('json: unknown field "preference"', { status: 400 });
+		}
+		return gcResponse({ found: true, coordinates: squareLoop(0, 0, 0.0056), distanceM: 5000 });
+	};
+	const res = await handleGenerate(
+		AUTH,
+		{ ...VALID_BODY, preference: 'quiet' },
+		GC_CFG,
+		{ fetcher, proChecker: asPro },
+	);
+	assert.equal(res.status, 200);
+	assert.equal(bodies.length, 2, 'the refusal must be retried once without the preference');
+	assert.ok(!bodies[1].includes('preference'));
+	// The retry served an unweighted loop, so nothing may claim the ask landed.
+	if (res.status === 200) assert.equal(res.body.preferenceApplied, undefined);
+});
+
+test('a sidecar that is UNREACHABLE is not retried — only a refusal is', async () => {
+	// The retry exists for a decoder that answered and refused. A transport
+	// failure has no answer to read, so retrying only doubles the wait before
+	// the honest 502.
+	let calls = 0;
+	const fetcher: Fetcher = async () => {
+		calls++;
+		throw new Error('ECONNREFUSED');
+	};
+	const res = await handleGenerate(
+		AUTH,
+		{ ...VALID_BODY, preference: 'quiet' },
+		GC_CFG,
+		{ fetcher, proChecker: asPro },
+	);
+	assert.equal(res.status, 502);
+	assert.equal(calls, 1);
+});
+
+test('the sidecar cannot name a preference this request never carried', async () => {
+	// It is a separately deployed service: a bare echo of its answer would let a
+	// future or wrong version tell the runner their route is something it isn't.
+	const fetcher: Fetcher = async () =>
+		gcResponse({
+			found: true,
+			coordinates: squareLoop(0, 0, 0.0056),
+			distanceM: 5000,
+			preferenceApplied: 'scenic',
+		});
+	const asked = await handleGenerate(AUTH, { ...VALID_BODY, preference: 'quiet' }, GC_CFG, {
+		fetcher,
+		proChecker: asPro,
+	});
+	assert.equal(asked.status, 200);
+	if (asked.status === 200) assert.equal(asked.body.preferenceApplied, undefined);
+	const unasked = await handleGenerate(AUTH, VALID_BODY, GC_CFG, { fetcher, proChecker: asPro });
+	assert.equal(unasked.status, 200);
+	if (unasked.status === 200) assert.equal(unasked.body.preferenceApplied, undefined);
+});
+
+test('cul_de_sac does not race round_trip twice — its first race was already plain', async () => {
+	// buildCustomModel returns null for it, so the preference race and the
+	// never-deny retry are byte-identical requests. Firing both doubles the
+	// upstream fan-out precisely when the engine is already failing.
+	let ghCalls = 0;
+	const fetcher: Fetcher = async (url) => {
+		if (url.includes('gc.local')) return gcResponse({ found: false, largestClean: null });
+		ghCalls++;
+		// A 200 carrying no path: the engine ANSWERED that it cannot build a loop
+		// here, which is the 422 branch rather than the 502 one.
+		return new Response(JSON.stringify({ paths: [] }), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		});
+	};
+	const res = await handleGenerate(
+		AUTH,
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'cul_de_sac', seeds: 1 },
+		{ ...OK_CFG, graphCycleUrl: 'http://gc.local' },
+		{ fetcher, proChecker: asPro },
+	);
+	assert.equal(res.status, 422);
+	// One race: REQUEST_MULTIPLIERS x seeds. A second would double it.
+	assert.equal(ghCalls, REQUEST_MULTIPLIERS.length);
+});
+
 test('handleGenerate with a preference still runs graph-cycle first', async () => {
 	// The preference used to divert the whole request onto round_trip, silently
 	// downgrading the runner off the durable v3 generator. It must not.
@@ -725,7 +795,6 @@ test('handleGenerate with a preference still runs graph-cycle first', async () =
 					coordinates: squareLoop(0, 0, 0.0056),
 					distanceM: 5000,
 					preferenceApplied: 'quiet',
-					preferenceShare: 0.8,
 				}),
 				{ status: 200, headers: { 'content-type': 'application/json' } },
 			);
