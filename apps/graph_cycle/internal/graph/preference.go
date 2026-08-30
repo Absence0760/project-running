@@ -13,6 +13,7 @@ const (
 	PrefNone Preference = iota
 	PrefQuiet
 	PrefScenic
+	PrefCulDeSac
 )
 
 // Soft per-edge cost multipliers. Every value is finite and strictly positive:
@@ -30,7 +31,9 @@ const (
 func (g *Graph) prefCost(e int32, pref Preference) float64 {
 	attr := g.edgeAttr[e]
 	switch pref {
-	case PrefQuiet:
+	case PrefQuiet, PrefCulDeSac:
+		// Cul-de-sac mode inherits the quiet weighting: the dead ends worth
+		// running down hang off neighbourhood streets, not off arterials.
 		switch attr & classMask {
 		case classArterial:
 			return quietArterialCost
@@ -54,6 +57,9 @@ func (g *Graph) prefCost(e int32, pref Preference) float64 {
 func (g *Graph) preferredShare(l *Loop, pref Preference) float64 {
 	if l == nil || l.DistanceM <= 0 || pref == PrefNone {
 		return 0
+	}
+	if pref == PrefCulDeSac {
+		return l.stubM / l.DistanceM
 	}
 	preferred := 0.0
 	for i := 1; i < len(l.path); i++ {

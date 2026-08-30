@@ -17,7 +17,7 @@ func TestPrefCostIsAlwaysSoft(t *testing.T) {
 	b.addSegment(0, 3, classFootFirst|attrGreen)
 	g := b.finalize()
 
-	for _, pref := range []Preference{PrefNone, PrefQuiet, PrefScenic} {
+	for _, pref := range []Preference{PrefNone, PrefQuiet, PrefScenic, PrefCulDeSac} {
 		for e := int32(0); e < int32(g.NumEdges()); e++ {
 			c := g.prefCost(e, pref)
 			// Soft only: a zero or infinite multiplier would let a preference
@@ -97,7 +97,7 @@ func TestPreferenceNeverDeniesALoop(t *testing.T) {
 			if plain.Best == nil {
 				continue
 			}
-			for _, pref := range []Preference{PrefQuiet, PrefScenic} {
+			for _, pref := range []Preference{PrefQuiet, PrefScenic, PrefCulDeSac} {
 				res := g.SearchCycle(context.Background(), lat, lng, target, pref)
 				if res.Best == nil {
 					t.Fatalf("graph %d target %.0f pref %d: preference denied a loop the plain search found", gi, target, pref)

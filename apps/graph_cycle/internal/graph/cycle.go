@@ -38,6 +38,7 @@ type Loop struct {
 
 	path  []int32
 	share float64 // fraction of DistanceM on the active preference's edges
+	stubM float64 // credited cul-de-sac stub length, 0 outside that mode
 }
 
 // CycleResult is what SearchCycle returns. Best is the chosen loop under the
@@ -153,9 +154,15 @@ func (g *Graph) searchCycle(ctx context.Context, startLat, startLng, targetM flo
 		}
 		loop := g.assembleLoop(out, back)
 		if loop != nil {
-			loop.share = g.preferredShare(loop, pref)
 			candidates = append(candidates, loop)
 		}
+	}
+
+	for _, c := range candidates {
+		if pref == PrefCulDeSac {
+			g.augmentCulDeSac(c, targetM)
+		}
+		c.share = g.preferredShare(c, pref)
 	}
 
 	res := selectLoops(candidates, targetM, pref)
@@ -278,6 +285,13 @@ const (
 	// loop the runner did not ask for the length of.
 	scoreShareRoundness = 0.5
 	scoreShareDistance  = distanceBand
+	// The cul-de-sac inversion. A loop that grows by a fraction f of its length
+	// with no new area keeps only 1/(1+f)² of its shape score, so at the stub
+	// cap it loses roughly 0.15 of an ordinary score against a credited share
+	// of about 0.17. A credit of 1 therefore leaves a fully-stubbed loop
+	// ranked a shade above the same loop without them — which is the ask —
+	// rather than penalised for taking the spurs the runner requested.
+	scoreStubCredit = 1.0
 )
 
 // scoreLoop ranks one candidate; higher is better. anyInBand says whether ANY
@@ -292,7 +306,7 @@ func scoreLoop(c *Loop, targetM float64, anyInBand bool, pref Preference) float6
 		}
 		s += snapToQuantum(c.AreaEfficiency) - scoreTieWeight*(delta/targetM)
 		if pref != PrefNone {
-			s += scoreShareRoundness * c.share
+			s += shareWeightFor(pref) * c.share
 		}
 		return s
 	}
@@ -301,6 +315,15 @@ func scoreLoop(c *Loop, targetM float64, anyInBand bool, pref Preference) float6
 		s += scoreShareDistance * targetM * c.share
 	}
 	return s
+}
+
+// shareWeightFor is what a fully preferred loop may buy while the field is
+// judged on shape.
+func shareWeightFor(pref Preference) float64 {
+	if pref == PrefCulDeSac {
+		return scoreStubCredit
+	}
+	return scoreShareRoundness
 }
 
 func snapToQuantum(v float64) float64 { return math.Round(v/scoreQuantum) * scoreQuantum }
