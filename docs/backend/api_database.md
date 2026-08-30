@@ -876,11 +876,20 @@ create table user_profiles (
 -- migration adds (this one plus `clubs.name` 80 / `clubs.description` 2000 /
 -- `clubs.location_label` 80) are restated once per client in
 -- `apps/web/src/lib/core/text_limits.ts` + `apps/mobile_android/lib/text_limits.dart`,
--- and `text_limits_test` on each side PARSES the migration to prove they match —
+-- and `text_limits_test` on each side PARSES the migrations to prove they match —
 -- a composer capped above the constraint hands the user a 23514 it cannot
 -- explain. Unlike `20261124_001` (which added three NOT VALID caps and never
--- validated any of them, so those rows are permanently unchecked) it emits the
--- VALIDATE, pinned by `club_profile_text_caps_test.sql`.
+-- validated any of them) it emits the VALIDATE, pinned by
+-- `club_profile_text_caps_test.sql`.
+--
+-- **Four more caps joined that registry in decisions §792**, and they are why
+-- both guards now scan the WHOLE migrations directory rather than this one
+-- file: `club_posts.body` 4096 and `events.description` 2000 (both
+-- `20261124_001`, validated by `20270503_001`), `training_plans.name` 120 and
+-- `user_profiles.parkrun_number` 32 (both `20270503_001`). Each client had been
+-- capping BELOW them — 1200 / 1000 / 80, mobile 20 for the parkrun id while web
+-- bounded it not at all — so the phone truncated a 25-character parkrun id the
+-- column would have stored, and a 33-character one reached the column from web.
 --
 -- **Nothing is uncapped any more** (`20270503_001`, decisions §548). The "40
 -- remain" this comment used to carry was derived by reading the migration files
@@ -998,7 +1007,7 @@ production. The code, the gate, and the record ship now.
 
 #### `body_metrics`
 
-Weight time-series for the nutrition Mifflin-St Jeor BMR target (migration `20261216_001`). Weight is a **time-series**, not a single mutable column, because a trend matters and a column loses history. **GDPR special-category health data**: owner-only RLS (no public read at all — `gym_workouts` / `food_log` are also owner-only on the base table since `20270313_001`, but each has a redacted `public_*` view for its `is_public` rows; `body_metrics` has neither), cascade-deletes from `auth.users`, gated on `health_data_consent_at` at the client layer, and must be in the DSAR export path (G1/G6).
+Weight time-series for the nutrition Mifflin-St Jeor BMR target (migration `20261216_001`). Weight is a **time-series**, not a single mutable column, because a trend matters and a column loses history. **`weight_kg`'s `0 < x <= 500` bound — and `user_profiles.height_cm`'s `0 < x <= 300`, and `checkpoint_crossings.body_weight_kg`'s `20..400` — are registered client-side in `core/numeric_limits.ts` / `numeric_limits.dart`** (decisions §792), with the `numeric column bounds` entry in `scripts/check_shared_constants.mjs` reading the CHECK out of the migrations so neither client can drift from it. Every surface grades the value in canonical kilograms and refuses in the unit the runner typed: the fields used to carry `min="0"` against a `> 0` CHECK and no ceiling at all, so 600 kg — or 1200 lb, which is 544 kg — reached the column and answered with a raw 23514. **GDPR special-category health data**: owner-only RLS (no public read at all — `gym_workouts` / `food_log` are also owner-only on the base table since `20270313_001`, but each has a redacted `public_*` view for its `is_public` rows; `body_metrics` has neither), cascade-deletes from `auth.users`, gated on `health_data_consent_at` at the client layer, and must be in the DSAR export path (G1/G6).
 
 ```sql
 create table body_metrics (
