@@ -128,10 +128,17 @@ const SYSTEM_PROMPT =
 	'out_and_back, and a request that names a different finish to ' +
 	'point_to_point. Map "avoid main roads/highways/busy roads/traffic" to ' +
 	'avoid_highways=true. Map "trail/off-road/park paths" to surface trail, ' +
-	'"roads/pavement/sidewalk" to road, and a mix to mixed. Omit any field ' +
+	'"roads/pavement/sidewalk" to road, and a mix to mixed. Map a request ' +
+	'about the CHARACTER of the streets to preference: "quiet streets", ' +
+	'"residential", "away from traffic" to quiet; "through the park", ' +
+	'"somewhere green/pretty", "along the river" to scenic; and an explicit ' +
+	'ask for dead ends / no-through roads to cul_de_sac. Omit any field ' +
 	'the request does not specify — do not guess.';
 
-const EXTRACT_TOOL: Anthropic.Tool = {
+/// Exported so `handler.test.ts` can pin that every preference the model is
+/// told about is one `validateConstraints` will actually accept — a value
+/// advertised on only one side is a value the runner never gets.
+export const EXTRACT_TOOL: Anthropic.Tool = {
 	name: 'extract_route_constraints',
 	description:
 		'Record the route-generation constraints extracted from the user\'s ' +
@@ -158,6 +165,18 @@ const EXTRACT_TOOL: Anthropic.Tool = {
 				type: 'boolean',
 				description:
 					'True when the runner wants to avoid main / busy roads and highways. Omit if unspecified.',
+			},
+			preference: {
+				type: 'string',
+				enum: ['quiet', 'scenic', 'cul_de_sac'],
+				description:
+					'How the route should be designed. quiet: residential back ' +
+					'streets, away from traffic and main roads. scenic: parks, ' +
+					'greenery, water — "through the park", "somewhere green", ' +
+					'"along the river". cul_de_sac: the runner explicitly wants ' +
+					'dead ends / no-through roads worked in ("I like poking down ' +
+					'dead ends"). Omit if unspecified — quiet is inferred from ' +
+					'avoid_highways and scenic from a trail surface.',
 			},
 		},
 	},

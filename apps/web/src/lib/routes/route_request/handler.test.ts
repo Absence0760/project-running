@@ -17,8 +17,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { handleRouteRequest, MAX_REQUEST_TEXT_CHARS } from './handler';
+import { EXTRACT_TOOL, handleRouteRequest, MAX_REQUEST_TEXT_CHARS } from './handler';
 import type { RouteRequestConfig } from './handler';
+import { validateConstraints } from './constraints';
 
 function baseConfig(): RouteRequestConfig {
 	return {
@@ -92,6 +93,22 @@ test('a valid request shape passes input validation (no 400) — fails later on 
 
 test('MAX_REQUEST_TEXT_CHARS is a sane cap', () => {
 	assert.ok(MAX_REQUEST_TEXT_CHARS >= 200 && MAX_REQUEST_TEXT_CHARS <= 2000);
+});
+
+test('every preference the tool advertises is one the validator accepts', () => {
+	// The schema is what the model is told it may emit; `validateConstraints`
+	// is what survives the trust boundary. A value on only the schema side is
+	// silently dropped after being billed for — the runner asks for a scenic
+	// route, the model complies, and the generator never hears about it.
+	const props = EXTRACT_TOOL.input_schema.properties as Record<
+		string,
+		{ enum?: string[] }
+	>;
+	const advertised = props.preference?.enum;
+	assert.ok(Array.isArray(advertised) && advertised.length > 0);
+	for (const p of advertised) {
+		assert.equal(validateConstraints({ preference: p }).preference, p);
+	}
 });
 
 // ─────────────── AI-disclosure consent gate (issue #734) ───────────────
