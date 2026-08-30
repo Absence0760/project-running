@@ -422,10 +422,23 @@ and the scoring:
   `preferenceShare` (0..1 of the served loop’s LENGTH on preferred edges; under
   cul-de-sac, on credited stubs), **omitted** when nothing was honoured —
   including when one was asked for and the unweighted retry served the loop.
+- **Client-side half — landed in the same change** ([decisions § 795](../architecture/decisions.md)).
+  The handler used to skip the sidecar entirely whenever a preference was set, so
+  ticking "Quiet roads" moved the runner off this generator onto the `round_trip`
+  custom model. It could not have been otherwise: `decodeBody` uses
+  `DisallowUnknownFields`, so a request carrying `preference` got a **400**. The
+  preference now rides the chain — sidecar first carrying it, `round_trip` under a
+  custom model only as the fallback it already was.
+- **Deploy order matters, and it degrades rather than breaks.** The Lambda and the
+  sidecar ship separately, so a window where the web half is live against an
+  *older* sidecar is normal. In it, every preference request is rejected 400, the
+  handler swallows it as a sidecar error, logs `graph_cycle sidecar error, falling
+  back`, and serves the `round_trip` custom model — exactly the behaviour that
+  shipped before this change. No runner sees a failure; the cost is that the
+  preference is served by the weaker generator until the sidecar deploys, and that
+  log line is the signal it has not.
 - **Out of scope** — mobile (route generation is web-canonical, no mobile route
-  builder). The web handler still skips the sidecar for `quiet` in favour of the
-  `round_trip` custom model; pointing it at the sidecar instead is the client-side
-  half of this work.
+  builder).
 
 **Elevation-aware is deferred, for want of data, not want of code.** Neither
 engine has terrain: GraphHopper is booted with no `graph.elevation.provider`
