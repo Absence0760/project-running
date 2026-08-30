@@ -54,26 +54,56 @@ export function estimatedOneRepMax(weightKg: number, reps: number): number {
 	return weightKg * (1 + r / 30);
 }
 
-/// Normalise a free-text exercise name for grouping: trimmed, lower-cased,
-/// internal whitespace collapsed. "Bench Press", "bench  press" and
-/// "  Bench press " all collapse to one PR bucket.
+/// Normalise a free-text exercise name for grouping: whitespace folded to
+/// single spaces and trimmed, the runtime-divergent case mappings applied by
+/// hand, then lower-cased. "Bench Press", "bench  press" and "  Bench press "
+/// all collapse to one PR bucket.
+///
+/// Every step is spelled out rather than delegated to a runtime default,
+/// because this value is PERSISTED and a third rail derives it in SQL. The
+/// trim is a regex over the single space the fold leaves, not `String.trim()`,
+/// whose class differs from Dart's and from `btrim`'s.
 export function normaliseExerciseName(name: string): string {
-	return name.replace(EXERCISE_WS, ' ').trim().toLowerCase().replace(/ +/g, ' ');
+	return name
+		.replace(EXERCISE_WS, ' ')
+		.replace(/^ +| +$/g, '')
+		.replace(EXERCISE_CASE_FOLD, (c) => EXERCISE_CASE_MAP[c])
+		.toLowerCase();
 }
 
-/// The whitespace class both platforms fold, spelled out rather than left to
+/// The whitespace class all THREE rails fold, spelled out rather than left to
 /// each runtime's default.
 ///
-/// This value is PERSISTED as `gym_routine_exercises.exercise_key`, so web and
-/// mobile must derive the identical key — otherwise one exercise buckets into
-/// two PRs depending on which platform logged it. Dart's `String.trim()`
-/// strips every Unicode `White_Space` code point, including U+0085 (NEL);
-/// JS's `trim()` and `\s` do not. A name carrying one keyed as `bench` on
-/// mobile and `bench\u0085` on web. Naming the set on both sides removes the
-/// dependency on that difference. Mirrors `kExerciseWhitespace` in
-/// `gym_prs.dart`.
+/// This value is PERSISTED as `gym_routine_exercises.exercise_key`, and the
+/// server derives it too: `normalise_exercise_name()` (migration
+/// `20270623000001`) is the SQL twin, and every gym RPC that groups or matches
+/// on an exercise goes through it. A disagreement splits or merges a lifter's
+/// history, so the three must name the identical set --
+/// `scripts/check_shared_constants.mjs` reads all three and fails the PR when
+/// they drift. Mirrors `kExerciseWhitespace` in `gym_prs.dart`.
 const EXERCISE_WS =
 	/[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+/g;
+
+/// The code points where the three rails' own case folding was measured to
+/// disagree, mapped by hand so that none of them decides.
+///
+/// U+0130 is the one that matters: JS applies Unicode's FULL lowercase mapping
+/// and yields `i` + U+0307, where Dart's simple folding and libc's `towlower`
+/// both yield a bare `i` -- so a Turkish lifter's name keyed one way on web and
+/// another way on the phone and the server, on a STORED key. The four
+/// titlecase digraphs are the same shape one step rarer. Everything outside
+/// this table is left to each rail's own `lower()`; the residual disagreement
+/// is confined to Cherokee, Coptic, Glagolitic, Georgian Mtavruli and the
+/// Cyrillic/Latin Extended-B additions, which no exercise name reaches.
+/// decisions.md § 790. Mirrors `kExerciseCaseFold` in `gym_prs.dart`.
+const EXERCISE_CASE_FOLD = /[\u0130\u01c5\u01c8\u01cb\u01f2]/g;
+const EXERCISE_CASE_MAP: Record<string, string> = {
+	'\u0130': 'i',
+	'\u01c5': '\u01c6',
+	'\u01c8': '\u01c9',
+	'\u01cb': '\u01cc',
+	'\u01f2': '\u01f3'
+};
 
 function round1(n: number): number {
 	return Math.round(n * 10) / 10;

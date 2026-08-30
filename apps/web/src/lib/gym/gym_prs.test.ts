@@ -171,12 +171,47 @@ test('RunningPrTracker.judge matches workoutPrs walked over growing prior', () =
 	}
 });
 
-test('normaliseExerciseName folds the same whitespace class as the Dart twin', () => {
-	// exercise_key is PERSISTED, so a name that normalises differently on the
-	// two platforms buckets one exercise into two PRs. Dart's trim() strips
-	// every Unicode White_Space code point (incl. U+0085 NEL) and JS's does
-	// not, so the class is spelled out on both sides.
-	assert.equal(normaliseExerciseName('Bench Press\u0085'), 'bench press');
-	assert.equal(normaliseExerciseName('\u00a0Bench\u2003Press\u2028'), 'bench press');
+test('normaliseExerciseName folds the same whitespace class as the Dart and SQL twins', () => {
+	// exercise_key is PERSISTED and three rails derive it, so a name that
+	// normalises differently on any of them buckets one exercise into two.
+	// Every member of the class, folded from the INSIDE of a name.
+	const members = [
+		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002,
+		0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a, 0x2028, 0x2029,
+		0x202f, 0x205f, 0x3000, 0xfeff
+	];
+	for (const cp of members) {
+		const c = String.fromCodePoint(cp);
+		assert.equal(normaliseExerciseName(`Bench${c}Press`), 'bench press', `inner U+${cp.toString(16)}`);
+		// The edge cases are the ones the SQL rail got wrong: `btrim(text)` with
+		// no second argument strips ONLY U+0020, so every other member survived
+		// the trim and the collapse then turned it into a leading/trailing SPACE.
+		assert.equal(normaliseExerciseName(`${c}Bench Press`), 'bench press', `leading U+${cp.toString(16)}`);
+		assert.equal(normaliseExerciseName(`Bench Press${c}`), 'bench press', `trailing U+${cp.toString(16)}`);
+	}
 	assert.equal(normaliseExerciseName('  Bench   press '), 'bench press');
+	assert.equal(normaliseExerciseName('\t\n'), '');
+});
+
+test('normaliseExerciseName leaves non-whitespace format characters alone', () => {
+	// U+200B ZWSP and U+180E are NOT whitespace in any of the three rails, and
+	// widening the class on one platform alone would re-key every name holding
+	// one. Pinned so the class cannot quietly grow.
+	assert.equal(normaliseExerciseName('Bench\u200bPress'), 'bench\u200bpress');
+	assert.equal(normaliseExerciseName('Bench\u180ePress'), 'bench\u180epress');
+});
+
+test('normaliseExerciseName applies the case folds no runtime agrees on', () => {
+	// JS full-lowercases U+0130 to `i` + U+0307 where Dart and libc's towlower
+	// both yield a bare `i`. Folding it by hand is what makes the stored key
+	// identical on all three rails; the four titlecase digraphs are the same
+	// shape. decisions.md § 790.
+	assert.equal(normaliseExerciseName('\u0130ncline Press'), 'incline press');
+	assert.equal(normaliseExerciseName('\u0130NCLINE PRESS'), 'incline press');
+	assert.equal(normaliseExerciseName('\u01c5em'), '\u01c6em');
+	assert.equal(normaliseExerciseName('\u01c8'), '\u01c9');
+	assert.equal(normaliseExerciseName('\u01cb'), '\u01cc');
+	assert.equal(normaliseExerciseName('\u01f2'), '\u01f3');
+	// Ordinary folding is still the runtime's, and all three agree on it.
+	assert.equal(normaliseExerciseName('\u00c9l\u00e9vation'), '\u00e9l\u00e9vation');
 });

@@ -316,6 +316,183 @@ function rateLimitSqlSites(ctx) {
 	return [{ key: 'buckets', where: 'live rate-limit call sites in the migrations', values: [...buckets] }];
 }
 
+// -- Entry: the exercise-name normalisation contract ------------------------
+
+// The whitespace class and the case-fold table behind `exercise_key`, which is
+// a STORED grouping key derived on three rails. A disagreement does not throw:
+// it silently splits one lifter's history into two exercises, or merges two
+// into one. decisions.md § 790.
+//
+// The extractors below yield CODE POINTS in hex, never the source text, so a
+// rail is free to spell a member however its language spells one -- `\t` in a
+// JS regex literal, `\\t` inside a Dart string, `chr(9)` in SQL -- and the
+// guard still compares the same thing.
+
+// SQL builds its class by concatenating `chr(n)` calls, so the operators, the
+// quotes and the whitespace between operands carry no members. A JS or Dart
+// class is the literal text, where a space IS one -- hence the two modes.
+/** @param {string} klass @returns {string} */
+function stripSqlConcatenation(klass) {
+	return klass.replace(/\|\||'|\s/g, '');
+}
+
+/**
+ * @param {string} klass
+ * @param {{ sql?: boolean }} [options]
+ * @returns {number[]}
+ */
+export function parseCharClassCodePoints(klass, { sql = false } = {}) {
+	const src = sql ? stripSqlConcatenation(klass) : klass.replace(/\\\\/g, '\\');
+	/** @type {(number | '-')[]} */
+	const tokens = [];
+	/** @type {Record<string, number>} */
+	const SHORT = { t: 9, n: 10, v: 11, f: 12, r: 13 };
+	for (let i = 0; i < src.length; ) {
+		const rest = src.slice(i);
+		const chrCall = /^chr\((\d+)\)/.exec(rest);
+		if (chrCall) {
+			tokens.push(Number(chrCall[1]));
+			i += chrCall[0].length;
+			continue;
+		}
+		const uEsc = /^\\u\{?([0-9a-fA-F]{1,6})\}?/.exec(rest);
+		if (uEsc) {
+			tokens.push(parseInt(uEsc[1], 16));
+			i += uEsc[0].length;
+			continue;
+		}
+		const shortEsc = /^\\([tnvfr])/.exec(rest);
+		if (shortEsc) {
+			tokens.push(SHORT[shortEsc[1]]);
+			i += 2;
+			continue;
+		}
+		if (src[i] === '-') {
+			tokens.push('-');
+			i += 1;
+			continue;
+		}
+		tokens.push(/** @type {number} */ (src.codePointAt(i)));
+		i += String.fromCodePoint(/** @type {number} */ (src.codePointAt(i))).length;
+	}
+	/** @type {number[]} */
+	const out = [];
+	for (let k = 0; k < tokens.length; k++) {
+		const prev = tokens[k - 1];
+		const next = tokens[k + 1];
+		if (tokens[k] === '-' && typeof prev === 'number' && typeof next === 'number') {
+			for (let cp = prev + 1; cp <= next; cp++) out.push(cp);
+			k += 1;
+			continue;
+		}
+		const here = tokens[k];
+		if (typeof here === 'number') out.push(here);
+	}
+	return out;
+}
+
+/** @param {number[]} cps @returns {string[]} */
+function asHex(cps) {
+	return cps.map((cp) => cp.toString(16).padStart(4, '0'));
+}
+
+// Anchored on the DECLARATION (`<name> … = …`) rather than on the first
+// mention: both files name their class in a doc comment above the code, and a
+// guard that silently reads a prose paragraph certifies nothing.
+/** @param {string} src @param {string} declName @returns {string[]} */
+export function parseNamedCharClass(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]{0,60}=[\\s\\S]{0,200}?\\[([\\s\\S]*?)\\]\\+`).exec(src);
+	return decl === null ? [] : asHex(parseCharClassCodePoints(decl[1]));
+}
+
+// A `'<from>': '<to>'` table written the same way in TypeScript and in Dart.
+/** @param {string} src @param {string} declName @returns {string[]} */
+export function parseCaseFoldMap(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]{0,60}=[\\s\\S]{0,60}?\\{([\\s\\S]*?)\\}`).exec(src);
+	if (decl === null) return [];
+	const cp = (/** @type {string} */ t) => asHex(parseCharClassCodePoints(t)).join('+');
+	return [...decl[1].matchAll(/'((?:\\u[0-9a-fA-F]{4}|[^'])+)'\s*:\s*'((?:\\u[0-9a-fA-F]{4}|[^'])+)'/g)].map(
+		(m) => `${cp(m[1])}>${cp(m[2])}`,
+	);
+}
+
+// The argument list of `name(...)` in `body`, split on its TOP-LEVEL commas --
+// every argument here is itself a call, so a regex split lands inside one.
+/** @param {string} body @param {string} name @returns {string[]} */
+export function callArguments(body, name) {
+	const open = body.indexOf(`${name}(`);
+	if (open < 0) return [];
+	let depth = 0;
+	let current = '';
+	/** @type {string[]} */
+	const args = [];
+	for (let i = open + name.length; i < body.length; i++) {
+		const ch = body[i];
+		if (ch === '(') {
+			depth += 1;
+			if (depth === 1) continue;
+		} else if (ch === ')') {
+			depth -= 1;
+			if (depth === 0) {
+				args.push(current);
+				return args;
+			}
+		} else if (ch === ',' && depth === 1) {
+			args.push(current);
+			current = '';
+			continue;
+		}
+		current += ch;
+	}
+	return [];
+}
+
+/** The one live SQL function allowed to spell the class out. */
+const SQL_EXERCISE_NORMALISER = 'collapse_exercise_whitespace';
+
+/** @param {Ctx} ctx @returns {Site[]} */
+function exerciseClassSqlSites(ctx) {
+	/** @type {Site[]} */
+	const out = [];
+	for (const [name, { file, sql }] of ctx.sql.live) {
+		// The definition itself, plus any OTHER live function that still rolls its
+		// own -- an inlined `\s+` parses to no code points, which the empty-value
+		// check reports rather than letting it agree with everything.
+		const rollsItsOwn =
+			name !== SQL_EXERCISE_NORMALISER &&
+			/exercise_name/i.test(sql) &&
+			/regexp_replace\s*\(/i.test(sql);
+		if (name !== SQL_EXERCISE_NORMALISER && !rollsItsOwn) continue;
+		const klass = /\[([\s\S]*?)\]\+/.exec(sql);
+		out.push({
+			key: 'whitespace',
+			where: `${name}() in ${file}`,
+			values: klass === null ? [] : asHex(parseCharClassCodePoints(klass[1], { sql: true })),
+		});
+	}
+	return out;
+}
+
+// SQL writes the same table as a `translate(expr, from, to)` pair of chr()
+// runs, which is one mapping per position.
+/** @param {Ctx} ctx @returns {Site[]} */
+function exerciseCaseFoldSqlSites(ctx) {
+	const live = ctx.sql.live.get('normalise_exercise_name');
+	if (!live) return [];
+	const where = `normalise_exercise_name() in ${live.file}`;
+	const args = callArguments(live.sql, 'translate');
+	if (args.length !== 3) return [{ key: 'case_folds', where, values: [] }];
+	const from = asHex(parseCharClassCodePoints(args[1], { sql: true }));
+	const to = asHex(parseCharClassCodePoints(args[2], { sql: true }));
+	return [
+		{
+			key: 'case_folds',
+			where,
+			values: from.length === to.length ? from.map((f, i) => `${f}>${to[i]}`) : [],
+		},
+	];
+}
+
 // ── The registry ───────────────────────────────────────────────────────────
 
 /** @type {readonly Entry[]} */
@@ -500,6 +677,78 @@ export const REGISTRY = [
 						key: 'cap',
 						where: 'WearRoutesBridge.kMaxRoutesPerPush',
 						values: parseNamedInt(ctx.read('apps/mobile_android/lib/wear_routes_bridge.dart'), 'kMaxRoutesPerPush'),
+					},
+				],
+			},
+		],
+	},
+	{
+		name: 'exercise-name whitespace class',
+		why:
+			'`gym_routine_exercises.exercise_key` is a STORED grouping key derived ' +
+			'on three rails. A member one rail folds and another does not splits a ' +
+			"lifter's history into two exercises, or merges two into one, with " +
+			'nothing rejecting the row.',
+		match: 'all',
+		compare: 'set',
+		rails: [
+			{ label: 'sql (live functions deriving an exercise key)', sites: exerciseClassSqlSites },
+			{
+				label: 'web (apps/web/src/lib/gym/gym_prs.ts)',
+				sites: (ctx) => [
+					{
+						key: 'whitespace',
+						where: 'EXERCISE_WS',
+						values: parseNamedCharClass(ctx.read('apps/web/src/lib/gym/gym_prs.ts'), 'EXERCISE_WS'),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				sites: (ctx) => [
+					{
+						key: 'whitespace',
+						where: 'kExerciseWhitespace',
+						values: parseNamedCharClass(
+							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							'kExerciseWhitespace',
+						),
+					},
+				],
+			},
+		],
+	},
+	{
+		name: 'exercise-name case folds',
+		why:
+			"The code points the three rails' own case folding disagrees on, mapped " +
+			'by hand so that none of them decides. JS full-lowercases U+0130 to `i` ' +
+			"+ U+0307 where Dart and libc's towlower both yield a bare `i`; a rail " +
+			'that stops applying the table silently re-keys every name holding one.',
+		match: 'all',
+		compare: 'set',
+		rails: [
+			{ label: 'sql (normalise_exercise_name)', sites: exerciseCaseFoldSqlSites },
+			{
+				label: 'web (apps/web/src/lib/gym/gym_prs.ts)',
+				sites: (ctx) => [
+					{
+						key: 'case_folds',
+						where: 'EXERCISE_CASE_MAP',
+						values: parseCaseFoldMap(ctx.read('apps/web/src/lib/gym/gym_prs.ts'), 'EXERCISE_CASE_MAP'),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				sites: (ctx) => [
+					{
+						key: 'case_folds',
+						where: 'kExerciseCaseMap',
+						values: parseCaseFoldMap(
+							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							'kExerciseCaseMap',
+						),
 					},
 				],
 			},

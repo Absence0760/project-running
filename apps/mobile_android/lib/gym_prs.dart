@@ -74,26 +74,56 @@ double estimatedOneRepMax(double weightKg, num reps) {
   return weightKg * (1 + r / 30);
 }
 
-/// The whitespace class both platforms fold, spelled out rather than left to
+/// The whitespace class all THREE rails fold, spelled out rather than left to
 /// each runtime's default.
 ///
-/// This value is PERSISTED as `gym_routine_exercises.exercise_key`, so web and
-/// mobile must derive the identical key — otherwise one exercise buckets into
-/// two PRs depending on which platform logged it. Dart's `String.trim()` strips
-/// every Unicode `White_Space` code point, including U+0085 (NEL); JS's
-/// `trim()` and `\s` do not. A name carrying one keyed as `bench` here and
-/// `bench` on web. Mirrors `EXERCISE_WS` in `gym_prs.ts`.
+/// This value is PERSISTED as `gym_routine_exercises.exercise_key`, and the
+/// server derives it too: `normalise_exercise_name()` (migration
+/// `20270623000001`) is the SQL twin, and every gym RPC that groups or matches
+/// on an exercise goes through it. A disagreement splits or merges a lifter's
+/// history, so the three must name the identical set --
+/// `scripts/check_shared_constants.mjs` reads all three and fails the PR when
+/// they drift. Mirrors `EXERCISE_WS` in `gym_prs.ts`.
 final RegExp kExerciseWhitespace = RegExp(
-  '[\\t\\n\\v\\f\\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+',
+  '[\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]+',
 );
 
-/// Normalise a free-text exercise name for grouping: trimmed, lower-cased,
-/// internal whitespace collapsed.
+/// The code points where the three rails' own case folding was measured to
+/// disagree, mapped by hand so that none of them decides.
+///
+/// U+0130 is the one that matters: JS applies Unicode's FULL lowercase mapping
+/// and yields `i` + U+0307, where Dart's simple folding and libc's `towlower`
+/// both yield a bare `i` -- so a Turkish lifter's name keyed one way on web and
+/// another way on the phone and the server, on a STORED key. The four
+/// titlecase digraphs are the same shape one step rarer. Everything outside
+/// this table is left to each rail's own `toLowerCase()`; the residual
+/// disagreement is confined to Cherokee, Coptic, Glagolitic, Georgian Mtavruli
+/// and the Cyrillic/Latin Extended-B additions, which no exercise name reaches.
+/// decisions.md § 790. Mirrors `EXERCISE_CASE_FOLD` / `EXERCISE_CASE_MAP` in
+/// `gym_prs.ts`.
+final RegExp kExerciseCaseFold =
+    RegExp('[\\u0130\\u01c5\\u01c8\\u01cb\\u01f2]');
+const Map<String, String> kExerciseCaseMap = {
+  '\u0130': 'i',
+  '\u01c5': '\u01c6',
+  '\u01c8': '\u01c9',
+  '\u01cb': '\u01cc',
+  '\u01f2': '\u01f3',
+};
+
+/// Normalise a free-text exercise name for grouping: whitespace folded to
+/// single spaces and trimmed, the runtime-divergent case mappings applied by
+/// hand, then lower-cased.
+///
+/// Every step is spelled out rather than delegated to a runtime default,
+/// because this value is PERSISTED and a third rail derives it in SQL. The
+/// trim is a regex over the single space the fold leaves, not `String.trim()`,
+/// whose class differs from JS's and from `btrim`'s.
 String normaliseExerciseName(String name) => name
     .replaceAll(kExerciseWhitespace, ' ')
-    .trim()
-    .toLowerCase()
-    .replaceAll(RegExp(r' +'), ' ');
+    .replaceAll(RegExp(r'^ +| +$'), '')
+    .replaceAllMapped(kExerciseCaseFold, (m) => kExerciseCaseMap[m[0]]!)
+    .toLowerCase();
 
 double _round1(double n) => (n * 10).round() / 10;
 
