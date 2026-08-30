@@ -77,6 +77,10 @@ as $$
       chr(105) || chr(454) || chr(457) || chr(460) || chr(499)));
 $$;
 
+-- Both helpers keep postgres's default PUBLIC execute, as the other pure text
+-- helpers do: a CHECK constraint's expression is ACL-checked against the role
+-- WRITING the row, so revoking here would have to be undone by a grant to every
+-- role that can insert a routine exercise. They read no data.
 comment on function public.normalise_exercise_name(text) is
   'The exercise grouping key: whitespace folded, the five runtime-divergent case mappings applied by hand, then lower(). Twin of normaliseExerciseName in gym_prs.ts / gym_prs.dart. decisions.md § 790.';
 
@@ -377,6 +381,8 @@ begin
 end;
 $$;
 
+revoke execute on function stamp_exercise_key() from public, authenticated;
+
 create trigger gym_routine_exercises_stamp_key
   before insert or update of exercise_name, exercise_key
   on public.gym_routine_exercises
@@ -392,6 +398,8 @@ begin
   return new;
 end;
 $$;
+
+revoke execute on function stamp_exercise_name_key() from public, authenticated;
 
 create trigger exercises_stamp_name_key
   before insert or update of name, name_key
