@@ -428,7 +428,7 @@ and the scoring:
   `preferenceShare` (0..1 of the served loop’s LENGTH on preferred edges; under
   cul-de-sac, on credited stubs), **omitted** when nothing was honoured —
   including when one was asked for and the unweighted retry served the loop.
-- **Client-side half — landed in the same change** ([decisions § 795](../architecture/decisions.md)).
+- **Client-side half — landed in the same change** ([decisions § 796](../architecture/decisions.md)).
   The handler used to skip the sidecar entirely whenever a preference was set, so
   ticking "Quiet roads" moved the runner off this generator onto the `round_trip`
   custom model. It could not have been otherwise: `decodeBody` uses
