@@ -584,7 +584,7 @@ test.describe('/settings/preferences', () => {
 		const weight = page.getByTestId('weight');
 		await expect(weight).toHaveAttribute('max', '250');
 		// `min="0"` admitted exactly the one value the `> 0` half rejects.
-		await expect(weight).not.toHaveAttribute('min', '0');
+		await expect(weight).toHaveAttribute('min', '20');
 		await expect(page.getByTestId('height-cm')).toHaveAttribute('max', '300');
 
 		await weight.fill('600');
