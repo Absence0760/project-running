@@ -133,9 +133,10 @@ func Build(path string) (*Graph, Stats, error) {
 		gg.markWay(pts, len(w) > 2 && w[0] == w[len(w)-1])
 	}
 	// The occupancy raster is all that is wanted from the green geometry, and
-	// the builder below is the run's peak allocation — hold the polygons no
-	// longer than the grid takes to build.
-	greenCoords = nil
+	// the builder below is the run's peak allocation. greenCoords needs no
+	// help — liveness analysis stops treating an unread local as a GC root —
+	// but ws stays live for ws.kept, and liveness is per variable, not per
+	// field, so the polygons would be held across the whole build.
 	ws.green = nil
 
 	b := newBuilder()
