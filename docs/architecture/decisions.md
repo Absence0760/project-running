@@ -11273,3 +11273,42 @@ The selection rewrite is the piece most able to regress something invisible. The
 **`cul_de_sac` has no GraphHopper expression and never will.** "Permit a capped number of short stubs into quiet dead-ends" is a claim about the shape of the assembled loop, not about any edge in isolation, and no encoded value marks a dead end — so `buildCustomModel` returns null for it and `round_trip` runs plain. Only a search that builds the loop can honour it. `scenic` is expressible but only as a proxy: this engine declares just the foot-profile encoded values (`graph.encoded_values` in `apps/job_worker/graphhopper/config.yml`) and imports no elevation at all, and OSM land use is not an encoded value in any build, so park adjacency and per-edge grade belong to the sidecar, which owns the extract. Both models therefore spend nothing but `road_class`, pinned by a test — naming an encoded value the engine lacks fails the whole request rather than the one clause, and the never-deny retry would have hidden that as a preference silently doing nothing. **Elevation-aware is not in the vocabulary for the same reason** and the filing's four-item list is three: there is no elevation on this rail to be aware of.
 
 **The ranking change is shaped to leave the default untouched.** `pickBestLoop`'s in-band score gains a third term beside distance error and shape: `1 + 0.25 × share` for a candidate whose engine measured the share of its length on preferred edges, and exactly 1 for one that did not. Reward-only, never a penalty, because the pool is mixed by construction — the sidecar measures a share and `round_trip` measures none — and a symmetric term would score the silent candidate as if it were 0 % preferred and hand it the win, punishing the one rail honest enough to report. Neutral-at-1 also means a pool carrying no shares scores bit-for-bit as it did before the term existed, which is pinned directly rather than inferred: a silent change to the generator every non-preference request runs is a regression nothing else in this slice would catch. The honest limit is worth writing down — the multi-objective ranking the filing asks for lives in the **sidecar**, which is the only component that enumerates several candidate loops and knows each one's share; the web selector sees one loop from that rail and a spread of unmeasured `round_trip` seeds from the other, so its term ranks nothing today. It exists so a share that arrives is weighed rather than dropped, not because the web side has a multi-objective choice to make.
+## 796. Three route-design preferences that are mutually exclusive on the wire get one single-choice control, and the page reports the preference the server applied rather than the one the runner asked for
+
+`/routes/new` shipped the cheap half of the route-design preference set as a
+lone "Quiet roads (avoid highways)" checkbox, whose only job was to turn
+`preference: 'quiet'` on the `POST /api/routes/generate` body on and off. Widening
+the vocabulary to `'quiet' | 'scenic' | 'cul_de_sac'` does not widen the wire: the
+body carries at most ONE preference, so three checkboxes would let a runner
+express a state the request cannot represent and leave the page to silently
+discard two of them. The control is therefore a four-option radio group —
+the three preferences plus an explicit "No preference" that sends no field at
+all — built from native `<input type="radio">` inside `<label>`s under a
+`role="radiogroup"`, the same idiom `RunEditor`, `EventEditor` and
+`RouteMarkerEditor` already use. Native radios are what buy the accessibility:
+one tab stop for the group, arrow keys to move the selection, and a real
+checked state, none of which a `div` with `role="radio"` has without hand-rolled
+roving focus. Each option's hint moved out of the `title=` tooltip the checkbox
+carried — a tooltip is not reachable by keyboard and is not announced — and into
+visible text inside the label, so every reader gets it.
+
+The second half is honesty about the result. A preference is an enhancement the
+generator may decline: the handler races the preference-aware request and, if
+that yields nothing, retries the whole race without it, and a request that never
+reaches the server at all (point-to-point, an unconfigured endpoint, an engine
+outage) falls through to the in-browser heuristic, which honours no preference
+whatsoever. Before this the runner saw the same rendered loop either way. The
+200 body's additive `preferenceApplied` is now read in `RouteBuilder`, which
+grades it against the preference it SENT rather than re-listing the union —
+so an absent field, an unknown token and a heuristic fallback all resolve
+identically to "not applied" — and hands the page a nullable applied value on
+every generation that produced a route. The page compares it to the ask it
+captured at call time (not to the live control, which the runner may have
+changed mid-generation) and, on a mismatch, states that the loop was generated
+without the preference. Fail-closed is the point: a deployment predating the
+field sends nothing, and reading nothing as success would make the note
+disappear exactly where it is most needed. The same resolution fixed a
+pre-existing gap in the AI route assistant, which listed `avoidHighways` in its
+"applied" summary while never touching the control or the request — the parsed
+`preference` now drives the control, with `avoidHighways` mapping onto `'quiet'`
+when nothing narrower came back.

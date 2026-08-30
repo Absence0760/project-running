@@ -279,6 +279,20 @@ async function waitForBuilderHook(page: Page) {
 	);
 }
 
+/** Pin the page-level start point without a map click (see `__routeBuilderPage`). */
+async function setStartViaHook(page: Page, start: { lat: number; lng: number }) {
+	await page.evaluate(
+		({ s }) => {
+			(
+				window as unknown as {
+					__routeBuilderPage: { setStartPoint: (p: { lat: number; lng: number }) => void };
+				}
+			).__routeBuilderPage.setStartPoint(s);
+		},
+		{ s: start },
+	);
+}
+
 async function generateLoopViaHook(
 	page: Page,
 	args: {
@@ -1193,14 +1207,14 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await expect(page.getByRole('button', { name: /Save Route/ })).toBeDisabled();
 	});
 
-	test('quiet-roads toggle appears and sets preference=quiet on the generate request', async ({
+	test('the route-preference control is single-choice and sends the chosen preference', async ({
 		page,
 	}) => {
-		// The avoid-highways / prefer-residential control. Off → today's request
-		// (no preference field). On → the body carries preference:'quiet', which the
-		// server turns into a GraphHopper custom model. Capture the POST body off the
-		// mock to assert the wiring.
-		let capturedBody: { preference?: string } | null = null;
+		// The four choices are mutually exclusive on the wire, so the control is
+		// a radio group rather than three checkboxes: "No preference" sends no
+		// `preference` field at all, and each other choice sends exactly its own
+		// token. Capture every POST body off the mock to assert the wiring.
+		const requests: Array<{ preference?: string }> = [];
 		await page.unroute('**/api/routes/generate');
 		await page.route('**/api/routes/generate', async (route: Route) => {
 			const body = route.request().postDataJSON() as {
@@ -1208,7 +1222,7 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 				targetDistanceM: number;
 				preference?: string;
 			};
-			capturedBody = body;
+			requests.push(body);
 			const coordinates = loopPolyline(body.start, body.targetDistanceM);
 			let distanceM = 0;
 			for (let i = 1; i < coordinates.length; i++) {
@@ -1220,33 +1234,118 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				body: JSON.stringify({ coordinates, distanceM }),
+				body: JSON.stringify(
+					body.preference
+						? { coordinates, distanceM, preferenceApplied: body.preference }
+						: { coordinates, distanceM },
+				),
 			});
 		});
 
-		// Open the distance panel and confirm the toggle is present + off.
 		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
-		const toggle = page.getByTestId('quiet-roads-toggle');
-		await expect(toggle).toBeVisible();
-		await expect(toggle).not.toBeChecked();
+		await setStartViaHook(page, FIELD_START);
 
-		// Default (off): the request omits the preference field.
-		await generateLoopViaHook(page, { targetDistanceM: 5000, start: FIELD_START });
-		expect(capturedBody).not.toBeNull();
-		expect(capturedBody!.preference).toBeUndefined();
+		const none = page.getByTestId('route-pref-none');
+		const quiet = page.getByTestId('route-pref-quiet');
+		const scenic = page.getByTestId('route-pref-scenic');
+		const culDeSac = page.getByTestId('route-pref-cul-de-sac');
+		for (const radio of [none, quiet, scenic, culDeSac]) {
+			await expect(radio).toBeVisible();
+		}
+		await expect(none).toBeChecked();
+		await expect(quiet).not.toBeChecked();
 
-		// Turn it on; the next page-driven generate carries preference:'quiet'.
-		await toggle.check();
-		await expect(toggle).toBeChecked();
-		await page.evaluate(({ s }) => {
-			(
-				window as unknown as {
-					__routeBuilderPage: { setStartPoint: (p: { lat: number; lng: number }) => void };
-				}
-			).__routeBuilderPage.setStartPoint(s);
-		}, { s: FIELD_START });
-		await page.getByRole('button', { name: /Generate .* loop/i }).click();
-		await expect.poll(() => capturedBody?.preference).toBe('quiet');
+		const generate = page.getByRole('button', { name: /Generate .* loop/i });
+		const save = page.getByRole('button', { name: /Save Route/ });
+		await expect(save).toBeDisabled();
+
+		// Default: the request omits the preference field entirely. Save flipping
+		// enabled is the proof the generation completed, so the absent
+		// not-applied note below is a real observation and not a race.
+		await generate.click();
+		await expect.poll(() => requests.length).toBe(1);
+		expect(requests[0].preference).toBeUndefined();
+		await expect(save).toBeEnabled();
+		await expect(page.getByTestId('route-pref-not-applied')).toBeHidden();
+
+		// Each choice sends its own token, and picking one clears the last.
+		const cases = [
+			[quiet, 'quiet'],
+			[scenic, 'scenic'],
+			[culDeSac, 'cul_de_sac'],
+		] as const;
+		for (const [radio, token] of cases) {
+			await radio.check();
+			await expect(radio).toBeChecked();
+			await expect(none).not.toBeChecked();
+			const before = requests.length;
+			await generate.click();
+			await expect.poll(() => requests.length).toBe(before + 1);
+			expect(requests[before].preference).toBe(token);
+		}
+
+		// Back to no preference: the field is dropped again, not left behind.
+		await none.check();
+		const before = requests.length;
+		await generate.click();
+		await expect.poll(() => requests.length).toBe(before + 1);
+		expect(requests[before].preference).toBeUndefined();
+	});
+
+	test('a preference the server did not apply is reported, and an absent field counts as not applied', async ({
+		page,
+	}) => {
+		// `preferenceApplied` is additive on the 200 body: a deployment that
+		// predates it sends nothing at all, which must read as "not applied"
+		// rather than as a silently honoured ask.
+		let echoPreference = true;
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+				preference?: string;
+			};
+			const coordinates = loopPolyline(body.start, body.targetDistanceM);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify(
+					echoPreference && body.preference
+						? { coordinates, distanceM, preferenceApplied: body.preference }
+						: { coordinates, distanceM },
+				),
+			});
+		});
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await setStartViaHook(page, FIELD_START);
+
+		const note = page.getByTestId('route-pref-not-applied');
+		const generate = page.getByRole('button', { name: /Generate .* loop/i });
+		const save = page.getByRole('button', { name: /Save Route/ });
+
+		// Honoured: the server names the preference back, so the page says
+		// nothing. Save going enabled proves the round trip finished.
+		await expect(save).toBeDisabled();
+		await page.getByTestId('route-pref-scenic').check();
+		await generate.click();
+		await expect(save).toBeEnabled();
+		await expect(note).toBeHidden();
+
+		// Same ask, a body carrying no `preferenceApplied` — the loop came back
+		// without the preference and the page has to say so.
+		echoPreference = false;
+		await generate.click();
+		await expect(note).toBeVisible();
+		await expect(note).toContainText(/without your route preference/i);
 	});
 
 	test('keyboard coordinate entry sets the start point without a map tap (WCAG 2.1.1)', async ({
