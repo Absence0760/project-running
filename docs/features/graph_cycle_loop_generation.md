@@ -418,16 +418,28 @@ and the scoring:
 - **Multi-objective ranking.** The old two-branch selection (in-band → roundest,
   else closest-to-target) is now one weighted score over distance error,
   `areaEfficiency` and the preference share. **The unpreferenced ordering is the
-  shipped contract**, pinned against a verbatim copy of the old selector over
-  8,000 random candidate sets; the leading objective is snapped to the same 1e-9
-  grid the old comparison called a tie.
+  shipped contract**, pinned against a verbatim copy of the old selector; the
+  leading objective is snapped to the same 1e-9 grid the old comparison called a
+  tie. Both branches score on an O(1) scale so each tie-break is representable at
+  the magnitude of the term it joins — the first draft added a `1e-12` roundness
+  tie-break to a number of **metres**, which float rounding annihilated above a
+  ~4.5 km target, and the pin's own corpus stopped at exactly 4,500 m. It now
+  covers the whole accepted range `(0, 100 km]`: 4 corpus shapes × 10 target
+  cells × 20,000 sets = 800,000, including the exact-`delta` ties the old rule's
+  tolerance branch existed for.
 - **Wire.** `POST /cycle` takes an optional `"preference"` of
-  `quiet | scenic | cul_de_sac`. Absent / empty / unrecognised means none and
-  behaves byte-identically to before — never a 400, so a stale knob on an older
-  client cannot deny route generation. The response adds `preferenceApplied` +
-  `preferenceShare` (0..1 of the served loop’s LENGTH on preferred edges; under
-  cul-de-sac, on credited stubs), **omitted** when nothing was honoured —
-  including when one was asked for and the unweighted retry served the loop.
+  `quiet | scenic | cul_de_sac`. Absent, empty or unrecognised means none and
+  behaves byte-identically to before, so a stale knob on an older client cannot
+  deny route generation — that holds for any *string*; a non-string (`123`, `[]`,
+  `{}`) is a decode type error and still 400s. The response adds
+  `preferenceApplied` + `preferenceShare` (0..1 of the served loop’s LENGTH on
+  preferred edges; under cul-de-sac, on credited stubs), **omitted** when nothing
+  was honoured — including when one was asked for and the unweighted retry served
+  the loop, and including a `cul_de_sac` ask that spliced no spur at all. That
+  last case is why the gate is not simply "a loop came back": a cul-de-sac ask is
+  binary and observable, so a loop carrying no spur did not honour it however the
+  search was weighted, where `quiet` and `scenic` are gradients whose share
+  reports what the bias achieved.
 - **Client-side half — landed in the same change** ([decisions § 796](../architecture/decisions.md)).
   The handler used to skip the sidecar entirely whenever a preference was set, so
   ticking "Quiet roads" moved the runner off this generator onto the `round_trip`
