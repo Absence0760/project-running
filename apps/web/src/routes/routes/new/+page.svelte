@@ -24,6 +24,7 @@
 		requestRouteConstraints,
 		RouteRequestError,
 	} from '$lib/routes/route_request_client';
+	import type { RoutePreference } from '$lib/routes/generate/graphhopper';
 
 	// True when the local Protomaps tile-style override is set —
 	// in that mode all three map-style buttons (streets/satellite/
@@ -315,11 +316,26 @@
 	let paceSec = $state(30);
 	let targetKm = $state(5);
 	let showDistanceTarget = $state(false);
-	// Avoid-highways / prefer-residential preference for distance generation.
-	// Off → today's generation; on → the server biases the loop onto quiet
-	// streets via a GraphHopper custom model, falling back to plain generation
-	// if the engine can't honour it.
-	let quietRoads = $state(false);
+	// Route-design preference for distance generation. The three values are
+	// mutually exclusive on the wire, so this is single-choice; null sends no
+	// preference field at all.
+	let preference = $state<RoutePreference | null>(null);
+	// The preference the in-flight generation asked for, captured at call time
+	// so a control change mid-generation can't be graded as the ask.
+	let preferenceAsked: RoutePreference | null = null;
+	// What the last completed generation asked for against what the server said
+	// it applied. An absent `preferenceApplied` grades as not-applied — a
+	// deployment that predates the field must not read as an honoured ask.
+	let preferenceOutcome = $state<{
+		asked: RoutePreference;
+		applied: RoutePreference | null;
+	} | null>(null);
+
+	function preferenceLabel(p: RoutePreference): string {
+		if (p === 'quiet') return m('routeNew.quietRoads');
+		if (p === 'scenic') return m('routeNew.preferenceScenic');
+		return m('routeNew.preferenceCulDeSac');
+	}
 	let pickingPoint = $state<'start' | 'end' | null>(null);
 	let startPoint = $state<{ lat: number; lng: number } | null>(null);
 	let endPoint = $state<{ lat: number; lng: number } | null>(null);
@@ -411,11 +427,11 @@
 	let nlBusy = $state(false);
 	let nlError = $state<string | null>(null);
 	// Set after a successful extraction so the user sees what was applied
-	// (incl. constraints the form can't render directly — shape /
-	// avoid-highways) and which fields were assumed from a default.
+	// (incl. the shape, which the form can't render directly) and which
+	// fields were assumed from a default.
 	let nlApplied = $state<{
 		shape: 'loop' | 'out_and_back' | 'point_to_point';
-		avoidHighways: boolean;
+		preference: RoutePreference | null;
 		assumptions: string[];
 	} | null>(null);
 
@@ -442,9 +458,15 @@
 			mode = c.surface === 'trail' ? 'trail' : 'road';
 			// Make the distance panel visible so the populated controls show.
 			showDistanceTarget = true;
+			// An explicit preference outranks the older boolean: `avoidHighways`
+			// is the same ask expressed in the vocabulary that predates the
+			// three-value union, so it maps onto 'quiet' when nothing narrower
+			// came back. Before this the summary reported avoid-highways as
+			// applied while the control stayed off and the request omitted it.
+			preference = c.preference ?? (c.avoidHighways ? 'quiet' : null);
 			nlApplied = {
 				shape: c.shape,
-				avoidHighways: c.avoidHighways,
+				preference,
 				assumptions: c.assumptions,
 			};
 		} catch (err) {
@@ -549,11 +571,13 @@
 		const start = startPoint ?? undefined;
 		const end = endPoint ?? undefined;
 
+		preferenceAsked = preference;
+		preferenceOutcome = null;
 		const ok = await builder?.generateLoop(
 			targetKm * 1000,
 			start,
 			end,
-			quietRoads ? 'quiet' : undefined,
+			preference ?? undefined,
 		);
 		routed = !!ok;
 	}
@@ -579,7 +603,9 @@
 		targetKm = Math.round(largest / 100) / 10;
 		const start = startPoint ?? undefined;
 		const end = endPoint ?? undefined;
-		const ok = await builder?.generateLoop(largest, start, end, quietRoads ? 'quiet' : undefined);
+		preferenceAsked = preference;
+		preferenceOutcome = null;
+		const ok = await builder?.generateLoop(largest, start, end, preference ?? undefined);
 		routed = !!ok;
 	}
 
@@ -875,8 +901,12 @@
 												: m('routeNew.aiRequestShapePointToPoint')}
 										</li>
 									{/if}
-									{#if nlApplied.avoidHighways}
-										<li>{m('routeNew.aiRequestAvoidHighways')}</li>
+									{#if nlApplied.preference}
+										<li>
+											{m('routeNew.aiRequestPreference', {
+												preference: preferenceLabel(nlApplied.preference),
+											})}
+										</li>
 									{/if}
 									{#if nlApplied.assumptions.length > 0}
 										<li>{m('routeNew.aiRequestAssumed')}</li>
@@ -972,10 +1002,52 @@
 						<button onclick={() => setTargetFromKm(21.1)}>Half</button>
 						<button onclick={() => setTargetFromKm(42.2)}>Full</button>
 					</div>
-					<label class="quiet-roads" title={m('routeNew.quietRoadsHint')}>
-						<input type="checkbox" bind:checked={quietRoads} data-testid="quiet-roads-toggle" />
-						<span>{m('routeNew.quietRoads')}</span>
-					</label>
+					<span class="section-label" id="route-preference-label">{m('routeNew.preferenceLabel')}</span>
+					<div class="pref-group" role="radiogroup" aria-labelledby="route-preference-label">
+						<label class="pref-option">
+							<input
+								type="radio"
+								name="route-preference"
+								checked={preference === null}
+								onchange={() => (preference = null)}
+								data-testid="route-pref-none"
+							/>
+							<span class="pref-name">{m('routeNew.preferenceNone')}</span>
+						</label>
+						<label class="pref-option">
+							<input
+								type="radio"
+								name="route-preference"
+								checked={preference === 'quiet'}
+								onchange={() => (preference = 'quiet')}
+								data-testid="route-pref-quiet"
+							/>
+							<span class="pref-name">{m('routeNew.quietRoads')}</span>
+							<span class="pref-hint">{m('routeNew.quietRoadsHint')}</span>
+						</label>
+						<label class="pref-option">
+							<input
+								type="radio"
+								name="route-preference"
+								checked={preference === 'scenic'}
+								onchange={() => (preference = 'scenic')}
+								data-testid="route-pref-scenic"
+							/>
+							<span class="pref-name">{m('routeNew.preferenceScenic')}</span>
+							<span class="pref-hint">{m('routeNew.preferenceScenicHint')}</span>
+						</label>
+						<label class="pref-option">
+							<input
+								type="radio"
+								name="route-preference"
+								checked={preference === 'cul_de_sac'}
+								onchange={() => (preference = 'cul_de_sac')}
+								data-testid="route-pref-cul-de-sac"
+							/>
+							<span class="pref-name">{m('routeNew.preferenceCulDeSac')}</span>
+							<span class="pref-hint">{m('routeNew.preferenceCulDeSacHint')}</span>
+						</label>
+					</div>
 					{#if builderBusy}
 						<button class="btn btn-outline" onclick={() => builder?.cancelGeneration()}>
 							{m('routeNew.cancelGenerating')}
@@ -991,6 +1063,11 @@
 						<p class="pro-upsell" role="note">
 							{m('routeNew.generateProUpsell')}
 							<a href="/settings/upgrade">{m('routeNew.generateProUpsellCta')}</a>
+						</p>
+					{/if}
+					{#if preferenceOutcome && preferenceOutcome.applied !== preferenceOutcome.asked}
+						<p class="pref-not-applied" role="status" data-testid="route-pref-not-applied">
+							{m('routeNew.preferenceNotApplied')}
 						</p>
 					{/if}
 				</div>
@@ -1062,6 +1139,8 @@
 			ongeneratemismatch={(achievedM, _targetM, largestLoopM) =>
 				(generateShortfall = { achievedM, largestLoopM })}
 			onprorequired={() => (showGenerateProUpsell = routeGenEnabled())}
+			onpreferenceapplied={(applied) =>
+				(preferenceOutcome = preferenceAsked ? { asked: preferenceAsked, applied } : null)}
 			onrequestclear={handleClear}
 		/>
 
@@ -1688,18 +1767,34 @@
 		color: var(--color-primary);
 	}
 
-	.quiet-roads {
+	.pref-group {
 		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+	.pref-option {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		align-items: baseline;
+		column-gap: var(--space-sm);
 		font-size: 0.8rem;
 		color: var(--color-text);
 		cursor: pointer;
 	}
-	.quiet-roads input[type="checkbox"] {
+	.pref-option input[type="radio"] {
 		width: auto;
-		flex-shrink: 0;
 		accent-color: var(--color-primary);
+	}
+	.pref-hint {
+		grid-column: 2;
+		font-size: 0.72rem;
+		color: var(--color-text-secondary);
+	}
+
+	.pref-not-applied {
+		margin: var(--space-xs) 0 0;
+		font-size: 0.72rem;
+		color: var(--color-text-secondary);
 	}
 
 	.pro-upsell {
