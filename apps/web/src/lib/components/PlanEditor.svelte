@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { TEXT_LIMITS } from '$lib/core/text_limits';
 	import { onMount } from 'svelte';
 	import { createTrainingPlan, fetchActivePlanOverview, fetchRuns } from '$lib/core/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -519,7 +520,7 @@
 					bind:value={name}
 					placeholder={t('planEditor.planNamePlaceholder')}
 					required
-					maxlength="80"
+					maxlength={TEXT_LIMITS.planName}
 				/>
 			</label>
 

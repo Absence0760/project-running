@@ -738,6 +738,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get bodyMetricsWeight => '体重';
 
   @override
+  String numericLimitRange(String field, String min, String max) {
+    return '$fieldは$minから$maxの間で入力してください。';
+  }
+
+  @override
   String get bodyMetricsActivityLevel => '活動レベル';
 
   @override

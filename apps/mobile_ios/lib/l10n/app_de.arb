@@ -200,6 +200,7 @@
   "bodyMetricsConsentSubtitle": "Größe und Gewicht sind besondere Gesundheitsdaten. Zum Löschen ausschalten.",
   "bodyMetricsHeight": "Größe",
   "bodyMetricsWeight": "Gewicht",
+  "numericLimitRange": "{field} muss zwischen {min} und {max} liegen.",
   "bodyMetricsActivityLevel": "Aktivitätsniveau",
   "bodyMetricsGoal": "Ziel",
   "bodyMetricsTargetsHint": "Dient zur Schätzung deiner täglichen Kalorien- und Makroziele.",

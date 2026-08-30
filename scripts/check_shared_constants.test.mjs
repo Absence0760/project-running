@@ -21,17 +21,21 @@ import {
 	callArguments,
 	check,
 	checkEntry,
+	columnBoundSites,
 	defaultContext,
 	indexMigrations,
+	limitRegistrySites,
 	parseAwarderLadders,
 	parseBadgeCatalogue,
 	parseCaseFoldMap,
 	parseCharClassCodePoints,
+	parseColumnBounds,
 	parseMinettiCoefficients,
 	parseNamedCharClass,
 	parseNamedInt,
 	parseNearbyCase,
 	parseNumberList,
+	parseProseThresholds,
 	parseStringList,
 	parseWearOffRoute,
 	resolveNumber,
@@ -207,6 +211,85 @@ test('a bucket nothing ever set produces no site, which the caller reports', () 
 		'20260101_001_a.sql': 'create or replace function f() returns int language sql as $$ select 1; $$;',
 	});
 	assert.deepEqual(bucketMimeSites(indexMigrations(dir), ['run-photos']), []);
+});
+
+// ── Numeric column bounds ──────────────────────────────────────────────────
+
+// The whole point of resolving an exclusive bound through the column's scale:
+// `> 0` on a two-decimal column admits 0.01 and on an int admits 1, and a form
+// that offers "0" for either offers the one value the CHECK rejects.
+test('an exclusive bound resolves to the neighbouring value the column can hold', () => {
+	assert.deepEqual(parseColumnBounds('weight_kg > 0 and weight_kg <= 500', 'weight_kg', 0.01), ['0.01', '500']);
+	assert.deepEqual(parseColumnBounds('rest_s >= 0 and rest_s <= 3600', 'rest_s', 1), ['0', '3600']);
+	assert.deepEqual(parseColumnBounds('reps > 0 and reps < 100', 'reps', 1), ['1', '99']);
+});
+
+test('a between reads as its two inclusive bounds', () => {
+	assert.deepEqual(parseColumnBounds('body_weight_kg between 20 and 400', 'body_weight_kg', 0.01), ['20', '400']);
+});
+
+test('a bound open at either end is not a bound this guard can state', () => {
+	assert.deepEqual(parseColumnBounds('quantity >= 0', 'quantity', 0.01), []);
+	assert.deepEqual(parseColumnBounds('servings <= 10', 'servings', 0.1), []);
+});
+
+test('the tightest bound in the CHECK wins when it names several', () => {
+	assert.deepEqual(parseColumnBounds('x >= 0 and x >= 5 and x <= 90 and x <= 100', 'x', 1), ['5', '90']);
+});
+
+// The replay: a bound tightened by a later `alter table` is the one in force,
+// and the file that tightens it is routinely named after something else.
+test('a column bound is the last statement that set it, not the first', () => {
+	const dir = migrationsFixture({
+		'20260101_001_create.sql':
+			'create table public.body_metrics (\n  weight_kg numeric(5, 2) not null check (weight_kg > 0 and weight_kg <= 500)\n);\n' +
+			'create or replace function f() returns int language sql as $$ select 1; $$;',
+		'20260102_001_unrelated_hardening.sql':
+			'alter table body_metrics add column weight_kg numeric(5, 2) check (weight_kg > 0 and weight_kg <= 400);',
+	});
+	assert.deepEqual(columnBoundSites(indexMigrations(dir), 'body_metrics.weight_kg'), [
+		{
+			key: 'body_metrics.weight_kg',
+			where: 'body_metrics.weight_kg in 20260102_001_unrelated_hardening.sql',
+			values: ['0.01', '400'],
+		},
+	]);
+});
+
+// The parse fell into exactly this hole once: a `\b` after the type alternation
+// cannot follow the `)` of `numeric(5, 2)`, so the match backtracked to a bare
+// `numeric`, the scale was lost, and `> 0` resolved to 1 rather than 0.01.
+test('a parenthesised numeric type keeps its scale', () => {
+	const dir = migrationsFixture({
+		'20260101_001_create.sql':
+			'create table public.t (\n  v numeric(5, 2) not null check (v > 0 and v <= 9)\n);\n' +
+			'create or replace function f() returns int language sql as $$ select 1; $$;',
+	});
+	assert.deepEqual(columnBoundSites(indexMigrations(dir), 't.v')[0].values, ['0.01', '9']);
+});
+
+test('a column no migration bounds produces no site, which the caller reports', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql': 'create or replace function f() returns int language sql as $$ select 1; $$;',
+	});
+	assert.deepEqual(columnBoundSites(indexMigrations(dir), 'body_metrics.weight_kg'), []);
+});
+
+test('a client registry is keyed by the column it names, not by its own key', () => {
+	const ts =
+		"export const NUMERIC_LIMITS = {\n\tbodyMetricsWeightKg: { min: 0.01, max: 500 }\n} as const;\n" +
+		"export const NUMERIC_LIMIT_COLUMNS = {\n\tbodyMetricsWeightKg: 'body_metrics.weight_kg'\n};\n";
+	assert.deepEqual(
+		limitRegistrySites(ts, /\b([A-Za-z0-9]+):\s*\{\s*min:\s*(-?[\d.]+),\s*max:\s*(-?[\d.]+)\s*\}/g, /\b([A-Za-z0-9]+):\s*'([a-z_]+\.[a-z_]+)'/g),
+		[{ key: 'body_metrics.weight_kg', where: 'bodyMetricsWeightKg (body_metrics.weight_kg)', values: ['0.01', '500'] }],
+	);
+});
+
+// ── Rate-limit thresholds in prose ─────────────────────────────────────────
+
+test('a threshold quoted in prose is read in the order it is written', () => {
+	assert.deepEqual(parseProseThresholds('a 30/60 s burst and a 250/3600 s hour cap'), ['30/60', '250/3600']);
+	assert.deepEqual(parseProseThresholds('no figures here'), []);
 });
 
 // ── Comparison: match 'all' ────────────────────────────────────────────────

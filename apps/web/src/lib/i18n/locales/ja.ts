@@ -3946,6 +3946,7 @@ export const messages = {
 	"prefs.dateOfBirthPurpose": "年齢別評価の結果に使用し、下の同意にチェックした場合は心拍ゾーンにも使用します。年齢は18歳未満のアカウントを名前検索から除外することにも使われます。",
 	"prefs.heightCm": "身長（cm）",
 	"prefs.weight": "体重",
+	"numericLimit.range": "{field}は{min}から{max}の間で入力してください。",
 	"prefs.consentRecordedOn": "{date} に同意を記録しました。上のチェックボックスのチェックを外して保存すると、同意を撤回し、第7条3項に従ってこれらの項目が消去されます。",
 	"prefs.demographicsSavedBtn": "保存しました！",
 	"prefs.saveDemographics": "属性情報を保存",

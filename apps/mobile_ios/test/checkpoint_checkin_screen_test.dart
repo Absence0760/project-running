@@ -151,6 +151,44 @@ void main() {
     expect(api.upserts, isEmpty);
   });
 
+  testWidgets('an out-of-range weigh-in is refused in the sheet, not by the '
+      'column', (tester) async {
+    // decisions § 792: `checkpoint_crossings.body_weight_kg` is 20-400 kg and
+    // the sheet bounded nothing, so a mistyped figure reached the database and
+    // came back to an aid-station volunteer as a raw 23514 naming a constraint.
+    dotenv.env['WEIGH_IN_GATE'] = 'yes';
+    api.requiresWeighIn = true;
+    await _pumpLoaded(tester);
+    final l10n = AppLocalizations.of(
+        tester.element(find.byType(CheckpointCheckinScreen)));
+
+    await tester.enterText(find.byType(TextField), '101');
+    await tester.tap(find.text(l10n.checkpointStampIn));
+    await _settleUntil(
+        tester, () => tester.any(find.text(l10n.checkpointWeighInTitle)));
+
+    // Let the sheet finish sliding in — a tap recorded mid-animation lands
+    // where the tile no longer is.
+    await tester.pump(const Duration(milliseconds: 500));
+    // Consent first — the weight field is behind it.
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).last, '4');
+    await tester.tap(find.text(l10n.checkpointWeighInSave));
+    await tester.pump();
+
+    // The sheet is still up carrying the bound, and nothing was written.
+    expect(find.textContaining('between 20 and 400'), findsOneWidget);
+    expect(store.rows, isEmpty);
+    expect(api.upserts, isEmpty);
+
+    // An in-range figure closes it and stamps.
+    await tester.enterText(find.byType(TextField).last, '64');
+    await tester.tap(find.text(l10n.checkpointWeighInSave));
+    await _settleUntil(tester, () => api.upserts.isNotEmpty);
+    expect(store.rows.single['body_weight_kg'], 64.0);
+  });
+
   testWidgets('an unrecognised WEIGH_IN_GATE value leaves the fields off',
       (tester) async {
     dotenv.env['WEIGH_IN_GATE'] = 'maybe';

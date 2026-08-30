@@ -200,6 +200,7 @@
   "bodyMetricsConsentSubtitle": "La taille et le poids sont des données de santé sensibles. Désactivez pour les effacer.",
   "bodyMetricsHeight": "Taille",
   "bodyMetricsWeight": "Poids",
+  "numericLimitRange": "{field} doit être compris entre {min} et {max}.",
   "bodyMetricsActivityLevel": "Niveau d'activité",
   "bodyMetricsGoal": "Objectif",
   "bodyMetricsTargetsHint": "Sert à estimer vos objectifs quotidiens de calories et de macros.",

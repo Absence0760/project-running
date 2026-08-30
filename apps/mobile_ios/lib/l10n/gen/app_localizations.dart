@@ -1307,6 +1307,12 @@ abstract class AppLocalizations {
   /// **'Weight'**
   String get bodyMetricsWeight;
 
+  /// Refusal shown when a typed number falls outside the bound its column enforces
+  ///
+  /// In en, this message translates to:
+  /// **'{field} must be between {min} and {max}.'**
+  String numericLimitRange(String field, String min, String max);
+
   /// Label for the nutrition activity-level picker
   ///
   /// In en, this message translates to:

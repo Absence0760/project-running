@@ -566,6 +566,39 @@ test.describe('/settings/preferences', () => {
 		await expect(page.locator('#dob-purpose')).toContainText(/under-18|name search/i);
 	});
 
+	test('an out-of-range body weight is refused in the unit it was typed in', async ({
+		page
+	}) => {
+		// decisions § 792: the field had `min="0"` and no `max` against a column
+		// whose CHECK is `weight_kg > 0 and weight_kg <= 500`, so 600 kg — and
+		// 1200 lb, which is 544 kg — reached the database and came back as a raw
+		// 23514 naming a constraint. The bound now lives in the client, and the
+		// pounds form is bounded in pounds: a refusal that quoted 500 would be
+		// quoting a number the runner never typed.
+		await page.goto('/settings/preferences');
+		const consent = page
+			.locator('label.consent-checkbox', { hasText: 'date of birth' })
+			.locator('input[type="checkbox"]');
+		if (!(await consent.isChecked())) await consent.check();
+
+		const weight = page.getByTestId('weight');
+		await expect(weight).toHaveAttribute('max', '250');
+		// `min="0"` admitted exactly the one value the `> 0` half rejects.
+		await expect(weight).not.toHaveAttribute('min', '0');
+		await expect(page.getByTestId('height-cm')).toHaveAttribute('max', '300');
+
+		await weight.fill('600');
+		await page.getByTestId('save-demographics').click();
+		// Named in kilograms, and the save never left the client.
+		await expect(page.locator('.toast, [role="alert"]').first()).toContainText(
+			/between 20 and 250/
+		);
+
+		// Leave nothing persisted for USER_A.
+		await weight.fill('');
+		await consent.uncheck();
+	});
+
 	test('skeleton renders during initial load + is replaced by real content', async ({
 		page
 	}) => {

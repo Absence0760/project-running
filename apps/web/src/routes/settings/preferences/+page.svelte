@@ -34,7 +34,15 @@
 		displayToKg,
 		roundWeight,
 		defaultWeightUnitForDistanceUnit,
+		BODY_WEIGHT_MIN_KG,
+		BODY_WEIGHT_MAX_KG,
+		isBodyWeightInRangeKg,
 	} from '$lib/format/weight';
+	import {
+		NUMERIC_LIMITS,
+		checkNumericLimit,
+		numericBoundsIn,
+	} from '$lib/core/numeric_limits';
 	import {
 		ACTIVITY_LEVELS,
 		type ActivityLevel,
@@ -359,6 +367,14 @@
 	let heightCm = $state<number | null>(null);
 	let weightInput = $state<number | null>(null); // in the user's weight unit
 	let loadedWeightKg = $state<number | null>(null);
+	// The plausible-human range restated in the unit the field is typed in, so a
+	// runner entering pounds is bounded in pounds rather than by the kilogram
+	// figure the column stores.
+	const weightBounds = $derived(
+		numericBoundsIn({ min: BODY_WEIGHT_MIN_KG, max: BODY_WEIGHT_MAX_KG }, (kg) =>
+			kgToDisplay(kg, weightUnit),
+		),
+	);
 	// Activity level + goal are nutrition preferences (not special-category),
 	// so they auto-save to the prefs bag like everything else above.
 	let nutritionActivityLevel = $state<ActivityLevel>('moderate');
@@ -585,6 +601,32 @@
 		if (!auth.user) return;
 		const heightVal = heightCm != null && heightCm > 0 ? heightCm : null;
 		const weightDisplay = weightInput != null && weightInput > 0 ? weightInput : null;
+		// Refuse out-of-range here rather than letting the column do it: the
+		// CHECK answers with a 23514 naming a constraint, and when the field is
+		// typed in pounds the number in that error is not even the number the
+		// runner typed (decisions § 792).
+		if (heightVal != null && checkNumericLimit(NUMERIC_LIMITS.profileHeightCm, heightVal) !== 'ok') {
+			showToast(
+				m('numericLimit.range', {
+					field: m('prefs.heightCm'),
+					min: NUMERIC_LIMITS.profileHeightCm.min,
+					max: NUMERIC_LIMITS.profileHeightCm.max,
+				}),
+				'error',
+			);
+			return;
+		}
+		if (weightDisplay != null && !isBodyWeightInRangeKg(displayToKg(weightDisplay, weightUnit))) {
+			showToast(
+				m('numericLimit.range', {
+					field: `${m('prefs.weight')} (${weightUnit})`,
+					min: weightBounds.min,
+					max: weightBounds.max,
+				}),
+				'error',
+			);
+			return;
+		}
 		// DOB is deliberately absent from this gate: the column write is the
 		// child-protection age record, not an Art 9 health use (§ 718).
 		// Refusing the save left a minor who declined consent with a NULL
@@ -1087,8 +1129,8 @@
 					<span class="label-text">{m('prefs.heightCm')}</span>
 					<input
 						type="number"
-						min="0"
-						max="300"
+						min={NUMERIC_LIMITS.profileHeightCm.min}
+						max={NUMERIC_LIMITS.profileHeightCm.max}
 						inputmode="numeric"
 						bind:value={heightCm}
 						disabled={!healthDataConsent}
@@ -1099,7 +1141,8 @@
 					<span class="label-text">{m('prefs.weight')} ({weightUnit})</span>
 					<input
 						type="number"
-						min="0"
+						min={weightBounds.min}
+						max={weightBounds.max}
 						inputmode="decimal"
 						bind:value={weightInput}
 						disabled={!healthDataConsent}

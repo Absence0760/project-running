@@ -200,6 +200,7 @@
   "bodyMetricsConsentSubtitle": "身長と体重は特別な健康データです。オフにすると削除されます。",
   "bodyMetricsHeight": "身長",
   "bodyMetricsWeight": "体重",
+  "numericLimitRange": "{field}は{min}から{max}の間で入力してください。",
   "bodyMetricsActivityLevel": "活動レベル",
   "bodyMetricsGoal": "目標",
   "bodyMetricsTargetsHint": "1日のカロリーとマクロ目標の推定に使用します。",

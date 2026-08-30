@@ -200,6 +200,7 @@
   "bodyMetricsConsentSubtitle": "Altura e peso são dados de saúde sensíveis. Desative para apagá-los.",
   "bodyMetricsHeight": "Altura",
   "bodyMetricsWeight": "Peso",
+  "numericLimitRange": "{field} deve estar entre {min} e {max}.",
   "bodyMetricsActivityLevel": "Nível de atividade",
   "bodyMetricsGoal": "Meta",
   "bodyMetricsTargetsHint": "Utilizado para estimar as suas metas diárias de calorias e macros.",

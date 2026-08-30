@@ -33,6 +33,7 @@ import '../widgets/fundraiser_section.dart';
 import '../widgets/finisher_certificate_card.dart';
 import '../widgets/gym_compose_sheet.dart';
 import '../widgets/top_banner.dart';
+import '../text_limits.dart';
 
 /// Host-only attendance marking is offered iff the viewer organises the
 /// event's club AND the event is a `class` (instructor_business.md M6).
@@ -1410,7 +1411,7 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
           TextField(
             controller: _ctrl,
             maxLines: 3,
-            maxLength: 1200,
+            maxLength: kClubPostBodyMaxLength,
             decoration: InputDecoration(
               hintText: AppLocalizations.of(context).eventUpdateHint,
               border: InputBorder.none,

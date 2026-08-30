@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { TEXT_LIMITS } from '$lib/core/text_limits';
 	import Modal from './Modal.svelte';
 	import { updatePlanMeta } from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -85,7 +86,7 @@
 	>
 		<label class="field">
 			<span class="field-label">{m('planMeta.name')}</span>
-			<input type="text" bind:value={name} maxlength="80" required />
+			<input type="text" bind:value={name} maxlength={TEXT_LIMITS.planName} required />
 		</label>
 
 		<label class="field">
