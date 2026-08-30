@@ -48,10 +48,10 @@ func TestDijkstraPenaltyReroutes(t *testing.T) {
 	b.addNode(1, Coord{Lat: metresToDegLat(100), Lng: 0})
 	b.addNode(2, Coord{Lat: 2 * metresToDegLat(100), Lng: 0})
 	b.addNode(3, Coord{Lat: metresToDegLat(100), Lng: metresToDegLng(100, 0)})
-	b.addSegment(0, 1)
-	b.addSegment(1, 2)
-	b.addSegment(0, 3)
-	b.addSegment(3, 2)
+	b.addSegment(0, 1, classResidential)
+	b.addSegment(1, 2, classResidential)
+	b.addSegment(0, 3, classResidential)
+	b.addSegment(3, 2, classResidential)
 	g := b.finalize()
 
 	// Unpenalised: either equal-length route is fine; assert reachable.
@@ -89,8 +89,8 @@ func TestDijkstraCapsOnRealNotPenalisedDistance(t *testing.T) {
 	b.addNode(0, Coord{Lat: 0, Lng: 0})
 	b.addNode(1, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
 	b.addNode(2, Coord{Lat: 0, Lng: 2 * metresToDegLng(100, 0)})
-	b.addSegment(0, 1)
-	b.addSegment(1, 2)
+	b.addSegment(0, 1, classResidential)
+	b.addSegment(1, 2, classResidential)
 	g := b.finalize()
 
 	penalised := map[uint64]struct{}{edgeKey(0, 1): {}}

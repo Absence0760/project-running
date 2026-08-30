@@ -53,11 +53,11 @@ func TestBuilderDedupAndCSR(t *testing.T) {
 	b.addNode(1, Coord{Lat: 0, Lng: 0})
 	b.addNode(2, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
 	b.addNode(3, Coord{Lat: metresToDegLat(100), Lng: 0})
-	b.addSegment(1, 2)
-	b.addSegment(2, 1) // duplicate (reverse) — should be ignored
-	b.addSegment(2, 3)
-	b.addSegment(3, 1)
-	b.addSegment(1, 1) // self-loop — ignored
+	b.addSegment(1, 2, classResidential)
+	b.addSegment(2, 1, classResidential) // duplicate (reverse) — should be ignored
+	b.addSegment(2, 3, classResidential)
+	b.addSegment(3, 1, classResidential)
+	b.addSegment(1, 1, classResidential) // self-loop — ignored
 	g := b.finalize()
 
 	if g.NumNodes() != 3 {
@@ -172,7 +172,7 @@ func TestNearestNodeMatchesBruteForceSparseNetwork(t *testing.T) {
 			})
 		}
 		for i := 1; i < n; i++ {
-			b.addSegment(int64(i-1), int64(i))
+			b.addSegment(int64(i-1), int64(i), classResidential)
 		}
 		g := b.finalize()
 
