@@ -28,7 +28,18 @@
 -- So the class is spelled out here by code point, exactly as both clients
 -- spell it out, and `btrim` is given the space explicitly. Nothing in this
 -- function consults the ctype, which is what makes it `immutable` in fact and
--- not merely by declaration -- a CHECK constraint may reference it.
+-- not merely by declaration.
+--
+-- `normalise_exercise_name` is the weaker of the two and it is the one the
+-- CHECK below references, because its trailing `lower()` resolves through the
+-- database's ctype above ASCII. Postgres declares `lower(text)` IMMUTABLE by
+-- convention rather than in fact, so a libc or ICU upgrade that moves the fold
+-- for a code point present in a stored `exercise_name` leaves an
+-- already-validated row violating `gym_routine_exercises_key_normalised_chk`,
+-- and the next UPDATE of that row raises 23514. The residual is bounded to the
+-- code points named below and is filed rather than claimed away -- hoisting it
+-- into the constraint means pre-mapping every one of them, which trades a
+-- measured 197-code-point exposure for a large table on three rails.
 --
 -- The one case fold we refuse to leave to the runtime is applied before
 -- `lower()`: U+0130 (Turkish dotted capital I) and the four titlecase digraphs
