@@ -28,11 +28,15 @@ var farFractions = []float64{0.34, 0.40, 0.46, 0.52, 0.58}
 
 // Loop is one candidate (or chosen) cycle: its geometry in [lng,lat] order, its
 // true length in metres (measured from geometry, not Dijkstra's penalised cost),
-// and its isoperimetric shape score.
+// and its isoperimetric shape score. `path` is the node-index sequence the
+// geometry came from, kept so the preference layer can read the edge
+// attribution the coordinates no longer carry.
 type Loop struct {
 	Coords         []Coord
 	DistanceM      float64
 	AreaEfficiency float64
+
+	path []int32
 }
 
 // CycleResult is what SearchCycle returns. Best is the chosen loop under the
@@ -43,6 +47,13 @@ type Loop struct {
 type CycleResult struct {
 	Best         *Loop
 	LargestClean *Loop
+
+	// Applied is the preference the served loop actually honours. It is
+	// PrefNone both when none was asked for and when one was asked for but the
+	// unweighted retry produced the loop — an unhonoured ask must never read as
+	// honoured. PreferredShare is meaningful only alongside a set Applied.
+	Applied        Preference
+	PreferredShare float64
 }
 
 // ShortestPath returns the foot-routing geometry and length between two
@@ -55,7 +66,7 @@ func (g *Graph) ShortestPath(ctx context.Context, fromLat, fromLng, toLat, toLng
 	if !ok1 || !ok2 {
 		return nil, 0, false
 	}
-	_, prev := g.dijkstra(ctx, src, dst, math.Inf(1), nil)
+	_, _, prev := g.dijkstra(ctx, src, dst, math.Inf(1), nil, PrefNone)
 	path := reconstruct(prev, src, dst)
 	if path == nil {
 		return nil, 0, false
@@ -81,7 +92,20 @@ func (g *Graph) ShortestPath(ctx context.Context, fromLat, fromLng, toLat, toLng
 //     cycle.
 //  4. Score every cycle by areaEfficiency, drop spurs (< spurFloor), and select
 //     under the web contract.
-func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM float64) CycleResult {
+//
+// A preference biases steps 1-3 through soft per-edge multipliers and step 4
+// through a ranking term. It can never deny a route: if the weighted search
+// clears no candidate over the spur floor, the whole search is repeated
+// unweighted and that loop is served with Applied left at PrefNone.
+func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM float64, pref Preference) CycleResult {
+	res := g.searchCycle(ctx, startLat, startLng, targetM, pref)
+	if res.Best != nil || pref == PrefNone || ctx.Err() != nil {
+		return res
+	}
+	return g.searchCycle(ctx, startLat, startLng, targetM, PrefNone)
+}
+
+func (g *Graph) searchCycle(ctx context.Context, startLat, startLng, targetM float64, pref Preference) CycleResult {
 	src, ok := g.NearestNode(startLat, startLng)
 	if !ok {
 		return CycleResult{}
@@ -95,12 +119,12 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 	}
 	// Outbound tree: reach far-points up to maxFar·target, with slack.
 	outRadius := maxFar*targetM*1.25 + 200
-	outDist, outPrev := g.dijkstra(ctx, src, -1, outRadius, nil)
+	_, outReal, outPrev := g.dijkstra(ctx, src, -1, outRadius, nil, pref)
 
 	if ctx.Err() != nil {
 		return CycleResult{}
 	}
-	fars := g.pickFarPoints(src, targetM, outDist)
+	fars := g.pickFarPoints(src, targetM, outReal)
 
 	var candidates []*Loop
 	// The return leg may legitimately detour well past the outbound length; cap
@@ -121,7 +145,7 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 			continue
 		}
 		penalised := pathEdgeKeys(out)
-		_, retPrev := g.dijkstra(ctx, f, src, returnRadius, penalised)
+		_, _, retPrev := g.dijkstra(ctx, f, src, returnRadius, penalised, pref)
 		back := reconstruct(retPrev, f, src)
 		if len(back) < 2 {
 			continue // no second way home from F — the loop-poor signal at this F
@@ -132,12 +156,19 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 		}
 	}
 
-	return selectLoops(candidates, targetM)
+	res := selectLoops(candidates, targetM)
+	if res.Best != nil {
+		res.Applied = pref
+		res.PreferredShare = g.preferredShare(res.Best, pref)
+	}
+	return res
 }
 
 // pickFarPoints buckets reached nodes into compass sectors and, for each
 // (sector, farFraction) pair, keeps the node whose outbound distance is closest
-// to the desired fraction of target. Deduped by node index.
+// to the desired fraction of target. Deduped by node index. The distances are
+// TRUE metres (dijkstra's realTo), so a preference-weighted outbound tree still
+// sizes its far-points against the loop the runner asked for.
 func (g *Graph) pickFarPoints(src int32, targetM float64, outDist map[int32]float64) []int32 {
 	sLat, sLng := g.lat[src], g.lng[src]
 
@@ -210,6 +241,7 @@ func (g *Graph) assembleLoop(out, back []int32) *Loop {
 		Coords:         coords,
 		DistanceM:      distanceM,
 		AreaEfficiency: areaEfficiency(coords, distanceM),
+		path:           full,
 	}
 }
 

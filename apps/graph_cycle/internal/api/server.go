@@ -160,7 +160,7 @@ func (s *Server) handleCycle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := s.g.SearchCycle(r.Context(), req.Start.Lat, req.Start.Lng, req.TargetDistanceM)
+	res := s.g.SearchCycle(r.Context(), req.Start.Lat, req.Start.Lng, req.TargetDistanceM, graph.PrefNone)
 	// found=false is a first-class loop-poor signal, NOT an error: the web
 	// client turns it into null and falls back to round_trip. largestClean is
 	// still surfaced so a caller can show the largest achievable loop.
