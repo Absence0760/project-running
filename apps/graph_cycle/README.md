@@ -52,7 +52,9 @@ When — and only when — a preference was actually honoured, the response adds
 out-and-backs into a loop running short of target (at most 4, 250 m one way, a
 fifth of the target in total) and credits them in the ranking instead of letting
 `areaEfficiency` punish them. An augmentation that would stop the loop looking
-like a loop is walked back.
+like a loop is walked back. Its ask is binary, so unlike `quiet` and `scenic` it
+reports itself applied only when a spur was actually spliced — a neighbourhood
+with no dead ends returns the loop with both fields omitted.
 
 **Elevation-aware is not in the vocabulary**: neither engine is built with
 terrain data and an OSM extract carries none, so a grade-weighted edge cost would

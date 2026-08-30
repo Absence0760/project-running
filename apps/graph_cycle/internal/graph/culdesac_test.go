@@ -124,3 +124,25 @@ func TestFindQuietStubRefusesAnOverlongSpur(t *testing.T) {
 		t.Fatalf("stub = %v, want none — the dead end is past the length cap", s)
 	}
 }
+
+func TestCulDeSacUnappliedWhenNothingWasSpliced(t *testing.T) {
+	// A plain lattice has no dead end anywhere, so the ask cannot be honoured.
+	// The loop is still served — a preference never denies a route — but saying
+	// it honoured a cul-de-sac request would be a lie the client cannot see
+	// through, since it only compares applied against asked.
+	g, _ := BuildTestGrid(9, 9, 100, 40.0, -77.0)
+	lat, lng := stubGridStart()
+	res := g.SearchCycle(context.Background(), lat, lng, 1200, PrefCulDeSac)
+	if res.Best == nil {
+		t.Fatal("expected a loop on a dense lattice")
+	}
+	if res.Best.stubM != 0 {
+		t.Fatalf("a lattice with no dead ends credited %.1f m of stub", res.Best.stubM)
+	}
+	if res.Applied != PrefNone {
+		t.Fatalf("applied = %q, want none", res.Applied)
+	}
+	if res.PreferredShare != 0 {
+		t.Fatalf("share = %v, want 0", res.PreferredShare)
+	}
+}

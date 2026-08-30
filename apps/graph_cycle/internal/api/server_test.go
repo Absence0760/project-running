@@ -156,6 +156,32 @@ func TestCycleCulDeSacIsReported(t *testing.T) {
 	}
 }
 
+func TestCycleCulDeSacOmittedWhenNoSpurWasSpliced(t *testing.T) {
+	// The plain lattice has no dead end to splice, so the ask went unhonoured.
+	// The web client shows its "not applied" note by comparing applied against
+	// asked and never reads the share, so a zero share reported alongside
+	// "cul_de_sac" tells the runner they got spurs they did not get.
+	s, cLat, cLng := testServer(t)
+	body := `{"start":{"lat":` + ftoa(cLat) + `,"lng":` + ftoa(cLng) + `},"targetDistanceM":1200,"preference":"cul_de_sac"}`
+	rec := do(t, s, http.MethodPost, "/cycle", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if found, _ := raw["found"].(bool); !found {
+		t.Fatal("expected a loop on a dense lattice")
+	}
+	if _, ok := raw["preferenceApplied"]; ok {
+		t.Fatalf("preferenceApplied = %v on a graph with no dead ends", raw["preferenceApplied"])
+	}
+	if _, ok := raw["preferenceShare"]; ok {
+		t.Fatal("preferenceShare must be absent alongside an absent preferenceApplied")
+	}
+}
+
 func TestCycleUnrecognisedPreferenceIsDropped(t *testing.T) {
 	// A stale or garbled knob must never be a 400, and must serve exactly what
 	// an unpreferenced request serves.

@@ -51,9 +51,10 @@ type CycleResult struct {
 	LargestClean *Loop
 
 	// Applied is the preference the served loop actually honours. It is
-	// PrefNone both when none was asked for and when one was asked for but the
-	// unweighted retry produced the loop — an unhonoured ask must never read as
-	// honoured. PreferredShare is meaningful only alongside a set Applied.
+	// PrefNone when none was asked for, when one was asked for but the
+	// unweighted retry produced the loop, and when a cul-de-sac ask spliced no
+	// spur — an unhonoured ask must never read as honoured. PreferredShare is
+	// meaningful only alongside a set Applied.
 	Applied        Preference
 	PreferredShare float64
 }
@@ -166,7 +167,11 @@ func (g *Graph) searchCycle(ctx context.Context, startLat, startLng, targetM flo
 	}
 
 	res := selectLoops(candidates, targetM, pref)
-	if res.Best != nil {
+	// A cul-de-sac ask is binary and observable, so a loop carrying no spur did
+	// not honour it however the search was weighted. quiet and scenic are
+	// gradients — the search genuinely was biased and the share reports what it
+	// achieved — so any loop they returned honours the ask.
+	if res.Best != nil && (pref != PrefCulDeSac || res.Best.stubM > 0) {
 		res.Applied = pref
 		res.PreferredShare = res.Best.share
 	}
