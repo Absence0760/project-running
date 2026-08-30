@@ -208,7 +208,14 @@ Deno.test('no handler reads a Stripe object as an untyped bag', () => {
     `these handler parameters are untyped Stripe payloads again: ${bagged.join(', ')}. ` +
       'Read them through readCheckoutSession / readCharge / readConnectAccount instead.',
   );
-  for (const reader of ['readCheckoutSession(', 'readCharge(', 'readConnectAccount(']) {
+  for (
+    const reader of [
+      'readCheckoutSession(',
+      'readCharge(',
+      'readConnectAccount(',
+      'readRefund(',
+    ]
+  ) {
     assert(
       SRC.includes(reader),
       `${reader} is not called from index.ts, so some event object is reaching a ` +
@@ -295,4 +302,96 @@ Deno.test('the async payment outcomes are dispatched, not 200-ignored', () => {
       `${constant} has no ${arm} arm to reach`,
     );
   }
+});
+
+// ── the refund that failed (decisions § 789) ───────────────────────────────
+
+function slice(startMarker: string, endMarker: string): string {
+  const start = SRC.indexOf(startMarker);
+  assert(start !== -1, `${startMarker} is gone — has the arm moved?`);
+  const end = SRC.indexOf(endMarker, start);
+  assert(end > start, `could not find the end of ${startMarker}`);
+  return SRC.slice(start, end);
+}
+
+Deno.test('the reversal arm reads a REFUND, and refuses anything that is not one', () => {
+  // The three reversal events carry a Refund at `data.object`, not a Charge.
+  // Feeding one to readCharge yields refunded:null + amount_refunded:null, and
+  // refundScopeOfCharge answers `full` for all of them — the branch that
+  // deletes a seat. The lib test pins that arithmetic; only the source can say
+  // which reader the dispatcher actually calls.
+  const dispatch = SRC.slice(SRC.indexOf('async function dispatchStripeEvent'));
+  const arm = dispatch.slice(dispatch.indexOf('isRefundReversalEvent(event.type)'));
+  assert(
+    arm.indexOf('readRefund(obj)') !== -1,
+    'the reversal arm must narrow data.object through readRefund',
+  );
+  assert(
+    arm.indexOf('readCharge(') === -1,
+    'the reversal arm reads its payload as a charge — a Refund has no ' +
+      '`refunded` and no `amount_refunded`, so refundScopeOfCharge answers ' +
+      '`full` for every one of them',
+  );
+  const gate = arm.indexOf('isRefundReversed(refund.status)');
+  const firstHandler = arm.indexOf('await handleDonationRefundReversed(');
+  assert(gate !== -1, 'nothing checks whether the refund actually failed');
+  assert(firstHandler !== -1, 'the reversal arm reaches no handler');
+  assert(
+    gate < firstHandler,
+    'a refund merely moving pending -> succeeded must not reach a handler: ' +
+      'the status gate has to come before the ledger work',
+  );
+});
+
+Deno.test('a failed refund does NOT re-seat the buyer', () => {
+  // The seat was released when the order went `refunded`, which fired
+  // promote_event_waitlist — the mat may already belong to someone else. A
+  // re-insert would meet the advisory-locked enforce_event_capacity trigger,
+  // which silently rewrites the row to `waitlisted` rather than raising, so
+  // the buyer would read as registered-then-waitlisted and the operator would
+  // see nothing. The ledger states the truth instead.
+  const src = slice(
+    'async function handleOrderRefundReversed',
+    'async function handleDonationRefunded',
+  );
+  assert(
+    !src.includes(".from('event_attendees')"),
+    'the reversal handler touches event_attendees — a stranded buyer is a ' +
+      'reconciliation decision for a human, not a silent re-seat over capacity',
+  );
+  assert(
+    src.includes("orderStatusTransition(order.status, eventType)"),
+    'the reversal must go through the transition table, not write a literal',
+  );
+  assert(
+    src.includes(".eq('status', order.status)"),
+    'the CAS must match the status it read',
+  );
+  assert(
+    src.includes('refunded_at: null'),
+    'the money did not go back, so the stamp saying when it did must be cleared',
+  );
+});
+
+Deno.test('the donation reversal CAS matches the refunded total EXACTLY', () => {
+  // The forward path writes Stripe's own cumulative figure and guards with
+  // `.lte`, which is safe because it needs no arithmetic. This one SUBTRACTS
+  // from the value it read, so an `lte` guard would let a concurrent change
+  // land underneath and store a total computed from a stale reading.
+  const src = slice(
+    'async function handleDonationRefundReversed',
+    'async function handleOrderRefundReversed',
+  );
+  assert(
+    src.includes(".eq('refunded_cents', donation.refunded_cents)"),
+    'the reversal CAS must match the refunded total it read, exactly',
+  );
+  assert(
+    !src.includes(".lte('refunded_cents'"),
+    'an lte guard cannot protect a subtraction from the value it read',
+  );
+  assert(
+    src.includes('donationRefundReversal('),
+    'the corrected figure must come from the shared helper, not be computed here',
+  );
 });

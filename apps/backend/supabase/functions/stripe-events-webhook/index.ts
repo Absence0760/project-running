@@ -1,7 +1,7 @@
 /// Stripe Connect events webhook — the ONE idempotent writer of order
 /// status (club_events.md slice P1).
 ///
-/// Handles six event types; everything else is 200-ignored:
+/// Handles nine event types; everything else is 200-ignored:
 ///   checkout.session.completed -> only once `payment_status` says the money
 ///     arrived: CAS pending->paid, confirm-time capacity recheck, seat the
 ///     'going' attendee with order_id. If the class filled via another path,
@@ -16,6 +16,13 @@
 ///     soft reservation (the pending row stops counting toward capacity).
 ///   charge.refunded            -> CAS the donation or the order, releasing
 ///     the seat only on a full refund.
+///   charge.refund.updated / refund.updated / refund.failed -> the refund
+///     announced by charge.refunded was rejected by the bank and the money is
+///     back with us. Acts only on a `failed` / `canceled` refund status: the
+///     donation ledger takes the reversed amount back off `refunded_cents`,
+///     the order ledger CAS's refunded->refund_failed and does NOT re-seat
+///     (decisions § 789). Three event types for one fact because which one an
+///     endpoint receives is decided by the API version set on it.
 ///   account.updated            -> mirror charges_enabled / payouts_enabled
 ///     / details_submitted into instructor_payout_accounts.
 ///
@@ -45,14 +52,19 @@ import {
   type CheckoutSession,
   type ConnectAccount,
   donationIdFromSession,
+  donationRefundReversal,
   donationStatusTransition,
   isDonationSession,
   isPaymentSettled,
+  isRefundReversalEvent,
+  isRefundReversed,
   orderStatusTransition,
   parseStripeEventEnvelope,
   readCharge,
   readCheckoutSession,
   readConnectAccount,
+  type Refund,
+  readRefund,
   refundedCentsOfCharge,
   refundScopeOfCharge,
   shouldReleaseDedupe,
@@ -184,6 +196,23 @@ async function dispatchStripeEvent(
     const donationRes = await handleDonationRefunded(service, charge);
     return donationRes ?? await handleOrderRefunded(service, charge);
   }
+  if (isRefundReversalEvent(event.type)) {
+    // A refund that was announced on `charge.refunded` and then rejected.
+    // `data.object` here is a REFUND, not a charge — readRefund refuses
+    // anything else rather than reading a charge's fields off it.
+    const refund = readRefund(obj);
+    if (!refund) {
+      console.error('refund reversal event carried no refund object. type:', event.type);
+      return Response.json({ ok: true, skipped: 'not_a_refund' });
+    }
+    if (!isRefundReversed(refund.status)) {
+      // The overwhelming majority of these: a refund moving pending ->
+      // succeeded. Nothing to undo.
+      return Response.json({ ok: true, skipped: 'refund_not_reversed' });
+    }
+    const donationRes = await handleDonationRefundReversed(service, refund);
+    return donationRes ?? await handleOrderRefundReversed(service, refund, event.type);
+  }
 
   // Unhandled types — recorded (dedupe) but no side effect.
   return Response.json({ ok: true, ignored: event.type });
@@ -299,6 +328,149 @@ async function handleDonationNotPaid(
     return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
   }
   return Response.json({ ok: true, donation_status: next });
+}
+
+/// A refund we announced was rejected, on the DONATION ledger. Returns a
+/// Response when the refund belongs to a donation, or null so the dispatcher
+/// falls through to the event-order ledger — the same shape (and the same
+/// resolve-by-payment-intent) as the `charge.refunded` pair above.
+async function handleDonationRefundReversed(
+  service: DbClient,
+  refund: Refund,
+): Promise<Response | null> {
+  const paymentIntent = refund.paymentIntentId;
+  if (!paymentIntent) {
+    return Response.json({ ok: true, skipped: 'missing_payment_intent' });
+  }
+  const { data: donation, error: readErr } = await service
+    .from('donations')
+    .select('id, status, refunded_cents')
+    .eq('stripe_payment_intent_id', paymentIntent)
+    .maybeSingle();
+  if (readErr) {
+    console.error('donation refund reversal read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_read_failed' }, { status: 500 });
+  }
+  if (!donation) return null;
+
+  const reversal = donationRefundReversal(
+    donation.status,
+    donation.refunded_cents,
+    refund.amountCents,
+  );
+  if (reversal === null) {
+    // Either the donation records no refund to take back, or the reversed
+    // amount is larger than the ledger holds — see donationRefundReversal.
+    // Reconciliation item, not a guess.
+    console.error(
+      'donation refund reversal not applicable; ledger left alone. donation:',
+      donation.id,
+    );
+    return Response.json({ ok: true, skipped: 'no_reversal' });
+  }
+
+  // `refunded_cents` is matched EXACTLY, not `lte` as the forward path does:
+  // this write subtracts from the value that was read, so any concurrent
+  // change to it invalidates the arithmetic rather than merely racing it.
+  const { data: updated, error: updErr } = await service
+    .from('donations')
+    .update({
+      status: reversal.status,
+      refunded_cents: reversal.refundedCents,
+      // Nothing came back after all, so the stamp saying when it did is a
+      // lie. It is cleared only when the whole recorded refund reversed —
+      // with an instalment surviving, the remaining one really did land.
+      ...(reversal.refundedCents === 0 ? { refunded_at: null } : {}),
+    })
+    .eq('id', donation.id)
+    .eq('status', donation.status)
+    .eq('refunded_cents', donation.refunded_cents)
+    .select('id')
+    .maybeSingle();
+  if (updErr) {
+    console.error('donation refund reversal update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_update_failed' }, { status: 500 });
+  }
+  if (!updated) {
+    return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+  return Response.json({
+    ok: true,
+    donation_refund_reversed: true,
+    donation_id: donation.id,
+  });
+}
+
+/// A refund we announced was rejected, on the ORDER ledger — the money is
+/// back with us and the buyer's seat is already gone.
+///
+/// The seat is deliberately NOT restored, and the reason is not squeamishness
+/// about capacity. Deleting the `going` row fired `promote_event_waitlist`,
+/// so the mat may already belong to someone else; re-inserting one would meet
+/// the advisory-locked `enforce_event_capacity` trigger, which does not raise
+/// but silently rewrites the row to `waitlisted` — the buyer would be shown as
+/// registered-then-waitlisted with no explanation and the operator would see
+/// nothing at all. And it is not even reachable without widening a second
+/// gate: `enforce_paid_order_for_priced_event` accepts only an order in
+/// `('paid', 'partially_refunded')` as backing a seat, and this order is in
+/// neither. So the ledger states the truth and names the order, and a human
+/// decides between re-seating, re-refunding, and offering the next occurrence.
+async function handleOrderRefundReversed(
+  service: DbClient,
+  refund: Refund,
+  eventType: string,
+): Promise<Response> {
+  const paymentIntent = refund.paymentIntentId;
+  if (!paymentIntent) {
+    return Response.json({ ok: true, skipped: 'missing_payment_intent' });
+  }
+  const { data: order, error: readErr } = await service
+    .from('event_orders')
+    .select('id, status')
+    .eq('stripe_payment_intent_id', paymentIntent)
+    .maybeSingle();
+  if (readErr) {
+    console.error('order refund reversal read failed (code):', readErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'order_read_failed' }, { status: 500 });
+  }
+  if (!order) {
+    return Response.json({ ok: true, skipped: 'no_order_for_refund' });
+  }
+
+  const nextStatus = orderStatusTransition(order.status, eventType);
+  if (nextStatus === null) {
+    // Most often a reversal on an order that never reached `refunded` — a
+    // failed partial, which kept its seat and which the order ledger carries
+    // no refunded amount to correct.
+    console.error(
+      'refund reversal with no order transition; money back with us. order:',
+      order.id,
+      'status:',
+      order.status,
+    );
+    return Response.json({ ok: true, skipped: 'no_transition' });
+  }
+
+  const { data: updated, error: updErr } = await service
+    .from('event_orders')
+    .update({ status: nextStatus, refunded_at: null })
+    .eq('id', order.id)
+    .eq('status', order.status)
+    .select('id')
+    .maybeSingle();
+  if (updErr) {
+    console.error('order refund reversal update failed (code):', updErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'order_update_failed' }, { status: 500 });
+  }
+  if (!updated) {
+    return Response.json({ ok: true, skipped: 'cas_lost' });
+  }
+
+  console.error(
+    'REFUND FAILED: money returned to us, buyer has no seat, needs an operator. order:',
+    order.id,
+  );
+  return Response.json({ ok: true, order_refund_failed: true, order_id: order.id });
 }
 
 /// Returns a Response when the charge IS a donation (handled, terminally),

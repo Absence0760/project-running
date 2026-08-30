@@ -270,11 +270,15 @@ export type RecapPeriodKind = 'year' | 'month';
 // constraint (migration 20261229_001) — keep these unions in lockstep
 // (check_constraint_unions.mjs PAIRS).
 // event_orders.status — the order ledger lifecycle, written only by the
-// stripe-events webhook (service role).
+// stripe-events webhook (service role). `refund_failed` (20270623_001) is the
+// state an order is in when a refund was announced, the seat was released, and
+// the refund was then rejected by the bank: the money is with us and the buyer
+// has no seat. It backs no seat and is not buyer-cancelable — see § 789.
 export type OrderStatus =
 	| 'pending'
 	| 'paid'
 	| 'refunded'
+	| 'refund_failed'
 	| 'partially_refunded'
 	| 'failed'
 	| 'canceled';
