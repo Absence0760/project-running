@@ -9,6 +9,7 @@ import '../l10n/locale_support.dart';
 import '../social_service.dart';
 import '../typed_decimal.dart';
 import 'full_screen_form.dart';
+import '../text_limits.dart';
 
 /// Full-screen dialog for creating a new event under a club. Mirrors
 /// the web `EventEditor.svelte` (one-off / weekly / biweekly / monthly).
@@ -292,7 +293,7 @@ class _EventFormState extends State<_EventForm> {
             TextField(
               controller: _description,
               maxLines: 3,
-              maxLength: 1000,
+              maxLength: kEventDescriptionMaxLength,
               decoration: InputDecoration(
                 labelText: l10n.eventFormDescriptionLabel,
               ),

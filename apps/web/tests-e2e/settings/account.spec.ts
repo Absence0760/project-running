@@ -53,6 +53,20 @@ test.describe('/settings/account', () => {
 		await expect(page.getByLabel('Display Name')).toHaveValue(originalName);
 	});
 
+	test('the parkrun number field takes every character the column stores', async ({
+		page
+	}) => {
+		// decisions § 792: the column caps at 32, web capped at 30 and mobile at
+		// 20, so a 25-character parkrun id typed fine here and was truncated on
+		// the phone. All three now read one registered number.
+		await page.goto('/settings/account');
+		await page.waitForLoadState('networkidle');
+		await expect(page.getByLabel(/parkrun Athlete Number/)).toHaveAttribute(
+			'maxlength',
+			'32'
+		);
+	});
+
 	test('parkrun athlete number save persists across reload', async ({
 		page
 	}) => {

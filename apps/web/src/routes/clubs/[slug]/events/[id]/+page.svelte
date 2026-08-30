@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+	import { TEXT_LIMITS } from '$lib/core/text_limits';
 	import { onMount, onDestroy } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { initial, hashHue } from '$lib/format/avatar';
@@ -1964,7 +1965,7 @@
 						bind:value={draftPost}
 						placeholder={m('clubEvent.postUpdatePlaceholder')}
 						rows="3"
-						maxlength="1200"
+						maxlength={TEXT_LIMITS.clubPostBody}
 					></textarea>
 					<button class="btn-primary" type="submit" disabled={!draftPost.trim() || busy}>
 						{m('clubEvent.postUpdateButton')}

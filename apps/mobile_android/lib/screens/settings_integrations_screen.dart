@@ -21,6 +21,7 @@ import '../strava.dart';
 import '../widgets/top_banner.dart';
 import 'races_screen.dart';
 import 'watch_live_screen.dart';
+import '../text_limits.dart';
 
 class SettingsIntegrationsScreen extends StatefulWidget {
   final ApiClient? apiClient;
@@ -345,7 +346,7 @@ class _SettingsIntegrationsScreenState
             TextField(
               controller: ctrl,
               autofocus: true,
-              maxLength: 20,
+              maxLength: kParkrunNumberMaxLength,
               decoration: InputDecoration(
                 labelText: l10n.integrationsParkrunFieldLabel,
                 hintText: 'A123456',

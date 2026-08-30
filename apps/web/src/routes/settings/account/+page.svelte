@@ -1227,7 +1227,12 @@
 			</label>
 			<label>
 				<span class="label-text">{m('settingsAccount.parkrunNumber')}</span>
-				<input type="text" bind:value={parkrunNumber} placeholder="A123456" />
+				<input
+					type="text"
+					bind:value={parkrunNumber}
+					placeholder="A123456"
+					maxlength={TEXT_LIMITS.parkrunNumber}
+				/>
 				{#if parkrunNumber && parkrunNumber.trim().length > 0}
 					<button
 						type="button"

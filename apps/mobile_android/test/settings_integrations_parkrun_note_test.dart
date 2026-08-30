@@ -9,6 +9,7 @@ import '../lib/ble_treadmill.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/settings_integrations_screen.dart';
+import '../lib/text_limits.dart';
 
 class _FakeApi extends ApiClient {
   @override
@@ -16,6 +17,10 @@ class _FakeApi extends ApiClient {
 
   @override
   Future<List<IntegrationRow>> fetchIntegrations() async => const [];
+
+  @override
+  Future<UserProfileRow?> fetchMyProfile() async =>
+      UserProfileRow(shadowHidden: false, id: 'u1');
 }
 
 Future<void> _pump(WidgetTester tester, Locale deviceLocale) async {
@@ -60,5 +65,18 @@ void main() {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.integrationsParkrunTileSubtitle), findsOneWidget);
     expect(find.text(l10n.integrationsParkrunRegionNote), findsNothing);
+  });
+
+  testWidgets('the parkrun field takes every character the column stores',
+      (tester) async {
+    // decisions § 792: the column caps at 32 and this field capped at 20, so a
+    // 25-character parkrun id typed fine on web and was truncated here.
+    await _pump(tester, const Locale('en', 'GB'));
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await tester.tap(find.widgetWithText(ListTile, l10n.integrationsParkrunName));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.widgetWithText(
+        TextField, l10n.integrationsParkrunFieldLabel));
+    expect(field.maxLength, kParkrunNumberMaxLength);
   });
 }

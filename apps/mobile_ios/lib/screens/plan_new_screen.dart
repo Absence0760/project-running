@@ -17,6 +17,7 @@ import '../training_labels.dart';
 import '../training_service.dart';
 import '../widgets/top_banner.dart';
 import 'plan_detail_screen.dart';
+import '../text_limits.dart';
 
 /// A club plan template paired with the owning club's display name, for the
 /// "Start from a club template" picker. Mirrors the web `/plans/new`
@@ -181,10 +182,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     final raceName = widget.raceName?.trim();
     if (_racePreset?.ok == true && raceName != null && raceName.isNotEmpty) {
       _nameDefaulted = true;
-      // The field is `maxLength: 80`; a programmatic write bypasses that, so
-      // clamp what the listing hands us to the same budget.
-      _nameCtrl.text =
-          raceName.length > 80 ? raceName.substring(0, 80) : raceName;
+      // The field is capped at the constraint; a programmatic write bypasses
+      // that, so clamp what the listing hands us to the same budget.
+      _nameCtrl.text = raceName.length > kPlanNameMaxLength
+          ? raceName.substring(0, kPlanNameMaxLength)
+          : raceName;
       return;
     }
     if (widget.initialGoal != null || widget.initialBeginnerWalkRun) {
@@ -480,7 +482,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               labelText: l10n.planNewNameLabel,
               hintText: l10n.planNewNameHint,
             ),
-            maxLength: 80,
+            maxLength: kPlanNameMaxLength,
             // Re-evaluate the Create button's enabled state as the name is
             // typed — without this the button (which gates on a non-empty
             // name) only un-disables on the next unrelated rebuild.

@@ -38,6 +38,7 @@ import 'public_route_screen.dart';
 import 'route_builder_screen.dart';
 import '../widgets/sign_in_required_state.dart';
 import '../widgets/top_banner.dart';
+import '../text_limits.dart';
 
 class ClubDetailScreen extends StatefulWidget {
   final SocialService social;
@@ -694,7 +695,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           TextField(
             controller: _postCtrl,
             maxLines: 3,
-            maxLength: 1200,
+            maxLength: kClubPostBodyMaxLength,
             decoration: InputDecoration(
               border: InputBorder.none,
               hintText: AppLocalizations.of(context).clubDetailShareUpdateHint,
