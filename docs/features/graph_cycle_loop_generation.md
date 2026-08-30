@@ -344,6 +344,12 @@ variant honours it today as a cheap interim.
 
 ### Avoid-highways / prefer-residential — BUILT (2026-06-14, web-only)
 
+> **Superseded in part on 2026-08-30** by the section below. The custom model and
+> its fallback are still there and still the `round_trip` path, but "skips the
+> graph-cycle sidecar" below is no longer true: the sidecar honours preferences on
+> its own search now, so the preference rides the chain rather than diverting the
+> request off it. Kept as the record of what the cheap half was.
+
 The cheap half shipped as a `round_trip` custom-model variant, no v3 required:
 
 - **UI** — a "Quiet roads (avoid highways)" checkbox in the distance panel on
