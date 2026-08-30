@@ -96,6 +96,29 @@ type footWay struct {
 	class uint8
 }
 
+// wayRole is what one way of the extract contributes: green geometry for the
+// occupancy raster, a foot-routable way carrying its road class, or neither.
+type wayRole struct {
+	green bool
+	kept  bool
+	class uint8
+}
+
+// roleForWay is the whole tag→attribution decision for one way, kept out of the
+// scanner loop so it can be exercised without a PBF. Green is tested first, but
+// the order is not what separates the two: greenWay already refuses anything
+// tagged highway=, so a park's footpath is a graph edge and earns its green flag
+// from the raster like any other edge.
+func roleForWay(tags osm.Tags) wayRole {
+	if greenWay(tags) {
+		return wayRole{green: true}
+	}
+	if !footAllowed(tags) {
+		return wayRole{}
+	}
+	return wayRole{kept: true, class: roadClassFor(tags.Find("highway"))}
+}
+
 // wayScan is what one pass over the PBF's ways yields: the foot-routable ways
 // with their road class, the green-space ways the scenic attribution needs, and
 // the node ids each set references. The two sets stay separate so the green
@@ -143,8 +166,18 @@ func Build(path string) (*Graph, Stats, error) {
 	// help — liveness analysis stops treating an unread local as a GC root.
 	ws.green = nil
 
+	g := assemble(ws.kept, coords, gg)
+	return g, Stats{Nodes: g.NumNodes(), Edges: g.NumEdges(), Ways: len(ws.kept)}, nil
+}
+
+// assemble walks the kept ways into the graph. Every segment inherits its way's
+// road class plus the green flag its own MIDPOINT earns from the raster — green
+// is a property of where a way runs, not of the way, so a street clipping a park
+// corner is green only along the segments that clip it. A node the second pass
+// never saw breaks the chain rather than joining across the hole.
+func assemble(kept []footWay, coords map[int64]Coord, gg *greenGrid) *Graph {
 	b := newBuilder()
-	for _, w := range ws.kept {
+	for _, w := range kept {
 		var prev int64 = -1
 		var prevOK bool
 		for _, id := range w.nodes {
@@ -163,8 +196,7 @@ func Build(path string) (*Graph, Stats, error) {
 			prev, prevOK = id, ok
 		}
 	}
-	g := b.finalize()
-	return g, Stats{Nodes: g.NumNodes(), Edges: g.NumEdges(), Ways: len(ws.kept)}, nil
+	return b.finalize()
 }
 
 // scanWays reads only ways, collecting the foot-routable ones with their road
@@ -189,29 +221,27 @@ func scanWays(path string) (wayScan, error) {
 		if !ok {
 			continue
 		}
-		if greenWay(w.Tags) {
-			ids := make([]int64, 0, len(w.Nodes))
-			for _, wn := range w.Nodes {
-				id := int64(wn.ID)
-				ids = append(ids, id)
-				out.greenRefs[id] = struct{}{}
-			}
-			if len(ids) >= 2 {
-				out.green = append(out.green, ids)
-			}
+		role := roleForWay(w.Tags)
+		if !role.green && !role.kept {
 			continue
 		}
-		if !footAllowed(w.Tags) {
-			continue
+		refs := out.refs
+		if role.green {
+			refs = out.greenRefs
 		}
 		ids := make([]int64, 0, len(w.Nodes))
 		for _, wn := range w.Nodes {
 			id := int64(wn.ID)
 			ids = append(ids, id)
-			out.refs[id] = struct{}{}
+			refs[id] = struct{}{}
 		}
-		if len(ids) >= 2 {
-			out.kept = append(out.kept, footWay{nodes: ids, class: roadClassFor(w.Tags.Find("highway"))})
+		if len(ids) < 2 {
+			continue
+		}
+		if role.green {
+			out.green = append(out.green, ids)
+		} else {
+			out.kept = append(out.kept, footWay{nodes: ids, class: role.class})
 		}
 	}
 	if err := scanner.Err(); err != nil {
