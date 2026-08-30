@@ -121,6 +121,12 @@ func Build(path string) (*Graph, Stats, error) {
 	if err != nil {
 		return nil, Stats{}, err
 	}
+	// The two id sets have done their whole job — the coordinates are keyed by
+	// id now — but ws stays live to the end for ws.kept, and liveness is per
+	// variable, not per field, so nothing else releases them before the builder
+	// below, which is the run's peak allocation. A country extract's foot
+	// network runs to tens of millions of ids and both sets are held to it.
+	ws.refs, ws.greenRefs = nil, nil
 
 	gg := newGreenGrid(greenCoords)
 	for _, w := range ws.green {
@@ -133,10 +139,8 @@ func Build(path string) (*Graph, Stats, error) {
 		gg.markWay(pts, len(w) > 2 && w[0] == w[len(w)-1])
 	}
 	// The occupancy raster is all that is wanted from the green geometry, and
-	// the builder below is the run's peak allocation. greenCoords needs no
-	// help — liveness analysis stops treating an unread local as a GC root —
-	// but ws stays live for ws.kept, and liveness is per variable, not per
-	// field, so the polygons would be held across the whole build.
+	// the polygons are held by the same field liveness. greenCoords needs no
+	// help — liveness analysis stops treating an unread local as a GC root.
 	ws.green = nil
 
 	b := newBuilder()
