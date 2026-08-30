@@ -1025,7 +1025,7 @@ The gym-programming **P1** reusable-plan tier (migration `20270101_001`, [gym_pr
 
 Author-only RLS on all three tables + the EXISTS parent gates + the full-tree cascade from `auth.users` are pinned by `gym_routines_rls_test.sql`. The three tables (+ nested embeds) ship in the DSAR export (`export-data` `backup_spec.ts`, pinned by `backup_spec.test.ts`).
 
-**Club templates (migration `20270109_001`, decisions §145).** `gym_routines.club_id` (nullable FK → `clubs`, `on delete cascade`) makes a routine **club-owned** — a publishable template. Added RLS (alongside, not replacing, the author-only policies — Postgres ORs permissive policies): club members read the routine + its exercises/sets children (`club_id is not null and private.is_club_member(club_id)`); club admins may update/delete (unpublish) but **not** insert (publishing is the gated RPC below, so an admin can't inject a foreign `author_id`). Two SECURITY DEFINER RPCs (`search_path = public, private`, revoked from PUBLIC, granted to `authenticated`): `publish_gym_routine_as_template(p_routine_id, p_club_id)` — author + `is_club_admin` gated, rate-limited, deep-copies the routine + exercises + sets into a new club-owned routine (the personal original is untouched); `clone_gym_routine_template(p_template_id)` — author-or-`is_club_member`-or-`is_public_template` gated, rate-limited, deep-copies into a personal, club-less, non-public routine. Pinned by `gym_routine_club_templates_test.sql` (13 tests).
+**Club templates (migration `20270109_001`, decisions §145).** `gym_routines.club_id` (nullable FK → `clubs`, `on delete cascade`) makes a routine **club-owned** — a publishable template. Added RLS (alongside, not replacing, the author-only policies — Postgres ORs permissive policies): club members read the routine + its exercises/sets children (`club_id is not null and private.is_club_member(club_id)`); club admins may update/delete (unpublish) but **not** insert (publishing is the gated RPC below, so an admin can't inject a foreign `author_id`). Two SECURITY DEFINER RPCs (`search_path = public, private`, revoked from `public, anon` since `20270626000001`, granted to `authenticated`): `publish_gym_routine_as_template(p_routine_id, p_club_id)` — author + `is_club_admin` gated, rate-limited, deep-copies the routine + exercises + sets into a new club-owned routine (the personal original is untouched); `clone_gym_routine_template(p_template_id)` — author-or-`is_club_member`-or-`is_public_template` gated, rate-limited, deep-copies into a personal, club-less, non-public routine. Pinned by `gym_routine_club_templates_test.sql` (13 tests).
 
 **Public library (migration `20270226_001`, redaction `20270319_001`, decisions §182).** The anyone-can-adopt counterpart, the gym-routine analogue of the public PLAN library (`clone_public_plan`). `gym_routines.is_public_template` + the `gym_routines_public_not_club` CHECK (public ⇒ not club-owned). The original additive base-table public-read branch leaked `external_id` (import crosswalk) + `last_modified_at` (edit-cadence clock), so `20270319_001` replaced it with the 20270313 medicine: the parent's public read goes through the redacted **`public_gym_routines` view** (template-safe columns only, granted to authenticated — the library stays a signed-in surface), and the `"gym_routine_exercises/sets public templates read"` child policies answer via `private.is_public_gym_routine(routine_id)` (SECURITY DEFINER oracle) since the parent row is now RLS-hidden from non-authors. `clone_gym_routine_template` carries the public-template authorisation branch (any signed-in caller; the clone is personal, `club_id` null, `is_public_template` false). `set_gym_routine_public(p_routine_id, p_public)` — SECURITY DEFINER, author-gated, refuses a club-owned routine — flips `is_public_template` on the routine itself (the routine IS the template, no deep-copy). Nothing else is stripped on publish/clone (targets are the published prescription). Pinned by `public_gym_routine_library_test.sql` (13 tests). Surfaced as `/gym/routines/library` + the routine-detail publish toggle on web + `RoutinePublicLibraryScreen` + the publish toggle on mobile; library ordering is `created_at desc` (the sync clock is redacted).
 
@@ -1378,7 +1378,7 @@ create unique index jobs_dedupe_map_match
 ```
 
 - **RLS**: deny everything — no policies, anon/authenticated cannot touch the table. Service role bypasses RLS for direct queries; the SECURITY DEFINER functions below are the typed surface for everything else.
-- **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. Each is revoked `from public` and granted to `service_role` only — but none of the three names `anon` in its revoke, and none carries an in-body auth check, so on an image that grants `anon` by name at create time (Cloud and CI, see § Who may EXECUTE one at the head of [Database functions (RPCs)](#database-functions-rpcs)) `anon` still holds EXECUTE on all three. Tracked as a follow-up to [decisions.md § 799](../architecture/decisions.md).
+- **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. `service_role` only. None of the three carries an in-body auth check, and until `20270626000001` each was revoked `from public` alone — which removes nothing on an image that grants `anon` by name at create time (Cloud and CI, see § Who may EXECUTE one at the head of [Database functions (RPCs)](#database-functions-rpcs)), so both `anon` **and** `authenticated` could drain the queue there: claim a job's payload and burn an attempt, mark it succeeded, or defer it. Both are now revoked; `anon_execute_contract_test.sql` pins it. See [decisions.md § 799](../architecture/decisions.md).
 - **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
 - **Partial indexes**: the `jobs_queued_v2` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
 
@@ -1529,7 +1529,7 @@ Pinned by `data_export_jobs_test.sql` (19 assertions) + `data_export_ready_notif
 | `cleanup-stale-user-coach-usage` | `17 * * * *` | Calls `cleanup_stale_user_coach_usage()` (coach-usage counter retention). | `20261215_001` |
 | `purge-stale-checkpoint-health-data` | `47 3 * * *` | Calls `private.purge_stale_checkpoint_health_data()` — scrubs (nulls) the Art 9 weigh-in / medical columns on `checkpoint_crossings` older than 90 days (`recorded_at`); the in/out split times survive (they are race results). | `20270317_001` |
 
-The scheduled functions are EXECUTE-revoked from PUBLIC where applicable; the cron extension runs as superuser. The live-run-ping cleanup lives in `20260602_001_pg_cron_schedules.sql` alongside what used to be a `refresh-mv-weekly-mileage` entry — that job is **gone** (unscheduled in `20270530_001` when the unread matview it refreshed was dropped, see above), so the table above lists no matview refresh and the repo now schedules no `refresh materialized view` anywhere. The rate-limit cleanup is in `20260604_001_rate_limits.sql`. Each remaining row's migration is listed in the table.
+The scheduled functions are EXECUTE-revoked from `public, anon, authenticated` and granted to `service_role` only (`20270625000001` + `20270626000001`; before those, a single-grantee revoke left both client roles holding the create-time grant on Cloud). pg_cron itself runs them as `postgres` and needs no grant. The live-run-ping cleanup lives in `20260602_001_pg_cron_schedules.sql` alongside what used to be a `refresh-mv-weekly-mileage` entry — that job is **gone** (unscheduled in `20270530_001` when the unread matview it refreshed was dropped, see above), so the table above lists no matview refresh and the repo now schedules no `refresh materialized view` anywhere. The rate-limit cleanup is in `20260604_001_rate_limits.sql`. Each remaining row's migration is listed in the table.
 
 ---
 
@@ -1998,6 +1998,30 @@ Two further rules follow from the same mechanism:
   body checks `auth.uid()` itself. `anon_execute_registry_test.sql` pins the
   rule and the four functions `20270625000001` withheld.
 
+**The set of anon-executable functions is closed, and pinned.**
+`20270626000001` swept the remaining 71 and
+`anon_execute_contract_test.sql` holds the contract for the whole schema: no
+`public` non-trigger function outside a 34-row allowlist may be executable by
+`anon` or carry a PUBLIC / `anon` EXECUTE entry, every function *on* the
+allowlist still must be (so a blanket revoke that 42501s the logged-out pages
+fails there rather than in production), and the cron / job-queue family must
+stay closed to `authenticated` while `service_role` keeps it. Adding an RPC that
+a logged-out visitor needs therefore means adding a row to that list with the
+surface that justifies it; adding one they do not need means writing the revoke,
+or the test names your function. The 34 are the `/share/*` and `/live/[id]`
+lookups, the logged-out map / search / discovery readers, the public fundraiser
+and segment and challenge boards, the three visibility oracles named inside the
+`public_runs` and `public_routes` view definitions, `is_event_visible` and
+`is_challenge_visible` (named by policies `to public` on tables `anon` can
+read — withholding either turns an anonymous read into `42501`), and
+`confirm_safety_contact_by_token`, which a trusted contact calls from an emailed
+link with no account at all.
+
+Trigger-returning functions are outside that contract on purpose: Postgres
+raises `0A000` for a direct call before privileges are consulted, so no grant
+makes one reachable. Extension-owned functions are outside it too — several
+hundred arrive with the image default and are the extension's business.
+
 ### `weekly_mileage(weeks_back integer)`
 
 Returns total distance per week for the chart on the dashboard.
@@ -2140,7 +2164,7 @@ SECURITY DEFINER — the organiser read path for the live-results board. Returns
 
 ### `is_pro()`
 
-SECURITY DEFINER boolean — `select user_profiles.subscription_tier in ('pro','lifetime')` for `auth.uid()`. Used by Edge Functions and the `/api/coach` server route to gate paywalled features without a separate column lookup per request. Granted to `authenticated`. Migration `20260429_001_subscription_paywall.sql` (the predecessor `is_user_pro(uuid)` was dropped in `20260516_001`).
+SECURITY DEFINER boolean — `select user_profiles.subscription_tier in ('pro','lifetime')` for `auth.uid()`. Used by Edge Functions and the `/api/coach` server route to gate paywalled features without a separate column lookup per request. Granted to `authenticated` + `service_role`, and revoked from `public, anon` in `20270626000001` — no RLS policy names it, so the grant narrows freely. Migration `20260429_001_subscription_paywall.sql` (the predecessor `is_user_pro(uuid)` was dropped in `20260516_001`).
 
 ### `join_club_by_token(token text)`
 
@@ -2166,7 +2190,7 @@ Returns the caller's most recent `fitness_snapshots` row (VDOT, weekly mileage, 
 
 ### `get_integration_tokens(p_user_id uuid, p_provider text)` / `set_integration_tokens(p_user_id uuid, p_provider text, p_access_token text, p_refresh_token text, p_token_expiry timestamptz)`
 
-SECURITY DEFINER pair that brokers OAuth tokens through Supabase Vault rather than exposing the encrypted columns directly to the row. `set` writes the access + refresh + expiry into Vault and stores only the secret IDs on the `integrations` row; `get` returns `table(access_token, refresh_token, token_expiry)` for the calling Edge Function. EXECUTE revoked from `public`, granted to `authenticated` + `service_role`. Both take an explicit `p_user_id` (the caller, re-derived in the function body). Decision: [decisions.md § 41](../architecture/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns). Created in `20260603_001_integrations_vault.sql`; current signatures in `20260919_001_get_integration_tokens_modern_claims.sql`. A compare-and-swap variant `set_integration_tokens_cas(p_user_id, p_provider, p_expected_refresh_token, p_access_token, p_refresh_token, p_token_expiry)` (migration `20261006_001_set_integration_tokens_cas.sql`) guards concurrent refreshes.
+SECURITY DEFINER pair that brokers OAuth tokens through Supabase Vault rather than exposing the encrypted columns directly to the row. `set` writes the access + refresh + expiry into Vault and stores only the secret IDs on the `integrations` row; `get` returns `table(access_token, refresh_token, token_expiry)` for the calling Edge Function. EXECUTE revoked from `public, anon` (`20270626000001` added the `anon` half; the original `from public` alone withheld nothing on Cloud), granted to `authenticated` + `service_role`. Both take an explicit `p_user_id`, and the body raises unless the caller is that user or `service_role`. Decision: [decisions.md § 41](../architecture/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns). Created in `20260603_001_integrations_vault.sql`; current signatures in `20260919_001_get_integration_tokens_modern_claims.sql`. A compare-and-swap variant `set_integration_tokens_cas(p_user_id, p_provider, p_expected_refresh_token, p_access_token, p_refresh_token, p_token_expiry)` (migration `20261006_001_set_integration_tokens_cas.sql`) guards concurrent refreshes.
 
 ### `check_rate_limit_tiered(p_user_id uuid, p_bucket text, p_free_max int, p_pro_max int, p_window_seconds int)`
 
@@ -2180,7 +2204,7 @@ SECURITY DEFINER GC for the `rate_limits` table — deletes rows whose window ha
 
 ### `claim_next_job(worker_id, kind_filter)`
 
-SECURITY DEFINER. Atomically marks the next ready job as `running`, increments its `attempts`, and returns the row. Used by the Go service (and any future worker) to drain the [`jobs`](#jobs) queue. Revoked `from public` and granted to `service_role` only; the revoke does not name `anon`, and the body has no auth check — see the caveat on the [`jobs`](#jobs) table.
+SECURITY DEFINER. Atomically marks the next ready job as `running`, increments its `attempts`, and returns the row. Used by the Go service (and any future worker) to drain the [`jobs`](#jobs) queue. Revoked from `public, anon, authenticated` and granted to `service_role` only — the body has no auth check, so the grant is the whole control; see the caveat on the [`jobs`](#jobs) table.
 
 ```sql
 -- Drain the next map_match job:
