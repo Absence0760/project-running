@@ -5,7 +5,8 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatDuration } from '$lib/format/time';
-	import { formatDistance, formatWeight, parseWeight, getUnit } from '$lib/format/units.svelte';
+	import { formatDistance, formatWeight, parseWeight, getUnit, getWeightUnit } from '$lib/format/units.svelte';
+	import { weightBoundsIn } from '$lib/format/weight';
 	import { isWeighInEnabled } from '$lib/runs/weigh_in_flag';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -168,6 +169,15 @@
 	// Weigh-in entry (gated). Records a crossing at the runner's last reached
 	// checkpoint with health fields + explicit consent.
 	let weighTarget = $state<BoardRunner | null>(null);
+	// The field is typed in the runner's own weight unit and stored canonical
+	// kg, so the bound has to be converted too — `checkpoint_crossings
+	// .body_weight_kg` is CHECK-bounded 20..400 kg and an unbounded field made
+	// a 900 lb typo a raw 23514 (decisions § 792). The label reads the SAME
+	// signal `parseWeight` parses against; it used to derive lbs from the
+	// DISTANCE unit, so a km/lbs runner was told kg and parsed as lbs.
+	const weighBounds = $derived(
+		weightBoundsIn('checkpoint_crossings.body_weight_kg', getWeightUnit()),
+	);
 	let wWeight = $state<number | null>(null);
 	let wMedicalHold = $state(false);
 	let wNote = $state('');
@@ -338,8 +348,15 @@
 	>
 		<form class="editor-form" onsubmit={(e) => { e.preventDefault(); saveWeighIn(); }}>
 			<label>
-				{m('checkpoint.bodyWeightLabel', { unit: getUnit() === 'mi' ? 'lbs' : 'kg' })}
-				<input type="number" inputmode="decimal" step="0.1" min="0" bind:value={wWeight} />
+				{m('checkpoint.bodyWeightLabel', { unit: getWeightUnit() })}
+				<input
+					type="number"
+					inputmode="decimal"
+					step="0.1"
+					min={weighBounds.min}
+					max={weighBounds.max}
+					bind:value={wWeight}
+				/>
 			</label>
 			<label class="toggle-row">
 				<input type="checkbox" bind:checked={wMedicalHold} />

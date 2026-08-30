@@ -293,16 +293,19 @@ Supabase only marks a column as optional in the `Row` type when it has a databas
 
 ### The "narrow union" columns drifted out of sync with reality
 
-Nineteen columns carry both a CHECK constraint on the SQL side and a narrow TS union on the client — among them `runs.source` (`RunSource`), `runs.activity_type` (`ActivityType`), `routes.surface` (`RouteSurface`), `integrations.provider` (`IntegrationProvider`), `user_profiles.preferred_unit` (`PreferredUnit`), `user_profiles.subscription_tier` (`SubscriptionTier`), `club_members.role` (`ClubRole`), plus the typed-event and gym-routine columns (`events.category`, `event_orders.status`, `gym_routine_sets.set_type`, …). See the full `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs` for all nineteen. The first four `RunSource`/`RouteSurface`/`IntegrationProvider`/`PreferredUnit` landed in `20260505_001_narrow_union_check_constraints.sql`; `subscription_tier` in `20260429_001_subscription_paywall.sql`; `role` in `20260428_001_role_permissions.sql`.
+**Sixty-seven** columns carry a set-shaped CHECK constraint (`check (col in (…))`, or its nullable form) — among them `runs.source` (`RunSource`), `runs.activity_type` (`ActivityType`), `routes.surface` (`RouteSurface`), `integrations.provider` (`IntegrationProvider`), `user_profiles.preferred_unit` (`PreferredUnit`), `user_profiles.subscription_tier` (`SubscriptionTier`), `club_members.role` (`ClubRole`), plus the typed-event, gym-routine, nutrition and moderation columns. **52 of them are enumerated by at least one client, across 121 declarations in 46 files — 87 on web, 34 in the Flutter tree.** The `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs` is the single registry: it is keyed on `<table>.<column>` and lists every rail. The first four `RunSource`/`RouteSurface`/`IntegrationProvider`/`PreferredUnit` landed in `20260505_001_narrow_union_check_constraints.sql`; `subscription_tier` in `20260429_001_subscription_paywall.sql`; `role` in `20260428_001_role_permissions.sql`.
 
-`apps/web/scripts/check_constraint_unions.mjs` runs in the `parity-types` CI job and fails PRs that drift — extracting the values from both the migration and the TS union and comparing equality. To add a new value:
+`apps/web/scripts/check_constraint_unions.mjs` runs in the `parity-types` CI job (step **"CHECK constraints vs client vocabularies"**, followed by the guard's own `node --test` suite) and fails PRs that drift — extracting the values from the migration and from every registered client declaration and comparing equality. **It reads far more than `types.ts`**: a rail declares its `shape` — `union` (a TS `type X = 'a' | 'b'`), `strings` (a const array, in `.ts`, `.svelte` or `.dart`), `keys` (an object-key map), `records` (a list of specs plus the `field` to read) or `enum` (a Dart enum, compared as snake_case, so `activityCount` reads as `activity_count`). A `Record<Union, X>` icon or label map is deliberately not registered: `tsc` already makes those exhaustive.
+
+To add a new value:
 
 1. Update the CHECK constraint in a migration.
-2. Update the TS union in `apps/web/src/lib/types.ts`.
-3. Regenerate types (`npm run gen:types --workspace=apps/backend`).
-4. If you're introducing a brand-new column+CHECK+TS-union triple, append it to the `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs` so the guard knows about it.
+2. Regenerate types (`npm run gen:types --workspace=apps/backend` + `dart run scripts/gen_dart_models.dart`).
+3. Run `npm run check:check-constraints --workspace=apps/web`. It names **every** rail that has drifted, file and declaration — the TS union, the Svelte option list, the Dart dropdown array. Update each.
 
-Dart treats these columns as raw `String` (no Dart enum to update), but the DB-level CHECK rejects invalid writes anyway. CI catches drift; runtime defends against it.
+To add a new set-shaped CHECK **column**, you must also add a `PAIRS` entry in the same change — the guard fails on an unregistered one rather than passing silently. Register every client declaration that enumerates it, or an empty `clients` list plus a `note` saying no client does (15 of the 67 are that shape: server-owned vocabularies like `jobs.kind`, and four spelled only as inline unions). Registering a column `database.types.ts` no longer has fails too, so a dropped column's phantom CHECK cannot linger. A client value the column cannot hold — or a column value a client deliberately omits — goes in that rail's `allowExtra` / `allowMissing` with a reason; the guard fails once such an exemption is stale.
+
+Dart is **not** exempt, and this section used to say it was. `preferences.dart`'s `ActivityType` and `DistanceUnit`, `challenge_progress.dart`'s `ChallengeMetric`, `route_markers.dart`'s `routeMarkerKinds`, `run_stats.dart`'s two PR-bracket maps and 23 more enumerate a CHECK-constrained set; all are registered. Rails name `apps/mobile_android` only — the byte-identical twin ([decisions § 39](decisions.md)) covers iOS, and the guard's suite pins that premise. See [decisions § 791](decisions.md).
 
 ---
 

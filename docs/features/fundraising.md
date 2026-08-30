@@ -86,6 +86,8 @@ create table donations (
 
 alter table donations add constraint donations_status_check
   check (status in ('pending', 'paid', 'refunded', 'failed', 'canceled'));
+-- Widened twice since: `partially_refunded` by 20270620_001 (decisions § 776)
+-- and `refund_failed` by 20270624000001 (decisions § 789).
 alter table donations add constraint donations_amount_positive_check
   check (amount_cents > 0 and platform_fee_cents >= 0);
 
@@ -106,7 +108,8 @@ create index donations_fundraiser_paid_idx
 
 ```
 FundraiserStatus = 'open' | 'closed'
-DonationStatus   = 'pending' | 'paid' | 'refunded' | 'failed' | 'canceled'
+DonationStatus   = 'pending' | 'paid' | 'partially_refunded' | 'refunded'
+                 | 'refund_failed' | 'failed' | 'canceled'   -- as shipped
 ```
 
 **Two codegen commands (mandatory, both outputs committed — `docs/architecture/schema_codegen.md`):**
@@ -247,6 +250,33 @@ The one arm that deliberately differs from the event ledger:
 `partially_refunded + charge.refunded(partial)` is a **self-transition** for a
 donation and `null` for an order. An order records a seat and has nothing to
 write on a second instalment; a donation records an amount and does.
+
+### A refund the bank sent back
+
+`charge.refunded` fires when a refund is **created**, not when it settles —
+including one Stripe holds `pending` because our available balance does not
+cover it. If the bank then rejects it, the money returns to us and Stripe emits
+`refund.failed` (or `refund.updated`, or the deprecated `charge.refund.updated`
+on a webhook endpoint pinned below API version `2024-10-28.acacia`; all three
+are handled, gated on the **Refund's own status**, because `refund.updated` also
+fires for a benign acquirer-reference update). Until `20270624000001` nothing
+consumed that outcome, so `refunded_cents` stated an amount that never left and
+the donation stayed off the thermometer as though the donor had been repaid.
+
+`refund_failed` is that state, and `fundraiser_totals` excludes it exactly as it
+excludes `refunded` — correct, because the money is **owed back** to the donor
+rather than raised for the charity. On such a row `refunded_cents` reads as the
+amount that came back to us and is owed out, which is what an operator settling
+it by another route needs.
+
+It is reachable only from `refunded`. A failed **partial** refund is logged for
+reconciliation and the status stands: sending a partly-refunded donation to the
+excluded `refund_failed` would drop the *whole* donation off the total including
+the part that was never refunded, and the only alternative — subtracting this
+instalment from `refunded_cents` — is arithmetic on a running total, which is
+precisely what § 769's cumulative-figure design avoided so that an at-least-once
+redelivery cannot double-apply. Understating what was raised is the smaller,
+safe lie. [Decisions § 789](../architecture/decisions.md).
 
 #### Reconciling pre-§769 refunds
 

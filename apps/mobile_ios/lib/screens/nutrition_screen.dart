@@ -8,6 +8,7 @@ import 'package:ui_kit/ui_kit.dart';
 
 import '../adaptive_width.dart';
 import '../auth_error.dart';
+import '../column_limits.dart';
 import '../diary_day.dart';
 import '../exercise_calories.dart';
 import '../exercise_day.dart';
@@ -587,49 +588,76 @@ class _NutritionScreenState extends State<NutritionScreen> {
     final today = _dayEntries;
     if (today.isEmpty) return;
     final nameController = TextEditingController();
-    final servingsController = TextEditingController(text: '1');
+    // `recipes.servings` has a floor of 1 in the column and no ceiling there,
+    // but `numeric(5,1)` has one — so an unbounded field turned a mistyped 9
+    // into a raw 22003 and a typed 0 into a 23514 (decisions § 792). The
+    // dialog refuses rather than clamping: silently rewriting a typed number
+    // is the same swallow one layer down.
+    const servingsKey = 'recipes.servings';
+    final servingsController =
+        TextEditingController(text: '${columnMin(servingsKey).toInt()}');
+    String boundText(num v) =>
+        formatFixed(v.toDouble(), v == v.roundToDouble() ? 0 : 1, activeLocaleTag);
     final result = await showDialog<({String name, double servings})>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.nutritionSaveAsRecipeTitle),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: l10n.nutritionRecipeName,
-                hintText: l10n.nutritionRecipeNamePlaceholder,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final typed = parseTypedDecimal(servingsController.text);
+          final outOfRange =
+              typed != null && !withinColumnLimit(servingsKey, typed);
+          return AlertDialog(
+            title: Text(l10n.nutritionSaveAsRecipeTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: l10n.nutritionRecipeName,
+                    hintText: l10n.nutritionRecipeNamePlaceholder,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: servingsController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: InputDecoration(
+                    labelText: l10n.nutritionRecipeServings,
+                    errorText: outOfRange
+                        ? l10n.limitsServingsOutOfRange(
+                            boundText(columnMin(servingsKey)),
+                            boundText(columnMax(servingsKey)))
+                        : null,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(l10n.nutritionRecipeServingsHint,
+                    style: Theme.of(ctx).textTheme.bodySmall),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(l10n.nutritionCancel),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: servingsController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(labelText: l10n.nutritionRecipeServings),
-            ),
-            const SizedBox(height: 8),
-            Text(l10n.nutritionRecipeServingsHint,
-                style: Theme.of(ctx).textTheme.bodySmall),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.nutritionCancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(
-              ctx,
-              (
-                name: nameController.text,
-                servings: parseTypedDecimal(servingsController.text) ?? 1,
+              TextButton(
+                onPressed: outOfRange
+                    ? null
+                    : () => Navigator.pop(
+                          ctx,
+                          (
+                            name: nameController.text,
+                            servings: typed ?? columnMin(servingsKey).toDouble(),
+                          ),
+                        ),
+                child: Text(l10n.nutritionSaveRecipe),
               ),
-            ),
-            child: Text(l10n.nutritionSaveRecipe),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
     FocusManager.instance.primaryFocus?.unfocus();

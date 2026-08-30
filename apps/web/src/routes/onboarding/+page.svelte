@@ -8,6 +8,7 @@
 		parseWeightToKg,
 		roundWeight,
 		isBodyWeightInRangeKg,
+		weightBoundsIn,
 		type WeightUnit,
 	} from '$lib/format/weight';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -68,8 +69,9 @@
 	// parsing, exactly like preferred_unit for distance.
 	let bodyWeight = $state('');
 	const weightUnit = $derived<WeightUnit>(preferredUnit === 'mi' ? 'lbs' : 'kg');
-	const weightMin = $derived(weightUnit === 'lbs' ? 44 : 20);
-	const weightMax = $derived(weightUnit === 'lbs' ? 550 : 250);
+	const weightBounds = $derived(weightBoundsIn('body_metrics.weight_kg', weightUnit));
+	const weightMin = $derived(weightBounds.min);
+	const weightMax = $derived(weightBounds.max);
 	// The `min`/`max` input attributes above are cosmetic — the wizard
 	// advances via onclick handlers, not a native form submit, so the
 	// browser's constraint validation never runs (issue #677). This is the
@@ -451,7 +453,7 @@
 					/>
 					{#if weightOutOfRange}
 						<span class="field-error" role="alert">
-							{m('onboarding.weightOutOfRange', { min: weightMin, max: weightMax, unit: weightUnit })}
+							{m('limits.weightOutOfRange', { min: weightMin, max: weightMax, unit: weightUnit })}
 						</span>
 					{/if}
 				</label>

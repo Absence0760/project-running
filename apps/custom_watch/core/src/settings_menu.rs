@@ -55,8 +55,8 @@ pub enum MenuItem {
     GnssMode,
     /// The §284 hide-empty-pages filter, watch-editable: right = ON, left =
     /// OFF. The one curation lever that makes sense on the wrist (the full
-    /// per-page mask stays a phone surface — 33 checkboxes do not belong on
-    /// five buttons).
+    /// per-page mask stays a phone surface — one checkbox per page does not
+    /// belong on five buttons).
     HideEmpty,
     /// The activity-profile ladder (Run → Trail → Ultra → Hike), edited
     /// directionally like the mode ladder: right toward the longer / more-

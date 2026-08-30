@@ -270,12 +270,16 @@ export type RecapPeriodKind = 'year' | 'month';
 // constraint (migration 20261229_001) — keep these unions in lockstep
 // (check_constraint_unions.mjs PAIRS).
 // event_orders.status — the order ledger lifecycle, written only by the
-// stripe-events webhook (service role).
+// stripe-events webhook (service role). `refund_failed` (20270624000001) is a
+// `refunded` order whose refund the bank reversed: the seat was released when
+// the refund was created and the money never reached the buyer, so it backs no
+// seat and is not a live payment either. decisions § 789.
 export type OrderStatus =
 	| 'pending'
 	| 'paid'
 	| 'refunded'
 	| 'partially_refunded'
+	| 'refund_failed'
 	| 'failed'
 	| 'canceled';
 // event_pricing.refund_policy — buyer self-cancel terms (honoured in P2).
@@ -293,11 +297,15 @@ export type FundraiserStatus = 'open' | 'closed';
 // (20270620_001) is the state a donation is in when part of the charge came
 // back and the rest did not; `donations.refunded_cents` carries how much, and
 // `fundraiser_totals` sums the difference.
+// `refund_failed` (20270624000001) is the same reversal on the donation
+// ledger; fundraiser_totals excludes it exactly as it excludes `refunded`,
+// because the money is owed back to the donor rather than raised.
 export type DonationStatus =
 	| 'pending'
 	| 'paid'
 	| 'partially_refunded'
 	| 'refunded'
+	| 'refund_failed'
 	| 'failed'
 	| 'canceled';
 // session_plan_items.kind — a yoga/pilates movement is a timed hold, a counted

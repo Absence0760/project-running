@@ -3996,5 +3996,8 @@
   "challengesErrGoal": "目標：正の数を入力してください",
   "challengesGoalPreview": "参加者には {value} と表示されます",
   "challengesGoalStreakCeiling": "この期間に収まるアクティブな日数は最大 {n} 日です。",
-  "challengesErrWindow": "終了は開始より後にしてください。"
+  "challengesErrWindow": "終了は開始より後にしてください。",
+  "limitsWeightOutOfRange": "{min}〜{max}{unit}の範囲で体重を入力してください。",
+  "limitsHeightOutOfRange": "{min}〜{max}cmの範囲で身長を入力してください。",
+  "limitsServingsOutOfRange": "{min}〜{max}の範囲で分量を入力してください。"
 }

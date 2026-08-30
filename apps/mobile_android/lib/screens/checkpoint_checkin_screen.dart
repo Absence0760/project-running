@@ -5,10 +5,13 @@ import 'package:ui_kit/ui_kit.dart' show ActivityLoaderKind, FullBodyLoader;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import '../auth_error.dart';
+import '../column_limits.dart';
 import '../env_flag.dart';
 import '../local_crossings_store.dart';
 import '../l10n/gen/app_localizations.dart';
-import '../typed_decimal.dart';
+import '../l10n/locale_support.dart' show activeLocaleTag;
+import '../l10n/number_format.dart' show formatFixed;
+import '../preferences.dart' show WeightFormat, activeWeightUnit;
 import '../widgets/top_banner.dart';
 
 /// P3 weigh-in fields are Art 9 health data — gated fail-closed behind this
@@ -393,14 +396,49 @@ class _WeighInSheet extends StatefulWidget {
 }
 
 class _WeighInSheetState extends State<_WeighInSheet> {
+  static const _weightKey = 'checkpoint_crossings.body_weight_kg';
+
   final TextEditingController _weight = TextEditingController();
   bool _consent = false;
   bool _medicalHold = false;
 
   @override
+  void initState() {
+    super.initState();
+    // `body_weight_kg` is CHECK-bounded 20..400 kg and this field had no
+    // bound at all, so a mis-keyed weigh-in was a raw 23514 at an aid station
+    // with no signal (decisions § 792).
+    _weight.addListener(_onChanged);
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _weight.removeListener(_onChanged);
     _weight.dispose();
     super.dispose();
+  }
+
+  /// The typed weight in canonical kg. The field is entered in the volunteer's
+  /// own weight unit, so the bound has to be converted for the message too.
+  double? get _typedKg =>
+      WeightFormat.parseToKg(_weight.text, activeWeightUnit);
+
+  bool get _outOfRange {
+    final kg = _typedKg;
+    return kg != null && !withinColumnLimit(_weightKey, kg);
+  }
+
+  static String _bound(num v) =>
+      formatFixed(v.toDouble(), v == v.roundToDouble() ? 0 : 1, activeLocaleTag);
+
+  String _rangeMessage(AppLocalizations l10n) {
+    final b = WeightFormat.boundsIn(_weightKey, activeWeightUnit);
+    return l10n.limitsWeightOutOfRange(
+        _bound(b.min), _bound(b.max), WeightFormat.label(activeWeightUnit));
   }
 
   @override
@@ -438,6 +476,8 @@ class _WeighInSheetState extends State<_WeighInSheet> {
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: l10n.checkpointWeighInWeightKg,
+                suffixText: WeightFormat.label(activeWeightUnit),
+                errorText: _outOfRange ? _rangeMessage(l10n) : null,
               ),
             ),
             const SizedBox(height: 8),
@@ -460,15 +500,15 @@ class _WeighInSheetState extends State<_WeighInSheet> {
               ),
               const SizedBox(width: 8),
               FilledButton(
-                onPressed: () {
-                  Navigator.of(context).pop(_WeighInResult(
-                    consent: _consent,
-                    bodyWeightKg: _consent
-                        ? parseTypedDecimal(_weight.text)
-                        : null,
-                    medicalHold: _consent ? _medicalHold : null,
-                  ));
-                },
+                onPressed: _outOfRange
+                    ? null
+                    : () {
+                        Navigator.of(context).pop(_WeighInResult(
+                          consent: _consent,
+                          bodyWeightKg: _consent ? _typedKg : null,
+                          medicalHold: _consent ? _medicalHold : null,
+                        ));
+                      },
                 child: Text(l10n.checkpointWeighInSave),
               ),
             ],

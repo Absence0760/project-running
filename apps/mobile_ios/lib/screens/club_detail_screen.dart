@@ -10,6 +10,7 @@ import 'package:core_models/core_models.dart' hide Route;
 
 import 'package:api_client/api_client.dart';
 
+import '../column_limits.dart';
 import '../auth_error.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -694,7 +695,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           TextField(
             controller: _postCtrl,
             maxLines: 3,
-            maxLength: 1200,
+            maxLength: columnLength('club_posts.body'),
             decoration: InputDecoration(
               border: InputBorder.none,
               hintText: AppLocalizations.of(context).clubDetailShareUpdateHint,

@@ -13215,4 +13215,19 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get challengesErrWindow => '終了は開始より後にしてください。';
+
+  @override
+  String limitsWeightOutOfRange(String min, String max, String unit) {
+    return '$min〜$max$unitの範囲で体重を入力してください。';
+  }
+
+  @override
+  String limitsHeightOutOfRange(String min, String max) {
+    return '$min〜${max}cmの範囲で身長を入力してください。';
+  }
+
+  @override
+  String limitsServingsOutOfRange(String min, String max) {
+    return '$min〜$maxの範囲で分量を入力してください。';
+  }
 }

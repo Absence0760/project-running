@@ -3996,5 +3996,8 @@
   "challengesErrGoal": "Objectif : saisissez un nombre positif",
   "challengesGoalPreview": "Les participants voient {value}",
   "challengesGoalStreakCeiling": "Cette période contient au maximum {n} jours actifs.",
-  "challengesErrWindow": "La fin doit être postérieure au début."
+  "challengesErrWindow": "La fin doit être postérieure au début.",
+  "limitsWeightOutOfRange": "Indique un poids entre {min} et {max} {unit}.",
+  "limitsHeightOutOfRange": "Indique une taille entre {min} et {max} cm.",
+  "limitsServingsOutOfRange": "Indique un nombre de portions entre {min} et {max}."
 }

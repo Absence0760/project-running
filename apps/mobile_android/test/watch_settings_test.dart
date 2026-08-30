@@ -31,6 +31,60 @@ const _goldenHex =
     '2800'
     '1c26d5df';
 
+/// The single-field goldens, one per presence bit that arrived with its own
+/// version. Each is frozen byte-for-byte in the firmware's matching
+/// `golden_vector_*` test, and `scripts/check_watch_wire_vectors.mjs` reads
+/// both rails and fails when they part company — the comparison the "update
+/// BOTH" comments used to only ask for.
+///
+/// Named rather than inlined into the expectations below because a vector a
+/// guard cannot address is a vector nothing compares.
+
+/// Pairs with `golden_vector_tz_only`. -570 (Marquesas, -9:30) pins the
+/// two's-complement i16.
+const _goldenTzHex = '53455431' '08' '00' '01' '00' 'c6fd' 'ce5b97f0';
+
+/// Pairs with `golden_vector_v4_arms_only` — the only vector that exercises
+/// the five v4 fields without the rest of the frame.
+const _goldenV4ArmsHex = '53455431'
+    '08'
+    '00'
+    '3e'
+    '00'
+    'e8030000'
+    '08070000'
+    '2c01a401'
+    'd3a4000038310000'
+    '00'
+    '656173792d333000000000000000000000000000000000'
+    '00'
+    '96d47178';
+
+/// Pairs with `golden_vector_resting_hr_only`.
+const _goldenRestingHrHex = '53455431' '08' '00' '40' '00' '3000' '0cacd552';
+
+/// Pairs with `golden_vector_ice_only` — the vector that pins the
+/// field-by-field NUL padding a shorter name must produce.
+const _goldenIceHex = '53455431'
+    '08'
+    '00'
+    '80'
+    '00'
+    '414c45580000000000000000000000000000000000'
+    '4f204e4547000000'
+    '415354484d41000000000000000000000000000000'
+    '4a414d494500000000000000000000000000000000'
+    '353535203031333400000000000000000000000000'
+    '831e0d7c';
+
+/// Pairs with `golden_vector_auto_lap_only`. The rung is `min10` (index 6)
+/// because that is what the firmware vector encodes; the other rungs are
+/// exercised beside it without being part of the pair.
+const _goldenAutoLapHex = '53455431' '08' '00' '00' '01' '06' '8d631f14';
+
+/// Pairs with `golden_vector_storm_only`. 4.0 hPa travels as 40 tenths.
+const _goldenStormHex = '53455431' '08' '00' '00' '02' '2800' '06b85e48';
+
 Uint8List _hex(String s) {
   final out = Uint8List(s.length ~/ 2);
   for (var i = 0; i < out.length; i++) {
@@ -199,10 +253,7 @@ void main() {
       // -570 (Marquesas, -9:30) pins the two's-complement i16 encoding; the
       // same vector is frozen in the Rust `golden_vector_tz_only` test.
       const settings = WatchSettings(tzOffsetMin: -570);
-      expect(
-        settings.encode(),
-        _hex('53455431' '08' '00' '01' '00' 'c6fd' 'ce5b97f0'),
-      );
+      expect(settings.encode(), _hex(_goldenTzHex));
     });
 
     test('a positive tz offset encodes as i16 LE after every flags field', () {
@@ -347,20 +398,14 @@ void main() {
         ),
         guidedRunId: 'easy-30',
       );
-      expect(
-        armed.encode(),
-        _hex('53455431' '08' '00' '3e' '00' 'e8030000' '08070000' '2c01a401' 'd3a4000038310000' '00' '656173792d333000000000000000000000000000000000' '00' '96d47178'),
-      );
+      expect(armed.encode(), _hex(_goldenV4ArmsHex));
     });
 
     test('restingHr sets flags2 bit6 and matches the firmware golden', () {
       // Frozen on both sides as the `golden_vector_resting_hr_only` pair — the
       // only vector that exercises the v5 field alone.
       const settings = WatchSettings(restingHr: 48);
-      expect(
-        settings.encode(),
-        _hex('53455431' '08' '00' '40' '00' '3000' '0cacd552'),
-      );
+      expect(settings.encode(), _hex(_goldenRestingHrHex));
     });
 
     test('restingHr lays out after the flags fields and after guidedRunId', () {
@@ -391,18 +436,7 @@ void main() {
           phone: '555 0134',
         ),
       );
-      expect(
-        settings.encode(),
-        _hex(
-          '53455431' '08' '00' '80' '00'
-          '414c45580000000000000000000000000000000000'
-          '4f204e4547000000'
-          '415354484d41000000000000000000000000000000'
-          '4a414d494500000000000000000000000000000000'
-          '353535203031333400000000000000000000000000'
-          '831e0d7c',
-        ),
-      );
+      expect(settings.encode(), _hex(_goldenIceHex));
     });
 
     test('an all-blank card is a real field that CLEARS the watch card', () {
@@ -459,6 +493,12 @@ void main() {
         min30.encode(),
         _hex('53455431' '08' '00' '00' '01' '07' '1b531863'),
       );
+      // The rung the firmware's `golden_vector_auto_lap_only` pins. v7 and v8
+      // shipped without a single-field vector on this rail, so the two flags3
+      // fields were pinned here only inside the all-fields golden, where a
+      // layout error can hide behind its neighbours' offsets.
+      const min10 = WatchSettings(autoLap: WatchAutoLap.min10);
+      expect(min10.encode(), _hex(_goldenAutoLapHex));
     });
 
     test('the auto-lap rung index is the wire contract, in firmware order', () {
@@ -482,10 +522,7 @@ void main() {
 
     test('stormAlertHpa sets flags3 bit1, travels as tenths, and 0 disarms', () {
       const armed = WatchSettings(stormAlertHpa: 4.0);
-      expect(
-        armed.encode(),
-        _hex('53455431' '08' '00' '00' '02' '2800' '06b85e48'),
-      );
+      expect(armed.encode(), _hex(_goldenStormHex));
       const fractional = WatchSettings(stormAlertHpa: 2.5);
       expect(
         fractional.encode(),

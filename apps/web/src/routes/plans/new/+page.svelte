@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { lengthLimit } from '$lib/core/column_limits';
 	import { formatISO, todayISO } from '$lib/training/training';
 	import { racePlanPreset } from '$lib/training/race_plan_preset';
 	import { goto, afterNavigate } from '$app/navigation';
@@ -82,10 +83,12 @@
 		: null;
 	// A refusal still renders the wizard on its own defaults — we just say
 	// why the dates aren't the race's, rather than silently ignoring the link.
-	// The name field is `maxlength="80"`; a programmatic bind bypasses that,
-	// so clamp what the URL hands us to the same budget.
+	// The name field is capped; a programmatic bind bypasses that, so clamp
+	// what the URL hands us to the same budget.
 	const initialName =
-		racePreset?.ok && raceNameParam?.trim() ? raceNameParam.trim().slice(0, 80) : undefined;
+		racePreset?.ok && raceNameParam?.trim()
+			? raceNameParam.trim().slice(0, lengthLimit('training_plans.name'))
+			: undefined;
 
 	const raceRefusalKey: MessageKey | null =
 		!racePreset || racePreset.ok

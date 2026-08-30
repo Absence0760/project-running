@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
+	import { valueLimit } from '$lib/core/column_limits';
 	import {
 		fetchFoodLogWithError,
 		fetchLatestWeightKg,
@@ -106,7 +107,11 @@
 	let recipesError = $state(false);
 	let showSaveRecipe = $state(false);
 	let recipeName = $state('');
-	let recipeServings = $state(1);
+	// `recipes.servings` has a floor of 1 in the column and no ceiling there —
+	// but `numeric(5,1)` has one, so an unbounded field turns a mistyped 9 into
+	// a raw 22003 rather than a 23514 (decisions § 792).
+	const servingsBounds = valueLimit('recipes.servings');
+	let recipeServings = $state(servingsBounds.min);
 	let savingRecipe = $state(false);
 	let loggingRecipeId = $state<string | null>(null);
 	let confirmDeleteRecipe = $state<RecipeSummary | null>(null);
@@ -433,7 +438,10 @@
 			const draft = recipeFromEntries(recipeName, entries);
 			await createRecipe({
 				name: draft.name,
-				servings: recipeServings >= 1 ? recipeServings : 1,
+				servings: Math.min(
+					Math.max(recipeServings, servingsBounds.min),
+					servingsBounds.max,
+				),
 				meal_slot: draft.mealSlot,
 				ingredients: draft.ingredients.map((it) => ({
 					position: it.position,
@@ -449,7 +457,7 @@
 			showToast(m('nutrition.recipeSaved'), 'success');
 			showSaveRecipe = false;
 			recipeName = '';
-			recipeServings = 1;
+			recipeServings = servingsBounds.min;
 			await loadRecipes();
 		} catch (e) {
 			showToast(m('nutrition.recipeSaveFailed', { error: (e as Error).message }), 'error');
@@ -934,7 +942,7 @@
 							type="button"
 							onclick={() => {
 								recipeName = '';
-								recipeServings = 1;
+								recipeServings = servingsBounds.min;
 								showSaveRecipe = true;
 							}}
 							data-testid="save-as-recipe"
@@ -1125,7 +1133,8 @@
 			<span class="section-label">{m('nutrition.recipeServings')}</span>
 			<input
 				type="number"
-				min="1"
+				min={servingsBounds.min}
+				max={servingsBounds.max}
 				step="0.5"
 				bind:value={recipeServings}
 				data-testid="recipe-servings"

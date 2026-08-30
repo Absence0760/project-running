@@ -1859,7 +1859,11 @@ export async function fetchPersonalRecords() {
 
 	if (!data || data.length === 0) return [];
 
-	const labels: Record<string, string> = {
+	// Named for the column, not for what they hold: both are registered
+	// against `personal_records.distance` in check_constraint_unions.mjs, and
+	// that registry keys on the declaration name inside this ten-thousand-line
+	// file. `labels` and `order` are not unique by construction.
+	const PR_BRACKET_LABELS: Record<string, string> = {
 		'1_mile': 'Mile',
 		'5k': '5k',
 		'8k': '8k',
@@ -1868,7 +1872,7 @@ export async function fetchPersonalRecords() {
 		half_marathon: 'Half Marathon',
 		marathon: 'Marathon',
 	};
-	const order: Record<string, number> = {
+	const PR_BRACKET_ORDER: Record<string, number> = {
 		'1_mile': 0,
 		'5k': 1,
 		'8k': 2,
@@ -1880,10 +1884,10 @@ export async function fetchPersonalRecords() {
 
 	return data
 		.slice()
-		.sort((a, b) => (order[a.distance] ?? 99) - (order[b.distance] ?? 99))
+		.sort((a, b) => (PR_BRACKET_ORDER[a.distance] ?? 99) - (PR_BRACKET_ORDER[b.distance] ?? 99))
 		.map((r) => ({
 			key: r.distance as string,
-			distance: labels[r.distance] ?? r.distance,
+			distance: PR_BRACKET_LABELS[r.distance] ?? r.distance,
 			time_s: r.best_time_s,
 			date: r.achieved_at.slice(0, 10),
 		}));

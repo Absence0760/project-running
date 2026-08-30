@@ -13863,6 +13863,21 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get challengesErrWindow => 'O fim deve ser depois do início.';
+
+  @override
+  String limitsWeightOutOfRange(String min, String max, String unit) {
+    return 'Introduza um peso entre $min e $max $unit.';
+  }
+
+  @override
+  String limitsHeightOutOfRange(String min, String max) {
+    return 'Introduza uma altura entre $min e $max cm.';
+  }
+
+  @override
+  String limitsServingsOutOfRange(String min, String max) {
+    return 'Introduza um número de doses entre $min e $max.';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -27715,4 +27730,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get challengesErrWindow => 'O fim deve ser depois do início.';
+
+  @override
+  String limitsWeightOutOfRange(String min, String max, String unit) {
+    return 'Informe um peso entre $min e $max $unit.';
+  }
+
+  @override
+  String limitsHeightOutOfRange(String min, String max) {
+    return 'Informe uma altura entre $min e $max cm.';
+  }
+
+  @override
+  String limitsServingsOutOfRange(String min, String max) {
+    return 'Informe um número de porções entre $min e $max.';
+  }
 }

@@ -61,6 +61,18 @@ interface ChargeSource {
 }
 type ChargeSourceIsStripes = AssertAssignable<Stripe.Charge, ChargeSource>;
 
+/// Exactly the Refund fields the refund-lifecycle handler reads. `status` is
+/// declared `string | null` by Stripe itself — not a union — so unlike
+/// `payment_status` there is no compile-time check available here and the
+/// accepted set has to be spelled out and enforced at runtime.
+interface RefundSource {
+  id: string;
+  payment_intent: string | { id: string } | null;
+  status: string | null;
+  failure_reason?: string;
+}
+type RefundSourceIsStripes = AssertAssignable<Stripe.Refund, RefundSource>;
+
 interface ConnectAccountSource {
   id: string;
   charges_enabled: boolean;
@@ -81,8 +93,45 @@ export const STRIPE_EVENT = {
   checkoutAsyncFailed: 'checkout.session.async_payment_failed',
   checkoutExpired: 'checkout.session.expired',
   chargeRefunded: 'charge.refunded',
+  refundFailed: 'refund.failed',
+  refundUpdated: 'refund.updated',
+  chargeRefundUpdated: 'charge.refund.updated',
   accountUpdated: 'account.updated',
 } as const satisfies Record<string, Stripe.Event.Type>;
+
+/// The three event types that can carry the news that a refund did not
+/// deliver. All three put a `Stripe.Refund` in `data.object`, which is why one
+/// handler serves them, and none of them MEANS a failure on its own — that is
+/// `refundReversed`'s job, keyed on the refund's own status.
+///
+///   refund.failed          — what Stripe's own "Handle failed refunds" guide
+///                            says it notifies you with. Available on all
+///                            refunds (including those with a charge) from API
+///                            version 2024-10-28.acacia; the pinned SDK is
+///                            stripe@17.5.0, past the 17.3.0 that version
+///                            shipped with.
+///   refund.updated         — the non-deprecated general refund-lifecycle
+///                            event. Carries the `canceled` transition, which
+///                            Stripe documents as "a type of refund failure",
+///                            and also every benign update (an ARN reference,
+///                            metadata) — hence the status gate.
+///   charge.refund.updated  — DEPRECATED in Stripe's own refund-events table
+///                            ("Listen to refund.updated ... instead"), and
+///                            handled only because a webhook endpoint still
+///                            pinned to a pre-2024-10-28 API version receives
+///                            this one and not the other two. Which version an
+///                            endpoint is on is dashboard configuration, not
+///                            something this repo can read, so both eras are
+///                            handled rather than assumed. decisions § 789.
+export const REFUND_LIFECYCLE_EVENTS: readonly string[] = [
+  STRIPE_EVENT.refundFailed,
+  STRIPE_EVENT.refundUpdated,
+  STRIPE_EVENT.chargeRefundUpdated,
+];
+
+export function isRefundLifecycleEvent(eventType: string): boolean {
+  return REFUND_LIFECYCLE_EVENTS.includes(eventType);
+}
 
 /// Metadata as it can actually be read. Stripe declares it
 /// `{ [name: string]: string }`, and TypeScript hands back `string` for a
@@ -101,6 +150,13 @@ export interface Charge {
   refunded: boolean | null;
   amountCents: number | null;
   amountRefundedCents: number | null;
+}
+
+export interface Refund {
+  id: string | null;
+  paymentIntentId: string | null;
+  status: string | null;
+  failureReason: string | null;
 }
 
 export interface ConnectAccount {
@@ -164,6 +220,41 @@ export function readCharge(object: Record<string, unknown>): Charge {
       ? object.amount_refunded
       : null,
   };
+}
+
+/// Narrow one refund-lifecycle `data.object` from the wire. Same rule as
+/// `readCheckoutSession`: every field is checked, and a value that does not
+/// check reads as absent. Absent here means "this body does not say the refund
+/// failed", which is the direction that changes nothing.
+export function readRefund(object: Record<string, unknown>): Refund {
+  return {
+    id: typeof object.id === 'string' ? object.id : null,
+    paymentIntentId: referenceId(object.payment_intent),
+    status: typeof object.status === 'string' ? object.status : null,
+    failureReason: typeof object.failure_reason === 'string' ? object.failure_reason : null,
+  };
+}
+
+/// The refund statuses that mean the money did NOT reach the payer and is back
+/// with us. `canceled` is in the set because Stripe puts it there: "As
+/// cancellations are a type of refund failure, the attributes `failure_reason`
+/// and `failure_balance_transaction` are included on the Refund."
+///
+/// `requires_action` is deliberately absent even though it is one of the ways
+/// a bank hands money back: Stripe re-emails the customer for corrected
+/// details and the refund is still in flight. So is `pending`. Calling either
+/// a failure would move a ledger that is about to settle on its own.
+const REVERSED_REFUND_STATUSES: readonly string[] = ['failed', 'canceled'];
+
+/// Whether a refund-lifecycle event says the refund returned no money.
+///
+/// Fails closed on anything else, INCLUDING a status this build has never
+/// heard of. `refund.updated` fires for benign changes far more often than for
+/// failures, so a handler that acted on the event type alone would walk a
+/// correctly-refunded order back the moment Stripe attached an acquirer
+/// reference number to it.
+export function refundReversed(refund: Refund): boolean {
+  return refund.status !== null && REVERSED_REFUND_STATUSES.includes(refund.status);
 }
 
 export function readConnectAccount(object: Record<string, unknown>): ConnectAccount {
@@ -287,6 +378,7 @@ export type OrderStatus =
   | 'paid'
   | 'refunded'
   | 'partially_refunded'
+  | 'refund_failed'
   | 'failed'
   | 'canceled';
 
@@ -296,12 +388,14 @@ export type OrderStatus =
 /// `pending`) and gets `null` — so it cannot re-grant a slot or
 /// double-count revenue even if the webhook_events dedupe were bypassed.
 ///
-///   pending  + checkout.session.completed              -> paid
-///   pending  + checkout.session.async_payment_succeeded -> paid
-///   pending  + checkout.session.expired                 -> canceled
-///   pending  + checkout.session.async_payment_failed    -> failed
-///   paid     + charge.refunded                          -> refunded
-///   everything else                                     -> null
+///   pending            + checkout.session.completed              -> paid
+///   pending            + checkout.session.async_payment_succeeded -> paid
+///   pending            + checkout.session.expired                 -> canceled
+///   pending            + checkout.session.async_payment_failed    -> failed
+///   paid               + charge.refunded                          -> refunded
+///   refunded           + refund.failed                    -> refund_failed
+///   refund_failed      + charge.refunded (full)                   -> refunded
+///   everything else                                               -> null
 ///
 /// The two async arms are the delayed-notification half of Checkout: the
 /// money behind a completed Session has not necessarily arrived, so a session
@@ -318,6 +412,22 @@ export type OrderStatus =
 /// the sole, idempotent status writer — flips the order on charge.refunded
 /// and releases the seat. A replayed charge.refunded finds the order
 /// already `refunded` and gets `null`, so it cannot double-release a seat.
+///
+/// `refund_failed` is the bank rejecting a refund we already acted on
+/// (decisions § 789). `charge.refunded` fires when a refund is CREATED, so on a
+/// delayed rail the seat is released days before the money's fate is known; if
+/// the refund then fails, `refunded` is a claim about money that is provably
+/// false. The arm is reachable ONLY from `refunded`, deliberately:
+/// `partially_refunded` is a seat-BEARING status on both
+/// `enforce_paid_order_for_priced_event` and the buyer-cancel RLS policy
+/// (20270522_001), so moving a partly-refunded order out of it would take the
+/// roster entry and the cancel affordance away from a buyer who is still
+/// attending and lost nothing. That case is logged for reconciliation instead.
+///
+/// `refund.failed` is the CANONICAL key for "a refund returned no money": the
+/// dispatcher normalises the other two refund-lifecycle events onto it once
+/// `refundReversed` has read the refund's own status, because neither
+/// `refund.updated` nor `charge.refund.updated` means a failure on its own.
 export function orderStatusTransition(
   currentStatus: string,
   eventType: string,
@@ -342,6 +452,20 @@ export function orderStatusTransition(
   // able to release the seat. Only a FULL refund moves it on — a second partial
   // returns null so the seat is not released by an instalment.
   if (currentStatus === 'partially_refunded' && eventType === STRIPE_EVENT.chargeRefunded) {
+    return refund === 'full' ? 'refunded' : null;
+  }
+  // The bank reversed the refund: the money is ours again, and the seat this
+  // order held is already gone. Reachable ONLY from `refunded` — see the note
+  // above the function for why a failed PARTIAL refund transitions on nothing.
+  if (currentStatus === 'refunded' && eventType === STRIPE_EVENT.refundFailed) {
+    return 'refund_failed';
+  }
+  // Someone paid the buyer back another way and it landed. `refund_failed` is
+  // terminal against everything except the refund actually succeeding, or the
+  // ledger would be stuck denying a refund that has now happened. A PARTIAL
+  // refund on this order returns null instead of resurrecting the seat-bearing
+  // `partially_refunded`: there is no attendee row left to bear.
+  if (currentStatus === 'refund_failed' && eventType === STRIPE_EVENT.chargeRefunded) {
     return refund === 'full' ? 'refunded' : null;
   }
   return null;
@@ -397,6 +521,7 @@ export type DonationStatus =
   | 'paid'
   | 'partially_refunded'
   | 'refunded'
+  | 'refund_failed'
   | 'failed'
   | 'canceled';
 
@@ -414,6 +539,8 @@ export type DonationStatus =
 ///   paid                + charge.refunded (full)     -> refunded
 ///   partially_refunded  + charge.refunded (partial)  -> partially_refunded
 ///   partially_refunded  + charge.refunded (full)     -> refunded
+///   refunded            + refund.failed              -> refund_failed
+///   refund_failed       + charge.refunded (full)     -> refunded
 ///   everything else                                  -> null
 ///
 /// The last-but-one arm is a SELF-transition, and it is the one place this
@@ -430,6 +557,19 @@ export type DonationStatus =
 /// from the thermometer — a 5 USD goodwill refund on a 500 USD donation erased
 /// 500 USD of it. That was the lesser of two lies, not an answer; the ledger
 /// can now state the real one. decisions § 769, § 776.
+///
+/// `refund_failed` mirrors the order ledger and is reachable only from
+/// `refunded` for a second reason of its own: `fundraiser_totals` sums
+/// `amount_cents - refunded_cents` over ('paid', 'partially_refunded'), so a
+/// `refund_failed` row drops out of the thermometer exactly as `refunded`
+/// does — correct, because the money is owed back to the donor rather than
+/// raised for the charity. Moving a `partially_refunded` donation there
+/// instead would remove the WHOLE donation from the total including the part
+/// that was never refunded, which is a larger error than the one it fixes; and
+/// the only alternative — subtracting the failed instalment from
+/// `refunded_cents` — is arithmetic on a running total, which is precisely
+/// what § 769 avoided so that an at-least-once redelivery cannot double-apply.
+/// decisions § 789.
 export function donationStatusTransition(
   currentStatus: string,
   eventType: string,
@@ -446,9 +586,15 @@ export function donationStatusTransition(
     if (eventType === STRIPE_EVENT.checkoutAsyncFailed) return 'failed';
     return null;
   }
+  if (currentStatus === 'refunded' && eventType === STRIPE_EVENT.refundFailed) {
+    return 'refund_failed';
+  }
   if (eventType !== STRIPE_EVENT.chargeRefunded) return null;
   if (currentStatus === 'paid' || currentStatus === 'partially_refunded') {
     return refund === 'full' ? 'refunded' : 'partially_refunded';
+  }
+  if (currentStatus === 'refund_failed') {
+    return refund === 'full' ? 'refunded' : null;
   }
   return null;
 }

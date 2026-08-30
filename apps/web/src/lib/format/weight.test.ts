@@ -18,6 +18,7 @@ import {
 	isBodyWeightInRangeKg,
 	BODY_WEIGHT_MIN_KG,
 	BODY_WEIGHT_MAX_KG,
+	weightBoundsIn,
 } from './weight.js';
 
 test('parseWeightUnit: only "lbs" maps to lbs, everything else to kg', () => {
@@ -118,4 +119,24 @@ test('isBodyWeightInRangeKg + parseWeightToKg: the onboarding issue #677 repro â
 	assert.ok(kgFromKg != null && !isBodyWeightInRangeKg(kgFromKg));
 	const kgFromLbs = parseWeightToKg('9999', 'lbs');
 	assert.ok(kgFromLbs != null && !isBodyWeightInRangeKg(kgFromLbs));
+});
+
+test('weightBoundsIn: kg is the stored bound unchanged', () => {
+	assert.deepEqual(weightBoundsIn('body_metrics.weight_kg', 'kg'), {
+		min: BODY_WEIGHT_MIN_KG,
+		max: BODY_WEIGHT_MAX_KG,
+	});
+});
+
+test('weightBoundsIn: the lbs range converts back INSIDE the kg range', () => {
+	// The whole point of rounding the floor up and the ceiling down: every
+	// value the displayed range admits must survive the real kg gate, or the
+	// field advertises a bound its own validator refuses.
+	const { min, max } = weightBoundsIn('body_metrics.weight_kg', 'lbs');
+	assert.ok(isBodyWeightInRangeKg(parseWeightToKg(String(min), 'lbs') as number));
+	assert.ok(isBodyWeightInRangeKg(parseWeightToKg(String(max), 'lbs') as number));
+	// Nearest-rounding would have produced 44.1 / 551.1 too, but the failure
+	// this pins is the floor: 44.0 lb is 19.96 kg, which the gate refuses.
+	assert.ok(!isBodyWeightInRangeKg(parseWeightToKg('44', 'lbs') as number));
+	assert.ok(min > 44);
 });

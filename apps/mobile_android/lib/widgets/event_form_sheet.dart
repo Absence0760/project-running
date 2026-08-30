@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../column_limits.dart';
 import '../auth_error.dart';
 import '../event_category.dart';
 import '../event_gym_template.dart';
@@ -292,7 +293,7 @@ class _EventFormState extends State<_EventForm> {
             TextField(
               controller: _description,
               maxLines: 3,
-              maxLength: 1000,
+              maxLength: columnLength('events.description'),
               decoration: InputDecoration(
                 labelText: l10n.eventFormDescriptionLabel,
               ),

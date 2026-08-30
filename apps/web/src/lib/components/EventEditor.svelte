@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, untrack } from 'svelte';
+	import { lengthLimit } from '$lib/core/column_limits';
 	import { formatISO } from '$lib/training/training';
 	import {
 		fetchRoutes,
@@ -459,7 +460,7 @@
 		<textarea
 			bind:value={description}
 			rows="3"
-			maxlength="1000"
+			maxlength={lengthLimit('events.description')}
 			placeholder={m('eventEditor.detailsPlaceholder')}
 		></textarea>
 	</label>

@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../auth_error.dart';
+import '../column_limits.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart' show activeLocaleTag;
+import '../l10n/number_format.dart' show formatFixed;
 import '../nutrition_targets.dart' show activityLevels, goalKcalDelta;
 import '../preferences.dart';
 import '../settings_sync.dart';
@@ -58,6 +61,9 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
   final _heightCtl = TextEditingController();
   final _weightCtl = TextEditingController();
 
+  static const _weightKey = 'body_metrics.weight_kg';
+  static const _heightKey = 'user_profiles.height_cm';
+
   bool _loading = true;
   bool _loadFailed = false;
   bool _saving = false;
@@ -73,11 +79,41 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
   @override
   void initState() {
     super.initState();
+    // Both columns are CHECK-bounded (`weight_kg > 0 and <= 500`,
+    // `height_cm > 0 and <= 300`), and this screen guarded only `> 0` — so a
+    // typed 600 kg reached the insert as a raw 23514 naming a constraint and
+    // no field (decisions § 792). Re-render on every keystroke so the error
+    // appears under the field the moment it goes out of range, the same
+    // moment the web card disables its Save.
+    _heightCtl.addListener(_onFieldChanged);
+    _weightCtl.addListener(_onFieldChanged);
     _load();
+  }
+
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// The typed height, or null when the field is empty. Out-of-range values
+  /// are returned rather than dropped — [_heightError] is what refuses them,
+  /// so the runner is told rather than silently saved without a height.
+  double? get _typedHeight => parseTypedDecimal(_heightCtl.text);
+  double? get _typedWeightKg => WeightFormat.parseToKg(_weightCtl.text, _unit);
+
+  bool get _heightError {
+    final h = _typedHeight;
+    return h != null && !withinColumnLimit(_heightKey, h);
+  }
+
+  bool get _weightError {
+    final w = _typedWeightKg;
+    return w != null && !withinColumnLimit(_weightKey, w);
   }
 
   @override
   void dispose() {
+    _heightCtl.removeListener(_onFieldChanged);
+    _weightCtl.removeListener(_onFieldChanged);
     _heightCtl.dispose();
     _weightCtl.dispose();
     super.dispose();
@@ -129,9 +165,19 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     final l10n = AppLocalizations.of(context);
     final api = widget.api;
     if (api == null) return;
-    final h = parseTypedDecimal(_heightCtl.text);
+    // Checked here as well as on the button's disabled state so a value
+    // outside the column's range cannot reach the insert through any other
+    // path into this handler.
+    if (_heightError || _weightError) {
+      _snack(_heightError
+          ? l10n.limitsHeightOutOfRange(
+              _bound(columnMin(_heightKey)), _bound(columnMax(_heightKey)))
+          : _weightRangeMessage(l10n));
+      return;
+    }
+    final h = _typedHeight;
     final heightVal = (h != null && h > 0) ? h : null;
-    final weightKg = WeightFormat.parseToKg(_weightCtl.text, _unit);
+    final weightKg = _typedWeightKg;
     final weightVal = (weightKg != null && weightKg > 0) ? weightKg : null;
 
     if ((heightVal != null || weightVal != null) && !_consent) {
@@ -206,6 +252,18 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// A bound rendered the way the field's own value reads: whole numbers
+  /// without a `.0`, a converted one to a single decimal, both through the
+  /// active locale's separator.
+  static String _bound(num v) =>
+      formatFixed(v.toDouble(), v == v.roundToDouble() ? 0 : 1, activeLocaleTag);
+
+  String _weightRangeMessage(AppLocalizations l10n) {
+    final b = WeightFormat.boundsIn(_weightKey, _unit);
+    return l10n.limitsWeightOutOfRange(
+        _bound(b.min), _bound(b.max), WeightFormat.label(_unit));
   }
 
   Future<void> _putBag(String key, String value) async {
@@ -308,6 +366,11 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
                       decoration: InputDecoration(
                         labelText: l10n.bodyMetricsHeight,
                         suffixText: 'cm',
+                        errorText: _heightError
+                            ? l10n.limitsHeightOutOfRange(
+                                _bound(columnMin(_heightKey)),
+                                _bound(columnMax(_heightKey)))
+                            : null,
                       ),
                     ),
                   ),
@@ -320,6 +383,8 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
                       decoration: InputDecoration(
                         labelText: l10n.bodyMetricsWeight,
                         suffixText: WeightFormat.label(_unit),
+                        errorText:
+                            _weightError ? _weightRangeMessage(l10n) : null,
                       ),
                     ),
                   ),
@@ -347,7 +412,8 @@ class _SettingsBodyMetricsScreenState extends State<SettingsBodyMetricsScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: FilledButton(
-                    onPressed: _saving ? null : _save,
+                    onPressed:
+                        _saving || _heightError || _weightError ? null : _save,
                     child: Text(l10n.prefsSave),
                   ),
                 ),
