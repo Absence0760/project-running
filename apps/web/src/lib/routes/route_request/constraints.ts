@@ -14,7 +14,7 @@ import {
 	MAX_TARGET_DISTANCE_M,
 	isValidTargetDistance,
 } from '../route_loop';
-import type { RoutePreference } from '../generate/graphhopper';
+import { ROUTE_PREFERENCES, type RoutePreference } from '../generate/graphhopper';
 
 /// Lower bound for an extracted distance. The generator's own guard
 /// (`isValidTargetDistance`) only rejects non-positive / NaN / absurd-large;
@@ -59,13 +59,11 @@ export interface RouteConstraints {
 const SHAPES: ReadonlySet<string> = new Set(['loop', 'out_and_back', 'point_to_point']);
 const SURFACES: ReadonlySet<string> = new Set(['road', 'trail', 'mixed']);
 /// The vocabulary is owned by the generator, not by this module, so the set is
-/// typed on construction: a value the generator drops from `RoutePreference`
-/// fails the build here rather than reaching it as a token it cannot route.
-const PREFERENCES: ReadonlySet<string> = new Set<RoutePreference>([
-	'quiet',
-	'scenic',
-	'cul_de_sac',
-]);
+/// derived from it rather than transcribed: a hand-copied list only fails the
+/// build when a value is REMOVED, and silently drops a newly added one — the
+/// model would be told about a preference the generator accepts and this
+/// boundary would then discard it.
+const PREFERENCES: ReadonlySet<string> = new Set(ROUTE_PREFERENCES);
 
 /// Fill a preference the request did not name from what it did name.
 /// `avoid_highways` is the same ask `'quiet'` implements in the custom model,

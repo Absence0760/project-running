@@ -11,6 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { ROUTE_PREFERENCES } from '../generate/graphhopper';
 import {
 	clampDistance,
 	validateConstraints,
@@ -123,7 +124,9 @@ test('validateConstraints: partial object only assumes the missing fields', () =
 });
 
 test('validateConstraints: every accepted preference passes through unchanged', () => {
-	for (const p of ['quiet', 'scenic', 'cul_de_sac']) {
+	// Iterates the generator's own vocabulary rather than a copy of it, so a
+	// value added there fails here until this boundary accepts it too.
+	for (const p of ROUTE_PREFERENCES) {
 		const c = validateConstraints({ preference: p });
 		assert.equal(c.preference, p);
 		assert.ok(!c.assumptions.includes('preference'));
