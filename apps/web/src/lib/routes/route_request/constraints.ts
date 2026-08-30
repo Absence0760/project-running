@@ -14,6 +14,7 @@ import {
 	MAX_TARGET_DISTANCE_M,
 	isValidTargetDistance,
 } from '../route_loop';
+import type { RoutePreference } from '../generate/graphhopper';
 
 /// Lower bound for an extracted distance. The generator's own guard
 /// (`isValidTargetDistance`) only rejects non-positive / NaN / absurd-large;
@@ -47,11 +48,40 @@ export interface RouteConstraints {
 	shape: RouteShape;
 	surface: RouteRequestSurface;
 	avoidHighways: boolean;
+	/// Road-design preference for the generator's custom model. Null is a real
+	/// answer — "no preference" — not a missing one: every other field has a
+	/// default the runner would have picked anyway, whereas defaulting this one
+	/// would silently bias every generated route toward a design nobody asked for.
+	preference: RoutePreference | null;
 	assumptions: string[];
 }
 
 const SHAPES: ReadonlySet<string> = new Set(['loop', 'out_and_back', 'point_to_point']);
 const SURFACES: ReadonlySet<string> = new Set(['road', 'trail', 'mixed']);
+/// The vocabulary is owned by the generator, not by this module, so the set is
+/// typed on construction: a value the generator drops from `RoutePreference`
+/// fails the build here rather than reaching it as a token it cannot route.
+const PREFERENCES: ReadonlySet<string> = new Set<RoutePreference>([
+	'quiet',
+	'scenic',
+	'cul_de_sac',
+]);
+
+/// Fill a preference the request did not name from what it did name.
+/// `avoid_highways` is the same ask `'quiet'` implements in the custom model,
+/// and a trail request is asking for the green half of `'scenic'`; the explicit
+/// negative constraint wins over the weaker surface inference when both hold.
+/// `'cul_de_sac'` is never derived — it inverts part of the loop score and is an
+/// explicit opt-in by design (graph_cycle_loop_generation.md § Extension), so
+/// inferring it would hand a runner dead-end spurs they never asked for.
+function derivePreference(
+	avoidHighways: boolean | null,
+	surface: RouteRequestSurface | null,
+): RoutePreference | null {
+	if (avoidHighways === true) return 'quiet';
+	if (surface === 'trail') return 'scenic';
+	return null;
+}
 
 /// Clamp an untrusted distance (in metres) to the request-sane band.
 /// Returns null when the value can't be coerced to a finite number at all,
@@ -84,17 +114,26 @@ export function validateConstraints(raw: unknown): RouteConstraints {
 	const shape = SHAPES.has(o.shape as string) ? (o.shape as RouteShape) : null;
 	const avoidHighways =
 		typeof o.avoid_highways === 'boolean' ? o.avoid_highways : null;
+	const preference = PREFERENCES.has(o.preference as string)
+		? (o.preference as RoutePreference)
+		: null;
+	const resolvedPreference = preference ?? derivePreference(avoidHighways, surface);
 
 	if (distanceM === null) assumptions.push('distance');
 	if (surface === null) assumptions.push('surface');
 	if (shape === null) assumptions.push('shape');
 	if (avoidHighways === null) assumptions.push('avoid_highways');
+	// Only a derivation is an assumption. Landing on null means we assumed
+	// nothing — telling the runner we assumed a preference we did not set
+	// would be the same dishonesty from the other direction.
+	if (preference === null && resolvedPreference !== null) assumptions.push('preference');
 
 	return {
 		distanceM: distanceM ?? DEFAULT_REQUEST_DISTANCE_M,
 		shape: shape ?? 'loop',
 		surface: surface ?? 'road',
 		avoidHighways: avoidHighways ?? false,
+		preference: resolvedPreference,
 		assumptions,
 	};
 }
