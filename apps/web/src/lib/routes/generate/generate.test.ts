@@ -8,9 +8,10 @@ import {
 	fetchRoundTrip,
 	GraphHopperError,
 	parseRoundTrip,
+	ROUTE_PREFERENCES,
 	type Fetcher,
 } from './graphhopper';
-import { areaEfficiency, enclosedAreaM2, inBandScore, pickBestLoop } from './select';
+import { areaEfficiency, enclosedAreaM2, inBandScore, pickBestLoop, preferenceFactor } from './select';
 import { DEFAULT_SEEDS, handleGenerate, parseGenerateRequest, REQUEST_MULTIPLIERS } from './handler';
 
 const BASE = 'http://gh.local';
@@ -42,6 +43,15 @@ function ghResponse(coords: [number, number][], distanceM: number): Response {
 		JSON.stringify({ paths: [{ distance: distanceM, points: { type: 'LineString', coordinates: coords } }] }),
 		{ status: 200, headers: { 'content-type': 'application/json' } },
 	);
+}
+
+/// A sidecar /cycle response reporting a loop-poor start, so the handler falls
+/// through to the round_trip race.
+function gcLoopPoor(): Response {
+	return new Response(JSON.stringify({ found: false, largestClean: null }), {
+		status: 200,
+		headers: { 'content-type': 'application/json' },
+	});
 }
 
 // --- graphhopper.ts ---
@@ -263,6 +273,44 @@ test('pickBestLoop picks the closest-to-target when nothing is in-band', () => {
 	const nearSpur = { coordinates: spurLoop(0, 0, 0.031), distanceM: 6900 };
 	const best = pickBestLoop([farRound, nearSpur], 5000);
 	assert.equal(best, nearSpur);
+});
+
+test('preferenceFactor is neutral without a measured share, rewarding with one', () => {
+	const base = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
+	assert.equal(preferenceFactor(base), 1);
+	// An unmeasured candidate must score exactly as it did before the term
+	// existed — the round_trip rail reports no share and must not be punished
+	// for the sidecar's honesty.
+	assert.equal(preferenceFactor({ ...base, preferenceShare: 0 }), 1);
+	assert.ok(preferenceFactor({ ...base, preferenceShare: 1 }) > 1);
+	assert.ok(
+		preferenceFactor({ ...base, preferenceShare: 0.8 }) <
+			preferenceFactor({ ...base, preferenceShare: 1 }),
+	);
+	// A garbled share is not a measurement.
+	assert.equal(preferenceFactor({ ...base, preferenceShare: Number.NaN }), 1);
+});
+
+test('pickBestLoop is unchanged when no candidate carries a share', () => {
+	// The default generator is the regression nothing else here would catch:
+	// every in-band score must be identical with the preference term in place.
+	const a = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
+	const b = { coordinates: squareLoop(0, 0, 0.006231), distanceM: 5550 };
+	const spur = { coordinates: spurLoop(0, 0, 0.01), distanceM: 5000 };
+	assert.equal(pickBestLoop([a, b, spur], 5000), a);
+	for (const c of [a, b, spur]) {
+		assert.equal(inBandScore(c, 5000), areaEfficiency(c) * (1 - Math.abs(c.distanceM - 5000) / 5000));
+	}
+});
+
+test('pickBestLoop lets a measured preference share break a shape-and-distance tie', () => {
+	const plain = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
+	const preferred = { ...plain, preferenceShare: 0.9 };
+	assert.equal(pickBestLoop([plain, preferred], 5000), preferred);
+	// The term is capped well below the shape signal: a spur can't buy the win.
+	const roundish = { coordinates: squareLoop(0, 0, 0.005614), distanceM: 5000 };
+	const quietSpur = { coordinates: spurLoop(0, 0, 0.01), distanceM: 5000, preferenceShare: 1 };
+	assert.equal(pickBestLoop([roundish, quietSpur], 5000), roundish);
 });
 
 test('pickBestLoop returns null when no candidate is usable', () => {
@@ -552,6 +600,48 @@ test("buildCustomModel('quiet') down-weights arterials, up-weights residential",
 	for (const r of rules) assert.ok(r.multiply_by > 0, 'no hard exclusion');
 });
 
+test("buildCustomModel('scenic') promotes paths and still penalises arterials", () => {
+	const model = buildCustomModel('scenic');
+	assert.ok(model);
+	const rules = model.priority;
+	const path = rules.find((r) => r.if === 'road_class == PATH');
+	const footway = rules.find((r) => r.else_if === 'road_class == FOOTWAY');
+	const motorway = rules.find((r) => r.if === 'road_class == MOTORWAY');
+	assert.ok(path && path.multiply_by > 1, 'paths must be favoured');
+	assert.ok(footway && footway.multiply_by > 1, 'footways must be favoured');
+	assert.ok(motorway && motorway.multiply_by < 1, 'an arterial is not scenic either');
+	for (const r of rules) assert.ok(r.multiply_by > 0, 'no hard exclusion');
+	// Stairs are scenic and unrunnable; leaving STEPS unweighted is deliberate.
+	assert.equal(
+		rules.some((r) => (r.if ?? r.else_if) === 'road_class == STEPS'),
+		false,
+	);
+});
+
+test('every custom model spends only encoded values the deployed engine carries', () => {
+	// `graph.encoded_values` in apps/job_worker/graphhopper/config.yml declares
+	// only the foot-profile set; road_class rides GraphHopper's always-imported
+	// defaults. Naming anything else fails the whole request, not the one clause,
+	// and the never-deny retry would hide that as a silently-ignored preference.
+	for (const pref of ROUTE_PREFERENCES) {
+		const model = buildCustomModel(pref);
+		if (!model) continue;
+		for (const r of model.priority) {
+			const expr = r.if ?? r.else_if ?? '';
+			assert.ok(
+				expr.startsWith('road_class == '),
+				`${pref} references a non-road_class encoded value: ${expr}`,
+			);
+		}
+	}
+});
+
+test("buildCustomModel('cul_de_sac') has no GraphHopper expression", () => {
+	// A capped stub into a quiet dead-end is a property of the assembled loop,
+	// not of any edge — round_trip runs plain and only the sidecar can honour it.
+	assert.equal(buildCustomModel('cul_de_sac'), null);
+});
+
 test('buildRoundTripBody carries the custom_model + ch.disable + round_trip params', () => {
 	const model = buildCustomModel('quiet')!;
 	const body = buildRoundTripBody(
@@ -602,24 +692,63 @@ test('fetchRoundTrip stays a GET with no body when no preference is set', async 
 	assert.equal(body, undefined);
 });
 
-test('parseGenerateRequest keeps a known preference, drops an unknown one', () => {
-	assert.equal(
-		parseGenerateRequest({ start: { lat: 1, lng: 2 }, targetDistanceM: 5000, preference: 'quiet' })?.preference,
-		'quiet',
-	);
+test('parseGenerateRequest keeps every known preference, drops an unknown one', () => {
+	for (const pref of ROUTE_PREFERENCES) {
+		assert.equal(
+			parseGenerateRequest({ start: { lat: 1, lng: 2 }, targetDistanceM: 5000, preference: pref })
+				?.preference,
+			pref,
+		);
+	}
 	// Unrecognised preference is silently dropped (never a 400) so a stale knob
 	// can't block generation.
-	assert.equal(
-		parseGenerateRequest({ start: { lat: 1, lng: 2 }, targetDistanceM: 5000, preference: 'scenic' })?.preference,
-		undefined,
-	);
+	for (const bogus of ['elevation', '', 'QUIET', 7, null]) {
+		assert.equal(
+			parseGenerateRequest({ start: { lat: 1, lng: 2 }, targetDistanceM: 5000, preference: bogus })
+				?.preference,
+			undefined,
+		);
+	}
 });
 
-test('handleGenerate with a preference POSTs a custom model and skips graph-cycle', async () => {
+test('handleGenerate with a preference still runs graph-cycle first', async () => {
+	// The preference used to divert the whole request onto round_trip, silently
+	// downgrading the runner off the durable v3 generator. It must not.
 	let sawGraphCycle = false;
+	let sawRoundTrip = false;
+	const fetcher: Fetcher = async (url) => {
+		if (url.includes('gc.local')) {
+			sawGraphCycle = true;
+			return new Response(
+				JSON.stringify({
+					found: true,
+					coordinates: squareLoop(0, 0, 0.0056),
+					distanceM: 5000,
+					preferenceApplied: 'quiet',
+					preferenceShare: 0.8,
+				}),
+				{ status: 200, headers: { 'content-type': 'application/json' } },
+			);
+		}
+		sawRoundTrip = true;
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate(
+		AUTH,
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'quiet', seeds: 1 },
+		{ ...OK_CFG, graphCycleUrl: 'http://gc.local' },
+		{ fetcher, proChecker: asPro },
+	);
+	assert.equal(res.status, 200);
+	assert.ok(sawGraphCycle, 'the preference must ride the graph-cycle rail, not skip it');
+	assert.equal(sawRoundTrip, false, 'a served graph-cycle loop needs no round_trip race');
+	if (res.status === 200) assert.equal(res.body.preferenceApplied, 'quiet');
+});
+
+test('handleGenerate POSTs a custom model on the round_trip fallback and reports it', async () => {
 	let postedModel = false;
 	const fetcher: Fetcher = async (url, init) => {
-		if (url.includes('gc.local')) sawGraphCycle = true;
+		if (url.includes('gc.local')) return gcLoopPoor();
 		if (init?.method === 'POST' && typeof init.body === 'string' && init.body.includes('custom_model')) {
 			postedModel = true;
 		}
@@ -632,8 +761,25 @@ test('handleGenerate with a preference POSTs a custom model and skips graph-cycl
 		{ fetcher, proChecker: asPro },
 	);
 	assert.equal(res.status, 200);
-	assert.equal(sawGraphCycle, false, 'preference path must skip the graph-cycle sidecar');
-	assert.ok(postedModel, 'preference path must carry the custom model');
+	assert.ok(postedModel, 'the fallback must carry the custom model');
+	if (res.status === 200) assert.equal(res.body.preferenceApplied, 'quiet');
+});
+
+test('handleGenerate never claims a preference GraphHopper cannot express', async () => {
+	// cul_de_sac has no custom model, so a round_trip fallback serves a plain
+	// loop — reporting it as applied would be a lie the UI would repeat.
+	const fetcher: Fetcher = async (url) => {
+		if (url.includes('gc.local')) return gcLoopPoor();
+		return ghResponse(squareLoop(0, 0, 0.0056), 5000);
+	};
+	const res = await handleGenerate(
+		AUTH,
+		{ start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'cul_de_sac', seeds: 1 },
+		{ ...OK_CFG, graphCycleUrl: 'http://gc.local' },
+		{ fetcher, proChecker: asPro },
+	);
+	assert.equal(res.status, 200);
+	if (res.status === 200) assert.equal(res.body.preferenceApplied, undefined);
 });
 
 test('handleGenerate falls back to plain generation when the preference race finds nothing', async () => {
@@ -656,4 +802,6 @@ test('handleGenerate falls back to plain generation when the preference race fin
 	);
 	assert.equal(res.status, 200, 'a rejected preference must never deny a buildable route');
 	assert.ok(plainServed, 'fallback must retry without the preference');
+	// The loop that got served was built without the model, so nothing applied.
+	if (res.status === 200) assert.equal(res.body.preferenceApplied, undefined);
 });

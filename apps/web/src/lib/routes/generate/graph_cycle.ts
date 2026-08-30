@@ -17,7 +17,7 @@
  * `X-Engine-Key` header is forwarded when configured (decisions §45 / §575).
  */
 
-import type { Fetcher, LoopCandidate } from './graphhopper';
+import { ROUTE_PREFERENCES, type Fetcher, type LoopCandidate, type RoutePreference } from './graphhopper';
 
 /// Typed transport failure so the handler can distinguish "URL not set" from
 /// "sidecar down". Either way the handler falls back to round_trip — graph-cycle
@@ -41,6 +41,11 @@ export interface GraphCycleRequest {
 	/// `requestDistanceM`, this is the ACTUAL target — the sidecar samples its own
 	/// spread of far-points internally and returns the loop closest to it.
 	targetDistanceM: number;
+	/// Optional road-design preference, sent verbatim on the request body. The
+	/// sidecar weights its own search edges with it and reports back what it
+	/// actually managed to apply; an unrecognised value there means no preference,
+	/// never a refusal.
+	preference?: RoutePreference;
 	/// Shared secret sent as `X-Engine-Key`. The sidecar fails closed when its
 	/// own key is set and the header is missing/wrong, so omit only in dev where
 	/// the guard is permissive.
@@ -54,9 +59,14 @@ export interface GraphCycleRequest {
 /// `loop` is the in-band loop (null when loop-poor); `largestCleanM` is the
 /// largest achievable clean-loop length (null when even that is absent — a
 /// genuinely loop-poor start, or `loop` itself is already the largest).
+/// `preferenceApplied` is what the sidecar says it actually honoured on the
+/// served loop — null both when none was asked for and when one was asked for
+/// but its own unweighted retry is what found the loop, so a caller can be honest
+/// about an ask it couldn't meet.
 export interface GraphCycleResult {
 	loop: LoopCandidate | null;
 	largestCleanM: number | null;
+	preferenceApplied: RoutePreference | null;
 }
 
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -72,7 +82,8 @@ export function buildGraphCycleUrl(baseUrl: string): string {
 /// payload is malformed — both cases the handler turns into a round_trip
 /// fallback. The wire shape matches LoopCandidate (`coordinates` [lng,lat],
 /// `distanceM`) plus a `found` flag and a separately-parsed `largestClean` (see
-/// `parseLargestCleanM`).
+/// `parseLargestCleanM`). A measured `preferenceShare` rides onto the returned
+/// candidate so the selector can weigh it (see `preferenceFactor` in ./select).
 export function parseGraphCycle(json: unknown): LoopCandidate | null {
 	const j = json as
 		| { found?: unknown; coordinates?: unknown; distanceM?: unknown }
@@ -90,7 +101,35 @@ export function parseGraphCycle(json: unknown): LoopCandidate | null {
 	const distanceM =
 		typeof j.distanceM === 'number' && Number.isFinite(j.distanceM) ? j.distanceM : 0;
 	if (distanceM <= 0) return null;
-	return { coordinates, distanceM };
+	const loop: LoopCandidate = { coordinates, distanceM };
+	// A share measures the applied weighting, so it only rides the candidate when
+	// the sidecar says the weighting reached this loop — otherwise it would feed
+	// the selection score a number about a preference nobody applied.
+	if (parsePreferenceApplied(json) !== null) {
+		const share = parsePreferenceShare(json);
+		if (share !== null) loop.preferenceShare = share;
+	}
+	return loop;
+}
+
+/// Parse the preference the sidecar says it applied to the served loop. Pure.
+/// Fail-closed: absent, null, or outside the shared vocabulary all read as "not
+/// applied" — a surface must never tell the runner an ask was honoured on the
+/// strength of a field it couldn't understand.
+export function parsePreferenceApplied(json: unknown): RoutePreference | null {
+	const v = (json as { preferenceApplied?: unknown } | null)?.preferenceApplied;
+	return typeof v === 'string' && (ROUTE_PREFERENCES as readonly string[]).includes(v)
+		? (v as RoutePreference)
+		: null;
+}
+
+/// Parse the share (0..1) of the served loop's length on preferred edges. Pure.
+/// Anything non-numeric or outside the unit interval yields null rather than a
+/// clamp: the value feeds a selection score, and a fabricated one would move the
+/// choice as confidently as a measured one.
+export function parsePreferenceShare(json: unknown): number | null {
+	const v = (json as { preferenceShare?: unknown } | null)?.preferenceShare;
+	return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? v : null;
 }
 
 /// Parse the sidecar's `largestClean` distance. Pure. The sidecar reports
@@ -107,7 +146,9 @@ export function parseLargestCleanM(json: unknown): number | null {
 /// Fetch the best loop near `targetDistanceM` from the sidecar plus the largest
 /// achievable clean loop. `loop` is the in-band loop, or null when the sidecar
 /// reports loop-poor; `largestCleanM` is the largest clean-loop length the search
-/// found (present even when loop-poor) so the caller can offer it explicitly.
+/// found (present even when loop-poor) so the caller can offer it explicitly;
+/// `preferenceApplied` is what the sidecar honoured, so the caller can tell the
+/// runner when an ask went unmet rather than implying every ask lands.
 /// Throws `GraphCycleError` on an unconfigured URL or any transport failure
 /// (non-2xx, network, timeout, bad JSON) so the handler can fall back to
 /// round_trip with the reason intact. Applies a request timeout via
@@ -127,10 +168,15 @@ export async function fetchGraphCycle(
 	try {
 		const headers: Record<string, string> = { 'content-type': 'application/json' };
 		if (req.apiKey) headers['X-Engine-Key'] = req.apiKey;
+		const payload: Record<string, unknown> = {
+			start: req.start,
+			targetDistanceM: req.targetDistanceM,
+		};
+		if (req.preference) payload.preference = req.preference;
 		res = await fetcher(url, {
 			method: 'POST',
 			headers,
-			body: JSON.stringify({ start: req.start, targetDistanceM: req.targetDistanceM }),
+			body: JSON.stringify(payload),
 			signal: controller.signal,
 		});
 	} catch (e) {
@@ -153,5 +199,9 @@ export async function fetchGraphCycle(
 			`graph_cycle returned non-JSON: ${e instanceof Error ? e.message : String(e)}`,
 		);
 	}
-	return { loop: parseGraphCycle(json), largestCleanM: parseLargestCleanM(json) };
+	return {
+		loop: parseGraphCycle(json),
+		largestCleanM: parseLargestCleanM(json),
+		preferenceApplied: parsePreferenceApplied(json),
+	};
 }
