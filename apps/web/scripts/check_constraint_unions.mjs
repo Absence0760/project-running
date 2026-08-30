@@ -536,7 +536,15 @@ export const PAIRS = [
 	},
 	{
 		tableColumn: 'reports.reason',
-		ts: [{ file: DATA, shape: 'union', name: 'ReportReason' }],
+		ts: [
+			{ file: DATA, shape: 'union', name: 'ReportReason' },
+			{
+				file: 'apps/web/src/lib/components/ReportDialog.svelte',
+				shape: 'keyed',
+				name: 'REASONS',
+				field: 'value',
+			},
+		],
 		dart: [
 			{
 				file: 'apps/mobile_android/lib/widgets/report_sheet.dart',
@@ -549,6 +557,7 @@ export const PAIRS = [
 		tableColumn: 'personal_records.distance',
 		ts: [
 			{ file: DATA, shape: 'keys', name: 'order' },
+			{ file: DATA, shape: 'keys', name: 'labels' },
 			{
 				file: 'apps/web/src/routes/dashboard/+page.svelte',
 				shape: 'keys',
