@@ -24,6 +24,7 @@ type Graph struct {
 	edgeHead []int32
 	edgeTo   []int32
 	edgeLen  []float32 // metres
+	edgeAttr []uint8   // packed road class + green flag, see attributes.go
 
 	grid *grid // spatial index for NearestNode
 }

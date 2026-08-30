@@ -27,7 +27,7 @@ func TestDijkstraRadiusCap(t *testing.T) {
 	g := gridGraph(10, 10, 100, 40.0, -77.0)
 	src, _ := g.NearestNode(40.0, -77.0)
 	// Cap at 250 m: only nodes within ~2 hops should be reached.
-	distTo, _ := g.dijkstra(context.Background(), src, -1, 250, nil)
+	distTo, _, _ := g.dijkstra(context.Background(), src, -1, 250, nil, PrefNone)
 	for _, d := range distTo {
 		if d > 250+1e-6 {
 			t.Fatalf("reached a node at %.0f m beyond the 250 m cap", d)
@@ -48,21 +48,21 @@ func TestDijkstraPenaltyReroutes(t *testing.T) {
 	b.addNode(1, Coord{Lat: metresToDegLat(100), Lng: 0})
 	b.addNode(2, Coord{Lat: 2 * metresToDegLat(100), Lng: 0})
 	b.addNode(3, Coord{Lat: metresToDegLat(100), Lng: metresToDegLng(100, 0)})
-	b.addSegment(0, 1)
-	b.addSegment(1, 2)
-	b.addSegment(0, 3)
-	b.addSegment(3, 2)
+	b.addSegment(0, 1, classResidential)
+	b.addSegment(1, 2, classResidential)
+	b.addSegment(0, 3, classResidential)
+	b.addSegment(3, 2, classResidential)
 	g := b.finalize()
 
 	// Unpenalised: either equal-length route is fine; assert reachable.
-	_, prev := g.dijkstra(context.Background(), 0, 2, math.Inf(1), nil)
+	_, _, prev := g.dijkstra(context.Background(), 0, 2, math.Inf(1), nil, PrefNone)
 	if reconstruct(prev, 0, 2) == nil {
 		t.Fatal("no path 0→2")
 	}
 
 	// Penalise the top route (edges 0-1 and 1-2). The bottom route must win.
 	penalised := map[uint64]struct{}{edgeKey(0, 1): {}, edgeKey(1, 2): {}}
-	_, prev2 := g.dijkstra(context.Background(), 0, 2, math.Inf(1), penalised)
+	_, _, prev2 := g.dijkstra(context.Background(), 0, 2, math.Inf(1), penalised, PrefNone)
 	path := reconstruct(prev2, 0, 2)
 	if path == nil {
 		t.Fatal("penalised search found no path")
@@ -89,12 +89,12 @@ func TestDijkstraCapsOnRealNotPenalisedDistance(t *testing.T) {
 	b.addNode(0, Coord{Lat: 0, Lng: 0})
 	b.addNode(1, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
 	b.addNode(2, Coord{Lat: 0, Lng: 2 * metresToDegLng(100, 0)})
-	b.addSegment(0, 1)
-	b.addSegment(1, 2)
+	b.addSegment(0, 1, classResidential)
+	b.addSegment(1, 2, classResidential)
 	g := b.finalize()
 
 	penalised := map[uint64]struct{}{edgeKey(0, 1): {}}
-	distTo, _ := g.dijkstra(context.Background(), 0, -1, 250, penalised)
+	distTo, _, _ := g.dijkstra(context.Background(), 0, -1, 250, penalised, PrefNone)
 
 	cost, ok := distTo[2]
 	if !ok {

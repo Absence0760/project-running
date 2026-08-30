@@ -28,11 +28,17 @@ var farFractions = []float64{0.34, 0.40, 0.46, 0.52, 0.58}
 
 // Loop is one candidate (or chosen) cycle: its geometry in [lng,lat] order, its
 // true length in metres (measured from geometry, not Dijkstra's penalised cost),
-// and its isoperimetric shape score.
+// and its isoperimetric shape score. `path` is the node-index sequence the
+// geometry came from, kept so the preference layer can read the edge
+// attribution the coordinates no longer carry.
 type Loop struct {
 	Coords         []Coord
 	DistanceM      float64
 	AreaEfficiency float64
+
+	path  []int32
+	share float64 // fraction of DistanceM on the active preference's edges
+	stubM float64 // credited cul-de-sac stub length, 0 outside that mode
 }
 
 // CycleResult is what SearchCycle returns. Best is the chosen loop under the
@@ -43,6 +49,14 @@ type Loop struct {
 type CycleResult struct {
 	Best         *Loop
 	LargestClean *Loop
+
+	// Applied is the preference the served loop actually honours. It is
+	// PrefNone when none was asked for, when one was asked for but the
+	// unweighted retry produced the loop, and when a cul-de-sac ask spliced no
+	// spur — an unhonoured ask must never read as honoured. PreferredShare is
+	// meaningful only alongside a set Applied.
+	Applied        Preference
+	PreferredShare float64
 }
 
 // ShortestPath returns the foot-routing geometry and length between two
@@ -55,7 +69,7 @@ func (g *Graph) ShortestPath(ctx context.Context, fromLat, fromLng, toLat, toLng
 	if !ok1 || !ok2 {
 		return nil, 0, false
 	}
-	_, prev := g.dijkstra(ctx, src, dst, math.Inf(1), nil)
+	_, _, prev := g.dijkstra(ctx, src, dst, math.Inf(1), nil, PrefNone)
 	path := reconstruct(prev, src, dst)
 	if path == nil {
 		return nil, 0, false
@@ -81,7 +95,20 @@ func (g *Graph) ShortestPath(ctx context.Context, fromLat, fromLng, toLat, toLng
 //     cycle.
 //  4. Score every cycle by areaEfficiency, drop spurs (< spurFloor), and select
 //     under the web contract.
-func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM float64) CycleResult {
+//
+// A preference biases steps 1-3 through soft per-edge multipliers and step 4
+// through a ranking term. It can never deny a route: if the weighted search
+// clears no candidate over the spur floor, the whole search is repeated
+// unweighted and that loop is served with Applied left at PrefNone.
+func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM float64, pref Preference) CycleResult {
+	res := g.searchCycle(ctx, startLat, startLng, targetM, pref)
+	if res.Best != nil || pref == PrefNone || ctx.Err() != nil {
+		return res
+	}
+	return g.searchCycle(ctx, startLat, startLng, targetM, PrefNone)
+}
+
+func (g *Graph) searchCycle(ctx context.Context, startLat, startLng, targetM float64, pref Preference) CycleResult {
 	src, ok := g.NearestNode(startLat, startLng)
 	if !ok {
 		return CycleResult{}
@@ -95,12 +122,12 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 	}
 	// Outbound tree: reach far-points up to maxFar·target, with slack.
 	outRadius := maxFar*targetM*1.25 + 200
-	outDist, outPrev := g.dijkstra(ctx, src, -1, outRadius, nil)
+	_, outReal, outPrev := g.dijkstra(ctx, src, -1, outRadius, nil, pref)
 
 	if ctx.Err() != nil {
 		return CycleResult{}
 	}
-	fars := g.pickFarPoints(src, targetM, outDist)
+	fars := g.pickFarPoints(src, targetM, outReal)
 
 	var candidates []*Loop
 	// The return leg may legitimately detour well past the outbound length; cap
@@ -121,7 +148,7 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 			continue
 		}
 		penalised := pathEdgeKeys(out)
-		_, retPrev := g.dijkstra(ctx, f, src, returnRadius, penalised)
+		_, _, retPrev := g.dijkstra(ctx, f, src, returnRadius, penalised, pref)
 		back := reconstruct(retPrev, f, src)
 		if len(back) < 2 {
 			continue // no second way home from F — the loop-poor signal at this F
@@ -132,12 +159,30 @@ func (g *Graph) SearchCycle(ctx context.Context, startLat, startLng, targetM flo
 		}
 	}
 
-	return selectLoops(candidates, targetM)
+	for _, c := range candidates {
+		if pref == PrefCulDeSac {
+			g.augmentCulDeSac(c, targetM)
+		}
+		c.share = g.preferredShare(c, pref)
+	}
+
+	res := selectLoops(candidates, targetM, pref)
+	// A cul-de-sac ask is binary and observable, so a loop carrying no spur did
+	// not honour it however the search was weighted. quiet and scenic are
+	// gradients — the search genuinely was biased and the share reports what it
+	// achieved — so any loop they returned honours the ask.
+	if res.Best != nil && (pref != PrefCulDeSac || res.Best.stubM > 0) {
+		res.Applied = pref
+		res.PreferredShare = res.Best.share
+	}
+	return res
 }
 
 // pickFarPoints buckets reached nodes into compass sectors and, for each
 // (sector, farFraction) pair, keeps the node whose outbound distance is closest
-// to the desired fraction of target. Deduped by node index.
+// to the desired fraction of target. Deduped by node index. The distances are
+// TRUE metres (dijkstra's realTo), so a preference-weighted outbound tree still
+// sizes its far-points against the loop the runner asked for.
 func (g *Graph) pickFarPoints(src int32, targetM float64, outDist map[int32]float64) []int32 {
 	sLat, sLng := g.lat[src], g.lng[src]
 
@@ -210,17 +255,96 @@ func (g *Graph) assembleLoop(out, back []int32) *Loop {
 		Coords:         coords,
 		DistanceM:      distanceM,
 		AreaEfficiency: areaEfficiency(coords, distanceM),
+		path:           full,
 	}
 }
 
-// selectLoops applies the web selection contract and finds the largest clean
-// loop. Clean = areaEfficiency ≥ spurFloor.
+// Multi-objective ranking weights. One weighted score replaces the two-branch
+// selection the sidecar shipped with, so a preference can trade a little
+// roundness or distance error for a loop that is actually on the roads the
+// runner asked for.
 //
-//   - In-band candidates (|len−target| ≤ distanceBand·target) exist → pick the
-//     roundest; distance closeness breaks ties.
-//   - Otherwise → the closest-to-target clean loop; roundness breaks ties.
-//   - No clean loop at all → Best is nil (loop-poor).
-func selectLoops(cands []*Loop, targetM float64) CycleResult {
+// With no preference the ordering is the shipped contract: an in-band candidate
+// scores on the roundness scale and an out-of-band one in a strictly lower band,
+// so the two never cross and whichever objective led the old branch still leads
+// it. The other rides at scoreTieWeight. That is why BOTH branches score on an
+// O(1) scale rather than in metres — a tie-break this small added to a 25 km
+// delta is a fraction of one ULP of it and rounds away entirely, silently
+// reversing the objective it exists to decide. The 1e-9 tolerance the old
+// comparison treated as a tie also made it non-transitive, so no scalar score
+// can reproduce it exactly; selection_pin_test.go measures what is left.
+const (
+	// The grid the leading objective is snapped to before the tie-break is
+	// added — the same 1e-9 the old comparison called a tie. Without it two
+	// loops equidistant from target to the last bit would be separated by float
+	// noise instead of by their shape, which is the one place a scalar score
+	// could diverge from the contract.
+	scoreQuantum = 1e-9
+	// The tie-break's WHOLE range: both branches normalise their secondary
+	// objective to [0,1] before scaling by it, so a hundredth of a quantum is
+	// what keeps the tie-break under the grid of the objective it breaks ties
+	// within while still spanning thousands of ULP of the sum it joins.
+	scoreTieWeight = scoreQuantum / 100
+	// What a fully preferred loop may buy itself, in each branch's own currency:
+	// half of the roundness scale while the field is judged on shape, and one
+	// band's width of (target-normalised) distance error while it is judged on
+	// distance. Every candidate has already cleared the spur floor, so trading
+	// some roundness for the roads the runner explicitly asked for is the right
+	// trade —
+	// roundness is our aesthetic proxy, the preference is their instruction.
+	// Trading a whole band of distance, though, would let a preference serve a
+	// loop the runner did not ask for the length of.
+	scoreShareRoundness = 0.5
+	scoreShareDistance  = distanceBand
+	// The cul-de-sac inversion. A loop that grows by a fraction f of its length
+	// with no new area keeps only 1/(1+f)² of its shape score, so at the stub
+	// cap it loses roughly 0.15 of an ordinary score against a credited share
+	// of about 0.17. A credit of 1 therefore leaves a fully-stubbed loop
+	// ranked a shade above the same loop without them — which is the ask —
+	// rather than penalised for taking the spurs the runner requested.
+	scoreStubCredit = 1.0
+)
+
+// scoreLoop ranks one candidate; higher is better. An in-band candidate scores
+// on the roundness scale, which every candidate that reached scoring occupies
+// above zero (they have all cleared spurFloor); an out-of-band one scores an
+// order below zero. So the field is judged on shape exactly when something
+// reached the band, without a magnitude-dwarfing bonus to say so. The snapped
+// delta is divided by targetM rather than snapped after: targetM is a positive
+// constant within a call, so the primary ordering is untouched and equal snapped
+// deltas still yield an identical quotient.
+func scoreLoop(c *Loop, targetM float64, pref Preference) float64 {
+	delta := math.Abs(c.DistanceM - targetM)
+	band := distanceBand * targetM
+	if delta <= band {
+		s := snapToQuantum(c.AreaEfficiency) - scoreTieWeight*(delta/band)
+		if pref != PrefNone {
+			s += shareWeightFor(pref) * c.share
+		}
+		return s
+	}
+	s := -1 - snapToQuantum(delta)/targetM + scoreTieWeight*c.AreaEfficiency
+	if pref != PrefNone {
+		s += scoreShareDistance * c.share
+	}
+	return s
+}
+
+// shareWeightFor is what a fully preferred loop may buy while the field is
+// judged on shape.
+func shareWeightFor(pref Preference) float64 {
+	if pref == PrefCulDeSac {
+		return scoreStubCredit
+	}
+	return scoreShareRoundness
+}
+
+func snapToQuantum(v float64) float64 { return math.Round(v/scoreQuantum) * scoreQuantum }
+
+// selectLoops drops spurs (areaEfficiency < spurFloor), ranks what is left by
+// scoreLoop, and reports the largest clean loop alongside the winner. No clean
+// loop at all → Best is nil (loop-poor).
+func selectLoops(cands []*Loop, targetM float64, pref Preference) CycleResult {
 	clean := make([]*Loop, 0, len(cands))
 	for _, c := range cands {
 		if c.AreaEfficiency >= spurFloor {
@@ -247,34 +371,13 @@ func selectLoops(cands []*Loop, targetM float64) CycleResult {
 		}
 	}
 
-	band := distanceBand * targetM
-	var within []*Loop
-	for _, c := range clean {
-		if math.Abs(c.DistanceM-targetM) <= band {
-			within = append(within, c)
-		}
-	}
-
-	var best *Loop
-	if len(within) > 0 {
-		best = within[0]
-		for _, c := range within[1:] {
-			if c.AreaEfficiency > best.AreaEfficiency+1e-9 ||
-				(math.Abs(c.AreaEfficiency-best.AreaEfficiency) <= 1e-9 &&
-					math.Abs(c.DistanceM-targetM) < math.Abs(best.DistanceM-targetM)) {
-				best = c
-			}
-		}
-	} else {
-		best = clean[0]
-		bestDelta := math.Abs(best.DistanceM - targetM)
-		for _, c := range clean[1:] {
-			delta := math.Abs(c.DistanceM - targetM)
-			if delta < bestDelta-1e-9 ||
-				(math.Abs(delta-bestDelta) <= 1e-9 && c.AreaEfficiency > best.AreaEfficiency) {
-				best = c
-				bestDelta = delta
-			}
+	best := clean[0]
+	bestScore := scoreLoop(best, targetM, pref)
+	for _, c := range clean[1:] {
+		// Strictly better only, so an exact tie keeps the earlier candidate in
+		// the deterministic order sorted above.
+		if s := scoreLoop(c, targetM, pref); s > bestScore {
+			best, bestScore = c, s
 		}
 	}
 

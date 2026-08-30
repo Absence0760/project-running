@@ -11,6 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { ROUTE_PREFERENCES } from '../generate/graphhopper';
 import {
 	clampDistance,
 	validateConstraints,
@@ -50,11 +51,13 @@ test('validateConstraints: a fully-specified, in-band object passes through with
 		shape: 'out_and_back',
 		surface: 'trail',
 		avoid_highways: true,
+		preference: 'scenic',
 	});
 	assert.equal(c.distanceM, 10000);
 	assert.equal(c.shape, 'out_and_back');
 	assert.equal(c.surface, 'trail');
 	assert.equal(c.avoidHighways, true);
+	assert.equal(c.preference, 'scenic');
 	assert.deepEqual(c.assumptions, []);
 });
 
@@ -64,6 +67,7 @@ test('validateConstraints: empty object falls back to all documented defaults', 
 	assert.equal(c.shape, 'loop');
 	assert.equal(c.surface, 'road');
 	assert.equal(c.avoidHighways, false);
+	assert.equal(c.preference, null);
 	assert.deepEqual(
 		c.assumptions.sort(),
 		['avoid_highways', 'distance', 'shape', 'surface'],
@@ -115,5 +119,80 @@ test('validateConstraints: partial object only assumes the missing fields', () =
 	assert.equal(c.avoidHighways, true);
 	assert.equal(c.shape, 'loop');
 	assert.equal(c.surface, 'road');
-	assert.deepEqual(c.assumptions.sort(), ['shape', 'surface']);
+	// avoid_highways derives the quiet preference, which is itself an assumption.
+	assert.deepEqual(c.assumptions.sort(), ['preference', 'shape', 'surface']);
+});
+
+test('validateConstraints: every accepted preference passes through unchanged', () => {
+	// Iterates the generator's own vocabulary rather than a copy of it, so a
+	// value added there fails here until this boundary accepts it too.
+	for (const p of ROUTE_PREFERENCES) {
+		const c = validateConstraints({ preference: p });
+		assert.equal(c.preference, p);
+		assert.ok(!c.assumptions.includes('preference'));
+	}
+});
+
+test('validateConstraints: an unknown preference token is dropped, never forwarded', () => {
+	for (const bad of ['hilly', 'QUIET', 'cul-de-sac', '', 42, null, {}]) {
+		const c = validateConstraints({ preference: bad });
+		assert.equal(c.preference, null);
+		assert.ok(!c.assumptions.includes('preference'));
+	}
+});
+
+test('validateConstraints: avoid_highways derives quiet and records the assumption', () => {
+	const c = validateConstraints({ avoid_highways: true });
+	assert.equal(c.preference, 'quiet');
+	// The existing knob survives beside the derived one — the generate body
+	// still carries avoidHighways for the form's own toggle.
+	assert.equal(c.avoidHighways, true);
+	assert.ok(c.assumptions.includes('preference'));
+});
+
+test('validateConstraints: a trail surface derives scenic and records the assumption', () => {
+	const c = validateConstraints({ surface: 'trail' });
+	assert.equal(c.preference, 'scenic');
+	assert.ok(c.assumptions.includes('preference'));
+});
+
+test('validateConstraints: an explicit preference beats both derivations', () => {
+	const c = validateConstraints({
+		preference: 'cul_de_sac',
+		avoid_highways: true,
+		surface: 'trail',
+	});
+	assert.equal(c.preference, 'cul_de_sac');
+	assert.ok(!c.assumptions.includes('preference'));
+});
+
+test('validateConstraints: an unknown preference still falls through to the derivation', () => {
+	const c = validateConstraints({ preference: 'hilly', avoid_highways: true });
+	assert.equal(c.preference, 'quiet');
+	assert.ok(c.assumptions.includes('preference'));
+});
+
+test('validateConstraints: the stated road constraint outranks the surface inference', () => {
+	const c = validateConstraints({ avoid_highways: true, surface: 'trail' });
+	assert.equal(c.preference, 'quiet');
+});
+
+test('validateConstraints: cul_de_sac is never derived, only asked for', () => {
+	// It inverts part of the loop score — a runner who did not ask for dead-end
+	// spurs must never be given a route built out of them.
+	for (const raw of [
+		{},
+		{ avoid_highways: true },
+		{ surface: 'trail' },
+		{ surface: 'road', avoid_highways: false },
+		{ shape: 'out_and_back', distance_m: 5000 },
+	]) {
+		assert.notEqual(validateConstraints(raw).preference, 'cul_de_sac');
+	}
+});
+
+test('validateConstraints: a request naming neither road nor trail assumes no preference', () => {
+	const c = validateConstraints({ distance_m: 5000, surface: 'mixed', avoid_highways: false });
+	assert.equal(c.preference, null);
+	assert.ok(!c.assumptions.includes('preference'));
 });

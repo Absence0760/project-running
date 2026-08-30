@@ -77,6 +77,7 @@
 		onbusy = (_busy: boolean) => {},
 		ongeneratemismatch = (_achievedM: number, _targetM: number, _largestLoopM?: number) => {},
 		onprorequired = () => {},
+		onpreferenceapplied = (_applied: RoutePreference | null) => {},
 		onrequestclear = (): boolean => false
 	}: {
 		mode?: 'road' | 'trail';
@@ -133,6 +134,15 @@
 		 */
 		onprorequired?: () => void;
 		/**
+		 * Called once after every generateLoop that produced a route, with the
+		 * preference the server reported having applied — or null when it
+		 * applied none. Null is also what a caller gets when the request never
+		 * reached the server (point-to-point, an unconfigured endpoint, an
+		 * engine outage): the in-browser heuristic honours no preference at
+		 * all, so a fallback route is an unpreferenced route.
+		 */
+		onpreferenceapplied?: (applied: RoutePreference | null) => void;
+		/**
 		 * Called when the Escape keyboard shortcut requests a clear. Return
 		 * `true` to signal the parent has taken ownership (e.g. opened a
 		 * confirm dialog), in which case the builder does NOT clear itself —
@@ -154,6 +164,11 @@
 	let routeCoordinates: [number, number][] = [];
 	let routeElevations: number[] = [];
 	let markers: maplibregl.Marker[] = [];
+	/// The preference the last server-served loop actually applied. Reset at the
+	/// top of every generateLoop and only ever raised by a 200 body that names
+	/// the very preference we asked for, so an absent field, an unknown value,
+	/// and a heuristic fallback all grade the same: not applied.
+	let servedPreference: RoutePreference | null = null;
 	/// 0-based indices of waypoints flagged by the post-routing quality
 	/// pass — failed snaps, deviation outliers, or detour-segment
 	/// endpoints. These markers render in red so the user can see at a
@@ -1442,7 +1457,12 @@
 			return false;
 		}
 		if (!res.ok) return false;
-		let data: { coordinates?: unknown; distanceM?: unknown; largestLoopM?: unknown };
+		let data: {
+			coordinates?: unknown;
+			distanceM?: unknown;
+			largestLoopM?: unknown;
+			preferenceApplied?: unknown;
+		};
 		try {
 			data = await res.json();
 		} catch {
@@ -1452,6 +1472,11 @@
 		const coords = data?.coordinates;
 		if (!Array.isArray(coords) || coords.length < 2) return false;
 		const polyline = coords as [number, number][];
+		// Comparing against the ask rather than re-listing the union keeps the
+		// vocabulary in one place and fails closed: only the server naming the
+		// preference we sent counts as honoured.
+		const appliedPreference =
+			preference !== undefined && data.preferenceApplied === preference ? preference : null;
 		// Largest genuinely clean loop the graph search found near this start (only
 		// present when the served loop is an out-and-back fallback). Powers the
 		// "best loop near you is ~X km" choice below.
@@ -1510,6 +1535,7 @@
 		} else {
 			onerror(null);
 		}
+		servedPreference = appliedPreference;
 		return true;
 	}
 
@@ -1588,6 +1614,7 @@
 		// the pre-generate snapshot when the iteration bailed (cancel,
 		// mutation race, every attempt failed to route).
 		let success = false;
+		servedPreference = null;
 		try {
 
 		// Loop case (no distinct end pin): try the server-side GraphHopper
@@ -1763,7 +1790,9 @@
 		);
 		return false;
 		} finally {
-			if (!success) {
+			if (success) {
+				onpreferenceapplied(servedPreference);
+			} else {
 				// Restore the pre-generate state — clears scaffolding
 				// markers, repopulates whatever waypoints the user had
 				// before (often none), and refreshes the preview line.

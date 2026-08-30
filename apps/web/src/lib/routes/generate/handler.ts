@@ -10,11 +10,16 @@
  *
  * Generator chain (docs/features/graph_cycle_loop_generation.md, v3):
  *   1. graph-cycle FIRST — the self-hosted graph_cycle sidecar searches the real
- *      foot graph for a clean loop near target. This is the durable generator;
- *      it traces the neighbourhood loop geometry can't find.
- *   2. round_trip fallback — GraphHopper's `round_trip` (multi-distance race)
- *      when graph-cycle is loop-poor or unreachable.
+ *      foot graph for a clean loop near target, carrying the road-design
+ *      preference. This is the durable generator; it traces the neighbourhood
+ *      loop geometry can't find.
+ *   2. round_trip fallback — GraphHopper's `round_trip` (multi-distance race),
+ *      under a `custom_model` where GraphHopper can express the preference, when
+ *      graph-cycle is loop-poor or unreachable.
  * The v2 polygon generator is retired: graph-cycle beat it at every spike start.
+ * A preference no longer diverts the whole request onto the fallback: it rides
+ * the chain, and the served loop reports back which preference (if any) was
+ * actually applied, so the client can be honest about an ask it couldn't meet.
  *
  * Fail-closed: no engine URL → 501 (operator config); an engine that's down →
  * 502; an engine that answered but found no loop worth serving near this start
@@ -36,13 +41,15 @@ import { createClient } from '@supabase/supabase-js';
 
 import { parseAuthHeader } from '../../coach/limits';
 import {
+	buildCustomModel,
 	fetchRoundTrip,
 	GraphHopperError,
+	ROUTE_PREFERENCES,
 	type Fetcher,
 	type LoopCandidate,
 	type RoutePreference,
 } from './graphhopper';
-import { fetchGraphCycle } from './graph_cycle';
+import { fetchGraphCycle, GraphCycleError } from './graph_cycle';
 import { pickBestLoop } from './select';
 import { isValidTargetDistance } from '../route_loop';
 import { checkRouteRateLimit } from '../rate_limit';
@@ -53,10 +60,8 @@ export interface GenerateRequest {
 	targetDistanceM: number;
 	/// How many round_trip seeds to race; clamped to [1, MAX_SEEDS].
 	seeds?: number;
-	/// Optional road-design preference. `'quiet'` biases the loop onto residential
-	/// streets and away from motorway/trunk/primary via a GraphHopper custom model
-	/// (the avoid-highways / prefer-residential half of route-design preferences).
-	/// Unset → today's behaviour. Any unrecognised value is dropped at parse time.
+	/// Optional road-design preference, carried to both engines. Unset → today's
+	/// behaviour. Any unrecognised value is dropped at parse time.
 	preference?: RoutePreference;
 }
 
@@ -162,10 +167,19 @@ export type GenerateResult =
 				/// Lets the client offer the "best loop near you is ~X km" choice
 				/// instead of a generic shortfall banner.
 				largestLoopM?: number;
+				/// The road-design preference the serving engine actually applied.
+				/// Omitted when none was asked for AND when one was asked for but
+				/// couldn't be honoured, so the client can say so rather than
+				/// implying every ask lands.
+				preferenceApplied?: RoutePreference;
 			};
 	  }
 	| { status: 400 | 401 | 422 | 429 | 500 | 501 | 502; body: { error: string } }
 	| { status: 403; body: { error: 'pro_required'; upgrade: true } };
+
+/// The 200 body, derived from GenerateResult so the two engine paths that build
+/// one can't drift from the contract they're both returning.
+type GenerateBody = Extract<GenerateResult, { status: 200 }>['body'];
 
 /// Seeds raced at EACH request multiplier (so total round_trip calls is
 /// seeds × REQUEST_MULTIPLIERS). round_trip's actual distance varies wildly per
@@ -258,7 +272,12 @@ export function parseGenerateRequest(raw: unknown): GenerateRequest | null {
 	}
 	// An unrecognised preference is silently dropped (treated as "no preference")
 	// rather than 400'd: a stale/garbled knob must never block route generation.
-	if (r.preference === 'quiet') out.preference = 'quiet';
+	if (
+		typeof r.preference === 'string' &&
+		(ROUTE_PREFERENCES as readonly string[]).includes(r.preference)
+	) {
+		out.preference = r.preference as RoutePreference;
+	}
 	return out;
 }
 
@@ -310,32 +329,58 @@ export async function handleGenerate(
 	// sidecar outage and a cul-de-sac neighbourhood were one signal.
 	let graphCycleUnreachable = false;
 
-	// graph-cycle FIRST: search the real foot graph. A real loop wins; null means
-	// loop-poor (or the sidecar is unreachable) and we fall through to round_trip.
-	// A sidecar error is never fatal — graph-cycle is a quality upgrade, not a
-	// hard dependency — so we swallow the throw and let round_trip serve.
-	//
-	// Skipped when a road-design preference is set: the graph-cycle sidecar doesn't
-	// yet honour preferences (full edge-weighted search is the v3 § Extension work),
-	// and it would otherwise return a clean-but-arterial loop that ignores the
-	// "quiet roads" ask. The custom-model round_trip below carries the preference.
-	if (config.graphCycleUrl && !req.preference) {
-		try {
-			const result = await fetchGraphCycle(
+	// graph-cycle FIRST: search the real foot graph, carrying the preference. A
+	// real loop wins; null means loop-poor (or the sidecar is unreachable) and we
+	// fall through to round_trip. A sidecar error is never fatal — graph-cycle is a
+	// quality upgrade, not a hard dependency — so we swallow the throw and let
+	// round_trip serve.
+	if (config.graphCycleUrl) {
+		const searchGraphCycle = (preference?: RoutePreference) =>
+			fetchGraphCycle(
 				{
 					baseUrl: config.graphCycleUrl,
 					start: req.start,
 					targetDistanceM: req.targetDistanceM,
 					apiKey: config.graphCycleApiKey,
+					preference,
 				},
 				fetcher,
 			);
+		try {
+			const result = await searchGraphCycle(req.preference).catch((e: unknown) => {
+				// A sidecar that ANSWERED and refused is a version skew, not an
+				// outage: its decoder rejects unknown fields, so one deployed
+				// before this preference existed 400s the whole request. Retry
+				// once without the preference — the same never-deny rule the
+				// round_trip race below applies, and without it a preference is
+				// the sole reason a buildable route is denied (a 502, which pages
+				// the on-call, on a deploy carrying no round_trip fallback).
+				if (
+					req.preference &&
+					e instanceof GraphCycleError &&
+					e.status !== undefined &&
+					e.status >= 400 &&
+					e.status < 500
+				) {
+					return searchGraphCycle();
+				}
+				throw e;
+			});
 			largestCleanM = result.largestCleanM;
 			if (result.loop) {
-				return {
-					status: 200,
-					body: { coordinates: result.loop.coordinates, distanceM: result.loop.distanceM },
+				const body: GenerateBody = {
+					coordinates: result.loop.coordinates,
+					distanceM: result.loop.distanceM,
 				};
+				// Only the sidecar's own verdict, and only where it agrees with the
+				// ask: the sidecar retries unweighted when the weighted search comes
+				// up empty, and it is a separately deployed service, so neither an
+				// echo of req.preference nor a bare echo of its answer can be
+				// trusted to describe the loop actually served.
+				if (req.preference && result.preferenceApplied === req.preference) {
+					body.preferenceApplied = req.preference;
+				}
+				return { status: 200, body };
 			}
 		} catch (e) {
 			graphCycleUnreachable = true;
@@ -366,12 +411,25 @@ export async function handleGenerate(
 		req.preference,
 	);
 
+	// Whether the race that just ran was preference-aware at all. `cul_de_sac` has
+	// no custom model, so its race was already the plain one — which is what makes
+	// both the claim below and the retry meaningless for it.
+	const racedWithModel = req.preference !== undefined && buildCustomModel(req.preference) !== null;
+
+	// What round_trip may claim it honoured: a preference GraphHopper could express
+	// as a custom model, whose race is the one that produced these candidates. Read
+	// before the retry below, which deliberately drops the preference — a loop found
+	// without the model was never shaped by it.
+	const roundTripPreference = racedWithModel && candidates.length > 0 ? req.preference : undefined;
+
 	// Graceful fallback: a preference-aware (custom_model) race that produced
 	// nothing — the engine rejected the model, or the down-weighting found no loop —
 	// must never deny a route the plain generator could build. Retry once without
 	// the preference. Layered resilience: the preference is an enhancement, the
-	// route itself is the contract.
-	if (req.preference && candidates.length === 0) {
+	// route itself is the contract. Gated on the model because an unmodelled
+	// preference already raced plain: retrying would re-send a byte-identical
+	// request, doubling the upstream fan-out exactly when the engine is failing.
+	if (racedWithModel && candidates.length === 0) {
 		({ candidates, lastError } = await raceRoundTrip(
 			req.start,
 			req.targetDistanceM,
@@ -406,12 +464,13 @@ export async function handleGenerate(
 	// clean loop, surface it so the client can offer "best loop near you is ~X km".
 	// Only attach when it's meaningfully (>5%) larger than what we're serving, so
 	// we never offer a "better" loop that's the same size as the out-and-back.
-	const body: { coordinates: [number, number][]; distanceM: number; largestLoopM?: number } = {
+	const body: GenerateBody = {
 		coordinates: best.coordinates,
 		distanceM: best.distanceM,
 	};
 	if (largestCleanM !== null && largestCleanM > best.distanceM * 1.05) {
 		body.largestLoopM = largestCleanM;
 	}
+	if (roundTripPreference) body.preferenceApplied = roundTripPreference;
 	return { status: 200, body };
 }

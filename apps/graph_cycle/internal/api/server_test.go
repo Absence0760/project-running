@@ -99,6 +99,137 @@ func TestCycleLoopPoor(t *testing.T) {
 	}
 }
 
+// splitServer builds the attributed lattice: one half arterial, the other
+// foot-first and green, so a preference has something to steer onto.
+func splitServer(t *testing.T) (*Server, float64, float64) {
+	t.Helper()
+	g, stats := graph.BuildTestSplitGrid(9, 9, 100, 40.0, -77.0, true)
+	return New(g, stats, slog.New(slog.NewTextHandler(io.Discard, nil))),
+		40.0 + 4*0.000898, -77.0 + 4*0.001173
+}
+
+type cycleBody struct {
+	Found             bool    `json:"found"`
+	DistanceM         float64 `json:"distanceM"`
+	PreferenceApplied string  `json:"preferenceApplied"`
+	PreferenceShare   float64 `json:"preferenceShare"`
+}
+
+func TestCycleReportsTheHonouredPreference(t *testing.T) {
+	s, cLat, cLng := splitServer(t)
+	for _, pref := range []string{"quiet", "scenic"} {
+		body := `{"start":{"lat":` + ftoa(cLat) + `,"lng":` + ftoa(cLng) + `},"targetDistanceM":800,"preference":"` + pref + `"}`
+		rec := do(t, s, http.MethodPost, "/cycle", body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d body=%s", pref, rec.Code, rec.Body.String())
+		}
+		var got cycleBody
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if !got.Found {
+			t.Fatalf("%s: expected a loop", pref)
+		}
+		if got.PreferenceApplied != pref {
+			t.Fatalf("%s: preferenceApplied = %q", pref, got.PreferenceApplied)
+		}
+		if got.PreferenceShare < 0 || got.PreferenceShare > 1 {
+			t.Fatalf("%s: preferenceShare = %v, want 0..1", pref, got.PreferenceShare)
+		}
+	}
+}
+
+func TestCycleCulDeSacIsReported(t *testing.T) {
+	g, stats := graph.BuildTestStubGrid(9, 9, 100, 40.0, -77.0, 0.4)
+	s := New(g, stats, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	body := `{"start":{"lat":` + ftoa(40.0+4*0.000898) + `,"lng":` + ftoa(-77.0+4*0.001173) + `},"targetDistanceM":1200,"preference":"cul_de_sac"}`
+	rec := do(t, s, http.MethodPost, "/cycle", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var got cycleBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.PreferenceApplied != "cul_de_sac" || got.PreferenceShare <= 0 {
+		t.Fatalf("applied = %q share = %v", got.PreferenceApplied, got.PreferenceShare)
+	}
+}
+
+func TestCycleCulDeSacOmittedWhenNoSpurWasSpliced(t *testing.T) {
+	// The plain lattice has no dead end to splice, so the ask went unhonoured.
+	// The web client shows its "not applied" note by comparing applied against
+	// asked and never reads the share, so a zero share reported alongside
+	// "cul_de_sac" tells the runner they got spurs they did not get.
+	s, cLat, cLng := testServer(t)
+	body := `{"start":{"lat":` + ftoa(cLat) + `,"lng":` + ftoa(cLng) + `},"targetDistanceM":1200,"preference":"cul_de_sac"}`
+	rec := do(t, s, http.MethodPost, "/cycle", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if found, _ := raw["found"].(bool); !found {
+		t.Fatal("expected a loop on a dense lattice")
+	}
+	if _, ok := raw["preferenceApplied"]; ok {
+		t.Fatalf("preferenceApplied = %v on a graph with no dead ends", raw["preferenceApplied"])
+	}
+	if _, ok := raw["preferenceShare"]; ok {
+		t.Fatal("preferenceShare must be absent alongside an absent preferenceApplied")
+	}
+}
+
+func TestCycleUnrecognisedPreferenceIsDropped(t *testing.T) {
+	// A stale or garbled knob must never be a 400, and must serve exactly what
+	// an unpreferenced request serves.
+	s, cLat, cLng := splitServer(t)
+	start := `{"start":{"lat":` + ftoa(cLat) + `,"lng":` + ftoa(cLng) + `},"targetDistanceM":800`
+	plain := do(t, s, http.MethodPost, "/cycle", start+`}`)
+	if plain.Code != http.StatusOK {
+		t.Fatalf("plain status = %d", plain.Code)
+	}
+	for _, pref := range []string{`""`, `"banana"`, `"QUIET"`, `"cul-de-sac"`, `null`} {
+		rec := do(t, s, http.MethodPost, "/cycle", start+`,"preference":`+pref+`}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, want 200", pref, rec.Code)
+		}
+		if rec.Body.String() != plain.Body.String() {
+			t.Fatalf("%s: response differs from an unpreferenced request", pref)
+		}
+	}
+	// The degrade covers every string the field can carry. A non-string is a
+	// JSON type error like any other malformed body, and the README says so.
+	for _, pref := range []string{`123`, `[]`, `{}`, `true`} {
+		rec := do(t, s, http.MethodPost, "/cycle", start+`,"preference":`+pref+`}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: status = %d, want 400", pref, rec.Code)
+		}
+	}
+}
+
+func TestCycleLoopPoorOmitsThePreference(t *testing.T) {
+	g, stats := graph.BuildTestLine(30, 100, 40.0, -77.0)
+	s := New(g, stats, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	body := `{"start":{"lat":40.0,"lng":-77.0},"targetDistanceM":1000,"preference":"quiet"}`
+	rec := do(t, s, http.MethodPost, "/cycle", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := raw["preferenceApplied"]; ok {
+		t.Fatal("a loop that was never served must not report a preference")
+	}
+	if _, ok := raw["preferenceShare"]; ok {
+		t.Fatal("preferenceShare must be absent alongside an absent preferenceApplied")
+	}
+}
+
 func TestCycleValidation(t *testing.T) {
 	s, _, _ := testServer(t)
 	cases := []struct {
