@@ -69,6 +69,24 @@ interface ConnectAccountSource {
 }
 type ConnectAccountSourceIsStripes = AssertAssignable<Stripe.Account, ConnectAccountSource>;
 
+/// A refund is NOT a charge, and the difference is the whole of decisions
+/// § 789. `charge.refund.updated` / `refund.updated` / `refund.failed` all
+/// deliver a Refund as `data.object`, and a Refund carries neither `refunded`
+/// nor `amount_refunded` — the two fields `refundScopeOfCharge` decides on.
+/// Its `amount` is THIS refund's own amount, not the charge total, so putting
+/// one through `readCharge` yields `refunded: null`, `amount_refunded: null`
+/// and a charge total that is really a refund total: `refundScopeOfCharge`
+/// then answers `full` for every one of them.
+interface RefundSource {
+  object: 'refund';
+  id: string;
+  amount: number;
+  charge: string | { id: string } | null;
+  payment_intent: string | { id: string } | null;
+  status: string | null;
+}
+type RefundSourceIsStripes = AssertAssignable<Stripe.Refund, RefundSource>;
+
 /// The Stripe event types this webhook acts on, checked against Stripe's own
 /// event union. A mistyped comparison string does not fail — it silently
 /// matches nothing, and on the sole writer of `event_orders.status` that
@@ -81,8 +99,37 @@ export const STRIPE_EVENT = {
   checkoutAsyncFailed: 'checkout.session.async_payment_failed',
   checkoutExpired: 'checkout.session.expired',
   chargeRefunded: 'charge.refunded',
+  chargeRefundUpdated: 'charge.refund.updated',
+  refundUpdated: 'refund.updated',
+  refundFailed: 'refund.failed',
   accountUpdated: 'account.updated',
 } as const satisfies Record<string, Stripe.Event.Type>;
+
+/// The three event types that can carry the news that a refund did NOT
+/// happen after all, any one of which an endpoint may be the only one to
+/// receive.
+///
+/// `charge.refunded` fires the moment a refund is CREATED, including one
+/// created `pending` against a delayed-notification payment method, and
+/// `charge.amount_refunded` is incremented optimistically with it. When the
+/// bank then rejects the refund the money comes back to us and Stripe walks
+/// that figure down again — news which arrives on the refund object, not the
+/// charge. Which of these three delivers it depends on the API version pinned
+/// on the webhook ENDPOINT, not on the SDK version in this repo:
+/// `charge.refund.updated` is the long-standing name and `refund.updated` /
+/// `refund.failed` the modern ones, and the endpoint's version is operator
+/// configuration we cannot read from here. All three are subscribed and all
+/// three are treated identically; `webhook_events` dedupes by event id, and
+/// the CAS below makes a second delivery of the same reversal a no-op anyway.
+export const REFUND_REVERSAL_EVENTS: readonly string[] = [
+  STRIPE_EVENT.chargeRefundUpdated,
+  STRIPE_EVENT.refundUpdated,
+  STRIPE_EVENT.refundFailed,
+];
+
+export function isRefundReversalEvent(eventType: string): boolean {
+  return REFUND_REVERSAL_EVENTS.includes(eventType);
+}
 
 /// Metadata as it can actually be read. Stripe declares it
 /// `{ [name: string]: string }`, and TypeScript hands back `string` for a
@@ -108,6 +155,12 @@ export interface ConnectAccount {
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
   detailsSubmitted: boolean;
+}
+
+export interface Refund {
+  paymentIntentId: string | null;
+  amountCents: number | null;
+  status: string | null;
 }
 
 /// Stripe serialises a reference either as the bare id or, when the webhook
@@ -164,6 +217,40 @@ export function readCharge(object: Record<string, unknown>): Charge {
       ? object.amount_refunded
       : null,
   };
+}
+
+/// Narrow a refund-bearing `data.object`, or refuse it.
+///
+/// The refusal is the point, and it is a CHECK rather than a cast (§ 785's
+/// shape): `object` is Stripe's own discriminator and it is the only thing
+/// separating a Refund from the Charge that the sibling reader takes. An
+/// endpoint subscribed to a fourth event type — or a Stripe API version that
+/// moves one of these three onto a different resource — reaches the handler
+/// with something that is not a refund, and reading its `amount` as a refund
+/// amount would walk a donation's refunded total down by an arbitrary figure.
+/// Null here means "not a refund", which the caller answers 200-ignored.
+export function readRefund(object: Record<string, unknown>): Refund | null {
+  if (object.object !== 'refund') return null;
+  return {
+    paymentIntentId: referenceId(object.payment_intent),
+    amountCents: typeof object.amount === 'number' ? object.amount : null,
+    status: typeof object.status === 'string' ? object.status : null,
+  };
+}
+
+/// Whether a refund's status means the money did NOT go back.
+///
+/// Stripe's refund lifecycle is `pending` -> `succeeded` | `failed`, with
+/// `requires_action` in between for methods that need one and `canceled` for
+/// a `requires_action` refund nobody actioned. `failed` and `canceled` both
+/// mean the funds returned to our balance; every other value — including one
+/// this build has never heard of — means the refund is alive or done, and
+/// reversing a LIVE refund would delete a seat release that was correct.
+/// Stripe declares this field as a bare `string`, so there is no compile-time
+/// check on the vocabulary and the fail-closed default is what stands in for
+/// one.
+export function isRefundReversed(status: string | null): boolean {
+  return status === 'failed' || status === 'canceled';
 }
 
 export function readConnectAccount(object: Record<string, unknown>): ConnectAccount {
@@ -286,6 +373,7 @@ export type OrderStatus =
   | 'pending'
   | 'paid'
   | 'refunded'
+  | 'refund_failed'
   | 'partially_refunded'
   | 'failed'
   | 'canceled';
@@ -301,6 +389,8 @@ export type OrderStatus =
 ///   pending  + checkout.session.expired                 -> canceled
 ///   pending  + checkout.session.async_payment_failed    -> failed
 ///   paid     + charge.refunded                          -> refunded
+///   refunded + a refund reversal                        -> refund_failed
+///   refund_failed + charge.refunded (full)              -> refunded
 ///   everything else                                     -> null
 ///
 /// The two async arms are the delayed-notification half of Checkout: the
@@ -342,6 +432,35 @@ export function orderStatusTransition(
   // able to release the seat. Only a FULL refund moves it on — a second partial
   // returns null so the seat is not released by an instalment.
   if (currentStatus === 'partially_refunded' && eventType === STRIPE_EVENT.chargeRefunded) {
+    return refund === 'full' ? 'refunded' : null;
+  }
+  // A refund that was announced and then rejected by the bank. `refunded` is
+  // the only status this reaches, and the asymmetry is deliberate:
+  //
+  //   * From `refunded` the seat has ALREADY been deleted and, if the event
+  //     had a waitlist, given away. `refund_failed` records that the money is
+  //     back with us on an order whose seat is gone — a state the ledger could
+  //     not previously express at all, and the one an operator reconciles from
+  //     (`select … where status = 'refund_failed'`). It deliberately does NOT
+  //     go back to `paid`: `enforce_paid_order_for_priced_event` accepts a
+  //     `paid` order as backing a seat, so calling it paid would describe a
+  //     registration that does not exist.
+  //   * From `partially_refunded` the seat was never released, so nothing is
+  //     stranded — and `event_orders` carries no refunded AMOUNT, so there is
+  //     no way to tell "the one partial we announced failed" (truthfully
+  //     `paid`) from "one of two failed" (truthfully still
+  //     `partially_refunded`). Writing either would be a guess, and both
+  //     guesses are invisible to the buyer. It returns null and the handler
+  //     logs instead.
+  if (currentStatus === 'refunded' && isRefundReversalEvent(eventType)) {
+    return 'refund_failed';
+  }
+  // A rejected refund can be re-issued — from the dashboard, or by the buyer
+  // cancelling again — and the retry's `charge.refunded` has to be able to
+  // finish the job. A partial retry returns null: the seat is already gone, so
+  // `partially_refunded` (which every seat predicate reads as a HELD seat)
+  // would describe a registration that no longer exists.
+  if (currentStatus === 'refund_failed' && eventType === STRIPE_EVENT.chargeRefunded) {
     return refund === 'full' ? 'refunded' : null;
   }
   return null;
@@ -481,6 +600,56 @@ export function refundedCentsOfCharge(
   const refunded = charge.amountRefundedCents;
   if (refunded === null || !Number.isInteger(refunded) || refunded <= 0) return null;
   return Math.min(refunded, amountCents);
+}
+
+export interface DonationRefundReversal {
+  status: DonationStatus;
+  refundedCents: number;
+}
+
+/// What a donation's ledger should say once one of its refunds has been
+/// rejected and the money has come back to us.
+///
+/// This is the one place the cumulative-total rule of § 776 cannot be
+/// applied. `refunded_cents` is written from Stripe's own
+/// `charge.amount_refunded` precisely so the write needs no arithmetic and
+/// survives out-of-order delivery — but the reversal arrives on the REFUND,
+/// which carries only its own amount, and the charge's walked-down total is
+/// not in the payload. So this subtracts, and every guard below exists to
+/// make the subtraction safe rather than plausible:
+///
+///   * only `refunded` / `partially_refunded` reverse — a `paid` donation
+///     never had a refund recorded against it, so there is nothing to take
+///     back off, and a `pending` one never had money in the first place;
+///   * the reversed amount must be a positive integer no larger than what the
+///     ledger holds. A larger one means the ledger never recorded this refund
+///     (the reversal overtook its own `charge.refunded`, or the row predates
+///     20270620_001 and carries 0 against a real refund), and subtracting it
+///     would invent a negative total the CHECK refuses. Null, and the caller
+///     logs it for reconciliation rather than guessing;
+///   * the resulting status is DERIVED from the corrected figure rather than
+///     assumed, so a donation with two instalments where one fails lands in
+///     `partially_refunded` with the survivor still recorded, and one whose
+///     only refund failed goes back to `paid` — which is what puts it back on
+///     the charity's thermometer, since `fundraiser_totals` sums
+///     `amount_cents - refunded_cents` over exactly those two statuses.
+///
+/// Because it is arithmetic on a value that was read, the caller's CAS must
+/// match `refunded_cents` EXACTLY, not `lte` as the forward path does.
+export function donationRefundReversal(
+  currentStatus: string,
+  currentRefundedCents: number,
+  reversedCents: number | null,
+): DonationRefundReversal | null {
+  if (currentStatus !== 'refunded' && currentStatus !== 'partially_refunded') return null;
+  if (!Number.isInteger(currentRefundedCents) || currentRefundedCents <= 0) return null;
+  if (reversedCents === null || !Number.isInteger(reversedCents) || reversedCents <= 0) return null;
+  if (reversedCents > currentRefundedCents) return null;
+  const remaining = currentRefundedCents - reversedCents;
+  return {
+    status: remaining > 0 ? 'partially_refunded' : 'paid',
+    refundedCents: remaining,
+  };
 }
 
 export interface AttendeeRow {
