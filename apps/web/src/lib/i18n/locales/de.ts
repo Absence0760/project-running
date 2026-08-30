@@ -926,7 +926,7 @@ export const messages = {
 	"routeNew.preferenceScenicHint": "Lenkt die generierte Runde zu Parks, Grünflächen und Uferwegen.",
 	"routeNew.preferenceCulDeSac": "Ruhige Sackgassen",
 	"routeNew.preferenceCulDeSacHint": "Erlaubt kurze Abstecher in ruhige Sackgassen und zurück, um die Distanz aufzufüllen.",
-	"routeNew.preferenceNotApplied": "Diese Runde wurde ohne deine Streckenpräferenz generiert.",
+	"routeNew.preferenceNotApplied": "Diese Strecke wurde ohne deine Präferenz generiert.",
 	"routeNew.cancelGenerating": "Generierung abbrechen…",
 	"routeNew.generateRoute": "{distance}-Route generieren",
 	"routeNew.generateLoop": "{distance}-Schleife generieren",

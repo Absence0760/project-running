@@ -17,6 +17,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { distanceInPreferred, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 	import { routeSurfaceLabel } from '$lib/i18n/enum_labels.svelte';
 	import { env } from '$env/dynamic/public';
 	import { routeGenEnabled } from '$lib/routes/route_gen_flag';
@@ -286,6 +287,10 @@
 	function doClear() {
 		builder?.clearWaypoints();
 		routed = false;
+		// The note is a claim about a specific served route; clearing the
+		// waypoints destroys that route, so leaving it up accuses the
+		// generator over something no longer on the map.
+		preferenceOutcome = null;
 	}
 
 	// Strip a route name down to a filesystem-safe ASCII basename for the
@@ -331,11 +336,15 @@
 		applied: RoutePreference | null;
 	} | null>(null);
 
-	function preferenceLabel(p: RoutePreference): string {
-		if (p === 'quiet') return m('routeNew.quietRoads');
-		if (p === 'scenic') return m('routeNew.preferenceScenic');
-		return m('routeNew.preferenceCulDeSac');
-	}
+	// Keyed by the union rather than an if-chain, so a value added to
+	// ROUTE_PREFERENCES fails the build here instead of rendering under
+	// whichever label the fall-through happened to end on — stating a
+	// preference the runner never asked for as fact.
+	const PREFERENCE_LABEL_KEYS: Record<RoutePreference, MessageKey> = {
+		quiet: 'routeNew.quietRoads',
+		scenic: 'routeNew.preferenceScenic',
+		cul_de_sac: 'routeNew.preferenceCulDeSac',
+	};
 	let pickingPoint = $state<'start' | 'end' | null>(null);
 	let startPoint = $state<{ lat: number; lng: number } | null>(null);
 	let endPoint = $state<{ lat: number; lng: number } | null>(null);
@@ -616,6 +625,7 @@
 		routingError = null;
 		builder?.clearWaypoints();
 		routed = false;
+		preferenceOutcome = null;
 		pickingPoint = 'start';
 	}
 
@@ -904,7 +914,7 @@
 									{#if nlApplied.preference}
 										<li>
 											{m('routeNew.aiRequestPreference', {
-												preference: preferenceLabel(nlApplied.preference),
+												preference: m(PREFERENCE_LABEL_KEYS[nlApplied.preference]),
 											})}
 										</li>
 									{/if}
@@ -1012,7 +1022,7 @@
 								onchange={() => (preference = null)}
 								data-testid="route-pref-none"
 							/>
-							<span class="pref-name">{m('routeNew.preferenceNone')}</span>
+							<span>{m('routeNew.preferenceNone')}</span>
 						</label>
 						<label class="pref-option">
 							<input
@@ -1022,7 +1032,7 @@
 								onchange={() => (preference = 'quiet')}
 								data-testid="route-pref-quiet"
 							/>
-							<span class="pref-name">{m('routeNew.quietRoads')}</span>
+							<span>{m('routeNew.quietRoads')}</span>
 							<span class="pref-hint">{m('routeNew.quietRoadsHint')}</span>
 						</label>
 						<label class="pref-option">
@@ -1033,7 +1043,7 @@
 								onchange={() => (preference = 'scenic')}
 								data-testid="route-pref-scenic"
 							/>
-							<span class="pref-name">{m('routeNew.preferenceScenic')}</span>
+							<span>{m('routeNew.preferenceScenic')}</span>
 							<span class="pref-hint">{m('routeNew.preferenceScenicHint')}</span>
 						</label>
 						<label class="pref-option">
@@ -1044,7 +1054,7 @@
 								onchange={() => (preference = 'cul_de_sac')}
 								data-testid="route-pref-cul-de-sac"
 							/>
-							<span class="pref-name">{m('routeNew.preferenceCulDeSac')}</span>
+							<span>{m('routeNew.preferenceCulDeSac')}</span>
 							<span class="pref-hint">{m('routeNew.preferenceCulDeSacHint')}</span>
 						</label>
 					</div>
@@ -1065,11 +1075,11 @@
 							<a href="/settings/upgrade">{m('routeNew.generateProUpsellCta')}</a>
 						</p>
 					{/if}
-					{#if preferenceOutcome && preferenceOutcome.applied !== preferenceOutcome.asked}
-						<p class="pref-not-applied" role="status" data-testid="route-pref-not-applied">
-							{m('routeNew.preferenceNotApplied')}
-						</p>
-					{/if}
+					<p class="pref-not-applied" aria-live="polite" data-testid="route-pref-not-applied">
+						{preferenceOutcome && preferenceOutcome.applied !== preferenceOutcome.asked
+							? m('routeNew.preferenceNotApplied')
+							: ''}
+					</p>
 				</div>
 			{/if}
 

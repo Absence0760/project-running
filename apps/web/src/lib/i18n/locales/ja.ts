@@ -921,7 +921,7 @@ export const messages = {
 	"routeNew.preferenceScenicHint": "生成されるループを公園・緑地・水辺の道に寄せます。",
 	"routeNew.preferenceCulDeSac": "静かな行き止まり",
 	"routeNew.preferenceCulDeSacHint": "距離を補うため、静かな行き止まりへの短い往復を許可します。",
-	"routeNew.preferenceNotApplied": "このループはルートの好みを適用せずに生成されました。",
+	"routeNew.preferenceNotApplied": "このルートは好みを適用せずに生成されました。",
 	"routeNew.cancelGenerating": "生成をキャンセル…",
 	"routeNew.generateRoute": "{distance} のルートを生成",
 	"routeNew.generateLoop": "{distance} のループを生成",

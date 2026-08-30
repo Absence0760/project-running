@@ -926,7 +926,7 @@ export const messages = {
 	"routeNew.preferenceScenicHint": "Orienta el bucle generado hacia parques, zonas verdes y paseos junto al agua.",
 	"routeNew.preferenceCulDeSac": "Calles sin salida tranquilas",
 	"routeNew.preferenceCulDeSacHint": "Permite desvíos cortos de ida y vuelta por calles sin salida tranquilas para completar la distancia.",
-	"routeNew.preferenceNotApplied": "Este bucle se generó sin tu preferencia de ruta.",
+	"routeNew.preferenceNotApplied": "Esta ruta se generó sin tu preferencia.",
 	"routeNew.cancelGenerating": "Cancelar generación…",
 	"routeNew.generateRoute": "Generar ruta de {distance}",
 	"routeNew.generateLoop": "Generar circuito de {distance}",

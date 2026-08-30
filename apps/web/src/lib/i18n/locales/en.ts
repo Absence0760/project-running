@@ -937,7 +937,7 @@ export const en = {
 	"routeNew.preferenceScenicHint": "Bias the generated loop toward parks, green space and waterside paths.",
 	"routeNew.preferenceCulDeSac": "Quiet dead ends",
 	"routeNew.preferenceCulDeSacHint": "Allow short out-and-back spurs into quiet cul-de-sacs to make up the distance.",
-	"routeNew.preferenceNotApplied": "This loop was generated without your route preference.",
+	"routeNew.preferenceNotApplied": "This route was generated without your preference.",
 	"routeNew.cancelGenerating": "Cancel generating…",
 	"routeNew.generateRoute": "Generate {distance} route",
 	"routeNew.generateLoop": "Generate {distance} loop",

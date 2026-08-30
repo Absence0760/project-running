@@ -1266,7 +1266,7 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		await expect.poll(() => requests.length).toBe(1);
 		expect(requests[0].preference).toBeUndefined();
 		await expect(save).toBeEnabled();
-		await expect(page.getByTestId('route-pref-not-applied')).toBeHidden();
+		await expect(page.getByTestId('route-pref-not-applied')).toHaveText('');
 
 		// Each choice sends its own token, and picking one clears the last.
 		const cases = [
@@ -1332,20 +1332,65 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 		const generate = page.getByRole('button', { name: /Generate .* loop/i });
 		const save = page.getByRole('button', { name: /Save Route/ });
 
+		// The region is permanently mounted and only its text changes
+		// (decisions § 736), so these assert on the message, not on presence.
 		// Honoured: the server names the preference back, so the page says
 		// nothing. Save going enabled proves the round trip finished.
 		await expect(save).toBeDisabled();
 		await page.getByTestId('route-pref-scenic').check();
 		await generate.click();
 		await expect(save).toBeEnabled();
-		await expect(note).toBeHidden();
+		await expect(note).toHaveText('');
 
 		// Same ask, a body carrying no `preferenceApplied` — the loop came back
 		// without the preference and the page has to say so.
 		echoPreference = false;
 		await generate.click();
-		await expect(note).toBeVisible();
-		await expect(note).toContainText(/without your route preference/i);
+		await expect(note).toContainText(/without your preference/i);
+
+		// And it clears again once an ask IS honoured: a stale note is a false
+		// accusation, which is the direction of this failure that misleads.
+		echoPreference = true;
+		await generate.click();
+		await expect(note).toHaveText('');
+	});
+
+	test('a preference the server answers with a DIFFERENT token counts as not applied', async ({
+		page,
+	}) => {
+		// The engines deploy separately from this bundle, so the body can name a
+		// preference this request never carried. Agreement with the ask is what
+		// the page reports — a bare echo would let a wrong answer read as a
+		// honoured one.
+		await page.unroute('**/api/routes/generate');
+		await page.route('**/api/routes/generate', async (route: Route) => {
+			const body = route.request().postDataJSON() as {
+				start: { lat: number; lng: number };
+				targetDistanceM: number;
+			};
+			const coordinates = loopPolyline(body.start, body.targetDistanceM);
+			let distanceM = 0;
+			for (let i = 1; i < coordinates.length; i++) {
+				distanceM += haversineM(
+					{ lng: coordinates[i - 1][0], lat: coordinates[i - 1][1] },
+					{ lng: coordinates[i][0], lat: coordinates[i][1] },
+				);
+			}
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ coordinates, distanceM, preferenceApplied: 'quiet' }),
+			});
+		});
+
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+		await setStartViaHook(page, FIELD_START);
+		await page.getByTestId('route-pref-scenic').check();
+		await page.getByRole('button', { name: /Generate .* loop/i }).click();
+		await expect(page.getByRole('button', { name: /Save Route/ })).toBeEnabled();
+		await expect(page.getByTestId('route-pref-not-applied')).toContainText(
+			/without your preference/i,
+		);
 	});
 
 	test('keyboard coordinate entry sets the start point without a map tap (WCAG 2.1.1)', async ({

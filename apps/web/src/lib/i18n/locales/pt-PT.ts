@@ -925,7 +925,7 @@ export const messages = {
 	"routeNew.preferenceScenicHint": "Direciona o trajeto gerado para parques, zonas verdes e caminhos à beira de água.",
 	"routeNew.preferenceCulDeSac": "Becos sem saída tranquilos",
 	"routeNew.preferenceCulDeSacHint": "Permite desvios curtos de ida e volta por becos sem saída tranquilos para completar a distância.",
-	"routeNew.preferenceNotApplied": "Este circuito foi gerado sem a sua preferência de rota.",
+	"routeNew.preferenceNotApplied": "Esta rota foi gerada sem a sua preferência.",
 	"routeNew.cancelGenerating": "Cancelar geração…",
 	"routeNew.generateRoute": "Gerar rota de {distance}",
 	"routeNew.generateLoop": "Gerar circuito de {distance}",

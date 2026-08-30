@@ -926,7 +926,7 @@ export const messages = {
 	"routeNew.preferenceScenicHint": "Oriente la boucle générée vers les parcs, les espaces verts et les chemins au bord de l'eau.",
 	"routeNew.preferenceCulDeSac": "Impasses tranquilles",
 	"routeNew.preferenceCulDeSacHint": "Autorise de courts allers-retours dans des impasses tranquilles pour compléter la distance.",
-	"routeNew.preferenceNotApplied": "Cette boucle a été générée sans votre préférence d'itinéraire.",
+	"routeNew.preferenceNotApplied": "Cet itinéraire a été généré sans votre préférence.",
 	"routeNew.cancelGenerating": "Annuler la génération…",
 	"routeNew.generateRoute": "Générer un itinéraire de {distance}",
 	"routeNew.generateLoop": "Générer une boucle de {distance}",
