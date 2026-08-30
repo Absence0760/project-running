@@ -26,11 +26,6 @@ export interface LoopCandidate {
 	coordinates: [number, number][];
 	/// Engine-reported path length in metres.
 	distanceM: number;
-	/// Share (0..1) of this loop's length on edges the requested preference
-	/// favours, when the producing engine MEASURED it. Absent means unmeasured,
-	/// never zero — `select.ts` rewards a measured share and never penalises a
-	/// candidate for a measurement its engine doesn't report.
-	preferenceShare?: number;
 }
 
 /// Typed failure so wrappers can map "unconfigured" → 501 (operator must set

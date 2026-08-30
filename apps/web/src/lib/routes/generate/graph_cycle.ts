@@ -27,6 +27,11 @@ export class GraphCycleError extends Error {
 	constructor(
 		readonly kind: 'unconfigured' | 'upstream',
 		message: string,
+		/// HTTP status when the sidecar ANSWERED and refused. Absent for a
+		/// transport failure, where there is no answer to read — which is the
+		/// distinction the caller needs: a refusal can be retried differently,
+		/// an unreachable host cannot.
+		readonly status?: number,
 	) {
 		super(message);
 		this.name = 'GraphCycleError';
@@ -82,8 +87,7 @@ export function buildGraphCycleUrl(baseUrl: string): string {
 /// payload is malformed — both cases the handler turns into a round_trip
 /// fallback. The wire shape matches LoopCandidate (`coordinates` [lng,lat],
 /// `distanceM`) plus a `found` flag and a separately-parsed `largestClean` (see
-/// `parseLargestCleanM`). A measured `preferenceShare` rides onto the returned
-/// candidate so the selector can weigh it (see `preferenceFactor` in ./select).
+/// `parseLargestCleanM`).
 export function parseGraphCycle(json: unknown): LoopCandidate | null {
 	const j = json as
 		| { found?: unknown; coordinates?: unknown; distanceM?: unknown }
@@ -101,15 +105,7 @@ export function parseGraphCycle(json: unknown): LoopCandidate | null {
 	const distanceM =
 		typeof j.distanceM === 'number' && Number.isFinite(j.distanceM) ? j.distanceM : 0;
 	if (distanceM <= 0) return null;
-	const loop: LoopCandidate = { coordinates, distanceM };
-	// A share measures the applied weighting, so it only rides the candidate when
-	// the sidecar says the weighting reached this loop — otherwise it would feed
-	// the selection score a number about a preference nobody applied.
-	if (parsePreferenceApplied(json) !== null) {
-		const share = parsePreferenceShare(json);
-		if (share !== null) loop.preferenceShare = share;
-	}
-	return loop;
+	return { coordinates, distanceM };
 }
 
 /// Parse the preference the sidecar says it applied to the served loop. Pure.
@@ -121,15 +117,6 @@ export function parsePreferenceApplied(json: unknown): RoutePreference | null {
 	return typeof v === 'string' && (ROUTE_PREFERENCES as readonly string[]).includes(v)
 		? (v as RoutePreference)
 		: null;
-}
-
-/// Parse the share (0..1) of the served loop's length on preferred edges. Pure.
-/// Anything non-numeric or outside the unit interval yields null rather than a
-/// clamp: the value feeds a selection score, and a fabricated one would move the
-/// choice as confidently as a measured one.
-export function parsePreferenceShare(json: unknown): number | null {
-	const v = (json as { preferenceShare?: unknown } | null)?.preferenceShare;
-	return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? v : null;
 }
 
 /// Parse the sidecar's `largestClean` distance. Pure. The sidecar reports
@@ -188,7 +175,7 @@ export async function fetchGraphCycle(
 		clearTimeout(timer);
 	}
 	if (!res.ok) {
-		throw new GraphCycleError('upstream', `graph_cycle returned ${res.status}`);
+		throw new GraphCycleError('upstream', `graph_cycle returned ${res.status}`, res.status);
 	}
 	let json: unknown;
 	try {

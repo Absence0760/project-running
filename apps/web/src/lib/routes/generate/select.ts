@@ -33,11 +33,6 @@ import type { LoopCandidate } from './graphhopper';
 /// closest-to-target, minimising the warning the user actually sees.
 const DISTANCE_BAND = 0.15;
 
-/// How much a fully-preferred loop can lift its in-band score. Small on purpose:
-/// a loop the runner asked to be quiet is still a loop first, and a 25% ceiling
-/// can't buy a spur past a genuinely round near-target candidate.
-const PREFERENCE_WEIGHT = 0.25;
-
 /// Signed-area magnitude of the closed polyline in m², via the shoelace
 /// formula on a local equirectangular projection (metres around the first
 /// vertex's latitude). Open polylines are treated as implicitly closed.
@@ -85,24 +80,8 @@ export function areaEfficiency(c: LoopCandidate): number {
 	return enclosedAreaM2(c.coordinates) / circleArea;
 }
 
-/// Preference term: `1 + PREFERENCE_WEIGHT × share` for a candidate whose engine
-/// measured the share of its length on preferred edges, and exactly 1 for one
-/// that didn't.
-///
-/// Reward-only, never a penalty, because the pool is mixed by construction: the
-/// graph-cycle sidecar reports a share and GraphHopper's round_trip reports none.
-/// A symmetric term would score the unmeasured candidate as if it were 0%
-/// preferred and hand the win to whichever engine stayed silent — punishing the
-/// one rail honest enough to measure. Neutral-at-1 also keeps a pool with no
-/// shares at all scoring exactly as it did before the term existed.
-export function preferenceFactor(c: LoopCandidate): number {
-	const share = c.preferenceShare;
-	if (typeof share !== 'number' || !Number.isFinite(share)) return 1;
-	return 1 + PREFERENCE_WEIGHT * Math.min(1, Math.max(0, share));
-}
-
 /// In-band selection score: roundness discounted by how far the candidate
-/// strays from target, then lifted by the preference term. The discount
+/// strays from target. The discount
 /// `1 - |len − target| / target` is 1 at the target and falls linearly to
 /// `1 - DISTANCE_BAND` (≈0.85) at the band edge, so a candidate 11% long must be
 /// ~13% rounder to still win — it can, but only when it's genuinely the cleaner
@@ -110,7 +89,7 @@ export function preferenceFactor(c: LoopCandidate): number {
 /// out-of-band tier already applies.
 export function inBandScore(c: LoopCandidate, targetDistanceM: number): number {
 	const closeness = 1 - Math.abs(c.distanceM - targetDistanceM) / targetDistanceM;
-	return areaEfficiency(c) * closeness * preferenceFactor(c);
+	return areaEfficiency(c) * closeness;
 }
 
 export function pickBestLoop(

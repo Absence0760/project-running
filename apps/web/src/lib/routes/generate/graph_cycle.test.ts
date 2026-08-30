@@ -8,7 +8,6 @@ import {
 	parseGraphCycle,
 	parseLargestCleanM,
 	parsePreferenceApplied,
-	parsePreferenceShare,
 } from './graph_cycle';
 import { handleGenerate } from './handler';
 import type { Fetcher } from './graphhopper';
@@ -207,38 +206,6 @@ test('parsePreferenceApplied accepts only the shared vocabulary', () => {
 	assert.equal(parsePreferenceApplied(null), null);
 });
 
-test('parsePreferenceShare accepts only a finite 0..1 value', () => {
-	assert.equal(parsePreferenceShare({ preferenceShare: 0.78 }), 0.78);
-	assert.equal(parsePreferenceShare({ preferenceShare: 0 }), 0);
-	assert.equal(parsePreferenceShare({ preferenceShare: 1 }), 1);
-	// Out of range is a broken sidecar, not a clamp: the value feeds a selection
-	// score, so a fabricated one moves the choice as confidently as a real one.
-	assert.equal(parsePreferenceShare({ preferenceShare: 1.4 }), null);
-	assert.equal(parsePreferenceShare({ preferenceShare: -0.1 }), null);
-	assert.equal(parsePreferenceShare({ preferenceShare: '0.5' }), null);
-	assert.equal(parsePreferenceShare({}), null);
-});
-
-test('parseGraphCycle carries the share only when a preference was applied', () => {
-	const loop = squareLoop(0, 0, 0.01);
-	const applied = parseGraphCycle({
-		found: true,
-		coordinates: loop,
-		distanceM: 5000,
-		preferenceApplied: 'quiet',
-		preferenceShare: 0.62,
-	});
-	assert.equal(applied?.preferenceShare, 0.62);
-	// A share without an applied preference measures nothing.
-	const orphaned = parseGraphCycle({
-		found: true,
-		coordinates: loop,
-		distanceM: 5000,
-		preferenceShare: 0.62,
-	});
-	assert.equal(orphaned?.preferenceShare, undefined);
-});
-
 test('fetchGraphCycle reports the preference the sidecar actually applied', async () => {
 	const withApplied: Fetcher = async () =>
 		new Response(
@@ -247,7 +214,6 @@ test('fetchGraphCycle reports the preference the sidecar actually applied', asyn
 				coordinates: squareLoop(0, 0, 0.01),
 				distanceM: 5000,
 				preferenceApplied: 'quiet',
-				preferenceShare: 0.9,
 			}),
 			{ status: 200, headers: { 'content-type': 'application/json' } },
 		);
