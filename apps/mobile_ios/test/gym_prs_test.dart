@@ -164,13 +164,51 @@ void main() {
     });
   });
 
-  test('the whitespace class matches web, U+0085 included', () {
-    // exercise_key is PERSISTED, so a name that normalises differently on the
-    // two platforms buckets one exercise into two PRs. Dart's trim() strips
-    // every Unicode White_Space code point (incl. NEL); JS's does not, so the
-    // class is spelled out on both sides rather than left to the runtime.
-    expect(normaliseExerciseName('Bench Press\u0085'), 'bench press');
-    expect(normaliseExerciseName('\u00a0Bench\u2003Press\u2028'), 'bench press');
+  test('the whitespace class matches the web and SQL twins', () {
+    // exercise_key is PERSISTED and three rails derive it, so a name that
+    // normalises differently on any of them buckets one exercise into two.
+    const members = <int>[
+      0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001,
+      0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200a,
+      0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff,
+    ];
+    for (final cp in members) {
+      final c = String.fromCharCode(cp);
+      final hex = cp.toRadixString(16);
+      expect(normaliseExerciseName('Bench${c}Press'), 'bench press',
+          reason: 'inner U+$hex');
+      // The edge cases are the ones the SQL rail got wrong: btrim(text) with
+      // no second argument strips ONLY U+0020, so every other member survived
+      // the trim and the collapse then turned it into a leading/trailing space.
+      expect(normaliseExerciseName('${c}Bench Press'), 'bench press',
+          reason: 'leading U+$hex');
+      expect(normaliseExerciseName('Bench Press$c'), 'bench press',
+          reason: 'trailing U+$hex');
+    }
     expect(normaliseExerciseName('  Bench   press '), 'bench press');
+    expect(normaliseExerciseName('\t\n'), '');
+  });
+
+  test('non-whitespace format characters are left alone', () {
+    // U+200B ZWSP and U+180E are NOT whitespace in any of the three rails, and
+    // widening the class on one platform alone would re-key every name holding
+    // one. Pinned so the class cannot quietly grow.
+    expect(normaliseExerciseName('Bench\u200bPress'), 'bench\u200bpress');
+    expect(normaliseExerciseName('Bench\u180ePress'), 'bench\u180epress');
+  });
+
+  test('the case folds no runtime agrees on are applied by hand', () {
+    // JS full-lowercases U+0130 to `i` + U+0307 where Dart and libc's towlower
+    // both yield a bare `i`. Folding it by hand is what makes the stored key
+    // identical on all three rails; the four titlecase digraphs are the same
+    // shape. decisions.md § 790.
+    expect(normaliseExerciseName('\u0130ncline Press'), 'incline press');
+    expect(normaliseExerciseName('\u0130NCLINE PRESS'), 'incline press');
+    expect(normaliseExerciseName('\u01c5em'), '\u01c6em');
+    expect(normaliseExerciseName('\u01c8'), '\u01c9');
+    expect(normaliseExerciseName('\u01cb'), '\u01cc');
+    expect(normaliseExerciseName('\u01f2'), '\u01f3');
+    // Ordinary folding is still the runtime's, and all three agree on it.
+    expect(normaliseExerciseName('\u00c9l\u00e9vation'), '\u00e9l\u00e9vation');
   });
 }
