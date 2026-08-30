@@ -49,26 +49,60 @@ func TestCulDeSacAddsStubsAndCreditsThem(t *testing.T) {
 	}
 }
 
+func deadEndsOn(g *Graph, path []int32) int {
+	n := 0
+	for _, v := range path {
+		if g.degree(v) == 1 {
+			n++
+		}
+	}
+	return n
+}
+
 func TestCulDeSacRespectsItsCaps(t *testing.T) {
-	g, _ := BuildTestStubGrid(9, 9, 100, 40.0, -77.0, 0.4)
+	// The caps are spelled out rather than read off the implementation. An
+	// assertion phrased in the constant it pins cannot fail when that constant
+	// moves: raising all three at once (4 stubs to 12, a fifth of target to
+	// four fifths, 250 m to 2500) left this whole suite green.
+	const (
+		maxStubs         = 4
+		maxShareOfTarget = 0.20
+	)
+	g, _ := BuildTestStubGrid(11, 11, 100, 40.0, -77.0, 0.4)
 	lat, lng := stubGridStart()
-	for _, target := range []float64{600, 800, 1200, 1600, 2000} {
+
+	// One short base loop augmented towards far larger targets, so the shortfall
+	// it is closing is never the binding constraint and the caps are. Degree-1
+	// nodes on the served path are NOT the stub count — a far-point can itself
+	// be a dead end, so the base loop can carry one before any augmentation —
+	// but the change in that count across the augmentation is exactly the stubs
+	// it spliced, since every stub ends at a dead end reached off the loop.
+	base := g.SearchCycle(context.Background(), lat, lng, 800, PrefNone)
+	if base.Best == nil {
+		t.Fatal("expected a base loop to augment")
+	}
+	for _, target := range []float64{1200, 2000, 3000, 5000} {
+		l := *base.Best
+		before := deadEndsOn(g, l.path)
+		g.augmentCulDeSac(&l, target)
+		if spliced := deadEndsOn(g, l.path) - before; spliced > maxStubs {
+			t.Fatalf("target %.0f: spliced %d stubs, cap is %d", target, spliced, maxStubs)
+		}
+		if l.stubM > maxShareOfTarget*target+1e-9 {
+			t.Fatalf("target %.0f: credited %.1f m of stub, cap is %.1f",
+				target, l.stubM, maxShareOfTarget*target)
+		}
+	}
+
+	// And end to end, where the search picks the base loop itself.
+	for _, target := range []float64{600, 800, 1200, 1600, 2000, 2500, 3000} {
 		res := g.SearchCycle(context.Background(), lat, lng, target, PrefCulDeSac)
 		if res.Best == nil {
 			continue
 		}
-		if res.Best.stubM > culDeSacShareOfTarget*target+1e-9 {
-			t.Fatalf("target %.0f: credited %.1f m of stub, cap is %.1f",
-				target, res.Best.stubM, culDeSacShareOfTarget*target)
-		}
-		deadEnds := 0
-		for _, n := range res.Best.path {
-			if g.degree(n) == 1 {
-				deadEnds++
-			}
-		}
-		if deadEnds > culDeSacMaxStubs {
-			t.Fatalf("target %.0f: %d dead ends on the loop, cap is %d", target, deadEnds, culDeSacMaxStubs)
+		if res.Best.stubM > maxShareOfTarget*target+1e-9 {
+			t.Fatalf("target %.0f: served %.1f m of stub, cap is %.1f",
+				target, res.Best.stubM, maxShareOfTarget*target)
 		}
 	}
 }
@@ -111,17 +145,28 @@ func TestFindQuietStubSkipsArterialDeadEnds(t *testing.T) {
 	}
 }
 
-func TestFindQuietStubRefusesAnOverlongSpur(t *testing.T) {
-	b := newBuilder()
-	b.addNode(0, Coord{Lat: 0, Lng: 0})
-	b.addNode(1, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
-	b.addNode(2, Coord{Lat: metresToDegLat(culDeSacMaxStubM + 50), Lng: 0})
-	b.addSegment(0, 1, classResidential)
-	b.addSegment(0, 2, classResidential)
-	g := b.finalize()
+func TestFindQuietStubRespectsTheLengthCap(t *testing.T) {
+	// 250 m one way, as a literal on both sides of the cap. A fixture placed at
+	// culDeSacMaxStubM+50 moves with the cap and so cannot fail when it changes.
+	for _, c := range []struct {
+		metres float64
+		offer  bool
+	}{
+		{240, true},
+		{300, false},
+	} {
+		b := newBuilder()
+		b.addNode(0, Coord{Lat: 0, Lng: 0})
+		b.addNode(1, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
+		b.addNode(2, Coord{Lat: metresToDegLat(c.metres), Lng: 0})
+		b.addSegment(0, 1, classResidential)
+		b.addSegment(0, 2, classResidential)
+		g := b.finalize()
 
-	if s := g.findQuietStub(0, map[int32]struct{}{0: {}, 1: {}}, map[int32]struct{}{}); s != nil {
-		t.Fatalf("stub = %v, want none — the dead end is past the length cap", s)
+		stub := g.findQuietStub(0, map[int32]struct{}{0: {}, 1: {}}, map[int32]struct{}{})
+		if (stub != nil) != c.offer {
+			t.Fatalf("a %.0f m dead end: stub = %v, want offered = %v", c.metres, stub, c.offer)
+		}
 	}
 }
 
