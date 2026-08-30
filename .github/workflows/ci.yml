@@ -1347,7 +1347,7 @@ jobs:
     #
     # Raised 25 -> 35 when `dropout` was added, 35 -> 40 for `screens`,
     # 40 -> 45 for `idle`, 45 -> 50 for `workout` and 50 -> 55 for `storm`: the
-    # eight budgets below now sum to 42 min against ~10 min of Renode fetch,
+    # eight budgets below now sum to 44 min against ~11 min of Renode fetch,
     # toolchain and a cold cargo build, and a cap that only just covered them
     # left the harness no room to fail with its own diagnostics before the
     # runner was killed bare. The cap is still what it has always been — a
