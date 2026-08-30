@@ -3951,6 +3951,7 @@ export const messages = {
 	"prefs.dateOfBirthPurpose": "Wird für altersbewertete Ergebnisse und – bei erteilter Einwilligung unten – für Herzfrequenzzonen genutzt. Dein Alter hält außerdem Konten unter 18 aus der Namenssuche heraus.",
 	"prefs.heightCm": "Größe (cm)",
 	"prefs.weight": "Gewicht",
+	"numericLimit.range": "{field} muss zwischen {min} und {max} liegen.",
 	"prefs.consentRecordedOn": "Einwilligung erfasst am {date}. Wenn du das obige Kästchen abwählst und speicherst, widerrufst du die Einwilligung und diese Felder werden gemäß Art. 7 Abs. 3 gelöscht.",
 	"prefs.demographicsSavedBtn": "Gespeichert!",
 	"prefs.saveDemographics": "Demografische Daten speichern",

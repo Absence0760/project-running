@@ -3951,6 +3951,7 @@ export const messages = {
 	"prefs.dateOfBirthPurpose": "Utilisée pour les résultats ajustés par âge et, si tu donnes ton consentement ci-dessous, pour les zones de fréquence cardiaque. Ton âge exclut aussi les comptes de moins de 18 ans de la recherche par nom.",
 	"prefs.heightCm": "Taille (cm)",
 	"prefs.weight": "Poids",
+	"numericLimit.range": "{field} doit être compris entre {min} et {max}.",
 	"prefs.consentRecordedOn": "Consentement enregistré le {date}. En décochant la case ci-dessus puis en enregistrant, tu retires ton consentement et ces champs sont effacés conformément à l'art. 7, par. 3.",
 	"prefs.demographicsSavedBtn": "Enregistré !",
 	"prefs.saveDemographics": "Enregistrer les données démographiques",

@@ -5,7 +5,14 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatDuration } from '$lib/format/time';
-	import { formatDistance, formatWeight, parseWeight, getUnit } from '$lib/format/units.svelte';
+	import {
+		formatDistance,
+		formatWeight,
+		parseWeight,
+		getWeightUnit,
+	} from '$lib/format/units.svelte';
+	import { kgToDisplay } from '$lib/format/weight';
+	import { NUMERIC_LIMITS, checkNumericLimit, numericBoundsIn } from '$lib/core/numeric_limits';
 	import { isWeighInEnabled } from '$lib/runs/weigh_in_flag';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -169,6 +176,10 @@
 	// checkpoint with health fields + explicit consent.
 	let weighTarget = $state<BoardRunner | null>(null);
 	let wWeight = $state<number | null>(null);
+	// The 20-400 kg column bound restated in the unit the crew types in.
+	const weighInBounds = $derived(
+		numericBoundsIn(NUMERIC_LIMITS.checkpointBodyWeightKg, (kg) => kgToDisplay(kg, getWeightUnit()))
+	);
 	let wMedicalHold = $state(false);
 	let wNote = $state('');
 	let wConsent = $state(false);
@@ -176,7 +187,12 @@
 	function openWeighIn(r: BoardRunner) {
 		weighTarget = r;
 		const existing = healthByKey.get(r.key);
-		wWeight = existing?.body_weight_kg ?? null;
+		// Stored canonical, typed in the crew's unit — pre-filling the raw kg
+		// into a field labelled lbs re-saves a different weight.
+		wWeight =
+			existing?.body_weight_kg != null
+				? Math.round(kgToDisplay(existing.body_weight_kg, getWeightUnit()) * 10) / 10
+				: null;
 		wMedicalHold = existing?.medical_hold ?? false;
 		wNote = existing?.medical_note ?? '';
 		wConsent = false;
@@ -192,6 +208,21 @@
 		const checkpointId = r.projection.lastCheckpointId ?? checkpoints[0]?.id;
 		if (!checkpointId) return;
 		const kg = wWeight != null ? parseWeight(wWeight) : null;
+		// The column is 20-400 kg and this field is typed in the crew's own unit,
+		// so a refusal has to name the bound in that unit — a raw 23514 at an aid
+		// station names a constraint and a kilogram figure nobody entered
+		// (decisions § 792).
+		if (kg != null && checkNumericLimit(NUMERIC_LIMITS.checkpointBodyWeightKg, kg) !== 'ok') {
+			showToast(
+				m('numericLimit.range', {
+					field: m('checkpoint.bodyWeightLabel', { unit: getWeightUnit() }),
+					min: weighInBounds.min,
+					max: weighInBounds.max,
+				}),
+				'error'
+			);
+			return;
+		}
 		busy = r.key;
 		try {
 			await upsertCheckpointCrossing({
@@ -338,8 +369,15 @@
 	>
 		<form class="editor-form" onsubmit={(e) => { e.preventDefault(); saveWeighIn(); }}>
 			<label>
-				{m('checkpoint.bodyWeightLabel', { unit: getUnit() === 'mi' ? 'lbs' : 'kg' })}
-				<input type="number" inputmode="decimal" step="0.1" min="0" bind:value={wWeight} />
+				{m('checkpoint.bodyWeightLabel', { unit: getWeightUnit() })}
+				<input
+					type="number"
+					inputmode="decimal"
+					step="0.1"
+					min={weighInBounds.min}
+					max={weighInBounds.max}
+					bind:value={wWeight}
+				/>
 			</label>
 			<label class="toggle-row">
 				<input type="checkbox" bind:checked={wMedicalHold} />

@@ -3967,6 +3967,7 @@ export const en = {
 	"prefs.dateOfBirthPurpose": "Used for age-graded results and, when you consent below, heart-rate zones. Your age also keeps under-18 accounts out of name search.",
 	"prefs.heightCm": "Height (cm)",
 	"prefs.weight": "Weight",
+	"numericLimit.range": "{field} must be between {min} and {max}.",
 	"prefs.consentRecordedOn": "Consent recorded on {date}. Unticking the checkbox above and saving will withdraw consent and clear these fields per Art 7(3).",
 	"prefs.demographicsSavedBtn": "Saved!",
 	"prefs.saveDemographics": "Save demographics",
