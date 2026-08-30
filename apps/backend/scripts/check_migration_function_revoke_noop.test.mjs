@@ -11,58 +11,107 @@ function audit(pairs) {
 /** @type {readonly [string, string]} */
 const CREATE = [
   '20260101_001_create.sql',
-  'create or replace function enqueue_run_rematch(p_run_id uuid) returns void language sql as $$ select 1 $$;',
+  'create or replace function coach_roster_summary() returns setof record language sql as $$ select 1 $$;',
 ];
 
-test('the shipped shape — grant to authenticated, revoke from anon — is reported', () => {
+test('`from public` alone is reported — anon keeps its own grant on the CI and prod image', () => {
   const { violations } = audit([
     CREATE,
     [
       '20260102_001_lock.sql',
-      `grant execute on function enqueue_run_rematch(uuid) to authenticated;
-       revoke execute on function enqueue_run_rematch(uuid) from anon;`,
+      `revoke execute on function coach_roster_summary() from public;
+       grant execute on function coach_roster_summary() to authenticated;`,
     ],
   ]);
   assert.equal(violations.length, 1);
-  assert.equal(violations[0].routine, 'public.enqueue_run_rematch');
-  assert.equal(violations[0].role, 'anon');
-  assert.equal(violations[0].filename, '20260102_001_lock.sql');
+  assert.equal(violations[0].routine, 'public.coach_roster_summary');
+  assert.equal(violations[0].named, 'public');
+  assert.equal(violations[0].missing, 'anon');
 });
 
-test('the house form `from public, anon` is clean', () => {
+test('`from anon` alone is reported — PUBLIC still reaches it on the workstation image', () => {
   const { violations } = audit([
     CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from public, anon;'],
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from anon;'],
+  ]);
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].named, 'anon');
+  assert.equal(violations[0].missing, 'public');
+});
+
+test('the portable form `from public, anon` is clean, in either order and any spacing', () => {
+  for (const roles of ['public, anon', 'anon, public', 'PUBLIC ,  ANON', 'public, anon, authenticated']) {
+    const { violations } = audit([
+      CREATE,
+      ['20260102_001_lock.sql', `revoke execute on function coach_roster_summary() from ${roles};`],
+    ]);
+    assert.deepEqual(violations, [], roles);
+  }
+});
+
+test('the two halves may land in different migrations — a repair is forward, not an edit here', () => {
+  const { violations } = audit([
+    CREATE,
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public;'],
+    ['20260103_001_repair.sql', 'revoke execute on function public.coach_roster_summary() from anon;'],
   ]);
   assert.deepEqual(violations, []);
 });
 
-test('`from public` alone is clean — it is the half that does the work', () => {
-  const { violations } = audit([
+test('a deliberate grant discharges the obligation in either direction — it is portable too', () => {
+  const openedToAnon = audit([
     CREATE,
     [
       '20260102_001_lock.sql',
-      `revoke execute on function enqueue_run_rematch(uuid) from public;
-       grant execute on function enqueue_run_rematch(uuid) to authenticated;`,
+      `revoke execute on function coach_roster_summary() from public;
+       grant execute on function coach_roster_summary() to anon, authenticated;`,
     ],
   ]);
-  assert.deepEqual(violations, []);
+  assert.deepEqual(openedToAnon.violations, []);
+
+  const openedToPublic = audit([
+    CREATE,
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from anon;'],
+    ['20260103_001_open.sql', 'grant execute on function coach_roster_summary() to public;'],
+  ]);
+  assert.deepEqual(openedToPublic.violations, []);
 });
 
-test('`from public` is never itself the violation, even where PUBLIC ends up holding', () => {
+test('`from authenticated` alone is reported, but an anon lockdown never obliges authenticated', () => {
+  const alone = audit([
+    CREATE,
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from authenticated;'],
+  ]);
+  assert.equal(alone.violations.length, 1);
+  assert.equal(alone.violations[0].named, 'authenticated');
+  assert.equal(alone.violations[0].missing, 'public');
+
+  const anonOnly = audit([
+    CREATE,
+    [
+      '20260102_001_lock.sql',
+      `revoke execute on function coach_roster_summary() from public, anon;
+       grant execute on function coach_roster_summary() to authenticated;`,
+    ],
+  ]);
+  assert.deepEqual(anonOnly.violations, []);
+});
+
+test('naming PUBLIC settles the authenticated obligation but not the anon one', () => {
   const { violations } = audit([
     CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from public;'],
-    ['20260103_001_rebuild.sql', `drop function enqueue_run_rematch(uuid);\n${CREATE[1]}`],
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public, authenticated;'],
   ]);
-  assert.deepEqual(violations, []);
+  assert.equal(violations.length, 1);
+  assert.equal(violations[0].named, 'public');
+  assert.equal(violations[0].missing, 'anon');
 });
 
 test('`revoke all` and `revoke all privileges` carry EXECUTE, so both are the class', () => {
   for (const clause of ['all', 'all privileges']) {
     const { violations } = audit([
       CREATE,
-      ['20260102_001_lock.sql', `revoke ${clause} on function enqueue_run_rematch(uuid) from anon;`],
+      ['20260102_001_lock.sql', `revoke ${clause} on function coach_roster_summary() from public;`],
     ]);
     assert.equal(violations.length, 1, clause);
   }
@@ -74,48 +123,42 @@ test('a statement spanning lines, in any spacing or casing, is read the same', (
     [
       '20260102_001_lock.sql',
       `REVOKE   EXECUTE
-         ON FUNCTION   public.enqueue_run_rematch( uuid )
-         FROM   anon ,   authenticated ;`,
+         ON FUNCTION   public.coach_roster_summary( )
+         FROM   PUBLIC ;`,
     ],
   ]);
-  assert.deepEqual(new Set(violations.map((v) => v.role)), new Set(['anon', 'authenticated']));
+  assert.equal(violations.length, 1);
 });
 
 test('`grant option for` does not hide the verb', () => {
   const { violations } = audit([
     CREATE,
+    ['20260102_001_lock.sql', 'revoke grant option for execute on function coach_roster_summary() from public;'],
+  ]);
+  assert.equal(violations.length, 1);
+});
+
+test('a drop-and-recreate re-defaults both channels, and every unpaired revoke reports again', () => {
+  const { violations } = audit([
+    CREATE,
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public;'],
+    ['20260103_001_repair.sql', 'revoke execute on function coach_roster_summary() from anon;'],
     [
-      '20260102_001_lock.sql',
-      'revoke grant option for execute on function enqueue_run_rematch(uuid) from anon;',
+      '20260104_001_rebuild.sql',
+      `drop function coach_roster_summary();\n${CREATE[1]}`,
     ],
+    ['20260105_001_lock.sql', 'revoke execute on function coach_roster_summary() from public;'],
   ]);
-  assert.equal(violations.length, 1);
-});
-
-test('a later revoke from PUBLIC repairs it forward, with no allowlist', () => {
-  const { violations } = audit([
-    CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from anon;'],
-    ['20260103_001_repair.sql', 'revoke execute on function public.enqueue_run_rematch(uuid) from public;'],
-  ]);
-  assert.deepEqual(violations, []);
-});
-
-test('a later grant to PUBLIC puts the report back', () => {
-  const { violations } = audit([
-    CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from anon;'],
-    ['20260103_001_repair.sql', 'revoke execute on function enqueue_run_rematch(uuid) from public;'],
-    ['20260104_001_reopen.sql', 'grant execute on function enqueue_run_rematch(uuid) to public;'],
-  ]);
-  assert.equal(violations.length, 1);
-  assert.equal(violations[0].filename, '20260102_001_lock.sql');
+  assert.deepEqual(
+    violations.map((v) => v.filename),
+    ['20260102_001_lock.sql', '20260105_001_lock.sql'],
+  );
 });
 
 test('repair is judged on the end state, not on directory order', () => {
   const { violations } = audit([
-    ['20260103_001_repair.sql', 'revoke execute on function enqueue_run_rematch(uuid) from public;'],
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from anon;'],
+    ['20260103_001_repair.sql', 'revoke execute on function coach_roster_summary() from anon;'],
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public;'],
     CREATE,
   ]);
   assert.deepEqual(violations, []);
@@ -124,38 +167,47 @@ test('repair is judged on the end state, not on directory order', () => {
 test('a repair is matched across the 8-digit / 14-digit version forms', () => {
   const { violations } = audit([
     CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from anon;'],
-    ['20260102000002_repair.sql', 'revoke execute on function enqueue_run_rematch(uuid) from public;'],
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public;'],
+    ['20260102000002_repair.sql', 'revoke execute on function coach_roster_summary() from anon;'],
   ]);
   assert.deepEqual(violations, []);
 });
 
-test('`create or replace` preserves the ACL, so a lockdown survives it', () => {
+test('`create or replace` preserves the ACL, so a portable lockdown survives a rebuild', () => {
   const { violations } = audit([
     CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from public;'],
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public, anon;'],
     ['20260103_001_rebuild.sql', CREATE[1]],
-    ['20260104_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from anon;'],
   ]);
   assert.deepEqual(violations, []);
 });
 
-test('drop then create restores the built-in PUBLIC grant, and the next revoke is a no-op again', () => {
+test('a well-formed revoke is never reported, even where a later rebuild re-opens the routine', () => {
   const { violations } = audit([
     CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from public;'],
-    ['20260103_001_rebuild.sql', `drop function if exists enqueue_run_rematch(uuid);\n${CREATE[1]}`],
-    ['20260104_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from anon;'],
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public, anon;'],
+    ['20260103_001_rebuild.sql', `drop function coach_roster_summary();\n${CREATE[1]}`],
+  ]);
+  assert.deepEqual(violations, []);
+});
+
+test('drop then create resets both channels, so the earlier pairing no longer covers', () => {
+  const { violations } = audit([
+    CREATE,
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from public, anon;'],
+    ['20260103_001_rebuild.sql', `drop function if exists coach_roster_summary();\n${CREATE[1]}`],
+    ['20260104_001_lock.sql', 'revoke execute on function coach_roster_summary() from anon;'],
   ]);
   assert.equal(violations.length, 1);
   assert.equal(violations[0].filename, '20260104_001_lock.sql');
+  assert.equal(violations[0].missing, 'public');
 });
 
 test('`public.` qualification and quoted identifiers key to the same routine', () => {
   const { violations } = audit([
     ['20260101_001_create.sql', 'create function public."f"(a uuid) returns void language sql as $$ select 1 $$;'],
-    ['20260102_001_lock.sql', 'revoke execute on function "f"(uuid) from anon;'],
-    ['20260103_001_repair.sql', 'revoke execute on function public.f(uuid) from public;'],
+    ['20260102_001_lock.sql', 'revoke execute on function "f"(uuid) from public;'],
+    ['20260103_001_repair.sql', 'revoke execute on function public.f(uuid) from anon;'],
   ]);
   assert.deepEqual(violations, []);
 });
@@ -164,12 +216,9 @@ test('a comma-separated routine list is expanded without splitting argument list
   const { violations } = audit([
     ['20260101_001_create.sql', 'create function f(a uuid, b text) returns void language sql as $$ select 1 $$;'],
     ['20260101000002_create.sql', 'create function g(c int) returns void language sql as $$ select 1 $$;'],
-    ['20260102_001_lock.sql', 'revoke execute on function f(uuid, text), g(int) from anon;'],
+    ['20260102_001_lock.sql', 'revoke execute on function f(uuid, text), g(int) from public;'],
   ]);
-  assert.deepEqual(
-    new Set(violations.map((v) => v.routine)),
-    new Set(['public.f', 'public.g']),
-  );
+  assert.deepEqual(new Set(violations.map((v) => v.routine)), new Set(['public.f', 'public.g']));
 });
 
 test('the bulk `on all functions in schema` form is modelled in both directions', () => {
@@ -179,14 +228,13 @@ test('the bulk `on all functions in schema` form is modelled in both directions'
   ]);
   const flagged = audit([
     ...created,
-    ['20260102_001_lock.sql', 'revoke execute on all functions in schema public from anon;'],
+    ['20260102_001_lock.sql', 'revoke execute on all functions in schema public from public;'],
   ]);
   assert.deepEqual(flagged.violations.map((v) => v.routine), ['public.a']);
 
   const clean = audit([
     ...created,
-    ['20260102_001_lock.sql', 'revoke execute on all functions in schema public, private from public;'],
-    ['20260103_001_lock.sql', 'revoke execute on function a() from anon;'],
+    ['20260102_001_lock.sql', 'revoke execute on all functions in schema public, private from public, anon;'],
   ]);
   assert.deepEqual(clean.violations, []);
 });
@@ -194,21 +242,21 @@ test('the bulk `on all functions in schema` form is modelled in both directions'
 test('procedures and routines are the same object class', () => {
   const { violations } = audit([
     ['20260101_001_create.sql', 'create procedure p(a uuid) language sql as $$ select 1 $$;'],
-    ['20260102_001_lock.sql', 'revoke execute on procedure p(uuid) from anon;'],
-    ['20260103_001_lock.sql', 'revoke all on routine p(uuid) from authenticated;'],
+    ['20260102_001_lock.sql', 'revoke execute on procedure p(uuid) from public;'],
+    ['20260103_001_lock.sql', 'revoke all on routine p(uuid) from anon;'],
   ]);
-  assert.equal(violations.length, 2);
+  assert.deepEqual(violations, []);
 });
 
 test('service_role and postgres are not client roles', () => {
   const { violations } = audit([
     CREATE,
-    ['20260102_001_lock.sql', 'revoke execute on function enqueue_run_rematch(uuid) from service_role, postgres;'],
+    ['20260102_001_lock.sql', 'revoke execute on function coach_roster_summary() from service_role, postgres;'],
   ]);
   assert.deepEqual(violations, []);
 });
 
-test('a table or column revoke is a different guard\'s business', () => {
+test("a table or column revoke is a different guard's business", () => {
   const { violations } = audit([
     CREATE,
     [
@@ -216,6 +264,7 @@ test('a table or column revoke is a different guard\'s business', () => {
       `revoke select on donations from anon, authenticated;
        revoke select (secret) on donations from anon;
        revoke select on function_logs from anon;
+       revoke all on public.public_runs from public, anon, authenticated;
        grant usage on schema public to anon;`,
     ],
   ]);
@@ -228,7 +277,7 @@ test('a revoke inside a dollar-quoted body is not a statement', () => {
     [
       '20260102_001_fn.sql',
       `create function note() returns text language sql as $$
-         select 'revoke execute on function enqueue_run_rematch(uuid) from anon'
+         select 'revoke execute on function coach_roster_summary() from public'
        $$;`,
     ],
   ]);
@@ -249,6 +298,9 @@ test('an alter default privileges on routines is reported as unmodelled, not jud
 });
 
 test('the scanned list names every migration handed in', () => {
-  const { scanned } = audit([CREATE, ['20260102_001_grant.sql', 'grant execute on function enqueue_run_rematch(uuid) to authenticated;']]);
+  const { scanned } = audit([
+    CREATE,
+    ['20260102_001_grant.sql', 'grant execute on function coach_roster_summary() to authenticated;'],
+  ]);
   assert.deepEqual(scanned, ['20260101_001_create.sql', '20260102_001_grant.sql']);
 });

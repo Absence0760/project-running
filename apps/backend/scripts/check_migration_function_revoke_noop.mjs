@@ -1,47 +1,64 @@
 #!/usr/bin/env node
-// Fail loudly when a migration revokes EXECUTE on a function from `anon` or
-// `authenticated` while PUBLIC still holds it, which revokes nothing.
+// Fail loudly when a migration revokes EXECUTE on a function from PUBLIC or
+// from `anon` but not both, which withholds nothing on one of the two Supabase
+// images this repo runs against.
 //
-// A function created in this database arrives under Postgres's built-in
-// default ACL — EXECUTE to the owner and to PUBLIC — and `anon` reaches it
-// through PUBLIC, not through a grant of its own. So
-// `revoke execute on function f(uuid) from anon` finds no grant to anon to
-// remove: it reports REVOKE, materialises an ACL that still carries `=X`, and
-// leaves `has_function_privilege('anon', …, 'EXECUTE')` true. The statement
-// reads as a lockdown and is a comment — [decisions § 781]'s column-revoke
-// no-op, one object class over, with PUBLIC playing the part the table level
-// played there.
+// `anon` can reach a function through two independent channels: the built-in
+// PUBLIC grant Postgres gives every new routine, and a grant of anon's own.
+// Which of the two exists depends on the Supabase CLI image, and the two
+// images disagree:
 //
-// Measured against the live catalogue, not assumed. A fresh function created
-// by `postgres` in `public` has `proacl` NULL (the built-in default, PUBLIC
-// included) and anon can execute it; `revoke … from public` turns that to
-// `{postgres=X/postgres}` and anon to false, while `revoke … from anon` alone
-// leaves `{=X/postgres,…}` and anon true. `enqueue_run_rematch` is the shipped
-// instance and its ACL matches that probe byte for byte.
+//   * Workstation, CLI 2.109.1 — a new `public` function has `proacl` NULL,
+//     the built-in default, and anon reaches it ONLY through PUBLIC. So
+//     `revoke … from public` withholds and `revoke … from anon` is a no-op.
+//   * CI and Supabase Cloud, CLI 2.84.2 (pinned in ci.yml) — an
+//     `alter default privileges` hands the new function an EXPLICIT anon
+//     grant, so `revoke … from public` leaves it in place and only
+//     `revoke … from anon` withholds.
 //
-// This is why the house form is `from public, anon`: it is the `from public`
-// half that does the work. `revoke … from public` on its own is CORRECT and is
-// deliberately NOT reported — 110 functions are locked down that way and every
-// one of them is closed to anon in the catalogue.
+// The evidence that separates them is this repo's own shipped test, not a
+// probe. `coach_roster_summary_test.sql` asserts, under `set local role anon`,
+// that the call raises `not authenticated` — which requires the ACL to ADMIT
+// anon so the body can refuse it. That function was only ever revoked
+// `from public` (20270206_001, 20270314_001). On CI the assertion passes; on
+// the workstation the same SQL raises `permission denied for function`.
 //
-// The second way PUBLIC comes back is a `drop function` followed by a fresh
-// `create`, which resets the ACL to the built-in default; `create or replace`
-// on the same signature preserves it. Both are modelled, both measured.
+// So neither single-grantee revoke is portable, and a guard that picks one
+// image's rule is wrong on the other. Only `from public, anon` withholds under
+// either default, which is why that is the house form — and it is the form
+// this guard requires. The two channels need not close in one statement: a
+// later migration closing the other one repairs it forward.
+//
+// A DELIBERATE re-open discharges the obligation, because it is portable in
+// its own right: `revoke … from public` followed by `grant execute … to anon`
+// leaves anon holding on both images, which is a decision rather than a
+// divergence. Only a channel left at its image-dependent DEFAULT is reported.
+//
+// `authenticated` is carried for the same reason in one direction only: a
+// revoke naming it is defeated by PUBLIC on the workstation image exactly as
+// an anon revoke is. Nothing requires an anon lockdown to close authenticated
+// as well — every RPC here is meant for signed-in callers unless it says
+// otherwise, and ~110 migrations grant it back on the next line.
 //
 // The whole tree is scanned, on every run, with no allowlist and no version
 // cutoff — [§ 775] retired a cutoff whose bookkeeping edit was the bypass. The
-// migration set is replayed in version order and a revoke is reported only if
-// PUBLIC STILL holds EXECUTE on that function at the end of the replay, so a
-// repair lands as a later migration (`revoke execute on function f(uuid) from
-// public`) rather than as an edit here, and a later `grant … to public` puts
-// the report back.
+// set is replayed in version order and a revoke is reported only if the other
+// channel is STILL at its default at the end, so a repair is a migration
+// rather than an edit here, and a later re-default puts the report back.
 //
-// What it deliberately does not catch: a function is keyed by its
-// schema-qualified NAME, so two overloads of one name share a verdict (there
-// are none in `public` or `private` today, measured); and the model's one
-// premise — that a created function lands under the built-in default — is
-// version-controlled rather than assumed, so an `alter default privileges`
-// touching routines fails this guard instead of silently inverting it.
+// What it deliberately does not catch. It grades the STATEMENT, so a routine
+// nobody ever wrote a lockdown for is not its business, and neither is one
+// whose well-formed lockdown a later `drop`-and-`create` re-opened — the
+// statement was portable as written, and "every routine is locked down" is a
+// claim about STATE that a pgtap catalogue assertion makes ([§ 781]). A
+// routine is keyed by its schema-qualified NAME, so two overloads of one name
+// share a verdict (there are none in `public` or `private` today, measured).
+// Table and column revokes are check_migration_column_revoke_noop.mjs's
+// business. `service_role` is not tracked; it keeps full access by design. And
+// `alter default privileges` on routines is NOT modelled — it would move the
+// very default this guard replays against, so a migration carrying one fails
+// here rather than letting the replay keep issuing verdicts under a premise
+// the tree has changed.
 //
 // Run locally: node apps/backend/scripts/check_migration_function_revoke_noop.mjs
 
@@ -85,11 +102,12 @@ function splitList(text) {
 }
 
 /**
- * Replay the migration set and return every revoke of EXECUTE from a client
- * role that PUBLIC still holds at the end of the replay.
+ * Replay the migration set and return every revoke that closes one of the two
+ * channels to `anon` while the other is still at its image-dependent default.
  * @param {{ filename: string, sql: string }[]} migrations any order; sorted here
  * @returns {{ scanned: string[], unmodelled: { filename: string, statement: string }[],
- *   violations: { filename: string, routine: string, role: string, statement: string }[] }}
+ *   violations: { filename: string, routine: string, named: string, missing: string,
+ *   statement: string }[] }}
  */
 export function auditMigrations(migrations) {
   const ordered = [...migrations].sort((a, b) => {
@@ -97,14 +115,28 @@ export function auditMigrations(migrations) {
     return versions !== 0 ? versions : a.filename.localeCompare(b.filename);
   });
 
-  /** Routines PUBLIC holds EXECUTE on, keyed schema.name. Absent = never seen. */
-  const publicHolds = new Map();
-  /** @type {{ filename: string, routine: string, role: string, statement: string }[]} */
+  /**
+   * Per routine, the state of each channel anon can reach EXECUTE through.
+   * `default` is whatever the image grants a new routine — the one state that
+   * is not portable, and the only one reported.
+   * @type {Map<string, { public: string, anon: string }>}
+   */
+  const channels = new Map();
+  /** @type {{ filename: string, routine: string, named: string, missing: string, statement: string }[]} */
   const candidates = [];
   /** @type {{ filename: string, statement: string }[]} */
   const unmodelled = [];
   /** @type {string[]} */
   const scanned = [];
+
+  /** @param {string} routine */
+  const track = (routine) => {
+    const seen = channels.get(routine);
+    if (seen) return seen;
+    const fresh = { public: 'default', anon: 'default' };
+    channels.set(routine, fresh);
+    return fresh;
+  };
 
   for (const { filename, sql } of ordered) {
     scanned.push(filename);
@@ -122,44 +154,66 @@ export function auditMigrations(migrations) {
 
       const created = CREATE_ROUTINE.exec(statement);
       if (created) {
-        const routine = qualify(created[1]);
-        if (!publicHolds.has(routine)) publicHolds.set(routine, true);
+        track(qualify(created[1]));
         continue;
       }
       const dropped = DROP_ROUTINE.exec(statement);
       if (dropped) {
-        publicHolds.delete(qualify(dropped[1]));
+        channels.delete(qualify(dropped[1]));
         continue;
       }
 
       const match = GRANT_OR_REVOKE.exec(statement);
       if (!match) continue;
-      const [, verb, privilegeClause, objectKind, target, roleClause] = match;
+      const [, rawVerb, privilegeClause, objectKind, target, roleClause] = match;
       if (!/^(?:all|execute)\b/i.test(privilegeClause.trim())) continue;
+      const verb = rawVerb.toLowerCase();
 
       const bulk = /^all\b/i.test(objectKind.trim());
-      const schemas = bulk ? new Set(splitList(target).map((s) => s.replace(/"/g, '').toLowerCase())) : null;
+      const schemas = bulk
+        ? new Set(splitList(target).map((s) => s.replace(/"/g, '').toLowerCase()))
+        : null;
       const routines = schemas
-        ? [...publicHolds.keys()].filter((name) => schemas.has(name.slice(0, name.indexOf('.'))))
+        ? [...channels.keys()].filter((name) => schemas.has(name.slice(0, name.indexOf('.'))))
         : splitList(target).map(qualify);
-      const roles = splitList(roleClause).map((role) => role.replace(/"/g, '').toLowerCase());
+      const roles = new Set(splitList(roleClause).map((role) => role.replace(/"/g, '').toLowerCase()));
 
       for (const routine of routines) {
-        if (!publicHolds.has(routine)) publicHolds.set(routine, true);
-        if (roles.includes('public')) {
-          publicHolds.set(routine, verb.toLowerCase() === 'grant');
-          continue;
+        const state = track(routine);
+        if (verb === 'revoke') {
+          if (roles.has('public') && !roles.has('anon')) {
+            candidates.push({ filename, routine, named: 'public', missing: 'anon', statement });
+          }
+          if (roles.has('anon') && !roles.has('public')) {
+            candidates.push({ filename, routine, named: 'anon', missing: 'public', statement });
+          }
+          if (roles.has('authenticated') && !roles.has('public')) {
+            candidates.push({ filename, routine, named: 'authenticated', missing: 'public', statement });
+          }
         }
-        if (verb.toLowerCase() !== 'revoke' || publicHolds.get(routine) !== true) continue;
-        for (const role of roles) {
-          if (CLIENT_ROLES.includes(role)) candidates.push({ filename, routine, role, statement });
-        }
+        if (roles.has('public')) state.public = verb === 'grant' ? 'granted' : 'closed';
+        if (roles.has('anon')) state.anon = verb === 'grant' ? 'granted' : 'closed';
       }
     }
   }
 
-  const violations = candidates.filter(({ routine }) => publicHolds.get(routine) === true);
+  const violations = candidates.filter(({ routine, missing }) => {
+    const state = channels.get(routine);
+    return state !== undefined && (missing === 'anon' ? state.anon : state.public) === 'default';
+  });
   return { scanned, unmodelled, violations };
+}
+
+/**
+ * @param {{ routine: string, named: string, missing: string }} violation
+ * @returns {string}
+ */
+function why(violation) {
+  return violation.missing === 'anon'
+    ? `"${violation.routine}" is closed to PUBLIC but nothing closes anon's own grant, which the ` +
+        `CI and production image installs by default — so anon can still execute it there`
+    : `"${violation.routine}" is closed to "${violation.named}" but nothing closes PUBLIC, which ` +
+        `the workstation image relies on to reach the function — so it is still executable there`;
 }
 
 function main() {
@@ -181,29 +235,31 @@ function main() {
   for (const { filename, statement } of unmodelled) {
     console.error(
       `::error file=apps/backend/supabase/migrations/${filename}::${filename} changes the DEFAULT ` +
-        `privileges on routines, which is the one premise this guard replays against — that a ` +
-        `created function lands under Postgres's built-in default of EXECUTE to PUBLIC. The ` +
-        `statement is "${statement}". Re-measure the default against the local catalogue and ` +
-        `teach the replay in check_migration_function_revoke_noop.mjs about it, rather than ` +
-        `leaving it to report verdicts under a premise the tree has changed.`,
+        `privileges on routines, which is the very thing this guard replays against — it models a ` +
+        `new routine as arriving with BOTH the PUBLIC channel and anon's own open, because which ` +
+        `one an image really grants differs between CLI 2.109.1 and the pinned 2.84.2. The ` +
+        `statement is "${statement}". Teach the replay in ` +
+        `check_migration_function_revoke_noop.mjs about it rather than leaving it to issue ` +
+        `verdicts under a premise the tree has changed.`,
     );
   }
 
-  for (const { filename, routine, role, statement } of violations) {
+  for (const violation of violations) {
+    const { filename, named, statement } = violation;
     console.error(
-      `::error file=apps/backend/supabase/migrations/${filename}::${filename} revokes EXECUTE on ` +
-        `"${routine}" from "${role}", which revokes nothing: PUBLIC still holds EXECUTE on that ` +
-        `function at the end of the migration set, and "${role}" reaches it through PUBLIC rather ` +
-        `than through a grant of its own. The statement is "${statement}". Revoke it from PUBLIC ` +
-        `instead — the house form is "revoke execute on function <f> from public, anon;" — and ` +
-        `re-grant the roles that must keep it. A shipped migration is uneditable, so repair it ` +
-        `forward in a new one; this guard has no allowlist and reads the end state.`,
+      `::error file=apps/backend/supabase/migrations/${filename}::${filename} revokes EXECUTE from ` +
+        `"${named}" alone, which does not withhold the function on both Supabase images: ` +
+        `${why(violation)}. The statement is "${statement}". Name both — ` +
+        `"revoke execute on function <f> from public, anon;" — in this migration or a later one, ` +
+        `or grant the role EXECUTE outright if it is meant to have it. A shipped migration is ` +
+        `uneditable, so repair it forward; this guard has no allowlist and reads the end state.`,
     );
   }
 
   if (violations.length > 0 || unmodelled.length > 0) process.exit(1);
   console.log(
-    `OK: ${scanned.length} migrations replayed, no EXECUTE revoke left standing under a PUBLIC grant.`,
+    `OK: ${scanned.length} migrations replayed, every EXECUTE revoke closes both the PUBLIC and ` +
+      `the anon channel.`,
   );
 }
 
