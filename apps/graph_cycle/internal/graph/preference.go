@@ -16,6 +16,36 @@ const (
 	PrefCulDeSac
 )
 
+// ParsePreference maps the wire vocabulary onto a Preference. An empty or
+// unrecognised token is PrefNone rather than an error: the knob is an
+// enhancement, so a stale or garbled value from a client must degrade to the
+// plain search, never block route generation.
+func ParsePreference(s string) Preference {
+	switch s {
+	case "quiet":
+		return PrefQuiet
+	case "scenic":
+		return PrefScenic
+	case "cul_de_sac":
+		return PrefCulDeSac
+	}
+	return PrefNone
+}
+
+// String is the wire token. PrefNone has none — the response omits the field
+// rather than reporting a preference that was not applied.
+func (p Preference) String() string {
+	switch p {
+	case PrefQuiet:
+		return "quiet"
+	case PrefScenic:
+		return "scenic"
+	case PrefCulDeSac:
+		return "cul_de_sac"
+	}
+	return ""
+}
+
 // Soft per-edge cost multipliers. Every value is finite and strictly positive:
 // a preference may bias the search but must never be able to disconnect the
 // graph, because a hard filter turns a buildable neighbourhood into "no loop"
