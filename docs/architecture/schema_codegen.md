@@ -293,16 +293,25 @@ Supabase only marks a column as optional in the `Row` type when it has a databas
 
 ### The "narrow union" columns drifted out of sync with reality
 
-Nineteen columns carry both a CHECK constraint on the SQL side and a narrow TS union on the client — among them `runs.source` (`RunSource`), `runs.activity_type` (`ActivityType`), `routes.surface` (`RouteSurface`), `integrations.provider` (`IntegrationProvider`), `user_profiles.preferred_unit` (`PreferredUnit`), `user_profiles.subscription_tier` (`SubscriptionTier`), `club_members.role` (`ClubRole`), plus the typed-event and gym-routine columns (`events.category`, `event_orders.status`, `gym_routine_sets.set_type`, …). See the full `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs` for all nineteen. The first four `RunSource`/`RouteSurface`/`IntegrationProvider`/`PreferredUnit` landed in `20260505_001_narrow_union_check_constraints.sql`; `subscription_tier` in `20260429_001_subscription_paywall.sql`; `role` in `20260428_001_role_permissions.sql`.
+**67 columns carry a set-shaped CHECK constraint** (`check (col in (…))`, and the nullable `check (col is null or col in (…))` form) — counted by replaying every migration in order, so a constraint that was dropped and re-added lands widened and a column that was dropped outright is gone. `runs.kind` is the one that made the replay necessary: `20261204_001` gave it a CHECK, `20261206_001` dropped the column, and the guard reported it live for eight months afterwards.
 
-`apps/web/scripts/check_constraint_unions.mjs` runs in the `parity-types` CI job and fails PRs that drift — extracting the values from both the migration and the TS union and comparing equality. To add a new value:
+**52 of them are enumerated by at least one client, and the guard reads every such enumeration on BOTH rails.** A value set has more homes than `types.ts`: a TS union there or in `core/data.ts`, a `const` array, a keyed object list (`ROUTE_MARKER_KINDS`), a record's keys (the PR-bracket maps), a Dart `enum` (identifiers converted camelCase→snake_case, `doubleProgression` ↔ `double_progression`), a Dart `const List<String>`. `apps/web/scripts/check_constraint_unions.mjs` names the file, shape and declaration for each; `client_enum_extract.mjs` reads them. 104 enumeration checks pass today — 69 TypeScript, 35 Dart (31 distinct Dart declarations, several columns sharing one).
+
+The remaining **15 columns are filed in `UNENUMERATED` with the reason no client enumerates them** — mostly server-only bookkeeping (`jobs.kind`, `jobs.status`, `deletion_audit_log.result`, `email_suppressions.reason`). That list is a claim a reader made, not an exemption: if a client later declares one of those sets, move the column to `PAIRS`.
+
+**Coverage is derived from the migrations, not from the array.** `auditCoverage` compares the registry against the live constraint set in both directions, so a new set-shaped CHECK column fails the PR until somebody files it, and an entry whose constraint is gone fails too. The old suite asserted `checks.size >= PAIRS.length`, which is true of any registry — 41 pairs against 68 parsed columns satisfied it while 27 columns went unexamined (decisions § 791).
+
+A client may be a **declared superset** of its column: `data_export_jobs.status` stores five states while both clients additionally model `none` (never asked) and `stalled` (derived at read time). Those go in an `extra: [...]` on the entry, which still catches a stored value the client cannot represent — the direction that breaks.
+
+`apps/web/scripts/check_constraint_unions.mjs` runs in the `parity-types` CI job. To add a new value:
 
 1. Update the CHECK constraint in a migration.
-2. Update the TS union in `apps/web/src/lib/types.ts`.
-3. Regenerate types (`npm run gen:types --workspace=apps/backend`).
-4. If you're introducing a brand-new column+CHECK+TS-union triple, append it to the `PAIRS` array in `apps/web/scripts/check_constraint_unions.mjs` so the guard knows about it.
+2. Update the TS union in `apps/web/src/lib/types.ts` (or wherever the registry says it lives).
+3. **Update every Dart enumeration of the same set.** The guard names them; a widened CHECK used to fail only the web union while the mobile dropdown silently lacked the value.
+4. Regenerate types (`npm run gen:types --workspace=apps/backend`).
+5. If you're introducing a brand-new set-shaped CHECK column, add it to `PAIRS` naming the client enumerations, or to `UNENUMERATED` with the reason there are none. The build fails until you do one or the other.
 
-Dart treats these columns as raw `String` (no Dart enum to update), but the DB-level CHECK rejects invalid writes anyway. CI catches drift; runtime defends against it.
+Dart is **not** exempt and this section used to say it was. "Dart treats these columns as raw `String` (no Dart enum to update)" was measured false in the § 787 sweep and is now enforced against, not merely corrected: 31 Dart enums and const lists are read against their CHECK on every PR.
 
 ---
 
