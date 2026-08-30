@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 
 import { getAdminClient, loadSupabaseEnv } from '../fixtures/local-supabase';
 import { createClient } from '@supabase/supabase-js';
-import { readMaybeRow } from '../fixtures/db-read';
 
 /**
  * Wire-format pin for migration 20260801_001_clubs_invite_token_lockdown.sql.
@@ -59,22 +58,23 @@ test.describe('clubs.invite_token wire-format lockdown', () => {
 		expect((data ?? []).length).toBeGreaterThan(0);
 	});
 
-	test('anon RPC get_club_invite_token returns NULL — the RPC fails closed when auth.uid() is null', async () => {
+	test('anon cannot reach get_club_invite_token at all — the grant refuses before the body does', async () => {
 		const { url, anonKey } = loadSupabaseEnv();
 		const anon = createClient(url, anonKey, {
 			auth: { persistSession: false, autoRefreshToken: false }
 		});
 
-		const data = await readMaybeRow(
-			'the get_club_invite_token() rpc',
-			anon.rpc('get_club_invite_token', {
-				target_club: FRIENDS_OF_JARED_ID
-			})
-		);
+		const { data, error } = await anon.rpc('get_club_invite_token', {
+			target_club: FRIENDS_OF_JARED_ID
+		});
 
-		// The function is SECURITY DEFINER with an `is_club_admin`
-		// gate. For anon, `auth.uid() is null`, the gate is false, and
-		// the case-when returns null — never the actual token.
+		// Until the anon-EXECUTE sweep (decisions § 799) anon reached the
+		// body and was refused by its `is_club_admin` gate returning null.
+		// The grant is now the outer defence and refuses first, which is
+		// strictly the stronger of the two — so this asserts the refusal
+		// rather than the null, and the body's gate stays pinned by pgtap
+		// for the authenticated non-admin it still guards.
+		expect(error?.code).toBe('42501');
 		expect(data).toBeNull();
 	});
 
