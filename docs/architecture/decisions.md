@@ -11252,3 +11252,43 @@ first-draft bugs.
 **The doc filing was right twice and understated both times.** `firmware.md` said the GATT service carries "seven" characteristics; `ble.rs` declares nine (`roadbook` and `push_status`). The same stale seven was in four more places the filing did not name — `roadmap.md`, `privacy.md` (where it is a security claim), `quality_standards.md` and `local_testing.md`. `watch_settings.dart`'s comment said "the firmware still decodes v1-v7 frames"; `decode` accepts **v3 through v8**, so the sentence was wrong at both ends — v1 and v2 have been refused since the CRC became mandatory, and v8 is the version the phone itself stamps. Two more of the class turned up in `firmware.md` alone: it said the watch "records runs locally to LittleFS", when tier 1 has no filesystem at all (four 4 KiB internal-flash slots, 253 records), and it named `off_route_alert.dart` as the phone-side twin of the 40 m / 20 m thresholds — that module is the *escalation to a trusted contact* and deliberately fires at 75 m after 90 s, so a reader following the reference would have found a different number and no way to know which was the contract. The real twin is `run_screen.dart`'s `_offRouteThresholdMetres`, and it is now one of the four rails the guard compares. The class sweep found four more the filing did not: `local_testing.md` had BTN3 walking "seven rows" of the §351 settings menu against `MENU_ITEMS = 8`; `roadmap.md` had the `SET1` v7 row saying "v1–v6 still decode" and three stale counts against a `Page` enum that is now 41 built-ins plus four composed seats and a `face::Metric` catalogue that is now 40; and `settings_menu.rs` priced the per-page mask at "33 checkboxes" against 45 pages, which is now written count-free so it cannot rot again. `tier1_log.md`'s § 374 entry claimed `decode` accepts "v1–v7", and that one was wrong the day it was written — v1 and v2 had been withdrawn at § 403, before v7 landed — so it carries a bracketed correction rather than a rewrite. The remaining counts in `tier1_log.md` and in § 377's own ADR text are left alone: those were true when they were written, and this log rewrites no history.
 
 **Verification.** `node scripts/check_watch_wire_vectors.mjs` exits **0** over 38 lines — 17 vector pairs compared byte-for-byte, the third copy of the run blob held to one of them, and 20 constant rows agreeing across 2, 3 or 4 rails — and its 21 unit tests pass. `node scripts/check_watch_ble_uuids.mjs` exits 0 on **11** UUIDs (10 pairs plus the advertised u128) with its suite at 20 → **24** tests; `comment_strip.test.mjs` still passes its 9. `cargo test --target x86_64-unknown-linux-gnu -p watch_core`: **2349** lib tests plus the property suites, 0 failed. `flutter test test/watch_settings_test.dart`: **38** passing, unchanged in count — the auto-lap golden is a new expectation inside the existing rung test, not a new case — and `dart analyze` over the two changed Dart files reports only the three pre-existing package-import infos. `diff -r` is clean on both twin trees. `tsc -p tsconfig.scripts.json` exits 0 over the two new `.mjs` files and `tsconfig_coverage.test.mjs` still passes, so they are inside a tsc program. `actionlint` is clean and `check_ci_diagnostics.mjs` accepts the new `watch-wire-vectors` job — both of its steps carry their own `::error::`, because a job running a second guard is a bundled one by that fact — and reports `ci-gate` waiting on all **29**. `check_shared_constants.mjs` and `check_parity_pair_registry.mjs` are untouched and still pass. **No hardware and no simulator ran**, so nothing here moves any claim past *host-tested* on `quality_standards.md`'s ladder: the guard proves the two encoders agree about bytes, not that either has ever driven a radio.
+
+## 796. Three route-design preferences that are mutually exclusive on the wire get one single-choice control, and the page reports the preference the server applied rather than the one the runner asked for
+
+`/routes/new` shipped the cheap half of the route-design preference set as a
+lone "Quiet roads (avoid highways)" checkbox, whose only job was to turn
+`preference: 'quiet'` on the `POST /api/routes/generate` body on and off. Widening
+the vocabulary to `'quiet' | 'scenic' | 'cul_de_sac'` does not widen the wire: the
+body carries at most ONE preference, so three checkboxes would let a runner
+express a state the request cannot represent and leave the page to silently
+discard two of them. The control is therefore a four-option radio group —
+the three preferences plus an explicit "No preference" that sends no field at
+all — built from native `<input type="radio">` inside `<label>`s under a
+`role="radiogroup"`, the same idiom `RunEditor`, `EventEditor` and
+`RouteMarkerEditor` already use. Native radios are what buy the accessibility:
+one tab stop for the group, arrow keys to move the selection, and a real
+checked state, none of which a `div` with `role="radio"` has without hand-rolled
+roving focus. Each option's hint moved out of the `title=` tooltip the checkbox
+carried — a tooltip is not reachable by keyboard and is not announced — and into
+visible text inside the label, so every reader gets it.
+
+The second half is honesty about the result. A preference is an enhancement the
+generator may decline: the handler races the preference-aware request and, if
+that yields nothing, retries the whole race without it, and a request that never
+reaches the server at all (point-to-point, an unconfigured endpoint, an engine
+outage) falls through to the in-browser heuristic, which honours no preference
+whatsoever. Before this the runner saw the same rendered loop either way. The
+200 body's additive `preferenceApplied` is now read in `RouteBuilder`, which
+grades it against the preference it SENT rather than re-listing the union —
+so an absent field, an unknown token and a heuristic fallback all resolve
+identically to "not applied" — and hands the page a nullable applied value on
+every generation that produced a route. The page compares it to the ask it
+captured at call time (not to the live control, which the runner may have
+changed mid-generation) and, on a mismatch, states that the loop was generated
+without the preference. Fail-closed is the point: a deployment predating the
+field sends nothing, and reading nothing as success would make the note
+disappear exactly where it is most needed. The same resolution fixed a
+pre-existing gap in the AI route assistant, which listed `avoidHighways` in its
+"applied" summary while never touching the control or the request — the parsed
+`preference` now drives the control, with `avoidHighways` mapping onto `'quiet'`
+when nothing narrower came back.
