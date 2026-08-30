@@ -1378,7 +1378,7 @@ create unique index jobs_dedupe_map_match
 ```
 
 - **RLS**: deny everything — no policies, anon/authenticated cannot touch the table. Service role bypasses RLS for direct queries; the SECURITY DEFINER functions below are the typed surface for everything else.
-- **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. PUBLIC EXECUTE is revoked; only `service_role` is granted. See [§ Database functions](#database-functions-rpcs).
+- **Worker API**: `claim_next_job(worker_id, kind_filter)`, `finish_job(job_id, result_status, err)`, `defer_job(job_id, delay_seconds, err)`. Each is revoked `from public` and granted to `service_role` only — but none of the three names `anon` in its revoke, and none carries an in-body auth check, so on an image that grants `anon` by name at create time (Cloud and CI, see § Who may EXECUTE one at the head of [Database functions (RPCs)](#database-functions-rpcs)) `anon` still holds EXECUTE on all three. Tracked as a follow-up to [decisions.md § 799](../architecture/decisions.md).
 - **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
 - **Partial indexes**: the `jobs_queued_v2` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
 
@@ -1952,6 +1952,52 @@ PATCH  /user_profiles?id=eq.{user_id}   # update profile
 
 Custom Postgres functions exposed via `supabase.rpc()`.
 
+### Who may EXECUTE one — and why `revoke ... from public` is not enough
+
+Every function in `public` is owned by `postgres`, and what a freshly created
+one's ACL says depends on the Postgres image the schema is running on:
+
+- **Supabase Cloud and CI** (`supabase/setup-cli` is pinned to `2.84.2` in
+  `ci.yml`) carry an `alter default privileges` for `postgres` that grants
+  EXECUTE to `anon`, `authenticated` and `service_role`. A new function arrives
+  with those three **by name**, so `revoke execute ... from public` removes
+  nothing — there is no PUBLIC entry to remove.
+- **A current workstation CLI** (2.109.1) ships an image whose `postgres`
+  default ACL is `{postgres=X/postgres}`, and a new function comes up with
+  `proacl` NULL — Postgres's built-in owner+PUBLIC default. There
+  `revoke ... from public` *does* withhold from `anon`, and
+  `revoke ... from anon` is the statement that withholds nothing.
+
+Two shipped pgtap suites are the evidence that the two differ, and both fail on
+a current workstation while passing on CI: `coach_roster_summary_test` expects
+an anon caller to enter the body of a function revoked only `from public` and be
+refused **by the body**, and `donations_status_lock_test` calls
+`fundraiser_totals` as `service_role`, which no migration ever granted it.
+
+**So the only portable withholding names both grantees:**
+
+```sql
+revoke execute on function public.<fn>(<args>) from public, anon;
+grant  execute on function public.<fn>(<args>) to authenticated;   -- and/or service_role
+```
+
+Add `authenticated` to the revoke list when no client role should hold it at all
+(the `cleanup_*` / `enqueue_*` cron family, and helpers only a SECURITY DEFINER
+trigger calls). 31 migrations already write the `from public, anon` form; it is
+the house form for exactly this reason.
+
+Two further rules follow from the same mechanism:
+
+- **`drop function` takes the privileges with it**, so a signature change
+  re-issues the image default. Any migration that drops and recreates a function
+  must re-emit its `revoke` / `grant` pair, or a withholding decision is
+  silently reverted. `20260830_001` withheld `segment_leaderboard_tiered` from
+  `anon` as an audit fix and `20261022_001` handed it straight back that way
+  (repaired in `20270625000001`; see [decisions.md § 799](../architecture/decisions.md)).
+- **The grant is the only control a SECURITY DEFINER function has** unless its
+  body checks `auth.uid()` itself. `anon_execute_registry_test.sql` pins the
+  rule and the four functions `20270625000001` withheld.
+
 ### `weekly_mileage(weeks_back integer)`
 
 Returns total distance per week for the chart on the dashboard.
@@ -2128,13 +2174,13 @@ SECURITY DEFINER. Atomic per-bucket per-user counter that picks the ceiling by r
 
 ### `cleanup_stale_rate_limits()`
 
-SECURITY DEFINER GC for the `rate_limits` table — deletes rows whose window has elapsed. Driven by the hourly `cleanup-stale-rate-limits` pg_cron job. Migration `20260604_001_cleanup_stale_rate_limits.sql`.
+SECURITY DEFINER GC for the `rate_limits` table — deletes rows whose window has elapsed. Driven by the hourly `cleanup-stale-rate-limits` pg_cron job. Migration `20260604_001_cleanup_stale_rate_limits.sql`. The body is an unqualified `delete` with no auth check, and until `20270625000001` nothing had revoked EXECUTE from it at all: an anonymous `POST /rest/v1/rpc/cleanup_stale_rate_limits` cleared every elapsed rate-limit window. It is now `from public, anon, authenticated` with `service_role` granted, matching its three siblings.
 
 ---
 
 ### `claim_next_job(worker_id, kind_filter)`
 
-SECURITY DEFINER. Atomically marks the next ready job as `running`, increments its `attempts`, and returns the row. Used by the Go service (and any future worker) to drain the [`jobs`](#jobs) queue. PUBLIC EXECUTE is revoked; granted to `service_role` only.
+SECURITY DEFINER. Atomically marks the next ready job as `running`, increments its `attempts`, and returns the row. Used by the Go service (and any future worker) to drain the [`jobs`](#jobs) queue. Revoked `from public` and granted to `service_role` only; the revoke does not name `anon`, and the body has no auth check — see the caveat on the [`jobs`](#jobs) table.
 
 ```sql
 -- Drain the next map_match job:
