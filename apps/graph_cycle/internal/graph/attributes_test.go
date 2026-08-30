@@ -73,7 +73,7 @@ func TestStubGridDeadEnds(t *testing.T) {
 }
 
 func TestSplitGridAttributesEastAndWest(t *testing.T) {
-	g, _ := BuildTestSplitGrid(5, 6, 100, 40.0, -77.0)
+	g, _ := BuildTestSplitGrid(5, 6, 100, 40.0, -77.0, true)
 	// Node index is r*cols + c for this fixture. Column 0→1 is western, 4→5 eastern.
 	west, ok := g.attrBetween(0, 1)
 	if !ok || west&classMask != classArterial {

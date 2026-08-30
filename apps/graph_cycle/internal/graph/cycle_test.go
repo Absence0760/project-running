@@ -92,7 +92,7 @@ func TestSelectLoopsInBandPicksRoundest(t *testing.T) {
 	}
 	rounder := &Loop{Coords: square(100), DistanceM: 820, AreaEfficiency: 0.78}
 	flatter := &Loop{Coords: square(100), DistanceM: 800, AreaEfficiency: 0.30}
-	res := selectLoops([]*Loop{flatter, rounder}, 800)
+	res := selectLoops([]*Loop{flatter, rounder}, 800, PrefNone)
 	if res.Best != rounder {
 		t.Fatalf("expected the rounder in-band loop, got eff %.2f", res.Best.AreaEfficiency)
 	}
@@ -102,7 +102,7 @@ func TestSelectLoopsNoneInBandPicksClosest(t *testing.T) {
 	near := &Loop{Coords: []Coord{{0, 0}, {0, 1}, {1, 1}, {1, 0}}, DistanceM: 1300, AreaEfficiency: 0.5}
 	far := &Loop{Coords: []Coord{{0, 0}, {0, 1}, {1, 1}, {1, 0}}, DistanceM: 2000, AreaEfficiency: 0.9}
 	// Target 1000, band ±150 → neither in band; closest-to-target wins.
-	res := selectLoops([]*Loop{far, near}, 1000)
+	res := selectLoops([]*Loop{far, near}, 1000, PrefNone)
 	if res.Best != near {
 		t.Fatalf("expected the closest-to-target loop (1300 m), got %.0f m", res.Best.DistanceM)
 	}
@@ -114,7 +114,7 @@ func TestSelectLoopsNoneInBandPicksClosest(t *testing.T) {
 
 func TestSelectLoopsAllSpurs(t *testing.T) {
 	spur := &Loop{Coords: []Coord{{0, 0}, {0, 1}, {0, 0}}, DistanceM: 1000, AreaEfficiency: 0.01}
-	res := selectLoops([]*Loop{spur}, 1000)
+	res := selectLoops([]*Loop{spur}, 1000, PrefNone)
 	if res.Best != nil || res.LargestClean != nil {
 		t.Fatal("a field of spurs must select nothing")
 	}

@@ -39,33 +39,45 @@ func splitGridCentre(rows, cols int, spacingM, originLat, originLng float64) (la
 		originLng + float64(cols/2)*metresToDegLng(spacingM, originLat)
 }
 
+// sweepTargets is a spread of loop lengths a 13x13 lattice at 100 m spacing can
+// actually serve, so a preference is judged over a field of choices rather than
+// on one lucky target.
+var sweepTargets = []float64{400, 600, 800, 1000, 1200, 1600, 2000, 2400}
+
 func TestPreferenceSteersOntoPreferredEdges(t *testing.T) {
-	g, _ := BuildTestSplitGrid(9, 9, 100, 40.0, -77.0)
-	lat, lng := splitGridCentre(9, 9, 100, 40.0, -77.0)
+	// The same lattice with the preferred half mirrored, so nothing about the
+	// geometry can favour one answer. The unweighted search is blind to the
+	// attribution and must pick the same loops on both; the weighted one must
+	// end up on more preferred road than it does.
+	for _, preferEast := range []bool{true, false} {
+		g, _ := BuildTestSplitGrid(13, 13, 100, 40.0, -77.0, preferEast)
+		lat := 40.0 + 6*metresToDegLat(100)
+		lng := -77.0 + 6*metresToDegLng(100, 40.0)
 
-	plain := g.SearchCycle(context.Background(), lat, lng, 800, PrefNone)
-	if plain.Best == nil {
-		t.Fatal("expected an unpreferenced loop on a dense grid")
-	}
-	if plain.Applied != PrefNone || plain.PreferredShare != 0 {
-		t.Fatalf("unpreferenced result claimed applied=%d share=%v", plain.Applied, plain.PreferredShare)
-	}
-
-	for _, pref := range []Preference{PrefQuiet, PrefScenic} {
-		res := g.SearchCycle(context.Background(), lat, lng, 800, pref)
-		if res.Best == nil {
-			t.Fatalf("pref %d: expected a loop", pref)
-		}
-		if res.Applied != pref {
-			t.Fatalf("pref %d: applied = %d", pref, res.Applied)
-		}
-		got := g.preferredShare(res.Best, pref)
-		base := g.preferredShare(plain.Best, pref)
-		if got <= base {
-			t.Fatalf("pref %d: preferred share %.3f did not improve on the unpreferenced %.3f", pref, got, base)
-		}
-		if math.Abs(res.PreferredShare-got) > 1e-12 {
-			t.Fatalf("pref %d: reported share %.6f != measured %.6f", pref, res.PreferredShare, got)
+		for _, pref := range []Preference{PrefQuiet, PrefScenic} {
+			plainShare, prefShare := 0.0, 0.0
+			for _, target := range sweepTargets {
+				plain := g.SearchCycle(context.Background(), lat, lng, target, PrefNone)
+				res := g.SearchCycle(context.Background(), lat, lng, target, pref)
+				if plain.Best == nil || res.Best == nil {
+					t.Fatalf("east=%v pref=%d target=%.0f: expected a loop on a dense grid", preferEast, pref, target)
+				}
+				if plain.Applied != PrefNone || plain.PreferredShare != 0 {
+					t.Fatalf("unpreferenced result claimed applied=%d share=%v", plain.Applied, plain.PreferredShare)
+				}
+				if res.Applied != pref {
+					t.Fatalf("east=%v pref=%d: applied = %d", preferEast, pref, res.Applied)
+				}
+				if math.Abs(res.PreferredShare-res.Best.share) > 1e-12 {
+					t.Fatalf("reported share %.6f != the winner %.6f", res.PreferredShare, res.Best.share)
+				}
+				plainShare += g.preferredShare(plain.Best, pref)
+				prefShare += res.PreferredShare
+			}
+			if prefShare <= plainShare {
+				t.Fatalf("east=%v pref=%d: preferred share over the sweep %.3f did not beat the unpreferenced %.3f",
+					preferEast, pref, prefShare, plainShare)
+			}
 		}
 	}
 }
@@ -75,7 +87,7 @@ func TestPreferenceNeverDeniesALoop(t *testing.T) {
 	// search finds a loop, the weighted search must serve one too — either its
 	// own, or the unweighted retry's.
 	grid, _ := BuildTestGrid(9, 9, 100, 40.0, -77.0)
-	split, _ := BuildTestSplitGrid(9, 9, 100, 40.0, -77.0)
+	split, _ := BuildTestSplitGrid(9, 9, 100, 40.0, -77.0, true)
 	stub, _ := BuildTestStubGrid(9, 9, 100, 40.0, -77.0, 0.4)
 	lat, lng := splitGridCentre(9, 9, 100, 40.0, -77.0)
 
@@ -110,7 +122,7 @@ func TestPreferredLoopLengthComesFromGeometry(t *testing.T) {
 	// The weighted cost is not metres. A served loop's distance must still be
 	// re-measured from its geometry, exactly as the reuse penalty already
 	// required.
-	g, _ := BuildTestSplitGrid(9, 9, 100, 40.0, -77.0)
+	g, _ := BuildTestSplitGrid(9, 9, 100, 40.0, -77.0, true)
 	lat, lng := splitGridCentre(9, 9, 100, 40.0, -77.0)
 	res := g.SearchCycle(context.Background(), lat, lng, 800, PrefQuiet)
 	if res.Best == nil {

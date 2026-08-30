@@ -51,17 +51,22 @@ func BuildTestLine(n int, spacingM, originLat, originLng float64) (*Graph, Stats
 }
 
 // BuildTestSplitGrid builds the same lattice as BuildTestGrid, but every
-// segment lying wholly in the EASTERN half is attributed foot-first and green
-// while the west is arterial — so a preference-weighted search has a
-// measurably better half of the map to prefer, and an unweighted one has no
-// reason to favour either.
-func BuildTestSplitGrid(rows, cols int, spacingM, originLat, originLng float64) (*Graph, Stats) {
+// segment lying wholly in one half is attributed foot-first and green while the
+// other half is arterial — so a preference-weighted search has a measurably
+// better half of the map to prefer, and an unweighted one has no reason to
+// favour either. preferEast picks which half, so a test can mirror the map and
+// watch the chosen loop follow it.
+func BuildTestSplitGrid(rows, cols int, spacingM, originLat, originLng float64, preferEast bool) (*Graph, Stats) {
 	b := newBuilder()
 	dLat := metresToDegLat(spacingM)
 	dLng := metresToDegLng(spacingM, originLat)
 	id := func(r, c int) int64 { return int64(r*cols + c) }
 	attrFor := func(c1, c2 int) uint8 {
-		if c1 >= cols/2 && c2 >= cols/2 {
+		in := c1 >= cols/2 && c2 >= cols/2
+		if !preferEast {
+			in = c1 <= cols/2 && c2 <= cols/2
+		}
+		if in {
 			return classFootFirst | attrGreen
 		}
 		return classArterial

@@ -36,7 +36,8 @@ type Loop struct {
 	DistanceM      float64
 	AreaEfficiency float64
 
-	path []int32
+	path  []int32
+	share float64 // fraction of DistanceM on the active preference's edges
 }
 
 // CycleResult is what SearchCycle returns. Best is the chosen loop under the
@@ -152,14 +153,15 @@ func (g *Graph) searchCycle(ctx context.Context, startLat, startLng, targetM flo
 		}
 		loop := g.assembleLoop(out, back)
 		if loop != nil {
+			loop.share = g.preferredShare(loop, pref)
 			candidates = append(candidates, loop)
 		}
 	}
 
-	res := selectLoops(candidates, targetM)
+	res := selectLoops(candidates, targetM, pref)
 	if res.Best != nil {
 		res.Applied = pref
-		res.PreferredShare = g.preferredShare(res.Best, pref)
+		res.PreferredShare = res.Best.share
 	}
 	return res
 }
@@ -245,14 +247,68 @@ func (g *Graph) assembleLoop(out, back []int32) *Loop {
 	}
 }
 
-// selectLoops applies the web selection contract and finds the largest clean
-// loop. Clean = areaEfficiency ≥ spurFloor.
+// Multi-objective ranking weights. One weighted score replaces the two-branch
+// selection the sidecar shipped with, so a preference can trade a little
+// roundness or distance error for a loop that is actually on the roads the
+// runner asked for.
 //
-//   - In-band candidates (|len−target| ≤ distanceBand·target) exist → pick the
-//     roundest; distance closeness breaks ties.
-//   - Otherwise → the closest-to-target clean loop; roundness breaks ties.
-//   - No clean loop at all → Best is nil (loop-poor).
-func selectLoops(cands []*Loop, targetM float64) CycleResult {
+// With no preference the ordering is the shipped contract: the in-band bonus
+// dwarfs every other term, so an in-band candidate always outranks an
+// out-of-band one; whichever objective led its branch still leads it; and the
+// other rides at scoreTieWeight, orders of magnitude below the 1e-9 tolerance
+// the old comparison treated as a tie. That tolerance made the old comparator
+// non-transitive, so no scalar score can reproduce it inside the band — outside
+// it the two agree exactly, which is what the pinning test measures.
+const (
+	scoreInBandBonus = 1000.0
+	scoreTieWeight   = 1e-12
+	// The grid the leading objective is snapped to before the tie-break is
+	// added — the same 1e-9 the old comparison called a tie. Without it two
+	// loops equidistant from target to the last bit would be separated by float
+	// noise instead of by their shape, which is the one place a scalar score
+	// could diverge from the contract.
+	scoreQuantum = 1e-9
+	// What a fully preferred loop may buy itself, in each branch's own currency:
+	// half of the roundness scale while the field is judged on shape, and one
+	// band's width of distance error while it is judged on distance. Every
+	// candidate has already cleared the spur floor, so trading some roundness
+	// for the roads the runner explicitly asked for is the right trade —
+	// roundness is our aesthetic proxy, the preference is their instruction.
+	// Trading a whole band of distance, though, would let a preference serve a
+	// loop the runner did not ask for the length of.
+	scoreShareRoundness = 0.5
+	scoreShareDistance  = distanceBand
+)
+
+// scoreLoop ranks one candidate; higher is better. anyInBand says whether ANY
+// candidate landed inside the distance band, which is what decides whether the
+// field is judged on shape or on distance.
+func scoreLoop(c *Loop, targetM float64, anyInBand bool, pref Preference) float64 {
+	delta := math.Abs(c.DistanceM - targetM)
+	if anyInBand {
+		s := 0.0
+		if delta <= distanceBand*targetM {
+			s = scoreInBandBonus
+		}
+		s += snapToQuantum(c.AreaEfficiency) - scoreTieWeight*(delta/targetM)
+		if pref != PrefNone {
+			s += scoreShareRoundness * c.share
+		}
+		return s
+	}
+	s := -snapToQuantum(delta) + scoreTieWeight*c.AreaEfficiency
+	if pref != PrefNone {
+		s += scoreShareDistance * targetM * c.share
+	}
+	return s
+}
+
+func snapToQuantum(v float64) float64 { return math.Round(v/scoreQuantum) * scoreQuantum }
+
+// selectLoops drops spurs (areaEfficiency < spurFloor), ranks what is left by
+// scoreLoop, and reports the largest clean loop alongside the winner. No clean
+// loop at all → Best is nil (loop-poor).
+func selectLoops(cands []*Loop, targetM float64, pref Preference) CycleResult {
 	clean := make([]*Loop, 0, len(cands))
 	for _, c := range cands {
 		if c.AreaEfficiency >= spurFloor {
@@ -280,33 +336,21 @@ func selectLoops(cands []*Loop, targetM float64) CycleResult {
 	}
 
 	band := distanceBand * targetM
-	var within []*Loop
+	anyInBand := false
 	for _, c := range clean {
 		if math.Abs(c.DistanceM-targetM) <= band {
-			within = append(within, c)
+			anyInBand = true
+			break
 		}
 	}
 
-	var best *Loop
-	if len(within) > 0 {
-		best = within[0]
-		for _, c := range within[1:] {
-			if c.AreaEfficiency > best.AreaEfficiency+1e-9 ||
-				(math.Abs(c.AreaEfficiency-best.AreaEfficiency) <= 1e-9 &&
-					math.Abs(c.DistanceM-targetM) < math.Abs(best.DistanceM-targetM)) {
-				best = c
-			}
-		}
-	} else {
-		best = clean[0]
-		bestDelta := math.Abs(best.DistanceM - targetM)
-		for _, c := range clean[1:] {
-			delta := math.Abs(c.DistanceM - targetM)
-			if delta < bestDelta-1e-9 ||
-				(math.Abs(delta-bestDelta) <= 1e-9 && c.AreaEfficiency > best.AreaEfficiency) {
-				best = c
-				bestDelta = delta
-			}
+	best := clean[0]
+	bestScore := scoreLoop(best, targetM, anyInBand, pref)
+	for _, c := range clean[1:] {
+		// Strictly better only, so an exact tie keeps the earlier candidate in
+		// the deterministic order sorted above.
+		if s := scoreLoop(c, targetM, anyInBand, pref); s > bestScore {
+			best, bestScore = c, s
 		}
 	}
 
