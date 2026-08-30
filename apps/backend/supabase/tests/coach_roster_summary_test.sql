@@ -7,7 +7,7 @@
 -- The aggregates (runs_7d / distance_7d_m / plan_completion_pct) match the
 -- seeded data, and ending a link mid-test drops the athlete immediately.
 begin;
-select plan(13);
+select plan(14);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -112,14 +112,27 @@ select is(
   0, 'an athlete is not a coach -- their roster is empty');
 
 -- ============================================================
--- Anon / unauthenticated: the function raises (fail-closed).
+-- Unauthenticated: fail-closed twice over.
+--
+-- Until 20270626000001 this asserted that an `anon` caller reached the
+-- body and was refused by it -- which held only on an image that grants
+-- anon EXECUTE at create time, and was the evidence separating the two
+-- images in decisions.md 799. The grant is now withheld on both, so the
+-- refusal an anonymous caller meets is the ACL's; the body's own
+-- fail-closed guard is asserted through a role that can still reach it.
+-- The rule those two images differ on is pinned directly, with probe
+-- functions, in anon_execute_registry_test.sql.
 -- ============================================================
-set local role anon;
-set local "request.jwt.claims" = '{"role":"anon"}';
+select ok(
+  not has_function_privilege('anon', 'public.coach_roster_summary()', 'EXECUTE'),
+  'coach_roster_summary is not executable by anon at all');
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"role":"authenticated"}';
 select throws_ok(
   $$select * from coach_roster_summary()$$,
   'not authenticated',
-  'coach_roster_summary raises for an unauthenticated caller');
+  'coach_roster_summary raises for a caller with no subject');
 
 -- ============================================================
 -- Ending the active link revokes the athlete from the roster immediately.
