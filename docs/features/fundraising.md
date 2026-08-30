@@ -248,6 +248,40 @@ The one arm that deliberately differs from the event ledger:
 donation and `null` for an order. An order records a seat and has nothing to
 write on a second instalment; a donation records an amount and does.
 
+#### A refund that is rejected walks `refunded_cents` back down
+
+`charge.refunded` fires when a refund is *created*, not when it settles — on a
+delayed-notification method Stripe increments `charge.amount_refunded`
+optimistically and the bank can still reject it days later. `refund.updated` /
+`charge.refund.updated` / `refund.failed` are dispatched for that (all three:
+which one an endpoint receives is set by the API version pinned on it), and a
+`failed` / `canceled` refund status reaches `donationRefundReversal`.
+
+This is the one place § 776's cumulative-total rule cannot be applied. The
+reversal arrives on the **refund**, which carries only its own amount — the
+charge's walked-down total is not in the payload — so the helper subtracts, and
+its guards are what make that safe:
+
+- only `refunded` / `partially_refunded` reverse (nothing else has a recorded
+  refund to take back off);
+- the reversed amount must be a positive integer **no larger than what the
+  ledger holds**. A larger one means the ledger never recorded this refund —
+  the reversal overtook its own `charge.refunded`, or the row predates
+  `20270620_001` and carries 0 against a real one — and subtracting would
+  invent a negative total that `donations_refunded_range_check` refuses, so the
+  delivery would 23514 and Stripe would retry it forever. It records nothing and
+  logs instead;
+- the resulting status is **derived** from the corrected figure, so the last
+  instalment coming back off lands the donation on `paid` with
+  `refunded_cents = 0` — back on the thermometer, which sums
+  `amount_cents - refunded_cents` over exactly `('paid', 'partially_refunded')`.
+
+Because it is arithmetic on a value that was read, the CAS matches
+`refunded_cents` **exactly** where the forward path guards with `lte`. An `lte`
+guard cannot protect a subtraction from the reading it was computed from, and a
+wiring guard pins the asymmetry — the two arms sit twenty lines apart and the
+safer-looking spelling is the wrong one here. [decisions § 789](../architecture/decisions.md).
+
 #### Reconciling pre-§769 refunds
 
 A donation that the old whole-refund behaviour flipped to `refunded` over a
