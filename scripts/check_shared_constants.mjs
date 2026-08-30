@@ -43,6 +43,12 @@
 //     mirrors, each of which reads the migration
 //   - the Strava lookback maximum -> a web guard in strava_sync_result.test.ts
 //     reads the Edge Function's own bound
+// And two numeric CHECKs are absent from the `numeric column bounds` entry
+// because neither is a value with a second home: `gym_routine_sets`'
+// `target_percent_1rm` has no client input on either platform, and
+// `recipes.servings` carries only a lower bound both clients already clamp to
+// (decisions § 792). A registry entry for either would be a number with exactly
+// one home written down twice.
 // And what is not registered because it is not extractable: `challenge_goal`'s
 // streak ceiling is a FORMULA (`floor(window / one day) + 1`) written three
 // times, not a literal. Comparing the `86400` out of it would certify nothing
@@ -298,6 +304,170 @@ export function parseNamedInt(src, declName) {
 	return decl ? [decl[1]] : [];
 }
 
+// ── Entry: numeric column bounds vs the client fields that write them ───────
+
+/** @param {string} type @returns {number} */
+function columnStep(type) {
+	const scale = /numeric\s*\(\s*\d+\s*,\s*(\d+)\s*\)/i.exec(type);
+	return scale ? 10 ** -Number(scale[1]) : 1;
+}
+
+// `0 + 0.01` is 0.010000000000000002 in binary floating point, and a bound
+// printed that way agrees with nothing.
+/** @param {number} value @param {number} step @returns {string} */
+function roundToStep(value, step) {
+	const places = step >= 1 ? 0 : String(step).split('.')[1].length;
+	return String(Number(value.toFixed(places)));
+}
+
+// A bound is only as good as the neighbouring value the column can actually
+// hold: `> 0` on a `numeric(5, 2)` admits 0.01 and on an `int` admits 1, and a
+// form that states either as "0" states the one value the CHECK rejects. So the
+// exclusive comparisons are resolved through the column's own scale here rather
+// than reported as a flag every caller would have to carry to its input.
+/** @param {string} body @param {string} column @param {number} step @returns {string[]} */
+export function parseColumnBounds(body, column, step) {
+	/** @type {number[]} */
+	const lower = [];
+	/** @type {number[]} */
+	const upper = [];
+	const between = new RegExp(`\\b${column}\\s+between\\s+(-?[\\d.]+)\\s+and\\s+(-?[\\d.]+)`, 'i').exec(body);
+	if (between) {
+		lower.push(Number(between[1]));
+		upper.push(Number(between[2]));
+	}
+	const cmp = new RegExp(`\\b${column}\\s*(>=|<=|>|<)\\s*(-?[\\d.]+)`, 'gi');
+	/** @type {RegExpExecArray | null} */
+	let m;
+	while ((m = cmp.exec(body)) !== null) {
+		const value = Number(m[2]);
+		if (m[1] === '>=') lower.push(value);
+		else if (m[1] === '>') lower.push(value + step);
+		else if (m[1] === '<=') upper.push(value);
+		else upper.push(value - step);
+	}
+	if (lower.length === 0 || upper.length === 0) return [];
+	return [roundToStep(Math.max(...lower), step), roundToStep(Math.min(...upper), step)];
+}
+
+/**
+ * The last CHECK any migration leaves on `<table>.<column>`, resolved with the
+ * column's declared type — a replay, like the function index above, because a
+ * bound can be tightened by a later `alter table` in a file named after
+ * something else entirely.
+ * @param {SqlIndex} sql @param {string} qualified @returns {Site[]}
+ */
+export function columnBoundSites(sql, qualified) {
+	const [table, column] = qualified.split('.');
+	const tableRe = new RegExp(
+		`\\b(?:create\\s+table|alter\\s+table)\\s+(?:if\\s+not\\s+exists\\s+)?(?:public\\.)?${table}\\b`,
+		'i',
+	);
+	const typeRe = new RegExp(
+		// Each word alternative carries its own `\b`; a trailing one outside the
+		// group cannot follow the `)` of `numeric(5, 2)`, so the parse would fall
+		// back to a bare `numeric`, lose the scale, and resolve `> 0` to 1 instead
+		// of 0.01. It did, and this guard is what said so.
+		`\\b${column}\\s+(numeric\\s*\\(\\s*\\d+\\s*,\\s*\\d+\\s*\\)|numeric\\b|bigint\\b|integer\\b|int\\b|smallint\\b)`,
+		'i',
+	);
+	/** @type {Site | null} */
+	let last = null;
+	for (const { file, sql: statement } of sql.statements) {
+		if (!tableRe.test(statement)) continue;
+		const type = typeRe.exec(statement);
+		if (!type) continue;
+		const step = columnStep(type[1]);
+		for (const check of statement.matchAll(/check\s*\(((?:[^()]|\([^()]*\))*)\)/gi)) {
+			const values = parseColumnBounds(check[1], column, step);
+			if (values.length === 0) continue;
+			last = { key: qualified, where: `${qualified} in ${file}`, values };
+		}
+	}
+	return last === null ? [] : [last];
+}
+
+/** @param {string} src @param {RegExp} pairs @param {RegExp} columns @returns {Site[]} */
+export function limitRegistrySites(src, pairs, columns) {
+	/** @type {Map<string, string>} */
+	const column = new Map([...src.matchAll(columns)].map((m) => [m[1], m[2]]));
+	/** @type {Site[]} */
+	const out = [];
+	for (const m of src.matchAll(pairs)) {
+		const qualified = column.get(m[1]);
+		if (qualified === undefined) continue;
+		out.push({
+			key: qualified,
+			where: `${m[1]} (${qualified})`,
+			values: [String(Number(m[2])), String(Number(m[3]))],
+		});
+	}
+	return out;
+}
+
+const TS_LIMIT_PAIR = /\b([A-Za-z0-9]+):\s*\{\s*min:\s*(-?[\d.]+),\s*max:\s*(-?[\d.]+)\s*\}/g;
+const TS_LIMIT_COLUMN = /\b([A-Za-z0-9]+):\s*'([a-z_]+\.[a-z_]+)'/g;
+const DART_LIMIT_PAIR = /'([A-Za-z0-9]+)':\s*NumericLimit\(\s*(-?[\d.]+),\s*(-?[\d.]+)\s*\)/g;
+const DART_LIMIT_COLUMN = /'([A-Za-z0-9]+)':\s*'([a-z_]+\.[a-z_]+)'/g;
+
+// ── Entry: the rate-limit thresholds ───────────────────────────────────────
+
+const RATE_LIMIT_THRESHOLD =
+	/enforce_create_rate_limit\s*\(\s*'([a-z_]+)'\s*,\s*[^,]+,\s*(\d+)\s*,\s*(\d+)\s*\)/gi;
+
+/**
+ * Every distinct `(max, window_s)` pair a live function passes for a bucket.
+ * @param {Ctx} ctx @returns {Map<string, Set<string>>}
+ */
+function rateLimitThresholds(ctx) {
+	/** @type {Map<string, Set<string>>} */
+	const byBucket = new Map();
+	for (const { sql } of ctx.sql.live.values()) {
+		RATE_LIMIT_THRESHOLD.lastIndex = 0;
+		/** @type {RegExpExecArray | null} */
+		let m;
+		while ((m = RATE_LIMIT_THRESHOLD.exec(sql)) !== null) {
+			const seen = byBucket.get(m[1]) ?? new Set();
+			seen.add(`${m[2]}/${m[3]}`);
+			byBucket.set(m[1], seen);
+		}
+	}
+	return byBucket;
+}
+
+// Eleven `enforce_create_rate_limit` calls appear across the migration set, but
+// after the function replay each bucket has exactly ONE live home: the four
+// `create_report` calls are four re-issues of `submit_report`, the three
+// `clone_plan_template` ones three re-issues of one function. So the SQL side
+// of these numbers is not in this class at all, and the only second home is the
+// prose below. decisions.md § 792.
+/** @param {Ctx} ctx @param {readonly string[]} buckets @returns {string[]} */
+function dmThresholdValues(ctx, buckets) {
+	const byBucket = rateLimitThresholds(ctx);
+	/** @type {string[]} */
+	const out = [];
+	for (const bucket of buckets) {
+		const pairs = byBucket.get(bucket);
+		if (pairs === undefined) return [];
+		out.push(...[...pairs].sort());
+	}
+	return out;
+}
+
+/** The order the two clients' prose names them in: burst first, then the hour cap. */
+export const DM_RATE_LIMIT_BUCKETS = ['send_direct_message_burst', 'send_direct_message'];
+
+/**
+ * The `<max>/<window> s` figures a client's own prose transcribes, in the order
+ * they are written. Both clients explain the two direct-message buckets by
+ * quoting their numbers (decisions § 737), which makes the comment a home for
+ * the value and therefore something this guard has to read.
+ * @param {string} src @returns {string[]}
+ */
+export function parseProseThresholds(src) {
+	return [...src.matchAll(/(\d+)\/(\d+)\s*s\b/g)].map((m) => `${m[1]}/${m[2]}`);
+}
+
 // ── Entry: the rate-limit bucket vocabulary ─────────────────────────────────
 
 const RATE_LIMIT_CALL =
@@ -431,6 +601,128 @@ export const REGISTRY = [
 						values: [...ctx.read('apps/mobile_android/lib/rate_limit_message.dart').matchAll(/case\s+'([a-z_]+)':/g)].map(
 							(m) => m[1],
 						),
+					},
+				],
+			},
+		],
+	},
+	{
+		name: 'numeric column bounds',
+		why:
+			'A form that does not carry the column\'s own bound hands the runner a ' +
+			'postgres 23514 naming a constraint, which is not a sentence anybody can ' +
+			'act on — and when the field is typed in pounds against a kilogram ' +
+			'column, the number in the error is not even the number they typed. The ' +
+			'clients state the bound so they can refuse first, so it has to be the ' +
+			'same bound.',
+		match: 'key',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'sql (the column CHECK)',
+				sites: (ctx) =>
+					Object.values(
+						/** @type {Record<string, string>} */ (
+							Object.fromEntries(
+								[...ctx.read('apps/web/src/lib/core/numeric_limits.ts').matchAll(TS_LIMIT_COLUMN)].map((m) => [
+									m[1],
+									m[2],
+								]),
+							)
+						),
+					).flatMap((qualified) => columnBoundSites(ctx.sql, qualified)),
+			},
+			{
+				label: 'web (apps/web/src/lib/core/numeric_limits.ts)',
+				sites: (ctx) =>
+					limitRegistrySites(
+						ctx.read('apps/web/src/lib/core/numeric_limits.ts'),
+						TS_LIMIT_PAIR,
+						TS_LIMIT_COLUMN,
+					),
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/numeric_limits.dart)',
+				sites: (ctx) =>
+					limitRegistrySites(
+						ctx.read('apps/mobile_android/lib/numeric_limits.dart'),
+						DART_LIMIT_PAIR,
+						DART_LIMIT_COLUMN,
+					),
+			},
+		],
+	},
+	{
+		name: 'plausible body-weight range',
+		why:
+			'The narrower human range the demographics forms actually show. It is ' +
+			'inside the `body_metrics.weight_kg` CHECK on purpose — the same parse ' +
+			'also reads gym-load weights, which routinely exceed it — so the two ' +
+			'clients disagreeing means one of them refuses a weight the other stores.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/format/weight.ts)',
+				sites: (ctx) => {
+					const src = ctx.read('apps/web/src/lib/format/weight.ts');
+					return [
+						{
+							key: 'range',
+							where: 'BODY_WEIGHT_MIN_KG / BODY_WEIGHT_MAX_KG',
+							values: [...parseNamedInt(src, 'BODY_WEIGHT_MIN_KG'), ...parseNamedInt(src, 'BODY_WEIGHT_MAX_KG')],
+						},
+					];
+				},
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/numeric_limits.dart)',
+				sites: (ctx) => {
+					const m = /kBodyWeightRangeKg\s*=\s*NumericLimit\(\s*(-?[\d.]+),\s*(-?[\d.]+)\s*\)/.exec(
+						ctx.read('apps/mobile_android/lib/numeric_limits.dart'),
+					);
+					return m === null ? [] : [{ key: 'range', where: 'kBodyWeightRangeKg', values: [m[1], m[2]] }];
+				},
+			},
+		],
+	},
+	{
+		name: 'direct-message rate-limit thresholds',
+		why:
+			'Both clients explain the two direct-message buckets by quoting their ' +
+			'numbers, so the comment is a home for the value. Prose outlives the ' +
+			'thing it describes: a re-tuned burst window leaves two files telling ' +
+			'the next reader a limit the database stopped enforcing.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'sql (send_direct_message_burst, then send_direct_message)',
+				sites: (ctx) => [
+					{
+						key: 'dm',
+						where: 'live enforce_create_rate_limit call sites',
+						values: dmThresholdValues(ctx, DM_RATE_LIMIT_BUCKETS),
+					},
+				],
+			},
+			{
+				label: 'web (apps/web/src/lib/i18n/rate_limit_message.ts)',
+				sites: (ctx) => [
+					{
+						key: 'dm',
+						where: 'BUCKET_KEY doc comment',
+						values: parseProseThresholds(ctx.read('apps/web/src/lib/i18n/rate_limit_message.ts')),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/rate_limit_message.dart)',
+				sites: (ctx) => [
+					{
+						key: 'dm',
+						where: 'rateLimitMessage doc comment',
+						values: parseProseThresholds(ctx.read('apps/mobile_android/lib/rate_limit_message.dart')),
 					},
 				],
 			},
