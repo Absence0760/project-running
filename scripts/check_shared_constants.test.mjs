@@ -24,6 +24,10 @@ import {
 	indexMigrations,
 	parseAwarderLadders,
 	parseBadgeCatalogue,
+	callArguments,
+	parseCaseFoldMap,
+	parseCharClassCodePoints,
+	parseNamedCharClass,
 	parseNamedInt,
 	parseNearbyCase,
 	parseNumberList,
@@ -203,6 +207,97 @@ test('a bucket nothing ever set produces no site, which the caller reports', () 
 });
 
 // ── Comparison: match 'all' ────────────────────────────────────────────────
+
+test('a character class reads as code points however its language spells them', () => {
+	// The same class in the three languages it is written in: a JS regex
+	// literal, a Dart string (doubled backslashes), and SQL chr() concatenation.
+	const expected = [9, 10, 32, 0x85, 0xa0];
+	assert.deepEqual(parseCharClassCodePoints('\\t\\n \\u0085\\u00a0'), expected);
+	assert.deepEqual(parseCharClassCodePoints('\\\\t\\\\n \\\\u0085\\\\u00a0'), expected);
+	assert.deepEqual(
+		parseCharClassCodePoints(
+			"chr(9) || chr(10) || chr(32)\n          || chr(133) || chr(160)",
+			{ sql: true },
+		),
+		expected,
+	);
+});
+
+test('a range expands to every code point it covers, in every spelling', () => {
+	assert.deepEqual(parseCharClassCodePoints('\\u2000-\\u2003'), [0x2000, 0x2001, 0x2002, 0x2003]);
+	assert.deepEqual(
+		parseCharClassCodePoints("chr(8192) || '-' || chr(8195)", { sql: true }),
+		[0x2000, 0x2001, 0x2002, 0x2003],
+	);
+});
+
+test('a SQL class keeps no space of its own, a JS one keeps the space it names', () => {
+	// The whitespace between SQL concatenation operands is punctuation; the
+	// space inside a JS class is a member. Reading them the same way put 80
+	// spurious U+0020s in the SQL rail and made the two disagree.
+	assert.deepEqual(parseCharClassCodePoints("chr(9)   ||   chr(10)", { sql: true }), [9, 10]);
+	assert.deepEqual(parseCharClassCodePoints('\\t \\n'), [9, 32, 10]);
+});
+
+test('a class is read from its declaration, not from a doc comment naming it', () => {
+	const src =
+		'/// Every step is spelled out; see EXERCISE_WS below.\n' +
+		'const EXERCISE_WS = /[\\t\\n \\u00a0]+/g;\n';
+	assert.deepEqual(parseNamedCharClass(src, 'EXERCISE_WS'), ['0009', '000a', '0020', '00a0']);
+});
+
+test('a case-fold table reads as from>to pairs on both clients', () => {
+	const ts =
+		"const EXERCISE_CASE_FOLD = /[\\u0130]/g;\n" +
+		"const EXERCISE_CASE_MAP: Record<string, string> = {\n\t'\\u0130': 'i',\n\t'\\u01c5': '\\u01c6'\n};\n";
+	const dart =
+		"const Map<String, String> kExerciseCaseMap = {\n  '\\u0130': 'i',\n  '\\u01c5': '\\u01c6',\n};\n";
+	assert.deepEqual(parseCaseFoldMap(ts, 'EXERCISE_CASE_MAP'), ['0130>0069', '01c5>01c6']);
+	assert.deepEqual(parseCaseFoldMap(dart, 'kExerciseCaseMap'), ['0130>0069', '01c5>01c6']);
+});
+
+test('a call is split on its top-level commas, not on the ones inside its arguments', () => {
+	const body = "select translate(collapse(p_name, 'x'), chr(304) || chr(453), chr(105) || chr(454));";
+	assert.deepEqual(callArguments(body, 'translate'), [
+		"collapse(p_name, 'x')",
+		' chr(304) || chr(453)',
+		' chr(105) || chr(454)',
+	]);
+});
+
+test('the exercise normalisation entries agree across SQL, web and mobile', () => {
+	// Reads the real rails, so a class or a fold that drifts on one platform
+	// fails here rather than silently re-keying a lifter's stored history.
+	const ctx = defaultContext();
+	for (const name of ['exercise-name whitespace class', 'exercise-name case folds']) {
+		const entry = /** @type {import('./check_shared_constants.mjs').Entry} */ (
+			REGISTRY.find((e) => e.name === name)
+		);
+		assert.ok(entry, `${name} is registered`);
+		const { errors } = checkEntry(entry, ctx);
+		assert.deepEqual(errors, []);
+	}
+});
+
+test('a SQL function that rolls its own exercise-name class is reported, not ignored', () => {
+	// The failure this entry exists to catch a SECOND time: a new RPC that
+	// inlines `regexp_replace(lower(btrim(exercise_name)), '\s+', ' ', 'g')`
+	// instead of calling normalise_exercise_name(). `\s` names no code point,
+	// so the rail reads no values and the guard says it has gone blind there.
+	const entry = /** @type {import('./check_shared_constants.mjs').Entry} */ (
+		REGISTRY.find((e) => e.name === 'exercise-name whitespace class')
+	);
+	const real = defaultContext();
+	const live = new Map(real.sql.live);
+	live.set('gym_rogue_rpc', {
+		file: '20990101_001_rogue.sql',
+		sql: "create function gym_rogue_rpc() returns text language sql as $$ select regexp_replace(lower(btrim(s.exercise_name)), '\\s+', ' ', 'g') from gym_sets s $$;",
+	});
+	const { errors } = checkEntry(entry, { read: real.read, sql: { live, statements: real.sql.statements } });
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /gym_rogue_rpc\(\)/);
+	assert.match(errors[0], /read no values/);
+});
 
 test('sites carrying the same values in a different order agree under set compare', () => {
 	const entry = entryOf(
