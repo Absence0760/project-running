@@ -433,6 +433,28 @@ jobs:
             echo "Use the shape 20260707_001 prescribes — revoke the TABLE-level privilege, then re-grant column by column — and register the withheld columns in apps/backend/supabase/tests/column_grant_lockdown_registry_test.sql."
             exit 1
           fi
+      # The same disease one object class over, and it is IMAGE-DEPENDENT.
+      # anon reaches a function through two channels — the built-in PUBLIC
+      # grant and a grant of its own — and the two CLI images disagree about
+      # which one a new function arrives with: 2.109.1 (workstation) gives it
+      # PUBLIC only, the pinned 2.84.2 (this job, and Supabase Cloud) installs
+      # an explicit anon grant. So `from public` alone withholds on one image
+      # and `from anon` alone on the other; only `from public, anon` withholds
+      # on both, which is why that is the house form. Same no-allowlist replay
+      # as the step above: a revoke naming one channel is reported only if the
+      # other is still at its default at the end of the set.
+      - name: Migration EXECUTE revokes withhold on both CLI images
+        run: |
+          if ! node --test apps/backend/scripts/check_migration_function_revoke_noop.test.mjs; then
+            echo "::error::The function-revoke guard's own unit tests failed, so its verdict on the migration set cannot be trusted. This is not schema drift, not a lock-safety failure and not the column-revoke guard."
+            echo "Fix apps/backend/scripts/check_migration_function_revoke_noop.mjs (or its tests) first, then re-read what it says about the migrations."
+            exit 1
+          fi
+          if ! node apps/backend/scripts/check_migration_function_revoke_noop.mjs; then
+            echo "::error::A migration revokes EXECUTE on a function from PUBLIC or from anon but not both, so it withholds nothing on one of the two Supabase CLI images — this job's pinned 2.84.2 and prod install an explicit anon grant that a PUBLIC-revoke does not reach. Nothing here is about version keys, blocking locks, column grants or the generated types."
+            echo "Name both — 'revoke execute on function <f> from public, anon;' — in that migration or a later one, and re-grant the roles that must keep it. A shipped migration is uneditable, so repair it forward in a new one."
+            exit 1
+          fi
       # The four `pnpm.overrides` entries are security pins, and a bot can drop
       # them. Dependabot #812 regenerated pnpm-lock.yaml without its top-level
       # `overrides:` block, and all 17 pnpm jobs then died at

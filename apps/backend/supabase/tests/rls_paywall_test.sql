@@ -1,9 +1,9 @@
 -- pgtap suite for the paywall tier gates:
 --
 --   - is_pro() — SECURITY DEFINER. Returns true when auth.uid()'s
---     subscription_tier is 'pro' or 'lifetime'. Read-side gate; used
---     by RLS policies on paid-tier tables and Edge Functions that
---     guard premium endpoints.
+--     subscription_tier is 'pro' or 'lifetime'. Read-side gate, called
+--     by the web and mobile clients and by the endpoints that guard
+--     premium features; no RLS policy names it.
 --   - check_rate_limit_tiered(p_user_id, p_bucket, free_max, pro_max,
 --     window_s) — SECURITY DEFINER. Reads tier and uses it to pick
 --     the max. Increments the rate_limits row in the same call so
@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(19);
+select plan(20);
 
 -- ── Fixture: a free user, a pro user, a lifetime user ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -59,10 +59,19 @@ select is(is_pro(), true, 'is_pro() returns true for a pro user');
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000f003","role":"authenticated"}';
 select is(is_pro(), true, 'is_pro() returns true for a lifetime user');
 
--- 4. Anon (no auth.uid): is_pro() = false (no row matches NULL).
-set local role anon;
+-- 4. No auth.uid: is_pro() = false (no row matches NULL). Asserted as
+-- `authenticated` with no subject rather than as anon, because 20270626000001
+-- withheld EXECUTE from anon entirely -- a caller with no account is now
+-- refused by the grant, one layer before the body, which 4b pins.
+set local role authenticated;
 set local "request.jwt.claims" = '';
-select is(is_pro(), false, 'is_pro() returns false for an unauthenticated caller');
+select is(is_pro(), false, 'is_pro() returns false for a caller with no subject');
+
+-- 4b.
+select ok(
+  not has_function_privilege('anon', 'public.is_pro()', 'EXECUTE'),
+  'is_pro() is not executable by anon at all'
+);
 
 -- ── check_rate_limit_tiered ──
 set local role authenticated;
