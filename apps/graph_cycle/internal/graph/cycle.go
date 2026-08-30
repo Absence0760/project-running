@@ -259,27 +259,33 @@ func (g *Graph) assembleLoop(out, back []int32) *Loop {
 // roundness or distance error for a loop that is actually on the roads the
 // runner asked for.
 //
-// With no preference the ordering is the shipped contract: the in-band bonus
-// dwarfs every other term, so an in-band candidate always outranks an
-// out-of-band one; whichever objective led its branch still leads it; and the
-// other rides at scoreTieWeight, orders of magnitude below the 1e-9 tolerance
-// the old comparison treated as a tie. That tolerance made the old comparator
-// non-transitive, so no scalar score can reproduce it inside the band — outside
-// it the two agree exactly, which is what the pinning test measures.
+// With no preference the ordering is the shipped contract: an in-band candidate
+// scores on the roundness scale and an out-of-band one in a strictly lower band,
+// so the two never cross and whichever objective led the old branch still leads
+// it. The other rides at scoreTieWeight. That is why BOTH branches score on an
+// O(1) scale rather than in metres — a tie-break this small added to a 25 km
+// delta is a fraction of one ULP of it and rounds away entirely, silently
+// reversing the objective it exists to decide. The 1e-9 tolerance the old
+// comparison treated as a tie also made it non-transitive, so no scalar score
+// can reproduce it exactly; selection_pin_test.go measures what is left.
 const (
-	scoreInBandBonus = 1000.0
-	scoreTieWeight   = 1e-12
 	// The grid the leading objective is snapped to before the tie-break is
 	// added — the same 1e-9 the old comparison called a tie. Without it two
 	// loops equidistant from target to the last bit would be separated by float
 	// noise instead of by their shape, which is the one place a scalar score
 	// could diverge from the contract.
 	scoreQuantum = 1e-9
+	// The tie-break's WHOLE range: both branches normalise their secondary
+	// objective to [0,1] before scaling by it, so a hundredth of a quantum is
+	// what keeps the tie-break under the grid of the objective it breaks ties
+	// within while still spanning thousands of ULP of the sum it joins.
+	scoreTieWeight = scoreQuantum / 100
 	// What a fully preferred loop may buy itself, in each branch's own currency:
 	// half of the roundness scale while the field is judged on shape, and one
-	// band's width of distance error while it is judged on distance. Every
-	// candidate has already cleared the spur floor, so trading some roundness
-	// for the roads the runner explicitly asked for is the right trade —
+	// band's width of (target-normalised) distance error while it is judged on
+	// distance. Every candidate has already cleared the spur floor, so trading
+	// some roundness for the roads the runner explicitly asked for is the right
+	// trade —
 	// roundness is our aesthetic proxy, the preference is their instruction.
 	// Trading a whole band of distance, though, would let a preference serve a
 	// loop the runner did not ask for the length of.
@@ -294,25 +300,27 @@ const (
 	scoreStubCredit = 1.0
 )
 
-// scoreLoop ranks one candidate; higher is better. anyInBand says whether ANY
-// candidate landed inside the distance band, which is what decides whether the
-// field is judged on shape or on distance.
-func scoreLoop(c *Loop, targetM float64, anyInBand bool, pref Preference) float64 {
+// scoreLoop ranks one candidate; higher is better. An in-band candidate scores
+// on the roundness scale, which every candidate that reached scoring occupies
+// above zero (they have all cleared spurFloor); an out-of-band one scores an
+// order below zero. So the field is judged on shape exactly when something
+// reached the band, without a magnitude-dwarfing bonus to say so. The snapped
+// delta is divided by targetM rather than snapped after: targetM is a positive
+// constant within a call, so the primary ordering is untouched and equal snapped
+// deltas still yield an identical quotient.
+func scoreLoop(c *Loop, targetM float64, pref Preference) float64 {
 	delta := math.Abs(c.DistanceM - targetM)
-	if anyInBand {
-		s := 0.0
-		if delta <= distanceBand*targetM {
-			s = scoreInBandBonus
-		}
-		s += snapToQuantum(c.AreaEfficiency) - scoreTieWeight*(delta/targetM)
+	band := distanceBand * targetM
+	if delta <= band {
+		s := snapToQuantum(c.AreaEfficiency) - scoreTieWeight*(delta/band)
 		if pref != PrefNone {
 			s += shareWeightFor(pref) * c.share
 		}
 		return s
 	}
-	s := -snapToQuantum(delta) + scoreTieWeight*c.AreaEfficiency
+	s := -1 - snapToQuantum(delta)/targetM + scoreTieWeight*c.AreaEfficiency
 	if pref != PrefNone {
-		s += scoreShareDistance * targetM * c.share
+		s += scoreShareDistance * c.share
 	}
 	return s
 }
@@ -358,21 +366,12 @@ func selectLoops(cands []*Loop, targetM float64, pref Preference) CycleResult {
 		}
 	}
 
-	band := distanceBand * targetM
-	anyInBand := false
-	for _, c := range clean {
-		if math.Abs(c.DistanceM-targetM) <= band {
-			anyInBand = true
-			break
-		}
-	}
-
 	best := clean[0]
-	bestScore := scoreLoop(best, targetM, anyInBand, pref)
+	bestScore := scoreLoop(best, targetM, pref)
 	for _, c := range clean[1:] {
 		// Strictly better only, so an exact tie keeps the earlier candidate in
 		// the deterministic order sorted above.
-		if s := scoreLoop(c, targetM, anyInBand, pref); s > bestScore {
+		if s := scoreLoop(c, targetM, pref); s > bestScore {
 			best, bestScore = c, s
 		}
 	}
