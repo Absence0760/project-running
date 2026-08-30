@@ -126,6 +126,10 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 type cycleRequest struct {
 	Start           point   `json:"start"`
 	TargetDistanceM float64 `json:"targetDistanceM"`
+	// Optional route-design preference. An unrecognised value is dropped
+	// silently rather than rejected — a stale knob on an older client must not
+	// be able to deny route generation.
+	Preference string `json:"preference"`
 }
 
 // loopJSON is the wire shape of one chosen/clean loop.
@@ -160,7 +164,7 @@ func (s *Server) handleCycle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := s.g.SearchCycle(r.Context(), req.Start.Lat, req.Start.Lng, req.TargetDistanceM)
+	res := s.g.SearchCycle(r.Context(), req.Start.Lat, req.Start.Lng, req.TargetDistanceM, graph.ParsePreference(req.Preference))
 	// found=false is a first-class loop-poor signal, NOT an error: the web
 	// client turns it into null and falls back to round_trip. largestClean is
 	// still surfaced so a caller can show the largest achievable loop.
@@ -172,6 +176,13 @@ func (s *Server) handleCycle(w http.ResponseWriter, r *http.Request) {
 		resp["coordinates"] = coordsJSON(res.Best.Coords)
 		resp["distanceM"] = res.Best.DistanceM
 		resp["areaEfficiency"] = res.Best.AreaEfficiency
+		// Reported only when a preference was actually honoured — a request
+		// served by the unweighted retry says nothing, so the client can show
+		// the runner what they got rather than what they asked for.
+		if res.Applied != graph.PrefNone {
+			resp["preferenceApplied"] = res.Applied.String()
+			resp["preferenceShare"] = res.PreferredShare
+		}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

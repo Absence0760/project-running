@@ -14,7 +14,7 @@ func TestSearchCycleFindsCleanLoop(t *testing.T) {
 	cLat := 40.0 + 4*metresToDegLat(100)
 	cLng := -77.0 + 4*metresToDegLng(100, 40)
 
-	res := g.SearchCycle(context.Background(), cLat, cLng, 800)
+	res := g.SearchCycle(context.Background(), cLat, cLng, 800, PrefNone)
 	if res.Best == nil {
 		t.Fatal("expected a loop in a dense grid, got loop-poor")
 	}
@@ -40,7 +40,7 @@ func TestSearchCycleLoopPoor(t *testing.T) {
 	// A straight line has no second way home: every "loop" is an out-and-back
 	// spur, so the search must report loop-poor (Best nil).
 	g := lineGraph(30, 100, 40.0, -77.0)
-	res := g.SearchCycle(context.Background(), 40.0, -77.0, 1000)
+	res := g.SearchCycle(context.Background(), 40.0, -77.0, 1000, PrefNone)
 	if res.Best != nil {
 		t.Fatalf("line graph should be loop-poor, got %.0f m loop (eff %.3f)",
 			res.Best.DistanceM, res.Best.AreaEfficiency)
@@ -55,12 +55,12 @@ func TestSearchCycleDeterministic(t *testing.T) {
 	cLat := 40.0 + 4*metresToDegLat(100)
 	cLng := -77.0 + 4*metresToDegLng(100, 40)
 
-	first := g.SearchCycle(context.Background(), cLat, cLng, 800)
+	first := g.SearchCycle(context.Background(), cLat, cLng, 800, PrefNone)
 	if first.Best == nil {
 		t.Fatal("expected a loop")
 	}
 	for i := 0; i < 5; i++ {
-		next := g.SearchCycle(context.Background(), cLat, cLng, 800)
+		next := g.SearchCycle(context.Background(), cLat, cLng, 800, PrefNone)
 		if next.Best == nil || next.Best.DistanceM != first.Best.DistanceM {
 			t.Fatalf("run %d: distance %v != %v (non-deterministic)", i, next.Best.DistanceM, first.Best.DistanceM)
 		}
@@ -77,7 +77,7 @@ func TestSearchCycleDeterministic(t *testing.T) {
 
 func TestSearchCycleOffGraph(t *testing.T) {
 	g := newBuilder().finalize()
-	res := g.SearchCycle(context.Background(), 0, 0, 1000)
+	res := g.SearchCycle(context.Background(), 0, 0, 1000, PrefNone)
 	if res.Best != nil || res.LargestClean != nil {
 		t.Fatal("empty graph must yield an all-nil result")
 	}
@@ -92,7 +92,7 @@ func TestSelectLoopsInBandPicksRoundest(t *testing.T) {
 	}
 	rounder := &Loop{Coords: square(100), DistanceM: 820, AreaEfficiency: 0.78}
 	flatter := &Loop{Coords: square(100), DistanceM: 800, AreaEfficiency: 0.30}
-	res := selectLoops([]*Loop{flatter, rounder}, 800)
+	res := selectLoops([]*Loop{flatter, rounder}, 800, PrefNone)
 	if res.Best != rounder {
 		t.Fatalf("expected the rounder in-band loop, got eff %.2f", res.Best.AreaEfficiency)
 	}
@@ -102,7 +102,7 @@ func TestSelectLoopsNoneInBandPicksClosest(t *testing.T) {
 	near := &Loop{Coords: []Coord{{0, 0}, {0, 1}, {1, 1}, {1, 0}}, DistanceM: 1300, AreaEfficiency: 0.5}
 	far := &Loop{Coords: []Coord{{0, 0}, {0, 1}, {1, 1}, {1, 0}}, DistanceM: 2000, AreaEfficiency: 0.9}
 	// Target 1000, band ±150 → neither in band; closest-to-target wins.
-	res := selectLoops([]*Loop{far, near}, 1000)
+	res := selectLoops([]*Loop{far, near}, 1000, PrefNone)
 	if res.Best != near {
 		t.Fatalf("expected the closest-to-target loop (1300 m), got %.0f m", res.Best.DistanceM)
 	}
@@ -114,7 +114,7 @@ func TestSelectLoopsNoneInBandPicksClosest(t *testing.T) {
 
 func TestSelectLoopsAllSpurs(t *testing.T) {
 	spur := &Loop{Coords: []Coord{{0, 0}, {0, 1}, {0, 0}}, DistanceM: 1000, AreaEfficiency: 0.01}
-	res := selectLoops([]*Loop{spur}, 1000)
+	res := selectLoops([]*Loop{spur}, 1000, PrefNone)
 	if res.Best != nil || res.LargestClean != nil {
 		t.Fatal("a field of spurs must select nothing")
 	}

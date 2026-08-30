@@ -7,6 +7,7 @@ import {
 	GraphCycleError,
 	parseGraphCycle,
 	parseLargestCleanM,
+	parsePreferenceApplied,
 } from './graph_cycle';
 import { handleGenerate } from './handler';
 import type { Fetcher } from './graphhopper';
@@ -174,6 +175,62 @@ test('fetchGraphCycle POSTs a JSON body with the start + target and the key head
 	const body = JSON.parse(seenInit?.body as string);
 	assert.deepEqual(body.start, { lat: 40, lng: -74 });
 	assert.equal(body.targetDistanceM, 5000);
+});
+
+test('fetchGraphCycle carries a preference on the body, and omits the key when unset', async () => {
+	let seenInit: RequestInit | undefined;
+	const fetcher: Fetcher = async (_u, init) => {
+		seenInit = init;
+		return gcResponse(true, squareLoop(0, 0, 0.01), 5000);
+	};
+	await fetchGraphCycle(
+		{ baseUrl: GC, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'scenic' },
+		fetcher,
+	);
+	assert.equal(JSON.parse(seenInit?.body as string).preference, 'scenic');
+
+	await fetchGraphCycle({ baseUrl: GC, start: { lat: 0, lng: 0 }, targetDistanceM: 5000 }, fetcher);
+	// Absent, not null: "no preference" must be the byte-for-byte request the
+	// sidecar has always answered.
+	assert.equal('preference' in JSON.parse(seenInit?.body as string), false);
+});
+
+test('parsePreferenceApplied accepts only the shared vocabulary', () => {
+	assert.equal(parsePreferenceApplied({ preferenceApplied: 'quiet' }), 'quiet');
+	assert.equal(parsePreferenceApplied({ preferenceApplied: 'cul_de_sac' }), 'cul_de_sac');
+	// Fail-closed: a value we can't read is "not applied", never "applied".
+	assert.equal(parsePreferenceApplied({ preferenceApplied: 'elevation' }), null);
+	assert.equal(parsePreferenceApplied({ preferenceApplied: null }), null);
+	assert.equal(parsePreferenceApplied({ preferenceApplied: true }), null);
+	assert.equal(parsePreferenceApplied({}), null);
+	assert.equal(parsePreferenceApplied(null), null);
+});
+
+test('fetchGraphCycle reports the preference the sidecar actually applied', async () => {
+	const withApplied: Fetcher = async () =>
+		new Response(
+			JSON.stringify({
+				found: true,
+				coordinates: squareLoop(0, 0, 0.01),
+				distanceM: 5000,
+				preferenceApplied: 'quiet',
+			}),
+			{ status: 200, headers: { 'content-type': 'application/json' } },
+		);
+	const got = await fetchGraphCycle(
+		{ baseUrl: GC, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'quiet' },
+		withApplied,
+	);
+	assert.equal(got.preferenceApplied, 'quiet');
+
+	// The sidecar's own unweighted retry served this one — the ask went unmet,
+	// and asking for it is not evidence it landed.
+	const unweighted: Fetcher = async () => gcResponse(true, squareLoop(0, 0, 0.01), 5000);
+	const fallback = await fetchGraphCycle(
+		{ baseUrl: GC, start: { lat: 0, lng: 0 }, targetDistanceM: 5000, preference: 'quiet' },
+		unweighted,
+	);
+	assert.equal(fallback.preferenceApplied, null);
 });
 
 test('fetchGraphCycle omits the key header when no apiKey is set', async () => {

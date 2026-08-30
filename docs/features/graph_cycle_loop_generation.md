@@ -344,6 +344,12 @@ variant honours it today as a cheap interim.
 
 ### Avoid-highways / prefer-residential — BUILT (2026-06-14, web-only)
 
+> **Superseded in part on 2026-08-30** by the section below. The custom model and
+> its fallback are still there and still the `round_trip` path, but "skips the
+> graph-cycle sidecar" below is no longer true: the sidecar honours preferences on
+> its own search now, so the preference rides the chain rather than diverting the
+> request off it. Kept as the record of what the cheap half was.
+
 The cheap half shipped as a `round_trip` custom-model variant, no v3 required:
 
 - **UI** — a "Quiet roads (avoid highways)" checkbox in the distance panel on
@@ -367,10 +373,105 @@ The cheap half shipped as a `round_trip` custom-model variant, no v3 required:
 - **Out of scope** — mobile (route generation is a web-canonical surface, no mobile
   route builder); and the harder preference set below, which needs v3.
 
-**The full set (scenic, elevation-aware, cul-de-sac mode, multi-objective ranking)
-still needs the graph search**, where we own the edges + the scoring.
+### Scenic, cul-de-sac mode + multi-objective ranking — BUILT (2026-08-30, sidecar)
 
-**Remaining effort:** ~2–3 days on top of a working graph-cycle generator —
-scenic/park-adjacency and cul-de-sac mode are the harder half. The natural-language
-front-end that *sets* these preferences from a plain-English request is its own
-proposal: [ai_route_assistant.md](ai_route_assistant.md).
+The half that needed v3 shipped inside the Go sidecar, where we own the edges
+and the scoring:
+
+- **Per-edge attribution.** The PBF parse used to throw every way tag away. It
+  now keeps one packed byte per directed edge (`internal/graph/attributes.go`):
+  a road-class bucket (arterial / residential-ish / foot-first) plus a green
+  flag. Green space (`leisure=park,garden,nature_reserve`, `natural=water`,
+  `landuse=forest,grass,recreation_ground`) is collected in the *same* way pass
+  and rasterised into a coarse occupancy grid on the spatial index’s own 200 m
+  cell scheme (`green.go`); an edge is green when its midpoint lands in a green
+  cell, which is also how a footpath *through* a park earns the flag. A closed
+  way’s rows are filled between its own extremes so the middle of a park counts
+  and not just its boundary, capped at ~10 km so one forest polygon can’t
+  blanket an extract. The green coordinates are released before the graph is
+  built — the raster is all that survives, and nothing is retained at query time.
+- **Soft weights.** `dijkstra` multiplies each edge’s true length by a
+  preference multiplier (`preference.go`): quiet = arterial ×1.8 / foot-first
+  ×0.85, scenic = green ×0.65 / arterial ×1.3. **Never 0, never infinite, never
+  an edge removal** — a hard filter can disconnect a buildable neighbourhood.
+  `PrefNone` skips the multiply outright, so the unpreferenced search is
+  bit-identical to the one that shipped. Dijkstra now returns TRUE metres
+  alongside the weighted cost, because the far-point picker sizes candidates
+  against the loop the runner asked for and a weighted cost is no longer a
+  measure of that.
+- **Never denies a route.** If the weighted search clears no candidate over the
+  spur floor, the whole search repeats unweighted and that loop is served with
+  **no preference reported** — the same rule the web handler already applies to
+  its `round_trip` race. Given the reuse penalty (×8) dwarfs every preference
+  multiplier, the retry is cheap insurance rather than a common path; what the
+  suite enforces is the outcome (a preference never returns nil where the plain
+  search returns a loop), not the branch.
+- **Cul-de-sac mode** (`culdesac.go`) is the design’s deliberate exception, and
+  opt-in. Dead ends are found structurally — the shortest walk to a degree-1
+  node touching neither the loop nor an arterial — and spliced in as
+  out-and-backs, capped at 4 per loop, 250 m one way, and a fifth of the target
+  in total, and only ever added to a loop running *short* of target. The
+  inversion is in the ranking, not in the shape score: the stub length is
+  credited at a weight sized to cancel the isoperimetric penalty the spur
+  incurs, and an augmentation that would drop the loop below the spur floor is
+  walked back a stub at a time. A cul-de-sac loop is still a loop.
+- **Multi-objective ranking.** The old two-branch selection (in-band → roundest,
+  else closest-to-target) is now one weighted score over distance error,
+  `areaEfficiency` and the preference share. **The unpreferenced ordering is the
+  shipped contract**, pinned against a verbatim copy of the old selector; the
+  leading objective is snapped to the same 1e-9 grid the old comparison called a
+  tie. Both branches score on an O(1) scale so each tie-break is representable at
+  the magnitude of the term it joins — the first draft added a `1e-12` roundness
+  tie-break to a number of **metres**, which float rounding annihilated above a
+  ~4.5 km target, and the pin's own corpus stopped at exactly 4,500 m. It now
+  covers the whole accepted range `(0, 100 km]`: 4 corpus shapes × 10 target
+  cells × 20,000 sets = 800,000, including the exact-`delta` ties the old rule's
+  tolerance branch existed for.
+- **Wire.** `POST /cycle` takes an optional `"preference"` of
+  `quiet | scenic | cul_de_sac`. Absent, empty or unrecognised means none and
+  behaves byte-identically to before, so a stale knob on an older client cannot
+  deny route generation — that holds for any *string*; a non-string (`123`, `[]`,
+  `{}`) is a decode type error and still 400s. The response adds
+  `preferenceApplied` + `preferenceShare` (0..1 of the served loop’s LENGTH on
+  preferred edges; under cul-de-sac, on credited stubs), **omitted** when nothing
+  was honoured — including when one was asked for and the unweighted retry served
+  the loop, and including a `cul_de_sac` ask that spliced no spur at all. That
+  last case is why the gate is not simply "a loop came back": a cul-de-sac ask is
+  binary and observable, so a loop carrying no spur did not honour it however the
+  search was weighted, where `quiet` and `scenic` are gradients whose share
+  reports what the bias achieved.
+- **Client-side half — landed in the same change** ([decisions § 796](../architecture/decisions.md)).
+  The handler used to skip the sidecar entirely whenever a preference was set, so
+  ticking "Quiet roads" moved the runner off this generator onto the `round_trip`
+  custom model. It could not have been otherwise: `decodeBody` uses
+  `DisallowUnknownFields`, so a request carrying `preference` got a **400**. The
+  preference now rides the chain — sidecar first carrying it, `round_trip` under a
+  custom model only as the fallback it already was.
+- **Deploy order matters, and it degrades rather than breaks.** The Lambda and the
+  sidecar ship separately, so a window where the web half is live against an
+  *older* sidecar is normal. In it, every preference request is rejected 400, the
+  handler swallows it as a sidecar error, logs `graph_cycle sidecar error, falling
+  back`, and serves the `round_trip` custom model — exactly the behaviour that
+  shipped before this change. No runner sees a failure; the cost is that the
+  preference is served by the weaker generator until the sidecar deploys, and that
+  log line is the signal it has not.
+- **Out of scope** — mobile (route generation is web-canonical, no mobile route
+  builder).
+
+**Elevation-aware is deferred, for want of data, not want of code.** Neither
+engine has terrain: GraphHopper is booted with no `graph.elevation.provider`
+(`apps/job_worker/graphhopper/config.yml` lines 5 + 13–15, and
+`apps/job_worker/deployment.md` § "No elevation" — the stock `foot_elevation.json`
+profile wants SRTM tiles and the extra disk + RAM they cost), and the sidecar’s
+own PBF parse keeps only `lat`/`lng` per node, because an OSM extract carries no
+terrain to keep. A grade-weighted edge cost would therefore have nothing behind
+it, and inventing a grade signal would be worse than not offering the preference.
+The cost to unblock it is a **DEM as a deploy input** — an SRTM/Copernicus tile
+set mounted on the sidecar’s Fly volume beside the PBF, sampled per node at build
+time into a per-edge grade alongside the existing attribution byte, plus the disk
+and RAM for it on both engines. Until that ships, `elevation` is not in the wire
+vocabulary at all rather than accepted and ignored.
+
+**Remaining effort:** the natural-language front-end that *sets* these
+preferences from a plain-English request is its own proposal:
+[ai_route_assistant.md](ai_route_assistant.md).

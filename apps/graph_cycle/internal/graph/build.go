@@ -89,45 +89,124 @@ func footAllowed(tags osm.Tags) bool {
 	return footWhitelist[highway]
 }
 
-// Build parses an OSM PBF at `path` into a foot-routable Graph. Two passes over
-// the file: the first reads ways (foot-filtered) to learn which node ids the
-// graph needs; the second reads only those nodes' coordinates. This keeps the
-// coordinate map to the foot network rather than every node in the extract.
-func Build(path string) (*Graph, Stats, error) {
-	refs, keptWays, err := scanWays(path)
-	if err != nil {
-		return nil, Stats{}, err
-	}
-	coords, err := scanNodes(path, refs)
-	if err != nil {
-		return nil, Stats{}, err
-	}
+// footWay is one kept way: its node-id sequence and the road-class bucket every
+// segment along it inherits.
+type footWay struct {
+	nodes []int64
+	class uint8
+}
 
+// wayRole is what one way of the extract contributes: green geometry for the
+// occupancy raster, a foot-routable way carrying its road class, or neither.
+type wayRole struct {
+	green bool
+	kept  bool
+	class uint8
+}
+
+// roleForWay is the whole tag→attribution decision for one way, kept out of the
+// scanner loop so it can be exercised without a PBF. Green is tested first, but
+// the order is not what separates the two: greenWay already refuses anything
+// tagged highway=, so a park's footpath is a graph edge and earns its green flag
+// from the raster like any other edge.
+func roleForWay(tags osm.Tags) wayRole {
+	if greenWay(tags) {
+		return wayRole{green: true}
+	}
+	if !footAllowed(tags) {
+		return wayRole{}
+	}
+	return wayRole{kept: true, class: roadClassFor(tags.Find("highway"))}
+}
+
+// wayScan is what one pass over the PBF's ways yields: the foot-routable ways
+// with their road class, the green-space ways the scenic attribution needs, and
+// the node ids each set references. The two sets stay separate so the green
+// coordinates can be released before the graph itself is allocated.
+type wayScan struct {
+	refs      map[int64]struct{}
+	greenRefs map[int64]struct{}
+	kept      []footWay
+	green     [][]int64
+}
+
+// Build parses an OSM PBF at `path` into a foot-routable Graph. Two passes over
+// the file: the first reads ways (foot-filtered, plus the green-space areas) to
+// learn which node ids are needed; the second reads only those nodes'
+// coordinates. This keeps the coordinate map to the foot network rather than
+// every node in the extract.
+func Build(path string) (*Graph, Stats, error) {
+	ws, err := scanWays(path)
+	if err != nil {
+		return nil, Stats{}, err
+	}
+	coords, greenCoords, err := scanNodes(path, ws.refs, ws.greenRefs)
+	if err != nil {
+		return nil, Stats{}, err
+	}
+	// The two id sets have done their whole job — the coordinates are keyed by
+	// id now — but ws stays live to the end for ws.kept, and liveness is per
+	// variable, not per field, so nothing else releases them before the builder
+	// below, which is the run's peak allocation. A country extract's foot
+	// network runs to tens of millions of ids and both sets are held to it.
+	ws.refs, ws.greenRefs = nil, nil
+
+	gg := newGreenGrid(greenCoords)
+	for _, w := range ws.green {
+		pts := make([]Coord, 0, len(w))
+		for _, id := range w {
+			if c, ok := greenCoords[id]; ok {
+				pts = append(pts, c)
+			}
+		}
+		gg.markWay(pts, len(w) > 2 && w[0] == w[len(w)-1])
+	}
+	// The occupancy raster is all that is wanted from the green geometry, and
+	// the polygons are held by the same field liveness. greenCoords needs no
+	// help — liveness analysis stops treating an unread local as a GC root.
+	ws.green = nil
+
+	g := assemble(ws.kept, coords, gg)
+	return g, Stats{Nodes: g.NumNodes(), Edges: g.NumEdges(), Ways: len(ws.kept)}, nil
+}
+
+// assemble walks the kept ways into the graph. Every segment inherits its way's
+// road class plus the green flag its own MIDPOINT earns from the raster — green
+// is a property of where a way runs, not of the way, so a street clipping a park
+// corner is green only along the segments that clip it. A node the second pass
+// never saw breaks the chain rather than joining across the hole.
+func assemble(kept []footWay, coords map[int64]Coord, gg *greenGrid) *Graph {
 	b := newBuilder()
-	for _, w := range keptWays {
+	for _, w := range kept {
 		var prev int64 = -1
 		var prevOK bool
-		for _, id := range w {
+		for _, id := range w.nodes {
 			c, ok := coords[id]
 			if ok {
 				b.addNode(id, c)
 			}
 			if prevOK && ok {
-				b.addSegment(prev, id)
+				p := coords[prev]
+				attr := w.class
+				if gg.contains((p.Lat+c.Lat)/2, (p.Lng+c.Lng)/2) {
+					attr |= attrGreen
+				}
+				b.addSegment(prev, id, attr)
 			}
 			prev, prevOK = id, ok
 		}
 	}
-	g := b.finalize()
-	return g, Stats{Nodes: g.NumNodes(), Edges: g.NumEdges(), Ways: len(keptWays)}, nil
+	return b.finalize()
 }
 
-// scanWays reads only ways, returning the set of node ids referenced by
-// foot-routable ways and those ways' node-id sequences.
-func scanWays(path string) (map[int64]struct{}, [][]int64, error) {
+// scanWays reads only ways, collecting the foot-routable ones with their road
+// class and the green-space areas, plus the node ids each references. Both are
+// taken in the SAME pass — the file is already streaming every way, so a
+// separate pass for green space would double the parse for nothing.
+func scanWays(path string) (wayScan, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open pbf: %w", err)
+		return wayScan{}, fmt.Errorf("open pbf: %w", err)
 	}
 	defer f.Close()
 
@@ -136,12 +215,19 @@ func scanWays(path string) (map[int64]struct{}, [][]int64, error) {
 	scanner.SkipRelations = true
 	defer scanner.Close()
 
-	refs := make(map[int64]struct{})
-	var keptWays [][]int64
+	out := wayScan{refs: make(map[int64]struct{}), greenRefs: make(map[int64]struct{})}
 	for scanner.Scan() {
 		w, ok := scanner.Object().(*osm.Way)
-		if !ok || !footAllowed(w.Tags) {
+		if !ok {
 			continue
+		}
+		role := roleForWay(w.Tags)
+		if !role.green && !role.kept {
+			continue
+		}
+		refs := out.refs
+		if role.green {
+			refs = out.greenRefs
 		}
 		ids := make([]int64, 0, len(w.Nodes))
 		for _, wn := range w.Nodes {
@@ -149,21 +235,26 @@ func scanWays(path string) (map[int64]struct{}, [][]int64, error) {
 			ids = append(ids, id)
 			refs[id] = struct{}{}
 		}
-		if len(ids) >= 2 {
-			keptWays = append(keptWays, ids)
+		if len(ids) < 2 {
+			continue
+		}
+		if role.green {
+			out.green = append(out.green, ids)
+		} else {
+			out.kept = append(out.kept, footWay{nodes: ids, class: role.class})
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, nil, fmt.Errorf("scan ways: %w", err)
+		return wayScan{}, fmt.Errorf("scan ways: %w", err)
 	}
-	return refs, keptWays, nil
+	return out, nil
 }
 
-// scanNodes reads only nodes, keeping coordinates for the referenced set.
-func scanNodes(path string, refs map[int64]struct{}) (map[int64]Coord, error) {
+// scanNodes reads only nodes, keeping coordinates for the two referenced sets.
+func scanNodes(path string, refs, greenRefs map[int64]struct{}) (coords, greenCoords map[int64]Coord, err error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open pbf: %w", err)
+		return nil, nil, fmt.Errorf("open pbf: %w", err)
 	}
 	defer f.Close()
 
@@ -172,21 +263,26 @@ func scanNodes(path string, refs map[int64]struct{}) (map[int64]Coord, error) {
 	scanner.SkipRelations = true
 	defer scanner.Close()
 
-	coords := make(map[int64]Coord, len(refs))
+	coords = make(map[int64]Coord, len(refs))
+	greenCoords = make(map[int64]Coord, len(greenRefs))
 	for scanner.Scan() {
 		n, ok := scanner.Object().(*osm.Node)
 		if !ok {
 			continue
 		}
 		id := int64(n.ID)
+		c := Coord{Lng: n.Lon, Lat: n.Lat}
 		if _, want := refs[id]; want {
-			coords[id] = Coord{Lng: n.Lon, Lat: n.Lat}
+			coords[id] = c
+		}
+		if _, want := greenRefs[id]; want {
+			greenCoords[id] = c
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan nodes: %w", err)
+		return nil, nil, fmt.Errorf("scan nodes: %w", err)
 	}
-	return coords, nil
+	return coords, greenCoords, nil
 }
 
 // builder accumulates nodes and undirected segments, deduping each, then emits
@@ -198,6 +294,7 @@ type builder struct {
 	segFrom  []int32
 	segTo    []int32
 	segLen   []float32
+	segAttr  []uint8
 	seenSeg  map[uint64]struct{}
 }
 
@@ -216,7 +313,7 @@ func (b *builder) addNode(id int64, c Coord) int32 {
 	return i
 }
 
-func (b *builder) addSegment(idA, idB int64) {
+func (b *builder) addSegment(idA, idB int64, attr uint8) {
 	a, okA := b.idx[idA]
 	c, okC := b.idx[idB]
 	if !okA || !okC || a == c {
@@ -231,6 +328,7 @@ func (b *builder) addSegment(idA, idB int64) {
 	b.segTo = append(b.segTo, c)
 	length := haversineM(b.lat[a], b.lng[a], b.lat[c], b.lng[c])
 	b.segLen = append(b.segLen, float32(length))
+	b.segAttr = append(b.segAttr, attr)
 }
 
 // finalize converts the accumulated undirected segments into a directed CSR
@@ -250,18 +348,20 @@ func (b *builder) finalize() *Graph {
 	total := edgeHead[n]
 	edgeTo := make([]int32, total)
 	edgeLen := make([]float32, total)
+	edgeAttr := make([]uint8, total)
 	cursor := make([]int32, n)
 	copy(cursor, edgeHead[:n])
-	put := func(from, to int32, length float32) {
+	put := func(from, to int32, length float32, attr uint8) {
 		pos := cursor[from]
 		edgeTo[pos] = to
 		edgeLen[pos] = length
+		edgeAttr[pos] = attr
 		cursor[from]++
 	}
 	for i := range b.segFrom {
-		from, to, length := b.segFrom[i], b.segTo[i], b.segLen[i]
-		put(from, to, length)
-		put(to, from, length)
+		from, to, length, attr := b.segFrom[i], b.segTo[i], b.segLen[i], b.segAttr[i]
+		put(from, to, length, attr)
+		put(to, from, length, attr)
 	}
 	g := &Graph{
 		lat:      b.lat,
@@ -269,6 +369,7 @@ func (b *builder) finalize() *Graph {
 		edgeHead: edgeHead,
 		edgeTo:   edgeTo,
 		edgeLen:  edgeLen,
+		edgeAttr: edgeAttr,
 	}
 	g.grid = buildGrid(b.lat, b.lng)
 	return g

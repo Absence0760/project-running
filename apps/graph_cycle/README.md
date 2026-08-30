@@ -20,13 +20,49 @@ Caddy sidecar and the image stays distroless.
 | Route | Method | Purpose |
 |---|---|---|
 | `/health` | GET | Open (no key). `{"status":"ok","nodes":N,"edges":M,"ways":W}` once the graph is built. |
-| `/cycle` | POST | The loop search. Body `{"start":{"lat","lng"},"targetDistanceM"}`. |
+| `/cycle` | POST | The loop search. Body `{"start":{"lat","lng"},"targetDistanceM"}` + an optional `"preference"`. |
 | `/route` | POST | Shortest foot path `{"from","to"}` — for validating the graph against OSRM. |
 | `/nearest` | GET | `?lat=&lng=` → nearest graph node. Debug. |
 
 `/cycle` returns `{"found":true,"coordinates":[[lng,lat]…],"distanceM","areaEfficiency","largestClean":{…}}`
 when a clean loop exists, or `{"found":false,"largestClean":…}` when the start is
 loop-poor (the web client turns `found:false` into a round_trip fallback).
+
+### Route-design preferences
+
+`preference` is optional and takes exactly `"quiet"`, `"scenic"` or
+`"cul_de_sac"`. Absent, `null`, empty or unrecognised means **no preference** and
+behaves byte-identically to a request without the field, so a stale knob on an
+older client cannot deny route generation. That covers every *string* the field
+can carry; a non-string (`123`, `[]`, `{}`) is a JSON type error like any other
+malformed body, and is a 400.
+
+A preference is a **soft** per-edge weight (never 0, never infinite, never an
+edge removal — a hard filter can disconnect a buildable neighbourhood) plus a
+term in the candidate ranking. It can never deny a route: when the weighted
+search clears no candidate over the spur floor, the search repeats unweighted
+and that loop is served instead.
+
+When — and only when — a preference was actually honoured, the response adds:
+
+| Field | Meaning |
+|---|---|
+| `preferenceApplied` | the preference the served loop honours (`quiet` / `scenic` / `cul_de_sac`). **Omitted** when none was applied, including when one was asked for and the unweighted retry served the loop. |
+| `preferenceShare` | 0..1, the share of the served loop's LENGTH on preferred edges — non-arterial for `quiet`, park/water/forest-adjacent for `scenic`, credited dead-end stubs for `cul_de_sac`. Omitted alongside an omitted `preferenceApplied`. |
+
+`cul_de_sac` is the opt-in exception: it splices short quiet dead-end
+out-and-backs into a loop running short of target (at most 4, 250 m one way, a
+fifth of the target in total) and credits them in the ranking instead of letting
+`areaEfficiency` punish them. An augmentation that would stop the loop looking
+like a loop is walked back. Its ask is binary, so unlike `quiet` and `scenic` it
+reports itself applied only when a spur was actually spliced — a neighbourhood
+with no dead ends returns the loop with both fields omitted.
+
+**Elevation-aware is not in the vocabulary**: neither engine is built with
+terrain data and an OSM extract carries none, so a grade-weighted edge cost would
+have nothing behind it. See
+[graph_cycle_loop_generation.md § Extension](../../docs/features/graph_cycle_loop_generation.md)
+for what a DEM deploy input would cost.
 
 ## One-time setup
 
@@ -79,9 +115,12 @@ generate handler skips graph-cycle and uses round_trip.
 go test ./...   # pure unit tests, no PBF, no network
 ```
 
-The graph build, Dijkstra, penalty rerouting, cycle search, the guard, and the
-HTTP handlers are all covered. Synthetic lattice/line graphs
-(`graph.BuildTestGrid` / `BuildTestLine`) stand in for a PBF.
+The graph build, Dijkstra, penalty rerouting, cycle search, the preference
+layer, the guard, and the HTTP handlers are all covered. Synthetic graphs stand
+in for a PBF: `graph.BuildTestGrid` / `BuildTestLine` for the loop-rich and
+loop-poor cases, `BuildTestSplitGrid` for an attributed map with a preferred
+half (mirrorable, so a test can watch the chosen loop follow it), and
+`BuildTestStubGrid` for the cul-de-sac fixture.
 
 ## Deploying to production
 

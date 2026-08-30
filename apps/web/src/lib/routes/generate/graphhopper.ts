@@ -41,13 +41,16 @@ export class GraphHopperError extends Error {
 	}
 }
 
-/// Optional road-design preference biasing the loop toward quieter streets.
-/// `'quiet'` down-weights motorway/trunk/primary (+ their `_link`s) and
-/// up-weights residential/living_street via a GraphHopper `custom_model`. Any
-/// other value (or none) → today's behaviour: a plain `round_trip` GET, no model.
-/// This is the cheap avoid-highways / prefer-residential half of the route-design
-/// preferences in graph_cycle_loop_generation.md § Extension.
-export type RoutePreference = 'quiet';
+/// The road-design preference vocabulary, shared verbatim with the graph_cycle
+/// sidecar's `/cycle` request (docs/features/graph_cycle_loop_generation.md
+/// § Extension). Declared as the array so the type is derived from it and the
+/// handler's parse whitelist can't drift from the union.
+export const ROUTE_PREFERENCES = ['quiet', 'scenic', 'cul_de_sac'] as const;
+
+/// Optional road-design preference. Honoured by the graph-cycle sidecar (which
+/// weights its own search edges) and, where GraphHopper can express it, by a
+/// `custom_model` on the round_trip fallback. Unset → today's behaviour.
+export type RoutePreference = (typeof ROUTE_PREFERENCES)[number];
 
 /// GraphHopper Custom Model `priority` clause shape. Only the subset we emit.
 interface PriorityClause {
@@ -61,24 +64,63 @@ interface CustomModel {
 }
 
 /// Build the GraphHopper `custom_model` for a preference. Returns null for any
-/// preference we don't model (caller then sends the plain GET round_trip). Pure +
-/// exported so the priority rules are unit-tested without a network round-trip.
+/// preference GraphHopper can't express (caller then sends the plain GET
+/// round_trip). Pure + exported so the priority rules are unit-tested without a
+/// network round-trip.
 ///
-/// `road_class` is GraphHopper's encoded-value name; the multipliers are soft
-/// weights (never 0) so the loop is biased onto residential streets but the graph
+/// Both models spend only `road_class`, which rides GraphHopper's always-imported
+/// default encoded values — the deployed engine declares just the foot-profile set
+/// in `graph.encoded_values` (apps/job_worker/graphhopper/config.yml), and naming
+/// an encoded value it doesn't carry fails the whole request rather than the one
+/// clause. That rules out the park/water adjacency and the per-edge grade the
+/// design sketch reaches for: this engine imports no elevation at all, and OSM
+/// land-use polygons aren't an encoded value in any build. So `'scenic'` is
+/// expressed as the proxy the graph does carry — green space is overwhelmingly
+/// where the paths are — and the real park-adjacency term belongs to the sidecar,
+/// which owns the OSM extract.
+///
+/// The multipliers are soft weights (never 0) so the loop is biased but the graph
 /// can't be disconnected into a no_route — over-filtering would defeat the
 /// "a preference must never break generation" contract.
 export function buildCustomModel(pref: RoutePreference | undefined): CustomModel | null {
-	if (pref !== 'quiet') return null;
-	return {
-		priority: [
-			{ if: 'road_class == MOTORWAY', multiply_by: 0.1 },
-			{ else_if: 'road_class == TRUNK', multiply_by: 0.2 },
-			{ else_if: 'road_class == PRIMARY', multiply_by: 0.4 },
-			{ if: 'road_class == RESIDENTIAL', multiply_by: 1.4 },
-			{ else_if: 'road_class == LIVING_STREET', multiply_by: 1.5 },
-		],
-	};
+	switch (pref) {
+		case 'quiet':
+			return {
+				priority: [
+					{ if: 'road_class == MOTORWAY', multiply_by: 0.1 },
+					{ else_if: 'road_class == TRUNK', multiply_by: 0.2 },
+					{ else_if: 'road_class == PRIMARY', multiply_by: 0.4 },
+					{ if: 'road_class == RESIDENTIAL', multiply_by: 1.4 },
+					{ else_if: 'road_class == LIVING_STREET', multiply_by: 1.5 },
+				],
+			};
+		case 'scenic':
+			// STEPS is deliberately left neutral rather than promoted with the
+			// other off-road classes: a staircase is scenic to look at and ruins
+			// a loop to run.
+			return {
+				priority: [
+					{ if: 'road_class == MOTORWAY', multiply_by: 0.1 },
+					{ else_if: 'road_class == TRUNK', multiply_by: 0.2 },
+					{ else_if: 'road_class == PRIMARY', multiply_by: 0.4 },
+					{ else_if: 'road_class == SECONDARY', multiply_by: 0.6 },
+					{ if: 'road_class == PATH', multiply_by: 1.6 },
+					{ else_if: 'road_class == FOOTWAY', multiply_by: 1.5 },
+					{ else_if: 'road_class == TRACK', multiply_by: 1.5 },
+					{ else_if: 'road_class == PEDESTRIAN', multiply_by: 1.4 },
+					{ else_if: 'road_class == CYCLEWAY', multiply_by: 1.3 },
+				],
+			};
+		case 'cul_de_sac':
+			// No model, and none is possible: "permit a few short stubs into quiet
+			// dead-ends" is a claim about the SHAPE of the assembled loop, not about
+			// any edge in isolation, and GraphHopper carries no dead-end encoded
+			// value to weight even if it were. round_trip runs plain here; only the
+			// sidecar's own search can honour this one.
+			return null;
+		default:
+			return null;
+	}
 }
 
 export interface RoundTripRequest {

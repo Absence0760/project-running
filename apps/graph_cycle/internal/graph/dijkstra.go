@@ -30,11 +30,16 @@ import (
 //     it, defeating the whole point of penalised reuse.
 //   - penalised:  undirected keys whose cost is scaled; nil for an unpenalised
 //     search.
+//   - pref:       a route-design preference whose per-edge multiplier is folded
+//     into the cost alongside the reuse penalty. PrefNone skips the multiply
+//     entirely rather than multiplying by 1.0, so an unpreferenced search is
+//     bit-identical to the one that shipped.
 //
-// Returns the (penalised) distance map and predecessor map. A node absent from
-// distTo was not reached within the cap. For an unpenalised search the penalised
-// distance equals the real distance, so distTo is exact real metres (the forward
-// far-point search relies on this).
+// Returns the (penalised) cost map, the TRUE metres along each node's chosen
+// path, and the predecessor map. A node absent from distTo was not reached
+// within the cap. realTo is what the far-point search must read: under a
+// preference the cost map is no longer metres, and picking far-points by a
+// weighted cost would systematically mis-size the loop.
 // dijkstra explores until the radius bound, the target, or [ctx] is done.
 //
 // The ctx check is load-shedding, not an optimisation: work here scales with
@@ -44,8 +49,9 @@ import (
 // write deadline, so the handler ran to completion regardless and repeated
 // requests amplified with no way to shed them. Cancellation returns whatever
 // has been settled so far; the caller treats a short/absent path as no result.
-func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM float64, penalised map[uint64]struct{}) (distTo map[int32]float64, prev map[int32]int32) {
+func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM float64, penalised map[uint64]struct{}, pref Preference) (distTo, realTo map[int32]float64, prev map[int32]int32) {
 	distTo = map[int32]float64{src: 0}
+	realTo = map[int32]float64{src: 0}
 	prev = map[int32]int32{src: -1}
 	settled := map[int32]struct{}{}
 
@@ -60,7 +66,7 @@ func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM floa
 	for pq.Len() > 0 {
 		pops++
 		if pops%ctxCheckEvery == 0 && ctx.Err() != nil {
-			return distTo, prev
+			return distTo, realTo, prev
 		}
 		top := heap.Pop(pq).(heapItem)
 		u := top.node
@@ -69,7 +75,7 @@ func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM floa
 		}
 		settled[u] = struct{}{}
 		if u == target {
-			return distTo, prev
+			return distTo, realTo, prev
 		}
 		du := top.dist
 		duReal := top.real
@@ -80,6 +86,9 @@ func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM floa
 			v := g.edgeTo[e]
 			realW := float64(g.edgeLen[e])
 			w := realW
+			if pref != PrefNone {
+				w *= g.prefCost(e, pref)
+			}
 			if penalised != nil {
 				if _, p := penalised[edgeKey(u, v)]; p {
 					w *= reusePenalty
@@ -92,12 +101,13 @@ func (g *Graph) dijkstra(ctx context.Context, src, target int32, maxRadiusM floa
 			nd := du + w
 			if old, ok := distTo[v]; !ok || nd < old {
 				distTo[v] = nd
+				realTo[v] = ndReal
 				prev[v] = u
 				heap.Push(pq, heapItem{node: v, dist: nd, real: ndReal})
 			}
 		}
 	}
-	return distTo, prev
+	return distTo, realTo, prev
 }
 
 // reconstruct walks prev from dst back to src, returning the node-index path in

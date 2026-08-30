@@ -46,6 +46,101 @@ func TestFootAllowed(t *testing.T) {
 	}
 }
 
+func TestRoleForWay(t *testing.T) {
+	// The seam between the tag helpers and the graph: which of the two piles a
+	// way lands in, and — the part nothing else pins — that a kept way carries
+	// its own road class rather than the residential zero value.
+	for _, c := range []struct {
+		name string
+		tags osm.Tags
+		want wayRole
+	}{
+		{"park polygon", tags("leisure", "park"), wayRole{green: true}},
+		{"forest polygon", tags("landuse", "forest"), wayRole{green: true}},
+		{"lake", tags("natural", "water"), wayRole{green: true}},
+		{"residential street", tags("highway", "residential"), wayRole{kept: true, class: classResidential}},
+		{"service road", tags("highway", "service"), wayRole{kept: true, class: classResidential}},
+		{"secondary road", tags("highway", "secondary"), wayRole{kept: true, class: classArterial}},
+		{"tertiary link", tags("highway", "tertiary_link"), wayRole{kept: true, class: classArterial}},
+		{"footway", tags("highway", "footway"), wayRole{kept: true, class: classFootFirst}},
+		{"steps", tags("highway", "steps"), wayRole{kept: true, class: classFootFirst}},
+		// foot=yes buys a trunk into the graph, but not out of its class: the
+		// quiet preference exists to steer off exactly this road.
+		{"trunk with foot=yes", tags("highway", "trunk", "foot", "yes"), wayRole{kept: true, class: classArterial}},
+		// A footpath through a park is an edge, not a polygon — it earns green
+		// from the raster, and dropping it into the green pile would delete it
+		// from the routable network.
+		{"footpath tagged park", tags("highway", "footway", "leisure", "park"), wayRole{kept: true, class: classFootFirst}},
+		{"building", tags("building", "yes"), wayRole{}},
+		{"motorway", tags("highway", "motorway"), wayRole{}},
+	} {
+		if got := roleForWay(c.tags); got != c.want {
+			t.Errorf("%s: roleForWay = %+v, want %+v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestAssembleAttributesEachSegment(t *testing.T) {
+	// A 600 m park, one footpath crossing it, and one secondary road that only
+	// clips its western edge. Both ways run west to east along the same
+	// latitudes, so the difference in what each segment carries is entirely the
+	// midpoint lookup and the way's own class.
+	const lat, lng = 40.0, -77.0
+	park := squareWay(lat, lng, 600)
+	greenCoords := map[int64]Coord{}
+	for i, c := range park {
+		greenCoords[int64(100+i)] = c
+	}
+	gg := newGreenGrid(greenCoords)
+	gg.markWay(park, true)
+
+	dLng := metresToDegLng(300, lat)
+	insideLat := lat + metresToDegLat(300)
+	outsideLat := lat + metresToDegLat(3000)
+	coords := map[int64]Coord{
+		1: {Lat: insideLat, Lng: lng},
+		2: {Lat: insideLat, Lng: lng + dLng},
+		3: {Lat: outsideLat, Lng: lng},
+		4: {Lat: outsideLat, Lng: lng + dLng},
+	}
+	g := assemble([]footWay{
+		{nodes: []int64{1, 2}, class: classFootFirst},
+		{nodes: []int64{3, 4}, class: classArterial},
+	}, coords, gg)
+
+	through, ok := g.attrBetween(0, 1)
+	if !ok {
+		t.Fatal("the park footpath is missing from the graph")
+	}
+	if through != classFootFirst|attrGreen {
+		t.Errorf("footpath through the park = %#b, want foot-first + green", through)
+	}
+	away, ok := g.attrBetween(2, 3)
+	if !ok {
+		t.Fatal("the road outside the park is missing from the graph")
+	}
+	if away != classArterial {
+		t.Errorf("road 3 km from the park = %#b, want arterial and not green", away)
+	}
+}
+
+func TestAssembleBreaksAWayAtAMissingNode(t *testing.T) {
+	// The second pass keeps coordinates only for referenced nodes, and a way can
+	// still name one the extract cut off. The chain must break there rather than
+	// join across the hole and invent a segment kilometres long.
+	coords := map[int64]Coord{
+		1: {Lat: 40.0, Lng: -77.0},
+		3: {Lat: 40.0, Lng: -77.0 + metresToDegLng(2000, 40.0)},
+	}
+	g := assemble([]footWay{{nodes: []int64{1, 2, 3}, class: classResidential}}, coords, newGreenGrid(nil))
+	if g.NumNodes() != 2 {
+		t.Fatalf("nodes = %d, want the two the extract had coordinates for", g.NumNodes())
+	}
+	if g.NumEdges() != 0 {
+		t.Fatalf("edges = %d, want none — the way's two ends are not adjacent", g.NumEdges())
+	}
+}
+
 func TestBuilderDedupAndCSR(t *testing.T) {
 	// A 3-node triangle, with one segment added twice (both orientations) to
 	// prove dedup. Expect 3 nodes, 3 undirected segments → 6 directed edges.
@@ -53,11 +148,11 @@ func TestBuilderDedupAndCSR(t *testing.T) {
 	b.addNode(1, Coord{Lat: 0, Lng: 0})
 	b.addNode(2, Coord{Lat: 0, Lng: metresToDegLng(100, 0)})
 	b.addNode(3, Coord{Lat: metresToDegLat(100), Lng: 0})
-	b.addSegment(1, 2)
-	b.addSegment(2, 1) // duplicate (reverse) — should be ignored
-	b.addSegment(2, 3)
-	b.addSegment(3, 1)
-	b.addSegment(1, 1) // self-loop — ignored
+	b.addSegment(1, 2, classResidential)
+	b.addSegment(2, 1, classResidential) // duplicate (reverse) — should be ignored
+	b.addSegment(2, 3, classResidential)
+	b.addSegment(3, 1, classResidential)
+	b.addSegment(1, 1, classResidential) // self-loop — ignored
 	g := b.finalize()
 
 	if g.NumNodes() != 3 {
@@ -172,7 +267,7 @@ func TestNearestNodeMatchesBruteForceSparseNetwork(t *testing.T) {
 			})
 		}
 		for i := 1; i < n; i++ {
-			b.addSegment(int64(i-1), int64(i))
+			b.addSegment(int64(i-1), int64(i), classResidential)
 		}
 		g := b.finalize()
 

@@ -16,6 +16,10 @@
  *  - If NONE is in-band (a sparse start where every seed over/undershoots), the
  *    closest-to-target candidate wins — a 6.9 km loop beats a rounder 9.2 km one
  *    when 5 km was asked. Shape breaks ties.
+ *
+ * The in-band score is multi-objective: distance error, shape, and — for a
+ * candidate whose engine MEASURED it — the share of the loop spent on the edges
+ * the requested preference favours.
  */
 
 import { unwrapLonDeg } from '../geo';
@@ -77,11 +81,12 @@ export function areaEfficiency(c: LoopCandidate): number {
 }
 
 /// In-band selection score: roundness discounted by how far the candidate
-/// strays from target. The discount `1 - |len − target| / target` is 1 at the
-/// target and falls linearly to `1 - DISTANCE_BAND` (≈0.85) at the band edge, so
-/// a candidate 11% long must be ~13% rounder to still win — it can, but only when
-/// it's genuinely the cleaner loop, never merely a marginal tie. Mirrors the
-/// closest-to-target weighting the out-of-band tier already applies.
+/// strays from target. The discount
+/// `1 - |len − target| / target` is 1 at the target and falls linearly to
+/// `1 - DISTANCE_BAND` (≈0.85) at the band edge, so a candidate 11% long must be
+/// ~13% rounder to still win — it can, but only when it's genuinely the cleaner
+/// loop, never merely a marginal tie. Mirrors the closest-to-target weighting the
+/// out-of-band tier already applies.
 export function inBandScore(c: LoopCandidate, targetDistanceM: number): number {
 	const closeness = 1 - Math.abs(c.distanceM - targetDistanceM) / targetDistanceM;
 	return areaEfficiency(c) * closeness;
