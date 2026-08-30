@@ -214,6 +214,67 @@ export function parseNearbyCase(body) {
 	return [...body.matchAll(/when\s+[^\n]*?<\s*(\d+)\s*then\s+\d+/gi)].map((m) => m[1]);
 }
 
+// ── Entry: the off-route hysteresis and the Minetti GAP coefficients ────────
+
+// A constant whose value is DERIVED from another in the same file is still a
+// value this registry can read: the divisor comes out of the source like every
+// other digit. Three of the four off-route rails write the re-arm as
+// `threshold / 2`; the Wear OS one writes both numbers by hand, so a threshold
+// change on the other three would leave its band asymmetric with nothing
+// reporting it. Resolving the derivation is what lets all four be compared as
+// the same ordered pair.
+/**
+ * @param {string} src
+ * @param {string} declName
+ * @returns {number | null}
+ */
+export function resolveNumber(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]*=\\s*([^;\\n]+)`).exec(src);
+	if (!decl) return null;
+	const rhs = decl[1].trim();
+	const literal = /^-?\d+(?:\.\d+)?/.exec(rhs);
+	if (literal) return Number(literal[0]);
+	const derived = /^([A-Za-z_][A-Za-z0-9_.]*)\s*\/\s*(\d+(?:\.\d+)?)/.exec(rhs);
+	if (!derived) return null;
+	const base = resolveNumber(src, derived[1].replace(/^.*\./, ''));
+	return base === null ? null : base / Number(derived[2]);
+}
+
+/** @param {string} src @param {string} threshold @param {string} rearm @returns {string[]} */
+function hysteresisPair(src, threshold, rearm) {
+	const a = resolveNumber(src, threshold);
+	const b = resolveNumber(src, rearm);
+	return a === null || b === null ? [] : [String(a), String(b)];
+}
+
+// The Wear OS rail compares against bare literals inside the composable rather
+// than naming them, so it is read where it is used. Both numbers come from the
+// two comparisons that actually drive the banner, never from the comment above
+// them — a comment agreeing with itself is the § 793 failure exactly.
+/** @param {string} src @returns {string[]} */
+export function parseWearOffRoute(src) {
+	const over = /offRouteDistanceM\s*>\s*(\d+(?:\.\d+)?)/.exec(src);
+	const under = /offRouteDistanceM\s*<\s*(\d+(?:\.\d+)?)/.exec(src);
+	return over && under ? [String(Number(over[1])), String(Number(under[1]))] : [];
+}
+
+// Minetti et al. 2002's 5th-order energy-cost fit, written as one expression on
+// every rail. Identifiers are blanked before the numbers are read, because
+// `i5` / `i4` / `i3` / `i2` are variable names carrying digits and reading
+// those as coefficients would compare ten numbers where there are six.
+/** @param {string} src @returns {string[]} */
+export function parseMinettiCoefficients(src) {
+	const line = src
+		.split('\n')
+		.map((l) => l.replace(/\/\/.*$/, ''))
+		.find((l) => /\bi5\b/.test(l) && /\bi2\b/.test(l) && l.includes('*'));
+	if (!line) return [];
+	const bare = line.replace(/[A-Za-z_][A-Za-z0-9_]*/g, ' ');
+	return [...bare.matchAll(/([+-])?\s*(\d+(?:\.\d+)?)/g)].map(
+		(m) => `${m[1] === '-' ? '-' : ''}${m[2]}`,
+	);
+}
+
 // ── Entry: the achievement tier ladders ─────────────────────────────────────
 
 // One extractor for both clients: the two catalogues are written in different
@@ -749,6 +810,195 @@ export const REGISTRY = [
 							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
 							'kExerciseCaseMap',
 						),
+					},
+				],
+			},
+		],
+	},
+	{
+		name: 'Apple Watch route point budget',
+		why:
+			'The phone thins a route to this many positions, the native bridge ' +
+			're-checks the shape before queueing a durable WCSession transfer, and ' +
+			'the watch drops the whole payload above it. A phone cap above the ' +
+			"watch's queues a transfer the watch rejects on every retry, forever — " +
+			'`transferUserInfo` is durable, so nothing gives up. The number lived in ' +
+			'three languages behind a Dart test that read the two Swift files off ' +
+			'disk and RETURNED SILENTLY when it could not (decisions § 793), so a ' +
+			'rename on either Swift side left the pair unchecked and green.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'phone dart (apps/mobile_android/lib/apple_watch_route_bridge.dart)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'kMaxAppleWatchRoutePoints',
+						values: parseNamedInt(
+							ctx.read('apps/mobile_android/lib/apple_watch_route_bridge.dart'),
+							'kMaxAppleWatchRoutePoints',
+						),
+					},
+				],
+			},
+			{
+				label: 'phone swift (apps/mobile_ios/ios/Runner/WatchIngestBridge.swift)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'WatchIngestBridge.maxRoutePoints',
+						values: parseNamedInt(
+							ctx.read('apps/mobile_ios/ios/Runner/WatchIngestBridge.swift'),
+							'maxRoutePoints',
+						),
+					},
+				],
+			},
+			{
+				label: 'watch swift (apps/watch_ios/WatchApp/ArmedRoute.swift)',
+				sites: (ctx) => [
+					{
+						key: 'cap',
+						where: 'ArmedRoute.maxPoints',
+						values: parseNamedInt(
+							ctx.read('apps/watch_ios/WatchApp/ArmedRoute.swift'),
+							'maxPoints',
+						),
+					},
+				],
+			},
+		],
+	},
+	{
+		name: 'off-route hysteresis',
+		why:
+			'Alert past the threshold, re-arm only back under half of it. Four ' +
+			'rails run the same latch — the watch firmware, the phone run screen, ' +
+			'the Apple Watch navigator and the Wear OS banner — and a runner who ' +
+			'gets a different answer from the wrist and the pocket about whether ' +
+			'they are on the course trusts neither. Three rails derive the re-arm ' +
+			'from the threshold; the Wear OS one writes both numbers by hand, so ' +
+			'only a comparison across rails catches a threshold change that left ' +
+			'its band asymmetric.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'firmware (apps/custom_watch/core/src/course.rs)',
+				sites: (ctx) => [
+					{
+						key: 'hysteresis',
+						where: 'OFF_COURSE_THRESHOLD_M / OFF_COURSE_REARM_M',
+						values: hysteresisPair(
+							ctx.read('apps/custom_watch/core/src/course.rs'),
+							'OFF_COURSE_THRESHOLD_M',
+							'OFF_COURSE_REARM_M',
+						),
+					},
+				],
+			},
+			{
+				label: 'phone (apps/mobile_android/lib/screens/run_screen.dart)',
+				sites: (ctx) => {
+					const src = ctx.read('apps/mobile_android/lib/screens/run_screen.dart');
+					const threshold = resolveNumber(src, '_offRouteThresholdMetres');
+					return [
+						{
+							key: 'hysteresis',
+							where:
+								'_offRouteThresholdMetres (the re-arm is threshold / 2 at the call site)',
+							values:
+								threshold === null ? [] : [String(threshold), String(threshold / 2)],
+						},
+					];
+				},
+			},
+			{
+				label: 'apple watch (apps/watch_ios/WatchApp/RouteNavigator.swift)',
+				sites: (ctx) => [
+					{
+						key: 'hysteresis',
+						where: 'RouteNavigator.thresholdMetres / rearmMetres',
+						values: hysteresisPair(
+							ctx.read('apps/watch_ios/WatchApp/RouteNavigator.swift'),
+							'thresholdMetres',
+							'rearmMetres',
+						),
+					},
+				],
+			},
+			{
+				label: 'wear os (apps/watch_wear .../ui/RunWatchApp.kt)',
+				sites: (ctx) => [
+					{
+						key: 'hysteresis',
+						where: 'the offRouteDistanceM comparisons behind the banner',
+						values: parseWearOffRoute(
+							ctx.read(
+								'apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/ui/RunWatchApp.kt',
+							),
+						),
+					},
+				],
+			},
+		],
+	},
+	{
+		name: 'Minetti GAP polynomial coefficients',
+		why:
+			"Minetti et al. 2002's 5th-order energy-cost fit, written out as one " +
+			'expression in four languages. Every grade-adjusted pace the product ' +
+			'quotes comes off this polynomial, so a mistyped coefficient on one ' +
+			'rail makes the same climb cost a different effort on the watch than on ' +
+			'the phone — and it degrades gracefully enough that nothing would ' +
+			'notice unless a test pinned the exact numbers.',
+		match: 'all',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/runs/grade_adjusted_pace.ts)',
+				sites: (ctx) => [
+					{
+						key: 'coefficients',
+						where: 'minettiCostAtGrade',
+						values: parseMinettiCoefficients(
+							ctx.read('apps/web/src/lib/runs/grade_adjusted_pace.ts'),
+						),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/grade_adjusted_pace.dart)',
+				sites: (ctx) => [
+					{
+						key: 'coefficients',
+						where: 'minettiCostAtGrade',
+						values: parseMinettiCoefficients(
+							ctx.read('apps/mobile_android/lib/grade_adjusted_pace.dart'),
+						),
+					},
+				],
+			},
+			{
+				label: 'firmware (apps/custom_watch/core/src/grade_adjusted_pace.rs)',
+				sites: (ctx) => [
+					{
+						key: 'coefficients',
+						where: 'minetti_cost_at_grade',
+						values: parseMinettiCoefficients(
+							ctx.read('apps/custom_watch/core/src/grade_adjusted_pace.rs'),
+						),
+					},
+				],
+			},
+			{
+				label: 'garmin (the Connect IQ GAP data field)',
+				sites: (ctx) => [
+					{
+						key: 'coefficients',
+						where: 'minettiCostAtGrade',
+						values: parseMinettiCoefficients(ctx.read('apps/watch_garmin/source/GradeAdjustedPaceView.mc')),
 					},
 				],
 			},

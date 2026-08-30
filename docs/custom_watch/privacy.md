@@ -53,13 +53,13 @@ owner. That is a property of the design worth keeping.
 | GATT `frame` (read + notify) | live latitude + longitude at 1e-6°, speed, course, satellites, altitude, GNSS time-of-day, fix age — once per second (`link::status_frame`) | **paired + encrypted peers only** |
 | GATT `run_manifest` (read + notify) | run sequence, blob size, start uptime | paired only |
 | GATT `run_chunk` (write + notify) | the whole run blob — every coordinate and every bpm | paired only |
-| GATT `settings`, `course`, `workout`, `screens` (write) | inbound config; no readback | paired only |
+| GATT `settings`, `course`, `workout`, `screens`, `roadbook` (write) | inbound config; no readback | paired only |
 | The display | the ICE card, to anyone holding the wrist — **by design** | anyone physically present |
 | defmt / RTT log stream | fix quality and pulse presence; coordinates and bpm only under `log-personal-data` | anyone with the debug cable |
 | UARTE1 → TCP (`tasks::phone`) | the same `link::status_frame` bytes, unencrypted and unauthenticated | **simulator only** — the module is `#![cfg(not(feature = "ble"))]`, so it is compiled out of every hardware build |
 
 **The BLE data plane is fail-closed** ([§ 285](../architecture/decisions.md#285-run-store-v2-byte-15-becomes-a-record-tag-laps-interleave-with-points-and-a-full-slot-decimates-instead-of-truncating-the-threkir-gatt-service-is-encrypted-only-with-one-persisted-bond),
-issue #598). All seven characteristics carry `security = "justworks"` —
+issue #598). All nine characteristics carry `security = "justworks"` —
 Security Mode 1 Level 2 — so the SoftDevice rejects every read, write and CCCD
 subscription from an unencrypted connection. An unbonded central can discover
 the service's shape and nothing else. This is **build-verified only** and can
