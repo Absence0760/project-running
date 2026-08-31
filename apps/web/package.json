@@ -46,7 +46,7 @@
 		"@supabase/ssr": "^0.12.4",
 		"@supabase/supabase-js": "^2.112.3",
 		"@zip.js/zip.js": "^2.8.55",
-		"fit-file-parser": "^4.1.0",
+		"fit-file-parser": "^5.0.2",
 		"html-to-image": "^1.11.13",
 		"isomorphic-dompurify": "^3.22.0",
 		"jszip": "^3.10.1",
