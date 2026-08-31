@@ -81,6 +81,7 @@ insert into runs (
     'in_progress', false, 'manual_entry', false,
     -- Indoor / GPS-source flags
     'indoor_estimated', false, 'distance_source', 'gps',
+    'indoor_source', 'treadmill',
     -- Safety-escalation internals (20270401_001, 20270410_001)
     'safety_escalated_at', '2026-04-15T11:00:00Z',
     'expected_return_at', '2026-04-15T10:30:00Z',
@@ -122,7 +123,7 @@ declare
     'guided_run_id',
     'last_modified_at', 'recovered_from_crash',
     'in_progress_saved_at', 'in_progress', 'manual_entry',
-    'indoor_estimated', 'distance_source',
+    'indoor_estimated', 'distance_source', 'indoor_source',
     -- Safety-escalation internals (20270401_001, 20270410_001)
     'safety_escalated_at', 'expected_return_at',
     'race_name', 'bib', 'overall_place', 'chip_time', 'perceived_effort',
