@@ -635,12 +635,21 @@ export function dartConstHex(src, name) {
  * `const` and `final` both count: `sim_watch_screen_test.dart` holds its copy
  * of the run blob as `final _goldenBlob = _hex('…')`, and a copy nothing
  * compares is the whole defect this file exists for.
+ *
+ * A collection is a collection of values, never one vector, so a `[` or `{`
+ * outside the literals disqualifies the declaration. Without that,
+ * `status_color_literal_guard_test.dart`'s 21 banned six-digit colour literals
+ * join into one 63-byte "vector" the registry has never heard of. The test is
+ * on the bracket rather than on the comma between the elements: the registered
+ * `sim_watch_screen_test.dart::_goldenBlob` is `_hex('…' '…' '…',)`, a trailing
+ * comma in a call, and its own guard test catches a rule that drops it.
  * @param {string} src comment-stripped Dart
  */
 export function dartHexConsts(src) {
   /** @type {Map<string, string>} */
   const out = new Map();
   for (const m of src.matchAll(/(?:^|\n)\s*(?:const|final)\s+(?:String\s+)?(\w+)\s*=([^;]*);/g)) {
+    if (/[[{]/.test(m[2].replace(/'[^']*'/g, ''))) continue;
     const parts = [...m[2].matchAll(/'([^']*)'/g)].map((p) => p[1]);
     if (parts.length === 0) continue;
     const hex = parts.join('').replace(/\s+/g, '').toLowerCase();
@@ -655,18 +664,6 @@ export function dartHexConsts(src) {
  */
 export function rustGoldenFns(src) {
   return [...src.matchAll(/\bfn\s+([A-Za-z0-9_]*golden[A-Za-z0-9_]*)\s*\(/g)].map((m) => m[1]);
-}
-
-/**
- * The four-byte magics the firmware declares, as lowercase hex. Derived rather
- * than listed so a wire format added later drags its own phone-side test file
- * into the sweep below without anyone remembering to widen a list.
- * @param {string} src comment-stripped Rust
- */
-export function rustMagics(src) {
-  return [...src.matchAll(/\bconst\s+\w*MAGIC\w*\s*:\s*\[u8;\s*4\]\s*=\s*\*b"(....)"/g)].map((m) =>
-    [...m[1]].map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join(''),
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -760,35 +757,35 @@ export function main() {
   }
 
   // 2. The phone's whole hex inventory, for the rail-local absence rule below.
-  //    Only the test files that actually carry one of the firmware's magics are
-  //    read: the shared Dart lexer does not track `${…}` interpolation, so three
-  //    unrelated importer tests cannot be blanked, and a guard must not report a
-  //    verdict about source it cannot read. None of them mentions a magic. A
-  //    file that DOES and still cannot be lexed is a hard error, never a skip.
-  const magics = new Set(
-    walk(join(ROOT, 'apps/custom_watch'), '.rs').flatMap((abs) =>
-      rustMagics(read(relative(ROOT, abs), 'rust')),
-    ),
-  );
-  if (magics.size === 0) errors.push('no wire magics found in the firmware — the sweep is blind');
+  //    EVERY Dart file on the phone rail is read. This used to be narrowed to
+  //    the test files carrying one of the firmware's own wire magics, because
+  //    the shared lexer could not blank a file whose strings interpolated
+  //    (decisions § 793); it can now (§ 816), so the narrowing is gone and with
+  //    it the chance that a golden spelled without a magic byte in it — a
+  //    payload-only vector, a magic written as `[0x43, 0x52, …]` — sat outside
+  //    the sweep. A file that cannot be lexed is a hard error, never a skip:
+  //    a guard must not report a verdict about source it cannot read.
   /** @type {Map<string, Map<string, string>>} */
   const dartConstsByFile = new Map();
   /** @type {Set<string>} */
   const allDartHex = new Set();
-  for (const abs of walk(join(ROOT, 'apps/mobile_android/test'), '.dart')) {
-    const rel = relative(ROOT, abs);
-    const raw = readFileSync(abs, 'utf8').toLowerCase();
-    if (![...magics].some((m) => raw.includes(m))) continue;
-    /** @type {Map<string, string>} */
-    let consts;
-    try {
-      consts = dartHexConsts(read(rel, 'dart'));
-    } catch (e) {
-      errors.push(`${rel} carries a wire magic but cannot be lexed: ${e instanceof Error ? e.message : String(e)}`);
-      continue;
+  for (const root of ['apps/mobile_android/lib', 'apps/mobile_android/test']) {
+    for (const abs of walk(join(ROOT, root), '.dart')) {
+      const rel = relative(ROOT, abs);
+      /** @type {Map<string, string>} */
+      let consts;
+      try {
+        consts = dartHexConsts(read(rel, 'dart'));
+      } catch (e) {
+        errors.push(`${rel} cannot be lexed: ${e instanceof Error ? e.message : String(e)}`);
+        continue;
+      }
+      if (consts.size > 0) dartConstsByFile.set(rel, consts);
+      for (const hex of consts.values()) allDartHex.add(hex);
     }
-    if (consts.size > 0) dartConstsByFile.set(rel, consts);
-    for (const hex of consts.values()) allDartHex.add(hex);
+  }
+  if (allDartHex.size === 0) {
+    errors.push('no hex vectors found on the phone rail — the sweep is blind');
   }
 
   // 3. Every golden the firmware declares is registered, or declared rail-local
