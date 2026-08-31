@@ -15,6 +15,7 @@ import '../health_connect_exporter.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../parkrun_regions.dart';
 import '../preferences.dart';
+import '../race_provider_labels.dart';
 import '../race_service.dart';
 import '../settings_sync.dart';
 import '../share_sheet.dart';
@@ -34,6 +35,10 @@ class SettingsIntegrationsScreen extends StatefulWidget {
   /// (decisions §33).
   final SettingsSyncService? settingsSync;
 
+  /// Test-only DI seam for the race-provider probes; production callsites let
+  /// the screen build its own.
+  final RaceService? raceService;
+
   const SettingsIntegrationsScreen({
     super.key,
     required this.apiClient,
@@ -41,6 +46,7 @@ class SettingsIntegrationsScreen extends StatefulWidget {
     required this.treadmill,
     required this.preferences,
     this.settingsSync,
+    this.raceService,
   });
 
   @override
@@ -58,34 +64,29 @@ class _SettingsIntegrationsScreenState
   /// so the record of "there is more to fetch" has to outlive it or the rest
   /// ages out unnoticed. Null once a walk has reached the end of the window.
   bool? _stravaResumable;
-  final RaceService _raceService = RaceService();
-  bool _runSignUpAvailable = false;
-  bool _chronoTrackAvailable = false;
+  late final RaceService _raceService = widget.raceService ?? RaceService();
+  final Map<String, bool> _providerAvailable = {};
 
   @override
   void initState() {
     super.initState();
     _refreshIntegrations();
-    _probeRunSignUp();
-    _probeChronoTrack();
-  }
-
-  Future<void> _probeRunSignUp() async {
-    try {
-      final ok = await _raceService.isRunSignUpConfigured();
-      if (mounted) setState(() => _runSignUpAvailable = ok);
-    } catch (_) {
-      if (mounted) setState(() => _runSignUpAvailable = false);
+    for (final spec in raceImportProviders) {
+      _probeRaceProvider(spec.provider);
     }
   }
 
-  Future<void> _probeChronoTrack() async {
+  /// A probe is a network call (L4): each provider degrades to unavailable on
+  /// its own so one unreachable leg neither disables its peers nor takes the
+  /// screen down.
+  Future<void> _probeRaceProvider(String provider) async {
+    var ok = false;
     try {
-      final ok = await _raceService.isChronoTrackConfigured();
-      if (mounted) setState(() => _chronoTrackAvailable = ok);
-    } catch (_) {
-      if (mounted) setState(() => _chronoTrackAvailable = false);
+      ok = await _raceService.isProviderConfigured(provider);
+    } catch (e) {
+      debugPrint('settings: $provider probe failed: $e');
     }
+    if (mounted) setState(() => _providerAvailable[provider] = ok);
   }
 
   Future<void> _refreshIntegrations() async {
@@ -535,37 +536,26 @@ class _SettingsIntegrationsScreenState
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _importParkrun,
               ),
-              // Both tiles stay tappable whatever the provider probe says:
+              // Every provider tile stays tappable whatever its probe says:
               // they are secondary deep links into the race calendar, whose
               // search never needed a provider key. The subtitle discloses
-              // whether the *import* leg is live; the second line says where
-              // the tap actually goes (decisions § 488).
-              ListTile(
-                isThreeLine: true,
-                leading: const Icon(Icons.flag_outlined),
-                title: Text(l10n.integrationsRunsignup),
-                subtitle: _integrationSubtitle(
-                  _runSignUpAvailable
-                      ? l10n.integrationsRunsignupConnect
-                      : l10n.integrationsRunsignupUnavailable,
-                  l10n.integrationsRunsignupOpen,
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openRaces,
-              ),
-              ListTile(
-                isThreeLine: true,
-                leading: const Icon(Icons.timer),
-                title: Text(l10n.integrationsChronotrack),
-                subtitle: _integrationSubtitle(
-                  _chronoTrackAvailable
-                      ? l10n.integrationsChronotrackConnect
-                      : l10n.integrationsChronotrackUnavailable,
-                  l10n.integrationsChronotrackOpen,
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: _openRaces,
-              ),
+              // whether THAT provider's import leg is live; the second line
+              // says where the tap actually goes (decisions § 488).
+              for (final spec in raceImportProviders)
+                if (raceProviderLabels(l10n)[spec.provider] case final p?)
+                  ListTile(
+                    isThreeLine: true,
+                    leading: Icon(p.icon),
+                    title: Text(p.name),
+                    subtitle: _integrationSubtitle(
+                      (_providerAvailable[spec.provider] ?? false)
+                          ? p.connect
+                          : p.unavailable,
+                      p.open,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _openRaces,
+                  ),
             ] else
               ListTile(
                 leading: const Icon(Icons.lock_outline),
