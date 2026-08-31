@@ -18,8 +18,11 @@ import {
   BACKEND_DIR,
   escapeForFilter,
   filterFor,
+  GATEWAY_STATUSES,
   MUTATIONS,
   phantomKills,
+  satisfies,
+  statusOf,
   TEST_FILE,
   unmeasuredCases,
   validateMutations,
@@ -43,6 +46,7 @@ function mut(over = {}) {
     from: 'GATE',
     to: 'false',
     probe: PROBE,
+    expect: { status: 200 },
     kills: ['case one'],
     spares: [],
     reason: 'because',
@@ -84,6 +88,74 @@ test('every case a mutation names is one of the five self-authenticating functio
       assert.ok(fns.has(name.split(':')[0]), `${m.id} kills "${name}", which names no such function`);
     }
   }
+});
+
+test('every mutation declares the answer its mutant settles on', () => {
+  for (const m of MUTATIONS) {
+    assert.ok(Number.isInteger(m.expect.status), `${m.id} declares no expected status`);
+    // A bare gateway status is what the runtime answers WHILE RESTARTING, so a
+    // round waiting for one cannot tell the mutant from the reload window.
+    if (GATEWAY_STATUSES.has(m.expect.status)) {
+      assert.ok(m.expect.contains, `${m.id} expects ${m.expect.status} with no discriminating body`);
+    }
+  }
+});
+
+test('no mutation can be satisfied by a restarting runtime', () => {
+  // The CI failure this pins: the wait used to accept any answer that merely
+  // DIFFERED from the pre-mutation one, so two consecutive gateway 503s during
+  // the `functions serve` restart let the round run against a host that was
+  // serving nothing. Every case then failed on the wrong answer - scoring the
+  // kills as killed and the SPARES as moved, which is exactly what came back
+  // from run 33421025889.
+  const restarting = [
+    '503 upstream connect error',
+    '502 Bad Gateway',
+    '504 Gateway Timeout',
+    'ERR error sending request for url (http://127.0.0.1:54321/functions/v1/x)',
+    'ERR connection closed before message completed',
+  ];
+  for (const m of MUTATIONS) {
+    for (const fp of restarting) {
+      assert.equal(
+        satisfies(fp, m.expect),
+        false,
+        `${m.id} would accept a restarting runtime's ${JSON.stringify(fp)} as its mutant`,
+      );
+    }
+  }
+});
+
+test('validateMutations rejects a mutation with no expected answer, or an unusable one', () => {
+  const noExpect = mut();
+  // @ts-expect-error - deliberately malformed, which is what the guard is for
+  delete noExpect.expect;
+  assert.match(validateMutations([noExpect], () => 'GATE')[0], /no HTTP status/);
+  assert.match(
+    validateMutations([mut({ expect: { status: 503 } })], () => 'GATE')[0],
+    /gateway status/,
+  );
+  assert.deepEqual(
+    validateMutations([mut({ expect: { status: 503, contains: 'smtp_not_configured' } })], () => 'GATE'),
+    [],
+  );
+  assert.match(validateMutations([mut({ expect: { status: 200, contains: '' } })], () => 'GATE')[0], /empty/);
+});
+
+test('statusOf reads the code, and a transport failure is not a status', () => {
+  assert.equal(statusOf('418 {"a":1}'), 418);
+  assert.equal(statusOf('ERR connection reset'), -1);
+  assert.equal(statusOf(''), -1);
+});
+
+test('satisfies needs the status, and the body when one is declared', () => {
+  assert.equal(satisfies('418 body', { status: 418 }), true);
+  assert.equal(satisfies('503 body', { status: 418 }), false);
+  assert.equal(satisfies('ERR reset', { status: 418 }), false);
+  assert.equal(satisfies('503 {"error":"smtp_not_configured"}', { status: 503, contains: 'smtp_not_configured' }), true);
+  // A kong gateway 503 during the reload carries no such body, which is the
+  // whole reason the discriminator is required at that status.
+  assert.equal(satisfies('503 upstream unavailable', { status: 503, contains: 'smtp_not_configured' }), false);
 });
 
 test('validateMutations rejects an anchor that is not unique', () => {
