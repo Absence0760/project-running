@@ -58,8 +58,43 @@ export function findDuplicateVersions(filenames) {
     .map(([version, files]) => ({ version, files: files.sort() }));
 }
 
+/// Whether the scan read anything it could have judged.
+///
+/// Every verdict below is "no duplicate found", which an empty directory
+/// satisfies — so a walk pointed at the wrong path, or one that stopped
+/// matching `.sql`, reports `OK: 0 migrations` and exits 0. Same shape as the
+/// blindness checks the watch and iOS guards carry: a guard that inspected
+/// nothing enforces nothing.
+/**
+ * @param {readonly string[]} filenames every `.sql` the directory holds
+ * @returns {string[]} the reasons this scan cannot be trusted, empty when it can
+ */
+export function scanBlindness(filenames) {
+  if (filenames.length === 0) {
+    return [
+      `no .sql files under ${MIGRATIONS_DIR}, so the uniqueness check below passes over ` +
+        'nothing. Either every migration was deleted, or this guard is reading the wrong ' +
+        'directory.',
+    ];
+  }
+  const versioned = filenames.filter((f) => parseVersion(f) !== null);
+  if (versioned.length === 0) {
+    return [
+      `none of the ${filenames.length} .sql file(s) under ${MIGRATIONS_DIR} carries a leading ` +
+        'version key, so no two of them can collide and this check has nothing to compare. ' +
+        'The Supabase CLI names migrations `<digits>_<name>.sql`.',
+    ];
+  }
+  return [];
+}
+
 function main() {
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
+  const blind = scanBlindness(files);
+  if (blind.length > 0) {
+    for (const reason of blind) console.error(`::error::${reason}`);
+    process.exit(1);
+  }
   const duplicates = findDuplicateVersions(files);
   if (duplicates.length === 0) {
     console.log(`OK: ${files.length} migrations, all version keys unique.`);

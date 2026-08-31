@@ -6,6 +6,7 @@ import {
   MIGRATIONS_DIR,
   parseVersion,
   findDuplicateVersions,
+  scanBlindness,
 } from './check_migration_versions.mjs';
 
 test('parseVersion takes only the leading digit run before the first underscore', () => {
@@ -51,4 +52,29 @@ test('findDuplicateVersions accepts the 14-digit disambiguation', () => {
 test('the committed migrations directory has no duplicate version keys', () => {
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
   assert.deepEqual(findDuplicateVersions(files), []);
+});
+
+test('an empty migrations directory is a blind scan, not a clean one', () => {
+	// Every verdict this guard reaches is "no duplicate found", which nothing
+	// satisfies best of all.
+	assert.equal(findDuplicateVersions([]).length, 0);
+	const blind = scanBlindness([]);
+	assert.equal(blind.length, 1);
+	assert.match(blind[0], /passes over nothing/);
+});
+
+test('a directory of .sql files that carry no version key is blind too', () => {
+	const blind = scanBlindness(['seed.sql', 'fixtures.sql']);
+	assert.equal(blind.length, 1);
+	assert.match(blind[0], /no two of them can collide/);
+});
+
+test('one versioned migration is enough for the scan to have a subject', () => {
+	assert.deepEqual(scanBlindness(['20270101_001_a.sql', 'seed.sql']), []);
+});
+
+test('the committed migrations directory is not a blind scan', () => {
+	const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
+	assert.ok(files.length > 100, `expected the whole migration set, found ${files.length}`);
+	assert.deepEqual(scanBlindness(files), []);
 });
