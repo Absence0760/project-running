@@ -4005,5 +4005,8 @@
   "challengesErrWindow": "O fim deve ser depois do início.",
   "limitsWeightOutOfRange": "Informe um peso entre {min} e {max} {unit}.",
   "limitsHeightOutOfRange": "Informe uma altura entre {min} e {max} cm.",
-  "limitsServingsOutOfRange": "Informe um número de porções entre {min} e {max}."
+  "limitsServingsOutOfRange": "Informe um número de porções entre {min} e {max}.",
+  "runDetailGuidedRun": "Corrida guiada: {title}",
+  "runDetailGuidedRunUnavailable": "Corrida guiada não está mais na biblioteca",
+  "guidedRunUseThisRun": "Usar esta corrida"
 }

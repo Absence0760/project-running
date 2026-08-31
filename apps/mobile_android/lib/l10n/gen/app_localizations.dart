@@ -23036,6 +23036,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter a number of servings between {min} and {max}.'**
   String limitsServingsOutOfRange(String min, String max);
+
+  /// Run-detail chip naming the guided-run script a run was recorded under
+  ///
+  /// In en, this message translates to:
+  /// **'Guided run: {title}'**
+  String runDetailGuidedRun(String title);
+
+  /// Run-detail readout when the stored guided_run_id names a workout this build no longer ships
+  ///
+  /// In en, this message translates to:
+  /// **'Guided run no longer in the library'**
+  String get runDetailGuidedRunUnavailable;
+
+  /// Action on the guided-run detail screen that arms the script on the recorder
+  ///
+  /// In en, this message translates to:
+  /// **'Use this run'**
+  String get guidedRunUseThisRun;
 }
 
 class _AppLocalizationsDelegate

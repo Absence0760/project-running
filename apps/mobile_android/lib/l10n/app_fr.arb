@@ -4005,5 +4005,8 @@
   "challengesErrWindow": "La fin doit être postérieure au début.",
   "limitsWeightOutOfRange": "Indique un poids entre {min} et {max} {unit}.",
   "limitsHeightOutOfRange": "Indique une taille entre {min} et {max} cm.",
-  "limitsServingsOutOfRange": "Indique un nombre de portions entre {min} et {max}."
+  "limitsServingsOutOfRange": "Indique un nombre de portions entre {min} et {max}.",
+  "runDetailGuidedRun": "Course guidée : {title}",
+  "runDetailGuidedRunUnavailable": "Course guidée absente de la bibliothèque",
+  "guidedRunUseThisRun": "Utiliser cette course"
 }

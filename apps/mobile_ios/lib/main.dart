@@ -691,6 +691,17 @@ final ValueNotifier<Locale?> localeNotifier = ValueNotifier<Locale?>(null);
 final ValueNotifier<cm.PlanWorkoutRow?> pendingStartWorkout =
     ValueNotifier<cm.PlanWorkoutRow?>(null);
 
+/// Cross-screen handoff for "arm this guided run on the recorder". Set by the
+/// guided-run detail screen (reachable from the Coach tab and from Settings),
+/// which pops back to the shell straight after; HomeScreen listens and
+/// switches to the Run tab, RunScreen drains it and arms the script through
+/// the same path its own picker uses. Sibling of [pendingStartWorkout].
+///
+/// The library ID travels rather than the resolved run: the library is
+/// rebuilt per locale, so the recorder re-resolves it against its own
+/// [AppLocalizations] instead of holding a title built somewhere else.
+final ValueNotifier<String?> pendingArmGuidedRun = ValueNotifier<String?>(null);
+
 /// Cross-screen handoff for "start a run following this route now". Set by
 /// any route surface that isn't hosted under HomeScreen's route-list flow —
 /// the route-detail Start FAB (so it works regardless of who pushed the

@@ -14,6 +14,7 @@ import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/screens/guided_runs_screen.dart';
 import '../lib/screens/run_detail_screen.dart';
 import '../lib/settings_sync.dart';
 import '../lib/widgets/live_run_map.dart';
@@ -1320,6 +1321,43 @@ void main() {
             'Grade-adjusted pace is the flat-ground pace that would have cost the same effort as the hills you actually ran.'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('RunDetailScreen — the guided-run readout', () {
+    Run guided(String? id) => _run(metadata: {
+          'activity_type': 'run',
+          if (id != null) 'guided_run_id': id,
+        });
+
+    testWidgets('names the script the run was recorded under', (tester) async {
+      await _pump(tester, guided('easy-30'));
+      expect(find.text('Guided run: 30-Minute Easy Run'), findsOneWidget);
+    });
+
+    testWidgets('self-hides on a run that carries no arming', (tester) async {
+      await _pump(tester, guided(null));
+      expect(find.textContaining('Guided run'), findsNothing);
+      expect(find.byIcon(Icons.headset_mic_outlined), findsNothing);
+    });
+
+    testWidgets('an id this build no longer ships says so, without the slug',
+        (tester) async {
+      // The library is versioned in code, so a renamed or dropped workout
+      // leaves live rows pointing at an id nothing answers to.
+      await _pump(tester, guided('easy-30-remix'));
+      expect(find.text('Guided run no longer in the library'), findsOneWidget);
+      expect(find.textContaining('easy-30-remix'), findsNothing,
+          reason: 'the id is an internal identifier, not a label');
+    });
+
+    testWidgets('tapping through opens the script it names', (tester) async {
+      await _pump(tester, guided('easy-30'));
+      await tester.tap(find.text('Guided run: 30-Minute Easy Run'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(GuidedRunDetailScreen), findsOneWidget);
+      expect(find.text('THE FULL SCRIPT'), findsOneWidget);
     });
   });
 }

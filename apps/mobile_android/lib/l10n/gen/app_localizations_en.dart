@@ -13754,4 +13754,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Enter a number of servings between $min and $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Guided run: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'Guided run no longer in the library';
+
+  @override
+  String get guidedRunUseThisRun => 'Use this run';
 }

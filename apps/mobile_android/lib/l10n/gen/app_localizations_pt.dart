@@ -13900,6 +13900,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Introduza um número de doses entre $min e $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Corrida guiada: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'Corrida guiada já não consta da biblioteca';
+
+  @override
+  String get guidedRunUseThisRun => 'Utilizar esta corrida';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -27789,4 +27801,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Informe um número de porções entre $min e $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Corrida guiada: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'Corrida guiada não está mais na biblioteca';
+
+  @override
+  String get guidedRunUseThisRun => 'Usar esta corrida';
 }

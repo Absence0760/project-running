@@ -13251,4 +13251,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return '$min〜$maxの範囲で分量を入力してください。';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'ガイド付きラン: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable => 'このガイド付きランはライブラリにありません';
+
+  @override
+  String get guidedRunUseThisRun => 'このランを使う';
 }

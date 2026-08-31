@@ -4005,5 +4005,8 @@
   "challengesErrWindow": "Das Ende muss nach dem Beginn liegen.",
   "limitsWeightOutOfRange": "Gib ein Gewicht zwischen {min} und {max} {unit} ein.",
   "limitsHeightOutOfRange": "Gib eine Größe zwischen {min} und {max} cm ein.",
-  "limitsServingsOutOfRange": "Gib eine Portionszahl zwischen {min} und {max} ein."
+  "limitsServingsOutOfRange": "Gib eine Portionszahl zwischen {min} und {max} ein.",
+  "runDetailGuidedRun": "Geführter Lauf: {title}",
+  "runDetailGuidedRunUnavailable": "Geführter Lauf nicht mehr in der Bibliothek",
+  "guidedRunUseThisRun": "Diesen Lauf verwenden"
 }
