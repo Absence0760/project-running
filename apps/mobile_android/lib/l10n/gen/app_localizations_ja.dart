@@ -7201,7 +7201,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsSplitIntervalDefault => 'デフォルト';
 
   @override
-  String get prefsSplitIntervalDefaultSubtitle => 'デフォルト（ランニングは1km、サイクリングは5km）';
+  String prefsSplitIntervalDefaultSubtitle(String run, String cycle) {
+    return 'デフォルト（ランニングは$run、サイクリングは$cycle）';
+  }
 
   @override
   String get prefsSplitPaceMode => 'スプリットの読み上げ';
@@ -11420,7 +11422,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get checkpointWeighInConsent => 'ランナーは健康データの記録に同意します';
 
   @override
-  String get checkpointWeighInWeightKg => '体重 (kg)';
+  String get checkpointWeighInBodyWeight => '体重';
 
   @override
   String get checkpointMedicalHold => 'メディカルホールドにする';

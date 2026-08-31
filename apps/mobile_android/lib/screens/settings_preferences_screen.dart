@@ -1478,7 +1478,20 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                                 prefs.splitIntervalMetres,
                                 prefs.unit,
                               )
-                            : l10n.prefsSplitIntervalDefaultSubtitle,
+                            : l10n.prefsSplitIntervalDefaultSubtitle(
+                                _splitIntervalLabel(
+                                  ActivityType.run
+                                      .splitIntervalMetresFor(prefs.unit)
+                                      .round(),
+                                  prefs.unit,
+                                ),
+                                _splitIntervalLabel(
+                                  ActivityType.cycle
+                                      .splitIntervalMetresFor(prefs.unit)
+                                      .round(),
+                                  prefs.unit,
+                                ),
+                              ),
                       ),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: _editSplitInterval,

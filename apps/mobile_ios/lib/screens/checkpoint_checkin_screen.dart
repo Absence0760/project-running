@@ -475,7 +475,7 @@ class _WeighInSheetState extends State<_WeighInSheet> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: l10n.checkpointWeighInWeightKg,
+                labelText: l10n.checkpointWeighInBodyWeight,
                 suffixText: WeightFormat.label(activeWeightUnit),
                 errorText: _outOfRange ? _rangeMessage(l10n) : null,
               ),

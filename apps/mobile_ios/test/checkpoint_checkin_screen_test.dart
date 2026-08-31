@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -5,9 +6,11 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_crossings_store.dart';
+import '../lib/preferences.dart';
 import '../lib/screens/checkpoint_checkin_screen.dart';
 import 'pump_until.dart';
 
@@ -173,6 +176,87 @@ void main() {
 
     expect(find.text(l10n.checkpointWeighInTitle), findsNothing);
     expect(store.rows.single['bib'], '101');
+  });
+
+  /// Open the weigh-in sheet and reveal the weight field behind its Art 9
+  /// consent toggle, returning the field's decoration.
+  Future<InputDecoration> _weighInDecoration(WidgetTester tester) async {
+    dotenv.env['WEIGH_IN_GATE'] = 'yes';
+    api.requiresWeighIn = true;
+    // The sheet is a tall unscrolled Column; on the default 800x600 surface
+    // the consent switch sits below the fold and the tap misses it.
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await _pumpLoaded(tester);
+    final l10n = AppLocalizations.of(
+        tester.element(find.byType(CheckpointCheckinScreen)));
+    await tester.enterText(find.byType(TextField), '101');
+    await tester.tap(find.text(l10n.checkpointStampIn));
+    await _settleUntil(
+        tester, () => tester.any(find.text(l10n.checkpointWeighInTitle)),
+        describe: 'the Art 9 weigh-in sheet the gate opens');
+    // The sheet is findable while it is still sliding up from below the fold,
+    // so a tap now lands off the bottom of the render tree. Advance the
+    // slide-in explicitly — pumpAndSettle hangs on the bib field's cursor.
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byType(SwitchListTile));
+    await _settleUntil(
+        tester, () => tester.any(find.text(l10n.checkpointWeighInBodyWeight)),
+        describe: 'the weight field the consent toggle reveals');
+    final fields = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .where((f) => f.decoration?.suffixText != null)
+        .toList();
+    expect(fields, hasLength(1),
+        reason: 'exactly one field on the sheet carries a unit suffix');
+    return fields.single.decoration!;
+  }
+
+  // The label used to be `checkpointWeighInWeightKg` — "Body weight (kg)" in
+  // every locale — beside a suffix carrying the runner's OWN unit, so a runner
+  // on lbs read "Body weight (kg)" with an "lbs" suffix: two units in one
+  // field, one of them wrong (decisions § 820). The suffix is the authority,
+  // so the label names no unit at all.
+  testWidgets('the weight label names no unit; the suffix carries the real one',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'weight_unit': 'lbs'});
+    final prefs = Preferences();
+    await prefs.init();
+    registerActivePreferences(prefs);
+    addTearDown(resetActivePreferencesForTest);
+    expect(activeWeightUnit, WeightUnit.lbs);
+
+    final decoration = await _weighInDecoration(tester);
+    expect(decoration.suffixText, 'lbs');
+    expect(decoration.labelText, isNotNull);
+    expect(decoration.labelText, isNot(contains('kg')));
+    expect(decoration.labelText, isNot(contains('lbs')));
+  });
+
+  // The widget test above can only read the locale it renders. This reads the
+  // string every locale ships, because a translator restoring "(kg)" in one
+  // catalogue puts the contradiction back for that language alone.
+  test('no locale names a unit in the weigh-in weight label', () {
+    const key = 'checkpointWeighInBodyWeight';
+    final arbs = Directory('${Directory.current.path}/lib/l10n')
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.arb'))
+        .toList();
+    expect(arbs, hasLength(7), reason: 'expected the seven shipped catalogues');
+    for (final f in arbs) {
+      final bag = jsonDecode(f.readAsStringSync()) as Map<String, dynamic>;
+      final value = bag[key] as String?;
+      expect(value, isNotNull, reason: '$key missing from ${f.path}');
+      for (final unit in const ['kg', 'lb', 'キロ', '(', 'kilo']) {
+        expect(value!.toLowerCase().contains(unit.toLowerCase()), isFalse,
+            reason: '${f.path} names "$unit" in $key — the field suffix is '
+                "the runner's own unit and would contradict it");
+      }
+    }
   });
 
   testWidgets('an empty bib is rejected without writing', (tester) async {
