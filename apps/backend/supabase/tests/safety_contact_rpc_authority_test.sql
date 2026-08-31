@@ -178,7 +178,6 @@ select is(
 
 -- Asked WITHOUT the client's own scope, so the zero is RLS's answer and not
 -- the query's: neither permissive SELECT policy names this caller on c3.
--- refusal: the linked-contact SELECT policy admits only rows naming the caller
 select is(
   (select count(*)::int from safety_contacts
     where id = '5afe0000-0000-0000-0000-0000000000c3'),

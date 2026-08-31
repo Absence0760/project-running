@@ -93,7 +93,6 @@ select is(
 -- ── a stranger is stopped by RLS, one layer above the grant ─────────────────
 set local "request.jwt.claims" = '{"sub":"9ac70000-0000-0000-0000-000000000002","role":"authenticated"}';
 
--- refusal: the own-row policy is what hides another host's payout state
 select is(
   (select count(*)::int from (
      select user_id, charges_enabled from instructor_payout_accounts) p),
@@ -155,7 +154,6 @@ select ok(
   'the amount is granted — the lockdown is per column, not a blanket revoke'
 );
 
--- refusal: donations has no permissive client SELECT policy
 select is(
   (select count(*)::int from (select amount_cents from donations) d),
   0,
