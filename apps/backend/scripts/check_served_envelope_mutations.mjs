@@ -73,6 +73,7 @@ const METHOD_GATE_BEACON = "return Response.json({ error: 'method_not_allowed' }
 
 /**
  * @typedef {{ fn: string, method?: string, query?: string, headers?: Record<string,string>, body?: string }} Probe
+ * @typedef {{ status: number, contains?: string }} Expect
  * @typedef {{
  *   id: string,
  *   file: string,
@@ -80,6 +81,7 @@ const METHOD_GATE_BEACON = "return Response.json({ error: 'method_not_allowed' }
  *   to: string,
  *   beacon?: { file?: string, from: string, to: string },
  *   probe: Probe,
+ *   expect: Expect,
  *   kills: string[],
  *   spares: string[],
  *   reason: string,
@@ -94,6 +96,7 @@ export const MUTATIONS = [
     from: 'if (!token || !timingSafeEqual(token, cronSecret)) {',
     to: 'if (false) {',
     probe: { fn: 'refresh-tokens', method: 'POST' },
+    expect: { status: 200 },
     kills: [
       'refresh-tokens: 403 on missing Authorization header',
       'refresh-tokens: 403 on wrong CRON_SECRET',
@@ -110,6 +113,7 @@ export const MUTATIONS = [
     from: '!token || !timingSafeEqual(token, cronSecret)',
     to: '!token',
     probe: { fn: 'refresh-tokens', method: 'POST', headers: { Authorization: 'Bearer wrong-secret' } },
+    expect: { status: 200 },
     kills: ['refresh-tokens: 403 on wrong CRON_SECRET'],
     spares: [
       'refresh-tokens: 403 on missing Authorization header',
@@ -126,6 +130,7 @@ export const MUTATIONS = [
     from: 'if (!suppliedSecret || !timingSafeEqual(suppliedSecret, webhookSecret)) {',
     to: 'if (false) {',
     probe: { fn: 'strava-webhook', method: 'POST', query: '?secret=wrong', body: '{}' },
+    expect: { status: 200 },
     kills: [
       'strava-webhook: 403 on POST with no ?secret=',
       'strava-webhook: 403 on GET with no ?secret=',
@@ -147,6 +152,7 @@ export const MUTATIONS = [
         `?secret=${STRAVA_WEBHOOK_SECRET}&hub.mode=subscribe&hub.challenge=probe` +
         '&hub.verify_token=wrong-token',
     },
+    expect: { status: 200 },
     kills: ['strava-webhook: 403 on GET with valid ?secret= but wrong hub.verify_token'],
     spares: ['strava-webhook: GET handshake echoes hub.challenge on correct secret + verify_token'],
     reason:
@@ -165,6 +171,7 @@ export const MUTATIONS = [
         `?secret=${STRAVA_WEBHOOK_SECRET}&hub.mode=subscribe&hub.challenge=probe` +
         `&hub.verify_token=${STRAVA_VERIFY_TOKEN}`,
     },
+    expect: { status: 200, contains: '"ok":true' },
     kills: ['strava-webhook: GET handshake echoes hub.challenge on correct secret + verify_token'],
     spares: ['strava-webhook: 403 on GET with valid ?secret= but wrong hub.verify_token'],
     reason:
@@ -182,6 +189,7 @@ export const MUTATIONS = [
       query: `?secret=${STRAVA_WEBHOOK_SECRET}`,
       body: '{"object_type":"athlete","object_id":1,"aspect_type":"update","owner_id":1,"event_time":1}',
     },
+    expect: { status: 400 },
     kills: ['strava-webhook: 200 "OK" on non-create event after valid secret'],
     spares: ['strava-webhook: 400 missing_object_id_or_owner_id on create-shaped event with no ids'],
     reason:
@@ -199,6 +207,7 @@ export const MUTATIONS = [
       query: `?secret=${STRAVA_WEBHOOK_SECRET}`,
       body: '{"object_type":"activity","aspect_type":"create","event_time":1}',
     },
+    expect: { status: 400, contains: 'event_outside_freshness_window' },
     kills: ['strava-webhook: 400 missing_object_id_or_owner_id on create-shaped event with no ids'],
     spares: ['strava-webhook: 200 "OK" on non-create event after valid secret'],
     reason: 'an id-less create is carried into the dedupe key and the integrations lookup',
@@ -209,6 +218,7 @@ export const MUTATIONS = [
     from: "if (req.method !== 'POST') {",
     to: 'if (false) {',
     probe: { fn: 'revenuecat-webhook' },
+    expect: { status: 401 },
     kills: ['revenuecat-webhook: 405 on GET (POST-only)'],
     spares: ['revenuecat-webhook: 401 missing_signature when no x-revenuecat-hmac header'],
     reason: 'a GET is read for a body and signature-checked rather than refused',
@@ -219,6 +229,7 @@ export const MUTATIONS = [
     from: "return Response.json({ error: 'missing_signature' }, { status: 401 });",
     to: 'return Response.json({ ok: true });',
     probe: { fn: 'revenuecat-webhook', method: 'POST', body: '{}' },
+    expect: { status: 200 },
     kills: ['revenuecat-webhook: 401 missing_signature when no x-revenuecat-hmac header'],
     spares: ['revenuecat-webhook: 401 bad_signature on wrong HMAC'],
     reason: 'an unsigned caller is answered 200 - the fail-open shape, one branch above the compare',
@@ -234,6 +245,7 @@ export const MUTATIONS = [
       headers: { 'x-revenuecat-hmac': 'deadbeef' },
       body: '{"event":{}}',
     },
+    expect: { status: 400 },
     kills: ['revenuecat-webhook: 401 bad_signature on wrong HMAC'],
     spares: ['revenuecat-webhook: 401 missing_signature when no x-revenuecat-hmac header'],
     reason: 'any signature verifies, so anyone can move a subscription tier',
@@ -245,6 +257,7 @@ export const MUTATIONS = [
     to: 'if (false) {',
     beacon: { from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'revenuecat-webhook' },
+    expect: { status: 418 },
     kills: ['revenuecat-webhook: 200 on valid HMAC + fresh anonymous event'],
     spares: ['revenuecat-webhook: 400 event_outside_freshness_window on stale event'],
     reason:
@@ -259,6 +272,7 @@ export const MUTATIONS = [
     to: 'if (false) {',
     beacon: { from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'revenuecat-webhook' },
+    expect: { status: 418 },
     kills: ['revenuecat-webhook: 400 event_outside_freshness_window on stale event'],
     spares: ['revenuecat-webhook: 400 missing_event_timestamp_ms when timestamp absent'],
     reason: 'a captured delivery replays at any future time - the replay window is the only sequencer',
@@ -270,6 +284,7 @@ export const MUTATIONS = [
     to: 'if (false) {',
     beacon: { from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'revenuecat-webhook' },
+    expect: { status: 418 },
     kills: ['revenuecat-webhook: 400 missing_event_timestamp_ms when timestamp absent'],
     spares: ['revenuecat-webhook: 400 event_outside_freshness_window on stale event'],
     reason: 'a timestamp-less event reaches the freshness gate as null instead of being named',
@@ -281,6 +296,7 @@ export const MUTATIONS = [
     to: 'void newTier;',
     beacon: { from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'revenuecat-webhook' },
+    expect: { status: 418 },
     kills: [
       'revenuecat-webhook: writes user_profiles — pro → dedupe → free → lifetime → ' +
         'lifetime-protected PRODUCT_CHANGE',
@@ -296,6 +312,7 @@ export const MUTATIONS = [
     from: "if (req.method !== 'POST') {",
     to: 'if (false) {',
     probe: { fn: 'auth-email' },
+    expect: { status: 401 },
     kills: ['auth-email: 405 on GET (POST-only)'],
     spares: ['auth-email: 401 bad_signature on a wrong signature'],
     reason: 'a GET reaches the Standard Webhooks verification rather than being refused',
@@ -306,6 +323,7 @@ export const MUTATIONS = [
     from: "return 'missing_headers';",
     to: "return 'ok';",
     probe: { fn: 'auth-email', method: 'POST', body: '{}' },
+    expect: { status: 503, contains: 'smtp_not_configured' },
     kills: ['auth-email: 401 missing_headers when the Standard Webhooks headers are absent'],
     spares: ['auth-email: 401 bad_signature on a wrong signature'],
     reason:
@@ -319,6 +337,7 @@ export const MUTATIONS = [
     to: "return 'ok';",
     beacon: { file: 'auth-email/handler.ts', from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'auth-email' },
+    expect: { status: 418 },
     kills: ['auth-email: 401 bad_signature on a wrong signature'],
     spares: ['auth-email: 401 missing_headers when the Standard Webhooks headers are absent'],
     reason: 'any signature verifies once the three headers are merely present',
@@ -330,6 +349,7 @@ export const MUTATIONS = [
     to: 'charges_enabled: false,',
     beacon: { from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'stripe-events-webhook' },
+    expect: { status: 418 },
     kills: [
       'stripe-events-webhook: account.updated mirrors capability flags into ' +
         'instructor_payout_accounts + dedupes a replay',
@@ -346,6 +366,7 @@ export const MUTATIONS = [
     to: "    .from('donations')\n    .update({\n      status: 'pending',",
     beacon: { from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'stripe-events-webhook' },
+    expect: { status: 418 },
     kills: [
       'stripe-events-webhook: donation checkout.session.completed marks donations paid + dedupes ' +
         'a replay + charge.refunded refunds it',
@@ -360,6 +381,7 @@ export const MUTATIONS = [
     to: "    .from('event_orders')\n    .update({ status: 'pending' })",
     beacon: { from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
     probe: { fn: 'stripe-events-webhook' },
+    expect: { status: 418 },
     kills: ['stripe-events-webhook: event-order checkout.session.expired CAS pending->canceled'],
     spares: [],
     reason:
@@ -405,6 +427,20 @@ export function validateMutations(mutations, readFn) {
     if (m.from === m.to) errs.push(`${m.id} replaces its anchor with itself`);
     for (const name of m.spares) {
       if (m.kills.includes(name)) errs.push(`${m.id} lists "${name}" as both a kill and a spare`);
+    }
+    if (!Number.isInteger(m.expect?.status) || m.expect.status < 100 || m.expect.status > 599) {
+      errs.push(`${m.id} declares no HTTP status for its mutant's probe answer`);
+    } else if (GATEWAY_STATUSES.has(m.expect.status) && !m.expect.contains) {
+      // 502/503/504 are what a restarting runtime answers with, so a round
+      // waiting for a bare one of those cannot tell the mutant from the reload
+      // and would run against a half-up host - the CI failure § 815 records.
+      errs.push(
+        `${m.id} expects a gateway status (${m.expect.status}), which is also what the runtime ` +
+          'answers mid-restart, so it must also declare a `contains` only the mutant can produce',
+      );
+    }
+    if (m.expect?.contains !== undefined && !m.expect.contains.length) {
+      errs.push(`${m.id} declares an empty \`contains\``);
     }
     let src;
     try {
@@ -481,6 +517,9 @@ const RELOAD_POLL_MS = 250;
 // strava verdict a statement about the gate.
 export const STRAVA_ANON_BUCKET = 'strava-webhook:anon';
 
+/** What a restarting edge runtime answers with, rather than any mutant. */
+export const GATEWAY_STATUSES = new Set([502, 503, 504]);
+
 async function clearStravaRateLimit() {
   try {
     const res = await fetch(
@@ -504,6 +543,17 @@ async function clearStravaRateLimit() {
 const funcPath = (rel) => join(FUNCTIONS_DIR, rel);
 
 /**
+ * Deno's own output, indented and capped, for quoting inside a diagnosis.
+ * @param {string} text
+ * @returns {string}
+ */
+function indent(text) {
+  const lines = text.replace(/\u001b\[[0-9;]*m/g, '').trimEnd().split('\n');
+  const shown = lines.length > 60 ? [...lines.slice(0, 30), '  ...', ...lines.slice(-30)] : lines;
+  return shown.map((l) => `    ${l}`).join('\n');
+}
+
+/**
  * @param {Probe} probe
  * @returns {Promise<string>} a status+body fingerprint
  */
@@ -524,32 +574,90 @@ async function probeOnce(probe) {
 }
 
 /**
- * Wait until the probe's fingerprint satisfies `done` on TWO consecutive polls.
- * One is not enough: `functions serve` recycles the worker around the reload,
- * and a request landing in that window is answered with a reset connection
- * rather than a response - which a test reads as a failure and this guard would
- * read as a kill nobody earned.
- * @param {Probe} probe
- * @param {(fingerprint: string) => boolean} done
- * @returns {Promise<boolean>}
+ * The HTTP status a fingerprint carries, or -1 for a transport failure.
+ * @param {string} fingerprint
+ * @returns {number}
  */
-async function waitFor(probe, done) {
+export function statusOf(fingerprint) {
+  const m = /^(\d{3}) /.exec(fingerprint);
+  return m ? Number(m[1]) : -1;
+}
+
+/**
+ * Whether a fingerprint is the answer `expect` describes.
+ * @param {string} fingerprint
+ * @param {Expect} expect
+ * @returns {boolean}
+ */
+export function satisfies(fingerprint, expect) {
+  if (statusOf(fingerprint) !== expect.status) return false;
+  return expect.contains === undefined || fingerprint.includes(expect.contains);
+}
+
+/**
+ * Wait until the probe DOES NOT merely differ from `before` but settles on the
+ * answer the mutation declares, twice in a row and byte-identically.
+ *
+ * "Differs from before" is what this used to require, and it is what failed in
+ * real CI: `functions serve` restarts the runtime around a file change, and a
+ * request landing in that window is answered by kong with a gateway 503 or by
+ * a reset connection. Both differ from `before`, so two of them in a row let
+ * the round proceed against a host that was not serving the mutant at all -
+ * every case then failed on the wrong answer, which scores the kills as killed
+ * and the SPARES as moved. That is exactly the shape the CI failure took, and
+ * it is invisible locally because the restart window is milliseconds on a warm
+ * workstation and seconds on a loaded two-core runner.
+ * @param {Probe} probe
+ * @param {string} before
+ * @param {Expect} expect
+ * @returns {Promise<{ ok: boolean, last: string }>}
+ */
+async function waitForMutant(probe, before, expect) {
   const deadline = Date.now() + RELOAD_TIMEOUT_MS;
-  let streak = 0;
+  let last = '';
+  let prevGood = '';
   while (Date.now() < deadline) {
-    streak = done(await probeOnce(probe)) ? streak + 1 : 0;
-    if (streak === 2) return true;
+    const fp = await probeOnce(probe);
+    last = fp;
+    const good = fp !== before && satisfies(fp, expect);
+    if (good && fp === prevGood) return { ok: true, last: fp };
+    prevGood = good ? fp : '';
     await new Promise((r) => setTimeout(r, RELOAD_POLL_MS));
   }
-  return false;
+  return { ok: false, last };
+}
+
+/**
+ * Wait until the probe is byte-identically back to its pre-mutation answer,
+ * twice in a row. This half was always exact, which is why the restore never
+ * mis-fired the way the mutation wait did.
+ * @param {Probe} probe
+ * @param {string} before
+ * @returns {Promise<{ ok: boolean, last: string }>}
+ */
+async function waitForRestore(probe, before) {
+  const deadline = Date.now() + RELOAD_TIMEOUT_MS;
+  let last = '';
+  let streak = 0;
+  while (Date.now() < deadline) {
+    const fp = await probeOnce(probe);
+    last = fp;
+    streak = fp === before ? streak + 1 : 0;
+    if (streak === 2) return { ok: true, last: fp };
+    await new Promise((r) => setTimeout(r, RELOAD_POLL_MS));
+  }
+  return { ok: false, last };
 }
 
 /**
  * Every case the run reported, keyed by test name (the JUnit `classname` carries
- * a `./` prefix deno adds, so the file half is not a stable key).
+ * a `./` prefix deno adds, so the file half is not a stable key), plus deno's
+ * own output. The output is what a failing round has to quote: a guard that
+ * says "this case stopped passing" without saying WHY sends the reader back to
+ * a machine that no longer has the mutant applied.
  * @param {string} filter
  * @param {string} junitPath
- * @returns {Promise<Map<string, boolean>>} name -> passed
+ * @returns {Promise<{ report: Map<string, boolean>, output: string }>}
  */
 async function runFiltered(filter, junitPath) {
   await clearStravaRateLimit();
@@ -576,9 +684,9 @@ async function runFiltered(filter, junitPath) {
     );
   }
   /** @type {Map<string, boolean>} */
-  const out = new Map();
-  for (const t of parseJunit(xml).values()) out.set(t.name, t.passed);
-  return out;
+  const report = new Map();
+  for (const t of parseJunit(xml).values()) report.set(t.name, t.passed);
+  return { report, output: `${res.stdout ?? ''}${res.stderr ?? ''}` };
 }
 
 async function main() {
@@ -600,6 +708,20 @@ async function main() {
         "429 those cases tolerate as runner noise would read as the secret gate's refusal and " +
         'every strava mutation would report a survivor it did not earn. Read the key with ' +
         '`supabase status -o env`.',
+    );
+    process.exit(1);
+  }
+
+  // Checked once, and refused rather than warned about: an unchecked clear is
+  // the same silence as an unchecked assertion. A full bucket answers 429,
+  // which three strava cases tolerate as runner noise, so a clear that quietly
+  // does nothing turns those rounds into survivors nobody earned.
+  if (!(await clearStravaRateLimit())) {
+    console.error(
+      `::error::Could not empty the ${STRAVA_ANON_BUCKET} rate-limit bucket through the REST API, ` +
+        'so this guard cannot keep a 429 out of the strava rounds - and a 429 satisfies "the ' +
+        'secret gate refused" without the gate being consulted. Check SUPABASE_SERVICE_ROLE_KEY ' +
+        'and that SUPABASE_TEST_URL points at a stack whose rate_limits table is reachable.',
     );
     process.exit(1);
   }
@@ -630,7 +752,10 @@ async function main() {
   process.on('SIGTERM', bail);
 
   try {
-    const baseline = await runFiltered('', join(workdir, 'baseline.xml'));
+    const { report: baseline, output: baselineOutput } = await runFiltered(
+      '',
+      join(workdir, 'baseline.xml'),
+    );
     const ran = [...baseline.keys()];
     const red = ran.filter((name) => baseline.get(name) !== true);
     if (!ran.length) {
@@ -645,7 +770,7 @@ async function main() {
       console.error(
         `::error::The handler-envelope suite is not green before the mutation (${red.length} ` +
           'failing). Vacuity cannot be measured against a red baseline. First failure: ' +
-          `${red[0]}`,
+          `${red[0]}\n${baselineOutput}`,
       );
       process.exit(1);
     }
@@ -654,7 +779,7 @@ async function main() {
     const active = MUTATIONS.filter((m) => m.kills.every((k) => ran.includes(k)));
     const skipped = MUTATIONS.filter((m) => !active.includes(m));
 
-    /** @type {{ id: string, survivors: string[], movedSpares: string[], reloaded: boolean }[]} */
+    /** @type {{ id: string, survivors: string[], movedSpares: string[], absent: string[], reloaded: boolean, output: string, lastProbe: string }[]} */
     const results = [];
     /** @param {string} rel */
     const remember = (rel) => {
@@ -681,31 +806,50 @@ async function main() {
           ),
         );
       }
-      const reloaded = await waitFor(probe, (fp) => fp !== before);
+      const settled = await waitForMutant(probe, before, m.expect);
+      const reloaded = settled.ok;
       /** @type {string[]} */
       let survivors = [];
       /** @type {string[]} */
       let movedSpares = [];
+      /** @type {string[]} */
+      let absent = [];
+      let output = '';
       if (reloaded) {
         const names = [...m.kills, ...m.spares];
-        const report = await runFiltered(filterFor(names), join(workdir, `${m.id}.xml`));
-        survivors = m.kills.filter((k) => report.get(k) !== false);
-        movedSpares = m.spares.filter((s) => report.get(s) !== true);
+        const run = await runFiltered(filterFor(names), join(workdir, `${m.id}.xml`));
+        output = run.output;
+        // A case the report does not carry did not RUN, which is a different
+        // fact from failing and must not be reported as one - the filter
+        // matched nothing, or deno never reached it.
+        absent = names.filter((n) => !run.report.has(n));
+        survivors = m.kills.filter((k) => run.report.get(k) === true);
+        movedSpares = m.spares.filter((s) => run.report.get(s) === false);
       }
       writeFileSync(funcPath(m.file), base);
       if (beaconFile !== m.file) writeFileSync(funcPath(beaconFile), beaconBase);
       // Do not start the next round against a worker still holding this one's
       // mutant: the probe is back to its pre-mutation answer only once the
       // restored tree is the tree being served.
-      if (!(await waitFor(probe, (fp) => fp === before))) {
+      const back = await waitForRestore(probe, before);
+      if (!back.ok) {
         console.error(
           `::error::After restoring the ${m.id} mutation the served host never went back to its ` +
-            'pre-mutation answer, so every later round would measure a tree nobody wrote. Restart ' +
-            '`supabase functions serve` and re-run.',
+            `pre-mutation answer (wanted ${JSON.stringify(before.slice(0, 200))}, last saw ` +
+            `${JSON.stringify(back.last.slice(0, 200))}), so every later round would measure a ` +
+            'tree nobody wrote. Restart `supabase functions serve` and re-run.',
         );
         process.exit(1);
       }
-      results.push({ id: m.id, survivors, movedSpares, reloaded });
+      results.push({
+        id: m.id,
+        survivors,
+        movedSpares,
+        absent,
+        reloaded,
+        output,
+        lastProbe: settled.last,
+      });
     }
 
     const killed = active.reduce((n, m) => n + m.kills.length, 0);
@@ -732,10 +876,12 @@ async function main() {
       for (const r of results) {
         const verdict = !r.reloaded
           ? 'HOST NEVER RELOADED'
-          : r.survivors.length || r.movedSpares.length
-            ? `survivors=${r.survivors.length} movedSpares=${r.movedSpares.length}`
+          : r.survivors.length || r.movedSpares.length || r.absent.length
+            ? `survivors=${r.survivors.length} movedSpares=${r.movedSpares.length} ` +
+              `didNotRun=${r.absent.length}`
             : 'ok';
         console.log(`  ${r.id.padEnd(42)} ${verdict}`);
+        if (verdict !== 'ok' && verdict !== 'HOST NEVER RELOADED') console.log(indent(r.output));
       }
       return;
     }
@@ -746,10 +892,12 @@ async function main() {
       if (!r.reloaded) {
         bad = true;
         console.error(
-          `::error::The served host never picked up the ${r.id} mutation, so nothing was measured ` +
-            'about it. `supabase functions serve` re-reads a changed module on the next request; a ' +
-            'probe that never changes means the host is serving a different tree than this script ' +
-            'is editing (a stale container, or a --workdir pointed elsewhere).',
+          `::error::The served host never settled on the answer ${r.id} declares ` +
+            `(expect ${JSON.stringify(m?.expect)}), so nothing was measured about it. Last seen: ` +
+            `${JSON.stringify(r.lastProbe.slice(0, 300))}. A gateway 503 or a reset connection ` +
+            'here is the runtime restarting and never coming back; a settled answer that is ' +
+            "simply not the declared one means the entry's `expect` is wrong, or the branch it " +
+            'opens no longer leads where the table says.',
         );
         continue;
       }
@@ -761,12 +909,22 @@ async function main() {
             'gate can satisfy, the way the bare-GET secret case was given a correct verify token.',
         );
       }
+      if (r.survivors.length) console.error(indent(r.output));
       for (const name of r.movedSpares) {
         bad = true;
         console.error(
           `::error::"${name}" is declared a spare of ${r.id} but stopped passing under it, so the ` +
             'round cannot attribute its kills. Either the mutation reaches further than the table ' +
-            'claims, or the case does not discriminate between the two gates.',
+            'claims, the case does not discriminate between the two gates, or the failure is not ' +
+            `about the mutation at all - deno said:\n${indent(r.output)}`,
+        );
+      }
+      for (const name of r.absent) {
+        bad = true;
+        console.error(
+          `::error::"${name}" is named by ${r.id} but did not run at all, so nothing was measured ` +
+            'about it. The --filter regex matched no case of that name, or deno stopped before ' +
+            `reaching it - deno said:\n${indent(r.output)}`,
         );
       }
     }
