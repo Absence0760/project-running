@@ -23,7 +23,10 @@ import { browserDayAt, browserDayStart } from '../fixtures/dates';
  * places four meals for this same user at `now() - 8h/-5h/-4h/-1h`, and each
  * one that lands on the browser's UTC day is another ingredient: the count is
  * 2 only while the seed ran inside the 00:00–01:00 UTC hour, and 6 for any
- * seed after 08:00 UTC (decisions § 819). So this test owns today's meals for
+ * seed after 08:00 UTC. That is not § 728's zone mismatch — the seed's rows are
+ * on the browser's day legitimately, they are simply not this spec's — but it
+ * is the same family, and `docs/testing/testing.md § Owning the day` holds the
+ * rule. So this test owns today's meals for
  * its window — it clears them first, the way `meal-templates.spec.ts` does for
  * the same reason — seeds at fixed hours on the browser's own calendar day,
  * and names the two ingredients it expects rather than counting whatever is

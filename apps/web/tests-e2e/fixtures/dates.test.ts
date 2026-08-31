@@ -286,7 +286,7 @@ test('the scan reaches the field constructor, and spares the UTC spelling', () =
  * wrong day, it is on the right one and simply is not the spec's. The only
  * honest scoping is to own the day and clear it first, through
  * `browserDayStart()` so the window is the browser's day rather than the
- * runner's (decisions § 819).
+ * runner's. `docs/testing/testing.md § Owning the day` holds the rule.
  */
 const WHOLE_DAY_CAPTURE = /getByTestId\(\s*['"`]save-as-(?:meal|recipe)['"`]\s*\)/;
 const CLEARS_THE_DAY = /from\(\s*['"`]food_log['"`]\s*\)[\s\S]{0,400}?\.gte\(\s*['"`]started_at['"`],\s*browserDayStart\(/;
@@ -313,7 +313,7 @@ test('a spec that captures the whole diary day clears the day first', () => {
 		'These specs capture every food_log entry on the browser\'s current day and then assert ' +
 			'over what they captured, without first clearing the day. The seed puts four meals on ' +
 			"USER_A's day, so the assertion holds only for the hour the seed happened to run in " +
-			`(decisions.md § 819): ${offenders.join(' ')}`
+			`(docs/testing/testing.md § Owning the day): ${offenders.join(' ')}`
 	);
 });
 

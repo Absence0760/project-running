@@ -225,6 +225,11 @@ pub fn compute_nutrition_targets(input: BodyMetricsInput) -> Option<NutritionTar
     if weight_kg <= 0.0 || height_cm <= 0.0 || age_years <= 0.0 {
         return None;
     }
+    // The two ceilings are `body_metrics.weight_kg`'s and `user_profiles.height_cm`'s
+    // own CHECK maxima. Both clients read them from `column_limits`' `columnCheckMax`,
+    // where a guard proves them equal to the migrations; this rail keeps literals
+    // because the watch has no database in reach, so a widened CHECK must be carried
+    // here by hand (decisions § 819).
     if weight_kg > 500.0 || height_cm > 300.0 || age_years > 120.0 {
         return None;
     }
