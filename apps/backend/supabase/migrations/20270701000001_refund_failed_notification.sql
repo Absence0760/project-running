@@ -118,6 +118,16 @@ create trigger notify_refund_failed_donation
   when (old.status is distinct from new.status and new.status = 'refund_failed')
   execute function notify_refund_failed_donation();
 
+-- Trigger firing uses the function owner's rights, so the EXECUTE grant every
+-- new function inherits from `public` is vestigial — and on a SECURITY DEFINER
+-- function it is the shape 20261123_001 swept for the three social notify
+-- triggers. Calling one outside a trigger context errors immediately, so this
+-- closes a posture hole rather than a live one, but a definer function an
+-- authenticated caller can name is exactly what that sweep exists to prevent
+-- accumulating.
+revoke execute on function notify_refund_failed_order() from public, anon, authenticated;
+revoke execute on function notify_refund_failed_donation() from public, anon, authenticated;
+
 comment on function notify_refund_failed_donation() is
   'Tell the donor their refund was reversed by the bank. Carries no FK: '
   'donations has no client SELECT policy, so the notification IS the donor '

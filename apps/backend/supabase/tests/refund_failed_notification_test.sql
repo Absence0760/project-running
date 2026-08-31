@@ -21,7 +21,7 @@
 --     event page, and the donation arm carries neither.
 
 begin;
-select plan(11);
+select plan(15);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -170,6 +170,21 @@ select throws_ok(
   null,
   'the kind widening is an allowlist edit — a near-miss spelling is still refused'
 );
+
+-- ── 4. neither definer trigger function is client-callable ─────────────────
+
+-- Trigger firing uses the owner's rights, so the EXECUTE grant a new function
+-- inherits from `public` is vestigial. On a SECURITY DEFINER function it is
+-- also the shape 20261123_001 swept off the three social notify triggers, and
+-- rls_definer_hygiene_pt3_test.sql pins those three; these two join them.
+select ok(not has_function_privilege('anon', 'public.notify_refund_failed_order()', 'EXECUTE'),
+  'anon must NOT execute notify_refund_failed_order');
+select ok(not has_function_privilege('authenticated', 'public.notify_refund_failed_order()', 'EXECUTE'),
+  'authenticated must NOT execute notify_refund_failed_order');
+select ok(not has_function_privilege('anon', 'public.notify_refund_failed_donation()', 'EXECUTE'),
+  'anon must NOT execute notify_refund_failed_donation');
+select ok(not has_function_privilege('authenticated', 'public.notify_refund_failed_donation()', 'EXECUTE'),
+  'authenticated must NOT execute notify_refund_failed_donation');
 
 select * from finish();
 rollback;
