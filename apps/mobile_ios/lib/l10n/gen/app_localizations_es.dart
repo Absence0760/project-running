@@ -13055,6 +13055,17 @@ class AppLocalizationsEs extends AppLocalizations {
       'Solo activo cuando preparas una carrera guiada en la pestaña Correr antes de empezar. Anuncia cada indicación del guion al llegar a su marca. Ejemplo: «Cinco minutos. Asíentate en un ritmo que podrías mantener todo el día.»';
 
   @override
+  String get runGuidedRun => 'Carrera guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sin carrera guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Estrategia de carrera';
 
   @override

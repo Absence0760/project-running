@@ -13069,6 +13069,17 @@ class AppLocalizationsDe extends AppLocalizations {
       'Nur aktiv, wenn du vor dem Start im Lauf-Tab einen geführten Lauf auswählst. Sagt jede Coach-Ansage des Skripts an, sobald du ihre Marke erreichst. Beispiel: „Fünf Minuten. Finde einen Rhythmus, den du den ganzen Tag halten könntest.“';
 
   @override
+  String get runGuidedRun => 'Geführter Lauf';
+
+  @override
+  String get runGuidedRunNone => 'Kein geführter Lauf';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes Min. · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Rennstrategie';
 
   @override

@@ -13059,6 +13059,17 @@ class AppLocalizationsPt extends AppLocalizations {
       'Só fica ativo quando escolhe uma corrida guiada no separador Corrida antes de começar. Anuncia cada indicação do guião ao chegar à sua marca. Exemplo: “Cinco minutos. Estabilize num ritmo que aguentaria o dia todo.”';
 
   @override
+  String get runGuidedRun => 'Corrida guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sem corrida guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Estratégia de corrida';
 
   @override
@@ -26937,6 +26948,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsCueGuidedRunInfo =>
       'Só fica ativo quando você escolhe uma corrida guiada na aba Corrida antes de começar. Anuncia cada indicação do roteiro ao chegar à sua marca. Exemplo: “Cinco minutos. Estabilize num ritmo que aguentaria o dia todo.”';
+
+  @override
+  String get runGuidedRun => 'Corrida guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sem corrida guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'Estratégia de corrida';

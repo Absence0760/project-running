@@ -12919,6 +12919,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Only active when you arm a guided run on the Run tab before you start. Speaks each scripted coach cue as you reach its mark. Example: “Five minutes in. Settle into a rhythm you could hold all day.”';
 
   @override
+  String get runGuidedRun => 'Guided run';
+
+  @override
+  String get runGuidedRunNone => 'No guided run';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Race strategy';
 
   @override

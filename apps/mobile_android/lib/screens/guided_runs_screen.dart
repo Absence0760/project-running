@@ -7,11 +7,13 @@ import '../guided_runs.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
-/// Browse the guided-runs library and preview each script. The
-/// actual cue-firing during a recorded run hooks into the recorder
-/// via `audio_cues.dart#speakGuidedCue` — the integration into the
-/// L0-L4 recording stack is a follow-up task; this screen is the
-/// surface today.
+/// Browse the guided-runs library and preview each script.
+///
+/// Preview only. A run is armed for RECORDING from the Run tab's own
+/// guided-run picker, and the cues then fire from the L4 block in
+/// `run_screen.dart#_onSnapshot` through `audio_cues.dart#announceGuidedCue`
+/// — the queueing sibling of the interrupting [speakGuidedCue] this screen's
+/// per-cue preview button uses.
 class GuidedRunsScreen extends StatelessWidget {
   const GuidedRunsScreen({super.key});
 

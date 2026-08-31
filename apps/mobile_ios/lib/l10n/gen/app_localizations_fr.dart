@@ -13087,6 +13087,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'Actif seulement quand tu choisis une course guidée dans l\'onglet Course avant de partir. Annonce chaque consigne du script quand tu atteins son repère. Exemple : « Cinq minutes. Installe-toi sur une allure que tu tiendrais toute la journée. »';
 
   @override
+  String get runGuidedRun => 'Course guidée';
+
+  @override
+  String get runGuidedRunNone => 'Aucune course guidée';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Stratégie de course';
 
   @override
