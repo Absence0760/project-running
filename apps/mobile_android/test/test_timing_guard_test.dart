@@ -169,13 +169,20 @@ void main() {
   });
 
   group('every deadline names its own condition', () {
-    test('a file-local _pumpUntil wrapper requires a describe', () {
+    test('no file-local wrapper bakes in one description for every wait', () {
+      // Named `_pumpUntil` in two files and `_settleUntil` in two more, so
+      // the rule is about the SHAPE, not the name: any private wrapper that
+      // takes the PREDICATE per call site and still passes one literal
+      // describe answers the same sentence for every wait in its file. A
+      // wrapper that owns both its predicate and its description is fine —
+      // every call site there is waiting for the same thing.
       final offenders = <String>[];
+      var wrappersSeen = 0;
       for (final f in dartFiles(_testRoot)) {
+        if (f.path == _helper) continue;
         final src = f.readAsStringSync();
         final blanked = blankNonCode(src);
-        for (final m
-            in RegExp(r'Future<void>\s+_pumpUntil\s*\(').allMatches(blanked)) {
+        for (final m in RegExp(r'Future<void>\s+(_\w+)\s*\(').allMatches(blanked)) {
           var depth = 0;
           var i = m.end - 1;
           while (i < blanked.length) {
@@ -186,18 +193,27 @@ void main() {
             }
             i++;
           }
+          if (i >= blanked.length) continue;
           final params = blanked.substring(m.end, i);
-          if (!params.contains('required String describe')) {
-            offenders.add(f.path);
+          if (!params.contains('bool Function()')) continue;
+          final body = src.substring(i, (i + 600).clamp(0, src.length));
+          if (!RegExp(r'\bpumpUntil\(').hasMatch(body)) continue;
+          wrappersSeen++;
+          if (RegExp(r"describe:\s*'").hasMatch(body) &&
+              !params.contains('required String describe')) {
+            offenders.add('${f.path} (${m.group(1)})');
           }
         }
       }
+      expect(wrappersSeen, greaterThanOrEqualTo(4),
+          reason: 'the wrapper scan found only $wrappersSeen predicate-taking '
+              'wrappers — its shape assumptions broke and it is enforcing '
+              'nothing');
       expect(offenders, isEmpty,
-          reason: 'a local pumpUntil wrapper that bakes in one describe '
-              'answers the same sentence for every wait in the file, so an '
-              'expired deadline no longer says which condition never held. '
-              'Take `required String describe` and pass it through: '
-              '${offenders.join(', ')}');
+          reason: 'a wrapper that takes the predicate per call site and bakes '
+              'in one describe means an expired deadline no longer says which '
+              'condition never held. Take `required String describe` and pass '
+              'it through: ${offenders.join(', ')}');
     });
 
     test('no call site passes an empty description', () {
