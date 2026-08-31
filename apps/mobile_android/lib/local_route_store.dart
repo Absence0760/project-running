@@ -45,11 +45,6 @@ class LocalRouteStore extends ChangeNotifier {
   /// shows up on the watch picker; an offline-pinned route gates
   /// what stays on this device.
   final Set<String> _offlinePinnedIds = {};
-  // Serialises sidecar writes: concurrent pin/unpin calls each await this
-  // tail, so writes apply in call order and the last one to land reflects
-  // the latest in-memory state (otherwise overlapping writeAsString calls
-  // can finish out of order and leave the on-disk set stale).
-  Future<void> _offlinePersistChain = Future<void>.value();
   static const _offlinePinnedIdsFilename = 'offline_pinned_route_ids.json';
   File get _offlinePinnedIdsFile =>
       File('${_dir!.path}/$_offlinePinnedIdsFilename');
@@ -88,6 +83,36 @@ class LocalRouteStore extends ChangeNotifier {
   /// save (stamp) and each getter (filter). Null / unset = signed out —
   /// only untagged rows are visible.
   String? Function()? currentUserIdProvider;
+
+  /// Serialises every operation that mutates this store's DIRECTORY, on the
+  /// shared per-directory chain (`serialiseStoreWrite`, § 828). Unserialised, a
+  /// [delete] fired against an in-flight [save] of the same id removed the
+  /// route file and the save's `rename` put it straight back — then the save
+  /// re-inserted the row into `_routes`, so memory and disk agreed on a route
+  /// the user had asked to delete and the next cold load kept it.
+  ///
+  /// The §67 owner tags were the worse half, because their sidecar is
+  /// read-modify-write and `_ownerTagsTouched` is cleared by whichever write
+  /// lands first: eight overlapping saves left as few as two routes tagged
+  /// (measured, § 828), and an untagged route is visible to — and drainable
+  /// into the cloud account of — every other account on a shared device. That
+  /// is the direction `_persistOwnerTags` itself calls unrecoverable.
+  ///
+  /// This replaced a `FileLock.blockingExclusive` over those sidecar merges.
+  /// POSIX record locks are owned by the PROCESS, so two handles in one
+  /// process — including the WorkManager isolate the lock named, which shares
+  /// the app process — both acquired it and excluded nothing (measured,
+  /// § 829). What survives an interleaved isolate is the merge-never-replace
+  /// in each writer, not the lock.
+  String get _chainKey =>
+      _dir?.path ?? 'uninitialised:${identityHashCode(this)}';
+
+  Future<T> _serialised<T>(Future<T> Function() body) =>
+      serialiseStoreWrite(_chainKey, body);
+
+  /// Test-only: completes once every operation queued so far has finished.
+  @visibleForTesting
+  Future<void> debugWritesSettled() => storeWritesSettled(_chainKey);
 
   String? get _activeOwner {
     final uid = currentUserIdProvider?.call();
@@ -206,11 +231,13 @@ class LocalRouteStore extends ChangeNotifier {
       dir.createSync(recursive: true);
     }
     _dir = dir;
-    await _loadAll();
-    await _loadSyncedIds();
-    await _loadOfflinePinnedIds();
-    await _loadOwnerTags();
-    await _loadPendingRemoteDeletes();
+    await _serialised(() async {
+      await _loadAll();
+      await _loadSyncedIds();
+      await _loadOfflinePinnedIds();
+      await _loadOwnerTags();
+      await _loadPendingRemoteDeletes();
+    });
   }
 
   /// Recover from a missed / failed init() by lazily creating the
@@ -245,7 +272,10 @@ class LocalRouteStore extends ChangeNotifier {
         ...route.toJson(),
       };
 
-  Future<void> save(Route route, {bool markSynced = false}) async {
+  Future<void> save(Route route, {bool markSynced = false}) =>
+      _serialised(() => _save(route, markSynced));
+
+  Future<void> _save(Route route, bool markSynced) async {
     final dir = await _ensureDir();
     final file = File('${dir.path}/${route.id}.json');
     await writeJsonAtomic(file, _routeRecord(route));
@@ -282,7 +312,10 @@ class LocalRouteStore extends ChangeNotifier {
   Future<void> saveBatch(
     Iterable<Route> routes, {
     bool markSynced = true,
-  }) async {
+  }) =>
+      _serialised(() => _saveBatch(routes, markSynced));
+
+  Future<void> _saveBatch(Iterable<Route> routes, bool markSynced) async {
     if (routes.isEmpty) return;
     // Server-ingest path (markSynced): never clobber a route that has
     // unsynced local edits. Overwriting it with the server's (possibly
@@ -323,7 +356,10 @@ class LocalRouteStore extends ChangeNotifier {
 
   /// Mark a route as confirmed-pushed to the cloud. Called by
   /// [SyncService] after a successful `api.saveRoute(...)`.
-  Future<void> markRouteSynced(String routeId) async {
+  Future<void> markRouteSynced(String routeId) =>
+      _serialised(() => _markRouteSynced(routeId));
+
+  Future<void> _markRouteSynced(String routeId) async {
     if (_syncedIds.add(routeId)) {
       _syncedIdsCleared.remove(routeId);
       await _persistSyncedIds();
@@ -332,7 +368,10 @@ class LocalRouteStore extends ChangeNotifier {
   }
 
   /// Bulk variant for the drain loop — one sidecar write per batch.
-  Future<void> markManyRoutesSynced(Iterable<String> routeIds) async {
+  Future<void> markManyRoutesSynced(Iterable<String> routeIds) =>
+      _serialised(() => _markManyRoutesSynced(routeIds));
+
+  Future<void> _markManyRoutesSynced(Iterable<String> routeIds) async {
     final added = <String>[];
     for (final id in routeIds) {
       if (_syncedIds.add(id)) added.add(id);
@@ -347,7 +386,10 @@ class LocalRouteStore extends ChangeNotifier {
   /// untagged (signed-out-built) route in [owner]'s account, tag it so
   /// it stops being visible to every other account on the device.
   /// Mirrors §67's push-time adoption of null-owner runs.
-  Future<void> tagRoutesOwner(Iterable<String> routeIds, String owner) async {
+  Future<void> tagRoutesOwner(Iterable<String> routeIds, String owner) =>
+      _serialised(() => _tagRoutesOwner(routeIds, owner));
+
+  Future<void> _tagRoutesOwner(Iterable<String> routeIds, String owner) async {
     if (owner.isEmpty) return;
     var touched = false;
     for (final id in routeIds) {
@@ -362,7 +404,9 @@ class LocalRouteStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> delete(String routeId) async {
+  Future<void> delete(String routeId) => _serialised(() => _delete(routeId));
+
+  Future<void> _delete(String routeId) async {
     final dir = await _ensureDir();
     final file = File('${dir.path}/$routeId.json');
     if (file.existsSync()) await file.delete();
@@ -387,7 +431,10 @@ class LocalRouteStore extends ChangeNotifier {
   /// `notifyListeners()` call instead of one per row so the list
   /// doesn't flicker through N intermediate states. Idempotent on
   /// already-deleted ids (the per-id file delete is best-effort).
-  Future<void> deleteMany(Iterable<String> routeIds) async {
+  Future<void> deleteMany(Iterable<String> routeIds) =>
+      _serialised(() => _deleteMany(routeIds));
+
+  Future<void> _deleteMany(Iterable<String> routeIds) async {
     if (routeIds.isEmpty) return;
     final ids = routeIds.toSet();
     final dir = await _ensureDir();
@@ -413,14 +460,20 @@ class LocalRouteStore extends ChangeNotifier {
 
   /// Mark a route as kept-on-device. The pin is local-only — never
   /// pushed to Supabase. Idempotent (re-pinning is a no-op).
-  Future<void> pinOffline(String routeId) async {
+  Future<void> pinOffline(String routeId) =>
+      _serialised(() => _pinOffline(routeId));
+
+  Future<void> _pinOffline(String routeId) async {
     if (!_offlinePinnedIds.add(routeId)) return;
     _offlinePinnedCleared.remove(routeId);
     await _persistOfflinePinnedIds();
     notifyListeners();
   }
 
-  Future<void> unpinOffline(String routeId) async {
+  Future<void> unpinOffline(String routeId) =>
+      _serialised(() => _unpinOffline(routeId));
+
+  Future<void> _unpinOffline(String routeId) async {
     if (!_offlinePinnedIds.remove(routeId)) return;
     _offlinePinnedCleared.add(routeId);
     await _persistOfflinePinnedIds();
@@ -440,7 +493,11 @@ class LocalRouteStore extends ChangeNotifier {
   Future<void> markPendingRemoteDelete(
     String routeId, {
     String? ownerUserId,
-  }) async {
+  }) =>
+      _serialised(() => _markPendingRemoteDelete(routeId, ownerUserId));
+
+  Future<void> _markPendingRemoteDelete(
+      String routeId, String? ownerUserId) async {
     final existed = _pendingRemoteDeletes.containsKey(routeId);
     final prevOwner = existed ? _pendingRemoteDeletes[routeId] : null;
     if (existed && prevOwner == ownerUserId) return;
@@ -455,7 +512,11 @@ class LocalRouteStore extends ChangeNotifier {
   Future<void> markManyPendingRemoteDelete(
     Iterable<String> routeIds, {
     String? ownerUserId,
-  }) async {
+  }) =>
+      _serialised(() => _markManyPendingRemoteDelete(routeIds, ownerUserId));
+
+  Future<void> _markManyPendingRemoteDelete(
+      Iterable<String> routeIds, String? ownerUserId) async {
     var changed = false;
     for (final id in routeIds) {
       final existed = _pendingRemoteDeletes.containsKey(id);
@@ -474,7 +535,10 @@ class LocalRouteStore extends ChangeNotifier {
   /// Drop a route id from the retry queue. Called by the SyncService
   /// after a successful retry, or by the user if they purge the
   /// orphan locally.
-  Future<void> clearPendingRemoteDelete(String routeId) async {
+  Future<void> clearPendingRemoteDelete(String routeId) =>
+      _serialised(() => _clearPendingRemoteDelete(routeId));
+
+  Future<void> _clearPendingRemoteDelete(String routeId) async {
     // containsKey guard, not `remove() != null` — entries can have a
     // null value (untagged / legacy) and Map.remove returns the value,
     // which would silently skip the persistence + notify for those.
@@ -504,7 +568,7 @@ class LocalRouteStore extends ChangeNotifier {
   /// rather than by absence, because absence can't distinguish "I cleared
   /// this" from "the other instance queued this while I was running".
   Future<void> _persistPendingRemoteDeletes() async {
-    await _withSidecarLock(_pendingRemoteDeletesFilename, () async {
+    await _serialised(() async {
       final disk =
           await _readPendingRemoteDeletes() ?? const <String, String?>{};
       final merged = <String, String?>{
@@ -705,44 +769,7 @@ class LocalRouteStore extends ChangeNotifier {
     return null;
   }
 
-  /// Hold an exclusive cross-process advisory lock on [name] for the duration
-  /// of [action]. Ported verbatim from `LocalRunStore._withSidecarLock`:
-  /// `background_sync.dart` builds a second [LocalRouteStore] over this same
-  /// directory in the WorkManager isolate, so a read-modify-write of any
-  /// sidecar needs the lock or two interleaved merges still drop the later
-  /// writer's work. Best effort — if the lock can't be taken the action still
-  /// runs, because a merged write without a lock beats no write at all.
-  Future<void> _withSidecarLock(
-      String name, Future<void> Function() action) async {
-    final dir = await _ensureDir();
-    RandomAccessFile? handle;
-    try {
-      handle = await File('${dir.path}/$name.lock').open(mode: FileMode.write);
-      await handle.lock(FileLock.blockingExclusive);
-    } catch (e) {
-      debugPrint('local_route_store: sidecar lock unavailable for $name: $e');
-      try {
-        await handle?.close();
-      } catch (_) {/* best-effort */}
-      handle = null;
-    }
-    try {
-      await action();
-    } finally {
-      if (handle != null) {
-        try {
-          await handle.unlock();
-        } catch (e) {
-          debugPrint('local_route_store: sidecar unlock failed for $name: $e');
-        }
-        try {
-          await handle.close();
-        } catch (_) {/* best-effort */}
-      }
-    }
-  }
-
-  /// Merge-write one id-set sidecar under its lock. [live] is this process's
+  /// Merge-write one id-set sidecar. [live] is this process's
   /// current set, [cleared] the ids it has deliberately dropped since the last
   /// successful write.
   ///
@@ -768,7 +795,7 @@ class LocalRouteStore extends ChangeNotifier {
     final dir = await _ensureDir();
     final known = _routes.map((r) => r.id).toSet();
     if (pruneMissing) live.retainWhere(known.contains);
-    await _withSidecarLock(filename, () async {
+    await _serialised(() async {
       final merged = <String>{...live};
       for (final id in await readDisk() ?? const <String>{}) {
         if (cleared.contains(id)) continue;
@@ -822,19 +849,14 @@ class LocalRouteStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _persistOfflinePinnedIds() {
-    // Chain onto the previous write so concurrent calls serialise in-process;
-    // the sidecar lock inside handles the cross-isolate half.
-    _offlinePersistChain = _offlinePersistChain.then((_) => _persistIdSetSidecar(
-          filename: _offlinePinnedIdsFilename,
-          file: _offlinePinnedIdsFile,
-          live: _offlinePinnedIds,
-          cleared: _offlinePinnedCleared,
-          readDisk: _readOfflinePinnedFromDisk,
-          pruneMissing: false,
-        ));
-    return _offlinePersistChain;
-  }
+  Future<void> _persistOfflinePinnedIds() => _persistIdSetSidecar(
+        filename: _offlinePinnedIdsFilename,
+        file: _offlinePinnedIdsFile,
+        live: _offlinePinnedIds,
+        cleared: _offlinePinnedCleared,
+        readDisk: _readOfflinePinnedFromDisk,
+        pruneMissing: false,
+      );
 
   /// Absent sidecar (first run, pre-tag upgrade) leaves the map empty:
   /// every existing route reads as untagged → visible to any account,
@@ -858,7 +880,7 @@ class LocalRouteStore extends ChangeNotifier {
   /// drain copies the other user's route into their cloud account.
   Future<void> _persistOwnerTags() async {
     final dir = await _ensureDir();
-    await _withSidecarLock(_ownerTagsFilename, () async {
+    await _serialised(() async {
       final merged = <String, String>{
         ...?await _readOwnerTagsFromDisk(),
       };
