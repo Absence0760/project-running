@@ -60,9 +60,13 @@ function functionsTree() {
  * @param {string} name
  * @param {RegExp} command
  * @param {string} why
+ * @param {string} [text] the workflow to read; defaults to the committed one.
+ *   Overridable so the mutations this guard exists to catch can be fed to it
+ *   rather than only reasoned about (decisions § 775 verified them by hand and
+ *   committed none of them).
  */
-function derivedFilesStep(name, command, why) {
-	const steps = parseSteps(readFileSync(CI_WORKFLOW, 'utf8')).filter(
+function derivedFilesStep(name, command, why, text = readFileSync(CI_WORKFLOW, 'utf8')) {
+	const steps = parseSteps(text).filter(
 		(s) => s.job === JOB && s.name === name,
 	);
 	assert.equal(
@@ -92,21 +96,25 @@ function derivedFilesStep(name, command, why) {
 	return { workingDirectory: workdir[1], filesExpression: expression[1], body };
 }
 
-const typecheckStep = () =>
+/** @param {string} [text] */
+const typecheckStep = (text) =>
 	derivedFilesStep(
 		STEP,
 		/deno check \$files/,
 		`the "${STEP}" step must run \`deno check $files\` — the derived set and the set it ` +
 			'actually checks have to be the same one.',
+		text,
 	);
 
-const warmCacheStep = () =>
+/** @param {string} [text] */
+const warmCacheStep = (text) =>
 	derivedFilesStep(
 		WARM_STEP,
 		/deno cache --no-check \$files/,
 		`the "${WARM_STEP}" step must run \`deno cache --no-check $files\` — it exists to pull ` +
 			'the whole module graph inside the retry wrapper, over the same set the typecheck ' +
 			'then reads.',
+		text,
 	);
 
 /// What the CI step's own expression selects, repo-relative and sorted.
@@ -234,4 +242,70 @@ test('the warm-cache prefetch runs before the typecheck', () => {
 	assert.ok(warm >= 0, `the "${WARM_STEP}" step is gone from \`${JOB}\`.`);
 	assert.ok(check >= 0, `the "${STEP}" step is gone from \`${JOB}\`.`);
 	assert.ok(warm < check, `"${WARM_STEP}" must run before "${STEP}", not after it.`);
+});
+
+// ---------------------------------------------------------------------------
+// The mutations § 775 measured by hand. Each is the shape the assertions above
+// exist to refuse, fed to them from a rewritten copy of the workflow — because
+// an assertion that has only ever read a passing tree is one nobody has seen
+// fail.
+// ---------------------------------------------------------------------------
+
+/** @param {(text: string) => string} rewrite */
+function mutatedWorkflow(rewrite) {
+	const text = readFileSync(CI_WORKFLOW, 'utf8');
+	const next = rewrite(text);
+	assert.notEqual(next, text, 'the mutation changed nothing — it has gone stale against ci.yml');
+	return next;
+}
+
+test('narrowing the warm step to the test files puts ~450 declaration fetches outside the retry', () => {
+	// The exact regression § 775 named: the sibling test step in this job once
+	// listed paths, and a warm step written the same way leaves `deno check`
+	// resolving stripe's declarations itself, outside the three-attempt wrapper.
+	const narrowed = mutatedWorkflow((text) =>
+		text.replace(
+			/(- name: Warm the Deno dependency cache[\s\S]*?files=\$\()[^)]+(\))/,
+			"$1find . -name '*.test.ts' -not -path './_shared/*'$2",
+		),
+	);
+	const warm = new Set(laneFiles(warmCacheStep(narrowed)));
+	const checked = laneFiles(typecheckStep(narrowed));
+	const unwarmed = checked.filter((f) => !warm.has(f));
+	assert.ok(
+		unwarmed.length > 0,
+		'the narrowed warm step must leave the non-test modules unwarmed',
+	);
+	// And the committed pair does not, which is the half that makes the
+	// assertion above a control rather than an arithmetic coincidence.
+	const committedWarm = new Set(laneFiles(warmCacheStep()));
+	assert.deepEqual(laneFiles(typecheckStep()).filter((f) => !committedWarm.has(f)), []);
+});
+
+test('a step that names its files instead of deriving them is refused', () => {
+	const hardcoded = mutatedWorkflow((text) =>
+		text.replace(
+			/(- name: Edge Function typecheck\n[\s\S]*?)^(\s*)files=\$\([^)]+\)$/m,
+			'$1$2files="functions/a.ts functions/b.ts"',
+		),
+	);
+	assert.throws(
+		() => typecheckStep(hardcoded),
+		/no longer derives its file set/,
+		'hardcoding the paths is how the sibling test step came to miss four new files',
+	);
+});
+
+test('a renamed or duplicated step is reported, not silently read as one', () => {
+	const renamed = mutatedWorkflow((text) =>
+		text.replace('- name: Edge Function typecheck\n', '- name: Edge Function typecheck (deno)\n'),
+	);
+	assert.throws(() => typecheckStep(renamed), /expected exactly one "Edge Function typecheck" step/);
+});
+
+test('a typecheck step that stops running deno check over its own set is refused', () => {
+	const detached = mutatedWorkflow((text) =>
+		text.replace('deno check $files', 'deno check ./_shared/env.ts'),
+	);
+	assert.throws(() => typecheckStep(detached), /must run `deno check \$files`/);
 });
