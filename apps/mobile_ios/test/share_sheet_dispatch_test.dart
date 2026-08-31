@@ -14,8 +14,6 @@
 // first access, so installing the fake in setUpAll is what the production
 // call path then reaches.
 
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_plus_platform_interface/share_plus_platform_interface.dart';
