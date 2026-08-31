@@ -363,8 +363,10 @@ Deno.test('both reversal CASs match the status they read', () => {
 
 Deno.test('a reversal that is not a transition is logged, never silently dropped', () => {
   // A failed PARTIAL refund transitions on nothing by design (the seat-bearing
-  // status must survive), so the only record of the money discrepancy is the
-  // log line — which makes its absence a real loss, not a style point.
+  // status must survive). Since § 823 the money discrepancy is also a
+  // `payment_refunds` row, so the log line is no longer the ONLY record — but
+  // it is still the one an operator tailing the function sees first, and the
+  // status it declined to move is not on the row.
   const src = reversalHandlers();
   const noTransition = [...src.matchAll(/skipped: 'no_transition'/g)];
   assertEquals(noTransition.length, 2, 'both ledgers must have a no-transition arm');
@@ -374,4 +376,85 @@ Deno.test('a reversal that is not a transition is logged, never silently dropped
       `the ${ledger} no-transition arm does not log the row it declined to move`,
     );
   }
+});
+
+
+// ── payment_refunds: the row a failed PARTIAL refund gets (§ 823) ────────────
+
+function refundRecorder(): string {
+  const start = SRC.indexOf('async function recordPaymentRefund');
+  assert(start !== -1, 'recordPaymentRefund is gone — has the refund ledger moved?');
+  const end = SRC.indexOf('// ── donation handlers', start);
+  assert(end > start, 'could not find the end of recordPaymentRefund');
+  return SRC.slice(start, end);
+}
+
+function refundLifecycleArm(): string {
+  const start = SRC.indexOf('if (isRefundLifecycleEvent(event.type))');
+  assert(start !== -1, 'the refund-lifecycle dispatch arm is gone');
+  const end = SRC.indexOf('// Unhandled types', start);
+  assert(end > start, 'could not find the end of the refund-lifecycle arm');
+  return SRC.slice(start, end);
+}
+
+Deno.test('the refund is recorded before the reversal gate, and whatever its status', () => {
+  // `refundReversed` is false for `succeeded` and for every benign
+  // `refund.updated`. Recording behind that gate would keep only the failures,
+  // and the ledger would then hold a reversal with no sibling instalment to
+  // read it against.
+  const src = refundLifecycleArm();
+  const record = src.indexOf('recordPaymentRefund(service, refund)');
+  const gate = src.indexOf('refundReversed(refund)');
+  assert(record !== -1, 'the lifecycle arm never records the refund');
+  assert(gate !== -1, 'the reversal gate is gone');
+  assert(record < gate, 'the refund must be recorded before the reversal gate, not after it');
+});
+
+Deno.test('the refund row is keyed on the Stripe Refund id, so a replay is one row', () => {
+  // This is the whole idempotency argument. `refunded_cents -= amount` moves
+  // once per delivery; an upsert on a unique key does not move at all on the
+  // second (§ 789's refusal, § 823's answer).
+  const src = refundRecorder();
+  assert(
+    /\.upsert\(/.test(src),
+    'the refund record must be an upsert — a bare insert 23505s on every replay',
+  );
+  assert(
+    src.includes("onConflict: 'stripe_refund_id'"),
+    'the upsert must conflict on the Stripe Refund id, not on the surrogate key',
+  );
+});
+
+Deno.test('recording a refund never touches a running total or a seat', () => {
+  const src = refundRecorder();
+  assert(
+    !src.includes('refunded_cents'),
+    'the refund recorder writes refunded_cents — the arithmetic § 789 refused',
+  );
+  assert(
+    !src.includes(".from('event_attendees')") && !src.includes('.delete()'),
+    'the refund recorder touches seats; it may only write payment_refunds',
+  );
+  assert(
+    !src.includes("update("),
+    'the refund recorder must go through the upsert, not a second write path',
+  );
+});
+
+Deno.test('an unresolvable parent writes nothing, and a failed read retries', () => {
+  const src = refundRecorder();
+  // payment_refunds_one_ledger_check requires exactly one parent, so a refund
+  // on a charge neither ledger knows has no row to write.
+  assert(
+    /if \(!order\) return null;/.test(src),
+    'a refund on an unknown charge must write no row',
+  );
+  // A read that ERRORED is not "not a donation". Falling through on it would
+  // attribute a donation refund to the order ledger, find nothing, and answer
+  // 200 — closing the delivery on the one event that says the money came back.
+  assertEquals(
+    [...src.matchAll(/status: 500/g)].length,
+    3,
+    'both parent reads and the upsert must 500 so Stripe retries',
+  );
 });

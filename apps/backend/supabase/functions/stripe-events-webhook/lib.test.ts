@@ -15,13 +15,17 @@ import {
   isPaymentSettled,
   parseStripeEventEnvelope,
   isRefundLifecycleEvent,
+  knownRefundStatus,
+  paymentRefundRecord,
   readCharge,
   readCheckoutSession,
   readConnectAccount,
   readRefund,
   REFUND_LIFECYCLE_EVENTS,
+  REFUND_STATUSES,
   refundedCentsOfCharge,
   refundReversed,
+  REVERSED_REFUND_STATUSES,
   refundScopeOfCharge,
   shouldReleaseDedupe,
   STRIPE_EVENT,
@@ -764,6 +768,7 @@ Deno.test('readRefund — every field is checked, and an EXPANDED payment_intent
     id: 're_1',
     paymentIntentId: 'pi_1',
     status: 'failed',
+    amountCents: 5000,
     failureReason: 'declined',
   });
   // The endpoint may be configured to expand the reference into the whole
@@ -775,23 +780,41 @@ Deno.test('readRefund — every field is checked, and an EXPANDED payment_intent
       payment_intent: { id: 'pi_2', object: 'payment_intent' },
       status: 'canceled',
     }),
-    { id: 're_2', paymentIntentId: 'pi_2', status: 'canceled', failureReason: null },
+    {
+      id: 're_2',
+      paymentIntentId: 'pi_2',
+      status: 'canceled',
+      amountCents: null,
+      failureReason: null,
+    },
   );
 });
 
 Deno.test('readRefund — a value that does not check reads as absent, never as a default', () => {
-  assertEquals(readRefund({ id: 42, payment_intent: 7, status: { code: 'failed' } }), {
-    id: null,
-    paymentIntentId: null,
-    status: null,
-    failureReason: null,
-  });
+  assertEquals(
+    readRefund({ id: 42, payment_intent: 7, status: { code: 'failed' }, amount: '5000' }),
+    {
+      id: null,
+      paymentIntentId: null,
+      status: null,
+      amountCents: null,
+      failureReason: null,
+    },
+  );
   assertEquals(readRefund({}), {
     id: null,
     paymentIntentId: null,
     status: null,
+    amountCents: null,
     failureReason: null,
   });
+  // A money field is an integer count of cents or it is absent. A fractional
+  // or negative `amount` reaching the ledger would be a refund the CHECK
+  // rejects, which 500s into an endless Stripe retry on an event that changed
+  // nothing.
+  assertStrictEquals(readRefund({ amount: 12.5 }).amountCents, null);
+  assertStrictEquals(readRefund({ amount: -1 }).amountCents, null);
+  assertStrictEquals(readRefund({ amount: 0 }).amountCents, 0);
 });
 
 Deno.test('refundReversed — only failed and canceled mean the money came back to us', () => {
@@ -955,4 +978,105 @@ Deno.test('charge.refund.updated envelope — the deprecated event carries the s
   const refund = readRefund(event!.data.object);
   assertStrictEquals(refundReversed(refund), true);
   assertStrictEquals(refund.paymentIntentId, 'pi_1');
+});
+
+
+// ── payment_refunds: the row a failed PARTIAL refund gets (§ 823) ────────────
+
+Deno.test('knownRefundStatus — exactly Stripe\'s vocabulary, and nothing else', () => {
+  for (const status of REFUND_STATUSES) {
+    assertStrictEquals(knownRefundStatus(status), status);
+  }
+  // A status the CHECK does not admit must record NOTHING rather than reach
+  // the insert: a 23514 there answers 500, Stripe retries, and an event that
+  // changed nothing retries forever.
+  for (const bogus of [null, '', 'Failed', 'succeeded ', 'reversed', 'refunded']) {
+    assertStrictEquals(knownRefundStatus(bogus), null);
+  }
+});
+
+Deno.test('every reversed status is a status the ledger can hold', () => {
+  // The reversal set decides what fundraiser_totals subtracts; the vocabulary
+  // decides what can be stored at all. A member of the first that is not a
+  // member of the second is a correction that can never be recorded.
+  for (const status of REVERSED_REFUND_STATUSES) {
+    assertStrictEquals(REFUND_STATUSES.includes(status), true, status);
+  }
+});
+
+Deno.test('paymentRefundRecord — the whole refund, or no row at all', () => {
+  assertEquals(
+    paymentRefundRecord(readRefund({
+      id: 're_9',
+      payment_intent: 'pi_9',
+      status: 'failed',
+      amount: 500,
+      failure_reason: 'insufficient_funds',
+    })),
+    {
+      stripe_refund_id: 're_9',
+      amount_cents: 500,
+      status: 'failed',
+      failure_reason: 'insufficient_funds',
+    },
+  );
+  // A refund that DELIVERED is recorded too. The row is the refund's whole
+  // lifecycle, not only its worst moment — an operator reading a reversal
+  // needs to see the sibling instalment that did land.
+  assertEquals(
+    paymentRefundRecord(readRefund({ id: 're_ok', status: 'succeeded', amount: 250 })),
+    {
+      stripe_refund_id: 're_ok',
+      amount_cents: 250,
+      status: 'succeeded',
+      failure_reason: null,
+    },
+  );
+});
+
+Deno.test('paymentRefundRecord — fails closed on each of the three it cannot guess', () => {
+  // No Stripe Refund id: no idempotency key. A row keyed on anything else
+  // double-counts on the next redelivery, which is the whole reason this is a
+  // child row rather than arithmetic on donations.refunded_cents (§ 789).
+  assertStrictEquals(
+    paymentRefundRecord(readRefund({ status: 'failed', amount: 500 })),
+    null,
+  );
+  // No amount: nothing to correct a total by.
+  assertStrictEquals(
+    paymentRefundRecord(readRefund({ id: 're_1', status: 'failed' })),
+    null,
+  );
+  // A status outside the CHECK's set.
+  assertStrictEquals(
+    paymentRefundRecord(readRefund({ id: 're_1', status: 'reversed', amount: 500 })),
+    null,
+  );
+  // Each refusal reproduces the pre-table behaviour exactly: no row, the
+  // thermometer still understating, the log line still there.
+});
+
+Deno.test('paymentRefundRecord — an over-long reason is clipped, never dropped', () => {
+  // payment_refunds_failure_reason_len_chk caps it at 120. Refusing the whole
+  // row over a cosmetic field would lose the money discrepancy; a 23514 would
+  // 500 into an endless Stripe retry.
+  const record = paymentRefundRecord(readRefund({
+    id: 're_long',
+    status: 'failed',
+    amount: 500,
+    failure_reason: 'x'.repeat(500),
+  }));
+  assertStrictEquals(record?.failure_reason?.length, 120);
+  assertStrictEquals(record?.status, 'failed');
+  // The longest reason Stripe documents, `charge_for_pending_refund_disputed`,
+  // is well inside the cap and must survive intact.
+  assertStrictEquals(
+    paymentRefundRecord(readRefund({
+      id: 're_doc',
+      status: 'failed',
+      amount: 500,
+      failure_reason: 'charge_for_pending_refund_disputed',
+    }))?.failure_reason,
+    'charge_for_pending_refund_disputed',
+  );
 });

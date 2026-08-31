@@ -69,6 +69,7 @@ interface RefundSource {
   id: string;
   payment_intent: string | { id: string } | null;
   status: string | null;
+  amount: number;
   failure_reason?: string;
 }
 type RefundSourceIsStripes = AssertAssignable<Stripe.Refund, RefundSource>;
@@ -156,6 +157,7 @@ export interface Refund {
   id: string | null;
   paymentIntentId: string | null;
   status: string | null;
+  amountCents: number | null;
   failureReason: string | null;
 }
 
@@ -231,8 +233,40 @@ export function readRefund(object: Record<string, unknown>): Refund {
     id: typeof object.id === 'string' ? object.id : null,
     paymentIntentId: referenceId(object.payment_intent),
     status: typeof object.status === 'string' ? object.status : null,
+    amountCents: Number.isInteger(object.amount) && (object.amount as number) >= 0
+      ? object.amount as number
+      : null,
     failureReason: typeof object.failure_reason === 'string' ? object.failure_reason : null,
   };
+}
+
+/// Stripe's whole `Refund.status` vocabulary, and the third rail of the
+/// `payment_refunds.status` CHECK (migration 20270630000001) beside the
+/// `PaymentRefundStatus` union in apps/web/src/lib/types.ts —
+/// check_constraint_unions.mjs reads all three.
+///
+/// It exists because the row this webhook writes has to hold a value the CHECK
+/// admits. `Stripe.Refund.status` is declared `string | null` by the SDK — a
+/// bare string, not a union (§ 789) — so a status this build has never heard
+/// of reaches the insert as a plain string, the CHECK rejects it, and the
+/// handler 500s into an endless Stripe retry on an event that would otherwise
+/// have been harmless. `knownRefundStatus` is the gate: an unrecognised status
+/// records NOTHING, which is exactly the behaviour that shipped before this
+/// table existed.
+export const REFUND_STATUSES = [
+  'pending',
+  'requires_action',
+  'succeeded',
+  'failed',
+  'canceled',
+] as const;
+
+export type RefundStatus = typeof REFUND_STATUSES[number];
+
+export function knownRefundStatus(status: string | null): RefundStatus | null {
+  return status !== null && (REFUND_STATUSES as readonly string[]).includes(status)
+    ? status as RefundStatus
+    : null;
 }
 
 /// The refund statuses that mean the money did NOT reach the payer and is back
@@ -244,7 +278,7 @@ export function readRefund(object: Record<string, unknown>): Refund {
 /// a bank hands money back: Stripe re-emails the customer for corrected
 /// details and the refund is still in flight. So is `pending`. Calling either
 /// a failure would move a ledger that is about to settle on its own.
-const REVERSED_REFUND_STATUSES: readonly string[] = ['failed', 'canceled'];
+export const REVERSED_REFUND_STATUSES: readonly RefundStatus[] = ['failed', 'canceled'];
 
 /// Whether a refund-lifecycle event says the refund returned no money.
 ///
@@ -254,7 +288,50 @@ const REVERSED_REFUND_STATUSES: readonly string[] = ['failed', 'canceled'];
 /// correctly-refunded order back the moment Stripe attached an acquirer
 /// reference number to it.
 export function refundReversed(refund: Refund): boolean {
-  return refund.status !== null && REVERSED_REFUND_STATUSES.includes(refund.status);
+  return refund.status !== null &&
+    (REVERSED_REFUND_STATUSES as readonly string[]).includes(refund.status);
+}
+
+/// The `payment_refunds` row a refund-lifecycle event says exists — or null
+/// when this body does not carry a refund the ledger can hold.
+///
+/// Three things have to be present and none of them can be guessed. Without
+/// the Stripe Refund id there is no idempotency key, and a row keyed on
+/// anything else would be counted twice on the next redelivery — which is the
+/// whole reason this table exists rather than an arithmetic adjustment to
+/// `donations.refunded_cents` (§ 789, § 823). Without an integer `amount` there
+/// is no figure to correct a total by. Without a status the CHECK admits, the
+/// insert would 500 into an endless Stripe retry.
+///
+/// Failing closed here reproduces the pre-table behaviour exactly: nothing is
+/// recorded, the thermometer keeps understating by the reversed part, and the
+/// operator still has the log line. That is the direction that cannot make
+/// anything worse.
+export interface PaymentRefundRecord {
+  stripe_refund_id: string;
+  amount_cents: number;
+  status: RefundStatus;
+  failure_reason: string | null;
+}
+
+/// `payment_refunds_failure_reason_len_chk`. The reason is third-party text we
+/// store verbatim, and a value past the cap would 23514 into the same endless
+/// Stripe retry an unknown status would — so it is TRUNCATED rather than
+/// refused: a clipped reason is still the reason, where dropping the whole row
+/// would lose the money discrepancy over a cosmetic field.
+const FAILURE_REASON_MAX = 120;
+
+export function paymentRefundRecord(refund: Refund): PaymentRefundRecord | null {
+  const status = knownRefundStatus(refund.status);
+  if (refund.id === null || status === null || refund.amountCents === null) return null;
+  return {
+    stripe_refund_id: refund.id,
+    amount_cents: refund.amountCents,
+    status,
+    failure_reason: refund.failureReason === null
+      ? null
+      : refund.failureReason.slice(0, FAILURE_REASON_MAX),
+  };
 }
 
 export function readConnectAccount(object: Record<string, unknown>): ConnectAccount {

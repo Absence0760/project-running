@@ -350,21 +350,27 @@ Deno.test('readRefund — an expanded payment_intent resolves and a wrong-typed 
       id: 're_1',
       payment_intent: { id: 'pi_1', object: 'payment_intent' },
       status: 'failed',
+      amount: 2500,
       failure_reason: 'expired_or_canceled_card',
     }),
     {
       id: 're_1',
       paymentIntentId: 'pi_1',
       status: 'failed',
+      amountCents: 2500,
       failureReason: 'expired_or_canceled_card',
     },
   );
-  assertEquals(readRefund({ id: 1, payment_intent: 7, status: false, failure_reason: {} }), {
-    id: null,
-    paymentIntentId: null,
-    status: null,
-    failureReason: null,
-  });
+  assertEquals(
+    readRefund({ id: 1, payment_intent: 7, status: false, amount: null, failure_reason: {} }),
+    {
+      id: null,
+      paymentIntentId: null,
+      status: null,
+      amountCents: null,
+      failureReason: null,
+    },
+  );
 });
 
 Deno.test('readConnectAccount — every capability is off unless it is literally true', () => {
