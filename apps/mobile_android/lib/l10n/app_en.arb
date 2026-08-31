@@ -17667,5 +17667,22 @@
         "type": "String"
       }
     }
+  },
+  "runDetailGuidedRun": "Guided run: {title}",
+  "@runDetailGuidedRun": {
+    "description": "Run-detail chip naming the guided-run script a run was recorded under",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailGuidedRunUnavailable": "Guided run no longer in the library",
+  "@runDetailGuidedRunUnavailable": {
+    "description": "Run-detail readout when the stored guided_run_id names a workout this build no longer ships"
+  },
+  "guidedRunUseThisRun": "Use this run",
+  "@guidedRunUseThisRun": {
+    "description": "Action on the guided-run detail screen that arms the script on the recorder"
   }
 }

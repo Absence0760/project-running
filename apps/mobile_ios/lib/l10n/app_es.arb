@@ -4005,5 +4005,8 @@
   "challengesErrWindow": "El fin debe ser posterior al inicio.",
   "limitsWeightOutOfRange": "Introduce un peso entre {min} y {max} {unit}.",
   "limitsHeightOutOfRange": "Introduce una altura entre {min} y {max} cm.",
-  "limitsServingsOutOfRange": "Introduce un número de raciones entre {min} y {max}."
+  "limitsServingsOutOfRange": "Introduce un número de raciones entre {min} y {max}.",
+  "runDetailGuidedRun": "Carrera guiada: {title}",
+  "runDetailGuidedRunUnavailable": "La carrera guiada ya no está en la biblioteca",
+  "guidedRunUseThisRun": "Usar esta carrera"
 }

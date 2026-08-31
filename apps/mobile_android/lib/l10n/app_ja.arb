@@ -4005,5 +4005,8 @@
   "challengesErrWindow": "終了は開始より後にしてください。",
   "limitsWeightOutOfRange": "{min}〜{max}{unit}の範囲で体重を入力してください。",
   "limitsHeightOutOfRange": "{min}〜{max}cmの範囲で身長を入力してください。",
-  "limitsServingsOutOfRange": "{min}〜{max}の範囲で分量を入力してください。"
+  "limitsServingsOutOfRange": "{min}〜{max}の範囲で分量を入力してください。",
+  "runDetailGuidedRun": "ガイド付きラン: {title}",
+  "runDetailGuidedRunUnavailable": "このガイド付きランはライブラリにありません",
+  "guidedRunUseThisRun": "このランを使う"
 }
