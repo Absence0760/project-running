@@ -88,7 +88,7 @@ export const MIGRATIONS_DIR = join(REPO_ROOT, 'apps/backend/supabase/migrations'
  * }} Entry
  *
  * @typedef {{ read: (relPath: string) => string, sql: SqlIndex }} Ctx
- * @typedef {{ live: Map<string, { file: string, sql: string }>, statements: { file: string, sql: string }[] }} SqlIndex
+ * @typedef {{ live: Map<string, { file: string, sql: string }>, views: Map<string, { file: string, sql: string }>, statements: { file: string, sql: string }[] }} SqlIndex
  */
 
 // ── SQL: what the migration set leaves behind ───────────────────────────────
@@ -108,6 +108,8 @@ export const MIGRATIONS_DIR = join(REPO_ROOT, 'apps/backend/supabase/migrations'
 export function indexMigrations(dir = MIGRATIONS_DIR) {
 	/** @type {Map<string, { file: string, sql: string }>} */
 	const live = new Map();
+	/** @type {Map<string, { file: string, sql: string }>} */
+	const views = new Map();
 	/** @type {{ file: string, sql: string }[]} */
 	const statements = [];
 	const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
@@ -120,7 +122,22 @@ export function indexMigrations(dir = MIGRATIONS_DIR) {
 				continue;
 			}
 			const dropped = /^\s*drop\s+function\s+(?:if\s+exists\s+)?(?:public\.)?([a-z_][a-z0-9_]*)/i.exec(sql);
-			if (dropped) live.delete(dropped[1].toLowerCase());
+			if (dropped) {
+				live.delete(dropped[1].toLowerCase());
+				continue;
+			}
+			// A view is replayed the same way, and anchored at the start of the
+			// statement rather than searched for anywhere inside it: a function body
+			// that itself issues DDL would otherwise register as a definition of the
+			// view it names. The lexer has already dropped comments, so a historic
+			// definition preserved in one cannot be picked up either.
+			const viewCreated = /^\s*create\s+(?:or\s+replace\s+)?view\s+(?:public\.)?([a-z_][a-z0-9_]*)/i.exec(sql);
+			if (viewCreated) {
+				views.set(viewCreated[1].toLowerCase(), { file, sql });
+				continue;
+			}
+			const viewDropped = /^\s*drop\s+view\s+(?:if\s+exists\s+)?(?:public\.)?([a-z_][a-z0-9_]*)/i.exec(sql);
+			if (viewDropped) views.delete(viewDropped[1].toLowerCase());
 		}
 	}
 	if (live.size === 0) {
@@ -130,7 +147,7 @@ export function indexMigrations(dir = MIGRATIONS_DIR) {
 				'reads as agreement.',
 		);
 	}
-	return { live, statements };
+	return { live, views, statements };
 }
 
 /** @param {string} list @returns {string[]} */
@@ -467,6 +484,221 @@ export function parseGuidedRunLibrary(src, anchor, where) {
 		);
 	}
 	return [{ key: 'library order', where: `run ids in ${where}`, values: runs.map((r) => r.key) }, ...runs];
+}
+
+// ── Entry: the public_runs metadata denylist ───────────────────────────────
+
+// `public_runs.metadata` is a DENYLIST projection — `coalesce(r.metadata,'{}')
+// - 'k1' - 'k2' …` — so every key `runs.metadata` grows is public to anonymous
+// readers by default, and the one thing between a new key and the share page
+// is somebody remembering a line. `rls_public_runs_view_denylist_test.sql`
+// exists to make that memory unnecessary: it files a row carrying every
+// stripped key, reads it back as `anon`, and its own header instructs the next
+// author to extend the array.
+//
+// The instruction was ignored three times over. The array stood four keys
+// behind the view — `watch_workout`, `safety_escalated_at`,
+// `expected_return_at`, `guided_run_id` — and nothing could tell, because the
+// test asserts the keys it NAMES rather than the keys the view STRIPS, so a
+// shorter array passes exactly as green as a complete one. The failure the
+// test was written to catch is therefore the one shape of failure it cannot
+// see, and each of the four went unasserted from the migration that stripped
+// it until this entry was added.
+//
+// Only the denylist is compared. The projected COLUMNS are a different
+// question with its own rail (`database.types.ts` and the seed assertions),
+// and the fixture deliberately carries public-safe keys the denylist must not
+// name, so the two are not the same set.
+
+export const PUBLIC_RUNS_DENYLIST_TEST =
+	'apps/backend/supabase/tests/rls_public_runs_view_denylist_test.sql';
+
+/**
+ * The keys the metadata projection subtracts, read off ONE view definition.
+ *
+ * Anchored on the projection's two ends rather than on the file: `coalesce(…
+ * metadata …` opens it and `as metadata` closes it, so a `- 'x'` anywhere else
+ * in the view cannot join the set and a rewrite that drops either end is
+ * reported instead of silently reading a shorter list.
+ * @param {string} viewSql @param {string} where @returns {string[]}
+ */
+export function parseMetadataDenylist(viewSql, where) {
+	const projection = /coalesce\s*\(\s*(?:[a-z_][a-z0-9_]*\.)?metadata\s*,[\s\S]*?\bas\s+metadata\b/i.exec(
+		viewSql,
+	);
+	if (projection === null) {
+		throw new Error(
+			`check_shared_constants: no metadata projection in ${where}. This entry ` +
+				`reads the \`coalesce(… metadata …) - 'key' … as metadata\` expression; ` +
+				`the view kept its name and changed that shape, and a rail that reads ` +
+				`nothing agrees with every other one.`,
+		);
+	}
+	const keys = [...projection[0].matchAll(/-\s*'([^']*)'/g)].map((m) => m[1]);
+	if (keys.length === 0) {
+		throw new Error(
+			`check_shared_constants: the metadata projection in ${where} subtracts no ` +
+				`keys. An empty denylist is not a denylist — every owner-only key on ` +
+				`the row would reach anonymous readers — and an empty set compares ` +
+				`equal to whatever the test asserts.`,
+		);
+	}
+	return keys;
+}
+
+/** @param {Ctx} ctx @returns {Site[]} */
+export function publicRunsViewSites(ctx) {
+	const view = ctx.sql.views.get('public_runs');
+	if (view === undefined) {
+		throw new Error(
+			'check_shared_constants: the migration set defines no `public_runs` view. ' +
+				'The live projection is the one the LAST `create or replace view ' +
+				'public_runs` wrote, which is routinely in a migration named after ' +
+				'something else; with none found this rail carries nothing.',
+		);
+	}
+	const where = `public_runs in ${view.file}`;
+	return [{ key: 'metadata denylist', where, values: parseMetadataDenylist(view.sql, where) }];
+}
+
+/**
+ * The arguments of a call at `open` (the index of its `(`), balanced across
+ * nesting and blind to parentheses inside string literals.
+ * @param {string} sql @param {number} open @returns {string | null}
+ */
+function callArguments(sql, open) {
+	let depth = 0;
+	let quoted = false;
+	for (let i = open; i < sql.length; i++) {
+		const char = sql[i];
+		if (quoted) {
+			if (char !== "'") continue;
+			if (sql[i + 1] === "'") i++;
+			else quoted = false;
+			continue;
+		}
+		if (char === "'") quoted = true;
+		else if (char === '(') depth++;
+		else if (char === ')' && --depth === 0) return sql.slice(open + 1, i);
+	}
+	return null;
+}
+
+/** @param {string} args @returns {string[]} */
+function splitTopLevel(args) {
+	/** @type {string[]} */
+	const parts = [];
+	let depth = 0;
+	let quoted = false;
+	let start = 0;
+	for (let i = 0; i < args.length; i++) {
+		const char = args[i];
+		if (quoted) {
+			if (char !== "'") continue;
+			if (args[i + 1] === "'") i++;
+			else quoted = false;
+			continue;
+		}
+		if (char === "'") quoted = true;
+		else if (char === '(' || char === '[') depth++;
+		else if (char === ')' || char === ']') depth--;
+		else if (char === ',' && depth === 0) {
+			parts.push(args.slice(start, i));
+			start = i + 1;
+		}
+	}
+	parts.push(args.slice(start));
+	return parts;
+}
+
+/**
+ * The keys every `jsonb_build_object(…)` in the file builds — the bag the test
+ * actually files. Odd arguments are values and are ignored; a key written as
+ * anything but a bare literal is not counted, which fails loudly below rather
+ * than vouching for coverage this parser cannot see.
+ * @param {string[]} statements @returns {Set<string>}
+ */
+export function jsonbBuildObjectKeys(statements) {
+	/** @type {Set<string>} */
+	const keys = new Set();
+	for (const sql of statements) {
+		for (const call of [...sql.matchAll(/\bjsonb_build_object\s*\(/gi)]) {
+			const args = callArguments(sql, (call.index ?? 0) + call[0].length - 1);
+			if (args === null) continue;
+			splitTopLevel(args).forEach((part, index) => {
+				if (index % 2 !== 0) return;
+				const literal = /^\s*'([^']*)'\s*$/.exec(part);
+				if (literal) keys.add(literal[1]);
+			});
+		}
+	}
+	return keys;
+}
+
+/**
+ * The array the pgtap test asserts. The file goes through the Postgres lexer
+ * first so the array's own `--` group comments cannot be read as content and a
+ * commented-out array cannot be read as the live one.
+ * @param {string} src @param {string} where @returns {string[]}
+ */
+export function parsePgtapDenylist(src, where) {
+	/** @type {string | null} */
+	let body = null;
+	for (const sql of splitSqlStatements(src)) {
+		const opener = /\bdenylist\s+text\s*\[\s*\]\s*:=\s*array\s*\[/i.exec(sql);
+		if (opener === null) continue;
+		const open = opener.index + opener[0].length - 1;
+		const close = sql.indexOf(']', open);
+		if (close < 0) continue;
+		body = sql.slice(open + 1, close);
+	}
+	if (body === null) {
+		throw new Error(
+			`check_shared_constants: no \`denylist text[] := array[…]\` in ${where}. ` +
+				`That array is what this entry holds the view against; renamed or moved, ` +
+				`the rail reads nothing and agrees with every other one.`,
+		);
+	}
+	const keys = [...body.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+	if (keys.length === 0) {
+		throw new Error(
+			`check_shared_constants: the \`denylist\` array in ${where} is empty. The ` +
+				`test would then loop over nothing and pass against any view at all.`,
+		);
+	}
+	return keys;
+}
+
+/**
+ * The pgtap rail, and the one anti-vacuity check the set comparison cannot
+ * make: the test reads its fixture row back and asserts each named key is
+ * ABSENT, so a key the fixture never built is asserted against a bag that
+ * could not have carried it — green whatever the view does with it.
+ * @param {Ctx} ctx @returns {Site[]}
+ */
+export function pgtapDenylistSites(ctx) {
+	const src = ctx.read(PUBLIC_RUNS_DENYLIST_TEST);
+	const asserted = parsePgtapDenylist(src, PUBLIC_RUNS_DENYLIST_TEST);
+	const built = jsonbBuildObjectKeys(splitSqlStatements(src));
+	const unbuilt = asserted.filter((key) => !built.has(key));
+	if (unbuilt.length > 0) {
+		throw new Error(
+			`check_shared_constants: ${PUBLIC_RUNS_DENYLIST_TEST} asserts ` +
+				`${unbuilt.join(', ')} but its fixture never puts ${
+					unbuilt.length === 1 ? 'that key' : 'those keys'
+				} in the row. ` +
+				`An absent key reads back absent whatever the view does with it, so the ` +
+				`assertion passes without measuring anything. Add it to the ` +
+				`jsonb_build_object above the array.`,
+		);
+	}
+	return [
+		{
+			key: 'metadata denylist',
+			where: `denylist array in ${PUBLIC_RUNS_DENYLIST_TEST}`,
+			values: asserted,
+		},
+	];
 }
 
 // ── Bounds: a client input bound against the column the database bounds ────
@@ -1089,6 +1321,22 @@ export const REGISTRY = [
 						MOBILE_GUIDED_RUNS,
 					),
 			},
+		],
+	},
+	{
+		name: 'public_runs metadata denylist',
+		why:
+			'The view projects metadata by SUBTRACTION, so a key added to ' +
+			'runs.metadata reaches anonymous readers unless a migration strips it, ' +
+			'and the pgtap suite is what proves each one is gone. The test asserts ' +
+			'the keys it names rather than the keys the view strips, so an array ' +
+			'left behind is still green — which is how four keys went unasserted ' +
+			'from the migration that stripped each of them.',
+		match: 'all',
+		compare: 'set',
+		rails: [
+			{ label: 'sql (the live public_runs projection)', sites: publicRunsViewSites },
+			{ label: `pgtap (${PUBLIC_RUNS_DENYLIST_TEST})`, sites: pgtapDenylistSites },
 		],
 	},
 ];

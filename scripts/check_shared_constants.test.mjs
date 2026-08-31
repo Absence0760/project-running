@@ -43,6 +43,12 @@ import {
 	parseWhitespaceClass,
 	MOBILE_GUIDED_RUNS,
 	WEB_GUIDED_RUNS,
+	PUBLIC_RUNS_DENYLIST_TEST,
+	jsonbBuildObjectKeys,
+	parseMetadataDenylist,
+	parsePgtapDenylist,
+	pgtapDenylistSites,
+	publicRunsViewSites,
 } from './check_shared_constants.mjs';
 
 /** @param {Record<string, string>} files */
@@ -825,4 +831,209 @@ test('MUTATION: a workout renamed on the web alone fails as a key missing from e
 	assert.match(errors.join('\n'), /"first-timer-15" is written on 1 of 2 rails/);
 	assert.match(errors.join('\n'), /"first-timer-15-v2" is written on 1 of 2 rails/);
 	assert.match(errors.join('\n'), /"library order" disagrees/);
+});
+
+// ── The public_runs metadata denylist ──────────────────────────────────────
+
+const VIEW_HEAD = `create or replace view public_runs as
+select
+  r.id,
+  coalesce(r.metadata, '{}'::jsonb)
+`;
+const VIEW_TAIL = `    as metadata
+from runs r
+where r.is_public = true;
+`;
+
+/** @param {string[]} keys */
+function viewSql(keys) {
+	return VIEW_HEAD + keys.map((k) => `    - '${k}'\n`).join('') + VIEW_TAIL;
+}
+
+// The replay a filename cannot stand in for, and the reason this rail reads
+// the migration SET rather than the file whose name is about the view: the
+// `expected_return_at` strip really did arrive in a migration called
+// `_safety_sms_escalation`, three files after the last one named for the view.
+test('the live public_runs projection is the last one written, not the last one named for it', () => {
+	const dir = migrationsFixture({
+		'20260101_001_public_runs_view.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_safety_escalation.sql': viewSql(['strava_id', 'expected_return_at']),
+		'20260103_001_public_runs_index.sql': 'create index runs_public_idx on runs (is_public);',
+	});
+	const { views } = indexMigrations(dir);
+	assert.equal(views.get('public_runs')?.file, '20260102_001_safety_escalation.sql');
+	assert.deepEqual(parseMetadataDenylist(views.get('public_runs')?.sql ?? '', 'fixture'), [
+		'strava_id',
+		'expected_return_at',
+	]);
+});
+
+test('a dropped view stops being live', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_b.sql': 'drop view if exists public.public_runs;',
+	});
+	assert.equal(indexMigrations(dir).views.has('public_runs'), false);
+});
+
+// The same trap the GATT guard fell into (decisions § 773), one relation over.
+test('a commented-out view definition does not register as live', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_b.sql': '-- ' + viewSql(['ghost']).replace(/\n/g, '\n-- ') + '\nselect 1;',
+	});
+	assert.equal(indexMigrations(dir).views.get('public_runs')?.file, '20260101_001_a.sql');
+	assert.deepEqual(parseMetadataDenylist(indexMigrations(dir).views.get('public_runs')?.sql ?? '', 'f'), [
+		'strava_id',
+	]);
+});
+
+// Anchored at the start of the statement: a function that issues DDL of its
+// own would otherwise register as a definition of the view it names, and the
+// rail would then grade a body that never ran.
+test('a view definition inside a function body does not register as live', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_b.sql':
+			'create or replace function rebuild() returns void language plpgsql as $$ begin execute $q$ ' +
+			viewSql(['ghost']) +
+			' $q$; end; $$;',
+	});
+	assert.equal(indexMigrations(dir).views.get('public_runs')?.file, '20260101_001_a.sql');
+});
+
+test('the denylist is the subtraction chain between the coalesce and `as metadata`', () => {
+	const sql = `create or replace view public_runs as
+select
+  r.id - 'not_a_key' as offset_col,
+  coalesce(r.metadata, '{}'::jsonb)
+    - 'strava_id'
+    - 'garmin_id'
+    as metadata,
+  r.concluded_at
+from runs r;`;
+	assert.deepEqual(parseMetadataDenylist(sql, 'fixture'), ['strava_id', 'garmin_id']);
+});
+
+test('a projection whose shape changed throws rather than reading nothing', () => {
+	assert.throws(
+		() => parseMetadataDenylist("create or replace view public_runs as select r.metadata from runs r;", 'fixture'),
+		/no metadata projection in fixture/,
+	);
+});
+
+test('a projection that subtracts nothing throws — an empty denylist is not a denylist', () => {
+	assert.throws(() => parseMetadataDenylist(viewSql([]), 'fixture'), /subtracts no keys/);
+});
+
+test('a migration set with no public_runs view throws rather than reading nothing', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql': 'create or replace function f() returns int language sql as $$ select 1; $$;',
+	});
+	assert.throws(
+		() => publicRunsViewSites(/** @type {any} */ ({ sql: indexMigrations(dir) })),
+		/defines no `public_runs` view/,
+	);
+});
+
+const PGTAP_SRC = `begin;
+insert into runs (metadata) values (
+  jsonb_build_object(
+    -- Audit / import linkage
+    'strava_id', '12345',
+    'garmin_id', '67890',
+    -- Public-safe, included to confirm it survives
+    'event', 'parkrun'
+  )
+);
+do $$
+declare
+  denylist text[] := array[
+    'strava_id',
+    -- A group comment naming its source migration
+    'garmin_id'
+  ];
+begin
+  null;
+end $$;
+rollback;
+`;
+
+// The array's own `--` group comments name migrations, which carry digits and
+// underscores; reading the array as raw text would sweep them in. The lexer is
+// what stops that, and the same pass is what makes a commented-out array
+// unreadable as the live one.
+test('the pgtap array is read past its group comments', () => {
+	assert.deepEqual(parsePgtapDenylist(PGTAP_SRC, 'fixture'), ['strava_id', 'garmin_id']);
+});
+
+test('a renamed pgtap array throws rather than reading nothing', () => {
+	assert.throws(
+		() => parsePgtapDenylist(PGTAP_SRC.replace('denylist text[]', 'stripped_keys text[]'), 'fixture'),
+		/no `denylist text\[\] := array\[…\]` in fixture/,
+	);
+});
+
+test('an empty pgtap array throws — the loop would then pass against any view', () => {
+	assert.throws(
+		() => parsePgtapDenylist(PGTAP_SRC.replace(/array\[[\s\S]*?\]/, 'array[]'), 'fixture'),
+		/is empty/,
+	);
+});
+
+test('a fixture bag yields its keys, not its values', () => {
+	const keys = jsonbBuildObjectKeys([
+		"jsonb_build_object('a', 'garmin_id', 'b', jsonb_build_object('c', 1), 'd', '{\"x\": 1, \"y\": 2}'::jsonb)",
+	]);
+	assert.deepEqual([...keys].sort(), ['a', 'b', 'c', 'd']);
+});
+
+// The anti-vacuity the set comparison cannot make: the test reads its row back
+// and asserts each named key is ABSENT, so a key the fixture never built is
+// asserted against a bag that could not have carried it.
+test('a key the array asserts but the fixture never builds throws', () => {
+	const src = PGTAP_SRC.replace("    'garmin_id', '67890',\n", '');
+	assert.throws(
+		() => pgtapDenylistSites(/** @type {any} */ ({ read: () => src })),
+		/asserts garmin_id but its fixture never puts that key in the row/,
+	);
+});
+
+test('MUTATION: a key dropped from the pgtap array fails, naming the key and both homes', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'public_runs metadata denylist'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === PUBLIC_RUNS_DENYLIST_TEST
+				? real.read(rel).replace(/^\s*'guided_run_id',\n/m, '')
+				: real.read(rel),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /the live public_runs projection/);
+	assert.match(errors[0], new RegExp(PUBLIC_RUNS_DENYLIST_TEST.replace(/[.]/g, '\\.')));
+	assert.match(errors[0], /missing there: guided_run_id/);
+});
+
+test('MUTATION: a view redefined without a strip line fails, naming the key only the test has', () => {
+	const real = defaultContext();
+	const live = /** @type {{ file: string, sql: string }} */ (real.sql.views.get('public_runs'));
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'public_runs metadata denylist'));
+	const { errors } = checkEntry(entry, {
+		read: real.read,
+		sql: {
+			live: real.sql.live,
+			statements: real.sql.statements,
+			views: new Map(real.sql.views).set('public_runs', {
+				file: live.file,
+				sql: live.sql.replace(/^\s*- 'watch_workout'\n/m, ''),
+			}),
+		},
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /only there: {4}watch_workout/);
 });
