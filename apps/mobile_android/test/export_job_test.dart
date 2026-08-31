@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/export_job.dart';
 
@@ -158,5 +160,211 @@ void main() {
     expect(job.status, ExportJobStatus.queued);
     expect(job.jobId, 'exp-9');
     expect(isExportJobActive(job.status), isTrue);
+  });
+
+  group('the status vocabulary is one vocabulary', () {
+    // Both clients read the SAME two endpoints, so an unrecognised token on
+    // one and a recognised one on the other is a phone that keeps polling a
+    // job the browser has already called finished, or offers a download the
+    // browser will not. The pair is registered in both parity registries,
+    // and that registry says the two files must agree — nothing until now
+    // read them against each other.
+    const webHelper = '../web/src/lib/backup/cloud_export_helpers.ts';
+
+    String webSource() {
+      final f = File(webHelper);
+      expect(f.existsSync(), isTrue,
+          reason: '$webHelper is gone — repoint this guard rather than '
+              'letting the two halves drift unwatched');
+      return f.readAsStringSync();
+    }
+
+    List<String> literalList(String src, String marker) {
+      final at = src.indexOf(marker);
+      expect(at, isNonNegative, reason: 'could not find "$marker" in $webHelper');
+      // The marker itself contains a `[` (`readonly string[]`), so the
+      // closing bracket has to be looked for past it.
+      final open = at + marker.length;
+      final close = src.indexOf(']', open);
+      return RegExp(r"'([a-z_]+)'")
+          .allMatches(src.substring(open, close))
+          .map((m) => m.group(1)!)
+          .toList();
+    }
+
+    test('every status web knows, the phone knows, and no more', () {
+      final web = literalList(
+          webSource(), 'const KNOWN_JOB_STATUSES: readonly string[] = [');
+      expect(web, isNotEmpty, reason: 'the extractor found no statuses');
+      expect(
+        ExportJobStatus.values.map((s) => s.name).toSet(),
+        web.toSet(),
+        reason: 'a token one client resolves and the other does not is the '
+            'poll-for-ever / dead-button pair this normalisation exists to '
+            'prevent',
+      );
+    });
+
+    test('and every one of them actually PARSES on the phone', () {
+      // The enum carrying the name is not the same claim as the parser
+      // resolving the wire token: a token missing from the lookup makes a
+      // real server status arrive as `failed`, and the enum still reads
+      // complete. `ready` needs a URL to survive its own guard.
+      final web = literalList(
+          webSource(), 'const KNOWN_JOB_STATUSES: readonly string[] = [');
+      for (final token in web) {
+        final job = exportJobFromResponse(<String, Object?>{
+          'status': token,
+          if (token == 'ready') 'url': 'https://signed.example/a',
+        });
+        expect(job.status.name, token,
+            reason: '"$token" is a status the server can send and the phone '
+                'resolved it as ${job.status.name}');
+      }
+    });
+
+    test('the active set is the same two statuses on both rails', () {
+      final src = webSource();
+      final at = src.indexOf('export function isCloudExportJobActive');
+      expect(at, isNonNegative);
+      final body = src.substring(at, src.indexOf('}', at));
+      for (final s in ExportJobStatus.values) {
+        final webActive = body.contains("'${s.name}'");
+        expect(isExportJobActive(s), webActive,
+            reason: '${s.name} is ${webActive ? '' : 'not '}active on web and '
+                'the opposite on the phone');
+      }
+    });
+
+    test('the poll floor and cap are the same numbers on both rails', () {
+      final src = webSource();
+      int number(String marker) {
+        final m = RegExp('$marker = ([0-9_]+)').firstMatch(src);
+        expect(m, isNotNull, reason: 'could not read $marker from $webHelper');
+        return int.parse(m!.group(1)!.replaceAll('_', ''));
+      }
+
+      expect(kExportPollMinMs, number('CLOUD_EXPORT_POLL_MIN_MS'));
+      expect(kExportPollMaxMs, number('CLOUD_EXPORT_POLL_MAX_MS'));
+    });
+  });
+
+  group('exportJobFromResponse — the shapes a server can actually send', () {
+    test('a null body claims nothing', () {
+      final job = exportJobFromResponse(null);
+      expect(job.status, ExportJobStatus.failed);
+      expect(job.errorCode, 'unreadable_response');
+    });
+
+    test('a list, a string and a number are all unreadable', () {
+      for (final raw in <Object>[<int>[1], 'ready', 7]) {
+        expect(exportJobFromResponse(raw).status, ExportJobStatus.failed,
+            reason: '$raw must not resolve to a usable job');
+      }
+    });
+
+    test('a non-string status is unknown, not silently absent', () {
+      final job = exportJobFromResponse(<String, Object?>{'status': 3});
+      expect(job.status, ExportJobStatus.failed);
+      expect(job.errorCode, 'unknown_status',
+          reason: 'a client that guessed here would either poll for ever or '
+              'offer a download it has no URL for');
+    });
+
+    test('an empty-string URL on a ready job is no URL', () {
+      final job = exportJobFromResponse(<String, Object?>{
+        'status': 'ready',
+        'url': '',
+      });
+      expect(job.status, ExportJobStatus.failed);
+      expect(job.errorCode, 'no_url',
+          reason: 'an empty string renders as a dead download button');
+    });
+
+    test('a status token is matched exactly, not loosely', () {
+      for (final token in const ['READY', ' ready', 'ready ', 'read']) {
+        final job = exportJobFromResponse(<String, Object?>{'status': token});
+        expect(job.status, ExportJobStatus.failed,
+            reason: '"$token" is not a status this build knows');
+        expect(job.errorCode, token);
+      }
+    });
+
+    test('a non-finite count is dropped rather than rendered', () {
+      final job = exportJobFromResponse(<String, Object?>{
+        'status': 'ready',
+        'url': 'https://x/y',
+        'count': double.nan,
+        'total': double.infinity,
+      });
+      expect(job.count, isNull);
+      expect(job.total, isNull);
+    });
+
+    test('a complete:true job discloses no shortfall even with counts', () {
+      final job = exportJobFromResponse(<String, Object?>{
+        'status': 'ready',
+        'url': 'https://x/y',
+        'count': 10,
+        'total': 99,
+        'complete': true,
+      });
+      expect(exportJobShortfall(job), isNull,
+          reason: 'only an explicit complete:false claims a shortfall');
+    });
+
+    test('a non-boolean complete is not a shortfall claim', () {
+      final job = exportJobFromResponse(<String, Object?>{
+        'status': 'ready',
+        'url': 'https://x/y',
+        'complete': 'false',
+      });
+      expect(job.complete, isNull);
+      expect(exportJobShortfall(job), isNull,
+          reason: 'warning on every export because a field arrived as the '
+              'wrong type is its own dishonesty');
+    });
+  });
+
+  group('exportPollDelayMs — a ladder, never a spike', () {
+    test('it never dips below the floor or past the cap', () {
+      for (var attempt = -5; attempt < 200; attempt++) {
+        final ms = exportPollDelayMs(attempt);
+        expect(ms, greaterThanOrEqualTo(kExportPollMinMs),
+            reason: 'attempt $attempt asked for $ms ms');
+        expect(ms, lessThanOrEqualTo(kExportPollMaxMs),
+            reason: 'attempt $attempt asked for $ms ms');
+      }
+    });
+
+    test('it never goes backwards as the attempt grows', () {
+      var previous = 0;
+      for (var attempt = 0; attempt < 100; attempt++) {
+        final ms = exportPollDelayMs(attempt);
+        expect(ms, greaterThanOrEqualTo(previous),
+            reason: 'the backoff dipped at attempt $attempt');
+        previous = ms;
+      }
+    });
+
+    test('a caller that never stops incrementing cannot overflow it', () {
+      expect(exportPollDelayMs(1 << 20), kExportPollMaxMs);
+      expect(exportPollDelayMs(0x7fffffff), kExportPollMaxMs);
+    });
+  });
+
+  group('the endpoint URLs', () {
+    test('a base with many trailing slashes still joins once', () {
+      expect(buildExportJobsUrl('https://hub.example///'),
+          'https://hub.example/v1/export/jobs');
+      expect(buildExportJobStatusUrl('https://hub.example///'),
+          'https://hub.example/v1/export/jobs/latest');
+    });
+
+    test('the status endpoint is the latest one, not one keyed by id', () {
+      // The resume path is the server, not a file on the device: a job id
+      // written to disk is a second source of truth a reinstall loses.
+      expect(buildExportJobStatusUrl('https://hub.example'), endsWith('/latest'));
+    });
   });
 }
