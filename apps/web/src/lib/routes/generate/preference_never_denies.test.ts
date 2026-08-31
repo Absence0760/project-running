@@ -157,6 +157,48 @@ test('no preference turns a servable route into a refusal, on any engine shape',
 	}
 });
 
+test('on a sidecar-only deploy a preference still cannot deny a route', async () => {
+	// This is the configuration the never-deny retry EXISTS for. With
+	// round_trip configured, a sidecar that refuses the preference field falls
+	// through to the fallback engine and the contract holds for a different
+	// reason — so a test that only ever runs the two-engine chain scores the
+	// retry as unnecessary. Here there is nothing underneath: the sidecar's
+	// 400 is either retried clean or it is a 502 that pages the on-call.
+	const refusesPreference = () => {
+		const bodies: string[] = [];
+		const fetcher: Fetcher = async (_u, init) => {
+			const body = String(init?.body ?? '');
+			bodies.push(body);
+			if (body.includes('preference')) {
+				return new Response('json: unknown field "preference"', { status: 400 });
+			}
+			return gcFound(5050);
+		};
+		return { fetcher, bodies };
+	};
+
+	for (const pref of ROUTE_PREFERENCES) {
+		const { fetcher, bodies } = refusesPreference();
+		const res = await generate(pref, fetcher, { graphCycleUrl: GC });
+		assert.equal(
+			res.status,
+			200,
+			`${pref}: a version-skewed sidecar denied a buildable route on a deploy with no fallback`,
+		);
+		assert.equal(bodies.length, 2, `${pref}: the refusal must be retried once, unweighted`);
+		assert.ok(!bodies[1].includes('preference'), `${pref}: the retry re-sent the preference`);
+		// And the loop the plain retry found must not be advertised as preferred.
+		if (res.status === 200) assert.equal(res.body.preferenceApplied, undefined, pref);
+	}
+
+	// The retry is scoped to a REFUSAL, not to an outage: a 5xx or a transport
+	// failure is still a 502, because retrying it would only ask a dead
+	// sidecar the same question twice.
+	const down: Fetcher = async () => new Response('boom', { status: 503 });
+	const outage = await generate('quiet', down, { graphCycleUrl: GC });
+	assert.equal(outage.status, 502);
+});
+
 test('a preference never changes the served geometry into something shorter or empty', async () => {
 	// The never-deny retry is only honest if what it serves is a real route.
 	// A 200 carrying two points and no distance would satisfy the status
