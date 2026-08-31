@@ -159,8 +159,7 @@ export const PAIRS = [
 	},
 	{
 		tableColumn: 'coach_messages.role',
-		clients: [],
-		note: "the chat transport spells `'user' | 'assistant'` inline in each provider signature; no named vocabulary.",
+		clients: [{ file: 'apps/web/src/lib/coach/types.ts', decl: 'CoachMessageRole', shape: 'union' }],
 	},
 	{
 		tableColumn: 'data_export_jobs.format',
@@ -251,8 +250,7 @@ export const PAIRS = [
 	},
 	{
 		tableColumn: 'event_results.finisher_status',
-		clients: [],
-		note: 'spelled as an inline union on the result row and the CSV parser; no named type to read.',
+		clients: [{ file: TS_TYPES, decl: 'FinisherStatus', shape: 'union' }],
 	},
 	{
 		tableColumn: 'events.category',
@@ -506,8 +504,7 @@ export const PAIRS = [
 	},
 	{
 		tableColumn: 'race_sessions.status',
-		clients: [],
-		note: 'spelled as an inline union on the race-session row type; no named vocabulary on either client.',
+		clients: [{ file: TS_TYPES, decl: 'RaceSessionStatus', shape: 'union' }],
 	},
 	{
 		tableColumn: 'recipes.meal_slot',
@@ -535,9 +532,15 @@ export const PAIRS = [
 		],
 	},
 	{
+		// `pending` is the insert default every report starts at, and the
+		// moderation queue only ever writes a RESOLUTION — so the vocabulary is
+		// named for the half it can write rather than widened to a value the
+		// resolve RPC would reject. The exemption is staleness-checked, so a
+		// FOURTH status still fails here.
 		tableColumn: 'reports.status',
-		clients: [],
-		note: 'the moderation queue names only the two RESOLVED statuses inline; `pending` is the default the reader never writes.',
+		clients: [
+			{ file: DATA_TS, decl: 'ReportResolution', shape: 'union', allowMissing: ['pending'] },
+		],
 	},
 	{
 		tableColumn: 'reports.target_kind',

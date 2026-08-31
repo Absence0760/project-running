@@ -409,6 +409,31 @@ test('the committed tree agrees', () => {
 	assert.deepEqual(errors, []);
 });
 
+// § 817: four columns whose vocabulary was spelled anonymously inline —
+// `'finished' | 'dnf' | 'dns'` five times, `'user' | 'assistant'` six — until
+// each was named once. A rail that merely EXISTS proves nothing about what it
+// catches, so widen each column's real CHECK by a value no client carries and
+// pin that the rail is what fails.
+test('the newly-named inline vocabularies catch a widened CHECK', () => {
+	const live = loadLiveColumns();
+	for (const column of [
+		'event_results.finisher_status',
+		'race_sessions.status',
+		'reports.status',
+		'coach_messages.role',
+	]) {
+		const checks = loadAllMigrationChecks();
+		const current = checks.get(column);
+		assert.ok(current, `${column}: no set-shaped CHECK in the committed tree`);
+		checks.set(column, new Set([...current, 'a_value_no_client_carries']));
+		const { errors } = audit(checks, readRepo, PAIRS, live);
+		assert.ok(
+			errors.some((e) => e.startsWith(`${column} drift`)),
+			`${column}: widening the CHECK failed no rail`,
+		);
+	}
+});
+
 test('the exported TYPES_FILE still points at the web overlay unions', () => {
 	assert.ok(parseTsUnion(readFileSync(TYPES_FILE, 'utf-8'), 'RunSource'));
 });

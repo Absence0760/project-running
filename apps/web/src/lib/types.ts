@@ -287,6 +287,15 @@ export type RefundPolicy = 'full_until_start' | 'full_until_24h' | 'no_refund';
 // event_pricing.modality — in_person only in P1; 'virtual' is a digital good
 // that re-opens the app-store IAP rule (reserved for P4).
 export type EventModality = 'in_person';
+// event_results.finisher_status — how a result row ended. Enforced by the
+// event_results CHECK (migration 20260424_001); the finisher-only rank window
+// (20261222_001) partitions on `= 'finished'`, so a new value lands OUTSIDE
+// the ranked set by default. Keep in lockstep (check_constraint_unions.mjs).
+export type FinisherStatus = 'finished' | 'dnf' | 'dns';
+// race_sessions.status — the club-event race-mode lifecycle. Enforced by the
+// race_sessions CHECK (migration 20260425_001) — keep this union in lockstep
+// (check_constraint_unions.mjs PAIRS).
+export type RaceSessionStatus = 'armed' | 'running' | 'finished' | 'cancelled';
 // Charity fundraising (fundraising.md, migration 20270213_001). Two
 // narrow-union ↔ CHECK pairs; the Dart side treats both as raw String. Keep
 // each in lockstep with the migration (check_constraint_unions.mjs PAIRS).

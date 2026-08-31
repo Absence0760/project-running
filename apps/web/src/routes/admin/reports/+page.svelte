@@ -10,6 +10,7 @@
 		type PendingReportTarget,
 		type TargetReport,
 		type ReportTargetKind,
+		type ReportResolution,
 	} from '$lib/core/data';
 	import { formatRelativeTime } from '$lib/format/time';
 	import Modal from '$lib/components/Modal.svelte';
@@ -27,7 +28,7 @@
 	let resolution = $state('');
 	let resolving = $state(false);
 	let unhiding = $state(false);
-	let confirm = $state<{ status: 'reviewed' | 'dismissed' } | null>(null);
+	let confirm = $state<{ status: ReportResolution } | null>(null);
 	let confirmUnhide = $state(false);
 
 	function targetHref(kind: ReportTargetKind, id: string): string {
@@ -75,7 +76,7 @@
 		detail = [];
 	}
 
-	async function doResolve(status: 'reviewed' | 'dismissed') {
+	async function doResolve(status: ReportResolution) {
 		if (!selected || resolving) return;
 		resolving = true;
 		const target = selected;
