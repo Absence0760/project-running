@@ -79,6 +79,21 @@ export function buildAccountLinkParams(
 /// allows any path under it, which is what return_url needs
 /// (`https://app.example.com/settings/payouts?...`). Returns true only
 /// when the URL parses and its origin is in the allowlist.
+/// A URL with no origin of its own — a custom scheme, `data:`, `blob:`,
+/// `javascript:` — serialises its opaque origin as the literal string `null`,
+/// and every such URL serialises to the SAME string. Comparing the
+/// serialisations therefore makes any one opaque-origin entry in the allowlist
+/// admit every opaque-origin URL there is, including `javascript:`. The
+/// sibling `STRAVA_ALLOWED_REDIRECTS` really does carry a custom scheme
+/// (`threkir://strava-callback`), and this gate's own comment points an
+/// operator at that convention, so the configuration that opens it is one an
+/// operator would reach for. `return_url` is caller-supplied and this is the
+/// only thing standing between it and Stripe's hosted onboarding page, so a
+/// candidate carrying no origin is refused before the allowlist is consulted —
+/// which also makes an opaque ENTRY inert, since no origin an allowed URL can
+/// have is the string `null`.
+const OPAQUE_ORIGIN = 'null';
+
 export function validateReturnUrl(url: string, allowlist: readonly string[]): boolean {
   if (allowlist.length === 0) return false;
   let origin: string;
@@ -87,6 +102,7 @@ export function validateReturnUrl(url: string, allowlist: readonly string[]): bo
   } catch {
     return false;
   }
+  if (origin === OPAQUE_ORIGIN) return false;
   for (const entry of allowlist) {
     let allowedOrigin: string;
     try {
