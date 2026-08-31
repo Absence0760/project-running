@@ -38,7 +38,7 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../live_broadcaster.dart';
 import '../live_hub_client.dart';
-import '../main.dart' show pendingStartWorkout;
+import '../main.dart' show pendingArmGuidedRun, pendingStartWorkout;
 import '../live_cutoff_eta.dart';
 import '../preferences.dart';
 import '../privacy.dart';
@@ -706,6 +706,7 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     widget.social.addListener(_onSocialChange);
     widget.training.addListener(_onTrainingChange);
     pendingStartWorkout.addListener(_onPendingStartWorkout);
+    pendingArmGuidedRun.addListener(_onPendingArmGuidedRun);
     _activityType =
         ActivityType.fromName(widget.preferences.defaultActivityType);
     _selectedRoute = widget.initialRoute;
@@ -721,6 +722,7 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     // post-frame to consume whatever was queued.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onPendingStartWorkout();
+      _onPendingArmGuidedRun();
     });
     // A process-killed run was recovered as resumable at cold start. Prompt
     // once, after first frame (so `_l10n` + a Navigator context exist), to
@@ -798,6 +800,33 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     }
     pendingStartWorkout.value = null;
     _startStructuredWorkout(wo);
+  }
+
+  /// A guided-run surface elsewhere in the app armed a script for this
+  /// recorder. Resolve the parked id against the library for THIS screen's
+  /// locale and arm it down the same path the idle picker uses, so the watch
+  /// push, the cue cursor and the metadata stamp cannot diverge between the
+  /// two entry points.
+  void _onPendingArmGuidedRun() {
+    final id = pendingArmGuidedRun.value;
+    if (id == null) return;
+    if (!mounted) return;
+    // Spent on arrival even when it can't be honoured. Holding it would make
+    // a second tap on the SAME run a no-op notifier write (the value never
+    // changes, so no listener fires), and arming mid-recording rewinds the
+    // cue cursor, replaying every mark the runner has already passed in one
+    // burst on the next tick.
+    pendingArmGuidedRun.value = null;
+    if (_state != _ScreenState.idle) {
+      debugPrint('pendingArmGuidedRun dropped: state=$_state');
+      return;
+    }
+    final guided = findGuidedRun(_l10n, id);
+    if (guided == null) {
+      debugPrint('pendingArmGuidedRun dropped: unknown id=$id');
+      return;
+    }
+    _armGuidedRun(guided);
   }
 
   /// Build a [WorkoutRunner] from the incoming planned workout — its
@@ -3597,6 +3626,7 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     runRecordingActive.value = false;
     WidgetsBinding.instance.removeObserver(this);
     pendingStartWorkout.removeListener(_onPendingStartWorkout);
+    pendingArmGuidedRun.removeListener(_onPendingArmGuidedRun);
     widget.preferences.removeListener(_onPrefsChange);
     widget.runStore.removeListener(_onPrefsChange);
     widget.social.removeListener(_onSocialChange);

@@ -4,13 +4,16 @@ import 'package:ui_kit/ui_kit.dart' show StatusPill, TextLane;
 import '../auth_error.dart';
 import '../audio_cues.dart';
 import '../guided_runs.dart';
+import '../main.dart' show pendingArmGuidedRun;
 import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
 /// Browse the guided-runs library and preview each script.
 ///
-/// Preview only. A run is armed for RECORDING from the Run tab's own
-/// guided-run picker, and the cues then fire from the L4 block in
+/// Preview only. A run is armed for RECORDING from the Run tab — either from
+/// its own picker or by the detail screen's "Use this run", which parks the
+/// library id on `pendingArmGuidedRun` for the recorder to drain — and the
+/// cues then fire from the L4 block in
 /// `run_screen.dart#_onSnapshot` through `audio_cues.dart#announceGuidedCue`
 /// — the queueing sibling of the interrupting [speakGuidedCue] this screen's
 /// per-cue preview button uses.
@@ -118,6 +121,14 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
     return '$m:${s.toString().padLeft(2, '0')}';
   }
 
+  /// Arm this script on the recorder and get out of the way: the Run tab is
+  /// several pops down, so the shell has to come back to the front before
+  /// the tab switch HomeScreen makes is visible.
+  void _useThisRun() {
+    pendingArmGuidedRun.value = widget.run.id;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
   Future<void> _previewCue(String text) async {
     try {
       await _audioCues.speakGuidedCue(text);
@@ -144,6 +155,15 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
           const SizedBox(height: 12),
           Text(widget.run.description,
               style: theme.textTheme.bodyLarge?.copyWith(height: 1.4)),
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: _useThisRun,
+            icon: const Icon(Icons.headset_mic_outlined),
+            label: Text(l10n.guidedRunUseThisRun),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
           const SizedBox(height: 24),
           Text(
             l10n.guidedRunFullScript,

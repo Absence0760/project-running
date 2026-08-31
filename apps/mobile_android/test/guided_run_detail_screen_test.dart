@@ -7,6 +7,7 @@ import '../lib/audio_cues.dart';
 import '../lib/guided_runs.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/l10n/gen/app_localizations_en.dart';
+import '../lib/main.dart' show pendingArmGuidedRun;
 import '../lib/screens/guided_runs_screen.dart';
 
 final AppLocalizations _l10n = AppLocalizationsEn();
@@ -141,6 +142,44 @@ void main() {
       _app(GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues())),
     );
     expect(find.byIcon(Icons.volume_up), findsNWidgets(3));
+  });
+
+  group('GuidedRunDetailScreen — Use this run', () {
+    tearDown(() => pendingArmGuidedRun.value = null);
+
+    testWidgets('parks the library id and clears the pushed screens',
+        (tester) async {
+      final run = guidedRunLibrary(_l10n).first;
+      await tester.pumpWidget(_app(Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => GuidedRunDetailScreen(
+                    run: run,
+                    audioCues: FakeAudioCues(),
+                  ),
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      )));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GuidedRunDetailScreen), findsOneWidget);
+
+      await tester.tap(find.text('Use this run'));
+      await tester.pumpAndSettle();
+
+      expect(pendingArmGuidedRun.value, run.id,
+          reason: 'the recorder is handed the library id, never a title');
+      expect(find.byType(GuidedRunDetailScreen), findsNothing,
+          reason: 'the Run tab lives under the shell, so the pushed screens '
+              'have to come off the stack for the switch to be visible');
+    });
   });
 
   group('GuidedRunDetailScreen — the cue timestamp lane', () {

@@ -18,6 +18,7 @@ import '../lib/guided_runs.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
+import '../lib/main.dart' show pendingArmGuidedRun;
 import '../lib/preferences.dart';
 import '../lib/race_controller.dart';
 import '../lib/screens/run_screen.dart';
@@ -247,6 +248,7 @@ void main() {
     mockedMethodChannels.clear();
     mockedEventChannels.clear();
     await geolocator.dispose();
+    pendingArmGuidedRun.value = null;
     if (runsDir.existsSync()) runsDir.deleteSync(recursive: true);
   });
 
@@ -362,6 +364,64 @@ void main() {
       }
       await tester.tap(find.text('No guided run'));
       await tester.pumpAndSettle();
+    });
+  });
+
+  group('RunScreen — the guided-run handoff', () {
+    testWidgets('an id parked before the screen exists arms it', (tester) async {
+      // The Run tab is built lazily, so a detail screen deeper in the stack
+      // routinely parks the id before this State has ever existed.
+      pendingArmGuidedRun.value = 'easy-30';
+      await pumpRunScreen(tester);
+
+      expect(find.text(easyTitle), findsOneWidget);
+      expect(pendingArmGuidedRun.value, isNull,
+          reason: 'the handoff is spent on arrival');
+    });
+
+    testWidgets('an id parked while the screen is up arms it', (tester) async {
+      await pumpRunScreen(tester);
+      expect(find.text('Guided run'), findsOneWidget);
+
+      pendingArmGuidedRun.value = 'first-timer-15';
+      await tester.pump();
+
+      expect(find.text(firstTimerTitle), findsOneWidget);
+      expect(pendingArmGuidedRun.value, isNull);
+    });
+
+    testWidgets('a second visit to the Run tab does not re-arm', (tester) async {
+      pendingArmGuidedRun.value = 'easy-30';
+      await pumpRunScreen(tester);
+      expect(find.text(easyTitle), findsOneWidget);
+
+      // Tear the screen down and come back. An id left parked would arm the
+      // script again on a visit the runner never asked for it on.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await pumpRunScreen(tester);
+
+      expect(find.text(easyTitle), findsNothing);
+      expect(find.text('Guided run'), findsOneWidget);
+    });
+
+    testWidgets('the handoff arms down the same path the picker uses',
+        (tester) async {
+      // The wrist push is what proves it: a second arming path that skipped
+      // _armGuidedRun would leave the watch on whatever it was last told.
+      pendingArmGuidedRun.value = 'easy-30';
+      final s = await pumpRunScreen(tester, backendUrl: _localBackend);
+      await pumpUntil(tester, () => s.watch.settingsWrites.isNotEmpty,
+          describe: 'the guided-run SET1 frame to reach the watch');
+      expect(s.watch.lastGuidedRunId, 'easy-30');
+    });
+
+    testWidgets('an id no build ships is dropped, not armed', (tester) async {
+      pendingArmGuidedRun.value = 'easy-30-remix';
+      await pumpRunScreen(tester);
+
+      expect(find.text('Guided run'), findsOneWidget);
+      expect(pendingArmGuidedRun.value, isNull);
     });
   });
 
