@@ -155,12 +155,17 @@ class _RejectingSyncApi extends ApiClient {
 /// Real file I/O driven from mount has no completion hook to await, so poll
 /// the observable end-state rather than sleeping a fixed duration (same
 /// pattern as nutrition_screen_test).
+///
+/// [describe] is required for the reason § 723 gives: a deadline that expires
+/// has to name the condition that never held, and one generic string shared
+/// across every call site in a file has given that away.
 Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() done, {
+  required String describe,
   Duration timeout = const Duration(seconds: 10),
 }) =>
-    pumpUntil(tester, done, describe: 'the gym screen to reach the expected state', timeout: timeout);
+    pumpUntil(tester, done, describe: describe, timeout: timeout);
 
 /// Sentinel for "leave the draft marker at its well-formed shape" — null is a
 /// value a caller wants to seed, so it cannot double as the default.
@@ -594,7 +599,8 @@ void main() {
           home: GymScreen(api: _RejectingSyncApi(), store: store),
         ));
         await _pumpUntil(
-            tester, () => tester.any(find.text("1 change hasn't synced")));
+            tester, () => tester.any(find.text("1 change hasn't synced")),
+            describe: 'the rejected sync to surface the unsynced-count banner');
         expect(find.text('Retry'), findsOneWidget);
         expect(store.hasPending, isTrue);
         // Let the in-flight refresh drain before tearing the temp dir down.
@@ -721,7 +727,8 @@ void main() {
       await tester.tap(find.text('Finish'));
       // The save banner is the last thing _finishAndSave does, so waiting for
       // it proves the store write it awaited first has landed.
-      await _pumpUntil(tester, () => tester.any(find.text('Workout saved')));
+      await _pumpUntil(tester, () => tester.any(find.text('Workout saved')),
+          describe: 'the saved banner _finishAndSave shows after its write');
 
       final w = s.store.workouts.single;
       expect(w.sets.length, 2,
@@ -746,7 +753,8 @@ void main() {
 
       await tester.tap(find.widgetWithText(TextButton, 'Save as is'));
       await _pumpUntil(
-          tester, () => !tester.any(find.text('Workout in progress')));
+          tester, () => !tester.any(find.text('Workout in progress')),
+          describe: 'the in-progress card to clear after "Save as is"');
 
       final w = s.store.workouts.single;
       expect(w.sets.length, 1);
@@ -781,7 +789,8 @@ void main() {
       await tester.tap(find.descendant(
           of: find.byType(AlertDialog), matching: find.text('Discard')));
       await _pumpUntil(
-          tester, () => !tester.any(find.text('Workout in progress')));
+          tester, () => !tester.any(find.text('Workout in progress')),
+          describe: 'the in-progress card to clear after the discard');
 
       expect(s.store.workouts, isEmpty);
     });
