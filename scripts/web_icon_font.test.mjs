@@ -31,6 +31,7 @@ import {
 	VOCABULARY_FILE,
 	WEB_SRC,
 	collectSources,
+	TEST_SOURCE,
 	parseVocabulary,
 	pinnedAxisConflicts,
 	selectIcons,
@@ -257,4 +258,28 @@ test('the committed subset clears the per-asset ceiling with no exemption', () =
 		[],
 		'an exemption nothing needs is a hole nobody is watching (decisions § 780)',
 	);
+});
+
+test('a ligature spelled inside a test module is not a render site', () => {
+	// The reader's last pass takes any quoted bare token in the vocabulary, and
+	// the vocabulary is full of ordinary English. A fixture quoting one is not
+	// an icon: nothing under a *.test.ts name reaches a bundle.
+	const walked = collectSources(WEB_SRC).map((s) => s.path);
+	assert.equal(
+		walked.filter((p) => TEST_SOURCE.test(p)).length,
+		0,
+		'collectSources walked a test module',
+	);
+
+	const shipped = walked.filter((p) => /\.(ts|svelte)$/.test(p));
+	assert.ok(shipped.length > 100, 'the walk still reads the shipped sources');
+});
+
+test('the exclusion is what keeps a quoted vocabulary word out of the subset', () => {
+	// Positive control for the rule above: feed the reader the shape a test
+	// fixture has, and it does select the word. The exclusion is load-bearing,
+	// not a tidy-up -- 24 glyphs entered the subset this way.
+	const fixture = [{ path: 'apps/web/src/lib/x.test.ts', text: '<div class="stack">' }];
+	assert.deepEqual(selectIcons(fixture, vocabulary).icons, ['stack']);
+	assert.ok(vocabulary.has('padding') && vocabulary.has('privacy'));
 });

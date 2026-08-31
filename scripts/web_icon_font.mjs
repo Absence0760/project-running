@@ -63,6 +63,16 @@ export const UPSTREAM_FONT = join(UPSTREAM_PACKAGE, 'material-symbols-outlined.w
 /// the mdsvex `/learn` guides.
 export const SOURCE_EXTENSIONS = new Set(['.svelte', '.ts', '.js', '.css', '.md', '.svx', '.html']);
 
+/// A test module. Nothing under this name reaches a bundle, so a ligature
+/// spelled inside one renders nowhere and must not pull a glyph into the
+/// shipped face. The exclusion is not cosmetic: the reader's last pass takes
+/// any quoted bare token that happens to be in the 4275-word vocabulary, and
+/// the vocabulary is full of ordinary English -- `stack`, `padding`, `privacy`,
+/// `javascript`. 24 of the 348 glyphs the walk selected were in the subset for
+/// that reason alone, and a fixture that merely quotes such a word failed the
+/// coverage gate on a font that was in fact correct.
+export const TEST_SOURCE = /\.(test|spec)\.(ts|js|mjs)$/;
+
 /// The axes pinned out of the variable font, and the value each is pinned at.
 ///
 /// Measured on the 347-glyph subset: all four axes 222 KB, drop GRAD 136 KB,
@@ -138,6 +148,7 @@ export function collectSources(root) {
 				continue;
 			}
 			if (!SOURCE_EXTENSIONS.has(extname(entry.name))) continue;
+			if (TEST_SOURCE.test(entry.name)) continue;
 			out.push({
 				path: abs.slice(REPO_ROOT.length + 1).split(sep).join('/'),
 				text: readFileSync(abs, 'utf8'),
