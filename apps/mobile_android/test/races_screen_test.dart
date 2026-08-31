@@ -295,10 +295,13 @@ void main() {
   });
 
   testWidgets(
-      'a configured ultrasignup listing imports against the athlete id it carries',
+      'a configured ultrasignup listing will not import on the listing id alone',
       (tester) async {
-    // UltraSignup scopes on the runner's athlete id rather than a bib, and an
-    // UltraSignup listing already carries it — so the pull needs no typing.
+    // The listing carries a `provider_race_id`, and the sheet used to fall back
+    // to it as the athlete account. That column holds a RACE id — by its name
+    // and by every other provider's use of it — so the fallback would pull a
+    // race's finishers and stamp this runner's id onto one of them. Both the
+    // sheet and `ultraSignUpScopeGate` now refuse until an athlete id is typed.
     final service = _FakeRaceService(
       results: [
         _listing('us2', 'Bear 100',
@@ -318,20 +321,14 @@ void main() {
     );
     await pumpUntil(tester, () => importButton.evaluate().isNotEmpty,
         describe: 'the UltraSignup import action to appear');
-    expect(tester.widget<FilledButton>(importButton).onPressed, isNotNull);
-
-    await tester.tap(importButton);
-    await tester.pumpAndSettle();
-
-    expect(service.lastImportProvider, 'ultrasignup');
-    expect(service.lastImportAthleteId, 'athlete-42');
-    expect(service.lastImportBib, isNull,
-        reason: 'the UltraSignup leg never filters on a bib');
+    expect(tester.widget<FilledButton>(importButton).onPressed, isNull,
+        reason: 'an unscoped UltraSignup pull must not be submittable');
+    expect(service.lastImportProvider, isNull);
 
     await tester.pump(const Duration(seconds: 3));
   });
 
-  testWidgets('a typed UltraSignup athlete id wins over the listing\'s',
+  testWidgets('a typed UltraSignup athlete id scopes the pull',
       (tester) async {
     final service = _FakeRaceService(
       results: [

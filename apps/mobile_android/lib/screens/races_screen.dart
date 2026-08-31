@@ -587,14 +587,15 @@ class _RaceImportFormState extends State<_RaceImportForm> {
   bool get _canPaste =>
       !_busy && (_chip.text.trim().isNotEmpty || _gun.text.trim().isNotEmpty);
 
-  /// The value that narrows the pull to this runner. A bib-scoped leg refuses
-  /// without one client-side, mirroring the Edge Function's own gate (issue
-  /// #360); an athlete-scoped leg falls back to the id the listing carries, so
-  /// there the field is a fallback rather than a gate.
+  /// The value that narrows the pull to this runner. Every leg refuses without
+  /// one client-side, mirroring the Edge Function's own pre-fetch gate (issue
+  /// #360). The athlete-scoped leg deliberately does NOT fall back to the id
+  /// the listing carries: `provider_race_id` holds a RACE id, by its name and
+  /// by every other provider's use of it, so reading it as an athlete account
+  /// would pull a race's finishers and stamp this runner's id onto one of them.
   String? get _scopeValue => switch (_provider?.scope) {
         RaceImportScope.bib => _blank(_bib.text),
-        RaceImportScope.athleteId =>
-          _blank(_athleteId.text) ?? _blank(widget.race.providerRaceId ?? ''),
+        RaceImportScope.athleteId => _blank(_athleteId.text),
         null => null,
       };
 
