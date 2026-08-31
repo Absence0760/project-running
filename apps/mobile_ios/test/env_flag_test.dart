@@ -10,9 +10,11 @@
 
 import 'dart:io';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/env_flag.dart';
+import '../lib/nearby_flag.dart';
 import 'source_scan.dart';
 
 const _libRoot = 'lib';
@@ -207,6 +209,120 @@ void main() {
               'not read .env.development, so these are unreachable in '
               'production. Add a String.fromEnvironment const and the matching '
               'entry to the loadFromString list.');
+    });
+  });
+
+  group('the bridge wires each define to its own key', () {
+    // `bridgedKeys()` above intersects the set of names READ with the set of
+    // names MERGED, which catches a key that is only half-bridged. It cannot
+    // see a key wired to the WRONG variable: `'WEIGH_IN_GATE=$tileUrlTemplateDef'`
+    // leaves both sets containing WEIGH_IN_GATE while the value a release
+    // build actually receives is somebody else's. The gates are exactly the
+    // flags nobody exercises before shipping, so nothing else would notice.
+    late Map<String, String> consts;
+    late Map<String, String> merges;
+
+    setUpAll(() {
+      final main = File('lib/main.dart').readAsStringSync();
+      consts = <String, String>{
+        for (final m in RegExp(
+                "const\\s+(\\w+)\\s*=\\s*\\n?\\s*String\\.fromEnvironment\\('([A-Z0-9_]+)'\\)")
+            .allMatches(main))
+          m.group(1)!: m.group(2)!,
+      };
+      merges = <String, String>{
+        for (final m in RegExp(r"'([A-Z0-9_]+)=\$(\w+)'").allMatches(main))
+          m.group(1)!: m.group(2)!,
+      };
+    });
+
+    test('the extractors still see the bridge they are reading', () {
+      expect(consts.length, greaterThanOrEqualTo(15),
+          reason: 'only ${consts.length} String.fromEnvironment consts found '
+              'in main.dart — the extractor broke and every check below is '
+              'vacuous');
+      expect(merges.length, greaterThanOrEqualTo(15),
+          reason: 'only ${merges.length} dotenv merge entries found');
+    });
+
+    test('every merged key comes from the define of the same name', () {
+      final crossed = <String>[];
+      for (final entry in merges.entries) {
+        final source = consts[entry.value];
+        if (source == null) {
+          crossed.add('${entry.key} is merged from ${entry.value}, which is '
+              'not a String.fromEnvironment const');
+        } else if (source != entry.key) {
+          crossed.add('${entry.key} is merged from ${entry.value}, which '
+              'reads $source');
+        }
+      }
+      expect(crossed, isEmpty,
+          reason: 'a define wired to the wrong key hands a release build '
+              'somebody else\'s value while both halves of the reachability '
+              'scan still see the name:\n${crossed.join('\n')}');
+    });
+
+    test('every declared define is actually merged', () {
+      final unused = consts.entries
+          .where((e) => merges[e.value] != e.key)
+          .map((e) => '${e.value} (const ${e.key})')
+          .toList()
+        ..sort();
+      expect(unused, isEmpty,
+          reason: 'these are read from --dart-define and never reach dotenv, '
+              'so passing them at build time does nothing: '
+              '${unused.join(', ')}');
+    });
+
+    // Named one at a time because each is a documented sign-off gate or a
+    // deploy override, and each was unreachable in a release build at some
+    // point (decisions § 709). A set-level assertion would go on passing if
+    // one of them quietly left the bridge.
+    for (final key in const [
+      'ENABLE_NEARBY_RUNNERS',
+      'OFF_ROUTE_ESCALATION_ENABLED',
+      'ADAPTIVE_FITNESS_GATE',
+      'WEIGH_IN_GATE',
+      'TILE_URL_TEMPLATE',
+      'USDA_FDC_API_KEY',
+    ]) {
+      test('$key survives into a release build', () {
+        expect(merges.containsKey(key), isTrue,
+            reason: '$key is not merged into dotenv — a release build cannot '
+                'read it however the deploy passes it');
+        expect(consts[merges[key]], key,
+            reason: '$key is merged from a const that reads a different key');
+      });
+    }
+  });
+
+
+  group('the nearby gate reads its own flag, fail-closed', () {
+    setUpAll(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      dotenv.loadFromString(isOptional: true);
+    });
+    tearDown(() => dotenv.env.remove(kNearbyRunnersEnvKey));
+
+    // The one gate with an env-reading accessor of its own. Driven end to end
+    // rather than by reading its source: `yes` is the value that separates
+    // the shared parser from the narrow copy the audit found, and the whole
+    // surface is Art 9-adjacent person-location.
+    test('unset is off, `yes` is on, junk is off', () {
+      expect(nearbyRunnersGate, isFalse,
+          reason: 'an unset sign-off gate must fail closed');
+      dotenv.env[kNearbyRunnersEnvKey] = 'yes';
+      expect(nearbyRunnersGate, isTrue);
+      dotenv.env[kNearbyRunnersEnvKey] = 'YES';
+      expect(nearbyRunnersGate, isTrue, reason: 'case-insensitive');
+      dotenv.env[kNearbyRunnersEnvKey] = ' on ';
+      expect(nearbyRunnersGate, isTrue, reason: 'trimmed');
+      for (final junk in const ['enabled', '0', 'false', 'y', '']) {
+        dotenv.env[kNearbyRunnersEnvKey] = junk;
+        expect(nearbyRunnersGate, isFalse,
+            reason: '"$junk" must never open a location surface');
+      }
     });
   });
 }
