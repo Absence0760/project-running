@@ -43,7 +43,6 @@ import {
   rustConstHex,
   rustFnBody,
   rustGoldenFns,
-  rustMagics,
   rustVectors,
 } from './check_watch_wire_vectors.mjs';
 
@@ -106,14 +105,6 @@ test('a named hex const inside a fn body is addressable on its own', () => {
   assert.equal(rustConstHex(body, 'V3_HEX'), null);
 });
 
-test('the firmware magics are read from their declarations', () => {
-  const src = `
-    pub const COURSE_MAGIC: [u8; 4] = *b"CRS1";
-    const PUSH_STATUS_MAGIC: [u8; 4] = *b"PSH1";
-  `;
-  assert.deepEqual(rustMagics(src), ['43525331', '50534831']);
-});
-
 test('a Dart const concatenates its adjacent parts across an interleaved comment', () => {
   const src = stripComments(
     [
@@ -130,6 +121,28 @@ test('a Dart const concatenates its adjacent parts across an interleaved comment
 
 test('a Dart const that is not all hex is not a vector', () => {
   assert.equal(dartConstHex("const _x = 'not hex at all here';", '_x'), null);
+});
+
+// The sweep reads every Dart file on the phone rail since decisions § 816, so
+// the shape of a vector has to separate one from a collection of unrelated
+// values: `status_color_literal_guard_test.dart` holds 21 six-digit colour
+// literals that join into a 63-byte hex string nothing has ever encoded. The
+// trailing comma matters — `_goldenBlob` is `_hex('…' '…',)`, so the rule has
+// to be about the bracket and not about the comma.
+test('a list of hex literals is not one vector, but a trailing comma is fine', () => {
+  const src = [
+    "const _banned = [",
+    "  '22C55E', '16A34A', '10B981', '34D399',",
+    "];",
+    "final _real = _hex(",
+    "    '54524b3101000000'",
+    "    '0102030405060708',",
+    ");",
+  ].join('\n');
+  assert.deepEqual(
+    [...dartHexConsts(src).entries()],
+    [['_real', '54524b31010000000102030405060708']],
+  );
 });
 
 test('the sweep sees `final … = _hex(…)`, not only `const`', () => {

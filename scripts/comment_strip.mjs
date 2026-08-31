@@ -21,6 +21,17 @@
 // which are not closed and would otherwise swallow the rest of the file —
 // and Dart's `'…'`, `'''…'''`, `"""…"""` and `r`-prefixed strings.
 //
+// Dart's `${…}` interpolation is a nested CODE region, not string content,
+// and is tracked as one (decisions § 816). Inside it live strings — including
+// differently-quoted ones, which is what `'"${v.replaceAll('"', '""')}"'`
+// is — braces of their own, further interpolations, comments, and newlines
+// even when the enclosing string is single-quoted. Reading the region as
+// content instead threw `unterminated string` on eight committed Dart files,
+// four of them the byte-identical iOS twins, one of them library code rather
+// than a test. A `$` that does not open a brace is the `$identifier` form and
+// needs no tracking: it can hold no delimiter. `r`-prefixed strings take no
+// interpolation at all — `$` is literal — so they stay a single verbatim span.
+//
 // An unterminated block comment or string THROWS, for the reason
 // apps/backend/scripts/sql_lex.mjs throws: source the lexer cannot read is
 // source a guard must not report a verdict about.
@@ -55,6 +66,144 @@ export function stripComments(src, lang) {
 		throw new Error(`comment_strip: unterminated ${what} at line ${line}`);
 	};
 
+	/**
+	 * The end of the nested block comment opening at `from`, past its closer.
+	 * @param {number} from
+	 */
+	const blockCommentEnd = (from) => {
+		let depth = 0;
+		let k = from;
+		while (k < src.length) {
+			if (src.slice(k, k + 2) === '/*') {
+				depth++;
+				k += 2;
+				continue;
+			}
+			if (src.slice(k, k + 2) === '*/') {
+				depth--;
+				k += 2;
+				if (depth === 0) return k;
+				continue;
+			}
+			k++;
+		}
+		unterminated('block comment', from);
+		return k;
+	};
+
+	/**
+	 * A Dart `r`-prefixed string at `from`, kept verbatim: raw strings take no
+	 * escapes and no interpolation, so only the delimiter closes them.
+	 * @param {number} from
+	 * @returns {number} the index past the closing delimiter.
+	 */
+	const dartRawEnd = (from) => {
+		const q = src[from + 1];
+		const triple = src.slice(from + 1, from + 4) === q.repeat(3) ? q.repeat(3) : q;
+		const at = src.indexOf(triple, from + 1 + triple.length);
+		if (at === -1) unterminated('raw string', from);
+		keep(from, at + triple.length);
+		return at + triple.length;
+	};
+
+	/** @param {number} at */
+	const isDartRaw = (at) => src[at] === 'r' && /['"]/.test(src[at + 1] ?? '');
+
+	/**
+	 * A Dart string at `from`, emitting its content verbatim and recursing into
+	 * every `${…}` region it carries.
+	 * @param {number} from
+	 * @returns {number} the index past the closing delimiter.
+	 */
+	const dartStringEnd = (from) => {
+		const quote = src[from];
+		const triple = src.slice(from, from + 3) === quote.repeat(3);
+		const delim = triple ? quote.repeat(3) : quote;
+		let k = from + delim.length;
+		let seg = from;
+		for (;;) {
+			if (k >= src.length) unterminated('string', from);
+			if (src[k] === '\\') {
+				k += 2;
+				continue;
+			}
+			if (src.slice(k, k + delim.length) === delim) break;
+			if (src[k] === '$' && src[k + 1] === '{') {
+				keep(seg, k + 2);
+				k = dartInterpolationEnd(k + 2, from);
+				seg = k;
+				continue;
+			}
+			// A newline can only reach here as string content: the interpolation
+			// scanner has already consumed any that sat inside a `${…}`.
+			if (!triple && src[k] === '\n') unterminated('string', from);
+			k++;
+		}
+		keep(seg, k + delim.length);
+		return k + delim.length;
+	};
+
+	/**
+	 * A Dart `${…}` region, `from` pointing just past the `${`. Code, so its
+	 * comments are blanked like any others and its own strings recurse.
+	 * @param {number} from
+	 * @param {number} stringAt the enclosing string, for the error's line number.
+	 * @returns {number} the index past the matching `}`.
+	 */
+	const dartInterpolationEnd = (from, stringAt) => {
+		let k = from;
+		let depth = 1;
+		let seg = from;
+		for (;;) {
+			if (k >= src.length) unterminated('string interpolation', stringAt);
+			const two = src.slice(k, k + 2);
+			if (two === '//') {
+				keep(seg, k);
+				const nl = src.indexOf('\n', k);
+				const end = nl === -1 ? src.length : nl;
+				blank(k, end);
+				k = end;
+				seg = k;
+				continue;
+			}
+			if (two === '/*') {
+				keep(seg, k);
+				const end = blockCommentEnd(k);
+				blank(k, end);
+				k = end;
+				seg = k;
+				continue;
+			}
+			if (isDartRaw(k)) {
+				keep(seg, k);
+				k = dartRawEnd(k);
+				seg = k;
+				continue;
+			}
+			if (src[k] === '"' || src[k] === "'") {
+				keep(seg, k);
+				k = dartStringEnd(k);
+				seg = k;
+				continue;
+			}
+			if (src[k] === '{') {
+				depth++;
+				k++;
+				continue;
+			}
+			if (src[k] === '}') {
+				depth--;
+				k++;
+				if (depth === 0) {
+					keep(seg, k);
+					return k;
+				}
+				continue;
+			}
+			k++;
+		}
+	};
+
 	while (i < src.length) {
 		const two = src.slice(i, i + 2);
 
@@ -67,25 +216,9 @@ export function stripComments(src, lang) {
 		}
 
 		if (two === '/*') {
-			let depth = 0;
-			let k = i;
-			while (k < src.length) {
-				if (src.slice(k, k + 2) === '/*') {
-					depth++;
-					k += 2;
-					continue;
-				}
-				if (src.slice(k, k + 2) === '*/') {
-					depth--;
-					k += 2;
-					if (depth === 0) break;
-					continue;
-				}
-				k++;
-			}
-			if (depth !== 0) unterminated('block comment', i);
-			blank(i, k);
-			i = k;
+			const end = blockCommentEnd(i);
+			blank(i, end);
+			i = end;
 			continue;
 		}
 
@@ -102,13 +235,8 @@ export function stripComments(src, lang) {
 				continue;
 			}
 		}
-		if (lang === 'dart' && src[i] === 'r' && /['"]/.test(src[i + 1] ?? '')) {
-			const q = src[i + 1];
-			const triple = src.slice(i + 1, i + 4) === q.repeat(3) ? q.repeat(3) : q;
-			const at = src.indexOf(triple, i + 1 + triple.length);
-			if (at === -1) unterminated('raw string', i);
-			keep(i, at + triple.length);
-			i = at + triple.length;
+		if (lang === 'dart' && isDartRaw(i)) {
+			i = dartRawEnd(i);
 			continue;
 		}
 
@@ -128,6 +256,10 @@ export function stripComments(src, lang) {
 		const quote = src[i];
 		const isQuote = quote === '"' || (lang === 'dart' && quote === "'");
 		if (isQuote) {
+			if (lang === 'dart') {
+				i = dartStringEnd(i);
+				continue;
+			}
 			const triple = src.slice(i, i + 3) === quote.repeat(3);
 			const delim = triple ? quote.repeat(3) : quote;
 			let k = i + delim.length;
