@@ -1069,7 +1069,7 @@ test('MUTATION: a key dropped from the pgtap array fails, naming the key and bot
 	});
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /the live public_runs projection/);
-	assert.match(errors[0], new RegExp(PUBLIC_RUNS_DENYLIST_TEST.replace(/[.]/g, '\\.')));
+	assert.ok(errors[0].includes(PUBLIC_RUNS_DENYLIST_TEST));
 	assert.match(errors[0], /missing there: guided_run_id/);
 });
 
