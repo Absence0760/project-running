@@ -55,6 +55,7 @@
 		type PacingVerdict,
 	} from '$lib/runs/pace_analysis';
 	import { defaultZoneCutoffs } from '$lib/training/hr_zones';
+	import { findGuidedRun } from '$lib/training/guided_runs';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { consent } from '$lib/settings/consent.svelte';
@@ -367,6 +368,20 @@
 	let disciplineLabel = $derived(
 		subSport ? subSport.charAt(0).toUpperCase() + subSport.slice(1) : null,
 	);
+	/// Which scripted coach workout this run was recorded under. Owner-only:
+	/// `20270627000001` strips the key from `public_runs`, and the whole
+	/// surrounding branch is the owner's anyway. Resolved against the library
+	/// inside a `$derived` so a locale switch re-localizes the title — a
+	/// top-level const would freeze it to the boot locale (guided_runs.ts).
+	let guidedRunId = $derived.by<string | null>(() => {
+		const v = (run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.guided_run_id];
+		return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+	});
+	/// Null for an id the shipped library no longer carries — the library is
+	/// versioned in code, so a run recorded under a workout a later build
+	/// dropped or renamed is a real state. The chip still says the run was
+	/// guided; it just can't name or link the script.
+	let guidedRun = $derived(guidedRunId === null ? null : findGuidedRun(m, guidedRunId));
 	/// The custom watch reset mid-run and this run was recovered from its last
 	/// flash checkpoint, so every total on this page is a total-so-far
 	/// (decisions §316(c) / §323). Shown as a header chip because the numbers
@@ -1431,6 +1446,23 @@
 							<span class="material-symbols">{run.is_public ? 'public' : 'lock'}</span>
 							{run.is_public ? m('runDetail.public') : m('runDetail.private')}
 						</span>
+						{#if guidedRunId}
+							{#if guidedRun}
+								<a
+									class="meta-item guided-chip"
+									data-testid="guided-run-chip"
+									href="/guided/{guidedRun.id}"
+								>
+									<span class="material-symbols" aria-hidden="true">script</span>
+									{m('runDetail.guidedRunNamed', { title: guidedRun.title })}
+								</a>
+							{:else}
+								<span class="meta-item guided-chip" data-testid="guided-run-chip">
+									<span class="material-symbols" aria-hidden="true">script</span>
+									{m('runDetail.guidedRun')}
+								</span>
+							{/if}
+						{/if}
 						{#if isDnf}
 							<span class="meta-item dnf-chip" data-testid="dnf-chip">
 								<span class="material-symbols">flag</span>
@@ -2756,6 +2788,26 @@
 		color: var(--color-text-secondary);
 		font-weight: 600;
 		font-size: 0.72rem;
+	}
+
+	.guided-chip {
+		padding: 0.2rem 0.55rem;
+		border-radius: 9999px;
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+		font-weight: 600;
+		font-size: 0.72rem;
+		text-decoration: none;
+	}
+
+	a.guided-chip:hover {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+
+	a.guided-chip:hover .material-symbols {
+		color: var(--color-primary);
 	}
 
 	.back-link {

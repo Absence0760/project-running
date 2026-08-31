@@ -12304,6 +12304,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Insira o seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'ID de atleta do UltraSignup';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Insira o seu ID de atleta do UltraSignup ou deixe em branco para usar o desta corrida.';
+
+  @override
   String get racesPasteResultHint =>
       'Introduza os detalhes da sua chegada a partir da página de resultados da corrida.';
 
@@ -12358,6 +12365,20 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam a funcionar.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Importe resultados de trail e ultra do UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Abrir o calendário de corridas';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'A importação do UltraSignup ainda não está disponível. O parkrun e a colagem manual continuam a funcionar.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
@@ -13046,6 +13067,28 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get prefsCuePhaseTransitionsInfo =>
       'Só fica ativo quando escolhe uma estratégia de corrida. Anuncia cada fase e a sua intenção ao começar. Exemplo: “Fase 2 de 3. Estabilize no seu ritmo alvo.”';
+
+  @override
+  String get prefsCueGuidedRun => 'Corridas guiadas';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'O guião do treinador de uma corrida guiada escolhida antes de começar';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Só fica ativo quando escolhe uma corrida guiada no separador Corrida antes de começar. Anuncia cada indicação do guião ao chegar à sua marca. Exemplo: “Cinco minutos. Estabilize num ritmo que aguentaria o dia todo.”';
+
+  @override
+  String get runGuidedRun => 'Corrida guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sem corrida guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'Estratégia de corrida';
@@ -13878,6 +13921,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Introduza um número de doses entre $min e $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Corrida guiada: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'Corrida guiada já não consta da biblioteca';
+
+  @override
+  String get guidedRunUseThisRun => 'Utilizar esta corrida';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -26173,6 +26228,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'ID de atleta do UltraSignup';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Insira seu ID de atleta do UltraSignup ou deixe em branco para usar o desta corrida.';
+
+  @override
   String get racesPasteResultHint =>
       'Insira os detalhes da sua chegada a partir da página de resultados da corrida.';
 
@@ -26227,6 +26289,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get integrationsRunsignupUnavailable =>
       'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam funcionando.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Importe resultados de trail e ultra do UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Abrir o calendário de corridas';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'A importação do UltraSignup ainda não está disponível. O parkrun e a colagem manual continuam funcionando.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
@@ -26915,6 +26991,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsCuePhaseTransitionsInfo =>
       'Só fica ativo quando você escolhe uma estratégia de corrida. Anuncia cada fase e sua intenção ao começar. Exemplo: “Fase 2 de 3. Estabilize no seu ritmo alvo.”';
+
+  @override
+  String get prefsCueGuidedRun => 'Corridas guiadas';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'O roteiro do treinador de uma corrida guiada escolhida antes de começar';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Só fica ativo quando você escolhe uma corrida guiada na aba Corrida antes de começar. Anuncia cada indicação do roteiro ao chegar à sua marca. Exemplo: “Cinco minutos. Estabilize num ritmo que aguentaria o dia todo.”';
+
+  @override
+  String get runGuidedRun => 'Corrida guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sem corrida guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'Estratégia de corrida';
@@ -27745,4 +27843,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Informe um número de porções entre $min e $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Corrida guiada: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'Corrida guiada não está mais na biblioteca';
+
+  @override
+  String get guidedRunUseThisRun => 'Usar esta corrida';
 }

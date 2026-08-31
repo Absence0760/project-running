@@ -38,7 +38,18 @@ import {
 	parseNearbyCase,
 	parseNumberList,
 	parseStringList,
+	parseGuidedRunLibrary,
+	parseGuidedSeconds,
 	parseWhitespaceClass,
+	MOBILE_GUIDED_RUNS,
+	WEB_GUIDED_RUNS,
+	PUBLIC_RUNS_DENYLIST_TEST,
+	jsonbBuildObjectKeys,
+	parseMetadataDenylist,
+	parsePgtapDenylist,
+	parseSeedDenylist,
+	pgtapDenylistSites,
+	publicRunsViewSites,
 } from './check_shared_constants.mjs';
 
 /** @param {Record<string, string>} files */
@@ -665,4 +676,421 @@ test('MUTATION: a bucket the SQL raises and the doc table omits fails', () => {
 	});
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /"create_club" is written on 1 of 2 rails/);
+});
+
+// ── The guided-run cue library ─────────────────────────────────────────────
+
+const GUIDED_ANCHOR_TS = 'guidedRunLibrary(t: GuidedTranslate';
+const GUIDED_ANCHOR_DART = 'guidedRunLibrary(AppLocalizations';
+
+const GUIDED_TS = `
+export function guidedRunLibrary(t: GuidedTranslate): GuidedRun[] {
+	return [
+		{
+			id: 'easy-30',
+			title: t('guidedRuns.easy30.title'),
+			duration_sec: 30 * 60,
+			cues: [
+				{ at_sec: 0, text: t('guidedRuns.easy30.cue0') },
+				{ at_sec: 5 * 60, text: t('guidedRuns.easy30.cue1') },
+			],
+		},
+		{
+			id: 'brisk-10',
+			title: t('guidedRuns.brisk10.title'),
+			duration_sec: 600,
+			cues: [{ at_sec: 0, text: t('guidedRuns.brisk10.cue0') }],
+		},
+	];
+}
+`;
+
+const GUIDED_DART = `
+List<GuidedRun> guidedRunLibrary(AppLocalizations l10n) => [
+      GuidedRun(
+        id: 'easy-30',
+        title: l10n.guidedEasy30Title,
+        durationSec: 30 * 60,
+        cues: [
+          GuidedCue(atSec: 0, text: l10n.guidedEasy30Cue0),
+          GuidedCue(atSec: 5 * 60, text: l10n.guidedEasy30Cue1),
+        ],
+      ),
+      GuidedRun(
+        id: 'brisk-10',
+        title: l10n.guidedBrisk10Title,
+        durationSec: 600,
+        cues: [GuidedCue(atSec: 0, text: l10n.guidedBrisk10Cue0)],
+      ),
+    ];
+`;
+
+// The same two workouts, listed the other way round. Nothing about either run
+// changes — which is the point: a set comparison would call this agreement.
+const GUIDED_DART_REORDERED = `
+List<GuidedRun> guidedRunLibrary(AppLocalizations l10n) => [
+      GuidedRun(
+        id: 'brisk-10',
+        durationSec: 600,
+        cues: [GuidedCue(atSec: 0, text: l10n.guidedBrisk10Cue0)],
+      ),
+      GuidedRun(
+        id: 'easy-30',
+        durationSec: 30 * 60,
+        cues: [
+          GuidedCue(atSec: 0, text: l10n.guidedEasy30Cue0),
+          GuidedCue(atSec: 5 * 60, text: l10n.guidedEasy30Cue1),
+        ],
+      ),
+    ];
+`;
+
+// Two languages, one parse. Comparing the two outputs directly is what makes
+// "web and mobile agree" a property of the extractor rather than of two
+// regexes that could drift the way their subjects can.
+test('one extractor reads the TypeScript and the Dart spelling of the same library', () => {
+	const ts = parseGuidedRunLibrary(GUIDED_TS, GUIDED_ANCHOR_TS, 'lib');
+	const dart = parseGuidedRunLibrary(GUIDED_DART, GUIDED_ANCHOR_DART, 'lib');
+	assert.deepEqual(ts, dart);
+	assert.deepEqual(ts, [
+		{ key: 'library order', where: 'run ids in lib', values: ['easy-30', 'brisk-10'] },
+		{ key: 'easy-30', where: 'easy-30 in lib', values: ['duration=1800', 'cue@0', 'cue@300'] },
+		{ key: 'brisk-10', where: 'brisk-10 in lib', values: ['duration=600', 'cue@0'] },
+	]);
+});
+
+test('a second mark is evaluated from minutes, and a bare integer is taken as seconds', () => {
+	assert.equal(parseGuidedSeconds('29 * 60', 'w'), 1740);
+	assert.equal(parseGuidedSeconds(' 0 ', 'w'), 0);
+	assert.equal(parseGuidedSeconds('600', 'w'), 600);
+});
+
+// Skipping an unreadable mark would shorten one rail's cue list, which the
+// other rail cannot see and the comparison would read as the run it knows.
+test('a second mark in a form the parser does not know throws rather than being skipped', () => {
+	assert.throws(() => parseGuidedSeconds('const Duration(minutes: 5).inSeconds', 'easy-30 in lib'), /easy-30 in lib/);
+	assert.throws(() => parseGuidedSeconds('5 * 60 + 30', 'w'), /teach it the new form/);
+});
+
+test('a library whose anchor is gone throws rather than reading nothing', () => {
+	assert.throws(() => parseGuidedRunLibrary(GUIDED_TS, 'buildGuidedRuns(', 'lib'), /agrees with every other one/);
+});
+
+test('a run carrying no cue marks throws — a cue-less run matches a cue-less run', () => {
+	const cueless = GUIDED_DART.replace(/cues: \[GuidedCue\(atSec: 0, text: l10n\.guidedBrisk10Cue0\)\],/, 'cues: [],');
+	assert.throws(() => parseGuidedRunLibrary(cueless, GUIDED_ANCHOR_DART, 'lib'), /"brisk-10".*no cue marks/s);
+});
+
+test('a run carrying no duration throws', () => {
+	const undated = GUIDED_TS.replace('duration_sec: 600,', '');
+	assert.throws(() => parseGuidedRunLibrary(undated, GUIDED_ANCHOR_TS, 'lib'), /"brisk-10".*no duration/s);
+});
+
+test('a parse that yields fewer runs than a library holds throws', () => {
+	const oneRun = GUIDED_TS.slice(0, GUIDED_TS.indexOf("id: 'brisk-10'")) + '];\n}\n';
+	assert.throws(() => parseGuidedRunLibrary(oneRun, GUIDED_ANCHOR_TS, 'lib'), /read 1 guided run\(s\)/);
+});
+
+test('MUTATION: two rails holding the same runs in a different order fail on the order', () => {
+	const entry = entryOf(
+		[
+			{ label: 'web', sites: parseGuidedRunLibrary(GUIDED_TS, GUIDED_ANCHOR_TS, 'web') },
+			{ label: 'mobile', sites: parseGuidedRunLibrary(GUIDED_DART_REORDERED, GUIDED_ANCHOR_DART, 'mobile') },
+		],
+		'key',
+		'ordered',
+	);
+	const { errors } = checkEntry(entry, NO_CTX);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /"library order" disagrees/);
+});
+
+test('MUTATION: a cue mark moved on the phone alone fails, naming the run', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'guided-run cue library'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === MOBILE_GUIDED_RUNS
+				? real.read(rel).replace('GuidedCue(atSec: 25 * 60,', 'GuidedCue(atSec: 26 * 60,')
+				: real.read(rel),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /"easy-30" disagrees/);
+	assert.match(errors[0], /cue@1500/);
+	assert.match(errors[0], /cue@1560/);
+});
+
+test('MUTATION: a workout renamed on the web alone fails as a key missing from each rail in turn', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'guided-run cue library'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === WEB_GUIDED_RUNS ? real.read(rel).replace("id: 'first-timer-15',", "id: 'first-timer-15-v2',") : real.read(rel),
+	});
+	assert.match(errors.join('\n'), /"first-timer-15" is written on 1 of 2 rails/);
+	assert.match(errors.join('\n'), /"first-timer-15-v2" is written on 1 of 2 rails/);
+	assert.match(errors.join('\n'), /"library order" disagrees/);
+});
+
+// ── The public_runs metadata denylist ──────────────────────────────────────
+
+const VIEW_HEAD = `create or replace view public_runs as
+select
+  r.id,
+  coalesce(r.metadata, '{}'::jsonb)
+`;
+const VIEW_TAIL = `    as metadata
+from runs r
+where r.is_public = true;
+`;
+
+/** @param {string[]} keys */
+function viewSql(keys) {
+	return VIEW_HEAD + keys.map((k) => `    - '${k}'\n`).join('') + VIEW_TAIL;
+}
+
+// The replay a filename cannot stand in for, and the reason this rail reads
+// the migration SET rather than the file whose name is about the view: the
+// `expected_return_at` strip really did arrive in a migration called
+// `_safety_sms_escalation`, three files after the last one named for the view.
+test('the live public_runs projection is the last one written, not the last one named for it', () => {
+	const dir = migrationsFixture({
+		'20260101_001_public_runs_view.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_safety_escalation.sql': viewSql(['strava_id', 'expected_return_at']),
+		'20260103_001_public_runs_index.sql': 'create index runs_public_idx on runs (is_public);',
+	});
+	const { views } = indexMigrations(dir);
+	assert.equal(views.get('public_runs')?.file, '20260102_001_safety_escalation.sql');
+	assert.deepEqual(parseMetadataDenylist(views.get('public_runs')?.sql ?? '', 'fixture'), [
+		'strava_id',
+		'expected_return_at',
+	]);
+});
+
+test('a dropped view stops being live', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_b.sql': 'drop view if exists public.public_runs;',
+	});
+	assert.equal(indexMigrations(dir).views.has('public_runs'), false);
+});
+
+// The same trap the GATT guard fell into (decisions § 773), one relation over.
+test('a commented-out view definition does not register as live', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_b.sql': '-- ' + viewSql(['ghost']).replace(/\n/g, '\n-- ') + '\nselect 1;',
+	});
+	assert.equal(indexMigrations(dir).views.get('public_runs')?.file, '20260101_001_a.sql');
+	assert.deepEqual(parseMetadataDenylist(indexMigrations(dir).views.get('public_runs')?.sql ?? '', 'f'), [
+		'strava_id',
+	]);
+});
+
+// Anchored at the start of the statement: a function that issues DDL of its
+// own would otherwise register as a definition of the view it names, and the
+// rail would then grade a body that never ran.
+test('a view definition inside a function body does not register as live', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql':
+			'create or replace function f() returns int language sql as $$ select 1; $$;\n' + viewSql(['strava_id']),
+		'20260102_001_b.sql':
+			'create or replace function rebuild() returns void language plpgsql as $$ begin execute $q$ ' +
+			viewSql(['ghost']) +
+			' $q$; end; $$;',
+	});
+	assert.equal(indexMigrations(dir).views.get('public_runs')?.file, '20260101_001_a.sql');
+});
+
+test('the denylist is the subtraction chain between the coalesce and `as metadata`', () => {
+	const sql = `create or replace view public_runs as
+select
+  r.id - 'not_a_key' as offset_col,
+  coalesce(r.metadata, '{}'::jsonb)
+    - 'strava_id'
+    - 'garmin_id'
+    as metadata,
+  r.concluded_at
+from runs r;`;
+	assert.deepEqual(parseMetadataDenylist(sql, 'fixture'), ['strava_id', 'garmin_id']);
+});
+
+test('a projection whose shape changed throws rather than reading nothing', () => {
+	assert.throws(
+		() => parseMetadataDenylist("create or replace view public_runs as select r.metadata from runs r;", 'fixture'),
+		/no metadata projection in fixture/,
+	);
+});
+
+test('a projection that subtracts nothing throws — an empty denylist is not a denylist', () => {
+	assert.throws(() => parseMetadataDenylist(viewSql([]), 'fixture'), /subtracts no keys/);
+});
+
+test('a migration set with no public_runs view throws rather than reading nothing', () => {
+	const dir = migrationsFixture({
+		'20260101_001_a.sql': 'create or replace function f() returns int language sql as $$ select 1; $$;',
+	});
+	assert.throws(
+		() => publicRunsViewSites(/** @type {any} */ ({ sql: indexMigrations(dir) })),
+		/defines no `public_runs` view/,
+	);
+});
+
+const PGTAP_SRC = `begin;
+insert into runs (metadata) values (
+  jsonb_build_object(
+    -- Audit / import linkage
+    'strava_id', '12345',
+    'garmin_id', '67890',
+    -- Public-safe, included to confirm it survives
+    'event', 'parkrun'
+  )
+);
+do $$
+declare
+  denylist text[] := array[
+    'strava_id',
+    -- A group comment naming its source migration
+    'garmin_id'
+  ];
+begin
+  null;
+end $$;
+rollback;
+`;
+
+// The array's own `--` group comments name migrations, which carry digits and
+// underscores; reading the array as raw text would sweep them in. The lexer is
+// what stops that, and the same pass is what makes a commented-out array
+// unreadable as the live one.
+test('the pgtap array is read past its group comments', () => {
+	assert.deepEqual(parsePgtapDenylist(PGTAP_SRC, 'fixture'), ['strava_id', 'garmin_id']);
+});
+
+test('a renamed pgtap array throws rather than reading nothing', () => {
+	assert.throws(
+		() => parsePgtapDenylist(PGTAP_SRC.replace('denylist text[]', 'stripped_keys text[]'), 'fixture'),
+		/no `denylist text\[\] := array\[…\]` in fixture/,
+	);
+});
+
+test('an empty pgtap array throws — the loop would then pass against any view', () => {
+	assert.throws(
+		() => parsePgtapDenylist(PGTAP_SRC.replace(/array\[[\s\S]*?\]/, 'array[]'), 'fixture'),
+		/is empty/,
+	);
+});
+
+const SEED_SRC = `
+do $$
+declare
+  v_public_metadata jsonb;
+begin
+  IF NOT (v_public_metadata ? 'activity_type') THEN
+    RAISE EXCEPTION 'public_runs: activity_type must survive (it is public-safe)';
+  END IF;
+
+  IF v_public_metadata ? 'strava_id'
+     -- A group comment naming its source migration
+     OR v_public_metadata ? 'garmin_id' THEN
+    RAISE EXCEPTION 'public_runs: metadata strip list incomplete';
+  END IF;
+end $$;
+`;
+
+// The same `v_public_metadata ? 'key'` spelling asserts a few lines earlier
+// that activity_type SURVIVES. A parser reading the file at large folds that
+// into the denylist and then reports a disagreement that is really two
+// assertions pointing in opposite directions.
+test('the seed rail reads only the strip-list block, not the survives-assertions above it', () => {
+	assert.deepEqual(parseSeedDenylist(SEED_SRC, 'fixture'), ['strava_id', 'garmin_id']);
+});
+
+test('a renamed seed strip-list exception throws rather than reading nothing', () => {
+	assert.throws(
+		() => parseSeedDenylist(SEED_SRC.replace('strip list incomplete', 'something else'), 'fixture'),
+		/no public_runs strip-list assertion in fixture/,
+	);
+});
+
+// Reachable only when the chain stops naming literals — a rewrite to `? v_key`
+// over a loop variable keeps the anchor and takes the key names out of the
+// file, which is a rail reading nothing while looking untouched.
+test('a seed strip-list assertion naming no literal keys throws', () => {
+	assert.throws(
+		() => parseSeedDenylist(SEED_SRC.replace(/\? '[a-z_]*'/g, '? v_key'), 'fixture'),
+		/names no keys/,
+	);
+});
+
+// seed.sql annotates each group of keys with the migration that added it, and
+// those comments live inside a dollar-quoted body the lexer leaves intact --
+// correctly, since it is a string literal. A key-position match that did not
+// tolerate them read every commented group as unbuilt.
+test('a fixture key written after a comment line still counts as built', () => {
+	const keys = jsonbBuildObjectKeys([
+		"jsonb_build_object('a', 1,\n  -- 20270430_001 strip-list addition:\n  'b', 2)",
+	]);
+	assert.deepEqual([...keys].sort(), ['a', 'b']);
+});
+
+test('a fixture bag yields its keys, not its values', () => {
+	const keys = jsonbBuildObjectKeys([
+		"jsonb_build_object('a', 'garmin_id', 'b', jsonb_build_object('c', 1), 'd', '{\"x\": 1, \"y\": 2}'::jsonb)",
+	]);
+	assert.deepEqual([...keys].sort(), ['a', 'b', 'c', 'd']);
+});
+
+// The anti-vacuity the set comparison cannot make: the test reads its row back
+// and asserts each named key is ABSENT, so a key the fixture never built is
+// asserted against a bag that could not have carried it.
+test('a key the array asserts but the fixture never builds throws', () => {
+	const src = PGTAP_SRC.replace("    'garmin_id', '67890',\n", '');
+	assert.throws(
+		() => pgtapDenylistSites(/** @type {any} */ ({ read: () => src })),
+		/asserts garmin_id but its fixture never puts that key in the row/,
+	);
+});
+
+test('MUTATION: a key dropped from the pgtap array fails, naming the key and both homes', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'public_runs metadata denylist'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === PUBLIC_RUNS_DENYLIST_TEST
+				? real.read(rel).replace(/^\s*'guided_run_id',\n/m, '')
+				: real.read(rel),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /the live public_runs projection/);
+	assert.ok(errors[0].includes(PUBLIC_RUNS_DENYLIST_TEST));
+	assert.match(errors[0], /missing there: guided_run_id/);
+});
+
+test('MUTATION: a view redefined without a strip line fails, naming the key only the test has', () => {
+	const real = defaultContext();
+	const live = /** @type {{ file: string, sql: string }} */ (real.sql.views.get('public_runs'));
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'public_runs metadata denylist'));
+	const { errors } = checkEntry(entry, {
+		read: real.read,
+		sql: {
+			live: real.sql.live,
+			statements: real.sql.statements,
+			views: new Map(real.sql.views).set('public_runs', {
+				file: live.file,
+				sql: live.sql.replace(/^\s*- 'watch_workout'\n/m, ''),
+			}),
+		},
+	});
+	// One error per rail that still strips the key: the pgtap array and the
+	// seed's assertion each disagree with the view independently, which is the
+	// point of holding three homes rather than two.
+	assert.equal(errors.length, 2);
+	for (const error of errors) assert.match(error, /only there: {4}watch_workout/);
 });

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { VOICE_CUE_IDS } from '../../src/lib/settings/voice_cues';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -32,8 +33,12 @@ test.describe('/settings/preferences voice cues', () => {
 
 		const cueList = page.getByTestId('voice-cue-types');
 		await expect(cueList).toBeVisible();
-		// One row per cue id in the shared wire contract.
-		await expect(cueList.locator('input[type="checkbox"]')).toHaveCount(8);
+		// One row per cue id in the shared wire contract — read from the
+		// contract itself, so adding a cue can't leave a runner with a toggle
+		// the page never renders.
+		await expect(cueList.locator('input[type="checkbox"]')).toHaveCount(
+			VOICE_CUE_IDS.length,
+		);
 
 		const offRoute = page.getByTestId('voice-cue-off_route');
 		const splits = page.getByTestId('voice-cue-splits');

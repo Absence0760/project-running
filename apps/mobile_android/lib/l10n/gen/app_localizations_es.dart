@@ -12302,6 +12302,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Introduce tu dorsal para importar solo tu resultado, no toda la clasificación.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'ID de atleta de UltraSignup';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Introduce tu ID de atleta de UltraSignup, o déjalo en blanco para usar el de esta carrera.';
+
+  @override
   String get racesPasteResultHint =>
       'Introduce los datos de tu llegada desde la página de resultados de la carrera.';
 
@@ -12356,6 +12363,20 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'La importación de RunSignUp aún no está disponible. parkrun y el pegado manual siguen funcionando.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Importa resultados de trail y ultra desde UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Abrir el calendario de carreras';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'La importación de UltraSignup aún no está disponible. parkrun y el pegado manual siguen funcionando.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
@@ -13042,6 +13063,28 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get prefsCuePhaseTransitionsInfo =>
       'Solo activo cuando eliges una estrategia de carrera. Anuncia cada fase y su intención al comenzar. Ejemplo: «Fase 2 de 3. Asiéntate en tu ritmo objetivo.»';
+
+  @override
+  String get prefsCueGuidedRun => 'Carreras guiadas';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'El guion del entrenador de una carrera guiada que preparaste antes de empezar';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Solo activo cuando preparas una carrera guiada en la pestaña Correr antes de empezar. Anuncia cada indicación del guion al llegar a su marca. Ejemplo: «Cinco minutos. Asíentate en un ritmo que podrías mantener todo el día.»';
+
+  @override
+  String get runGuidedRun => 'Carrera guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sin carrera guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'Estrategia de carrera';
@@ -13876,4 +13919,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Introduce un número de raciones entre $min y $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Carrera guiada: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'La carrera guiada ya no está en la biblioteca';
+
+  @override
+  String get guidedRunUseThisRun => 'Usar esta carrera';
 }

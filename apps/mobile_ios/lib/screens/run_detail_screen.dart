@@ -32,10 +32,12 @@ import '../preferences.dart';
 import '../privacy.dart';
 import '../route_simplify.dart';
 import '../grade_adjusted_pace.dart';
+import '../guided_runs.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../social_service.dart';
 import '../typed_decimal.dart';
+import 'guided_runs_screen.dart';
 import 'settings_preferences_screen.dart';
 import '../widgets/fundraiser_section.dart';
 import '../widgets/live_run_map.dart';
@@ -1159,6 +1161,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           child: Text(_notes, style: theme.textTheme.bodyMedium),
         ),
 
+      ..._buildGuidedRun(theme, l10n),
+
       // Primary stats. For runs with no GPS track (manual entries, summary
       // imports) the "Moving" column is dropped — it's identical to "Time".
       Padding(
@@ -1393,6 +1397,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return const [];
   }
 
+  /// The guided-run library id this run was recorded under, or null when no
+  /// coach script was armed. Owner-only — `public_runs` strips the key
+  /// (migration `20270627000001`), so the public twin can never see it.
+  String? get _guidedRunId {
+    final raw = run.metadata?[MetadataKeys.guidedRunId];
+    if (raw is! String || raw.trim().isEmpty) return null;
+    return raw.trim();
+  }
+
   // Garmin FIT discipline (sub_sport) — trail / treadmill / track / road —
   // capitalised for a header chip beside the activity type. Null when the
   // import carried no informative sub_sport.
@@ -1432,6 +1445,59 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         ),
       );
     }).toList();
+  }
+
+  /// Names the guided run this recording was scripted by, resolved through
+  /// the library for the ACTIVE locale so the reader sees the same title the
+  /// picker offered them.
+  ///
+  /// The library is versioned in code, so an id it no longer answers to is a
+  /// real state: a run recorded under a workout a later build renamed or
+  /// dropped. That says so rather than self-hiding — the run WAS coached, and
+  /// erasing the fact because we can no longer name the script would make the
+  /// app's own record of the run change between builds. The slug itself is
+  /// never rendered; it is an internal identifier and means nothing to a
+  /// reader.
+  List<Widget> _buildGuidedRun(ThemeData theme, AppLocalizations l10n) {
+    final id = _guidedRunId;
+    if (id == null) return const [];
+    final guided = findGuidedRun(l10n, id);
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: guided == null
+            ? Row(
+                children: [
+                  Icon(Icons.headset_mic_outlined,
+                      size: 16, color: theme.colorScheme.outline),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      l10n.runDetailGuidedRunUnavailable,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: ActionChip(
+                  avatar: const Icon(Icons.headset_mic_outlined, size: 16),
+                  label: Text(
+                    l10n.runDetailGuidedRun(guided.title),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => GuidedRunDetailScreen(run: guided),
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    ];
   }
 
   List<Widget> _buildRunningDynamics(ThemeData theme, AppLocalizations l10n) {

@@ -1609,6 +1609,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                         VoiceCue.phaseTransitions,
                         l10n.prefsCuePhaseTransitionsInfo,
                       ),
+                      _cueSwitch(
+                        l10n.prefsCueGuidedRun,
+                        l10n.prefsCueGuidedRunSubtitle,
+                        VoiceCue.guidedRun,
+                        l10n.prefsCueGuidedRunInfo,
+                      ),
                       ListTile(
                         title: Text(l10n.prefsSplitPaceMode),
                         subtitle: Text(

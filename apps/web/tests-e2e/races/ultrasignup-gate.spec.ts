@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { browserDate } from '../fixtures/dates';
+import { deleteRaceListing, insertRaceListing } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -14,6 +16,23 @@ import { USER_A } from '../fixtures/users';
 test.describe('UltraSignup gate (unconfigured key)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	const stamp = Date.now();
+	const raceName = `E2E UltraSignup Gate ${stamp}`;
+	let listingId: string | null = null;
+
+	test.beforeAll(async () => {
+		listingId = await insertRaceListing({
+			provider: 'ultrasignup',
+			name: raceName,
+			race_date: browserDate(30),
+			provider_race_id: 'e2e-ultrasignup-1'
+		});
+	});
+
+	test.afterAll(async () => {
+		if (listingId) await deleteRaceListing(listingId);
+	});
+
 	test('settings card shows the unavailable explainer, no open action', async ({ page }) => {
 		await page.goto('/settings/integrations');
 
@@ -24,5 +43,23 @@ test.describe('UltraSignup gate (unconfigured key)', () => {
 
 		// parkrun stays available (fail-closed is scoped to the API providers).
 		await expect(page.getByText('parkrun', { exact: true })).toBeVisible();
+	});
+
+	test('the race calendar import modal names UltraSignup, not RunSignUp', async ({ page }) => {
+		await page.goto('/races');
+		await page.getByTestId('races-search').fill(raceName);
+
+		const card = page.getByTestId('race-card').filter({ hasText: raceName });
+		await expect(card).toBeVisible({ timeout: 15_000 });
+		await card.getByTestId('race-import').click();
+
+		// Its OWN explainer: a runner told RunSignUp is unavailable about a
+		// UltraSignup-timed race learns nothing true.
+		await expect(page.getByTestId('race-ultrasignup-unavailable')).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByTestId('race-runsignup-unavailable')).toHaveCount(0);
+		await expect(page.getByTestId('race-import-ultrasignup')).toHaveCount(0);
+
+		// The manual paste form is the universal fallback and stays available.
+		await expect(page.getByTestId('paste-save')).toBeVisible();
 	});
 });

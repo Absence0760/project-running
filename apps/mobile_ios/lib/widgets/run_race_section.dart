@@ -35,7 +35,6 @@ class _RunRaceSectionState extends State<RunRaceSection> {
   bool _loading = true;
   RaceResultForRun? _result;
   RaceListingView? _candidate;
-  bool _runSignUpAvailable = false;
   bool _dismissed = false;
 
   @override
@@ -53,9 +52,6 @@ class _RunRaceSectionState extends State<RunRaceSection> {
           final listings =
               await widget.service.findRaceMatchCandidates(widget.runId);
           candidate = _bestCandidate(listings);
-          if (candidate != null) {
-            _runSignUpAvailable = await widget.service.isRunSignUpConfigured();
-          }
         } catch (_) {
           candidate = null;
         }
@@ -101,7 +97,6 @@ class _RunRaceSectionState extends State<RunRaceSection> {
       context,
       service: widget.service,
       race: candidate,
-      runSignUpAvailable: _runSignUpAvailable,
       matchRunId: widget.runId,
     );
     if (done == true && mounted) {
