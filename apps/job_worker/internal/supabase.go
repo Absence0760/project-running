@@ -1627,9 +1627,6 @@ func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) 
 	// one Art 9 set (decisions.md § 718), so exporting two of them is an
 	// archive that disagrees with the controller's own account.
 	//
-	// The EF twin's PROFILE_SELECT (export-data/backup_spec.ts) is
-	// narrower until it is mirrored; the queued Go rail is the only one
-	// either client reaches (decisions.md § 724).
 	q.Set("select", "id,display_name,handle,avatar_url,preferred_unit,created_at,onboarded_at,"+
 		"date_of_birth,gender,height_cm,parkrun_number,"+
 		"subscription_tier,subscription_at,billing_issue_at,"+

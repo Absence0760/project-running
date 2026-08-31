@@ -1399,7 +1399,79 @@ export const REGISTRY = [
 			{ label: `seed (${PUBLIC_RUNS_SEED})`, sites: seedDenylistSites },
 		],
 	},
+	{
+		name: 'Art 20 export user_profiles projection',
+		why:
+			'user_profiles reaches the export archive through an enumerated ' +
+			'select rather than through exportPersonalDataSpecs, so the ' +
+			'table-level completeness guard never covered it and eight columns ' +
+			'were absent from every archive. height_cm is the sharpest: ' +
+			'withdraw_health_data_consent() clears date_of_birth, gender and ' +
+			'height_cm as ONE Art 9 set (decisions.md § 718) and the archive was ' +
+			'exporting two of the three. The Go rail is the only one either ' +
+			'client reaches today (§ 724), but the Edge Function rail is still ' +
+			'deployed and a subject who reaches it must not get a thinner ' +
+			'archive than one who does not.',
+		match: 'all',
+		compare: 'set',
+		rails: [
+			{
+				label: 'go (apps/job_worker/internal/supabase.go FetchExportProfile)',
+				sites: (ctx) => [
+					{
+						key: 'projection',
+						where: 'FetchExportProfile q.Set("select", ...)',
+						values: goExportProfileColumns(ctx.read('apps/job_worker/internal/supabase.go')),
+					},
+				],
+			},
+			{
+				label: 'edge function (apps/backend/supabase/functions/export-data/backup_spec.ts)',
+				sites: (ctx) => [
+					{
+						key: 'projection',
+						where: 'PROFILE_SELECT',
+						values: tsExportProfileColumns(
+							ctx.read('apps/backend/supabase/functions/export-data/backup_spec.ts'),
+						),
+					},
+				],
+			},
+		],
+	},
 ];
+
+/// The column list `FetchExportProfile` asks PostgREST for. Read out of the
+/// concatenated Go string literal rather than matched in place, so a rail that
+/// stops being extractable reports as blind instead of as empty.
+/** @param {string} src @returns {string[]} */
+export function goExportProfileColumns(src) {
+	// Anchored on the function, because supabase.go issues many such calls and
+	// an unanchored read silently certifies whichever one happens to be first.
+	const start = src.search(/func \([^)]*\) FetchExportProfile\(/);
+	if (start === -1) return [];
+	const body = src.slice(start, start + 4000);
+	const call = /q\.Set\("select",\s*((?:"[^"]*"\s*\+?\s*)+)\)/.exec(body);
+	if (!call) return [];
+	return splitColumns(call[1]);
+}
+
+/// The same list on the Edge Function rail.
+/** @param {string} src @returns {string[]} */
+export function tsExportProfileColumns(src) {
+	const decl = /export const PROFILE_SELECT\s*=\s*((?:'[^']*'\s*\+?\s*)+);/.exec(src);
+	if (!decl) return [];
+	return splitColumns(decl[1]);
+}
+
+/** @param {string} literal @returns {string[]} */
+function splitColumns(literal) {
+	const joined = [...literal.matchAll(/["']([^"']*)["']/g)].map((m) => m[1]).join('');
+	return joined
+		.split(',')
+		.map((c) => c.trim())
+		.filter((c) => c.length > 0);
+}
 
 // ── Comparison ─────────────────────────────────────────────────────────────
 
