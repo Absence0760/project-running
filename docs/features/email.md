@@ -468,6 +468,36 @@ Dashboard → Auth → Hooks in prod):
   ADR for why. Goes live with the shared `SMTP_HOST` worker gate like every
   other notification kind; no new credential.
 
+- [x] **Reversed-refund notification** — SHIPPED 2026-08-31 (migration
+  `20270701000001`, `refund_failed` notification kind; `decisions.md § 825`).
+  A refund the bank sent back leaves money with us that we owe the payer, and
+  `decisions.md § 789` gave that state an honest name and an operator worklist
+  but no reader — the buyer's seat was gone, the refund never arrived, and
+  nothing said why. This is the sentence the app should be saying.
+  A **notification kind rather than a `jobs.kind`**, for two reasons that are
+  both about reach: the fan-out already turns one row into the inbox entry, the
+  email and both pushes, and the inbox is the **only one of those four mobile
+  renders** (there is no paid-registration surface on mobile at all —
+  `club_events.md` P3); and on the **donation** ledger it is the only surface
+  that can exist, because `donations` carries no client SELECT policy and a
+  donor cannot read their own row anywhere, so the message carries the whole
+  sentence rather than pointing at a ledger they cannot see.
+  In `importantKinds`, so the default `important` mode delivers it. It gets
+  **no `kindMutePrefKey` entry** — a per-kind opt-out of being told we still
+  hold your money is not a control anyone benefits from having, and
+  `email_notifications = off` still silences it, which is the fail-closed
+  property that matters. There is no `notified_at` stamp either: the enqueue
+  trigger is `after update of status ... when (old.status is distinct from
+  new.status)`, and the webhook CASes against the status it read, so a
+  redelivery updates no row and announces nothing — the § Idempotency rule for
+  recurring transactional templates, not the once-per-account one.
+  `pathForKind` has **two arms**: an event order carries `event_id` and goes to
+  `/events/{id}`, a donation carries no FK and goes to the inbox, because
+  `eventPath`'s own `/clubs` fallback would answer "we still have your money"
+  with a club directory. An **anonymous** donation (`donor_user_id` null) has
+  no account to reach and is skipped in the trigger. Goes live with the shared
+  `SMTP_HOST` worker gate; no new credential.
+
 ### Not planned (with reason)
 
 - **New-device sign-in alerts** — there's no sign-in/device tracking to key
@@ -652,7 +682,9 @@ The code side is built and committed:
   the `NOT VALID` + `VALIDATE` two-step because `notifications` is a guarded
   table, plus `data_export_jobs.notified_at` and the `notify_data_export_ready()`
   service-role RPC; the opt-OUT `notify_data_export_ready` pref is a jsonb key
-  with no migration).
+  with no migration), `20270701000001` (reversed refund — the `refund_failed`
+  notifications kind on the same two-step, plus one `after update of status`
+  trigger per money ledger; no stamp column and no pref, decisions § 825).
 - Native-push client leg: the mobile device-token registration —
   `apps/mobile_android/lib/push_messaging_bridge.dart` +
   `firebase_push_messaging.dart` (byte-identical iOS twins), wired in `main.dart`,
@@ -678,4 +710,4 @@ The code side is built and committed:
   the committed `supabase/functions/.env`.
 - ADRs: `decisions.md` §117 (channel), §119 (lifecycle kind), §120 (i18n),
   §121 (subscription emails), §131 (safety-contact alerts), §203 (auth-email
-  hook), §729 (data-export-ready + the per-kind mute).
+  hook), §729 (data-export-ready + the per-kind mute), §825 (reversed refund).

@@ -134,6 +134,37 @@ export function isRefundLifecycleEvent(eventType: string): boolean {
   return REFUND_LIFECYCLE_EVENTS.includes(eventType);
 }
 
+/// The API version from which `refund.failed` / `refund.updated` reach a
+/// refund that has a charge. Below it Stripe sends the deprecated
+/// `charge.refund.updated` instead.
+export const REFUND_EVENTS_MIN_API_VERSION = '2024-10-28.acacia';
+
+/// Which refund-event era a delivery belongs to, read off the version Stripe
+/// stamps on the event itself.
+///
+/// A webhook endpoint's pinned API version and its enabled-events list are
+/// dashboard configuration this repo cannot read, and § 789 handled both eras
+/// rather than assume one. But the delivery TELLS us: every event payload
+/// carries `api_version`. Grading it is what turns "unknowable from here" into
+/// a line an operator can grep, which is the whole of the second half of the
+/// § 789 follow-up (decisions § 826).
+///
+/// Compared on the ISO date prefix only. Stripe versions are `YYYY-MM-DD`
+/// optionally followed by `.name`, the date orders lexicographically, and the
+/// suffix is a label rather than an ordinal — comparing whole strings would
+/// make `2024-10-28.acacia` sort after a hypothetical `2024-10-28.zebra` on a
+/// spelling, not a date. A version that is not a date is `unknown`, never
+/// silently modern: claiming the modern era for an unreadable value is the
+/// assumption this exists to remove.
+export function refundEventsApiEra(
+  apiVersion: string | null,
+): 'modern' | 'legacy' | 'unknown' {
+  if (apiVersion === null) return 'unknown';
+  const date = apiVersion.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'unknown';
+  return date >= REFUND_EVENTS_MIN_API_VERSION.slice(0, 10) ? 'modern' : 'legacy';
+}
+
 /// Metadata as it can actually be read. Stripe declares it
 /// `{ [name: string]: string }`, and TypeScript hands back `string` for a
 /// key that is not there unless the read is typed to admit it — which is a
@@ -425,6 +456,11 @@ export async function verifyStripeSignature(
 export interface StripeEventEnvelope {
   id: string;
   type: string;
+  /// The API version the ENDPOINT is pinned to, as Stripe stamps it on the
+  /// delivery. Optional in the parse rather than required: it is diagnostic,
+  /// and rejecting a delivery that omitted it would drop a real money event
+  /// over a field no handler reads.
+  apiVersion: string | null;
   data: { object: Record<string, unknown> };
 }
 
@@ -447,7 +483,13 @@ export function parseStripeEventEnvelope(rawBody: string): StripeEventEnvelope |
   if (typeof data !== 'object' || data === null) return null;
   const dataObj = (data as Record<string, unknown>).object;
   if (typeof dataObj !== 'object' || dataObj === null) return null;
-  return { id, type, data: { object: dataObj as Record<string, unknown> } };
+  const apiVersion = obj.api_version;
+  return {
+    id,
+    type,
+    apiVersion: typeof apiVersion === 'string' ? apiVersion : null,
+    data: { object: dataObj as Record<string, unknown> },
+  };
 }
 
 export type OrderStatus =

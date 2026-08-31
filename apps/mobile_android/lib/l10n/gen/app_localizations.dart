@@ -7264,6 +7264,12 @@ abstract class AppLocalizations {
   /// **'Your data export is ready to download'**
   String get profileNotifDataExportReady;
 
+  /// Notification text for a refund the bank reversed, on an event order or a donation
+  ///
+  /// In en, this message translates to:
+  /// **'A refund we started couldn\'t be completed. The money is still with us and we\'ll arrange another way to return it.'**
+  String get profileNotifRefundFailed;
+
   /// Fallback notification text for unknown kinds
   ///
   /// In en, this message translates to:

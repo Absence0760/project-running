@@ -4170,6 +4170,10 @@ class AppLocalizationsJa extends AppLocalizations {
   String get profileNotifDataExportReady => 'データのエクスポートをダウンロードできます';
 
   @override
+  String get profileNotifRefundFailed =>
+      '開始した返金が完了しませんでした。代金はまだ当方にあり、別の方法で返金の手配をします。';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$nameがあなたのアクティビティに反応しました';
   }

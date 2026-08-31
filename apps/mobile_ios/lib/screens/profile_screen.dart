@@ -1233,6 +1233,22 @@ class _ProfileScreenState extends State<ProfileScreen>
       // cannot construct (it holds none of that screen's dependencies), so
       // the request is parked for the shell to drain — decisions § 710.
       openSettings(SettingsDestination.account);
+    } else if (kind == 'refund_failed' &&
+        item.row.eventId != null &&
+        item.eventClubSlug != null) {
+      // Only the event-order half has somewhere to go. A donation refund
+      // failure carries no FK — `donations` has no client SELECT policy, so
+      // there is no donor-facing row on any platform — and the inbox line is
+      // the whole message rather than a pointer to one (decisions § 825).
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => EventDetailScreen(
+            social: SocialService(),
+            clubSlug: item.eventClubSlug!,
+            eventId: item.row.eventId!,
+          ),
+        ),
+      );
     }
   }
 
@@ -1281,6 +1297,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         return l10n.profileNotifContentHidden;
       case 'data_export_ready':
         return l10n.profileNotifDataExportReady;
+      case 'refund_failed':
+        return l10n.profileNotifRefundFailed;
       case 'message':
         return l10n.profileNotifMessage(name);
       case 'club_post':

@@ -65,6 +65,7 @@ import {
   readRefund,
   type Refund,
   refundedCentsOfCharge,
+  refundEventsApiEra,
   refundReversed,
   refundScopeOfCharge,
   shouldReleaseDedupe,
@@ -197,6 +198,23 @@ async function dispatchStripeEvent(
     return donationRes ?? await handleOrderRefunded(service, charge);
   }
   if (isRefundLifecycleEvent(event.type)) {
+    // Say, once per refund delivery, which era this endpoint is configured
+    // for. § 789 handled both because a webhook endpoint's pinned API version
+    // is dashboard configuration this repo cannot read — but the delivery
+    // carries it, so the unreadable half is only unreadable at BUILD time. A
+    // `legacy` line means the endpoint predates 2024-10-28.acacia and is
+    // receiving only the deprecated `charge.refund.updated`; an `unknown` one
+    // means Stripe sent no version we could parse. Logged on this branch alone
+    // because this is the only branch whose behaviour the version decides.
+    // decisions § 826.
+    console.log(
+      'stripe refund event era:',
+      refundEventsApiEra(event.apiVersion),
+      'api_version:',
+      event.apiVersion ?? 'absent',
+      'type:',
+      event.type,
+    );
     // All three carry a Refund, and NONE of them means a failure by itself:
     // `refund.updated` fires whenever Stripe attaches an acquirer reference
     // number, and acting on the event type alone would walk a correctly

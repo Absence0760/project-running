@@ -14,6 +14,8 @@ import {
   orderStatusTransition,
   isPaymentSettled,
   parseStripeEventEnvelope,
+  REFUND_EVENTS_MIN_API_VERSION,
+  refundEventsApiEra,
   isRefundLifecycleEvent,
   knownRefundStatus,
   paymentRefundRecord,
@@ -138,6 +140,53 @@ Deno.test('parseStripeEventEnvelope — garbage / missing fields -> null', () =>
     parseStripeEventEnvelope(JSON.stringify({ id: 'x', type: 't', data: {} })),
     null,
   ); // no data.object
+});
+
+Deno.test('parseStripeEventEnvelope — the endpoint API version is carried, never required', () => {
+  const stamped = parseStripeEventEnvelope(
+    JSON.stringify({
+      id: 'evt_1',
+      type: 'refund.failed',
+      api_version: '2024-10-28.acacia',
+      data: { object: { id: 're_1' } },
+    }),
+  );
+  assertStrictEquals(stamped?.apiVersion, '2024-10-28.acacia');
+  // Absent and non-string both read as null rather than rejecting the
+  // delivery: no handler branches on it, and dropping a money event over a
+  // diagnostic field would be the more expensive failure.
+  assertStrictEquals(
+    parseStripeEventEnvelope(
+      JSON.stringify({ id: 'e', type: 't', data: { object: {} } }),
+    )?.apiVersion,
+    null,
+  );
+  assertStrictEquals(
+    parseStripeEventEnvelope(
+      JSON.stringify({ id: 'e', type: 't', api_version: 20241028, data: { object: {} } }),
+    )?.apiVersion,
+    null,
+  );
+});
+
+Deno.test('refundEventsApiEra — the boundary is the DATE, and nothing else is modern', () => {
+  // The exact version the two non-deprecated refund events arrive from.
+  assertStrictEquals(refundEventsApiEra(REFUND_EVENTS_MIN_API_VERSION), 'modern');
+  assertStrictEquals(refundEventsApiEra('2024-10-28'), 'modern');
+  assertStrictEquals(refundEventsApiEra('2025-03-31.basil'), 'modern');
+  // One day short: this endpoint receives only charge.refund.updated.
+  assertStrictEquals(refundEventsApiEra('2024-10-27.acacia'), 'legacy');
+  assertStrictEquals(refundEventsApiEra('2019-05-16'), 'legacy');
+  // The suffix is a label, not an ordinal — a whole-string compare would rank
+  // these two by spelling, and one of them would come out on the wrong side.
+  assertStrictEquals(refundEventsApiEra('2024-10-28.aaaaaaa'), 'modern');
+  assertStrictEquals(refundEventsApiEra('2024-11-01.aaaaaaa'), 'modern');
+  // Anything unreadable claims nothing. Reporting `modern` here would restore
+  // exactly the assumption this grading exists to remove.
+  for (const bad of ['', 'acacia', '2024-10', 'latest', '20241028', 'x024-10-28']) {
+    assertStrictEquals(refundEventsApiEra(bad), 'unknown', bad);
+  }
+  assertStrictEquals(refundEventsApiEra(null), 'unknown');
 });
 
 Deno.test('orderStatusTransition — pending + completed -> paid', () => {

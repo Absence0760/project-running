@@ -464,6 +464,15 @@
 		myOrder != null && myOrder.status === 'paid' && myOrder.refund_initiated_at != null
 	);
 
+	// The refund was started, Stripe created it, and the bank sent it back:
+	// `refunded -> refund_failed` (decisions § 789). The seat is already gone
+	// and is deliberately not restored, so `regState` is no longer
+	// `already_registered` and the whole registered block — where every other
+	// order state is rendered — never draws. This one has to stand outside it,
+	// and outside the `!isPast` gate too: money we still owe does not stop
+	// being owed once the event has happened.
+	let refundFailed = $derived(myOrder != null && myOrder.status === 'refund_failed');
+
 	// Whether a self-cancel of the current paid slot would refund the buyer,
 	// per the event's refund_policy and the time remaining. Pure mirror of the
 	// EF's server-side gate — used only to pick the confirm copy; the EF still
@@ -1654,6 +1663,19 @@
 						>
 					</div>
 				{/if}
+				{#if refundFailed}
+					<div class="refund-failed-banner" role="alert" data-testid="refund-failed-banner">
+						<span class="material-symbols" aria-hidden="true">credit_card_off</span>
+						<div>
+							<strong>{m('clubEvent.refundFailedTitle')}</strong>
+							<p>{m('clubEvent.refundFailedBody')}</p>
+							<p>{m('clubEvent.refundFailedNext')}</p>
+							<a class="btn btn-outline" href="mailto:billing@threkir.com">
+								{m('clubEvent.refundFailedContact')}
+							</a>
+						</div>
+					</div>
+				{/if}
 				{#if activeException}
 					<div class="cancelled-banner" role="status">
 						<span class="material-symbols" aria-hidden="true">event_busy</span>
@@ -2826,6 +2848,27 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--color-text-secondary);
+	}
+	.refund-failed-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.6rem;
+		padding: 0.7rem 0.9rem;
+		border: 1px solid var(--color-warning);
+		border-radius: var(--radius-md);
+		background: var(--color-warning-light);
+		margin-bottom: 0.6rem;
+	}
+	.refund-failed-banner .material-symbols {
+		color: var(--color-warning-text);
+	}
+	.refund-failed-banner p {
+		margin: 0.3rem 0 0;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.refund-failed-banner .btn {
+		margin-top: 0.6rem;
 	}
 	.cancelled-banner {
 		display: flex;
