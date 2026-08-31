@@ -173,3 +173,42 @@ test('every message key the preference surface names exists in the catalogue', (
 		'the note fires on point-to-point too, where the button itself says "route"',
 	);
 });
+
+test('the assistant\'s parsed preference drives the control, not just the summary', () => {
+	// § 797/§ 798's pre-existing gap: the NL panel listed `avoidHighways` in
+	// its "applied" summary while never setting the page's control or the
+	// request, so a request to avoid main roads was acknowledged and then not
+	// honoured. The fix is that one assignment; without it the summary is a
+	// claim about nothing.
+	const src = read(PAGE);
+	assert.match(
+		src,
+		/preference = c\.preference \?\? \(c\.avoidHighways \? 'quiet' : null\)/,
+		'the parsed preference must set the control, with avoidHighways mapping onto ' +
+			"'quiet' only when nothing narrower came back",
+	);
+	// And the summary reports what was assigned, not the raw constraint object.
+	assert.match(
+		src,
+		/nlApplied = \{\s*shape: c\.shape,\s*preference,/,
+		'the summary must report the preference the page actually adopted',
+	);
+});
+
+test('the preference the assistant may set is the generator vocabulary and nothing wider', () => {
+	// `constraints.ts` validates against a set derived FROM the generator, so
+	// this pins the seam rather than the set: the page's own type is the
+	// generator's union, which makes a widened assistant vocabulary a build
+	// error here rather than a token the generator cannot route.
+	const src = read(PAGE);
+	assert.match(
+		src,
+		/let preference = \$state<RoutePreference \| null>\(null\)/,
+		'the control holds the generator union, so nothing wider can reach the request',
+	);
+	assert.match(
+		src,
+		/preference: RoutePreference \| null;/,
+		'the applied summary is typed on the same union',
+	);
+});
