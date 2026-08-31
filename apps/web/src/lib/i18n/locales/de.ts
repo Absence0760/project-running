@@ -1120,6 +1120,8 @@ export const messages = {
 	"runDetail.public": "Öffentlich",
 	"runDetail.private": "Privat",
 	"runDetail.dnf": "DNF",
+	"runDetail.guidedRun": "Geführter Lauf",
+	"runDetail.guidedRunNamed": "Geführt: {title}",
 	"runDetail.incomplete": "Unvollständig",
 	"runDetail.incompleteHint":
 		"Deine Uhr wurde mitten im Lauf neu gestartet. Diese Werte umfassen nur, was bis dahin aufgezeichnet war, nicht die gesamte Aktivität.",

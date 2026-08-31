@@ -1115,6 +1115,8 @@ export const messages = {
 	"runDetail.public": "公開",
 	"runDetail.private": "非公開",
 	"runDetail.dnf": "DNF",
+	"runDetail.guidedRun": "ガイド付きラン",
+	"runDetail.guidedRunNamed": "ガイド付き：{title}",
 	"runDetail.incomplete": "記録途中",
 	"runDetail.incompleteHint":
 		"ラン中にウォッチが再起動しました。ここに表示されている合計はその時点までに記録された分だけで、アクティビティ全体ではありません。",
