@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/race_service.dart';
 
-// The wire-level probe (isChronoTrackConfigured) + importRaceResult dispatch
+// The wire-level probe (isProviderConfigured) + importRaceResult dispatch
 // need a live Supabase session, which mobile has no e2e for by design
 // (docs/testing/testing.md). These pin the twin-shared, network-free contract:
 // the distinct fail-closed exception type exists and a ChronoTrack pasted-result

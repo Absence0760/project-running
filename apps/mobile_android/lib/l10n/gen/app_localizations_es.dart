@@ -12302,6 +12302,13 @@ class AppLocalizationsEs extends AppLocalizations {
       'Introduce tu dorsal para importar solo tu resultado, no toda la clasificación.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'ID de atleta de UltraSignup';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Introduce tu ID de atleta de UltraSignup, o déjalo en blanco para usar el de esta carrera.';
+
+  @override
   String get racesPasteResultHint =>
       'Introduce los datos de tu llegada desde la página de resultados de la carrera.';
 
@@ -12356,6 +12363,20 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'La importación de RunSignUp aún no está disponible. parkrun y el pegado manual siguen funcionando.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Importa resultados de trail y ultra desde UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Abrir el calendario de carreras';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'La importación de UltraSignup aún no está disponible. parkrun y el pegado manual siguen funcionando.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';

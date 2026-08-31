@@ -112,11 +112,94 @@ class RunSignUpUnavailable implements Exception {
   const RunSignUpUnavailable();
 }
 
+/// Thrown when the UltraSignup leg is unconfigured server-side (503), so the UI
+/// can show the unavailable explainer rather than a generic failure.
+class UltraSignUpUnavailable implements Exception {
+  const UltraSignUpUnavailable();
+}
+
 /// Thrown when the ChronoTrack leg is unconfigured server-side (503), so the UI
 /// can show the unavailable explainer rather than a generic failure.
 class ChronoTrackUnavailable implements Exception {
   const ChronoTrackUnavailable();
 }
+
+/// The one scoping value a provider's leg needs before it may be called.
+enum RaceImportScope {
+  /// The runner's bib narrows the finisher field to their own row. An unscoped
+  /// pull returns the whole field and every row of it is inserted as the
+  /// caller's own run (issue #360), so the client refuses one too.
+  bib,
+
+  /// The runner's own athlete id IS the upstream endpoint, so the pull is
+  /// already scoped. An UltraSignup listing carries it as `provider_race_id`,
+  /// which makes the field a fallback rather than a gate.
+  athleteId,
+}
+
+/// One race-results provider with a built leg in `race-results-import`, keyed
+/// by the token that function takes.
+///
+/// This list is the only provider vocabulary the app holds: the probe, the
+/// fail-closed exception and what a caller must supply all hang off it, so a
+/// leg added server-side reaches every mobile surface by being named here once.
+///
+/// `paste` is deliberately absent — it is the universal manual fallback rather
+/// than a listing provider, needs no credential and no probe, and stays offered
+/// beside every entry here. So are `parkrun`, `manual` and `raceresult`, which
+/// are listing providers with no bib-import leg at all.
+class RaceImportProvider {
+  final String provider;
+  final RaceImportScope scope;
+
+  /// Thrown on the 503 `provider_not_configured` so a surface shows THIS
+  /// provider's explainer and never a peer's.
+  final Exception unavailable;
+
+  final String probeFunction;
+  final Map<String, dynamic> probeBody;
+
+  const RaceImportProvider({
+    required this.provider,
+    required this.scope,
+    required this.unavailable,
+    required this.probeFunction,
+    required this.probeBody,
+  });
+}
+
+const List<RaceImportProvider> raceImportProviders = [
+  RaceImportProvider(
+    provider: 'runsignup',
+    scope: RaceImportScope.bib,
+    unavailable: RunSignUpUnavailable(),
+    probeFunction: 'race-listings-sync',
+    probeBody: <String, dynamic>{},
+  ),
+  RaceImportProvider(
+    provider: 'ultrasignup',
+    scope: RaceImportScope.athleteId,
+    unavailable: UltraSignUpUnavailable(),
+    probeFunction: 'race-listings-sync',
+    probeBody: <String, dynamic>{'provider': 'ultrasignup'},
+  ),
+  RaceImportProvider(
+    provider: 'chronotrack',
+    scope: RaceImportScope.bib,
+    unavailable: ChronoTrackUnavailable(),
+    probeFunction: 'race-results-import',
+    probeBody: <String, dynamic>{'provider': 'chronotrack', 'probe': true},
+  ),
+];
+
+final Map<String, RaceImportProvider> _providerByToken = {
+  for (final p in raceImportProviders) p.provider: p,
+};
+
+/// The spec for a listing's provider, or null when that provider has no import
+/// leg. A null is not a gap: manual paste still applies to every listing.
+RaceImportProvider? raceImportProviderFor(String provider) =>
+    _providerByToken[provider];
 
 /// All Supabase calls for the race calendar + results import (race_calendar.md).
 /// Mirrors the web `data.ts` race helpers; wire-level methods are exercisable
@@ -258,13 +341,14 @@ class RaceService extends ChangeNotifier {
     return searchRaceListings(from: day, to: day, limit: 20);
   }
 
-  /// Invoke `race-results-import`. Throws [RunSignUpUnavailable] or
-  /// [ChronoTrackUnavailable] on the 503 `provider_not_configured` so the UI
-  /// can show the explainer.
+  /// Invoke `race-results-import`. Throws the provider's own
+  /// [RaceImportProvider.unavailable] on the 503 `provider_not_configured` so
+  /// the UI can show that provider's explainer.
   Future<ImportRaceResultOutcome> importRaceResult({
-    required String provider, // 'runsignup' | 'chronotrack' | 'paste'
+    required String provider, // a [raceImportProviders] token, or 'paste'
     required String listingId,
     String? bib,
+    String? ultraSignUpAthleteId,
     String? matchRunId,
     PastedRaceResult? result,
   }) async {
@@ -273,6 +357,8 @@ class RaceService extends ChangeNotifier {
         'provider': provider,
         'listingId': listingId,
         if (bib != null) 'bib': bib,
+        if (ultraSignUpAthleteId != null)
+          'ultraSignUpAthleteId': ultraSignUpAthleteId,
         if (matchRunId != null) 'matchRunId': matchRunId,
         if (result != null) 'result': result.toJson(),
       });
@@ -283,39 +369,28 @@ class RaceService extends ChangeNotifier {
         enriched: (data['enriched'] as num?)?.toInt() ?? 0,
       );
     } on FunctionException catch (e) {
-      if (e.status == 503 && _isProviderNotConfigured(e.details)) {
-        if (provider == 'chronotrack') throw const ChronoTrackUnavailable();
-        throw const RunSignUpUnavailable();
+      final spec = raceImportProviderFor(provider);
+      if (spec != null && e.status == 503 && _isProviderNotConfigured(e.details)) {
+        throw spec.unavailable;
       }
       rethrow;
     }
   }
 
-  /// Probe whether the RunSignUp leg is configured server-side. Returns false
-  /// on a 503 `provider_not_configured`, true otherwise — drives the disabled
-  /// RunSignUp tile + explainer.
-  Future<bool> isRunSignUpConfigured() async {
+  /// Probe whether [provider]'s import leg is configured server-side, over the
+  /// probe that provider's [RaceImportProvider] names. Returns false on a 503
+  /// `provider_not_configured` — and false without a call for a listing
+  /// provider that has no import leg at all, so a caller can ask about any
+  /// listing and get an honest answer rather than a peer provider's.
+  ///
+  /// Anything else answers true: a probe that could not reach the server has
+  /// not shown the provider to be unconfigured, and disabling a live leg on a
+  /// dropped connection would be its own dishonesty.
+  Future<bool> isProviderConfigured(String provider) async {
+    final spec = raceImportProviderFor(provider);
+    if (spec == null) return false;
     try {
-      await _c.functions.invoke('race-listings-sync', body: const {});
-      return true;
-    } on FunctionException catch (e) {
-      if (e.status == 503 && _isProviderNotConfigured(e.details)) return false;
-      return true;
-    } catch (_) {
-      return true;
-    }
-  }
-
-  /// Probe whether the ChronoTrack leg is configured server-side. Returns false
-  /// on a 503 `provider_not_configured`, true otherwise — drives the disabled
-  /// ChronoTrack tile + explainer. Uses the `race-results-import` probe mode (no
-  /// listing needed), mirroring [isRunSignUpConfigured].
-  Future<bool> isChronoTrackConfigured() async {
-    try {
-      await _c.functions.invoke(
-        'race-results-import',
-        body: const {'provider': 'chronotrack', 'probe': true},
-      );
+      await _c.functions.invoke(spec.probeFunction, body: spec.probeBody);
       return true;
     } on FunctionException catch (e) {
       if (e.status == 503 && _isProviderNotConfigured(e.details)) return false;

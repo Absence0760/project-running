@@ -20337,6 +20337,18 @@ abstract class AppLocalizations {
   /// **'Enter your bib number so we import only your result, not the whole field.'**
   String get racesRunSignUpBibHint;
 
+  /// Label for the UltraSignup athlete-id field in the race import sheet
+  ///
+  /// In en, this message translates to:
+  /// **'UltraSignup athlete ID'**
+  String get racesUltraSignUpAthleteId;
+
+  /// Hint above the UltraSignup import action explaining the optional athlete id
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your UltraSignup athlete ID, or leave it blank to use the one this listing carries.'**
+  String get racesUltraSignUpAthleteHint;
+
   /// Hint above the manual result paste form
   ///
   /// In en, this message translates to:
@@ -20438,6 +20450,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'RunSignUp import isn\'t available yet. parkrun and manual paste still work.'**
   String get integrationsRunsignupUnavailable;
+
+  /// UltraSignup integration name
+  ///
+  /// In en, this message translates to:
+  /// **'UltraSignup'**
+  String get integrationsUltrasignup;
+
+  /// UltraSignup integration description
+  ///
+  /// In en, this message translates to:
+  /// **'Import trail and ultra results from UltraSignup.'**
+  String get integrationsUltrasignupConnect;
+
+  /// Action linking to the race calendar from the UltraSignup tile
+  ///
+  /// In en, this message translates to:
+  /// **'Open the race calendar'**
+  String get integrationsUltrasignupOpen;
+
+  /// Explainer when the UltraSignup key is unconfigured
+  ///
+  /// In en, this message translates to:
+  /// **'UltraSignup import isn\'t available yet. parkrun and manual paste still work.'**
+  String get integrationsUltrasignupUnavailable;
 
   /// ChronoTrack integration name
   ///

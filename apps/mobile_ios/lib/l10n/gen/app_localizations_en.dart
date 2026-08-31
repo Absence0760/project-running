@@ -12176,6 +12176,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter your bib number so we import only your result, not the whole field.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'UltraSignup athlete ID';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Enter your UltraSignup athlete ID, or leave it blank to use the one this listing carries.';
+
+  @override
   String get racesPasteResultHint =>
       'Enter your finishing details from the race\'s results page.';
 
@@ -12229,6 +12236,20 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'RunSignUp import isn\'t available yet. parkrun and manual paste still work.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Import trail and ultra results from UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Open the race calendar';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'UltraSignup import isn\'t available yet. parkrun and manual paste still work.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
