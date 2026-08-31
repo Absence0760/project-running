@@ -400,12 +400,6 @@ class RaceService extends ChangeNotifier {
     }
   }
 
-  /// Probe whether the RunSignUp leg is configured server-side.
-  Future<bool> isRunSignUpConfigured() => isProviderConfigured('runsignup');
-
-  /// Probe whether the ChronoTrack leg is configured server-side.
-  Future<bool> isChronoTrackConfigured() => isProviderConfigured('chronotrack');
-
   bool _isProviderNotConfigured(dynamic details) {
     if (details is Map && details['error'] == 'provider_not_configured') return true;
     return details.toString().contains('provider_not_configured');
