@@ -11,7 +11,7 @@
 
 begin;
 
-select plan(14);
+select plan(17);
 
 -- ── Fixture ──────────────────────────────────────────────────────
 -- A and C both follow B, so both are inside the send gate. D follows B
@@ -192,6 +192,42 @@ select lives_ok(
     values ('00000000-0000-0000-0000-00000000dd01',
             '00000000-0000-0000-0000-00000000dd02', 'written by direct SQL')$$,
   'a caller with no auth context writes past a spent burst window'
+);
+
+-- ── A throttled sender cannot clear their own counter ────────────
+-- decisions § 799: `cleanup_stale_rate_limits()` was anon-executable, and its
+-- whole body is `delete from rate_limits where window_start < now() - 24h` —
+-- an anonymous POST to it cleared every elapsed window and defeated every
+-- throttle in the app. 20270625000001 withheld it. The table itself carries
+-- the deliberate 20270408_001 grant matrix with RLS on and no policy at all,
+-- so the direct route is a silent zero-row delete rather than a refusal, and
+-- both routes are asserted: the counter A spent is still spent afterwards.
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000dd01","role":"authenticated"}';
+
+select throws_ok(
+  $$ select cleanup_stale_rate_limits() $$,
+  '42501',
+  null,
+  'a throttled sender cannot execute the sweep that would clear their window'
+);
+
+delete from rate_limits where user_id = '00000000-0000-0000-0000-00000000dd01';
+
+select throws_matching(
+  $$ insert into direct_messages (sender_id, recipient_id, body)
+       values ('00000000-0000-0000-0000-00000000dd01',
+               '00000000-0000-0000-0000-00000000dd02', 'after the reset attempt') $$,
+  '^rate limit exceeded for send_direct_message_burst, retry in [0-9]+s$',
+  'and a direct delete of their own counter rows leaves them just as throttled'
+);
+
+set local role postgres;
+select is(
+  (select count(*)::int from rate_limits
+    where user_id = '00000000-0000-0000-0000-00000000dd01'),
+  2,
+  'both of the sender''s counter rows survived the delete'
 );
 
 -- ── A refused send does not spend the volume budget ───────────────
