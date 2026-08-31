@@ -24,7 +24,12 @@ import '../lib/training_service.dart';
 import '../lib/screens/home_screen.dart';
 import '../lib/screens/run_screen.dart';
 import '../lib/screens/settings_about_screen.dart';
+import '../lib/screens/settings_account_screen.dart';
+import '../lib/screens/settings_body_metrics_screen.dart';
+import '../lib/screens/settings_integrations_screen.dart';
 import '../lib/screens/settings_preferences_screen.dart';
+import '../lib/screens/settings_pro_screen.dart';
+import '../lib/screens/settings_safety_screen.dart';
 import '../lib/screens/setup_wizard_screen.dart';
 
 /// Drives auth transitions for the setup-wizard gate (#232): a fresh
@@ -556,6 +561,114 @@ void main() {
       await openAndSettle(tester);
 
       expect(find.byType(SettingsPreferencesScreen), findsOneWidget);
+    });
+
+    // Only `preferences` and `about` were ever driven end to end, so five of
+    // the seven arms of `_settingsDestinationScreen` were unexercised — a
+    // switch wired to the wrong screen, or a new destination added with no
+    // arm at all, would have shipped. The loop is over the enum rather than
+    // over a hand-written list, so a destination added without a case here
+    // fails at compile time in the map below and at run time in the switch.
+    const expectedScreen = <SettingsDestination, Type>{
+      SettingsDestination.preferences: SettingsPreferencesScreen,
+      SettingsDestination.account: SettingsAccountScreen,
+      SettingsDestination.safety: SettingsSafetyScreen,
+      SettingsDestination.integrations: SettingsIntegrationsScreen,
+      SettingsDestination.bodyMetrics: SettingsBodyMetricsScreen,
+      SettingsDestination.about: SettingsAboutScreen,
+      SettingsDestination.pro: SettingsProScreen,
+    };
+
+    test('every destination in the enum is named here', () {
+      expect(expectedScreen.keys.toSet(), SettingsDestination.values.toSet(),
+          reason: 'a destination the shell can be asked for but that no test '
+              'ever opens is an arm nobody has run');
+    });
+
+    for (final entry in expectedScreen.entries) {
+      testWidgets('${entry.key.name} opens ${entry.value}', (tester) async {
+        final s = await _makeStores();
+        await _pump(tester, s);
+        expect(find.byType(entry.value), findsNothing,
+            reason: 'negative control: the screen must not already be up, or '
+                'the assertion below proves nothing');
+
+        openSettings(entry.key);
+        await openAndSettle(tester);
+
+        expect(find.byType(entry.value), findsOneWidget,
+            reason: 'the caller holds none of the dependencies '
+                '${entry.value} takes — naming it has to be enough');
+        // No other settings screen came up: a switch arm returning its
+        // neighbour would otherwise read as a pass on both.
+        for (final other in expectedScreen.values.toSet()) {
+          if (other == entry.value) continue;
+          expect(find.byType(other), findsNothing,
+              reason: '${entry.key.name} also opened $other');
+        }
+        tester.takeException();
+      });
+    }
+
+    testWidgets('the push lands on the current tab, not on You', (tester) async {
+      // Contract, not incident: a runner sent to Preferences from the nearby
+      // list wants one Back to return to the list they were reading, rather
+      // than to be relocated into the Settings tab.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      final before = tester.widget<PageView>(find.byType(PageView).first);
+      final beforeIndex = before.controller?.page ?? before.controller?.initialPage;
+
+      openSettings(SettingsDestination.about);
+      await openAndSettle(tester);
+      expect(find.byType(SettingsAboutScreen), findsOneWidget);
+
+      final after = tester.widget<PageView>(find.byType(PageView).first);
+      expect(after.controller?.page ?? after.controller?.initialPage, beforeIndex,
+          reason: 'the shell must not switch tabs on the way to a pushed '
+              'settings screen');
+    });
+
+    testWidgets('the same destination twice opens twice', (tester) async {
+      // The slot-clearing drain is what makes this possible: a ValueNotifier
+      // is silent on an unchanged value, so a shell that left the slot full
+      // would swallow the second request in silence.
+      final s = await _makeStores();
+      await _pump(tester, s);
+
+      openSettings(SettingsDestination.about);
+      await openAndSettle(tester);
+      expect(find.byType(SettingsAboutScreen), findsOneWidget);
+
+      final nav = tester.state<NavigatorState>(find.byType(Navigator).last);
+      nav.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byType(SettingsAboutScreen), findsNothing);
+
+      openSettings(SettingsDestination.about);
+      await openAndSettle(tester);
+      expect(find.byType(SettingsAboutScreen), findsOneWidget,
+          reason: 'an identical second request must reach the shell');
+      tester.takeException();
+    });
+
+    testWidgets('a request after the shell is gone is inert', (tester) async {
+      // The seam is global, so a request parked by a surface after the shell
+      // unmounted must not reach a dead listener. It stays parked for the
+      // next shell instead.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      await tester.pumpWidget(const SizedBox.shrink());
+
+      openSettings(SettingsDestination.safety);
+      await tester.pump();
+
+      expect(tester.takeException(), isNull,
+          reason: 'the shell removes its listener on dispose');
+      expect(pendingSettingsDestination.value, SettingsDestination.safety,
+          reason: 'nothing drained it, so it waits');
     });
   });
 }
