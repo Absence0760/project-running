@@ -62,7 +62,21 @@ export function parsePageCodes(src) {
 	if (at === -1) throw new Error('check_watch_page_ring: no `fn code` in page.rs');
 	const body = code.slice(at, endOfArmBlock(code, at));
 	const out = new Map();
+	/** @type {Map<string, string>} */
+	const owner = new Map();
 	for (const m of body.matchAll(/Page::(\w+)\s*=>\s*"([A-Z0-9]{1,5})"/g)) {
+		// Two variants under one code collapse their edges into one another
+		// silently — `A => B` and `A' => B'` both read as `X>Y` — so the ring
+		// would agree with a diagram drawing neither page. The codes are also
+		// the panel labels, where a duplicate is its own bug.
+		const clash = owner.get(m[2]);
+		if (clash !== undefined) {
+			throw new Error(
+				`check_watch_page_ring: Page::${clash} and Page::${m[1]} both take the ` +
+					`code "${m[2]}", so the ring cannot tell their edges apart.`,
+			);
+		}
+		owner.set(m[2], m[1]);
 		out.set(m[1], m[2]);
 	}
 	if (out.size === 0) throw new Error('check_watch_page_ring: `fn code` parsed empty');
