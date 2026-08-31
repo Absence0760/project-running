@@ -50,7 +50,14 @@ const ALL_STATUSES = [
 /// the list on purpose: they reach the transition tables only after
 /// `refundReversed` has normalised them onto `refund.failed`, so the tables
 /// themselves must answer null for both.
-const ALL_EVENTS = [
+/// A FUNCTION rather than a module-level constant, and so are the two tables
+/// below. `check_edge_function_test_vacuity.mjs` re-runs this suite against a
+/// tree whose every module exports its names as `undefined`, and a top-level
+/// `STRIPE_EVENT.chargeRefunded` throws while that file is being loaded — which
+/// takes the whole file out of the mutant run and scores it as UNMEASURED
+/// rather than as a kill. Deferring the reads into the cases keeps the file
+/// loadable and the measurement honest (decisions § 788).
+const allEvents = (): readonly string[] => [
   STRIPE_EVENT.checkoutCompleted,
   STRIPE_EVENT.checkoutAsyncPaid,
   STRIPE_EVENT.checkoutAsyncFailed,
@@ -63,14 +70,14 @@ const ALL_EVENTS = [
   'charge.succeeded',
   'payment_intent.succeeded',
   '',
-] as const;
+];
 
 const SCOPES: readonly RefundScope[] = ['full', 'partial'];
 
 const key = (status: string, event: string, scope: RefundScope) => `${status}|${event}|${scope}`;
 
 /// The complete order table. A key absent from this map must answer null.
-const ORDER_ARMS: Readonly<Record<string, OrderStatus>> = {
+const orderArms = (): Readonly<Record<string, OrderStatus>> => ({
   [key('pending', STRIPE_EVENT.checkoutCompleted, 'full')]: 'paid',
   [key('pending', STRIPE_EVENT.checkoutCompleted, 'partial')]: 'paid',
   [key('pending', STRIPE_EVENT.checkoutAsyncPaid, 'full')]: 'paid',
@@ -85,13 +92,13 @@ const ORDER_ARMS: Readonly<Record<string, OrderStatus>> = {
   [key('refunded', STRIPE_EVENT.refundFailed, 'full')]: 'refund_failed',
   [key('refunded', STRIPE_EVENT.refundFailed, 'partial')]: 'refund_failed',
   [key('refund_failed', STRIPE_EVENT.chargeRefunded, 'full')]: 'refunded',
-};
+});
 
 /// The complete donation table. It differs from the order table in exactly two
 /// places, and both are load-bearing: `partially_refunded + partial` is a
 /// self-transition here (a donation records an AMOUNT, so a second instalment
 /// has something to write) and `paid + partial` lands on the same status.
-const DONATION_ARMS: Readonly<Record<string, DonationStatus>> = {
+const donationArms = (): Readonly<Record<string, DonationStatus>> => ({
   [key('pending', STRIPE_EVENT.checkoutCompleted, 'full')]: 'paid',
   [key('pending', STRIPE_EVENT.checkoutCompleted, 'partial')]: 'paid',
   [key('pending', STRIPE_EVENT.checkoutAsyncPaid, 'full')]: 'paid',
@@ -107,7 +114,7 @@ const DONATION_ARMS: Readonly<Record<string, DonationStatus>> = {
   [key('refunded', STRIPE_EVENT.refundFailed, 'full')]: 'refund_failed',
   [key('refunded', STRIPE_EVENT.refundFailed, 'partial')]: 'refund_failed',
   [key('refund_failed', STRIPE_EVENT.chargeRefunded, 'full')]: 'refunded',
-};
+});
 
 function sweep(
   table: Readonly<Record<string, string>>,
@@ -118,7 +125,7 @@ function sweep(
   const wrong: string[] = [];
   let arms = 0;
   for (const status of ALL_STATUSES) {
-    for (const event of ALL_EVENTS) {
+    for (const event of allEvents()) {
       for (const scope of SCOPES) {
         const k = key(status, event, scope);
         const got = transition(status, event, scope);
@@ -134,29 +141,31 @@ function sweep(
 }
 
 Deno.test('orderStatusTransition — the WHOLE table, so a stray arm cannot hide beside a right one', () => {
-  const r = sweep(ORDER_ARMS, orderStatusTransition);
+  const arms = orderArms();
+  const r = sweep(arms, orderStatusTransition);
   assertEquals(r.unexpected, []);
   assertEquals(r.missing, []);
   assertEquals(r.wrong, []);
   // Count the arms as well as their contents: a table that answered null for
   // everything would satisfy the three empty lists above.
-  assertEquals(r.arms, Object.keys(ORDER_ARMS).length);
+  assertEquals(r.arms, Object.keys(arms).length);
   assertEquals(r.arms, 14);
 });
 
 Deno.test('donationStatusTransition — the WHOLE table, including its two deliberate divergences', () => {
-  const r = sweep(DONATION_ARMS, donationStatusTransition);
+  const arms = donationArms();
+  const r = sweep(arms, donationStatusTransition);
   assertEquals(r.unexpected, []);
   assertEquals(r.missing, []);
   assertEquals(r.wrong, []);
-  assertEquals(r.arms, Object.keys(DONATION_ARMS).length);
+  assertEquals(r.arms, Object.keys(arms).length);
   assertEquals(r.arms, 15);
 });
 
 Deno.test('the two ledgers differ in exactly one cell, and it is the second instalment', () => {
   const differing: string[] = [];
   for (const status of ALL_STATUSES) {
-    for (const event of ALL_EVENTS) {
+    for (const event of allEvents()) {
       for (const scope of SCOPES) {
         const a = orderStatusTransition(status, event, scope);
         const b = donationStatusTransition(status, event, scope);
@@ -192,7 +201,7 @@ Deno.test('every status a ledger can reach is one its own CHECK admits', () => {
     'canceled',
   ]);
   for (const status of ALL_STATUSES) {
-    for (const event of ALL_EVENTS) {
+    for (const event of allEvents()) {
       for (const scope of SCOPES) {
         const a = orderStatusTransition(status, event, scope);
         if (a !== null) assert(orderCheck.has(a), `order ledger produced ${a}`);
@@ -208,7 +217,7 @@ Deno.test('a status the database never wrote transitions on nothing', () => {
   // against literals, and a caller handing over a value from anywhere but the
   // column must not fall into an arm.
   for (const bogus of ['Paid', 'PENDING', ' pending', 'pending ', '', 'refund-failed', 'null']) {
-    for (const event of ALL_EVENTS) {
+    for (const event of allEvents()) {
       assertEquals(orderStatusTransition(bogus, event, 'full'), null, `order ${bogus} ${event}`);
       assertEquals(
         donationStatusTransition(bogus, event, 'full'),
@@ -240,7 +249,7 @@ Deno.test('a seat-bearing status is never moved by a refund that failed', () => 
 });
 
 Deno.test('refund_failed is terminal against everything except the refund landing', () => {
-  for (const event of ALL_EVENTS) {
+  for (const event of allEvents()) {
     for (const scope of SCOPES) {
       const expected = event === STRIPE_EVENT.chargeRefunded && scope === 'full' ? 'refunded' : null;
       assertEquals(

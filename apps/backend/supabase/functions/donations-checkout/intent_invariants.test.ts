@@ -245,8 +245,13 @@ Deno.test('buildDonationSessionParams — a resumed donation rebuilds byte-ident
     cancelUrl: 'https://threkir.com/no',
     metadata: { kind: 'donation' as const, donation_id: 'don_1', fundraiser_id: 'fr_1' },
   };
-  assertEquals(
-    JSON.stringify(buildDonationSessionParams(args)),
-    JSON.stringify(buildDonationSessionParams(args)),
-  );
+  const first = JSON.stringify(buildDonationSessionParams(args));
+  const second = JSON.stringify(buildDonationSessionParams(args));
+  assertEquals(first, second);
+  // And what they agree ON, because two calls of one function agreeing is
+  // satisfied by a function with no answers at all (§ 788). The donation id in
+  // the metadata is the part Stripe's joint contract is keyed against.
+  assert(first.includes('"donation_id":"don_1"'), first);
+  assert(first.includes('"unit_amount":5000'), first);
+  assert(first.includes('"destination":"acct_1"'), first);
 });

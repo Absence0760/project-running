@@ -63,9 +63,13 @@ Deno.test('cancelAction — the whole table, so a widened selector cannot silent
 Deno.test('cancelAction — every status the handler selects reaches a real action', () => {
   // A `noop` for a status the query deliberately fetched is the § 769 defect:
   // the caller reports success, no refund is created, and the seat stays held.
+  // Asserted as membership of the acting set rather than as `!== 'noop'`: a
+  // function with no answer at all satisfies the inequality, which is the shape
+  // § 788 found on four security assertions.
+  const acting: readonly CancelAction[] = ['release_reservation', 'refund', 'policy_no_refund'];
   for (const status of SELECTED_BY_THE_HANDLER) {
-    assert(cancelAction(status, true) !== 'noop', `${status} + eligible`);
-    assert(cancelAction(status, false) !== 'noop', `${status} + not eligible`);
+    assert(acting.includes(cancelAction(status, true)), `${status} + eligible`);
+    assert(acting.includes(cancelAction(status, false)), `${status} + not eligible`);
   }
 });
 
@@ -137,14 +141,23 @@ Deno.test('resolveRefundEligibility — an offset form names the same instant as
   const utc = '2026-06-01T10:00:00Z';
   const offset = '2026-06-01T12:00:00+02:00';
   assertEquals(Date.parse(utc), Date.parse(offset));
+  // Each comparison names the answer as well as the agreement: two calls of the
+  // same function agreeing is satisfied by a function with no answers (§ 788),
+  // and the point here is that BOTH forms produce the same REAL verdict.
+  const expected: Record<string, boolean[]> = {
+    // clocks: 24h+1ms before start, 1ms before start, 1ms after start
+    no_refund: [false, false, false],
+    full_until_start: [true, true, false],
+    full_until_24h: [true, false, false],
+  };
+  const clocks = [START_MS - DAY_MS - 1, START_MS - 1, START_MS + 1];
   for (const policy of POLICIES) {
-    for (const now of [START_MS - DAY_MS - 1, START_MS - 1, START_MS + 1]) {
-      assertEquals(
-        resolveRefundEligibility(policy, now, offset),
-        resolveRefundEligibility(policy, now, utc),
-        `${policy} at ${now}`,
-      );
-    }
+    clocks.forEach((now, i) => {
+      const viaOffset = resolveRefundEligibility(policy, now, offset);
+      const viaUtc = resolveRefundEligibility(policy, now, utc);
+      assertEquals(viaOffset, viaUtc, `${policy} at ${now}`);
+      assertEquals(viaUtc.eligible, expected[policy][i], `${policy} verdict at clock ${i}`);
+    });
   }
 });
 
