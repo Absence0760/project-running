@@ -199,3 +199,98 @@ test('a plan started on the snapped date is one the week index buckets from day 
 	assert.equal(currentPlanWeekIndex(start, isoPlusDays(start, 6), 12), 0);
 	assert.equal(currentPlanWeekIndex(start, isoPlusDays(start, 7), 12), 1);
 });
+
+// --- the runner's zone must not decide the answer ---------------------------
+
+// The two assertions above about DST spans only FIRE in a zone whose
+// transition falls inside the tested window: reverting the helper to a floored
+// millisecond division leaves them green in UTC — which is what CI runs — and
+// red only in Europe/London. That is precisely the seam decisions.md § 728 and
+// § 735 are both about, so the guard cannot be a fixture in one zone. Node
+// re-reads `process.env.TZ` per `Date` operation on Linux, so the sweep runs
+// in-process, the way § 738 swept the clock rather than running the suite.
+const ZONES = [
+	'UTC',
+	'Europe/London',
+	'America/New_York',
+	'America/Santiago',
+	'Australia/Sydney',
+	'Australia/Lord_Howe',
+	'Pacific/Kiritimati',
+	'Pacific/Midway',
+	'Asia/Kolkata',
+];
+
+function inZone<T>(tz: string, fn: () => T): T {
+	const original = process.env.TZ;
+	process.env.TZ = tz;
+	try {
+		return fn();
+	} finally {
+		if (original === undefined) delete process.env.TZ;
+		else process.env.TZ = original;
+	}
+}
+
+test('the week index is the same in every runner zone, on every day of a year', () => {
+	// A plan opening on the Sunday before the northern spring-forward and one
+	// opening before the southern one, walked day by day.
+	for (const start of ['2026-03-22', '2026-09-27', '2026-10-25', '2026-11-01']) {
+		const reference = inZone('UTC', () =>
+			Array.from({ length: 366 }, (_, day) =>
+				currentPlanWeekIndex(start, isoPlusDays(start, day), 60),
+			),
+		);
+		for (const tz of ZONES) {
+			const actual = inZone(tz, () =>
+				Array.from({ length: 366 }, (_, day) =>
+					currentPlanWeekIndex(start, isoPlusDays(start, day), 60),
+				),
+			);
+			const firstDiff = actual.findIndex((v, i) => v !== reference[i]);
+			assert.equal(
+				firstDiff,
+				-1,
+				`${tz}: plan starting ${start} reports week ${actual[firstDiff]} on day ` +
+					`${firstDiff} (${isoPlusDays(start, firstDiff)}) where UTC reports ` +
+					`${reference[firstDiff]} — the week index must not depend on the runner's zone`,
+			);
+		}
+	}
+});
+
+test('the week index equals the whole-epoch-day answer, in every zone', () => {
+	// Stated against the definition rather than against UTC's output, so the
+	// sweep cannot agree with itself while both halves are wrong.
+	const start = '2026-03-22';
+	for (const tz of ZONES) {
+		inZone(tz, () => {
+			for (let day = 0; day < 400; day++) {
+				const today = isoPlusDays(start, day);
+				assert.equal(
+					currentPlanWeekIndex(start, today, 60),
+					Math.min(59, Math.floor((epochDay(today) - epochDay(start)) / 7)),
+					`${tz} day ${day}`,
+				);
+			}
+		});
+	}
+});
+
+test('a snapped start date is a Sunday in whichever zone the runner is standing in', () => {
+	// `plan_start.ts` is deliberately LOCAL — the weekday has to match the one
+	// the runner sees on their own calendar — so the claim here is the
+	// invariant within a zone, not agreement across zones.
+	for (const tz of ZONES) {
+		inZone(tz, () => {
+			let iso = '2026-01-01';
+			for (let i = 0; i < 400; i++) {
+				const snapped = nextSundayIso(iso);
+				assert.equal(isSundayIso(snapped), true, `${tz}: ${iso} -> ${snapped}`);
+				const delta = epochDay(snapped) - epochDay(iso);
+				assert.ok(delta >= 0 && delta <= 6, `${tz}: ${iso} -> ${snapped} moved ${delta}`);
+				iso = isoPlusDays(iso, 1);
+			}
+		});
+	}
+});
