@@ -11,13 +11,21 @@
 --      `rateLimitErrorMessage()` + the Dart twin — both fall through
 --      to the raw exception when the format drifts.
 --   4. Service-role + null-auth bypasses (used by migrations + the
---      seed file) still pass — verified implicitly by the fact that
---      seed.sql plants its 12 routes + 3 clubs without hitting the
---      cap.
+--      seed file). The null-auth one was verified only implicitly, by
+--      seed.sql planting its 12 routes + 3 clubs without hitting the
+--      cap; the service-role one was verified nowhere, and had never
+--      fired — enforce_create_rate_limit read the deprecated
+--      `request.jwt.claim.role` setting that current PostgREST does
+--      not populate, so `v_role` was always the empty string and skip
+--      1 was dead code that skip 2 happened to cover (20270629000001,
+--      the same defect 20260726_001 fixed in check_rate_limit). Both
+--      are asserted here now, and the service-role JWT carries a `sub`
+--      on purpose: without one auth.uid() is null and skip 2 answers,
+--      which looks identical and measures nothing.
 
 begin;
 
-select plan(6);
+select plan(8);
 
 -- ── Fixture ──────────────────────────────────────────────────────
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -156,6 +164,30 @@ select throws_matching(
      ) $$,
   '^rate limit exceeded for create_report, retry in [0-9]+s$',
   '11th report in the same hour is rejected with the client-parser-compatible rate-limit format'
+);
+
+-- ── The two trusted skips, one at a time, on a spent bucket ──────
+set local role service_role;
+set local "request.jwt.claims" =
+  '{"sub":"00000000-0000-0000-0000-0000000c0001","role":"service_role"}';
+select lives_ok(
+  $$ insert into routes (user_id, name, distance_m, waypoints, surface)
+       values ('00000000-0000-0000-0000-0000000c0001',
+               'service-role-route', 1000,
+               '[{"lat":0,"lng":0},{"lat":0.001,"lng":0.001}]'::jsonb,
+               'road') $$,
+  'the service role writes past a spent create_route window'
+);
+
+set local role postgres;
+set local "request.jwt.claims" = '';
+select lives_ok(
+  $$ insert into routes (user_id, name, distance_m, waypoints, surface)
+       values ('00000000-0000-0000-0000-0000000c0001',
+               'direct-sql-route', 1000,
+               '[{"lat":0,"lng":0},{"lat":0.001,"lng":0.001}]'::jsonb,
+               'road') $$,
+  'a caller with no auth context writes past a spent create_route window'
 );
 
 select * from finish();
