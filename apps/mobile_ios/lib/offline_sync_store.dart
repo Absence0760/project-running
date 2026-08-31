@@ -107,23 +107,42 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// AFTER the delete removed it, leaving `rowsById` saying the row was gone
   /// and the next cold-load resurrecting it — no exception anywhere.
   ///
-  /// A whole-store chain rather than a per-id lock, because [clear],
+  /// A whole-directory chain rather than a per-id lock, because [clear],
   /// [rewriteAll], [loadAll] and the index flush are directory-wide: per-id
   /// exclusion would still let each of them race a row write. Ordering costs
   /// nothing here — these are single small files, and every existing caller
   /// already awaited them one at a time.
-  Future<void> _writes = Future<void>.value();
+  ///
+  /// Keyed on the directory, NOT on the instance, because the interleaving
+  /// that matters is between two instances: the sign-out wipe constructs a
+  /// throwaway store per screen-owned type precisely because all instances of
+  /// a type share one on-disk directory (`offline_store_wipe.dart`), so a
+  /// per-instance chain would have left its [clear] free to race the live
+  /// screen's write. A separate isolate is out of reach of any in-process
+  /// lock — that is what `kAtomicOrphanMinAge` already allows for.
+  static final Map<String, Future<void>> _writeChains = <String, Future<void>>{};
+
+  String get _chainKey =>
+      dir?.path ?? 'uninitialised:${identityHashCode(this)}';
 
   Future<T> _serialised<T>(Future<T> Function() body) {
+    final key = _chainKey;
     final completer = Completer<T>();
+    final prior = _writeChains[key] ?? Future<void>.value();
     // The chain must never become an error future, or one failed write would
     // reject every write queued behind it. The failure goes to its own caller.
-    _writes = _writes.then((_) async {
+    final link = prior.then((_) async {
       try {
         completer.complete(await body());
       } catch (e, st) {
         completer.completeError(e, st);
       }
+    });
+    _writeChains[key] = link;
+    // Keep the map bounded: a link that finished with nothing queued behind it
+    // is the whole chain, and a fresh one starts from `Future.value()` anyway.
+    link.whenComplete(() {
+      if (identical(_writeChains[key], link)) _writeChains.remove(key);
     });
     return completer.future;
   }

@@ -66,6 +66,24 @@ void main() {
     expect(reloaded.debugStored(gear.id), isNull);
   });
 
+  test('the sign-out wipe orders against a live instance over the same dir',
+      () async {
+    final gear = await store.createLocal(name: 'Pegasus', kind: 'shoes');
+
+    // The real sign-out path: `wipeScreenOwnedOfflineStores` builds a THROWAWAY
+    // store per type because all instances of a type share one directory. A
+    // per-instance lock would have left this free to race the live screen's
+    // in-flight write.
+    final other = LocalGearStore();
+    await other.init(overrideDirectory: dir);
+
+    final write = store.updateLocal(gear.id, {'name': 'Pegasus 41'});
+    final wipe = other.clear();
+    await expectLater(Future.wait([write, wipe]), completes);
+
+    expect(filenames(), isEmpty);
+  });
+
   test('concurrent writes to one row leave disk agreeing with memory',
       () async {
     final gear = await store.createLocal(name: 'Pegasus', kind: 'shoes');
