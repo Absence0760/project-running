@@ -204,6 +204,20 @@ The same file carries `holdFinish`, the RunScreen Finish-hold drive built on it:
 - **Not from inside `tester.runAsync`.** `pumpUntil` calls `runAsync` itself and it does not nest; a test whose body is already wrapped has to be restructured first.
 - **Check the predicate is ever false.** A `pumpUntil` whose condition already holds on its first evaluation has converted nothing, and reading the diff will not tell you. Temporarily count the iterations inside `pumpUntil` and run the file: zero means either the work is microtask-only (the preceding `pump()` already drained it, and the wait is a guard rather than a wait) or the predicate is wrong — one converted case waited on a run being synced when the fixture had already synced it.
 
+### 5. Owning the day — a Playwright spec may not assert over rows it did not seed
+
+`decisions.md § 728` covers the *zone* half of this: a seed built with local-time `Date` getters lands on the adjacent calendar day from the one the UTC-pinned browser reads. The other half is that a row can be on the right day and still not be yours. `apps/backend/supabase/seed.sql` places rows for the shared users relative to the database's own `now()` — four `food_log` meals on USER_A's day at −8 h / −5 h / −4 h / −1 h, plus `body_metrics`, `gym_workouts`, `runs` and challenge windows — so a surface that aggregates "everything today" sees them alongside whatever the spec seeded.
+
+`nutrition/recipes.spec.ts` asserted `ingredient_count === 2` after seeding two meals. "Save as recipe" builds the recipe from **every** entry on the diary's current day, so the count was 2 only when the seed happened to run inside the 00:00–01:00 UTC hour and 6 for any seed after 08:00 UTC — measured at 17:14 UTC as `Expected: 2, Received: 6`, with the summed-macro and ingredient-name assertions moving with it.
+
+Three scopings are honest, in this order:
+
+1. **A unique per-run name or stamp** — an `item_name` carrying a per-run `Date.now()` — so every read is filtered to rows the spec created. Always prefer this; it needs no cleanup beyond the spec's own rows and cannot collide with a sibling.
+2. **Own the window**: delete it first, through `browserDayStart()` from `tests-e2e/fixtures/dates.ts` so the boundary is the *browser's* midnight. Necessary when the surface under test aggregates the whole day and a name filter therefore cannot reach it — the recipe and meal-template save paths are the two.
+3. **A relative or `>=` assertion** (`initialTotal + 1`) when neither of the above fits.
+
+Never a bare exact count over a shared user's day. `fixtures/dates.test.ts` enforces the one case where it is mechanically decidable: a spec that drives `save-as-meal` or `save-as-recipe` must first clear the day through `browserDayStart()`, and the guard fails naming the spec. A sweep of the tree found this to be the only genuine collision, with one fragile near-miss (`challenges/pace.spec.ts`, whose challenge window admits the seed's own morning run but whose assertions are qualitative enough not to flip).
+
 ---
 
 ## How to add a new test

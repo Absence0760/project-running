@@ -24,10 +24,12 @@ import {
 	bucketMimeSites,
 	check,
 	checkColumnBounds,
+	checkColumnCheckMaxima,
 	checkEntry,
 	defaultContext,
 	indexMigrations,
 	numericCeiling,
+	parseColumnCheckMaxima,
 	parseColumnLimits,
 	rateLimitCeilingDocSites,
 	rateLimitCeilingSqlSites,
@@ -610,6 +612,96 @@ test('MUTATION: a field bounded on one client only fails', () => {
 
 test('a client module the extractor can no longer read is reported as blindness', () => {
 	const { errors } = checkColumnBounds(boundsCtx((rel, src) => (rel === WEB_COLUMN_LIMITS ? '' : src)));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /guard going blind/);
+});
+
+// ── DB caps: equality, not containment ─────────────────────────────────────
+
+test('the DB-cap extractor reads its own map, not the input bounds beside it', () => {
+	const web = parseColumnCheckMaxima(defaultContext().read(WEB_COLUMN_LIMITS));
+	const mobile = parseColumnCheckMaxima(defaultContext().read(MOBILE_COLUMN_LIMITS));
+	// `COLUMN_LIMITS` sits in the same file and is keyed identically; a reader
+	// that swept the whole file would pick up its object literals too.
+	assert.deepEqual([...web.keys()].sort(), ['body_metrics.weight_kg', 'user_profiles.height_cm']);
+	assert.deepEqual([...web.entries()].sort(), [...mobile.entries()].sort());
+});
+
+test('every declared DB cap equals its column own CHECK in the committed tree', () => {
+	const { errors, ok } = checkColumnCheckMaxima(defaultContext());
+	assert.deepEqual(errors, []);
+	assert.equal(ok.length, 2);
+});
+
+test('MUTATION: a CHECK widened past the declared cap fails, where containment does not', () => {
+	const dir = migrationsFixture({
+		'0001_create.sql':
+			'create table body_metrics (weight_kg numeric(5, 2) not null check (weight_kg > 0 and weight_kg <= 600));',
+		'0002_height.sql':
+			'alter table user_profiles add column height_cm numeric(5, 1) check (height_cm is null or (height_cm > 0 and height_cm <= 300));',
+	});
+	const real = defaultContext();
+	const ctx = { read: real.read, sql: indexMigrations2(dir) };
+	// The containment guard is BLIND to this: 250 is still inside 600. (The
+	// fixture holds only these two columns, so the other registered keys report
+	// a missing CHECK; the point is that weight_kg is not among them.)
+	assert.deepEqual(
+		checkColumnBounds(ctx).errors.filter((e) => e.includes('body_metrics.weight_kg')),
+		[],
+	);
+	const { errors } = checkColumnCheckMaxima(ctx);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /body_metrics\.weight_kg/);
+	assert.match(errors[0], /declared as 500, but the column's own CHECK admits up to 600/);
+});
+
+test('MUTATION: a cap NARROWER than the CHECK fails too — the direction is not one-sided', () => {
+	const { errors } = checkColumnCheckMaxima(
+		boundsCtx((rel, src) =>
+			rel === WEB_COLUMN_LIMITS || rel === MOBILE_COLUMN_LIMITS
+				? src.replace(/('body_metrics\.weight_kg':\s*)500/g, '$1400')
+				: src,
+		),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /declared as 400, but the column's own CHECK admits up to 500/);
+});
+
+test('MUTATION: the two clients disagreeing on a DB cap fails, naming both values', () => {
+	const { errors } = checkColumnCheckMaxima(
+		boundsCtx((rel, src) =>
+			rel === MOBILE_COLUMN_LIMITS
+				? src.replace("'user_profiles.height_cm': 300", "'user_profiles.height_cm': 250")
+				: src,
+		),
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /user_profiles\.height_cm.*web 300, mobile 250/);
+});
+
+test('a column whose CHECK is gone certifies nothing rather than passing', () => {
+	const dir = migrationsFixture({
+		'0001_create.sql': 'create table body_metrics (weight_kg numeric(5, 2) not null);',
+	});
+	const real = defaultContext();
+	const { errors } = checkColumnCheckMaxima({ read: real.read, sql: indexMigrations2(dir) });
+	assert.ok(errors.some((e) => /no CHECK in the .*migrations bounds that column/s.test(e)));
+});
+
+test('an exclusive CHECK is refused rather than read as an inclusive maximum', () => {
+	const dir = migrationsFixture({
+		'0001_create.sql':
+			'create table body_metrics (weight_kg numeric(5, 2) not null check (weight_kg > 0 and weight_kg < 500));',
+	});
+	const real = defaultContext();
+	const { errors } = checkColumnCheckMaxima({ read: real.read, sql: indexMigrations2(dir) });
+	assert.ok(errors.some((e) => /bounds it EXCLUSIVELY \(< 500\)/.test(e)));
+});
+
+test('a DB-cap map the extractor can no longer read is reported as blindness', () => {
+	const { errors } = checkColumnCheckMaxima(
+		boundsCtx((rel, src) => (rel === MOBILE_COLUMN_LIMITS ? src.replace('kColumnCheckMax', 'kRenamed') : src)),
+	);
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /guard going blind/);
 });

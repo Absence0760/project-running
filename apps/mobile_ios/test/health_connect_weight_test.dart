@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/column_limits.dart';
 import '../lib/health_connect_importer.dart';
 
 void main() {
+  const key = 'body_metrics.weight_kg';
+
   group('HealthConnectImporter.selectLatestWeightKg', () {
     test('picks the most-recent in-range sample', () {
       final kg = HealthConnectImporter.selectLatestWeightKg([
@@ -31,6 +34,34 @@ void main() {
         ]),
         isNull,
       );
+    });
+
+    test('the accepted range is the registered column bound, both ends', () {
+      // The importer used to carry its own 30–300 kg, which is narrower than
+      // the body-metrics field at the floor and WIDER at the ceiling — so an
+      // import could seed a weight the field then refused to re-save, and a
+      // light runner's real sample was dropped as noise. Written against the
+      // registry so the two can no longer drift apart (decisions § 819).
+      final min = columnMin(key).toDouble();
+      final max = columnMax(key).toDouble();
+      for (final kg in [min, max, (min + max) / 2]) {
+        expect(
+          HealthConnectImporter.selectLatestWeightKg([
+            (kg: kg, at: DateTime(2026, 1, 1)),
+          ]),
+          kg,
+          reason: '$kg is inside the column bound and must be accepted',
+        );
+      }
+      for (final kg in [min - 0.01, max + 0.01]) {
+        expect(
+          HealthConnectImporter.selectLatestWeightKg([
+            (kg: kg, at: DateTime(2026, 1, 1)),
+          ]),
+          isNull,
+          reason: '$kg is outside the column bound and must be refused',
+        );
+      }
     });
   });
 }

@@ -1042,6 +1042,117 @@ export function checkColumnBounds(ctx) {
 	return { errors, ok };
 }
 
+// ── Bounds: the DB cap a client transcribes, against the column's own CHECK ─
+
+// The third comparison over the same two files, and the only one that demands
+// EQUALITY. `COLUMN_LIMITS` holds what a client may SEND and is checked for
+// containment: capped below the column is merely conservative. `COLUMN_CHECK_MAX`
+// holds what the COLUMN ACCEPTS, for a defensive filter over a value read back —
+// and a filter capped below its column silently discards a row the database
+// legitimately holds, while one capped above admits garbage. Neither direction
+// is safe, so neither is allowed.
+//
+// This exists because `nutrition_targets` (a registered TS<->Dart parity pair)
+// carried `weightKg > 500 || heightCm > 300` as literals in both halves. Those
+// are `body_metrics.weight_kg`'s and `user_profiles.height_cm`'s CHECK maxima
+// transcribed, so a CHECK widened to 600 would have left a legitimately-stored
+// weight producing NO calorie target on either platform, with all 34 mirror
+// tests passing — the pair's lockstep guarantees only that the two halves are
+// wrong together. decisions.md § 819.
+
+/**
+ * The `<table>.<column>` -> DB cap map out of either client, read from the
+ * map's own body so the object-literal entries of `COLUMN_LIMITS` in the same
+ * file cannot be mistaken for it.
+ * @param {string} src
+ * @returns {Map<string, number>}
+ */
+export function parseColumnCheckMaxima(src) {
+	/** @type {Map<string, number>} */
+	const out = new Map();
+	const opener = /(?:COLUMN_CHECK_MAX|kColumnCheckMax)[^=]*=\s*\{/.exec(src);
+	if (!opener) return out;
+	const rest = src.slice(opener.index + opener[0].length);
+	const close = rest.indexOf('}');
+	const body = close === -1 ? rest : rest.slice(0, close);
+	for (const m of body.matchAll(/'([a-z_]+\.[a-z_]+)':\s*(-?\d+(?:\.\d+)?)/g)) {
+		out.set(m[1], Number(m[2]));
+	}
+	return out;
+}
+
+/**
+ * @param {Ctx} ctx
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkColumnCheckMaxima(ctx) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	const web = parseColumnCheckMaxima(ctx.read(WEB_COLUMN_LIMITS));
+	const mobile = parseColumnCheckMaxima(ctx.read(MOBILE_COLUMN_LIMITS));
+	if (web.size === 0 || mobile.size === 0) {
+		errors.push(
+			`column check maxima: read ${web.size} entries from ${WEB_COLUMN_LIMITS} and ` +
+				`${mobile.size} from ${MOBILE_COLUMN_LIMITS}.\n` +
+				`  A rail that reads nothing agrees with every other one, so this is ` +
+				`reported as the guard going blind rather than as a match.`,
+		);
+		return { errors, ok };
+	}
+	for (const key of [...new Set([...web.keys(), ...mobile.keys()])].sort()) {
+		const w = web.get(key);
+		const mo = mobile.get(key);
+		if (w === undefined || mo === undefined) {
+			errors.push(
+				`column check maxima: "${key}" is declared on ${w !== undefined ? 'web' : 'mobile'} only.\n` +
+					`  A defensive filter that exists on one client only is the divergence ` +
+					`this map exists to make impossible.`,
+			);
+			continue;
+		}
+		if (w !== mo) {
+			errors.push(
+				`column check maxima: "${key}" disagrees between the clients — web ${w}, mobile ${mo}.`,
+			);
+			continue;
+		}
+		const [table, column] = key.split('.');
+		const db = sqlColumnBound(ctx.sql, table, column);
+		if (db.sites === 0) {
+			errors.push(
+				`column check maxima: "${key}" is declared as ${w}, but no CHECK in the ` +
+					`migrations bounds that column.\n  Either the column moved or its ` +
+					`constraint was dropped; a cap over a column with no cap certifies nothing.`,
+			);
+			continue;
+		}
+		if (db.maxExclusive) {
+			errors.push(
+				`column check maxima: "${key}"'s CHECK bounds it EXCLUSIVELY (< ${db.max}) ` +
+					`in ${db.files.join(', ')}.\n  This map states an inclusive maximum, so ` +
+					`an exclusive CHECK has no honest entry here — filter on the CHECK's own ` +
+					`shape at the call site instead.`,
+			);
+			continue;
+		}
+		if (db.max !== w) {
+			errors.push(
+				`column check maxima: "${key}" is declared as ${w}, but the column's own ` +
+					`CHECK admits up to ${db.max} (${db.files.join(', ')}).\n` +
+					`  Equality, not containment: below it, a value the database ` +
+					`legitimately holds is discarded as non-physical and the surface reading ` +
+					`it renders nothing; above it, garbage is admitted. Update this line in ` +
+					`BOTH clients in the same change as the migration.`,
+			);
+			continue;
+		}
+		ok.push(`column check maxima / ${key}: clients ${w} == database CHECK ${db.max}`);
+	}
+	return { errors, ok };
+}
+
 // ── Bounds: the create rate-limit ceilings ─────────────────────────────────
 
 // `enforce_create_rate_limit(bucket, user, max, window_s)` carries its numbers
@@ -1614,6 +1725,9 @@ export function check(registry = REGISTRY, ctx = defaultContext()) {
 	const bounds = checkColumnBounds(ctx);
 	errors.push(...bounds.errors);
 	ok.push(...bounds.ok);
+	const maxima = checkColumnCheckMaxima(ctx);
+	errors.push(...maxima.errors);
+	ok.push(...maxima.ok);
 	return { errors, ok };
 }
 
@@ -1639,8 +1753,8 @@ function main() {
 	}
 	console.log(
 		`\n${REGISTRY.length} registered shared constants agree across every home, and ` +
-			`every registered client bound sits inside its column's own CHECK ` +
-			`(${ok.length} checks).`,
+			`every registered client bound sits inside its column's own CHECK, and ` +
+			`every declared DB cap equals it (${ok.length} checks).`,
 	);
 	return 0;
 }

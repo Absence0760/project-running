@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/column_limits.dart';
 import '../lib/nutrition_targets.dart';
 
 BodyMetricsInput baseWith({
@@ -155,5 +156,30 @@ void main() {
     for (var i = 1; i < activityLevels.length; i++) {
       expect(activityLevels[i].factor > activityLevels[i - 1].factor, true);
     }
+  });
+
+  test(
+      'computeNutritionTargets — the non-physical ceiling IS the column CHECK, not a literal',
+      () {
+    // A filter over a value read back. The weight at the column's own ceiling
+    // is storable, so it must produce a target; a hair above it cannot have
+    // come from the column at all. Written against the accessor so a widened
+    // CHECK moves this assertion with it instead of leaving a real stored
+    // weight silently target-less on both platforms.
+    final weightMax = columnCheckMax('body_metrics.weight_kg').toDouble();
+    final heightMax = columnCheckMax('user_profiles.height_cm').toDouble();
+    expect(computeNutritionTargets(baseWith(weightKg: weightMax)), isNotNull);
+    expect(computeNutritionTargets(baseWith(weightKg: weightMax + 0.01)),
+        isNull);
+    expect(computeNutritionTargets(baseWith(heightCm: heightMax)), isNotNull);
+    expect(computeNutritionTargets(baseWith(heightCm: heightMax + 0.01)),
+        isNull);
+    // Age has no column, so its ceiling is a stated constant on both sides.
+    expect(computeNutritionTargets(baseWith(ageYears: maxAgeYears)), isNotNull);
+    expect(
+        computeNutritionTargets(baseWith(ageYears: maxAgeYears + 1)), isNull);
+    // The input bound the composer offers is inside the column's, so a runner
+    // the body-metrics field accepted always gets a target.
+    expect(weightMax > 250 && heightMax >= 300, isTrue);
   });
 }

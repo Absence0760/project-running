@@ -156,6 +156,24 @@ void main() {
     }
   });
 
+  // The split-interval row's subtitle stated "1 km for running, 5 km for
+  // cycling" in every locale while the default it describes actually follows
+  // the distance preference — `splitIntervalMetresFor` returns 1 mi / 5 mi in
+  // imperial, deliberately, so an imperial runner is told when they pass a
+  // MILE. The row therefore named the wrong unit for exactly the runners the
+  // unit-aware default exists for (decisions § 820).
+  testWidgets('the default split interval is described in the runner unit',
+      (tester) async {
+    await _pump(tester, await _prefs({'use_miles': true}), size: _wholePage);
+    expect(find.textContaining('1 mi for running'), findsOneWidget);
+    expect(find.textContaining('5 mi for cycling'), findsOneWidget);
+    expect(find.textContaining('for running, 5 km'), findsNothing);
+
+    await _pump(tester, await _prefs({'use_miles': false}), size: _wholePage);
+    expect(find.textContaining('1 km for running'), findsOneWidget);
+    expect(find.textContaining('5 km for cycling'), findsOneWidget);
+  });
+
   testWidgets('turning audio cues off drops the voice-cue group entirely',
       (tester) async {
     await _pump(tester, await _prefs(), size: _wholePage);

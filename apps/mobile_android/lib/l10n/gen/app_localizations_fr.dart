@@ -7650,8 +7650,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prefsSplitIntervalDefault => 'Par défaut';
 
   @override
-  String get prefsSplitIntervalDefaultSubtitle =>
-      'Par défaut (1 km en course, 5 km à vélo)';
+  String prefsSplitIntervalDefaultSubtitle(String run, String cycle) {
+    return 'Par défaut ($run en course, $cycle à vélo)';
+  }
 
   @override
   String get prefsSplitPaceMode => 'Annonce des splits';
@@ -12019,7 +12020,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Le coureur consent à l\'enregistrement de données de santé';
 
   @override
-  String get checkpointWeighInWeightKg => 'Poids corporel (kg)';
+  String get checkpointWeighInBodyWeight => 'Poids corporel';
 
   @override
   String get checkpointMedicalHold => 'Mettre sous surveillance médicale';
