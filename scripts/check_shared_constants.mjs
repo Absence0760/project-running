@@ -372,6 +372,30 @@ export function parseWhitespaceClass(src, anchor) {
 		.map((cp) => `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`);
 }
 
+/**
+ * A single case-fold pair — the code point folded and the code point it folds
+ * to — read as the first two escaped code points after `anchor`. Three
+ * spellings, one shape: TS and Dart write `'\\u0130'`, Postgres writes
+ * `U&'\\0130'`, so the `u` is optional and nothing else is accepted. A pair
+ * that reads as fewer than two code points is returned empty, which the entry
+ * checker reports as the guard going blind rather than as agreement.
+ * @param {string} src @param {string} anchor @returns {string[]}
+ */
+export function parseCaseFoldPair(src, anchor) {
+	const at = src.indexOf(anchor);
+	if (at < 0) return [];
+	const token = /\\u?([0-9a-f]{4})/gi;
+	token.lastIndex = at + anchor.length;
+	/** @type {string[]} */
+	const out = [];
+	/** @type {RegExpExecArray | null} */
+	let m;
+	while (out.length < 2 && (m = token.exec(src)) !== null) {
+		out.push(`U+${m[1].toUpperCase()}`);
+	}
+	return out.length === 2 ? out : [];
+}
+
 // ── Entry: the guided-run cue library ──────────────────────────────────────
 
 // The only entry here whose subject is a DATA LIBRARY rather than a threshold
@@ -1410,6 +1434,83 @@ export const REGISTRY = [
 						values: parseNamedInt(ctx.read('apps/mobile_android/lib/wear_routes_bridge.dart'), 'kMaxRoutesPerPush'),
 					},
 				],
+			},
+		],
+	},
+	{
+		name: 'exercise-name case fold',
+		why:
+			'The grouping key is lower-cased on three rails whose case tables are ' +
+			'not each other\'s. Measured over every assignable code point, JS and ' +
+			'Dart toLowerCase() disagree at 466, and Postgres lower() answers with ' +
+			'the collation of its argument. These two folds are the disagreements ' +
+			'reachable in a Latin or Greek exercise name, and the key is PERSISTED ' +
+			'as gym_routine_exercises.exercise_key and exercises.name_key: a rail ' +
+			'that stops applying one either splits a lifter\'s history into two ' +
+			'buckets or writes a key the CHECK on those columns rejects outright.',
+		match: 'key',
+		compare: 'ordered',
+		rails: [
+			{
+				label: 'web (apps/web/src/lib/gym/gym_prs.ts)',
+				sites: (ctx) => [
+					{
+						key: 'pre-fold (before the lowercase)',
+						where: 'EXERCISE_CASE_PRE_FOLD',
+						values: parseCaseFoldPair(
+							ctx.read('apps/web/src/lib/gym/gym_prs.ts'),
+							'EXERCISE_CASE_PRE_FOLD = [',
+						),
+					},
+					{
+						key: 'post-fold (after the lowercase)',
+						where: 'EXERCISE_CASE_POST_FOLD',
+						values: parseCaseFoldPair(
+							ctx.read('apps/web/src/lib/gym/gym_prs.ts'),
+							'EXERCISE_CASE_POST_FOLD = [',
+						),
+					},
+				],
+			},
+			{
+				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
+				sites: (ctx) => [
+					{
+						key: 'pre-fold (before the lowercase)',
+						where: 'kExerciseCasePreFold',
+						values: parseCaseFoldPair(
+							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							'kExerciseCasePreFold = [',
+						),
+					},
+					{
+						key: 'post-fold (after the lowercase)',
+						where: 'kExerciseCasePostFold',
+						values: parseCaseFoldPair(
+							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
+							'kExerciseCasePostFold = [',
+						),
+					},
+				],
+			},
+			{
+				label: 'sql (normalise_exercise_name)',
+				sites: (ctx) => {
+					const fn = ctx.sql.live.get('normalise_exercise_name');
+					if (!fn) return [];
+					return [
+						{
+							key: 'pre-fold (before the lowercase)',
+							where: `normalise_exercise_name() in ${fn.file}`,
+							values: parseCaseFoldPair(fn.sql, 'translate(p_name,'),
+						},
+						{
+							key: 'post-fold (after the lowercase)',
+							where: `normalise_exercise_name() in ${fn.file}`,
+							values: parseCaseFoldPair(fn.sql, 'collate "und-x-icu"),'),
+						},
+					];
+				},
 			},
 		],
 	},

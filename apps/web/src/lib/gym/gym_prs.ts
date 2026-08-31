@@ -58,8 +58,38 @@ export function estimatedOneRepMax(weightKg: number, reps: number): number {
 /// internal whitespace collapsed. "Bench Press", "bench  press" and
 /// "  Bench press " all collapse to one PR bucket.
 export function normaliseExerciseName(name: string): string {
-	return name.replace(EXERCISE_WS, ' ').trim().toLowerCase().replace(/ +/g, ' ');
+	return name
+		.replace(EXERCISE_WS, ' ')
+		.trim()
+		.replaceAll(EXERCISE_CASE_PRE_FOLD[0], EXERCISE_CASE_PRE_FOLD[1])
+		.toLowerCase()
+		.replaceAll(EXERCISE_CASE_POST_FOLD[0], EXERCISE_CASE_POST_FOLD[1])
+		.replace(/ +/g, ' ');
 }
+
+/// The two case folds every rail applies around its own lowercase, spelled out
+/// by code point for the same reason the whitespace class below is: past ASCII,
+/// no two of the three rails' lowercase tables agree.
+///
+/// Postgres `lower()` answers with the collation of its argument, so the SQL
+/// mirror pins `collate "und-x-icu"` (decisions § 830) — without it the same
+/// migration set keys `Incline Press` differently on a Turkish-locale database
+/// (`lower('I')` is U+0131 there) and folds nothing past ASCII on a `C` one.
+/// The clients need no such pin: JS and Dart `toLowerCase()` are both
+/// locale-independent. But their TABLES are not each other's, and measured over
+/// every assignable code point they disagree at 466 — Dart's is Unicode simple
+/// case mapping from an older revision, JS's is full mapping from a newer one.
+/// These two are the disagreements reachable in a Latin or Greek exercise name:
+///
+///   * U+0130 folds to a bare `i` BEFORE the lowercase, its Unicode SIMPLE
+///     lowercase mapping and what Dart and the libc provider already return.
+///     Without it, a mobile-written key for such a name violates the CHECK on
+///     `gym_routine_exercises.exercise_key` — 23514 on a legitimate save.
+///   * U+03C2 folds to U+03C3 AFTER. ICU and JS apply Unicode's contextual
+///     Final_Sigma rule and Dart and libc never do, so an all-caps Greek
+///     spelling would otherwise never meet its own lower-case one.
+const EXERCISE_CASE_PRE_FOLD = ['\u0130', '\u0069'] as const;
+const EXERCISE_CASE_POST_FOLD = ['\u03c2', '\u03c3'] as const;
 
 /// The whitespace class every rail folds, spelled out by code point rather
 /// than left to a runtime's default.
