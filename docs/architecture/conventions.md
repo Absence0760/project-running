@@ -1728,6 +1728,21 @@ Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/
 
 Both have been breached by an automated sync from the `templates` repo, which is additive by path and therefore blind to a name it collides with, so neither rule can rely on review alone.
 
+## A revoke names every channel the grantee can reach the object through
+
+A `REVOKE` is not a statement about a role, it is a statement about one **entry** in an ACL, and Postgres admits a role through the broadest entry it holds. So a revoke that names one channel while the role holds another withholds nothing, reports success, and leaves no trace in the catalogue for a state assertion to find later — the statement is the only place the intent was ever legible. This has now shipped twice, on two object classes.
+
+- **Columns.** `revoke select (col) on t from anon` is a no-op while `anon` holds table-level SELECT, because `has_column_privilege` answers off the broader grant ([decisions § 781](decisions.md)). The prescription is the opposite order: revoke the table-level privilege, then `grant select (…)` the columns the client may read.
+- **Functions.** `revoke execute on function f() from public` withholds `anon` on a workstation CLI image and **nothing** on the CI and Cloud image, where Supabase's `alter default privileges` hands every new `public` function an EXECUTE grant to `anon`, `authenticated` and `service_role` **by name**. `revoke ... from anon` is the no-op on the other image. Neither single-grantee form is portable, so the house form names both — `revoke execute on function public.f(args) from public, anon;` — and adds `authenticated` when no client role should hold it at all ([decisions § 799](decisions.md), [§ 800](decisions.md), [§ 827](decisions.md)).
+
+Three rules follow, and they generalise past these two cases:
+
+- **`drop function` / `drop table` takes the ACL with it.** A signature change re-issues the image default, so any migration that drops and recreates must re-emit its `revoke` / `grant` pair or a withholding decision is silently reverted. No migration is wrong on its own words when this happens, which is why a text replay cannot catch it.
+- **A statement guard and a state guard are different guards, and a no-op revoke needs both.** The statement guard (`check_migration_column_revoke_noop.mjs`, `check_migration_function_revoke_noop.mjs`) replays the migration set in version order and reports a revoke whose other channel is still at its default at the end — so a repair is a later migration rather than an edit to the guard, and neither carries an allowlist. The state guard is a pgtap catalogue assertion (`anon_execute_contract_test.sql`, `column_grant_lockdown_registry_test.sql`) that answers the question the statement guard cannot: *is the object actually closed*, including for an object nobody ever wrote a revoke for. Write both, or the class reopens through whichever half you skipped.
+- **A privilege change reaches every surface that exercises the privilege.** Closing an ACL moves the refusal outward: a body that used to return null on a null `auth.uid()` now raises `42501` at the grant, so a test asserting the inner answer breaks. pgtap is not the whole search space — grep the function names across `tests-e2e/` too.
+
+Before withholding, read the **reference graph**, not just the call sites. A SECURITY INVOKER body and an RLS policy expression are both privilege-checked against the *querying* role, so a function named by a policy `to public` on a table `anon` can read must keep its grant or an anonymous read turns into `42501` ([decisions § 746](decisions.md)). `is_challenge_visible` is the live example.
+
 ## A guard parses its input, or refuses it — it never pattern-matches a language
 
 A CI guard's whole value is that its verdict is true, so a guard that reads its input approximately is worse than no guard: it is a green tick over text nobody looked at. Four of them were found doing exactly that ([decisions § 770](decisions.md), after [§ 757](decisions.md)), and the repair is the same four rules every time.
