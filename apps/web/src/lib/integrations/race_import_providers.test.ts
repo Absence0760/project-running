@@ -59,14 +59,30 @@ test('every leg carries its own explainer and its own test ids', () => {
 	}
 });
 
-test('a leg the function refuses unscoped is a bib leg', () => {
-	// `runSignUpScopeGate` and `chronoTrackScopeGate` both reject an unscoped
-	// call 400 before any upstream fetch, so those two must disable their submit
-	// until the field is filled. UltraSignup reads one athlete's own history and
-	// falls back to the listing's id, so it has no such gate to mirror.
+test('every leg has a pre-fetch scope gate, and the record says it is required', () => {
+	// A leg with no gate fetches an unscoped upstream page and then stamps the
+	// CALLER's user_id onto whatever comes back. UltraSignup shipped without one
+	// for exactly as long as nothing populated its listings: its branch fell back
+	// to the listing's `provider_race_id`, which is a RACE id by name and by every
+	// other provider's use of it, read as an athlete account id.
+	//
+	// The scope FIELD differs by leg (a bib narrows a race's results; UltraSignup
+	// reads one athlete's history, so its scope is an account id) — that is not
+	// the invariant. The invariant is that every leg has a gate and the UI knows
+	// to demand the field before submitting.
+	const lib = readFileSync(
+		join(REPO_ROOT, 'apps/backend/supabase/functions/race-results-import/lib.ts'),
+		'utf-8'
+	);
+	const gated = new Set(
+		[...lib.matchAll(/export function ([a-zA-Z]+)ScopeGate\b/g)].map((match) =>
+			match[1].toLowerCase()
+		)
+	);
+	assert.ok(gated.size >= 3, 'found no scope gates — the parser stopped matching');
 	for (const [leg, spec] of Object.entries(RACE_IMPORT_LEGS)) {
-		if (!spec.scopeRequired) continue;
-		assert.equal(spec.scopeField, 'bib', `${leg} requires a scope that is not a bib`);
+		assert.ok(gated.has(leg), `${leg} has no ${leg}ScopeGate in the Edge Function`);
+		assert.equal(spec.scopeRequired, true, `${leg} is gated server-side but not in the UI`);
 	}
 });
 

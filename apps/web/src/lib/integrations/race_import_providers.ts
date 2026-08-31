@@ -18,9 +18,10 @@ export interface RaceImportLegSpec {
 	/// A bib is a race number; UltraSignup instead reads one athlete's history,
 	/// so its scope is an account id and not a bib.
 	scopeField: 'bib' | 'ultraSignUpAthleteId';
-	/// Whether the Edge Function refuses the call without it. `runSignUpScopeGate`
-	/// and `chronoTrackScopeGate` both reject an unscoped request 400 before any
-	/// upstream fetch; the UltraSignup leg falls back to the listing's own id.
+	/// Whether the Edge Function refuses the call without it. All three legs
+	/// reject an unscoped request 400 before any upstream fetch — UltraSignup
+	/// only since `ultraSignUpScopeGate`, which replaced a fallback that read
+	/// the listing's `provider_race_id` as an athlete id.
 	scopeRequired: boolean;
 	labelKey: MessageKey;
 	hintKey: MessageKey;
@@ -46,7 +47,7 @@ export const RACE_IMPORT_LEGS: Record<RaceImportLeg, RaceImportLegSpec> = {
 	},
 	ultrasignup: {
 		scopeField: 'ultraSignUpAthleteId',
-		scopeRequired: false,
+		scopeRequired: true,
 		labelKey: 'races.ultraSignUpAthleteId',
 		hintKey: 'races.ultraSignUpAthleteHint',
 		unavailableKey: 'integrations.ultrasignupUnavailable',
