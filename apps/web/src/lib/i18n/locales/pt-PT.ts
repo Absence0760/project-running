@@ -3906,6 +3906,8 @@ export const messages = {
 	"prefs.cue.markerTargetsHint": "Se está à frente ou atrás do plano em cada ponto do percurso.",
 	"prefs.cue.phaseTransitions": "Fases da prova",
 	"prefs.cue.phaseTransitionsHint": "Um aviso quando cada fase da sua estratégia de prova começa.",
+	"prefs.cue.guidedRun": "Corridas guiadas",
+	"prefs.cue.guidedRunHint": "O guião do treinador de uma corrida guiada escolhida antes de começar.",
 	"prefs.weeklyMileageGoal": "Meta de distância semanal (m)",
 	"prefs.weeklyMileageGoalPlaceholder": "Ex.: 40000 (40 km)",
 	"prefs.heartRateZonesHeading": "Zonas de frequência cardíaca",

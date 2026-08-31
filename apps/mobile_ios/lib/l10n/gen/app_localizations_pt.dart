@@ -13048,6 +13048,28 @@ class AppLocalizationsPt extends AppLocalizations {
       'Só fica ativo quando escolhe uma estratégia de corrida. Anuncia cada fase e a sua intenção ao começar. Exemplo: “Fase 2 de 3. Estabilize no seu ritmo alvo.”';
 
   @override
+  String get prefsCueGuidedRun => 'Corridas guiadas';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'O guião do treinador de uma corrida guiada escolhida antes de começar';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Só fica ativo quando escolhe uma corrida guiada no separador Corrida antes de começar. Anuncia cada indicação do guião ao chegar à sua marca. Exemplo: “Cinco minutos. Estabilize num ritmo que aguentaria o dia todo.”';
+
+  @override
+  String get runGuidedRun => 'Corrida guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sem corrida guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Estratégia de corrida';
 
   @override
@@ -26915,6 +26937,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsCuePhaseTransitionsInfo =>
       'Só fica ativo quando você escolhe uma estratégia de corrida. Anuncia cada fase e sua intenção ao começar. Exemplo: “Fase 2 de 3. Estabilize no seu ritmo alvo.”';
+
+  @override
+  String get prefsCueGuidedRun => 'Corridas guiadas';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'O roteiro do treinador de uma corrida guiada escolhida antes de começar';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Só fica ativo quando você escolhe uma corrida guiada na aba Corrida antes de começar. Anuncia cada indicação do roteiro ao chegar à sua marca. Exemplo: “Cinco minutos. Estabilize num ritmo que aguentaria o dia todo.”';
+
+  @override
+  String get runGuidedRun => 'Corrida guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sem corrida guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'Estratégia de corrida';

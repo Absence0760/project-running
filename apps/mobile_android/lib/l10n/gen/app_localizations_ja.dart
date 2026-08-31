@@ -12437,6 +12437,27 @@ class AppLocalizationsJa extends AppLocalizations {
       'ランでレース戦略を選んだときだけ有効です。各フェーズとその狙いを開始時に読み上げます。例：「3フェーズ中2フェーズ目。目標ペースに落ち着いて。」';
 
   @override
+  String get prefsCueGuidedRun => 'ガイド付きラン';
+
+  @override
+  String get prefsCueGuidedRunSubtitle => '開始前に選んだガイド付きランのコーチ音声スクリプト';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'ランタブで開始前にガイド付きランを選んだときだけ有効です。各マークに達するとスクリプトのコーチの声を読み上げます。例：「5分経過。一日中維持できるリズムに落ち着いて。」';
+
+  @override
+  String get runGuidedRun => 'ガイド付きラン';
+
+  @override
+  String get runGuidedRunNone => 'ガイド付きランなし';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes分 · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'レース戦略';
 
   @override

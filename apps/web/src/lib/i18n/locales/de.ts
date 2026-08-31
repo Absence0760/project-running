@@ -3907,6 +3907,8 @@ export const messages = {
 	"prefs.cue.markerTargetsHint": "Ob du an jeder Streckenmarke vor oder hinter dem Plan liegst.",
 	"prefs.cue.phaseTransitions": "Rennphasen",
 	"prefs.cue.phaseTransitionsHint": "Eine Ansage, wenn jede Phase deiner Rennstrategie beginnt.",
+	"prefs.cue.guidedRun": "Geführte Läufe",
+	"prefs.cue.guidedRunHint": "Das Coach-Skript eines geführten Laufs, den du vor dem Start ausgewählt hast.",
 	"prefs.weeklyMileageGoal": "Wöchentliches Distanzziel (m)",
 	"prefs.weeklyMileageGoalPlaceholder": "z. B. 40000 (40 km)",
 	"prefs.heartRateZonesHeading": "Herzfrequenzzonen",

@@ -12908,6 +12908,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'Only active when you pick a Race strategy for the run. Announces each phase and its intent as it starts. Example: “Phase 2 of 3. Settle into your goal pace.”';
 
   @override
+  String get prefsCueGuidedRun => 'Guided runs';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'The coach script of a guided run you armed before starting';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Only active when you arm a guided run on the Run tab before you start. Speaks each scripted coach cue as you reach its mark. Example: “Five minutes in. Settle into a rhythm you could hold all day.”';
+
+  @override
+  String get runGuidedRun => 'Guided run';
+
+  @override
+  String get runGuidedRunNone => 'No guided run';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Race strategy';
 
   @override

@@ -21618,6 +21618,42 @@ abstract class AppLocalizations {
   /// Voice cues / race strategy
   ///
   /// In en, this message translates to:
+  /// **'Guided runs'**
+  String get prefsCueGuidedRun;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'The coach script of a guided run you armed before starting'**
+  String get prefsCueGuidedRunSubtitle;
+
+  /// Info popup body + example for the guided-run cue
+  ///
+  /// In en, this message translates to:
+  /// **'Only active when you arm a guided run on the Run tab before you start. Speaks each scripted coach cue as you reach its mark. Example: “Five minutes in. Settle into a rhythm you could hold all day.”'**
+  String get prefsCueGuidedRunInfo;
+
+  /// Run screen — the idle-state affordance that arms a guided run for the next recording
+  ///
+  /// In en, this message translates to:
+  /// **'Guided run'**
+  String get runGuidedRun;
+
+  /// Run screen — the guided-run picker row that clears the armed run
+  ///
+  /// In en, this message translates to:
+  /// **'No guided run'**
+  String get runGuidedRunNone;
+
+  /// Run screen — a guided-run picker row subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min · {subtitle}'**
+  String runGuidedRunOption(int minutes, String subtitle);
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
   /// **'Race strategy'**
   String get runRaceStrategy;
 

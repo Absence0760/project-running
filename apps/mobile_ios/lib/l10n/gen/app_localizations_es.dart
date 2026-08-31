@@ -13044,6 +13044,28 @@ class AppLocalizationsEs extends AppLocalizations {
       'Solo activo cuando eliges una estrategia de carrera. Anuncia cada fase y su intención al comenzar. Ejemplo: «Fase 2 de 3. Asiéntate en tu ritmo objetivo.»';
 
   @override
+  String get prefsCueGuidedRun => 'Carreras guiadas';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'El guion del entrenador de una carrera guiada que preparaste antes de empezar';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Solo activo cuando preparas una carrera guiada en la pestaña Correr antes de empezar. Anuncia cada indicación del guion al llegar a su marca. Ejemplo: «Cinco minutos. Asíentate en un ritmo que podrías mantener todo el día.»';
+
+  @override
+  String get runGuidedRun => 'Carrera guiada';
+
+  @override
+  String get runGuidedRunNone => 'Sin carrera guiada';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
+
+  @override
   String get runRaceStrategy => 'Estrategia de carrera';
 
   @override

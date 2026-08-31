@@ -3902,6 +3902,8 @@ export const messages = {
 	"prefs.cue.markerTargetsHint": "各コースマーカーで計画より先行しているか遅れているか。",
 	"prefs.cue.phaseTransitions": "レースフェーズ",
 	"prefs.cue.phaseTransitionsHint": "レース戦略の各フェーズが始まるときのアナウンス。",
+	"prefs.cue.guidedRun": "ガイド付きラン",
+	"prefs.cue.guidedRunHint": "開始前に選んだガイド付きランのコーチ音声スクリプト。",
 	"prefs.weeklyMileageGoal": "週間走行距離の目標（m）",
 	"prefs.weeklyMileageGoalPlaceholder": "例: 40000（40 km）",
 	"prefs.heartRateZonesHeading": "心拍ゾーン",

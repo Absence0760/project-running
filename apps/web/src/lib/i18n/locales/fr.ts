@@ -3907,6 +3907,8 @@ export const messages = {
 	"prefs.cue.markerTargetsHint": "Si vous êtes en avance ou en retard sur le plan à chaque repère du parcours.",
 	"prefs.cue.phaseTransitions": "Phases de course",
 	"prefs.cue.phaseTransitionsHint": "Une annonce au début de chaque phase de votre stratégie de course.",
+	"prefs.cue.guidedRun": "Courses guidées",
+	"prefs.cue.guidedRunHint": "Le script du coach d'une course guidée choisie avant le départ.",
 	"prefs.weeklyMileageGoal": "Objectif de distance hebdomadaire (m)",
 	"prefs.weeklyMileageGoalPlaceholder": "p. ex. 40000 (40 km)",
 	"prefs.heartRateZonesHeading": "Zones de fréquence cardiaque",
