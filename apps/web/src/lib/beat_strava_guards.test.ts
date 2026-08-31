@@ -217,3 +217,32 @@ test('audio_cues.dart exposes speakGuidedCue for the recorder integration', () =
 	const source = read('../mobile_android/lib/audio_cues.dart');
 	assert.match(source, /Future<void> speakGuidedCue\(String text\)/, 'speakGuidedCue method missing');
 });
+
+// ─────────── Race auto-match prompt ───────────
+
+test('the run-detail auto-match prompt resolves its leg from RACE_IMPORT_LEGS', () => {
+	// Reason: this prompt is the SECOND surface that reaches the
+	// race-results-import legs, and it hardcoded `runsignup` long after the
+	// Edge Function grew ultrasignup and chronotrack legs — so a candidate on
+	// either silently degraded to manual paste even with the credentials set,
+	// which reads to the runner as the provider not being supported. Driving it
+	// off the shared record is what keeps the two surfaces from disagreeing
+	// about which providers exist.
+	const source = read('src/lib/components/RunRaceResult.svelte');
+	assert.match(source, /RACE_IMPORT_LEGS/, 'must resolve the leg from the shared record');
+	assert.doesNotMatch(
+		source,
+		/isRunSignUpCandidate/,
+		'the single-provider predicate is what made the other legs unreachable',
+	);
+	assert.doesNotMatch(
+		source,
+		/'RUNSIGNUP_UNAVAILABLE'/,
+		"catching one leg's unavailable literal strands the others on a generic failure",
+	);
+	assert.match(
+		source,
+		/RACE_IMPORT_UNAVAILABLE/,
+		'the unconfigured-leg fallback must be keyed off the map, not one literal',
+	);
+});

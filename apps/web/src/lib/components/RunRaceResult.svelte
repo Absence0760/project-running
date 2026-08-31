@@ -8,9 +8,15 @@
 		findRaceMatchCandidates,
 		importRaceResult,
 		type RaceResultForRun,
-		type RaceListingResult
+		type RaceListingResult,
+		RACE_IMPORT_UNAVAILABLE
 	} from '$lib/core/data';
 	import { raceMatchScore, isRaceMatchCandidate } from '$lib/integrations/race_match';
+	import {
+		RACE_IMPORT_LEGS,
+		type RaceImportLeg,
+		type RaceImportProvider
+	} from '$lib/integrations/race_import_providers';
 
 	interface Props {
 		runId: string;
@@ -90,7 +96,7 @@
 		return best;
 	}
 
-	async function confirmMatch(provider: 'runsignup' | 'paste') {
+	async function confirmMatch(provider: RaceImportProvider) {
 		if (!candidate) return;
 		// A paste-only candidate (manual listing, no provider auto-pull) has no
 		// server pull to attempt — open the paste form so the owner can enter
@@ -105,7 +111,15 @@
 				provider,
 				listingId: candidate.id,
 				matchRunId: runId,
-				bib: provider === 'runsignup' ? matchBib.trim() || undefined : undefined,
+				bib:
+					provider !== 'paste' && RACE_IMPORT_LEGS[provider].scopeField === 'bib'
+						? matchBib.trim() || undefined
+						: undefined,
+				ultraSignUpAthleteId:
+					provider !== 'paste' &&
+					RACE_IMPORT_LEGS[provider].scopeField === 'ultraSignUpAthleteId'
+						? matchBib.trim() || undefined
+						: undefined,
 				result:
 					provider === 'paste'
 						? {
@@ -122,8 +136,12 @@
 			matchBib = '';
 			await load();
 		} catch (e) {
-			if ((e as Error).message === 'RUNSIGNUP_UNAVAILABLE') {
-				// RunSignUp leg unconfigured — drop to the manual paste form.
+			// Any leg's unconfigured signal drops to the manual paste form. Keyed
+			// off the map rather than the one literal, or a ChronoTrack candidate
+			// on an unconfigured leg reports a generic failure and offers nothing.
+			if (
+				Object.values(RACE_IMPORT_UNAVAILABLE).includes((e as Error).message)
+			) {
 				pasting = true;
 			} else {
 				showToast(m('races.importFailed'), 'error');
@@ -139,7 +157,14 @@
 		matchBib = '';
 	}
 
-	const isRunSignUpCandidate = $derived(candidate?.provider === 'runsignup');
+	// The candidate's own leg, or null when its listing has no import leg
+	// (parkrun / manual / raceresult) — those are paste-only by construction.
+	const matchLeg = $derived<RaceImportLeg | null>(
+		candidate && candidate.provider in RACE_IMPORT_LEGS
+			? (candidate.provider as RaceImportLeg)
+			: null
+	);
+	const matchSpec = $derived(matchLeg ? RACE_IMPORT_LEGS[matchLeg] : null);
 
 	onMount(load);
 </script>
@@ -222,12 +247,17 @@
 					</div>
 				</form>
 			{:else}
-				{#if isRunSignUpCandidate}
+				{#if matchSpec}
 					<label class="match-bib">
-						<span>{m('races.bib')}</span>
-						<input type="text" bind:value={matchBib} data-testid="match-runsignup-bib" />
+						<span>{m(matchSpec.labelKey)}</span>
+						<input
+							type="text"
+							bind:value={matchBib}
+							data-testid="match-runsignup-bib"
+							data-leg={matchLeg}
+						/>
 					</label>
-					<p class="match-hint">{m('races.runSignUpBibHint')}</p>
+					<p class="match-hint">{m(matchSpec.hintKey)}</p>
 				{/if}
 				<div class="match-actions">
 					<button type="button" class="btn btn-outline btn-sm" onclick={dismiss} data-testid="match-dismiss">
@@ -236,8 +266,8 @@
 					<button
 						type="button"
 						class="btn btn-primary btn-sm"
-						disabled={busy || (isRunSignUpCandidate && !matchBib.trim())}
-						onclick={() => confirmMatch(isRunSignUpCandidate ? 'runsignup' : 'paste')}
+						disabled={busy || (matchSpec?.scopeRequired === true && !matchBib.trim())}
+						onclick={() => confirmMatch(matchLeg ?? 'paste')}
 						data-testid="match-confirm"
 					>
 						{m('races.matchConfirm')}
