@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -87,6 +88,72 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// existing file, so the crash-atomic write-before-prune contract is intact.
   final Map<String, String> _writtenJson = <String, String>{};
 
+  /// Serialises every directory-mutating operation this store performs.
+  ///
+  /// Each public write below owns a whole directory transition: [persist]
+  /// writes a row file then the index, [dropRow] removes a row file then
+  /// rewrites the index, [rewriteAll] writes every row then prunes what is
+  /// left, [clear] deletes every file outright, and [loadAll] rebuilds the
+  /// resident state from what it finds. Every caller awaits its own call, but
+  /// two callers over one store are ordinary — a screen firing a save
+  /// unawaited, a connectivity return draining while the user edits, sign-out
+  /// landing mid-save — and nothing ordered them against each other.
+  ///
+  /// Two measured interleavings. [clear] deletes EVERY file in the directory,
+  /// including the `.tmp` sibling of an in-flight [persist], so that write's
+  /// `rename` then failed with a `PathNotFoundException` naming a temp path
+  /// its caller has never heard of. Worse, and silent: a delete that overtook
+  /// an in-flight write to the same id renamed the row's file back into place
+  /// AFTER the delete removed it, leaving `rowsById` saying the row was gone
+  /// and the next cold-load resurrecting it — no exception anywhere.
+  ///
+  /// A whole-directory chain rather than a per-id lock, because [clear],
+  /// [rewriteAll], [loadAll] and the index flush are directory-wide: per-id
+  /// exclusion would still let each of them race a row write. Ordering costs
+  /// nothing here — these are single small files, and every existing caller
+  /// already awaited them one at a time.
+  ///
+  /// Keyed on the directory, NOT on the instance, because the interleaving
+  /// that matters is between two instances: the sign-out wipe constructs a
+  /// throwaway store per screen-owned type precisely because all instances of
+  /// a type share one on-disk directory (`offline_store_wipe.dart`), so a
+  /// per-instance chain would have left its [clear] free to race the live
+  /// screen's write. A separate isolate is out of reach of any in-process
+  /// lock — that is what `kAtomicOrphanMinAge` already allows for.
+  static final Map<String, Future<void>> _writeChains = <String, Future<void>>{};
+
+  String get _chainKey =>
+      dir?.path ?? 'uninitialised:${identityHashCode(this)}';
+
+  Future<T> _serialised<T>(Future<T> Function() body) {
+    final key = _chainKey;
+    final completer = Completer<T>();
+    final prior = _writeChains[key] ?? Future<void>.value();
+    // The chain must never become an error future, or one failed write would
+    // reject every write queued behind it. The failure goes to its own caller.
+    final link = prior.then((_) async {
+      try {
+        completer.complete(await body());
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    _writeChains[key] = link;
+    // Keep the map bounded: a link that finished with nothing queued behind it
+    // is the whole chain, and a fresh one starts from `Future.value()` anyway.
+    link.whenComplete(() {
+      if (identical(_writeChains[key], link)) _writeChains.remove(key);
+    });
+    return completer.future;
+  }
+
+  /// Test-only: a future that completes once every write queued so far has
+  /// finished. A widget test whose UI signal is the in-memory row (which
+  /// [persist] installs synchronously, before its file write) is otherwise
+  /// free to tear its temp directory down under a write still in flight.
+  @visibleForTesting
+  Future<void> debugWritesSettled() => _serialised(() async {});
+
   int _revision = 0;
 
   /// Monotonic counter bumped on every mutation (every [notifyListeners]).
@@ -173,7 +240,9 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
     await loadAll();
   }
 
-  Future<void> loadAll() async {
+  Future<void> loadAll() => _serialised(_loadAll);
+
+  Future<void> _loadAll() async {
     rowsById.clear();
     _summaries.clear();
     _writtenJson.clear();
@@ -430,6 +499,10 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
 
   Future<void> dropRow(String id) async {
     requireInitialised('dropRow');
+    await _serialised(() => _dropRow(id));
+  }
+
+  Future<void> _dropRow(String id) async {
     rowsById.remove(id);
     _writtenJson.remove(id);
     final file = File('${dir!.path}/$id.json');
@@ -440,9 +513,12 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   }
 
   Future<void> persist(S stored) async {
-    await _persistRow(stored);
-    await _persistIndex();
-    notifyListeners();
+    requireInitialised('persist');
+    return _serialised(() async {
+      await _persistRow(stored);
+      await _persistIndex();
+      notifyListeners();
+    });
   }
 
   /// Write a single row + reflect it in [_summaries] without flushing the
@@ -482,6 +558,10 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// resident rows replaced and nothing on disk agreeing with them.
   Future<void> rewriteAll() async {
     requireInitialised('rewriteAll');
+    await _serialised(_rewriteAll);
+  }
+
+  Future<void> _rewriteAll() async {
     final d = dir!;
     final keep = <String>{};
     for (final stored in rowsById.values) {
@@ -522,7 +602,13 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   Future<int> restoreFromBackup(
     List<Map<String, dynamic>> records, {
     bool generateNewIds = false,
-  }) async {
+  }) =>
+      _serialised(() => _restoreFromBackup(records, generateNewIds));
+
+  Future<int> _restoreFromBackup(
+    List<Map<String, dynamic>> records,
+    bool generateNewIds,
+  ) async {
     var imported = 0;
     for (final json in records) {
       try {
@@ -597,7 +683,9 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// §72) isn't available here — these stores aren't user-namespaced on disk —
   /// so sign-out clears them outright. Idempotent; tolerates a per-file delete
   /// failure so one undeletable file can't strand the rest still on disk.
-  Future<void> clear() async {
+  Future<void> clear() => _serialised(_clear);
+
+  Future<void> _clear() async {
     rowsById.clear();
     _summaries.clear();
     _writtenJson.clear();

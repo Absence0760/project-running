@@ -70,6 +70,7 @@
 	import FundraiserSection from '$lib/components/FundraiserSection.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { isAthleticCategory } from '$lib/social/event_category';
+	import type { FinisherStatus } from '$lib/types';
 	import { sameInstant } from '$lib/social/event_instance';
 	import { upcomingCancelledOccurrences } from '$lib/social/event_occurrence';
 	import { workoutDraftFromTemplate, workoutDraftFromSession } from '$lib/social/event_gym_template';
@@ -808,7 +809,7 @@
 		}
 	}
 
-	async function recordNonFinish(status: 'dnf' | 'dns') {
+	async function recordNonFinish(status: Exclude<FinisherStatus, 'finished'>) {
 		if (!event || !activeInstance || submitting) return;
 		submitting = true;
 		try {

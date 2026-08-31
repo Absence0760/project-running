@@ -7544,8 +7544,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsSplitIntervalDefault => 'Default';
 
   @override
-  String get prefsSplitIntervalDefaultSubtitle =>
-      'Default (1 km for running, 5 km for cycling)';
+  String prefsSplitIntervalDefaultSubtitle(String run, String cycle) {
+    return 'Default ($run for running, $cycle for cycling)';
+  }
 
   @override
   String get prefsSplitPaceMode => 'Splits announce';
@@ -11868,7 +11869,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Runner consents to recording health data';
 
   @override
-  String get checkpointWeighInWeightKg => 'Body weight (kg)';
+  String get checkpointWeighInBodyWeight => 'Body weight';
 
   @override
   String get checkpointMedicalHold => 'Place on medical hold';

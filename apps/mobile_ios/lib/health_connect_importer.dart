@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:health/health.dart';
 
+import 'column_limits.dart';
 import 'embedded_bests.dart';
 import 'import_failures.dart';
 import 'imported_run_id.dart';
@@ -442,8 +443,8 @@ class HealthConnectImporter {
 
   /// The most-recent body-weight sample (kg) Health Connect holds, or null
   /// when there is none or the read errors. Used to one-time seed the
-  /// user's `body_weight_kg` on import. Clamps to a sane 30–300 kg so a
-  /// stray sample can't poison the calorie estimate.
+  /// user's `body_weight_kg` on import, so a stray sample can't poison the
+  /// calorie estimate.
   static Future<double?> fetchLatestWeightKg() async {
     try {
       final now = DateTime.now();
@@ -467,15 +468,22 @@ class HealthConnectImporter {
     }
   }
 
-  /// Pick the most-recent in-range (30–300 kg) weight from a list of
-  /// samples. Pure so the recency + clamp logic is unit-testable without
-  /// the Health Connect plugin. Returns null when none qualify.
+  /// Pick the most-recent in-range weight from a list of samples. Pure so the
+  /// recency + range logic is unit-testable without the Health Connect plugin.
+  /// Returns null when none qualify.
+  ///
+  /// The range is `body_metrics.weight_kg`'s registered client bound, not a
+  /// third opinion. This filter said 30–300 kg, which disagreed with the
+  /// body-metrics field at BOTH ends: 300 is above what the field lets a
+  /// runner type, so an import could seed a weight the runner then could not
+  /// re-save, and 30 is above the field's floor, so a legitimately light
+  /// runner's real sample was discarded as noise (decisions § 819).
   @visibleForTesting
   static double? selectLatestWeightKg(List<({double kg, DateTime at})> samples) {
     double? latestKg;
     DateTime? latestAt;
     for (final s in samples) {
-      if (s.kg < 30 || s.kg > 300) continue;
+      if (!withinColumnLimit('body_metrics.weight_kg', s.kg)) continue;
       if (latestAt == null || s.at.isAfter(latestAt)) {
         latestAt = s.at;
         latestKg = s.kg;

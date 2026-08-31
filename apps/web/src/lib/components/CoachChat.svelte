@@ -9,6 +9,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ChipDropdown from '$lib/components/ChipDropdown.svelte';
 	import { TIER_LIMITS } from '$lib/coach/types';
+	import type { CoachMessageRole } from '$lib/coach/types';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { TrainingPlan } from '$lib/types';
 
@@ -35,7 +36,7 @@
 		// server returns the row id, we stitch it in so bubble actions
 		// (regenerate / edit / react) can anchor on it.
 		id: string | null;
-		role: 'user' | 'assistant';
+		role: CoachMessageRole;
 		content: string;
 		reaction?: 'up' | 'down' | null;
 	}
@@ -176,7 +177,7 @@
 			return;
 		}
 		const groups = new Map<string, { count: number; firstUser: string | null }>();
-		for (const row of (data ?? []) as { archived_at: string; role: 'user' | 'assistant'; content: string }[]) {
+		for (const row of (data ?? []) as { archived_at: string; role: CoachMessageRole; content: string }[]) {
 			const g = groups.get(row.archived_at) ?? { count: 0, firstUser: null };
 			g.count += 1;
 			if (g.firstUser == null && row.role === 'user') g.firstUser = row.content;
@@ -771,7 +772,7 @@
 				(payload: { new: Record<string, unknown> }) => {
 					const row = payload.new as {
 						id: string;
-						role: 'user' | 'assistant';
+						role: CoachMessageRole;
 						content: string;
 						reaction: 'up' | 'down' | null;
 						plan_id: string | null;

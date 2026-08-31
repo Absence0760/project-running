@@ -39,8 +39,9 @@ const Map<String, ColumnLimit> kColumnLimits = {
   // produces a calorie target instead of an error. 250 is the same judgement
   // at the other end, well inside the column's 500.
   'body_metrics.weight_kg': ColumnLimit.value(20, 250),
-  // The column allows anything above 0; 50 cm is below every human who can
-  // hold a phone, and catches a height typed in feet.
+  // 50 cm is below every human who can hold a phone, and catches a height
+  // typed in feet. The maximum is EQUAL to the column's own 300 — there is no
+  // height between them to be stricter about.
   'user_profiles.height_cm': ColumnLimit.value(50, 300),
   // The race-director weigh-in, where the column's own 20..400 is already the
   // right range — a runner is weighed against their own start baseline, so
@@ -63,6 +64,38 @@ const Map<String, ColumnLimit> kColumnLimits = {
   // the same id typed fine on the web (decisions § 792).
   'user_profiles.parkrun_number': ColumnLimit.length(32),
 };
+
+/// What the COLUMN accepts, which is a different question from what a client
+/// may send.
+///
+/// [kColumnLimits] bounds an INPUT: it is the narrowest thing a composer should
+/// offer, and being conservative there costs nothing. This map is the opposite
+/// direction — the ceiling a defensive filter over a value read BACK out of the
+/// database must use, so that a row the column legitimately holds is not
+/// discarded as garbage. `nutrition_targets.dart` is the case: it refuses a
+/// stored profile whose weight or height is non-physical and returns null,
+/// which hides the calorie rings. Written against the client input bound it
+/// would hide them for a runner the body-metrics screen never let type that
+/// weight in the first place; written as a literal it would go on hiding them
+/// after a CHECK was widened, silently, on both platforms, with every mirror
+/// test passing.
+///
+/// So the number is the column's, and the guard in
+/// `scripts/check_shared_constants.mjs` resolves each column's CHECK by
+/// replaying every migration and demands EQUALITY — not containment, which is
+/// what it demands of [kColumnLimits]. A CHECK widened to 600 fails the PR that
+/// widens it and names this line. decisions § 819.
+const Map<String, num> kColumnCheckMax = {
+  'body_metrics.weight_kg': 500,
+  'user_profiles.height_cm': 300,
+};
+
+/// The largest value the column's own CHECK admits, in its canonical unit.
+num columnCheckMax(String key) {
+  final max = kColumnCheckMax[key];
+  if (max == null) throw ArgumentError('unknown column check max: $key');
+  return max;
+}
 
 ColumnLimit _limit(String key) {
   final limit = kColumnLimits[key];

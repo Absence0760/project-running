@@ -73,7 +73,7 @@ void main() {
         if (!f.path.endsWith('.dart')) continue;
         final src = f.readAsStringSync();
         for (final m in RegExp(
-                r"""\b(?:columnMin|columnMax|columnLength|withinColumnLimit|boundsIn)\(\s*'([a-z_]+\.[a-z_]+)'""")
+                r"""\b(?:columnMin|columnMax|columnLength|columnCheckMax|withinColumnLimit|boundsIn)\(\s*'([a-z_]+\.[a-z_]+)'""")
             .allMatches(src)) {
           asked.add(m.group(1)!);
         }
@@ -81,8 +81,31 @@ void main() {
       expect(asked, isNotEmpty,
           reason: 'no call site found — the pattern stopped matching');
       for (final key in asked) {
-        expect(kColumnLimits.containsKey(key), isTrue, reason: key);
+        expect(
+            kColumnLimits.containsKey(key) || kColumnCheckMax.containsKey(key),
+            isTrue,
+            reason: key);
       }
+    });
+
+    test('a declared DB cap is never below the input bound for the same column',
+        () {
+      // The two maps answer different questions but cannot contradict each
+      // other: an input the composer offers that the column then rejects is
+      // the 23514 this module exists to prevent. The guard proves each map
+      // against the migrations; this proves them against each other, with no
+      // SQL in reach.
+      for (final key in kColumnCheckMax.keys) {
+        final input = kColumnLimits[key];
+        expect(input, isNotNull, reason: key);
+        expect(input!.isLength, isFalse, reason: key);
+        expect(input.max, lessThanOrEqualTo(columnCheckMax(key)),
+            reason: '$key: input bound exceeds the column');
+      }
+    });
+
+    test('columnCheckMax refuses an unregistered column', () {
+      expect(() => columnCheckMax('no_such.column'), throwsArgumentError);
     });
   });
 

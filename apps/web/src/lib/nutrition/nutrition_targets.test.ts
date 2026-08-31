@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { columnCheckMax } from '../core/column_limits';
+
 import {
 	ACTIVITY_LEVELS,
+	MAX_AGE_YEARS,
 	GOAL_KCAL_DELTA,
 	MIN_CALORIE_TARGET,
 	ageFromDob,
@@ -148,4 +151,24 @@ test('ACTIVITY_LEVELS is ordered least → most active with rising factors', () 
 	for (let i = 1; i < ACTIVITY_LEVELS.length; i++) {
 		assert.ok(ACTIVITY_LEVELS[i].factor > ACTIVITY_LEVELS[i - 1].factor);
 	}
+});
+
+test('computeNutritionTargets — the non-physical ceiling IS the column CHECK, not a literal', () => {
+	// A filter over a value read back. The weight at the column's own ceiling is
+	// storable, so it must produce a target; a hair above it cannot have come
+	// from the column at all. Written against the accessor so a widened CHECK
+	// moves this assertion with it instead of leaving a real stored weight
+	// silently target-less on both platforms.
+	const weightMax = columnCheckMax('body_metrics.weight_kg');
+	const heightMax = columnCheckMax('user_profiles.height_cm');
+	assert.ok(computeNutritionTargets({ ...base, weightKg: weightMax }) !== null);
+	assert.equal(computeNutritionTargets({ ...base, weightKg: weightMax + 0.01 }), null);
+	assert.ok(computeNutritionTargets({ ...base, heightCm: heightMax }) !== null);
+	assert.equal(computeNutritionTargets({ ...base, heightCm: heightMax + 0.01 }), null);
+	// Age has no column, so its ceiling is a stated constant on both sides.
+	assert.ok(computeNutritionTargets({ ...base, ageYears: MAX_AGE_YEARS }) !== null);
+	assert.equal(computeNutritionTargets({ ...base, ageYears: MAX_AGE_YEARS + 1 }), null);
+	// The input bound the composer offers is inside the column's, so a runner
+	// the body-metrics field accepted always gets a target.
+	assert.ok(weightMax > 250 && heightMax >= 300);
 });

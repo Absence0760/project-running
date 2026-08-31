@@ -7627,8 +7627,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsSplitIntervalDefault => 'Predefinição';
 
   @override
-  String get prefsSplitIntervalDefaultSubtitle =>
-      'Predefinição (1 km ao correr, 5 km ao pedalar)';
+  String prefsSplitIntervalDefaultSubtitle(String run, String cycle) {
+    return 'Predefinição ($run ao correr, $cycle ao pedalar)';
+  }
 
   @override
   String get prefsSplitPaceMode => 'Anúncio de parciais';
@@ -11994,7 +11995,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'O corredor consente o registo de dados de saúde';
 
   @override
-  String get checkpointWeighInWeightKg => 'Peso corporal (kg)';
+  String get checkpointWeighInBodyWeight => 'Peso corporal';
 
   @override
   String get checkpointMedicalHold => 'Colocar em retenção médica';
@@ -21554,8 +21555,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get prefsSplitIntervalDefault => 'Padrão';
 
   @override
-  String get prefsSplitIntervalDefaultSubtitle =>
-      'Padrão (1 km ao correr, 5 km ao pedalar)';
+  String prefsSplitIntervalDefaultSubtitle(String run, String cycle) {
+    return 'Padrão ($run ao correr, $cycle ao pedalar)';
+  }
 
   @override
   String get prefsSplitPaceMode => 'Anúncio de parciais';
@@ -25918,7 +25920,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'O corredor consente o registro de dados de saúde';
 
   @override
-  String get checkpointWeighInWeightKg => 'Peso corporal (kg)';
+  String get checkpointWeighInBodyWeight => 'Peso corporal';
 
   @override
   String get checkpointMedicalHold => 'Colocar em retenção médica';

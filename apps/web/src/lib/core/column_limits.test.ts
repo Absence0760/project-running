@@ -1,10 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	COLUMN_CHECK_MAX,
 	COLUMN_LIMITS,
+	columnCheckMax,
 	lengthLimit,
 	valueLimit,
 	withinValueLimit,
+	type ColumnCheckMaxKey,
 	type ColumnLimitKey
 } from './column_limits.js';
 
@@ -50,5 +53,17 @@ test('withinValueLimit: a non-finite value is outside every range', () => {
 		assert.equal(withinValueLimit(key, NaN), false, key);
 		assert.equal(withinValueLimit(key, Infinity), false, key);
 		assert.equal(withinValueLimit(key, -Infinity), false, key);
+	}
+});
+
+test('a declared DB cap is never below the input bound for the same column', () => {
+	// The two maps answer different questions but cannot contradict each other:
+	// an input the composer offers that the column then rejects is the 23514
+	// this module exists to prevent. The guard proves each map against the
+	// migrations; this proves them against each other, with no SQL in reach.
+	for (const key of Object.keys(COLUMN_CHECK_MAX) as ColumnCheckMaxKey[]) {
+		const input = COLUMN_LIMITS[key as ColumnLimitKey];
+		assert.ok(input !== undefined && input.kind === 'value', key);
+		assert.ok(input.max <= columnCheckMax(key), `${key}: input bound exceeds the column`);
 	}
 });

@@ -10,6 +10,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type CoachMode = 'send' | 'regenerate' | 'edit';
 
+// coach_messages.role — who wrote a turn. The column's CHECK (migration
+// 20260511_001) admits exactly these two; `system` is not persisted (the
+// system prompt is rebuilt per request, never a row). Keep in lockstep
+// (check_constraint_unions.mjs PAIRS).
+export type CoachMessageRole = 'user' | 'assistant';
+
 /// Factory shape for the Supabase client the handler builds internally.
 /// Prod leaves `CoachConfig.createClient` unset and the handler falls back
 /// to the real `@supabase/supabase-js` `createClient`; the field exists so
@@ -23,7 +29,7 @@ export type SupabaseClientFactory = (
 ) => SupabaseClient;
 
 export interface CoachRequestBody {
-	messages: { role: 'user' | 'assistant'; content: string }[];
+	messages: { role: CoachMessageRole; content: string }[];
 	plan_id?: string;
 	recent_runs_limit?: number;
 	mode?: CoachMode;

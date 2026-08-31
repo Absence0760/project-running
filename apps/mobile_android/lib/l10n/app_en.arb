@@ -10058,9 +10058,13 @@
   "@prefsSplitIntervalDefault": {
     "description": "Split-interval option meaning the app default"
   },
-  "prefsSplitIntervalDefaultSubtitle": "Default (1 km for running, 5 km for cycling)",
+  "prefsSplitIntervalDefaultSubtitle": "Default ({run} for running, {cycle} for cycling)",
   "@prefsSplitIntervalDefaultSubtitle": {
-    "description": "Subtitle shown when the split interval is at its default"
+    "description": "Subtitle shown when the split interval is at its default. The two intervals are passed in already rendered in the runner's own distance unit — the default follows the preference (1 mi / 5 mi in imperial), so the string must not name one.",
+    "placeholders": {
+      "run": { "type": "String" },
+      "cycle": { "type": "String" }
+    }
   },
   "prefsSplitPaceMode": "Splits announce",
   "@prefsSplitPaceMode": {
@@ -15563,9 +15567,9 @@
   "@checkpointWeighInConsent": {
     "description": "Art 9 consent toggle on the weigh-in sheet"
   },
-  "checkpointWeighInWeightKg": "Body weight (kg)",
-  "@checkpointWeighInWeightKg": {
-    "description": "Body weight field label on the weigh-in sheet"
+  "checkpointWeighInBodyWeight": "Body weight",
+  "@checkpointWeighInBodyWeight": {
+    "description": "Body weight field label on the weigh-in sheet. Deliberately names NO unit: the field's suffix carries the runner's own weight unit, so a label saying kg contradicts an lb suffix."
   },
   "checkpointMedicalHold": "Place on medical hold",
   "@checkpointMedicalHold": {

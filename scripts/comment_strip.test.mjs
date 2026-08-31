@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -114,16 +115,109 @@ test("a Dart escaped quote does not close its string", () => {
 	assert.equal(kept("var s = 'it\\'s'; // x", 'dart'), "var s = 'it\\'s';");
 });
 
-/// decisions.md § 793 depends on this THROWING rather than returning something
-/// plausible: the wire-vector guard treats a file it cannot lex as a hard error
-/// when that file names a wire magic, and as out of scope otherwise. A lexer
-/// that quietly mis-read an interpolated string would put the guard back to
-/// reporting a verdict about source it could not read.
-test('a Dart interpolation carrying a quote is refused, not guessed at', () => {
-	assert.throws(
-		() => stripComments('var s = \'a ${b("\'")} c\';', 'dart'),
-		/unterminated string/,
+// `${…}` is a nested CODE region (decisions § 816). Every case below is a
+// shape the committed tree actually holds; before § 816 each one threw
+// `unterminated string`, which the wire-vector guard then had to route around.
+
+test('a differently-quoted string inside an interpolation does not end the string', () => {
+	// `import_failures.dart`'s CSV quoting, verbatim. Library code, not a test.
+	const src = `String _f(String v) => '"\${v.replaceAll('"', '""')}"'; // x`;
+	assert.equal(kept(src, 'dart'), src.replace(' // x', ''));
+});
+
+test('a same-quoted string inside an interpolation does not end the string', () => {
+	assert.equal(kept("var s = '${a('b')} c'; // x", 'dart'), "var s = '${a('b')} c';");
+});
+
+test('an interpolation may span lines even in a single-quoted string', () => {
+	// `coach_screen_helpers_test.dart`'s SSE fixture in miniature: a newline and
+	// a brace-carrying map literal inside a `${…}` in a '…' string, which Dart
+	// allows and a content-only reading cannot.
+	const src = ["var s = 'a: ${f({", "  'k': {'n': 1},", "})}'; // x"].join('\n');
+	assert.equal(kept(src, 'dart'), src.replace(' // x', ''));
+});
+
+test('a bare newline is still unterminated when it is NOT inside an interpolation', () => {
+	assert.throws(() => stripComments("var s = 'a\nvar t = 2;", 'dart'), /unterminated string/);
+	assert.throws(() => stripComments("var s = 'a ${b}\nvar t = 2;", 'dart'), /unterminated string/);
+});
+
+test('a raw string interpolates nothing, so its ${ is content', () => {
+	assert.equal(kept("var s = r'a ${not code'; // x", 'dart'), "var s = r'a ${not code';");
+	const triple = `var s = r"""a \${b('c')}"""; // x`;
+	assert.equal(kept(triple, 'dart'), triple.replace(' // x', ''));
+});
+
+test('the $identifier form needs no brace tracking', () => {
+	assert.equal(kept("var s = 'a $b c'; // x", 'dart'), "var s = 'a $b c';");
+	// An escaped `$` opens no region either, so the `{` after it is content.
+	const escaped = String.raw`var s = 'a \${b} c'; // x`;
+	assert.equal(kept(escaped, 'dart'), escaped.replace(' // x', ''));
+});
+
+test('braces nest inside an interpolation', () => {
+	assert.equal(
+		kept("var s = '${{'a': {'b': 1}}}'; // x", 'dart'),
+		"var s = '${{'a': {'b': 1}}}';",
 	);
+});
+
+test('a // inside a string inside an interpolation is not a comment', () => {
+	assert.equal(
+		kept("var s = 'at ${Uri.parse('https://x/y').host}'; // x", 'dart'),
+		"var s = 'at ${Uri.parse('https://x/y').host}';",
+	);
+});
+
+test('a real comment inside an interpolation IS blanked, like any other code', () => {
+	// The region is code, so a comment in it is a comment. Only a multi-line
+	// interpolation can carry a `//` and still close.
+	const src = ["var s = '${f(", '  1, // one', ")}'; // x"].join('\n');
+	assert.equal(
+		kept(src, 'dart').replace(/ +$/gm, ''),
+		["var s = '${f(", '  1,', ")}';"].join('\n'),
+	);
+	assert.equal(
+		kept("var s = '${/* nine */ 9}'; // x", 'dart').replace(/ {2,}/g, ' '),
+		"var s = '${ 9}';",
+	);
+});
+
+/// decisions.md § 793 depended on an unlexable file THROWING rather than
+/// returning something plausible, and § 816 keeps that: an interpolation that
+/// never closes is source no guard may report a verdict about.
+test('an interpolation that never closes throws rather than eating the file', () => {
+	assert.throws(
+		() => stripComments("var s = '${f(1); var t = 2;", 'dart'),
+		/unterminated string interpolation/,
+	);
+});
+
+// The hole § 816 closed was invisible because nothing read the whole tree, so
+// this is the case that stops the next `${…}` shape reopening it silently.
+test('every committed Dart file on the phone rail lexes', () => {
+	/** @param {string} dir @returns {string[]} */
+	const walk = (dir) =>
+		readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+			const p = join(dir, e.name);
+			return e.isDirectory() ? walk(p) : p.endsWith('.dart') ? [p] : [];
+		});
+	const root = join(import.meta.dirname, '..');
+	const files = ['apps/mobile_android', 'packages'].flatMap((r) => walk(join(root, r)));
+	assert.ok(files.length > 900, `expected the phone rail, found ${files.length} files`);
+	/** @type {string[]} */
+	const broken = [];
+	for (const f of files) {
+		const src = readFileSync(f, 'utf-8');
+		try {
+			const out = stripComments(src, 'dart');
+			assert.equal(out.length, src.length, f);
+			assert.equal(out.split('\n').length, src.split('\n').length, f);
+		} catch (e) {
+			broken.push(`${f}: ${e instanceof Error ? e.message : String(e)}`);
+		}
+	}
+	assert.deepEqual(broken, []);
 });
 
 test('an unterminated raw string throws in both languages', () => {

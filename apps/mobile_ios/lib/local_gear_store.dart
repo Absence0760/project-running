@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 
@@ -190,10 +188,7 @@ class LocalGearStore extends OfflineSyncStore<StoredGear> {
     final existing = rowsById[id];
     if (existing == null) return;
     if (existing.syncState == SyncState.pendingCreate) {
-      rowsById.remove(id);
-      final file = File('${dir!.path}/$id.json');
-      if (file.existsSync()) file.deleteSync();
-      notifyListeners();
+      await dropRow(id);
       return;
     }
     final tombstone = StoredGear(

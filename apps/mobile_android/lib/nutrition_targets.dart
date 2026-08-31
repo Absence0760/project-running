@@ -27,11 +27,21 @@
 /// [computeNutritionTargets] returns null when any required metric is missing
 /// or non-physical, so the UI hides the rings rather than render a
 /// zeroed/garbage target (anti-clutter checklist, multi_modal.md).
+/// "Non-physical" is measured against what the COLUMN accepts, not against
+/// what the body-metrics field offers: this is a filter over a value read
+/// BACK, so a weight the database legitimately holds must produce a target.
+/// The ceilings come from `column_limits.dart`'s [columnCheckMax], where a
+/// guard proves them equal to the columns' own CHECKs; they were literal
+/// `500` / `300` in both halves of this pair, which meant a CHECK widened to
+/// 600 would have hidden the rings for a real stored weight on both platforms
+/// with every mirror test passing (decisions § 819).
 ///
 /// Pure functions, no Flutter / Supabase deps.
 library;
 
 import 'dart:math' as math;
+
+import 'column_limits.dart';
 
 class ActivityLevelOption {
   final String key;
@@ -70,6 +80,12 @@ const fatKcalFraction = 0.3;
 /// medical clamp. Below this the default is suspect; the user can still
 /// override.
 const minCalorieTarget = 1200;
+
+/// Oldest age a body-metrics profile can carry. Unlike the weight and height
+/// ceilings this is NOT a column bound — age is derived from `date_of_birth`,
+/// which no CHECK bounds — so it stays a stated plausible-human maximum, named
+/// once rather than written twice in this file.
+const maxAgeYears = 120;
 
 const _kcalPerGProtein = 4;
 const _kcalPerGCarb = 4;
@@ -163,7 +179,7 @@ int? ageFromDob(String? dobIso, int nowMs) {
   final nd = now.day;
   var age = ny - by;
   if (nm < bm || (nm == bm && nd < bd)) age -= 1;
-  if (age < 0 || age > 120) return null;
+  if (age < 0 || age > maxAgeYears) return null;
   return age;
 }
 
@@ -175,7 +191,11 @@ NutritionTargets? computeNutritionTargets(BodyMetricsInput input) {
   final ageYears = input.ageYears;
   if (weightKg == null || heightCm == null || ageYears == null) return null;
   if (weightKg <= 0 || heightCm <= 0 || ageYears <= 0) return null;
-  if (weightKg > 500 || heightCm > 300 || ageYears > 120) return null;
+  if (weightKg > columnCheckMax('body_metrics.weight_kg') ||
+      heightCm > columnCheckMax('user_profiles.height_cm') ||
+      ageYears > maxAgeYears) {
+    return null;
+  }
 
   final bmr = mifflinStJeorBmr(weightKg, heightCm, ageYears, input.sex);
   final baseTdee =

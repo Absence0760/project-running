@@ -12382,11 +12382,11 @@ abstract class AppLocalizations {
   /// **'Default'**
   String get prefsSplitIntervalDefault;
 
-  /// Subtitle shown when the split interval is at its default
+  /// Subtitle shown when the split interval is at its default. The two intervals are passed in already rendered in the runner's own distance unit — the default follows the preference (1 mi / 5 mi in imperial), so the string must not name one.
   ///
   /// In en, this message translates to:
-  /// **'Default (1 km for running, 5 km for cycling)'**
-  String get prefsSplitIntervalDefaultSubtitle;
+  /// **'Default ({run} for running, {cycle} for cycling)'**
+  String prefsSplitIntervalDefaultSubtitle(String run, String cycle);
 
   /// Tile title for choosing which pace the split cue reads
   ///
@@ -19791,11 +19791,11 @@ abstract class AppLocalizations {
   /// **'Runner consents to recording health data'**
   String get checkpointWeighInConsent;
 
-  /// Body weight field label on the weigh-in sheet
+  /// Body weight field label on the weigh-in sheet. Deliberately names NO unit: the field's suffix carries the runner's own weight unit, so a label saying kg contradicts an lb suffix.
   ///
   /// In en, this message translates to:
-  /// **'Body weight (kg)'**
-  String get checkpointWeighInWeightKg;
+  /// **'Body weight'**
+  String get checkpointWeighInBodyWeight;
 
   /// Medical-hold toggle on the weigh-in sheet
   ///

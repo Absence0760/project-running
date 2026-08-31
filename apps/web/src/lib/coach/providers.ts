@@ -2,7 +2,7 @@
 // `ProviderStream` shape so handler.ts is provider-agnostic.
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { ProviderStream, ProviderUsage, Tier } from './types';
+import type { CoachMessageRole, ProviderStream, ProviderUsage, Tier } from './types';
 import { TIER_LIMITS, emptyUsage } from './types';
 
 // ─────────────────────── Anthropic (streaming + prompt cache) ───────────────────────
@@ -11,7 +11,7 @@ export function streamAnthropic(
 	apiKey: string,
 	systemText: string,
 	contextPayload: string,
-	messages: { role: 'user' | 'assistant'; content: string }[],
+	messages: { role: CoachMessageRole; content: string }[],
 	limits: typeof TIER_LIMITS[Tier],
 ): ProviderStream {
 	const anthropic = new Anthropic({ apiKey });
@@ -82,7 +82,7 @@ export function streamOpenAI(
 	model: string,
 	systemText: string,
 	contextPayload: string,
-	messages: { role: 'user' | 'assistant'; content: string }[],
+	messages: { role: CoachMessageRole; content: string }[],
 	limits: typeof TIER_LIMITS[Tier],
 ): ProviderStream {
 	const convo = [

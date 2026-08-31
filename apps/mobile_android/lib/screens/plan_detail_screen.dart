@@ -4,9 +4,9 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ui_kit/ui_kit.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../adaptive_fitness_flag.dart';
 import '../adaptive_width.dart';
 import '../auth_error.dart';
 import '../l10n/date_format.dart';
@@ -44,20 +44,6 @@ bool _isWorkoutCompleted(PlanWorkoutRow wo) =>
 
 /// Web `isWorkoutSkipped` twin — deliberately dropped, off the books.
 bool _isWorkoutSkipped(PlanWorkoutRow wo) => isWorkoutSkipped(wo.skippedAt);
-
-/// P2 fitness direction gate (gen v2, decisions §144 + §150). OFF by default —
-/// the health-derived-load → prescription path stays inert until this dotenv
-/// flag is flipped, which is the CISO/Security-Analyst sign-off-gated action
-/// (mirrors the web PUBLIC_ADAPTIVE_FITNESS_GATE). The parse itself lives in
-/// the parity pair so the two platforms accept exactly the same values.
-bool get _adaptiveFitnessGate {
-  try {
-    return adaptiveFitnessGateEnabled(dotenv.env['ADAPTIVE_FITNESS_GATE']);
-  } catch (_) {
-    // dotenv not loaded (e.g. widget tests) → gate stays off.
-    return false;
-  }
-}
 
 /// Filter the viewer's club memberships to ones they can publish a
 /// plan-template into — owner or admin. Pure so it's directly
@@ -336,7 +322,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   /// `Run`s (with `metadata.avg_bpm`) from `LocalRunStore` — NOT `_recentRuns`
   /// (`RecentRunRow`, no HR) — to `computeTrainingLoadSeries`, default HR prefs.
   AdaptiveFitness? _adaptiveFitnessInput() {
-    if (!_adaptiveFitnessGate) return null;
+    if (!adaptiveFitnessGate) return null;
     final runs = widget.runStore?.runs;
     if (runs == null || runs.isEmpty) return null;
     final series = computeTrainingLoadSeries(runs, endDate: DateTime.now());

@@ -21,7 +21,9 @@ import {
 	SHAPES,
 	TYPES_FILE,
 	audit,
+	dartSwitches,
 	extractClientValues,
+	extractSwitchValues,
 	findInitializers,
 	loadAllMigrationChecks,
 	loadLiveColumns,
@@ -407,6 +409,185 @@ test('every registered Dart rail has a byte-identical mobile_ios twin', () => {
 test('the committed tree agrees', () => {
 	const { errors } = audit(loadAllMigrationChecks(), readRepo, PAIRS, loadLiveColumns());
 	assert.deepEqual(errors, []);
+});
+
+// --- the Dart `switch` shape (§ 818) ---------------------------------------
+
+const DART_LABELS = `
+class _Screen {
+  String _slotLabel(L l10n, String slot) {
+    switch (slot) {
+      case 'breakfast':
+        return l10n.a;
+      case 'lunch':
+      case 'dinner':
+        return l10n.b;
+      default:
+        return l10n.c;
+    }
+  }
+
+  String _kindLabel(String kind) => switch (kind) {
+        'aid_station' => 'Aid',
+        'cutoff' || 'hazard' => 'Warn',
+        _ => 'Custom',
+      };
+}
+`;
+
+test('a switch rail reads case labels and arrow labels, never the default branch', () => {
+	assert.deepEqual(sorted(extractSwitchValues(DART_LABELS, '_slotLabel')), [
+		'breakfast',
+		'dinner',
+		'lunch',
+	]);
+	assert.deepEqual(sorted(extractSwitchValues(DART_LABELS, '_kindLabel')), [
+		'aid_station',
+		'cutoff',
+		'hazard',
+	]);
+});
+
+test('a switch rail resolves through extractClientValues like any other shape', () => {
+	assert.deepEqual(sorted(extractClientValues(DART_LABELS, { decl: '_kindLabel', shape: 'switch' })), [
+		'aid_station',
+		'cutoff',
+		'hazard',
+	]);
+});
+
+test('a value that only appears in a switch comment is not read as a label', () => {
+	const src = `
+String f(String s) {
+  switch (s) {
+    // case 'ghost':
+    /* case 'phantom': */
+    case 'real':
+      return s;
+  }
+  return s;
+}
+`;
+	assert.deepEqual(sorted(extractSwitchValues(src, 'f')), ['real']);
+});
+
+// The anchor is the INNERMOST ENCLOSING declaration, not the nearest preceding
+// one. `_setTypeChip` reads its subject into a local first; anchoring on that
+// local would let an unrelated rename move the rail off the switch, and a
+// control-flow word would steal it outright.
+test('a switch anchors on its enclosing declaration, not on a local above it', () => {
+	const src = `
+class _S {
+  String? _setTypeChip(Map<String, dynamic> s) {
+    final t = (s['set_type'] as String?) ?? 'working';
+    if (t == 'working') {
+      switch (t) {
+        case 'warmup':
+          return 'W';
+      }
+    }
+    return null;
+  }
+}
+`;
+	const paths = dartSwitches(src).map((x) => x.path);
+	assert.deepEqual(paths, ['_S._setTypeChip']);
+	assert.deepEqual(sorted(extractSwitchValues(src, '_setTypeChip')), ['warmup']);
+	assert.equal(extractSwitchValues(src, 't'), null);
+	assert.equal(extractSwitchValues(src, 'if'), null);
+});
+
+// A Dart parameter list can carry `{named}` / `[optional]` groups. A bounded
+// character class cannot cross those, and the one that tried made
+// `profile_screen`'s `_verbFor` — the widest switch in the tree, 16 notification
+// kinds — invisible to the reader while every other switch in the file resolved.
+test('a named-parameter list does not hide the declaration holding the switch', () => {
+	const src = `
+class _P {
+  String _verbFor(
+    L l10n,
+    View item, {
+    String? nameOverride,
+  }) {
+    final name = nameOverride ?? '';
+    switch (item.kind) {
+      case 'kudos':
+        return name;
+      case 'follow':
+        return name;
+    }
+    return name;
+  }
+}
+`;
+	assert.deepEqual(sorted(extractSwitchValues(src, '_verbFor')), ['follow', 'kudos']);
+});
+
+test('a bare name matching two switches throws, and the class qualifier resolves it', () => {
+	const src = `
+class _A {
+  String _kindLabel(String k) => switch (k) { 'a' => 'A', _ => '' };
+}
+
+class _B {
+  String _kindLabel(String k) => switch (k) { 'b' => 'B', _ => '' };
+}
+`;
+	assert.throws(() => extractSwitchValues(src, '_kindLabel'), /2 switches addressed/);
+	assert.deepEqual(sorted(extractSwitchValues(src, '_A._kindLabel')), ['a']);
+	assert.deepEqual(sorted(extractSwitchValues(src, '_B._kindLabel')), ['b']);
+});
+
+test('a switch declaration that is not there reads as null, never as an empty set', () => {
+	assert.equal(extractSwitchValues(DART_LABELS, '_renamedAway'), null);
+});
+
+// § 818: every column carrying a switch rail. A rail that merely EXISTS proves
+// nothing about what it catches, and these are the rails that exist BECAUSE a
+// Dart switch degrades silently — so pin that widening each of their columns is
+// what fails, naming the switch.
+test('every registered switch rail catches a widened CHECK', () => {
+	const live = loadLiveColumns();
+	const withSwitch = PAIRS.filter((p) => p.clients.some((c) => c.shape === 'switch'));
+	assert.ok(withSwitch.length > 0, 'no switch rail registered');
+	for (const entry of withSwitch) {
+		const checks = loadAllMigrationChecks();
+		const current = checks.get(entry.tableColumn);
+		assert.ok(current, `${entry.tableColumn}: no set-shaped CHECK in the committed tree`);
+		checks.set(entry.tableColumn, new Set([...current, 'a_value_no_client_carries']));
+		const { errors } = audit(checks, readRepo, PAIRS, live);
+		for (const rail of entry.clients.filter((c) => c.shape === 'switch')) {
+			assert.ok(
+				errors.some((e) => e.startsWith(`${entry.tableColumn} drift vs ${rail.decl} (`)),
+				`${entry.tableColumn} → ${rail.decl}: widening the CHECK failed this rail`,
+			);
+		}
+	}
+});
+
+// § 817: four columns whose vocabulary was spelled anonymously inline —
+// `'finished' | 'dnf' | 'dns'` five times, `'user' | 'assistant'` six — until
+// each was named once. A rail that merely EXISTS proves nothing about what it
+// catches, so widen each column's real CHECK by a value no client carries and
+// pin that the rail is what fails.
+test('the newly-named inline vocabularies catch a widened CHECK', () => {
+	const live = loadLiveColumns();
+	for (const column of [
+		'event_results.finisher_status',
+		'race_sessions.status',
+		'reports.status',
+		'coach_messages.role',
+	]) {
+		const checks = loadAllMigrationChecks();
+		const current = checks.get(column);
+		assert.ok(current, `${column}: no set-shaped CHECK in the committed tree`);
+		checks.set(column, new Set([...current, 'a_value_no_client_carries']));
+		const { errors } = audit(checks, readRepo, PAIRS, live);
+		assert.ok(
+			errors.some((e) => e.startsWith(`${column} drift`)),
+			`${column}: widening the CHECK failed no rail`,
+		);
+	}
 });
 
 test('the exported TYPES_FILE still points at the web overlay unions', () => {

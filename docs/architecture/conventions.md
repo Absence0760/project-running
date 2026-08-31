@@ -510,6 +510,21 @@ When you write a value that a second language also has to know:
 - **A rail that extracts nothing is a failure, not a match.** Two empty sets
   agree. Both the guard and any hand-written mirror must fail loudly when the
   shape they read changes.
+- **A vocabulary a guard cannot point at is a vocabulary nothing guards.** An
+  anonymous inline union — `status: 'reviewed' | 'dismissed'` written out at
+  three call sites — is a rail with no name, and `check_constraint_unions.mjs`
+  filed four of those as "no client enumerates this column" while sixteen
+  spellings of them shipped ([decisions § 817](decisions.md)). Name the
+  vocabulary once, in one exported declaration, and derive any narrower use of
+  it (`Exclude<FinisherStatus, 'finished'>`) rather than re-typing the subset.
+- **Where the language cannot make the lookup exhaustive, the guard reads the
+  lookup itself.** Web's `Record<Union, X>` label maps need no rail because
+  `tsc` checks them; a Dart `switch` over a `String` cannot be exhaustive, so
+  it silently falls to `default:` when its CHECK grows and it gets a `switch`
+  rail instead ([§ 818](decisions.md)). Do NOT install a const list beside the
+  switch for the guard to read — that is a second declaration nothing checks
+  against the switch, the [§ 641](decisions.md) shape. Point the rail at the
+  authority.
 - **Resolve SQL by replay, not by filename.** The body a function has in
   production is the one the last `create or replace function` wrote, and that
   is routinely in a migration named after something else. Reading the migration
@@ -548,6 +563,35 @@ binding ceiling. Four fields were in that state when the class was swept
   kilograms and the field may be pounds, so convert — rounding the floor UP and
   the ceiling DOWN, or the range advertises a value its own gate refuses.
 
+## Local stores — a directory transition is serialised, not just atomic
+
+`writeStringAtomic` gives each in-flight write its own `.tmp` sibling and renames
+it over the target, so a crash leaves either the old file or the whole new one.
+That is a guarantee about ONE write. It says nothing about two *operations* over
+the same directory, and every mobile store operation is a multi-step directory
+transition: write the row then the index, delete the row then rewrite the index,
+write every row then prune, delete every file.
+
+So every directory-mutating entry point on `OfflineSyncStore` runs on one serial
+chain, and a new one must go on it too. Three properties are load-bearing and a
+change that weakens any of them reopens a measured bug (decisions § 821):
+
+- **Whole-directory, not per-id.** `clear`, `rewriteAll`, `loadAll` and the index
+  flush touch files no row id names, so per-id exclusion still lets them race a
+  row write.
+- **Keyed on the directory, not the instance.** All instances of a store type
+  share one directory — `offline_store_wipe.dart` relies on exactly that to wipe
+  from a throwaway instance — so a per-instance lock leaves a sign-out `clear()`
+  free to delete the temp file of the live screen's in-flight write.
+- **The chain never becomes an error future.** A failed write reports to its own
+  caller; it must not reject every write queued behind it.
+
+The corollary for tests: a widget test's UI signal is usually the in-memory row,
+which `persist` installs synchronously *before* its file write. Tearing a temp
+directory down on that signal deletes a `.tmp` mid-rename. Wait on the file (or
+on `debugWritesSettled`), which is also the only thing that actually pins the
+offline-first durability the surface is claiming.
+
 ## Feature gates — one parser, and a define a release build can actually read
 
 Every fail-closed feature gate on either client parses its env string through the
@@ -571,6 +615,18 @@ parser, directly or through one named delegate.
 A flag whose parser belongs to a TS↔Dart parity pair (`off_route_alert`,
 `plan_adaptive_replan`) keeps its named function and delegates to the canonical
 one — on **both** sides, in the same change, or the pair diverges.
+
+**One binding module per flag, and the surfaces read the gate — never the key.**
+A flag's env key and its fail-closed guard live together in a `*_flag` module
+(`nearby_flag.dart` / `off_route_flag.dart` / `adaptive_fitness_flag.dart` /
+`weigh_in_flag.dart`; on web the `*_flag.ts` layer), which exports the key const
+and a named gate getter. A surface imports the getter. It does not spell
+`dotenv.env['KEY']` / `env.PUBLIC_KEY` itself, because a guard written at the
+call site is only as good as that call site: four mobile gates all failed closed
+while their bindings sat at five call sites in two idioms, two of them duplicates
+and two private to a screen and therefore unassertable (decisions § 822). The
+mobile suite fails on a gate key read literally outside its own module, and on a
+gate that throws rather than answering `false` against an uninitialised dotenv.
 
 **On mobile the gate is not finished until the key is in `main.dart`'s
 `String.fromEnvironment` bridge.** Release builds never load `.env.development`
@@ -1561,6 +1617,8 @@ When a Playwright / pgtap test surfaces a real bug in the app code, fix the bug 
 
 **The same-commit rule.** Tests for a piece of work go in the **same commit** as the piece — not a follow-up commit, not "I'll add tests next session." A bug fix lands with the pinning test in the same commit (the test is the bug's headstone — without it, the next regression slips through silently). A new module lands with its unit tests in the same commit. A new web route lands with at least one Playwright e2e in the same commit.
 
+**A new `handler_envelope.test.ts` case lands with the mutation that kills it.** The three mutation guards (`check_pgtap_refusal_assertions.mjs`, `check_edge_function_test_vacuity.mjs`, `check_served_envelope_mutations.mjs`) all derive their population, so a new pgtap refusal or a new Deno unit case is measured the moment it exists. The served-host one cannot: its operator is a table of named source edits, so it enforces coverage instead — a case the baseline ran that no mutation claims **fails the build**, and so does a mutation naming a case that no longer exists. Adding a case to that file therefore means adding the entry in `apps/backend/scripts/check_served_envelope_mutations.mjs` that opens the gate the case names, in the same change. That is the point rather than the friction: the entry is where you find out whether the assertion discriminates, and three of the file's cases turned out not to ([decisions § 815](decisions.md)).
+
 **A test waits on a condition, never on a duration.** A fixed sleep, a fixed number of `pump`s, or a bounded loop that silently falls through when its deadline expires are all the same defect: the test is guessing how long some async work takes, so it passes on a developer machine and fails on a loaded CI runner. Wait on the observable thing instead — the future the trigger hands back, the row the save writes, the widget the state change mounts — with a deadline whose only job is to turn a hang into a named failure. On mobile that is `pumpUntil` / `holdFinish` in `apps/mobile_android/test/pump_until.dart`; on web, Playwright's auto-waiting `expect` rather than `waitForTimeout`. Never widen a timeout to make a test pass — that is the same rule as "don't inflate a timeout or a retry to hide a bug", applied to the harness. The exception is a delay that *models elapsed time* (a debounce window, a throttle, a signal blackout, a hanging fetcher proving a `.timeout()` fires): there the duration is the test's subject. See [decisions.md § 715](decisions.md).
 
 **When a test genuinely isn't viable** (pure docs, runbook updates, infra blocked on credentials, orchestration code that pulls in SvelteKit virtual imports / Supabase / native plugins and would need heavyweight DI to unit-test), say so explicitly in the commit message — `no unit test viable; e2e covers it` is fine, silence isn't. Future you (and future code-reviewer agents) will read the message and either accept the trade-off or argue with it; either way the reasoning is recorded.
@@ -1678,6 +1736,7 @@ A CI guard's whole value is that its verdict is true, so a guard that reads its 
 - **Ask the tool that already knows.** git knows which files a diff ADDED (`--diff-filter=A`); inferring it from a `@@ … +1` hunk header was wrong 22 times in 28. The same goes for a version a lockfile resolves, a job list a workflow declares, a path a `package.json` names.
 - **Two facts in the same file are not two facts in the same scope.** A cache key belongs to its job, a `NOT VALID` to its action, an `env:` to its file. Matching per file because that is what a `readFileSync` hands you produces a verdict about a pairing that does not exist.
 - **Input the guard cannot read is refused, loudly, naming the file.** Never consumed to end of input, never caught into an empty result, never skipped. A guard that reports a clean tree over something it failed to parse is the failure mode all three rules above collapse into.
+- **A filter that routes around a lexer's limitation is a scope reduction, and it comes out the day the limitation does.** `check_watch_wire_vectors.mjs` read 7 of 521 phone-side test files because the shared Dart lexer could not blank a file whose strings interpolated; the narrowing was honest and documented, and it still meant a golden spelled without a magic byte in it sat outside the sweep with nothing to report it ([decisions § 816](decisions.md)). Fix the reader, then widen the scan back and re-measure — the widening is where the next defect surfaces. And where a lexer is shared, one of its suites reads the WHOLE tree it is meant to handle: `comment_strip.test.mjs` lexes all 1056 committed Dart files on the phone rail in about 0.4 s, which is the only reason the hole cannot reopen silently.
 
 And where a rule genuinely has a blind spot, the guard **reports the blind spot** — `check_ci_diagnostics.mjs` lists the steps it does not ask to diagnose themselves — rather than leaving its boundary in a paragraph someone has to re-derive.
 
