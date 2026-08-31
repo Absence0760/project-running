@@ -17,6 +17,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
+import '../lib/rate_limit_message.dart';
 import '../lib/route_overlap.dart';
 import '../lib/screens/route_builder_screen.dart';
 
@@ -285,6 +286,80 @@ void main() {
         code: 'P0001',
       ));
       expect(msg, contains('creating clubs too quickly'));
+    });
+
+    // § 744's point: the branch used to sit ABOVE the context check, so it
+    // discarded a localizer it was already holding and every reader got
+    // English. These drive the production shape — a context IS passed at the
+    // single real call site — and pin that the sentence comes out of the
+    // catalogue rather than out of the helper.
+    testWidgets('a German context gets German, not the English fallback',
+        (tester) async {
+      late BuildContext ctx;
+      await tester.pumpWidget(MaterialApp(
+        locale: const Locale('de'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(builder: (c) {
+          ctx = c;
+          return const SizedBox.shrink();
+        }),
+      ));
+
+      final msg = formatSaveRouteError(
+        PostgrestException(
+          message: 'rate limit exceeded for create_route, retry in 42s',
+          code: 'P0001',
+        ),
+        ctx,
+      );
+      final de = lookupAppLocalizations(const Locale('de'));
+      expect(msg, de.rateLimitCreateRoute(rateLimitWait(de, 42)));
+      expect(msg, isNot(contains('too quickly')),
+          reason: 'a hardcoded copy of a translated string is exactly what '
+              '§ 744 removed');
+    });
+
+    testWidgets('every shipped locale renders its own refusal here',
+        (tester) async {
+      for (final locale in AppLocalizations.supportedLocales) {
+        late BuildContext ctx;
+        await tester.pumpWidget(MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(builder: (c) {
+            ctx = c;
+            return const SizedBox.shrink();
+          }),
+        ));
+        final l10n = lookupAppLocalizations(locale);
+        final msg = formatSaveRouteError(
+          PostgrestException(
+            message: 'rate limit exceeded for create_route, retry in 42s',
+            code: 'P0001',
+          ),
+          ctx,
+        );
+        expect(msg, l10n.rateLimitCreateRoute(rateLimitWait(l10n, 42)),
+            reason: '$locale renders through the catalogue');
+        expect(msg.contains('{'), isFalse,
+            reason: '$locale left a slot unsubstituted: $msg');
+      }
+    });
+
+    test('with no context it looks English up rather than re-spelling it', () {
+      // Only the unit tests reach this arm, and it must still come out of
+      // the catalogue — a literal here is a second copy of a translated
+      // string that no catalogue parity suite can see.
+      final en = lookupAppLocalizations(const Locale('en'));
+      expect(
+        formatSaveRouteError(PostgrestException(
+          message: 'rate limit exceeded for create_route, retry in 42s',
+          code: 'P0001',
+        )),
+        en.rateLimitCreateRoute(rateLimitWait(en, 42)),
+      );
     });
 
     // The raw exception used to be interpolated into this string so a
