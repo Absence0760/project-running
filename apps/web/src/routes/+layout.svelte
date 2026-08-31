@@ -416,12 +416,19 @@
 <UndoBar />
 <CookieConsentBanner />
 
-{#if isOffline}
-	<div class="offline-banner" role="status" aria-live="polite" data-testid="offline-banner">
-		<span class="material-symbols offline-icon" aria-hidden="true">wifi_off</span>
-		{m('shell.offline')}
-	</div>
-{/if}
+<!-- The region is permanently mounted and only the banner inside it comes and
+     goes: a live region announces changes made INSIDE it, not its own arrival,
+     so mounting region and message together announces nothing (decisions.md
+     § 736). The wrapper carries no styles — the banner keeps its own fixed
+     positioning. -->
+<div role="status" aria-live="polite">
+	{#if isOffline}
+		<div class="offline-banner" data-testid="offline-banner">
+			<span class="material-symbols offline-icon" aria-hidden="true">wifi_off</span>
+			{m('shell.offline')}
+		</div>
+	{/if}
+</div>
 
 {#if isShellless($page.url.pathname)}
 	<!-- Landing, login, share, live, club-invite — these have their own
