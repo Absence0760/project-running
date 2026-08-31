@@ -65,7 +65,22 @@ const DATA_TS = 'apps/web/src/lib/core/data.ts';
 //   keys     — `const X = { a: …, b: … };` object keys    (both)
 //   records  — `const X = [{ f: 'a' }, …];` + `field`     (both)
 //   enum     — `enum X { a, bCd }` → a, b_cd              (Dart only)
-export const SHAPES = ['union', 'strings', 'keys', 'records', 'enum'];
+//   switch   — `case 'a':` / `'a' =>` labels              (Dart only)
+//
+// `switch` exists because § 791's carve-out does not carry over. Web's
+// icon/label `Record<Union, X>` maps are deliberately unregistered — `tsc`
+// makes them exhaustive — and Dart has no analogue: a `switch` over a `String`
+// cannot be exhaustive, so every one of those lookups degrades SILENTLY to its
+// `default:` / `_` branch the day its CHECK gains a value. The rail reads the
+// switch ITSELF rather than a const list beside it, because a list is a second
+// declaration nothing checks against the switch — the § 641 shape, a copy whose
+// divergence is undetectable. decisions § 818.
+//
+// A `switch` rail's `allowMissing` is normally the one value its `default:` /
+// `_` branch was written FOR: a `_slotLabel` naming breakfast / lunch / dinner
+// and falling through to "Snack" omits `snack` on purpose. The exemption is
+// staleness-checked like every other, so a FIFTH meal slot still fails here.
+export const SHAPES = ['union', 'strings', 'keys', 'records', 'enum', 'switch'];
 
 // Each entry is one set-shaped CHECK column and every client vocabulary that
 // enumerates it. `clients: []` + `note` records a column no client spells out.
@@ -89,6 +104,16 @@ export const PAIRS = [
 			{ file: TS_TYPES, decl: 'AchievementTier', shape: 'union' },
 			{ file: 'apps/web/src/lib/social/badges.ts', decl: 'TIER_ORDER', shape: 'strings' },
 			{ file: 'apps/mobile_android/lib/badges.dart', decl: 'kTierOrder', shape: 'strings' },
+			{
+				file: 'apps/mobile_android/lib/widgets/badge_grid.dart',
+				decl: 'badgeTierColor',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/badge_grid.dart',
+				decl: 'badgeTierLabel',
+				shape: 'switch',
+			},
 		],
 	},
 	{
@@ -123,6 +148,21 @@ export const PAIRS = [
 				decl: 'kChallengeMetrics',
 				shape: 'strings',
 			},
+			{
+				file: 'apps/mobile_android/lib/challenge_goal.dart',
+				decl: 'challengeGoalUnit',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/challenge_progress_bar.dart',
+				decl: 'challengeMetricLabel',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/challenge_progress_bar.dart',
+				decl: 'challengeValueLabel',
+				shape: 'switch',
+			},
 		],
 	},
 	{
@@ -133,6 +173,11 @@ export const PAIRS = [
 				file: 'apps/mobile_android/lib/widgets/challenge_form_sheet.dart',
 				decl: 'kChallengeScopes',
 				shape: 'strings',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/challenge_form_sheet.dart',
+				decl: '_scopeLabel',
+				shape: 'switch',
 			},
 		],
 	},
@@ -266,6 +311,11 @@ export const PAIRS = [
 				decl: 'kEventCategories',
 				shape: 'strings',
 			},
+			{
+				file: 'apps/mobile_android/lib/screens/discover_screen.dart',
+				decl: '_categoryLabel',
+				shape: 'switch',
+			},
 		],
 	},
 	{
@@ -273,6 +323,21 @@ export const PAIRS = [
 		clients: [
 			{ file: TS_TYPES, decl: 'RecurrenceFreq', shape: 'union' },
 			{ file: 'apps/mobile_android/lib/recurrence.dart', decl: 'RecurrenceFreq', shape: 'enum' },
+			{
+				file: 'apps/mobile_android/lib/recurrence.dart',
+				decl: 'recurrenceFromString',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/discover_screen.dart',
+				decl: 'freq',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/event_form_sheet.dart',
+				decl: '_submit',
+				shape: 'switch',
+			},
 		],
 	},
 	{
@@ -333,6 +398,24 @@ export const PAIRS = [
 			{ file: 'apps/mobile_android/lib/nutrition_totals.dart', decl: 'mealSlots', shape: 'strings' },
 			{ file: 'apps/mobile_android/lib/meal_template.dart', decl: '_slots', shape: 'strings' },
 			{ file: 'apps/mobile_android/lib/recipe.dart', decl: '_slots', shape: 'strings' },
+			{
+				file: 'apps/mobile_android/lib/screens/nutrition_screen.dart',
+				decl: '_slotLabel',
+				shape: 'switch',
+				allowMissing: ['snack'],
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/nutrition_meal_detail_screen.dart',
+				decl: '_slotLabel',
+				shape: 'switch',
+				allowMissing: ['snack'],
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/nutrition_log_sheet.dart',
+				decl: '_slotLabel',
+				shape: 'switch',
+				allowMissing: ['snack'],
+			},
 		],
 	},
 	{
@@ -357,6 +440,12 @@ export const PAIRS = [
 				decl: '_wearAreas',
 				shape: 'strings',
 			},
+			{
+				file: 'apps/mobile_android/lib/widgets/gear_form_sheet.dart',
+				decl: '_wearAreaLabel',
+				shape: 'switch',
+				allowMissing: ['other'],
+			},
 		],
 	},
 	{
@@ -372,6 +461,11 @@ export const PAIRS = [
 				file: 'apps/mobile_android/lib/widgets/routine_builder_sheet.dart',
 				decl: '_modalities',
 				shape: 'strings',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/routine_builder_sheet.dart',
+				decl: '_modalityLabel',
+				shape: 'switch',
 			},
 		],
 	},
@@ -395,6 +489,29 @@ export const PAIRS = [
 				decl: '_schemes',
 				shape: 'strings',
 			},
+			{
+				file: 'apps/mobile_android/lib/widgets/routine_builder_sheet.dart',
+				decl: '_schemeLabel',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/routine_detail_screen.dart',
+				decl: '_schemeLabel',
+				shape: 'switch',
+				allowMissing: ['none'],
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/gym_detail_screen.dart',
+				decl: '_schemeFromString',
+				shape: 'switch',
+				allowMissing: ['none'],
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/gym_session_screen.dart',
+				decl: '_schemeFromString',
+				shape: 'switch',
+				allowMissing: ['none'],
+			},
 		],
 	},
 	{
@@ -411,6 +528,16 @@ export const PAIRS = [
 				decl: '_setTypes',
 				shape: 'strings',
 			},
+			{
+				file: 'apps/mobile_android/lib/widgets/routine_builder_sheet.dart',
+				decl: '_setTypeLabel',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/routine_detail_screen.dart',
+				decl: '_setTypeLabel',
+				shape: 'switch',
+			},
 		],
 	},
 	{
@@ -418,6 +545,8 @@ export const PAIRS = [
 		clients: [{ file: TS_TYPES, decl: 'GymPeriodisation', shape: 'union' }],
 	},
 	{
+		// `_setTypeChip` returns null for `working` BEFORE its switch — the common
+		// set carries no chip, so the switch never names the value.
 		tableColumn: 'gym_sets.set_type',
 		clients: [
 			{ file: TS_TYPES, decl: 'GymSetType', shape: 'union' },
@@ -426,6 +555,17 @@ export const PAIRS = [
 				file: 'apps/mobile_android/lib/widgets/gym_compose_sheet.dart',
 				decl: '_gymSetTypes',
 				shape: 'strings',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/gym_compose_sheet.dart',
+				decl: '_gymSetTypeLabel',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/gym_detail_screen.dart',
+				decl: '_setTypeChip',
+				shape: 'switch',
+				allowMissing: ['working'],
 			},
 		],
 	},
@@ -466,8 +606,24 @@ export const PAIRS = [
 		note: 'stamped by the notify triggers from the activity that fired them; no client enumerates the three.',
 	},
 	{
+		// `_targetKeyFor` omits the two kinds that point at no shared entity, so
+		// they take a per-row `solo:` key and can never collapse into each other;
+		// that is the grouping contract, not an oversight.
 		tableColumn: 'notifications.kind',
-		clients: [{ file: TS_TYPES, decl: 'NotificationKind', shape: 'union' }],
+		clients: [
+			{ file: TS_TYPES, decl: 'NotificationKind', shape: 'union' },
+			{
+				file: 'apps/mobile_android/lib/notification_groups.dart',
+				decl: '_targetKeyFor',
+				shape: 'switch',
+				allowMissing: ['content_hidden', 'data_export_ready'],
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/profile_screen.dart',
+				decl: '_verbFor',
+				shape: 'switch',
+			},
+		],
 	},
 	{
 		tableColumn: 'personal_records.distance',
@@ -504,7 +660,19 @@ export const PAIRS = [
 	},
 	{
 		tableColumn: 'race_sessions.status',
-		clients: [{ file: TS_TYPES, decl: 'RaceSessionStatus', shape: 'union' }],
+		clients: [
+			{ file: TS_TYPES, decl: 'RaceSessionStatus', shape: 'union' },
+			{
+				file: 'apps/mobile_android/lib/screens/event_detail_screen.dart',
+				decl: 'banner',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/event_detail_screen.dart',
+				decl: 'bannerColour',
+				shape: 'switch',
+			},
+		],
 	},
 	{
 		tableColumn: 'recipes.meal_slot',
@@ -529,6 +697,12 @@ export const PAIRS = [
 				decl: '_reasonKeys',
 				shape: 'strings',
 			},
+			{
+				file: 'apps/mobile_android/lib/widgets/report_sheet.dart',
+				decl: '_reasonLabel',
+				shape: 'switch',
+				allowMissing: ['other'],
+			},
 		],
 	},
 	{
@@ -544,7 +718,14 @@ export const PAIRS = [
 	},
 	{
 		tableColumn: 'reports.target_kind',
-		clients: [{ file: TS_TYPES, decl: 'ReportTargetKind', shape: 'union' }],
+		clients: [
+			{ file: TS_TYPES, decl: 'ReportTargetKind', shape: 'union' },
+			{
+				file: 'apps/mobile_android/lib/widgets/report_sheet.dart',
+				decl: '_title',
+				shape: 'switch',
+			},
+		],
 	},
 	{
 		tableColumn: 'route_conditions.condition',
@@ -559,6 +740,12 @@ export const PAIRS = [
 				file: 'apps/mobile_android/lib/widgets/route_conditions.dart',
 				decl: 'kRouteConditionKinds',
 				shape: 'strings',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/route_conditions.dart',
+				decl: 'routeConditionKindLabel',
+				shape: 'switch',
+				allowMissing: ['other'],
 			},
 		],
 	},
@@ -575,6 +762,18 @@ export const PAIRS = [
 				file: 'apps/mobile_android/lib/widgets/route_conditions.dart',
 				decl: 'kRouteConditionSeverities',
 				shape: 'strings',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/route_conditions.dart',
+				decl: 'routeConditionSeverityLabel',
+				shape: 'switch',
+				allowMissing: ['info'],
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/route_conditions.dart',
+				decl: 'routeConditionSeverityColor',
+				shape: 'switch',
+				allowMissing: ['info'],
 			},
 		],
 	},
@@ -594,6 +793,24 @@ export const PAIRS = [
 				shape: 'records',
 				field: 'kind',
 			},
+			{
+				file: 'apps/mobile_android/lib/screens/run_screen.dart',
+				decl: '_markerKindLabel',
+				shape: 'switch',
+				allowMissing: ['custom'],
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/route_markers_panel.dart',
+				decl: 'RouteMarkersPanelState._kindLabel',
+				shape: 'switch',
+				allowMissing: ['custom'],
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/route_markers_panel.dart',
+				decl: '_MarkerEditorSheetState._kindLabel',
+				shape: 'switch',
+				allowMissing: ['custom'],
+			},
 		],
 	},
 	{
@@ -610,6 +827,38 @@ export const PAIRS = [
 				decl: 'kRouteSurfaceVocabulary',
 				shape: 'strings',
 			},
+			{
+				file: 'apps/mobile_android/lib/screens/global_segments_screen.dart',
+				decl: 'catalogueSurfaceLabel',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/route_detail_screen.dart',
+				decl: 'surface',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/route_detail_screen.dart',
+				decl: '_surfaceIcon',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/route_detail_screen.dart',
+				decl: '_surfaceLabel',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/explore_routes_screen.dart',
+				decl: '_surfaceIcon',
+				shape: 'switch',
+				allowMissing: ['road'],
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/explore_routes_screen.dart',
+				decl: '_surfaceLabel',
+				shape: 'switch',
+				allowMissing: ['road'],
+			},
 		],
 	},
 	{
@@ -617,11 +866,25 @@ export const PAIRS = [
 		clients: [{ file: DATA_TS, decl: 'MatchStatus', shape: 'union' }],
 	},
 	{
+		// `_activityIcon` lets `stroller` fall to the running icon deliberately: a
+		// stroller run is foot-powered, which is the same mapping the
+		// `auto_tag_default_gear` trigger and `gear_backfill` make (decisions § 598).
 		tableColumn: 'runs.activity_type',
 		clients: [
 			{ file: TS_TYPES, decl: 'ActivityType', shape: 'union' },
 			{ file: 'apps/web/src/lib/runs/activity_type.ts', decl: 'ACTIVITY_TYPES', shape: 'strings' },
 			{ file: 'apps/mobile_android/lib/preferences.dart', decl: 'ActivityType', shape: 'enum' },
+			{
+				file: 'apps/mobile_android/lib/health_connect_exporter.dart',
+				decl: 'healthWorkoutTypeForActivity',
+				shape: 'switch',
+			},
+			{
+				file: 'apps/mobile_android/lib/widgets/gear_backfill_sheet.dart',
+				decl: '_activityIcon',
+				shape: 'switch',
+				allowMissing: ['stroller'],
+			},
 		],
 	},
 	{
@@ -645,6 +908,18 @@ export const PAIRS = [
 				decl: 'SessionItemKind',
 				shape: 'enum',
 			},
+			{
+				file: 'apps/mobile_android/lib/screens/session_detail_screen.dart',
+				decl: 'sessionKindFromString',
+				shape: 'switch',
+				allowMissing: ['hold'],
+			},
+			{
+				file: 'apps/mobile_android/lib/screens/event_detail_screen.dart',
+				decl: '_sessionKindFromString',
+				shape: 'switch',
+				allowMissing: ['hold'],
+			},
 		],
 	},
 	{
@@ -667,6 +942,12 @@ export const PAIRS = [
 			{ file: TS_TYPES, decl: 'Gender', shape: 'union' },
 			{ file: 'apps/web/src/lib/runs/calories.ts', decl: 'CalorieGender', shape: 'union' },
 			{ file: 'apps/web/src/lib/training/training.ts', decl: 'TrainingGender', shape: 'union' },
+			{
+				file: 'apps/mobile_android/lib/screens/nutrition_targets_screen.dart',
+				decl: '_metricsCard',
+				shape: 'switch',
+				allowMissing: ['prefer_not_to_say'],
+			},
 		],
 	},
 	{
@@ -1021,6 +1302,285 @@ function firstStringLiteral(chunk) {
 	return m[1] ?? m[2];
 }
 
+/**
+ * A copy of `src` with every comment replaced by spaces of the same length, so
+ * index-based scanning still maps 1:1 onto the original. String literals —
+ * including Dart's triple-quoted form — are left whole: the values this script
+ * reads ARE literals.
+ *
+ * Length-preserving rather than reusing `stripComments`, which deletes: the
+ * switch reader compares positions, and a commented-out declaration must not
+ * become the anchor of the switch below it (a `/// String _oldLabel(String s)
+ * {` doc line is exactly that shape).
+ * @param {string} src
+ */
+export function blankComments(src) {
+	let out = '';
+	let i = 0;
+	while (i < src.length) {
+		const c = src[i];
+		if (c === "'" || c === '"') {
+			const triple = src.slice(i, i + 3);
+			if (triple === "'".repeat(3) || triple === '"'.repeat(3)) {
+				const end = src.indexOf(triple, i + 3);
+				const stop = end < 0 ? src.length : end + 3;
+				out += src.slice(i, stop);
+				i = stop;
+				continue;
+			}
+			const end = skipString(src, i);
+			out += src.slice(i, end);
+			i = end;
+			continue;
+		}
+		if (c === '/' && src[i + 1] === '/') {
+			const nl = src.indexOf('\n', i);
+			const stop = nl < 0 ? src.length : nl;
+			out += ' '.repeat(stop - i);
+			i = stop;
+			continue;
+		}
+		if (c === '/' && src[i + 1] === '*') {
+			const end = src.indexOf('*/', i + 2);
+			const stop = end < 0 ? src.length : end + 2;
+			out += src.slice(i, stop).replace(/[^\n]/g, ' ');
+			i = stop;
+			continue;
+		}
+		out += c;
+		i += 1;
+	}
+	return out;
+}
+
+// A getter or a variable with an initialiser. A method / function is found by
+// scan rather than by pattern (`dartDeclarations`): a Dart parameter list can
+// carry `{named}` / `[optional]` groups, which no bounded character class can
+// cross — `_verbFor(l10n, item, {String? nameOverride})` was invisible to one
+// that tried, and its 16-value switch with it.
+const DART_DECLS = [
+	/\bget\s+([A-Za-z_$][\w$]*)\s*(?:\{|=>)/g,
+	/\b(?:final|const|var|late)\s+(?:[\w$<>,?[\]]+\s+)?([A-Za-z_$][\w$]*)\s*=(?!=)/g,
+];
+const DART_SCOPES = /\b(?:class|mixin|extension|enum)\s+([A-Za-z_$][\w$]*)/g;
+// `if (…) {` is an identifier followed by a parenthesised group and a block —
+// structurally a method declaration. A control-flow word winning the
+// innermost-enclosing race would move every anchor onto the nearest `if`.
+const DART_NON_DECL = new Set([
+	'if',
+	'for',
+	'while',
+	'switch',
+	'catch',
+	'do',
+	'else',
+	'return',
+	'assert',
+	'await',
+	'yield',
+	'new',
+	'super',
+	'this',
+]);
+
+/**
+ * The index one past the end of the declaration body that starts at `from`.
+ * A block body is its balanced braces; an arrow or assignment body runs to the
+ * next `;` outside any bracket or string.
+ * @param {string} src
+ * @param {number} from index of the `{`, or just past the `=>` / `=`
+ * @param {boolean} block
+ */
+function declBodyEnd(src, from, block) {
+	let depth = 0;
+	let i = from;
+	while (i < src.length) {
+		const c = src[i];
+		if (c === "'" || c === '"') {
+			i = skipString(src, i);
+			continue;
+		}
+		if (c === '(' || c === '[' || c === '{') depth += 1;
+		else if (c === ')' || c === ']' || c === '}') {
+			depth -= 1;
+			if (block && depth === 0) return i + 1;
+			if (depth < 0) return i;
+		} else if (!block && c === ';' && depth === 0) return i + 1;
+		i += 1;
+	}
+	return src.length;
+}
+
+/**
+ * Every declaration in a comment-blanked Dart source that can hold a switch,
+ * with the span its body occupies.
+ * @param {string} blanked
+ * @returns {{ start: number, end: number, name: string }[]}
+ */
+function dartDeclarations(blanked) {
+	/** @type {{ start: number, end: number, name: string }[]} */
+	const out = [];
+	for (const re of DART_DECLS) {
+		re.lastIndex = 0;
+		/** @type {RegExpExecArray | null} */
+		let d;
+		while ((d = re.exec(blanked)) !== null) {
+			const after = d.index + d[0].length;
+			const block = d[0].endsWith('{');
+			out.push({
+				start: d.index,
+				end: declBodyEnd(blanked, block ? after - 1 : after, block),
+				name: d[1],
+			});
+		}
+	}
+	const nameRe = /([A-Za-z_$][\w$]*)\s*(?:<[^<>()]*>)?\s*\(/g;
+	/** @type {RegExpExecArray | null} */
+	let n;
+	while ((n = nameRe.exec(blanked)) !== null) {
+		if (DART_NON_DECL.has(n[1])) continue;
+		let i = n.index + n[0].length - 1;
+		let depth = 0;
+		for (; i < blanked.length; i += 1) {
+			const c = blanked[i];
+			if (c === "'" || c === '"') {
+				i = skipString(blanked, i) - 1;
+				continue;
+			}
+			if (c === '(') depth += 1;
+			else if (c === ')') {
+				depth -= 1;
+				if (depth === 0) {
+					i += 1;
+					break;
+				}
+			}
+		}
+		const tail = blanked.slice(i).match(/^\s*(?:async\s*\*?\s*|sync\s*\*\s*)?(\{|=>)/);
+		if (!tail) continue;
+		const bodyAt = i + tail[0].length - tail[1].length;
+		out.push({
+			start: n.index,
+			end: declBodyEnd(blanked, tail[1] === '{' ? bodyAt : bodyAt + 2, tail[1] === '{'),
+			name: n[1],
+		});
+	}
+	out.sort((a, b) => a.start - b.start);
+	return out;
+}
+
+/**
+ * Every `switch (…) { … }` in a Dart source, with the path the registry
+ * addresses it by: the name of the innermost declaration whose body ENCLOSES
+ * it, qualified by the nearest preceding class / mixin / extension.
+ *
+ * Innermost-enclosing rather than nearest-preceding, which conflates two very
+ * different declarations: `final banner = switch (status) {…}` is the switch's
+ * own initialiser and names it exactly, while `final t = row['set_type'] …`
+ * sitting a line above one merely precedes it — addressing by that would let an
+ * unrelated local rename move a rail off its switch.
+ *
+ * Addressed by declaration rather than by subject expression because two
+ * switches in one method routinely share a subject: the race banner and its
+ * colour on `event_detail_screen` both switch on `status`.
+ * @param {string} src
+ * @returns {{ path: string, member: string, body: string }[]}
+ */
+export function dartSwitches(src) {
+	const blanked = blankComments(src);
+	const decls = dartDeclarations(blanked);
+	/** @type {{ index: number, name: string }[]} */
+	const scopes = [];
+	DART_SCOPES.lastIndex = 0;
+	/** @type {RegExpExecArray | null} */
+	let sc;
+	while ((sc = DART_SCOPES.exec(blanked)) !== null) scopes.push({ index: sc.index, name: sc[1] });
+
+	/** @type {{ path: string, member: string, body: string }[]} */
+	const out = [];
+	const switchRe = /\bswitch\s*\(/g;
+	/** @type {RegExpExecArray | null} */
+	let m;
+	while ((m = switchRe.exec(blanked)) !== null) {
+		let i = blanked.indexOf('(', m.index);
+		let depth = 0;
+		for (; i < blanked.length; i += 1) {
+			if (blanked[i] === '(') depth += 1;
+			else if (blanked[i] === ')') {
+				depth -= 1;
+				if (depth === 0) {
+					i += 1;
+					break;
+				}
+			}
+		}
+		while (i < blanked.length && /\s/.test(blanked[i])) i += 1;
+		if (blanked[i] !== '{') continue;
+		const end = declBodyEnd(blanked, i, true);
+		/** @type {string | null} */
+		let member = null;
+		for (const d of decls) {
+			if (d.start >= m.index) break;
+			if (d.end > m.index) member = d.name;
+		}
+		if (member === null) continue;
+		/** @type {string | null} */
+		let scope = null;
+		for (const sp of scopes) {
+			if (sp.index >= m.index) break;
+			scope = sp.name;
+		}
+		out.push({
+			path: scope === null ? member : `${scope}.${member}`,
+			member,
+			body: blanked.slice(i, end),
+		});
+	}
+	return out;
+}
+
+/**
+ * The string literals a Dart switch's case labels enumerate — `case 'x':`,
+ * `case 'x' || 'y':`, `'x' =>` and `'x' || 'y' =>`. The `default:` / `_` branch
+ * contributes nothing, which is the point: it is where an unhandled value
+ * lands, not a value the switch names.
+ * @param {string} body
+ */
+function switchLabels(body) {
+	/** @type {Set<string>} */
+	const out = new Set();
+	for (const m of body.matchAll(/\bcase\s+('[^']*'(?:\s*\|\|\s*'[^']*')*)/g)) {
+		for (const v of m[1].matchAll(/'([^']*)'/g)) out.add(v[1]);
+	}
+	for (const m of body.matchAll(/(?:^|[{,;])\s*('[^']*'(?:\s*\|\|\s*'[^']*')*)\s*=>/gm)) {
+		for (const v of m[1].matchAll(/'([^']*)'/g)) out.add(v[1]);
+	}
+	return out;
+}
+
+/**
+ * The value set the switch addressed by `decl` enumerates. `decl` is either a
+ * bare declaration name or `Scope.name`; a bare name matching two switches
+ * throws rather than reading the first, the same refusal `findInitializers`
+ * makes one shape over.
+ * @param {string} src
+ * @param {string} decl
+ * @returns {Set<string> | null}
+ */
+export function extractSwitchValues(src, decl) {
+	const matches = dartSwitches(src).filter((s) => s.path === decl || s.member === decl);
+	if (matches.length === 0) return null;
+	if (matches.length > 1) {
+		throw new Error(
+			`${matches.length} switches addressed by "${decl}" (${matches
+				.map((s) => s.path)
+				.join(', ')}) — the registry cannot say which one it means. Qualify it as Scope.name.`,
+		);
+	}
+	const values = switchLabels(matches[0].body);
+	return values.size === 0 ? null : values;
+}
+
 const SNAKE = /([a-z0-9])([A-Z])/g;
 /** @param {string} id */
 const toSnake = (id) => id.replace(SNAKE, '$1_$2').toLowerCase();
@@ -1056,6 +1616,8 @@ export function extractClientValues(src, rail) {
 		}
 		return out.size === 0 ? null : out;
 	}
+
+	if (shape === 'switch') return extractSwitchValues(src, decl);
 
 	const slices = findInitializers(src, decl);
 	if (slices.length === 0) return null;
