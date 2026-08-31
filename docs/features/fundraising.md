@@ -278,6 +278,26 @@ precisely what § 769's cumulative-figure design avoided so that an at-least-onc
 redelivery cannot double-apply. Understating what was raised is the smaller,
 safe lie. [Decisions § 789](../architecture/decisions.md).
 
+**And since `20270701000001` the donor is told** ([decisions § 825](../architecture/decisions.md)). The state was an
+operator worklist with no reader, and on this ledger that gap is total rather
+than partial: `donations` has no client SELECT policy, so a donor cannot read
+their own donation row on any surface, in any state — there is no
+`my_donations` RPC, no route and no screen. An `after update of status ... when
+(old.status is distinct from new.status and new.status = 'refund_failed')`
+trigger writes one `refund_failed` notification, which the fan-out turns into
+the inbox row, the email and both pushes in all seven locales; the notification
+carries the whole sentence rather than a link, because there is nothing to link
+to. The transition is the dedupe — the webhook CASes against the status it read,
+so a redelivered event moves no row and announces nothing.
+
+An **anonymous** donation (`donor_user_id` null — a donor who was never signed
+in, distinct from the `is_anonymous` display flag) cannot be reached by this
+rail at all: there is no account to put an inbox row on, and their only contact
+point is the address they gave Stripe, which this database does not hold. The
+trigger guards on the null rather than letting the insert raise 23502, because
+a not-null violation inside the webhook's own UPDATE would abort it and leave
+the ledger never recording the failure. Those donors stay a § 789 worklist item.
+
 #### Reconciling pre-§769 refunds
 
 A donation that the old whole-refund behaviour flipped to `refunded` over a
