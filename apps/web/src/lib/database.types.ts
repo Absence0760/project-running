@@ -2565,6 +2565,57 @@ export type Database = {
           },
         ]
       }
+      payment_refunds: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          donation_id: string | null
+          event_order_id: string | null
+          failure_reason: string | null
+          id: string
+          status: string
+          stripe_refund_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          donation_id?: string | null
+          event_order_id?: string | null
+          failure_reason?: string | null
+          id?: string
+          status: string
+          stripe_refund_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          donation_id?: string | null
+          event_order_id?: string | null
+          failure_reason?: string | null
+          id?: string
+          status?: string
+          stripe_refund_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_refunds_donation_id_fkey"
+            columns: ["donation_id"]
+            isOneToOne: false
+            referencedRelation: "donations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_refunds_event_order_id_fkey"
+            columns: ["event_order_id"]
+            isOneToOne: false
+            referencedRelation: "event_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       personal_records: {
         Row: {
           achieved_at: string

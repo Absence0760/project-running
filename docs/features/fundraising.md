@@ -269,14 +269,56 @@ rather than raised for the charity. On such a row `refunded_cents` reads as the
 amount that came back to us and is owed out, which is what an operator settling
 it by another route needs.
 
-It is reachable only from `refunded`. A failed **partial** refund is logged for
-reconciliation and the status stands: sending a partly-refunded donation to the
-excluded `refund_failed` would drop the *whole* donation off the total including
-the part that was never refunded, and the only alternative — subtracting this
-instalment from `refunded_cents` — is arithmetic on a running total, which is
-precisely what § 769's cumulative-figure design avoided so that an at-least-once
-redelivery cannot double-apply. Understating what was raised is the smaller,
-safe lie. [Decisions § 789](../architecture/decisions.md).
+It is reachable only from `refunded`, and a failed **partial** refund still moves
+no status: sending a partly-refunded donation to the excluded `refund_failed`
+would drop the *whole* donation off the total including the part that was never
+refunded, and subtracting this instalment from `refunded_cents` is arithmetic on
+a running total, which is precisely what § 769's cumulative-figure design avoided
+so that an at-least-once redelivery cannot double-apply. Understating what was
+raised is the smaller, safe lie. [Decisions § 789](../architecture/decisions.md).
+
+#### The refund itself is a row (`payment_refunds`)
+
+Until `20270630000001` the failed-partial discrepancy existed **only** in a
+`console.error`. `payment_refunds` gives it a representation without disturbing
+either refusal above: one row per Stripe Refund, `stripe_refund_id` unique, its
+own status from Stripe's five-value vocabulary, and exactly one parent ledger
+(`donation_id` or `event_order_id`).
+
+The thermometer then reports
+
+```
+amount_cents - refunded_cents + least(reversed, refunded_cents)
+```
+
+where `reversed` sums that donation's `failed` / `canceled` children. A reversed
+refund's amount is **already inside** `refunded_cents` — `charge.refunded` fired
+when the refund was created — so adding it back is not new arithmetic on a
+running total; it is a second, separate total summed from rows that cannot be
+counted twice. Three deliveries of one Refund upsert onto one unique key and the
+figure does not move.
+
+`refunded_cents` is deliberately **not** derived from these rows, and that is the
+whole design constraint. `charge.refunded` carries a *Charge* and no refund id,
+so no child row can be keyed off it; only the refund-lifecycle trio carries a
+*Refund*. A refund that succeeds instantly and emits no lifecycle event leaves no
+row at all, and which events an endpoint receives is dashboard configuration this
+repo cannot read. Summing an incomplete set would count that refund as money the
+charity kept — a bounded understatement traded for an unbounded overstatement on
+a public page. The children are the authority for **reversals only**, which is
+strictly additive: a reversal we never hear about leaves the § 789 behaviour
+exactly as it was. [Decisions § 823](../architecture/decisions.md).
+
+The operator worklist is one query across both money ledgers, and unlike
+`where status = 'refund_failed'` it carries the amount:
+
+```sql
+select stripe_refund_id, donation_id, event_order_id, amount_cents,
+       status, failure_reason, updated_at
+  from payment_refunds
+ where status in ('failed', 'canceled')
+ order by updated_at desc;
+```
 
 #### Reconciling pre-§769 refunds
 

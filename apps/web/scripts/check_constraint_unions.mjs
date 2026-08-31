@@ -626,6 +626,17 @@ export const PAIRS = [
 		],
 	},
 	{
+		tableColumn: 'payment_refunds.status',
+		clients: [
+			{ file: TS_TYPES, decl: 'PaymentRefundStatus', shape: 'union' },
+			{
+				file: 'apps/backend/supabase/functions/stripe-events-webhook/lib.ts',
+				decl: 'REFUND_STATUSES',
+				shape: 'strings',
+			},
+		],
+	},
+	{
 		tableColumn: 'personal_records.distance',
 		// The three maps are keyed `Record<string, …>` / `<String, …>`, so
 		// neither compiler checks them: a new bracket sorts to the fallback
