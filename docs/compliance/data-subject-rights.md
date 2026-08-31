@@ -117,6 +117,28 @@ Both rails now project only columns the generated row types contain, and
 a test checks every backup projection and filter against those types
 rather than against a list of known-bad names.
 
+**Corrected 2026-08-31, and the same class one level down:** `user_profiles`
+reaches the archive through `FetchExportProfile`'s enumerated projection and
+through nothing else — it is not in `exportPersonalDataSpecs`, so the
+table-level completeness guard never covered it. Eight columns were therefore
+absent from every `backup` export: `handle`, `height_cm`, `onboarded_at` and
+the four consent records (`terms_accepted_at`, `age_confirmed_at`,
+`coach_consent_at`, `health_data_consent_at`) plus `ai_disclosure_version`.
+`height_cm` is the one that mattered most: `withdraw_health_data_consent()`
+clears `date_of_birth`, `gender` and `height_cm` as one Art 9 set
+([decisions § 718](../architecture/decisions.md)), and the archive was
+exporting two of the three. All eight are projected now, and
+`personal_data_export_profile_guard_test.go` parses every `user_profiles`
+column out of the migrations and fails the build unless each is either
+projected or named in an exclusion list with its reason — the same shape the
+table-level guard already had. Two are excluded: `tier_updated_event_ts` (the
+internal webhook-ordering key for the tier columns that *are* exported) and
+`shadow_hidden` (moderation state, controller-assigned; disclosure defeats the
+auto-hide mechanism — CISO/counsel to confirm). The Edge Function twin's
+`PROFILE_SELECT` is still the narrow list and needs the same mirror; the
+queued Go rail is the only one either client reaches
+([decisions § 724](../architecture/decisions.md)).
+
 A subject who hits either cap, or the Edge Function's clock, has not
 received everything, and the manifest says so. Art 20 is satisfied by
 re-running or by an operator export. Giving the Go rail the same

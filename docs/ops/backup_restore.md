@@ -136,6 +136,13 @@ cloud rows, so mobile skips that path entirely while anything is local-only.
 Optional. Readers must tolerate them being absent. Same shape / semantics
 as their DB rows.
 
+`profile.json` carries `{profile, settings_prefs}`. The `profile` half is a
+`user_profiles` row with `id` stripped (the archive is re-homeable; restore
+stamps the new owner's uid) and is the ONLY path by which that table reaches
+the archive, so its projection is guarded column by column against the
+migrations — see `personal_data_export_profile_guard_test.go` and
+`docs/compliance/data-subject-rights.md`.
+
 ## Round-trip guarantees
 
 - Run count is preserved (counts.runs == imported runs).
