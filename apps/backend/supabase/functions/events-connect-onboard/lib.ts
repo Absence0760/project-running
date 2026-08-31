@@ -67,18 +67,6 @@ export function buildAccountLinkParams(
   };
 }
 
-/// Pin a redirect/return URL against an allowlist of origins, the way
-/// strava-import pins STRAVA_ALLOWED_REDIRECTS. `account_onboarding`
-/// return/refresh URLs are operator-configured, but routing them through
-/// the same gate as the checkout success/cancel URLs keeps the
-/// open-redirect defence in one place and fails closed on an empty
-/// allowlist (a missed `supabase secrets set` must not silently allow
-/// any host).
-///
-/// Match is by *origin* (scheme + host + port) — a configured origin
-/// allows any path under it, which is what return_url needs
-/// (`https://app.example.com/settings/payouts?...`). Returns true only
-/// when the URL parses and its origin is in the allowlist.
 /// A URL with no origin of its own — a custom scheme, `data:`, `blob:`,
 /// `javascript:` — serialises its opaque origin as the literal string `null`,
 /// and every such URL serialises to the SAME string. Comparing the
@@ -94,6 +82,18 @@ export function buildAccountLinkParams(
 /// have is the string `null`.
 const OPAQUE_ORIGIN = 'null';
 
+/// Pin a redirect/return URL against an allowlist of origins, the way
+/// strava-import pins STRAVA_ALLOWED_REDIRECTS. `account_onboarding`
+/// return/refresh URLs are operator-configured, but routing them through
+/// the same gate as the checkout success/cancel URLs keeps the
+/// open-redirect defence in one place and fails closed on an empty
+/// allowlist (a missed `supabase secrets set` must not silently allow
+/// any host).
+///
+/// Match is by *origin* (scheme + host + port) — a configured origin
+/// allows any path under it, which is what return_url needs
+/// (`https://app.example.com/settings/payouts?...`). Returns true only
+/// when the URL parses and its origin is in the allowlist.
 export function validateReturnUrl(url: string, allowlist: readonly string[]): boolean {
   if (allowlist.length === 0) return false;
   let origin: string;
