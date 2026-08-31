@@ -154,6 +154,20 @@ const LOCAL_ZONE_INSTANT =
 	/(?:new\s+Date\(|Date\.parse\()\s*['"`]\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?['"`]/;
 
 /**
+ * The multi-argument `Date` constructor — `new Date(y, m, d, h, min)` — which
+ * § 728 names first among the shapes that bit ("four building seeds with
+ * `new Date(y, m, d, h, 0)` or a local midnight") and which neither pattern
+ * above reaches: it touches no getter and carries no string literal. The
+ * fields are interpreted in the RUNNER's zone, so the instant it yields is
+ * the runner's offset away from the one the browser would build from the
+ * same numbers.
+ *
+ * `new Date(Date.UTC(...))` is the correct spelling and is excluded by name;
+ * a single-argument call carries no comma at depth 1 and never matches.
+ */
+const LOCAL_ZONE_FIELDS = /new\s+Date\(\s*(?!Date\.UTC)[^)]*,/;
+
+/**
  * Files the scan flags that are nonetheless correct, each with why. Every
  * entry is asserted to still match, so the list cannot rot into a set of
  * stale exemptions — a converted file must be deleted from it, and a new file
@@ -196,7 +210,13 @@ function localZoneDayLines(file: string): number[] {
 	const lines = withoutComments(readFileSync(file, 'utf8')).split('\n');
 	const hits: number[] = [];
 	lines.forEach((line, i) => {
-		if (LOCAL_ZONE_DAY.test(line) || LOCAL_ZONE_INSTANT.test(line)) hits.push(i + 1);
+		if (
+			LOCAL_ZONE_DAY.test(line) ||
+			LOCAL_ZONE_INSTANT.test(line) ||
+			LOCAL_ZONE_FIELDS.test(line)
+		) {
+			hits.push(i + 1);
+		}
 	});
 	return hits;
 }
@@ -219,6 +239,40 @@ test('no spec derives a day-relative date in the runner zone', () => {
 			'fixtures/dates.ts — browserDate / browserDateOf / browserDayStart / browserDayAt / ' +
 			`noonOnBrowserDay / waterStorageKey — instead of local Date getters: ${offenders.join(' ')}`
 	);
+});
+
+test('the scan reaches the field constructor, and spares the UTC spelling', () => {
+	// § 738: a shape the scan misses is a shape that returns, and no green
+	// run is evidence of its absence — so each pattern is probed rather than
+	// read. These are the forms that carry no banned getter and no zone-less
+	// string literal, which is how the constructor form survived the first
+	// two sweeps.
+	const caught = [
+		'ts: new Date(2026, 4, 15, 7, 30, i * 6).toISOString(),',
+		'const d = new Date(y, m - 1, day);',
+		'const d = new Date( y , m , 1 );',
+		'seed(new Date(year, 0, 1));'
+	];
+	for (const probe of caught) {
+		assert.ok(
+			LOCAL_ZONE_FIELDS.test(probe),
+			`the field-constructor scan misses: ${probe}`
+		);
+	}
+	const spared = [
+		'return new Date(Date.UTC(y, m, d + offsetDays, hour, minute));',
+		"const d = new Date('2026-05-15T07:30:00Z');",
+		'const d = new Date(instant);',
+		'const now = new Date();',
+		'const label = new Date(instant).toISOString().slice(0, 10);',
+		"fmt(new Date(instant), { timeZone: 'UTC', day: '2-digit' });"
+	];
+	for (const probe of spared) {
+		assert.ok(
+			!LOCAL_ZONE_FIELDS.test(probe),
+			`the field-constructor scan wrongly accuses: ${probe}`
+		);
+	}
 });
 
 test('every allowed local-zone site still exists and still matches', () => {

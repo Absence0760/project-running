@@ -26,7 +26,11 @@ test.describe('/runs/[id] — Preview scrubber marker', () => {
 			lat: 37.531 + i * 0.0005,
 			lng: -77.452 + i * 0.0005,
 			ele: 50 + i,
-			ts: new Date(2026, 4, 15, 7, 30, i * 6).toISOString(),
+			// Built in UTC to match `started_at` below: a multi-argument Date
+			// constructor resolves in the RUNNER's zone, so on any non-UTC
+			// workstation the track's clock and the run's start drifted apart by
+			// the runner's whole offset while CI (UTC) saw them agree.
+			ts: new Date(Date.UTC(2026, 4, 15, 7, 30, i * 6)).toISOString(),
 		}));
 		const planted = await insertRun({
 			user_id: USER_A.id,
