@@ -38,7 +38,11 @@ import {
 	parseNearbyCase,
 	parseNumberList,
 	parseStringList,
+	parseGuidedRunLibrary,
+	parseGuidedSeconds,
 	parseWhitespaceClass,
+	MOBILE_GUIDED_RUNS,
+	WEB_GUIDED_RUNS,
 } from './check_shared_constants.mjs';
 
 /** @param {Record<string, string>} files */
@@ -665,4 +669,160 @@ test('MUTATION: a bucket the SQL raises and the doc table omits fails', () => {
 	});
 	assert.equal(errors.length, 1);
 	assert.match(errors[0], /"create_club" is written on 1 of 2 rails/);
+});
+
+// ── The guided-run cue library ─────────────────────────────────────────────
+
+const GUIDED_ANCHOR_TS = 'guidedRunLibrary(t: GuidedTranslate';
+const GUIDED_ANCHOR_DART = 'guidedRunLibrary(AppLocalizations';
+
+const GUIDED_TS = `
+export function guidedRunLibrary(t: GuidedTranslate): GuidedRun[] {
+	return [
+		{
+			id: 'easy-30',
+			title: t('guidedRuns.easy30.title'),
+			duration_sec: 30 * 60,
+			cues: [
+				{ at_sec: 0, text: t('guidedRuns.easy30.cue0') },
+				{ at_sec: 5 * 60, text: t('guidedRuns.easy30.cue1') },
+			],
+		},
+		{
+			id: 'brisk-10',
+			title: t('guidedRuns.brisk10.title'),
+			duration_sec: 600,
+			cues: [{ at_sec: 0, text: t('guidedRuns.brisk10.cue0') }],
+		},
+	];
+}
+`;
+
+const GUIDED_DART = `
+List<GuidedRun> guidedRunLibrary(AppLocalizations l10n) => [
+      GuidedRun(
+        id: 'easy-30',
+        title: l10n.guidedEasy30Title,
+        durationSec: 30 * 60,
+        cues: [
+          GuidedCue(atSec: 0, text: l10n.guidedEasy30Cue0),
+          GuidedCue(atSec: 5 * 60, text: l10n.guidedEasy30Cue1),
+        ],
+      ),
+      GuidedRun(
+        id: 'brisk-10',
+        title: l10n.guidedBrisk10Title,
+        durationSec: 600,
+        cues: [GuidedCue(atSec: 0, text: l10n.guidedBrisk10Cue0)],
+      ),
+    ];
+`;
+
+// The same two workouts, listed the other way round. Nothing about either run
+// changes — which is the point: a set comparison would call this agreement.
+const GUIDED_DART_REORDERED = `
+List<GuidedRun> guidedRunLibrary(AppLocalizations l10n) => [
+      GuidedRun(
+        id: 'brisk-10',
+        durationSec: 600,
+        cues: [GuidedCue(atSec: 0, text: l10n.guidedBrisk10Cue0)],
+      ),
+      GuidedRun(
+        id: 'easy-30',
+        durationSec: 30 * 60,
+        cues: [
+          GuidedCue(atSec: 0, text: l10n.guidedEasy30Cue0),
+          GuidedCue(atSec: 5 * 60, text: l10n.guidedEasy30Cue1),
+        ],
+      ),
+    ];
+`;
+
+// Two languages, one parse. Comparing the two outputs directly is what makes
+// "web and mobile agree" a property of the extractor rather than of two
+// regexes that could drift the way their subjects can.
+test('one extractor reads the TypeScript and the Dart spelling of the same library', () => {
+	const ts = parseGuidedRunLibrary(GUIDED_TS, GUIDED_ANCHOR_TS, 'lib');
+	const dart = parseGuidedRunLibrary(GUIDED_DART, GUIDED_ANCHOR_DART, 'lib');
+	assert.deepEqual(ts, dart);
+	assert.deepEqual(ts, [
+		{ key: 'library order', where: 'run ids in lib', values: ['easy-30', 'brisk-10'] },
+		{ key: 'easy-30', where: 'easy-30 in lib', values: ['duration=1800', 'cue@0', 'cue@300'] },
+		{ key: 'brisk-10', where: 'brisk-10 in lib', values: ['duration=600', 'cue@0'] },
+	]);
+});
+
+test('a second mark is evaluated from minutes, and a bare integer is taken as seconds', () => {
+	assert.equal(parseGuidedSeconds('29 * 60', 'w'), 1740);
+	assert.equal(parseGuidedSeconds(' 0 ', 'w'), 0);
+	assert.equal(parseGuidedSeconds('600', 'w'), 600);
+});
+
+// Skipping an unreadable mark would shorten one rail's cue list, which the
+// other rail cannot see and the comparison would read as the run it knows.
+test('a second mark in a form the parser does not know throws rather than being skipped', () => {
+	assert.throws(() => parseGuidedSeconds('const Duration(minutes: 5).inSeconds', 'easy-30 in lib'), /easy-30 in lib/);
+	assert.throws(() => parseGuidedSeconds('5 * 60 + 30', 'w'), /teach it the new form/);
+});
+
+test('a library whose anchor is gone throws rather than reading nothing', () => {
+	assert.throws(() => parseGuidedRunLibrary(GUIDED_TS, 'buildGuidedRuns(', 'lib'), /agrees with every other one/);
+});
+
+test('a run carrying no cue marks throws — a cue-less run matches a cue-less run', () => {
+	const cueless = GUIDED_DART.replace(/cues: \[GuidedCue\(atSec: 0, text: l10n\.guidedBrisk10Cue0\)\],/, 'cues: [],');
+	assert.throws(() => parseGuidedRunLibrary(cueless, GUIDED_ANCHOR_DART, 'lib'), /"brisk-10".*no cue marks/s);
+});
+
+test('a run carrying no duration throws', () => {
+	const undated = GUIDED_TS.replace('duration_sec: 600,', '');
+	assert.throws(() => parseGuidedRunLibrary(undated, GUIDED_ANCHOR_TS, 'lib'), /"brisk-10".*no duration/s);
+});
+
+test('a parse that yields fewer runs than a library holds throws', () => {
+	const oneRun = GUIDED_TS.slice(0, GUIDED_TS.indexOf("id: 'brisk-10'")) + '];\n}\n';
+	assert.throws(() => parseGuidedRunLibrary(oneRun, GUIDED_ANCHOR_TS, 'lib'), /read 1 guided run\(s\)/);
+});
+
+test('MUTATION: two rails holding the same runs in a different order fail on the order', () => {
+	const entry = entryOf(
+		[
+			{ label: 'web', sites: parseGuidedRunLibrary(GUIDED_TS, GUIDED_ANCHOR_TS, 'web') },
+			{ label: 'mobile', sites: parseGuidedRunLibrary(GUIDED_DART_REORDERED, GUIDED_ANCHOR_DART, 'mobile') },
+		],
+		'key',
+		'ordered',
+	);
+	const { errors } = checkEntry(entry, NO_CTX);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /"library order" disagrees/);
+});
+
+test('MUTATION: a cue mark moved on the phone alone fails, naming the run', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'guided-run cue library'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === MOBILE_GUIDED_RUNS
+				? real.read(rel).replace('GuidedCue(atSec: 25 * 60,', 'GuidedCue(atSec: 26 * 60,')
+				: real.read(rel),
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /"easy-30" disagrees/);
+	assert.match(errors[0], /cue@1500/);
+	assert.match(errors[0], /cue@1560/);
+});
+
+test('MUTATION: a workout renamed on the web alone fails as a key missing from each rail in turn', () => {
+	const entry = /** @type {any} */ (REGISTRY.find((e) => e.name === 'guided-run cue library'));
+	const real = defaultContext();
+	const { errors } = checkEntry(entry, {
+		sql: real.sql,
+		read: (/** @type {string} */ rel) =>
+			rel === WEB_GUIDED_RUNS ? real.read(rel).replace("id: 'first-timer-15',", "id: 'first-timer-15-v2',") : real.read(rel),
+	});
+	assert.match(errors.join('\n'), /"first-timer-15" is written on 1 of 2 rails/);
+	assert.match(errors.join('\n'), /"first-timer-15-v2" is written on 1 of 2 rails/);
+	assert.match(errors.join('\n'), /"library order" disagrees/);
 });

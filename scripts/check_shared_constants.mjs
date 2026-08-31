@@ -355,6 +355,120 @@ export function parseWhitespaceClass(src, anchor) {
 		.map((cp) => `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`);
 }
 
+// ── Entry: the guided-run cue library ──────────────────────────────────────
+
+// The only entry here whose subject is a DATA LIBRARY rather than a threshold
+// or a vocabulary, and the reason registering `guided_runs` as a parity pair
+// was not enough on its own. Both rails carry three workouts as literals — an
+// id, a duration, and an ordered list of second marks — and each suite tests
+// its own rail against itself ("ids are unique", "a finish cue at exactly
+// duration"). Neither reads the other, so a cue added, moved or dropped on one
+// rail passes both suites and every other guard in the tree, and the two
+// surfaces then describe the same named workout differently: a different
+// finish time under the same title, or a cue one platform lists and the other
+// has never heard of. A registry line tells an agent to look; this is what
+// fails the PR.
+//
+// Only the MARKS are compared. The cue text is a catalogue lookup on both
+// rails and the key identifiers differ by convention — web's dotted
+// `guidedRuns.easy30.cue0` against mobile's camelCase `guidedEasy30Cue0` —
+// the same carve-out `badges` and `extended_nutrients` record for their own
+// label keys.
+
+export const WEB_GUIDED_RUNS = 'apps/web/src/lib/training/guided_runs.ts';
+export const MOBILE_GUIDED_RUNS = 'apps/mobile_android/lib/guided_runs.dart';
+
+/** Below this a parse has read a fragment of the library, not the library. */
+export const GUIDED_RUN_MIN = 2;
+
+/**
+ * A second mark in the two forms both rails write: a bare integer, or minutes
+ * times sixty. Deliberately not an evaluator — a mark spelled any other way is
+ * a shape this guard cannot certify, and refusing it is the only honest
+ * answer. Skipping it would drop a cue from one rail's compared list, which
+ * the other rail cannot see and a comparison reads as agreement.
+ * @param {string} expr @param {string} where @returns {number}
+ */
+export function parseGuidedSeconds(expr, where) {
+	const text = expr.trim();
+	const product = /^(\d+)\s*\*\s*60$/.exec(text);
+	if (product !== null) return Number(product[1]) * 60;
+	if (/^\d+$/.test(text)) return Number(text);
+	throw new Error(
+		`check_shared_constants: the guided-run library writes a second mark as ` +
+			`"${text}" at ${where}. This guard evaluates a bare integer and ` +
+			`\`<minutes> * 60\`; teach it the new form rather than leaving the mark ` +
+			`uncompared.`,
+	);
+}
+
+/**
+ * One extractor for both rails, the way `parseBadgeCatalogue` reads two
+ * catalogues written in different languages: a quoted `id` opens a block, then
+ * the duration and the cue marks in whichever spelling its language uses
+ * (`duration_sec` / `at_sec` in TypeScript, `durationSec` / `atSec` in Dart).
+ *
+ * Emits one site per run PLUS a `library order` site carrying the ids in
+ * order, because `match: 'key'` compares key SETS: without it two rails
+ * holding the same three workouts in a different order would agree, and the
+ * order is what both surfaces list the library in.
+ *
+ * @param {string} src @param {string} anchor @param {string} where
+ * @returns {Site[]}
+ */
+export function parseGuidedRunLibrary(src, anchor, where) {
+	const at = src.indexOf(anchor);
+	if (at < 0) {
+		throw new Error(
+			`check_shared_constants: no "${anchor}" in ${where}. The guided-run ` +
+				`library moved or its signature changed, and a rail that reads nothing ` +
+				`agrees with every other one.`,
+		);
+	}
+	const body = src.slice(at);
+	const ids = [...body.matchAll(/\bid:\s*'([a-z0-9-]+)'/g)];
+	/** @type {Site[]} */
+	const runs = [];
+	for (let i = 0; i < ids.length; i++) {
+		const start = ids[i].index ?? 0;
+		const end = i + 1 < ids.length ? ids[i + 1].index ?? body.length : body.length;
+		const block = body.slice(start, end);
+		const id = ids[i][1];
+		const site = `${id} in ${where}`;
+		const duration = /\b(?:duration_sec|durationSec):\s*([^,\n]+)/.exec(block);
+		if (duration === null) {
+			throw new Error(
+				`check_shared_constants: guided run "${id}" in ${where} carries no ` +
+					`duration this guard can find. An uncompared duration is a workout ` +
+					`whose countdown and finish cue can differ per platform.`,
+			);
+		}
+		const cues = [...block.matchAll(/\b(?:at_sec|atSec):\s*([^,\n]+)/g)].map((m) =>
+			parseGuidedSeconds(m[1], site),
+		);
+		if (cues.length === 0) {
+			throw new Error(
+				`check_shared_constants: guided run "${id}" in ${where} yielded no cue ` +
+					`marks. A cue-less run compares equal to a cue-less run on the other ` +
+					`rail, which is agreement about nothing.`,
+			);
+		}
+		runs.push({
+			key: id,
+			where: site,
+			values: [`duration=${parseGuidedSeconds(duration[1], site)}`, ...cues.map((s) => `cue@${s}`)],
+		});
+	}
+	if (runs.length < GUIDED_RUN_MIN) {
+		throw new Error(
+			`check_shared_constants: read ${runs.length} guided run(s) out of ${where}, ` +
+				`fewer than the ${GUIDED_RUN_MIN} that make it a library. The block shape ` +
+				`changed and this guard would certify a fragment of it as the whole.`,
+		);
+	}
+	return [{ key: 'library order', where: `run ids in ${where}`, values: runs.map((r) => r.key) }, ...runs];
+}
+
 // ── Bounds: a client input bound against the column the database bounds ────
 
 // A second registry, with a different comparison. The entries above ask
@@ -947,6 +1061,33 @@ export const REGISTRY = [
 						},
 					];
 				},
+			},
+		],
+	},
+	{
+		name: 'guided-run cue library',
+		why:
+			'A mark moved, a duration changed or a workout renamed on one rail ' +
+			'passes both suites, because each tests its own rail against itself and ' +
+			'neither reads the other. The two surfaces then describe the same named ' +
+			'workout differently — a different finish time under the same title, or ' +
+			'a cue one platform lists and the other has never heard of.',
+		match: 'key',
+		compare: 'ordered',
+		rails: [
+			{
+				label: `web (${WEB_GUIDED_RUNS})`,
+				sites: (ctx) =>
+					parseGuidedRunLibrary(ctx.read(WEB_GUIDED_RUNS), 'guidedRunLibrary(t: GuidedTranslate', WEB_GUIDED_RUNS),
+			},
+			{
+				label: `mobile (${MOBILE_GUIDED_RUNS})`,
+				sites: (ctx) =>
+					parseGuidedRunLibrary(
+						ctx.read(MOBILE_GUIDED_RUNS),
+						'guidedRunLibrary(AppLocalizations',
+						MOBILE_GUIDED_RUNS,
+					),
 			},
 		],
 	},
