@@ -2,6 +2,7 @@
 library core_models;
 
 export 'src/atomic_io.dart';
+export 'src/store_write_chain.dart';
 export 'src/food.dart';
 export 'src/gear.dart';
 export 'src/generated/db_rows.dart';
