@@ -78,6 +78,38 @@ void main() {
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
+  // ── Overlapping owner stamps (§ 828) ────────────────────────────────
+  group('setLastKnownOwner — overlapping calls', () {
+    File ownerFile() => File('${tempDir.path}/watch_ingest_queue/last_owner.txt');
+
+    test('a clear fired against an in-flight stamp is not undone', () async {
+      // Both call sites in main.dart fire this unawaited, so a sign-out
+      // landing on a sign-in put a delete and an atomic write over one file in
+      // flight together: the delete found no target yet, the write's rename
+      // put the stamp back, and the next cold start hydrated an owner the
+      // store had been told to forget.
+      await queue.setLastKnownOwner('user-a');
+
+      final stamp = queue.setLastKnownOwner('user-b');
+      final clear = queue.setLastKnownOwner(null);
+      await Future.wait([stamp, clear]);
+
+      expect(queue.debugLastKnownOwner, isNull);
+      expect(ownerFile().existsSync(), isFalse,
+          reason: 'a cold start must not hydrate a stamp the store was told '
+              'to clear — an adopted watch run lands in the wrong account');
+    });
+
+    test('the last stamp wins on disk as well as in memory', () async {
+      final a = queue.setLastKnownOwner('user-a');
+      final b = queue.setLastKnownOwner('user-b');
+      await Future.wait([a, b]);
+
+      expect(queue.debugLastKnownOwner, 'user-b');
+      expect(ownerFile().readAsStringSync(), 'user-b');
+    });
+  });
+
   // ── Headline guarantee ──────────────────────────────────────────────
   group('drain — shared-device owner filter', () {
     test('payload enqueued under user-a does NOT drain under user-b',

@@ -56,7 +56,7 @@ class WatchIngestQueue {
       _queueDir.createSync(recursive: true);
     }
     _sweepRejected();
-    cm.sweepAtomicWriteOrphans(_queueDir,
+    cm.sweepStoreScratchFiles(_queueDir,
         onError: (m) => debugPrint('WatchIngestQueue: $m'));
     // Hydrate the in-memory cache from the sidecar so enqueues that
     // run before the first setLastKnownOwner call still carry the
@@ -81,20 +81,37 @@ class WatchIngestQueue {
   ///
   /// Persisted to a sidecar so a process kill between the last
   /// sign-out and the next sign-in doesn't lose the stamp.
+  /// Both call sites in `main.dart` fire this UNAWAITED — the bootstrap
+  /// restore and the `signedIn` listener — so a sign-out followed by a sign-in
+  /// puts a delete and an atomic write over one file in flight together. The
+  /// delete then ran while the write's `.tmp` had not been renamed yet, found
+  /// nothing to remove, and the rename put a stamp back that the store had
+  /// been told to clear: the in-memory cache said signed-out while the next
+  /// cold start hydrated a stale owner, and that owner is what decides which
+  /// account a queued watch run adopts to. Serialised on the queue directory
+  /// (§ 828); the in-memory half is already last-caller-wins because it is set
+  /// before the first await.
+  ///
+  /// [enqueue] and [drain] stay off the chain deliberately. An enqueue's path
+  /// is a fresh uuid nothing else names, and a drain awaits `api.saveRun` per
+  /// file — putting a watch payload's write behind a stalled upload is the one
+  /// thing this must not do.
   Future<void> setLastKnownOwner(String? userId) async {
     _lastKnownOwnerCache = userId;
-    try {
-      if (userId == null || userId.isEmpty) {
-        if (_lastOwnerFile.existsSync()) await _lastOwnerFile.delete();
-      } else {
-        // Atomic like the envelope write: a bare writeAsString truncates
-        // first, and init() reads an empty file as "no owner" — which drops
-        // the stamp and lets the next account adopt the previous user's run.
-        await cm.writeStringAtomic(_lastOwnerFile, userId);
+    await cm.serialiseStoreWrite(_queueDir.path, () async {
+      try {
+        if (userId == null || userId.isEmpty) {
+          if (_lastOwnerFile.existsSync()) await _lastOwnerFile.delete();
+        } else {
+          // Atomic like the envelope write: a bare writeAsString truncates
+          // first, and init() reads an empty file as "no owner" — which drops
+          // the stamp and lets the next account adopt the previous user's run.
+          await cm.writeStringAtomic(_lastOwnerFile, userId);
+        }
+      } catch (e) {
+        debugPrint('WatchIngestQueue.setLastKnownOwner write failed: $e');
       }
-    } catch (e) {
-      debugPrint('WatchIngestQueue.setLastKnownOwner write failed: $e');
-    }
+    });
   }
 
   /// The user_id stamped on payloads enqueued right now (exposed for

@@ -15,7 +15,8 @@ import 'package:path_provider/path_provider.dart';
 /// rewritten every few seconds during a recording, so a crash mid-run can
 /// be recovered on next launch.
 class LocalRunStore extends ChangeNotifier {
-  late Directory _dir;
+  Directory? _dirOrNull;
+  Directory get _dir => _dirOrNull!;
   List<Run> _runs = [];
   // The authoritative full-history projection — one lightweight RunSummary per
   // run on disk, newest-first, kept in lockstep with the per-run files. Unlike
@@ -43,6 +44,35 @@ class LocalRunStore extends ChangeNotifier {
   // tagging shipped, or queued while signed-out) — those drain under
   // whichever user is signed in next, matching the run adoption rule.
   final Map<String, String?> _pendingRemoteDeletes = {};
+
+  /// Serialises every operation that mutates this store's DIRECTORY, on the
+  /// shared per-directory chain (`serialiseStoreWrite`, § 828). Unserialised, a
+  /// [delete] fired against an in-flight [save] of the same id removed the row
+  /// file and the save's `rename` put it straight back — and, unlike the
+  /// resurrection § 821 found on `OfflineSyncStore`, the save rebuilt `_runs`
+  /// and `_summaries` too, so memory and disk AGREED on a row the user had
+  /// asked to delete and no cold load could recover from it. The sidecars are
+  /// worse: they are read-modify-write, so two overlapping saves each merged
+  /// from a snapshot taken before the other wrote and one lost its work.
+  ///
+  /// This replaced a `FileLock.blockingExclusive` held over the sidecar
+  /// read-modify-writes. POSIX record locks are owned by the PROCESS, so two
+  /// handles in one process — including the WorkManager isolate the lock named,
+  /// which shares the app process — both acquired it and excluded nothing
+  /// (measured, § 829). What survives an interleaved isolate is the
+  /// merge-never-replace in each writer below, not the lock.
+  ///
+  /// The in-progress recording path is deliberately NOT on this chain — see
+  /// [saveInProgress]. Nothing here may delay an L1 write during a recording.
+  String get _chainKey =>
+      _dirOrNull?.path ?? 'uninitialised:${identityHashCode(this)}';
+
+  Future<T> _serialised<T>(Future<T> Function() body) =>
+      serialiseStoreWrite(_chainKey, body);
+
+  /// Test-only: completes once every operation queued so far has finished.
+  @visibleForTesting
+  Future<void> debugWritesSettled() => storeWritesSettled(_chainKey);
 
   /// Returns the currently-signed-in user id (or `null` for the
   /// "offline / not signed in" case). Set once at app bootstrap so
@@ -276,7 +306,7 @@ class LocalRunStore extends ChangeNotifier {
   /// touches it.
   @visibleForTesting
   void debugSeed(Iterable<Run> runs, {Directory? dir, bool synced = true}) {
-    if (dir != null) _dir = dir;
+    if (dir != null) _dirOrNull = dir;
     _runs = List<Run>.from(runs);
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
     if (synced) {
@@ -294,15 +324,15 @@ class LocalRunStore extends ChangeNotifier {
   /// supplied directory instead of the platform documents dir.
   Future<void> init({Directory? overrideDirectory}) async {
     if (overrideDirectory != null) {
-      _dir = overrideDirectory;
+      _dirOrNull = overrideDirectory;
     } else {
       final appDir = await getApplicationDocumentsDirectory();
-      _dir = Directory('${appDir.path}/runs');
+      _dirOrNull = Directory('${appDir.path}/runs');
     }
     if (!_dir.existsSync()) {
       _dir.createSync(recursive: true);
     }
-    await _loadAll();
+    await _serialised(_loadAll);
   }
 
   /// Save a freshly-recorded run locally. Stamps `last_modified_at` and marks
@@ -314,7 +344,9 @@ class LocalRunStore extends ChangeNotifier {
   /// what was stored: passing its own instance can never match, and the run
   /// would stay unsynced forever while re-uploading its full track on every
   /// drain.
-  Future<Run> save(Run run) async {
+  Future<Run> save(Run run) => _serialised(() => _save(run));
+
+  Future<Run> _save(Run run) async {
     Run stamped = _withLastModified(run, DateTime.now());
     // Owner-tag the run with the userId that was signed in at save
     // time. Prevents the cross-user contamination bug on a shared
@@ -393,7 +425,10 @@ class LocalRunStore extends ChangeNotifier {
   /// - Remote runs come back with an empty `track` (tracks are stored in
   ///   Storage and lazy-loaded). If the local copy already has the full track,
   ///   we preserve it so we don't drop GPS data when syncing.
-  Future<void> saveFromRemote(Run run) async {
+  Future<void> saveFromRemote(Run run) =>
+      _serialised(() => _saveFromRemote(run));
+
+  Future<void> _saveFromRemote(Run run) async {
     final existing = _runs.where((r) => r.id == run.id).firstOrNull;
     // Newer-wins must also catch a synced run that's been windowed out of
     // `_runs` — its summary still carries the modification clock. Without this,
@@ -457,7 +492,10 @@ class LocalRunStore extends ChangeNotifier {
   /// rebuilding the runs screen — a fresh user pulling for the first time
   /// rebuilt the screen 200 times. This variant batches all writes with
   /// `Future.wait`, then notifies listeners once at the end.
-  Future<void> saveManyFromRemote(Iterable<Run> runs) async {
+  Future<void> saveManyFromRemote(Iterable<Run> runs) =>
+      _serialised(() => _saveManyFromRemote(runs));
+
+  Future<void> _saveManyFromRemote(Iterable<Run> runs) async {
     if (runs.isEmpty) return;
     final toWrite = <Run>[];
     for (final run in runs) {
@@ -522,7 +560,9 @@ class LocalRunStore extends ChangeNotifier {
   /// Replace an existing run with updated data (same id, new metadata).
   /// Stamps `last_modified_at = now` and marks the run unsynced so it gets
   /// pushed on the next sync.
-  Future<void> update(Run updated) async {
+  Future<void> update(Run updated) => _serialised(() => _update(updated));
+
+  Future<void> _update(Run updated) async {
     final file = File('${_dir.path}/${updated.id}.json');
     if (!file.existsSync()) return;
 
@@ -595,7 +635,9 @@ class LocalRunStore extends ChangeNotifier {
   }
 
   /// Delete a run from local storage.
-  Future<void> delete(String runId) async {
+  Future<void> delete(String runId) => _serialised(() => _delete(runId));
+
+  Future<void> _delete(String runId) async {
     final file = File('${_dir.path}/$runId.json');
     if (file.existsSync()) {
       await file.delete();
@@ -610,7 +652,10 @@ class LocalRunStore extends ChangeNotifier {
   /// Delete a batch of runs in one shot. Removes each run's file from disk,
   /// updates the in-memory list, and notifies listeners exactly **once** at
   /// the end — so a bulk delete of N runs doesn't trigger N UI rebuilds.
-  Future<void> deleteMany(Iterable<String> runIds) async {
+  Future<void> deleteMany(Iterable<String> runIds) =>
+      _serialised(() => _deleteMany(runIds));
+
+  Future<void> _deleteMany(Iterable<String> runIds) async {
     final ids = runIds.toSet();
     if (ids.isEmpty) return;
     for (final id in ids) {
@@ -757,7 +802,10 @@ class LocalRunStore extends ChangeNotifier {
   /// Mark a run as synced. Writes only the small sidecar file; the run's
   /// own JSON is untouched. For sync loops that mark many runs at once,
   /// prefer [markManySynced] which writes the sidecar once per batch.
-  Future<void> markSynced(String runId) async {
+  Future<void> markSynced(String runId) =>
+      _serialised(() => _markSynced(runId));
+
+  Future<void> _markSynced(String runId) async {
     _syncedIds.add(runId);
     _markSummariesSynced({runId});
     await _persistSyncedIds();
@@ -778,7 +826,10 @@ class LocalRunStore extends ChangeNotifier {
   /// [update] installs a NEW Run instance for every mutation, so identity is an
   /// exact "did this row change under us" test. A false negative only costs one
   /// more drain. Mirrors [OfflineSyncStore.markSynced].
-  Future<void> markManySynced(Iterable<Run> pushed) async {
+  Future<void> markManySynced(Iterable<Run> pushed) =>
+      _serialised(() => _markManySynced(pushed));
+
+  Future<void> _markManySynced(Iterable<Run> pushed) async {
     final byId = {for (final r in _runs) r.id: r};
     final ids = <String>{};
     for (final r in pushed) {
@@ -814,7 +865,7 @@ class LocalRunStore extends ChangeNotifier {
     // re-uploads its full track on the next drain.
     final liveIds = _summaries.map((s) => s.id).toSet();
     _syncedIds.retainWhere(liveIds.contains);
-    await _withSidecarLock(_syncedIdsFilename, () async {
+    await _serialised(() async {
       // Merge, never replace. `background_sync.dart` builds its OWN
       // LocalRunStore over this same directory in the WorkManager isolate, so
       // a whole-file write from one process's snapshot silently discards the
@@ -845,41 +896,6 @@ class LocalRunStore extends ChangeNotifier {
         debugPrint('Failed to persist synced ids sidecar: $e');
       }
     });
-  }
-
-  /// Hold an exclusive cross-process advisory lock on [name] for the duration
-  /// of [action]. The sidecars are read-modify-write, and the WorkManager
-  /// isolate runs a second store over the same directory — without the lock
-  /// two interleaved merges still drop the later writer's addition. Best
-  /// effort: if the lock can't be taken the action still runs, because a
-  /// merged write without a lock is strictly better than no write at all.
-  Future<void> _withSidecarLock(
-      String name, Future<void> Function() action) async {
-    RandomAccessFile? handle;
-    try {
-      handle = await File('${_dir.path}/$name.lock').open(mode: FileMode.write);
-      await handle.lock(FileLock.blockingExclusive);
-    } catch (e) {
-      debugPrint('local_run_store: sidecar lock unavailable for $name: $e');
-      try {
-        await handle?.close();
-      } catch (_) {/* best-effort */}
-      handle = null;
-    }
-    try {
-      await action();
-    } finally {
-      if (handle != null) {
-        try {
-          await handle.unlock();
-        } catch (e) {
-          debugPrint('local_run_store: sidecar unlock failed for $name: $e');
-        }
-        try {
-          await handle.close();
-        } catch (_) {/* best-effort */}
-      }
-    }
   }
 
   /// Insert or replace [run]'s summary, keeping `_summaries` in lockstep with
@@ -930,7 +946,7 @@ class LocalRunStore extends ChangeNotifier {
   /// set stays correct and cold-load self-heals the disk copy from the per-run
   /// files next launch.
   Future<void> _persistIndex() async {
-    await _withSidecarLock(_indexFilename, () async {
+    await _serialised(() async {
       // Merge, never replace — `background_sync.dart` runs a second store over
       // this directory (§303). The cold-load gate compares the id SET only, so
       // a whole-file replace from a stale snapshot leaves per-id content drift
@@ -1009,7 +1025,11 @@ class LocalRunStore extends ChangeNotifier {
   Future<void> markPendingRemoteDelete(
     String runId, {
     String? ownerUserId,
-  }) async {
+  }) =>
+      _serialised(() => _markPendingRemoteDelete(runId, ownerUserId));
+
+  Future<void> _markPendingRemoteDelete(
+      String runId, String? ownerUserId) async {
     final existed = _pendingRemoteDeletes.containsKey(runId);
     final prevOwner = existed ? _pendingRemoteDeletes[runId] : null;
     if (existed && prevOwner == ownerUserId) return;
@@ -1024,7 +1044,11 @@ class LocalRunStore extends ChangeNotifier {
   Future<void> markManyPendingRemoteDelete(
     Iterable<String> runIds, {
     String? ownerUserId,
-  }) async {
+  }) =>
+      _serialised(() => _markManyPendingRemoteDelete(runIds, ownerUserId));
+
+  Future<void> _markManyPendingRemoteDelete(
+      Iterable<String> runIds, String? ownerUserId) async {
     var changed = false;
     for (final id in runIds) {
       final existed = _pendingRemoteDeletes.containsKey(id);
@@ -1043,7 +1067,10 @@ class LocalRunStore extends ChangeNotifier {
   /// Drop a run id from the retry queue. Called by the SyncService
   /// after a successful retry, or by the user if they purge the
   /// orphan locally.
-  Future<void> clearPendingRemoteDelete(String runId) async {
+  Future<void> clearPendingRemoteDelete(String runId) =>
+      _serialised(() => _clearPendingRemoteDelete(runId));
+
+  Future<void> _clearPendingRemoteDelete(String runId) async {
     // containsKey guard, not `remove() != null` — entries can have a
     // null value (untagged / legacy) and Map.remove returns the value,
     // which would silently skip the persistence + notify for those.
@@ -1060,7 +1087,7 @@ class LocalRunStore extends ChangeNotifier {
   final Set<String> _clearedRemoteDeletes = <String>{};
 
   Future<void> _persistPendingRemoteDeletes() async {
-    await _withSidecarLock(_pendingRemoteDeletesFilename, () async {
+    await _serialised(() async {
       // Merge, never replace — see _persistSyncedIds. This sidecar is the
       // worse of the two to clobber: an entry that goes missing is a run that
       // stays on the server forever with nothing left to retry it, and the old
@@ -1145,7 +1172,7 @@ class LocalRunStore extends ChangeNotifier {
     final pendingDeletes = await _readPendingRemoteDeletes();
     if (pendingDeletes != null) _pendingRemoteDeletes.addAll(pendingDeletes);
 
-    sweepAtomicWriteOrphans(_dir,
+    sweepStoreScratchFiles(_dir,
         onError: (m) => debugPrint('local_run_store: $m'));
 
     // listSync is intentional: the async stream form (`_dir.list()`)
