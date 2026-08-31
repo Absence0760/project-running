@@ -27,18 +27,25 @@ begin;
 
 select plan(12);
 
--- (1) Catch-all — readability. Only app_quota, deletion_audit_log and
--- data_export_jobs are intentionally service_role-only (no anon/authenticated
--- grant at all). data_export_jobs (20270603_001) holds the state of an Art 20
--- export request; the row is useless to a client without a signed URL, which
--- only the service role can mint, so the whole read goes through the Go
--- worker's JWT-authed status endpoint and the table needs no client grant.
+-- (1) Catch-all — readability. Only app_quota, deletion_audit_log,
+-- data_export_jobs and payment_refunds are intentionally service_role-only (no
+-- anon/authenticated grant at all). data_export_jobs (20270603_001) holds the
+-- state of an Art 20 export request; the row is useless to a client without a
+-- signed URL, which only the service role can mint, so the whole read goes
+-- through the Go worker's JWT-authed status endpoint and the table needs no
+-- client grant. payment_refunds (20270630000001) is one row per Stripe Refund
+-- on either money ledger: the amounts it holds reach a donor through
+-- fundraiser_feed's net figure and an operator through the service role, and
+-- there is no client surface that reads a refund row itself — so it takes the
+-- 20270621_001 lockdown at TABLE level rather than re-granting a column set
+-- nothing would call.
 select is(
   (select count(*)::int
      from pg_class c
      join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
      where c.relkind = 'r'
-       and c.relname not in ('app_quota', 'deletion_audit_log', 'data_export_jobs')
+       and c.relname not in ('app_quota', 'deletion_audit_log', 'data_export_jobs',
+                             'payment_refunds')
        and not has_table_privilege('authenticated', c.oid, 'SELECT')
        and not exists (
          select 1 from information_schema.role_column_grants g
