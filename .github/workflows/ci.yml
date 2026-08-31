@@ -189,10 +189,10 @@ jobs:
       # comment, which is how release-ios.yml's TestFlight upload survived the
       # sweep that pinned everything else, and including composite actions
       # under .github/actions, which Dependabot does not scan at all.
-      - name: Toolchain pin drift (Flutter SDK + melos + action SHAs)
+      - name: Toolchain pin drift (Flutter SDK + melos + Rust channel + action SHAs)
         run: |
           if ! node scripts/check_toolchain_pins.mjs; then
-            echo "::error::A toolchain this build installs is unpinned or two call sites disagree — a floating Flutter SDK, a melos version that does not match pubspec.lock, an unpinned defmt-print or a stale cache key for it, or a third-party action on a mutable tag instead of a commit SHA. Nothing here is about workflow syntax or the CI diagnoses; those are other checks in this job."
+            echo "::error::A toolchain this build installs is unpinned or two call sites disagree — a floating Flutter SDK, a melos version that does not match pubspec.lock, an unpinned defmt-print or a stale cache key for it, a firmware rust-toolchain.toml channel that is not an exact version, or a third-party action on a mutable tag instead of a commit SHA. Nothing here is about workflow syntax or the CI diagnoses; those are other checks in this job."
             echo "The failing line above names the file, the line and the value to pin. decisions § 595 is why the Flutter version is declared once per workflow file rather than inherited from 'channel: stable'."
             exit 1
           fi
@@ -1155,9 +1155,11 @@ jobs:
           restore-keys: cargo-firmware-
       - name: Install Rust toolchain (driven by rust-toolchain.toml)
         working-directory: apps/custom_watch
-        # rustup honours rust-toolchain.toml automatically: stable channel,
-        # thumbv7em-none-eabihf target, rust-src + llvm-tools-preview +
-        # clippy + rustfmt components. `rustup show` triggers the install.
+        # rustup honours rust-toolchain.toml automatically: an EXACT channel
+        # (decisions § 705 — clippy `-D warnings` on a floating one breaks the
+        # build on whoever pushes next), thumbv7em-none-eabihf target, rust-src
+        # + llvm-tools-preview + clippy + rustfmt components. `rustup show`
+        # triggers the install.
         run: rustup show
       - name: Build firmware (release, embedded target)
         working-directory: apps/custom_watch
