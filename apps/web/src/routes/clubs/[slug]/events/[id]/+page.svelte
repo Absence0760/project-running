@@ -2669,7 +2669,17 @@
 
 	.hero {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(16rem, auto);
+		/* The side rail's max is BOUNDED, not `auto`. An `auto` max track is
+		   sized to its content's max-content width — the longest line with no
+		   wrapping — and the title column beside it is `minmax(0, 1fr)`, whose
+		   min really is 0. So one long unbroken sentence in `.hero-side`
+		   starves the title to nothing: the reversed-refund banner's 868px
+		   max-content paragraph left the `<h1>` 38px wide on macOS and exactly
+		   0 on CI's wider font metrics, in the DOM and unrenderable. The
+		   skeleton beside it (`.skel-hero`) had always bounded its rail; the
+		   real hero only escaped because everything that had ever lived in the
+		   side column was short. decisions § 825. */
+		grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
 		gap: var(--space-lg);
 		padding: var(--space-lg) var(--space-xl);
 		background: linear-gradient(
