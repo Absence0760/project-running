@@ -43,13 +43,41 @@ export function validateDonationAmount(amountCents: unknown): AmountOutcome {
   return 'ok';
 }
 
+/// Drop every unpaired surrogate.
+///
+/// `slice` counts UTF-16 units, so a cap landing inside a surrogate pair leaves
+/// half a character behind: `JSON.stringify` emits it as a bare `\ud83d`
+/// escape, and a Postgres JSON parse refuses that outright ("Unicode low
+/// surrogate must follow a high surrogate"), so the donation insert fails on a
+/// message the donor can only ever retype identically. A value that arrived
+/// ill-formed is repaired on the same pass — the column is `text` either way,
+/// and half a character is not one.
+function dropLoneSurrogates(value: string): string {
+  let out = '';
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const low = value.charCodeAt(i + 1);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        out += value[i] + value[i + 1];
+        i++;
+      }
+      continue;
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) continue;
+    out += value[i];
+  }
+  return out;
+}
+
 /// Clamp + trim a donor-supplied free-text field to its cap. Returns null for a
 /// missing / blank value so the column stays NULL rather than an empty string.
 export function clampText(value: unknown, maxLen: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
-  return trimmed.slice(0, maxLen);
+  const clipped = dropLoneSurrogates(trimmed.slice(0, maxLen)).trim();
+  return clipped.length === 0 ? null : clipped;
 }
 
 /// Stripe request-idempotency key for the donation Checkout Session create.

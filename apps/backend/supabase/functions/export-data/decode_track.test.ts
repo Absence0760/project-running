@@ -34,13 +34,17 @@ Deno.test('decodeTrack — small valid track round-trips', async () => {
 });
 
 Deno.test('decodeTrack — bytes at exactly the cap are accepted', async () => {
-	// Build a "blob" that is exactly MAX bytes but ALSO decodes to a
-	// valid track. Easy way: pad a valid JSON with whitespace until
-	// the gzip is exactly the cap; but predictable cap-edge testing
-	// is brittle. Instead assert the inverse: a one-byte-over Blob
-	// throws (Cap+1 test below) and a small valid Blob succeeds
-	// (test above). The cap is an inequality, so this is sufficient
-	// coverage; just sanity-check the cap value is the expected 5 MB.
+	// This case is named for the boundary and used to assert only the constant,
+	// which a decoder rejecting every track at any size also satisfies. Building
+	// exactly MAX bytes of VALID gzip is brittle, so the boundary is observed the
+	// other way round: a blob of exactly the cap must get PAST the guard and fail
+	// in the decompressor instead. That distinguishes `>` from `>=` — which is
+	// the whole content of "at exactly the cap" — without needing the payload to
+	// be well formed.
+	const atCap = new Blob([new Uint8Array(MAX_TRACK_GZIP_BYTES)]);
+	const err = await decodeTrack(atCap).then(() => null, (e: unknown) => e);
+	assertEquals(err instanceof TrackTooLargeError, false, 'the cap must be exclusive');
+	assertEquals(err !== null, true, 'and the bytes are still not a track');
 	assertEquals(MAX_TRACK_GZIP_BYTES, 5 * 1024 * 1024);
 });
 
