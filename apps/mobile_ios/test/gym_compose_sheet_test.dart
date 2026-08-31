@@ -19,17 +19,33 @@ import 'pump_until.dart';
 /// CI runner, and the `finally` that deletes the temp directory then raced the
 /// write still in flight. Waiting on the condition itself ends as soon as the
 /// write lands and only reports a failure when the save is genuinely broken.
-Future<void> _settleUntil(WidgetTester tester, bool Function() ready) async {
-  await pumpUntil(tester, ready,
-      describe: 'the composer save to land in the store');
+///
+/// [describe] is required for the reason decisions 723 gives: one generic
+/// sentence shared by every call site in a file means an expired deadline no
+/// longer says which condition never held.
+Future<void> _settleUntil(WidgetTester tester, bool Function() ready,
+    {required String describe}) async {
+  await pumpUntil(tester, ready, describe: describe);
   await tester.pump(const Duration(milliseconds: 350));
 }
 
-Future<({LocalGymStore store, Directory dir})> _store(String tag) async {
+/// The composer's store, its temp dir, and a `persisted` probe.
+///
+/// `OfflineSyncStore.persist` puts the row into its in-memory map BEFORE the
+/// atomic write and notifies only once the row file and the index are both
+/// down, so `workouts.isNotEmpty` returns while the write is still in flight
+/// and the `finally` that deletes the temp dir then races it (decisions 723).
+/// Measured: every one of these waits spent ZERO loop turns on the row count
+/// — it was already true — so the wait proved nothing and the teardown race
+/// was live. The notification is the signal.
+Future<({LocalGymStore store, Directory dir, bool Function() persisted})>
+    _store(String tag) async {
   final dir = Directory.systemTemp.createTempSync('gym_compose_$tag');
   final store = LocalGymStore();
   await store.init(overrideDirectory: dir);
-  return (store: store, dir: dir);
+  var persisted = false;
+  store.addListener(() => persisted = true);
+  return (store: store, dir: dir, persisted: () => persisted);
 }
 
 /// A store whose create always fails, to drive the composer's save-error path.
@@ -129,7 +145,8 @@ void main() {
       await tester.runAsync(() async {
         await tester.tap(find.text('Save workout'));
       });
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
       expect(f.store.workouts, hasLength(1));
     } finally {
       f.dir.deleteSync(recursive: true);
@@ -155,7 +172,8 @@ void main() {
       await tester.tap(find.text('Save workout'));
       // The composer's save awaits a real file write (createLocal) — flush the
       // real event loop so it completes, then settle the route pop.
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
 
       expect(f.store.workouts, hasLength(1));
       final w = f.store.workouts.first;
@@ -192,7 +210,8 @@ void main() {
       await tester.tap(find.byType(FilledButton));
 
       // Now let the real file write complete and settle the route pop.
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
 
       expect(f.store.workouts, hasLength(1));
     } finally {
@@ -221,7 +240,8 @@ void main() {
       // The failing store rejects inside the same async chain, so wait on the
       // rendered error rather than on a duration.
       await _settleUntil(
-          tester, () => find.text("Couldn't save workout.").evaluate().isNotEmpty);
+          tester, () => find.text("Couldn't save workout.").evaluate().isNotEmpty,
+          describe: 'the rejected save to surface its error');
       await tester.pump();
 
       expect(find.text("Couldn't save workout."), findsOneWidget);
@@ -264,7 +284,8 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.text('Save workout'));
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;
@@ -300,7 +321,8 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.text('Save workout'));
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;
@@ -360,7 +382,8 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.text('Save workout'));
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;
@@ -427,7 +450,8 @@ void main() {
       await tester.enterText(fields.at(5), '90'); // duration seconds
 
       await tester.tap(find.text('Save workout'));
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
 
       expect(f.store.workouts, hasLength(1));
       final w = f.store.workouts.first;
@@ -465,7 +489,8 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Save workout'));
-      await _settleUntil(tester, () => f.store.workouts.isNotEmpty);
+      await _settleUntil(tester, f.persisted,
+          describe: "the composer's write to land on disk and notify");
 
       expect(f.store.workouts, hasLength(1));
       final sets = f.store.workouts.first.sets;

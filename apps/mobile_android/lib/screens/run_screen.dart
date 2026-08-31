@@ -1954,6 +1954,13 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
             _showTopBanner(_l10n.runTreadmillReconnected,
                 duration: const Duration(seconds: 2));
           }
+          // The subtitle switches on the status, so coming BACK also has to
+          // rebuild. Indoors the belt is the distance source and the position
+          // stream is silent, so nothing else repaints this card until the
+          // first FTMS notification lands — leaving an engaged toggle saying
+          // the belt is lost while it is connected, under a "reconnected"
+          // banner that has already expired.
+          setState(() {});
         case BleTreadmillStatus.disconnected:
           if (prev == BleTreadmillStatus.reconnecting) {
             _showTopBanner(_l10n.runTreadmillLostFallback);
