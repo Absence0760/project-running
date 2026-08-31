@@ -677,9 +677,13 @@ class _RaceImportFormState extends State<_RaceImportForm> {
             if (_provider case final spec?) ...[
               if (_available == true) ...[
                 Text(
-                  spec.scope == RaceImportScope.bib
-                      ? l.racesRunSignUpBibHint
-                      : l.racesUltraSignUpAthleteHint,
+                  // Exhaustive on purpose: a scope added to the catalogue must
+                  // fail to compile here rather than inherit a hint about a
+                  // field it does not have.
+                  switch (spec.scope) {
+                    RaceImportScope.bib => l.racesRunSignUpBibHint,
+                    RaceImportScope.athleteId => l.racesUltraSignUpAthleteHint,
+                  },
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 if (spec.scope == RaceImportScope.athleteId)
