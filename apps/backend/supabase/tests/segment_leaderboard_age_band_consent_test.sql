@@ -27,7 +27,7 @@
 
 begin;
 
-select plan(10);
+select plan(18);
 
 -- ── Fixture: an owner plus three athletes born on the same day ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -225,6 +225,87 @@ select is(
    where user_id = '00000000-0000-0000-0000-0000000ac003'),
   null::integer,
   'catalogue board: a withheld caller gets no age echo about themselves'
+);
+
+-- 7. The catalogue board's own-age echo and neighbouring bands, so the two
+--    boards are pinned symmetrically rather than one being read as the
+--    other's proxy.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ac002"}';
+select cmp_ok(
+  (select age from global_segment_leaderboard(
+     'a9a9a9a9-0000-0000-0000-0000000000c1'::uuid, null, null, 50)
+   where user_id = '00000000-0000-0000-0000-0000000ac002'),
+  '>=', 41,
+  'catalogue board: a consented caller still sees their own age'
+);
+
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ac001"}';
+select is(
+  (select count(*)::int from global_segment_leaderboard(
+     'a9a9a9a9-0000-0000-0000-0000000000c1'::uuid, null, '35-39', 50))
+  + (select count(*)::int from global_segment_leaderboard(
+       'a9a9a9a9-0000-0000-0000-0000000000c1'::uuid, null, '45-49', 50)),
+  0,
+  'catalogue board: the withheld runner is in no neighbouring band either'
+);
+
+-- ── The round trip a runner actually performs ──────────────────────────────
+-- § 727 gates the band on the stamp; § 721 keeps the age record when the
+-- stamp is withdrawn. Composed, that means the band follows the CONSENT and
+-- is restored by a re-grant — the outcome neither entry can show on its own,
+-- because a withdrawal that erased the date would look identical here until
+-- the re-grant failed to bring the runner back.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ac002"}';
+select withdraw_health_data_consent();
+
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ac001"}';
+select is(
+  (select count(*)::int from segment_leaderboard_tiered(
+     '77777777-7777-7777-7777-77777777ac01'::uuid, null, '40-44', 50)),
+  0,
+  'route board: withdrawing the consent empties the age band the runner held'
+);
+
+select is(
+  (select count(*)::int from global_segment_leaderboard(
+     'a9a9a9a9-0000-0000-0000-0000000000c1'::uuid, null, '40-44', 50)),
+  0,
+  'catalogue board: withdrawing the consent empties the band there too'
+);
+
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ac002"}';
+select is(
+  (select age from segment_leaderboard_tiered(
+     '77777777-7777-7777-7777-77777777ac01'::uuid, null, null, 50)
+   where user_id = '00000000-0000-0000-0000-0000000ac002'),
+  null::integer,
+  'the withdrawn runner''s own age echo stops too'
+);
+
+-- The unfiltered board is where they still are: a withdrawal is not a
+-- disappearance, exactly as the never-consented runner is not one.
+select is(
+  (select count(*)::int from segment_leaderboard_tiered(
+     '77777777-7777-7777-7777-77777777ac01'::uuid, null, null, 50)),
+  3,
+  'the withdrawn runner keeps their place on the unfiltered board'
+);
+
+select grant_health_data_consent();
+
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000ac001"}';
+select results_eq(
+  $$ select user_id::text from segment_leaderboard_tiered(
+       '77777777-7777-7777-7777-77777777ac01'::uuid, null, '40-44', 50) $$,
+  $$ values ('00000000-0000-0000-0000-0000000ac002') $$,
+  'route board: a re-grant restores the band — the age record survived the withdrawal'
+);
+
+select results_eq(
+  $$ select user_id::text from global_segment_leaderboard(
+       'a9a9a9a9-0000-0000-0000-0000000000c1'::uuid, null, '40-44', 50) $$,
+  $$ values ('00000000-0000-0000-0000-0000000ac002') $$,
+  'catalogue board: the re-grant restores the band there too'
 );
 
 select * from finish();
