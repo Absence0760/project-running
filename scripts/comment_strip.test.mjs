@@ -74,3 +74,64 @@ test('the committed sources come back the same length, line for line', () => {
 		assert.equal(out.split('\n').length, src.split('\n').length, path);
 	}
 });
+
+// The four guards that read through this lexer report line and column numbers,
+// so a blanked comment has to leave the code after it at the same offset — not
+// merely at the same total length.
+test('a mid-line comment leaves the code after it at the same column', () => {
+	const src = 'let a = 1; /* note */ let b = 2;';
+	const out = stripComments(src, 'rust');
+	assert.equal(out.indexOf('let b'), src.indexOf('let b'));
+	assert.equal(out.indexOf('let a'), src.indexOf('let a'));
+});
+
+test('a comment marker inside a block comment does not end it early', () => {
+	assert.equal(
+		kept('let x = 1; /* a // b */ let y = 2;', 'rust').replace(/ {2,}/g, ' '),
+		'let x = 1; let y = 2;',
+	);
+});
+
+test('a block-comment opener inside a string is not a comment', () => {
+	// The whole point of lexing rather than regexing: the string survives, and
+	// nothing after it is swallowed.
+	assert.equal(kept('let s = "/* not a comment"; // x', 'rust'), 'let s = "/* not a comment";');
+});
+
+test("Rust's byte literals are strings, prefix and all", () => {
+	assert.equal(kept('let s = b"ab//cd"; // x', 'rust'), 'let s = b"ab//cd";');
+	assert.equal(kept('let s = br#"a//b"#; // x', 'rust'), 'let s = br#"a//b"#;');
+	assert.equal(kept("let c = b'a'; // x", 'rust'), "let c = b'a';");
+});
+
+test('a Rust raw identifier is not a raw string', () => {
+	// `r#type` opens with the same two characters `r#"…"#` does, and reading it
+	// as a string would swallow to the next quote anywhere in the file.
+	assert.equal(kept('let r#type = 1; // x', 'rust'), 'let r#type = 1;');
+});
+
+test("a Dart escaped quote does not close its string", () => {
+	assert.equal(kept("var s = 'it\\'s'; // x", 'dart'), "var s = 'it\\'s';");
+});
+
+/// decisions.md § 793 depends on this THROWING rather than returning something
+/// plausible: the wire-vector guard treats a file it cannot lex as a hard error
+/// when that file names a wire magic, and as out of scope otherwise. A lexer
+/// that quietly mis-read an interpolated string would put the guard back to
+/// reporting a verdict about source it could not read.
+test('a Dart interpolation carrying a quote is refused, not guessed at', () => {
+	assert.throws(
+		() => stripComments('var s = \'a ${b("\'")} c\';', 'dart'),
+		/unterminated string/,
+	);
+});
+
+test('an unterminated raw string throws in both languages', () => {
+	assert.throws(() => stripComments('let s = r#"abc', 'rust'), /unterminated raw string/);
+	assert.throws(() => stripComments("var s = r'abc", 'dart'), /unterminated raw string/);
+});
+
+test('a nested block comment that closes only once is unterminated', () => {
+	assert.throws(() => stripComments('a /* one /* two */ b', 'rust'), /unterminated block comment/);
+	assert.equal(kept('a /*/ b */ c', 'rust').replace(/ {2,}/g, ' '), 'a c');
+});

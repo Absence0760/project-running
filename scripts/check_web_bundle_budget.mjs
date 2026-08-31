@@ -240,6 +240,24 @@ export function checkBudgets({
 	const errors = [];
 	const byPath = new Map(files.map((f) => [f.path, f]));
 
+	// Every ceiling below is an upper bound, so an empty walk satisfies all four
+	// and the guard reports a passing build it never measured. That is the
+	// § 775 shape pointed at this guard's own input: `collectEmitted` reading a
+	// build directory vite wrote nothing into, or wrote somewhere else, is
+	// indistinguishable from a bundle under budget. The classification errors
+	// above only catch it while a catalogue is lazy, which is a property of the
+	// i18n store rather than of this walk.
+	if (files.length === 0) {
+		errors.push({
+			budget: 'classification',
+			message:
+				`the build directory holds no emitted files at all, so every ceiling below ` +
+				`is satisfied by having measured nothing. Run a production build of apps/web ` +
+				`first (\`npm run build --workspace=apps/web\`), and if one did run, this ` +
+				`guard is walking the wrong directory.`,
+		});
+	}
+
 	/** @type {{ locale: string, path: string, kb: number }[]} */
 	const catalogueFiles = [];
 	for (const [locale, path] of [...catalogues].sort()) {
@@ -273,6 +291,16 @@ export function checkBudgets({
 	const cataloguePaths = new Set(catalogueFiles.map((c) => c.path));
 	const code = files.filter((f) => isCodeFile(f.path) && !cataloguePaths.has(f.path));
 	const assets = files.filter((f) => !isCodeFile(f.path));
+	if (files.length > 0 && code.length === 0) {
+		errors.push({
+			budget: 'classification',
+			message:
+				`the build emitted ${files.length} file(s) and not one of them is JS or CSS, ` +
+				`so the code ceiling and the largest-chunk ceiling both measure an empty set. ` +
+				`A SvelteKit build always emits both; this is a walk pointed at the wrong ` +
+				`directory or a build that stopped before its client bundle.`,
+		});
+	}
 	const codeKb = code.reduce((sum, f) => sum + f.kb, 0);
 	const catalogueKb = catalogueFiles.reduce((sum, c) => sum + c.kb, 0);
 	const largest = code.reduce(

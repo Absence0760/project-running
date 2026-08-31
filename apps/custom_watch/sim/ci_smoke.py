@@ -2431,6 +2431,62 @@ def scenario_terrain(sim):
     )
 
 
+def void_freeze(distances, void_start, span):
+    """The frozen-distance verdict for one void, and the anchor it settles on.
+
+    `distances` is every `(firmware_t, odometer_m)` snapshot strictly inside the
+    void, in publish order.
+
+    Anchored past the last fix's own credit (DROPOUT_FIX_CREDIT_SETTLE_S) rather
+    than at the first snapshot inside the void. Anchoring at `distances[0]` raced
+    that credit: it passed locally, where the credited snapshot landed first, and
+    failed on a CI runner where a `paused` snapshot carrying the pre-fix distance
+    arrived 1 ms after the fix and became the anchor — so the credit that
+    followed read as movement inside the void. The recorder had settled on the
+    same distance in both runs (decisions § 731).
+
+    Lives outside `scenario_dropout` because it is the half of that scenario
+    that can be replayed: the mis-anchor was found by replaying a recorded CI
+    log, and an anchor sampled one fix low does not merely produce a false red —
+    it makes the re-anchor assertion below it pass for a firmware that never
+    re-anchored, which is a false GREEN the emulator can only be asked to
+    reproduce by chance.
+    """
+    settle_deadline = void_start + DROPOUT_FIX_CREDIT_SETTLE_S
+    settled_snaps = [(t, d) for t, d in distances if t > settle_deadline]
+    if not settled_snaps:
+        raise SmokeFailure(
+            f"the {span:.1f}s void produced no snapshot past the "
+            f"{DROPOUT_FIX_CREDIT_SETTLE_S:.0f}s fix-credit settle window "
+            f"(deadline t={settle_deadline:.1f}s), so the frozen distance this "
+            "scenario exists to prove was never observable"
+        )
+    frozen = settled_snaps[0][1]
+    moved = [(t, d) for t, d in settled_snaps if d != frozen]
+    if moved:
+        t, d = moved[0]
+        raise SmokeFailure(
+            f"distance moved from {frozen:.1f} m to {d:.1f} m at t={t:.1f}s, "
+            "inside a void with no fixes in it — the recorder is crediting "
+            "distance it cannot have measured"
+        )
+    # The settle window is for the last fix's credit ARRIVING, never for a lump
+    # of the void's own displacement credited early: nothing in it may read above
+    # the anchor the recorder settles on.
+    overshot = [
+        (t, d) for t, d in distances if t <= settle_deadline and d > frozen
+    ]
+    if overshot:
+        t, d = overshot[0]
+        raise SmokeFailure(
+            f"distance read {d:.1f} m at t={t:.1f}s, above the {frozen:.1f} m the "
+            f"recorder settles on after the {DROPOUT_FIX_CREDIT_SETTLE_S:.0f}s "
+            "fix-credit settle window — inside a void with no fixes, so the "
+            "recorder credited more than the last real fix could justify"
+        )
+    return frozen, settled_snaps
+
+
 def scenario_dropout(sim):
     """Cross a GPS signal void and prove the recorder comes back from it.
 
@@ -2563,49 +2619,9 @@ def scenario_dropout(sim):
             "void with no snapshots in it means the record task stopped ticking "
             "when the fixes stopped, which is a stall and not a pause"
         )
-    # Anchor past the last fix's own credit (DROPOUT_FIX_CREDIT_SETTLE_S), not at
-    # the first snapshot inside the void. Anchoring at `inside[0]` raced that
-    # credit: it passed locally, where the credited snapshot landed first, and
-    # failed on a CI runner where a `paused` snapshot carrying the pre-fix
-    # distance arrived 1 ms after the fix and became the anchor — so the credit
-    # that followed read as movement inside the void. The recorder had settled on
-    # the same distance in both runs.
-    settle_deadline = void_start + DROPOUT_FIX_CREDIT_SETTLE_S
-    settled_snaps = [(t, m) for t, m in inside if t > settle_deadline]
-    if not settled_snaps:
-        raise SmokeFailure(
-            f"the {span:.1f}s void produced no snapshot past the "
-            f"{DROPOUT_FIX_CREDIT_SETTLE_S:.0f}s fix-credit settle window "
-            f"(deadline t={settle_deadline:.1f}s), so the frozen distance this "
-            "scenario exists to prove was never observable"
-        )
-    frozen = float(settled_snaps[0][1].group(2))
-    moved = [
-        (t, float(m.group(2))) for t, m in settled_snaps if float(m.group(2)) != frozen
-    ]
-    if moved:
-        t, d = moved[0]
-        raise SmokeFailure(
-            f"distance moved from {frozen:.1f} m to {d:.1f} m at t={t:.1f}s, "
-            "inside a void with no fixes in it — the recorder is crediting "
-            "distance it cannot have measured"
-        )
-    # The settle window is for the last fix's credit ARRIVING, never for a lump
-    # of the void's own displacement credited early: nothing in it may read above
-    # the anchor the recorder settles on.
-    overshot = [
-        (t, float(m.group(2)))
-        for t, m in inside
-        if t <= settle_deadline and float(m.group(2)) > frozen
-    ]
-    if overshot:
-        t, d = overshot[0]
-        raise SmokeFailure(
-            f"distance read {d:.1f} m at t={t:.1f}s, above the {frozen:.1f} m the "
-            f"recorder settles on after the {DROPOUT_FIX_CREDIT_SETTLE_S:.0f}s "
-            "fix-credit settle window — inside a void with no fixes, so the "
-            "recorder credited more than the last real fix could justify"
-        )
+    frozen, settled_snaps = void_freeze(
+        [(t, float(m.group(2))) for t, m in inside], void_start, span
+    )
     # The pause is owed once the fix-stale budget has elapsed, not at the instant
     # the fixes stop: `fix_stale` compares strictly past `fix_stale_budget_s`, so
     # the opening seconds of a void honestly still read `recording` and the frozen

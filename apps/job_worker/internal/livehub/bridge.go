@@ -217,3 +217,28 @@ func derefI(p *int) int {
 	}
 	return *p
 }
+
+// BridgeSkipReason names why the Realtime -> hub Bridge is not running for a
+// given hub and service key, or "" when it is.
+//
+// The Bridge is wired inside a type assertion to the in-process *Hub, so a
+// deploy that sets REDIS_URL drops it — and dropped it with no log line at all,
+// which is exactly the population that transport rollover exists to serve: a
+// hub spectator watching a runner still recording on the legacy Realtime
+// transport sees nothing (decisions.md § 756). The bridge's cursor and its
+// hub-native guard are per-process state that a multi-replica deploy would have
+// to hold in Redis, so the answer is not to widen the assertion — it is to say
+// so out loud instead of failing silently.
+func BridgeSkipReason(hub LivePubSub, serviceKey string) string {
+	if _, ok := hub.(*Hub); !ok {
+		return "the hub is not in-process (REDIS_URL is set), and the bridge's cursor and " +
+			"hub-native guard are per-process state that a multi-replica deploy would have to " +
+			"hold in Redis; hub spectators will not see runs still recording on the legacy " +
+			"Realtime transport"
+	}
+	if serviceKey == "" {
+		return "no service key, so live_run_pings cannot be read; hub spectators won't see " +
+			"legacy-transport runs"
+	}
+	return ""
+}
