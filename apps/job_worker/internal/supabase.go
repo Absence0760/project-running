@@ -1614,9 +1614,26 @@ func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) 
 	// server-managed, but still commercial data the business holds
 	// about the subject under Art 15(1) / CCPA right-to-know, and
 	// user_profiles is the only place it lives (RevenueCat keys by the
-	// Supabase user id). Keep in lockstep with the EF twin's
-	// PROFILE_SELECT in export-data/backup_spec.ts.
-	q.Set("select", "id,display_name,avatar_url,preferred_unit,created_at,date_of_birth,parkrun_number,gender,subscription_tier,subscription_at,billing_issue_at")
+	// Supabase user id).
+	//
+	// This table reaches the archive through THIS projection and nothing
+	// else — it is not in exportPersonalDataSpecs — so a column absent
+	// here is a column absent from the subject's Art 20 copy, which is
+	// how `handle`, `height_cm`, `onboarded_at` and the four consent
+	// records came to be missing. personal_data_export_profile_guard_test.go
+	// now fails on any column that is neither projected nor consciously
+	// excluded. `height_cm` in particular belongs with `date_of_birth`
+	// and `gender`: withdraw_health_data_consent() clears the three as
+	// one Art 9 set (decisions.md § 718), so exporting two of them is an
+	// archive that disagrees with the controller's own account.
+	//
+	// The EF twin's PROFILE_SELECT (export-data/backup_spec.ts) is
+	// narrower until it is mirrored; the queued Go rail is the only one
+	// either client reaches (decisions.md § 724).
+	q.Set("select", "id,display_name,handle,avatar_url,preferred_unit,created_at,onboarded_at,"+
+		"date_of_birth,gender,height_cm,parkrun_number,"+
+		"subscription_tier,subscription_at,billing_issue_at,"+
+		"terms_accepted_at,age_confirmed_at,coach_consent_at,health_data_consent_at,ai_disclosure_version")
 	q.Set("limit", "1")
 	u := c.BaseURL + "/rest/v1/" + schema.TableUserProfiles + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
