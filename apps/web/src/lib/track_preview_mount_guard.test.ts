@@ -50,22 +50,39 @@ function rel(file: string): string {
 	return relative(SRC, file).split('\\').join('/');
 }
 
+/// The half-open `[start, end)` spans a comment covers.
+///
+/// An unterminated opener runs to the end of the input, which is what a browser
+/// does with it and what makes the set complete: the alternative -- deleting
+/// each `<!-- ... -->` from the text -- both leaves a bare `<!--` behind and
+/// can JOIN what sits either side of a removed comment into a new complete one
+/// (`<!-` + `<!-- x -->` + `- ... -->` becomes `<!-- ... -->`), which this
+/// guard would then read as live markup.
+function commentSpans(source: string): [number, number][] {
+	const spans: [number, number][] = [];
+	for (const pattern of [
+		/<!--[\s\S]*?(?:-->|$)/g,
+		/\/\*[\s\S]*?(?:\*\/|$)/g,
+		/(?<!:)\/\/[^\n]*/g,
+	]) {
+		for (const m of source.matchAll(pattern)) {
+			spans.push([m.index, m.index + m[0].length]);
+		}
+	}
+	return spans;
+}
+
 /** Source with comments blanked, so prose quoting the tag never trips the scan. */
 export function withoutComments(source: string): string {
-	// To a fixpoint. Removing one comment can JOIN the text either side of it
-	// into a new complete one -- `<!-` + `<!-- x -->` + `- ... -->` leaves
-	// `<!-- ... -->` after a single pass -- and this guard reads what survives
-	// as live markup, so a mount hidden that way would go unseen.
-	let out = source;
-	let previous = '';
-	while (out !== previous) {
-		previous = out;
-		out = out.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+	// Blanked in place rather than deleted: every offset is preserved, so no
+	// removal can splice two fragments into something that reads as markup.
+	const chars = [...source];
+	for (const [start, end] of commentSpans(source)) {
+		for (let i = start; i < end && i < chars.length; i += 1) {
+			if (chars[i] !== '\n') chars[i] = ' ';
+		}
 	}
-	return out
-		.split('\n')
-		.map((line) => line.replace(/(?<!:)\/\/.*$/, ''))
-		.join('\n');
+	return chars.join('');
 }
 
 function mountsTrackPreview(file: string): boolean {
@@ -143,11 +160,24 @@ test('the scan sees a bare mount and is not fooled by prose', () => {
 	assert.ok(!/<TrackPreview\b/.test(withoutComments('<TrackPreviewCard {points} />')));
 });
 
-test('a comment whose removal joins a new comment is still blanked', () => {
-	// One pass over this leaves `<!-- <TrackPreview /> -->`, which the scan
-	// reads as a live mount; the fixpoint blanks it.
+test('no comment shape leaves a mount readable, and live markup survives', () => {
+	// Blanking preserves offsets, so a removed comment can no longer splice what
+	// sits either side of it into a new opener. What survives here is a mount
+	// the guard REPORTS -- which is also what a browser does with it, since the
+	// leading `<!-` opens a bogus comment that ends at the first `>`. Erring
+	// toward reporting is the only safe direction for a guard: a commented-out
+	// mount wrongly named costs an author one edit, where a real mount silently
+	// swallowed is the defect this file exists to prevent.
 	const joined = '<!-' + '<!-- x -->' + '- <TrackPreview /> -->';
-	assert.equal(withoutComments(joined).trim(), '');
+	assert.match(withoutComments(joined), /<TrackPreview/);
+	assert.ok(!withoutComments(joined).includes('<!--'));
 	assert.equal(withoutComments('<!-- <TrackPreview /> -->').trim(), '');
+	// An unterminated opener comments out the rest of the file, as it does in a
+	// browser -- so nothing after it is a mount, and no `<!--` survives.
+	assert.equal(withoutComments('<!-- <TrackPreview />').trim(), '');
+	assert.equal(withoutComments('/* <TrackPreview />').trim(), '');
+	assert.ok(!withoutComments('<!--<!-- x').includes('<!--'));
+	// Offsets are preserved, so line numbers still line up with the source.
+	assert.equal(withoutComments('<!-- x -->\nlive').split('\n')[1], 'live');
 	assert.match(withoutComments('<TrackPreview />'), /TrackPreview/);
 });
