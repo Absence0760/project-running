@@ -1120,6 +1120,8 @@ export const messages = {
 	"runDetail.public": "Public",
 	"runDetail.private": "Privé",
 	"runDetail.dnf": "DNF",
+	"runDetail.guidedRun": "Course guidée",
+	"runDetail.guidedRunNamed": "Guidée : {title}",
 	"runDetail.incomplete": "Incomplète",
 	"runDetail.incompleteHint":
 		"Ta montre a redémarré en pleine course. Ces totaux ne correspondent qu'à ce qu'elle avait enregistré jusque-là, pas à toute l'activité.",

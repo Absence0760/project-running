@@ -1119,6 +1119,8 @@ export const messages = {
 	"runDetail.public": "Público",
 	"runDetail.private": "Privado",
 	"runDetail.dnf": "DNF",
+	"runDetail.guidedRun": "Corrida guiada",
+	"runDetail.guidedRunNamed": "Guiada: {title}",
 	"runDetail.incomplete": "Incompleta",
 	"runDetail.incompleteHint":
 		"Seu relógio reiniciou no meio da corrida. Estes totais são apenas o que ele havia registrado até aquele ponto, não a atividade inteira.",

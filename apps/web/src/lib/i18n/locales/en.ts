@@ -1131,6 +1131,8 @@ export const en = {
 	"runDetail.public": "Public",
 	"runDetail.private": "Private",
 	"runDetail.dnf": "DNF",
+	"runDetail.guidedRun": "Guided run",
+	"runDetail.guidedRunNamed": "Guided: {title}",
 	"runDetail.incomplete": "Incomplete",
 	"runDetail.incompleteHint":
 		"Your watch restarted mid-run. These totals are only what it had recorded up to that point, not the whole activity.",
