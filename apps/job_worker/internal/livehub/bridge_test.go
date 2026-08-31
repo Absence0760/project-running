@@ -3,6 +3,7 @@ package livehub
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -253,4 +254,34 @@ func TestBridge_RunStartsCursorAtMaxAndForwardsOnlyNew(t *testing.T) {
 	}
 	cancel()
 	<-done
+}
+
+// decisions.md § 756. The Redis branch dropped the Bridge silently — no log
+// line, no metric, and the population it strands is the one the transport
+// rollover exists for. Whether the Bridge runs is now a stated answer.
+func TestBridgeSkipReasonNamesTheRedisDrop(t *testing.T) {
+	if got := BridgeSkipReason(NewHub(), "service-key"); got != "" {
+		t.Fatalf("an in-process hub with a service key runs the bridge; got %q", got)
+	}
+	if got := BridgeSkipReason(NewHub(), ""); got == "" {
+		t.Fatal("no service key means no live_run_pings read, which must be stated")
+	} else if !strings.Contains(got, "service key") {
+		t.Fatalf("the reason must name the missing service key; got %q", got)
+	}
+
+	redis := &RedisHub{}
+	got := BridgeSkipReason(redis, "service-key")
+	if got == "" {
+		t.Fatal("a Redis-backed hub runs no bridge, and saying nothing is the § 756 defect")
+	}
+	for _, want := range []string{"REDIS_URL", "legacy", "Realtime"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("the reason must name %q so a reader can act on it; got %q", want, got)
+		}
+	}
+	// A service key does not rescue the Redis case: the missing half is
+	// per-process state, not credentials.
+	if BridgeSkipReason(redis, "") == "" {
+		t.Fatal("a Redis hub with no service key still runs no bridge")
+	}
 }

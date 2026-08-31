@@ -668,6 +668,13 @@ func main() {
 	if redisHub, ok := hub.(*livehub.RedisHub); ok {
 		redisHub.StartGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
 	}
+	if skip := livehub.BridgeSkipReason(hub, serviceKey); skip != "" {
+		// A dropped bridge used to be silent on the Redis path, so the one
+		// population the transport rollover exists for — a hub spectator
+		// watching a runner still on legacy Realtime — saw nothing, and
+		// nothing in the log said why (decisions § 756).
+		logger.Warn("live-ping bridge: DISABLED", "reason", skip)
+	}
 	if inProc, ok := hub.(*livehub.Hub); ok {
 		inProc.StartGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
 		// Live-ping Bridge: republish legacy Supabase Realtime pings
@@ -682,8 +689,6 @@ func main() {
 			bridge := livehub.NewBridge(inProc, client, logger.With("component", "livehub-bridge"))
 			go bridge.Run(ctx)
 			logger.Info("live-ping bridge: enabled (Realtime → hub republish)")
-		} else {
-			logger.Warn("live-ping bridge: DISABLED — no service key; hub spectators won't see legacy-transport runs")
 		}
 	}
 	if authorizer != nil {
