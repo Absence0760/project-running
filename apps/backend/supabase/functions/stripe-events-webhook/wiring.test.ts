@@ -375,3 +375,32 @@ Deno.test('a reversal that is not a transition is logged, never silently dropped
     );
   }
 });
+
+Deno.test('the refund branch records which API era the endpoint is pinned to', () => {
+  // § 789 handled both refund-event eras because a webhook endpoint's pinned
+  // API version is dashboard configuration this repo cannot read. It cannot
+  // read it at BUILD time; every delivery carries it, and the point of this
+  // line is that an operator can find out which era their endpoint is actually
+  // on without opening the Stripe dashboard. Two properties, and the second is
+  // the one worth guarding: the grading must go through `refundEventsApiEra`,
+  // because a branch that logged the raw version would leave the reader to do
+  // the date comparison the helper exists to get right.
+  const start = SRC.indexOf('if (isRefundLifecycleEvent(event.type))');
+  assert(start !== -1, 'the refund-lifecycle branch is gone');
+  const end = SRC.indexOf('// Unhandled types', start);
+  assert(end > start, 'could not find the end of the refund-lifecycle branch');
+  const branch = SRC.slice(start, end);
+  assert(
+    branch.includes('refundEventsApiEra(event.apiVersion)'),
+    'the refund branch no longer grades the delivery API version',
+  );
+  assert(
+    branch.includes('event.apiVersion ?? '),
+    'the raw version is no longer logged beside the era — the era alone cannot be checked against 2024-10-28.acacia',
+  );
+  // And the version must survive the parse to be logged at all.
+  assert(
+    LIB.includes('apiVersion: typeof apiVersion === \'string\' ? apiVersion : null'),
+    'parseStripeEventEnvelope no longer carries api_version',
+  );
+});
