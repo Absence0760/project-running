@@ -114,6 +114,19 @@ func (w *Worker) handleDataExport(ctx context.Context, job *Job) error {
 		}
 		return err
 	}
+	// The payload says whose archive to build; the row says who will be
+	// handed the signed URL for it. A queue entry where the two disagree
+	// would put one subject's whole personal-data archive behind another
+	// subject's download link. `enqueue_data_export` derives both from
+	// one argument and `jobs` carries no client-writable policy, so no
+	// such row can be produced today — this is the assertion behind
+	// those two facts, and it is permanent: a rebuild cannot make a
+	// mismatched payload agree.
+	if row.UserID != p.UserID {
+		logger.Error("data export payload subject does not own the row", "row_user_id", row.UserID)
+		w.recordExportFailure(ctx, p.ExportJobID, "subject_mismatch", logger)
+		return errors.New("data export payload subject does not match the export row")
+	}
 	// A retry that arrives after the artifact already landed must not
 	// build a second one: the upload is the expensive half, and the
 	// first archive would be orphaned in Storage until the retention

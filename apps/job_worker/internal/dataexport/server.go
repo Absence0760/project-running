@@ -843,6 +843,14 @@ type extraSections struct {
 	name   string
 	arr    *jsonArray
 	counts map[string]int
+	// ownerPrefix is the subject's own Storage folder. A `storage_path`
+	// is a stored string handed to the service-role downloader, so it is
+	// checked against the caller the way the orphan sweep already checks
+	// the keys it lists — the CHECK constraint that ties the column to
+	// `owner_id` (20260622_001) is the guarantee, this is the assertion.
+	// Empty means no subject to attribute anything to, so nothing is
+	// collected.
+	ownerPrefix string
 	// photoPaths are the run-photo Storage keys the blob sweep below
 	// downloads. Keys, not rows: a path per photo is bounded by a few
 	// dozen bytes where the metadata row is not.
@@ -862,7 +870,7 @@ func (e *extraSections) write(entry string, rows []map[string]interface{}) error
 	}
 	for _, row := range rows {
 		if entry == "run_photos.json" {
-			if sp, ok := row["storage_path"].(string); ok && isSafeStoragePath(sp) {
+			if sp, ok := row["storage_path"].(string); ok && e.ownsStoragePath(sp) {
 				e.photoPaths = append(e.photoPaths, sp)
 			}
 		}
@@ -874,6 +882,12 @@ func (e *extraSections) write(entry string, rows []map[string]interface{}) error
 	return nil
 }
 
+// ownsStoragePath reports whether a run-photo key is safe to hand the
+// downloader AND belongs to the subject this archive is for.
+func (e *extraSections) ownsStoragePath(sp string) bool {
+	return isSafeStoragePath(sp) && e.ownerPrefix != "" && strings.HasPrefix(sp, e.ownerPrefix)
+}
+
 func (e *extraSections) closeCurrent() error {
 	if e.arr == nil {
 		return nil
@@ -881,6 +895,15 @@ func (e *extraSections) closeCurrent() error {
 	err := e.arr.close()
 	e.arr, e.name = nil, ""
 	return err
+}
+
+// ownerPrefixOf is the subject's own folder in a user-partitioned
+// Storage bucket, or "" when there is no subject.
+func ownerPrefixOf(userID string) string {
+	if userID == "" {
+		return ""
+	}
+	return userID + "/"
 }
 
 // isSafeStoragePath is defence in depth alongside the
@@ -1045,7 +1068,7 @@ func WriteBackupZip(ctx context.Context, w io.Writer, in BuildBackupZipInput, f 
 
 	// Extra personal-data tables, streamed section by section in the
 	// order the source walks them.
-	extras := &extraSections{zw: zw, counts: map[string]int{}}
+	extras := &extraSections{zw: zw, counts: map[string]int{}, ownerPrefix: ownerPrefixOf(in.UserID)}
 	if in.ExtraTables != nil {
 		emitErr = nil
 		extrasComp, err := in.ExtraTables(ctx, func(entry string, rows []map[string]interface{}) error {
@@ -1125,7 +1148,7 @@ func WriteBackupZip(ctx context.Context, w io.Writer, in BuildBackupZipInput, f 
 	// export still ships.
 	orphansAdded := 0
 	if f.ListObjects != nil && in.UserID != "" {
-		prefix := in.UserID + "/"
+		prefix := ownerPrefixOf(in.UserID)
 		type bucketWalk struct {
 			bucket   string
 			archived map[string]bool

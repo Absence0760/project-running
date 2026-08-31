@@ -250,6 +250,17 @@ func (s *Server) handleJobsLatest(w http.ResponseWriter, r *http.Request) {
 		if row.ErrorCode != "" {
 			body["error_code"] = row.ErrorCode
 		}
+	case row.Status == "ready" && row.ObjectPath == "":
+		// A `ready` row asserts that an artifact exists, and the object
+		// path is the whole of that assertion. Signing an empty path
+		// mints a URL for nothing, which reaches the subject as a
+		// download button that 404s — worse than being told the export
+		// failed, because it looks like their data is there. Both
+		// clients already refuse to render a ready job with no URL
+		// (§ 724); the server must not manufacture one either.
+		s.log().Error("dataexport: ready row carries no artifact path", "user_id", userID, "job_id", row.ID)
+		body["status"] = "failed"
+		body["error_code"] = "artifact_missing"
 	case row.Status == "ready":
 		// The 10-minute clock starts HERE, not when the build finished.
 		// A subject who closed the tab and came back an hour later gets
