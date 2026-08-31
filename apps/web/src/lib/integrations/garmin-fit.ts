@@ -320,10 +320,15 @@ export function buildHrZonesFromFit(
 	return { z1: last5[0], z2: last5[1], z3: last5[2], z4: last5[3], z5: last5[4] };
 }
 
-/// Normalise a FIT `sub_sport` enum value. Lower-cases and drops the
-/// uninformative `generic` / `all` placeholders + empties to null so we
-/// never persist a meaningless discipline. (persona round-5 F1)
-export function normalizeSubSport(raw: unknown): string | null {
+/// Normalise a FIT `sport` or `sub_sport` enum value. Lower-cases and
+/// drops the uninformative `generic` / `all` placeholders + empties to
+/// null so we never persist a meaningless discipline. (persona round-5 F1)
+///
+/// The decoder leaves an enum member its profile has no name for as the
+/// raw number, so a watch newer than the profile puts a `number` in both
+/// fields -- calling a string method on one throws out of the whole
+/// import, losing every activity in the archive rather than one field.
+export function normalizeSportToken(raw: unknown): string | null {
 	if (typeof raw !== 'string') return null;
 	const s = raw.trim().toLowerCase();
 	if (!s || s === 'generic' || s === 'all' || s === 'invalid') return null;
@@ -393,9 +398,9 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 		}
 	}
 
-	const sport = (session.sport ?? '').toLowerCase();
-	const rawSubSport = (session as { sub_sport?: string }).sub_sport;
-	const subSport = (rawSubSport ?? '').toLowerCase();
+	const sport = normalizeSportToken(session.sport) ?? '';
+	const rawSubSport = (session as { sub_sport?: unknown }).sub_sport;
+	const subSport = normalizeSportToken(rawSubSport) ?? '';
 	const indoor =
 		subSport.includes('treadmill') ||
 		subSport.includes('indoor') ||
@@ -465,7 +470,7 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 		garmin_file_id: garminFileId,
 		laps: buildCanonicalLaps(data.laps as RawFitLap[] | undefined),
 		indoor,
-		sub_sport: normalizeSubSport(rawSubSport),
+		sub_sport: normalizeSportToken(rawSubSport),
 		running_dynamics: buildRunningDynamics(session as RawFitSessionDynamics),
 		hr_zones: buildHrZonesFromFit(
 			(data as { hr_zone?: { high_bpm?: unknown }[] }).hr_zone,

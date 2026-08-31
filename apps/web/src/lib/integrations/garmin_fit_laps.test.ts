@@ -5,7 +5,7 @@ import {
 	buildCanonicalLaps,
 	garminExternalId,
 	fitCadenceToSpm,
-	normalizeSubSport,
+	normalizeSportToken,
 	buildRunningDynamics,
 	buildHrZonesFromFit,
 } from './garmin-fit';
@@ -99,24 +99,24 @@ test('buildCanonicalLaps — clamps missing/negative distance + rounds fractiona
 	);
 });
 
-test('normalizeSubSport — preserves a trail run discipline', () => {
+test('normalizeSportToken — preserves a trail run discipline', () => {
 	// F1: a trail run collapses to a generic activity_type='run'; the
 	// sub_sport datum is what tells the runner it was a trail.
-	assert.equal(normalizeSubSport('trail'), 'trail');
-	assert.equal(normalizeSubSport('Trail'), 'trail');
-	assert.equal(normalizeSubSport('  TREADMILL '), 'treadmill');
-	assert.equal(normalizeSubSport('track'), 'track');
+	assert.equal(normalizeSportToken('trail'), 'trail');
+	assert.equal(normalizeSportToken('Trail'), 'trail');
+	assert.equal(normalizeSportToken('  TREADMILL '), 'treadmill');
+	assert.equal(normalizeSportToken('track'), 'track');
 });
 
-test('normalizeSubSport — drops uninformative / missing placeholders to null', () => {
-	assert.equal(normalizeSubSport('generic'), null);
-	assert.equal(normalizeSubSport('all'), null);
-	assert.equal(normalizeSubSport('invalid'), null);
-	assert.equal(normalizeSubSport(''), null);
-	assert.equal(normalizeSubSport('   '), null);
-	assert.equal(normalizeSubSport(undefined), null);
-	assert.equal(normalizeSubSport(null), null);
-	assert.equal(normalizeSubSport(42), null);
+test('normalizeSportToken — drops uninformative / missing placeholders to null', () => {
+	assert.equal(normalizeSportToken('generic'), null);
+	assert.equal(normalizeSportToken('all'), null);
+	assert.equal(normalizeSportToken('invalid'), null);
+	assert.equal(normalizeSportToken(''), null);
+	assert.equal(normalizeSportToken('   '), null);
+	assert.equal(normalizeSportToken(undefined), null);
+	assert.equal(normalizeSportToken(null), null);
+	assert.equal(normalizeSportToken(42), null);
 });
 
 test('buildRunningDynamics — projects the fields a Running pod recorded', () => {
