@@ -14,17 +14,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { handleGenerate } from './handler';
+import { handleGenerate, type GenerateConfig } from './handler';
 import { ROUTE_PREFERENCES, buildCustomModel, type Fetcher, type RoutePreference } from './graphhopper';
 import { parsePreferenceApplied } from './graph_cycle';
 
 const GC = 'http://gc.local';
 const GH = 'http://gh.local';
 const AUTH = 'Bearer test-token';
-const GATE_CFG = {
+const GATE_CFG: GenerateConfig = {
 	publicSupabaseUrl: 'http://127.0.0.1:54321',
 	publicSupabaseAnonKey: 'sb_publishable_fake_local_anon_key',
 	bypassPaywallEnabled: false,
+	graphhopperUrl: undefined,
 };
 const asPro = async () => 'pro' as const;
 const START = { lat: 0, lng: 0 };
@@ -66,7 +67,11 @@ function byEngine(onCycle: Fetcher, onRoundTrip: Fetcher): Fetcher {
 	return (url, init) => (url.includes('/cycle') ? onCycle(url, init) : onRoundTrip(url, init));
 }
 
-async function generate(preference: RoutePreference | undefined, fetcher: Fetcher, cfg: object) {
+async function generate(
+	preference: RoutePreference | undefined,
+	fetcher: Fetcher,
+	cfg: Partial<GenerateConfig>,
+) {
 	return handleGenerate(
 		AUTH,
 		{
