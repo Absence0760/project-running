@@ -566,7 +566,7 @@ test('a floating channel is refused, whichever name it floats under', () => {
 		assert.equal(errors.length, 1, floating);
 		assert.equal(ok.length, 0, floating);
 		assert.match(errors[0], /not an exact MAJOR\.MINOR\.PATCH/);
-		assert.match(errors[0], new RegExp(floating.replace(/[.\-]/g, '\\$&')));
+		assert.match(errors[0], new RegExp(floating.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')));
 	}
 });
 

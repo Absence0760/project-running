@@ -51,10 +51,18 @@ function rel(file: string): string {
 }
 
 /** Source with comments blanked, so prose quoting the tag never trips the scan. */
-function withoutComments(source: string): string {
-	return source
-		.replace(/<!--[\s\S]*?-->/g, '')
-		.replace(/\/\*[\s\S]*?\*\//g, '')
+export function withoutComments(source: string): string {
+	// To a fixpoint. Removing one comment can JOIN the text either side of it
+	// into a new complete one -- `<!-` + `<!-- x -->` + `- ... -->` leaves
+	// `<!-- ... -->` after a single pass -- and this guard reads what survives
+	// as live markup, so a mount hidden that way would go unseen.
+	let out = source;
+	let previous = '';
+	while (out !== previous) {
+		previous = out;
+		out = out.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+	}
+	return out
 		.split('\n')
 		.map((line) => line.replace(/(?<!:)\/\/.*$/, ''))
 		.join('\n');
@@ -86,8 +94,15 @@ test('only a clip-aware wrapper mounts the unclipped renderer', () => {
 test('every permitted wrapper still performs the read that permits it', () => {
 	for (const [path, read] of Object.entries(CLIPPING_WRAPPERS)) {
 		const file = join(SRC, path);
-		assert.ok(statSync(file).isFile(), `${path} is permitted but no longer exists`);
-		const source = withoutComments(readFileSync(file, 'utf-8'));
+		// Read rather than stat-then-read: the permitted set is a claim about the
+		// file's CONTENT, so the read is the check and there is no window between.
+		let raw: string;
+		try {
+			raw = readFileSync(file, 'utf-8');
+		} catch {
+			throw new Error(`${path} is permitted but no longer readable`);
+		}
+		const source = withoutComments(raw);
 		assert.match(
 			source,
 			read,
@@ -126,4 +141,13 @@ test('the scan sees a bare mount and is not fooled by prose', () => {
 	assert.ok(!/<TrackPreview\b/.test(withoutComments('/* <TrackPreview /> */')));
 	// A differently-named component must not be read as this one.
 	assert.ok(!/<TrackPreview\b/.test(withoutComments('<TrackPreviewCard {points} />')));
+});
+
+test('a comment whose removal joins a new comment is still blanked', () => {
+	// One pass over this leaves `<!-- <TrackPreview /> -->`, which the scan
+	// reads as a live mount; the fixpoint blanks it.
+	const joined = '<!-' + '<!-- x -->' + '- <TrackPreview /> -->';
+	assert.equal(withoutComments(joined).trim(), '');
+	assert.equal(withoutComments('<!-- <TrackPreview /> -->').trim(), '');
+	assert.match(withoutComments('<TrackPreview />'), /TrackPreview/);
 });

@@ -1442,8 +1442,14 @@ export const REGISTRY = [
 ];
 
 /// The column list `FetchExportProfile` asks PostgREST for. Read out of the
-/// concatenated Go string literal rather than matched in place, so a rail that
-/// stops being extractable reports as blind instead of as empty.
+/// Go string literal rather than matched in place, so a rail that stops being
+/// extractable reports as blind instead of as empty.
+///
+/// The literal is located and then SLICED rather than matched by a repeated
+/// group: `(?:"..."\s*\+?\s*)+` is ambiguous at every repetition, which is
+/// exponential backtracking on a near-miss input. Nothing here is
+/// attacker-controlled, but a guard that can hang the job it runs in is a
+/// guard that gets disabled.
 /** @param {string} src @returns {string[]} */
 export function goExportProfileColumns(src) {
 	// Anchored on the function, because supabase.go issues many such calls and
@@ -1451,17 +1457,24 @@ export function goExportProfileColumns(src) {
 	const start = src.search(/func \([^)]*\) FetchExportProfile\(/);
 	if (start === -1) return [];
 	const body = src.slice(start, start + 4000);
-	const call = /q\.Set\("select",\s*((?:"[^"]*"\s*\+?\s*)+)\)/.exec(body);
-	if (!call) return [];
-	return splitColumns(call[1]);
+	return splitColumns(sliceLiteral(body, 'q.Set("select",', ')'));
 }
 
 /// The same list on the Edge Function rail.
 /** @param {string} src @returns {string[]} */
 export function tsExportProfileColumns(src) {
-	const decl = /export const PROFILE_SELECT\s*=\s*((?:'[^']*'\s*\+?\s*)+);/.exec(src);
-	if (!decl) return [];
-	return splitColumns(decl[1]);
+	return splitColumns(sliceLiteral(src, 'export const PROFILE_SELECT', ';'));
+}
+
+/// The text between a literal opener and the first `end` after it. Both
+/// searches are plain `indexOf`, so the cost is linear in the source.
+/** @param {string} src @param {string} opener @param {string} end @returns {string} */
+function sliceLiteral(src, opener, end) {
+	const at = src.indexOf(opener);
+	if (at === -1) return '';
+	const from = at + opener.length;
+	const to = src.indexOf(end, from);
+	return to === -1 ? '' : src.slice(from, to);
 }
 
 /** @param {string} literal @returns {string[]} */
