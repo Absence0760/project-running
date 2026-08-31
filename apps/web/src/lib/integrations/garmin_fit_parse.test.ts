@@ -352,3 +352,72 @@ test('parseFitBuffer — core scalars round-trip', async () => {
 	assert.equal(parsed!.total_ascent_m, 250);
 	assert.equal(parsed!.indoor, false);
 });
+
+/// A session whose `sport` and `sub_sport` carry enum members the decoder's
+/// profile has no name for, so it hands them back as the raw numbers. A
+/// watch newer than the bundled profile produces exactly this file.
+function buildSyntheticUnknownSportFit(): ArrayBuffer {
+	const chunks: Buffer[] = [];
+	function defMsg(localNum: number, globalNum: number, fields: [number, number, number][]) {
+		const def = Buffer.alloc(6 + fields.length * 3);
+		def[0] = 0x40 | localNum;
+		def.writeUInt16LE(globalNum, 3);
+		def[5] = fields.length;
+		fields.forEach(([num, size, base], i) => {
+			def[6 + i * 3] = num;
+			def[6 + i * 3 + 1] = size;
+			def[6 + i * 3 + 2] = base;
+		});
+		chunks.push(def);
+	}
+	const t0 = 1000000000;
+
+	defMsg(0, 0, [[0, 1, 0x00], [4, 4, 0x86], [3, 4, 0x8c]]);
+	{
+		const d = Buffer.alloc(1 + 1 + 4 + 4);
+		d[0] = 0; d[1] = 4; d.writeUInt32LE(t0, 2); d.writeUInt32LE(24680, 6);
+		chunks.push(d);
+	}
+
+	defMsg(1, 18, [
+		[2, 4, 0x86], [5, 1, 0x00], [6, 1, 0x00], [7, 4, 0x86], [9, 4, 0x86],
+	]);
+	{
+		const d = Buffer.alloc(1 + 4 + 1 + 1 + 4 + 4);
+		let o = 0;
+		d[o] = 1; o += 1;
+		d.writeUInt32LE(t0, o); o += 4;
+		d[o] = 250; o += 1; // sport: no name in the profile
+		d[o] = 249; o += 1; // sub_sport: no name in the profile
+		d.writeUInt32LE(1800 * 1000, o); o += 4;
+		d.writeUInt32LE(5000 * 100, o); o += 4;
+		chunks.push(d);
+	}
+
+	const body = Buffer.concat(chunks);
+	const header = Buffer.alloc(14);
+	header[0] = 14;
+	header[1] = 0x10;
+	header.writeUInt16LE(2140, 2);
+	header.writeUInt32LE(body.length, 4);
+	header.write('.FIT', 8, 'ascii');
+	header.writeUInt16LE(crc16(header.subarray(0, 12)), 12);
+	const full = Buffer.concat([header, body]);
+	const crc = Buffer.alloc(2);
+	crc.writeUInt16LE(crc16(full), 0);
+	const out = Buffer.concat([full, crc]);
+	return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+}
+
+test('parseFitBuffer — an unnamed sport enum degrades, it does not throw', async () => {
+	// The decoder leaves an enum member it cannot name as a number. Reading
+	// it as a string threw out of parseFitBuffer, which loses every activity
+	// in the archive rather than one field of one of them.
+	const parsed = await parseFitBuffer(buildSyntheticUnknownSportFit());
+	assert.ok(parsed, 'the session still parses');
+	assert.equal(parsed!.activity_type, null, 'an unnameable sport claims no activity type');
+	assert.equal(parsed!.sub_sport, null, 'and no discipline');
+	assert.equal(parsed!.indoor, false, 'and is not guessed to be indoor');
+	assert.equal(parsed!.distance_m, 5000);
+	assert.equal(parsed!.duration_s, 1800);
+});

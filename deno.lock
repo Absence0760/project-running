@@ -433,7 +433,7 @@
             "npm:@types/node@^26.4.0",
             "npm:@zip.js/zip.js@^2.8.60",
             "npm:esbuild@0.28.2",
-            "npm:fit-file-parser@^4.1.0",
+            "npm:fit-file-parser@^5.0.2",
             "npm:html-to-image@^1.11.13",
             "npm:isomorphic-dompurify@^3.23.0",
             "npm:jszip@^3.10.1",
