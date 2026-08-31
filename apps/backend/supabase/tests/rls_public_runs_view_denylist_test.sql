@@ -7,6 +7,12 @@
 --                                              overall_place, chip_time,
 --                                              perceived_effort
 --   20260724_001_public_runs_strip_run_number.sql — run_number
+--   20270214_001_race_calendar.sql          — gun_time, age_group_place,
+--                                              age_group
+--   20270401_001_safety_overdue_escalation.sql — safety_escalated_at
+--   20270410_001_safety_sms_escalation.sql  — expected_return_at
+--   20270430_001_public_runs_strip_watch_workout.sql — watch_workout
+--   20270627000001_public_runs_strip_guided_run.sql  — guided_run_id
 -- Each addition closed a real audit finding (race-source PII, perceived
 -- effort leaking through seed rows, parkrun attendance counter). Every
 -- one is a "you only catch the leak if someone tests for it" — the
@@ -16,8 +22,17 @@
 -- This test asserts the full denylist by inserting a runs row carrying
 -- every sensitive key, then SELECTing through the view as anon and
 -- verifying none survive. Adding a new key to the strip list = add it
--- to the array below; removing a key = explicit signal that the public-
--- ness gate has shifted (audit it).
+-- to the array below AND to the fixture above it; removing a key =
+-- explicit signal that the public-ness gate has shifted (audit it).
+--
+-- Both halves are load-bearing and neither is self-checking: a key the
+-- array names but the fixture never inserts is asserted against a bag
+-- that could not have carried it, and a key the view strips but the
+-- array omits is not asserted at all. That second failure is the one
+-- that happened — the array stood four keys behind the view until
+-- `scripts/check_shared_constants.mjs` grew an entry that reads the
+-- live view's projection and this array and compares them as sets
+-- (decisions.md § 787). Keep both in step; the guard fails the PR.
 --
 -- Companion: `rls_runs_test.sql` covers strava_id + plan_workout_id +
 -- the row-level visibility chain. This file is denylist-coverage only.
@@ -56,12 +71,19 @@ insert into runs (
     -- Plan-linkage / workout adherence
     'plan_workout_id', '00000000-0000-0000-0000-000000000000',
     'workout_step_results', '[]'::jsonb, 'workout_adherence', 0.95,
+    -- Custom-watch planned-vs-actual trail (20270430_001)
+    'watch_workout', '{"step_total": 2, "adherence": "completed"}'::jsonb,
+    -- Guided-run script attribution (20270627000001)
+    'guided_run_id', 'first-timer-15',
     -- Recorder internal state
     'last_modified_at', '2026-04-15T09:35:00Z',
     'recovered_from_crash', true, 'in_progress_saved_at', '2026-04-15T09:33:00Z',
     'in_progress', false, 'manual_entry', false,
     -- Indoor / GPS-source flags
     'indoor_estimated', false, 'distance_source', 'gps',
+    -- Safety-escalation internals (20270401_001, 20270410_001)
+    'safety_escalated_at', '2026-04-15T11:00:00Z',
+    'expected_return_at', '2026-04-15T10:30:00Z',
     -- Race-source PII (20260714_001)
     'race_name', 'parkrun #1', 'bib', '777',
     'overall_place', 12, 'chip_time', '24:18',
@@ -93,9 +115,16 @@ declare
     'strava_id', 'garmin_id', 'imported_from', 'imported_at',
     'health_connect_type', 'strava_activity_type', 'source_file',
     'max_bpm', 'plan_workout_id', 'workout_step_results',
-    'workout_adherence', 'last_modified_at', 'recovered_from_crash',
+    'workout_adherence',
+    -- Custom-watch planned-vs-actual trail (20270430_001)
+    'watch_workout',
+    -- Guided-run script attribution (20270627000001)
+    'guided_run_id',
+    'last_modified_at', 'recovered_from_crash',
     'in_progress_saved_at', 'in_progress', 'manual_entry',
     'indoor_estimated', 'distance_source',
+    -- Safety-escalation internals (20270401_001, 20270410_001)
+    'safety_escalated_at', 'expected_return_at',
     'race_name', 'bib', 'overall_place', 'chip_time', 'perceived_effort',
     'gun_time', 'age_group_place', 'age_group',
     'run_number'
