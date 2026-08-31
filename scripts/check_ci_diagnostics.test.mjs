@@ -1,5 +1,8 @@
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 
 import {
 	ANNOTATION,
@@ -18,6 +21,8 @@ import {
 	readWorkflows,
 	runBody,
 } from './check_ci_diagnostics.mjs';
+
+const CENSUS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * @param {string} name
@@ -408,4 +413,203 @@ test('the repo’s real workflows carry no misattributable diagnosis', () => {
 		'parity-matrix is derived, so registering it by hand would be the coupling this replaced',
 	);
 	assert.ok(gate.covered >= 20, `expected ci.yml's jobs to be gated, found ${gate.covered}`);
+});
+
+// ---------------------------------------------------------------------------
+// A guard that no workflow invokes enforces nothing, and a guard invoked only
+// by a workflow the required check does not wait for blocks nothing.
+//
+// decisions.md § 773 found `check_root_scripts.mjs` in that first state — "a
+// guard enforcing nothing for as long as it has existed", the § 439 shape, and
+// the filing that reported four misreads in it did not notice. § 775 found the
+// second state: `web-bundle-budget.yml` was its own workflow, in no `needs:` of
+// the `CI gate` aggregator, so a red budget did not block a merge. Both were
+// found by reading rather than by anything that would find the next one.
+//
+// The census below is that thing. It is a test rather than a rule inside
+// `check_ci_diagnostics.mjs` because the answer for a guard living outside
+// ci.yml is a judgement — some of them legitimately do — and a judgement
+// recorded as a named entry with a reason is the shape § 775 settled on for
+// exactly this ("a moving boundary exempts things nobody has read; a name
+// exempts one thing somebody did").
+// ---------------------------------------------------------------------------
+
+/// Directories holding this repo's own guards.
+const GUARD_DIRS = ['scripts', 'apps/web/scripts', 'apps/backend/scripts'];
+
+/// Files in those directories that are not guards: shared lexers and helpers
+/// reached only through a consumer, generators, and local dev tools. Each is
+/// named rather than pattern-matched, so a new guard cannot join the list by
+/// being spelled a certain way.
+const NOT_A_GUARD = new Map([
+	['scripts/comment_strip.mjs', 'a lexer, consumed by four guards'],
+	['scripts/markdown_lines.mjs', 'a lexer, consumed by three guards'],
+	['scripts/shell_lex.mjs', 'a lexer, consumed by two guards'],
+	['scripts/web_icon_font.mjs', "the icon extractor, consumed by the generator and its suite"],
+	['scripts/gen_web_icon_font.mjs', 'a generator; its output is what the guard checks'],
+	['scripts/sync_deno_lock.mjs', 'a syncer; ci.yml runs it with --check'],
+	['scripts/dev_run_graphhopper.mjs', 'a local dev tool'],
+	['scripts/dev_run_osrm.mjs', 'a local dev tool'],
+	['scripts/seed-run-tracks.mjs', 'a local dev seeding tool'],
+	['apps/backend/scripts/sql_lex.mjs', 'a lexer, consumed by four guards'],
+	['apps/backend/scripts/edge_function_neuter.mjs', "the vacuity guard's mutation operator"],
+	['apps/backend/scripts/pgtap_definer_neutralisers.mjs', "the pgtap guard's mutation operator"],
+	['apps/web/scripts/env_isolation.mjs', 'a vite plugin, loaded by the web build'],
+	['apps/web/scripts/cross_client_roundtrip_read.mjs', 'a round-trip lane read half'],
+	['apps/web/scripts/cross_client_roundtrip_route_read.mjs', 'a round-trip lane read half'],
+	['apps/web/scripts/cross_client_roundtrip_live_read.mjs', 'a round-trip lane read half'],
+	['apps/web/scripts/cross_client_roundtrip_sync_read.mjs', 'a round-trip lane read half'],
+]);
+
+/// Guards whose invoking workflow is NOT ci.yml, and therefore whose failure
+/// the required `CI gate` status check does not wait for. Each entry says which
+/// workflow runs it and why that is the arrangement; a guard that leaves this
+/// state, or a stale entry, fails below.
+const OFF_THE_GATE = new Map([
+	[
+		'apps/web/scripts/check_production_env.mjs',
+		'release-web.yml at tag time, plus env-isolation.yml on a path filter — so a ' +
+			'regression to the release-build env guard reaches no required check on the PR ' +
+			'that causes it. Same shape as the bundle budget before § 775 moved it into ' +
+			'build-web.',
+	],
+	[
+		'scripts/check_compliance_drift.mjs',
+		'compliance-drift.yml, deliberately advisory (COMPLIANCE_DRIFT_MODE=warn) — it ' +
+			'reports findings and never fails the job, so being off the gate is the design ' +
+			'rather than a gap.',
+	],
+]);
+
+/** @returns {string[]} repo-relative paths of every .mjs under GUARD_DIRS */
+function allScripts() {
+	return GUARD_DIRS.flatMap((dir) =>
+		readdirSync(join(CENSUS_ROOT, dir))
+			.filter((f) => f.endsWith('.mjs'))
+			.map((f) => `${dir}/${f}`),
+	).sort();
+}
+
+/** Every workflow and composite action, as `{ name, text }`. */
+function allAutomation() {
+	const files = readWorkflows(WORKFLOW_DIR).map((f) => ({ name: f.name, text: f.text }));
+	const actionDir = join(CENSUS_ROOT, '.github', 'actions');
+	for (const entry of readdirSync(actionDir, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		for (const f of ['action.yml', 'action.yaml']) {
+			const abs = join(actionDir, entry.name, f);
+			if (!existsSync(abs)) continue;
+			files.push({ name: `actions/${entry.name}/${f}`, text: readFileSync(abs, 'utf-8') });
+		}
+	}
+	return files;
+}
+
+/// Every package.json script this repo declares, as `name -> body`. A workflow
+/// reaches several guards through one (`npm run check:check-constraints`), so a
+/// census reading only the workflow text would report those as run by nothing.
+function packageScripts() {
+	/** @type {Map<string, string>} */
+	const out = new Map();
+	for (const manifest of ['package.json', 'apps/web/package.json', 'apps/backend/package.json']) {
+		const abs = join(CENSUS_ROOT, manifest);
+		if (!existsSync(abs)) continue;
+		const scripts = JSON.parse(readFileSync(abs, 'utf-8')).scripts ?? {};
+		for (const [name, body] of Object.entries(scripts)) {
+			out.set(name, `${out.get(name) ?? ''}\n${body}`);
+		}
+	}
+	return out;
+}
+
+/// A workflow file's commands, with the package.json scripts they run spliced
+/// in — and with comments and `echo`'d reproduce lines removed.
+///
+/// Those two exclusions are the point. A comment or an `echo` makes the same
+/// claim a command does and executes nothing, and § 773's `check_root_scripts`
+/// was named in a comment inside the very file that did not run it. A census
+/// reading whole file text would have scored it as covered.
+/** @param {{name: string, text: string}} file @param {Map<string,string>} scripts */
+function commandsOf(file, scripts) {
+	const lines = (file.name.startsWith('actions/')
+		? file.text
+		: parseSteps(file.text)
+				.map((step) => runBody(step))
+				.join('\n')
+	)
+		.split('\n')
+		.filter((line) => !/^\s*#/.test(line) && !/^\s*echo\b/.test(line));
+	const commands = lines.join('\n');
+	const expanded = [commands];
+	for (const [name, body] of scripts) {
+		if (new RegExp(`(?:npm run|pnpm run|pnpm|npm exec|yarn)\\s+${name.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`).test(commands)) {
+			expanded.push(body);
+		}
+	}
+	return expanded.join('\n');
+}
+
+/** @param {string} path @param {{name: string, text: string}[]} automation */
+function invokers(path, automation) {
+	const base = path.split('/').pop() ?? '';
+	const scripts = packageScripts();
+	return automation.filter((f) => commandsOf(f, scripts).includes(base)).map((f) => f.name);
+}
+
+test('every guard this repo ships is invoked by some workflow', () => {
+	const automation = allAutomation();
+	const guards = allScripts().filter((p) => !p.endsWith('.test.mjs') && !NOT_A_GUARD.has(p));
+	assert.ok(guards.length >= 20, `expected the guard population, found ${guards.length}`);
+	assert.deepEqual(
+		guards.filter((p) => invokers(p, automation).length === 0),
+		[],
+		'a guard no workflow runs enforces nothing for as long as it exists (decisions § 439 / § 773). ' +
+			'Wire it into a job, or name it in NOT_A_GUARD with what it actually is.',
+	);
+});
+
+test("every guard's own unit suite exists and is run by some workflow", () => {
+	const automation = allAutomation();
+	const guards = allScripts().filter((p) => !p.endsWith('.test.mjs') && !NOT_A_GUARD.has(p));
+	const missing = guards.filter((p) => !existsSync(join(CENSUS_ROOT, p.replace(/\.mjs$/, '.test.mjs'))));
+	assert.deepEqual(missing, [], 'a guard with no suite of its own is one nothing proves fires');
+	assert.deepEqual(
+		guards
+			.map((p) => p.replace(/\.mjs$/, '.test.mjs'))
+			.filter((p) => invokers(p, automation).length === 0),
+		[],
+		"a guard whose own tests no job runs can regress into passing over anything, and " +
+			'the guard would still report success (decisions § 711).',
+	);
+});
+
+test('the guards the required gate does not wait for are named, with a reason', () => {
+	const automation = allAutomation();
+	const guards = allScripts().filter((p) => !p.endsWith('.test.mjs') && !NOT_A_GUARD.has(p));
+	const offGate = guards.filter((p) => !invokers(p, automation).includes('ci.yml'));
+	assert.deepEqual(
+		offGate.filter((p) => !OFF_THE_GATE.has(p)),
+		[],
+		'the required status check is a job named `CI gate` inside ci.yml, so a guard run ' +
+			'only by another workflow blocks no merge (decisions § 775). Move it into a ci.yml ' +
+			'job, or record it in OFF_THE_GATE with which workflow runs it and why.',
+	);
+	assert.deepEqual(
+		[...OFF_THE_GATE.keys()].filter((p) => !offGate.includes(p)),
+		[],
+		'an OFF_THE_GATE entry for a guard that ci.yml now runs is cover for nothing — delete it.',
+	);
+	for (const [path, why] of OFF_THE_GATE) {
+		assert.ok(existsSync(join(CENSUS_ROOT, path)), `OFF_THE_GATE names ${path}, which is gone`);
+		assert.ok(why.length > 40, `OFF_THE_GATE's reason for ${path} has to say something`);
+	}
+});
+
+test('a NOT_A_GUARD entry that no longer exists fails rather than sitting as cover', () => {
+	const present = new Set(allScripts());
+	assert.deepEqual(
+		[...NOT_A_GUARD.keys()].filter((p) => !present.has(p)),
+		[],
+		'a list of exemptions that has stopped describing the tree exempts nothing (decisions § 775)',
+	);
 });
