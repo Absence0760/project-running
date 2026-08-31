@@ -380,20 +380,20 @@ Deno.test('refundReversed — the accepted set is exactly two, matched case-sens
   ];
   for (const status of reversed) {
     assertEquals(
-      refundReversed({ id: 're_1', paymentIntentId: 'pi_1', status, failureReason: null }),
+      refundReversed({ id: 're_1', paymentIntentId: 'pi_1', status, amountCents: null, failureReason: null }),
       true,
       status,
     );
   }
   for (const status of inFlightOrSettled) {
     assertEquals(
-      refundReversed({ id: 're_1', paymentIntentId: 'pi_1', status, failureReason: null }),
+      refundReversed({ id: 're_1', paymentIntentId: 'pi_1', status, amountCents: null, failureReason: null }),
       false,
       status,
     );
   }
   assertEquals(
-    refundReversed({ id: 're_1', paymentIntentId: 'pi_1', status: null, failureReason: null }),
+    refundReversed({ id: 're_1', paymentIntentId: 'pi_1', status: null, amountCents: null, failureReason: null }),
     false,
     'an unreadable status says nothing',
   );
