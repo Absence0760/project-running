@@ -32,8 +32,9 @@ export const COLUMN_LIMITS = {
 	// produces a calorie target instead of an error. 250 is the same judgement
 	// at the other end, well inside the column's 500.
 	'body_metrics.weight_kg': { kind: 'value', min: 20, max: 250 },
-	// The column allows anything above 0; 50 cm is below every human who can
-	// hold a phone, and catches a height typed in feet.
+	// 50 cm is below every human who can hold a phone, and catches a height
+	// typed in feet. The maximum is EQUAL to the column's own 300 — there is no
+	// height between them to be stricter about.
 	'user_profiles.height_cm': { kind: 'value', min: 50, max: 300 },
 	// The race-director weigh-in, where the column's own 20..400 is already the
 	// right range — a runner is weighed against their own start baseline, so
@@ -58,6 +59,39 @@ export const COLUMN_LIMITS = {
 } as const satisfies Record<string, ColumnLimit>;
 
 export type ColumnLimitKey = keyof typeof COLUMN_LIMITS;
+
+/**
+ * What the COLUMN accepts, which is a different question from what a client
+ * may send.
+ *
+ * `COLUMN_LIMITS` bounds an INPUT: it is the narrowest thing a composer should
+ * offer, and being conservative there costs nothing. This map is the opposite
+ * direction — the ceiling a defensive filter over a value read BACK out of the
+ * database must use, so that a row the column legitimately holds is not
+ * discarded as garbage. `nutrition_targets` is the case: it refuses a stored
+ * profile whose weight or height is non-physical and returns null, which hides
+ * the calorie rings. Written against the client input bound it would hide them
+ * for a runner the body-metrics screen never let type that weight in the first
+ * place; written as a literal it would go on hiding them after a CHECK was
+ * widened, silently, on both platforms, with every mirror test passing.
+ *
+ * So the number is the column's, and the guard in
+ * `scripts/check_shared_constants.mjs` resolves each column's CHECK by
+ * replaying every migration and demands EQUALITY — not containment, which is
+ * what it demands of `COLUMN_LIMITS`. A CHECK widened to 600 fails the PR that
+ * widens it and names this line. decisions § 819.
+ */
+export const COLUMN_CHECK_MAX = {
+	'body_metrics.weight_kg': 500,
+	'user_profiles.height_cm': 300
+} as const satisfies Record<string, number>;
+
+export type ColumnCheckMaxKey = keyof typeof COLUMN_CHECK_MAX;
+
+/** The largest value the column's own CHECK admits, in its canonical unit. */
+export function columnCheckMax(key: ColumnCheckMaxKey): number {
+	return COLUMN_CHECK_MAX[key];
+}
 
 /** The inclusive value range for a column, in the column's canonical unit. */
 export function valueLimit(key: ColumnLimitKey): { min: number; max: number } {
