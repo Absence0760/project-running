@@ -1172,7 +1172,7 @@ class LocalRunStore extends ChangeNotifier {
     final pendingDeletes = await _readPendingRemoteDeletes();
     if (pendingDeletes != null) _pendingRemoteDeletes.addAll(pendingDeletes);
 
-    sweepAtomicWriteOrphans(_dir,
+    sweepStoreScratchFiles(_dir,
         onError: (m) => debugPrint('local_run_store: $m'));
 
     // listSync is intentional: the async stream form (`_dir.list()`)

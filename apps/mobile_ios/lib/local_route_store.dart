@@ -631,7 +631,7 @@ class LocalRouteStore extends ChangeNotifier {
     _ownerTagsTouched.clear();
     final dir = _dir;
     if (dir == null) return; // init() not yet completed — nothing to load.
-    sweepAtomicWriteOrphans(dir,
+    sweepStoreScratchFiles(dir,
         onError: (m) => debugPrint('local_route_store: $m'));
     // listSync is intentional — see LocalRunStore._loadAll for the
     // explanation (async _dir.list() deadlocks under `testWidgets`).

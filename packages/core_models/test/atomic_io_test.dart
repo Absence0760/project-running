@@ -64,7 +64,7 @@ void main() {
     expect(decoded['i'], inInclusiveRange(0, 7));
   });
 
-  group('sweepAtomicWriteOrphans', () {
+  group('sweepStoreScratchFiles', () {
     test('deletes a stale temp sibling and spares a fresh one', () {
       // The orphan a crashed write leaves behind is invisible to every store
       // listing (they all filter on `.json`), so it is never pruned and holds
@@ -75,7 +75,7 @@ void main() {
       final fresh = File('${dir.path}/b.json.1.tmp')..writeAsStringSync('{}');
       final keeper = File('${dir.path}/c.json')..writeAsStringSync('{}');
 
-      sweepAtomicWriteOrphans(dir);
+      sweepStoreScratchFiles(dir);
 
       expect(stale.existsSync(), isFalse);
       // The age gate is what keeps the sweep off a concurrent writer's
@@ -85,10 +85,26 @@ void main() {
       expect(keeper.existsSync(), isTrue);
     });
 
+    test('drops a leftover .lock outright, with no age gate', () {
+      // Residue of the per-sidecar FileLock the run and route stores held
+      // until § 829 measured that a POSIX record lock, owned by the process,
+      // excluded nothing in it. Nothing writes one any more, so an install
+      // upgrading past that change must not keep them forever.
+      final lock = File('${dir.path}/synced_ids.json.lock')
+        ..writeAsStringSync('');
+      final keeper = File('${dir.path}/synced_ids.json')
+        ..writeAsStringSync('{}');
+
+      sweepStoreScratchFiles(dir);
+
+      expect(lock.existsSync(), isFalse);
+      expect(keeper.existsSync(), isTrue);
+    });
+
     test('a missing directory is reported, not thrown', () {
       final gone = Directory('${dir.path}/nope');
       final errors = <String>[];
-      sweepAtomicWriteOrphans(gone, onError: errors.add);
+      sweepStoreScratchFiles(gone, onError: errors.add);
       expect(errors, hasLength(1));
     });
   });

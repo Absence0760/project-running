@@ -56,7 +56,7 @@ class WatchIngestQueue {
       _queueDir.createSync(recursive: true);
     }
     _sweepRejected();
-    cm.sweepAtomicWriteOrphans(_queueDir,
+    cm.sweepStoreScratchFiles(_queueDir,
         onError: (m) => debugPrint('WatchIngestQueue: $m'));
     // Hydrate the in-memory cache from the sidecar so enqueues that
     // run before the first setLastKnownOwner call still carry the

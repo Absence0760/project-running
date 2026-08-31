@@ -45,30 +45,41 @@ Future<void> writeJsonAtomic(File file, Object? json) =>
 /// store instances over the same directories).
 const Duration kAtomicOrphanMinAge = Duration(hours: 1);
 
-/// Delete `<name>.<n>.tmp` files left in [dir] when the process died between
-/// [writeStringAtomic]'s flush and its rename. Every store listing filters on
-/// `.json`, so an orphan is invisible to the store and otherwise sits on disk
-/// forever holding a full row — a GPS track, a route's waypoints — that
-/// outlives sign-out. Synchronous on purpose: it runs inside the cold-load
-/// directory walk, which must stay on `listSync` (decisions §48). [onError]
-/// lets a Flutter caller route failures to `debugPrint`; this package has no
-/// logger of its own.
-void sweepAtomicWriteOrphans(
+/// Delete the scratch files a store directory accumulates but never lists.
+///
+/// Two kinds. A `<name>.<n>.tmp` is left when the process died between
+/// [writeStringAtomic]'s flush and its rename; every store listing filters on
+/// `.json`, so it is invisible to the store and otherwise sits on disk forever
+/// holding a full row — a GPS track, a route's waypoints — that outlives
+/// sign-out. Those are age-gated by [kAtomicOrphanMinAge] because a genuinely
+/// concurrent writer may own one. A `<name>.lock` is residue of the
+/// `FileLock.blockingExclusive` the run and route stores held over their
+/// sidecar merges until § 829 measured that a POSIX record lock, being owned
+/// by the process, excluded nothing in it. Nothing writes one any more, so
+/// they are dropped outright; deleting a file another process holds an fcntl
+/// lock on is safe, the lock lives on the inode.
+///
+/// Synchronous on purpose: it runs inside the cold-load directory walk, which
+/// must stay on `listSync` (decisions §48). [onError] lets a Flutter caller
+/// route failures to `debugPrint`; this package has no logger of its own.
+void sweepStoreScratchFiles(
   Directory dir, {
   void Function(String message)? onError,
 }) {
   final cutoff = DateTime.now().subtract(kAtomicOrphanMinAge);
   try {
     for (final entity in dir.listSync()) {
-      if (entity is! File || !entity.path.endsWith('.tmp')) continue;
+      if (entity is! File) continue;
+      final isTemp = entity.path.endsWith('.tmp');
+      if (!isTemp && !entity.path.endsWith('.lock')) continue;
       try {
-        if (entity.statSync().modified.isAfter(cutoff)) continue;
+        if (isTemp && entity.statSync().modified.isAfter(cutoff)) continue;
         entity.deleteSync();
       } catch (e) {
-        onError?.call('orphan sweep failed ${entity.path}: $e');
+        onError?.call('scratch sweep failed ${entity.path}: $e');
       }
     }
   } catch (e) {
-    onError?.call('orphan sweep failed: $e');
+    onError?.call('scratch sweep failed: $e');
   }
 }

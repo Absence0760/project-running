@@ -254,7 +254,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       }
     }
 
-    sweepAtomicWriteOrphans(d, onError: (m) => debugPrint('$debugLabel: $m'));
+    sweepStoreScratchFiles(d, onError: (m) => debugPrint('$debugLabel: $m'));
 
     // Reuse a valid, matching on-disk index for the summary view — its id-set
     // must equal the on-disk row-file id-set (membership only, no reads). A
