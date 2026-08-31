@@ -11,10 +11,10 @@
 //   1. A `Future.delayed` inside `tester.runAsync` is a real-clock wait. Every
 //      one that remains is listed here with the reason § 723 recorded for it,
 //      and a site that is neither listed nor converted fails the suite.
-//   2. A file-local `_pumpUntil` wrapper must require its own `describe`. A
-//      deadline that expires has to say which condition never held; a wrapper
-//      answering "the screen to reach the expected state" for eight different
-//      waits has given that away.
+//   2. A file-local wrapper that takes the PREDICATE per call site must take
+//      its `describe` too. A deadline that expires has to say which condition
+//      never held; a wrapper answering "the screen to reach the expected
+//      state" for eight different waits has given that away.
 
 import 'dart:io';
 
