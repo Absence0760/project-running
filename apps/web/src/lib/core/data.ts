@@ -86,6 +86,8 @@ import type { YearInRunningRecap } from '../runs/recap';
 import { mergeRecapRuns, recapYearWindow } from '../runs/recap_window';
 import type {
 	CoachAthleteStatus,
+	FinisherStatus,
+	RaceSessionStatus,
 	SessionPlan,
 	SessionPlanBlock,
 	SessionPlanItem,
@@ -3630,7 +3632,7 @@ export interface EventResultRow {
 	duration_s: number;
 	distance_m: number;
 	rank: number | null;
-	finisher_status: 'finished' | 'dnf' | 'dns';
+	finisher_status: FinisherStatus;
 	age_grade_pct: number | null;
 	note: string | null;
 	created_at: string;
@@ -3697,7 +3699,7 @@ export async function submitEventResult(params: {
 	durationS: number;
 	distanceM: number;
 	runId?: string | null;
-	finisherStatus?: 'finished' | 'dnf' | 'dns';
+	finisherStatus?: FinisherStatus;
 	ageGradePct?: number | null;
 	note?: string | null;
 }): Promise<void> {
@@ -3913,7 +3915,7 @@ export async function fetchRecentRunsForPicker(limit = 20): Promise<RecentRunOpt
 export interface RaceSessionRow {
 	event_id: string;
 	instance_start: string;
-	status: 'armed' | 'running' | 'finished' | 'cancelled';
+	status: RaceSessionStatus;
 	started_at: string | null;
 	started_by: string | null;
 	finished_at: string | null;
@@ -8459,6 +8461,12 @@ export type ReportReason =
 	| 'impersonation'
 	| 'other';
 
+// The two RESOLVED statuses of `reports.status`. `pending` is the column's
+// third value and the default every report is inserted with, so the moderation
+// queue never writes it — the vocabulary here is deliberately the resolution
+// half (check_constraint_unions.mjs carries the exemption).
+export type ReportResolution = 'reviewed' | 'dismissed';
+
 export async function submitReport(input: {
 	targetKind: ReportTargetKind;
 	targetId: string;
@@ -10784,7 +10792,7 @@ export async function fetchReportsForTarget(
 export async function resolveTargetReports(
 	targetKind: ReportTargetKind,
 	targetId: string,
-	status: 'reviewed' | 'dismissed',
+	status: ReportResolution,
 	resolution: string | null
 ): Promise<number> {
 	const { data, error } = await supabase.rpc('resolve_target_reports', {

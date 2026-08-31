@@ -4,12 +4,14 @@
 // unit-tested directly; the data layer (`bulkImportEventResults`) maps the
 // output onto account-optional `event_results` rows.
 
+import type { FinisherStatus } from '../types';
+
 export interface ParsedResultRow {
 	bib: string;
 	finisherName: string;
 	durationS: number;
 	distanceM: number;
-	finisherStatus: 'finished' | 'dnf' | 'dns';
+	finisherStatus: FinisherStatus;
 }
 
 export interface ParsedResultCsv {
@@ -108,7 +110,7 @@ export function parseDurationToSeconds(raw: string | undefined): number | null {
 	return Math.round(n);
 }
 
-function parseStatus(raw: string | undefined): 'finished' | 'dnf' | 'dns' {
+function parseStatus(raw: string | undefined): FinisherStatus {
 	const s = (raw ?? '').trim().toLowerCase();
 	if (s === 'dnf') return 'dnf';
 	if (s === 'dns') return 'dns';
@@ -188,7 +190,7 @@ export interface ExportResultRow {
 	finisherName: string | null;
 	durationS: number;
 	distanceM: number;
-	finisherStatus: 'finished' | 'dnf' | 'dns';
+	finisherStatus: FinisherStatus;
 	rank: number | null;
 }
 

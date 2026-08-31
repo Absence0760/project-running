@@ -510,6 +510,21 @@ When you write a value that a second language also has to know:
 - **A rail that extracts nothing is a failure, not a match.** Two empty sets
   agree. Both the guard and any hand-written mirror must fail loudly when the
   shape they read changes.
+- **A vocabulary a guard cannot point at is a vocabulary nothing guards.** An
+  anonymous inline union — `status: 'reviewed' | 'dismissed'` written out at
+  three call sites — is a rail with no name, and `check_constraint_unions.mjs`
+  filed four of those as "no client enumerates this column" while sixteen
+  spellings of them shipped ([decisions § 817](decisions.md)). Name the
+  vocabulary once, in one exported declaration, and derive any narrower use of
+  it (`Exclude<FinisherStatus, 'finished'>`) rather than re-typing the subset.
+- **Where the language cannot make the lookup exhaustive, the guard reads the
+  lookup itself.** Web's `Record<Union, X>` label maps need no rail because
+  `tsc` checks them; a Dart `switch` over a `String` cannot be exhaustive, so
+  it silently falls to `default:` when its CHECK grows and it gets a `switch`
+  rail instead ([§ 818](decisions.md)). Do NOT install a const list beside the
+  switch for the guard to read — that is a second declaration nothing checks
+  against the switch, the [§ 641](decisions.md) shape. Point the rail at the
+  authority.
 - **Resolve SQL by replay, not by filename.** The body a function has in
   production is the one the last `create or replace function` wrote, and that
   is routinely in a migration named after something else. Reading the migration
