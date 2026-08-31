@@ -3923,6 +3923,8 @@ export const en = {
 	"prefs.cue.markerTargetsHint": "Whether you're ahead of or behind plan at each course marker.",
 	"prefs.cue.phaseTransitions": "Race phases",
 	"prefs.cue.phaseTransitionsHint": "A cue when each phase of your race-strategy plan begins.",
+	"prefs.cue.guidedRun": "Guided runs",
+	"prefs.cue.guidedRunHint": "The coach script of a guided run you armed before starting.",
 	"prefs.weeklyMileageGoal": "Weekly Mileage Goal (m)",
 	"prefs.weeklyMileageGoalPlaceholder": "e.g. 40000 (40 km)",
 	"prefs.heartRateZonesHeading": "Heart Rate Zones",
