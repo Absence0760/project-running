@@ -14,10 +14,20 @@
 // What is tracked: `'…'` (no escapes inside, as POSIX has none), `"…"` with
 // backslash escapes, bare backslash escapes, `\`-newline continuation, `#`
 // comments (only where a word may begin — `foo#bar` is one word), and the
-// operators `;` `&` `&&` `|` `||` `(` `)` and newline. `$(` opens a nested
-// command because that is what it is: `X=$(aws lambda get-alias --name live)`
-// carries a real `aws` invocation that a scan for a command beginning `aws`
-// must see.
+// operators `;` `&` `&&` `|` `||` `(` `)` `` ` `` and newline. `$(` opens a
+// nested command because that is what it is: `X=$(aws lambda get-alias --name
+// live)` carries a real `aws` invocation that a scan for a command beginning
+// `aws` must see.
+//
+// A BACKTICK is the same substitution written the older way, and it was not an
+// operator here — so an unquoted `` `aws ssm get-parameter --name live` `` sat
+// inside the WORD LIST of the command containing it, and § 773's decoy
+// (`aws lambda update-alias --function-name `…--name live` --name stable`)
+// answered `live` for an alias call whose real `--name` was `stable`. The `$(`
+// spelling of that same decoy had already been closed; the backtick spelling
+// re-opened it, latent only because nothing in the tree writes one outside a
+// comment. Both delimiters end the word and open a command, so both fail in
+// the same direction.
 //
 // No expansion of any kind: `$NAME` stays `$NAME`. A guard comparing text
 // against a declaration wants the text that was written, and a lexer that
@@ -32,7 +42,8 @@
 /** @typedef {{ line: number, words: string[] }} ShellCommand */
 
 /// The two-character operators, longest first so `&&` is not read as `&` `&`.
-const OPERATORS = ['&&', '||', ';;', ';', '&', '|', '(', ')'];
+/// The backtick appears once because it is its own opener and closer.
+const OPERATORS = ['&&', '||', ';;', ';', '&', '|', '(', ')', '`'];
 
 /**
  * @param {string} src

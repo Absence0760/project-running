@@ -450,6 +450,44 @@ test('the alias name comes from the alias call, not from a decoy inside it', () 
   assert.ok(errors.some((e) => /do not agree on the alias name/.test(e)));
 });
 
+// The same decoy written with backticks. `$( )` had been closed and this
+// spelling had not: the substitution sat inside the alias call's own word list,
+// so its `--name live` came before the real `--name stable` and answered for
+// it. Latent because the committed script writes no backtick substitution —
+// which is the only reason § 773 did not find it too.
+//
+// The outcome is fail-closed rather than correct, and deliberately so: an
+// UNQUOTED substitution of either spelling ends the command containing it, so
+// the alias call reads no `--name` at all and the "names no alias" blindness
+// check fires. Reading nothing is the safe half of the pair; reading the decoy
+// is the half that certifies an alias the script never repoints.
+test('a backtick decoy inside the alias call cannot answer for the alias name', () => {
+  const sh =
+    `FUNCTIONS=(${SUFFIXES.join(' ')})\n` +
+    `for fn in "\${FUNCTIONS[@]}"; do\n` +
+    `\tNAME="threkir-web-\${ENV_NAME}-\${fn}"\n` +
+    `\taws lambda update-alias \\\n` +
+    '\t\t--function-name `aws ssm get-parameter --name live --query X` \\\n' +
+    `\t\t--name stable \\\n` +
+    `\t\t--function-version "$NEWEST"\n` +
+    `done\n`;
+  const names = [...parseSyncScript(sh).aliasNames];
+  assert.ok(!names.includes('live'), `the decoy answered for the alias name: ${names}`);
+  const { errors } = aligned({ sh });
+  assert.ok(
+    errors.some((e) => /names no alias|do not agree on the alias name/.test(e)),
+    `expected a loud refusal, got ${JSON.stringify(errors)}`,
+  );
+});
+
+test('a backtick inside a quoted argument is part of that argument, not a command', () => {
+  // The committed script's only backticks outside comments are the JMESPath
+  // literals in `--query 'Versions[?Version!=`$LATEST`].[Version]'`, and
+  // reading those as a command boundary would truncate the call around them.
+  const live = parseSyncScript(readFileSync(SCRIPT_FILE, 'utf-8'));
+  assert.deepEqual([...live.aliasNames], ['live']);
+});
+
 test('quoting an alias name is not a disagreement', () => {
   const sh = fakeScript(SUFFIXES).replaceAll('--name live', '--name "live"');
   assert.deepEqual([...parseSyncScript(sh).aliasNames], ['live']);
