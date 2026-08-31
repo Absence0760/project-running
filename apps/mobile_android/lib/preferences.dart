@@ -191,6 +191,7 @@ class VoiceCue {
   static const cutoffCatchUp = 'cutoff_catch_up';
   static const markerTargets = 'marker_targets';
   static const phaseTransitions = 'phase_transitions';
+  static const guidedRun = 'guided_run';
 
   static const all = [
     splits,
@@ -201,6 +202,7 @@ class VoiceCue {
     cutoffCatchUp,
     markerTargets,
     phaseTransitions,
+    guidedRun,
   ];
 }
 

@@ -12176,6 +12176,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enter your bib number so we import only your result, not the whole field.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'UltraSignup athlete ID';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Enter your UltraSignup athlete ID, or leave it blank to use the one this listing carries.';
+
+  @override
   String get racesPasteResultHint =>
       'Enter your finishing details from the race\'s results page.';
 
@@ -12229,6 +12236,20 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'RunSignUp import isn\'t available yet. parkrun and manual paste still work.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Import trail and ultra results from UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Open the race calendar';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'UltraSignup import isn\'t available yet. parkrun and manual paste still work.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
@@ -12906,6 +12927,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get prefsCuePhaseTransitionsInfo =>
       'Only active when you pick a Race strategy for the run. Announces each phase and its intent as it starts. Example: “Phase 2 of 3. Settle into your goal pace.”';
+
+  @override
+  String get prefsCueGuidedRun => 'Guided runs';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'The coach script of a guided run you armed before starting';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Only active when you arm a guided run on the Run tab before you start. Speaks each scripted coach cue as you reach its mark. Example: “Five minutes in. Settle into a rhythm you could hold all day.”';
+
+  @override
+  String get runGuidedRun => 'Guided run';
+
+  @override
+  String get runGuidedRunNone => 'No guided run';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'Race strategy';
@@ -13732,4 +13775,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Enter a number of servings between $min and $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Guided run: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'Guided run no longer in the library';
+
+  @override
+  String get guidedRunUseThisRun => 'Use this run';
 }

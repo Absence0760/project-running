@@ -8,6 +8,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../fab_clearance.dart';
 import '../preferences.dart' show formatDistanceForPref;
 import '../race_plan_preset.dart';
+import '../race_provider_labels.dart';
 import '../race_service.dart';
 import '../training.dart' show toIsoDate;
 import '../training_service.dart';
@@ -18,17 +19,19 @@ import 'plan_new_screen.dart';
 /// Race calendar discovery (race_calendar.md). Mirrors the web `/races` page:
 /// a name search + distance-band chips + "near a place" geocode over the
 /// `search_race_listings` RPC, with a Register link per result and an
-/// "Import my result" affordance (manual paste; RunSignUp pull when the
-/// provider key is configured). A "Add a race" action submits a crowd listing.
+/// "Import my result" affordance (manual paste always; a provider pull when
+/// that listing's provider has a leg and its key is configured). A "Add a
+/// race" action submits a crowd listing.
 ///
 /// Reached from the run surface's labelled peer strip (Train → Runs →
 /// **Races**, decisions § 488) and, as a secondary deep link, from the
-/// RunSignUp / ChronoTrack tiles under Settings → Integrations. NOT a
-/// bottom-nav destination (the 5-slot ceiling holds, decisions §63).
+/// race-provider tiles under Settings → Integrations. NOT a bottom-nav
+/// destination (the 5-slot ceiling holds, decisions §63).
 ///
 /// Nothing gates reaching it: the search is a public RPC, and
-/// [RaceService.isRunSignUpConfigured] gates only the *provider* import path
-/// inside the per-race import sheet.
+/// [RaceService.isProviderConfigured] gates only the *provider* import path
+/// inside the per-race import sheet, which probes the listing it was opened
+/// for rather than a provider chosen up front.
 class RacesScreen extends StatefulWidget {
   final RaceService service;
   final String? mapTilerKey;
@@ -63,7 +66,6 @@ class _RacesScreenState extends State<RacesScreen> {
   bool _loading = true;
   bool _error = false;
   List<RaceListingView> _results = const [];
-  bool _runSignUpAvailable = false;
 
   late final TrainingService _training = widget.training ?? TrainingService();
 
@@ -71,7 +73,6 @@ class _RacesScreenState extends State<RacesScreen> {
   void initState() {
     super.initState();
     _run();
-    _probeRunSignUp();
   }
 
   @override
@@ -80,15 +81,6 @@ class _RacesScreenState extends State<RacesScreen> {
     _searchCtl.dispose();
     _placeCtl.dispose();
     super.dispose();
-  }
-
-  Future<void> _probeRunSignUp() async {
-    try {
-      final ok = await widget.service.isRunSignUpConfigured();
-      if (mounted) setState(() => _runSignUpAvailable = ok);
-    } catch (_) {
-      if (mounted) setState(() => _runSignUpAvailable = false);
-    }
   }
 
   void _schedule() {
@@ -166,7 +158,6 @@ class _RacesScreenState extends State<RacesScreen> {
       context,
       service: widget.service,
       race: race,
-      runSignUpAvailable: _runSignUpAvailable,
     );
     if (done == true && mounted) {
       showTopBanner(context, AppLocalizations.of(context).racesImported);
@@ -510,14 +501,14 @@ class _RaceListingFormState extends State<_RaceListingForm> {
   }
 }
 
-/// Import a result onto a recorded run / new race run. Offers the RunSignUp
-/// pull when the provider is configured, else a manual paste form. Resolves
-/// true when a result was imported.
+/// Import a result onto a recorded run / new race run. Offers this listing's
+/// own provider pull when that provider has a built leg and its key is
+/// configured, and manual paste in every case. Resolves true when a result was
+/// imported.
 Future<bool?> showRaceImportSheet(
   BuildContext context, {
   required RaceService service,
   required RaceListingView race,
-  required bool runSignUpAvailable,
   String? matchRunId,
 }) {
   return showDialog<bool>(
@@ -525,7 +516,6 @@ Future<bool?> showRaceImportSheet(
     builder: (_) => _RaceImportForm(
       service: service,
       race: race,
-      runSignUpAvailable: runSignUpAvailable,
       matchRunId: matchRunId,
     ),
   );
@@ -534,13 +524,11 @@ Future<bool?> showRaceImportSheet(
 class _RaceImportForm extends StatefulWidget {
   final RaceService service;
   final RaceListingView race;
-  final bool runSignUpAvailable;
   final String? matchRunId;
 
   const _RaceImportForm({
     required this.service,
     required this.race,
-    required this.runSignUpAvailable,
     this.matchRunId,
   });
 
@@ -550,14 +538,46 @@ class _RaceImportForm extends StatefulWidget {
 
 class _RaceImportFormState extends State<_RaceImportForm> {
   final _bib = TextEditingController();
+  final _athleteId = TextEditingController();
   final _chip = TextEditingController();
   final _gun = TextEditingController();
   final _place = TextEditingController();
   bool _busy = false;
 
+  /// Null for a listing whose provider has no import leg at all (parkrun,
+  /// manual, raceresult) — manual paste still applies to every one of them.
+  late final RaceImportProvider? _provider =
+      raceImportProviderFor(widget.race.provider);
+
+  /// Null until the probe answers. Guessing either way is wrong: offering an
+  /// import that 503s, or withdrawing one that works. Nothing below is gated
+  /// on it — paste is offered throughout.
+  bool? _available;
+
+  @override
+  void initState() {
+    super.initState();
+    _probe();
+  }
+
+  /// A probe is a network call (L4): a failure degrades this listing's
+  /// provider to unavailable and never takes the sheet or the paste form down.
+  Future<void> _probe() async {
+    final spec = _provider;
+    if (spec == null) return;
+    var ok = false;
+    try {
+      ok = await widget.service.isProviderConfigured(spec.provider);
+    } catch (e) {
+      debugPrint('RacesScreen: ${spec.provider} probe failed: $e');
+    }
+    if (mounted) setState(() => _available = ok);
+  }
+
   @override
   void dispose() {
     _bib.dispose();
+    _athleteId.dispose();
     _chip.dispose();
     _gun.dispose();
     _place.dispose();
@@ -567,27 +587,54 @@ class _RaceImportFormState extends State<_RaceImportForm> {
   bool get _canPaste =>
       !_busy && (_chip.text.trim().isNotEmpty || _gun.text.trim().isNotEmpty);
 
-  Future<void> _runSignUpImport() async {
+  /// The value that narrows the pull to this runner. Every leg refuses without
+  /// one client-side, mirroring the Edge Function's own pre-fetch gate (issue
+  /// #360). The athlete-scoped leg deliberately does NOT fall back to the id
+  /// the listing carries: `provider_race_id` holds a RACE id, by its name and
+  /// by every other provider's use of it, so reading it as an athlete account
+  /// would pull a race's finishers and stamp this runner's id onto one of them.
+  String? get _scopeValue => switch (_provider?.scope) {
+        RaceImportScope.bib => _blank(_bib.text),
+        RaceImportScope.athleteId => _blank(_athleteId.text),
+        null => null,
+      };
+
+  bool get _canProviderImport =>
+      !_busy && _available == true && _scopeValue != null;
+
+  Future<void> _providerImport() async {
+    final spec = _provider;
+    final scope = _scopeValue;
+    if (spec == null || scope == null) return;
     setState(() => _busy = true);
     final l = AppLocalizations.of(context);
     try {
       await widget.service.importRaceResult(
-        provider: 'runsignup',
+        provider: spec.provider,
         listingId: widget.race.id,
-        bib: _blank(_bib.text),
+        bib: spec.scope == RaceImportScope.bib ? scope : null,
+        ultraSignUpAthleteId:
+            spec.scope == RaceImportScope.athleteId ? scope : null,
         matchRunId: widget.matchRunId,
       );
       if (mounted) Navigator.of(context).pop(true);
-    } on RunSignUpUnavailable {
-      if (mounted) {
-        setState(() => _busy = false);
-        showTopBanner(context, l.integrationsRunsignupUnavailable);
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _busy = false);
-        showTopBanner(context, l.racesImportFailed);
-      }
+    } catch (e) {
+      if (!mounted) return;
+      // The service throws the catalogue's own const instance, so identity is
+      // what tells "this provider is unconfigured" from any other failure —
+      // and the probe that said otherwise is now known to be wrong.
+      final unconfigured = identical(e, spec.unavailable);
+      setState(() {
+        _busy = false;
+        if (unconfigured) _available = false;
+      });
+      showTopBanner(
+        context,
+        unconfigured
+            ? (raceProviderLabels(l)[spec.provider]?.unavailable ??
+                l.racesImportFailed)
+            : l.racesImportFailed,
+      );
     }
   }
 
@@ -628,17 +675,36 @@ class _RaceImportFormState extends State<_RaceImportForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.race.provider == 'runsignup' && widget.runSignUpAvailable) ...[
-              Text(l.racesRunSignUpBibHint, style: Theme.of(context).textTheme.bodySmall),
-              FilledButton(
-                onPressed: (_busy || _bib.text.trim().isEmpty) ? null : _runSignUpImport,
-                child: Text(l.racesImportResult),
-              ),
-            ] else if (widget.race.provider == 'runsignup' && !widget.runSignUpAvailable)
-              Text(
-                l.integrationsRunsignupUnavailable,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+            if (_provider case final spec?) ...[
+              if (_available == true) ...[
+                Text(
+                  // Exhaustive on purpose: a scope added to the catalogue must
+                  // fail to compile here rather than inherit a hint about a
+                  // field it does not have.
+                  switch (spec.scope) {
+                    RaceImportScope.bib => l.racesRunSignUpBibHint,
+                    RaceImportScope.athleteId => l.racesUltraSignUpAthleteHint,
+                  },
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (spec.scope == RaceImportScope.athleteId)
+                  TextField(
+                    controller: _athleteId,
+                    decoration:
+                        InputDecoration(labelText: l.racesUltraSignUpAthleteId),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                FilledButton(
+                  onPressed: _canProviderImport ? _providerImport : null,
+                  child: Text(l.racesImportResult),
+                ),
+              ] else if (_available == false)
+                Text(
+                  raceProviderLabels(l)[spec.provider]?.unavailable ??
+                      l.racesImportFailed,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
             const SizedBox(height: 8),
             Text(l.racesPasteResultHint, style: Theme.of(context).textTheme.bodySmall),
             TextField(

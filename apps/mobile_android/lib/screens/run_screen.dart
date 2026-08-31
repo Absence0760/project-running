@@ -25,8 +25,10 @@ import '../audio_cues.dart';
 import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
 import '../ble_treadmill.dart';
+import '../dev_auto_login.dart' show isLocalSupabaseUrl;
 import '../embedded_bests.dart';
 import '../goal_time.dart';
+import '../guided_runs.dart';
 import '../health_connect_exporter.dart';
 import '../activity_type_labels.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -36,12 +38,13 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../live_broadcaster.dart';
 import '../live_hub_client.dart';
-import '../main.dart' show pendingStartWorkout;
+import '../main.dart' show pendingArmGuidedRun, pendingStartWorkout;
 import '../live_cutoff_eta.dart';
 import '../preferences.dart';
 import '../privacy.dart';
 import '../off_route_alert.dart';
 import '../race_controller.dart';
+import '../reactive_ble_watch_transport.dart';
 import '../race_phases.dart';
 import '../roadbook.dart';
 import '../route_geometry.dart';
@@ -50,9 +53,12 @@ import '../route_match.dart';
 import '../route_simplify.dart';
 import '../safety_nudge.dart';
 import '../settings_sync.dart';
+import '../sim_watch_link.dart' show maybeDevBackendUrl;
+import '../sim_watch_sync.dart' show WatchBleTransport, WatchSyncClient;
 import '../turn_cue_announcer.dart';
 import '../turn_cues.dart';
 import '../typed_decimal.dart';
+import '../watch_settings.dart';
 import '../widgets/cutoff_card.dart';
 import 'route_picker_screen.dart';
 import '../background_location_nudge.dart';
@@ -129,6 +135,18 @@ class RunScreen extends StatefulWidget {
   /// `workout_adherence` to `runs.metadata`.
   final PlanWorkoutRow? initialWorkout;
 
+  /// Backend URL the custom-watch guided-run arm is gated on. The watch is
+  /// research-tier with no hardware in anyone's hands ([decisions.md § 71]),
+  /// so the push only runs against a loopback backend — the same rail the
+  /// route-detail course push and the Sim Watch link use. Production reads
+  /// dotenv; tests pass a URL to drive either side of the gate.
+  final String? devBackendUrl;
+
+  /// Injectable BLE transport for that push. Defaults to the production
+  /// `flutter_reactive_ble` client; tests pass a fake so the arm is exercised
+  /// with no radio attached.
+  final WatchBleTransport Function()? watchTransportFactory;
+
   /// An in-progress partial recovered at cold start whose process was killed
   /// mid-run. When set, RunScreen prompts the user to Resume (re-hydrate the
   /// recorder and continue the SAME run), Finish (finalize into a completed
@@ -151,6 +169,8 @@ class RunScreen extends StatefulWidget {
     required this.treadmill,
     this.initialRoute,
     this.initialWorkout,
+    this.devBackendUrl,
+    this.watchTransportFactory,
     this.initialResumablePartial,
   });
 
@@ -563,6 +583,20 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
   final ValueNotifier<WorkoutBandState> _workoutBand =
       ValueNotifier(WorkoutBandState.empty);
 
+  // ── Guided run ──
+  // Armed from the idle state and consumed by the L4 cue block in
+  // _onSnapshot. Null when this recording has no coach script.
+  GuidedRun? _guidedRun;
+
+  // The highest whole second of RECORDING time already dispatched. Only ever
+  // advances, so a repeated or rewound tick can't re-fire a mark the runner
+  // has already heard — `cuesDue` is idempotent over a range, but only if the
+  // range's floor never walks backwards.
+  int _guidedCueSec = -1;
+
+  bool get _guidedCuesEnabled =>
+      widget.preferences.voiceCueEnabled(VoiceCue.guidedRun);
+
   // Pace alerts
   DateTime? _lastPaceAlertAt;
   // Session-only mute for live pace cues. Not persisted — a group-run
@@ -672,6 +706,7 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     widget.social.addListener(_onSocialChange);
     widget.training.addListener(_onTrainingChange);
     pendingStartWorkout.addListener(_onPendingStartWorkout);
+    pendingArmGuidedRun.addListener(_onPendingArmGuidedRun);
     _activityType =
         ActivityType.fromName(widget.preferences.defaultActivityType);
     _selectedRoute = widget.initialRoute;
@@ -687,6 +722,7 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     // post-frame to consume whatever was queued.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _onPendingStartWorkout();
+      _onPendingArmGuidedRun();
     });
     // A process-killed run was recovered as resumable at cold start. Prompt
     // once, after first frame (so `_l10n` + a Navigator context exist), to
@@ -764,6 +800,33 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     }
     pendingStartWorkout.value = null;
     _startStructuredWorkout(wo);
+  }
+
+  /// A guided-run surface elsewhere in the app armed a script for this
+  /// recorder. Resolve the parked id against the library for THIS screen's
+  /// locale and arm it down the same path the idle picker uses, so the watch
+  /// push, the cue cursor and the metadata stamp cannot diverge between the
+  /// two entry points.
+  void _onPendingArmGuidedRun() {
+    final id = pendingArmGuidedRun.value;
+    if (id == null) return;
+    if (!mounted) return;
+    // Spent on arrival even when it can't be honoured. Holding it would make
+    // a second tap on the SAME run a no-op notifier write (the value never
+    // changes, so no listener fires), and arming mid-recording rewinds the
+    // cue cursor, replaying every mark the runner has already passed in one
+    // burst on the next tick.
+    pendingArmGuidedRun.value = null;
+    if (_state != _ScreenState.idle) {
+      debugPrint('pendingArmGuidedRun dropped: state=$_state');
+      return;
+    }
+    final guided = findGuidedRun(_l10n, id);
+    if (guided == null) {
+      debugPrint('pendingArmGuidedRun dropped: unknown id=$id');
+      return;
+    }
+    _armGuidedRun(guided);
   }
 
   /// Build a [WorkoutRunner] from the incoming planned workout — its
@@ -2382,6 +2445,29 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
         debugPrint('workout runner snapshot failed: $e');
       }
 
+      // L4 — Guided-run coach cues. The clock is the recorder's own monotonic
+      // elapsed, which STOPS on a manual pause, so a runner who stops to
+      // retie a lace still hears "five minutes in" at five minutes of
+      // RUNNING and skips nothing. The cursor advances even when the cues are
+      // muted: a mark is a moment, not a queue, so un-muting at 12 minutes
+      // must not then dump the 5- and 10-minute cues at once.
+      try {
+        final guided = _guidedRun;
+        final nowSec = snapshot.elapsed.inSeconds;
+        if (guided != null && nowSec > _guidedCueSec) {
+          final due = cuesDue(guided, _guidedCueSec, nowSec);
+          _guidedCueSec = nowSec;
+          if (widget.preferences.audioCues && _guidedCuesEnabled) {
+            for (final cue in due) {
+              _ttsCue('announceGuidedCue',
+                  () => widget.audioCues.announceGuidedCue(cue.text));
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('guided-run cue dispatch failed: $e');
+      }
+
       // L4 — Live race spectator ping. Requires a real, FRESH GPS fix;
       // cadence throttled inside RaceController. Network / Supabase realtime
       // can throw; swallow and keep going.
@@ -2847,6 +2933,11 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
           if (_strategyGoalTimeS != null) 'goal_time_s': _strategyGoalTimeS,
         },
     };
+    // The guided run this session is being recorded under, mirrored here so a
+    // process-kill mid-script keeps the attribution on the recovered run.
+    if (_guidedRun != null) {
+      metadata[cm.MetadataKeys.guidedRunId] = _guidedRun!.id;
+    }
     // Persist lap / aid-station marks so a process-kill mid-run can restore
     // them on resume (numbering + cumulative totals continue unbroken). The
     // recorder owns the canonical lap state; mirror it in the same shape
@@ -3087,6 +3178,12 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
       };
     }
 
+    // The guided run this session was recorded under, so the detail views can
+    // name the script that was playing. Registered in docs/backend/metadata.md.
+    if (_guidedRun != null) {
+      metadata[cm.MetadataKeys.guidedRunId] = _guidedRun!.id;
+    }
+
     // Indoor fallback: if no GPS fix ever arrived but the pedometer ran,
     // save the estimated distance so the run history shows something
     // useful. Flagged in metadata so downstream views can mark it as
@@ -3223,13 +3320,19 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     }
 
     if (!mounted) return;
+    final guidedWasArmed = _guidedRun != null;
     setState(() {
       _finishedRun = run;
       _setScreenState(_ScreenState.finished);
+      // A guided run is armed for ONE recording — the metadata above has the
+      // attribution, and leaving it armed would silently script the next run.
+      _guidedRun = null;
+      _guidedCueSec = -1;
       if (!localSaved) {
         _syncError = _l10n.runSaveFailedRelaunch;
       }
     });
+    if (guidedWasArmed) _pushGuidedRunToWatch('');
     _announceA11yState(_l10n.runA11yFinished);
 
     if (widget.preferences.audioCues &&
@@ -3466,7 +3569,10 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     _leftForegroundAt = null;
     _backgroundLimitDisclosed = false;
     // Strategy choice survives into the next run; the built plan and the
-    // per-recording cue trackers do not.
+    // per-recording cue trackers do not. The armed guided run follows the same
+    // rule — a discarded false start should not cost the runner the choice
+    // they made, only the cues it already spoke.
+    _guidedCueSec = -1;
     _phasePlan = const [];
     _phaseIndex = -1;
     _lastAlongM = null;
@@ -3520,6 +3626,7 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
     runRecordingActive.value = false;
     WidgetsBinding.instance.removeObserver(this);
     pendingStartWorkout.removeListener(_onPendingStartWorkout);
+    pendingArmGuidedRun.removeListener(_onPendingArmGuidedRun);
     widget.preferences.removeListener(_onPrefsChange);
     widget.runStore.removeListener(_onPrefsChange);
     widget.social.removeListener(_onSocialChange);
@@ -3558,6 +3665,81 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
         RacePhasePreset.negativeSplit => l10n.runStrategyNegativeSplit,
         RacePhasePreset.even => l10n.runStrategyEven,
       };
+
+  /// Pick (or clear) the guided run this recording will be scripted by.
+  /// Mirrors the race-strategy sheet next door: the choice is armed on the
+  /// idle screen and consumed by the L4 cue block once recording starts.
+  Future<void> _pickGuidedRun() async {
+    final l10n = _l10n;
+    final library = guidedRunLibrary(l10n);
+    final chosen = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(l10n.runGuidedRun,
+                  style: Theme.of(ctx).textTheme.titleMedium),
+            ),
+            RadioListTile<String>(
+              value: '',
+              groupValue: _guidedRun?.id ?? '',
+              title: Text(l10n.runGuidedRunNone),
+              onChanged: (v) => Navigator.pop(ctx, v),
+            ),
+            for (final g in library)
+              RadioListTile<String>(
+                value: g.id,
+                groupValue: _guidedRun?.id ?? '',
+                title: Text(g.title),
+                subtitle: Text(l10n.runGuidedRunOption(
+                    (g.durationSec / 60).round(), g.subtitle)),
+                onChanged: (v) => Navigator.pop(ctx, v),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    _armGuidedRun(chosen.isEmpty ? null : findGuidedRun(l10n, chosen));
+  }
+
+  void _armGuidedRun(GuidedRun? guided) {
+    setState(() {
+      _guidedRun = guided;
+      _guidedCueSec = -1;
+    });
+    _pushGuidedRunToWatch(guided?.id ?? '');
+  }
+
+  /// Arm (or, with an empty [id], clear) the same guided run on the custom
+  /// watch, so a runner wearing it gets the script on the wrist rather than
+  /// only in the phone's headphones.
+  ///
+  /// L4 and fire-and-forget: the radio may be absent, asleep, or refuse the
+  /// frame, and none of that may touch the recording. Gated on a loopback
+  /// backend like every other custom-watch push — the device is research-tier
+  /// with no unit in anyone's hands (decisions § 71).
+  void _pushGuidedRunToWatch(String id) {
+    if (!isLocalSupabaseUrl(widget.devBackendUrl ?? maybeDevBackendUrl())) {
+      return;
+    }
+    try {
+      final client = WatchSyncClient(
+        transport:
+            (widget.watchTransportFactory ?? ReactiveBleWatchTransport.new)(),
+        onRun: (_) async {},
+      );
+      unawaited(client.pushSettings(WatchSettings(guidedRunId: id)).catchError(
+        (Object e) => debugPrint('guided-run watch arm failed: $e'),
+      ));
+    } catch (e) {
+      debugPrint('guided-run watch arm failed (sync): $e');
+    }
+  }
 
   /// Pre-run race-strategy sheet: pick a phase preset, confirm the
   /// race distance (prefilled from the selected route), optionally set a
@@ -3987,6 +4169,13 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
                             onPressed: _shareLiveLink,
                             icon: const Icon(Icons.podcasts),
                             label: Text(l10n.runShareLiveLink),
+                          ),
+                          TextButton.icon(
+                            onPressed: _pickGuidedRun,
+                            icon: const Icon(Icons.headset_mic_outlined),
+                            label: Text(
+                              _guidedRun?.title ?? l10n.runGuidedRun,
+                            ),
                           ),
                           if (_activityType == ActivityType.run)
                             TextButton.icon(

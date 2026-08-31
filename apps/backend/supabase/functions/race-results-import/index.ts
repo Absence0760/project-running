@@ -19,6 +19,7 @@ import {
   parseRaceResultRow,
   runSignUpResultsUrl,
   runSignUpScopeGate,
+  ultraSignUpScopeGate,
   ultraSignUpResultsUrl,
   type MappedRaceRun,
 } from './lib.ts';
@@ -188,13 +189,12 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     if (!apiKey || !apiSecret) {
       return Response.json({ error: 'provider_not_configured' }, { status: 503 });
     }
-    // The athlete uid is the listing's provider_race_id for an UltraSignup
-    // listing, or supplied per-call (a runner importing their own history).
-    const athleteId = typeof body.ultraSignUpAthleteId === 'string' && body.ultraSignUpAthleteId
+    const athleteId = typeof body.ultraSignUpAthleteId === 'string'
       ? body.ultraSignUpAthleteId
-      : ((listing.provider_race_id as string | null) ?? '');
-    if (!athleteId) {
-      return Response.json({ error: 'listing has no UltraSignup athlete id' }, { status: 400 });
+      : '';
+    const usScope = ultraSignUpScopeGate({ athleteId });
+    if (!usScope.ok) {
+      return Response.json({ error: usScope.error }, { status: usScope.status });
     }
     const url = ultraSignUpResultsUrl({ athleteId, apiKey, apiSecret });
     const upstream = await fetch(url, {

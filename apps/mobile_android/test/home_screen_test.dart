@@ -15,6 +15,7 @@ import '../lib/local_gear_store.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
+import '../lib/main.dart' show pendingArmGuidedRun;
 import '../lib/preferences.dart';
 import '../lib/race_controller.dart';
 import '../lib/settings_destination.dart';
@@ -462,6 +463,28 @@ void main() {
       expect(find.text('Runs'), findsWidgets,
           reason: 'the Fitness hub mounted, so the tap navigated the PageView '
               'despite the locked swipe physics');
+    });
+  });
+
+  group('the guided-run handoff brings the Run tab forward', () {
+    setUp(() => pendingArmGuidedRun.value = null);
+    tearDown(() => pendingArmGuidedRun.value = null);
+
+    testWidgets('a parked guided run switches the shell to the recorder',
+        (tester) async {
+      // The guided-run detail screen is several pops below the shell and has
+      // no way to reach the PageView; naming the run has to be enough.
+      final s = await _makeStores();
+      await _pump(tester, s);
+      expect(find.byType(RunScreen), findsNothing,
+          reason: 'the shell opens on Home');
+
+      pendingArmGuidedRun.value = 'easy-30';
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      tester.takeException();
+
+      expect(find.byType(RunScreen), findsOneWidget);
     });
   });
 

@@ -618,6 +618,20 @@ class AudioCues {
     await _tts.speak(ttsL10n(activeLocaleTag).ttsWorkoutComplete);
   }
 
+  /// Speak a guided-run cue fired by the recorder — QUEUED, unlike the
+  /// preview path below.
+  ///
+  /// A guided run fires on fixed time marks (0:00, 5:00, 10:00 ...), so its
+  /// cues land on the same tick as a split, an off-route warning or a cut-off
+  /// catch-up. [speakGuidedCue]'s `stop()` would cut one of those off
+  /// mid-word, so the recording path rides the engine's queue mode
+  /// ([ttsQueueModeFor]) like every other run cue instead.
+  Future<void> announceGuidedCue(String text) async {
+    await _init();
+    await _applyLanguage();
+    await _tts.speak(text);
+  }
+
   /// Speak an arbitrary guided-run cue, replacing anything in flight.
   ///
   /// This is the one cue that must interrupt rather than queue: it backs the

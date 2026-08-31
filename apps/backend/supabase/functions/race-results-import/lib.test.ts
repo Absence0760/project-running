@@ -23,6 +23,7 @@ import {
   runSignUpResultsUrl,
   chronoTrackScopeGate,
   runSignUpScopeGate,
+  ultraSignUpScopeGate,
   ultraSignUpResultsUrl,
 } from './lib.ts';
 import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
@@ -495,4 +496,22 @@ Deno.test('chronoTrackScopeGate — a blank bib does not count as scoped', () =>
 
 Deno.test('chronoTrackScopeGate — a bib scopes the request', () => {
   assertEquals(chronoTrackScopeGate({ bib: '1423' }).ok, true);
+});
+
+Deno.test('ultraSignUpScopeGate rejects an unscoped request 400 ultrasignup_athlete_id_required', () => {
+  // The endpoint reads one ATHLETE'S history, so an unscoped call has no
+  // meaning to narrow afterwards. It used to fall back to the listing's
+  // provider_race_id -- a race id read as an account id, which would stamp the
+  // caller's user_id onto another finisher's result.
+  assertEquals(ultraSignUpScopeGate({}), {
+    ok: false,
+    status: 400,
+    error: 'ultrasignup_athlete_id_required',
+  });
+  assertEquals(ultraSignUpScopeGate({ athleteId: '   ' }).ok, false);
+  assertEquals(ultraSignUpScopeGate({ athleteId: '' }).ok, false);
+});
+
+Deno.test('ultraSignUpScopeGate accepts a request scoped by athlete id', () => {
+  assertEquals(ultraSignUpScopeGate({ athleteId: '4821' }).ok, true);
 });

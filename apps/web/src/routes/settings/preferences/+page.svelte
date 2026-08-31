@@ -136,6 +136,7 @@
 			label: 'prefs.cue.phaseTransitions',
 			hint: 'prefs.cue.phaseTransitionsHint',
 		},
+		guided_run: { label: 'prefs.cue.guidedRun', hint: 'prefs.cue.guidedRunHint' },
 	};
 
 	function toggleVoiceCue(id: VoiceCueId, on: boolean) {

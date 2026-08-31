@@ -163,6 +163,39 @@ test('/guided/[id] uses findGuidedRun for the lookup', () => {
 	assert.match(source, /findGuidedRun/, 'detail page must use the lookup helper');
 });
 
+test('/runs/[id] names the guided run through the library, never the raw id', () => {
+	// Reason: `runs.metadata.guided_run_id` stores a library slug
+	// (`first-timer-15`), and the library is versioned in code and rebuilt
+	// per locale. Rendering the stored value would put an English-only slug
+	// in front of every reader; resolving it outside a `$derived` would
+	// freeze the title to the boot locale (guided_runs.ts says so).
+	const source = read('src/routes/runs/[id]/+page.svelte');
+	assert.match(source, /findGuidedRun\(m, guidedRunId\)/, 'the id must resolve through the library');
+	assert.match(
+		source,
+		/let guidedRun = \$derived\(/,
+		'the lookup must live in a $derived so a locale switch re-localizes the title',
+	);
+	assert.doesNotMatch(
+		source,
+		/\{guidedRunId\}/,
+		'the raw library slug must never reach the template',
+	);
+});
+
+test('/runs/[id] still claims a guided run when the library no longer has the id', () => {
+	// Reason: the library ships in the bundle, so a run recorded under a
+	// workout a later build dropped or renamed resolves to null. Hiding the
+	// chip then would present that run as a silent one, which is false; the
+	// neutral branch states the fact and drops only the name and the link.
+	const source = read('src/routes/runs/[id]/+page.svelte');
+	assert.match(
+		source,
+		/\{#if guidedRunId\}[\s\S]*?\{:else\}[\s\S]*?runDetail\.guidedRun'\)[\s\S]*?\{\/if\}/,
+		'an unresolved id must fall through to the unnamed guided-run chip',
+	);
+});
+
 test('/coach surfaces the Guided runs library on its page', () => {
 	// Reason: the dedicated `/guided` sidebar entry was removed when the
 	// nav tightened to 5 items. Guided + Coach are both coach-driven,
@@ -183,4 +216,33 @@ test('audio_cues.dart exposes speakGuidedCue for the recorder integration', () =
 	// the planned wiring.
 	const source = read('../mobile_android/lib/audio_cues.dart');
 	assert.match(source, /Future<void> speakGuidedCue\(String text\)/, 'speakGuidedCue method missing');
+});
+
+// ─────────── Race auto-match prompt ───────────
+
+test('the run-detail auto-match prompt resolves its leg from RACE_IMPORT_LEGS', () => {
+	// Reason: this prompt is the SECOND surface that reaches the
+	// race-results-import legs, and it hardcoded `runsignup` long after the
+	// Edge Function grew ultrasignup and chronotrack legs — so a candidate on
+	// either silently degraded to manual paste even with the credentials set,
+	// which reads to the runner as the provider not being supported. Driving it
+	// off the shared record is what keeps the two surfaces from disagreeing
+	// about which providers exist.
+	const source = read('src/lib/components/RunRaceResult.svelte');
+	assert.match(source, /RACE_IMPORT_LEGS/, 'must resolve the leg from the shared record');
+	assert.doesNotMatch(
+		source,
+		/isRunSignUpCandidate/,
+		'the single-provider predicate is what made the other legs unreachable',
+	);
+	assert.doesNotMatch(
+		source,
+		/'RUNSIGNUP_UNAVAILABLE'/,
+		"catching one leg's unavailable literal strands the others on a generic failure",
+	);
+	assert.match(
+		source,
+		/RACE_IMPORT_UNAVAILABLE/,
+		'the unconfigured-leg fallback must be keyed off the map, not one literal',
+	);
 });

@@ -9,27 +9,31 @@ import '../lib/preferences.dart';
 import '../lib/race_service.dart';
 import '../lib/training.dart' show toIsoDate;
 import '../lib/screens/races_screen.dart';
+import 'pump_until.dart';
 
 class _FakeRaceService extends RaceService {
   final List<RaceListingView> results;
-  final bool runSignUpAvailable;
+  final Set<String> configured;
   bool importCalled = false;
   String? lastImportProvider;
   String? lastImportBib;
+  String? lastImportAthleteId;
 
-  _FakeRaceService({this.results = const [], this.runSignUpAvailable = false});
+  _FakeRaceService({this.results = const [], this.configured = const {}});
 
   @override
   Future<ImportRaceResultOutcome> importRaceResult({
     required String provider,
     required String listingId,
     String? bib,
+    String? ultraSignUpAthleteId,
     String? matchRunId,
     PastedRaceResult? result,
   }) async {
     importCalled = true;
     lastImportProvider = provider;
     lastImportBib = bib;
+    lastImportAthleteId = ultraSignUpAthleteId;
     return const ImportRaceResultOutcome(imported: 1, skipped: 0, enriched: 0);
   }
 
@@ -52,7 +56,8 @@ class _FakeRaceService extends RaceService {
   }
 
   @override
-  Future<bool> isRunSignUpConfigured() async => runSignUpAvailable;
+  Future<bool> isProviderConfigured(String provider) async =>
+      configured.contains(provider);
 }
 
 RaceListingView _listing(String id, String name,
@@ -60,11 +65,12 @@ RaceListingView _listing(String id, String name,
         double? distanceMAway,
         bool verified = true,
         String provider = 'manual',
+        String? providerRaceId,
         String raceDate = '2027-09-12'}) =>
     RaceListingView(
       id: id,
       provider: provider,
-      providerRaceId: null,
+      providerRaceId: providerRaceId,
       name: name,
       raceDate: raceDate,
       distanceM: distanceM,
@@ -129,7 +135,7 @@ void main() {
       (tester) async {
     final service = _FakeRaceService(
       results: [_listing('r3', 'RSU Race', provider: 'runsignup')],
-      runSignUpAvailable: true,
+      configured: const {'runsignup'},
     );
     await tester.pumpWidget(_app(service));
     await tester.pumpAndSettle();
@@ -155,7 +161,7 @@ void main() {
       (tester) async {
     final service = _FakeRaceService(
       results: [_listing('r3b', 'RSU Race', provider: 'runsignup')],
-      runSignUpAvailable: true,
+      configured: const {'runsignup'},
     );
     await tester.pumpWidget(_app(service));
     await tester.pumpAndSettle();
@@ -211,6 +217,193 @@ void main() {
       find.textContaining("RunSignUp import isn't available yet"),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+      'a chronotrack listing offers ITS OWN bib import, not just RunSignUp\'s',
+      (tester) async {
+    // The ChronoTrack leg has been built server-side the whole time; the sheet
+    // branched on `runsignup` alone, so a ChronoTrack listing could only ever
+    // be pasted by hand.
+    final service = _FakeRaceService(
+      results: [_listing('ct1', 'CT Marathon', provider: 'chronotrack')],
+      configured: const {'chronotrack'},
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+
+    final importButton = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(FilledButton, 'Import my result'),
+    );
+    await pumpUntil(tester, () => importButton.evaluate().isNotEmpty,
+        describe: 'the ChronoTrack import action to appear');
+    expect(tester.widget<FilledButton>(importButton).onPressed, isNull,
+        reason: 'an unscoped ChronoTrack pull returns the whole field');
+
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)).first,
+      '881',
+    );
+    await tester.pump();
+    await tester.tap(importButton);
+    await tester.pumpAndSettle();
+
+    expect(service.lastImportProvider, 'chronotrack');
+    expect(service.lastImportBib, '881');
+
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets(
+      'an unconfigured provider shows ITS OWN explainer, never a peer\'s',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [_listing('us1', 'Desert 100', provider: 'ultrasignup')],
+      configured: const {'runsignup'},
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+    await pumpUntil(
+      tester,
+      () => find
+          .textContaining("UltraSignup import isn't available yet")
+          .evaluate()
+          .isNotEmpty,
+      describe: "the UltraSignup explainer",
+    );
+
+    expect(
+      find.textContaining("RunSignUp import isn't available yet"),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Import my result'),
+      ),
+      findsNothing,
+    );
+    // Manual paste is the universal fallback and survives every refusal.
+    expect(find.textContaining('Enter your finishing details'), findsOneWidget);
+  });
+
+  testWidgets(
+      'a configured ultrasignup listing will not import on the listing id alone',
+      (tester) async {
+    // The listing carries a `provider_race_id`, and the sheet used to fall back
+    // to it as the athlete account. That column holds a RACE id — by its name
+    // and by every other provider's use of it — so the fallback would pull a
+    // race's finishers and stamp this runner's id onto one of them. Both the
+    // sheet and `ultraSignUpScopeGate` now refuse until an athlete id is typed.
+    final service = _FakeRaceService(
+      results: [
+        _listing('us2', 'Bear 100',
+            provider: 'ultrasignup', providerRaceId: 'athlete-42'),
+      ],
+      configured: const {'ultrasignup'},
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+
+    final importButton = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(FilledButton, 'Import my result'),
+    );
+    await pumpUntil(tester, () => importButton.evaluate().isNotEmpty,
+        describe: 'the UltraSignup import action to appear');
+    expect(tester.widget<FilledButton>(importButton).onPressed, isNull,
+        reason: 'an unscoped UltraSignup pull must not be submittable');
+    expect(service.lastImportProvider, isNull);
+
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('a typed UltraSignup athlete id scopes the pull',
+      (tester) async {
+    final service = _FakeRaceService(
+      results: [
+        _listing('us3', 'Bear 100',
+            provider: 'ultrasignup', providerRaceId: 'athlete-42'),
+      ],
+      configured: const {'ultrasignup'},
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+
+    final field = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(TextField, 'UltraSignup athlete ID'),
+    );
+    await pumpUntil(tester, () => field.evaluate().isNotEmpty,
+        describe: 'the athlete-id field');
+    await tester.enterText(field, 'athlete-99');
+    await tester.pump();
+
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(FilledButton, 'Import my result'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(service.lastImportAthleteId, 'athlete-99');
+
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('a parkrun listing offers manual paste and no provider pull',
+      (tester) async {
+    // parkrun, manual and raceresult are real listing providers with no
+    // bib-import leg. Falling through to paste is the correct answer, not a
+    // gap — and no other provider's explainer belongs on that sheet.
+    final service = _FakeRaceService(
+      results: [_listing('pk1', 'Saturday parkrun', provider: 'parkrun')],
+      configured: const {'runsignup', 'ultrasignup', 'chronotrack'},
+    );
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Enter your finishing details'), findsOneWidget);
+    expect(find.textContaining("isn't available yet"), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Import my result'),
+      ),
+      findsNothing,
+    );
+
+    await tester.enterText(
+      find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.widgetWithText(TextField, 'Chip time')),
+      '0:22:41',
+    );
+    await tester.pump();
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(FilledButton, 'Import result'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(service.lastImportProvider, 'paste');
+
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets(
