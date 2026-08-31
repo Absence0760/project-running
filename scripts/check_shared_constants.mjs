@@ -615,7 +615,10 @@ function splitTopLevel(args) {
  * The keys every `jsonb_build_object(…)` in the file builds — the bag the test
  * actually files. Odd arguments are values and are ignored; a key written as
  * anything but a bare literal is not counted, which fails loudly below rather
- * than vouching for coverage this parser cannot see.
+ * than vouching for coverage this parser cannot see. A key may be preceded by
+ * `--` comment lines: the lexer leaves those in place inside a dollar-quoted
+ * body (correctly — it is a string literal), and seed.sql annotates each group
+ * of keys with the migration that added it.
  * @param {string[]} statements @returns {Set<string>}
  */
 export function jsonbBuildObjectKeys(statements) {
@@ -627,7 +630,7 @@ export function jsonbBuildObjectKeys(statements) {
 			if (args === null) continue;
 			splitTopLevel(args).forEach((part, index) => {
 				if (index % 2 !== 0) return;
-				const literal = /^\s*'([^']*)'\s*$/.exec(part);
+				const literal = /^(?:\s*--[^\n]*\n)*\s*'([^']*)'\s*$/.exec(part);
 				if (literal) keys.add(literal[1]);
 			});
 		}
@@ -696,6 +699,62 @@ export function pgtapDenylistSites(ctx) {
 		{
 			key: 'metadata denylist',
 			where: `denylist array in ${PUBLIC_RUNS_DENYLIST_TEST}`,
+			values: asserted,
+		},
+	];
+}
+
+export const PUBLIC_RUNS_SEED = 'apps/backend/supabase/seed.sql';
+
+/**
+ * The keys `seed.sql`'s public_runs projection block asserts are gone.
+ *
+ * Anchored on the single `IF … THEN` whose body raises the strip-list
+ * exception, because the same `v_public_metadata ? 'key'` spelling is used a
+ * few lines above to assert that `activity_type` and `title` SURVIVE — reading
+ * the file at large would fold those two into the denylist and report a
+ * disagreement that is really two assertions pointing opposite ways.
+ * @param {string} src @param {string} where @returns {string[]}
+ */
+export function parseSeedDenylist(src, where) {
+	const block = /IF\s+v_public_metadata\s*\?[\s\S]*?strip list incomplete/i.exec(src);
+	if (block === null) {
+		throw new Error(
+			`check_shared_constants: no public_runs strip-list assertion in ${where}. ` +
+				`This entry reads the \`IF v_public_metadata ? '…' OR …\` chain whose ` +
+				`body raises "strip list incomplete"; renamed or removed, the rail reads ` +
+				`nothing and agrees with every other one.`,
+		);
+	}
+	const keys = [...block[0].matchAll(/\?\s*'([^']*)'/g)].map((m) => m[1]);
+	if (keys.length === 0) {
+		throw new Error(
+			`check_shared_constants: the strip-list assertion in ${where} names no ` +
+				`keys, so it raises for nothing and passes against any view.`,
+		);
+	}
+	return keys;
+}
+
+/** @param {Ctx} ctx @returns {Site[]} */
+export function seedDenylistSites(ctx) {
+	const src = ctx.read(PUBLIC_RUNS_SEED);
+	const asserted = parseSeedDenylist(src, PUBLIC_RUNS_SEED);
+	const built = jsonbBuildObjectKeys(splitSqlStatements(src));
+	const unbuilt = asserted.filter((key) => !built.has(key));
+	if (unbuilt.length > 0) {
+		throw new Error(
+			`check_shared_constants: ${PUBLIC_RUNS_SEED} asserts ${unbuilt.join(', ')} ` +
+				`is stripped but the seeded public run never carries ` +
+				`${unbuilt.length === 1 ? 'that key' : 'those keys'}. An absent key reads ` +
+				`back absent whatever the view does with it, so the assertion passes ` +
+				`without measuring anything.`,
+		);
+	}
+	return [
+		{
+			key: 'metadata denylist',
+			where: `public_runs strip-list assertion in ${PUBLIC_RUNS_SEED}`,
 			values: asserted,
 		},
 	];
@@ -1337,6 +1396,7 @@ export const REGISTRY = [
 		rails: [
 			{ label: 'sql (the live public_runs projection)', sites: publicRunsViewSites },
 			{ label: `pgtap (${PUBLIC_RUNS_DENYLIST_TEST})`, sites: pgtapDenylistSites },
+			{ label: `seed (${PUBLIC_RUNS_SEED})`, sites: seedDenylistSites },
 		],
 	},
 ];

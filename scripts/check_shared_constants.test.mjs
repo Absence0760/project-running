@@ -47,6 +47,7 @@ import {
 	jsonbBuildObjectKeys,
 	parseMetadataDenylist,
 	parsePgtapDenylist,
+	parseSeedDenylist,
 	pgtapDenylistSites,
 	publicRunsViewSites,
 } from './check_shared_constants.mjs';
@@ -985,6 +986,59 @@ test('an empty pgtap array throws — the loop would then pass against any view'
 	);
 });
 
+const SEED_SRC = `
+do $$
+declare
+  v_public_metadata jsonb;
+begin
+  IF NOT (v_public_metadata ? 'activity_type') THEN
+    RAISE EXCEPTION 'public_runs: activity_type must survive (it is public-safe)';
+  END IF;
+
+  IF v_public_metadata ? 'strava_id'
+     -- A group comment naming its source migration
+     OR v_public_metadata ? 'garmin_id' THEN
+    RAISE EXCEPTION 'public_runs: metadata strip list incomplete';
+  END IF;
+end $$;
+`;
+
+// The same `v_public_metadata ? 'key'` spelling asserts a few lines earlier
+// that activity_type SURVIVES. A parser reading the file at large folds that
+// into the denylist and then reports a disagreement that is really two
+// assertions pointing in opposite directions.
+test('the seed rail reads only the strip-list block, not the survives-assertions above it', () => {
+	assert.deepEqual(parseSeedDenylist(SEED_SRC, 'fixture'), ['strava_id', 'garmin_id']);
+});
+
+test('a renamed seed strip-list exception throws rather than reading nothing', () => {
+	assert.throws(
+		() => parseSeedDenylist(SEED_SRC.replace('strip list incomplete', 'something else'), 'fixture'),
+		/no public_runs strip-list assertion in fixture/,
+	);
+});
+
+// Reachable only when the chain stops naming literals — a rewrite to `? v_key`
+// over a loop variable keeps the anchor and takes the key names out of the
+// file, which is a rail reading nothing while looking untouched.
+test('a seed strip-list assertion naming no literal keys throws', () => {
+	assert.throws(
+		() => parseSeedDenylist(SEED_SRC.replace(/\? '[a-z_]*'/g, '? v_key'), 'fixture'),
+		/names no keys/,
+	);
+});
+
+// seed.sql annotates each group of keys with the migration that added it, and
+// those comments live inside a dollar-quoted body the lexer leaves intact --
+// correctly, since it is a string literal. A key-position match that did not
+// tolerate them read every commented group as unbuilt.
+test('a fixture key written after a comment line still counts as built', () => {
+	const keys = jsonbBuildObjectKeys([
+		"jsonb_build_object('a', 1,\n  -- 20270430_001 strip-list addition:\n  'b', 2)",
+	]);
+	assert.deepEqual([...keys].sort(), ['a', 'b']);
+});
+
 test('a fixture bag yields its keys, not its values', () => {
 	const keys = jsonbBuildObjectKeys([
 		"jsonb_build_object('a', 'garmin_id', 'b', jsonb_build_object('c', 1), 'd', '{\"x\": 1, \"y\": 2}'::jsonb)",
@@ -1034,6 +1088,9 @@ test('MUTATION: a view redefined without a strip line fails, naming the key only
 			}),
 		},
 	});
-	assert.equal(errors.length, 1);
-	assert.match(errors[0], /only there: {4}watch_workout/);
+	// One error per rail that still strips the key: the pgtap array and the
+	// seed's assertion each disagree with the view independently, which is the
+	// point of holding three homes rather than two.
+	assert.equal(errors.length, 2);
+	for (const error of errors) assert.match(error, /only there: {4}watch_workout/);
 });
