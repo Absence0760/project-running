@@ -166,6 +166,8 @@
 				return m('notificationBell.contentHidden');
 			case 'data_export_ready':
 				return m('notificationBell.dataExportReady');
+			case 'refund_failed':
+				return m('notificationBell.refundFailed');
 			default:
 				return m('notificationBell.generic');
 		}

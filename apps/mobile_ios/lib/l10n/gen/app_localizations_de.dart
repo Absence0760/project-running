@@ -4441,6 +4441,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Dein Datenexport steht zum Download bereit';
 
   @override
+  String get profileNotifRefundFailed =>
+      'Eine von uns gestartete Erstattung konnte nicht abgeschlossen werden. Das Geld liegt noch bei uns, und wir finden einen anderen Weg, es zurückzuzahlen.';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name hat mit deiner Aktivität interagiert';
   }

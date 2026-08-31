@@ -4440,6 +4440,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Votre export de données est prêt à télécharger';
 
   @override
+  String get profileNotifRefundFailed =>
+      'Un remboursement que nous avions lancé n’a pas pu aboutir. L’argent est toujours chez nous et nous trouverons un autre moyen de vous le rendre.';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name a interagi avec votre activité';
   }

@@ -4422,6 +4422,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Tu exportación de datos está lista para descargar';
 
   @override
+  String get profileNotifRefundFailed =>
+      'Un reembolso que iniciamos no se pudo completar. El dinero sigue con nosotros y buscaremos otra forma de devolvértelo.';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interactuó con tu actividad';
   }

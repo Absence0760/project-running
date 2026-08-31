@@ -5928,6 +5928,10 @@
   "@profileNotifDataExportReady": {
     "description": "Notification text for the user's own Art 20 data export finishing its build"
   },
+  "profileNotifRefundFailed": "A refund we started couldn't be completed. The money is still with us and we'll arrange another way to return it.",
+  "@profileNotifRefundFailed": {
+    "description": "Notification text for a refund the bank reversed, on an event order or a donation"
+  },
   "profileNotifGeneric": "{name} interacted with your activity",
   "@profileNotifGeneric": {
     "description": "Fallback notification text for unknown kinds",

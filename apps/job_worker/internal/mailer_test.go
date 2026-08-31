@@ -37,7 +37,7 @@ func pushPrefs(mode string) map[string]interface{} {
 }
 
 func TestShouldEmail_Matrix(t *testing.T) {
-	important := []string{"event_reminder", "event_cancel", "plan_update", "message", "data_export_ready"}
+	important := []string{"event_reminder", "event_cancel", "plan_update", "message", "data_export_ready", "refund_failed"}
 	social := []string{"kudos", "comment", "comment_reply", "follow", "club_post", "run_completed", "event_rsvp"}
 
 	for _, k := range important {
@@ -223,6 +223,11 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 		// and the page mints the signed download URL when the subject
 		// arrives (decisions.md § 729).
 		{"data_export_ready", NotificationRow{Kind: "data_export_ready", UserID: "usr-1"}, base + "/settings/account"},
+		// Both shapes: an event order carries the FK and lands on the event page,
+		// a donation carries none and lands on the inbox rather than on
+		// eventPath's own /clubs fallback (decisions § 825).
+		{"refund_failed", NotificationRow{Kind: "refund_failed", UserID: "usr-1", EventID: &ev}, base + "/events/evt-1"},
+		{"refund_failed_donation", NotificationRow{Kind: "refund_failed", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
 		{"unknown_future_kind", NotificationRow{Kind: "unknown_future_kind", UserID: "usr-1"}, base + "/u/usr-1?tab=notifications"},
 	}
 
@@ -321,6 +326,13 @@ func TestPathForKind(t *testing.T) {
 		{"run_completed nil id → inbox", "run_completed", NotificationRow{UserID: "u1"}, inbox},
 		// Follow → recipient's own profile (there is NO /profile route).
 		{"follow → /u/{id}", "follow", NotificationRow{UserID: "u1"}, base + "/u/u1"},
+		// A reversed refund on an event order → the event page, whose banner
+		// explains the same thing at length. On a DONATION there is no FK to
+		// carry, and eventPath's own /clubs fallback would answer "we still
+		// have your money" with a club directory — so that half goes to the
+		// inbox, where the message is (decisions § 825).
+		{"refund_failed order", "refund_failed", NotificationRow{UserID: "u1", EventID: &ev}, base + "/events/e1"},
+		{"refund_failed donation → inbox", "refund_failed", NotificationRow{UserID: "u1"}, inbox},
 		// Static targets.
 		{"message", "message", NotificationRow{}, base + "/messages"},
 		{"challenge_complete", "challenge_complete", NotificationRow{}, base + "/challenges"},

@@ -4425,6 +4425,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'A sua exportação de dados está pronta para transferir';
 
   @override
+  String get profileNotifRefundFailed =>
+      'Um reembolso que iniciámos não pôde ser concluído. O dinheiro continua connosco e vamos combinar outra forma de o devolver.';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interagiu com a sua atividade';
   }
@@ -18357,6 +18361,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get profileNotifDataExportReady =>
       'Sua exportação de dados está pronta para baixar';
+
+  @override
+  String get profileNotifRefundFailed =>
+      'Um reembolso que iniciamos não pôde ser concluído. O dinheiro ainda está conosco e vamos combinar outra forma de devolver.';
 
   @override
   String profileNotifGeneric(String name) {

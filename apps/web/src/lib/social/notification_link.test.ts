@@ -103,6 +103,22 @@ test('data_export_ready links to the export page, with or without any FK', () =>
 	);
 });
 
+// The two ledgers give this kind two shapes. An event order carries the FKs
+// and lands on the page whose banner explains the same thing at length; a
+// donation carries neither — `donations` has no client SELECT policy, so there
+// is no donor-facing row to point at — and the message is the whole message.
+test('refund_failed links to the event when it has one, and to nothing when it does not', () => {
+	assert.equal(
+		notificationLinkFor(
+			make({ kind: 'refund_failed', event_id: 'e1', event_club_slug: 'richmond' }),
+		),
+		'/clubs/richmond/events/e1',
+	);
+	assert.equal(notificationLinkFor(make({ kind: 'refund_failed' })), null);
+	// Half the pair is not a link: an id with no slug cannot address the route.
+	assert.equal(notificationLinkFor(make({ kind: 'refund_failed', event_id: 'e1' })), null);
+});
+
 test('an unknown future kind falls through to null, never undefined', () => {
 	const href = notificationLinkFor(make({ kind: 'brand_new_kind' }));
 	assert.equal(href, null);

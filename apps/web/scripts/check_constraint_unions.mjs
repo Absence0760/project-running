@@ -606,9 +606,11 @@ export const PAIRS = [
 		note: 'stamped by the notify triggers from the activity that fired them; no client enumerates the three.',
 	},
 	{
-		// `_targetKeyFor` omits the two kinds that point at no shared entity, so
-		// they take a per-row `solo:` key and can never collapse into each other;
-		// that is the grouping contract, not an oversight.
+		// `_targetKeyFor` omits the three kinds that point at no shared entity,
+		// so they take a per-row `solo:` key and can never collapse into each
+		// other; that is the grouping contract, not an oversight. `refund_failed`
+		// is deliberately among them: two reversed refunds are two sums of money
+		// owed, and "and 1 other" would hide one of them.
 		tableColumn: 'notifications.kind',
 		clients: [
 			{ file: TS_TYPES, decl: 'NotificationKind', shape: 'union' },
@@ -616,7 +618,7 @@ export const PAIRS = [
 				file: 'apps/mobile_android/lib/notification_groups.dart',
 				decl: '_targetKeyFor',
 				shape: 'switch',
-				allowMissing: ['content_hidden', 'data_export_ready'],
+				allowMissing: ['content_hidden', 'data_export_ready', 'refund_failed'],
 			},
 			{
 				file: 'apps/mobile_android/lib/screens/profile_screen.dart',

@@ -59,6 +59,15 @@ export function notificationLinkFor(item: NotificationLinkInput): string | null 
 			// § 717 + § 729). No FK — the export is not a `notifications`
 			// column, so this is the one kind whose link needs no id.
 			return '/settings/account';
+		case 'refund_failed':
+			// The event page carries the same explanation at length (§ 825).
+			// A DONATION refund failure has no FK to carry and no surface to
+			// point at — `donations` has no client SELECT policy — so it
+			// degrades to null and the row stays a plain, unlinked message,
+			// which is the whole message anyway.
+			return r.event_id && item.event_club_slug
+				? `/clubs/${item.event_club_slug}/events/${r.event_id}`
+				: null;
 		case 'content_hidden':
 			return null;
 		default:
