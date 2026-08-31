@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/guided_runs.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/l10n/gen/app_localizations_de.dart';
 import '../lib/l10n/gen/app_localizations_en.dart';
 
 final AppLocalizations _l10n = AppLocalizationsEn();
@@ -140,6 +141,22 @@ void main() {
         for (final c in g.cues) {
           expect(c.text.trim(), isNotEmpty);
         }
+      }
+    });
+
+    test('switching the catalogue re-localizes the text but keeps the shape', () {
+      final de = guidedRunLibrary(AppLocalizationsDe());
+
+      expect(de.length, library.length);
+      for (var i = 0; i < de.length; i++) {
+        // ids + timing are locale-independent; only the copy changes.
+        expect(de[i].id, library[i].id);
+        expect(de[i].durationSec, library[i].durationSec);
+        expect(de[i].title, isNot(library[i].title),
+            reason: '${de[i].id} title not translated');
+        expect(de[i].cues.map((c) => c.atSec).toList(),
+            library[i].cues.map((c) => c.atSec).toList());
+        expect(isGuidedRunValid(de[i]), isTrue);
       }
     });
   });

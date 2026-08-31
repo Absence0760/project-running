@@ -16017,6 +16017,14 @@
   "@racesRunSignUpBibHint": {
     "description": "Hint above the RunSignUp import action requiring a bib to scope the import"
   },
+  "racesUltraSignUpAthleteId": "UltraSignup athlete ID",
+  "@racesUltraSignUpAthleteId": {
+    "description": "Label for the UltraSignup athlete-id field in the race import sheet"
+  },
+  "racesUltraSignUpAthleteHint": "Enter your UltraSignup athlete ID, or leave it blank to use the one this listing carries.",
+  "@racesUltraSignUpAthleteHint": {
+    "description": "Hint above the UltraSignup import action explaining the optional athlete id"
+  },
   "racesPasteResultHint": "Enter your finishing details from the race's results page.",
   "@racesPasteResultHint": {
     "description": "Hint above the manual result paste form"
@@ -16084,6 +16092,22 @@
   "integrationsRunsignupUnavailable": "RunSignUp import isn't available yet. parkrun and manual paste still work.",
   "@integrationsRunsignupUnavailable": {
     "description": "Explainer when the RunSignUp key is unconfigured"
+  },
+  "integrationsUltrasignup": "UltraSignup",
+  "@integrationsUltrasignup": {
+    "description": "UltraSignup integration name"
+  },
+  "integrationsUltrasignupConnect": "Import trail and ultra results from UltraSignup.",
+  "@integrationsUltrasignupConnect": {
+    "description": "UltraSignup integration description"
+  },
+  "integrationsUltrasignupOpen": "Open the race calendar",
+  "@integrationsUltrasignupOpen": {
+    "description": "Action linking to the race calendar from the UltraSignup tile"
+  },
+  "integrationsUltrasignupUnavailable": "UltraSignup import isn't available yet. parkrun and manual paste still work.",
+  "@integrationsUltrasignupUnavailable": {
+    "description": "Explainer when the UltraSignup key is unconfigured"
   },
   "integrationsChronotrack": "ChronoTrack",
   "@integrationsChronotrack": {
@@ -16829,6 +16853,18 @@
   "@prefsCuePhaseTransitionsSubtitle": {"description": "Voice cues / race strategy"},
   "prefsCuePhaseTransitionsInfo": "Only active when you pick a Race strategy for the run. Announces each phase and its intent as it starts. Example: “Phase 2 of 3. Settle into your goal pace.”",
   "@prefsCuePhaseTransitionsInfo": {"description": "Info popup body + example for the race-phases cue"},
+  "prefsCueGuidedRun": "Guided runs",
+  "@prefsCueGuidedRun": {"description": "Voice cues / race strategy"},
+  "prefsCueGuidedRunSubtitle": "The coach script of a guided run you armed before starting",
+  "@prefsCueGuidedRunSubtitle": {"description": "Voice cues / race strategy"},
+  "prefsCueGuidedRunInfo": "Only active when you arm a guided run on the Run tab before you start. Speaks each scripted coach cue as you reach its mark. Example: “Five minutes in. Settle into a rhythm you could hold all day.”",
+  "@prefsCueGuidedRunInfo": {"description": "Info popup body + example for the guided-run cue"},
+  "runGuidedRun": "Guided run",
+  "@runGuidedRun": {"description": "Run screen — the idle-state affordance that arms a guided run for the next recording"},
+  "runGuidedRunNone": "No guided run",
+  "@runGuidedRunNone": {"description": "Run screen — the guided-run picker row that clears the armed run"},
+  "runGuidedRunOption": "{minutes} min · {subtitle}",
+  "@runGuidedRunOption": {"description": "Run screen — a guided-run picker row subtitle", "placeholders": {"minutes": {"type": "int"}, "subtitle": {"type": "String"}}},
   "runRaceStrategy": "Race strategy",
   "@runRaceStrategy": {"description": "Voice cues / race strategy"},
   "runStrategyNone": "No strategy",
@@ -17655,5 +17691,22 @@
         "type": "String"
       }
     }
+  },
+  "runDetailGuidedRun": "Guided run: {title}",
+  "@runDetailGuidedRun": {
+    "description": "Run-detail chip naming the guided-run script a run was recorded under",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailGuidedRunUnavailable": "Guided run no longer in the library",
+  "@runDetailGuidedRunUnavailable": {
+    "description": "Run-detail readout when the stored guided_run_id names a workout this build no longer ships"
+  },
+  "guidedRunUseThisRun": "Use this run",
+  "@guidedRunUseThisRun": {
+    "description": "Action on the guided-run detail screen that arms the script on the recorder"
   }
 }

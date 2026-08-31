@@ -149,6 +149,48 @@ export async function deleteRun(runId: string): Promise<void> {
 	}
 }
 
+/// Service-role insert of one race-calendar listing. `provider` is the
+/// `race_listings.provider` value under test — it decides which import leg the
+/// /races modal offers, so a spec about that seam names it explicitly.
+/// `search_race_listings` only returns listings from `current_date` forward,
+/// so build the date through `dates.ts` rather than a literal.
+export async function insertRaceListing(opts: {
+	provider: string;
+	name: string;
+	race_date: string;
+	distance_m?: number | null;
+	location_label?: string | null;
+	provider_race_id?: string | null;
+	is_verified?: boolean;
+}): Promise<string> {
+	const admin = getAdminClient();
+	const { data, error } = await admin
+		.from('race_listings')
+		.insert({
+			provider: opts.provider,
+			name: opts.name,
+			race_date: opts.race_date,
+			distance_m: opts.distance_m ?? 21_097,
+			location_label: opts.location_label ?? null,
+			provider_race_id: opts.provider_race_id ?? null,
+			is_verified: opts.is_verified ?? true
+		})
+		.select('id')
+		.single();
+	if (error) {
+		throw new Error(`simulate.insertRaceListing failed: ${error.message}`);
+	}
+	return (data as { id: string }).id;
+}
+
+export async function deleteRaceListing(listingId: string): Promise<void> {
+	const admin = getAdminClient();
+	const { error } = await admin.from('race_listings').delete().eq('id', listingId);
+	if (error) {
+		throw new Error(`simulate.deleteRaceListing failed: ${error.message}`);
+	}
+}
+
 /// Service-role upsert for `user_settings.prefs.<key>`. Used by tests
 /// that need to plant a setting (e.g. privacy zones) without driving
 /// through the canonical UI — appropriate when the UI requires

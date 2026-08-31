@@ -394,6 +394,28 @@ export function chronoTrackScopeGate(scope: { bib?: string }): RaceImportGate {
 }
 
 /**
+ * Pre-fetch gate for the UltraSignup leg — the same fail-closed rule its two
+ * siblings already had, which this branch never did.
+ *
+ * The UltraSignup endpoint reads ONE ATHLETE'S history rather than one race's
+ * results, so the scope is an account id and there is nothing to filter by
+ * afterwards. The branch used to fall back to the listing's own
+ * `provider_race_id` when no athlete id was supplied — a category error: that
+ * column holds a RACE id, by its name and by every other provider's use of it,
+ * so the fallback would fetch a race and then stamp the CALLER's user_id onto
+ * whichever finisher came back. Nothing populates UltraSignup listings today
+ * (the listing sync is a stub), so the hole was closed by the absence of data
+ * rather than by a check.
+ */
+export function ultraSignUpScopeGate(scope: { athleteId?: string }): RaceImportGate {
+  return capField(scope.athleteId) ? GATE_OK : {
+    ok: false,
+    status: 400,
+    error: 'ultrasignup_athlete_id_required',
+  };
+}
+
+/**
  * Post-fetch gate for the matchRunId (enrich) path. Enrich merges ONE result
  * onto the caller's own run, so it must resolve to exactly one mapped result;
  * more than one is ambiguous (which finisher is the caller?) and is rejected

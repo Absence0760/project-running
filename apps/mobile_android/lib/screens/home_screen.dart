@@ -14,7 +14,11 @@ import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../main.dart'
-    show pendingStartWorkout, pendingStartRunWithRoute, pendingPushTarget;
+    show
+        pendingArmGuidedRun,
+        pendingStartWorkout,
+        pendingStartRunWithRoute,
+        pendingPushTarget;
 import '../preferences.dart';
 import '../push_target.dart';
 import '../race_controller.dart';
@@ -176,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     _rebuildPages();
     pendingStartWorkout.addListener(_onPendingStartWorkout);
+    pendingArmGuidedRun.addListener(_onPendingArmGuidedRun);
     pendingStartRunWithRoute.addListener(_onPendingStartRunWithRoute);
     incomingRouteImport.addListener(_onIncomingRouteImport);
     pendingPushTarget.addListener(_onPendingPushTarget);
@@ -309,6 +314,18 @@ class _HomeScreenState extends State<HomeScreen>
   /// workout-load on its end via the same notifier.
   void _onPendingStartWorkout() {
     if (pendingStartWorkout.value == null) return;
+    if (!mounted) return;
+    if (_currentIndex.value != _pageRun) {
+      _currentIndex.value = _pageRun;
+      _pageController.jumpToPage(_pageRun);
+    }
+  }
+
+  /// The guided-run detail screen armed a script for the recorder. Same
+  /// shape as [_onPendingStartWorkout]: bring the Run tab forward and leave
+  /// the draining to RunScreen, which owns the arming.
+  void _onPendingArmGuidedRun() {
+    if (pendingArmGuidedRun.value == null) return;
     if (!mounted) return;
     if (_currentIndex.value != _pageRun) {
       _currentIndex.value = _pageRun;
@@ -594,6 +611,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     pendingStartWorkout.removeListener(_onPendingStartWorkout);
+    pendingArmGuidedRun.removeListener(_onPendingArmGuidedRun);
     pendingStartRunWithRoute.removeListener(_onPendingStartRunWithRoute);
     incomingRouteImport.removeListener(_onIncomingRouteImport);
     pendingPushTarget.removeListener(_onPendingPushTarget);

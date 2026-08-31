@@ -20337,6 +20337,18 @@ abstract class AppLocalizations {
   /// **'Enter your bib number so we import only your result, not the whole field.'**
   String get racesRunSignUpBibHint;
 
+  /// Label for the UltraSignup athlete-id field in the race import sheet
+  ///
+  /// In en, this message translates to:
+  /// **'UltraSignup athlete ID'**
+  String get racesUltraSignUpAthleteId;
+
+  /// Hint above the UltraSignup import action explaining the optional athlete id
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your UltraSignup athlete ID, or leave it blank to use the one this listing carries.'**
+  String get racesUltraSignUpAthleteHint;
+
   /// Hint above the manual result paste form
   ///
   /// In en, this message translates to:
@@ -20438,6 +20450,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'RunSignUp import isn\'t available yet. parkrun and manual paste still work.'**
   String get integrationsRunsignupUnavailable;
+
+  /// UltraSignup integration name
+  ///
+  /// In en, this message translates to:
+  /// **'UltraSignup'**
+  String get integrationsUltrasignup;
+
+  /// UltraSignup integration description
+  ///
+  /// In en, this message translates to:
+  /// **'Import trail and ultra results from UltraSignup.'**
+  String get integrationsUltrasignupConnect;
+
+  /// Action linking to the race calendar from the UltraSignup tile
+  ///
+  /// In en, this message translates to:
+  /// **'Open the race calendar'**
+  String get integrationsUltrasignupOpen;
+
+  /// Explainer when the UltraSignup key is unconfigured
+  ///
+  /// In en, this message translates to:
+  /// **'UltraSignup import isn\'t available yet. parkrun and manual paste still work.'**
+  String get integrationsUltrasignupUnavailable;
 
   /// ChronoTrack integration name
   ///
@@ -21614,6 +21650,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only active when you pick a Race strategy for the run. Announces each phase and its intent as it starts. Example: “Phase 2 of 3. Settle into your goal pace.”'**
   String get prefsCuePhaseTransitionsInfo;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'Guided runs'**
+  String get prefsCueGuidedRun;
+
+  /// Voice cues / race strategy
+  ///
+  /// In en, this message translates to:
+  /// **'The coach script of a guided run you armed before starting'**
+  String get prefsCueGuidedRunSubtitle;
+
+  /// Info popup body + example for the guided-run cue
+  ///
+  /// In en, this message translates to:
+  /// **'Only active when you arm a guided run on the Run tab before you start. Speaks each scripted coach cue as you reach its mark. Example: “Five minutes in. Settle into a rhythm you could hold all day.”'**
+  String get prefsCueGuidedRunInfo;
+
+  /// Run screen — the idle-state affordance that arms a guided run for the next recording
+  ///
+  /// In en, this message translates to:
+  /// **'Guided run'**
+  String get runGuidedRun;
+
+  /// Run screen — the guided-run picker row that clears the armed run
+  ///
+  /// In en, this message translates to:
+  /// **'No guided run'**
+  String get runGuidedRunNone;
+
+  /// Run screen — a guided-run picker row subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min · {subtitle}'**
+  String runGuidedRunOption(int minutes, String subtitle);
 
   /// Voice cues / race strategy
   ///
@@ -23000,6 +23072,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter a number of servings between {min} and {max}.'**
   String limitsServingsOutOfRange(String min, String max);
+
+  /// Run-detail chip naming the guided-run script a run was recorded under
+  ///
+  /// In en, this message translates to:
+  /// **'Guided run: {title}'**
+  String runDetailGuidedRun(String title);
+
+  /// Run-detail readout when the stored guided_run_id names a workout this build no longer ships
+  ///
+  /// In en, this message translates to:
+  /// **'Guided run no longer in the library'**
+  String get runDetailGuidedRunUnavailable;
+
+  /// Action on the guided-run detail screen that arms the script on the recorder
+  ///
+  /// In en, this message translates to:
+  /// **'Use this run'**
+  String get guidedRunUseThisRun;
 }
 
 class _AppLocalizationsDelegate

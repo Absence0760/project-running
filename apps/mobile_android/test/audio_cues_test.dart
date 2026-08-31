@@ -489,6 +489,22 @@ void main() {
       );
     });
 
+    test('announceGuidedCue queues — the recording path must not interrupt',
+        () {
+      // A guided run fires on fixed time marks, so its cues collide with
+      // splits, off-route warnings and cut-off catch-ups. A stop() here would
+      // truncate one of those mid-word on both platforms.
+      final src = File('lib/audio_cues.dart').readAsStringSync();
+      final start = src.indexOf('Future<void> announceGuidedCue(');
+      expect(start, isNonNegative);
+      final body = src.substring(
+          start, src.indexOf('Future<void> speakGuidedCue(', start));
+      expect(body.contains('_tts.stop()'), isFalse,
+          reason: 'the recording path must ride the engine queue mode, not '
+              'flush what is already speaking.');
+      expect(body.contains('_tts.speak(text)'), isTrue);
+    });
+
     test('speakGuidedCue interrupts rather than queues', () {
       final src = File('lib/audio_cues.dart').readAsStringSync();
       final start = src.indexOf('Future<void> speakGuidedCue(');

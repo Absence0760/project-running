@@ -11724,6 +11724,13 @@ class AppLocalizationsJa extends AppLocalizations {
       '全体ではなくあなたの結果だけをインポートするため、ゼッケン番号を入力してください。';
 
   @override
+  String get racesUltraSignUpAthleteId => 'UltraSignupアスリートID';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'UltraSignupのアスリートIDを入力してください。空欄のままにすると、このレースに登録されたIDを使います。';
+
+  @override
   String get racesPasteResultHint => 'レースの結果ページから完走の詳細を入力してください。';
 
   @override
@@ -11774,6 +11781,20 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'RunSignUpのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'UltraSignupからトレイル・ウルトラの結果をインポートします。';
+
+  @override
+  String get integrationsUltrasignupOpen => 'レースカレンダーを開く';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'UltraSignupのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
@@ -12435,6 +12456,27 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get prefsCuePhaseTransitionsInfo =>
       'ランでレース戦略を選んだときだけ有効です。各フェーズとその狙いを開始時に読み上げます。例：「3フェーズ中2フェーズ目。目標ペースに落ち着いて。」';
+
+  @override
+  String get prefsCueGuidedRun => 'ガイド付きラン';
+
+  @override
+  String get prefsCueGuidedRunSubtitle => '開始前に選んだガイド付きランのコーチ音声スクリプト';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'ランタブで開始前にガイド付きランを選んだときだけ有効です。各マークに達するとスクリプトのコーチの声を読み上げます。例：「5分経過。一日中維持できるリズムに落ち着いて。」';
+
+  @override
+  String get runGuidedRun => 'ガイド付きラン';
+
+  @override
+  String get runGuidedRunNone => 'ガイド付きランなし';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes分 · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'レース戦略';
@@ -13230,4 +13272,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return '$min〜$maxの範囲で分量を入力してください。';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'ガイド付きラン: $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable => 'このガイド付きランはライブラリにありません';
+
+  @override
+  String get guidedRunUseThisRun => 'このランを使う';
 }

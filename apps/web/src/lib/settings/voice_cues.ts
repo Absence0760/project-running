@@ -30,6 +30,7 @@ export const VOICE_CUE_IDS = [
 	'cutoff_catch_up',
 	'marker_targets',
 	'phase_transitions',
+	'guided_run',
 ] as const;
 
 export type VoiceCueId = (typeof VOICE_CUE_IDS)[number];

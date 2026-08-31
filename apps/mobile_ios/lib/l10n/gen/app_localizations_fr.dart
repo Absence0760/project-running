@@ -12328,6 +12328,13 @@ class AppLocalizationsFr extends AppLocalizations {
       'Saisissez votre dossard pour n\'importer que votre résultat, pas tout le classement.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'Identifiant athlète UltraSignup';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Saisissez votre identifiant athlète UltraSignup, ou laissez le champ vide pour utiliser celui de cette course.';
+
+  @override
   String get racesPasteResultHint =>
       'Saisissez les détails de votre arrivée depuis la page de résultats de la course.';
 
@@ -12382,6 +12389,20 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'L\'import RunSignUp n\'est pas encore disponible. parkrun et le collage manuel fonctionnent toujours.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Importez les résultats trail et ultra depuis UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Ouvrir le calendrier des courses';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'L\'import UltraSignup n\'est pas encore disponible. parkrun et le collage manuel fonctionnent toujours.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
@@ -13074,6 +13095,28 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get prefsCuePhaseTransitionsInfo =>
       'Actif seulement quand tu choisis une stratégie de course. Annonce chaque phase et son intention à son début. Exemple : « Phase 2 sur 3. Installe-toi sur ton allure cible. »';
+
+  @override
+  String get prefsCueGuidedRun => 'Courses guidées';
+
+  @override
+  String get prefsCueGuidedRunSubtitle =>
+      'Le script du coach d\'une course guidée choisie avant le départ';
+
+  @override
+  String get prefsCueGuidedRunInfo =>
+      'Actif seulement quand tu choisis une course guidée dans l\'onglet Course avant de partir. Annonce chaque consigne du script quand tu atteins son repère. Exemple : « Cinq minutes. Installe-toi sur une allure que tu tiendrais toute la journée. »';
+
+  @override
+  String get runGuidedRun => 'Course guidée';
+
+  @override
+  String get runGuidedRunNone => 'Aucune course guidée';
+
+  @override
+  String runGuidedRunOption(int minutes, String subtitle) {
+    return '$minutes min · $subtitle';
+  }
 
   @override
   String get runRaceStrategy => 'Stratégie de course';
@@ -13909,4 +13952,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String limitsServingsOutOfRange(String min, String max) {
     return 'Indique un nombre de portions entre $min et $max.';
   }
+
+  @override
+  String runDetailGuidedRun(String title) {
+    return 'Course guidée : $title';
+  }
+
+  @override
+  String get runDetailGuidedRunUnavailable =>
+      'Course guidée absente de la bibliothèque';
+
+  @override
+  String get guidedRunUseThisRun => 'Utiliser cette course';
 }

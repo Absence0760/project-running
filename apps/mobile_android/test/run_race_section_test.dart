@@ -33,7 +33,7 @@ class _FakeRaceService extends RaceService {
       candidates;
 
   @override
-  Future<bool> isRunSignUpConfigured() async => false;
+  Future<bool> isProviderConfigured(String provider) async => false;
 }
 
 RaceListingView _listing(String id, String name, {int? distanceM}) =>

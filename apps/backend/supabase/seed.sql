@@ -2253,7 +2253,17 @@ BEGIN
               'chip_time', '1:47:23',
               'perceived_effort', 7,
               -- 20260724_001 strip-list addition:
-              'run_number', 17
+              'run_number', 17,
+              -- 20270214_001 strip-list additions:
+              'gun_time', '1:47:10',
+              'age_group_place', 12,
+              'age_group', 'M35-39',
+              -- 20270401_001 / 20270410_001 strip-list additions:
+              'safety_escalated_at', '2026-05-01T02:00:00Z',
+              'expected_return_at', '2026-05-01T01:00:00Z',
+              -- 20270627000001 / 20270628000001 strip-list additions:
+              'guided_run_id', 'easy-30',
+              'indoor_source', 'treadmill'
             ))
     RETURNING id INTO v_run_id;
 
@@ -2300,7 +2310,14 @@ BEGIN
      OR v_public_metadata ? 'overall_place'
      OR v_public_metadata ? 'chip_time'
      OR v_public_metadata ? 'perceived_effort'
-     OR v_public_metadata ? 'run_number' THEN
+     OR v_public_metadata ? 'run_number'
+     OR v_public_metadata ? 'gun_time'
+     OR v_public_metadata ? 'age_group_place'
+     OR v_public_metadata ? 'age_group'
+     OR v_public_metadata ? 'safety_escalated_at'
+     OR v_public_metadata ? 'expected_return_at'
+     OR v_public_metadata ? 'guided_run_id'
+     OR v_public_metadata ? 'indoor_source' THEN
     RAISE EXCEPTION 'public_runs: metadata strip list incomplete — leaked at least one denylisted key';
   END IF;
 
