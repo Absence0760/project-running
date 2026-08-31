@@ -1072,3 +1072,36 @@ The script uploads a Melbourne-region track, inserts a run (firing the trigger t
 This is **not** wired into CI — both the OSM extract download and the OSRM build are too heavy for the GitHub runner. It's a developer-machine sanity check before shipping a matcher change.
 
 ---
+
+## Suite totals after the #789 coverage round (2026-08-31)
+
+Measured on the merged branch, not transcribed from the six slice reports. Each
+lane's own runner produced these numbers; the pgtap and Flutter figures are the
+whole suite, not the added files.
+
+| Lane | Command | Before | After |
+|---|---|---|---|
+| Web unit | `npm run test:unit --workspace=apps/web` | 4413 | 4508 |
+| Edge Functions (Deno) | `deno test --no-check supabase/functions/` | 618 | 785 |
+| pgTAP | `supabase test db --local` | 2242 in 265 files | 2406 in 272 files |
+| Repo guards | `node --test 'scripts/*.test.mjs'` | 556 | 613 |
+| Backend guards | `node --test 'apps/backend/scripts/*.test.mjs'` | 124 | 128 |
+| Watch sim (python) | `python3 -m unittest discover -s apps/custom_watch/sim` | 25 | 50 |
+| Go worker | `go test ./...` | — | +117 test funcs / 235 cases |
+| Flutter (android) | `flutter test` | — | 6750 |
+
+Two mutation guards back these rather than the counts alone.
+`check_edge_function_test_vacuity.mjs` reports 785 killed, 0 survived, 0
+unmeasured — it caught three of the round's own new cases as vacuous
+([decisions § 788](../architecture/decisions.md)'s second costume, an equality
+between two of the subject's own outputs) and 15 more as unmeasured, where a
+top-level dereference made the file throw during load and score as "not
+measured" rather than "not killed". `check_pgtap_refusal_assertions.mjs`
+reports 179 refusal assertions mutation-checked across 272 files, 5 survivors,
+all 5 expected.
+
+The one pgtap failure on this branch, `donations_status_lock_test`, is
+environmental and pre-existing: it fails identically on the untouched base
+commit (265 files / 2242 tests, same file, same `planned 19 tests but ran 0`).
+The workstation CLI is 2.109.1 against CI's pinned 2.84.2, and the two disagree
+about `service_role` EXECUTE on `fundraiser_totals`.

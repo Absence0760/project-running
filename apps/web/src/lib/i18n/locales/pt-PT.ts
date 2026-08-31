@@ -19,7 +19,7 @@ export const messages = {
 	"rateLimit.generic": "Está a fazer isto demasiado depressa — aguarde {wait} e tente novamente.",
 	"rateLimit.waitSeconds": "{n, plural, one {# segundo} other {# segundos}}",
 	"rateLimit.waitMinutes": "{n, plural, one {# minuto} other {# minutos}}",
-	"rateLimit.waitSoon": "Um momento",
+	"rateLimit.waitSoon": "um momento",
 	// The one `runs.activity_type` vocabulary — every surface that names an
 	// activity resolves through `activityTypeLabel` (runs/activity_type.ts).
 	// Value domain is the `runs_activity_type_check` CHECK constraint.

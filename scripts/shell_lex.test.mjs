@@ -88,3 +88,64 @@ test('each command carries the line it starts on', () => {
 		{ line: 5, words: ['d'] },
 	]);
 });
+
+// decisions.md § 773 closed a decoy inside an alias call's own argument list —
+// `--function-name "$(… --name live)" --name stable` reading `live`. The same
+// decoy written with backticks was still live: the substitution stayed inside
+// the enclosing command's words, so the decoy's `--name` came first.
+test('a backtick substitution is a command of its own, not words of the one around it', () => {
+	const cmds = splitShellCommands(
+		'aws lambda update-alias --function-name `aws ssm get-parameter --name live` --name stable',
+	);
+	assert.deepEqual(cmds.map((c) => c.words), [
+		['aws', 'lambda', 'update-alias', '--function-name'],
+		['aws', 'ssm', 'get-parameter', '--name', 'live'],
+		['--name', 'stable'],
+	]);
+	assert.ok(!cmds[0].words.includes('live'));
+});
+
+test('a backtick inside quotes stays inside its word, as `$(` already does', () => {
+	assert.deepEqual(
+		splitShellCommands('cmd --name "`inner --name live`" --name stable')[0].words,
+		['cmd', '--name', '`inner --name live`', '--name', 'stable'],
+	);
+	assert.deepEqual(
+		splitShellCommands("cmd --name '`inner`'")[0].words,
+		['cmd', '--name', '`inner`'],
+	);
+});
+
+test('a backtick in a comment opens no command', () => {
+	assert.deepEqual(splitShellCommands('# see `aws lambda update-alias`\ncmd').map((c) => c.words), [
+		['cmd'],
+	]);
+});
+
+test('an escaped backtick is a character, not a boundary', () => {
+	assert.deepEqual(splitShellCommands('cmd a\\`b')[0].words, ['cmd', 'a`b']);
+});
+
+// The shapes the two consuming guards meet in real scripts. None of these is a
+// command a scan should act on, and each one used to be lexed as words of the
+// command it sits in.
+test('arithmetic expansion is a nested command, not a word of its host', () => {
+	assert.deepEqual(splitShellCommands('echo $(( 1 + 2 ))').map((c) => c.words), [
+		['echo', '$'],
+		['1', '+', '2'],
+	]);
+});
+
+test('a redirection target does not merge into the word before it', () => {
+	assert.deepEqual(splitShellCommands('npm run build > out.txt')[0].words, [
+		'npm',
+		'run',
+		'build',
+		'>',
+		'out.txt',
+	]);
+});
+
+test('a variable assignment prefix stays with its command', () => {
+	assert.deepEqual(splitShellCommands('FOO=bar cmd --flag')[0].words, ['FOO=bar', 'cmd', '--flag']);
+});

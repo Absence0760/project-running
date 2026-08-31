@@ -63,6 +63,16 @@ export const UPSTREAM_FONT = join(UPSTREAM_PACKAGE, 'material-symbols-outlined.w
 /// the mdsvex `/learn` guides.
 export const SOURCE_EXTENSIONS = new Set(['.svelte', '.ts', '.js', '.css', '.md', '.svx', '.html']);
 
+/// A test module. Nothing under this name reaches a bundle, so a ligature
+/// spelled inside one renders nowhere and must not pull a glyph into the
+/// shipped face. The exclusion is not cosmetic: the reader's last pass takes
+/// any quoted bare token that happens to be in the 4275-word vocabulary, and
+/// the vocabulary is full of ordinary English -- `stack`, `padding`, `privacy`,
+/// `javascript`. 24 of the 348 glyphs the walk selected were in the subset for
+/// that reason alone, and a fixture that merely quotes such a word failed the
+/// coverage gate on a font that was in fact correct.
+export const TEST_SOURCE = /\.(test|spec)\.(ts|js|mjs)$/;
+
 /// The axes pinned out of the variable font, and the value each is pinned at.
 ///
 /// Measured on the 347-glyph subset: all four axes 222 KB, drop GRAD 136 KB,
@@ -138,6 +148,7 @@ export function collectSources(root) {
 				continue;
 			}
 			if (!SOURCE_EXTENSIONS.has(extname(entry.name))) continue;
+			if (TEST_SOURCE.test(entry.name)) continue;
 			out.push({
 				path: abs.slice(REPO_ROOT.length + 1).split(sep).join('/'),
 				text: readFileSync(abs, 'utf8'),
@@ -203,4 +214,40 @@ export function selectIcons(sources, vocabulary) {
 /** @param {string} text @returns {Set<string>} */
 export function parseVocabulary(text) {
 	return new Set(text.split('\n').filter((line) => line.length > 0));
+}
+
+/// One `'AXIS' value` pair inside a `font-variation-settings` declaration.
+export const VARIATION_SETTING = /'([A-Za-z]{4})'\s+(-?[\d.]+)/g;
+
+/**
+ * Every request in the sources for a PINNED axis at a value the subset cannot
+ * render.
+ *
+ * Pinning an axis instantiates it: the shipped face carries `GRAD` at 0 and
+ * `opsz` at 24 and no others, so a rule asking for a different value is not
+ * refused — it is silently ignored, and the icon renders at the pinned value
+ * with nothing on screen or in the console saying the declaration did nothing.
+ * That failure mode did not exist before the font was subset (decisions § 780),
+ * which is why the requests have to be read back out of the source rather than
+ * assumed to still match.
+ *
+ * @param {{ path: string, text: string }[]} sources
+ * @param {Readonly<Record<string, number>>} [pinned]
+ * @returns {{ path: string, axis: string, value: number, pinnedAt: number }[]}
+ */
+export function pinnedAxisConflicts(sources, pinned = PINNED_AXES) {
+	/** @type {{ path: string, axis: string, value: number, pinnedAt: number }[]} */
+	const out = [];
+	for (const { path, text } of sources) {
+		for (const decl of text.matchAll(/font-variation-settings\s*:\s*([^;}]*)/g)) {
+			for (const m of decl[1].matchAll(VARIATION_SETTING)) {
+				const axis = m[1];
+				if (!(axis in pinned)) continue;
+				const value = Number(m[2]);
+				if (value === pinned[axis]) continue;
+				out.push({ path, axis, value, pinnedAt: pinned[axis] });
+			}
+		}
+	}
+	return out;
 }

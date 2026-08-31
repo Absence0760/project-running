@@ -384,6 +384,30 @@ void main() {
       expect(picked, hasLength(30));
     });
 
+    test('the cap equals the watch store it exists to respect', () {
+      // Divergence 3 of decisions 787: this was 50 here and 30 on the watch,
+      // each file documenting the other's number, and TWO green unit tests
+      // transcribed the two different values. A literal on one rail cannot
+      // detect that; reading the other rail can. The phone follows the
+      // watch, which owns the constraint — a Preferences DataStore rewritten
+      // whole on every save, and a 1.4-inch picker.
+      final kotlin = File(
+          '../watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/'
+          'LocalRouteStore.kt');
+      expect(kotlin.existsSync(), isTrue,
+          reason: 'the watch-side store moved — repoint this guard rather '
+              'than deleting it, or the cap goes back to being two numbers');
+      final m = RegExp(r'const\s+val\s+MAX_ROUTES\s*=\s*(\d+)')
+          .firstMatch(kotlin.readAsStringSync());
+      expect(m, isNotNull,
+          reason: 'MAX_ROUTES is no longer a literal const in '
+              'LocalRouteStore.kt — this guard is reading nothing');
+      expect(WearRoutesBridge.kMaxRoutesPerPush, int.parse(m!.group(1)!),
+          reason: 'a push larger than the watch keeps shows routes in the '
+              'live picker that vanish at the next restart, with nothing '
+              'reported to the runner');
+    });
+
     test('mixed starred + plain over the cap honours both filters', () {
       // 100 routes total: 80 starred, 20 plain. With cap 30, the
       // first 30 starred (in input order) make it through.

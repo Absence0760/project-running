@@ -6,17 +6,20 @@ import assert from 'node:assert/strict';
 import {
 	ACTION_DIR,
 	LOCKFILE,
+	RUST_TOOLCHAIN,
 	WORKFLOW_DIR,
 	checkActionPins,
 	checkAll,
 	checkDefmtPrint,
 	checkFlutter,
 	checkMelos,
+	checkRustToolchain,
 	parseActionUses,
 	parseDefmtPrint,
 	parseDefmtPrintByJob,
 	parseLockedVersion,
 	parseMelosActivations,
+	parseRustChannel,
 	parseWorkflow,
 	readCompositeActions,
 	resolveVersion,
@@ -527,11 +530,13 @@ test('the repo’s real workflows and lockfile agree on both toolchains', () => 
 	const files = readdirSync(WORKFLOW_DIR)
 		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
 		.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') }));
-	const { errors, flutter, melos, defmt, actions } = checkAll(
+	const { errors, flutter, melos, defmt, actions, rust } = checkAll(
 		files,
 		readFileSync(LOCKFILE, 'utf-8'),
 		readCompositeActions(ACTION_DIR),
+		readFileSync(RUST_TOOLCHAIN, 'utf-8'),
 	);
+	assert.match(String(rust.channel), /^\d+\.\d+\.\d+$/);
 	assert.deepEqual(errors, []);
 	assert.ok(
 		actions.ok.length >= 100,
@@ -543,4 +548,69 @@ test('the repo’s real workflows and lockfile agree on both toolchains', () => 
 	);
 	assert.ok(melos.ok.length >= 6, `expected every melos activation, found ${melos.ok.length}`);
 	assert.ok(defmt.ok.length >= 4, `expected both installs + both cache keys, found ${defmt.ok.length}`);
+});
+
+/// decisions.md § 705. The firmware channel is the one toolchain in this repo
+/// nothing checked, and the shape that hurts is the one that reads as fine:
+/// `channel = "stable"` installs, builds and clippies cleanly today.
+test('the committed firmware channel is an exact version, not a channel name', () => {
+	const { errors, ok, channel } = checkRustToolchain(readFileSync(RUST_TOOLCHAIN, 'utf-8'));
+	assert.deepEqual(errors, []);
+	assert.equal(ok.length, 1);
+	assert.match(String(channel), /^\d+\.\d+\.\d+$/);
+});
+
+test('a floating channel is refused, whichever name it floats under', () => {
+	for (const floating of ['stable', 'beta', 'nightly', 'nightly-2026-01-01', 'stable-x86_64-unknown-linux-gnu']) {
+		const { errors, ok } = checkRustToolchain(`[toolchain]\nchannel = "${floating}"\n`);
+		assert.equal(errors.length, 1, floating);
+		assert.equal(ok.length, 0, floating);
+		assert.match(errors[0], /not an exact MAJOR\.MINOR\.PATCH/);
+		assert.match(errors[0], new RegExp(floating.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')));
+	}
+});
+
+test('a two-component version is a range, not a pin', () => {
+	// `1.98` admits 1.98.1, which is a different clippy with different lints —
+	// the same reason `--version ^1.1` was refused for defmt-print.
+	const { errors } = checkRustToolchain('[toolchain]\nchannel = "1.98"\n');
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /not an exact MAJOR\.MINOR\.PATCH/);
+});
+
+test('a toolchain file naming no channel fails rather than passing over nothing', () => {
+	const { errors, ok } = checkRustToolchain('[toolchain]\ntargets = ["thumbv7em-none-eabihf"]\n');
+	assert.equal(ok.length, 0);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /declares no `channel`/);
+});
+
+test('a missing toolchain file is an error, not a silent skip', () => {
+	const { errors, ok, channel } = checkRustToolchain(null);
+	assert.equal(ok.length, 0);
+	assert.equal(channel, null);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /is missing/);
+});
+
+test('a commented-out channel does not stand in for the real one', () => {
+	// `#` opens a TOML comment, so the first LIVE assignment is the channel;
+	// reading the commented one would report a pin the toolchain never sees.
+	assert.equal(parseRustChannel('# channel = "1.98.0"\nchannel = "stable"\n'), 'stable');
+	assert.equal(parseRustChannel('channel = "1.98.0" # was stable\n'), '1.98.0');
+	assert.equal(parseRustChannel("channel = '1.98.0'\n"), '1.98.0');
+});
+
+test('a floating firmware channel reaches checkAll rather than stopping at its own function', () => {
+	const files = readdirSync(WORKFLOW_DIR)
+		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
+		.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') }));
+	const { errors } = checkAll(
+		files,
+		readFileSync(LOCKFILE, 'utf-8'),
+		readCompositeActions(ACTION_DIR),
+		'[toolchain]\nchannel = "stable"\n',
+	);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /rust-toolchain\.toml/);
 });

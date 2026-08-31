@@ -26,7 +26,7 @@
 
 begin;
 
-select plan(15);
+select plan(17);
 
 -- ── The pure derivation ─────────────────────────────────────────────────────
 
@@ -224,6 +224,40 @@ select lives_ok(
   $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
     values ('00000000-0000-0000-0000-0000000b2001', 'Front Squat', 'front squat', 1)$$,
   'a service_role insert satisfying the constraint is not refused by it'
+);
+
+-- ── the whole class, one code point at a time ──────────────────────────────
+-- The six named cases above are the ones the old expression got wrong. This
+-- walks every member of the class the three rails share, because a migration
+-- that dropped one code point from the SQL copy alone would split exactly the
+-- names carrying it and nothing else in this file would notice. Each is
+-- checked both as an interior separator and at both edges, since the old
+-- defect was precisely a trim that did not cover what the fold produced.
+select is(
+  (select count(*)::int
+     from unnest(array[
+       9, 10, 11, 12, 13, 32, 133, 160, 5760,
+       8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202,
+       8232, 8233, 8239, 8287, 12288, 65279
+     ]) as cp
+    where public.normalise_exercise_name('Bench' || chr(cp) || 'Press') <> 'bench press'
+       or public.normalise_exercise_name(chr(cp) || 'Bench Press' || chr(cp)) <> 'bench press'),
+  0,
+  'every code point in the shared whitespace class folds to a space and trims'
+);
+
+-- The deliberate exclusions, kept out on all three rails: U+001C-U+001F are
+-- control characters the ICU provider happened to fold and the libc one did
+-- not, and U+200B / U+2060 / U+180E are invisible but are not White_Space and
+-- are not U+FEFF. Folding any of them here would merge two buckets the
+-- clients keep apart, which is the same defect pointing the other way.
+select is(
+  (select count(*)::int
+     from unnest(array[28, 29, 30, 31, 6158, 8203, 8288]) as cp
+    where public.normalise_exercise_name('Bench' || chr(cp) || 'Press')
+          <> 'bench' || chr(cp) || 'press'),
+  0,
+  'the code points outside the class are preserved, not folded'
 );
 
 select * from finish();

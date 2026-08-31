@@ -63,9 +63,13 @@
 		</a>
 	</header>
 
-	<main class="invite-main" id="main-content">
+	<!-- The live region is the permanently-mounted <main>, not the joining
+	     card: the card is the page's FIRST state, so a region on it is in the
+	     tree before anything changes and the result that replaces it is
+	     announced by nothing (decisions.md § 736). -->
+	<main class="invite-main" id="main-content" aria-live="polite">
 		{#if status === 'joining'}
-			<section class="invite-card joining-card" aria-live="polite">
+			<section class="invite-card joining-card">
 				<p class="kicker">{m('coachingAccept.joiningKicker')}</p>
 				<h1>{m('coachingAccept.joiningHeading')}</h1>
 				<p class="muted">{m('coachingAccept.joiningBody')}</p>

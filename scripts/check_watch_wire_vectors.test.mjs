@@ -12,7 +12,19 @@
 // Run: `node --test scripts/check_watch_wire_vectors.test.mjs`
 
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -220,3 +232,156 @@ test('a line-continued hex vector still reads as one value', () => {
   const src = `const V: &str = "0011223344556677\\\n     8899aabbccddeeff";`;
   assert.deepEqual(rustVectors(src), ['00112233445566778899aabbccddeeff']);
 });
+
+// ---------------------------------------------------------------------------
+// The verdict, not only the parsers.
+//
+// § 793 proved the comparison "by mutation, eight ways" and none of the eight
+// was committed, so the suite covered every reader the guard has and nothing
+// that reads their output. These drive the whole script — exit code, stderr and
+// all — against a mirrored tree with exactly one file rewritten, which is the
+// shape the guard's own `WATCH_WIRE_ROOT` override was added for.
+// ---------------------------------------------------------------------------
+
+const GUARD = join(REPO_ROOT, 'scripts', 'check_watch_wire_vectors.mjs');
+
+/// A tree of directories holding symlinks to the real sources: the guard walks
+/// two directories with `readdirSync(withFileTypes)`, which reports a symlinked
+/// DIRECTORY as neither a file nor a directory, so the mirror has to be
+/// per-file. Cheap enough to build once and reuse.
+/** @param {string} root @param {string[]} trees @param {string[]} extras */
+function mirror(root, trees, extras) {
+  /** @param {string} rel */
+  const link = (rel) => {
+    const dest = join(root, rel);
+    mkdirSync(dirname(dest), { recursive: true });
+    symlinkSync(join(REPO_ROOT, rel), dest);
+  };
+  /** @param {string} rel */
+  const walk = (rel) => {
+    for (const e of readdirSync(join(REPO_ROOT, rel), { withFileTypes: true })) {
+      if (e.name === 'target' || e.name === 'node_modules' || e.name === 'build') continue;
+      const child = `${rel}/${e.name}`;
+      if (e.isDirectory()) walk(child);
+      else link(child);
+    }
+  };
+  for (const t of trees) walk(t);
+  for (const rel of extras) if (!existsSync(join(root, rel))) link(rel);
+}
+
+/** @type {string | null} */
+let mirrorRoot = null;
+function fixtureRoot() {
+  if (mirrorRoot) return mirrorRoot;
+  const root = mkdtempSync(join(tmpdir(), 'wire-vectors-'));
+  /** @type {Set<string>} */
+  const extras = new Set();
+  for (const pair of VECTOR_PAIRS) {
+    extras.add(pair.rust.file);
+    extras.add(pair.dart.file);
+  }
+  for (const r of RUST_ONLY) extras.add(r.file);
+  for (const d of DART_ONLY) extras.add(d.file);
+  for (const row of CONSTANT_ROWS) for (const rail of row.rails) extras.add(rail.file);
+  mirror(root, ['apps/custom_watch', 'apps/mobile_android/test'], [...extras]);
+  process.on('exit', () => rmSync(root, { recursive: true, force: true }));
+  mirrorRoot = root;
+  return root;
+}
+
+/// Run the guard against the mirror with `rel` replaced by `rewrite(original)`.
+/** @param {string | null} rel @param {(src: string) => string} [rewrite] */
+function runGuard(rel, rewrite) {
+  const root = fixtureRoot();
+  const target = rel === null ? null : join(root, rel);
+  if (target && rewrite) {
+    const src = readFileSync(join(REPO_ROOT, /** @type {string} */ (rel)), 'utf8');
+    const next = rewrite(src);
+    assert.notEqual(next, src, `the fixture for ${rel} changed nothing — the mutation is stale`);
+    unlinkSync(target);
+    writeFileSync(target, next);
+  }
+  try {
+    return spawnSync(process.execPath, [GUARD], {
+      encoding: 'utf-8',
+      env: { ...process.env, WATCH_WIRE_ROOT: root },
+    });
+  } finally {
+    if (target && rewrite) {
+      unlinkSync(target);
+      symlinkSync(join(REPO_ROOT, /** @type {string} */ (rel)), target);
+    }
+  }
+}
+
+test('the committed tree passes as a process, over both registries', () => {
+  const res = runGuard(null);
+  assert.equal(res.status, 0, res.stderr);
+  const okLines = res.stdout.split('\n').filter((l) => l.startsWith('[OK]'));
+  assert.ok(okLines.length >= 37, `expected every pair and row reported, got ${okLines.length}`);
+});
+
+test('a firmware-only wire-version bump fails the constant row', () => {
+  const res = runGuard('apps/custom_watch/core/src/settings.rs', (src) =>
+    src.replace(/pub const SETTINGS_VERSION: u8 = (\d+);/, (_m, v) =>
+      `pub const SETTINGS_VERSION: u8 = ${Number(v) + 1};`),
+  );
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /SET1 format version: the rails disagree/);
+});
+
+test('a one-byte nudge of a firmware golden fails the pair and names the offset', () => {
+  const res = runGuard('apps/custom_watch/core/src/course_store.rs', flipFirstGoldenByte);
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /CRS1 course frame: the two rails no longer encode the same bytes/);
+  assert.match(res.stderr, /first difference at byte \d+/);
+});
+
+test('a phone-only nudge of a golden fails the same pair from the other side', () => {
+  const res = runGuard('apps/mobile_android/test/watch_course_test.dart', flipFirstGoldenByte);
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /CRS1 course frame: the two rails no longer encode the same bytes/);
+});
+
+test('a firmware golden nobody registered is refused, not ignored', () => {
+  const res = runGuard('apps/custom_watch/core/src/course_store.rs', (src) =>
+    `${src}\n#[cfg(test)]\nmod extra_golden {\n    #[test]\n    fn golden_unregistered_frame() {\n        assert_eq!(super::hex(), "0011223344556677");\n    }\n}\n`,
+  );
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /golden_unregistered_frame is a golden vector the registry does not know about/);
+});
+
+test('a stale RUST_ONLY entry fails as loudly as a new offender', () => {
+  const entry = RUST_ONLY[0];
+  const res = runGuard(entry.file, (src) => src.replace(`fn ${entry.fn}`, `fn ${entry.fn}_renamed`));
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, new RegExp(`RUST_ONLY names .*${entry.fn}, which no longer exists`));
+});
+
+test('the third copy of the run blob is held to the registered one', () => {
+  // It carries no registry row: it passes only by being byte-identical, so a
+  // drift in the copy alone has to fail (decisions § 793).
+  const res = runGuard('apps/mobile_android/test/sim_watch_screen_test.dart', flipFirstGoldenByte);
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /is a hex vector the registry does not know about, and it is not a copy of one it does/);
+});
+
+test('a Wear-OS-only off-route threshold fails the four-rail row', () => {
+  const res = runGuard(
+    'apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/ui/RunWatchApp.kt',
+    (src) => src.replace('offRouteDistanceM > 40', 'offRouteDistanceM > 50'),
+  );
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /off-route (alert threshold|re-arm distance)/);
+});
+
+/// Flip the low nibble of the first byte of the first long hex literal in a
+/// source, whichever language and quote style it is written in.
+/** @param {string} src */
+function flipFirstGoldenByte(src) {
+  return src.replace(/(['"])([0-9a-f]{2})([0-9a-f]{30,})/, (_m, quote, first, rest) => {
+    const flipped = first[0] + (parseInt(first[1], 16) ^ 1).toString(16);
+    return `${quote}${flipped}${rest}`;
+  });
+}

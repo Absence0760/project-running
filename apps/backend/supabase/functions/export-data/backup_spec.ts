@@ -434,8 +434,12 @@ export const BACKUP_VERSION = 1;
 /// the subject under GDPR Art 15(1) / CCPA right-to-know
 /// (audit/data-export-completeness 2026-07-02 High). Service-role
 /// reads bypass the 20260707_001 column-level revokes.
+/// One literal on purpose: supabase-js resolves a `.select()` argument at the
+/// type level, so a concatenation infers as `string` and the typed client
+/// degrades to `GenericStringError[]` at the call site.
+// prettier-ignore
 export const PROFILE_SELECT =
-	'id,display_name,avatar_url,preferred_unit,created_at,date_of_birth,parkrun_number,gender,subscription_tier,subscription_at,billing_issue_at';
+	'id,display_name,handle,avatar_url,preferred_unit,created_at,onboarded_at,date_of_birth,gender,height_cm,parkrun_number,subscription_tier,subscription_at,billing_issue_at,terms_accepted_at,age_confirmed_at,coach_consent_at,health_data_consent_at,ai_disclosure_version';
 
 /// Strip `id` from the profile so the archive is re-homeable —
 /// restore stamps the new owner's uid. Mirrors the Go worker's

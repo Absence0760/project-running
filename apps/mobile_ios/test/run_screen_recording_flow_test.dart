@@ -1493,5 +1493,145 @@ void main() {
           reason: 'a sample landing after stop must not reach a dead '
               'recorder or a disposed screen');
     });
+
+    testWidgets('a belt that reconnects states nothing until it feeds again',
+        (tester) async {
+      // The subtitle switches on the status, so the three non-feeding arms are
+      // disclosed whatever `_treadmillSpeedKmh` holds. What that structure
+      // does NOT cover is the return to `connected`: the status listener's
+      // null-out on the way out is the only thing stopping the pre-drop figure
+      // being re-presented as current the moment the link is back, before a
+      // single new sample has arrived.
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill, kmh: 10);
+      expect(find.text('Belt 10.0 km/h'), findsOneWidget);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.reconnecting);
+      await tester.pump();
+      treadmill.debugEmitStatus(BleTreadmillStatus.connected);
+      await tester.pump();
+
+      expect(find.text('Belt 10.0 km/h'), findsNothing,
+          reason: 'the belt has not sent anything since it came back — '
+              'showing what it last said before the drop presents a stale '
+              'figure as the current one');
+      final sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(sw.subtitle, isNull,
+          reason: 'connected-with-no-sample is the one blank state, and it is '
+              'blank because it is true');
+      await drainBanner(tester);
+    });
+
+    testWidgets('a fresh sample after a reconnect is the figure shown',
+        (tester) async {
+      // The negative control for the case above: the blank is a pending
+      // reading, not a subscription the drop tore down.
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill, kmh: 10);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.reconnecting);
+      await tester.pump();
+      treadmill.debugEmitStatus(BleTreadmillStatus.connected);
+      await tester.pump();
+      treadmill.debugEmitSample(
+          const TreadmillSample(instantaneousSpeedKmh: 7.5));
+      await tester.pump();
+
+      expect(find.text('Belt 7.5 km/h'), findsOneWidget);
+      expect(find.text('Belt 10.0 km/h'), findsNothing);
+      await drainBanner(tester);
+    });
+
+    testWidgets('a connect failure after a live belt clears the last figure',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      await engageBelt(tester, treadmill, kmh: 10);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.connectFailed);
+      await tester.pump();
+
+      expect(find.text('Belt 10.0 km/h'), findsNothing);
+      expect(find.text('No belt data — distance from GPS'), findsOneWidget,
+          reason: 'connectFailed and disconnected share one line: the fact '
+              'the runner needs is that distance is coming from GPS');
+      await drainBanner(tester);
+    });
+
+    testWidgets('an engaged belt with no sample yet claims nothing',
+        (tester) async {
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+      treadmill.debugEmitStatus(BleTreadmillStatus.connected);
+      await tester.pump();
+      await tester.tap(find.text('Treadmill mode'));
+      await tester.pump();
+
+      final sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(sw.value, isTrue);
+      expect(sw.subtitle, isNull,
+          reason: 'a connected belt that has not sent a reading yet is the '
+              'one state with nothing to say');
+    });
+
+    testWidgets('a belt failure while the toggle is off says nothing at all',
+        (tester) async {
+      // A background belt's connection churn must not narrate an outdoor GPS
+      // run. The status arm is only entered while the runner engaged the mode.
+      final treadmill = await pumpWithPairedBelt(tester);
+      await reachRecording(tester);
+
+      treadmill.debugEmitStatus(BleTreadmillStatus.disconnected);
+      await tester.pump();
+
+      final sw = tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+      expect(sw.value, isFalse);
+      expect(sw.subtitle, isNull,
+          reason: 'nothing is claimed about a belt the runner never engaged');
+      expect(find.text('No belt data — distance from GPS'), findsNothing);
+    });
+
+    testWidgets('the belt speed is stated in the runner own unit',
+        (tester) async {
+      // The figure is belt-reported km/h; a miles runner reads mph. Nothing
+      // else pins the conversion, so an inverted factor would ship.
+      final s = await makeStores();
+      await tester.runAsync(() => s.prefs.setUseMiles(true));
+      SharedPreferences.setMockInitialValues({
+        'treadmill_device_id': 'AA:BB:CC:DD:EE:FF',
+        'treadmill_device_name': 'NordicTrack T9',
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: RunScreen(
+            apiClient: null,
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+            treadmill: s.treadmill,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      });
+      await tester.pump();
+      await reachRecording(tester);
+      await engageBelt(tester, s.treadmill, kmh: 16.09344);
+
+      expect(find.text('Belt 10.0 mph'), findsOneWidget,
+          reason: '16.09344 km/h is exactly 10 mph — a runner set to miles '
+              'must not read the belt in kilometres');
+    });
   });
 }

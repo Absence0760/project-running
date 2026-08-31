@@ -67,6 +67,21 @@ export function buildAccountLinkParams(
   };
 }
 
+/// A URL with no origin of its own — a custom scheme, `data:`, `blob:`,
+/// `javascript:` — serialises its opaque origin as the literal string `null`,
+/// and every such URL serialises to the SAME string. Comparing the
+/// serialisations therefore makes any one opaque-origin entry in the allowlist
+/// admit every opaque-origin URL there is, including `javascript:`. The
+/// sibling `STRAVA_ALLOWED_REDIRECTS` really does carry a custom scheme
+/// (`threkir://strava-callback`), and this gate's own comment points an
+/// operator at that convention, so the configuration that opens it is one an
+/// operator would reach for. `return_url` is caller-supplied and this is the
+/// only thing standing between it and Stripe's hosted onboarding page, so a
+/// candidate carrying no origin is refused before the allowlist is consulted —
+/// which also makes an opaque ENTRY inert, since no origin an allowed URL can
+/// have is the string `null`.
+const OPAQUE_ORIGIN = 'null';
+
 /// Pin a redirect/return URL against an allowlist of origins, the way
 /// strava-import pins STRAVA_ALLOWED_REDIRECTS. `account_onboarding`
 /// return/refresh URLs are operator-configured, but routing them through
@@ -87,6 +102,7 @@ export function validateReturnUrl(url: string, allowlist: readonly string[]): bo
   } catch {
     return false;
   }
+  if (origin === OPAQUE_ORIGIN) return false;
   for (const entry of allowlist) {
     let allowedOrigin: string;
     try {

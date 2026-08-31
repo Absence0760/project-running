@@ -45,6 +45,16 @@
 // ended SHA updates for it. Three declarations plus this check keeps both
 // properties.
 //
+//   Rust (firmware) — `apps/custom_watch/rust-toolchain.toml` names an EXACT
+//     `MAJOR.MINOR.PATCH` channel, never `stable`/`beta`/`nightly` and never a
+//     two-component `1.98`. The firmware job runs clippy with `-D warnings`
+//     across three feature sets, and a zero-warning bar on a floating channel
+//     hands the toolchain vendor the power to break the build on whoever
+//     pushes next: clippy 1.98 added `chunks_exact_to_as_chunks` and failed CI
+//     on two call sites untouched for weeks, from a PR changing docs
+//     (decisions.md § 705). Same rule, same reason, as the Flutter pin — and
+//     it was the one toolchain in this repo that nothing checked.
+//
 //   GitHub Actions — every `uses:` reference naming a third-party action pins
 //     a 40-character commit SHA and carries the trailing `# vN` comment that
 //     makes it readable (conventions.md § GitHub Actions). A tag is mutable:
@@ -85,6 +95,9 @@ export const WORKFLOW_DIR = join(REPO_ROOT, '.github', 'workflows');
 // toolchain checks below are about what the WORKFLOWS install.
 export const ACTION_DIR = join(REPO_ROOT, '.github', 'actions');
 export const LOCKFILE = join(REPO_ROOT, 'pubspec.lock');
+// One file resolves the firmware's Rust channel, and every firmware job
+// installs from it (`rustup show` honours it automatically).
+export const RUST_TOOLCHAIN = join(REPO_ROOT, 'apps', 'custom_watch', 'rust-toolchain.toml');
 
 const ACTION = 'subosito/flutter-action@';
 const ENV_KEY = 'FLUTTER_VERSION';
@@ -516,6 +529,71 @@ export function checkDefmtPrint(files) {
 	return { errors, ok, versions };
 }
 
+/// The `channel` a rust-toolchain.toml declares, or null when the file names
+/// none. TOML, not YAML, and read line-wise for the same stdlib-only reason
+/// everything else here is.
+/**
+ * @param {string} text
+ * @returns {string | null}
+ */
+export function parseRustChannel(text) {
+	for (const line of text.split('\n')) {
+		const bare = line.replace(/#.*$/, '');
+		const m = bare.match(/^\s*channel\s*=\s*(.*?)\s*$/);
+		if (m) return unquote(m[1]);
+	}
+	return null;
+}
+
+/// `apps/custom_watch/rust-toolchain.toml` must pin an exact version.
+///
+/// A missing file, or a file naming no channel, is an error rather than a
+/// silent pass: rustup would then fall back to the host default and the
+/// firmware would build on whatever that machine happens to carry, which is
+/// the floating channel this check exists to refuse.
+/**
+ * @param {string | null} text null when the file is absent
+ * @returns {{ errors: string[], ok: string[], channel: string | null }}
+ */
+export function checkRustToolchain(text) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	if (text === null) {
+		errors.push(
+			`apps/custom_watch/rust-toolchain.toml is missing. Three firmware jobs run ` +
+				`\`rustup show\` inside apps/custom_watch and take their toolchain from it; ` +
+				`without the file each runner installs its own default and clippy ` +
+				`\`-D warnings\` breaks on whoever pushes next (decisions.md § 705).`,
+		);
+		return { errors, ok, channel: null };
+	}
+	const channel = parseRustChannel(text);
+	if (channel === null) {
+		errors.push(
+			`apps/custom_watch/rust-toolchain.toml declares no \`channel\`, so rustup ` +
+				`resolves the host default and the firmware's Rust version floats ` +
+				`(decisions.md § 705).`,
+		);
+		return { errors, ok, channel };
+	}
+	if (!EXACT_VERSION.test(channel)) {
+		errors.push(
+			`apps/custom_watch/rust-toolchain.toml pins \`channel = "${channel}"\`, which is ` +
+				`not an exact MAJOR.MINOR.PATCH version. The firmware job runs clippy with ` +
+				`\`-D warnings\` across three feature sets, so a floating channel means the ` +
+				`toolchain vendor decides when the build breaks and it breaks on whoever ` +
+				`pushes next, not on whoever chose to upgrade — clippy 1.98 failed CI on two ` +
+				`call sites untouched for weeks, from a PR changing docs (decisions.md § 705). ` +
+				`Bumping it is a deliberate commit that carries its own fallout.`,
+		);
+		return { errors, ok, channel };
+	}
+	ok.push(`apps/custom_watch/rust-toolchain.toml -> rust ${channel}`);
+	return { errors, ok, channel };
+}
+
 /// Every `uses:` line in a workflow or composite action, commented or not, as
 /// `{ line, ref, comment, commented }`. A line whose value is not shaped like
 /// an action reference is prose mentioning the key, not a use of it.
@@ -596,19 +674,22 @@ export function checkActionPins(files) {
  * @param {WorkflowFile[]} files
  * @param {string} lockText
  * @param {WorkflowFile[]} [compositeFiles]
+ * @param {string | null} [rustToolchainText]
  */
-export function checkAll(files, lockText, compositeFiles = []) {
+export function checkAll(files, lockText, compositeFiles = [], rustToolchainText = null) {
 	const flutter = checkFlutter(files);
 	const melos = checkMelos(files, lockText);
 	const defmt = checkDefmtPrint(files);
 	const actions = checkActionPins([...files, ...compositeFiles]);
+	const rust = checkRustToolchain(rustToolchainText);
 	return {
-		errors: [...flutter.errors, ...melos.errors, ...defmt.errors, ...actions.errors],
-		ok: [...flutter.ok, ...melos.ok, ...defmt.ok, ...actions.ok],
+		errors: [...flutter.errors, ...melos.errors, ...defmt.errors, ...actions.errors, ...rust.errors],
+		ok: [...flutter.ok, ...melos.ok, ...defmt.ok, ...actions.ok, ...rust.ok],
 		flutter,
 		melos,
 		defmt,
 		actions,
+		rust,
 	};
 }
 
@@ -635,10 +716,11 @@ export function readCompositeActions(dir) {
 }
 
 function main() {
-	const { errors, ok, flutter, melos, defmt, actions } = checkAll(
+	const { errors, ok, flutter, melos, defmt, actions, rust } = checkAll(
 		readWorkflows(WORKFLOW_DIR),
 		readFileSync(LOCKFILE, 'utf-8'),
 		readCompositeActions(ACTION_DIR),
+		existsSync(RUST_TOOLCHAIN) ? readFileSync(RUST_TOOLCHAIN, 'utf-8') : null,
 	);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
@@ -653,7 +735,8 @@ function main() {
 			`${[...flutter.versions.keys()][0]}; ${melos.ok.length} activation(s) pin ` +
 			`melos ${melos.locked}, matching pubspec.lock; defmt-print pinned to ` +
 			`${[...defmt.versions.keys()][0]} with matching cache keys; ` +
-			`${actions.ok.length} third-party action reference(s) pinned by commit SHA.`,
+			`${actions.ok.length} third-party action reference(s) pinned by commit SHA; ` +
+			`the firmware's Rust channel pinned to ${rust.channel}.`,
 	);
 	return 0;
 }

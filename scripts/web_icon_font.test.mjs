@@ -18,6 +18,9 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
+import { gzipSync } from 'node:zlib';
+
+import { ASSET_EXEMPTIONS, MAX_ASSET_KB } from './check_web_bundle_budget.mjs';
 
 import {
 	MANIFEST,
@@ -28,7 +31,9 @@ import {
 	VOCABULARY_FILE,
 	WEB_SRC,
 	collectSources,
+	TEST_SOURCE,
 	parseVocabulary,
+	pinnedAxisConflicts,
 	selectIcons,
 	sha256Bytes,
 } from './web_icon_font.mjs';
@@ -196,4 +201,85 @@ test('the upstream font the subset was cut from is the one installed', {
 		readFileSync(join(REPO_ROOT, 'node_modules', 'material-symbols', 'package.json'), 'utf8'),
 	).version;
 	assert.equal(manifest.upstream.package, `material-symbols@${version}`);
+});
+
+/// decisions.md § 780 pinned two axes out of the variable font, which creates a
+/// failure mode that did not exist before it: a rule asking for a pinned axis
+/// at some other value is not refused, it is ignored. Read back out of the
+/// source rather than assumed, the way the glyph set is.
+test('the committed sources ask for every pinned axis at the value it is pinned at', () => {
+	const conflicts = pinnedAxisConflicts(collectSources(WEB_SRC));
+	assert.deepEqual(
+		conflicts.map((c) => `${c.path}: '${c.axis}' ${c.value} (font carries ${c.pinnedAt})`),
+		[],
+		'the subset instantiates these axes, so the declaration silently does nothing — ' +
+			'drop it, or re-cut the font keeping that axis variable and re-measure the budget',
+	);
+});
+
+test('a request for a pinned axis at another value is named, not ignored', () => {
+	const conflicts = pinnedAxisConflicts(
+		source('a.svelte', "font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 200, 'opsz' 20;"),
+	);
+	assert.deepEqual(
+		conflicts.map((c) => `${c.axis}=${c.value}`),
+		['GRAD=200', 'opsz=20'],
+	);
+});
+
+test('a variable axis is never reported, whatever value it is set to', () => {
+	assert.deepEqual(
+		pinnedAxisConflicts(source('a.svelte', "font-variation-settings: 'FILL' 1, 'wght' 500;")),
+		[],
+	);
+});
+
+test('a pinned axis named outside a variation-settings declaration is not a request', () => {
+	// `'GRAD' 0` in prose, or in an unrelated property, asks the font for
+	// nothing — reading it as a request would fail the build over a comment.
+	assert.deepEqual(
+		pinnedAxisConflicts(source('a.css', "/* the 'GRAD' 200 axis is gone */\ncolor: red;")),
+		[],
+	);
+});
+
+/// The whole point of § 780 was the per-asset ceiling, and the number that
+/// clears it lives in an ADR rather than in an assertion. Checked here because
+/// it costs a gzip of one committed file: the bundle budget's own measurement
+/// needs a full production build first.
+test('the committed subset clears the per-asset ceiling with no exemption', () => {
+	const kb = Math.ceil(gzipSync(readFileSync(SUBSET_FONT)).length / 1024);
+	assert.ok(
+		kb <= MAX_ASSET_KB,
+		`the subset font is ${kb} KB gzipped against the ${MAX_ASSET_KB} KB per-asset ceiling`,
+	);
+	assert.deepEqual(
+		ASSET_EXEMPTIONS,
+		[],
+		'an exemption nothing needs is a hole nobody is watching (decisions § 780)',
+	);
+});
+
+test('a ligature spelled inside a test module is not a render site', () => {
+	// The reader's last pass takes any quoted bare token in the vocabulary, and
+	// the vocabulary is full of ordinary English. A fixture quoting one is not
+	// an icon: nothing under a *.test.ts name reaches a bundle.
+	const walked = collectSources(WEB_SRC).map((s) => s.path);
+	assert.equal(
+		walked.filter((p) => TEST_SOURCE.test(p)).length,
+		0,
+		'collectSources walked a test module',
+	);
+
+	const shipped = walked.filter((p) => /\.(ts|svelte)$/.test(p));
+	assert.ok(shipped.length > 100, 'the walk still reads the shipped sources');
+});
+
+test('the exclusion is what keeps a quoted vocabulary word out of the subset', () => {
+	// Positive control for the rule above: feed the reader the shape a test
+	// fixture has, and it does select the word. The exclusion is load-bearing,
+	// not a tidy-up -- 24 glyphs entered the subset this way.
+	const fixture = [{ path: 'apps/web/src/lib/x.test.ts', text: '<div class="stack">' }];
+	assert.deepEqual(selectIcons(fixture, vocabulary).icons, ['stack']);
+	assert.ok(vocabulary.has('padding') && vocabulary.has('privacy'));
 });

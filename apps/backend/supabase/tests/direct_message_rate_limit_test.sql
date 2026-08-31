@@ -11,7 +11,7 @@
 
 begin;
 
-select plan(9);
+select plan(17);
 
 -- ── Fixture ──────────────────────────────────────────────────────
 -- A and C both follow B, so both are inside the send gate. D follows B
@@ -25,21 +25,30 @@ values
   ('00000000-0000-0000-0000-00000000dd03', 'authenticated', 'authenticated',
    'dm-rate-c@spam.local', '', now(), now()),
   ('00000000-0000-0000-0000-00000000dd04', 'authenticated', 'authenticated',
-   'dm-rate-d@spam.local', '', now(), now());
+   'dm-rate-d@spam.local', '', now(), now()),
+  ('00000000-0000-0000-0000-00000000dd05', 'authenticated', 'authenticated',
+   'dm-rate-e@spam.local', '', now(), now());
 
 select tests.confirm_consent();
 
 insert into user_follows (follower_id, followee_id) values
   ('00000000-0000-0000-0000-00000000dd01', '00000000-0000-0000-0000-00000000dd02'),
   ('00000000-0000-0000-0000-00000000dd03', '00000000-0000-0000-0000-00000000dd02'),
-  ('00000000-0000-0000-0000-00000000dd04', '00000000-0000-0000-0000-00000000dd02');
+  ('00000000-0000-0000-0000-00000000dd04', '00000000-0000-0000-0000-00000000dd02'),
+  ('00000000-0000-0000-0000-00000000dd05', '00000000-0000-0000-0000-00000000dd02');
 
 -- D starts with their hour bucket already at the cap, in the window the
 -- trigger will compute for `now()`. Seeded here, before the role switch,
 -- because rate_limits has RLS enabled with no policies at all.
+-- E starts with BOTH windows already spent, which is the only state in which
+-- the order the trigger checks them in is observable.
 insert into rate_limits (user_id, bucket, window_start, count) values
   ('00000000-0000-0000-0000-00000000dd04', 'send_direct_message',
-   to_timestamp(floor(extract(epoch from now()) / 3600) * 3600), 250);
+   to_timestamp(floor(extract(epoch from now()) / 3600) * 3600), 250),
+  ('00000000-0000-0000-0000-00000000dd05', 'send_direct_message',
+   to_timestamp(floor(extract(epoch from now()) / 3600) * 3600), 250),
+  ('00000000-0000-0000-0000-00000000dd05', 'send_direct_message_burst',
+   to_timestamp(floor(extract(epoch from now()) / 60) * 60), 30);
 
 -- ── The trigger is the whole rail, not one affordance ─────────────
 -- There is exactly one write path into direct_messages (a PostgREST
@@ -145,6 +154,82 @@ select throws_ok(
   'a forged sender_id is refused by RLS, not misreported as a rate limit'
 );
 
+-- ── With both windows spent, the sender hears about the BINDING one ─
+-- The trigger checks the hour before the burst deliberately: both refusals
+-- are true, and telling a sender who has forty minutes to wait to "try again
+-- in 40 seconds" is the dishonest one. Swapping the two `perform` lines is a
+-- one-line edit that nothing else in this suite would notice.
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000dd05","role":"authenticated"}';
+select throws_matching(
+  $$ insert into direct_messages (sender_id, recipient_id, body)
+       values ('00000000-0000-0000-0000-00000000dd05',
+               '00000000-0000-0000-0000-00000000dd02', 'both windows spent') $$,
+  '^rate limit exceeded for send_direct_message, retry in [0-9]+s$',
+  'a sender with both windows spent is told about the hour, not the minute'
+);
+
+-- ── The two trusted skips, exercised one at a time ────────────────
+-- enforce_create_rate_limit returns before consulting the counter in three
+-- cases, and they are reached in order: service_role, then a null auth
+-- context, then a forged sender. The first two both admit a write past a
+-- spent window, so the JWT here carries a `sub` — without it auth.uid() is
+-- null and the SECOND skip answers, which would leave the service_role
+-- branch untested while looking exactly like this.
+set local role service_role;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000dd01","role":"service_role"}';
+select lives_ok(
+  $$insert into direct_messages (sender_id, recipient_id, body)
+    values ('00000000-0000-0000-0000-00000000dd01',
+            '00000000-0000-0000-0000-00000000dd02', 'written by the service role')$$,
+  'the service role writes past a spent burst window'
+);
+
+-- Direct SQL — migrations and seed.sql — carries no auth context at all.
+set local role postgres;
+set local "request.jwt.claims" = '';
+select lives_ok(
+  $$insert into direct_messages (sender_id, recipient_id, body)
+    values ('00000000-0000-0000-0000-00000000dd01',
+            '00000000-0000-0000-0000-00000000dd02', 'written by direct SQL')$$,
+  'a caller with no auth context writes past a spent burst window'
+);
+
+-- ── A throttled sender cannot clear their own counter ────────────
+-- decisions § 799: `cleanup_stale_rate_limits()` was anon-executable, and its
+-- whole body is `delete from rate_limits where window_start < now() - 24h` —
+-- an anonymous POST to it cleared every elapsed window and defeated every
+-- throttle in the app. 20270625000001 withheld it. The table itself carries
+-- the deliberate 20270408_001 grant matrix with RLS on and no policy at all,
+-- so the direct route is a silent zero-row delete rather than a refusal, and
+-- both routes are asserted: the counter A spent is still spent afterwards.
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000dd01","role":"authenticated"}';
+
+select throws_ok(
+  $$ select cleanup_stale_rate_limits() $$,
+  '42501',
+  null,
+  'a throttled sender cannot execute the sweep that would clear their window'
+);
+
+delete from rate_limits where user_id = '00000000-0000-0000-0000-00000000dd01';
+
+select throws_matching(
+  $$ insert into direct_messages (sender_id, recipient_id, body)
+       values ('00000000-0000-0000-0000-00000000dd01',
+               '00000000-0000-0000-0000-00000000dd02', 'after the reset attempt') $$,
+  '^rate limit exceeded for send_direct_message_burst, retry in [0-9]+s$',
+  'and a direct delete of their own counter rows leaves them just as throttled'
+);
+
+set local role postgres;
+select is(
+  (select count(*)::int from rate_limits
+    where user_id = '00000000-0000-0000-0000-00000000dd01'),
+  2,
+  'both of the sender''s counter rows survived the delete'
+);
+
 -- ── A refused send does not spend the volume budget ───────────────
 -- The trigger call lives inside the aborted statement, so its
 -- increment rolls back with it — unlike the standalone RPC path, where
@@ -157,6 +242,26 @@ select is(
       and bucket = 'send_direct_message'),
   30,
   'refused attempts roll back their own increment — the cap counts sent messages'
+);
+
+-- The same rollback on the window that actually did the refusing: six
+-- attempts were made past the cap (one single-row, one five-row batch) and
+-- the burst counter must still read the 30 that landed.
+select is(
+  (select count from rate_limits
+    where user_id = '00000000-0000-0000-0000-00000000dd01'
+      and bucket = 'send_direct_message_burst'),
+  30,
+  'the burst window counts sent messages too, not refused attempts'
+);
+
+-- The service-role write above went through the same trigger and must have
+-- left both of A's counters where it found them.
+select is(
+  (select count(*)::int from direct_messages
+    where sender_id = '00000000-0000-0000-0000-00000000dd01'),
+  32,
+  'both trusted writes landed without spending A''s budget'
 );
 
 select * from finish();

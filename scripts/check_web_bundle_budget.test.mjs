@@ -372,3 +372,42 @@ test('assets are outside the code and largest-chunk budgets, not silently inside
 	assert.match(summary.largest.path, /\.js$/);
 	assert.ok(summary.largestAsset.kb > MAX_CODE_KB, 'the font outweighs the entire code ceiling');
 });
+
+/// decisions.md § 775 turned on this guard's own input. Every ceiling is an
+/// upper bound, so an empty walk clears all four: a build directory the walk
+/// never found reads exactly like a bundle under budget.
+test('an empty build directory fails rather than clearing every ceiling', () => {
+	const { errors, summary } = checkBudgets({
+		files: [],
+		catalogues: new Map(),
+		locales: ['en'],
+	});
+	assert.equal(summary.codeKb, 0);
+	assert.ok(
+		errors.some((e) => e.budget === 'classification' && /no emitted files at all/.test(e.message)),
+		`expected the empty walk to be reported, got ${JSON.stringify(errors)}`,
+	);
+});
+
+test('a build with files but no JS or CSS is a walk pointed somewhere else', () => {
+	// Reachable without touching the i18n store: the manifest and the locale
+	// directory can both be intact while the walk reads a directory holding
+	// only prerendered HTML.
+	const { errors } = checkBudgets({
+		files: [
+			{ path: 'index.html', kb: 2 },
+			{ path: 'favicon.png', kb: 1 },
+		],
+		catalogues: new Map(),
+		locales: ['en'],
+	});
+	assert.ok(
+		errors.some((e) => /not one of them is JS or CSS/.test(e.message)),
+		`expected the code population to be reported empty, got ${JSON.stringify(errors)}`,
+	);
+});
+
+test('the empty-walk floor does not fire on a real build', () => {
+	const { errors } = checkBudgets(fixture());
+	assert.ok(!errors.some((e) => /no emitted files at all|not one of them is JS or CSS/.test(e.message)));
+});

@@ -99,17 +99,22 @@ void main() {
   // under runAsync with a bounded deadline instead. pumpAndSettle is avoided
   // — the loading spinner + the autofocused TextField cursor are perpetual
   // animations that hang it.
-  Future<void> _settleUntil(WidgetTester tester, bool Function() done) =>
+  ///
+  /// [describe] is required for the reason decisions 723 gives: one generic
+  /// sentence shared by every call site means an expired deadline no longer
+  /// names the condition that never held.
+  Future<void> _settleUntil(WidgetTester tester, bool Function() done,
+          {required String describe}) =>
       pumpUntil(tester, done,
-          describe: 'the check-in screen to reach the expected state',
-          timeout: const Duration(seconds: 5));
+          describe: describe, timeout: const Duration(seconds: 5));
 
   Future<void> _pumpLoaded(WidgetTester tester) async {
     await tester.runAsync(() async {
       await tester.pumpWidget(_app());
     });
     await tester.pump();
-    await _settleUntil(tester, () => tester.any(find.byType(TextField)));
+    await _settleUntil(tester, () => tester.any(find.byType(TextField)),
+        describe: 'the bib field to replace the loading state');
   }
 
   testWidgets('stamping IN writes a pending crossing through the store',
@@ -120,7 +125,8 @@ void main() {
 
     await tester.enterText(find.byType(TextField), '101');
     await tester.tap(find.text(l10n.checkpointStampIn));
-    await _settleUntil(tester, () => api.upserts.isNotEmpty);
+    await _settleUntil(tester, () => api.upserts.isNotEmpty,
+        describe: 'the stamp to drain through the sync RPC');
 
     expect(store.rows, hasLength(1));
     expect(store.rows.first['bib'], '101');
@@ -144,7 +150,8 @@ void main() {
     await tester.enterText(find.byType(TextField), '101');
     await tester.tap(find.text(l10n.checkpointStampIn));
     await _settleUntil(
-        tester, () => tester.any(find.text(l10n.checkpointWeighInTitle)));
+        tester, () => tester.any(find.text(l10n.checkpointWeighInTitle)),
+        describe: 'the Art 9 weigh-in sheet the gate opens');
 
     // The sheet is open and nothing has been written: the stamp waits on it.
     expect(store.rows, isEmpty);
@@ -161,7 +168,8 @@ void main() {
 
     await tester.enterText(find.byType(TextField), '101');
     await tester.tap(find.text(l10n.checkpointStampIn));
-    await _settleUntil(tester, () => api.upserts.isNotEmpty);
+    await _settleUntil(tester, () => api.upserts.isNotEmpty,
+        describe: 'the ungated stamp to drain through the sync RPC');
 
     expect(find.text(l10n.checkpointWeighInTitle), findsNothing);
     expect(store.rows.single['bib'], '101');

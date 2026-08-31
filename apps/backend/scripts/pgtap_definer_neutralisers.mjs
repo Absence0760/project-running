@@ -383,6 +383,61 @@ $neutralised$;`,
       },
     },
   ],
+  [
+    'global_segment_leaderboard',
+    {
+      why: "the catalogue twin of `segment_leaderboard_tiered`: drops `gs.is_active`, the per-effort `is_run_visible_to`, the block check, the club-membership gate, the shadow-hidden name masking and the `health_data_consent_at` requirement on the age band; keeps the segment id, the gender filter and the age arithmetic itself, which are the query the caller asked for",
+      sql: `create or replace function public.global_segment_leaderboard(
+   p_segment_id uuid, p_gender text default null::text, p_age_band text default null::text,
+   p_limit integer default 50, p_club_id uuid default null::uuid)
+ returns table(effort_id uuid, user_id uuid, run_id uuid, time_seconds integer,
+               started_at timestamptz, display_name text, avatar_url text,
+               gender text, age integer)
+ language sql stable security definer set search_path to 'public', 'private'
+as $neutralised$
+  select distinct on (se.user_id)
+    se.id, se.user_id, se.run_id, se.time_seconds::integer, se.started_at,
+    up.display_name, up.avatar_url, up.gender,
+    case when up.date_of_birth is not null
+      then extract(year from age(up.date_of_birth))::integer end
+  from public.global_segment_efforts se
+  join public.user_profiles up on up.id = se.user_id
+  where se.global_segment_id = p_segment_id
+    and (p_gender is null or up.gender = p_gender)
+    and (
+      p_age_band is null
+      or (
+        up.date_of_birth is not null
+        and extract(year from age(up.date_of_birth))::integer between
+              (case when p_age_band = '75+' then 75
+                    when p_age_band ~ '^[0-9]+-[0-9]+$'
+                      then split_part(p_age_band, '-', 1)::integer end)
+          and (case when p_age_band = '75+' then 200
+                    when p_age_band ~ '^[0-9]+-[0-9]+$'
+                      then split_part(p_age_band, '-', 2)::integer end)
+      )
+    )
+    and ${mine('se')}
+  order by se.user_id, se.time_seconds asc, se.started_at asc;
+$neutralised$;`,
+      subject: 'global_segment_efforts se',
+      witness: {
+        setup: `insert into global_segments (id, name, waypoints, distance_m, is_active)
+                 values ('00000000-0000-0000-0000-0000000f0002', 'guard witness',
+                         '[{"lat":40.0,"lng":-73.0},{"lat":40.002,"lng":-73.0}]', 400, false);
+                insert into global_segment_efforts
+                       (global_segment_id, run_id, user_id, time_seconds, started_at)
+                 values ('00000000-0000-0000-0000-0000000f0002',
+                         (select id from runs order by id limit 1),
+                         (select user_id from runs order by id limit 1), 100, now());
+                select set_config('request.jwt.claims',
+                         json_build_object('sub', (select id from auth.users order by id desc limit 1))::text,
+                         true);`,
+        probe: `select count(*) from global_segment_leaderboard(
+                  '00000000-0000-0000-0000-0000000f0002'::uuid);`,
+      },
+    },
+  ],
   // ── Relations Postgres calls SECURITY INVOKER that still filter for
   // themselves ──
   //
