@@ -140,7 +140,11 @@ test.describe('/login', () => {
 		// Neutral outcome: the info (status) banner appears; the error
 		// (alert) banner does NOT; and no session is minted so we stay
 		// on /login (no /onboarding or /dashboard handoff).
-		await expect(page.locator('.info[role="status"]')).toBeVisible({ timeout: 10_000 });
+		// The status region is permanently mounted and only the `.info` banner
+		// inside it comes and goes — a live region announces changes made
+		// inside it, not its own arrival (decisions.md § 736) — so the message
+		// is a descendant of the role, not the element carrying it.
+		await expect(page.locator('[role="status"] .info')).toBeVisible({ timeout: 10_000 });
 		await expect(page.locator('.error[role="alert"]')).toHaveCount(0);
 		await expect(page).toHaveURL(/\/login/);
 	});

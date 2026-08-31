@@ -353,9 +353,14 @@
 					{/if}
 				</div>
 			{/if}
-			{#if info}
-				<div class="info" role="status" aria-live="polite">{info}</div>
-			{/if}
+			<!-- Permanently mounted: a live region announces changes made INSIDE
+			     it, not its own arrival, so a region that appears together with
+			     its first message announces nothing (decisions.md § 736). -->
+			<div role="status" aria-live="polite">
+				{#if info}
+					<div class="info">{info}</div>
+				{/if}
+			</div>
 
 			{#if !isReset}
 				<div class="login-buttons">

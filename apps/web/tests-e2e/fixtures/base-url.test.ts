@@ -157,8 +157,41 @@ function scannedRelPaths(): string[] {
  */
 function devServerOriginPattern(): RegExp {
 	const ports = [...new Set(laneDevPorts().values())].sort((a, b) => a - b);
-	return new RegExp(`https?://(?:localhost|127\\.0\\.0\\.1):(?:${ports.join('|')})\\b`);
+	// Every spelling of a loopback host, not only the two that happen to be
+	// written today: `0.0.0.0` and `[::1]` reach the same dev server and would
+	// have slipped past a two-name pattern (decisions.md § 738 — a guard that
+	// lists shapes passes the next one).
+	const hosts = ['localhost', '127\\.0\\.0\\.1', '0\\.0\\.0\\.0', '\\[::1\\]'];
+	return new RegExp(`https?://(?:${hosts.join('|')}):(?:${ports.join('|')})\\b`);
 }
+
+test('the origin scan reaches every loopback spelling, and only lane ports', () => {
+	// Probed rather than read: the pattern is built from the lane ports at
+	// scan time, so a spelling it misses is a spelling that returns, and a
+	// port it over-reaches on would accuse Supabase (:54321) or Mailpit
+	// (:54324) — literals that are correct and deliberately outside the rule
+	// rather than exempted from it.
+	const pattern = devServerOriginPattern();
+	const port = DEFAULT_E2E_PORT;
+	for (const origin of [
+		`http://localhost:${port}`,
+		`http://127.0.0.1:${port}`,
+		`http://0.0.0.0:${port}`,
+		`http://[::1]:${port}`,
+		`https://localhost:${port}/settings/integrations`
+	]) {
+		assert.ok(pattern.test(`const base = '${origin}';`), `the scan misses: ${origin}`);
+	}
+	for (const origin of [
+		'http://localhost:54321',
+		'http://localhost:54324',
+		'http://127.0.0.1:1',
+		'https://example.com',
+		`http://localhost:${port}0`
+	]) {
+		assert.ok(!pattern.test(`const base = '${origin}';`), `the scan wrongly accuses: ${origin}`);
+	}
+});
 
 test('no spec or fixture hard-codes a lane dev-server origin', () => {
 	const pattern = devServerOriginPattern();
