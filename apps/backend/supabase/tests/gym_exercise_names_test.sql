@@ -1,4 +1,4 @@
--- pgtap suite for `gym_exercise_names` (migrations 20261226_001, 20270630000002).
+-- pgtap suite for `gym_exercise_names` (migrations 20261226_001, 20270630000004).
 --
 -- Returns the caller's distinct logged exercises + use counts, most-used
 -- first, for the gym editor autocomplete — so a caller that only needs the
@@ -8,7 +8,7 @@
 --   1. Correct use counts, ordered most-used first.
 --   2. Grouping is the canonical key, not the spelling, so a case variant and
 --      a stray-whitespace paste are one suggestion rather than three
---      (decisions § 831). Before 20270630000002 the grouping was a bare
+--      (decisions § 831). Before 20270630000004 the grouping was a bare
 --      `btrim`, which strips U+0020 alone.
 --   3. The display spelling is the caller's MOST-USED one, which is not the
 --      most-recent one the sibling `gym_exercise_records` picks.
@@ -74,7 +74,7 @@ select is(
   'use count is the number of sets logged under that name'
 );
 
--- 3. The whole point of 20270630000002. Grouped on the spelling, the four
+-- 3. The whole point of 20270630000004. Grouped on the spelling, the four
 --    bench sets were THREE suggestions: two differing only in case, and one
 --    differing only by an invisible leading tab that `btrim` does not strip.
 select is(
