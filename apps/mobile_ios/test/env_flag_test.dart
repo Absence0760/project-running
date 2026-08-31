@@ -13,8 +13,11 @@ import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/adaptive_fitness_flag.dart';
 import '../lib/env_flag.dart';
 import '../lib/nearby_flag.dart';
+import '../lib/off_route_flag.dart';
+import '../lib/weigh_in_flag.dart';
 import 'source_scan.dart';
 
 const _libRoot = 'lib';
@@ -175,7 +178,7 @@ void main() {
       'lib/off_route_alert.dart': 'offRouteEscalationEnabled',
       'lib/plan_adaptive_replan.dart': 'adaptiveFitnessGateEnabled',
       'lib/nearby_flag.dart': 'nearbyRunnersEnabled',
-      'lib/screens/checkpoint_checkin_screen.dart': '_weighInGate',
+      'lib/weigh_in_flag.dart': 'weighInEnabled',
     }.entries) {
       test('${gate.value} delegates to isTruthyFlagValue', () {
         final src = File(gate.key).readAsStringSync();
@@ -185,6 +188,92 @@ void main() {
         expect(src.contains('isTruthyFlagValue'), isTrue,
             reason: '${gate.key} must parse its flag through the canonical '
                 'isTruthyFlagValue, not a private copy.');
+      });
+    }
+  });
+
+  group('every gate fails closed on an uninitialised dotenv', () {
+    // `dotenv.env` throws NotInitializedError until something loads it, so an
+    // unguarded gate does not report "off" — it throws, and what happens next
+    // is the caller's error handling rather than the flag's answer. main.dart
+    // loads dotenv before runApp, so this is unreachable in the app today; it
+    // is reachable from a test, from a second entry point, and from any future
+    // caller that reads a gate before the bootstrap has run.
+    final gates = <String, bool Function()>{
+      'nearbyRunnersGate': () => nearbyRunnersGate,
+      'offRouteEscalationGate': () => offRouteEscalationGate,
+      'adaptiveFitnessGate': () => adaptiveFitnessGate,
+      'weighInGate': () => weighInGate,
+    };
+
+    setUpAll(() => TestWidgetsFlutterBinding.ensureInitialized());
+    tearDownAll(() => dotenv.clean());
+
+    for (final gate in gates.entries) {
+      test('${gate.key} returns false rather than throwing', () {
+        dotenv.clean();
+        expect(dotenv.isInitialized, isFalse,
+            reason: 'the precondition this test exists for must hold');
+        expect(gate.value(), isFalse);
+      });
+    }
+
+    test('and each gate still turns on once dotenv carries an affirmative', () {
+      // Without this the group above would pass against four gates hard-wired
+      // to false.
+      dotenv.clean();
+      dotenv.loadFromString(
+        envString: [
+          '$kNearbyRunnersEnvKey=yes',
+          '$kOffRouteEscalationEnvKey=yes',
+          '$kAdaptiveFitnessGateEnvKey=yes',
+          '$kWeighInEnvKey=yes',
+        ].join('\n'),
+      );
+      for (final gate in gates.entries) {
+        expect(gate.value(), isTrue, reason: '${gate.key} should be on');
+      }
+    });
+  });
+
+  group('a gate\'s env read lives in its own flag module', () {
+    // The guard the asymmetry actually needed. Three of the four gates spelled
+    // their own `dotenv.env[...]` read at the call site, in two different
+    // fail-closed idioms, and two of those were duplicates of each other — so
+    // "does this key fail closed" was a question about five call sites rather
+    // than about one module. A fifth caller copying the read is what would
+    // reintroduce it.
+    const owners = <String, String>{
+      'ENABLE_NEARBY_RUNNERS': 'lib/nearby_flag.dart',
+      'OFF_ROUTE_ESCALATION_ENABLED': 'lib/off_route_flag.dart',
+      'ADAPTIVE_FITNESS_GATE': 'lib/adaptive_fitness_flag.dart',
+      'WEIGH_IN_GATE': 'lib/weigh_in_flag.dart',
+    };
+
+    for (final owner in owners.entries) {
+      test('${owner.key} is read only by ${owner.value}', () {
+        final readers = <String>[];
+        for (final f in dartFiles(_libRoot)) {
+          final src = f.readAsStringSync();
+          // `blankNonCode` empties string BODIES, so the key has to be read
+          // out of the raw source at a position the blanked copy calls code —
+          // exactly how `dotenvKeysRead` resolves an index.
+          final blanked = blankNonCode(src);
+          for (final m in RegExp(r'dotenv\.env\[').allMatches(blanked)) {
+            final close = src.indexOf(']', m.end);
+            if (close <= m.end) continue;
+            if (src.substring(m.end, close).trim() == "'${owner.key}'") {
+              readers.add(f.path);
+            }
+          }
+        }
+        // The owner reads it through its own key const, not a literal, so a
+        // literal read anywhere is by definition somebody else's copy.
+        expect(readers, isEmpty,
+            reason: '${owner.key} is read directly in ${readers.join(', ')}. '
+                'Read the gate getter from ${owner.value} instead — a gate '
+                'spelled at the call site is a gate whose fail-closed guard '
+                'is only as good as that call site.');
       });
     }
   });
