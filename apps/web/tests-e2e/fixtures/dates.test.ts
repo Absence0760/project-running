@@ -275,6 +275,79 @@ test('the scan reaches the field constructor, and spares the UTC spelling', () =
 	}
 });
 
+/**
+ * The two /nutrition affordances that capture EVERY food_log entry on the
+ * diary's current day: "save as meal" (a template of the day's items) and
+ * "save as recipe" (one summed entry from them). A spec that drives one and
+ * then asserts what it captured is asserting over the whole day, so any row it
+ * did not seed is another item — and `seed.sql` places four meals on USER_A's
+ * day at `now() - 8h/-5h/-4h/-1h`, where `now()` is the SEED's clock. That is
+ * § 728's browser-vs-runner calendar day one layer on: the row is not on the
+ * wrong day, it is on the right one and simply is not the spec's. The only
+ * honest scoping is to own the day and clear it first, through
+ * `browserDayStart()` so the window is the browser's day rather than the
+ * runner's (decisions § 819).
+ */
+const WHOLE_DAY_CAPTURE = /getByTestId\(\s*['"`]save-as-(?:meal|recipe)['"`]\s*\)/;
+const CLEARS_THE_DAY = /from\(\s*['"`]food_log['"`]\s*\)[\s\S]{0,400}?\.gte\(\s*['"`]started_at['"`],\s*browserDayStart\(/;
+
+test('a spec that captures the whole diary day clears the day first', () => {
+	const drivers: string[] = [];
+	const offenders: string[] = [];
+	for (const file of scannedSources(E2E_ROOT)) {
+		const rel = relative(E2E_ROOT, file);
+		if (rel === 'fixtures/dates.ts' || rel === 'fixtures/dates.test.ts') continue;
+		const source = withoutComments(readFileSync(file, 'utf8'));
+		if (!WHOLE_DAY_CAPTURE.test(source)) continue;
+		drivers.push(rel);
+		if (!CLEARS_THE_DAY.test(source)) offenders.push(rel);
+	}
+	assert.ok(
+		drivers.length >= 2,
+		`expected the save-as-meal and save-as-recipe specs, found ${drivers.join(', ') || 'none'} — ` +
+			'the scan stopped matching rather than the rule stopped applying'
+	);
+	assert.deepEqual(
+		offenders,
+		[],
+		'These specs capture every food_log entry on the browser\'s current day and then assert ' +
+			'over what they captured, without first clearing the day. The seed puts four meals on ' +
+			"USER_A's day, so the assertion holds only for the hour the seed happened to run in " +
+			`(decisions.md § 819): ${offenders.join(' ')}`
+	);
+});
+
+test('the whole-day-capture scan reaches both affordances and both clearings', () => {
+	// Probed rather than read, for § 738's reason: a shape the scan misses is
+	// a shape that returns, and a green run is no evidence of its absence.
+	for (const probe of [
+		"await page.getByTestId('save-as-recipe').click();",
+		'await page.getByTestId("save-as-meal").click();',
+		"page.getByTestId( 'save-as-meal' ).click()"
+	]) {
+		assert.ok(WHOLE_DAY_CAPTURE.test(probe), `the capture scan misses: ${probe}`);
+	}
+	for (const probe of [
+		"page.getByTestId('log-recipe').click();",
+		"page.getByTestId('confirm-save-recipe').click();"
+	]) {
+		assert.ok(!WHOLE_DAY_CAPTURE.test(probe), `the capture scan wrongly accuses: ${probe}`);
+	}
+	assert.ok(
+		CLEARS_THE_DAY.test(
+			"admin.from('food_log').delete().eq('user_id', USER_A.id).gte('started_at', browserDayStart());"
+		)
+	);
+	// A day cleared from a locally-derived midnight is exactly the defect.
+	assert.ok(
+		!CLEARS_THE_DAY.test(
+			"admin.from('food_log').delete().eq('user_id', USER_A.id).gte('started_at', since);"
+		)
+	);
+	// A read of the same table is not a clearing.
+	assert.ok(!CLEARS_THE_DAY.test("admin.from('food_log').select('id').eq('user_id', USER_A.id);"));
+});
+
 test('every allowed local-zone site still exists and still matches', () => {
 	for (const [rel, reason] of Object.entries(LOCAL_ZONE_ALLOWED)) {
 		const file = join(E2E_ROOT, rel);
