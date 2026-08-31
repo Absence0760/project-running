@@ -395,4 +395,195 @@ void main() {
     expect(l10n.settingsAccountBackupOnDeviceNotice,
         contains('Account export'));
   });
+
+  testWidgets('a queued job says the build survives the app', (tester) async {
+    // The killed-app case is the ordinary case, so the standing claim
+    // the screen can keep — the archive keeps building without you — is
+    // the one it makes. The status is read on mount with nothing stored
+    // on the device.
+    final service = _FakeExportService(latest: [
+      <String, dynamic>{'job_id': 'exp-q', 'status': 'queued'},
+    ]);
+    await _pump(tester, service);
+
+    expect(find.byKey(const Key('account-export-building')), findsOneWidget);
+    expect(find.byKey(const Key('account-export-download')), findsNothing);
+    expect(service.latestReads, greaterThanOrEqualTo(1),
+        reason: 'the screen reads the status endpoint on mount rather than '
+            'resuming from anything it wrote to disk');
+  });
+
+  testWidgets('a running job keeps polling until it is ready', (tester) async {
+    final service = _FakeExportService(latest: [
+      <String, dynamic>{'job_id': 'exp-r', 'status': 'running'},
+      <String, dynamic>{'job_id': 'exp-r', 'status': 'running'},
+      <String, dynamic>{
+        'job_id': 'exp-r',
+        'status': 'ready',
+        'url': 'https://signed.example/r',
+      },
+    ]);
+    await _pump(tester, service);
+    expect(find.byKey(const Key('account-export-building')), findsOneWidget);
+
+    // The backoff starts at kExportPollMinMs and doubles every two
+    // attempts; well past the cap drains the whole ladder.
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(seconds: 20));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.byKey(const Key('account-export-download')), findsOneWidget,
+        reason: 'a job that finished while the screen was open has to become '
+            'downloadable without the runner leaving and returning');
+    expect(find.byKey(const Key('account-export-building')), findsNothing);
+    expect(service.latestReads, greaterThan(1),
+        reason: 'a terminal status is what stops the poll — one read and a '
+            'permanent "building" is the shape this rail replaced');
+  });
+
+  testWidgets('the poll stops once the job turns terminal', (tester) async {
+    // Two guards have to hold for this: the mount read only arms a poll
+    // for an ACTIVE job, and the poll only re-arms while the job is still
+    // active. A client that keeps asking about a finished job asks until
+    // the tab closes or the battery dies.
+    final service = _FakeExportService(latest: [
+      <String, dynamic>{'job_id': 'exp-t', 'status': 'running'},
+      <String, dynamic>{
+        'job_id': 'exp-t',
+        'status': 'ready',
+        'url': 'https://signed.example/t',
+      },
+    ]);
+    await _pump(tester, service);
+
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(seconds: 20));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.byKey(const Key('account-export-download')), findsOneWidget);
+    final afterReady = service.latestReads;
+    expect(afterReady, greaterThan(1),
+        reason: 'negative control: the poll did run while the job was active');
+
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(seconds: 30));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(service.latestReads, afterReady,
+        reason: 'the ready job is terminal — nothing may keep asking');
+  });
+
+  testWidgets('a terminal job found on mount arms no poll at all',
+      (tester) async {
+    final service = _FakeExportService(latest: [
+      <String, dynamic>{'job_id': 'exp-f', 'status': 'failed',
+          'error_code': 'storage_unavailable'},
+    ]);
+    await _pump(tester, service);
+    final afterMount = service.latestReads;
+
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(seconds: 20));
+    }
+
+    expect(service.latestReads, afterMount,
+        reason: 'a failed job is finished; re-reading it changes nothing');
+  });
+
+  testWidgets('a failed job names the reason it failed', (tester) async {
+    final service = _FakeExportService(latest: [
+      <String, dynamic>{
+        'job_id': 'exp-6',
+        'status': 'failed',
+        'error_code': 'storage_unavailable',
+      },
+    ]);
+    await _pump(tester, service);
+
+    expect(find.byKey(const Key('account-export-failed')), findsOneWidget);
+    expect(find.textContaining('storage_unavailable'), findsOneWidget,
+        reason: 'the machine code is what a support conversation starts from');
+    expect(find.byKey(const Key('account-export-download')), findsNothing);
+  });
+
+  testWidgets('an expired job is not offered as a download', (tester) async {
+    // The archive is deleted after 7 days. Rendering a download button
+    // over a deleted object is the dead-button failure in another guise.
+    final service = _FakeExportService(latest: [
+      <String, dynamic>{'job_id': 'exp-7', 'status': 'expired'},
+    ]);
+    await _pump(tester, service);
+
+    expect(find.byKey(const Key('account-export-expired')), findsOneWidget);
+    expect(find.byKey(const Key('account-export-download')), findsNothing);
+    expect(find.byKey(const Key('account-export-building')), findsNothing);
+  });
+
+  testWidgets('undrained runs are disclosed rather than switching archives',
+      (tester) async {
+    // § 724: the server cannot see a run that has not synced, so the
+    // tile says how many are missing. The rail this replaced quietly
+    // built the local archive instead and told the subject nothing.
+    final dir = Directory.systemTemp.createTempSync('export_unsynced_');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    final runStore = LocalRunStore();
+    // Real disk I/O: its futures only resolve on the real event loop, so
+    // the seeding has to happen inside runAsync or the test hangs.
+    await tester.runAsync(() async {
+      await runStore.init(overrideDirectory: dir);
+      await runStore.save(Run(
+        id: 'run-unsynced-1',
+        startedAt: DateTime.utc(2026, 5, 1, 7),
+        duration: const Duration(minutes: 30),
+        distanceMetres: 5000,
+        source: RunSource.app,
+      ));
+    });
+    expect(runStore.unsyncedRuns, hasLength(1),
+        reason: 'the fixture is the point — with nothing unsynced the '
+            'assertion below would pass against a screen that never checks');
+
+    final service = _FakeExportService(
+        latest: [<String, dynamic>{'status': 'none'}]);
+    await _pump(tester, service, runStore: runStore);
+
+    expect(find.byKey(const Key('account-export-unsynced')), findsOneWidget);
+    expect(find.textContaining('1 runs'), findsOneWidget);
+    // Still an account export, not a switch to the on-device archive.
+    expect(find.byKey(const Key('account-export-tile')), findsOneWidget);
+  });
+
+  testWidgets('a fully synced account is told nothing about undrained runs',
+      (tester) async {
+    final service = _FakeExportService(
+        latest: [<String, dynamic>{'status': 'none'}]);
+    await _pump(tester, service);
+
+    expect(find.byKey(const Key('account-export-unsynced')), findsNothing,
+        reason: 'a standing notice that is always there stops being read');
+  });
+
+  testWidgets('a refusal with no retry window still surfaces', (tester) async {
+    // Only a 429 carries a window the subject can act on; every other
+    // refusal has to reach them as itself rather than as silence.
+    final service = _FakeExportService(
+      latest: [<String, dynamic>{'status': 'none'}],
+      enqueueError: const BackupServerError('export request failed (status 500)',
+          statusCode: 500),
+    );
+    await _pump(tester, service);
+
+    await tester.tap(find.byKey(const Key('account-export-tile')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.textContaining('status 500'), findsOneWidget);
+    expect(find.byKey(const Key('account-export-building')), findsNothing);
+    expect(service.downloads, 0);
+    await tester.pump(const Duration(seconds: 4));
+  });
 }
