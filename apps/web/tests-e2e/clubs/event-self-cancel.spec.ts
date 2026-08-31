@@ -252,6 +252,16 @@ test.describe('paid registration self-cancel (slice P2)', () => {
 
 		const banner = page.getByTestId('refund-failed-banner');
 		await expect(banner).toBeVisible();
+
+		// The banner shares the hero grid with the event title, and the title
+		// column is `minmax(0, 1fr)` — a min of zero. While the side rail's max
+		// was `auto` it grew to this banner's 868px max-content paragraph and
+		// starved the title to 38px on macOS and to exactly 0 on CI's wider
+		// font metrics, where `toBeVisible` then reported an in-DOM heading as
+		// hidden. So visibility is NOT the assertion: at 38px it was "visible"
+		// and unreadable. The width is (decisions § 825).
+		const titleBox = await page.getByRole('heading', { name: title }).boundingBox();
+		expect(titleBox?.width ?? 0).toBeGreaterThan(240);
 		await expect(banner).toContainText(/refund/i);
 		await expect(banner).toContainText(/still with us/i);
 		await expect(banner.getByRole('link')).toHaveAttribute(
