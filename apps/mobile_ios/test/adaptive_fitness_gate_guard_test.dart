@@ -29,27 +29,34 @@ String _fitnessInputBody(String screen) {
 
 void main() {
   test('the P2 fitness gate is fail-closed and reads ADAPTIVE_FITNESS_GATE', () {
-    final screen = _read('lib/screens/plan_detail_screen.dart');
-    expect(screen.contains("dotenv.env['ADAPTIVE_FITNESS_GATE']"), true,
+    // The binding lives in its own module (decisions § 822); the screen reads
+    // the named gate and must not re-spell the env read.
+    final flag = _read('lib/adaptive_fitness_flag.dart');
+    expect(flag.contains("'ADAPTIVE_FITNESS_GATE'"), true,
         reason: 'the gate must read ADAPTIVE_FITNESS_GATE from dotenv');
     // Delegating to the parity-pair parser is what keeps web and mobile from
     // accepting different values for the same documented flag.
     expect(
         RegExp(r'adaptiveFitnessGateEnabled\(\s*dotenv\.env\[')
-            .hasMatch(screen),
+            .hasMatch(flag),
         true,
         reason: 'the gate must delegate to the shared adaptiveFitnessGateEnabled parser');
     // dotenv not loaded (widget tests, a stripped build) must read as OFF, not
     // throw its way past the gate.
-    expect(RegExp(r'catch \(_\) \{[^}]*return false;').hasMatch(screen), true,
+    expect(RegExp(r'catch \(_\) \{[^}]*return false;').hasMatch(flag), true,
         reason: 'an unreadable dotenv must fail closed');
+
+    final screen = _read('lib/screens/plan_detail_screen.dart');
+    expect(screen.contains("dotenv.env['ADAPTIVE_FITNESS_GATE']"), false,
+        reason: 'the screen must read the gate getter, not the env key — a '
+            'guard written at the call site is only as good as that call site');
   });
 
   test('the plan screen passes no fitness at all while the gate is off', () {
     final body = _fitnessInputBody(_read('lib/screens/plan_detail_screen.dart'));
-    expect(body.contains('if (!_adaptiveFitnessGate) return null;'), true,
+    expect(body.contains('if (!adaptiveFitnessGate) return null;'), true,
         reason: '_adaptiveFitnessInput must return null before touching the load series');
-    final guardIdx = body.indexOf('_adaptiveFitnessGate');
+    final guardIdx = body.indexOf('adaptiveFitnessGate');
     final seriesIdx = body.indexOf('computeTrainingLoadSeries');
     expect(seriesIdx > guardIdx, true,
         reason: 'the load series must only be computed after the gate check');

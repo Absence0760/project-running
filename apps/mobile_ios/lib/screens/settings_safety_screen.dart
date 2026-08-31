@@ -1,13 +1,12 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ui_kit/ui_kit.dart' show ListSkeleton;
 
 import '../auth_error.dart';
 import '../e164.dart';
 import '../l10n/gen/app_localizations.dart';
-import '../off_route_alert.dart';
+import '../off_route_flag.dart';
 import '../settings_sync.dart';
 import '../widgets/confirm_destructive.dart';
 import '../widgets/top_banner.dart';
@@ -69,10 +68,7 @@ class _SettingsSafetyScreenState extends State<SettingsSafetyScreen> {
 
   // Off-route auto-notify deploy gate (docs/features/safety.md). Hidden until
   // OFF_ROUTE_ESCALATION_ENABLED flips at deploy time (owner+CISO+counsel).
-  // Fail-closed when dotenv isn't loaded (e.g. under widget tests).
-  bool get _offRouteEnabled =>
-      dotenv.isInitialized &&
-      offRouteEscalationEnabled(dotenv.env['OFF_ROUTE_ESCALATION_ENABLED']);
+  bool get _offRouteEnabled => offRouteEscalationGate;
 
   @override
   void initState() {

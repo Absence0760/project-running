@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -58,6 +59,21 @@ Future<({LocalGymStore store, Directory dir, String id})> _seed() async {
   return (store: store, dir: dir, id: stored.id);
 }
 
+/// Whether the workout's on-disk record says public.
+///
+/// The visibility chip is NOT this signal. `persist` installs the new row in
+/// `rowsById` synchronously, so the chip flips on the very next frame while the
+/// atomic write is still in flight — and the temp-directory teardown below then
+/// removed that write's `.tmp` sibling out from under its rename, surfacing a
+/// `PathNotFoundException` through the screen's L4 handler. Waiting on the file
+/// is what actually proves the offline-first write landed.
+bool _publicOnDisk(Directory dir, String id) {
+  final file = File('${dir.path}/$id.json');
+  if (!file.existsSync()) return false;
+  final row = (jsonDecode(file.readAsStringSync()) as Map)['row'] as Map;
+  return row['is_public'] == true;
+}
+
 Widget _screen(LocalGymStore store, String id) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -87,12 +103,11 @@ void main() {
     expect(find.byTooltip('Make public'), findsOneWidget);
     expect(store.byId(id)!.workout.isPublic, isFalse);
 
-    // Toggle to public. The chip only flips once updateLocal's atomic write
-    // has landed and the store has notified, so it is the one signal that is
-    // ordered AFTER the write rather than alongside the in-memory row.
     await tester.runAsync(() => tester.tap(find.byTooltip('Make public')));
     await pumpUntil(tester, () => tester.any(find.text('Public')),
         describe: 'the visibility chip to flip to public');
+    await pumpUntil(tester, () => _publicOnDisk(dir, id),
+        describe: 'the visibility write to reach disk');
 
     // Store flipped to public + queued for the next sync (pendingUpdate).
     final updated = store.byId(id)!;
@@ -234,6 +249,8 @@ void main() {
     });
     await pumpUntil(tester, () => tester.any(find.text('Public')),
         describe: 'the first toggle to land and flip the chip');
+    await pumpUntil(tester, () => _publicOnDisk(dir, id),
+        describe: 'the first toggle\'s write to reach disk');
 
     expect(store.updateCalls, 1);
     expect(store.byId(id)!.workout.isPublic, isTrue);

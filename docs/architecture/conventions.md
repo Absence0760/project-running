@@ -563,6 +563,35 @@ binding ceiling. Four fields were in that state when the class was swept
   kilograms and the field may be pounds, so convert — rounding the floor UP and
   the ceiling DOWN, or the range advertises a value its own gate refuses.
 
+## Local stores — a directory transition is serialised, not just atomic
+
+`writeStringAtomic` gives each in-flight write its own `.tmp` sibling and renames
+it over the target, so a crash leaves either the old file or the whole new one.
+That is a guarantee about ONE write. It says nothing about two *operations* over
+the same directory, and every mobile store operation is a multi-step directory
+transition: write the row then the index, delete the row then rewrite the index,
+write every row then prune, delete every file.
+
+So every directory-mutating entry point on `OfflineSyncStore` runs on one serial
+chain, and a new one must go on it too. Three properties are load-bearing and a
+change that weakens any of them reopens a measured bug (decisions § 821):
+
+- **Whole-directory, not per-id.** `clear`, `rewriteAll`, `loadAll` and the index
+  flush touch files no row id names, so per-id exclusion still lets them race a
+  row write.
+- **Keyed on the directory, not the instance.** All instances of a store type
+  share one directory — `offline_store_wipe.dart` relies on exactly that to wipe
+  from a throwaway instance — so a per-instance lock leaves a sign-out `clear()`
+  free to delete the temp file of the live screen's in-flight write.
+- **The chain never becomes an error future.** A failed write reports to its own
+  caller; it must not reject every write queued behind it.
+
+The corollary for tests: a widget test's UI signal is usually the in-memory row,
+which `persist` installs synchronously *before* its file write. Tearing a temp
+directory down on that signal deletes a `.tmp` mid-rename. Wait on the file (or
+on `debugWritesSettled`), which is also the only thing that actually pins the
+offline-first durability the surface is claiming.
+
 ## Feature gates — one parser, and a define a release build can actually read
 
 Every fail-closed feature gate on either client parses its env string through the
@@ -586,6 +615,18 @@ parser, directly or through one named delegate.
 A flag whose parser belongs to a TS↔Dart parity pair (`off_route_alert`,
 `plan_adaptive_replan`) keeps its named function and delegates to the canonical
 one — on **both** sides, in the same change, or the pair diverges.
+
+**One binding module per flag, and the surfaces read the gate — never the key.**
+A flag's env key and its fail-closed guard live together in a `*_flag` module
+(`nearby_flag.dart` / `off_route_flag.dart` / `adaptive_fitness_flag.dart` /
+`weigh_in_flag.dart`; on web the `*_flag.ts` layer), which exports the key const
+and a named gate getter. A surface imports the getter. It does not spell
+`dotenv.env['KEY']` / `env.PUBLIC_KEY` itself, because a guard written at the
+call site is only as good as that call site: four mobile gates all failed closed
+while their bindings sat at five call sites in two idioms, two of them duplicates
+and two private to a screen and therefore unassertable (decisions § 822). The
+mobile suite fails on a gate key read literally outside its own module, and on a
+gate that throws rather than answering `false` against an uninitialised dotenv.
 
 **On mobile the gate is not finished until the key is in `main.dart`'s
 `String.fromEnvironment` bridge.** Release builds never load `.env.development`

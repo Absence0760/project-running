@@ -40,6 +40,7 @@ import '../live_broadcaster.dart';
 import '../live_hub_client.dart';
 import '../main.dart' show pendingArmGuidedRun, pendingStartWorkout;
 import '../live_cutoff_eta.dart';
+import '../off_route_flag.dart';
 import '../preferences.dart';
 import '../privacy.dart';
 import '../off_route_alert.dart';
@@ -1598,9 +1599,7 @@ class _RunScreenState extends State<RunScreen> with WidgetsBindingObserver {
   /// The OFF_ROUTE_ESCALATION_ENABLED deploy flag (docs/features/safety.md).
   /// Fail-closed: unset/false → the whole off-route auto-notify path is inert
   /// (the CISO/counsel deploy gate).
-  bool get _offRouteEscalationEnabled =>
-      dotenv.isInitialized &&
-      offRouteEscalationEnabled(dotenv.env['OFF_ROUTE_ESCALATION_ENABLED']);
+  bool get _offRouteEscalationEnabled => offRouteEscalationGate;
 
   /// The runner's `safety_off_route_alerts` opt-in (default false). False when
   /// settings aren't available — fail-closed.

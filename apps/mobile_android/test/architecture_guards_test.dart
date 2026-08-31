@@ -902,10 +902,20 @@ void main() {
       // unsynced pendingCreate rows. The fixed order is write-all-then-
       // prune. The gear / gym / food stores share this single base impl
       // now (decisions §122).
+      // The public `rewriteAll` is a thin wrapper that puts the transition on
+      // the store's serial write chain; `_rewriteAll` holds the ordering this
+      // guard is about. Both are named, so a rename can't quietly vacate it.
       final source = File('lib/offline_sync_store.dart').readAsStringSync();
+      expect(
+        RegExp(r'Future<void> rewriteAll\(\)[^}]*_serialised\(_rewriteAll\)')
+            .hasMatch(source),
+        isTrue,
+        reason: 'rewriteAll must delegate to _rewriteAll on the write chain — '
+            'the body this guard reads lives there.',
+      );
       final body = _extractMethodBody(
         source,
-        r'Future<void> rewriteAll\(\)\s*async\s*\{',
+        r'Future<void> _rewriteAll\(\)\s*async\s*\{',
       );
       final firstWrite = body.indexOf('writeJsonAtomic(');
       final firstDelete = body.indexOf('.delete()');
