@@ -68,6 +68,7 @@ import type {
 } from '../types';
 export type { NotificationKind };
 import { parseRunSource, parseRouteSurface, type RunSource } from '../types';
+import type { RaceImportLeg } from '../integrations/race_import_providers';
 import {
 	filterRelinkCandidates,
 	DEFAULT_RELINK_WINDOW_DAYS,
@@ -2280,19 +2281,25 @@ export async function importRaceResult(
 		}
 	});
 	if (error) {
-		if (await isProviderNotConfigured(error)) {
-			throw new Error(
-				input.provider === 'ultrasignup'
-					? 'ULTRASIGNUP_UNAVAILABLE'
-					: input.provider === 'chronotrack'
-						? 'CHRONOTRACK_UNAVAILABLE'
-						: 'RUNSIGNUP_UNAVAILABLE'
-			);
+		// `paste` carries no credential, so it can never be the provider a 503
+		// provider_not_configured is about — reporting one as RunSignUp's outage
+		// also swallowed a plain network failure on the paste path.
+		if (input.provider !== 'paste' && (await isProviderNotConfigured(error))) {
+			throw new Error(RACE_IMPORT_UNAVAILABLE[input.provider]);
 		}
 		throw error;
 	}
 	return data as ImportRaceResultOutcome;
 }
+
+/// The error `importRaceResult` throws when a leg's credentials are unset
+/// server-side, keyed by leg so a provider added later cannot inherit
+/// RunSignUp's message the way a fall-through ternary gave it to ChronoTrack.
+export const RACE_IMPORT_UNAVAILABLE: Record<RaceImportLeg, string> = {
+	runsignup: 'RUNSIGNUP_UNAVAILABLE',
+	ultrasignup: 'ULTRASIGNUP_UNAVAILABLE',
+	chronotrack: 'CHRONOTRACK_UNAVAILABLE'
+};
 
 /// Probe whether the RunSignUp leg is configured server-side. Returns false
 /// (unavailable) on a 503 provider_not_configured, true otherwise. Used to
@@ -2323,6 +2330,19 @@ export async function isChronoTrackConfigured(): Promise<boolean> {
 	});
 	if (!error) return true;
 	return !(await isProviderNotConfigured(error));
+}
+
+const RACE_IMPORT_PROBES: Record<RaceImportLeg, () => Promise<boolean>> = {
+	runsignup: isRunSignUpConfigured,
+	ultrasignup: isUltraSignUpConfigured,
+	chronotrack: isChronoTrackConfigured
+};
+
+/// Probe one import leg's credentials. The three probes above stay exported for
+/// the Settings cards, which name their provider; a caller holding a leg it
+/// resolved from a listing dispatches here instead of re-deciding which probe.
+export function isRaceImportProviderConfigured(leg: RaceImportLeg): Promise<boolean> {
+	return RACE_IMPORT_PROBES[leg]();
 }
 
 async function isProviderNotConfigured(error: unknown): Promise<boolean> {

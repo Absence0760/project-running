@@ -1,15 +1,20 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import {
 		searchRaceListings,
 		importRaceResult,
-		isRunSignUpConfigured,
+		isRaceImportProviderConfigured,
+		RACE_IMPORT_UNAVAILABLE,
 		type RaceListingResult,
 		type RaceListingFilters,
 		type RaceDistanceBand
 	} from '$lib/core/data';
+	import {
+		RACE_IMPORT_LEGS,
+		raceImportLegFor,
+		type RaceImportLeg
+	} from '$lib/integrations/race_import_providers';
 	import RunSurfaceTabs from '$lib/components/RunSurfaceTabs.svelte';
 	import RaceCalendarCard from '$lib/components/RaceCalendarCard.svelte';
 	import RaceListingEditor from '$lib/components/RaceListingEditor.svelte';
@@ -31,14 +36,18 @@
 
 	let showEditor = $state(false);
 
-	// RunSignUp availability probe → drives the import modal's provider choice.
-	let runSignUpAvailable = $state(false);
+	// Per-leg credential probe. Absent means "not answered yet" and renders
+	// nothing; only a resolved probe lets the modal either offer the import or
+	// state that this provider is unavailable. A failed probe resolves false.
+	let legAvailable = $state<Partial<Record<RaceImportLeg, boolean>>>({});
+	const legProbed = new Set<RaceImportLeg>();
 
 	// Import flow modal state.
 	let importing = $state<RaceListingResult | null>(null);
-	// RunSignUp requires a bib to scope the import to the runner's own result
-	// (issue #360 — an unscoped fetch imports the whole finisher field).
-	let runSignUpBib = $state('');
+	// The provider needs the import scoped to this runner before it will fetch
+	// (issue #360 — an unscoped fetch imports the whole finisher field). Which
+	// field that is differs per leg; the spec says which.
+	let scopeValue = $state('');
 	let pasteBib = $state('');
 	let pasteChip = $state('');
 	let pasteGun = $state('');
@@ -66,11 +75,38 @@
 		}
 		try {
 			results = await searchRaceListings(f);
+			void probeLegsIn(results);
 		} catch {
 			error = true;
 		} finally {
 			loading = false;
 		}
+	}
+
+	/// Probe only the legs the listings on screen can actually reach, once each.
+	/// Probing all three on every visit spends the import function's own hourly
+	/// rate limit, and a 429 reads as unavailable — the fail-closed default
+	/// would then hide a provider that is configured.
+	async function probeLegsIn(rows: RaceListingResult[]) {
+		const pending: RaceImportLeg[] = [];
+		for (const r of rows) {
+			const leg = raceImportLegFor(r.provider);
+			if (leg && !legProbed.has(leg)) {
+				legProbed.add(leg);
+				pending.push(leg);
+			}
+		}
+		await Promise.all(
+			pending.map(async (leg) => {
+				let ok = false;
+				try {
+					ok = await isRaceImportProviderConfigured(leg);
+				} catch {
+					ok = false;
+				}
+				legAvailable = { ...legAvailable, [leg]: ok };
+			})
+		);
 	}
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -144,27 +180,36 @@
 
 	function openImport(race: RaceListingResult) {
 		importing = race;
-		runSignUpBib = '';
+		scopeValue = '';
 		pasteBib = '';
 		pasteChip = '';
 		pasteGun = '';
 		pastePlace = null;
 	}
 
-	async function doRunSignUpImport() {
-		if (!importing) return;
+	const importLeg = $derived(importing ? raceImportLegFor(importing.provider) : null);
+	const importSpec = $derived(importLeg ? RACE_IMPORT_LEGS[importLeg] : null);
+
+	async function doProviderImport() {
+		if (!importing || !importLeg || !importSpec) return;
+		const scoped = scopeValue.trim() || undefined;
 		importBusy = true;
 		try {
 			await importRaceResult({
-				provider: 'runsignup',
+				provider: importLeg,
 				listingId: importing.id,
-				bib: runSignUpBib.trim() || undefined
+				bib: importSpec.scopeField === 'bib' ? scoped : undefined,
+				ultraSignUpAthleteId:
+					importSpec.scopeField === 'ultraSignUpAthleteId' ? scoped : undefined
 			});
 			showToast(m('races.imported'), 'success');
 			importing = null;
 		} catch (e) {
-			if ((e as Error).message === 'RUNSIGNUP_UNAVAILABLE') {
-				showToast(m('integrations.runsignupUnavailable'), 'error');
+			if ((e as Error).message === RACE_IMPORT_UNAVAILABLE[importLeg]) {
+				// The leg went unavailable between the probe and the call; correct
+				// the modal as well as saying so, or it keeps offering the form.
+				legAvailable = { ...legAvailable, [importLeg]: false };
+				showToast(m(importSpec.unavailableKey), 'error');
 			} else {
 				showToast(m('races.importFailed'), 'error');
 			}
@@ -200,14 +245,6 @@
 		showEditor = false;
 		run();
 	}
-
-	onMount(async () => {
-		try {
-			runSignUpAvailable = await isRunSignUpConfigured();
-		} catch {
-			runSignUpAvailable = false;
-		}
-	});
 </script>
 
 <svelte:head><title>{m('races.title')}</title></svelte:head>
@@ -315,24 +352,24 @@
 >
 	{#if importing}
 		<div class="import-body">
-			{#if importing.provider === 'runsignup' && runSignUpAvailable}
+			{#if importLeg && importSpec && legAvailable[importLeg] === true}
 				<label>
-					<span>{m('races.bib')}</span>
-					<input type="text" bind:value={runSignUpBib} data-testid="runsignup-bib" />
+					<span>{m(importSpec.labelKey)}</span>
+					<input type="text" bind:value={scopeValue} data-testid={importSpec.inputTestId} />
 				</label>
-				<p class="paste-hint">{m('races.runSignUpBibHint')}</p>
+				<p class="paste-hint">{m(importSpec.hintKey)}</p>
 				<button
 					type="button"
 					class="btn btn-primary"
-					disabled={importBusy || !runSignUpBib.trim()}
-					onclick={doRunSignUpImport}
-					data-testid="race-import-runsignup"
+					disabled={importBusy || (importSpec.scopeRequired && !scopeValue.trim())}
+					onclick={doProviderImport}
+					data-testid={importSpec.submitTestId}
 				>
 					{m('races.importResult')}
 				</button>
-			{:else if importing.provider === 'runsignup' && !runSignUpAvailable}
-				<p class="unavailable" data-testid="race-runsignup-unavailable">
-					{m('integrations.runsignupUnavailable')}
+			{:else if importLeg && importSpec && legAvailable[importLeg] === false}
+				<p class="unavailable" data-testid={importSpec.unavailableTestId}>
+					{m(importSpec.unavailableKey)}
 				</p>
 			{/if}
 
