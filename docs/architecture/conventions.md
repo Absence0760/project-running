@@ -572,9 +572,11 @@ the same directory, and every mobile store operation is a multi-step directory
 transition: write the row then the index, delete the row then rewrite the index,
 write every row then prune, delete every file.
 
-So every directory-mutating entry point on `OfflineSyncStore` runs on one serial
-chain, and a new one must go on it too. Three properties are load-bearing and a
-change that weakens any of them reopens a measured bug (decisions § 821):
+So every directory-mutating entry point on every local store —
+`OfflineSyncStore`, `LocalRunStore`, `LocalRouteStore` — runs on one serial
+chain, `serialiseStoreWrite` in `core_models`, and a new one must go on it too.
+Five properties are load-bearing and a change that weakens any of them reopens a
+measured bug (decisions § 821, § 828, § 829):
 
 - **Whole-directory, not per-id.** `clear`, `rewriteAll`, `loadAll` and the index
   flush touch files no row id names, so per-id exclusion still lets them race a
@@ -585,12 +587,36 @@ change that weakens any of them reopens a measured bug (decisions § 821):
   free to delete the temp file of the live screen's in-flight write.
 - **The chain never becomes an error future.** A failed write reports to its own
   caller; it must not reject every write queued behind it.
+- **Re-entrant on its own key.** The stores share `_persistIndex` /
+  `_persistSyncedIds` / `_persistOwnerTags` across ~30 entry points, so a helper
+  that queued behind its own caller would deadlock — silently, with no error and
+  no completion. A nested call on the same key runs inline.
+- **Nothing with unbounded latency inside a chained body.** No network call, no
+  untimed lock. Queueing behind a bounded operation is safe; queueing behind one
+  that may never return is a durability gap, not a race fix.
+
+Two things stay OFF the chain, and both are the recording stack. The in-progress
+recorder path (`saveInProgress` / `clearInProgress` / `loadInProgress`) owns
+`in_progress.json`, which nothing chained touches, and already has its own
+skip-don't-queue exclusion; `WatchIngestQueue.enqueue` writes a fresh uuid
+nothing else names, and its `drain` awaits an upload per file. **An L0/L1 write
+must never be able to queue behind a directory operation** — a write that never
+lands is worse than the race. Pin that with a test that holds the chain open
+through a never-completed `Completer` and asserts the recording write still
+lands, not with a timing assertion.
+
+Store durability is one mechanism, not a menu. A `FileLock` alongside the chain
+is not defence in depth: POSIX record locks are owned by the process, so they
+exclude neither a second store instance nor a second isolate (§ 829). What
+survives an interleaved isolate is the merge-never-replace in each sidecar
+writer.
 
 The corollary for tests: a widget test's UI signal is usually the in-memory row,
 which `persist` installs synchronously *before* its file write. Tearing a temp
 directory down on that signal deletes a `.tmp` mid-rename. Wait on the file (or
-on `debugWritesSettled`), which is also the only thing that actually pins the
-offline-first durability the surface is claiming.
+on `debugWritesSettled`, which every chained store exposes), which is also the
+only thing that actually pins the offline-first durability the surface is
+claiming.
 
 ## Feature gates — one parser, and a define a release build can actually read
 
