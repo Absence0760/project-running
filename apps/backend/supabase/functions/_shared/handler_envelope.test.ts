@@ -126,12 +126,47 @@ Deno.test({
   name: 'strava-webhook: 403 on GET with no ?secret=',
   ignore: SKIP,
   fn: async () => {
-    const res = await fetch(endpoint('strava-webhook'));
+    // The handshake carries a CORRECT `hub.verify_token`, so the only
+    // gate left that can answer 403 is the URL-secret one. A bare GET
+    // is 403 either way — the verify-token gate below refuses an
+    // absent token with the same status and the same body — so the
+    // assertion could not tell an open secret gate from a closed one
+    // (decisions § 815).
+    const res = await fetch(
+      `${endpoint('strava-webhook')}?hub.mode=subscribe&hub.challenge=ch_no_secret` +
+      `&hub.verify_token=${STRAVA_VERIFY_TOKEN}`,
+    );
     await res.body?.cancel();
     if (res.status !== 403 && res.status !== 429) {
       throw new Error(
         `expected 403 (or 429), got ${res.status}; the secret ` +
         'gate guards GET (hub.verify_token handshake) too.',
+      );
+    }
+  },
+});
+
+Deno.test({
+  name: 'strava-webhook: 403 on GET with valid ?secret= but wrong hub.verify_token',
+  ignore: SKIP,
+  fn: async () => {
+    // The second, independent gate on the handshake. Strava's verify
+    // token and the URL secret are separate values; an attacker who
+    // has the URL (and so the secret) must still not be able to
+    // complete a subscription handshake. Nothing measured this gate
+    // before § 815 — its mutation killed no test in the file.
+    const res = await fetch(
+      `${endpoint('strava-webhook')}?secret=${STRAVA_WEBHOOK_SECRET}` +
+      '&hub.mode=subscribe&hub.challenge=ch_bad_token' +
+      '&hub.verify_token=not-the-real-strava-verify-token',
+    );
+    const json = await res.json().catch(() => null);
+    if (res.status === 429) return; // rate-limited shared-IP noise; tolerate
+    if (res.status !== 403) {
+      throw new Error(
+        `expected 403 on a wrong hub.verify_token, got ${res.status} ` +
+        `${JSON.stringify(json)}; the handshake must not be completable ` +
+        'with the URL secret alone.',
       );
     }
   },
@@ -582,12 +617,21 @@ Deno.test({
     // A `create` event would require an `integrations` row keyed on
     // owner_id, which the seed user doesn't have a Strava
     // connection for under the test fixture.
+    //
+    // `event_time` is deliberately 30 days STALE, which is what makes
+    // the 200 "OK" a claim about the early return rather than about
+    // 200 "OK" in general: the not-connected-athlete branch further
+    // down answers with the identical body, so a fresh timestamp let
+    // the assertion pass with the early return deleted entirely — it
+    // just fell through the dedupe insert it exists to avoid and out
+    // the integrations miss. Stale, the only way to reach a 200 is to
+    // return before the replay-window gate (decisions § 815).
     const body = JSON.stringify({
       object_type: 'athlete',
       object_id: 12345,
       aspect_type: 'update',
       owner_id: 12345,
-      event_time: Math.floor(Date.now() / 1000),
+      event_time: Math.floor(Date.now() / 1000) - 30 * 24 * 3600,
     });
     const res = await fetch(
       `${endpoint('strava-webhook')}?secret=${STRAVA_WEBHOOK_SECRET}`,

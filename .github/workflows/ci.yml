@@ -2092,10 +2092,16 @@ jobs:
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
       # Auto-started edge-runtime container has no env vars beyond the
-      # Supabase defaults — every secret-gated function 503s. Stop it
-      # and run `functions serve` with `--env-file` so the rejection
-      # branches in `_shared/handler_envelope.test.ts` are reachable.
-      - name: Stop auto-started edge-runtime + boot env-loaded host
+      # Supabase defaults — every secret-gated function 503s. Run
+      # `functions serve` with `--env-file` so the rejection branches in
+      # `_shared/handler_envelope.test.ts` are reachable; the CLI replaces
+      # the auto-started runtime itself. A `docker stop
+      # supabase_edge_runtime_backend` stood here for the life of this job
+      # and never stopped anything: containers are named for
+      # `config.toml`'s `project_id`, which is `project-running`, so the
+      # name matched nothing and `|| true` swallowed the miss. What makes
+      # the env-loaded host take over is `functions serve`, not the stop.
+      - name: Boot the env-loaded functions host
         working-directory: apps/backend
         run: |
           # Write a CI-scoped .env.local with test-default secrets. The
@@ -2138,7 +2144,6 @@ jobs:
             exit 1
           fi
           grep '^STRAVA_ALLOWED_REDIRECTS=' .env.development >> .env.local
-          docker stop supabase_edge_runtime_backend || true
           # Background `supabase functions serve`. The CLI keeps the
           # process attached to the terminal even in CI, so put it in
           # background and capture the PID.
@@ -2193,6 +2198,39 @@ jobs:
             supabase/functions/_shared/handler_envelope.test.ts; then
             echo "::error::The handler-envelope integration tests failed. These drive the LIVE function host booted in the step above (wrong bearers / HMACs / ?secret= must be rejected), so a failure is the envelope's auth gates or the host's env, not the typecheck and not the pure-helper suite below."
             echo "Reproduce locally with: cd apps/backend && supabase start && supabase functions serve --env-file .env.local, then SUPABASE_TEST_URL=http://127.0.0.1:54321 deno test --no-check --allow-net --allow-env supabase/functions/_shared/handler_envelope.test.ts"
+            exit 1
+          fi
+      # A green integration run says the 23 cases passed against the live
+      # host, not that any of them would notice the gate it names being
+      # opened. The vacuity guard above cannot answer that: it neuters the
+      # module tree the TEST PROCESS imports, and this file imports none of
+      # it - the subject is a separately booted host reached over HTTP, so
+      # those cases were scored neither killed nor survived (decisions § 815).
+      # This guard mutates the SERVED tree one gate at a time and requires the
+      # case naming that gate to fail. `functions serve` re-reads a changed
+      # module on the next request, so it needs no second host and no second
+      # stack - measured at ~60 s for 20 mutations. It goes after the honest
+      # run above, whose green baseline it re-measures and refuses to proceed
+      # without.
+      - name: Validate the served-tree mutation table
+        run: |
+          if ! node --test apps/backend/scripts/check_served_envelope_mutations.test.mjs; then
+            echo "::error::The served-tree mutation guard's own tests fail. Nothing here involves the live host, the typecheck or the pure-helper suite — an anchor in check_served_envelope_mutations.mjs no longer occurs exactly once in the handler it names, or a mutation claims a test case the file no longer carries. Re-anchor the entry on the line that guards it now; deleting it puts that case back to unmeasured."
+            echo "Reproduce locally with: node --test apps/backend/scripts/check_served_envelope_mutations.test.mjs"
+            exit 1
+          fi
+      - name: Mutation-check the handler-envelope suite against the served tree
+        env:
+          SUPABASE_TEST_URL: http://127.0.0.1:54321
+          REVENUECAT_WEBHOOK_SECRET: ci-revenuecat-secret
+          STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret-32chars-ok
+          STRAVA_VERIFY_TOKEN: ci-strava-verify-token-32-chars-ok
+          STRIPE_EVENTS_WEBHOOK_SECRET: ci-stripe-events-secret
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if ! node apps/backend/scripts/check_served_envelope_mutations.mjs; then
+            echo "::error::A handler-envelope case still passes with the gate it names opened in the SERVED Edge Function tree, or a case ran that no mutation measures. The failure above names which. This is not the pure-helper suite and not the typecheck: it is the integration file's own assertions being asked whether they would notice a wrong bearer, HMAC or ?secret= being accepted."
+            echo "Reproduce locally with: cd apps/backend && supabase start && supabase functions serve --env-file .env.local, then from the repo root, with SUPABASE_TEST_URL=http://127.0.0.1:54321 and SUPABASE_SERVICE_ROLE_KEY taken from supabase status -o env: node apps/backend/scripts/check_served_envelope_mutations.mjs --report"
             exit 1
           fi
       - name: Run pure-helper unit tests
