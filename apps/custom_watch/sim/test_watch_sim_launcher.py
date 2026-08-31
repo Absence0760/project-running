@@ -52,8 +52,10 @@ class LauncherExitStatusTest(unittest.TestCase):
         self.assertNotEqual(res.returncode, 0)
         combined = res.stdout + res.stderr
         self.assertIn("NMEA fixture not found", combined)
-        # The fixture check sits ahead of the cargo build, so this refusal costs
-        # no compile — which is what makes it a test rather than a sim run.
+        # The fixture check sits ahead of the cargo build AND ahead of every
+        # need_cmd, so this refusal costs no compile and reaches the same
+        # verdict on a runner with no renode installed — which is every CI
+        # runner but the sim-scenario job.
         self.assertNotIn("Building firmware", combined)
 
 

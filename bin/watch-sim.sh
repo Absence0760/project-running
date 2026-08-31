@@ -105,11 +105,17 @@ if [[ ! -f "$WORKSPACE/Cargo.toml" ]]; then
 	fatal "apps/custom_watch/ Cargo workspace not scaffolded yet. See $WORKSPACE/README.md step 2."
 fi
 
+# The caller's own arguments are graded before the environment is: a bad
+# fixture path is the thing they can fix and the thing specific to the command
+# they just typed, where a missing renode is a machine that was never set up.
+# Ordering it the other way also made the refusal untestable anywhere renode is
+# absent, which is every CI runner but the sim-scenario job.
+[[ -f "$NMEA_FILE" ]] || fatal "NMEA fixture not found: $NMEA_FILE"
+
 need_cmd cargo
 need_cmd renode
 command -v defmt-print >/dev/null || \
 	fatal "defmt-print not on PATH — install with: cargo install defmt-print --locked"
-[[ -f "$NMEA_FILE" ]] || fatal "NMEA fixture not found: $NMEA_FILE"
 
 # sim-autostart: start the run on the first fix so distance accrues without a
 # button (dropped by --no-autostart, which leaves the sim on the idle face —
