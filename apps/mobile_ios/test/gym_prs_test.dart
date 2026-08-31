@@ -199,4 +199,33 @@ void main() {
     // not spaces — the clients must NOT start folding them to match.
     expect(normaliseExerciseName('Bench\u001cPress'), 'bench\u001cpress');
   });
+
+  test('the case fold matches what the SQL rail case-folds', () {
+    // The three rails' lowercase tables are not each other's: measured over
+    // every assignable code point, JS and Dart disagree at 466, and Postgres
+    // answers with its argument's collation until the SQL mirror pins
+    // `collate "und-x-icu"` (decisions § 830). These are the disagreements
+    // reachable in a Latin or Greek exercise name.
+    //
+    // U+0130's FULL lowercase is 'i' + U+0307 (what JS and ICU return); its
+    // SIMPLE one is a bare 'i' (what this rail and the libc provider return).
+    // The key takes the simple form, so a key written here no longer violates
+    // the CHECK on gym_routine_exercises.exercise_key.
+    expect(normaliseExerciseName('\u0130tme'), 'itme');
+    expect(normaliseExerciseName('\u0130TME'), 'itme');
+    // Final sigma: ICU and JS apply Unicode's contextual Final_Sigma rule and
+    // this rail and libc never do, so an all-caps Greek spelling has to be
+    // folded onto U+03C3 or it never meets its own lower-case one.
+    expect(normaliseExerciseName('\u039f\u0394\u039f\u03a3'),
+        '\u03bf\u03b4\u03bf\u03c3');
+    expect(normaliseExerciseName('\u03bf\u03b4\u03bf\u03c2'),
+        '\u03bf\u03b4\u03bf\u03c3');
+    // An ASCII capital I stays an i. Under a Turkish-locale database the old
+    // server derivation folded it to U+0131 and split every "Incline Press".
+    expect(normaliseExerciseName('INCLINE Press'), 'incline press');
+    // And the accented-capital merge every non-English lifter depends on is
+    // intact — an ASCII-only fold would have split these two.
+    expect(normaliseExerciseName('\u00dcBERZ\u00dcGE'), '\u00fcberz\u00fcge');
+    expect(normaliseExerciseName('\u00fcberz\u00fcge'), '\u00fcberz\u00fcge');
+  });
 }

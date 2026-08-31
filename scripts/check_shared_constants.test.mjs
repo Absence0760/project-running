@@ -42,6 +42,7 @@ import {
 	parseStringList,
 	parseGuidedRunLibrary,
 	parseGuidedSeconds,
+	parseCaseFoldPair,
 	parseWhitespaceClass,
 	MOBILE_GUIDED_RUNS,
 	WEB_GUIDED_RUNS,
@@ -227,6 +228,25 @@ test('a range expands, so two spellings of one set compare equal', () => {
 test('a whitespace class whose anchor moved reads as no values, which the caller reports', () => {
 	assert.deepEqual(parseWhitespaceClass('/[\\u0009]+/g', 'RENAMED ='), []);
 	assert.deepEqual(parseWhitespaceClass('const RENAMED = 3;', 'RENAMED ='), []);
+});
+
+// One shape, three spellings: TS and Dart escape a code point as \uXXXX and
+// Postgres as U&'\XXXX', so the parser accepts the 'u' or its absence and
+// nothing else. A pair short of two code points is no pair at all — returning
+// the one it found would let a rail that lost its target compare equal to a
+// rail that lost its source.
+test('a case-fold pair is read from all three rails and normalises to code points', () => {
+	const ts = "const EXERCISE_CASE_PRE_FOLD = ['\\u0130', '\\u0069'] as const;";
+	const dart = "const List<String> kExerciseCasePreFold = ['\\u0130', '\\u0069'];";
+	const sql = 'translate(p_name, ' + "U&'\\0130', U&'\\0069')";
+	assert.deepEqual(parseCaseFoldPair(ts, 'EXERCISE_CASE_PRE_FOLD = ['), ['U+0130', 'U+0069']);
+	assert.deepEqual(parseCaseFoldPair(dart, 'kExerciseCasePreFold = ['), ['U+0130', 'U+0069']);
+	assert.deepEqual(parseCaseFoldPair(sql, 'translate(p_name,'), ['U+0130', 'U+0069']);
+});
+
+test('a case-fold pair reads as no values when its anchor moved or it lost a half', () => {
+	assert.deepEqual(parseCaseFoldPair("['\\u0130', '\\u0069']", 'RENAMED = ['), []);
+	assert.deepEqual(parseCaseFoldPair("const PAIR = ['\\u0130'];", 'PAIR = ['), []);
 });
 
 test('a named integer is read from its declaration in Dart and in Kotlin', () => {
