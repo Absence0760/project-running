@@ -16017,6 +16017,14 @@
   "@racesRunSignUpBibHint": {
     "description": "Hint above the RunSignUp import action requiring a bib to scope the import"
   },
+  "racesUltraSignUpAthleteId": "UltraSignup athlete ID",
+  "@racesUltraSignUpAthleteId": {
+    "description": "Label for the UltraSignup athlete-id field in the race import sheet"
+  },
+  "racesUltraSignUpAthleteHint": "Enter your UltraSignup athlete ID, or leave it blank to use the one this listing carries.",
+  "@racesUltraSignUpAthleteHint": {
+    "description": "Hint above the UltraSignup import action explaining the optional athlete id"
+  },
   "racesPasteResultHint": "Enter your finishing details from the race's results page.",
   "@racesPasteResultHint": {
     "description": "Hint above the manual result paste form"
@@ -16084,6 +16092,22 @@
   "integrationsRunsignupUnavailable": "RunSignUp import isn't available yet. parkrun and manual paste still work.",
   "@integrationsRunsignupUnavailable": {
     "description": "Explainer when the RunSignUp key is unconfigured"
+  },
+  "integrationsUltrasignup": "UltraSignup",
+  "@integrationsUltrasignup": {
+    "description": "UltraSignup integration name"
+  },
+  "integrationsUltrasignupConnect": "Import trail and ultra results from UltraSignup.",
+  "@integrationsUltrasignupConnect": {
+    "description": "UltraSignup integration description"
+  },
+  "integrationsUltrasignupOpen": "Open the race calendar",
+  "@integrationsUltrasignupOpen": {
+    "description": "Action linking to the race calendar from the UltraSignup tile"
+  },
+  "integrationsUltrasignupUnavailable": "UltraSignup import isn't available yet. parkrun and manual paste still work.",
+  "@integrationsUltrasignupUnavailable": {
+    "description": "Explainer when the UltraSignup key is unconfigured"
   },
   "integrationsChronotrack": "ChronoTrack",
   "@integrationsChronotrack": {

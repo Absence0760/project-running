@@ -11724,6 +11724,13 @@ class AppLocalizationsJa extends AppLocalizations {
       '全体ではなくあなたの結果だけをインポートするため、ゼッケン番号を入力してください。';
 
   @override
+  String get racesUltraSignUpAthleteId => 'UltraSignupアスリートID';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'UltraSignupのアスリートIDを入力してください。空欄のままにすると、このレースに登録されたIDを使います。';
+
+  @override
   String get racesPasteResultHint => 'レースの結果ページから完走の詳細を入力してください。';
 
   @override
@@ -11774,6 +11781,20 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'RunSignUpのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'UltraSignupからトレイル・ウルトラの結果をインポートします。';
+
+  @override
+  String get integrationsUltrasignupOpen => 'レースカレンダーを開く';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'UltraSignupのインポートはまだ利用できません。parkrunと手動での貼り付けは引き続き利用できます。';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';

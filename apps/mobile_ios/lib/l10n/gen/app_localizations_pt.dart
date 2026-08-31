@@ -12304,6 +12304,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Insira o seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'ID de atleta do UltraSignup';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Insira o seu ID de atleta do UltraSignup ou deixe em branco para usar o desta corrida.';
+
+  @override
   String get racesPasteResultHint =>
       'Introduza os detalhes da sua chegada a partir da página de resultados da corrida.';
 
@@ -12358,6 +12365,20 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get integrationsRunsignupUnavailable =>
       'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam a funcionar.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Importe resultados de trail e ultra do UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Abrir o calendário de corridas';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'A importação do UltraSignup ainda não está disponível. O parkrun e a colagem manual continuam a funcionar.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
@@ -26207,6 +26228,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Insira seu número de peito para importarmos apenas o seu resultado, não a lista inteira.';
 
   @override
+  String get racesUltraSignUpAthleteId => 'ID de atleta do UltraSignup';
+
+  @override
+  String get racesUltraSignUpAthleteHint =>
+      'Insira seu ID de atleta do UltraSignup ou deixe em branco para usar o desta corrida.';
+
+  @override
   String get racesPasteResultHint =>
       'Insira os detalhes da sua chegada a partir da página de resultados da corrida.';
 
@@ -26261,6 +26289,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get integrationsRunsignupUnavailable =>
       'A importação do RunSignUp ainda não está disponível. O parkrun e a colagem manual continuam funcionando.';
+
+  @override
+  String get integrationsUltrasignup => 'UltraSignup';
+
+  @override
+  String get integrationsUltrasignupConnect =>
+      'Importe resultados de trail e ultra do UltraSignup.';
+
+  @override
+  String get integrationsUltrasignupOpen => 'Abrir o calendário de corridas';
+
+  @override
+  String get integrationsUltrasignupUnavailable =>
+      'A importação do UltraSignup ainda não está disponível. O parkrun e a colagem manual continuam funcionando.';
 
   @override
   String get integrationsChronotrack => 'ChronoTrack';
