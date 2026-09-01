@@ -15,6 +15,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
 	fetchStravaActivity,
+	type StravaActivity,
 	gzipBytes,
 	isAlreadyImported,
 	uploadTrack,
@@ -68,11 +69,21 @@ Deno.test('fetchStravaActivity — every other refusal is not_found, and never a
 });
 
 Deno.test('fetchStravaActivity — a success carries the activity and the bearer', async () => {
-	const activity = { id: 99, sport_type: 'TrailRun', distance: 21097 };
+	const activity = {
+		id: 99,
+		name: 'Trail loop',
+		distance: 21097,
+		moving_time: 7200,
+		elapsed_time: 7400,
+		total_elevation_gain: 640,
+		start_date: '2026-05-01T06:00:00Z',
+		type: 'Run',
+		sport_type: 'TrailRun',
+	};
 	const { calls, restore } = stubFetch(() => Response.json(activity));
 	try {
 		const result = await fetchStravaActivity('tok-abc', 99);
-		assertEquals(result, { status: 'ok', activity });
+		assertEquals(result, { status: 'ok', activity: activity as StravaActivity });
 	} finally {
 		restore();
 	}
