@@ -25,7 +25,7 @@
 -- donations_status_lock_test fail on a workstation CLI image (§ 799).
 
 begin;
-select plan(21);
+select plan(23);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -319,6 +319,29 @@ select lives_ok(
        where stripe_refund_id = 're_pr_failed' $$,
   'the service role (the stripe-events webhook) can move a refund''s status'
 );
+
+-- The privilege the sole writer depends on, STATED rather than inherited.
+-- 20270630000001 wrote only `revoke all … from anon, authenticated` and left
+-- service_role's DML to Supabase's `alter default privileges`, which is not
+-- stable across images: on the workstation CLI's current one the table lands
+-- with `service_role=Dxtm` and every assertion above dies at 42501 before it
+-- runs. 20270702000002 states the grant, so the two assertions are the pair
+-- that has to hold together — the writer keeps everything, the clients keep
+-- nothing.
+select is(
+  (select coalesce(string_agg(v.verb, ', ' order by v.verb), '')
+     from (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) v(verb)
+    where not has_table_privilege('service_role', 'public.payment_refunds'::regclass, v.verb)),
+  '',
+  'service_role holds full DML on payment_refunds — the webhook is the sole writer and its privilege is granted, not inherited from an image default');
+
+select is(
+  (select coalesce(string_agg(r.role || ' ' || v.verb, ', ' order by r.role, v.verb), '')
+     from (values ('anon'::name), ('authenticated'::name)) r(role)
+     cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) v(verb)
+    where has_table_privilege(r.role, 'public.payment_refunds'::regclass, v.verb)),
+  '',
+  'and no client role holds any of it — a refund''s amount and failure reason are not a client read path');
 
 select * from finish();
 rollback;

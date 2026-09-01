@@ -110,6 +110,7 @@ insert into server_only (fn, keeps_service_role) values
   ('cleanup_stale_live_run_pings', true), ('cleanup_stale_race_pings', true),
   ('cleanup_stale_user_coach_usage', true), ('cleanup_stale_rate_limits', true),
   ('cleanup_stale_export_blobs', true),
+  ('enqueue_data_export', true), ('expire_stale_export_jobs', true),
   ('enqueue_event_reminders', true), ('enqueue_lifecycle_drip', true),
   ('enqueue_weekly_digests', true),
   ('clear_device_token', true), ('clear_push_subscription', true),
