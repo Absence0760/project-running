@@ -1041,4 +1041,88 @@ mod tests {
         assert!(MENU_TIMEOUT_S >= 15);
         assert!(MENU_TIMEOUT_S <= 60);
     }
+    #[test]
+    fn every_menu_item_the_enum_can_hold_is_on_the_ring() {
+        // ITEMS is a hand-written array and MENU_ITEMS its hand-written
+        // length; the array literal's type checks the two against each other
+        // and nothing checks either against the ENUM. A variant added to
+        // MenuItem and not to ITEMS compiles, because `edit`'s exhaustive
+        // match is satisfied by the arm the author did write — and the row
+        // then exists in the firmware and can never be selected, because the
+        // cursor only ever walks ITEMS.
+        //
+        // The match below is what closes it: adding a variant fails to
+        // compile here until it is listed, and listing it fails the assertion
+        // until it is also seated on the ring.
+        let every = [
+            MenuItem::GnssMode,
+            MenuItem::HideEmpty,
+            MenuItem::Profile,
+            MenuItem::Backyard,
+            MenuItem::PairPhone,
+            MenuItem::Erase,
+            MenuItem::QnhRezero,
+            MenuItem::Ice,
+        ];
+        for item in every {
+            // Exhaustive by construction: a new variant makes this match
+            // non-exhaustive and the crate stops building.
+            let named = match item {
+                MenuItem::GnssMode
+                | MenuItem::HideEmpty
+                | MenuItem::Profile
+                | MenuItem::Backyard
+                | MenuItem::PairPhone
+                | MenuItem::Erase
+                | MenuItem::QnhRezero
+                | MenuItem::Ice => item,
+            };
+            assert_eq!(
+                ITEMS.iter().filter(|i| **i == named).count(),
+                1,
+                "{named:?} is not seated exactly once on the cursor ring, so it \
+                 is either unreachable or reachable twice"
+            );
+        }
+        assert_eq!(ITEMS.len(), every.len());
+        assert_eq!(MENU_ITEMS, every.len());
+    }
+
+    #[test]
+    fn a_guarded_row_is_on_screen_at_every_cursor_position() {
+        // The two-press guards put a destructive key behind a legend that
+        // names it ("B1 WIPES"). A body window that could scroll the row
+        // itself past the fold would leave that legend describing a row the
+        // wearer cannot see — the §337 surprise the legend exists to prevent,
+        // arriving through the §333 scroll instead of through the key map.
+        //
+        // Holds today because eight items over a seven-row window leave only
+        // two window positions and both guarded rows sit inside both. A ninth
+        // row opens a third position, and this is what says which rows fell
+        // out of it.
+        for cursor in 0..MENU_ITEMS as u8 {
+            let rows = super::menu_rows(
+                MenuView {
+                    cursor,
+                    erase_armed: false,
+                    pair_armed: false,
+                },
+                GnssMode::Balanced,
+                false,
+                None,
+                false,
+                0,
+                None,
+            );
+            let body: heapless::Vec<&str, ROWS> =
+                rows.iter().map(|r| r.as_str()).collect();
+            for needle in [ERASE_ROW, PAIR_ROW] {
+                assert!(
+                    body.iter().any(|r| r.contains(needle)),
+                    "cursor {cursor}: {needle:?} is off the fold, so its armed \
+                     legend would name a row nobody can see"
+                );
+            }
+        }
+    }
 }
