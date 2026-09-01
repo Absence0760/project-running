@@ -1114,8 +1114,7 @@ mod tests {
                 0,
                 None,
             );
-            let body: heapless::Vec<&str, ROWS> =
-                rows.iter().map(|r| r.as_str()).collect();
+            let body: heapless::Vec<&str, ROWS> = rows.iter().map(|r| r.as_str()).collect();
             for needle in [ERASE_ROW, PAIR_ROW] {
                 assert!(
                     body.iter().any(|r| r.contains(needle)),
