@@ -1,0 +1,225 @@
+-- The Art 20 export surface: the bucket the archive lands in, the row that
+-- tracks it, and the sweep that expires both (migrations 20270602_001,
+-- 20270603_001, and the photo-bucket narrowing 20270622000002 beside them).
+--
+-- What was already measured: that `exports` exists, is private, carries no
+-- `storage.objects` policies, has SOME size limit, has SOME mime list, and is
+-- bigger than `runs`. What was not: any of the actual VALUES. A regression to
+-- a 26 MB cap — back inside the range 20270602_001 was written to escape,
+-- where a full-history archive was truncated to "on the order of tens of
+-- runs" — satisfies `exports.file_size_limit > runs.file_size_limit`, and a
+-- mime list widened to `text/html` satisfies `allowed_mime_types is not null`.
+--
+-- The photo buckets are the same shape one door along. decisions § 557 made
+-- the accepted set BE the strippable set because `stripImageExif` returns an
+-- unrecognised format unchanged and the bucket then serves the geotagged
+-- original back through a signed URL; 20270622000002 finally landed that on
+-- the three buckets that still advertised HEIC/HEIF. `check_shared_constants`
+-- compares the migration TEXT against the two client lists, which is a
+-- different claim from what the applied `storage.buckets` row says — a manual
+-- console edit, a partially applied migration, or a bucket created by
+-- storage-api's own defaults is invisible to it. Nothing in the pgtap suite
+-- mentions `heic` at all.
+--
+-- `data_export_jobs` is asserted on both rails, because the migration's own
+-- header says it is on both deliberately: RLS with no policies, AND no client
+-- grant, so "a policy added by mistake later still cannot open a client read
+-- path". `role_grant_matrix_test` names the table only to EXCLUDE it from its
+-- readability catch-all, so a later `grant select … to authenticated` is
+-- invisible there.
+
+begin;
+
+select plan(17);
+
+-- ── the exports bucket ──────────────────────────────────────────────────────
+
+-- (1) The three settings that make it the archive bucket, as values. The
+-- mime-array LENGTH is the positive-control half: without it, a list widened
+-- to include `text/html` still satisfies both membership probes.
+select results_eq(
+  $$ select public, file_size_limit, array_length(allowed_mime_types, 1),
+            'text/csv' = any(allowed_mime_types),
+            'application/zip' = any(allowed_mime_types)
+       from storage.buckets where id = 'exports' $$,
+  $$ values (false, 5368709120::bigint, 2, true, true) $$,
+  'the exports bucket is private, admits a 5 GiB archive, and accepts exactly csv + zip');
+
+-- (2) The relational reason the bucket exists at all, kept beside the absolute
+-- value so the pair states both the figure and why it is not the runs cap.
+select cmp_ok(
+  (select file_size_limit from storage.buckets where id = 'exports'),
+  '>',
+  (select file_size_limit from storage.buckets where id = 'runs'),
+  'and is bigger than the runs bucket, which truncated a full-history export');
+
+-- ── the photo buckets ───────────────────────────────────────────────────────
+
+-- (3) Exactly the strippable set, in both directions. `@>` alone would pass a
+-- bucket narrowed to `['image/png']`, which breaks every JPEG upload; `<@`
+-- alone would pass an empty list.
+select is(
+  (select coalesce(string_agg(id || ': ' || array_to_string(allowed_mime_types, ','),
+                              '; ' order by id), '')
+     from storage.buckets
+    where id in ('run-photos', 'route-photos', 'club-photos', 'avatars')
+      and not (allowed_mime_types @> array['image/jpeg', 'image/png', 'image/webp']
+               and allowed_mime_types <@ array['image/jpeg', 'image/png', 'image/webp'])),
+  '',
+  'every photo bucket accepts exactly the strippable set — an accepted-but-unstrippable upload serves its GPS EXIF back through a signed URL');
+
+-- (4) And the population is the four buckets, so (3) cannot pass by naming
+-- buckets that are not there.
+select is(
+  (select count(*)::int from storage.buckets
+    where id in ('run-photos', 'route-photos', 'club-photos', 'avatars')),
+  4,
+  'all four photo buckets exist to be checked');
+
+-- ── data_export_jobs: both rails ────────────────────────────────────────────
+
+-- (5) The grant rail. The migration grants `authenticated` nothing at all.
+select is(
+  (select coalesce(string_agg(r.role || ' ' || v.verb, ', ' order by r.role, v.verb), '')
+     from (values ('anon'::name), ('authenticated'::name)) r(role)
+     cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) v(verb)
+    where has_table_privilege(r.role, 'public.data_export_jobs'::regclass, v.verb)),
+  '',
+  'no client role holds any grant on data_export_jobs — the second rail behind RLS');
+
+-- (6) The positive control for (5): the only writer keeps its whole surface,
+-- so an empty client set is a withholding rather than a table nobody can use.
+select is(
+  (select coalesce(string_agg(v.verb, ', ' order by v.verb), '')
+     from (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) v(verb)
+    where not has_table_privilege('service_role', 'public.data_export_jobs'::regclass, v.verb)),
+  '',
+  'service_role keeps full DML on data_export_jobs — the Go worker is the only writer');
+
+-- (7) The RLS rail, which the grant rail is deliberately redundant with.
+select results_eq(
+  $$ select c.relrowsecurity, (select count(*)::int from pg_policy p where p.polrelid = c.oid)
+       from pg_class c where c.oid = 'public.data_export_jobs'::regclass $$,
+  $$ values (true, 0) $$,
+  'data_export_jobs keeps RLS on and carries no policy — there is no client read path to serve');
+
+-- ── the row's own constraints, and its lifetime ─────────────────────────────
+
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
+values ('e8000000-0000-0000-0000-0000000000a1', 'authenticated', 'authenticated',
+        'export-subject@dsar.local', '', now(), now());
+
+insert into data_export_jobs (id, user_id, format, status, object_path)
+values ('e8000000-0000-0000-0000-0000000000d1', 'e8000000-0000-0000-0000-0000000000a1',
+        'backup', 'ready', 'e8000000-0000-0000-0000-0000000000a1/export.zip');
+
+-- (8) `error_code` is a machine token, never prose: a raw upstream error
+-- string carries paths and addresses into a durable row.
+select lives_ok(
+  $$ update data_export_jobs set error_code = repeat('a', 64)
+      where id = 'e8000000-0000-0000-0000-0000000000d1' $$,
+  'a 64-character machine token is accepted');
+
+select throws_ok(
+  $$ update data_export_jobs set error_code = repeat('a', 65)
+      where id = 'e8000000-0000-0000-0000-0000000000d1' $$,
+  '23514',
+  null,
+  'a 65-character error_code is rejected — the column is a token, not a place to put prose');
+
+-- (9) One in-flight export per subject. This is what makes a re-POST
+-- idempotent rather than a second full archive build charged to Storage.
+insert into data_export_jobs (user_id, format, status)
+values ('e8000000-0000-0000-0000-0000000000a1', 'csv', 'queued');
+
+select throws_ok(
+  $$ insert into data_export_jobs (user_id, format, status)
+       values ('e8000000-0000-0000-0000-0000000000a1', 'gpx', 'running') $$,
+  '23505',
+  null,
+  'a second in-flight export for the same subject is refused by the partial unique index');
+
+select lives_ok(
+  $$ insert into data_export_jobs (user_id, format, status)
+       values ('e8000000-0000-0000-0000-0000000000a1', 'gpx', 'failed') $$,
+  'but a terminal-status row is not in flight, so the index is partial rather than one-row-per-user');
+
+-- (10) Art 17. The table comment claims it "cascades away with the account";
+-- nothing measured it, and the row carries the fact and timing of a DSAR plus
+-- a Storage key naming the subject.
+select cmp_ok(
+  (select count(*)::int from data_export_jobs
+    where user_id = 'e8000000-0000-0000-0000-0000000000a1'),
+  '>', 0,
+  'the export state rows exist before the erasure');
+
+delete from auth.users where id = 'e8000000-0000-0000-0000-0000000000a1';
+
+select is(
+  (select count(*)::int from data_export_jobs
+    where user_id = 'e8000000-0000-0000-0000-0000000000a1'),
+  0,
+  'Art 17 erasure cascades every export state row away with the account');
+
+-- ── the sweep, driven rather than read ──────────────────────────────────────
+-- `cleanup_stale_export_blobs` is COMPOSED: it deletes the objects and then
+-- calls `expire_stale_export_jobs`, so a `ready` row cannot outlive the object
+-- it points at. Nothing measured the composition — `data_export_jobs_test`
+-- calls the expiry directly, so dropping the `perform` leaves that file green
+-- while production stops expiring rows. It also still has to reach the LEGACY
+-- prefix, `runs/{uid}/exports/`, where archives landed before 20270602_001.
+
+insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
+values ('e8000000-0000-0000-0000-0000000000a2', 'authenticated', 'authenticated',
+        'sweep-subject@dsar.local', '', now(), now());
+
+insert into data_export_jobs (id, user_id, format, status, object_path, finished_at)
+values ('e8000000-0000-0000-0000-0000000000d2', 'e8000000-0000-0000-0000-0000000000a2',
+        'backup', 'ready', 'e8000000-0000-0000-0000-0000000000a2/old.zip',
+        now() - interval '8 days');
+
+insert into storage.objects (bucket_id, name, created_at) values
+  ('exports', 'e8000000-0000-0000-0000-0000000000a2/old.zip', now() - interval '8 days'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a2/exports/legacy.zip', now() - interval '8 days'),
+  ('exports', 'e8000000-0000-0000-0000-0000000000a2/fresh.zip', now() - interval '1 day'),
+  ('runs',    'e8000000-0000-0000-0000-0000000000a2/track.json.gz', now() - interval '8 days');
+
+-- Newer storage-api images (the workstation CLI's, not CI's pinned 2.84.2)
+-- carry a `protect_objects_delete` trigger that refuses a direct DELETE from
+-- `storage.objects` outside the Storage API. Setting its escape GUC here is a
+-- no-op on an image without the trigger, so the file reads the same on both.
+set local "storage.allow_delete_query" = 'true';
+
+-- (11) Everything the sweep is about is present first.
+select is(
+  (select count(*)::int from storage.objects
+    where name like 'e8000000-0000-0000-0000-0000000000a2/%'),
+  4,
+  'all four fixture objects exist before the sweep');
+
+select is(
+  (select count(*)::int from cleanup_stale_export_blobs() as t(n) where true),
+  1,
+  'the sweep runs and returns a row');
+
+-- (12) The stale archive in the new bucket AND the one at the legacy prefix
+-- are both gone; the fresh archive and an unrelated track are both kept.
+select is(
+  (select coalesce(string_agg(bucket_id || '/' || name, ', ' order by name), '')
+     from storage.objects
+    where name like 'e8000000-0000-0000-0000-0000000000a2/%'),
+  'exports/e8000000-0000-0000-0000-0000000000a2/fresh.zip, '
+  'runs/e8000000-0000-0000-0000-0000000000a2/track.json.gz',
+  'the sweep removes the stale archive from BOTH the exports bucket and the legacy runs/{uid}/exports/ prefix, and touches nothing else');
+
+-- (13) And the row that pointed at the deleted object was expired in the same
+-- call — the composition, not a second cron entry somebody has to remember.
+select results_eq(
+  $$ select status, object_path from data_export_jobs
+      where id = 'e8000000-0000-0000-0000-0000000000d2' $$,
+  $$ values ('expired', null::text) $$,
+  'the ready row is expired and its path cleared by the same sweep — a ready row cannot outlive its object');
+
+select * from finish();
+
+rollback;
