@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
 	challengeGoalUnit,
 	challengeGoalToStored,
@@ -117,3 +119,101 @@ test('the three unbounded metrics take any positive goal', () => {
 		assert.equal(checkChallengeGoal(1e9, metric, 0, DAY), null);
 	}
 });
+
+// ─────────── the SQL rail ───────────
+//
+// `challenges_goal_ck` is the third rail this pair mirrors, and its own
+// comment says so: "Mirrored client-side by checkChallengeGoal /
+// maxStreakDaysInWindow on both platforms." Nothing read it. Changing the
+// SQL `+ 1` to `+ 0`, or its `> 0` floor to `>= 0`, leaves every
+// assertion above green while the client offers a goal Postgres refuses
+// as a raw 23514 that names neither bound — which is the exact failure
+// the client half exists to prevent.
+
+const GOAL_CK = resolve(
+	'../backend/supabase/migrations/20270615_001_challenge_goal_check.sql',
+);
+
+function goalConstraintSql(): string {
+	const sql = readFileSync(GOAL_CK, 'utf-8');
+	const at = sql.indexOf('add constraint challenges_goal_ck');
+	assert.notEqual(at, -1, 'challenges_goal_ck is no longer added by this migration');
+	const end = sql.indexOf('not valid;', at);
+	assert.notEqual(end, -1, 'the constraint body no longer ends where this guard expects');
+	// Collapse whitespace so the assertions below are about the predicate,
+	// not about how the migration happens to be indented.
+	return sql.slice(at, end).replace(/\s+/g, ' ');
+}
+
+test('the SQL floor is strict, matching `not_positive` covering 0', () => {
+	assert.match(
+		goalConstraintSql(),
+		/goal_value > 0/,
+		'a `>= 0` floor would store a 0 goal, which recompute_challenge_completion ' +
+			'awards to every participant while both clients render the board as goal-less',
+	);
+	assert.equal(checkChallengeGoal(0, 'distance', 0, DAY), 'not_positive');
+	assert.equal(checkChallengeGoal(1, 'distance', 0, DAY), null);
+});
+
+test('only streak_days is window-bounded on both rails', () => {
+	const sql = goalConstraintSql();
+	const bounded = [...sql.matchAll(/metric <> '([a-z_]+)'/g)].map((m) => m[1]);
+	assert.deepEqual(
+		bounded,
+		['streak_days'],
+		'the SQL bounds a different metric set than the client does',
+	);
+	// A duration goal longer than its own window is deliberately allowed:
+	// the aggregate sums duration_s over runs whose START falls inside the
+	// window, so a 112-hour finish begun a minute before it closes counts.
+	assert.equal(checkChallengeGoal(400_000, 'duration', 0, DAY), null);
+	assert.equal(checkChallengeGoal(3, 'streak_days', 0, DAY), 'exceeds_window');
+});
+
+test('the window ceiling is derived from the SQL, not restated beside it', () => {
+	const sql = goalConstraintSql();
+	const bound = sql.match(
+		/goal_value (<=|<) floor\(extract\(epoch from \(ends_at - starts_at\)\) \/ (\d+)\) \+ (\d+)/,
+	);
+	assert.ok(bound, `the streak bound no longer matches a readable shape in ${GOAL_CK}`);
+	const [, comparison, secondsPerDay, addend] = bound;
+	assert.equal(comparison, '<=', 'the SQL bound is inclusive; the client refuses only ABOVE it');
+	// Evaluate the SQL's own predicate in JS and hold the client to it over
+	// a spread of windows, so a change to either number fails here.
+	const sqlCeiling = (startMs: number, endMs: number): number =>
+		Math.floor((endMs - startMs) / 1000 / Number(secondsPerDay)) + Number(addend);
+	for (const days of [1, 2, 7, 30, 365]) {
+		const endMs = days * DAY;
+		assert.equal(
+			maxStreakDaysInWindow(0, endMs),
+			sqlCeiling(0, endMs),
+			`the client and the CHECK disagree about a ${days}-day window`,
+		);
+		const ceiling = sqlCeiling(0, endMs);
+		assert.equal(checkChallengeGoal(ceiling, 'streak_days', 0, endMs), null);
+		assert.equal(
+			checkChallengeGoal(ceiling + 1, 'streak_days', 0, endMs),
+			'exceeds_window',
+		);
+	}
+	// The client's own day constant has to be the SQL's, expressed in ms.
+	assert.equal(Number(secondsPerDay) * 1000, DAY);
+});
+
+test('a streak goal is refused outright when the window is unusable', () => {
+	// The ceiling collapses to 0, so every positive goal is refused. Only
+	// exercised at the maxStreakDaysInWindow level before this.
+	for (const [startMs, endMs] of [
+		[Number.NaN, DAY],
+		[0, Number.NaN],
+		[DAY, 0],
+		[DAY, DAY],
+	]) {
+		assert.equal(maxStreakDaysInWindow(startMs, endMs), 0);
+		assert.equal(checkChallengeGoal(1, 'streak_days', startMs, endMs), 'exceeds_window');
+		// An unbounded metric is unaffected by an unusable window.
+		assert.equal(checkChallengeGoal(1, 'distance', startMs, endMs), null);
+	}
+});
+
