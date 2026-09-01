@@ -10,6 +10,7 @@ import {
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
 	MAX_TRACK_GZIP_BYTES,
+	TrackShapeError,
 	TrackTooLargeError,
 	decodeTrack,
 } from './decode_track.ts';
@@ -75,3 +76,31 @@ Deno.test(
 		assertEquals(err.message, 'track too large');
 	},
 );
+
+Deno.test('a blob that decodes to something other than a list is refused', async () => {
+	// The return type promised `TrackPoint[]`; `JSON.parse` promised nothing.
+	// An object reached the GPX renderer's `for…of` — and the caller's guard
+	// (`track.length < 2`) is false for `undefined`, so the TypeError escaped
+	// the per-run tolerance and failed the WHOLE export on one bad blob.
+	// Throwing puts it back inside the caller's `catch`, which skips the run.
+	for (const payload of ['{}', '{"points":[]}', 'null', '42', '"a"', 'true']) {
+		const blob = new Blob([await gzipString(payload) as BlobPart]);
+		const err = await decodeTrack(blob).then(() => null, (e: unknown) => e);
+		assertEquals(
+			err instanceof TrackShapeError,
+			true,
+			`${payload} decoded without a refusal`,
+		);
+	}
+});
+
+Deno.test('a real list of points still decodes, so the refusal is not blanket', async () => {
+	// The positive control beside the negative above: an empty array and a
+	// populated one are both lists and must both come back.
+	const empty = new Blob([await gzipString('[]') as BlobPart]);
+	assertEquals(await decodeTrack(empty), []);
+	const two = new Blob([
+		await gzipString(JSON.stringify([{ lat: 1, lng: 2 }, { lat: 3, lng: 4 }])) as BlobPart,
+	]);
+	assertEquals((await decodeTrack(two)).length, 2);
+});
