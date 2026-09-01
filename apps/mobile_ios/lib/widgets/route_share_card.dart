@@ -133,7 +133,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
                   aspectRatio: 9 / 16,
                   child: RepaintBoundary(
                     key: _cardKey,
-                    child: _ShareCardContent(
+                    child: RouteShareCard(
                       route: widget.route,
                       preferences: widget.preferences,
                       tileReadiness: _tiles,
@@ -166,7 +166,14 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
   }
 }
 
-class _ShareCardContent extends StatelessWidget {
+/// Portrait route share card — route map on top, headline stats on the
+/// bottom over a dark background. Wrap in a [RepaintBoundary] and capture it
+/// to produce a shareable PNG. Intended to be rendered at a 9:16 aspect ratio.
+///
+/// Public, like its sibling [RunShareCard], so the card can be mounted on its
+/// own: what it draws is the artifact that goes to social media, and a private
+/// class left that unreachable from a test.
+class RouteShareCard extends StatelessWidget {
   final cm.Route route;
   final Preferences preferences;
 
@@ -174,7 +181,8 @@ class _ShareCardContent extends StatelessWidget {
   /// basemap instead of sleeping.
   final MapTileReadiness? tileReadiness;
 
-  const _ShareCardContent({
+  const RouteShareCard({
+    super.key,
     required this.route,
     required this.preferences,
     this.tileReadiness,
@@ -272,8 +280,10 @@ class _ShareCardContent extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final unit = preferences.unit;
     final dist = UnitFormat.distance(route.distanceMetres, unit);
+    // Through the same unit preference the distance above it takes: a
+    // mile-unit runner was shown "3.11 mi" beside "128 m" on one card.
     final ele = route.elevationGainMetres > 0
-        ? '${route.elevationGainMetres.round()} m'
+        ? UnitFormat.elevation(route.elevationGainMetres, unit)
         : null;
 
     return Container(
