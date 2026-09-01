@@ -10,6 +10,7 @@ import {
   extractRunSignUpResults,
   extractUltraSignUpResults,
   filterResultsByBib,
+  isIsoCalendarDate,
   mapChronoTrackResult,
   mapRunSignUpResult,
   mapUltraSignUpResult,
@@ -514,4 +515,42 @@ Deno.test('ultraSignUpScopeGate rejects an unscoped request 400 ultrasignup_athl
 
 Deno.test('ultraSignUpScopeGate accepts a request scoped by athlete id', () => {
   assertEquals(ultraSignUpScopeGate({ athleteId: '4821' }).ok, true);
+});
+
+Deno.test('a race whose date is unusable maps to nothing, not to an unparseable stamp', () => {
+  // `public_race_listings` is a view, so the generated type cannot carry the
+  // base table's NOT NULL and the handler resolves the column with `?? ''`.
+  // Appended to the synthetic clock that gave the literal `T10:00:00Z`, which
+  // `timestamptz` cannot parse — and because the mapped rows go in as ONE
+  // batch, a single unattributable date used to 22007 the whole race rather
+  // than dropping one result. Same rule the distance already had.
+  const row = { chip_time: '1:45:00', bib_num: '55' };
+  for (const raceDate of ['', 'T10:00:00Z', '2025-9-21', '21/09/2025', '2025-02-30', '0000-01-01']) {
+    assertEquals(
+      mapRunSignUpResult(row, { ...OPTS, raceDate }),
+      null,
+      raceDate,
+    );
+  }
+  // The positive control: the same row against a real date still maps, so the
+  // refusals above are about the date and nothing else.
+  const ok = mapRunSignUpResult(row, OPTS);
+  assert(ok);
+  assertEquals(ok.started_at, `2025-09-21${SYNTHETIC_START_TIME_UTC}`);
+});
+
+Deno.test('isIsoCalendarDate accepts the date half only, and the real calendar', () => {
+  assertEquals(isIsoCalendarDate('2025-09-21'), true);
+  assertEquals(isIsoCalendarDate('2024-02-29'), true, 'a leap day is a day');
+  assertEquals(isIsoCalendarDate('2025-02-29'), false, 'and only in a leap year');
+  assertEquals(isIsoCalendarDate('1900-02-29'), false, 'the century rule is the calendar\'s');
+  assertEquals(isIsoCalendarDate('2000-02-29'), true, 'and so is its exception');
+  assertEquals(isIsoCalendarDate('2025-04-31'), false);
+  assertEquals(isIsoCalendarDate('2025-13-01'), false);
+  assertEquals(isIsoCalendarDate('2025-00-01'), false);
+  // A value carrying its own clock is refused: appending the synthetic one
+  // would put two times in a single literal.
+  assertEquals(isIsoCalendarDate('2025-09-21T00:00:00Z'), false);
+  assertEquals(isIsoCalendarDate(null), false);
+  assertEquals(isIsoCalendarDate(20250921), false);
 });

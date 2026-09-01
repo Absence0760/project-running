@@ -25,6 +25,21 @@ export function capField(raw: unknown, max: number = MAX_FIELD_LEN): string {
 }
 
 /** Parse "H:MM:SS" / "MM:SS" / "SS" into whole seconds. 0 on garbage. */
+/// A bare `YYYY-MM-DD` calendar date, which is what the synthetic start
+/// clock is appended to. Deliberately narrower than `isValidTimestamptz`:
+/// this is the date half only, and a value carrying its own time would
+/// produce two clocks in one literal.
+export function isIsoCalendarDate(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) return false;
+  const [year, month, day] = [m[1], m[2], m[3]].map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const lengths = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= lengths[month - 1];
+}
+
 export function parseClockToSeconds(time: unknown): number {
   const s = capField(time);
   if (!s) return 0;
@@ -99,6 +114,13 @@ export function mapRunSignUpResult(
   if (opts.distanceM == null || !Number.isFinite(opts.distanceM) || opts.distanceM <= 0) {
     return null;
   }
+  // Same rule for the date. `public_race_listings` is a view, so the generated
+  // type cannot carry the base table's NOT NULL and the caller resolves it
+  // with `?? ''` — which appended to the synthetic clock gives the literal
+  // `T10:00:00Z`, a value `timestamptz` cannot parse. That 22007s the batch
+  // insert, so ONE unattributable date loses the whole race rather than one
+  // result.
+  if (!isIsoCalendarDate(opts.raceDate)) return null;
 
   const bib = capField(r.bib_num);
   // The RunSignUp / ChronoTrack / UltraSignup feeds carry a race date with no
