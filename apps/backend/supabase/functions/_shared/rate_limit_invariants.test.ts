@@ -256,11 +256,49 @@ Deno.test('ipBucketKey — an IPv6 literal is accepted and case-folded, not disc
 
 Deno.test('ipBucketKey — the length bound is 45 characters, the longest IPv6 text form', async () => {
   const unknown = await ipBucketKey(req({}));
-  const at45 = 'a'.repeat(45);
+  // The bound is named for this address, so it is this address the case is
+  // measured with. It used to be measured with 45 letters, which the value
+  // check now rejects for not being an address at all — and which the old
+  // hex-only class had admitted precisely because it could not have admitted
+  // the real thing (the IPv4-mapped tail carries dots).
+  const at45 = 'ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255';
   assertEquals(at45.length, 45);
   assert(await ipBucketKey(req({ 'cf-connecting-ip': at45 })) !== unknown);
-  const at46 = `${at45}f`;
+  const at46 = `f${at45}`;
+  assertEquals(at46.length, 46);
   assertEquals(await ipBucketKey(req({ 'cf-connecting-ip': at46 })), unknown);
+});
+
+Deno.test('ipBucketKey — a value that is not an address does not get a window of its own', async () => {
+  // The point of the trusted-header design is that the caller cannot pick
+  // their own bucket. A hex-only class made every bare word an address, so
+  // any token a caller sent minted a fresh window — a rate limit that resets
+  // on demand is not one. Each of these collapses into the shared bucket.
+  const unknown = await ipBucketKey(req({}));
+  for (
+    const value of [
+      'a',
+      'abcdef',
+      'deadbeef',
+      'f'.repeat(45),
+      '1234',
+      '...',
+      '1.2.3',
+      '1.2.3.4.5',
+    ]
+  ) {
+    assertEquals(
+      await ipBucketKey(req({ 'cf-connecting-ip': value })),
+      unknown,
+      value,
+    );
+  }
+  // The positive controls, so "everything collapses" is not what makes the
+  // above pass: both address families still get a bucket, and two different
+  // addresses get two different buckets.
+  const v4 = await ipBucketKey(req({ 'cf-connecting-ip': '1.1.1.1' }));
+  const v6 = await ipBucketKey(req({ 'cf-connecting-ip': '::ffff:1.1.1.1' }));
+  assert(v4 !== unknown && v6 !== unknown && v4 !== v6);
 });
 
 Deno.test('ipBucketKey — every answer is a UUID with the literal 8 version nibble', async () => {

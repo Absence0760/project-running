@@ -153,3 +153,29 @@ Deno.test('isAnonymousAppUserId — non-anonymous ids return false', () => {
   assertStrictEquals(isAnonymousAppUserId(''), false);
   assertStrictEquals(isAnonymousAppUserId('rcanonymousid:abc'), false);
 });
+
+Deno.test('validateFreshness — an unusable stamp is refused, not waved through', () => {
+  // Every comparison against NaN is false, so both gates fell through and the
+  // replay window opened for anything a caller could make unparseable —
+  // `Date.parse` of a bad string, a field read off a body with no schema, an
+  // arithmetic overflow. The two live callers type-check their field first,
+  // which is why nothing had noticed; the gate must not depend on that.
+  const now = Date.now();
+  for (const bad of [NaN, Infinity, -Infinity]) {
+    assertEquals(validateFreshness(bad, now), 'too_old', String(bad));
+  }
+  // A broken clock on our side is the same problem from the other direction.
+  assertEquals(validateFreshness(now, NaN), 'too_old');
+  // The positive control beside it: a good stamp against a good clock is
+  // still ok, so the guard is not a blanket refusal.
+  assertEquals(validateFreshness(now - 1000, now), 'ok');
+});
+
+Deno.test('validateFreshness — the future edge is exclusive, like the past one', () => {
+  // The past side has both its edges pinned above. The future side had only
+  // an inside and an outside point, so a `<` / `<=` slip was invisible.
+  const now = Date.now();
+  const skew = 60 * 1000;
+  assertEquals(validateFreshness(now + skew, now), 'ok');
+  assertEquals(validateFreshness(now + skew + 1, now), 'too_future');
+});

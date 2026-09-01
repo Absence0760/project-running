@@ -143,8 +143,14 @@ function trustedClientIp(raw: string | null): string | null {
   const value = raw.trim().toLowerCase();
   if (value.length === 0 || value.length > 45 || value.includes(',')) return null;
   const ipv4 = /^(\d{1,3}\.){3}\d{1,3}$/;
-  const ipv6 = /^[0-9a-f:]+$/;
-  if (!ipv4.test(value) && !ipv6.test(value)) return null;
+  // A colon is what makes the value an address rather than an arbitrary
+  // token: without it the hex class admitted any bare word, and every
+  // distinct word minted its own window. The dot is in the class for the
+  // IPv4-mapped form (`::ffff:1.2.3.4`), which is also the LONGEST text
+  // form an address has — the 45-character bound above is named for it, and
+  // a hex-only class could not accept a single 45-character address.
+  const ipv6 = /^[0-9a-f.:]+$/;
+  if (!ipv4.test(value) && !(value.includes(':') && ipv6.test(value))) return null;
   return value;
 }
 
