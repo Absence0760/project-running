@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
@@ -17,6 +16,7 @@ import '../local_route_store.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 import '../share_sheet.dart';
+import '../widgets/capture_png.dart';
 import 'run_detail_screen.dart';
 import '../widgets/run_list_tile.dart';
 import '../widgets/top_banner.dart';
@@ -566,17 +566,13 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
       // `finisher_certificate_card`, the other tile-free card.
       await WidgetsBinding.instance.endOfFrame;
 
-      final boundary = _cardKey.currentContext!.findRenderObject()
-          as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
+      final bytes = await capturePngBytes(_cardKey);
 
       final tmp = await getTemporaryDirectory();
       final file = File(
         '${tmp.path}/period-${widget.periodName}-${widget.periodStartIso}.png',
       );
-      await file.writeAsBytes(byteData.buffer.asUint8List());
+      await file.writeAsBytes(bytes);
 
       await shareFilesFrom(
         context,

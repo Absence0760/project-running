@@ -539,6 +539,10 @@ void main() async {
         wipeScreenOwnedOfflineStores().catchError((Object e) {
           debugPrint('Screen-owned store wipe on signedOut failed: $e');
         });
+        // The run store's rows are owner-tagged and stay (a re-signing-in
+        // account keeps its own history), but the in-progress snapshot is
+        // not tagged and would be adopted by whoever signs in next.
+        wipeInProgressRecording(store);
       }
     });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
