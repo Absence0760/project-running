@@ -21,6 +21,7 @@ import {
   validateFreshness,
 } from '../_shared/webhook_security.ts';
 import {
+  ACTIVATING_EVENTS,
   DEACTIVATING_EVENTS,
   mapEventToBillingIssue,
   mapEventToTier,
@@ -63,6 +64,14 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
     event = JSON.parse(body).event;
   } catch {
     return Response.json({ error: 'invalid_json' }, { status: 400 });
+  }
+  // A body that parses but carries no `event` object is not a 500. `{}`
+  // parses fine and leaves `event` undefined, and the first field read below
+  // then threw a TypeError past the handler into withSentry's 500 — which
+  // RevenueCat treats as a delivery failure and retries for three days, on a
+  // payload that can never succeed.
+  if (typeof event !== 'object' || event === null) {
+    return Response.json({ error: 'missing_event' }, { status: 400 });
   }
 
   // Replay protection. HMAC authenticates the body but nothing
@@ -129,14 +138,19 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
   }
 
   // Resolve the user's current tier so the tier mapper can avoid demoting a
-  // `lifetime` holder. Needed for deactivating events (don't reset lifetime on
-  // a parallel-sub expiry) AND for PRODUCT_CHANGE (a plan change on a parallel
-  // sub must not knock lifetime down to pro). Other activating events always
-  // grant at least pro, so the lookup is skipped for them.
+  // `lifetime` holder — for EVERY event that can move the tier, not only the
+  // deactivating ones and PRODUCT_CHANGE. "Other activating events always
+  // grant at least pro" was the reasoning for skipping the read, and it is
+  // wrong in one direction: lifetime outranks pro. A lifetime owner carrying
+  // a parallel monthly sub gets a RENEWAL on that sub every month, and each
+  // one reached `mapEventToTier` with `currentTier: null`, wrote `pro` over
+  // `lifetime`, and made the guard in the mapper unreachable for four of the
+  // five activating types. The monthly's eventual EXPIRATION then read `pro`
+  // and finished the job at `free`.
   let currentTier: string | null = null;
   if (
     (DEACTIVATING_EVENTS as readonly string[]).includes(event.type) ||
-    event.type === 'PRODUCT_CHANGE'
+    (ACTIVATING_EVENTS as readonly string[]).includes(event.type)
   ) {
     const { data } = await supabase
       .from('user_profiles')
