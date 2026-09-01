@@ -222,6 +222,8 @@
 				return m('notificationsList.verbContentHidden');
 			case 'data_export_ready':
 				return m('notificationsList.verbDataExportReady');
+			case 'refund_failed':
+				return m('notificationsList.verbRefundFailed');
 			default:
 				return m('notificationsList.verbGeneric');
 		}

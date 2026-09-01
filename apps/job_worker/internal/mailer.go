@@ -276,13 +276,18 @@ const (
 // are the Phase 4b event-day items; message is a DM; plan_update is a
 // coach changing the user's training; data_export_ready is the literal
 // definition of the category — the subject asked for the archive minutes
-// ago and is waiting to be told it exists.
+// ago and is waiting to be told it exists. refund_failed is money we hold
+// and owe back: it belongs to the default set for the same reason a receipt
+// does, and it deliberately gets no kindMutePrefKey entry — a per-kind
+// opt-out of being told we still have your money is not a control anyone
+// benefits from having.
 var importantKinds = map[string]bool{
 	"event_reminder":    true,
 	"event_cancel":      true,
 	"plan_update":       true,
 	"message":           true,
 	"data_export_ready": true,
+	"refund_failed":     true,
 }
 
 // kindMutePrefKey maps a notification kind to the user_settings.prefs key
@@ -468,6 +473,18 @@ func pathForKind(kind, base string, n NotificationRow) string {
 		// No FK: the export lives in data_export_jobs, which the
 		// notifications row has no column for and does not need.
 		return base + "/settings/account"
+	case "refund_failed":
+		// Two ledgers, two shapes. An event order carries event_id and lands
+		// on the page whose banner explains the same thing at length
+		// (decisions § 825); a DONATION carries no FK at all, because
+		// `donations` has no client SELECT policy and there is no donor-facing
+		// row to point at. eventPath's own fallback is /clubs, which would
+		// answer "we still have your money" with a club directory, so the
+		// null case goes to the inbox instead — where the message itself is.
+		if n.EventID != nil {
+			return eventPath(base, n)
+		}
+		return inboxPath(base, n)
 	case "content_hidden":
 		// A provisional moderation notice with no destination — web's
 		// notificationLinkFor returns null for it, and inAppOnlyKinds keeps it

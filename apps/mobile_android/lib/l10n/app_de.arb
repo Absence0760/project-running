@@ -1239,6 +1239,7 @@
   "profileNotifChallengeComplete": "Du hast eine Challenge abgeschlossen",
   "profileNotifContentHidden": "Einer deiner Beiträge wurde nach einer Meldung ausgeblendet",
   "profileNotifDataExportReady": "Dein Datenexport steht zum Download bereit",
+  "profileNotifRefundFailed": "Eine von uns gestartete Erstattung konnte nicht abgeschlossen werden. Das Geld liegt noch bei uns, und wir finden einen anderen Weg, es zurückzuzahlen.",
   "profileNotifGeneric": "{name} hat mit deiner Aktivität interagiert",
   "socialTabFeed": "Feed",
   "socialTabPeople": "Personen",

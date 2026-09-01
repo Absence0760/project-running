@@ -1239,6 +1239,7 @@
   "profileNotifChallengeComplete": "チャレンジを達成しました",
   "profileNotifContentHidden": "報告を受けて、あなたの投稿の1つが非表示になりました",
   "profileNotifDataExportReady": "データのエクスポートをダウンロードできます",
+  "profileNotifRefundFailed": "開始した返金が完了しませんでした。代金はまだ当方にあり、別の方法で返金の手配をします。",
   "profileNotifGeneric": "{name}があなたのアクティビティに反応しました",
   "socialTabFeed": "フィード",
   "socialTabPeople": "ユーザー",

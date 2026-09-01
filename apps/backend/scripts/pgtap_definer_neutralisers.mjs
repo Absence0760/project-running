@@ -506,18 +506,31 @@ $neutralised$;`,
   [
     'gym_exercise_names',
     {
-      why: 'drops `gw.user_id = auth.uid()`; keeps the blank-name filter and the grouping',
+      why: 'drops `gw.user_id = auth.uid()`; keeps the blank-name filter and the canonical-key grouping',
       sql: `create or replace function public.gym_exercise_names()
  returns table(exercise_name text, uses integer)
  language sql stable set search_path to 'public'
 as $neutralised$
-  select btrim(s.exercise_name), count(*)::int
-  from gym_sets s
-  join gym_workouts gw on gw.id = s.workout_id
-  where btrim(coalesce(s.exercise_name, '')) <> ''
-    and ${mine('s')}
-  group by btrim(s.exercise_name)
-  order by count(*) desc, btrim(s.exercise_name);
+  with norm as (
+    select public.normalise_exercise_name(s.exercise_name) as key,
+           s.exercise_name as display,
+           gw.started_at
+    from gym_sets s
+    join gym_workouts gw on gw.id = s.workout_id
+    where coalesce(public.normalise_exercise_name(s.exercise_name), '') <> ''
+      and ${mine('s')}
+  ),
+  spellings as (
+    select key, display, count(*)::int as spelling_uses, max(started_at) as last_used
+    from norm group by key, display
+  ),
+  picked as (
+    select key,
+           (array_agg(display order by spelling_uses desc, last_used desc, display))[1] as display,
+           sum(spelling_uses)::int as uses
+    from spellings group by key
+  )
+  select p.display, p.uses from picked p order by p.uses desc, p.display;
 $neutralised$;`,
       subject: 'gym_sets s',
       witness: {

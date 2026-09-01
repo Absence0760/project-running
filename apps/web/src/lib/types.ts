@@ -317,6 +317,21 @@ export type DonationStatus =
 	| 'refund_failed'
 	| 'failed'
 	| 'canceled';
+// payment_refunds.status — one row per Stripe Refund on either payment ledger
+// (migration 20270630000001). Stripe declares `Refund.status` a bare
+// `string | null`, so this union and the CHECK are the only two places the
+// accepted set is stated; the third rail is REFUND_STATUSES in the
+// stripe-events webhook, which refuses to record a status outside it rather
+// than take a CHECK violation into an endless Stripe retry. A `failed` /
+// `canceled` row is money that came back to us and is owed to the payer by
+// another route — the queryable worklist § 789 could not give the PARTIAL
+// case. Keep in lockstep (check_constraint_unions.mjs PAIRS).
+export type PaymentRefundStatus =
+	| 'pending'
+	| 'requires_action'
+	| 'succeeded'
+	| 'failed'
+	| 'canceled';
 // session_plan_items.kind — a yoga/pilates movement is a timed hold, a counted
 // set of reps, or a continuous flow. Enforced by the session_plan_items_kind_check
 // CHECK constraint (migration 20270103_001) — keep this union in lockstep
@@ -386,7 +401,8 @@ export type NotificationKind =
 	| 'achievement'
 	| 'challenge_complete'
 	| 'content_hidden'
-	| 'data_export_ready';
+	| 'data_export_ready'
+	| 'refund_failed';
 
 // `invite_token` is excluded from the base type because the column-
 // level grant lockdown (migrations 20260801_001 + 20260818_001 redo)

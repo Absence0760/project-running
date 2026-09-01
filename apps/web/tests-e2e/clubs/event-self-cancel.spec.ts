@@ -20,7 +20,10 @@ import { USER_A } from '../fixtures/users';
  *   (c) clicking through with no Stripe keys fails closed to an error toast
  *       (never a false success), and the seat is untouched;
  *   (d) an order already mid-refund (refund_initiated_at stamped) shows the
- *       "Refund in progress" badge instead of a live Cancel button.
+ *       "Refund in progress" badge instead of a live Cancel button;
+ *   (e) an order the bank reversed (status refund_failed, seat already gone)
+ *       says so, on a page whose registered block cannot draw because there is
+ *       no seat left to draw it for (decisions § 789 + § 825).
  */
 
 const RICHMOND_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
@@ -105,6 +108,37 @@ async function seatBuyer(
 			.delete()
 			.eq('event_id', eventId)
 			.eq('user_id', buyerId);
+	};
+}
+
+/// The state a bank rejection leaves behind: the order reads `refund_failed`
+/// and there is NO attendee row, because `charge.refunded` already released
+/// the seat and § 789 deliberately does not put it back. Inserting a seat here
+/// would test a shape the ledger cannot produce.
+async function reverseRefund(
+	eventId: string,
+	instanceStart: string,
+	buyerId: string,
+	hostId: string
+): Promise<() => Promise<void>> {
+	const admin = getAdminClient();
+	const { error } = await admin.from('event_orders').insert({
+		event_id: eventId,
+		instance_start: instanceStart,
+		buyer_user_id: buyerId,
+		host_user_id: hostId,
+		stripe_payment_intent_id: `pi_e2e_rf_${eventId.slice(0, 8)}`,
+		amount_cents: 2200,
+		currency: 'usd',
+		platform_fee_cents: 110,
+		status: 'refund_failed',
+		paid_at: new Date().toISOString(),
+		refunded_at: new Date().toISOString(),
+		refund_initiated_at: new Date().toISOString()
+	});
+	if (error) throw new Error(`reverseRefund order insert failed: ${error.message}`);
+	return async () => {
+		await admin.from('event_orders').delete().eq('event_id', eventId);
 	};
 }
 
@@ -193,5 +227,51 @@ test.describe('paid registration self-cancel (slice P2)', () => {
 
 		await expect(page.getByText('Refund in progress')).toBeVisible();
 		await expect(page.getByTestId('cancel-registration')).toHaveCount(0);
+	});
+
+	test('a refund the bank reversed is named and explained, with a way to reach us', async ({
+		page
+	}) => {
+		const title = `e2e-refundfailed ${Date.now()}`;
+		const startsAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+		const id = await insertEvent({
+			club_id: RICHMOND_CLUB_ID,
+			author_id: USER_A.id,
+			title,
+			category: 'class',
+			discipline: 'Barre',
+			capacity: 10,
+			starts_at: startsAt
+		});
+		created.push(id);
+		cleanups.push(await priceEvent(USER_A.id, id));
+		cleanups.push(await reverseRefund(id, startsAt, USER_A.id, USER_A.id));
+
+		await page.goto(`/clubs/${RICHMOND_SLUG}/events/${id}`);
+		await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 10_000 });
+
+		const banner = page.getByTestId('refund-failed-banner');
+		await expect(banner).toBeVisible();
+
+		// The banner shares the hero grid with the event title, and the title
+		// column is `minmax(0, 1fr)` — a min of zero. While the side rail's max
+		// was `auto` it grew to this banner's 868px max-content paragraph and
+		// starved the title to 38px on macOS and to exactly 0 on CI's wider
+		// font metrics, where `toBeVisible` then reported an in-DOM heading as
+		// hidden. So visibility is NOT the assertion: at 38px it was "visible"
+		// and unreadable. The width is (decisions § 825).
+		const titleBox = await page.getByRole('heading', { name: title }).boundingBox();
+		expect(titleBox?.width ?? 0).toBeGreaterThan(240);
+		await expect(banner).toContainText(/refund/i);
+		await expect(banner).toContainText(/still with us/i);
+		await expect(banner.getByRole('link')).toHaveAttribute(
+			'href',
+			'mailto:billing@threkir.com'
+		);
+
+		// The seat is gone, so the registered block cannot draw and the buyer is
+		// never offered a Cancel button for a registration they no longer hold.
+		await expect(page.getByTestId('cancel-registration')).toHaveCount(0);
+		await expect(page.getByText("You're registered")).toHaveCount(0);
 	});
 });

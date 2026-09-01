@@ -1239,6 +1239,7 @@
   "profileNotifChallengeComplete": "Você completou um desafio",
   "profileNotifContentHidden": "Uma das suas publicações foi ocultada após ser denunciada",
   "profileNotifDataExportReady": "Sua exportação de dados está pronta para baixar",
+  "profileNotifRefundFailed": "Um reembolso que iniciamos não pôde ser concluído. O dinheiro ainda está conosco e vamos combinar outra forma de devolver.",
   "profileNotifGeneric": "{name} interagiu com sua atividade",
   "socialTabFeed": "Feed",
   "socialTabPeople": "Pessoas",

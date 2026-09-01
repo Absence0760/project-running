@@ -58,12 +58,14 @@ import {
   isRefundLifecycleEvent,
   orderStatusTransition,
   parseStripeEventEnvelope,
+  paymentRefundRecord,
   readCharge,
   readCheckoutSession,
   readConnectAccount,
   readRefund,
   type Refund,
   refundedCentsOfCharge,
+  refundEventsApiEra,
   refundReversed,
   refundScopeOfCharge,
   shouldReleaseDedupe,
@@ -196,6 +198,23 @@ async function dispatchStripeEvent(
     return donationRes ?? await handleOrderRefunded(service, charge);
   }
   if (isRefundLifecycleEvent(event.type)) {
+    // Say, once per refund delivery, which era this endpoint is configured
+    // for. § 789 handled both because a webhook endpoint's pinned API version
+    // is dashboard configuration this repo cannot read — but the delivery
+    // carries it, so the unreadable half is only unreadable at BUILD time. A
+    // `legacy` line means the endpoint predates 2024-10-28.acacia and is
+    // receiving only the deprecated `charge.refund.updated`; an `unknown` one
+    // means Stripe sent no version we could parse. Logged on this branch alone
+    // because this is the only branch whose behaviour the version decides.
+    // decisions § 826.
+    console.log(
+      'stripe refund event era:',
+      refundEventsApiEra(event.apiVersion),
+      'api_version:',
+      event.apiVersion ?? 'absent',
+      'type:',
+      event.type,
+    );
     // All three carry a Refund, and NONE of them means a failure by itself:
     // `refund.updated` fires whenever Stripe attaches an acquirer reference
     // number, and acting on the event type alone would walk a correctly
@@ -203,6 +222,14 @@ async function dispatchStripeEvent(
     // the discriminator, and anything but an explicit `failed` / `canceled`
     // leaves every ledger untouched.
     const refund = readRefund(obj);
+    // Record the refund itself BEFORE any status decision, and for every
+    // status — not only the reversed ones. This is the row that makes a failed
+    // PARTIAL refund queryable, which is the one case neither ledger's
+    // `refund_failed` status can represent (§ 789, § 823), and recording the
+    // succeeded ones too is what lets an operator read one refund's whole
+    // lifecycle instead of only its worst moment.
+    const recorded = await recordPaymentRefund(service, refund);
+    if (recorded !== null) return recorded;
     if (!refundReversed(refund)) {
       return Response.json({ ok: true, ignored: event.type, refund_status: refund.status });
     }
@@ -212,6 +239,74 @@ async function dispatchStripeEvent(
 
   // Unhandled types — recorded (dedupe) but no side effect.
   return Response.json({ ok: true, ignored: event.type });
+}
+
+/// Write the `payment_refunds` row for one refund-lifecycle delivery.
+///
+/// Returns a Response only when the caller must stop — a 500 the dispatcher
+/// hands back so Stripe retries. `null` means "carry on to the status
+/// decision", which covers both a successful write and every fail-closed skip.
+///
+/// The upsert is the idempotency proof. `payment_refunds.stripe_refund_id` is
+/// unique, so N redeliveries of one refund leave exactly one row and the
+/// reversal sum `fundraiser_totals` subtracts does not move — where the
+/// alternative § 789 refused, `refunded_cents = refunded_cents - amount`,
+/// moves once per delivery. Out-of-order deliveries are handled in the
+/// database rather than here: `lock_payment_refund_writes` latches a terminal
+/// status so a benign `refund.updated` carrying `pending` cannot un-say a
+/// `refund.failed` that arrived first.
+///
+/// Resolving the parent costs two indexed reads on a `refund.updated` that
+/// changes nothing (`donations_payment_intent_idx` /
+/// `event_orders_payment_intent_idx`, both 20270620_001). A refund on a charge
+/// neither ledger knows — a dashboard refund for something else — writes
+/// nothing: `payment_refunds_one_ledger_check` requires exactly one parent,
+/// and an orphan row would be a refund we cannot attribute to any money we
+/// took.
+async function recordPaymentRefund(
+  service: DbClient,
+  refund: Refund,
+): Promise<Response | null> {
+  const record = paymentRefundRecord(refund);
+  if (record === null || refund.paymentIntentId === null) return null;
+
+  const { data: donation, error: donationErr } = await service
+    .from('donations')
+    .select('id')
+    .eq('stripe_payment_intent_id', refund.paymentIntentId)
+    .maybeSingle();
+  if (donationErr) {
+    console.error('refund-record donation read failed (code):', donationErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'donation_read_failed' }, { status: 500 });
+  }
+
+  let orderId: string | null = null;
+  if (!donation) {
+    const { data: order, error: orderErr } = await service
+      .from('event_orders')
+      .select('id')
+      .eq('stripe_payment_intent_id', refund.paymentIntentId)
+      .maybeSingle();
+    if (orderErr) {
+      console.error('refund-record order read failed (code):', orderErr?.code ?? 'unknown');
+      return Response.json({ ok: false, error: 'order_read_failed' }, { status: 500 });
+    }
+    if (!order) return null;
+    orderId = order.id;
+  }
+
+  const { error: upsertErr } = await service
+    .from('payment_refunds')
+    .upsert({
+      ...record,
+      donation_id: donation?.id ?? null,
+      event_order_id: orderId,
+    }, { onConflict: 'stripe_refund_id' });
+  if (upsertErr) {
+    console.error('payment_refunds upsert failed (code):', upsertErr?.code ?? 'unknown');
+    return Response.json({ ok: false, error: 'refund_record_failed' }, { status: 500 });
+  }
+  return null;
 }
 
 // ── donation handlers (fundraising.md) ─────────────────────────────────────

@@ -646,6 +646,92 @@ void main() {
     });
   });
 
+  group('store write serialisation (§ 828)', () {
+    late String runStore;
+    late String routeStore;
+    setUpAll(() {
+      runStore = File('lib/local_run_store.dart').readAsStringSync();
+      routeStore = File('lib/local_route_store.dart').readAsStringSync();
+    });
+
+    // Every entry point that mutates a store DIRECTORY runs on the shared
+    // per-directory chain. A new one that forgets reopens the delete-vs-save
+    // race: the delete removes `<id>.json`, the in-flight save's rename puts
+    // it straight back, and memory agrees with the resurrected file.
+    const runEntryPoints = [
+      r'Future<Run> save\(Run run\)',
+      r'Future<void> saveFromRemote\(Run run\)',
+      r'Future<void> saveManyFromRemote\(Iterable<Run> runs\)',
+      r'Future<void> update\(Run updated\)',
+      r'Future<void> delete\(String runId\)',
+      r'Future<void> deleteMany\(Iterable<String> runIds\)',
+      r'Future<void> markSynced\(String runId\)',
+      r'Future<void> markManySynced\(Iterable<Run> pushed\)',
+      r'Future<void> clearPendingRemoteDelete\(String runId\)',
+    ];
+    for (final signature in runEntryPoints) {
+      test('LocalRunStore.$signature is serialised', () {
+        final match = RegExp('$signature\\s*=>[^;]*;').firstMatch(runStore);
+        expect(match, isNotNull,
+            reason: 'entry point moved — update this guard, and keep it on '
+                'the chain');
+        expect(match!.group(0), contains('_serialised'));
+      });
+    }
+
+    const routeEntryPoints = [
+      r'Future<void> markRouteSynced\(String routeId\)',
+      r'Future<void> markManyRoutesSynced\(Iterable<String> routeIds\)',
+      r'Future<void> tagRoutesOwner\(Iterable<String> routeIds, String owner\)',
+      r'Future<void> delete\(String routeId\)',
+      r'Future<void> deleteMany\(Iterable<String> routeIds\)',
+      r'Future<void> pinOffline\(String routeId\)',
+      r'Future<void> unpinOffline\(String routeId\)',
+      r'Future<void> clearPendingRemoteDelete\(String routeId\)',
+    ];
+    for (final signature in routeEntryPoints) {
+      test('LocalRouteStore.$signature is serialised', () {
+        final match = RegExp('$signature\\s*=>[^;]*;').firstMatch(routeStore);
+        expect(match, isNotNull,
+            reason: 'entry point moved — update this guard, and keep it on '
+                'the chain');
+        expect(match!.group(0), contains('_serialised'));
+      });
+    }
+
+    // The other half of the contract, and the one that matters more: the L1
+    // recording path must NEVER join the chain. It owns `in_progress.json`,
+    // which nothing chained touches, and a tick queued behind a directory
+    // walk is a durability gap during a live run — a queued write that never
+    // lands is worse than the race the chain closes.
+    test('the in-progress recording path stays off the chain', () {
+      for (final signature in [
+        r'Future<void> saveInProgress\(Run run\)\s*async\s*\{',
+        r'Future<void> clearInProgress\(\)\s*async\s*\{',
+        r'Future<Run\?> loadInProgress\(\)\s*async\s*\{',
+      ]) {
+        expect(_extractMethodBody(runStore, signature), isNot(contains('_serialised')),
+            reason: 'an L1 recording write must not queue behind a directory '
+                'operation');
+      }
+    });
+
+    // Two locking schemes in one file is how the next race gets written. The
+    // FileLock these stores held over their sidecar merges excluded nothing:
+    // POSIX record locks are owned by the process, so a second handle in the
+    // same process — the WorkManager isolate it named included — acquires it
+    // too (§ 829).
+    test('no store re-introduces a second locking scheme', () {
+      for (final source in [runStore, routeStore]) {
+        final code = source
+            .split('\n')
+            .where((l) => !l.trimLeft().startsWith('///'))
+            .join('\n');
+        expect(code, isNot(contains('FileLock')));
+      }
+    });
+  });
+
   group('local_run_store.dart', () {
     late String source;
     setUpAll(() {
@@ -657,7 +743,7 @@ void main() {
       // just to flip a boolean. The synced_ids.json sidecar replaces it.
       final body = _extractMethodBody(
         source,
-        r'Future<void> markSynced\(String runId\)\s*async\s*\{',
+        r'Future<void> _markSynced\(String runId\)\s*async\s*\{',
       );
       expect(
         body.contains('writeAsString(jsonEncode'),
@@ -702,7 +788,7 @@ void main() {
       // encodes on the UI thread and reintroduces the freeze.
       final body = _extractMethodBody(
         source,
-        r'Future<Run> save\(Run run\)\s*async\s*\{',
+        r'Future<Run> _save\(Run run\)\s*async\s*\{',
       );
       expect(
         body,
@@ -788,7 +874,7 @@ void main() {
       // if the remote carries a later timestamp from a different device.
       final body = _extractMethodBody(
         source,
-        r'Future<Run> save\(Run run\)\s*async\s*\{',
+        r'Future<Run> _save\(Run run\)\s*async\s*\{',
       );
       expect(
         body,
@@ -806,7 +892,7 @@ void main() {
       // same run can race and the older write silently wins.
       final body = _extractMethodBody(
         source,
-        r'Future<void> update\(Run updated\)\s*async\s*\{',
+        r'Future<void> _update\(Run updated\)\s*async\s*\{',
       );
       expect(
         body,
@@ -825,7 +911,7 @@ void main() {
       // preserve-local branch.
       final body = _extractMethodBody(
         source,
-        r'Future<void> saveFromRemote\(Run run\)\s*async\s*\{',
+        r'Future<void> _saveFromRemote\(Run run\)\s*async\s*\{',
       );
       expect(
         body,

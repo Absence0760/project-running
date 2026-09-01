@@ -572,9 +572,11 @@ the same directory, and every mobile store operation is a multi-step directory
 transition: write the row then the index, delete the row then rewrite the index,
 write every row then prune, delete every file.
 
-So every directory-mutating entry point on `OfflineSyncStore` runs on one serial
-chain, and a new one must go on it too. Three properties are load-bearing and a
-change that weakens any of them reopens a measured bug (decisions § 821):
+So every directory-mutating entry point on every local store —
+`OfflineSyncStore`, `LocalRunStore`, `LocalRouteStore` — runs on one serial
+chain, `serialiseStoreWrite` in `core_models`, and a new one must go on it too.
+Five properties are load-bearing and a change that weakens any of them reopens a
+measured bug (decisions § 821, § 828, § 829):
 
 - **Whole-directory, not per-id.** `clear`, `rewriteAll`, `loadAll` and the index
   flush touch files no row id names, so per-id exclusion still lets them race a
@@ -585,12 +587,36 @@ change that weakens any of them reopens a measured bug (decisions § 821):
   free to delete the temp file of the live screen's in-flight write.
 - **The chain never becomes an error future.** A failed write reports to its own
   caller; it must not reject every write queued behind it.
+- **Re-entrant on its own key.** The stores share `_persistIndex` /
+  `_persistSyncedIds` / `_persistOwnerTags` across ~30 entry points, so a helper
+  that queued behind its own caller would deadlock — silently, with no error and
+  no completion. A nested call on the same key runs inline.
+- **Nothing with unbounded latency inside a chained body.** No network call, no
+  untimed lock. Queueing behind a bounded operation is safe; queueing behind one
+  that may never return is a durability gap, not a race fix.
+
+Two things stay OFF the chain, and both are the recording stack. The in-progress
+recorder path (`saveInProgress` / `clearInProgress` / `loadInProgress`) owns
+`in_progress.json`, which nothing chained touches, and already has its own
+skip-don't-queue exclusion; `WatchIngestQueue.enqueue` writes a fresh uuid
+nothing else names, and its `drain` awaits an upload per file. **An L0/L1 write
+must never be able to queue behind a directory operation** — a write that never
+lands is worse than the race. Pin that with a test that holds the chain open
+through a never-completed `Completer` and asserts the recording write still
+lands, not with a timing assertion.
+
+Store durability is one mechanism, not a menu. A `FileLock` alongside the chain
+is not defence in depth: POSIX record locks are owned by the process, so they
+exclude neither a second store instance nor a second isolate (§ 829). What
+survives an interleaved isolate is the merge-never-replace in each sidecar
+writer.
 
 The corollary for tests: a widget test's UI signal is usually the in-memory row,
 which `persist` installs synchronously *before* its file write. Tearing a temp
 directory down on that signal deletes a `.tmp` mid-rename. Wait on the file (or
-on `debugWritesSettled`), which is also the only thing that actually pins the
-offline-first durability the surface is claiming.
+on `debugWritesSettled`, which every chained store exposes), which is also the
+only thing that actually pins the offline-first durability the surface is
+claiming.
 
 ## Feature gates — one parser, and a define a release build can actually read
 
@@ -1727,6 +1753,21 @@ Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/
 - **An agent's `name:` is unique across `.claude/agents/**`.** Claude resolves a subagent by that frontmatter name, never by path, so two files declaring one name are two definitions of one agent and which answers is unpredictable. Putting a copy in a different directory does not separate them.
 
 Both have been breached by an automated sync from the `templates` repo, which is additive by path and therefore blind to a name it collides with, so neither rule can rely on review alone.
+
+## A revoke names every channel the grantee can reach the object through
+
+A `REVOKE` is not a statement about a role, it is a statement about one **entry** in an ACL, and Postgres admits a role through the broadest entry it holds. So a revoke that names one channel while the role holds another withholds nothing, reports success, and leaves no trace in the catalogue for a state assertion to find later — the statement is the only place the intent was ever legible. This has now shipped twice, on two object classes.
+
+- **Columns.** `revoke select (col) on t from anon` is a no-op while `anon` holds table-level SELECT, because `has_column_privilege` answers off the broader grant ([decisions § 781](decisions.md)). The prescription is the opposite order: revoke the table-level privilege, then `grant select (…)` the columns the client may read.
+- **Functions.** `revoke execute on function f() from public` withholds `anon` on a workstation CLI image and **nothing** on the CI and Cloud image, where Supabase's `alter default privileges` hands every new `public` function an EXECUTE grant to `anon`, `authenticated` and `service_role` **by name**. `revoke ... from anon` is the no-op on the other image. Neither single-grantee form is portable, so the house form names both — `revoke execute on function public.f(args) from public, anon;` — and adds `authenticated` when no client role should hold it at all ([decisions § 799](decisions.md), [§ 800](decisions.md), [§ 827](decisions.md)).
+
+Three rules follow, and they generalise past these two cases:
+
+- **`drop function` / `drop table` takes the ACL with it.** A signature change re-issues the image default, so any migration that drops and recreates must re-emit its `revoke` / `grant` pair or a withholding decision is silently reverted. No migration is wrong on its own words when this happens, which is why a text replay cannot catch it.
+- **A statement guard and a state guard are different guards, and a no-op revoke needs both.** The statement guard (`check_migration_column_revoke_noop.mjs`, `check_migration_function_revoke_noop.mjs`) replays the migration set in version order and reports a revoke whose other channel is still at its default at the end — so a repair is a later migration rather than an edit to the guard, and neither carries an allowlist. The state guard is a pgtap catalogue assertion (`anon_execute_contract_test.sql`, `column_grant_lockdown_registry_test.sql`) that answers the question the statement guard cannot: *is the object actually closed*, including for an object nobody ever wrote a revoke for. Write both, or the class reopens through whichever half you skipped.
+- **A privilege change reaches every surface that exercises the privilege.** Closing an ACL moves the refusal outward: a body that used to return null on a null `auth.uid()` now raises `42501` at the grant, so a test asserting the inner answer breaks. pgtap is not the whole search space — grep the function names across `tests-e2e/` too.
+
+Before withholding, read the **reference graph**, not just the call sites. A SECURITY INVOKER body and an RLS policy expression are both privilege-checked against the *querying* role, so a function named by a policy `to public` on a table `anon` can read must keep its grant or an anonymous read turns into `42501` ([decisions § 746](decisions.md)). `is_challenge_visible` is the live example.
 
 ## A guard parses its input, or refuses it — it never pattern-matches a language
 

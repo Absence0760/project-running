@@ -4387,6 +4387,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your data export is ready to download';
 
   @override
+  String get profileNotifRefundFailed =>
+      'A refund we started couldn\'t be completed. The money is still with us and we\'ll arrange another way to return it.';
+
+  @override
   String profileNotifGeneric(String name) {
     return '$name interacted with your activity';
   }

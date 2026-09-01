@@ -23,10 +23,14 @@
 --   * that the two CHECK constraints reject a non-canonical stored key, and
 --     that every role able to write the keyed tables may evaluate them -- a
 --     CHECK naming a function ACL-checks it against the INSERTING role
+--   * that the CASE fold is a function of neither the database's locale
+--     provider nor its locale, which the bare `lower()` it replaced was, and
+--     that it lands on the answer the mobile rail's own case table gives
+--     (decisions § 830)
 
 begin;
 
-select plan(17);
+select plan(21);
 
 -- ── The pure derivation ─────────────────────────────────────────────────────
 
@@ -258,6 +262,78 @@ select is(
           <> 'bench' || chr(cp) || 'press'),
   0,
   'the code points outside the class are preserved, not folded'
+);
+
+-- ── The case fold (decisions § 830) ─────────────────────────────────────────
+
+-- 18. `lower()` answers with the collation of its argument. Measured over all
+--     1,112,063 assignable code points, ICU en-US and libc en_US.utf8 disagree
+--     at exactly one -- U+0130, folded to `i` + U+0307 by ICU and to a bare
+--     `i` by libc -- and Dart's own case table gives the bare `i` too. The key
+--     takes that form, so a mobile-written exercise_key for such a name no
+--     longer violates the CHECK below (assertion 21).
+select is(
+  public.normalise_exercise_name(chr(304) || 'tme'),
+  'itme',
+  'U+0130 folds to a bare i, not to i + U+0307'
+);
+
+-- 19. ICU applies Unicode's contextual Final_Sigma rule and libc never does,
+--     so the all-caps spelling ended in U+03C2 on one provider and U+03C3 on
+--     the other -- a divergence no per-code-point sweep can see. Both spellings
+--     now land on U+03C3, which is also where Dart's table leaves them.
+select is(
+  (select array_agg(public.normalise_exercise_name(s) order by s)
+   from (values
+     (chr(927) || chr(916) || chr(927) || chr(931)),
+     (chr(959) || chr(948) || chr(959) || chr(962)),
+     (chr(959) || chr(948) || chr(959) || chr(963))
+   ) as t(s)),
+  array[
+    chr(959) || chr(948) || chr(959) || chr(963),
+    chr(959) || chr(948) || chr(959) || chr(963),
+    chr(959) || chr(948) || chr(959) || chr(963)
+  ],
+  'an all-caps Greek spelling meets its own lower-case one'
+);
+
+-- 20. The whole point: the answer no longer moves with the database. The old
+--     derivation disagreed with itself across these six collations on 14 / 24 /
+--     10 / 9,849 strings of a 10,031-string context corpus (tr-TR / lt-LT /
+--     libc / C); an ASCII capital I folded to U+0131 under tr-TR, splitting
+--     every "Incline Press", and the C collations folded nothing past ASCII.
+select is(
+  (select count(distinct k)::int
+   from (values
+     ('Incline Press'),
+     (chr(304) || 'tme'),
+     (chr(927) || chr(916) || chr(927) || chr(931)),
+     (chr(220) || 'BERZ' || chr(220) || 'GE'),
+     (chr(200) || 'lan'),
+     (chr(1055) || chr(1056) || chr(1048) || chr(1057) || chr(1045) || chr(1044))
+   ) as n(s),
+   lateral (values
+     (public.normalise_exercise_name(s collate "en-US-x-icu") collate "C"),
+     (public.normalise_exercise_name(s collate "tr-TR-x-icu") collate "C"),
+     (public.normalise_exercise_name(s collate "lt-LT-x-icu") collate "C"),
+     (public.normalise_exercise_name(s collate "und-x-icu")   collate "C"),
+     (public.normalise_exercise_name(s collate "en_US.utf8")  collate "C"),
+     (public.normalise_exercise_name(s collate "C")           collate "C"),
+     (public.normalise_exercise_name(s collate "C.utf8")      collate "C")
+   ) as v(k)),
+  6,
+  'the key does not depend on the database collation, provider or locale'
+);
+
+-- 21. The reachability pin for 18. `i` + U+0307 is exactly what a web build
+--     wrote for this name and what the ICU server derived, so the two agreed
+--     and the bare `i` the mobile rail wrote was refused -- 23514 on a
+--     legitimate save, from a CHECK added to protect the key.
+select lives_ok(
+  $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
+    values ('00000000-0000-0000-0000-0000000b2001',
+            chr(304) || 'tme', 'itme', 2)$$,
+  'the key the mobile rail derives for a U+0130 name satisfies the CHECK'
 );
 
 select * from finish();

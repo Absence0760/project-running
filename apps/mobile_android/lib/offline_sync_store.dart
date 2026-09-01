@@ -118,41 +118,21 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// throwaway store per screen-owned type precisely because all instances of
   /// a type share one on-disk directory (`offline_store_wipe.dart`), so a
   /// per-instance chain would have left its [clear] free to race the live
-  /// screen's write. A separate isolate is out of reach of any in-process
-  /// lock — that is what `kAtomicOrphanMinAge` already allows for.
-  static final Map<String, Future<void>> _writeChains = <String, Future<void>>{};
-
+  /// screen's write. `serialiseStoreWrite` holds that shape for the sibling
+  /// file stores too (§ 828); a separate isolate is out of reach of any
+  /// in-process lock, which is what `kAtomicOrphanMinAge` already allows for.
   String get _chainKey =>
       dir?.path ?? 'uninitialised:${identityHashCode(this)}';
 
-  Future<T> _serialised<T>(Future<T> Function() body) {
-    final key = _chainKey;
-    final completer = Completer<T>();
-    final prior = _writeChains[key] ?? Future<void>.value();
-    // The chain must never become an error future, or one failed write would
-    // reject every write queued behind it. The failure goes to its own caller.
-    final link = prior.then((_) async {
-      try {
-        completer.complete(await body());
-      } catch (e, st) {
-        completer.completeError(e, st);
-      }
-    });
-    _writeChains[key] = link;
-    // Keep the map bounded: a link that finished with nothing queued behind it
-    // is the whole chain, and a fresh one starts from `Future.value()` anyway.
-    link.whenComplete(() {
-      if (identical(_writeChains[key], link)) _writeChains.remove(key);
-    });
-    return completer.future;
-  }
+  Future<T> _serialised<T>(Future<T> Function() body) =>
+      serialiseStoreWrite(_chainKey, body);
 
   /// Test-only: a future that completes once every write queued so far has
   /// finished. A widget test whose UI signal is the in-memory row (which
   /// [persist] installs synchronously, before its file write) is otherwise
   /// free to tear its temp directory down under a write still in flight.
   @visibleForTesting
-  Future<void> debugWritesSettled() => _serialised(() async {});
+  Future<void> debugWritesSettled() => storeWritesSettled(_chainKey);
 
   int _revision = 0;
 
@@ -274,7 +254,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       }
     }
 
-    sweepAtomicWriteOrphans(d, onError: (m) => debugPrint('$debugLabel: $m'));
+    sweepStoreScratchFiles(d, onError: (m) => debugPrint('$debugLabel: $m'));
 
     // Reuse a valid, matching on-disk index for the summary view — its id-set
     // must equal the on-disk row-file id-set (membership only, no reads). A
