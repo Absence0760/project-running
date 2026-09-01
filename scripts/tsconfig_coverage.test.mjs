@@ -172,26 +172,56 @@ function denoFunctionsTree() {
 	return `${dirname(config)}/functions/`;
 }
 
+/**
+ * Every root's include/exclude patterns, compiled. Shared by the coverage test
+ * and by the negative control that proves the decision can say "uncovered".
+ */
+function rootMatchers() {
+	return configRoots().map((r) => {
+		const { include, exclude } = effectivePatterns(join(REPO_ROOT, r));
+		return { include: include.map(globToRegExp), exclude: exclude.map(globToRegExp) };
+	});
+}
+
+/**
+ * @param {string} abs
+ * @param {ReturnType<typeof rootMatchers>} matchers
+ */
+function isCovered(abs, matchers) {
+	return matchers.some(
+		(m) => m.include.some((re) => re.test(abs)) && !m.exclude.some((re) => re.test(abs)),
+	);
+}
+
 test('every compilable file outside apps/web is inside some tsc root', () => {
 	const roots = configRoots();
 	assert.ok(roots.length > 0, 'No tsconfig root is tracked at the repo root.');
 
-	const matchers = roots.map((r) => {
-		const { include, exclude } = effectivePatterns(join(REPO_ROOT, r));
-		return { include: include.map(globToRegExp), exclude: exclude.map(globToRegExp) };
-	});
-
+	const matchers = rootMatchers();
 	const deno = denoFunctionsTree();
-	const missed = sourceFiles()
+	const walked = sourceFiles()
 		.filter((f) => COMPILABLE.has(extname(f)))
-		.filter((f) => !f.startsWith(deno))
-		.filter((f) => {
-			const abs = join(REPO_ROOT, f);
-			return !matchers.some(
-				(m) => m.include.some((re) => re.test(abs)) && !m.exclude.some((re) => re.test(abs)),
-			);
-		})
-		.sort();
+		.filter((f) => !f.startsWith(deno));
+
+	// The assertion below is `deepEqual(missed, [])`, which an EMPTY walk
+	// satisfies as readily as a fully-covered one. A `git ls-files` that
+	// answered nothing, a filter that excluded everything, or a run from
+	// outside the repo would each report this tree clean while typechecking
+	// none of it — the shape decisions § 762 found on the Edge Function lane,
+	// one guard over. So the walk states what it saw before it judges it.
+	assert.ok(
+		walked.length > 20,
+		`the walk found only ${walked.length} compilable files outside apps/web, which cannot ` +
+			'be right — this guard would report the tree covered without having read it.',
+	);
+	for (const sentinel of ['scripts/check_ci_diagnostics.mjs', 'scripts/tsconfig_coverage.test.mjs']) {
+		assert.ok(
+			walked.includes(sentinel),
+			`the walk did not find ${sentinel}, so it is not reading the tree it claims to.`,
+		);
+	}
+
+	const missed = walked.filter((f) => !isCovered(join(REPO_ROOT, f), matchers)).sort();
 
 	assert.deepEqual(
 		missed,
@@ -200,6 +230,56 @@ test('every compilable file outside apps/web is inside some tsc root', () => {
 			'nothing typechecks them. Add them to an existing root, or give them one — do not ' +
 			`leave them outside: ${missed.join(', ')}`,
 	);
+});
+
+test('the coverage decision can still say no', () => {
+	// The positive result above is only evidence if the same pipeline refuses
+	// something. A tree no root names is the case this guard exists to catch,
+	// and if `globToRegExp` ever widened to match everything — one stray `.*`
+	// is enough — the test above would go green over an untypechecked repo
+	// while looking exactly as it does now.
+	const matchers = rootMatchers();
+	assert.equal(
+		isCovered(join(REPO_ROOT, 'a-tree-no-tsconfig-root-names/index.ts'), matchers),
+		false,
+		'every root claims a path none of them name, so the coverage test cannot fail.',
+	);
+	// And a file that IS covered still reads as covered, so the refusal above
+	// is not simply a matcher that matches nothing.
+	assert.equal(
+		isCovered(join(REPO_ROOT, 'scripts/check_ci_diagnostics.mjs'), matchers),
+		true,
+		'a file the roots do read is reported uncovered; the matchers are inert.',
+	);
+});
+
+test('the glob translation discriminates rather than matching everything', () => {
+	// The whole coverage verdict is this one function. Its failure direction is
+	// silent in both senses: a pattern that matches too much reports an
+	// uncovered tree as covered, and one that matches too little reports a
+	// covered file as missing. Neither shows up in the passing test above.
+	/** @param {string} pattern @param {string} path */
+	const hits = (pattern, path) => globToRegExp(pattern).test(path);
+
+	// `**` spans directories, a single `*` does not.
+	assert.equal(hits('/r/scripts/**/*.mjs', '/r/scripts/a.mjs'), true);
+	assert.equal(hits('/r/scripts/**/*.mjs', '/r/scripts/deep/nested/a.mjs'), true);
+	assert.equal(hits('/r/scripts/*.mjs', '/r/scripts/deep/a.mjs'), false);
+	// A sibling directory sharing the prefix is a different tree.
+	assert.equal(hits('/r/scripts/**/*.mjs', '/r/scriptsy/a.mjs'), false);
+	assert.equal(hits('/r/scripts/**/*.mjs', '/r/apps/a.mjs'), false);
+	// The extension is part of the pattern.
+	assert.equal(hits('/r/scripts/**/*.mjs', '/r/scripts/a.ts'), false);
+	assert.equal(hits('/r/scripts/**/*.mjs', '/r/scripts/a.mjs.bak'), false);
+	// A bare directory name covers everything beneath it and nothing beside it.
+	assert.equal(hits('/r/infra', '/r/infra/main.ts'), true);
+	assert.equal(hits('/r/infra', '/r/infra/deep/main.ts'), true);
+	assert.equal(hits('/r/infra', '/r/infrastructure/main.ts'), false);
+	// A `?` is one character and never a separator.
+	assert.equal(hits('/r/a?.ts', '/r/ab.ts'), true);
+	assert.equal(hits('/r/a?.ts', '/r/a/b.ts'), false);
+	// A dot is a literal, not "any character".
+	assert.equal(hits('/r/a.ts', '/r/axts'), false);
 });
 
 test('the apps/web half of this rule still exists', () => {

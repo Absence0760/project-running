@@ -1081,11 +1081,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
       - name: String Catalog coverage vs CFBundleLocalizations + knownRegions
         run: |
           if ! bash apps/watch_ios/scripts/check_xcstrings_parity.sh; then
             echo "::error::apps/watch_ios ships a locale it has not fully declared — a String Catalog entry missing a translation, or a locale the catalog translates that Info.plist's CFBundleLocalizations or the project's knownRegions does not list. An undeclared locale is never loaded at runtime: the watch shows English and nothing throws."
             echo "The failing line above names the string and the locale, or the declaration site that disagrees. Reproduce with: bash apps/watch_ios/scripts/check_xcstrings_parity.sh (python3 only, no Xcode needed). decisions.md § 761."
+            exit 1
+          fi
+      # The guard above is the only thing standing between a half-declared
+      # watchOS locale and the store, and the failure it catches is neither a
+      # compile error nor a crash — so no Swift test can reach it, and this
+      # repo can run a Swift test in one macOS job anyway. Its own suite
+      # mutates a copy of the real tree in each of the ways a locale ships
+      # half-declared and asserts it refuses, with the unmutated copy as the
+      # positive control.
+      - name: The String Catalog guard's own unit tests
+        run: |
+          if ! node --test scripts/check_xcstrings_parity.test.mjs; then
+            echo "::error::The watchOS String Catalog guard's own unit tests failed. The catalog itself is fine — the check above just passed — so this is a defect in apps/watch_ios/scripts/check_xcstrings_parity.sh, not a half-declared locale."
+            echo "Reproduce with: node --test scripts/check_xcstrings_parity.test.mjs (stdlib only, needs python3 + bash, no install needed)."
             exit 1
           fi
 

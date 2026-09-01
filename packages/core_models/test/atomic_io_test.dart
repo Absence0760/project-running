@@ -108,4 +108,158 @@ void main() {
       expect(errors, hasLength(1));
     });
   });
+  // ─────────────── the contract the module exists for ───────────────
+
+  test('a reader racing a stream of writes never sees a partial file',
+      () async {
+    // The whole point of the .tmp-then-rename dance. `File.writeAsString`
+    // truncates the destination to zero bytes and then streams into it, so a
+    // reader (or a cold start after a process death) can observe a prefix of
+    // the new contents, or nothing at all, and `jsonDecode` rejects it — the
+    // row silently disappears. `rename` swaps one inode for another, so the
+    // path always resolves to a whole file.
+    final file = File('${dir.path}/big.json');
+    // Big enough that a non-atomic write would be observable mid-stream:
+    // ~1.5 MB is many filesystem blocks, not one.
+    List<Map<String, Object>> payload(int gen) => [
+          for (var i = 0; i < 12000; i++) {'gen': gen, 'i': i, 'pad': 'x' * 100}
+        ];
+    await writeJsonAtomic(file, payload(0));
+
+    var reads = 0;
+    var stop = false;
+    final reader = Future<void>(() async {
+      while (!stop) {
+        // A read is expected to yield a COMPLETE document every time. Any
+        // decode failure, or a short list, is a torn read.
+        final decoded = jsonDecode(await file.readAsString()) as List<dynamic>;
+        expect(decoded, hasLength(12000));
+        reads++;
+        await Future<void>.delayed(Duration.zero);
+      }
+    });
+
+    for (var gen = 1; gen <= 12; gen++) {
+      await writeJsonAtomic(file, payload(gen));
+    }
+    stop = true;
+    await reader;
+    // Without this the loop could have run zero times and proved nothing.
+    expect(reads, greaterThan(0));
+    expect(tmpFiles(), isEmpty);
+  });
+
+  test('a write that cannot be renamed cleans up after itself and rethrows',
+      () async {
+    // The failure branch. A temp sibling left behind by a failed write is the
+    // same orphan a crash leaves: invisible to every store listing, holding a
+    // full row on disk. A directory standing where the target file should be
+    // makes `rename` fail without needing a filesystem fault.
+    final blocked = Directory('${dir.path}/blocked.json')..createSync();
+    await expectLater(
+      writeStringAtomic(File(blocked.path), 'hello'),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(tmpFiles(), isEmpty);
+  });
+
+  test('the temp file a real write creates is one the sweep would collect',
+      () async {
+    // The sweep matches on a `.tmp` suffix and the writer chooses the suffix.
+    // They are edited in different functions, and if the writer's naming
+    // moved, every crash orphan would become permanent while the sweep's own
+    // tests — which hand-write the name — kept passing. The name is captured
+    // from a real write here rather than transcribed.
+    final file = File('${dir.path}/watched.json');
+    final created = <String>[];
+    final sub = dir.watch(events: FileSystemEvent.create).listen((e) {
+      created.add(e.path.split('/').last);
+    });
+    // inotify delivery is asynchronous; give the watch a turn to arm.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    await writeJsonAtomic(file, {'v': 1});
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await sub.cancel();
+
+    final temps = created.where((n) => n != 'watched.json').toList();
+    expect(temps, isNotEmpty,
+        reason: 'no intermediate file was observed; the watch saw nothing and '
+            'this case would pass over any naming');
+    for (final name in temps) {
+      expect(name, endsWith('.tmp'),
+          reason: 'writeStringAtomic created $name, which '
+              'sweepStoreScratchFiles does not match — a crash orphan under '
+              'that name is never collected');
+    }
+  });
+
+  group('sweepStoreScratchFiles', () {
+    test('never deletes a store row, however its name is spelled', () {
+      // The direction that loses data. Every store lists `.json` and the
+      // sweep must be the exact complement of that: a widened match here
+      // deletes the rows the store is made of.
+      final rows = <File>[
+        File('${dir.path}/plain.json'),
+        // Contains the sweep's tokens but is not one: a run titled
+        // "a.tmp" or "b.lock" produces exactly these names.
+        File('${dir.path}/a.tmp.json'),
+        File('${dir.path}/b.lock.json'),
+        File('${dir.path}/synced_ids.json'),
+      ];
+      for (final f in rows) {
+        f.writeAsStringSync('{}');
+        f.setLastModifiedSync(
+            DateTime.now().subtract(kAtomicOrphanMinAge * 10));
+      }
+
+      final errors = <String>[];
+      sweepStoreScratchFiles(dir, onError: errors.add);
+
+      for (final f in rows) {
+        expect(f.existsSync(), isTrue,
+            reason: '${f.path} was swept — the sweep is eating store rows');
+      }
+      expect(errors, isEmpty);
+    });
+
+    test('leaves a subdirectory alone even when its name ends in .tmp', () {
+      // `listSync` yields directories too, and the sweep's own age gate does
+      // not protect one that is old — the `is! File` guard is the only thing
+      // that does. Both are aged past the cutoff so the guard is what this
+      // measures: an empty directory deletes without complaint, so a sweep
+      // that had lost the guard would silently remove them.
+      final stale = DateTime.now().subtract(kAtomicOrphanMinAge * 10);
+      final temp = Directory('${dir.path}/nested.tmp')..createSync();
+      final lock = Directory('${dir.path}/nested.lock')..createSync();
+      for (final d in [temp, lock]) {
+        Process.runSync('touch', ['-d', stale.toIso8601String(), d.path]);
+      }
+      final errors = <String>[];
+      sweepStoreScratchFiles(dir, onError: errors.add);
+      expect(temp.existsSync(), isTrue);
+      expect(lock.existsSync(), isTrue);
+      expect(errors, isEmpty);
+    });
+
+    test('an undeletable temp file is reported and does not stop the sweep',
+        () {
+      // Best-effort: one unlink failing must not leave the rest of the
+      // orphans on disk. A read-only directory makes the unlink fail
+      // without needing a filesystem fault.
+      final locked = Directory('${dir.path}/ro')..createSync();
+      final trapped = File('${locked.path}/x.json.0.tmp')
+        ..writeAsStringSync('{}');
+      trapped.setLastModifiedSync(
+          DateTime.now().subtract(kAtomicOrphanMinAge * 2));
+      Process.runSync('chmod', ['a-w', locked.path]);
+      addTearDown(() => Process.runSync('chmod', ['u+w', locked.path]));
+
+      final errors = <String>[];
+      sweepStoreScratchFiles(locked, onError: errors.add);
+
+      expect(trapped.existsSync(), isTrue);
+      expect(errors, hasLength(1));
+      expect(errors.single, contains('x.json.0.tmp'));
+    });
+  });
 }
