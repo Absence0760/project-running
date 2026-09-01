@@ -128,7 +128,13 @@ create temporary table event_order_probe_result (col name, written boolean);
 do $probe$
 declare r record;
 begin
-  for r in select col, assignment from event_order_probe order by col loop
+  -- `id` is probed LAST and deliberately so: every probe selects the row by
+  -- its id, so a successful id rewrite would leave every later probe matching
+  -- no row -- which raises nothing and would score as WRITTEN. Running it last
+  -- keeps each verdict exact. (Measured: without this the pre-fix run reports
+  -- nine writable columns where only one is.)
+  for r in select col, assignment from event_order_probe
+            order by (col = 'id'), col loop
     begin
       execute format('update event_orders set %s where id = %L',
                      r.assignment, 'ba000000-0000-0000-0000-0000000000a1');
