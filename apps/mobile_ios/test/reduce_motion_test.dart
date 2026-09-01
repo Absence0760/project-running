@@ -245,7 +245,7 @@ void main() {
         final f = File(path);
         expect(f.existsSync(), isTrue, reason: '$path moved');
         final src = f.readAsStringSync();
-        expect(src.contains('toImage('), isTrue,
+        expect(src.contains('capturePngBytes('), isTrue,
             reason: '$path is no longer a rasteriser — retarget this guard');
         expect(RegExp(r'Future\.delayed').hasMatch(src), isFalse,
             reason: '$path draws no map tiles, so there is nothing for a '
