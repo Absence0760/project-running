@@ -1467,6 +1467,7 @@ export const en = {
 	"settingsAccount.exportPartialNotice": "Your last export is partial: it holds {count} of the {total} runs on your account. Nothing was deleted — export again to retry. The full account archive names every short section in its manifest.json.",
 	"settingsAccount.backupFailed": "Backup failed: {error}",
 	"settingsAccount.backupPartialNotice": "This backup is missing {missing} of {wanted} GPS tracks — they could not be downloaded. Its manifest.json says so. Download it again on a steadier connection for a complete file.",
+	"settingsAccount.backupPartialSections": "This backup came up short: {sections} could not be read in full. Its manifest.json says so. Take it again on a steadier connection before relying on it.",
 	"settingsAccount.restoreArchiveIncomplete": "That archive says it is incomplete: {sections} came up short when it was written. Nothing was overwritten — restore from a complete backup to fill the gaps.",
 	"settingsAccount.restoreArchiveIncompleteUnnamed": "That archive says it is incomplete — it was short of the account when it was written. Nothing was overwritten.",
 	"settingsAccount.identitiesLoadFailed": "Failed to load sign-in methods: {error}",

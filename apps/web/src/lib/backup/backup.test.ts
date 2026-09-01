@@ -9,6 +9,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import JSZip from 'jszip';
 
 import {
@@ -351,4 +353,43 @@ test("buildBackupZip: a caller-reported short read joins the writer's own in the
 	// Sorted + de-duplicated, matching the Go writer's manifest.
 	assert.deepEqual(manifest.incomplete, ['runs', 'tracks']);
 	assert.deepEqual(archive.incomplete, ['runs', 'tracks']);
+});
+
+// `createBackup` itself needs supabase-js (and therefore SvelteKit's
+// `$env` virtual module), so its read-grading is pinned at the source
+// level. The claim under test is the whole point of decisions § 675/§ 676:
+// an archive may only say `complete: true` when every read behind it
+// answered in full. The runs + routes reads were fixed there; the profile
+// RPC and the user_settings read went on discarding their error, so a
+// failed read shipped a null profile under a manifest claiming whole.
+test('createBackup: every read behind the archive grades its error', () => {
+	const source = readFileSync(resolve('src/lib/backup/backup.ts'), 'utf-8');
+	const body = source.slice(
+		source.indexOf('export async function createBackup'),
+		source.indexOf('async function defaultTrackFetcher'),
+	);
+	assert.ok(body.length > 0, 'createBackup body not found — did the file move?');
+
+	// A destructure of `data` with no `error` beside it is a discarded read.
+	const reads = [...body.matchAll(/const \{([^}]*)\}\s*=\s*await supabase/g)];
+	assert.ok(reads.length >= 2, 'expected the profile + settings reads');
+	for (const [, bindings] of reads) {
+		assert.match(
+			bindings,
+			/\berror\b/,
+			`a supabase read in createBackup discards its error: {${bindings.trim()}}`,
+		);
+	}
+
+	// And the graded errors have to reach the manifest, not merely be bound.
+	assert.match(
+		body,
+		/profileErr\s*\?\s*\['profile'\]/,
+		'a failed profile read must name its section in incompleteSections',
+	);
+	assert.match(
+		body,
+		/settingsErr\s*\?\s*\['settings_prefs'\]/,
+		'a failed settings read must name its section in incompleteSections',
+	);
 });
