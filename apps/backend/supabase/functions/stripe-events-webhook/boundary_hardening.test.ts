@@ -395,3 +395,46 @@ Deno.test('readConnectAccount — every capability is off unless it is literally
     { id: 'acct_1', chargesEnabled: true, payoutsEnabled: true, detailsSubmitted: true },
   );
 });
+
+Deno.test('verifyStripeSignature — the default tolerance is the five minutes Stripe recommends', async () => {
+  // Every other case in this suite either signs at exactly `now` or passes
+  // the tolerance explicitly, so the DEFAULT was pinned by nothing: narrowing
+  // it to zero passed the whole suite while rejecting every real delivery
+  // that spent a second in flight, and widening it to a day passed too while
+  // opening the replay window that is the second half of this gate.
+  const raw = '{"id":"evt_1"}';
+  const v1 = await sign(raw);
+  const header = `t=${T},v1=${v1}`;
+  const at = (offsetSec: number) =>
+    verifyStripeSignature(raw, header, SECRET, (T + offsetSec) * 1000);
+  assertEquals(await at(299), true);
+  assertEquals(await at(300), true);
+  assertEquals(await at(301), false);
+  // Symmetric: the gate is on |now - t|, so a future-dated delivery is bounded
+  // by the same number.
+  assertEquals(await at(-300), true);
+  assertEquals(await at(-301), false);
+});
+
+Deno.test('verifyStripeSignature — a timestamp that is not an integer literal is refused', async () => {
+  // The signed payload is rebuilt from the PARSED integer, and
+  // `Number.parseInt` stops at the first character it cannot read — so
+  // `t=1700000000junk` recovered the real timestamp and verified against a
+  // genuine Stripe signature. Nothing was gained by an attacker (any other
+  // integer changes the signed payload and breaks the HMAC), but the parse
+  // and the payload disagreed about what `t` was, and a regression that
+  // signed the header TEXT instead would have been invisible: a clean header
+  // round-trips through both.
+  const raw = '{"id":"evt_1"}';
+  const v1 = await sign(raw);
+  for (const t of [`${T}junk`, `+${T}`, ` ${T}x`, `${T}.0`, `0x${T.toString(16)}`, `${T}e0`]) {
+    assertEquals(
+      await verifyStripeSignature(raw, `t=${t},v1=${v1}`, SECRET, NOW_MS),
+      false,
+      t,
+    );
+  }
+  // The positive control: the same signature under the clean literal passes,
+  // so the refusals above are about the timestamp and not about the body.
+  assertEquals(await verifyStripeSignature(raw, `t=${T},v1=${v1}`, SECRET, NOW_MS), true);
+});

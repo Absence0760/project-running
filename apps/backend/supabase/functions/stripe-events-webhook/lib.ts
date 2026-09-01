@@ -433,6 +433,14 @@ export async function verifyStripeSignature(
     const key = part.slice(0, idx).trim();
     const value = part.slice(idx + 1).trim();
     if (key === 't') {
+      // Exactly an integer literal. `Number.parseInt` stops at the first
+      // character it cannot read, so `t=1700000000junk` and `t=+1700000000`
+      // both recovered the real timestamp and verified — and because the
+      // signed payload is rebuilt from the PARSED integer rather than from
+      // the header text, a change to sign the text instead would have been
+      // invisible to every test, since a clean header round-trips. Requiring
+      // the two to be the same string removes the distinction.
+      if (!/^\d+$/.test(value)) continue;
       const n = Number.parseInt(value, 10);
       if (Number.isFinite(n)) timestamp = n;
     } else if (key === 'v1') {
