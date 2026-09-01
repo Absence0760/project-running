@@ -156,7 +156,7 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
   // event id.
   const { data: event, error: eventErr } = await service
     .from('events')
-    .select('host_user_id, capacity, starts_at, title')
+    .select('host_user_id, capacity, title')
     .eq('id', eventId)
     .maybeSingle();
   if (eventErr || !event) {
@@ -207,9 +207,14 @@ Deno.serve(withSentry('events-checkout', async (req: Request) => {
     return Response.json({ error: 'instance_cancelled' }, { status: 409 });
   }
 
-  // Sales window.
+  // Sales window, graded against the OCCURRENCE being bought. `events.
+  // starts_at` is the SERIES row — the first occurrence — so grading on it
+  // closed every later occurrence of a recurring class the moment the first
+  // one began, and a weekly class was permanently `sales_closed` from week
+  // two on. `events-cancel` already measures its refund cutoff from
+  // `instanceStart`; the two now bound the same instant.
   if (!isSalesWindowOpen(
-    Date.parse(event.starts_at as string),
+    Date.parse(instanceStart),
     pricing.sales_close_offset_minutes,
     Date.now(),
   )) {

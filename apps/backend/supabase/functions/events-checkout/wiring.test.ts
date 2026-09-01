@@ -63,3 +63,25 @@ Deno.test('a superseded hold is expired at Stripe before its replacement opens',
     'the supersede must run before the replacement session is created',
   );
 });
+
+Deno.test('the sales window is graded on the occurrence being bought', () => {
+  // `events.starts_at` is the SERIES row — the first occurrence. Grading the
+  // window on it closed every later occurrence of a recurring class the
+  // instant the first one began, so a weekly paid class was permanently
+  // `sales_closed` from week two on while its pricing, capacity and refund
+  // policy all resolved per instance. `events-cancel` already measures its
+  // refund cutoff from `instanceStart`.
+  const call = SRC.match(/isSalesWindowOpen\(\s*([^\n,]+),/);
+  assert(call, 'no isSalesWindowOpen call found — has the gate moved?');
+  assert(
+    call[1].trim() === 'Date.parse(instanceStart)',
+    `the window must bound the requested occurrence, got: ${call[1]}`,
+  );
+  // The series column is what the bug read; nothing in the handler may go
+  // back to it. Paired with the positive above so an emptied file cannot
+  // satisfy this on its own.
+  assert(
+    !SRC.includes('event.starts_at'),
+    'the handler must not grade or price anything off the series starts_at',
+  );
+});
