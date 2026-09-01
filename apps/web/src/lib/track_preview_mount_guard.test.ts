@@ -89,6 +89,28 @@ function mountsTrackPreview(file: string): boolean {
 	return /<TrackPreview\b/.test(withoutComments(readFileSync(file, 'utf-8')));
 }
 
+test('the scan reaches the tree and still sees a real mount', () => {
+	// A derived rule is only as good as its scan, and both halves of this
+	// one fail SILENTLY: a walk that reaches nothing and a `mountsTrack
+	// Preview` that stops matching each report an empty offender list,
+	// which is what a clean tree reports too (§ 762). Positive controls,
+	// off the real files rather than off a fixture, so the check cannot
+	// drift away from what it is checking.
+	const files = svelteFiles(SRC);
+	assert.ok(files.length > 100, `the walk reached only ${files.length} .svelte files`);
+	for (const path of Object.keys(CLIPPING_WRAPPERS)) {
+		assert.ok(
+			mountsTrackPreview(join(SRC, path)),
+			`${path} is permitted because it mounts TrackPreview, and the scan can no ` +
+				'longer see that it does — every offender it reports is now a false negative',
+		);
+	}
+	assert.ok(
+		!mountsTrackPreview(join(SRC, 'lib/components/Avatar.svelte')),
+		'the scan matches a file that mounts nothing — it is reporting on the wrong thing',
+	);
+});
+
 test('only a clip-aware wrapper mounts the unclipped renderer', () => {
 	const offenders: string[] = [];
 	for (const file of svelteFiles(SRC)) {
