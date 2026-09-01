@@ -147,4 +147,65 @@ test.describe('backup completeness disclosure', () => {
 		await expect(page.getByText(/Restored 1 runs/)).toBeVisible({ timeout: 15_000 });
 		await expect(page.getByTestId('restore-incomplete-archive')).toBeVisible();
 	});
+
+	test('a shortfall that is not tracks names its sections instead of counting tracks', async ({
+		page
+	}) => {
+		// Reason: `createBackup` merges two different shortfalls into one
+		// `incomplete` list — a track blob that would not download, and a
+		// row read that came up short before the writer ran. The surface
+		// spoke only the first, so an archive short of its PROFILE (or of
+		// thousands of runs) rendered "missing 0 of 0 GPS tracks": a
+		// sentence that reads as nothing being wrong, about the file
+		// someone wipes a device on. decisions.md § 845.
+		//
+		// The profile read is the cheapest of those to fail honestly — one
+		// RPC, no dependence on how much history the seed happens to carry.
+		await page.goto('/settings/account');
+		// The route goes on AFTER the page has loaded: /settings/account
+		// reads the same RPC to render the profile form, and failing that
+		// boot read tests the page's error handling rather than the
+		// archive's shortfall grading.
+		await expect(page.getByRole('button', { name: /Download full backup/ })).toBeVisible();
+		await page.route('**/rest/v1/rpc/get_my_profile*', (route) =>
+			route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ message: 'e2e forced profile read failure' })
+			})
+		);
+
+		const downloadPromise = page.waitForEvent('download');
+		await page.getByRole('button', { name: /Download full backup/ }).click();
+		const download = await downloadPromise;
+		const zipBytes = await downloadToBuffer(download);
+
+		const shortfall = page.getByTestId('backup-shortfall');
+		await expect(shortfall).toBeVisible({ timeout: 15_000 });
+		// The sections sentence, naming what was short. Before § 845 this
+		// string did not exist: a shortfall the track counter could not
+		// describe was disclosed as "missing 0 of 0 GPS tracks", so this
+		// assertion is what fails on the unfixed page.
+		await expect(shortfall).toContainText(/came up short/i);
+		await expect(shortfall).toContainText(/profile/i);
+		// Deliberately NOT asserted here: that the track-count sentence is
+		// absent. The seeded runs' Storage blobs do not survive a
+		// `supabase db reset`, so every track read fails in this
+		// environment and the archive is honestly short of both. Which
+		// sentence a given shortfall earns is decided in
+		// `backupShortfall`, measured exhaustively by
+		// src/lib/backup/shortfall.test.ts; what this test owns is that
+		// the sections sentence reaches the page at all.
+
+		const JSZip = (await import('jszip')).default;
+		const zip = await JSZip.loadAsync(zipBytes);
+		const manifest = JSON.parse(await zip.file('manifest.json')!.async('string')) as {
+			complete?: boolean;
+			incomplete?: string[];
+		};
+		expect(manifest.complete).toBe(false);
+		expect(manifest.incomplete).toContain('profile');
+		// The archive still ships — short, not withheld.
+		expect(zip.file('runs.json')).not.toBeNull();
+	});
 });
