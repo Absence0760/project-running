@@ -111,6 +111,12 @@
 				// N imported" is what stops the runner coming back for the rest,
 				// and the rest is only reachable until it ages out of the
 				// 90-day lookback window.
+				// The truncation outlives the toast on this path too. A
+				// first-connect backfill is the sync MOST likely to come up
+				// short — it is the only one that walks the whole window — so
+				// leaving the card silent here is where "sync again" would
+				// never be said at all.
+				stravaPartial = result.complete ? null : { resumable: result.resumable };
 				const counts = { imported: result.imported, skipped: result.skipped };
 				showToast(
 					result.complete

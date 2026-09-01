@@ -82,8 +82,15 @@ export async function createBackup(
 	// Use the get_my_profile RPC because subscription_tier / parkrun_number
 	// / subscription_at are column-level revoked from authenticated direct
 	// reads (migration 20260707_001).
-	const { data: profile } = await supabase.rpc('get_my_profile');
-	const { data: userSettings } = await supabase
+	//
+	// Graded, not discarded. These two reads are the rest of the archive,
+	// and an error here used to leave `profile: null` / an empty prefs bag
+	// under a manifest still claiming `complete: true` — the same false
+	// all-clear the paged row reads were fixed for. A missing settings ROW
+	// is not a shortfall (a runner who never changed a preference has
+	// none); only an error is.
+	const { data: profile, error: profileErr } = await supabase.rpc('get_my_profile');
+	const { data: userSettings, error: settingsErr } = await supabase
 		.from('user_settings')
 		.select('prefs')
 		.eq('user_id', userId)
@@ -119,7 +126,9 @@ export async function createBackup(
 		// writer's; the manifest merges both.
 		incompleteSections: [
 			...(runsRead.complete ? [] : ['runs']),
-			...(routesRead.complete ? [] : ['routes'])
+			...(routesRead.complete ? [] : ['routes']),
+			...(profileErr ? ['profile'] : []),
+			...(settingsErr ? ['settings_prefs'] : [])
 		],
 		onProgress,
 	});

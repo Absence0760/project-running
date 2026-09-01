@@ -30,6 +30,7 @@
 		type RestoreResult,
 	} from '$lib/backup/backup';
 	import { transferStageKey } from '$lib/backup/stage_labels';
+	import { backupShortfall as gradeBackupShortfall, type BackupShortfall } from '$lib/backup/shortfall';
 	import {
 		isPushSupported,
 		pushPermission,
@@ -131,7 +132,7 @@
 
 	let backingUp = $state(false);
 	let backupProgress = $state<BackupProgress | null>(null);
-	let backupShortfall = $state<{ missing: number; wanted: number } | null>(null);
+	let backupShortfall = $state<BackupShortfall | null>(null);
 	let restoring = $state(false);
 	let restoreProgress = $state<RestoreProgress | null>(null);
 	let restoreResult = $state<RestoreResult | null>(null);
@@ -883,15 +884,13 @@
 		try {
 			const archive = await createBackup((p) => (backupProgress = p));
 			// A track whose download failed is skipped so one dead blob can't
-			// sink the file. The archive's manifest says so, but nobody reads
-			// a manifest before trusting a backup — so the download surface
-			// says it too, and keeps saying it.
-			if (archive.incomplete.length > 0) {
-				backupShortfall = {
-					missing: archive.blobsWanted - archive.blobsWritten,
-					wanted: archive.blobsWanted,
-				};
-			}
+			// sink the file, and a row read that died half-way ships flagged
+			// rather than silently short. The archive's manifest says so, but
+			// nobody reads a manifest before trusting a backup — so the
+			// download surface says it too, and says WHICH of the two it was:
+			// reporting a short `runs` read as a track count read as an
+			// all-clear.
+			backupShortfall = gradeBackupShortfall(archive);
 			const url = URL.createObjectURL(archive.blob);
 			const a = document.createElement('a');
 			const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -1508,10 +1507,17 @@
 		</div>
 		{#if backupShortfall}
 			<p class="warn-text" role="status" data-testid="backup-shortfall">
-				{m('settingsAccount.backupPartialNotice', {
-					missing: backupShortfall.missing,
-					wanted: backupShortfall.wanted,
-				})}
+				{#if backupShortfall.missingTracks > 0}
+					{m('settingsAccount.backupPartialNotice', {
+						missing: backupShortfall.missingTracks,
+						wanted: backupShortfall.wantedTracks,
+					})}
+				{/if}
+				{#if backupShortfall.sections.length > 0}
+					{m('settingsAccount.backupPartialSections', {
+						sections: backupShortfall.sections.join(', '),
+					})}
+				{/if}
 			</p>
 		{/if}
 		{#if restoreResult?.archiveIncomplete}

@@ -10,7 +10,11 @@
 
 import { env } from '$env/dynamic/public';
 import { supabase } from '../core/supabase';
-import { parseStravaSyncResult, type StravaSyncResult } from './strava_sync_result';
+import {
+	STRAVA_LOOKBACK_DEFAULT_DAYS,
+	parseStravaSyncResult,
+	type StravaSyncResult,
+} from './strava_sync_result';
 
 // Read via `$env/dynamic/public` rather than `static/public` so a build
 // without `PUBLIC_STRAVA_CLIENT_ID` set falls back gracefully to "not
@@ -138,7 +142,9 @@ export async function completeStravaOAuth(
 /// Trigger a manual sync for an already-connected user. Safe to call
 /// repeatedly; the Edge Function dedupes against already-imported
 /// activity IDs.
-export async function syncStrava(lookbackDays = 90): Promise<StravaSyncResult> {
+export async function syncStrava(
+	lookbackDays = STRAVA_LOOKBACK_DEFAULT_DAYS,
+): Promise<StravaSyncResult> {
 	const { data, error } = await supabase.functions.invoke('strava-import', {
 		body: { action: 'sync', lookbackDays },
 	});
