@@ -102,6 +102,24 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 			writeJson(responseStream, 503, { error: 'Coach is not configured.' });
 			return;
 		}
+		// The core defaults an absent `openaiBaseUrl` to
+		// `http://localhost:11434/v1`, which is right for dev (Ollama on the
+		// developer's own machine) and meaningless inside a Lambda sandbox.
+		// Refuse up front, symmetrically with the core's missing-Anthropic-key
+		// branch: without this the turn passes auth, the paywall check and the
+		// daily-quota INCREMENT before failing on a connection to a port
+		// nothing is listening on, so a misconfigured provider spends the
+		// runner's daily allowance on a call that cannot succeed
+		// (decisions § 898).
+		if (provider === 'openai' && !process.env.OPENAI_BASE_URL?.trim()) {
+			console.error(
+				'[coach lambda] COACH_PROVIDER=openai with no OPENAI_BASE_URL — ' +
+					'set it to the OpenAI-compatible endpoint, or unset COACH_PROVIDER ' +
+					'to use Anthropic.',
+			);
+			writeJson(responseStream, 503, { error: 'Coach is not configured.' });
+			return;
+		}
 
 		// Parse the request body. Function URL events deliver `body` as
 		// a string, base64-encoded for binary content types. The size

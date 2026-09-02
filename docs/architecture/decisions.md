@@ -12388,3 +12388,29 @@ The rules deliberately do not try to recognise PII. A matcher for coordinates
 or emails would pass everything it had not thought of, which is the failure
 mode of every allowlist-of-banned-things in this repo; naming what may be
 logged is the direction that closes.
+
+## 898. `COACH_PROVIDER=openai` with no base URL spent the runner's daily message on a call to localhost
+
+**Decided 2026-09-02.** The coach core refuses up front when the Anthropic
+branch is unconfigured — `provider === 'anthropic' && !anthropicApiKey`
+answers a 503 before anything else runs. The OpenAI branch has no equivalent,
+because it does not need one in the place it was written for: an absent
+`openaiBaseUrl` defaults to `http://localhost:11434/v1`, which is exactly right
+for a developer running Ollama on their own machine.
+
+Inside a Lambda that default is a port nothing is listening on, and the failure
+lands in the wrong place. `COACH_PROVIDER=openai` with `OPENAI_BASE_URL` unset
+— a plausible self-host or partial-apply configuration — passes the auth check,
+passes the paywall check, and passes the daily-quota **increment**, and only
+then fails on the connection. So the runner loses a coach message from their
+daily cap to a configuration error, every time they try, while the operator
+sees a connection error rather than "not configured."
+
+The gate goes in the production wrapper rather than the core, for the same
+reason `bypassPaywallEnabled: false` is hardcoded there: the core's default is
+correct for dev, and what the Lambda knows that the core does not is that
+localhost means nothing here. It refuses with the core's own status and
+message, so the client behaves as it already does for a missing Anthropic key.
+The test shows the gate is the gate rather than a blanket refusal of the
+provider — with a base URL configured the turn hands over and is refused by the
+core's auth check instead.

@@ -178,6 +178,34 @@ test('an unrecognised COACH_PROVIDER refuses the turn rather than guessing', asy
 	}
 });
 
+test('COACH_PROVIDER=openai with no base URL refuses before the quota is spent', async () => {
+	// The core defaults an absent base URL to `http://localhost:11434/v1` —
+	// right for a developer running Ollama, meaningless in a Lambda sandbox.
+	// Without the wrapper's gate the turn passes auth, the paywall check and
+	// the daily-quota increment before failing on a connection to a port
+	// nothing is listening on.
+	process.env.COACH_PROVIDER = 'openai';
+	try {
+		const out = await invoke({
+			rawPath: '/api/coach',
+			body: CHAT_BODY,
+			headers: { 'x-supabase-authorization': 'Bearer tok' },
+		});
+		assert.equal(out.status, 503);
+		assert.deepEqual(JSON.parse(out.body), { error: 'Coach is not configured.' });
+
+		// With a base URL configured the wrapper hands over, and the refusal
+		// that follows is the core's own — which is what shows the gate is the
+		// gate rather than a blanket refusal of the openai provider.
+		process.env.OPENAI_BASE_URL = 'http://openai.invalid/v1';
+		const configured = await invoke({ rawPath: '/api/coach', body: CHAT_BODY });
+		assert.equal(configured.status, 401);
+	} finally {
+		delete process.env.COACH_PROVIDER;
+		delete process.env.OPENAI_BASE_URL;
+	}
+});
+
 test('the provider check does not gate the two route sub-paths', async () => {
 	// They are a Pro perk with a templated fallback and no COACH_PROVIDER of
 	// their own, so an unconfigured provider must not 503 them.
