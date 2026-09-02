@@ -75,7 +75,10 @@ activity's data-field picker.
 - **Stopped / walking** (< 0.4 m/s) → field shows `--:--`, never a garbage
   number or a divide-by-zero.
 - **Metric vs statute**: change the simulated device's units; pace unit
-  (min/km vs min/mi) follows `System.getDeviceSettings().distanceUnits`.
+  (min/km vs min/mi) follows `System.getDeviceSettings().paceUnits`. Set the
+  simulator's PACE and DISTANCE preferences to different systems and check the
+  cell follows pace — the two are separate settings and this field renders a
+  pace.
 
 ## 6. Run the unit tests
 

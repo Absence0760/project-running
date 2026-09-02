@@ -242,6 +242,28 @@ test('a table entry nothing references is refused', () => {
 	assert.match(out, /`Orphan` and nothing references it/);
 });
 
+// --- claim 6: the pace unit follows the pace preference ---------------------
+
+test('a field reading distanceUnits for its pace unit is refused', () => {
+	// The two members are the same type, so the wrong one compiles and runs.
+	// It is wrong only on a watch whose pace and distance preferences differ,
+	// which no build and no simulator run would surface.
+	const { status, out } = runMutated((dir) =>
+		edit(dir, VIEW, 'getDeviceSettings().paceUnits', 'getDeviceSettings().distanceUnits'),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /does not read `System\.getDeviceSettings\(\)\.paceUnits`/);
+	assert.match(out, /reads `distanceUnits`/);
+});
+
+test('a field that resolves no unit at all is refused', () => {
+	const { status, out } = runMutated((dir) =>
+		edit(dir, VIEW, /mMetric = System\.getDeviceSettings\(\)\.paceUnits == System\.UNIT_METRIC;/, ''),
+	);
+	assert.equal(status, 1, out);
+	assert.match(out, /does not read `System\.getDeviceSettings\(\)\.paceUnits`/);
+});
+
 // --- vacuity ---------------------------------------------------------------
 
 test('a renamed view class fails loudly rather than passing on an unread file', () => {

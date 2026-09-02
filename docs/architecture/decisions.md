@@ -15153,3 +15153,35 @@ That is the general point about a source-reading guard: it does not fail when it
 stops working, it passes. Its own mutation suite is the whole of what makes its
 green mean anything, which is why it runs as a second step beside it rather than
 being trusted on the strength of having been written.
+
+## 964. A pace cell reads the pace preference, and the wrong member of the same type compiles
+
+`GradeAdjustedPaceView.initialize` chose min/km against min/mi from
+`System.getDeviceSettings().distanceUnits`. Garmin exposes `paceUnits` and
+`distanceUnits` as SEPARATE user preferences, so a runner who logs distance in
+miles and reads pace in min/km — a real and unremarkable configuration — got
+min/mi in a cell every other pace on their watch shows in min/km, with a
+right-looking number in it.
+
+The previous round filed rather than fixed it, on the ground that the Connect IQ
+SDK is on no machine here and swapping to an API it could not compile would
+trade a possible mislabel for a possible build break. That was the right call
+without the answer and the wrong resting place: the answer is in the published
+API reference. `paceUnits` is a `System.UnitsSystem` returning `UNIT_METRIC` or
+`UNIT_STATUTE`, identical in type to `distanceUnits`, and available **since API
+level 1.0.0** — against this app's `minApiLevel` of 3.1.0, so every product in
+`manifest.xml` carries it. Corroborated on the Garmin developer forum, where the
+distinction between the two members is stated by developers working with both.
+
+That the two members share a type is the whole reason this needs a guard rather
+than only a fix: the wrong one compiles, links, runs, and is wrong only for the
+runners who set their two preferences apart — never on the developer's own
+watch, never in a simulator run nobody thought to configure that way. So
+`check_garmin_source.sh` gains a sixth claim, in both directions: `initialize`
+must read `paceUnits`, and the file must not name `distanceUnits` at all.
+Reverting the one-line fix fails both halves.
+
+The value is still read once at construction. A data field is constructed when
+the activity starts and the runner cannot reach system settings mid-activity, so
+re-reading it per second would cost a call every tick to observe a change that
+cannot happen.

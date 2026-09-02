@@ -118,7 +118,13 @@ class GradeAdjustedPaceView extends WatchUi.SimpleDataField {
     function initialize() {
         SimpleDataField.initialize();
         label = WatchUi.loadResource(Rez.Strings.FieldLabel) as String;
-        mMetric = System.getDeviceSettings().distanceUnits == System.UNIT_METRIC;
+        // paceUnits, not distanceUnits. Garmin exposes them as SEPARATE user
+        // preferences, and a runner who logs distance in miles while reading
+        // pace in min/km is a real configuration -- this cell renders a PACE,
+        // so it follows the pace preference. Read once at construction either
+        // way: a data field is constructed when the activity starts, and the
+        // runner cannot reach system settings mid-activity.
+        mMetric = System.getDeviceSettings().paceUnits == System.UNIT_METRIC;
     }
 
     // Called once per second by the activity recorder.
