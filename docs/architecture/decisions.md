@@ -13320,3 +13320,166 @@ region without any behaviour test noticing.
 No consumer on the wrist: the settings menu has no week-start row and
 `current_week::WeekStart` is a separate enum fed from the pushed settings frame.
 Port fidelity, and a doc claim that had become false.
+
+## 924. A panicking job handler ended the process, and the queue could never look at that job again
+
+**Decided 2026-09-02.** `Worker.handle` called `dispatch` directly. Go does not
+recover a panic for you, and the worker loop runs in `main`'s own goroutine — so
+a panic in any per-kind handler unwound `main` and ended the process. That
+process is not only the worker: `startHealthServer` mounts the live-spectator
+hub, the two data-export endpoints, the Strava webhook, the RFC 8058
+unsubscribe endpoint and the provider bounce webhook on the same binary. One
+malformed payload therefore stopped live tracking for every spectator watching
+every runner, which is the layered-resilience contract read backwards.
+
+The job was then unreachable. `claim_next_job` selects `status = 'queued'`
+only, `claim_next_job` itself moves the row to `running`, and nothing anywhere
+moves a row back out — `find_stuck_jobs` (migration `20260731_001`) deliberately
+only reports, because auto-failing a row would race a worker about to call
+`finish_job`. `handle`'s own doc comment claimed such a job is "recovered on the
+next process start because attempts < max_attempts"; it is not, and the comment
+is corrected rather than kept.
+
+`dispatchSafely` recovers, logs the value with `debug.Stack()`, and reports a
+`*panicError`. **The classification is deliberate and not merely a default**:
+`isTransient` falls back to substring-sniffing the message for network markers,
+and a panic value is arbitrary text — `panic("read tcp …: i/o timeout")` would
+have read as a retryable blip and been deferred. `isTransient` refuses a
+`*panicError` before reaching that sniffing, so a panic is always permanent. The
+row is stamped `failed`, which is what the `jobs-failed-alert` cron looks at.
+
+Pinned by four cases: the loop survives and reports; a panic whose text mentions
+a timeout is still permanent; the stack reaches the log; and a runtime
+nil-dereference is caught, not only an explicit `panic()`.
+
+## 925. The third parity rail's date comparison finds a port that fell behind, not one that was never faithful
+
+**Decided 2026-09-02.** Two `watch_core` modules were compared case-for-case
+against the web `.test.ts` they were ported from and both carried divergences
+that no guard could see. Both had been edited hours earlier, so the
+date-comparison sweep that produced the current firmware followups list read
+them as in sync — which is the finding worth recording: comparing modification
+dates detects a port that stopped following its source, and says nothing about a
+port that never matched it.
+
+`track_projection::or_epsilon` was written against the JS `value || 1e-6`, which
+is falsy-only: it catches an exact zero and lets a `1e-7` span through. Web
+replaced that with `Number.isFinite(v) && v > 1e-6` — matching the Dart twin's
+`max(span, 1e-6)` — and this rail kept the old form, so a centimetre of jitter
+(a runner who hit Start and Stop indoors) fitted the whole 92 px drawable band
+where web collapses it to about 8 px. The module's own second export,
+`isTrackRenderable`, had never been ported at all, so the rail had no way to
+refuse a stationary cluster in the first place; its four web cases port
+directly, including the one where a raw min/max reads jitter at the
+antimeridian as a 359.99 deg span and passes exactly the standing-still track
+the gate exists to catch.
+
+`route_simplify::compute_elevation_gain` carried **neither** of the two rules
+web's own doc calls load-bearing. It summed every positive sample-to-sample
+delta, so a 1 Hz sawtooth of ±1 m on a flat road reads as metres of phantom
+climb per minute — on the one device in this repo whose headline ultra metric is
+cumulative vert, a 100-mile day integrates that into thousands. And a `None`
+elevation broke the chain instead of being skipped with the last reading carried
+across, erasing the climb spanning a tree-covered section. A test named "null
+elevations are skipped" asserted a gain of 0 across exactly that gap, encoding
+the divergence as intent; it is replaced by web's own case rather than kept
+beside it. `ELEVATION_GAIN_MIN_DELTA_M` is now the 3 m the other two rails use,
+and a real descent moves the reference to the valley so the next climb is not
+measured from the previous summit.
+
+`summarize_route_from_track` was a third defect in the same module: it graded
+the SIMPLIFIED polyline. RDP measures perpendicular distance in 2-D, so a
+straight road over a summit collapses to its endpoints and its 50 m climb read
+as 0 — the identical bug web's own comment says it fixed.
+
+**Scope of the ports is unchanged.** `route_geometry`'s `markerPointAtDistance`
+stays unported: it is the route-editor "place this marker at mile 5" path, and
+authoring is web-canonical. The gap is filed rather than closed silently.
+
+## 926. Two unproven unwraps in `watch_core` reset the device instead of failing closed
+
+**Decided 2026-09-02.** `overflow-checks = false` in the release profile means
+arithmetic overflow wraps rather than traps, so the panics that survive to the
+wrist are the ones `Option::unwrap` and slice indexing raise. On a Cortex-M4F
+with no operating system a panic is a reset. Two sites were reachable from data
+rather than from a coding mistake, and both are now failures of the value rather
+than of the device.
+
+`predict_race_ladder` seeds both anchor loops with `f64::INFINITY` and takes the
+strict `<`. A candidate whose Riegel equivalent IS infinity therefore never
+wins — a positive-but-denormal distance overflows `libm::pow` — so neither the
+weighted pass nor the unweighted fallback assigns an anchor and `best.unwrap()`
+panicked, on a function whose own doc comment already promises `None` for a pool
+it cannot anchor. It is now `best?`.
+
+`compute_calibration` graded the numerator: `km <= 0.0` is false for a NaN
+distance because NaN fails every comparison, so `trimp / NaN` went into the
+list. One such row made the whole window's fallback rate NaN, and a second row
+beside it panicked `median`'s comparator — which was
+`partial_cmp(b).unwrap()`, the one comparator that returns `None` for exactly a
+NaN. The rate is graded now, and the comparator is `f64::total_cmp`, so the
+source guard and the sort are independent rails rather than one.
+
+Recorded because the sweep that found them is repeatable: every `.unwrap()`,
+`.expect(` and `panic!` outside a test module in `apps/custom_watch`, checked
+for whether the surrounding code proves the case away. Five others do — `cum`
+always carries its pushed zero, `by_day` is emptiness-guarded, `computed` is
+`Some` exactly when the match arm taking it is chosen, `view` is `Some` exactly
+when the `unfed` arm above did not return — and are left alone.
+
+## 927. A CPU-bound search bounded only by the caller's patience, and a refusal that read as a loop-poor neighbourhood
+
+**Decided 2026-09-02.** `graph_cycle`'s `/cycle` and `/route` handlers passed
+`r.Context()` straight into the search and had no clock of their own. Go
+cancels a request context when the client goes away, so the common case was
+bounded — but `main.go`'s `WriteTimeout` is 30 s and does **not** cancel the
+handler context, it only fails the connection write, so a search running past it
+burns a core producing a response no one can receive. And a caller that holds
+the connection open pins that core for as long as it likes, on an endpoint that
+is public behind one shared secret because the generate-route Lambda runs on AWS
+with no 6PN path into Fly.
+
+A 20 s server-side deadline leaves headroom under the 30 s write budget so the
+refusal can actually be written, and sits well past the web client's own 8 s
+`AbortController`, so in normal operation the caller still gives up first and
+this never fires.
+
+**The refusal must not be `found: false`.** That flag is a product claim — the
+client turns it into "the best loop near you is ~X km" — and a search that ran
+out of clock has established nothing about the neighbourhood. A deadline is a
+503 and an abandoned caller is a 499; the web client falls back to `round_trip`
+on either, with the reason intact, which is what its own `GraphCycleError`
+distinction exists for.
+
+Two more holes in the same surface. `decodeBody` accepted a body carrying a
+SECOND JSON value and silently discarded the tail, which is the laxness
+`DisallowUnknownFields` on the line above exists to refuse. And `NearestNode`
+spun for **33 s on a 9x9 test grid** given a non-finite query: `haversineM`
+returns NaN, `d < bestD` is false for every candidate, `best` never leaves `-1`,
+the early break can never fire, and the ring range comes from an `int32`
+conversion of NaN. That is the same class as the off-extract case the sweep's
+own comment records ("a start point outside the loaded PBF used to pin a core
+for minutes"), left open for input the two HTTP callers were trusted to have
+rejected. The guard is in `NearestNode` now, where it belongs on an exported
+function, with the request-level check kept as the outer wall.
+
+## 928. The live-hub's 403 body told a blocked person that they were blocked
+
+**Decided 2026-09-02.** `livehub.authorize` echoed the authorizer's own error
+into the response. That error distinguishes `auth: unknown run`, `auth: not the
+run owner` and `auth: blocked by run owner`, so a caller probing
+`/v1/live/{run_id}` learned which run ids exist and — the one that actually
+matters — a blocked person learned that a specific runner had blocked them. The
+product does not disclose a block anywhere else, and this endpoint reaches
+anonymous spectators by design.
+
+One opaque `forbidden` body for every denial, reason to the operator's log. That
+is the shape the two sibling servers in the same binary already use: the
+data-export and premium `extractUserID` collapse every verification failure to
+`missing_bearer` / `invalid_token` rather than surfacing what the JWKS verifier
+said. Nothing in the web client parses this body, and no test asserted on it.
+
+Pinned in both directions — the three reasons produce a body naming none of
+them while the log still carries each, and a push refusal and a snapshot refusal
+produce byte-identical bodies, so the response cannot be read as an oracle for
+which action was attempted either.
