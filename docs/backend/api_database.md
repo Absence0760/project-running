@@ -1744,8 +1744,13 @@ Fetches and imports a user's full parkrun history.
 
 **Response:**
 ```json
-{ "imported": 23, "skipped": 0 }
+{ "imported": 23, "skipped": 0, "total": 23, "complete": true }
 ```
+
+`total` is every usable result the page carried; `imported + skipped` stops at
+`MAX_PARKRUN_ROWS` (5000). `complete` is the explicit claim in the shape
+`parseStravaSyncResult` established — **a client must treat an absent `complete`
+as PARTIAL**, never as whole (decisions § 976).
 
 ---
 
@@ -1765,14 +1770,31 @@ Imports an official race result onto a `source='race'` run, or enriches an exist
 2. `provider='runsignup'`: **fail closed** — if `RUNSIGNUP_API_KEY`/`_SECRET` are unset return `503 {error:'provider_not_configured'}`; else call the RunSignUp results endpoint, map each finisher to a run row (`source='race'`, `external_id=race:{name}:{date}:{bib}`, the owner-only race metadata). Fail-loud on a non-2xx upstream (502).
 3. `provider='chronotrack'`: **fail closed** — if `CHRONOTRACK_CLIENT_ID`/`CHRONOTRACK_USER_ID`/`CHRONOTRACK_PASSWORD` are unset return `503 {error:'provider_not_configured'}`; else call the ChronoTrack Live results endpoint (event id = the listing's `provider_race_id`), map each finisher with the same shaping as RunSignUp. Fail-loud on a non-2xx upstream (502).
 4. `provider='paste'`: map the single pasted result row.
-5. `probe=true`: report provider availability without a listing — `503 provider_not_configured` when `provider='chronotrack'` is unconfigured, else `{configured:true}`. Drives the ChronoTrack Settings card.
-6. `matchRunId` set → merge the metadata + set `race_listing_id` onto that owner-scoped run (no duplicate). Else dedup per-user against existing `external_id`s and insert the fresh rows.
+5. `provider='ultrasignup'`: **refuses unconditionally** — `503 {error:'provider_not_configured', reason:'results_unattributable'}`, before the credential read and before the fetch. The endpoint is an athlete history feed with no race identifier on a row, so every result would be stamped with the listing's race (decisions § 975).
+6. `probe=true`: report provider availability without a listing — `503 provider_not_configured` when `provider='chronotrack'` is unconfigured or `provider='ultrasignup'` (always), else `{configured:true}`. Drives the ChronoTrack + UltraSignup Settings cards.
+7. `matchRunId` set → merge the metadata + set `race_listing_id` onto that owner-scoped run (no duplicate). Else dedup per-user against existing `external_id`s and insert the fresh rows.
 
-**Response:** `{ "imported": 1, "skipped": 0, "enriched": 0 }` (the `matchRunId` path returns `enriched: 1`).
+**Response:** `{ "imported": 1, "skipped": 0, "enriched": 0, "complete": true }` (the `matchRunId` path returns `enriched: 1`).
+
+`complete` is false when the provider fetch may have been cut off at
+`MAX_RESULTS_ROWS` (2000). It is reachable rather than theoretical:
+`runSignUpResultsUrl` narrows upstream by **user id only**, so a request scoped
+by bib alone fetches the whole finisher field and the bib filter runs afterwards
+— a major with 30,000 finishers truncates before it. A truncated fetch that
+matched nothing answers `502 {error:'upstream_results_truncated', complete:false}`
+rather than a successful import of nothing, because "we read the whole field and
+you are not in it" and "we read the first 2,000 and you were not among them" are
+different sentences (decisions § 976).
 
 ### `POST /race-listings-sync`
 
-Pulls upcoming RunSignUp races near a region into `race_listings` (v1 seam — the actual fetch+upsert is a scoped follow-up). **Fail closed**: returns `503 {error:'provider_not_configured'}` when `RUNSIGNUP_API_KEY`/`_SECRET` are unset; the web + mobile UIs probe it to decide whether to show the RunSignUp affordance or the unavailable explainer.
+Pulls a provider's upcoming races into `race_listings`. **Fail closed**: returns `503 {error:'provider_not_configured'}` when the chosen provider's key/secret are unset (`RUNSIGNUP_API_KEY`/`_SECRET`, or `ULTRASIGNUP_API_KEY`/`_SECRET` for `provider:'ultrasignup'`); the web + mobile UIs probe it to decide whether to show the affordance or the unavailable explainer. An unrecognised `provider` is `400 unknown_provider`, never coerced to the default.
+
+**Request:** `{ "sync": true, "provider": "runsignup" | "ultrasignup", "near": { "lng": -106.9, "lat": 37.8, "radius_m": 50000 } }` — `near` is optional; present-but-unusable is a `400`, never a silent fall back to no hint. **Without `sync: true` this is a credential probe**: it answers `{"configured": true}` behind the same gate and performs no fetch and no write. Every caller in the tree is that probe (both clients' provider-availability checks), so a sync has to be asked for or a page load would walk the provider feed and spend the 2/hour bucket (decisions § 977).
+
+**Flow:** auth → tiered rate limit (fail-closed) → provider gate → credential gate → fetch the provider feed → read each row through that provider's reader → reconcile against the stored `(provider, provider_race_id)` rows → insert the new ones and update only the changed ones, **as the service role** (`race_listings_force_unverified` forces `is_verified` false for every other role, and the INSERT policy requires `submitted_by = auth.uid()`). There is no upsert: `race_listings_provider_uniq` is a PARTIAL unique index and PostgREST cannot supply its predicate as an `ON CONFLICT` arbiter (42P10).
+
+**Response:** `{ "synced": 4, "updated": 1, "skipped": 0, "unusable": 0, "total": 5, "complete": true }`. `unusable` is rows the provider returned that could not yield the name and date `race_listings` requires — the field names in `lib.ts` are **unverified against a live payload** (no credential exists), so a differently-shaped feed answers `synced: 0` with `unusable` equal to the row count rather than writing junk into a public calendar (decisions § 977). A non-2xx or unparseable upstream is `502` and writes nothing.
 
 **Env:** `RUNSIGNUP_API_KEY`, `RUNSIGNUP_API_SECRET` (both required for the RunSignUp legs — unset → 503), `CHRONOTRACK_CLIENT_ID`, `CHRONOTRACK_USER_ID`, `CHRONOTRACK_PASSWORD` (all three required for the ChronoTrack leg — any unset → 503), `RACE_IMPORT_USER_AGENT` (optional, defaults `RunApp/1.0`).
 

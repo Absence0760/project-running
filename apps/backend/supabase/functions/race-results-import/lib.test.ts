@@ -10,7 +10,6 @@ import {
   extractRunSignUpResults,
   extractUltraSignUpResults,
   filterResultsByBib,
-  isIsoCalendarDate,
   mapChronoTrackResult,
   mapRunSignUpResult,
   mapUltraSignUpResult,
@@ -27,6 +26,7 @@ import {
   ultraSignUpScopeGate,
   ultraSignUpResultsUrl,
 } from './lib.ts';
+import { isIsoCalendarDate } from '../_shared/calendar_date.ts';
 import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
 
 const OPTS = {

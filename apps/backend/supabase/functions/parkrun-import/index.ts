@@ -59,7 +59,17 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   // still letting a user retry after a glitch. The pro multiplier is
   // 4× — enough that a Pro user importing across multiple historic
   // athlete numbers in one sitting doesn't hit the wall.
-  const denied = await checkRateLimitTiered(supabase, user.id, 'parkrun-import', 4, 16, 3600);
+  //
+  // Fail-closed. The scrape this gate stands in front of spends parkrun.org.uk's
+  // tolerance of OUR outbound IP — the resource this function's own comment
+  // below names ("drain our IP reputation with parkrun") — which is shared by
+  // every user of the deployment and cannot be rate-limited back into existence
+  // once it is spent. Nor does falling open buy the caller anything: the RPC
+  // that failed is on the same database the import must then read and write
+  // `runs` against (decisions § 974).
+  const denied = await checkRateLimitTiered(supabase, user.id, 'parkrun-import', 4, 16, 3600, {
+    failClosed: true,
+  });
   if (denied) return denied;
 
   const { athleteNumber } = (guarded.body ?? {}) as { athleteNumber?: unknown };
@@ -108,10 +118,16 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   // that used to stand in for it.
   const runs: (TablesInsert<'runs'> & { external_id: string })[] = [];
 
-  $('table tbody tr').each((_: number, row: cheerio.Element) => {
-    // Bound the result set independently of upstream input. /audit/all.
-    if (runs.length >= MAX_PARKRUN_ROWS) return false;
+  // Every usable result the page carried, INCLUDING the ones past the cap. The
+  // walk used to stop dead at the cap (`return false`), which bounded the result
+  // set and simultaneously destroyed the only evidence that it had been bounded
+  // — the answer was `{ imported, skipped }` either way, and `skipped` means
+  // "already had it". Counting past the cap keeps the bound where it belongs (on
+  // `runs`, and on the 2 MB HTML cap that already refuses loudly) while letting
+  // the response say what it left behind (decisions § 976).
+  let usable = 0;
 
+  $('table tbody tr').each((_: number, row: cheerio.Element) => {
     const cells = $(row).find('td');
     if (cells.length < 6) return;
 
@@ -127,6 +143,9 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
     // that fails the whole batch INSERT, and an unknown time imports a
     // corrupt 5000 m / 0 s run. Only rows with a real time + date become runs.
     if (!isUsableParkrunResult(time, date)) return;
+    usable++;
+    // Bound the result set independently of upstream input. /audit/all.
+    if (runs.length >= MAX_PARKRUN_ROWS) return;
 
     runs.push({
       id: crypto.randomUUID(),
@@ -185,5 +204,11 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
     }
   }
 
-  return Response.json({ imported, skipped });
+  // `complete` is the explicit claim, in the shape `parseStravaSyncResult`
+  // already established on the Strava side: a client must not have to infer a
+  // shortfall from a count, and only an explicit `true` should let a surface say
+  // the history is whole. `total` is what the page actually carried, so the
+  // client can name the gap rather than only its existence — `imported + skipped`
+  // is what we processed and stops at MAX_PARKRUN_ROWS.
+  return Response.json({ imported, skipped, total: usable, complete: usable <= MAX_PARKRUN_ROWS });
 }));

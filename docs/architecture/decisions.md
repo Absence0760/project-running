@@ -15249,6 +15249,7 @@ Measured before writing it: all three rails parse to the same five keys, so the
 previous round's hand check was right and this closes a future gap rather than a
 live defect. The Dart rail is read at `apps/mobile_android/lib` — the twin's
 canonical copy per § 39 — so reading one reads both.
+
 ## 967. The coach Lambda dispatched sub-paths by substring, so the prod path table and the dev route table disagreed about which paths exist
 
 `apps/web/lambda/coach/src/index.ts` chose its sub-handler with
@@ -15457,6 +15458,289 @@ fix, adding a method gate to all five Lambdas, was not taken: it would turn
 today's OPTIONS 200 into a 405 with no way to verify from here that no client
 sends a preflight against these paths, and the coupling is better made visible
 than papered over from the wrong side.
+
+## 973. The cron gate's missing throttle, and why copying the sibling's placement would have been the defect
+
+**Decided 2026-09-02.** `refresh-tokens` runs `verify_jwt = false`, so a bearer
+compared against `CRON_SECRET` is the only thing in front of a loop over the
+whole `integrations` table against Strava's OAuth endpoint. Its sibling in that
+posture, `strava-webhook`, carries two defences: a 32-character floor on its
+secret and an IP-keyed 60/hour bucket placed deliberately BEFORE the secret
+check. § 937 closed the floor half. This closes the other, and the interesting
+part is that the sibling's placement is the one thing that must NOT be copied.
+
+`ipBucketKey` collapses every caller the trusted header does not identify into
+one shared `unknown` bucket, and nothing in this repo establishes that pg_cron's
+invocation carries `cf-connecting-ip`. A limiter in front of the compare would
+therefore have handed an attacker a way to starve the hourly token refresh out
+of a bucket they share with it — turning a hardening pass into a denial of the
+exact job the gate exists to protect. The bucket is spent on a FAILED compare
+instead: the authorised path acquires no database dependency at all, and the
+guess rate is bounded at the same ceiling.
+
+**A second narrowing, and this one was measured rather than reasoned.** The
+bucket is spent only when a bearer was actually SUPPLIED and did not match. A
+request carrying no bearer is not a guess at the secret, it is a probe, and
+counting it would spend a `rate_limits` write on the cheapest request an
+attacker can generate while crowding out the guesses the ceiling is for. That
+narrowing is also what keeps the ceiling honest against CI, which is the § 937
+trap in the other direction: of the three `handler_envelope.test.ts` cases only
+one sends a bearer, the function host's readiness loop sends none, and the
+served-tree mutation operator re-runs the suite once per mutation — so the wide
+form would have spent about 62 of 60 in a single job and the tempting repair
+would have been to raise the ceiling to fit. Counting guesses rather than
+requests puts CI at roughly 20 without the number moving. **The ceiling is 60
+because the sibling's is 60, not because 20 fits under it.**
+
+Fail-closed on the limiter is not a judgement call here either. Every other call
+site weighs a false denial during a database blip against what falls through;
+this branch refuses either way, so the caller gets a 503 rather than a 403 and
+is refused in both.
+
+`gate_invariants.test.ts` pins the ceiling, the bucket, the fail-closed posture,
+that exactly one limiter exists and that it sits inside the refusal branch — and
+pins the SIBLING's opposite order too, because either half alone reads as an
+oversight to the next person and "making the tree consistent with itself" is
+precisely the edit that would reintroduce this. Four mutations, each killed:
+dropping `failClosed`, hoisting the limiter in front of the compare, removing
+the bearer test, and reversing the sibling's order.
+
+## 974. Four rate limits fell open, and they were the four spending someone else's resource
+
+**Decided 2026-09-02.** `checkRateLimit` / `checkRateLimitTiered` default to
+fail-OPEN on an RPC error, and the helper's own documentation names the
+exception: pass `{ failClosed: true }` on "expensive paths where letting traffic
+through on RPC failure is worse than the false-positive denial". Thirteen call
+sites; nine passed it. The four that did not were `strava-import`'s `sync`,
+`parkrun-import`, `race-results-import` and `race-listings-sync` — which is the
+rule inverted, because those four are the entire set whose work is an outbound
+call spending a resource that is **not ours**: Strava's per-application budget
+(a sync walks ~20 pages and uploads a track per activity), parkrun.org.uk's
+tolerance of our egress IP — the drain this function's own comment names — and
+our RunSignUp / ChronoTrack / UltraSignup credentials. The nine guarded sites
+are single writes to the caller's own rows.
+
+The stated reason for leaving `sync` open was that it is "idempotent and
+read-mostly". Idempotent for us; the third party is billed per call either way.
+
+What settles it is that the fail-open buys the caller nothing. The RPC that
+failed is `check_rate_limit` against the same database each of these four must
+then read and write `runs` (or `race_listings`) against, so letting the request
+through does not rescue it — it spends third-party quota on a walk that ends in
+a 500 at the insert. The "user-visible regression during a DB blip" the filing
+weighed is a request that was going to fail regardless; the only variable is
+whether it burns someone else's budget first.
+
+All four now fail closed. `_shared/rate_limit_failclosed_guard.test.ts` reads
+every `checkRateLimit`/`checkRateLimitTiered` call site in the tree by
+paren-balanced argument extraction — not a regex to the first `)`, which reads
+an options object as absent on a call that has one — and requires the posture on
+each, with a vacuity floor on the number of sites and files it found. The rule
+is absolute rather than allowlisted: a caller who wants fail-open has to come
+here and say why. Two mutations killed: reverting one of the four flips, and
+planting a fail-open call on an unrelated function (`clip-public-track`).
+
+## 975. An athlete feed cannot be attributed to a race, so the UltraSignup leg refuses
+
+**Decided 2026-09-02.** `race-results-import`'s UltraSignup branch builds
+`https://ultrasignup.com/service/events.svc/results/athlete?uid=…` — one
+athlete's WHOLE history, with no race parameter on it, which is exactly why
+`ultraSignUpScopeGate` requires an athlete id rather than a bib. Every row that
+comes back is then mapped through `mapOpts`, which carries the ONE
+`public_race_listings` row the request named.
+
+Measured rather than reasoned. Three results from three different races
+(4:32:10, 28:40:15, 2:58:44) against one listing:
+
+    race:Bighorn 100:2025-06-20:88   2025-06-20T10:00:00Z  160934m  16330s  L-9
+    race:Bighorn 100:2025-06-20:204  2025-06-20T10:00:00Z  160934m 103215s  L-9
+    race:Bighorn 100:2025-06-20:17   2025-06-20T10:00:00Z  160934m  10724s  L-9
+
+Three `runs` rows differing only in bib and finishing time. The 2:58 road
+marathon is now a 2:58 hundred-miler — which re-derives `personal_records`,
+fires `award_achievements_for_user`, poisons `run_streaks_for_user` and feeds
+every challenge leaderboard. This is a correctness defect in imported data, not
+a performance one, and § 914's batch dedupe slightly widened its reach: two of
+those historical races sharing a bib used to raise 23505 and lose the whole
+batch, which accidentally blocked some of it.
+
+**A row can only be recorded against a listing if the ROW says it belongs to
+that listing, and `UltraSignUpResult` declares no field that could.** The live
+payload has not been observed from here, and guessing a field name would put a
+wrong race on a runner's history on a hunch — a worse outcome than importing
+nothing, which is the rule this repo already applies to a distance a route
+cannot state and a rank an RPC did not return. So the leg refuses, before the
+credential is read and before anything is fetched.
+
+The refusal is `503 provider_not_configured` with `reason:
+'results_unattributable'`. The code is the seam both clients already act on —
+they disable the tile with an unavailable explainer — and a leg that cannot be
+used has no working configuration whatever env vars exist; the `reason` is what
+stops an operator who HAS set `ULTRASIGNUP_API_KEY` hunting for a missing one.
+The availability PROBE answers through the same gate, because it previously
+answered on key presence and a provisioned deploy would therefore have
+advertised a tile whose very next call refuses.
+
+The rest of the branch — the credential read, the scope gate, the fetch, the
+mapper, the extractor — is deliberately left standing behind the gate rather
+than deleted, which is the "write the whole code path, keep the gate in config"
+shape. But the gate's doc comment states what lifting it costs, because deleting
+it alone restores the defect exactly: the payload observed so the race
+identifier's name is a fact, AND a filter on it against the listing's
+`provider_race_id`.
+
+`ultrasignup_attribution.test.ts` carries the measurement as a characterisation
+test (so the day the mapper CAN attribute, it goes red and the gate is lifted
+with it), the gate's shape, and the ordering at both doors. Three mutations
+killed: removing the gate from the import branch, restoring the key-presence
+probe, and making the gate answer yes.
+
+Noted while there and left alone: no client sends `provider: 'ultrasignup'` to
+anything but the probe and this branch, so nothing else changes shape.
+
+## 976. Two silent truncations, and the reachable one was not the filed one
+
+**Decided 2026-09-02.** `parkrun-import` stopped its scrape at
+`MAX_PARKRUN_ROWS` and answered `{ imported, skipped }`, where `skipped` means
+"already had it" — no field could distinguish a whole import from a capped one.
+That was the filing, and it was correct. Its reachability estimate was also
+correct: 5,000 parkruns is about 96 years of weekly Saturdays.
+
+**The same class one function over is reachable today.**
+`race-results-import`'s three extractors cap at `MAX_RESULTS_ROWS` (2,000) and
+its response could not say so either — and `runSignUpResultsUrl` narrows
+upstream by **user id only**, so a request scoped by BIB alone fetches the whole
+finisher field and `filterResultsByBib` narrows afterwards. A major with 30,000
+finishers therefore truncates at 2,000 before the bib filter runs. Driven rather
+than described: 30,000 rows in, 2,000 extracted, `filterResultsByBib(mapped,
+'25000')` returns nothing. The runner is told no result was found for a race
+they finished.
+
+Both now report. parkrun answers `{ imported, skipped, total, complete }`, where
+`total` is every usable result the page carried — the walk no longer stops dead
+at the cap, which had bounded the result set and destroyed the evidence that it
+had been bounded in the same statement; the bound now lives on the push alone,
+and the walk is already bounded by the 2 MB HTML cap that refuses loudly.
+`race-results-import` answers `complete` on every success shape.
+
+The default is `parseStravaSyncResult`'s, not `cloudExportShortfall`'s: **an
+absent `complete` is PARTIAL.** The two chose opposite defaults for a stated
+reason — the export has two transports of different vintages, so warning on
+every export would be its own dishonesty, whereas here (as on the Strava side)
+there is one transport shipped alongside its callers and the cost is asymmetric.
+`resultsPossiblyTruncated` reads exactly-at-the-cap as truncated for the same
+reason: a page carrying exactly 2,000 is indistinguishable from one carrying
+more, and a false "possibly" costs a sentence where a false "complete" costs a
+runner the belief that they were not in a race they finished.
+
+One case gets more than a field. A truncated fetch that matched nothing now
+answers `502 upstream_results_truncated` rather than `{ imported: 0 }`, because
+"we read the whole field and you are not in it" and "we read the first 2,000
+finishers and you were not among them" are different sentences and only one of
+them is true.
+
+`_shared/import_truncation.test.ts` drives the 30,000-finisher case rather than
+asserting about the constant, and pins both response shapes. Three mutations
+killed: reverting parkrun's walk and response, removing the race-results
+refusal, and making the truncation predicate strict at the cap.
+
+**The client half is owed and filed**, not done here: neither web nor mobile
+reads `complete` off either importer, so today the field is honest and unread.
+
+## 977. The race-listings sync was a stub for want of a payload, and the deferral cost more than it saved
+
+**Decided 2026-09-02.** `race-listings-sync` validated its credentials and
+returned `{ synced: 0 }`. Its own comment had said the fetch and upsert were a
+scoped follow-up since it shipped, and the reasoning was defensible: no
+credential exists for either provider, the response shape cannot be observed
+without one, and guessing it is the fragility the per-site scrapers were
+deferred for.
+
+**What that reasoning missed is the cost of the other side.** With the leg a
+stub, no provider race can enter the calendar at all — so a fully provisioned
+deployment still holds only parkrun, crowd submissions and hand inserts, and
+issue #10's remaining work is not "a key" but this function. The repo's own rule
+for a feature blocked on a credential is to write the whole code path and keep
+the gate in config; this is that case, one door over from a compliance gate.
+
+The whole path is written: the region-hint validation, the URL, the envelope
+walk, the per-provider readers, the constraint-shaped field caps, the batch
+reconciliation, the insert, the differential update, and the error
+classification. What the missing key genuinely prevents is VERIFYING the field
+names and the endpoints, so that is handled explicitly rather than hidden:
+
+- Every reading is optional-with-drop, and a row that does not yield the two
+  things `race_listings` requires is COUNTED. A payload shaped differently
+  answers `synced: 0, unusable: <row count>` on the first call — visible at once
+  — instead of writing junk into a calendar every user reads.
+- A wrong endpoint answers a non-2xx, which is refused as `502 <provider>
+  upstream <status>` under the same fail-loud rule both sibling importers
+  already follow. It costs one request and announces itself.
+
+Four judgements inside it are worth recording. **The write runs as the service
+role**: `race_listings_force_unverified` forces `is_verified` false for every
+other role and the INSERT policy requires `submitted_by = auth.uid()`, so a
+provider race written on the caller's client would land as an unverified crowd
+submission attributed to whoever triggered the sync. **There is no upsert**: the
+unique index is PARTIAL (`where provider_race_id is not null`) and PostgREST
+cannot supply an index predicate as an `ON CONFLICT` arbiter (42P10, the lesson
+`parkrun-import` already carries), so the function reads what is stored and
+splits the batch — and a failed read is a 500 rather than an empty set, because
+treating it as empty re-inserts the whole feed. **Only changed rows are
+rewritten**, since without an upsert each rewrite is its own round trip and a
+steady-state feed would otherwise issue one per race every hour. **A row with no
+provider race id is dropped**, because the unique index does not cover nulls and
+such a row would be re-inserted on every sync.
+
+Two things the tests found in the new code before it was committed. A slash
+date is read US month-first (both platforms are US, and `parseParkrunDate`
+already reads the UK site's slashes day-first for the mirror-image reason), and
+a first component past 12 is refused rather than transposed — so a day-first
+feed announces itself on the first race past the 12th of a month. The explicit
+`month > 12` test written for that **could never fail**: the candidate
+`2027-20-06` is refused by the calendar check one line later. It is gone, and
+the mutation that proves the point is on the calendar check instead.
+
+And `distanceMetresFrom` folded `'M'` onto metres. US race listings write MILES
+as `M` while SI writes METRES as `m`, so a case-insensitive unit table files a
+100-MILE race as a 100-METRE one, at the wrong end of every band
+`search_race_listings` sorts into. A case-sensitive table would have been worse:
+it silently picks one reading of a letter whose meaning in this feed has not
+been observed. Both spellings are now refused and the race keeps a null distance
+— which the column is nullable for — instead of somebody else's band.
+
+Five mutations killed: the write moving to the caller's client, the failed-read
+refusal, the `unusable` counter, the calendar check in the slash branch, and the
+within-batch duplicate reconciliation.
+
+**And the function's only callers turned out not to want a sync at all.** Every
+invocation in the tree is a CREDENTIAL PROBE: web's `isRunSignUpConfigured` and
+`isUltraSignUpConfigured` invoke it with `{}` and `{ provider: 'ultrasignup' }`
+to decide whether to offer the affordance or the unavailable explainer, mobile's
+`raceImportProviders` names it as two `probeFunction`s, and nothing on either
+platform reads `synced`. While the leg was a stub that cost nothing. Writing it
+would have made a page load walk a provider feed, write the shared calendar, and
+spend the 2/hour bucket — so the SECOND probe within an hour would 429 and the
+tile would read unavailable for the rest of it. A sync is therefore opt-IN
+(`{ sync: true }`), the shape `race-results-import` already uses for its probe
+mode, and the default answer is the credential verdict alone. Behind the
+credential gate, not in front of it, or an unprovisioned deploy would report
+itself configured; both placements are pinned.
+
+**Which surfaced a live defect the clients had already learned to live with.**
+The probe spends this function's rate-limit bucket, and the bucket is 2/hour
+free — while BOTH web probes (`isRunSignUpConfigured` and
+`isUltraSignUpConfigured`) hit this one function. So one page load exhausts a
+free user's whole allowance and the next load 429s, which
+`isProviderNotConfigured` then fail-closes into "provider unavailable" for a
+provider that is configured and working. Web's own comment describes the
+symptom — "several probes per page/test exceed the free tier" — without naming
+the cause, and mobile's `isProviderConfigured` fails OPEN on the same 429, so
+the two platforms disagree about a configured provider on the second page load
+of an hour. The probe now has its own generous bucket
+(`race-listings-sync:probe`, 60/240), which costs nothing and removes the false
+unavailability; the sync keeps 2/8. Both fail closed.
+
 ## 979. A missing activity-type column is a header failure, not a row that happens to be untyped
 
 `indexHeader` answers `-1` for a column it cannot find, and `row[-1]` is
@@ -15684,6 +15968,7 @@ setter, on a restore that drops the epoch check, and on an epoch read at restore
 time instead of captured before the defer (a live read always equals itself).
 Source-level because the page is a `.svelte` file that `tsx --test` cannot
 execute, the same shape `strava_zip_strictness.test.ts` uses.
+
 ## 985. A numeric column can arrive as a JSON string, and the generator cast could only crash
 
 `scripts/gen_dart_models.dart` emitted `(json['x'] as num).toDouble()` for every
@@ -15985,3 +16270,4 @@ predicate, which is the correct shape. 28 files pair a temp directory with
 widget taps and no `pumpUntil` at all; identifying which of those actually
 outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
+
