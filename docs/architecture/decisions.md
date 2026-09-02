@@ -12278,3 +12278,44 @@ now what they say they are.
 (`guardedBuildScripts`, added for the locale guards), so an edit to it re-runs
 this rather than leaving `testDebugUnitTest` UP-TO-DATE on exactly the change
 the guard exists to catch.
+
+## 881. `POST_NOTIFICATIONS` was declared and never asked for, and nothing in the module could tell those two facts apart
+
+`AndroidManifest.xml` says what the Wear app MAY hold.
+`RunWatchApp.kt`'s `permissionLauncher.launch(...)` is the only place it ever
+ASKS. Nothing compared the two lists, and `POST_NOTIFICATIONS` was in the first
+and not the second — so on any watch running API 33 or later it was never
+granted.
+
+The reason this survived a suite of 638 tests is that the failure produces no
+error anywhere. `RunRecordingService` builds its `OngoingActivity` notification
+and calls `startForeground` on every run; the service starts, the recording
+runs, `nm.notify` returns normally, and the platform simply keeps the
+notification out of the shade. What the runner loses is the ongoing-activity
+chip on the watch face — the way back into a live run once they have swiped
+away from the app, and the only indication from outside the app that a run is
+recording at all. A watch app whose entire job is to record while the wearer is
+looking at something else lost its one glanceable handle, silently.
+
+The permission is requested behind a `TIRAMISU` gate because `minSdk` here is
+30 and the permission is API 33+. The guard pins the gate as well as the
+request: a version check is exactly the kind of thing that would later be
+tightened into removing the request again.
+
+`ManifestPermissionCoverageTest` DERIVES the obligation from the manifest
+rather than listing it. Every declared permission must be requested at runtime,
+be install-time (so there is nothing to request), or carry a registered reason —
+and an exemption naming a permission the manifest no longer declares fails too,
+so the register cannot rot in the quiet direction. Two entries are registered
+today: `ACCESS_COARSE_LOCATION`, which the platform grants alongside the fine
+one, and `BODY_SENSORS_BACKGROUND`, which is the same defect a second time and
+is NOT fixed here — a background permission cannot ride the same request as its
+foreground half, so it needs a two-step flow and a watch to verify it on. It is
+in `followups.md` with the measurement rather than fixed blind.
+
+The same test carries the other half of the manifest pair nothing checked:
+every `FOREGROUND_SERVICE_<TYPE>` permission declared must appear in the
+service's own `foregroundServiceType`, and vice versa. The two halves sit in
+different elements of one file, neither implies the other, and a
+`FOREGROUND_SERVICE_HEALTH` without `health` in the type list is a
+`SecurityException` the moment a run starts on API 34+.

@@ -1,6 +1,7 @@
 package com.runapp.watchwear.ui
 
 import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -178,15 +179,30 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             onOpenRoutePicker = vm::openRoutePicker,
                             onStart = {
                                 permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.BODY_SENSORS,
+                                    buildList {
+                                        add(Manifest.permission.ACCESS_FINE_LOCATION)
+                                        add(Manifest.permission.BODY_SENSORS)
                                         // Needed for `TYPE_STEP_COUNTER` on
                                         // API 29+. Granting is not blocking
                                         // — the step flow is silent if the
                                         // user denies.
-                                        Manifest.permission.ACTIVITY_RECOGNITION,
-                                    )
+                                        add(Manifest.permission.ACTIVITY_RECOGNITION)
+                                        // The recording service's ongoing
+                                        // notification IS the runner's way
+                                        // back into a live run from the
+                                        // watch face. On API 33+ it is
+                                        // withheld from the shade until this
+                                        // is granted — declaring it in the
+                                        // manifest is not enough, and the
+                                        // service posts one either way, so
+                                        // the failure is invisible from
+                                        // inside the app.
+                                        if (Build.VERSION.SDK_INT >=
+                                            Build.VERSION_CODES.TIRAMISU
+                                        ) {
+                                            add(Manifest.permission.POST_NOTIFICATIONS)
+                                        }
+                                    }.toTypedArray()
                                 )
                             },
                             onSignIn = vm::openSignIn,
