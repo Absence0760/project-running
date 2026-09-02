@@ -753,6 +753,126 @@ void main() {
       expect(r.distanceMetres.isFinite, isTrue);
     });
   });
+  // Only a bare `Feature` was ever read, so the three other shapes RFC 7946
+  // defines — and the one geojson.io / QGIS / Overpass turbo actually emit —
+  // came back as a route with zero waypoints and zero distance, reported as a
+  // successful import. The container reads were also blind casts, so a
+  // document whose `geometry` was a list threw a TypeError (an Error, not an
+  // Exception) out of a parser whose coordinate reads a level down had already
+  // been hardened against exactly that.
+  group('RouteParser GeoJSON document shapes', () {
+    List<dynamic> line(double lngOffset) => <dynamic>[
+          <dynamic>[lngOffset, 0.0],
+          <dynamic>[lngOffset + 0.001, 0.0],
+        ];
+
+    test('a FeatureCollection is read, not silently empty', () {
+      final json = <String, dynamic>{
+        'type': 'FeatureCollection',
+        'features': <dynamic>[
+          <String, dynamic>{
+            'type': 'Feature',
+            'properties': <String, dynamic>{'name': 'Loop'},
+            'geometry': <String, dynamic>{
+              'type': 'LineString',
+              'coordinates': line(0.0),
+            },
+          },
+        ],
+      };
+
+      final r = RouteParser.fromGeoJson(json);
+
+      expect(r.name, 'Loop');
+      expect(r.waypoints, hasLength(2));
+      expect(r.distanceMetres, closeTo(_equatorOneThousandthDeg, 0.01));
+    });
+
+    test('a FeatureCollection yields one route per feature', () {
+      final json = <String, dynamic>{
+        'type': 'FeatureCollection',
+        'features': <dynamic>[
+          <String, dynamic>{
+            'properties': <String, dynamic>{'name': 'First'},
+            'geometry': <String, dynamic>{'coordinates': line(0.0)},
+          },
+          <String, dynamic>{
+            'properties': <String, dynamic>{'name': 'Second'},
+            'geometry': <String, dynamic>{'coordinates': line(10.0)},
+          },
+        ],
+      };
+
+      final routes = RouteParser.routesFromGeoJson(json);
+
+      expect(routes, hasLength(2));
+      expect(routes.map((r) => r.name), ['First', 'Second']);
+      // Never one polyline through both — that invents a leg between two
+      // unrelated lines, the way a document-wide trkpt sweep once did.
+      for (final r in routes) {
+        expect(r.distanceMetres, closeTo(_equatorOneThousandthDeg, 0.01));
+      }
+    });
+
+    test('a bare LineString geometry is read', () {
+      final json = <String, dynamic>{
+        'type': 'LineString',
+        'coordinates': line(0.0),
+      };
+
+      final r = RouteParser.fromGeoJson(json);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.distanceMetres, closeTo(_equatorOneThousandthDeg, 0.01));
+    });
+
+    test('a MultiLineString becomes one route per member line', () {
+      final json = <String, dynamic>{
+        'type': 'Feature',
+        'properties': <String, dynamic>{'name': 'Split'},
+        'geometry': <String, dynamic>{
+          'type': 'MultiLineString',
+          'coordinates': <dynamic>[line(0.0), line(10.0)],
+        },
+      };
+
+      final routes = RouteParser.routesFromGeoJson(json);
+
+      expect(routes, hasLength(2));
+      for (final r in routes) {
+        expect(r.waypoints, hasLength(2));
+        expect(r.distanceMetres, closeTo(_equatorOneThousandthDeg, 0.01));
+      }
+      expect(RouteParser.fromGeoJson(json).waypoints, hasLength(2));
+    });
+
+    test('a malformed container is an empty import, never a TypeError', () {
+      final malformed = <Map<String, dynamic>>[
+        <String, dynamic>{'geometry': <dynamic>[]},
+        <String, dynamic>{
+          'geometry': <String, dynamic>{
+            'coordinates': <String, dynamic>{'a': 1},
+          },
+        },
+        <String, dynamic>{'properties': 'not-a-map'},
+        <String, dynamic>{
+          'properties': <String, dynamic>{'name': 7},
+        },
+        <String, dynamic>{'type': 'FeatureCollection', 'features': 'nope'},
+        <String, dynamic>{
+          'type': 'FeatureCollection',
+          'features': <dynamic>['nope'],
+        },
+      ];
+
+      for (final json in malformed) {
+        final r = RouteParser.fromGeoJson(json);
+        expect(r.waypoints, isEmpty, reason: '$json');
+        expect(r.distanceMetres, 0.0, reason: '$json');
+      }
+    });
+  });
+
   // A finite coordinate is not automatically a coordinate. `lat="1e308"`
   // clears every null / NaN check and then overflows the haversine's
   // `lat2 - lat1` to infinity, so `sin(infinity)` puts the route's own

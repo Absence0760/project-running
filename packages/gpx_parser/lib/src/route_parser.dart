@@ -187,40 +187,110 @@ class RouteParser {
     return _buildRoute(name, points);
   }
 
-  /// Parse a GeoJSON map into a [Route]. Expects a `LineString` geometry.
+  /// Parse a GeoJSON document into a [Route] — the FIRST line in it. Use
+  /// [routesFromGeoJson] to get every line.
   static Route fromGeoJson(Map<String, dynamic> json) {
-    final name = (json['properties'] as Map?)?['name'] as String? ?? 'Imported route';
+    final all = routesFromGeoJson(json);
+    if (all.isNotEmpty) return all.first;
+    return _buildRoute(_geoJsonName(json, null), const []);
+  }
 
-    final geometry = json['geometry'] as Map<String, dynamic>?;
-    final coords = geometry?['coordinates'] as List?;
-    if (coords == null) {
-      return Route(id: _id(), name: name, waypoints: const [], distanceMetres: 0);
-    }
+  /// Every route a GeoJSON document describes: one per `LineString`, and one
+  /// per member line of a `MultiLineString`.
+  ///
+  /// The document shape is the whole point. Only a bare `Feature` was ever
+  /// read — `json['geometry']['coordinates']` and nothing else — so a
+  /// `FeatureCollection`, which is what geojson.io, QGIS, Overpass turbo and
+  /// most other exporters actually emit, found no `geometry` key and imported
+  /// as a route with zero waypoints and zero distance. So did a bare geometry
+  /// (`{type: LineString, coordinates: [...]}`) and a `MultiLineString`, whose
+  /// coordinates are a list of LINES rather than of points. That is the same
+  /// silent-empty failure the `<Point>`-wins-the-lookup bug produced on KML,
+  /// and the web importer has read all four shapes since it was written.
+  ///
+  /// A `MultiLineString` becomes one route per member line rather than one
+  /// polyline through all of them, for the reason [routesFromGpx] gives:
+  /// joining unrelated lines invents a leg between them that poisons the
+  /// route's distance, elevation and map.
+  ///
+  /// Every container read is shape-checked rather than cast. A cast threw a
+  /// [TypeError] — an [Error], not an [Exception] — on a document whose
+  /// `geometry` was a list or whose `properties` was a string, so a malformed
+  /// file crashed the caller instead of coming back as an import that found
+  /// nothing. The coordinate reads inside the line were hardened for exactly
+  /// this a level down; the containers around them were not.
+  static List<Route> routesFromGeoJson(Map<String, dynamic> json) {
+    final routes = <Route>[];
+    final docName = _geoJsonName(json, null);
 
-    final points = <Waypoint>[];
-    for (final c in coords) {
-      if (c is List && c.length >= 2) {
-        // GeoJSON from hand-edits or non-conformant exporters can carry
-        // string / null coordinate elements. A blind `as num` cast threw
-        // and aborted the entire import on the first bad point; skip the
-        // point instead, matching the GPX/KML paths and the web twin.
-        final lngRaw = c[0];
-        final latRaw = c[1];
-        if (lngRaw is! num || latRaw is! num) continue;
-        final lat = latRaw.toDouble();
-        final lng = lngRaw.toDouble();
-        if (!_isUsableLat(lat) || !_isUsableLng(lng)) continue;
-        final eleRaw = c.length >= 3 ? c[2] : null;
-        final ele = _finiteOrNull(eleRaw is num ? eleRaw.toDouble() : null);
-        points.add(Waypoint(
-          lat: lat,
-          lng: lng,
-          elevationMetres: ele,
-        ));
+    void addGeometry(Object? geometry, String name) {
+      if (geometry is! Map) return;
+      final type = geometry['type'];
+      final coords = geometry['coordinates'];
+      if (coords is! List) return;
+      if (type == 'MultiLineString') {
+        for (final line in coords) {
+          final points = _geoJsonLine(line);
+          if (points.isNotEmpty) routes.add(_buildRoute(name, points));
+        }
+        return;
       }
+      // Anything else that carries a flat coordinate list reads as a line.
+      // The `type` is deliberately not required: a hand-written document that
+      // omits it still imported before this, and refusing it now would be a
+      // regression dressed as strictness.
+      final points = _geoJsonLine(coords);
+      if (points.isNotEmpty) routes.add(_buildRoute(name, points));
     }
 
-    return _buildRoute(name, points);
+    final type = json['type'];
+    final features = json['features'];
+    if (type == 'FeatureCollection' && features is List) {
+      for (final feature in features) {
+        if (feature is! Map) continue;
+        addGeometry(feature['geometry'], _geoJsonName(feature, docName));
+      }
+      return routes;
+    }
+    if (json.containsKey('geometry')) {
+      addGeometry(json['geometry'], docName);
+      return routes;
+    }
+    // A bare geometry object: the document IS the LineString.
+    addGeometry(json, docName);
+    return routes;
+  }
+
+  /// `properties.name` when it is a non-empty string, else [fallback], else
+  /// the generic import name.
+  static String _geoJsonName(Map<Object?, Object?> json, String? fallback) {
+    final props = json['properties'];
+    final name = props is Map ? props['name'] : null;
+    if (name is String && name.trim().isNotEmpty) return name.trim();
+    return fallback ?? _fallbackName;
+  }
+
+  /// One GeoJSON `LineString` coordinate array into waypoints.
+  static List<Waypoint> _geoJsonLine(Object? coords) {
+    final points = <Waypoint>[];
+    if (coords is! List) return points;
+    for (final c in coords) {
+      if (c is! List || c.length < 2) continue;
+      // GeoJSON from hand-edits or non-conformant exporters can carry
+      // string / null coordinate elements. A blind `as num` cast threw
+      // and aborted the entire import on the first bad point; skip the
+      // point instead, matching the GPX/KML paths and the web twin.
+      final lngRaw = c[0];
+      final latRaw = c[1];
+      if (lngRaw is! num || latRaw is! num) continue;
+      final lat = latRaw.toDouble();
+      final lng = lngRaw.toDouble();
+      if (!_isUsableLat(lat) || !_isUsableLng(lng)) continue;
+      final eleRaw = c.length >= 3 ? c[2] : null;
+      final ele = _finiteOrNull(eleRaw is num ? eleRaw.toDouble() : null);
+      points.add(Waypoint(lat: lat, lng: lng, elevationMetres: ele));
+    }
+    return points;
   }
 
   /// Whether a parsed latitude can be used as one. `double.tryParse`
