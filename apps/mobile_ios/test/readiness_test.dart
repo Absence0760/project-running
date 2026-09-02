@@ -131,5 +131,36 @@ void main() {
       expect(a.band, b.band);
       expect(a.advice, b.advice);
     });
+
+    test('a tie in |delta| is broken by insertion order, not by the sort', () {
+      // A TSB of -12 and six hours of sleep both score -12, and the two carry
+      // DIFFERENT advice, so which one wins has to be a contract. Dart's
+      // List.sort is unstable where JS's is stable, so this needs the
+      // explicit index tiebreak to match the web twin.
+      final r = computeReadiness(
+          const ReadinessInputs(tsb: -12, sleepHours: 6));
+      expect(r.contributors[0].delta, -12);
+      expect(r.contributors[1].delta, -12);
+      expect(r.advice, startsWith('Fatigued from recent training.'));
+    });
+
+    test('an all-zero tie still resolves to the first contributor', () {
+      final r = computeReadiness(const ReadinessInputs(
+        tsb: 0,
+        sleepHours: 10,
+        restingHrBpm: 50,
+        baselineRestingHrBpm: 50,
+      ));
+      expect(r.contributors, hasLength(3));
+      expect(r.contributors.map((c) => c.delta).toList(), [0, 0, 0]);
+      expect(r.advice, startsWith('Form is neutral.'));
+    });
+
+    test('the tiebreak does not override a genuinely larger contributor', () {
+      // Sleep at -25 beats a TSB of -12 even though TSB was added first.
+      final r = computeReadiness(
+          const ReadinessInputs(tsb: -12, sleepHours: 4));
+      expect(r.advice, startsWith('Very little sleep'));
+    });
   });
 }

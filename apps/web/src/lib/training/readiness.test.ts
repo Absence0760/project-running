@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { computeReadiness } from './readiness';
 
-test('neutral inputs → 75 baseline, moderate band', () => {
+test('neutral inputs → 75 baseline, high band', () => {
 	const r = computeReadiness({ tsb: 0 });
 	assert.equal(r.score, 75);
 	assert.equal(r.band, 'high');
@@ -110,4 +110,37 @@ test('score is deterministic — same inputs → same output', () => {
 	assert.equal(a.score, b.score);
 	assert.equal(a.band, b.band);
 	assert.equal(a.advice, b.advice);
+});
+
+test('a tie in |delta| is broken by insertion order, not by the sort', () => {
+	// A TSB of -12 and six hours of sleep both score -12, and the two carry
+	// DIFFERENT advice, so which one wins has to be a contract.
+	// `Array.prototype.sort` is stable so the first contributor added wins;
+	// the Dart twin's `List.sort` is NOT and carries an explicit index
+	// tiebreak to match.
+	const r = computeReadiness({ tsb: -12, sleepHours: 6 });
+	assert.equal(r.contributors[0].delta, -12);
+	assert.equal(r.contributors[1].delta, -12);
+	assert.match(r.advice, /^Fatigued from recent training\./);
+});
+
+test('an all-zero tie still resolves to the first contributor', () => {
+	const r = computeReadiness({
+		tsb: 0,
+		sleepHours: 10,
+		restingHrBpm: 50,
+		baselineRestingHrBpm: 50,
+	});
+	assert.equal(r.contributors.length, 3);
+	assert.deepEqual(
+		r.contributors.map((c) => c.delta),
+		[0, 0, 0],
+	);
+	assert.match(r.advice, /^Form is neutral\./);
+});
+
+test('the tiebreak does not override a genuinely larger contributor', () => {
+	// Sleep at -25 beats a TSB of -12 even though TSB was added first.
+	const r = computeReadiness({ tsb: -12, sleepHours: 4 });
+	assert.match(r.advice, /^Very little sleep/);
 });

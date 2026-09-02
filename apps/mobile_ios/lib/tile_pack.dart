@@ -94,7 +94,23 @@ List<TileCoord> tilesForBbox(
   return tiles;
 }
 
+/// Reject a non-finite corner, then clamp + order: latitudes into the Mercator
+/// range, min/max sorted so a caller passing them swapped still yields a sane
+/// range. Longitude is clamped to [-180, 180] rather than wrapped, so a route
+/// that genuinely crosses the antimeridian produces a wide-but-bounded pack
+/// instead of an empty one.
 TileBbox _normaliseBbox(TileBbox bbox) {
+  // A non-finite corner has no tile. It used to reach `.floor()`, which throws
+  // an unrelated "Unsupported operation" the caller then reported as "too
+  // large", while the web twin returned an EMPTY pack for the same NaN — two
+  // wrong answers to one question. Refusing outright is the honest one: the
+  // caller already has a failure path, and a silently empty offline pack is
+  // worse than a loud refusal for a runner who is about to lose signal.
+  for (final v in [bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng]) {
+    if (!v.isFinite) {
+      throw ArgumentError('tile bbox corner is not finite: $v');
+    }
+  }
   final minLat = _clamp(min(bbox.minLat, bbox.maxLat), -_maxMercatorLat, _maxMercatorLat);
   final maxLat = _clamp(max(bbox.minLat, bbox.maxLat), -_maxMercatorLat, _maxMercatorLat);
   final minLng = _clamp(min(bbox.minLng, bbox.maxLng), -180, 180);

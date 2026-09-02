@@ -9,8 +9,8 @@
  * Monday evening, you wake up Tuesday, the dashboard still shows
  * your streak alive until end-of-Tuesday).
  *
- * Mirrors `apps/mobile_android/lib/streaks.dart`. Keep in lockstep —
- * the shared-library-syncer agent watches the pair.
+ * TS↔Dart parity pair with `apps/mobile_android/lib/streaks.dart`. Keep
+ * in lockstep — the shared-library-syncer agent watches the pair.
  */
 
 export interface RunStreaks {

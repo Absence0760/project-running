@@ -5,8 +5,8 @@
 /// streak — the streak continues to count as long as yesterday had a
 /// run. The streak only resets when a full day goes by without one.
 ///
-/// Mirrors `apps/web/src/lib/streaks.ts`. Keep in lockstep — the
-/// shared-library-syncer agent watches the pair.
+/// TS↔Dart parity pair with `apps/web/src/lib/runs/streaks.ts`. Keep in
+/// lockstep — the shared-library-syncer agent watches the pair.
 
 class RunStreaks {
   /// Days in the user's current active streak (0 if broken).

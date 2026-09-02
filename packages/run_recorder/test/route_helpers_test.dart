@@ -330,6 +330,44 @@ void main() {
     });
   });
 
+  group('non-finite route geometry', () {
+    // The running minimum is seeded at +Infinity and a NaN never compares
+    // less than it, so a route whose every segment projects to NaN left the
+    // seed untouched and reported the runner as infinitely far off course.
+    // That figure reached the live stats readout and the sustained-off-route
+    // detector, which escalates to a trusted contact once per run.
+    Route nanRoute() => route([
+          [double.nan, double.nan],
+          [double.nan, double.nan],
+        ]);
+
+    test('off-route distance is null, never +Infinity', () {
+      final r = RunRecorder()..debugPrepareWithoutStream(route: nanRoute());
+      expect(r.debugOffRouteDistance(at(0, 0)), isNull);
+    });
+
+    test('remaining is null, never NaN', () {
+      final r = RunRecorder()..debugPrepareWithoutStream(route: nanRoute());
+      expect(r.debugRouteRemaining(at(0, 0)), isNull);
+    });
+
+    test('the single-pass progress agrees with both', () {
+      final r = RunRecorder()..debugPrepareWithoutStream(route: nanRoute());
+      expect(r.debugRouteProgress(at(0, 0)), isNull);
+    });
+
+    test('a non-finite runner position is refused on a good route', () {
+      final r = RunRecorder()
+        ..debugPrepareWithoutStream(
+            route: route([
+          [0, 0],
+          [0, 0.001],
+        ]));
+      expect(r.debugOffRouteDistance(at(double.nan, 0)), isNull);
+      expect(r.debugRouteProgress(at(0, double.nan)), isNull);
+    });
+  });
+
   group('_routeProgress (single-pass)', () {
     test('returns null when no route is loaded', () {
       final r = RunRecorder()..debugPrepareWithoutStream();

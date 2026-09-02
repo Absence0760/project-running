@@ -56,6 +56,65 @@ test('a dip back on-route resets the sustain clock (debounce)', () => {
 	assert.equal(d.update(OVER, NOW + OFF_ROUTE_ALERT_SUSTAIN_MS * 2), true);
 });
 
+test('a non-finite distance never arms the clock and never spends the latch', () => {
+	for (const bogus of [NaN, Infinity, -Infinity]) {
+		const d = new OffRouteAlertDetector();
+		assert.equal(d.update(bogus, NOW), false, `${bogus} must not start the clock`);
+		assert.equal(
+			d.update(bogus, NOW + OFF_ROUTE_ALERT_SUSTAIN_MS * 10),
+			false,
+			`${bogus} must never fire`,
+		);
+		assert.equal(d.hasFired, false, `${bogus} must not spend the latch`);
+	}
+});
+
+test('a non-finite reading resets the clock the way a null one does', () => {
+	const d = new OffRouteAlertDetector();
+	assert.equal(d.update(OVER, NOW), false, 'clock starts');
+	assert.equal(d.update(NaN, NOW + 1000), false);
+	// The unusable reading reset the window, so the original anchor is gone.
+	assert.equal(d.update(OVER, NOW + OFF_ROUTE_ALERT_SUSTAIN_MS), false);
+	assert.equal(d.update(OVER, NOW + OFF_ROUTE_ALERT_SUSTAIN_MS * 2), true);
+});
+
+test('a non-finite run leaves a later genuine departure still able to fire', () => {
+	const d = new OffRouteAlertDetector();
+	// A whole run's worth of unusable readings.
+	for (let i = 0; i < 20; i++) d.update(Infinity, NOW + i * OFF_ROUTE_ALERT_SUSTAIN_MS);
+	const later = NOW + 100 * OFF_ROUTE_ALERT_SUSTAIN_MS;
+	assert.equal(d.update(500, later), false, 'clock starts on the real departure');
+	assert.equal(d.update(500, later + OFF_ROUTE_ALERT_SUSTAIN_MS), true, 'the latch was still there');
+});
+
+test('a backwards clock step re-anchors instead of wedging the detector', () => {
+	const d = new OffRouteAlertDetector();
+	assert.equal(d.update(500, NOW), false, 'anchor at NOW');
+	// NTP corrects the device clock back an hour mid-run.
+	const back = NOW - 3_600_000;
+	assert.equal(d.update(500, back), false, 're-anchored, window restarts');
+	assert.equal(
+		d.update(500, back + OFF_ROUTE_ALERT_SUSTAIN_MS - 1),
+		false,
+		'still inside the restarted window',
+	);
+	assert.equal(
+		d.update(500, back + OFF_ROUTE_ALERT_SUSTAIN_MS),
+		true,
+		'fires a sustain window after the corrected clock, not an hour later',
+	);
+});
+
+test('a backwards step does not shorten the window either', () => {
+	const d = new OffRouteAlertDetector();
+	assert.equal(d.update(500, NOW), false);
+	// A step back of less than the window must still require a full window
+	// from the corrected reading — it must not read as elapsed time.
+	assert.equal(d.update(500, NOW - 10_000), false);
+	assert.equal(d.update(500, NOW - 10_000 + OFF_ROUTE_ALERT_SUSTAIN_MS - 1), false);
+	assert.equal(d.update(500, NOW - 10_000 + OFF_ROUTE_ALERT_SUSTAIN_MS), true);
+});
+
 test('reset() re-arms a fired detector', () => {
 	const d = new OffRouteAlertDetector();
 	d.update(OVER, NOW);

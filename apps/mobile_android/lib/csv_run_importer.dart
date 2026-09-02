@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'import_failures.dart';
 import 'imported_run_id.dart';
+import 'preferences.dart' show ActivityType;
 
 /// One-shot bulk-import path for CSV exports. Accepts both shapes the
 /// app produces today:
@@ -105,6 +106,26 @@ class CsvRunImporter {
               error: 'Could not parse the distance / duration.');
           continue;
         }
+        // Parsing is not validating. `double.tryParse` accepts the literals
+        // `NaN` and `Infinity`, and neither parse rejects a negative, so a
+        // hand-edited or third-party CSV could import a run of -5 km. Nothing
+        // downstream re-checks: `runs.distance_m` is `numeric(10, 2)` with no
+        // CHECK and postgres numeric holds NaN, so one such row makes every
+        // SQL aggregate that touches it -- weekly volume, the challenge
+        // leaderboard, the coach roster's workload -- read NaN or come out
+        // short. A non-finite value used to be refused only by accident,
+        // because `_syntheticExternalId` calls `.round()` on it and that
+        // throws; the row then reached the runner as an unexplained error
+        // rather than as a bad measurement.
+        if (!distance.isFinite || distance < 0 || durationSeconds < 0) {
+          recordImportFailure(failures,
+              name: 'Row ${i + 1}',
+              startedAt: startedAt.toUtc().toIso8601String(),
+              error: 'Distance and duration must be zero or more, and a real '
+                  'number: got distance "${cells[distanceIdx]}", duration '
+                  '"${cells[durationIdx]}".');
+          continue;
+        }
 
         final source = sourceIdx != null && sourceIdx < cells.length
             ? _parseSource(cells[sourceIdx])
@@ -135,9 +156,32 @@ class CsvRunImporter {
             }
           }
         }
+        // The activity type is a CHECK-constrained column
+        // (`runs_activity_type_check`), not free text, and the vocabulary is
+        // read off the registered `ActivityType` rail rather than retyped
+        // here so a sixth value cannot reach one and not the other. An
+        // unrecognised value used to be written through verbatim: the import
+        // reported success, and the row then failed to sync forever on a
+        // postgres 23514 the runner never saw. Refusing here says so at the
+        // moment the file is read. Case is normalised first -- our own export
+        // writes lowercase, a hand edit may not, and refusing `Run` would be
+        // pedantry. A genuinely different activity (`Ride`, `Swim`) is
+        // refused rather than defaulted to `run`, because filing a bike ride
+        // as a run is worse than not filing it.
         if (activityIdx != null && activityIdx < cells.length) {
           final v = cells[activityIdx].trim();
-          if (v.isNotEmpty) metadata[MetadataKeys.activityType] = v;
+          if (v.isNotEmpty) {
+            final canonical = v.toLowerCase();
+            if (!ActivityType.values.any((a) => a.name == canonical)) {
+              recordImportFailure(failures,
+                  name: 'Row ${i + 1}',
+                  startedAt: startedAt.toUtc().toIso8601String(),
+                  error: 'Unknown activity type "$v". Supported: '
+                      '${ActivityType.values.map((a) => a.name).join(', ')}.');
+              continue;
+            }
+            metadata[MetadataKeys.activityType] = canonical;
+          }
         }
         if (titleIdx != null && titleIdx < cells.length) {
           final v = cells[titleIdx].trim();

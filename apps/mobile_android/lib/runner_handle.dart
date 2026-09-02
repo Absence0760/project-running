@@ -1,5 +1,5 @@
 /// Persona-hunt Round 3 finding Privacy #5. Anonymous handle for live-
-/// spectator surfaces (mobile twin of `apps/web/src/lib/runner_handle.ts`).
+/// spectator surfaces (mobile twin of `apps/web/src/lib/social/runner_handle.ts`).
 /// Take the first 4 hex chars of the v4 uuid, upper-case them, prefix
 /// with `Runner #`. Deterministic so two spectators of the same runner
 /// see the same handle but anonymous because 4 hex chars are useless

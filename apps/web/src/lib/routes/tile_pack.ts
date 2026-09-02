@@ -84,12 +84,22 @@ export function tilesForBbox(
 	return tiles;
 }
 
-/// Clamp + order a bbox: latitudes into the Mercator range, min/max sorted so
+/// Reject a non-finite corner, then clamp + order: latitudes into the Mercator
+/// range, min/max sorted so
 /// a caller passing them swapped (or an antimeridian-spanning degenerate box)
 /// still yields a sane in-hemisphere range. We deliberately clamp longitude to
 /// [-180, 180] rather than wrap, so a route that genuinely crosses the
 /// antimeridian produces a wide-but-bounded pack instead of an empty one.
 function normaliseBbox(bbox: TileBbox): TileBbox {
+	// A non-finite corner has no tile. It used to survive every clamp on this
+	// side and yield an EMPTY pack, while the Dart twin's `.floor()` threw on
+	// the same NaN and the mobile caller reported the route as "too large" --
+	// two wrong answers to one question. Refusing outright is the honest one:
+	// the caller already has a failure path, and a silently empty offline pack
+	// is worse than a loud refusal for a runner who is about to lose signal.
+	for (const v of [bbox.minLat, bbox.maxLat, bbox.minLng, bbox.maxLng]) {
+		if (!Number.isFinite(v)) throw new Error(`tile bbox corner is not finite: ${v}`);
+	}
 	const minLat = clamp(Math.min(bbox.minLat, bbox.maxLat), -MAX_MERCATOR_LAT, MAX_MERCATOR_LAT);
 	const maxLat = clamp(Math.max(bbox.minLat, bbox.maxLat), -MAX_MERCATOR_LAT, MAX_MERCATOR_LAT);
 	const minLng = clamp(Math.min(bbox.minLng, bbox.maxLng), -180, 180);
