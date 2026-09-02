@@ -1714,6 +1714,89 @@ test('EVERY Lambda Function URL is AWS_IAM-auth + CloudFront-only', () => {
 	}
 });
 
+// The three operator scripts that address the estate secrets file all have to
+// agree about two strings: where the file lives, and what the not-yet-wired
+// placeholder in the estate `.sops.yaml` is called. `sops-init.sh` writes the
+// placeholder, `secret-set.sh` writes into the file, and `key-rotate.sh` reads
+// the rule back to decide which key the file should be under.
+//
+// key-rotate.sh had gone stale on both. It anchored on `<env>/secrets` and
+// recognised `REPLACE_<ENV>_KMS_ARN`, which are the in-repo layout from before
+// the secrets moved to the estate repo; neither string occurs in the estate
+// config, so BOTH envs matched no rule and the script died claiming an
+// unresolved placeholder — including on prod, whose key is fully wired — and
+// sent the operator to re-run sops-init.sh, which would tell them it was
+// already resolved. Key rotation is the compromise-response path, so it being
+// unconditionally broken is exactly the thing nobody discovers in advance.
+test('the three sops operator scripts agree on the estate path and the placeholder token', () => {
+	const sopsInit = read('../../bin/sops-init.sh');
+	const secretSet = read('../../bin/secret-set.sh');
+	const keyRotate = read('../../bin/key-rotate.sh');
+
+	const slugs = new Map<string, string>();
+	for (const [name, src] of [
+		['sops-init.sh', sopsInit],
+		['secret-set.sh', secretSet],
+		['key-rotate.sh', keyRotate],
+	] as const) {
+		const slug = src.match(/^PROJECT_SLUG="([a-z0-9-]+)"$/m)?.[1];
+		assert.ok(slug, `${name} declares no PROJECT_SLUG — it addresses the estate repo by hand.`);
+		slugs.set(name, slug!);
+		assert.match(
+			src,
+			/\$INFRA_SECRETS_DIR\/\$PROJECT_SLUG\//,
+			`${name} must build the estate path from $PROJECT_SLUG, not spell the subdirectory out.`,
+		);
+	}
+	assert.equal(
+		new Set(slugs.values()).size,
+		1,
+		`the scripts disagree about the estate subdirectory: ${[...slugs].map(([k, v]) => `${k}=${v}`).join(', ')}`,
+	);
+	const slug = [...slugs.values()][0];
+
+	// What sops-init.sh actually writes into the estate config, per env.
+	const written = new Map<string, string>();
+	for (const m of sopsInit.matchAll(/^\s*([a-z]+]?)\)\s*echo "([A-Z0-9_]+)"\s*;;/gm)) {
+		written.set(m[1].replace(/\]$/, ''), m[2]);
+	}
+	assert.ok(
+		written.size >= 2,
+		`read only ${written.size} placeholder token(s) out of sops-init.sh — parser broken?`,
+	);
+
+	// What key-rotate.sh derives. The derivation is required to be a derivation
+	// rather than a literal, so a third env cannot be added to one script alone.
+	assert.match(
+		keyRotate,
+		/placeholder="KMS_\$\(echo "\$\{PROJECT_SLUG\}_\$\{ENV_NAME\}" \| tr '\[:lower:\]-' '\[:upper:\]_'\)_ARN_PLACEHOLDER"/,
+		'key-rotate.sh must derive the placeholder token from the slug and the env, ' +
+			'the way sops-init.sh names it — a literal here is how the two came apart.',
+	);
+	for (const [env, token] of written) {
+		const derived = `KMS_${slug}_${env}`.toUpperCase().replace(/-/g, '_') + '_ARN_PLACEHOLDER';
+		assert.equal(
+			derived,
+			token,
+			`key-rotate.sh would look for ${derived} where sops-init.sh writes ${token} for ${env}.`,
+		);
+	}
+
+	// The rule it reads back must be the one naming this file, not a path from
+	// a layout that no longer exists.
+	assert.match(
+		keyRotate,
+		/rule_anchor="\$PROJECT_SLUG\/\$ENV_NAME"/,
+		'key-rotate.sh must anchor on the estate rule for its own file.',
+	);
+	for (const stale of ['preview/secrets', 'prod/secrets', 'REPLACE_PROD_KMS_ARN']) {
+		assert.ok(
+			!keyRotate.includes(stale),
+			`key-rotate.sh still refers to ${stale}, which no estate config contains.`,
+		);
+	}
+});
+
 test('S3 site bucket lifecycle aborts incomplete multipart uploads', () => {
 	// Reason: pass-2 commit 624bc00 added an abort-incomplete-multipart
 	// lifecycle rule. Without it an interrupted deploy (CI killed
