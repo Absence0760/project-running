@@ -1,6 +1,6 @@
 name: Terraform
 
-# Guards the 6 Terraform stacks under `infra/` against three classes
+# Guards the Terraform stacks under `infra/` against three classes
 # of regression:
 #   1. `terraform fmt` drift — keeps the formatter idempotent so the
 #      PR diff is the real change, not whitespace churn.
@@ -17,8 +17,9 @@ name: Terraform
 # Doesn't run on docs-only edits — the path filter below scopes it.
 #
 # Stacks scanned (matrix expanded inline; keep in lockstep with
-# `infra/README.md` § Stacks):
-#   - infra/bootstrap        (state bucket + DDB lock — one-time)
+# `infra/README.md` § Layout):
+#   - infra/bootstrap        (S3 state bucket — one-time; locking is
+#                             S3-native, there is no DynamoDB table)
 #   - infra/dns              (Route 53 zone + ACM cert)
 #   - infra/github-oidc      (OIDC provider + per-env deploy roles)
 #   - infra/envs/prod        (prod root module)
@@ -32,6 +33,11 @@ name: Terraform
 #
 # When adding a new stack: append it to the `stack` matrix below
 # AND add a `terraform` ecosystem entry to `.github/dependabot.yml`.
+# Both obligations are enforced — `scripts/check_infra_coverage.mjs`,
+# run by the `infra-guards` job in ci.yml, compares this matrix and
+# that manifest against the directories that actually hold `.tf`
+# files, so a stack nobody listed fails the PR instead of quietly
+# having one fewer green row than its siblings (decisions § 890).
 
 on:
   push:

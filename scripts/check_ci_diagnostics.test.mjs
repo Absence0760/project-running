@@ -443,6 +443,7 @@ const GUARD_DIRS = ['scripts', 'apps/web/scripts', 'apps/backend/scripts'];
 /// being spelled a certain way.
 const NOT_A_GUARD = new Map([
 	['scripts/comment_strip.mjs', 'a lexer, consumed by four guards'],
+	['scripts/hcl_lex.mjs', 'a lexer, consumed by three guards'],
 	['scripts/markdown_lines.mjs', 'a lexer, consumed by three guards'],
 	['scripts/shell_lex.mjs', 'a lexer, consumed by two guards'],
 	['scripts/web_icon_font.mjs', "the icon extractor, consumed by the generator and its suite"],
