@@ -36,6 +36,66 @@ String _extractMethodBody(String source, String signaturePattern) {
   return source.substring(start, i - 1);
 }
 
+/// The body of every `} catch (...) { ... }` in [body], brace-matched so a
+/// nested block inside a catch does not truncate it.
+List<String> _catchBlocks(String body) {
+  final out = <String>[];
+  for (final m in RegExp(r'\}\s*catch\s*\([^)]*\)\s*\{').allMatches(body)) {
+    final start = m.end;
+    var depth = 1;
+    var i = start;
+    while (depth > 0 && i < body.length) {
+      if (body[i] == '{') depth++;
+      if (body[i] == '}') depth--;
+      i++;
+    }
+    out.add(body.substring(start, i - 1));
+  }
+  return out;
+}
+
+/// [body] with every `try { ... } catch (...) { ... }` span removed, so what
+/// is left is the code that runs with no wrapper around it.
+String _withoutTryCatchBlocks(String body) {
+  final buf = StringBuffer();
+  var cursor = 0;
+  while (true) {
+    final t = body.indexOf('try {', cursor);
+    if (t < 0) {
+      buf.write(body.substring(cursor));
+      return buf.toString();
+    }
+    buf.write(body.substring(cursor, t));
+    var i = body.indexOf('{', t);
+    var depth = 0;
+    while (i < body.length) {
+      if (body[i] == '{') depth++;
+      if (body[i] == '}') {
+        depth--;
+        if (depth == 0) break;
+      }
+      i++;
+    }
+    final catchMatch =
+        RegExp(r'^\s*catch\s*\([^)]*\)\s*\{').firstMatch(body.substring(i + 1));
+    if (catchMatch == null) {
+      cursor = i + 1;
+      continue;
+    }
+    var j = i + 1 + catchMatch.end - 1;
+    depth = 0;
+    while (j < body.length) {
+      if (body[j] == '{') depth++;
+      if (body[j] == '}') {
+        depth--;
+        if (depth == 0) break;
+      }
+      j++;
+    }
+    cursor = j + 1;
+  }
+}
+
 void main() {
   group('run_screen.dart', () {
     late String source;
@@ -251,6 +311,95 @@ void main() {
             'wrapped L4 effects. A drop usually means effects were '
             'collapsed under a shared try, which re-introduces the '
             'failure mode the layering rule is meant to prevent.',
+      );
+    });
+
+    test('every L4 catch in _onSnapshot absorbs and reports the failure', () {
+      // Reason: the sibling guard above counts try/catch PAIRS, which is
+      // blind to what the catch does. A `catch (e) { rethrow; }` or an empty
+      // `catch (e) {}` keeps the count intact while defeating the layering
+      // rule outright — the first swallows nothing and kills every later
+      // effect in the snapshot pipeline, the second hides an auxiliary that
+      // has stopped working with no trace in the log. Both are exactly the
+      // shape a "clean up the noisy debugPrints" edit produces.
+      //
+      // The contract is stated in CLAUDE.md and
+      // docs/architecture/conventions.md § Layered resilience: wrap each
+      // auxiliary effect in its own try/catch plus a debugPrint, never
+      // swallow silently.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      final blocks = _catchBlocks(body);
+      expect(
+        blocks.length,
+        greaterThanOrEqualTo(7),
+        reason: 'expected one catch per L4 effect in _onSnapshot; found '
+            '${blocks.length}. If the effects were collapsed under a shared '
+            'catch, re-split them.',
+      );
+      for (var i = 0; i < blocks.length; i++) {
+        final block = blocks[i];
+        expect(
+          block.trim(),
+          isNotEmpty,
+          reason: 'catch #$i in _onSnapshot is empty — an auxiliary that '
+              'has silently stopped working leaves no trace at all.',
+        );
+        expect(
+          block.contains('debugPrint'),
+          isTrue,
+          reason: 'catch #$i in _onSnapshot does not report the failure. '
+              'Every L4 catch must debugPrint what it absorbed:\n$block',
+        );
+        expect(
+          block.contains('rethrow'),
+          isFalse,
+          reason: 'catch #$i in _onSnapshot rethrows, so the throw escapes '
+              'into the snapshot pipeline and every LATER effect stops '
+              'running. The layering rule is that an L4 failure is '
+              'absorbed where it happens:\n$block',
+        );
+      }
+    });
+
+    test('nothing runs unguarded between the L0/L1 publish and the end', () {
+      // Reason: the ordering guard proves the publish comes before the first
+      // try, and the catch guards prove each effect is isolated. Neither
+      // sees a BARE statement dropped between two try-blocks — a new
+      // `_someService.notify(...)` added without a wrapper, say — which
+      // throws straight out of _onSnapshot and skips every effect below it.
+      // The only two things allowed out here are the publish itself and the
+      // debug-only mirror assert.
+      final body = _extractMethodBody(
+        source,
+        r'void _onSnapshot\(RunSnapshot snapshot\)\s*\{',
+      );
+      final publishAt = body.indexOf('_statsNotifier.value = _LiveStats(');
+      expect(publishAt, greaterThan(-1));
+      final tail = _withoutTryCatchBlocks(body.substring(publishAt));
+      final stray = tail
+          .split('\n')
+          .map((l) => l.trim())
+          .where((l) => l.isNotEmpty && !l.startsWith('//'))
+          .toList();
+      // Everything left has to belong to the publish expression or the
+      // assert; both end before the first effect and neither can throw in
+      // release (the assert is stripped).
+      final allowed = RegExp(
+        r'^(_statsNotifier\.value = _LiveStats\(|[a-zA-Z_]+: [^;]+,|\);|'
+        r'assert\(\(\) \{|final v = _statsNotifier\.value;|'
+        r'return v\.|v\.|identical\(|\}\(\),)',
+      );
+      final unexpected =
+          stray.where((l) => !allowed.hasMatch(l)).toList();
+      expect(
+        unexpected,
+        isEmpty,
+        reason: 'these statements sit between the L0/L1 publish and the end '
+            'of _onSnapshot without a try/catch, so a throw in one skips '
+            'every L4 effect below it: $unexpected',
       );
     });
 
