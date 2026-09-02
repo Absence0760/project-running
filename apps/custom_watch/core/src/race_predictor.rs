@@ -257,9 +257,7 @@ pub fn predict_race_ladder(efforts: &[Effort]) -> Option<RacePrediction> {
     // here panicked, which on a device with no operating system is a reset in
     // the middle of a race. `None` is what the doc comment already promises for
     // a pool nothing can be anchored on.
-    let Some(anchor) = best else {
-        return None;
-    };
+    let anchor = best?;
     let days_since_best = libm::round(anchor.age_days) as i32;
 
     let mut rungs = [LadderRung {
