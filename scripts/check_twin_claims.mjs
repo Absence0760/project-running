@@ -99,11 +99,6 @@ export const KNOWN_GAPS = [
 			'"the compute pair" while nothing registers it',
 	},
 	{
-		file: 'apps/web/src/lib/social/fundraiser_progress.ts',
-		counterpart: 'apps/mobile_android/lib/fundraiser_progress.dart',
-		reason: 'both headers say "TS<->Dart parity pair"; neither registry carries it',
-	},
-	{
 		file: 'apps/web/src/lib/training/readiness.ts',
 		counterpart: 'apps/mobile_android/lib/readiness.dart',
 		reason: 'both headers declare the pair; neither registry carries it',
@@ -117,11 +112,6 @@ export const KNOWN_GAPS = [
 		file: 'apps/mobile_android/lib/cycle_plan.dart',
 		counterpart: 'apps/web/src/lib/training/cycle_plan.ts',
 		reason: 'both headers say "TS<->Dart parity pair"; neither registry carries it',
-	},
-	{
-		file: 'apps/mobile_android/lib/fundraiser_progress.dart',
-		counterpart: 'apps/web/src/lib/social/fundraiser_progress.ts',
-		reason: 'the Dart half of the unregistered fundraiser_progress pair',
 	},
 	{
 		file: 'apps/mobile_android/lib/readiness.dart',
@@ -143,11 +133,6 @@ export const KNOWN_GAPS = [
 		reason:
 			'the Dart half of the unregistered streaks pair, and the path is stale — the ' +
 			'web half is at apps/web/src/lib/runs/streaks.ts',
-	},
-	{
-		file: 'apps/mobile_android/lib/text_limits.dart',
-		counterpart: 'apps/web/src/lib/core/text_limits.ts',
-		reason: 'both headers declare the pair; neither registry carries it',
 	},
 ];
 
