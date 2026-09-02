@@ -2,8 +2,8 @@
 /// last night's sleep, and resting-HR drift vs a baseline into a
 /// single 0–100 number the dashboard can show.
 ///
-/// Mirrors `apps/web/src/lib/readiness.ts`. Keep in lockstep — the
-/// shared-library-syncer agent watches the pair.
+/// TS↔Dart parity pair with `apps/web/src/lib/training/readiness.ts`. Keep in
+/// lockstep — the shared-library-syncer agent watches the pair.
 
 class ReadinessInputs {
   /// Training Stress Balance (Form). Positive = fresh, negative = fatigued.
@@ -139,9 +139,19 @@ String _dominantAdvice(
         ? 'Looks like a good day to push the pace.'
         : 'Connect sleep + HR data for a real readiness picture.';
   }
-  final sorted = [...contributors]
-    ..sort((a, b) => b.delta.abs().compareTo(a.delta.abs()));
-  final dom = sorted.first;
+  // Ties in |delta| are common — a TSB of -12 and six hours of sleep both
+  // score -12, and the two carry DIFFERENT advice. Dart's List.sort is
+  // unstable where JS's is stable, so without the index fallback the
+  // dominant contributor here would be whichever the sort happened to land
+  // on rather than the first one added, and the two platforms would show
+  // different sentences for the same inputs.
+  final indexed = <(int, ReadinessContribution)>[
+    for (var i = 0; i < contributors.length; i++) (i, contributors[i]),
+  ]..sort((a, b) {
+      final c = b.$2.delta.abs().compareTo(a.$2.delta.abs());
+      return c != 0 ? c : a.$1.compareTo(b.$1);
+    });
+  final dom = indexed.first.$2;
   final tail = switch (band) {
     ReadinessBand.low => 'Consider an easy day or a rest day.',
     ReadinessBand.moderate => 'A steady or moderate effort fits today.',

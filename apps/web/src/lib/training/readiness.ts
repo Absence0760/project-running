@@ -8,7 +8,7 @@
  * 75; positive contributors push it up, negative ones drag it down,
  * and the result is clamped to 0–100.
  *
- * Pure — no Supabase, no DOM. Mirrors
+ * Pure — no Supabase, no DOM. TS↔Dart parity pair with
  * `apps/mobile_android/lib/readiness.dart`. Keep in lockstep — the
  * shared-library-syncer agent watches the pair.
  */
@@ -156,6 +156,11 @@ function dominantAdvice(contributors: ReadinessContribution[], band: ReadinessBa
 			? 'Looks like a good day to push the pace.'
 			: 'Connect sleep + HR data for a real readiness picture.';
 	}
+	// Ties in |delta| are common — a TSB of -12 and six hours of sleep both
+	// score -12, and the two carry DIFFERENT advice — so which one wins is a
+	// contract, not an accident. `Array.prototype.sort` is stable, so the
+	// first contributor added wins; the Dart twin's `List.sort` is NOT, and
+	// carries an explicit index tiebreak to match.
 	const dom = contributors.slice().sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
 	const tail =
 		band === 'low'

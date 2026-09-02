@@ -92,47 +92,9 @@ export const MIN_DECLARATIONS = 60;
 /** @type {readonly KnownGap[]} */
 export const KNOWN_GAPS = [
 	{
-		file: 'apps/web/src/lib/runs/streaks.ts',
-		counterpart: 'apps/mobile_android/lib/streaks.dart',
-		reason:
-			"unregistered, and CLAUDE.md's own `streak_card` entry calls this pair " +
-			'"the compute pair" while nothing registers it',
-	},
-	{
-		file: 'apps/web/src/lib/training/readiness.ts',
-		counterpart: 'apps/mobile_android/lib/readiness.dart',
-		reason: 'both headers declare the pair; neither registry carries it',
-	},
-	{
-		file: 'apps/mobile_android/lib/column_limits.dart',
-		counterpart: 'apps/web/src/lib/core/column_limits.ts',
-		reason: 'unregistered; the two halves expose differently-named APIs and different test counts',
-	},
-	{
 		file: 'apps/mobile_android/lib/cycle_plan.dart',
 		counterpart: 'apps/web/src/lib/training/cycle_plan.ts',
 		reason: 'both headers say "TS<->Dart parity pair"; neither registry carries it',
-	},
-	{
-		file: 'apps/mobile_android/lib/readiness.dart',
-		counterpart: 'apps/web/src/lib/readiness.ts',
-		reason:
-			'unregistered, and the path is stale — the web half is at ' +
-			'apps/web/src/lib/training/readiness.ts',
-	},
-	{
-		file: 'apps/mobile_android/lib/runner_handle.dart',
-		counterpart: 'apps/web/src/lib/runner_handle.ts',
-		reason:
-			'the pair IS registered — the header alone is stale, naming a path the web ' +
-			'half moved out of',
-	},
-	{
-		file: 'apps/mobile_android/lib/streaks.dart',
-		counterpart: 'apps/web/src/lib/streaks.ts',
-		reason:
-			'the Dart half of the unregistered streaks pair, and the path is stale — the ' +
-			'web half is at apps/web/src/lib/runs/streaks.ts',
 	},
 ];
 
