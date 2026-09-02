@@ -1,8 +1,10 @@
 //! Pure geometry helpers for a planned route polyline — the canonical
 //! standalone port of web `routes/route_geometry.ts` (twin of
-//! `route_geometry.dart`). Keep the algorithm, edge cases, and the
-//! thirty twin tests in lockstep so the route-detail scrubber and the
-//! predictive-live-tracking projection agree across every platform.
+//! `route_geometry.dart`). Keep the algorithm and edge cases in lockstep so the
+//! route-detail scrubber and the predictive-live-tracking projection agree
+//! across every platform. Web additionally carries `markerPointAtDistance`, the
+//! marker-authoring inverse; it has no wrist surface and is not ported, which is
+//! why the suites are 36 here against web's 43 rather than equal.
 //!
 //! Three helpers:
 //! - [`interpolate_along_route`] — a normalised `fraction` in `0..=1` to the
@@ -17,6 +19,7 @@
 //! self-contained port and shares no code with it. Pure logic, no peripherals,
 //! no allocator.
 
+use crate::geo::{lon_delta_deg, wrap_lon_deg};
 use crate::grade_adjusted_pace::haversine_metres;
 
 const R_M: f64 = 6_371_000.0;
@@ -68,7 +71,7 @@ pub fn interpolate_along_route(
             let local_t = ((target - seen) / seg_len).clamp(0.0, 1.0);
             return Some(RouteWaypoint {
                 lat: a.lat + (b.lat - a.lat) * local_t,
-                lng: a.lng + (b.lng - a.lng) * local_t,
+                lng: wrap_lon_deg(a.lng + lon_delta_deg(a.lng, b.lng) * local_t),
                 elevation_m: lerp_nullable(a.elevation_m, b.elevation_m, local_t),
             });
         }
@@ -80,9 +83,19 @@ pub fn interpolate_along_route(
 /// Inverse of [`interpolate_along_route`]: given an arbitrary point, find the
 /// nearest point on the polyline and return its cumulative
 /// distance-along-route in metres (`0` = start). `None` when the polyline has
-/// `< 2` waypoints. The live position is rarely exactly on the planned line
-/// (GPS drift, course offset), so we project onto the nearest segment in a
-/// per-segment equirectangular frame rather than requiring an exact match.
+/// `< 2` waypoints, and `None` for a non-finite fix — an unknown position is not
+/// the start line, and a caller substituting 0 names the FIRST cutoff and
+/// measures its distance-to-go from the start.
+///
+/// The live position is rarely exactly on the planned line (GPS drift, course
+/// offset), so each segment is projected in its own local planar frame — where
+/// it is anchored and accurate — but the candidates are **ranked by the
+/// great-circle distance to the projected foot**, not by the residual inside
+/// that frame. A perpendicular measured inside a segment's frame is scaled by
+/// the cosine of that segment's own start latitude, so the numbers are not
+/// comparable across segments: on an out-and-back the return limb anchors
+/// further along and always reports the smaller offset to a point equidistant
+/// from both, which flips the answer by the length of a limb.
 pub fn distance_along_route(
     point_lat: f64,
     point_lng: f64,
@@ -91,19 +104,22 @@ pub fn distance_along_route(
     if waypoints.len() < 2 {
         return None;
     }
+    if !point_lat.is_finite() || !point_lng.is_finite() {
+        return None;
+    }
     let deg = core::f64::consts::PI / 180.0;
     let r_per_deg = R_M * deg;
     let mut seen = 0.0;
     let mut best = 0.0;
-    let mut best_perp = f64::INFINITY;
+    let mut best_offset = f64::INFINITY;
     for i in 1..waypoints.len() {
         let a = waypoints[i - 1];
         let b = waypoints[i];
         let seg_len = haversine_metres(a.lat, a.lng, b.lat, b.lng);
         let cos_lat = libm::cos(a.lat * deg);
-        let bx = (b.lng - a.lng) * cos_lat * r_per_deg;
+        let bx = lon_delta_deg(a.lng, b.lng) * cos_lat * r_per_deg;
         let by = (b.lat - a.lat) * r_per_deg;
-        let px = (point_lng - a.lng) * cos_lat * r_per_deg;
+        let px = lon_delta_deg(a.lng, point_lng) * cos_lat * r_per_deg;
         let py = (point_lat - a.lat) * r_per_deg;
         let ab_len_sq = bx * bx + by * by;
         let t = if ab_len_sq <= 0.0 {
@@ -111,13 +127,11 @@ pub fn distance_along_route(
         } else {
             ((px * bx + py * by) / ab_len_sq).clamp(0.0, 1.0)
         };
-        let projx = bx * t;
-        let projy = by * t;
-        let dx = px - projx;
-        let dy = py - projy;
-        let perp = libm::sqrt(dx * dx + dy * dy);
-        if perp < best_perp {
-            best_perp = perp;
+        let foot_lat = a.lat + (b.lat - a.lat) * t;
+        let foot_lng = wrap_lon_deg(a.lng + lon_delta_deg(a.lng, b.lng) * t);
+        let offset = haversine_metres(point_lat, point_lng, foot_lat, foot_lng);
+        if offset < best_offset {
+            best_offset = offset;
             best = seen + t * seg_len;
         }
         seen += seg_len;
@@ -394,5 +408,98 @@ mod tests {
         let total = polyline_length_metres(&wps);
         let d = distance_along_route(0.0, 10_000.0 / M_PER_DEG_LNG, &wps).unwrap();
         assert!(d >= 0.0 && d <= total + 1e-6, "got {} (total {})", d, total);
+    }
+
+    #[test]
+    fn distance_a_later_segment_can_still_win() {
+        // Guard against a fix that degenerates into "always the first segment":
+        // an L (east 100 m, then north 100 m) probed 2 m east of the vertical
+        // leg, near its top, must resolve into the SECOND leg (> 100 m).
+        let wps = [
+            dist_wp(0.0),
+            dist_wp(100.0),
+            wp(100.0 / M_PER_DEG_LNG, 100.0 / M_PER_DEG_LNG),
+        ];
+        let d = distance_along_route(90.0 / M_PER_DEG_LNG, 102.0 / M_PER_DEG_LNG, &wps).unwrap();
+        assert!(
+            libm::fabs(d - 190.0) < 2.0,
+            "expected ~190 m on the second leg, got {}",
+            d
+        );
+    }
+
+    #[test]
+    fn distance_out_and_back_does_not_flip_limbs_on_one_centimetre_of_jitter() {
+        // 3.47 km due north and back. Ranking candidates by a perpendicular
+        // measured inside each segment's OWN planar frame compares
+        // incommensurable numbers: the return limb anchors its frame 3.5 km
+        // further north, where cos(lat) is smaller, so it always reports the
+        // smaller "distance" to a point exactly as far from both. A fix 1 cm
+        // off the line then resolves a whole limb further along the course.
+        let oab = [wp(45.0, 0.0), wp(45.031_25, 0.0), wp(45.0, 0.0)];
+        let total = polyline_length_metres(&oab);
+        let mid = 45.015_625;
+        let one_cm = 0.01 / (M_PER_DEG_LNG * libm::cos(mid * core::f64::consts::PI / 180.0));
+
+        let on_line = distance_along_route(mid, 0.0, &oab).unwrap();
+        let east = distance_along_route(mid, one_cm, &oab).unwrap();
+        let west = distance_along_route(mid, -one_cm, &oab).unwrap();
+
+        assert!(
+            libm::fabs(east - on_line) < 1.0,
+            "1 cm east moved the answer {} m",
+            libm::fabs(east - on_line)
+        );
+        assert!(
+            libm::fabs(west - on_line) < 1.0,
+            "1 cm west moved the answer {} m",
+            libm::fabs(west - on_line)
+        );
+        assert!(
+            libm::fabs(on_line - total / 4.0) < 1.0,
+            "expected the outbound limb (~{} m), got {}",
+            total / 4.0,
+            on_line
+        );
+    }
+
+    #[test]
+    fn distance_none_on_a_non_finite_point_never_zero() {
+        let wps = [dist_wp(0.0), dist_wp(100.0), dist_wp(200.0)];
+        assert!(distance_along_route(0.0, 100.0 / M_PER_DEG_LNG, &wps).is_some());
+        // A NaN or infinite fix is "unknown position", not "at the start" —
+        // a caller substituting 0 names the FIRST cutoff and measures the
+        // distance-to-go from the start line.
+        assert_eq!(distance_along_route(f64::NAN, 0.0, &wps), None);
+        assert_eq!(distance_along_route(0.0, f64::INFINITY, &wps), None);
+    }
+
+    #[test]
+    fn interpolate_a_leg_across_the_antimeridian_stays_on_the_leg() {
+        let wps = [wp(0.0, 179.99), wp(0.0, -179.97)];
+        let out = interpolate_along_route(&wps, 0.5).unwrap();
+        // The midpoint of a 0.04 deg leg anchored at 179.99 is 180.01, which
+        // wraps to -179.99 — not 0.01, half a world away.
+        assert!(libm::fabs(out.lng - -179.99) < 1e-9, "got {}", out.lng);
+        assert_eq!(out.lat, 0.0);
+    }
+
+    #[test]
+    fn distance_a_point_past_the_antimeridian_projects_onto_the_leg() {
+        let wps = [wp(0.0, 179.98), wp(0.0, -179.96)];
+        let total = polyline_length_metres(&wps);
+        let along = distance_along_route(0.0, -179.99, &wps).unwrap();
+        assert!(
+            libm::fabs(along - total / 2.0) < 1.0,
+            "got {} of {}",
+            along,
+            total
+        );
+    }
+
+    #[test]
+    fn polyline_length_across_the_antimeridian_spans_the_short_way() {
+        let wps = [wp(0.0, 179.98), wp(0.0, -179.96)];
+        assert!(libm::fabs(polyline_length_metres(&wps) - 6671.7) < 1.0);
     }
 }
