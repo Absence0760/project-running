@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { blockEnd, hclBlocks, hclResources, nestedBlock } from './hcl_lex.mjs';
+import { blockEnd, hclBlocks, hclResources, nestedBlock, nestedBlocks } from './hcl_lex.mjs';
 
 // The three shapes a regex gets wrong on this repo's own Terraform, all of
 // which appear in infra/modules/web-stack/main.tf: an interpolated string
@@ -100,4 +100,41 @@ test('nestedBlock returns the matching inner body, and null when absent', () => 
 test('nestedBlock is not confused by a global regex', () => {
   const body = 'A = {\n  x = 1\n}\nA = {\n  y = 2\n}\n';
   assert.match(nestedBlock(body, /A\s*=\s*\{/g) ?? '', /x = 1/);
+});
+
+test('nestedBlocks returns every repeated block, in source order', () => {
+  const body = 'A = {\n  x = 1\n}\nA = {\n  y = 2\n}\n';
+  const all = nestedBlocks(body, /A\s*=\s*\{/);
+  assert.equal(all.length, 2);
+  assert.match(all[0].body, /x = 1/);
+  assert.match(all[1].body, /y = 2/);
+});
+
+// The scan has to resume past a block's CLOSING brace. Resuming past the
+// header alone finds the same header again inside the block it just returned,
+// so a CloudFront `ordered_cache_behavior` carrying a `forwarded_values` of its
+// own would be counted twice and its inner half read as a behaviour with no
+// path pattern.
+test('nestedBlocks does not re-enter a block it already returned', () => {
+  const body = 'b {\n  b {\n    inner = 1\n  }\n}\nb {\n  outer = 2\n}\n';
+  const all = nestedBlocks(body, /(?:^|\n)\s*b\s*\{/);
+  assert.equal(all.length, 2);
+  assert.match(all[0].body, /inner = 1/);
+  assert.match(all[1].body, /outer = 2/);
+});
+
+test('nestedBlocks accepts a global regex without skipping the first match', () => {
+  const body = 'A = {\n  x = 1\n}\nA = {\n  y = 2\n}\n';
+  assert.equal(nestedBlocks(body, /A\s*=\s*\{/g).length, 2);
+});
+
+test('nestedBlocks stops at a block that never closes rather than looping', () => {
+  const body = 'A = {\n  x = 1\n}\nA = {\n  unterminated = "\n';
+  const all = nestedBlocks(body, /A\s*=\s*\{/);
+  assert.equal(all.length, 1);
+  assert.match(all[0].body, /x = 1/);
+});
+
+test('nestedBlocks returns nothing when the header never appears', () => {
+  assert.deepEqual(nestedBlocks('A = {\n}\n', /Z\s*=\s*\{/), []);
 });

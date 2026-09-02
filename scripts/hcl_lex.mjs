@@ -131,6 +131,36 @@ export function nestedBlock(body, header) {
 }
 
 /**
+ * Every nested block whose header matches `header`, in source order — the
+ * repeated-block form of `nestedBlock`. A CloudFront distribution declares one
+ * `origin` and one `ordered_cache_behavior` block per origin and per route, so
+ * reading only the first is reading one of eighteen.
+ *
+ * The scan resumes past each block's closing brace rather than just past its
+ * header, so a header that also occurs INSIDE a block is not returned twice.
+ *
+ * @param {string} body
+ * @param {RegExp} header must match the header up to and including its `{`
+ * @returns {HclResource[]} `label` is the matched header text
+ */
+export function nestedBlocks(body, header) {
+  const flags = header.flags.includes('g') ? header.flags : `${header.flags}g`;
+  const re = new RegExp(header.source, flags);
+  /** @type {HclResource[]} */
+  const out = [];
+  let m;
+  while ((m = re.exec(body)) !== null) {
+    const open = body.indexOf('{', m.index);
+    if (open < 0) break;
+    const close = blockEnd(body, open);
+    if (close < 0) break;
+    out.push({ label: m[0], body: body.slice(open + 1, close), index: m.index });
+    re.lastIndex = close;
+  }
+  return out;
+}
+
+/**
  * `src` with every `#` / `//` line comment and `/* … *\/` block comment
  * replaced by an equal number of spaces and newlines, so offsets and line
  * numbers are preserved. Quoted strings are left intact — a `#` inside one is

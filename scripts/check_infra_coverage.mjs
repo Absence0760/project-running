@@ -21,7 +21,21 @@
 //      configuration not present" (measured, not assumed). It is exempt here
 //      WITH that reason, and the exemption fails if it ever stops being needed.
 //
-//   2. Lambda alarm coverage. A failing Lambda origin on this distribution is
+//   2. Distribution behaviour coverage. The CloudFront distribution carries
+//      eighteen cache behaviours and every one of them re-states, by hand, the
+//      three properties that make it safe: the security response-headers policy
+//      (the CSP, HSTS, X-Frame-Options and Permissions-Policy live there and
+//      nowhere else), an https viewer-protocol policy, and the viewer-request
+//      function association that redirects `www.` to the apex. None of the
+//      three is inherited — CloudFront applies a response-headers policy and an
+//      edge function PER BEHAVIOUR — so a nineteenth behaviour that omits one
+//      serves that path with no CSP at all, or serves the whole site at a
+//      second host on that path. `www_redirect.js` had already shipped serving
+//      `WWW.threkir.com` for a year with nothing executing it (decisions § 894);
+//      this is the same function stopping at a path instead of at a casing, and
+//      the failure looks identical from the outside: a page that renders.
+//
+//   3. Lambda alarm coverage. A failing Lambda origin on this distribution is
 //      invisible. CloudFront models custom error responses per distribution
 //      rather than per behaviour, so the SPA `403/404 → /index.html at 200`
 //      fallback rewrites a Lambda-origin error too — issue #590 measured
@@ -42,7 +56,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { hclResources, nestedBlock, stripComments } from './hcl_lex.mjs';
+import { hclResources, nestedBlock, nestedBlocks, stripComments } from './hcl_lex.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -231,6 +245,109 @@ export function parseAlarms(raw) {
   return out;
 }
 
+/// Viewer-protocol policies that cannot serve a plaintext response. CloudFront
+/// also accepts `allow-all`, which answers http:// directly and is what the
+/// HSTS header in the response-headers policy exists to stop a browser ever
+/// asking for again.
+export const HTTPS_VIEWER_POLICIES = new Set(['redirect-to-https', 'https-only']);
+
+/**
+ * @typedef {{
+ *   pattern: string,
+ *   origin: string | null,
+ *   viewerProtocol: string | null,
+ *   responseHeadersPolicy: string | null,
+ *   cachePolicy: string | null,
+ *   viewerRequestSources: string[],
+ * }} Behaviour
+ * @typedef {{
+ *   originIds: string[],
+ *   originsMissingOac: string[],
+ *   insecureOrigins: string[],
+ *   behaviours: Behaviour[],
+ *   headerPolicies: Map<string, { csp: boolean, permissionsPolicy: boolean }>,
+ * } | null} Distribution
+ */
+
+/** @param {string} body @param {string} key */
+function attr(body, key) {
+  return body.match(new RegExp(`^\\s*${key}\\s*=\\s*(.+?)\\s*$`, 'm'))?.[1] ?? null;
+}
+
+/** @param {string | null} value */
+function unquote(value) {
+  return value === null ? null : value.replace(/^"|"$/g, '');
+}
+
+/// The distribution's origins and cache behaviours, plus what each
+/// response-headers policy in the module actually carries. Null when no
+/// `aws_cloudfront_distribution` could be read at all, which the caller reports
+/// rather than treating as "nothing to check".
+/**
+ * @param {string} raw
+ * @returns {Distribution}
+ */
+export function parseDistribution(raw) {
+  const src = stripComments(raw);
+  const dist = hclResources(src, 'aws_cloudfront_distribution')[0];
+  if (dist === undefined) return null;
+
+  /** @type {string[]} */
+  const originIds = [];
+  /** @type {string[]} */
+  const originsMissingOac = [];
+  /** @type {string[]} */
+  const insecureOrigins = [];
+  for (const { body } of nestedBlocks(dist.body, /(?:^|\n)\s*origin\s*\{/)) {
+    const id = unquote(attr(body, 'origin_id')) ?? '(unnamed)';
+    originIds.push(id);
+    if (attr(body, 'origin_access_control_id') === null) originsMissingOac.push(id);
+    const custom = nestedBlock(body, /custom_origin_config\s*\{/);
+    if (custom !== null && unquote(attr(custom, 'origin_protocol_policy')) !== 'https-only') {
+      insecureOrigins.push(id);
+    }
+  }
+
+  /** @type {Behaviour[]} */
+  const behaviours = [];
+  for (const { label, body } of nestedBlocks(
+    dist.body,
+    /(?:^|\n)\s*(?:default|ordered)_cache_behavior\s*\{/,
+  )) {
+    /** @type {string[]} */
+    const viewerRequestSources = [];
+    for (const assoc of nestedBlocks(
+      body,
+      /(?:^|\n)\s*(?:dynamic\s+"function_association"|function_association)\s*\{/,
+    )) {
+      const content = nestedBlock(assoc.body, /content\s*\{/) ?? assoc.body;
+      if (unquote(attr(content, 'event_type')) !== 'viewer-request') continue;
+      viewerRequestSources.push(
+        attr(assoc.body, 'for_each') ?? attr(content, 'function_arn') ?? '(unreadable)',
+      );
+    }
+    behaviours.push({
+      pattern: unquote(attr(body, 'path_pattern')) ?? (label.includes('default') ? '(default)' : '(unnamed)'),
+      origin: unquote(attr(body, 'target_origin_id')),
+      viewerProtocol: unquote(attr(body, 'viewer_protocol_policy')),
+      responseHeadersPolicy: attr(body, 'response_headers_policy_id'),
+      cachePolicy: attr(body, 'cache_policy_id'),
+      viewerRequestSources,
+    });
+  }
+
+  /** @type {Map<string, { csp: boolean, permissionsPolicy: boolean }>} */
+  const headerPolicies = new Map();
+  for (const { label, body } of hclResources(src, 'aws_cloudfront_response_headers_policy')) {
+    headerPolicies.set(label, {
+      csp: nestedBlock(body, /content_security_policy\s*\{/) !== null,
+      permissionsPolicy: /header\s*=\s*"Permissions-Policy"/.test(body),
+    });
+  }
+
+  return { originIds, originsMissingOac, insecureOrigins, behaviours, headerPolicies };
+}
+
 // ────────────────────────────── comparison ──────────────────────────────
 
 /**
@@ -239,9 +356,10 @@ export function parseAlarms(raw) {
  * @param {string[]} dependabot
  * @param {string[]} functions
  * @param {Alarm[]} alarms
+ * @param {Distribution} distribution
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function compareSources(dirs, matrix, dependabot, functions, alarms) {
+export function compareSources(dirs, matrix, dependabot, functions, alarms, distribution) {
   /** @type {string[]} */
   const errors = [];
   /** @type {string[]} */
@@ -366,7 +484,149 @@ export function compareSources(dirs, matrix, dependabot, functions, alarms) {
     );
   }
 
+  distributionCoverage(distribution, errors, ok);
+
   return { errors, ok };
+}
+
+/// The third half: every cache behaviour restates the security policy, the
+/// https viewer policy and the viewer-request function by hand, and CloudFront
+/// inherits none of the three.
+/**
+ * @param {Distribution} distribution
+ * @param {string[]} errors
+ * @param {string[]} ok
+ */
+function distributionCoverage(distribution, errors, ok) {
+  if (distribution === null) {
+    errors.push(
+      'no aws_cloudfront_distribution was read from the web-stack module — the behaviour-coverage ' +
+        'half checked nothing, and a behaviour serving a path with no CSP would read as covered.',
+    );
+    return;
+  }
+  const { behaviours, originIds, originsMissingOac, insecureOrigins, headerPolicies } = distribution;
+  if (behaviours.length < 2) {
+    errors.push(
+      `only ${behaviours.length} cache behaviour(s) were read from the distribution. It carries a ` +
+        'default plus one per routed path; a count this low means the block scan stopped matching ' +
+        'and every behaviour below went unchecked.',
+    );
+    return;
+  }
+
+  for (const id of originsMissingOac) {
+    errors.push(
+      `distribution origin ${JSON.stringify(id)} declares no origin_access_control_id, so ` +
+        'CloudFront reaches it unsigned. An S3 origin then needs a public bucket policy and a ' +
+        'Lambda Function URL needs authorization_type=NONE — both make the origin reachable ' +
+        'without going through this distribution at all.',
+    );
+  }
+  for (const id of insecureOrigins) {
+    errors.push(
+      `distribution origin ${JSON.stringify(id)} does not set origin_protocol_policy = "https-only", ` +
+        'so the CloudFront-to-origin leg can fall back to plaintext http.',
+    );
+  }
+
+  const originSet = new Set(originIds);
+  /** @type {Set<string>} */
+  const policies = new Set();
+  /** @type {Set<string>} */
+  const viewerRequestSources = new Set();
+
+  for (const b of behaviours) {
+    const at = `cache behaviour ${JSON.stringify(b.pattern)}`;
+    if (b.origin === null || !originSet.has(b.origin)) {
+      errors.push(
+        `${at}: target_origin_id ${JSON.stringify(b.origin)} names no origin this distribution ` +
+          'declares.',
+      );
+    }
+    if (b.viewerProtocol === null || !HTTPS_VIEWER_POLICIES.has(b.viewerProtocol)) {
+      errors.push(
+        `${at}: viewer_protocol_policy is ${JSON.stringify(b.viewerProtocol)}. Only ` +
+          `${[...HTTPS_VIEWER_POLICIES].join(' / ')} keep this path off plaintext http.`,
+      );
+    }
+    if (b.cachePolicy === null) {
+      errors.push(
+        `${at}: no cache_policy_id. The legacy forwarded_values form it falls back to has its own ` +
+          'cookie and header defaults, which is not a decision anyone made here.',
+      );
+    }
+    if (b.responseHeadersPolicy === null) {
+      errors.push(
+        `${at}: no response_headers_policy_id. CloudFront applies a response-headers policy PER ` +
+          'BEHAVIOUR and inherits nothing from the default one, so this path answers with no CSP, ' +
+          'no HSTS, no X-Frame-Options and no Permissions-Policy.',
+      );
+    } else {
+      policies.add(b.responseHeadersPolicy);
+    }
+    if (b.viewerRequestSources.length === 0) {
+      errors.push(
+        `${at}: no viewer-request function_association. The viewer-request function is what ` +
+          'redirects the `www.` host to the apex, and CloudFront associates a function PER ' +
+          'BEHAVIOUR — an unassociated path serves the whole site at a second host, which is the ' +
+          'duplicate-content split the function exists to close.',
+      );
+    }
+    for (const source of b.viewerRequestSources) viewerRequestSources.add(source);
+  }
+
+  if (policies.size > 1) {
+    errors.push(
+      `the behaviours name ${policies.size} different response-headers policies ` +
+        `(${[...policies].sort().join(', ')}). One of them is the security policy and the rest are ` +
+        'whatever a copy-paste reached for; a per-path CSP difference is not something a reader of ' +
+        'this file can see.',
+    );
+  }
+  for (const ref of policies) {
+    const label = ref.match(/^aws_cloudfront_response_headers_policy\.([A-Za-z0-9_-]+)\.id$/)?.[1];
+    if (label === undefined) {
+      errors.push(
+        `response_headers_policy_id ${JSON.stringify(ref)} does not reference a policy this module ` +
+          'declares, so what it carries could not be read.',
+      );
+      continue;
+    }
+    const policy = headerPolicies.get(label);
+    if (policy === undefined) {
+      errors.push(
+        `the behaviours are served under aws_cloudfront_response_headers_policy.${label}, which this ` +
+          'module does not declare.',
+      );
+    } else if (!policy.csp || !policy.permissionsPolicy) {
+      errors.push(
+        `aws_cloudfront_response_headers_policy.${label} carries ` +
+          `${policy.csp ? '' : 'no content_security_policy'}${!policy.csp && !policy.permissionsPolicy ? ' and ' : ''}` +
+          `${policy.permissionsPolicy ? '' : 'no Permissions-Policy header'}. Every behaviour on the ` +
+          'distribution points at it, so the whole site loses that header at once.',
+      );
+    } else {
+      ok.push(
+        `all ${behaviours.length} cache behaviours: CSP + Permissions-Policy via ${label}`,
+      );
+    }
+  }
+
+  if (viewerRequestSources.size > 1) {
+    errors.push(
+      `the behaviours associate ${viewerRequestSources.size} different viewer-request functions ` +
+        `(${[...viewerRequestSources].sort().join(', ')}). Every path on this distribution runs the ` +
+        'same edge function or the host consolidation is per-path, which nothing states.',
+    );
+  } else if (viewerRequestSources.size === 1) {
+    ok.push(
+      `all ${behaviours.length} cache behaviours: viewer-request function from ${[...viewerRequestSources][0]}`,
+    );
+  }
+  if (originsMissingOac.length === 0 && insecureOrigins.length === 0) {
+    ok.push(`all ${originIds.length} distribution origins: OAC-signed, https-only`);
+  }
 }
 
 export function main() {
@@ -376,6 +636,7 @@ export function main() {
     parseDependabotTerraform(readFileSync(DEPENDABOT_FILE, 'utf-8')),
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
+    parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
   );
 
   for (const line of ok) console.log(`[OK] ${line}`);
