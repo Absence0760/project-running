@@ -627,11 +627,14 @@ test("every register exemption still needs its exemption", async () => {
  * pt-PT is a derivation OF pt-BR, so an edge that differs is an artifact of the
  * derivation and never a translation choice. No list, no threshold.
  *
- * The initial CASE is deliberately not checked here even though the same 19
- * strings carried it: `pt-PT.ts` differs from Brazilian on the first letter of
- * 248 values, nearly all of them standalone labels where either case is
- * defensible, and a guard firing on those to reach these would be an allowlist
- * of 248 entries. The whitespace edge is the part that is unambiguous.
+ * The initial CASE is still not checked here, and now for a narrower reason
+ * than § 784's. The 248 were read one call site at a time and 208 lowercased
+ * (§ 872); the 21 left are label positions where the capital is right. What
+ * separates them is where the string renders — after a `<kbd>`, under a value,
+ * inside a badge — which a catalogue cannot see and which pt-BR cannot answer
+ * either, since Brazilian is lowercase in both classes. The subset whose
+ * position IS a catalogue fact is the one a value interpolates into another
+ * value, and that is guarded below rather than here.
  */
 test("a pt-PT fragment keeps the spacing its Brazilian twin assembles with", async () => {
 	const european = await catalogue("pt-PT");
@@ -698,6 +701,213 @@ test("a gender-flipped European noun agrees with what governs it", async () => {
 		"locales/pt-PT.ts carries a European word inside its Brazilian counterpart's " +
 			"agreement. Substituting the noun is half the change; the article and the " +
 			"adjective agreeing with it have to move too.",
+	);
+});
+
+/**
+ * A value one key interpolates INTO another cannot open a sentence it is in the
+ * middle of. `profile.thisRunner` fills `{name}` inside "Bloqueou {name}." and
+ * `reportDialog.nounProfile` fills `{noun}` inside "Denunciar este {noun}", so a
+ * capital there renders "Bloqueou Este corredor." — a sentence with a second
+ * beginning in it. The § 755 derivation walked `pt-BR.ts` value by value and
+ * sentence-cased each one it met, which put a capital on 248 of them; the ones
+ * reached this way are the subset whose position is a FACT about the catalogue
+ * rather than a judgement about the surface, because the outer value says in
+ * its own text where the slot sits (§ 872).
+ *
+ * Derived from source, not listed: the pairs come from scanning every call of
+ * the form `m('outer', { slot: m('inner') })` — including the `?? m('inner')`
+ * fallback shape, which is how most of them are actually written — so a new
+ * one is covered the day it is written and a deleted one stops being checked.
+ * The scan follows a literal key through a literal params object and nothing
+ * else, so a key reached through a `Record<Kind, MessageKey>` map (the report
+ * dialog's nouns, the route description's parts) is invisible to it; those were
+ * settled by reading the call site and are not guarded. What this catches is
+ * the shape that recurs, not every instance of the class.
+ *
+ * Cross-locale rather than pt-PT-against-pt-BR, unlike the two guards above:
+ * the slot's position is in the outer value of each catalogue separately, so
+ * every catalogue is measured against its own sentence and a defect shared by
+ * both Portuguese catalogues is still reported.
+ */
+
+/**
+ * Locales whose orthography capitalises a common noun wherever it stands, so a
+ * capital there carries no information about sentence position. German writes
+ * `Läufer` mid-sentence and is right to; reading that as a style choice would
+ * report every German noun-fallback in the set.
+ */
+const NOUN_CAPITALISING_LOCALES = new Set(["de"]);
+
+/**
+ * inner key -> why a capital is right even though the slot sits mid-sentence.
+ * Each is a slot that normally holds something already capitalised, so the
+ * stand-in matches what it stands in for rather than the sentence around it.
+ * Every one is capitalised in en, es, fr AND both Portuguese catalogues, which
+ * is what separates a shared authoring choice from a pt-PT artifact. The
+ * companion test drops an entry that has stopped covering anything.
+ */
+const INTERPOLATED_CAPITAL_EXEMPT: Record<string, string> = {
+	"coachingAthlete.runnerFallback":
+		"stands in for a person's display name. What normally lands in that slot is " +
+		"`Alice`, so the stand-in takes a name's case, not the sentence's.",
+	"liveEvent.eventFallback":
+		"stands in for an event's title, the same way — the slot normally holds " +
+		"whatever the organiser typed, which is capitalised.",
+	"onboarding.notSignedIn":
+		"is a whole sentence dropped into a `{message}` slot after a colon, and a " +
+		"sentence after a colon opens with a capital.",
+};
+
+/** `slot: m('inner')`, including the `slot: x ?? m('inner')` fallback shape. */
+const PARAM_SLOT =
+	/(?<![\w$.])([A-Za-z_$][\w$]*)\s*:\s*(?:[^,{}]*?\?\?\s*)?(?:m|t|tr)\(\s*(['"])([\w.]+)\2\s*\)/g;
+/** `m('outer', {` — the head of a translator call that takes params. */
+const PARAM_CALL = /(?<![\w$.])(?:m|t|tr)\(\s*(['"])([\w.]+)\1\s*,\s*\{/g;
+
+interface Interpolation {
+	inner: string;
+	outer: string;
+	slot: string;
+}
+
+/**
+ * Every `outer`/`slot`/`inner` triple a source file spells out literally.
+ * Whitespace is collapsed first so a call broken across lines reads the same
+ * as one on a single line, and the params object is brace-matched rather than
+ * regex-bounded so a nested object inside it does not truncate the body.
+ */
+function interpolationsIn(source: string): Interpolation[] {
+	const flat = source.replace(/\s+/g, " ");
+	const found: Interpolation[] = [];
+	PARAM_CALL.lastIndex = 0;
+	let head: RegExpExecArray | null;
+	while ((head = PARAM_CALL.exec(flat))) {
+		const bodyStart = head.index + head[0].length;
+		let i = bodyStart;
+		let depth = 1;
+		while (i < flat.length && depth > 0) {
+			const c = flat[i];
+			if (c === "{") depth++;
+			else if (c === "}") depth--;
+			i++;
+		}
+		const body = flat.slice(bodyStart, i - 1);
+		for (const slot of body.matchAll(PARAM_SLOT)) {
+			found.push({ inner: slot[3], outer: head[2], slot: slot[1] });
+		}
+	}
+	return found;
+}
+
+/** Does this character carry case at all, and is it the upper one? */
+function opensUpper(value: string): boolean {
+	const c = value[0];
+	return !!c && c.toLowerCase() !== c.toUpperCase() && c === c.toUpperCase();
+}
+
+test("the interpolation scan reads a wrapped call and ignores a bare one", () => {
+	const FIXTURES: Array<[found: Interpolation[], source: string]> = [
+		[
+			[{ inner: "profile.thisRunner", outer: "profile.blockedToast", slot: "name" }],
+			"showToast(m('profile.blockedToast', { name: p.display_name ?? m('profile.thisRunner') }))",
+		],
+		// The shape most of them are actually written in: broken over lines, and
+		// the outer call carrying a second param after the interpolated one.
+		[
+			[{ inner: "planLibrary.anonymousAuthor", outer: "planLibrary.byAuthor", slot: "author" }],
+			"{m('planLibrary.byAuthor', {\n\tauthor: p.author_handle ?? m('planLibrary.anonymousAuthor'),\n\tn: 3\n})}",
+		],
+		// A nested object in the params must not truncate the body before the slot.
+		[
+			[{ inner: "recap.days", outer: "recap.weekOf", slot: "date" }],
+			"t('recap.weekOf', { opts: { hour12: false }, date: t('recap.days') })",
+		],
+		// A call with no params object interpolates nothing.
+		[[], "<span>{m('dash.average')}</span>"],
+		// A literal string in the slot is not a catalogue value.
+		[[], "m('profile.blockedToast', { name: 'Alice' })"],
+	];
+	for (const [expected, source] of FIXTURES) {
+		assert.deepEqual(interpolationsIn(source), expected, source);
+	}
+});
+
+test("a value another key interpolates mid-sentence does not open a sentence", async () => {
+	const pairs = new Map<string, Interpolation>();
+	for (const file of sourceFiles(SRC)) {
+		if (file.endsWith(".test.ts")) continue;
+		if (file.includes(join("i18n", "locales"))) continue;
+		for (const p of interpolationsIn(readFileSync(file, "utf8"))) {
+			pairs.set(`${p.outer}|${p.slot}|${p.inner}`, p);
+		}
+	}
+	// A scan that finds nothing passes vacuously. The codebase does interpolate
+	// one catalogue value into another; if this comes back empty the matcher has
+	// broken — the `m`/`t`/`tr` aliases renamed, say — not the catalogues.
+	assert.ok(
+		pairs.size > 0,
+		"the interpolation scan found no `m('outer', { slot: m('inner') })` call at " +
+			"all. That is this guard breaking, not the source getting clean.",
+	);
+
+	const offenders: string[] = [];
+	for (const tag of SUPPORTED_LOCALES) {
+		if (NOUN_CAPITALISING_LOCALES.has(tag)) continue;
+		const messages = (await CATALOGUE_LOADERS[tag]()) as Record<string, unknown>;
+		for (const { inner, outer, slot } of pairs.values()) {
+			if (INTERPOLATED_CAPITAL_EXEMPT[inner]) continue;
+			const host = messages[outer];
+			const filler = messages[inner];
+			if (typeof host !== "string" || typeof filler !== "string") continue;
+			// `<= 0` covers both "the slot opens the value" and "this catalogue
+			// phrased the sentence without that slot at all".
+			if (host.indexOf(`{${slot}}`) <= 0) continue;
+			if (!opensUpper(filler)) continue;
+			offenders.push(`${tag} ${inner} = ${JSON.stringify(filler)} fills {${slot}} inside ${outer}`);
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		"a catalogue value opens with a capital where another value interpolates it " +
+			"mid-sentence, so the rendered sentence has a second beginning in it " +
+			"(decisions § 872). Lowercase the filler, or — if the slot normally holds " +
+			"something already capitalised, a person's name or a whole sentence — add " +
+			"it to INTERPOLATED_CAPITAL_EXEMPT with that reason.",
+	);
+});
+
+test("every mid-sentence-capital exemption still needs its exemption", async () => {
+	const pairs: Interpolation[] = [];
+	for (const file of sourceFiles(SRC)) {
+		if (file.endsWith(".test.ts")) continue;
+		if (file.includes(join("i18n", "locales"))) continue;
+		pairs.push(...interpolationsIn(readFileSync(file, "utf8")));
+	}
+	const stale: string[] = [];
+	for (const inner of Object.keys(INTERPOLATED_CAPITAL_EXEMPT)) {
+		let covers = false;
+		for (const tag of SUPPORTED_LOCALES) {
+			if (NOUN_CAPITALISING_LOCALES.has(tag)) continue;
+			const messages = (await CATALOGUE_LOADERS[tag]()) as Record<string, unknown>;
+			const filler = messages[inner];
+			if (typeof filler !== "string" || !opensUpper(filler)) continue;
+			for (const p of pairs) {
+				if (p.inner !== inner) continue;
+				const host = messages[p.outer];
+				if (typeof host === "string" && host.indexOf(`{${p.slot}}`) > 0) covers = true;
+			}
+		}
+		if (!covers) stale.push(inner);
+	}
+	assert.deepEqual(
+		stale,
+		[],
+		"an INTERPOLATED_CAPITAL_EXEMPT entry no longer covers a value the guard " +
+			"would otherwise report — the key was renamed, lowercased, or is no " +
+			"longer interpolated. An exemption covering nothing has stopped being a " +
+			"decision and become an allowance; delete it.",
 	);
 });
 
