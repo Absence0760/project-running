@@ -167,7 +167,7 @@ pub fn is_track_renderable(track: &[TrackPoint]) -> bool {
     }
     let d_lat_m = (max_lat - min_lat) * 111_320.0;
     let d_lng_m = (max_lng - min_lng) * 111_320.0 * libm::cos(min_lat * PI / 180.0);
-    libm::sqrt(d_lat_m * d_lat_m + d_lng_m * d_lng_m) > 0.5
+    libm::sqrt(d_lat_m * d_lat_m + d_lng_m * d_lng_m) > 5.0
 }
 
 #[cfg(test)]
