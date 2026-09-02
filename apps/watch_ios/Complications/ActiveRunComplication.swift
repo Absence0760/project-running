@@ -266,8 +266,10 @@ struct ActiveRunComplication: Widget {
 // Mirrors apps/watch_wear/.../tiles/ActiveRunTileService.kt so the two
 // platforms render identical strings. This Widget Extension target can't
 // link RunFormat.swift, so it carries this copy; WatchApp/RunFormat.swift
-// holds a byte-identical copy that ComplicationFormatterTests pins. Keep
-// the two in lockstep.
+// holds a byte-identical copy that ComplicationFormatterTests pins. The
+// two are held identical by scripts/check_watch_ios_source.mjs, which runs
+// on Linux — no Swift test can compare them, because this file is in no
+// target and the suite therefore links only the other copy (§ 885).
 
 func formatElapsed(_ seconds: Int) -> String {
     let s = max(seconds, 0)

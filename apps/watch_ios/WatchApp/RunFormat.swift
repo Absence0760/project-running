@@ -66,7 +66,10 @@ enum RunFormat {
 // builds in a separate Widget Extension target that can't link this file.
 // That copy is the source of truth for the widget; this copy lives in the
 // WatchApp target so `ComplicationFormatterTests` can pin the contract
-// without booting WidgetKit. Keep the two in lockstep.
+// without booting WidgetKit — which means the Swift suite tests THIS copy
+// and the watch face runs the OTHER one. `scripts/check_watch_ios_source.mjs`
+// is what keeps the two byte-identical; "keep them in lockstep" was a comment
+// nothing enforced until decisions § 885.
 
 func formatElapsed(_ seconds: Int) -> String {
     let s = max(seconds, 0)
