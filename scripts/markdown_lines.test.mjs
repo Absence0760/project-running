@@ -17,6 +17,26 @@ test('a line that opens a block starts a new one', () => {
 	}
 });
 
+test('an ordered item interrupts a paragraph only at 1, as CommonMark says', () => {
+	// A sentence wrapping onto "77. Distinct from ..." is a section reference,
+	// not a new list, and every markdown renderer reads it that way. Folding it
+	// as a block start truncates the paragraph at that point — on the committed
+	// parity bullet that hid 92 of its 109 pairs with no error reported, which is
+	// the exact defect the fold exists to prevent.
+	assert.equal(foldSoftWraps('see section\n77. Distinct from the other one'), 'see section 77. Distinct from the other one');
+	assert.equal(foldSoftWraps('see section\n77) Distinct from the other one'), 'see section 77) Distinct from the other one');
+	assert.equal(foldSoftWraps('- pairs are listed\n  604. and the note continues'), '- pairs are listed 604. and the note continues');
+
+	// 1 still interrupts, in both delimiters — a real ordered list written under
+	// a paragraph must not be swallowed into it.
+	assert.equal(foldSoftWraps('prose\n1. item'), 'prose\n1. item');
+	assert.equal(foldSoftWraps('prose\n1) item'), 'prose\n1) item');
+
+	// And a number at the START of a block is a list whatever its value: the
+	// rule is about interrupting an OPEN paragraph, not about the digit.
+	assert.equal(foldSoftWraps('prose\n\n77. item'), 'prose\n\n77. item');
+});
+
 test('a wrapped list item folds, a sibling item does not', () => {
 	assert.equal(foldSoftWraps('- first\n  wrapped\n- second'), '- first wrapped\n- second');
 });
