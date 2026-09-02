@@ -15023,3 +15023,41 @@ deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
 That check mattered — the first mutation attempted was weakening the assertion
 to `includes('')`, which passes trivially and measures nothing. **Mutate the
 subject, not the assertion.**
+
+## 979. A missing activity-type column is a header failure, not a row that happens to be untyped
+
+`indexHeader` answers `-1` for a column it cannot find, and `row[-1]` is
+`undefined`. Every other required column is checked before the import loop
+runs; `Activity Type` was not. So an export era that renamed or dropped it
+left `idx.type === -1`, `classifyStravaRow('')` fell through the
+`t && !t.includes('run')` guard to `import`, and `importOne`'s
+`(row[idx.type] ?? 'run')` then stamped the whole file `run`. A migrant's
+five years of rides, swims and yoga would import as runs, silently, with the
+disposition counter reporting them as imported and the summary toast agreeing.
+
+The filing asked whether to make it fatal or to drop the untyped row as
+`unsupported`. Dropping is the wrong answer for this case: with the column
+absent EVERY row is untyped, so the import ends at zero imported and several
+thousand "dropped", which is a worse message than a named header failure and
+still leaves the operator guessing which column moved. Refusing at the header
+is also the only point where "this export names no activity type" and "this
+row's cell is blank" are still distinguishable — past it, both are the empty
+string. The blank cell keeps its existing lenient behaviour deliberately: on
+an export that DOES carry the column, a blank cell is a Strava artifact and
+`run` is the overwhelmingly likely truth.
+
+Two rails, because a hard refusal on its own would reject an export we could
+in fact read. `type` now falls back to `Sport Type`, which every modern export
+carries beside the coarse column and whose foot-sport values spell their family
+out (`TrailRun`, `VirtualRun`, `Walk`, `Hike`) — so the existing substring test
+reads it unchanged. The refusal fires only when the header names NEITHER. On
+every export shipped to date the coarse column is present and still wins, so
+neither rail changes any real import.
+
+`classifyStravaRow` and `indexHeader` are web-only; the mobile Strava importer
+takes a different path and does not share the defect, so nothing is owed on the
+Dart side. Pinned by three cases in `strava-zip-header.test.ts` (Sport-Type
+fallback, coarse-wins, neither-present) and a source guard in
+`strava_zip_strictness.test.ts` — `strava-zip.ts` imports supabase-js and
+cannot be executed under `tsx --test`, which is why that file's coverage has
+always been source-level.
