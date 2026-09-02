@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
 	DEFAULT_BODY_WEIGHT_KG,
 	ACTIVITY_KCAL_PER_KG_PER_KM,
+	MAX_ESTIMABLE_KCAL,
 	estimateRunCalories,
 } from './calories';
 
@@ -179,6 +180,15 @@ test('estimateRunCalories: an unrepresentable product is no estimate', () => {
 		}),
 		0,
 	);
+});
+
+test('estimateRunCalories: a product past MAX_ESTIMABLE_KCAL is no estimate', () => {
+	// Finite, and inside the double range, but past the integer range the two
+	// platforms share: Dart's `int` saturates at 2^63-1 while a JS number
+	// keeps the double, so the same input would answer 9223372036854775807
+	// there and 7e19 here.
+	assert.equal(estimateRunCalories({ distanceM: 1e21 }), 0);
+	assert.equal(MAX_ESTIMABLE_KCAL, Number.MAX_SAFE_INTEGER);
 });
 
 test('estimateRunCalories: always returns a finite integer', () => {

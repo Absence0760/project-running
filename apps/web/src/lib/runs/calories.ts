@@ -76,20 +76,23 @@ export interface EstimateRunCaloriesInput {
 	gender?: CalorieGender;
 }
 
+/// Ceiling on an estimate either platform can carry the same way. Past 2^53-1
+/// a JS number stops being an exact integer while Dart's `int` saturates at
+/// 2^63-1, so the same absurd input yields two different figures -- and an
+/// estimate that large is not one. Reported as no estimate, the same answer a
+/// negative distance gets.
+export const MAX_ESTIMABLE_KCAL = Number.MAX_SAFE_INTEGER;
+
 /// Returns the estimated calorie burn for a run, rounded to the
 /// nearest integer. Always non-negative.
 export function estimateRunCalories(input: EstimateRunCaloriesInput): number {
-	// Every input is checked for finiteness, not just for sign. A NaN fails
-	// the `> 0` tests the way a zero does but survives `Math.max`, so an
-	// unusable distance used to reach the caller as a rendered `NaN kcal`
-	// while the Dart twin -- whose `.round()` throws on a non-finite double --
-	// answered 0 for the same NaN and threw outright for an Infinity, inside a
-	// widget getter read during build. One formula cannot have two answers, and
-	// neither of those two was the right one: an unusable measurement
-	// contributes nothing, and an unusable weight or coefficient falls back to
-	// the documented default exactly as an absent one does.
-	const distanceM = Number.isFinite(input.distanceM) ? input.distanceM : 0;
-	const distanceKm = Math.max(0, distanceM) / 1000;
+	const distanceKm = Math.max(0, input.distanceM) / 1000;
+	// Weight and coefficient are checked for FINITENESS, not just for sign. A
+	// NaN fails the `> 0` test the way a zero does and so already fell back to
+	// the default, but an Infinity passed it -- returning Infinity here while
+	// the Dart twin threw, because `.round()` refuses a non-finite double, and
+	// this is read from a getter during a widget build. An unusable weight is
+	// no more usable than an absent one, so both take the documented default.
 	const weight =
 		input.weightKg != null && Number.isFinite(input.weightKg) && input.weightKg > 0
 			? input.weightKg
@@ -101,8 +104,12 @@ export function estimateRunCalories(input: EstimateRunCaloriesInput): number {
 			? input.activityKcalPerKgPerKm
 			: ACTIVITY_KCAL_PER_KG_PER_KM.run;
 	const g = genderMultiplier(input.gender);
-	// Finite inputs can still multiply out past the double range; the estimate
-	// is a display figure, so an unrepresentable one is no estimate at all.
+	// The tail guard carries the DISTANCE. A NaN survives `Math.max` where the
+	// Dart twin's `> 0` test sends it to zero, and either way the product is
+	// then unusable, so grading the product is what makes the two agree rather
+	// than a third per-input check that no input could reach past this one.
+	// Finite inputs can also multiply out past the range the two platforms
+	// share -- see MAX_ESTIMABLE_KCAL.
 	const kcal = weight * activityCoef * distanceKm * g;
-	return Number.isFinite(kcal) ? Math.round(kcal) : 0;
+	return Number.isFinite(kcal) && kcal <= MAX_ESTIMABLE_KCAL ? Math.round(kcal) : 0;
 }

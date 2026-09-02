@@ -154,6 +154,15 @@ void main() {
       );
     });
 
+    test('a product past kMaxEstimableKcal is no estimate', () {
+      // Finite, and inside the double range, but past the integer range the
+      // two platforms share: `.round()` saturates at 2^63-1 here while a JS
+      // number keeps the double, so the same input would answer
+      // 9223372036854775807 here and 7e19 on web.
+      expect(estimateRunCalories(distanceM: 1e21), 0);
+      expect(kMaxEstimableKcal, 9007199254740991);
+    });
+
     test('always returns a finite non-negative integer', () {
       const inputs = [
         double.nan,

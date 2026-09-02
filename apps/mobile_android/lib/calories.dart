@@ -27,6 +27,13 @@ const double _kFemaleCalorieCalibration = 0.95;
 double _genderMultiplier(CalorieGender gender) =>
     gender == 'female' ? _kFemaleCalorieCalibration : 1.0;
 
+/// Ceiling on an estimate either platform can carry the same way. Past 2^53-1
+/// a JS number stops being an exact integer while Dart's `int` saturates at
+/// 2^63-1 — so `(7e19).round()` is 9223372036854775807 here and 7e19 on web
+/// for the same input. An estimate that large is not one. Reported as no
+/// estimate, the same answer a negative distance gets.
+const int kMaxEstimableKcal = 9007199254740991;
+
 /// Returns the estimated calorie burn for a run, rounded to the
 /// nearest integer. Always non-negative.
 ///
@@ -42,16 +49,14 @@ int estimateRunCalories({
   double? activityKcalPerKgPerKm,
   CalorieGender gender,
 }) {
-  // Every input is checked for finiteness, not just for sign. `.round()`
-  // THROWS on a non-finite double, and this getter is read during a widget
-  // build, so an Infinity distance or weight took the run-detail screen down
-  // where the web twin rendered `NaN kcal` for the same NaN. One formula
-  // cannot have two answers, and neither of those two was the right one: an
-  // unusable measurement contributes nothing, and an unusable weight or
-  // coefficient falls back to the documented default exactly as an absent one
-  // does.
-  final dist = distanceM.isFinite && distanceM > 0 ? distanceM : 0.0;
+  final dist = distanceM > 0 ? distanceM : 0.0;
   final distanceKm = dist / 1000;
+  // Weight and coefficient are checked for FINITENESS, not just for sign. A
+  // NaN fails the `> 0` test the way a zero does and so already fell back to
+  // the default, but an Infinity passed it — and `.round()` THROWS on a
+  // non-finite double, inside a getter read during the run-detail widget
+  // build, where the web twin merely returned Infinity. An unusable weight is
+  // no more usable than an absent one, so both take the documented default.
   final weight = (weightKg != null && weightKg.isFinite && weightKg > 0)
       ? weightKg
       : kDefaultBodyWeightKg;
@@ -61,8 +66,12 @@ int estimateRunCalories({
       ? activityKcalPerKgPerKm
       : kActivityKcalPerKgPerKm['run']!;
   final g = _genderMultiplier(gender);
-  // Finite inputs can still multiply out past the double range; the estimate
-  // is a display figure, so an unrepresentable one is no estimate at all.
+  // The tail guard carries the DISTANCE. A NaN goes to zero here where the web
+  // twin's `Math.max` keeps it, and either way the product is then unusable,
+  // so grading the product is what makes the two agree rather than a third
+  // per-input check that no input could reach past this one. Finite inputs can
+  // also multiply out past the range the two platforms share — see
+  // [kMaxEstimableKcal].
   final kcal = weight * coef * distanceKm * g;
-  return kcal.isFinite ? kcal.round() : 0;
+  return kcal.isFinite && kcal <= kMaxEstimableKcal ? kcal.round() : 0;
 }
