@@ -1236,6 +1236,10 @@ The production coach Lambda's own wrapper layer, which `handler.test.ts` structu
 
 The generate-route Lambda's wrapper, measured the same way. The method gate (which fails without the fix), the 4 KB cap against decoded bytes including the multi-byte case, the base64 decode shown to be flag-driven in both directions, that a well-formed POST reaches the CORE (the 501 is the core's, so the wrapper handed over rather than answering for it), and that every refusal is parseable JSON with a JSON content-type. See [decisions § 896](../architecture/decisions.md).
 
+### `apps/web/src/lib/lambda_log_hygiene.test.ts` — 2 tests (new)
+
+What the eight production Lambdas may put in a CloudWatch line. A per-handler table declares which `event.<field>` its log lines may name — the five share Lambdas declare `rawPath` (a share path is a public URL naming a public entity), the other three declare nothing, and a handler absent from the table fails rather than defaulting to permissive. The second rule requires every log line to be a literal message plus object literals, so no caught value is spread whole. Both walk the sources with a top-level argument splitter that tracks bracket depth and string state, both carry a population floor, and both were checked to discriminate: `path: event.rawPath` added to osrm-proxy's catch fails the first by name (that path *is* the runner's waypoint coordinates), and `console.error('…', e)` restored in the coach's stream pump fails the second. See [decisions § 897](../architecture/decisions.md).
+
 ---
 
 ## Suite totals after the #789 coverage round (2026-08-31)

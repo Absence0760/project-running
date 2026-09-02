@@ -177,7 +177,16 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 				stream.write(Buffer.from(chunk));
 			}
 		} catch (e) {
-			console.error('[coach lambda] stream pump failed', e);
+			// Normalised, never the raw caught value. This one is thrown by the
+			// PROVIDER STREAM, whose payload is the runner's own coaching
+			// conversation; a provider SDK's error object can carry the
+			// response body or the request that produced it, and spreading it
+			// into CloudWatch would put that conversation in the log
+			// (decisions § 897).
+			console.error('[coach lambda] stream pump failed', {
+				message: e instanceof Error ? e.message : String(e),
+				stack: e instanceof Error ? e.stack : undefined,
+			});
 		} finally {
 			stream.end();
 		}
@@ -194,7 +203,10 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		try {
 			writeJson(responseStream, 503, { error: 'Coach is temporarily unavailable.' });
 		} catch (writeErr) {
-			console.error('[coach lambda] failed to write 503 envelope', writeErr);
+			console.error('[coach lambda] failed to write 503 envelope', {
+				message: writeErr instanceof Error ? writeErr.message : String(writeErr),
+				stack: writeErr instanceof Error ? writeErr.stack : undefined,
+			});
 		}
 	}
 	},

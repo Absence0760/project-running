@@ -12351,3 +12351,40 @@ read from `x-supabase-authorization` and never `Authorization` (CloudFront's
 OAC signs that slot), the provider check not gating the two route sub-paths,
 and the outer envelope answering a generic 503 that does not name the env var
 it failed on.
+
+## 897. The Lambda tree's log lines are a declared shape, because the copy-paste that breaks it is one line
+
+**Decided 2026-09-02.** The eight handlers under `apps/web/lambda/` see the
+most sensitive values the product has. The osrm-proxy's request PATH *is* the
+runner's waypoint coordinates
+(`/api/routes/osrm/route/v1/foot/-0.1,51.5;-0.12,51.51`), the generate-route
+body carries a start coordinate, and the coach's provider stream carries the
+runner's own coaching conversation. Nothing constrained what a log line could
+name, and the audit answer "no PII reaches CloudWatch today" is true and worth
+about a week: the five share Lambdas log `path: event.rawPath` — correct
+there, a share path is a public URL naming a public entity — and that catch
+block is precisely the thing a sibling gets by copy-paste.
+
+One thing was already loose. `console.error('[coach lambda] stream pump
+failed', e)` handed the whole caught value over, where every other catch in the
+tree normalises to `{ message, stack }`. That `e` comes from iterating the
+PROVIDER stream, and a provider SDK's error object can carry the response body
+or the request that produced it, so the one log line in the tree that spread a
+raw error was the one downstream of the coaching conversation. Both raw-value
+logs in that file now normalise.
+
+The guard states two rules, each derived from the shape the tree already uses
+rather than invented for it. **A handler declares which `event.<field>` its log
+lines may name** — the five share Lambdas declare `rawPath`, the other three
+declare nothing, and a Lambda missing from the table fails rather than
+defaulting to permissive, so a ninth handler has to answer the question. **A
+log line is a literal message plus object literals** — anything else is a value
+whose shape nobody controls. Both are measured against the sources with a
+population floor, and both were checked to discriminate: adding
+`path: event.rawPath` to osrm-proxy's catch fails the first by name, reverting
+the pump log fails the second.
+
+The rules deliberately do not try to recognise PII. A matcher for coordinates
+or emails would pass everything it had not thought of, which is the failure
+mode of every allowlist-of-banned-things in this repo; naming what may be
+logged is the direction that closes.
