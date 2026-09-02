@@ -331,9 +331,16 @@ jobs:
       - name: go vet
         working-directory: apps/job_worker
         run: go vet ./...
+      # `-race`, not a plain run: this binary is the most concurrent thing in
+      # the repo — an in-process pub/sub hub with per-room goroutines, a GC
+      # sweeper, a bridge poller, an atomic heartbeat and six HTTP servers on
+      # one mux — and until now nothing had ever put the detector over it. A
+      # data race is invisible to a plain run until it corrupts something in
+      # production, which is the one place it cannot be debugged. Measured
+      # cost of the flag on this suite: 20 s -> 35 s.
       - name: go test
         working-directory: apps/job_worker
-        run: go test ./...
+        run: go test -race ./...
 
   test-graph-cycle:
     needs: changes
@@ -352,9 +359,12 @@ jobs:
       - name: go vet
         working-directory: apps/graph_cycle
         run: go vet ./...
+      # `-race` for the reason the worker job states: the cycle search runs
+      # concurrent workers over a shared graph, and a plain run cannot see a
+      # race at all. Measured cost here: 5 s -> 5.5 s.
       - name: go test
         working-directory: apps/graph_cycle
-        run: go test ./...
+        run: go test -race ./...
 
   parity-types:
     needs: changes

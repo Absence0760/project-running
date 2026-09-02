@@ -13936,3 +13936,25 @@ Pinned in both directions — the three reasons produce a body naming none of
 them while the log still carries each, and a push refusal and a snapshot refusal
 produce byte-identical bodies, so the response cannot be read as an oracle for
 which action was attempted either.
+
+## 935. The most concurrent binary in the repo had never met the race detector
+
+**Decided 2026-09-02.** Both Go jobs ran a plain `go test ./...`. `job_worker`
+is an in-process pub/sub hub with per-room goroutines, a GC sweeper, a bridge
+poller, an atomic heartbeat and six HTTP servers on one mux; `graph_cycle` runs
+concurrent workers over a shared graph. A plain run cannot observe a data race
+at all — it observes whichever interleaving it happened to get — so the suite
+being green said nothing about the property, and the first place an unsynchronised
+map write would surface is production, which is the one place it cannot be
+debugged.
+
+Both jobs now run `go test -race ./...`. Both suites are race-clean today,
+measured on this branch rather than assumed: `job_worker` 20 s to 35 s,
+`graph_cycle` 5 s to 5.5 s. The flag replaces the plain run rather than adding a
+second step, so neither job becomes a bundled one under the § 764 rule and
+neither needs its own `::error::`.
+
+The reason this went unnoticed is worth stating: `go vet` sits beside `go test`
+in both jobs and reads as a concurrency check to a passing eye, but `vet` is a
+static pass with no view of interleaving. Two guards in a job is not two
+questions answered.
