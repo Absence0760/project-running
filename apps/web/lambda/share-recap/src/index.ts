@@ -25,7 +25,7 @@ import {
 } from '../../../src/lib/share/share_recap_meta';
 import { injectShareRecapMeta } from '../../../src/lib/share/share_recap_spa_shell';
 import { renderRecapOgPng } from '../../../src/lib/share/og_recap_png';
-import { DEFAULT_SITE_URL } from '../../../src/lib/core/site_url';
+import { siteOrigin } from '../../../src/lib/core/site_url';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -40,7 +40,11 @@ export const handler = async (
 	try {
 		const supabaseUrl = process.env.PUBLIC_SUPABASE_URL ?? '';
 		const supabaseAnonKey = process.env.PUBLIC_SUPABASE_ANON_KEY ?? '';
-		const siteUrl = process.env.PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
+		// `siteOrigin`, not `?? DEFAULT_SITE_URL`: `??` fires only on
+		// null/undefined, so a `PUBLIC_SITE_URL=""` in the function's env
+		// survives as the empty string and every og:url / og:image below
+		// comes out root-relative (decisions § 895).
+		const siteUrl = siteOrigin(process.env.PUBLIC_SITE_URL);
 
 		const path = event.rawPath || '/';
 		const htmlMatch = path.match(HTML_PATH_RE);

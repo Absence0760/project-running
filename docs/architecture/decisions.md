@@ -12240,3 +12240,51 @@ scope — there is no module system at the edge, so there is nothing to import,
 and the same trick pins that the file really does declare a top-level
 `function handler` rather than a `const` or an `export` the runtime could not
 call. It is stdlib-only and runs as its own step in `parity-types`.
+
+## 895. `siteOrigin` had no callers, and every production Lambda folded the origin with `??` instead
+
+**Decided 2026-09-02.** Every crawler-facing surface on this site is rendered
+in production by a Lambda and never by SvelteKit — adapter-static drops the
+`+server` / `+page.ts` halves ([§ 53](#53)) — so `/share/{run,route,badge,
+event,profile,club,race,session,workout}`, `/recap/share/*` and the five
+`/og/*` PNGs each get their absolute `og:url`, `og:image`, canonical and
+JSON-LD `url` from one line in a Lambda:
+
+```
+const siteUrl = process.env.PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
+```
+
+The twenty in-app callers under `src/routes/` spell it
+`env.PUBLIC_SITE_URL || DEFAULT_SITE_URL`. **Those are not the same fold.**
+`??` fires only on null/undefined, so a `PUBLIC_SITE_URL=""` — a deploy that
+failed to configure it, an `extra_lambda_env` that set the key empty, a
+self-hosted stack — survives as the empty string and is handed to the head
+builders as the origin. `normaliseSiteUrl` then tolerates it (its own comment
+says so), and the rendered head carries `<meta property="og:url"
+content="/share/event/e1">` and `<meta property="og:image"
+content="/og-default.png">`. Open Graph requires an absolute URL, and a
+root-relative unfurl image is precisely what `share_url_source_guard.test.ts`
+already bans **in the sources** — banned where it was written, still reachable
+through the environment.
+
+The helper for this exact fold already existed. `siteOrigin` folds blank *and*
+whitespace-only to the default and trims a trailing slash, and its doc comment
+states the rule outright: "an env var set to the empty string is a deploy that
+failed to configure it, not a request to serve canonicals from nowhere." It was
+unit-tested and had **zero callers** — the module's split into a constant and a
+function had migrated the 28 copies of the *constant* and left the *fold* on
+every caller. All five Lambdas now go through it.
+
+Pinned two ways, because neither reaches the other's failure. A source register
+walks `apps/web/lambda/` and requires every `PUBLIC_SITE_URL` read to be
+`siteOrigin(process.env.PUBLIC_SITE_URL…)`, with a population floor so a broken
+walker fails instead of reporting a clean tree; reverting one Lambda fails it by
+name. And a behavioural pair drives the head builders the Lambdas actually call:
+one asserts what a blank origin produces (the root-relative `og:image`, so the
+consequence is written down rather than described), the other asserts that
+`undefined`, `null`, `''`, `'   '` and a trailing-slash origin all yield an
+absolute, single-slashed `og:url` and `og:image`.
+
+The `src/` half is not fixed here and is filed instead: `||` gets the blank case
+right, so those twenty callers are correct today, but none of them trims a
+trailing slash and none goes through the helper either.

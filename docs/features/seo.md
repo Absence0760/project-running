@@ -236,11 +236,25 @@ e2e-tested without standing up the Lambda.
   (popularity-weighted), learn pages, and public **events + clubs + races**
   (`entityEntries`).
   Graceful-degrades to top-level-only if Supabase is unreachable at build.
-- **`www` → apex 301** — a viewer-request CloudFront Function
+- **`www` → apex redirect** — a viewer-request CloudFront Function
   (`infra/modules/web-stack/functions/www_redirect.js`, gated on
-  `redirect_www_to_apex`, prod-only) 301s any `www.*` host to the bare
+  `redirect_www_to_apex`, prod-only) redirects any `www.*` host to the bare
   apex, preserving path + query, on every cache behavior. Consolidates the
-  duplicate host that otherwise split ranking signal.
+  duplicate host that otherwise split ranking signal. The host is **lowercased
+  before the test**, or a `WWW.` host escapes the redirect and serves the whole
+  site at the second host; GET and HEAD get a **301**, every other method a
+  **308**, because the function is on the `/api/*` behaviours too and a 301
+  lets a client rewrite a POST into a bodiless GET
+  ([decisions § 894](../architecture/decisions.md)). Behaviour is pinned by
+  `www_redirect.test.mjs` beside the function, in the `parity-types` job.
+- **The absolute origin every `<head>` resolves against** is
+  `PUBLIC_SITE_URL`, folded through `siteOrigin` (`$lib/core/site_url`) in
+  each of the five share Lambdas. The fold has to be `siteOrigin`, not
+  `?? DEFAULT_SITE_URL`: `??` fires only on null/undefined, so an empty env
+  var survives as the origin and every `og:url` / `og:image` the function
+  emits comes out root-relative — the same shape
+  `share_url_source_guard.test.ts` bans in the sources
+  ([decisions § 895](../architecture/decisions.md)).
 
 ## Deploy gate
 

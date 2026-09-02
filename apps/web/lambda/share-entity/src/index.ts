@@ -53,7 +53,7 @@ import {
 	renderShareWorkoutHeadTags,
 } from '../../../src/lib/share/share_workout_meta';
 import { injectEntityHead } from '../../../src/lib/share/entity_spa_shell';
-import { DEFAULT_SITE_URL } from '../../../src/lib/core/site_url';
+import { siteOrigin } from '../../../src/lib/core/site_url';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -132,7 +132,11 @@ export const handler = async (
 		const config: Config = {
 			supabaseUrl: process.env.PUBLIC_SUPABASE_URL ?? '',
 			supabaseAnonKey: process.env.PUBLIC_SUPABASE_ANON_KEY ?? '',
-			siteUrl: process.env.PUBLIC_SITE_URL ?? DEFAULT_SITE_URL,
+			// `siteOrigin`, not `?? DEFAULT_SITE_URL`: `??` fires only on
+			// null/undefined, so a `PUBLIC_SITE_URL=""` in the function's env
+			// survives as the empty string and every og:url / og:image below
+			// comes out root-relative (decisions § 895).
+			siteUrl: siteOrigin(process.env.PUBLIC_SITE_URL),
 		};
 		const path = event.rawPath || '/';
 		for (const route of ROUTES) {
