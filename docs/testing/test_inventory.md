@@ -1341,3 +1341,81 @@ environmental and pre-existing: it fails identically on the untouched base
 commit (265 files / 2242 tests, same file, same `planned 19 tests but ran 0`).
 The workstation CLI is 2.109.1 against CI's pinned 2.84.2, and the two disagree
 about `service_role` EXECUTE on `fundraiser_totals`.
+
+## Round 31 — the guard tier's own coverage (2026-09-02)
+
+Nothing guards the guards. This round's subject was the ~30 `scripts/*.test.mjs`
+suites themselves: for each of the highest-blast-radius ones, the exact
+violation it exists to catch was introduced into its REAL subject — the
+committed `ci.yml`, `CLAUDE.md`, the syncer table, `.tool-versions`,
+`package.json`, `deno.lock`, the fold table, the ligature vocabulary — and the
+guard required to fail. Repo guards: **828** tests (up from 788).
+
+Guards mutation-checked against their own subject and confirmed capable of
+failing, with no defect found: `check_parity_pair_registry` (all four
+properties — a pair dropped from either registry, a dead path, a path the two
+registries disagree about), `check_shared_constants` (a bent rail on the web,
+Dart and SQL sides of three different constants), `check_workflow_binaries` (an
+`npx` of an undeclared binary), `check_root_scripts` (a script `cd`-ing into a
+missing directory), `check_pnpm_overrides` (a CVE pin deleted), `sync_deno_lock
+--check` (a drifted workspace section), `check_dead_dependencies` (an unread
+dependency), `check_catalogue_fold_table` (one code point bent, and the Unicode
+version claim bent), `web_icon_font` (a shipped ligature removed from the
+vocabulary), `tsconfig_coverage` (a compilable `.mjs` outside every root).
+
+Three that could not fail, each fixed with the case that pins it:
+
+### `scripts/check_ci_diagnostics.test.mjs` — 36 tests (10 added)
+
+Rule 3 asserts every job is named in the `CI gate` aggregator's `needs:` list,
+on the premise that the aggregator passes only when every needed job passed or
+was skipped. That premise lives in a shell block inside the gate job and nothing
+read it. Three edits to that block leave rule 3 green while the single required
+status check reports success over a red repository — all three applied to the
+committed `ci.yml` and confirmed to pass the guard: removing the job-level
+`if: always()` (GitHub then SKIPS the gate on exactly the runs it exists to
+block, and a skipped required check holds nothing), replacing the `run:` with an
+`echo` (the exit status stops depending on the 31 jobs), and deleting the
+`exit 1` (the failure prints under a green check). Rule 4 now reads the gate
+itself; the eight branches it added are each mutation-checked, including the two
+block-boundary cases the first cut of the tests could not reach.
+[decisions § 909](../architecture/decisions.md).
+
+### `scripts/check_twin_claims.test.mjs` — 15 tests (new)
+
+`check_parity_pair_registry` cross-checks CLAUDE.md against the syncer table in
+both directions, and both can agree perfectly about a pair that is in NEITHER —
+the `turn_cues` (§ 641) and accent-fold (§ 760) failure, which CLAUDE.md names
+outright. The new guard takes the SOURCE as its subject: a header declaring a
+cross-platform twin must name a file that exists and a pair some syncer row
+carries. Over the tree that is **105 declarations, 13 violating** — nine pairs
+declared in both headers and registered nowhere, five headers naming a path the
+counterpart moved out of. They sit in `KNOWN_GAPS`, which fails when an entry
+stops being a violation, so the register can only shrink; the two open sets are
+in `followups.md`. Run as a fifth step of `parity-matrix`.
+[decisions § 910](../architecture/decisions.md).
+
+### `scripts/check_toolchain_pins.test.mjs` — 67 tests (17 added)
+
+`.tool-versions` pinned `nodejs 22` while all 21 `actions/setup-node` steps say
+24, and nothing in the repo read the file. Its commented lines carried the
+template's rust / flutter / golang / terraform versions against the repo's real
+ones. Two rails added — every setup-node step names a `node-version` and all
+agree, and every `.tool-versions` line (commented included) matches the pin the
+repo enforces — and writing the first surfaced a blind spot in the Flutter rail
+it was copied from: both anchored on the `- uses:` marker form, and `audit.yml`'s
+step is written `- name:` then `uses:`, so the first cut found 20 of 21 sites and
+missed the one whose comment claims it matches the rest. 54 steps in the
+committed workflows use that form. [decisions § 911](../architecture/decisions.md).
+
+### `.github/actions/start-supabase/wait_for_sidecars.test.mjs` — 10 tests (4 added)
+
+The script exists because the loop it replaced accepted kong's own answer as the
+upstream's, and its header names the answer each of its three probes requires.
+Only the edge-runtime one was ever driven: the stub answered a fixed 200 to
+storage and auth, so neither pattern was asked anything, and a stub that always
+says 200 would also have passed with the URLs swapped. Added: kong's own 503 on
+the storage path is not storage answering (and short-circuits, so no ready line
+can print under a failure); storage's own 4xx IS; a password grant GoTrue refuses
+is not auth being ready, which is why that probe is a grant rather than
+`/health`; and each probe addresses its own sidecar's path.
