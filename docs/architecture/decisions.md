@@ -13320,3 +13320,105 @@ region without any behaviour test noticing.
 No consumer on the wrist: the settings menu has no week-start row and
 `current_week::WeekStart` is a separate enum fed from the pushed settings frame.
 Port fidelity, and a doc claim that had become false.
+
+## 914. Both run importers deduped against the database and never against themselves, so a repeated result lost the whole batch
+
+**Decided 2026-09-02.** `parkrun-import` and `race-results-import` each build a
+batch of `runs` rows, read back the `external_id`s they already have stored, and
+insert the difference in ONE statement. `runs_user_external_id` (migration
+`20260528000003`) is a per-user partial unique index over
+`(user_id, external_id)`, so two rows in that one statement carrying the same id
+raise 23505 and take **every other result down with them** — not the duplicate.
+The caller gets a bare 500, nothing is imported, and a retry over the same input
+produces the same 500 because nothing about the input has changed.
+
+Reachable on both, and on the primary provider rather than a hostile edge.
+`extractRunSignUpResults` flattens every `individual_results_sets[]` entry —
+one per event, plus re-scored and provisional sets — so a runner posted in more
+than one set yields two rows whose `race:{name}:{date}:{bib}` id matches on the
+bib, since the name and the date both come from the ONE listing. The UltraSignup
+leg stamps one athlete's whole history with a single listing's name and date, so
+its ids differ by bib alone across races the runner may well have worn the same
+number in. And parkrun's scraper selects `table tbody tr` across every table on
+the page, so a result repeated in a second table is a second row with the same
+`parkrun:{event}:{date}`.
+
+The invariant this restores is the one both files already state in their own
+comments — "one junk row silently imported nothing for the athlete", "ONE
+unattributable date loses the whole race rather than one result". Both were
+closed by dropping the offending ROW. A duplicate is the same shape and had no
+such guard, at the one step where the blast radius is the whole batch.
+
+`reconcileImportBatch` in `_shared/external_id_batch.ts` takes the stored ids and
+the batch and answers both halves, returning `skipped` rather than leaving each
+call site to subtract it. That subtraction was written out twice, and it is the
+honesty half: a row dropped for duplicating a stored id and a row dropped for
+duplicating its batch-mate are the same answer to the caller — not imported, not
+lost either — so the two handlers must not be able to come to mean different
+things by one number. The guard beside it is on the SHAPE, not merely on the
+import: each of them reached the bug by writing the reconciliation out inline, so
+an `index.ts` that re-derives `fresh` from a local `Set` fails.
+
+## 915. RevenueCat reserved its dedupe row before granting a tier and never gave it back, so a transient failure closed the delivery for good
+
+**Decided 2026-09-02.** All three webhooks here write their `webhook_events` row
+BEFORE the side effect, so two concurrent deliveries of one event cannot both
+act. The price is that a handler which fails owes the row back: the provider
+retries on a non-2xx, and the retry hits the 23505 path, answers 200
+`duplicate_event`, and closes the delivery permanently. `stripe-events-webhook`
+released it and `strava-webhook` released it. `revenuecat-webhook` — the one
+that grants the paid tier — did not, and its 500 from the `user_profiles` patch
+was therefore terminal.
+
+The comment above its insert argued the cost was "a missed update, which RC's
+next renewal/state event corrects". That holds for a subscription and not for
+`NON_RENEWING_PURCHASE`: a lifetime buyer has no later event, so a single
+transient failure leaves them paid-up and on `free` with nothing coming to fix
+it. The same argument is weaker than it reads even for a renewal — the
+correction is a month away.
+
+The rule moves out of the Stripe lib into `_shared/webhook_security.ts` beside
+`validateFreshness`, since it is one rule for every insert-first deduper and the
+one that did not have it is the one that moves money's worth of entitlement; the
+Stripe lib re-exports it so its own importers and tests are unmoved. The handler
+now dispatches the way the Stripe one does — the post-dedupe work is one
+function whose response is checked — with the rethrow arm covering an uncaught
+throw that `withSentry` would otherwise turn into an unreleased 500.
+
+The guard is derived from the tree rather than listed: every `index.ts` that
+inserts a `webhook_events` row must also delete one, so a fourth webhook is
+covered the day it lands, and the set it finds is asserted so an emptied loop
+cannot pass for a clean sweep. Reserving without releasing is not a stricter
+posture — it is a delivery that can never be retried.
+
+## 916. A Strava track was uploaded and the pointer write's error was discarded, inside an arm that could not report it
+
+**Decided 2026-09-02.** `uploadTrack` checked the Storage upload and threw on
+it, then wrote `runs.track_url` and discarded that error. A failed pointer write
+therefore left the gzipped trace in Storage under the owner's prefix with no row
+naming it: every reader shows a run with no GPS trace while the bytes sit there.
+Nothing retries — `isAlreadyImported` matches on `metadata.strava_id`, so the
+next sync skips the activity entirely and the pointer is never attempted again.
+The suite had pinned the converse (a failed upload must not stamp a pointer at
+nothing) and never asked this direction, which is the shape worth recording: the
+asymmetric half of a two-step write is exactly where a test written from the
+first half does not look.
+
+The arm around it swallowed with `catch (_) {}` and no log at all, so a 404 for
+an indoor activity — expected, frequent — and a systematic breakage were
+perfectly indistinguishable. A changed streams endpoint, a revoked Storage
+grant or a quota would lose the trace of every run imported while it lasted,
+across both `strava-import` and `strava-webhook`, with nothing anywhere
+recording that it happened. It still never fails the import; it is now logged,
+and a positive control pins that an activity with no stream stays silent,
+because a line on every treadmill run is the same as no line.
+
+One thing the first fix got wrong and the mutation round caught: supabase-js
+rejects with a plain `{ message, details, hint, code }` object rather than an
+`Error`, and `uploadTrack` rethrows it as it stands — so an `instanceof Error`
+test alone reported every storage and pointer fault as `'unknown'`, a line
+saying a track was lost and nothing about why. `errorMessage` reads the message
+off both shapes and still ships only that half: `details` and `hint` carry the
+offending row's values into the shared function-log aggregator. The test now
+supplies that real shape, which is also what stops the redaction assertion
+beside it being vacuous — a thrown `Error` has no `details` for it to catch.
