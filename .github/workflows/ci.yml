@@ -544,7 +544,7 @@ jobs:
       # dir and runs `deno check --no-remote` there.
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: v2.x
+          deno-version: v2.9.6
       # Drift is checked BEFORE the tool's own suite, the reverse of the two
       # migration guards above. Those run their tests first because a broken
       # guard's verdict is worthless; here the suite's last case IS the drift
@@ -2318,7 +2318,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: v2.x
+          deno-version: v2.9.6
       # Persist the Deno module cache across runs keyed on the committed
       # deno.lock, so the common case (lockfile unchanged) restores every
       # remote dep and the test steps below never touch the network.

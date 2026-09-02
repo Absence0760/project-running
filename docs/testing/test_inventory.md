@@ -1428,7 +1428,7 @@ stops being a violation, so the register can only shrink; the two open sets are
 in `followups.md`. Run as a fifth step of `parity-matrix`.
 [decisions § 910](../architecture/decisions.md).
 
-### `scripts/check_toolchain_pins.test.mjs` — 67 tests (17 added)
+### `scripts/check_toolchain_pins.test.mjs` — 74 tests (7 added)
 
 `.tool-versions` pinned `nodejs 22` while all 21 `actions/setup-node` steps say
 24, and nothing in the repo read the file. Its commented lines carried the
@@ -1440,6 +1440,16 @@ it was copied from: both anchored on the `- uses:` marker form, and `audit.yml`'
 step is written `- name:` then `uses:`, so the first cut found 20 of 21 sites and
 missed the one whose comment claims it matches the rest. 54 steps in the
 committed workflows use that form. [decisions § 911](../architecture/decisions.md).
+
+A third rail added 2026-09-02: every `denoland/setup-deno` step names an EXACT
+`MAJOR.MINOR.PATCH` and they all agree, with `.tool-versions`' `deno` line held
+against it. Both steps took `v2.x`. Unlike Node, a major is not enough — a Deno
+MINOR carries new `deno check` diagnostics, which is the failure this rule is
+about — so the seven cases include the five channel spellings (`v2.x`, `2.x`,
+`2`, `v2`, `canary`) refused one by one, the exact form accepted with and
+without its `v` and quoted, a step naming no version, two workflows disagreeing,
+the vacuity case, a version read off a neighbouring step, and the
+`.tool-versions` half in all three states. [decisions § 965](../architecture/decisions.md).
 
 ### `.github/actions/install-playwright/verify_chromium.test.mjs` — 9 tests (new)
 

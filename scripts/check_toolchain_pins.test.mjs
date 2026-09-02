@@ -14,6 +14,7 @@ import {
 	checkActionPins,
 	checkAll,
 	checkDefmtPrint,
+	checkDeno,
 	checkFlutter,
 	checkMelos,
 	checkNode,
@@ -22,6 +23,7 @@ import {
 	parseActionUses,
 	parseDefmtPrint,
 	parseDefmtPrintByJob,
+	parseDenoSteps,
 	parseLockedVersion,
 	parseMelosActivations,
 	parseGoDirective,
@@ -721,6 +723,76 @@ test('quoting is not a divergence', () => {
 	]);
 	assert.deepEqual(errors, []);
 	assert.equal(versions.size, 1);
+});
+
+// --- Deno ------------------------------------------------------------------
+
+const denoWf = (/** @type {string} */ v) =>
+	`jobs:\n  a:\n    steps:\n      - uses: denoland/setup-deno@abc\n        with:\n          deno-version: ${v}\n`;
+
+test('a channel is refused where an exact Deno version is required', () => {
+	// The state this rail was added over: both steps took `v2.x`, so a Deno
+	// release landing between two runs changed the toolchain under code nobody
+	// touched. A major alone is enough for Node because the runner image
+	// resolves the rest; a Deno MINOR carries new `deno check` diagnostics.
+	for (const channel of ['v2.x', '2.x', '2', 'canary', 'v2']) {
+		const { errors } = checkDeno([{ name: 'ci.yml', text: denoWf(channel) }]);
+		assert.equal(errors.length, 1, channel);
+		assert.match(errors[0], /is a channel rather than a version/);
+	}
+});
+
+test('an exact Deno version passes, with or without the leading v', () => {
+	const { errors, versions } = checkDeno([
+		{ name: 'a.yml', text: denoWf('v2.9.6') },
+		{ name: 'b.yml', text: denoWf('2.9.6') },
+		{ name: 'c.yml', text: denoWf("'2.9.6'") },
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(versions.size, 1);
+	assert.ok(versions.has('2.9.6'));
+});
+
+test('a setup-deno step naming no deno-version is refused', () => {
+	const { errors } = checkDeno([
+		{ name: 'ci.yml', text: 'jobs:\n  a:\n    steps:\n      - uses: denoland/setup-deno@abc\n' },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no `deno-version` at all/);
+});
+
+test('two workflows on different Deno versions is the reported bug', () => {
+	const { errors } = checkDeno([
+		{ name: 'ci.yml', text: denoWf('v2.9.6') },
+		{ name: 'other.yml', text: denoWf('v2.8.0') },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /pin 2 different Deno versions/);
+});
+
+test('checkDeno fails rather than passing vacuously over no setup-deno step', () => {
+	const { errors } = checkDeno([{ name: 'ci.yml', text: 'jobs:\n  a:\n    steps:\n      - run: hi\n' }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /now checks nothing/);
+});
+
+test('parseDenoSteps reads the version off the step, not off a neighbour', () => {
+	const text =
+		'jobs:\n  a:\n    steps:\n      - uses: denoland/setup-deno@abc\n' +
+		'      - name: something else\n        with:\n          deno-version: v2.8.0\n';
+	assert.deepEqual(parseDenoSteps(text), [{ line: 4, version: null }]);
+});
+
+test('.tool-versions must carry the deno line the workflows pin', () => {
+	// The half that makes the pin a contributor's too. Dropping the line —
+	// which is where it was, commented, before this rail existed — fails.
+	const pins = repoPins({ deno: '2.9.6' });
+	assert.match(checkToolVersions('nodejs 24\n', pins).errors[0], /names no `deno` line/);
+	assert.match(
+		checkToolVersions('nodejs 24\n# deno 2.1.5\n', pins).errors[0],
+		/disagrees with the 2\.9\.6/,
+	);
+	assert.deepEqual(checkToolVersions('nodejs 24\ndeno 2.9.6\n', pins).errors, []);
 });
 
 test('parseToolVersions keeps a commented line, and takes the first spelling of a plugin', () => {

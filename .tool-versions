@@ -14,9 +14,11 @@
 #   golang    — apps/*/go.mod
 #   flutter   — each workflow's top-level env.FLUTTER_VERSION
 #   terraform — .github/workflows/terraform.yml
+#   deno      — each workflow's `denoland/setup-deno` step (exact, not a
+#               channel: a Deno minor carries new `deno check` diagnostics)
 #
-# The rest carry no in-repo pin, so nothing can check them: `deno` floats at
-# `v2.x` in CI, and python3 / zola are whatever the runner ships.
+# The rest carry no in-repo pin, so nothing can check them: python3 / zola are
+# whatever the runner ships.
 
 nodejs 24
 
@@ -24,5 +26,5 @@ nodejs 24
 # golang 1.26.6
 # flutter 3.47.0
 # terraform 1.13.0
-# deno 2.1.5
+# deno 2.9.6
 # python 3.14

@@ -15185,3 +15185,35 @@ The value is still read once at construction. A data field is constructed when
 the activity starts and the runner cannot reach system settings mid-activity, so
 re-reading it per second would cost a call every tick to observe a change that
 cannot happen.
+
+## 965. Deno was the last floating toolchain, and a major is not a pin for it
+
+Two `denoland/setup-deno` steps took `deno-version: v2.x` — the `parity-types`
+job's deno.lock workspace-section guard and the `edge-functions` job. That is the
+`channel: stable` shape § 595 was written about and § 705 restated for the
+firmware's Rust channel: the toolchain moves between two runs, `deno check` or
+`deno test` gains a diagnostic, and CI fails on code nobody touched with the
+blame landing on whichever PR ran next.
+
+**The version is measured, not chosen.** The last green CI run on `main`
+(5a81d206d, 2026-09-02 18:55Z) resolved `v2.x` to the **v2.9.6** release tag and
+downloaded it in both steps. Pinning 2.9.6 therefore reproduces exactly what CI
+ran green; it changes nothing about today's build and only stops tomorrow's from
+moving. The workstation has 2.9.3, which is a data point about the tree being
+runnable on 2.9.x and not evidence about CI, so it was not used as the pin.
+
+**A major is not enough here, and that is the difference from the Node rail.**
+`checkNode` compares majors because the runner image resolves the rest and a
+Node minor does not add diagnostics to a typechecker. A Deno MINOR does — it is
+the entire failure mode — so the new rule demands `MAJOR.MINOR.PATCH` and
+refuses `v2` as firmly as `v2.x`. Both spellings are covered by the suite, along
+with `2.x`, `2` and `canary`.
+
+**The `.tool-versions` line stays commented.** Its active lines are what
+`asdf install` / `mise install` materialise, and `nodejs` is the only one; the
+`rust`, `golang`, `flutter` and `terraform` pins are all commented and all
+checked, because § 911's rule reads commented lines precisely so a pin nobody
+installs through asdf is still held to the repo's. Deno is installed by its own
+installer on this workstation, so it belongs with those four rather than with
+`nodejs`. Deleting the line outright fails; leaving it at the template's stale
+`2.1.5`, commented or not, fails.
