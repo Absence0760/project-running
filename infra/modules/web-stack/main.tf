@@ -2475,9 +2475,26 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   # SPA fallback — SvelteKit static fallback is index.html.
-  # The Lambda-served behaviours above run BEFORE this fallback, so
-  # a 404 on a /share/run/<id> returned by the Lambda surfaces as a
-  # real 404 (the Lambda's own not-found HTML), not the SPA shell.
+  #
+  # These apply to EVERY origin on the distribution, not just S3.
+  # CloudFront models custom error responses per DISTRIBUTION; there is no
+  # per-cache-behaviour form, so a 403 or a 404 returned by any of the eight
+  # Lambda origins above is rewritten to the shell at 200 as well. The comment
+  # here used to claim the opposite — that a Lambda's own 404 surfaced as a real
+  # 404 because its behaviour ran first — and the `cloudfront_invoke_function`
+  # block above records the measurement that disproves it: with only one of the
+  # two OAC grants the Function URL 403s before invocation, this fallback
+  # rewrites that 403 into the shell at 200, and the surface reads healthy while
+  # the Lambda never runs (issue #590, proven 2026-07-21). Two comments in one
+  # file cannot both be true; this is the one that was wrong.
+  #
+  # The consequence is a monitoring contract, not a config one: a Lambda-origin
+  # failure is invisible to a viewer AND to a synthetic check, so every Lambda
+  # in this module carries an error-rate alarm and a p95 alarm in alarms.tf, and
+  # the two engine-backed ones additionally carry an `engine_unreachable` log
+  # filter for the clean-502 path the Errors metric never sees. That coverage is
+  # the only signal these failures have; `scripts/check_infra_coverage.mjs`
+  # fails the PR when a function is added without it.
   #
   # Both 403 AND 404 map to the shell: the S3 bucket policy grants
   # s3:GetObject only (no s3:ListBucket), so S3 answers a missing key

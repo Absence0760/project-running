@@ -241,6 +241,33 @@ resource "aws_cloudwatch_metric_alarm" "osrm_proxy_lambda_errors" {
   }
 }
 
+# The p95 alarm generate-route carries, on the sibling the comment above calls
+# its mirror. It was missing: the proxy shares generate-route's 15 s timeout and
+# its clean-502 degradation, so a slow engine walks the duration toward the
+# timeout while the error rate stays flat, the route builder quietly falls back
+# to straight-line segments, and — because the distribution's SPA error fallback
+# rewrites a Lambda-origin 403/404 into the shell at 200 — nothing downstream
+# looks wrong either. The alarm is the only place that outage becomes visible.
+resource "aws_cloudwatch_metric_alarm" "osrm_proxy_lambda_p95_duration" {
+  alarm_name          = "${local.resource_prefix}-osrm-proxy-lambda-p95"
+  alarm_description   = "Osrm-proxy Lambda p95 duration >12 s across two consecutive 5-min windows (approaching the 15 s timeout). Usually a slow / overloaded OSRM engine."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 12000
+  treat_missing_data  = "notBreaching"
+  metric_name         = "Duration"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  extended_statistic  = "p95"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  dimensions = {
+    FunctionName = aws_lambda_function.osrm_proxy.function_name
+  }
+}
+
 resource "aws_cloudwatch_log_metric_filter" "osrm_proxy_engine_unreachable" {
   name           = "${local.resource_prefix}-osrm-proxy-engine-unreachable"
   log_group_name = aws_cloudwatch_log_group.lambda_osrm_proxy.name
