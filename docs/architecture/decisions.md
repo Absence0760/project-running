@@ -15023,3 +15023,84 @@ deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
 That check mattered — the first mutation attempted was weakening the assertion
 to `includes('')`, which passes trivially and measures nothing. **Mutate the
 subject, not the assertion.**
+
+## 973. The cron gate's missing throttle, and why copying the sibling's placement would have been the defect
+
+**Decided 2026-09-02.** `refresh-tokens` runs `verify_jwt = false`, so a bearer
+compared against `CRON_SECRET` is the only thing in front of a loop over the
+whole `integrations` table against Strava's OAuth endpoint. Its sibling in that
+posture, `strava-webhook`, carries two defences: a 32-character floor on its
+secret and an IP-keyed 60/hour bucket placed deliberately BEFORE the secret
+check. § 937 closed the floor half. This closes the other, and the interesting
+part is that the sibling's placement is the one thing that must NOT be copied.
+
+`ipBucketKey` collapses every caller the trusted header does not identify into
+one shared `unknown` bucket, and nothing in this repo establishes that pg_cron's
+invocation carries `cf-connecting-ip`. A limiter in front of the compare would
+therefore have handed an attacker a way to starve the hourly token refresh out
+of a bucket they share with it — turning a hardening pass into a denial of the
+exact job the gate exists to protect. The bucket is spent on a FAILED compare
+instead: the authorised path acquires no database dependency at all, and the
+guess rate is bounded at the same ceiling.
+
+**A second narrowing, and this one was measured rather than reasoned.** The
+bucket is spent only when a bearer was actually SUPPLIED and did not match. A
+request carrying no bearer is not a guess at the secret, it is a probe, and
+counting it would spend a `rate_limits` write on the cheapest request an
+attacker can generate while crowding out the guesses the ceiling is for. That
+narrowing is also what keeps the ceiling honest against CI, which is the § 937
+trap in the other direction: of the three `handler_envelope.test.ts` cases only
+one sends a bearer, the function host's readiness loop sends none, and the
+served-tree mutation operator re-runs the suite once per mutation — so the wide
+form would have spent about 62 of 60 in a single job and the tempting repair
+would have been to raise the ceiling to fit. Counting guesses rather than
+requests puts CI at roughly 20 without the number moving. **The ceiling is 60
+because the sibling's is 60, not because 20 fits under it.**
+
+Fail-closed on the limiter is not a judgement call here either. Every other call
+site weighs a false denial during a database blip against what falls through;
+this branch refuses either way, so the caller gets a 503 rather than a 403 and
+is refused in both.
+
+`gate_invariants.test.ts` pins the ceiling, the bucket, the fail-closed posture,
+that exactly one limiter exists and that it sits inside the refusal branch — and
+pins the SIBLING's opposite order too, because either half alone reads as an
+oversight to the next person and "making the tree consistent with itself" is
+precisely the edit that would reintroduce this. Four mutations, each killed:
+dropping `failClosed`, hoisting the limiter in front of the compare, removing
+the bearer test, and reversing the sibling's order.
+
+## 974. Four rate limits fell open, and they were the four spending someone else's resource
+
+**Decided 2026-09-02.** `checkRateLimit` / `checkRateLimitTiered` default to
+fail-OPEN on an RPC error, and the helper's own documentation names the
+exception: pass `{ failClosed: true }` on "expensive paths where letting traffic
+through on RPC failure is worse than the false-positive denial". Thirteen call
+sites; nine passed it. The four that did not were `strava-import`'s `sync`,
+`parkrun-import`, `race-results-import` and `race-listings-sync` — which is the
+rule inverted, because those four are the entire set whose work is an outbound
+call spending a resource that is **not ours**: Strava's per-application budget
+(a sync walks ~20 pages and uploads a track per activity), parkrun.org.uk's
+tolerance of our egress IP — the drain this function's own comment names — and
+our RunSignUp / ChronoTrack / UltraSignup credentials. The nine guarded sites
+are single writes to the caller's own rows.
+
+The stated reason for leaving `sync` open was that it is "idempotent and
+read-mostly". Idempotent for us; the third party is billed per call either way.
+
+What settles it is that the fail-open buys the caller nothing. The RPC that
+failed is `check_rate_limit` against the same database each of these four must
+then read and write `runs` (or `race_listings`) against, so letting the request
+through does not rescue it — it spends third-party quota on a walk that ends in
+a 500 at the insert. The "user-visible regression during a DB blip" the filing
+weighed is a request that was going to fail regardless; the only variable is
+whether it burns someone else's budget first.
+
+All four now fail closed. `_shared/rate_limit_failclosed_guard.test.ts` reads
+every `checkRateLimit`/`checkRateLimitTiered` call site in the tree by
+paren-balanced argument extraction — not a regex to the first `)`, which reads
+an options object as absent on a call that has one — and requires the posture on
+each, with a vacuity floor on the number of sites and files it found. The rule
+is absolute rather than allowlisted: a caller who wants fail-open has to come
+here and say why. Two mutations killed: reverting one of the four flips, and
+planting a fail-open call on an unrelated function (`clip-public-track`).
