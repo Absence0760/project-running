@@ -15104,3 +15104,61 @@ each, with a vacuity floor on the number of sites and files it found. The rule
 is absolute rather than allowlisted: a caller who wants fail-open has to come
 here and say why. Two mutations killed: reverting one of the four flips, and
 planting a fail-open call on an unrelated function (`clip-public-track`).
+
+## 975. An athlete feed cannot be attributed to a race, so the UltraSignup leg refuses
+
+**Decided 2026-09-02.** `race-results-import`'s UltraSignup branch builds
+`https://ultrasignup.com/service/events.svc/results/athlete?uid=…` — one
+athlete's WHOLE history, with no race parameter on it, which is exactly why
+`ultraSignUpScopeGate` requires an athlete id rather than a bib. Every row that
+comes back is then mapped through `mapOpts`, which carries the ONE
+`public_race_listings` row the request named.
+
+Measured rather than reasoned. Three results from three different races
+(4:32:10, 28:40:15, 2:58:44) against one listing:
+
+    race:Bighorn 100:2025-06-20:88   2025-06-20T10:00:00Z  160934m  16330s  L-9
+    race:Bighorn 100:2025-06-20:204  2025-06-20T10:00:00Z  160934m 103215s  L-9
+    race:Bighorn 100:2025-06-20:17   2025-06-20T10:00:00Z  160934m  10724s  L-9
+
+Three `runs` rows differing only in bib and finishing time. The 2:58 road
+marathon is now a 2:58 hundred-miler — which re-derives `personal_records`,
+fires `award_achievements_for_user`, poisons `run_streaks_for_user` and feeds
+every challenge leaderboard. This is a correctness defect in imported data, not
+a performance one, and § 914's batch dedupe slightly widened its reach: two of
+those historical races sharing a bib used to raise 23505 and lose the whole
+batch, which accidentally blocked some of it.
+
+**A row can only be recorded against a listing if the ROW says it belongs to
+that listing, and `UltraSignUpResult` declares no field that could.** The live
+payload has not been observed from here, and guessing a field name would put a
+wrong race on a runner's history on a hunch — a worse outcome than importing
+nothing, which is the rule this repo already applies to a distance a route
+cannot state and a rank an RPC did not return. So the leg refuses, before the
+credential is read and before anything is fetched.
+
+The refusal is `503 provider_not_configured` with `reason:
+'results_unattributable'`. The code is the seam both clients already act on —
+they disable the tile with an unavailable explainer — and a leg that cannot be
+used has no working configuration whatever env vars exist; the `reason` is what
+stops an operator who HAS set `ULTRASIGNUP_API_KEY` hunting for a missing one.
+The availability PROBE answers through the same gate, because it previously
+answered on key presence and a provisioned deploy would therefore have
+advertised a tile whose very next call refuses.
+
+The rest of the branch — the credential read, the scope gate, the fetch, the
+mapper, the extractor — is deliberately left standing behind the gate rather
+than deleted, which is the "write the whole code path, keep the gate in config"
+shape. But the gate's doc comment states what lifting it costs, because deleting
+it alone restores the defect exactly: the payload observed so the race
+identifier's name is a fact, AND a filter on it against the listing's
+`provider_race_id`.
+
+`ultrasignup_attribution.test.ts` carries the measurement as a characterisation
+test (so the day the mapper CAN attribute, it goes red and the gate is lifted
+with it), the gate's shape, and the ordering at both doors. Three mutations
+killed: removing the gate from the import branch, restoring the key-presence
+probe, and making the gate answer yes.
+
+Noted while there and left alone: no client sends `provider: 'ultrasignup'` to
+anything but the probe and this branch, so nothing else changes shape.
