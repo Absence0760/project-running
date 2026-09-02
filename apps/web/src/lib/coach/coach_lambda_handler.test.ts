@@ -20,7 +20,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { COACH_BODY_LIMIT_BYTES } from './body.js';
@@ -293,4 +293,102 @@ test('the production config never honours the dev paywall bypass', async () => {
 	} finally {
 		delete process.env.BYPASS_PAYWALL;
 	}
+});
+
+test('a sub-path is matched by its whole path, not by a substring of it', async () => {
+	// The dispatch was `rawPath.includes('/route-describe')`, against a dev
+	// route table that is exact (`src/routes/api/coach/route-describe/
+	// +server.ts`). Measured before the fix: every path below reached the
+	// route-describe or route-request handler and answered its own
+	// `400 invalid route …`, where dev answers 404 (decisions § 968).
+	for (const rawPath of [
+		'/api/coach/route-describe-v2',
+		'/api/coach/route-describeZZ',
+		'/api/coach/x/route-describe',
+		'/api/coach/route-describe/extra',
+		'/api/coach/route-requestX',
+		'/api/coach/route-request/extra',
+	]) {
+		const out = await invoke({ rawPath, body: CHAT_BODY });
+		assert.equal(
+			out.status,
+			404,
+			`${rawPath} was dispatched by a substring of a real sub-path`,
+		);
+		assert.deepEqual(JSON.parse(out.body), { error: 'not found' });
+	}
+});
+
+test('an unknown path under the prefix never reaches the coach turn or its larger cap', async () => {
+	// CloudFront sends the whole `/api/coach*` prefix here, so a path the dev
+	// table does not declare used to fall THROUGH both `includes` tests to the
+	// coach core — spending an auth round-trip and a daily-quota increment on a
+	// path that does not exist, under the coach's own 256 KB cap rather than
+	// the smaller one a `/route-…` name implies.
+	const unknown = await invoke({ rawPath: '/api/coach/nonsense', body: CHAT_BODY });
+	assert.equal(unknown.status, 404);
+
+	const big = await invoke({
+		rawPath: '/api/coach/nonsense',
+		body: 'x'.repeat(COACH_BODY_LIMIT_BYTES + 1),
+	});
+	assert.equal(big.status, 404, 'an unknown path was sized against the coach cap');
+
+	// The three paths the dev table does declare still route, trailing slash
+	// included. The status is each handler's own first refusal — 401 for the
+	// coach's auth gate, 400 for a sub-path's input check.
+	for (const [rawPath, status] of [
+		['/api/coach', 401],
+		['/api/coach/', 401],
+		['/api/coach/route-describe', 400],
+		['/api/coach/route-describe/', 400],
+		['/api/coach/route-request', 400],
+		['/api/coach/route-request/', 400],
+	] as Array<[string, number]>) {
+		const out = await invoke({ rawPath, body: CHAT_BODY });
+		assert.equal(out.status, status, `${rawPath} no longer routes`);
+	}
+});
+
+test('the Lambda routes exactly the sub-paths the dev route table declares', () => {
+	// Two independent spellings of one route set, and a disagreement is
+	// invisible locally: SvelteKit runs the dev table, so a fourth sub-path
+	// looks finished while production shadows it at whichever pattern matched
+	// first. Derived from the directory rather than from a second hand-written
+	// list, so adding a route is what fails this — not forgetting to update it.
+	const devRoot = resolve(import.meta.dirname, '..', '..', 'routes', 'api', 'coach');
+	const devSubPaths = readdirSync(devRoot, { withFileTypes: true })
+		.filter((e) => e.isDirectory())
+		.map((e) => e.name)
+		.sort();
+	assert.ok(devSubPaths.length > 0, `no dev sub-routes under ${devRoot} — walker broken?`);
+
+	const src = readFileSync(
+		resolve(import.meta.dirname, '..', '..', '..', 'lambda', 'coach', 'src', 'index.ts'),
+		'utf-8',
+	);
+	const table = src.match(/const SUB_PATHS = \[([\s\S]*?)\]\.map\(/);
+	assert.ok(table, 'the Lambda must declare its sub-paths in one SUB_PATHS table');
+	const routed = [...table[1].matchAll(/segment: '([a-z-]+)'/g)].map((m) => m[1]).sort();
+
+	assert.deepEqual(
+		routed,
+		devSubPaths,
+		'the production path table and the dev route table disagree. A sub-path in ' +
+			'one and not the other is a route that works locally and 404s in ' +
+			'production, or the reverse.',
+	);
+
+	// No survivor of the substring dispatch: a bare `includes` on the path is
+	// what let one sub-path shadow another.
+	const code = src
+		.replace(/\/\*[\s\S]*?\*\//g, ' ')
+		.split('\n')
+		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
+		.join('\n');
+	assert.doesNotMatch(
+		code,
+		/rawPath\.includes\(/,
+		'dispatch on an anchored pattern, never on a substring of the path.',
+	);
 });

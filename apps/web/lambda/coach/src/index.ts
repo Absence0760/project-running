@@ -50,6 +50,28 @@ import {
 	COACH_BODY_LIMIT_BYTES,
 } from '../../../src/lib/coach/body';
 
+// The production path table, anchored — `^…$`, never `rawPath.includes(…)`.
+// A substring test matches anywhere in the path, so `/api/coach/route-describe-v2`
+// and `/api/coach/x/route-describeZZ` both dispatched at the FIRST `includes`
+// while dev answered them 404 (measured, decisions § 968). Not exploitable with
+// the two sub-paths shipped today — both are Pro-gated and carry a SMALLER body
+// cap than the coach path, so a mismatch lands a caller on a stricter handler —
+// but it becomes a live defect the moment a third sub-path's name contains an
+// existing one: the first `includes` shadows it in production only, while dev
+// routes both. `coach_lambda_handler.test.ts` derives the expected set from the
+// dev route directory, so a sub-path added there fails the PR until it is
+// routed here.
+const COACH_PATH_RE = /^\/api\/coach\/?$/;
+
+const SUB_PATHS = [
+	{ segment: 'route-describe', handle: dispatchRouteDescribe },
+	{ segment: 'route-request', handle: dispatchRouteRequest },
+].map(({ segment, handle }) => ({
+	segment,
+	pattern: new RegExp(`^/api/coach/${segment}/?$`),
+	handle,
+}));
+
 export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 	async (event, responseStream) => {
 	// Outer fail-closed envelope. Audit/coach May 2026 Medium #6 —
@@ -75,24 +97,25 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 			return;
 		}
 
-		// CloudFront routes the whole `/api/coach/*` prefix to this
-		// Function URL. The route-describe sub-path is a separate,
-		// non-streaming handler (a Pro perk that enhances a route
-		// description, with a templated fallback) — dispatch it before
-		// the coach provider check so an unconfigured COACH_PROVIDER
-		// doesn't 503 a route-describe request.
+		// CloudFront routes the whole `/api/coach*` prefix to this Function
+		// URL, so this table is the production half of the dev route table
+		// under `src/routes/api/coach/` and must name the same paths. The two
+		// sub-paths are separate, non-streaming handlers (Pro perks with their
+		// own, smaller body caps) — dispatched before the coach provider check
+		// so an unconfigured COACH_PROVIDER doesn't 503 them.
 		const rawPath = event.rawPath ?? '';
-		if (rawPath.includes('/route-describe')) {
-			await dispatchRouteDescribe(event, responseStream);
+		const dispatch = SUB_PATHS.find((s) => s.pattern.test(rawPath));
+		if (dispatch) {
+			await dispatch.handle(event, responseStream);
 			return;
 		}
-		// The route-request sub-path is the REQUEST half of the AI route
-		// assistant — a Pro-gated, non-streaming NL → constraints
-		// extractor. Same reasoning as route-describe: dispatch before the
-		// coach provider check so an unconfigured COACH_PROVIDER doesn't
-		// 503 a route-request call.
-		if (rawPath.includes('/route-request')) {
-			await dispatchRouteRequest(event, responseStream);
+		// Anything else under the prefix is a path neither table declares.
+		// SvelteKit answers it 404 in dev; prod used to fall through to the
+		// coach turn, which spends an auth round-trip and the daily quota on a
+		// path that does not exist and hands it the coach's own 256 KB cap
+		// rather than the smaller one its name suggests (decisions § 968).
+		if (!COACH_PATH_RE.test(rawPath)) {
+			writeJson(responseStream, 404, { error: 'not found' });
 			return;
 		}
 
