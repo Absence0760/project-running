@@ -14480,3 +14480,159 @@ deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
 That check mattered — the first mutation attempted was weakening the assertion
 to `includes('')`, which passes trivially and measures nothing. **Mutate the
 subject, not the assertion.**
+## 944. The Garmin data field carried the grade of a discarded activity into the next one, and nothing in the repo had ever read that tier
+
+`apps/watch_garmin` is a Connect IQ data field that injects one metric — Minetti
+grade-adjusted pace — into Garmin's native run screen. No CI job builds it, no
+CI job runs its `(:test)` suite, the Connect IQ SDK is on no machine here, and
+until this round the only thing in the repo that read a line of it was
+`scripts/check_watch_wire_vectors.mjs`, which pins four numbers (the polynomial,
+the +/-45% clamp, C(0) and the 5 m segment gate) and nothing else. Everything
+BETWEEN those numbers was unread, including the state machine that decides which
+grade they are applied to.
+
+`Activity.Info.elapsedDistance` restarts at 0 when the recorder resets or
+discards an activity. The field's grade anchor stayed parked at the old total,
+so every later sample measured a NEGATIVE run, the `run >= MIN_SEGMENT_M` gate
+never opened again, and the grade last measured before the reset was applied for
+the whole of the next run. Nothing throws and nothing blanks: a runner who
+reset at the top of a 10% wall would see the flat road that followed reported at
+a 1.66x factor — 5:00/km raw rendered as 3:01/km GAP — as a confident number
+for as long as the field was on screen. The gate could only re-open after the
+runner covered the entire discarded distance again, which on any real activity
+means never.
+
+The firmware twin has always had the reset this rail lacked: `GapEstimator`
+carries an explicit `reset()` and the recorder calls it at every start. The
+Monkey C had no equivalent because it had no separable state to reset — the
+anchors were three private fields on the view. So the state moved into a
+`GradeTracker` with a `reset()`, `onTimerReset` was overridden to call it, and a
+negative run re-anchors: the general recovery, which also covers a rewind no
+callback reports, and which sets the grade back to 0.0 rather than to the last
+measured value, because 0.0 (GAP == raw pace) is what the field already reports
+before its first segment and on a watch feeding it no altitude at all.
+
+The six new `(:test)` cases are **authored, not executed** — there is no
+`monkeyc` here, exactly as the nineteen already in that file are. So the enforcing
+artefact is `apps/watch_garmin/scripts/check_garmin_source.sh`: bash + python3,
+no SDK, the same shape as the watchOS String Catalog guard. It holds five claims
+a compiler cannot — the reset wiring above; `source-test/` staying annotated
+`(:test)` and `monkey.jungle` still excluding it, since `base.sourcePath`
+compiles that directory into every build and only the annotation keeps it off a
+watch with tens of KB of headroom; a permission-gated Toybox module being
+declared in `manifest.xml` before it is used, because the runtime refuses such a
+call mid-activity and the build says nothing; the cross-rail constants being
+named rather than spelled inline; and the string table agreeing with its call
+sites in both directions. Fifteen mutations were run against it and each produced
+the message naming its own defect.
+
+It is deliberately NOT wired into CI in this change — `ci.yml` belongs to no
+lane this round — and a guard nothing runs is a script. The wiring is one job
+plus one line in the gate's `needs:` list, and is filed in `followups.md`.
+
+## 945. A four-rail chain, every link enforced except the one it starts at
+
+The 99:00-per-unit live-pace ceiling exists four times. The Garmin field's
+`formatPace` guards on it; the firmware's `grade_adjusted_pace::MAX_PACE_S_PER_KM`
+says in its own doc comment that it "mirrors the Garmin field's `formatPace`
+guard"; a firmware unit test pins that equal to `alerts::PACE_BAND_MAX_S_PER_KM`;
+and `check_watch_wire_vectors.mjs` holds THAT against the phone's
+`kWorkoutPaceMaxSecPerKm`. Three of the four links are enforced by something
+that can fail.
+
+The fourth was a bare `5940.0` inline in an `if`. A rail read by regex cannot
+see a literal, so the head of the chain was the one link where a comment claimed
+a relationship and nothing checked it — § 641's shape, in the tier least able to
+notice it. Naming the constant is what makes it readable; registering it as a
+fifth rail on that row is a `scripts/` change and is filed rather than taken.
+
+The new guard's fourth claim generalises the lesson rather than pinning this one
+value: the constants other rails read out of that file must be declared by name
+AND used by name, so the next value promoted to a cross-rail contract cannot be
+inlined back into invisibility. `FLAT_COST` is exempt with the reason recorded —
+3.6 is also the Minetti polynomial's own constant term, because C(0) *is* that
+term, and every rail spells it twice for the same reason.
+
+## 946. Six Wear OS guards could not see their own inputs, and reported green on exactly the changes they exist to catch
+
+Six unit tests in the Wear OS module are source-level guards over files OUTSIDE
+that Gradle build, reached with `WearLocales.findUp`: the phone's two
+`Wear*Bridge.kt`, the web env-flag parser, the `runs.metadata` registry, the
+`activity_type` migration and the two client label catalogues it is held
+against. The build script declared `src/main/res` and the three build scripts as
+test-task inputs — with a comment explaining precisely why a guarded file must
+be a declared input — and none of the six.
+
+Measured on three, not inferred. Renaming `anon_key` to `anonKey` in the phone's
+`WearAuthBridge` — the `/supabase_session` drift whose consequence is a wrist
+that is never signed in, and the exact defect `DataLayerContractTest` was
+written for — left `testDebugUnitTest` UP-TO-DATE and the build SUCCESSFUL.
+Widening the canonical affirmative set in `env_flag.ts` did the same. So did
+narrowing the recording service's `foregroundServiceType` in the manifest, which
+turned out to be undeclared too: it is on no unit test's classpath, so nothing
+else was making it an input either. With the inputs declared, all three go red
+on the guard that names them.
+
+CI escapes this only because it checks out clean every run, so nothing there is
+ever up to date — which is why four rounds of coverage work never saw it. A
+local `./gradlew testDebugUnitTest` reporting green on the change a guard exists
+to catch is worse than having no guard, because it reads as coverage.
+
+The repo-root walk is a `generateSequence` up from `rootProject.projectDir`
+looking for the Wear build script itself, not a hardcoded `../../..`; a missing
+file in an input collection is not an error, so a checkout without the sibling
+trees still builds, and the guards already assert they located what they read,
+so a genuinely absent tree fails loudly in the test rather than quietly here.
+
+## 947. The complication kind was the same string typed into two targets, and a mismatch is a silent no-op
+
+`WidgetCenter.shared.reloadTimelines(ofKind:)` in the watchOS host app and `let
+kind` in the widget extension were the same literal written twice, in two
+different Xcode targets, with nothing able to compare them — the shape § 887
+closed for the run hand-off envelope and § 640-era work closed for the App Group
+name, arrived at from a third direction.
+
+`reloadTimelines(ofKind:)` with a kind no widget declares does not throw, does
+not log and returns nothing to check. So a rename on either side alone leaves
+the host writing snapshots the complication is never told to re-read, and the
+watch face keeps showing the pre-run state until the platform's own refresh
+budget comes round — up to about half an hour into a run. That is the failure
+the nudge exists to prevent, reintroduced from the other end, and it is the same
+class as the missing App Group entitlement that made this complication receive
+no data at all.
+
+Derived rather than guarded. The kind moved onto `ActiveRunBridge`, the file
+whose whole purpose is being compiled into BOTH targets and which already
+centralises `appGroup` for exactly this reason; both call sites and the operator
+README now read the one constant. A guard over two copies would have been the
+smaller change and would have left two copies. Source-level only — there is no
+Xcode on Linux, so this is read, not compiled; the two existing watchOS source
+guards still pass and prove nothing about whether it builds.
+
+## 948. What a Linux-only round may claim about three wrist tiers
+
+Of the three wrist platforms, exactly one can be executed here. The Wear OS
+suite was run (`./gradlew --no-daemon testDebugUnitTest`, green, and red under
+each of the mutations § 946 records). watchOS has no compiler on this machine —
+`test-watch-ios` is a macOS job — so every claim about it in this round is a
+source-level read, and the word "verified" is not available for it. Garmin is
+the same and worse: no SDK exists on any machine in this project, so its
+`(:test)` suite has never been executed by anyone, and saying its expected
+values are pinned to the TS/Dart oracle describes an intention rather than a
+measurement.
+
+That asymmetry is why the two uncompilable tiers got guards rather than tests.
+A source-level guard runs where the compiler cannot and fails on the drift the
+compiler would not have caught anyway; a Swift or Monkey C test that no machine
+runs is a comment with parentheses in it. Both new guards therefore say in their
+own headers what they do not prove, and both docs say the suites beside them are
+authored and unexecuted.
+
+One contract was found unregistered and deliberately left so. The phone-to-watch
+route push — `WatchIngestBridge.routeUserInfo` writing five keys into a
+`transferUserInfo` payload and `ArmedRoute.decode` reading them back, with the
+Dart method-channel args a third rail — is the same envelope shape as the run
+hand-off, on the same `WCSession`, in the opposite direction, and nothing
+compares the three key lists. They agree today; that was checked by hand. The
+guard belongs in `scripts/`, which no lane owns this round, so it is filed with
+the rails and the key set named rather than half-built here.
