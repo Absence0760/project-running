@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/csv_run_importer.dart';
 import '../lib/import_failures.dart';
+import '../lib/preferences.dart' show ActivityType;
 
 void main() {
   // Helper — build the 5-column CSV the mobile + web Settings screens
@@ -379,30 +380,29 @@ void main() {
       expect(result.failures.items, isEmpty);
     });
 
-    test('negative distance / duration are still parsed (DB rejects on upsert)',
-        () {
-      // Defensive: don't try to validate semantics inside the
-      // parser. The DB CHECK (distance_m >= 0, duration_s >= 0)
-      // is the source of truth; the parser passes through and the
-      // upsert fails noisily on bogus rows. Pinning this so a
-      // future "let's validate in the parser too" PR isn't a
-      // silent behaviour change.
+    test('negative distance / duration are refused by the parser', () {
+      // This case previously asserted the opposite, on the stated grounds
+      // that "the DB CHECK (distance_m >= 0, duration_s >= 0) is the source
+      // of truth". `public.runs` has neither CHECK — those live on
+      // `event_results` and `gym_workouts` — so the parser was passing a
+      // -100 m run through to a column (`numeric(10, 2)`, not null, no
+      // constraint) that stores it happily, and to every aggregate that
+      // sums it. The value has to be graded where it is read.
       final csv = 'date,distance_m,duration_s,pace_s_per_km,source\n'
           '2026-05-20T08:00:00Z,-100,-50,300,app\n';
       final result = CsvRunImporter.parse(csv);
-      expect(result.runs, hasLength(1));
-      expect(result.runs.single.distanceMetres, -100);
-      expect(result.runs.single.duration.inSeconds, -50);
+      expect(result.runs, isEmpty);
+      expect(result.failures.total, 1);
     });
 
     test('row with trailing whitespace + extra commas parses leniently', () {
       // Dart's int.tryParse/double.tryParse both tolerate trailing
-      // whitespace + tabs, so a CSV with stray padding still hands
-      // back a valid row. The DB CHECK constraints (distance_m >= 0,
-      // duration_s >= 0, runs_metadata_activity_type_check) are the
-      // source of truth on row validity — the parser stays
-      // permissive on whitespace so a hand-edited CSV that survived
-      // a spreadsheet round-trip still imports.
+      // whitespace + tabs, so a CSV with stray padding still hands back a
+      // valid row — the parser stays permissive on WHITESPACE so a
+      // hand-edited CSV that survived a spreadsheet round-trip still
+      // imports. Permissive on whitespace is not the same as permissive on
+      // values: a measurement that is not a measurement, or an activity type
+      // `runs_activity_type_check` cannot hold, is refused above.
       final csv = 'date,distance_m,duration_s,pace_s_per_km,source\n'
           '2026-05-20T08:00:00Z,5000,1500   ,300,app\n';
       final result = CsvRunImporter.parse(csv);
@@ -440,6 +440,96 @@ void main() {
           '2026-05-20T08:00:00Z,5000,1500\n';
       final result = CsvRunImporter.parse(csv);
       expect(result.runs, hasLength(1));
+    });
+  });
+
+  // Parsing is not validating. `double.tryParse` accepts the literals `NaN`
+  // and `Infinity`, and neither parse rejects a negative, so a hand-edited or
+  // third-party CSV could import a run of -5 km. `runs.distance_m` is
+  // `numeric(10, 2)` with no CHECK and postgres numeric holds NaN, so nothing
+  // downstream would have caught one.
+  group('non-physical measurements are refused, not imported', () {
+    String rowsCsv(List<String> rows) =>
+        'date,distance_m,duration_s,pace_s_per_km,source\n${rows.join('\n')}\n';
+
+    test('a negative distance is refused', () {
+      final result = CsvRunImporter.parse(rowsCsv([
+        '2026-05-20T08:00:00Z,-5000,1500,300,app',
+        '2026-05-21T08:00:00Z,5000,1500,300,app',
+      ]));
+      expect(result.runs, hasLength(1));
+      expect(result.runs.single.distanceMetres, 5000);
+      expect(result.failures.total, 1);
+    });
+
+    test('a negative duration is refused', () {
+      final result = CsvRunImporter.parse(rowsCsv([
+        '2026-05-20T08:00:00Z,5000,-1500,300,app',
+      ]));
+      expect(result.runs, isEmpty);
+      expect(result.failures.total, 1);
+    });
+
+    test('a non-finite distance is refused with a message about the value', () {
+      // Previously refused only by accident: _syntheticExternalId calls
+      // .round() on it, which throws, and the runner saw the throw rather
+      // than a bad measurement.
+      for (final bad in ['NaN', 'Infinity', '-Infinity']) {
+        final result =
+            CsvRunImporter.parse(rowsCsv(['2026-05-20T08:00:00Z,$bad,1500,300,app']));
+        expect(result.runs, isEmpty, reason: bad);
+        expect(result.failures.total, 1, reason: bad);
+        expect(result.failures.items.single.detail, contains(bad), reason: bad);
+      }
+    });
+
+    test('zero distance and zero duration are still allowed', () {
+      // A zero-distance row is odd but not impossible, and refusing it would
+      // drop a real logged entry.
+      final result = CsvRunImporter.parse(rowsCsv([
+        '2026-05-20T08:00:00Z,0,0,0,app',
+      ]));
+      expect(result.runs, hasLength(1));
+      expect(result.failures.total, 0);
+    });
+  });
+
+  group('activity type is validated against the column vocabulary', () {
+    String activityCsv(String value) =>
+        'date,distance_m,duration_s,activity_type\n'
+        '2026-05-20T08:00:00Z,5000,1500,$value\n';
+
+    test('every value the ActivityType rail carries is accepted', () {
+      for (final a in ActivityType.values) {
+        final result = CsvRunImporter.parse(activityCsv(a.name));
+        expect(result.runs, hasLength(1), reason: a.name);
+        expect(result.runs.single.metadata?[MetadataKeys.activityType], a.name,
+            reason: a.name);
+      }
+    });
+
+    test('case is normalised rather than refused', () {
+      final result = CsvRunImporter.parse(activityCsv('Walk'));
+      expect(result.runs, hasLength(1));
+      expect(result.runs.single.metadata?[MetadataKeys.activityType], 'walk');
+    });
+
+    test('a value the column CHECK cannot hold is refused at import', () {
+      // It used to be written through verbatim: the import reported success
+      // and the row then failed to sync forever on a postgres 23514 the
+      // runner never saw.
+      for (final bad in ['Ride', 'Swim', 'totally-made-up']) {
+        final result = CsvRunImporter.parse(activityCsv(bad));
+        expect(result.runs, isEmpty, reason: bad);
+        expect(result.failures.total, 1, reason: bad);
+        expect(result.failures.items.single.detail, contains(bad), reason: bad);
+      }
+    });
+
+    test('an absent activity type still defaults to run', () {
+      final csv = 'date,distance_m,duration_s\n2026-05-20T08:00:00Z,5000,1500\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.runs.single.metadata?[MetadataKeys.activityType], 'run');
     });
   });
 }
