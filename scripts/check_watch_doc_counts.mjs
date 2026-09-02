@@ -39,12 +39,18 @@
 // stamp their entries with a date and record what was true when it was written;
 // § 793 left their counts alone on exactly that rule and so does this. Scanning
 // them would demand that history be rewritten every time a page lands. `DOC_FILES`
-// is therefore the closed set of PRESENT-TENSE docs, and any file added to
-// `docs/custom_watch/` must be added here or its counts go unread.
+// is therefore the closed set of PRESENT-TENSE docs — and because a list of files
+// is the one thing a registry cannot police from the inside, it plus `DATED_LOGS`
+// must account for `docs/custom_watch/` FILE FOR FILE: a doc dropped in that
+// neither list claims fails this guard rather than going unread.
 //
 // Run: `node scripts/check_watch_doc_counts.mjs`
-// CI:  the `watch-wire-vectors` job in .github/workflows/ci.yml, which is in the
-//      `CI gate` aggregator's `needs:` list.
+// CI:  the `parity-matrix` job in .github/workflows/ci.yml — the UNGATED
+//      doc-registry job, not the `watch-wire-vectors` one this guard is a sibling
+//      of. Every job in that block is gated on `needs.changes.outputs.code`, and
+//      the `changes` filter calls any `*.md` diff a docs-only diff, so a
+//      code-gated job would skip on exactly the edits that rot a doc count and
+//      the CI gate counts a skip as a pass (decisions § 869).
 // Unit tests: `node --test scripts/check_watch_doc_counts.test.mjs`
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -59,7 +65,10 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // mutated copy of the tree, which is how a guard is shown to fail.
 export const ROOT = process.env.WATCH_DOC_COUNT_ROOT ?? REPO_ROOT;
 
-/** Present-tense docs. A dated log is not one — see the header. */
+/**
+ * Present-tense docs. A dated log is not one — see the header, and `DATED_LOGS`
+ * below, which this list has to reconcile against the directory.
+ */
 export const DOC_FILES = [
 	'docs/custom_watch/README.md',
 	'docs/custom_watch/firmware.md',
