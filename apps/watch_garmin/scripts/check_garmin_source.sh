@@ -123,10 +123,16 @@ def body_of(src, signature):
 
     Brace counting rather than a lazy regex: these bodies contain braces of
     their own and `.*?\\}` stops at the first one.
+
+    The name must END where the signature does. A plain substring search reads
+    `function onTimerResetX` as `function onTimerReset` and reports the override
+    present when the recorder would call nothing -- which is the same silent
+    failure the claim exists to catch, one level up.
     """
-    at = src.find(signature)
-    if at < 0:
+    m = re.search(re.escape(signature) + r"(?![A-Za-z0-9_])", src)
+    if m is None:
         return None
+    at = m.start()
     open_at = src.find("{", at)
     if open_at < 0:
         return None

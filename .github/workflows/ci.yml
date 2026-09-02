@@ -1336,6 +1336,50 @@ jobs:
             exit 1
           fi
 
+  watch-garmin-source:
+    name: Garmin data-field source-level guards (grade reset, annotations, permissions, strings)
+    # The Garmin tier is the least verified thing in the monorepo. No job
+    # compiles the Monkey C, no job runs its `(:test)` suite, and the Connect IQ
+    # SDK is on no machine here — so until now the ONLY automated claim about it
+    # was the four numbers `check_watch_wire_vectors.mjs` reads out of one file.
+    # `check_garmin_source.sh` has covered five more since it was written and ran
+    # in no job at all: it passed on every commit and nothing would have noticed
+    # the day it stopped.
+    #
+    # Its own job rather than a step inside `watch-ios-locale-parity`, which was
+    # the obvious host. That job is already bundled and already prints a
+    # per-step `::error::`, so rule 2 would have been satisfied — but a job NAME
+    # is what a reader sees red in the checks list, and "watchOS source-level
+    # guards" going red for a Garmin defect is a name that is wrong about the
+    # TIER, which no per-step annotation can correct. The two tiers also fail
+    # for unrelated reasons and are read by different people.
+    #
+    # UNGATED, for the reason `watch-ios-locale-parity` is: the whole job is
+    # bash + python3 + a bare `node` against a checkout — no `npm ci`, no SDK,
+    # seconds on a Linux runner — so running it on a docs-only PR costs less
+    # than reasoning about whether it needed to, and an ungated job always
+    # reports a real result rather than a skip the gate counts as a pass.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Monkey C source-level claims (no Connect IQ SDK needed)
+        run: |
+          if ! bash apps/watch_garmin/scripts/check_garmin_source.sh; then
+            echo "::error::apps/watch_garmin carries a source-level defect no compiler reports — a grade tracker that cannot recover from an activity reset or discard (the field then applies the discarded run's last hill to the whole of the next one, as a confident number), a source-test file the release build no longer excludes, a permission-gated Toybox module used without its manifest declaration (the runtime refuses it on the watch, mid-activity), a cross-rail constant spelled inline where another rail reads it by name, or a string the table and the source disagree about."
+            echo "The failing line above names the claim and the fix. Reproduce with: bash apps/watch_garmin/scripts/check_garmin_source.sh (bash + python3 only, no SDK needed)."
+            exit 1
+          fi
+      - name: The Garmin source guard's own unit tests
+        run: |
+          if ! node --test scripts/check_garmin_source.test.mjs; then
+            echo "::error::The Garmin source guard's own unit tests failed. The tier itself is fine — the check above just passed — so this is a defect in apps/watch_garmin/scripts/check_garmin_source.sh, not a defect in apps/watch_garmin. A guard that has stopped matching passes vacuously, which is the failure mode a source-reading guard has instead of a false negative."
+            echo "Reproduce with: node --test scripts/check_garmin_source.test.mjs (stdlib only, needs python3 + bash, no install needed)."
+            exit 1
+          fi
+
   lambda-alias-coverage:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -3191,6 +3235,7 @@ jobs:
       - watch-wire-vectors
       - ios-native-declarations
       - watch-ios-locale-parity
+      - watch-garmin-source
       - lambda-alias-coverage
       - infra-guards
       - build-watch-wear

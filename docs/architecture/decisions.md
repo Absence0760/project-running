@@ -15115,3 +15115,41 @@ The walk gate is two rails and stays two. The web and Dart GAP helpers are batch
 — they take a track, not a per-sample speed — so there is no third copy of this
 number to hold, which the `why` says outright rather than leaving the absence to
 read as an omission.
+
+## 963. The Garmin guard now runs, in a job of its own, and writing its suite found it reading names by prefix
+
+`apps/watch_garmin/scripts/check_garmin_source.sh` made five claims about the
+least-verified tier in the monorepo and ran in no job at all. It passed on every
+commit; nothing would have noticed the day it stopped.
+
+**A new job, not a step in `watch-ios-locale-parity`.** That was the obvious
+host — it is already the "read a tier no compiler here can reach" job, already
+bundled, and already prints a per-step `::error::`, so § 764's rule 2 would have
+been satisfied for free. The reason not to is that a job NAME is what a reader
+sees red in the PR checks list, and "watchOS source-level guards" going red for
+a Garmin defect is a name wrong about the TIER, which no per-step annotation can
+correct: the annotation is inside the log, the name is the row. `watch-garmin-source`
+is ungated for the reason § 761's amendment gives for its sibling — bash +
+python3 + a bare `node` against a checkout, seconds on a Linux runner, and an
+ungated job always reports a real result rather than a skip the gate counts as a
+pass. Both of § 764's obligations were verified by removal: deleting the
+`- watch-garmin-source` line from the aggregator's `needs:` and deleting one
+step's `::error::` each make `check_ci_diagnostics.mjs` refuse, naming the
+missing thing.
+
+**The guard is now measured, and measuring it found a defect in it.**
+`scripts/check_garmin_source.test.mjs` mutates a copy of the real tree into each
+shape the guard exists to refuse — 20 cases, positive control included. Two of
+them failed on the first run, and not because the mutation was wrong:
+`body_of(src, signature)` located a declaration with `src.find(signature)`, a
+plain substring search. `function onTimerResetX` therefore satisfied the claim
+that `onTimerReset` is overridden, and `class GradeTrackerV2` satisfied the
+claim that `GradeTracker` exists. That is the same failure the claims exist to
+catch — a callback the recorder will never call, reported present — one level
+up, in the thing doing the reporting. The signature must now end where it ends
+(`(?![A-Za-z0-9_])`), and both halves are pinned.
+
+That is the general point about a source-reading guard: it does not fail when it
+stops working, it passes. Its own mutation suite is the whole of what makes its
+green mean anything, which is why it runs as a second step beside it rather than
+being trusted on the strength of having been written.

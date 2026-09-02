@@ -74,12 +74,17 @@ scripts/check_garmin_source.sh       source-level guard, runs on Linux with no S
 `scripts/check_garmin_source.sh` is the only thing in this repo that reads this
 app on every change and can fail. It needs no Connect IQ SDK — bash + python3,
 same shape as `apps/watch_ios/scripts/check_xcstrings_parity.sh` — and holds
-four claims the compiler cannot: the grade tracker recovers from a distance
+five claims the compiler cannot: the grade tracker recovers from a distance
 rewind and `onTimerReset` clears it; `source-test/` stays annotated and
 excluded from release builds; a permission-gated Toybox module is declared in
-`manifest.xml` before it is used; and the string table and its call sites agree
-in both directions. It is **not yet wired into CI** — see
-[followups.md](../../docs/product/followups.md).
+`manifest.xml` before it is used; the constants other rails read are declared
+by name and used by name; and the string table and its call sites agree in both
+directions. It runs in the **`watch-garmin-source`** job of
+`.github/workflows/ci.yml` — ungated (bash + python3 + a bare `node`, seconds
+on a Linux runner), in the `CI gate` aggregator's `needs:` list, with
+`scripts/check_garmin_source.test.mjs` beside it as a second step: a
+source-reading guard that has stopped matching passes vacuously, so its own
+mutation suite is what makes its green mean anything.
 
 `GradeTracker` is the rolling (distance, altitude) → grade state machine, split
 out of the view so it can be reset and unit-tested without an `Activity.Info`.
