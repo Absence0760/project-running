@@ -489,6 +489,35 @@ String? _extractType(String remainder) {
   return match.group(1)!.toLowerCase();
 }
 
+/// Emitted verbatim at the top of `db_rows.dart`.
+///
+/// Postgres renders a `numeric` / `float8` value JSON has no literal for as a
+/// JSON *string* — measured against the local stack, `json_agg` (the shape
+/// PostgREST builds its response with) yields `{"distance_m":"NaN"}` — so a
+/// bare `as num` cast is a `TypeError` on a wire shape the server really
+/// produces, thrown inside `fromJson` where the whole screen dies rather than
+/// one field. A column's own CHECK is no protection: `'NaN'::numeric >= 100`
+/// is true, so `global_segments_distance_m_check` admits it.
+///
+/// An unusable value therefore resolves to each field type's own "no number":
+/// `null` for a nullable column, `double.nan` for a non-nullable one — which
+/// is also exactly what the web twin's `Number(...)` yields, so a row renders
+/// on both platforms and the finiteness screens already in place (e.g.
+/// `sortCatalogue`'s "absent or non-finite sorts LAST") decide what to say
+/// about it. Zero is deliberately not the fallback: a 0 m segment is a
+/// plausible-looking lie where a NaN is unmistakably no answer.
+const String _doubleHelpers = '''
+double? _toDoubleOrNull(Object? value) {
+  final num? n =
+      value is num ? value : (value is String ? num.tryParse(value) : null);
+  if (n == null) return null;
+  final double d = n.toDouble();
+  return d.isFinite ? d : null;
+}
+
+double _toDouble(Object? value) => _toDoubleOrNull(value) ?? double.nan;
+''';
+
 String _emit(Map<String, Map<String, _Column>> schema, Set<String> enums) {
   final out = StringBuffer()
     ..writeln('// GENERATED FILE — DO NOT EDIT.')
@@ -498,7 +527,8 @@ String _emit(Map<String, Map<String, _Column>> schema, Set<String> enums) {
     ..writeln('//')
     ..writeln('// Do not hand-edit. To add a column, add it to the SQL')
     ..writeln('// migration, rerun the generator, and commit both files.')
-    ..writeln();
+    ..writeln()
+    ..writeln(_doubleHelpers);
 
   final tableOrder = _tables.toList()..sort();
   for (final table in tableOrder) {
@@ -595,9 +625,7 @@ String _fromJsonExpr(_Column c, Set<String> enums) {
           ? '($key as num?)?.toInt()'
           : '($key as num).toInt()';
     case 'double':
-      return c.nullable
-          ? '($key as num?)?.toDouble()'
-          : '($key as num).toDouble()';
+      return c.nullable ? '_toDoubleOrNull($key)' : '_toDouble($key)';
     case 'bool':
       // Non-nullable booleans get the safe-false fallback even though
       // the DB-side NOT NULL guarantees the value is present in fresh

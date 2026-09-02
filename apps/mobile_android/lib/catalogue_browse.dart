@@ -22,10 +22,11 @@ const List<String> kRouteSurfaceVocabulary = <String>['road', 'trail', 'mixed'];
 ///
 /// `distanceM` / `elevationM` are nullable `num` because the numeric guard
 /// treats an absent and an unusable value identically — see [sortCatalogue].
-/// Web widens the same two fields to `number | string`, because PostgREST may
-/// hand a `numeric` column over as a JSON string; on this side
-/// `GlobalSegmentRow.fromJson` has already coerced through `as num` at its own
-/// boundary, so the honest input type here is the narrower one.
+/// Web widens the same two fields to `number | string`, because Postgres
+/// renders a `numeric` value JSON has no literal for as a JSON string; on this
+/// side `GlobalSegmentRow.fromJson` coerces that string at its own boundary
+/// (decisions § 985), so the honest input type here is the narrower one — a
+/// non-finite `double` still arrives, which is what [sortCatalogue] screens.
 class CatalogueSegment {
   const CatalogueSegment({
     required this.id,

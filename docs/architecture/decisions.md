@@ -15023,3 +15023,56 @@ deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
 That check mattered — the first mutation attempted was weakening the assertion
 to `includes('')`, which passes trivially and measures nothing. **Mutate the
 subject, not the assertion.**
+
+## 985. A numeric column can arrive as a JSON string, and the generator cast could only crash
+
+`scripts/gen_dart_models.dart` emitted `(json['x'] as num).toDouble()` for every
+`double` column — 69 reads in `db_rows.dart`. `as num` is a cast, not a
+coercion: a `String` on the wire is a `TypeError` thrown inside `fromJson`,
+which kills the whole screen rather than one field. The filing that raised this
+called the string arrival hypothetical. It is not. Measured against the local
+stack:
+
+```
+select coalesce(json_agg(_postgrest_t), '[]')::character varying
+from (select 'NaN'::numeric as distance_m, 'Infinity'::numeric as elevation_m,
+             12.5::numeric as ok) _postgrest_t;
+-> [{"distance_m":"NaN","elevation_m":"Infinity","ok":12.5}]
+```
+
+`json_agg` is the shape PostgREST builds its response body with, and JSON has
+no literal for NaN or Infinity, so Postgres quotes them. The column's own CHECK
+is no defence: `'NaN'::numeric >= 100` is **true**, so
+`global_segments_distance_m_check` admits exactly the value that then cannot be
+decoded. The same package already believed this — `effort_rank.dart`'s
+`_usableRank` accepts `raw is String ? num.tryParse(raw)` — so two boundaries
+in one package disagreed about one risk, and the generated half was the one
+that crashed.
+
+The generator now emits a pair of helpers and routes every `double` column
+through them. An unusable value resolves to the field type's own "no number":
+`null` for a nullable column, `double.nan` for a non-nullable one. Three
+choices inside that, each deliberate.
+
+**Non-finite is unusable, not a value.** A parsed `"NaN"` is `double.nan` in
+Dart, so accepting the parse and stopping there would swap a crash for a poison
+number propagating into arithmetic. The helper screens `isFinite`, the same
+rule §940 and §954 applied at the SQL and coordinate boundaries.
+
+**Zero is never the fallback.** A 0 m segment is a plausible-looking lie; a NaN
+is unmistakably no answer, and every finiteness screen already in the tree —
+`sortCatalogue`'s "absent or non-finite sorts LAST" among them — is written to
+recognise it.
+
+**NaN for a non-nullable column is what the web twin already does.**
+`Number("NaN")` is NaN, so web renders the row and sorts it last where mobile
+died. The point of the fix is that both platforms now answer the same way about
+the same byte.
+
+Ints are deliberately left on `as num`. `int2`/`int4`/`int8` have no non-finite
+values and `to_json` never quotes them (measured: `9223372036854775807` comes
+back unquoted), so the cast cannot meet a shape it rejects.
+
+One consequence recorded rather than fixed here: a row decoded with a NaN and
+then re-encoded through `toJson` hits `jsonEncode`'s refusal of non-finite
+doubles. That is the same class as §986 and is answered there.
