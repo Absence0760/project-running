@@ -12194,3 +12194,207 @@ and a suite that runs against two Flutter versions cannot pick one. It is also
 a second instance of the round's other lesson ([§ 877](#877)) — a failure
 reproduced in one environment and attributed to that environment is not
 diagnosed, only relocated.
+
+## 879. The Wear OS session bridge trusted its sender, so a half-formed push overwrote the one credential an out-of-range watch still had
+
+`SessionPayload.fromDataMap` on the watch read the `/supabase_session` DataMap
+with `dm.getString(k) ?: ""` on all five string fields. Every absent field
+became an empty string and the payload was constructed regardless, so
+`RunViewModel.bootstrapAuth` ran the full accept path on it:
+`sessionStore.save(stored)` wrote the blanks over the **encrypted** cached
+session — which exists precisely so a cold launch out of Bluetooth range still
+has credentials — and `applySession` then set `authed = true` and
+`authReady = true`. The wrist reported itself signed in, hid the sign-in
+affordance behind that state, and drained the upload queue under an empty
+bearer token against an empty base URL. A single malformed push destroyed
+working credentials and left no way back on the watch.
+
+The receive side had no guard because the send side has one. The phone's
+`WearAuthBridge.parseWearAuthPushArgs` refuses a push missing any of the six
+fields, and its own comment names this exact hazard — "rather than shipping a
+half-formed DataItem that the watch's SessionBridge would silently apply". That
+is a sender-side guard describing a receiver-side hole. **A receiver that trusts
+its sender has no contract, only a habit**, and this habit was already broken in
+a shipped writer: the phone parser checks presence and type, never emptiness, and
+`wear_auth_bridge.dart` sends `session.refreshToken ?? ''` — an empty string is
+a value the sender is built to produce.
+
+`fromDataMapOrNull` now grades through the pure `fromFields`, refusing when any
+of the five load-bearing strings is null or blank. Whitespace is refused with
+the absent case: a DataMap carrying `" "` is exactly as unusable and reads as
+present to a null check. `expiresAtMs` is deliberately NOT graded — 0 reads as
+NOT expired (`StoredSession.isExpired`), which is the documented contract that
+`StoredSessionTest` pins, and grading it here would reject a session the rest of
+the app calls valid.
+
+A refusal drops the event rather than emitting `Cleared`. That direction is
+load-bearing: `Cleared` runs `tearDownSession`, which wipes the unsynced-run
+queue **and its on-disk track files** (fail-closed against cross-user upload,
+`LocalRunStore.clear`), so treating a malformed push as a sign-out would be
+worse than the bug it replaces — it would convert a corrupt frame into data
+loss. A push the watch cannot read must leave the session it already holds
+exactly as it was.
+
+The extraction is what makes the contract testable at all: `DataMap` is a Google
+Play Services type no host JVM test can build, so the grading lives in a pure
+`fromFields(String?, ..., Long)` the suite calls directly, and a source-level
+guard pins that both call sites — the `TYPE_CHANGED` branch and the cold-start
+`current()` read, which applies a session on the identical path — route through
+the adapter, and that no `?: ""` coercion survives on the receive side. Same
+shape as `RoutesBridge`'s pure `parseRoutesJson` plus `RoutesBridgeWiringTest`.
+
+## 880. The Wear build script was a fourth rail of the flag parser, and being the only NEGATIVE one made its narrow copy fail open
+
+`apps/watch_wear/android/app/build.gradle.kts` reads `BYPASS_LOGIN`,
+`DISABLE_HR` and `DISABLE_TTS` out of `.env.development` / `.env.local` at
+Gradle-configure time and emits them as `BuildConfig` booleans. Its `envFlag`
+accepted `raw?.trim()?.lowercase() == "true"` and nothing else, where the
+canonical parser ([§ 709](#709), `apps/web/src/lib/core/env_flag.ts` twinned
+into `apps/mobile_android/lib/env_flag.dart`) accepts `1` / `true` / `yes` /
+`on`. Same defect, fourth rail — and this rail is the one where the narrow
+parse fails **open**, because two of its three flags are negatives:
+`ENABLE_HR = !envFlag("DISABLE_HR")`, so `DISABLE_HR=1` parsed as false and
+left heart rate ON. The Wear OS emulator synthesises HR samples that look
+real; keeping them out of the runs table is the entire reason the flag exists.
+
+The guard reads the accepted set **off** the canonical rail rather than
+restating it. A list written into the Kotlin test would pin the tokens someone
+remembered on the day, and web adding a fifth affirmative would leave this rail
+behind silently — which is precisely how the drift arose. `EnvFlagParityTest`
+extracts the quoted tokens from `isTruthyFlagValue`'s body and from `envFlag`'s
+and compares the two sets, plus asserts the trim and lowercase calls (the set
+can be right and the behaviour still wrong), and that no `.env` read spells an
+inline comparison instead of going through the two helpers.
+
+Two smaller things fell out of the same reading. `envFlag`'s `default: Boolean
+= false` parameter was never read by the body and never passed by a caller — a
+parameter that documents a behaviour the function does not have. And
+`envString` returned `""` for a key that is present but empty, so
+`APP_RELEASE=` yielded `""` rather than the declared `"dev"`, which
+`MainActivity` then reports to Sentry as the `production` environment. Both are
+now what they say they are.
+
+`build.gradle.kts` is already a declared input of the test task
+(`guardedBuildScripts`, added for the locale guards), so an edit to it re-runs
+this rather than leaving `testDebugUnitTest` UP-TO-DATE on exactly the change
+the guard exists to catch.
+
+## 881. `POST_NOTIFICATIONS` was declared and never asked for, and nothing in the module could tell those two facts apart
+
+`AndroidManifest.xml` says what the Wear app MAY hold.
+`RunWatchApp.kt`'s `permissionLauncher.launch(...)` is the only place it ever
+ASKS. Nothing compared the two lists, and `POST_NOTIFICATIONS` was in the first
+and not the second — so on any watch running API 33 or later it was never
+granted.
+
+The reason this survived a suite of 638 tests is that the failure produces no
+error anywhere. `RunRecordingService` builds its `OngoingActivity` notification
+and calls `startForeground` on every run; the service starts, the recording
+runs, `nm.notify` returns normally, and the platform simply keeps the
+notification out of the shade. What the runner loses is the ongoing-activity
+chip on the watch face — the way back into a live run once they have swiped
+away from the app, and the only indication from outside the app that a run is
+recording at all. A watch app whose entire job is to record while the wearer is
+looking at something else lost its one glanceable handle, silently.
+
+The permission is requested behind a `TIRAMISU` gate because `minSdk` here is
+30 and the permission is API 33+. The guard pins the gate as well as the
+request: a version check is exactly the kind of thing that would later be
+tightened into removing the request again.
+
+`ManifestPermissionCoverageTest` DERIVES the obligation from the manifest
+rather than listing it. Every declared permission must be requested at runtime,
+be install-time (so there is nothing to request), or carry a registered reason —
+and an exemption naming a permission the manifest no longer declares fails too,
+so the register cannot rot in the quiet direction. Two entries are registered
+today: `ACCESS_COARSE_LOCATION`, which the platform grants alongside the fine
+one, and `BODY_SENSORS_BACKGROUND`, which is the same defect a second time and
+is NOT fixed here — a background permission cannot ride the same request as its
+foreground half, so it needs a two-step flow and a watch to verify it on. It is
+in `followups.md` with the measurement rather than fixed blind.
+
+The same test carries the other half of the manifest pair nothing checked:
+every `FOREGROUND_SERVICE_<TYPE>` permission declared must appear in the
+service's own `foregroundServiceType`, and vice versa. The two halves sit in
+different elements of one file, neither implies the other, and a
+`FOREGROUND_SERVICE_HEALTH` without `health` in the type list is a
+`SecurityException` the moment a run starts on API 34+.
+
+## 882. `distance_km_recorded` had no mile sibling, and the one screen never handed `preferredUnit` was the one that used it
+
+Every distance read-out on the wrist is chosen by `DistanceUnit`:
+`distanceLabel`, `distanceToGoLabel` and `paceLabel` each `when (unit)` over a
+matched pair of string resources, and the recording service's notification does
+the same. The crash-recovery prompt did not. It called
+`stringResource(R.string.distance_km_recorded, formatKm(distance))` — a
+kilometre number under a kilometre word — so a miles runner opening the app
+after a process kill was told "6.44 km recorded" about their four-mile run, on
+the single screen where the figure's whole job is to let them recognise which
+run survived.
+
+Two independent things had to be true for it to reach a release, and each hid
+the other. `distance_km_recorded` was the only unit-bearing key in the
+catalogue with no `_mi` sibling, so there was nothing to dispatch to; and
+`PreRunScreen` was the only screen never passed `preferredUnit`, so there was
+nothing to dispatch on. Neither absence is visible to any guard that looks at
+one locale at a time: the key was present and correctly translated in all seven
+catalogues, so `L10nResourceParityTest` was satisfied, and a reviewer reading
+the prompt sees a `stringResource` call that looks like every other one.
+
+So the guard is over the catalogue's SHAPE rather than its contents. A key
+carrying a `km` segment must have the `mi` key that swapping that segment
+names, and vice versa — segment-wise, because the unit is not always the last
+word (`distance_km_to_go`). And both halves of a pair must be referenced from
+the source, since a pair that exists and is half-wired is indistinguishable
+from this defect at the resource level.
+
+The same reading found the inverse: three keys — `tile_stat_row`,
+`pace_placeholder`, `pace_per_km_compact` — declared in all seven catalogues
+and referenced from nowhere, left behind when the tile moved to composing those
+strings in Kotlin. Twenty-one dead entries translators maintain, and two of
+them hardcode `/km`: a later call site wiring up `pace_placeholder` would have
+inherited this exact bug from a string that looked already-translated and
+already-reviewed. They are deleted, and a third guard fails on any key the
+catalogue declares that no call site names. `formatKm` went with them — its own
+doc comment named the two km-only call sites it existed for, the notification
+and the recovery prompt, and neither is one any more.
+
+## 883. Both Wearable Data Layer contracts were pinned by a comment telling the other rail what to do
+
+The phone writes a `DataItem` at a path with a set of `DataMap` keys; the watch
+listens at a path and reads a set of keys. Two files, two apps, no shared type,
+and a mismatch that surfaces as nothing at all — a renamed path means the
+listener never fires, a renamed key reads as absent, and neither process logs a
+word. The runner sees that starring a route on the phone stopped reaching the
+wrist, or that the watch never signs in, with nothing to attribute it to.
+
+What stood in for a contract on `/saved_routes` was
+`assertTrue(src.contains("\"/saved_routes\""))` in `RoutesBridgeWiringTest`,
+under a comment reading "must match the phone-side WearRoutesBridge.kt PATH".
+That is an instruction, not an enforcement — exactly the failure
+`scripts/check_watch_wire_vectors.mjs` was written to replace on the firmware
+rails ([§ 641](#641)): rename the path on the phone and the watch suite stays
+green while the feature is dead. `/supabase_session` had no assertion of the
+kind on either side, so the six-field session wire was held together entirely
+by the two files happening to agree.
+
+`DataLayerContractTest` reads both rails and compares them: the `PATH`
+constants per bridge, and the set of keys the phone's `dataMap.put*` writes
+against the set the watch's `dm.get*` reads. The comparison is symmetric on
+purpose — a key the watch reads and the phone never writes is the same defect
+from the other end, and at runtime it is a field that is permanently absent
+rather than an error. A vacuity check comes first, because "these two sets are
+equal" is satisfied by two empty sets, which is what a regex that stopped
+matching would produce.
+
+A fifth case closes the seam between the two guards over the session's field
+list: the phone's `parseWearAuthPushArgs` validates a list of method-channel
+args and the watch (§ 879) refuses blanks in a list of DataMap fields, and a
+field added to the wire on one side alone would be validated by neither. It is
+asserted that the args the phone validates are exactly the keys the phone
+writes.
+
+The cross-tree read is the same shape `MetadataRegistryTest` (which reads
+`docs/backend/metadata.md`) and `WearRoutesFixtureTest` (a repo-root fixture)
+already use, and it runs in the `build-watch-wear` job, which is code-gated —
+so a phone-side rename, being code, runs it.

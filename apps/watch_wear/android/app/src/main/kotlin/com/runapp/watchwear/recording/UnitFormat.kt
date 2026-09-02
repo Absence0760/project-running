@@ -91,13 +91,3 @@ fun splitIntervalMetres(unit: DistanceUnit): Double = when (unit) {
 fun completedSplits(distanceM: Double, unit: DistanceUnit): Int =
     (distanceM / splitIntervalMetres(unit)).toInt()
 
-/// Format metres as a 2-decimal kilometre figure in [locale] — number
-/// only, no unit word. Retained for the km-only call sites (notification,
-/// recovery prompt) that don't take a unit. e.g. 5123.0 m → "5.12" (en).
-fun formatKm(distanceM: Double, locale: Locale = Locale.getDefault()): String =
-    formatDistance(distanceM, DistanceUnit.KM, 2, locale)
-
-/// Format metres as a kilometre figure with [decimals] fraction digits in
-/// [locale]. Retained for km-only call sites.
-fun formatKm(distanceM: Double, decimals: Int, locale: Locale = Locale.getDefault()): String =
-    formatDistance(distanceM, DistanceUnit.KM, decimals, locale)
