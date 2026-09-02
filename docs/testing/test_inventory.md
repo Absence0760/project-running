@@ -1739,3 +1739,60 @@ goes red when the duration floor is removed. Three mutations killed — the
 distance bound reduced to a bare `>= 0` (tests 6, 7, 16), the duration bound
 dropped (9, 16), the elevation bound losing its Infinity term (14) — each
 restored and re-run green. See [decisions § 939](../architecture/decisions.md).
+
+### `apps/backend/supabase/tests/numeric_bounds_reject_nan_test.sql` — 6 tests (new)
+
+The catch-all behind [decisions § 940](../architecture/decisions.md). It pulls
+every single-column numeric CHECK in `public` out of the catalogue, substitutes
+the column for `'NaN'` (and for `'Infinity'` where the column's typmod can hold
+one), and EXECUTES the expression — so a bound added later in the one-sided
+shape fails here rather than joining the list. Two rules: rule 1 grades the
+evaluable set; rule 2 requires every numeric column appearing only in a
+multi-column CHECK to also carry a single-column one, which is what made
+`segments.end_distance_m`'s absence a failure rather than a silence.
+`challenges.goal_value` is the one exemption (its bound is window-relative and
+cannot be written one column at a time) and is pinned by value in
+`challenge_goal_check_test.sql` instead — that suite grew from 9 to 13.
+
+The sweep carries an **operator validation**: before it asks the real schema
+anything it creates `public.nan_bound_probe (v numeric check (v >= 0))` inside
+its own transaction and requires the sweep to name that column as admitting
+both literals. A substitution that had quietly become a no-op would satisfy
+every emptiness assertion for free, and the two population floors alone would
+not catch it. Four mutations killed: `gym_sets.weight_kg` reduced to a bare
+`>= 0` (rule 1 NaN), `segment_efforts.time_seconds` losing only its Infinity
+term (rule 1 Infinity), `segments_end_distance_m_check` dropped entirely
+(rule 2), and `challenges_goal_ck` losing its NaN term (the by-value pins).
+
+### `apps/backend/supabase/tests/frozen_managed_columns_test.sql` — 16 tests (new)
+
+The eleven managed columns of [decisions § 941](../architecture/decisions.md),
+each asserted against the write that reached it, all from an ordinary
+`authenticated` session under the row owner's own JWT. Value comparisons rather
+than `throws_ok`, because the guard discards rather than refuses — a 42501 on
+`shadow_hidden` would tell a hidden account that it is hidden.
+
+Three of the sixteen exist to catch over-reach rather than under-reach, and they
+are the ones that make the design falsifiable: the route still has its derived
+geometry after the freeze (a guard ordered after the derivation would leave the
+route with no line at all), an admin can still unhide through
+`admin_unhide_target`, and the club really is unhidden afterwards. Five
+mutations killed — the routes trigger dropped, the `user_profiles` trigger
+dropped, the clubs trigger reduced to BEFORE UPDATE (the original bug's shape),
+the routes guard made SECURITY DEFINER (which masks `current_user` and lets
+every caller through), and the clubs guard re-keyed on the JWT role, which fails
+the "an admin can still unhide" assertion precisely because every legitimate
+writer is a definer function called by an ordinary user's session.
+
+### Round 32 sql-lane suite totals
+
+| Suite | Command | Before | After |
+|---|---|---|---|
+| pgTAP | `supabase test db` from `apps/backend` | 2526 in 281 files | 2542 in 282 files |
+| Backend guards | `node --test apps/backend/scripts/*.test.mjs` | 147 | 147 |
+| pgtap refusal mutation guard | `node apps/backend/scripts/check_pgtap_refusal_assertions.mjs` | 179 assertions / 5 expected survivors | 179 / 5 |
+
+The one pgtap failure on this branch is `donations_status_lock_test`, which is
+the known workstation-vs-CI Supabase CLI image split (2.109.1 against CI's
+2.84.2 disagreeing about `service_role` EXECUTE on `fundraiser_totals`) and
+fails identically on the untouched base commit.

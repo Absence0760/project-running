@@ -14314,6 +14314,77 @@ including `live_run_pings.lat` / `lng` and `race_pings.lat` / `lng`, which are
 client-written and rendered on a public spectator map. That is a different
 question — what each column's honest range is — and it wants a per-column answer
 rather than a sweep.
+
+## 941. A shadow-hidden account could unhide itself, and the guard that stops it cannot read the JWT
+
+**Decided 2026-09-02.** `shadow_hidden` is the moderation bit. `auto_hide_target`
+raises it when a target crosses the report threshold, and `admin_unhide_target`
+— SECURITY DEFINER, gated on `private.is_admin` — is the only intended way down.
+All three tables it lives on carried a table-level UPDATE grant, so from an
+ordinary authenticated session under the row owner's own JWT, with no second
+account and no service key:
+
+```
+update user_profiles set shadow_hidden = false where id = auth.uid();
+update clubs         set shadow_hidden = false where id = <my club>;
+update routes        set shadow_hidden = false where id = <my route>;
+```
+
+each returned the target to every surface that filters on it. `user_profiles`
+was reachable a second way even without the UPDATE — it carries a "users delete
+own profile" policy, so DELETE + re-INSERT reaches every column an UPDATE grant
+could withhold, which is § 584's round trip verbatim.
+
+Four more from the same seat. A club created with `is_verified => true` kept the
+trust badge, because `clubs_protect_is_verified_trg` is BEFORE **UPDATE** only
+and nobody had asked what INSERT did (`race_listings_force_unverified`, two
+tables over, is BEFORE INSERT OR UPDATE and is the shape that holds).
+`clubs.member_count` set to 999999 stayed there — the maintaining trigger
+recomputes on a `club_members` change and a club nobody joins never has one —
+and `search_clubs` sorts on it, so the forged club ranked first. `routes.run_count`
+set to 4242 promoted the route into the `popular` lens of
+`discoverable_routes_in_bbox` and out of `hidden_gems`; `is_featured` put it in
+the admin-curated lens outright. And `update routes set geom_public = geom`
+overwrote the privacy-zone clip that `routes_within_box` — granted to `anon` —
+runs its `ST_Intersects` against, because that column's maintaining trigger
+watches `waypoints` and a write touching only the geometry is never recomputed.
+
+**Two design choices, and both are the interesting part.**
+
+*Discard, do not refuse.* The obvious fix was the § 584 shape — revoke the table
+verb, re-grant column by column — and it was written first and then thrown away.
+A grant refuses with a 42501, and a refusal on `shadow_hidden` tells the hidden
+account that it is hidden, which is the one thing a *shadow* hide must not do.
+It also breaks any caller that hands a table a whole row it read back earlier:
+`backup.dart`'s restore upserts a `select()`ed route verbatim, so every one of
+these columns is in its statement's column list and every route in an archive
+would have failed to import. Silently keeping the write and discarding the value
+is not the weaker guard here; it is the correct behaviour, and it is what a
+restore should do with a moderation bit and a derived cache anyway.
+
+*The guard cannot read the JWT.* Every legitimate writer of these columns —
+`admin_unhide_target`, `auto_hide_target`, `refresh_route_run_count`,
+`refresh_club_member_count`, `refresh_gym_workout_totals`,
+`sync_challenge_participant_count`, `routes_set_geom` — is SECURITY DEFINER and
+is called **by an ordinary user's session**. So inside all of them the JWT role
+claim reads `authenticated`, and `current_setting('role')` reads the session's
+`SET ROLE`, which is also `authenticated`. Those are the two signals
+`lock_subscription_columns` and `force_unverified_listing` key on, and either
+one here would have locked the moderator out of the unhide while every
+"the forge is refused" assertion still passed. `current_user` is the signal that
+survives, because in a SECURITY **INVOKER** function it follows the effective
+user: `postgres` inside a definer body, `authenticated` on a direct PostgREST
+write. Measured on this Postgres with one trigger and one session. Making these
+guards SECURITY DEFINER would defeat them outright — the definer switch masks
+`current_user` to the owner, so every caller would look trusted. The suite kills
+exactly that mutation, and kills a JWT-role-keyed variant on the assertion that
+an admin can still unhide.
+
+One residual, asserted rather than hidden: the DELETE + re-INSERT path now
+produces a *fresh* profile row, which is not hidden. A new row is not a hidden
+row, and a guard that carried the flag across a delete would be inventing state
+for a row that does not exist yet. Re-applying the hide to a re-created account
+is the moderator's, and the test says so in its own assertion text.
 ## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
 
 **Decided 2026-09-02.** PR #849 went up green on every suite this round ran and
