@@ -15174,3 +15174,44 @@ Removing `data.ts::donations-checkout` from `edge_function_error_guard.ts`'s
 exemption list is the second rail: with the unwrap reverted the guard's "no
 site rethrows unexamined" test fails, and had the exemption been left behind
 its own staleness test would have.
+
+## 983. The export failure toast was rendering a sentence about our transport
+
+The filing said neither `startDonationCheckout` nor `edgeFunctionExport` puts
+its message in front of a person, and that the export path's "message reaches a
+generic toast that reads as a generic failure either way". Half of that is
+wrong, and it is the half that matters: `settingsAccount.exportFailed` is
+`"Export failed: {error}"` and the handler interpolated `(e as Error).message`.
+So a subject asking for their own GDPR Art 20 archive read **"Export failed:
+Edge Function returned a non-2xx status code"** — supabase-js's fixed internal
+sentence, in English, whatever locale they had chosen. The exemption that let
+this stand in `edge_function_error_guard.ts` was written from the same belief.
+
+The hub rail leaked in the other direction. `throwForStatus` built
+`` `Export failed (${res.status}): ${body || 'no detail'}` `` — the Go service's
+raw response body pasted into the same slot — and its 429 branch assembled an
+English sentence no locale could translate.
+
+Both rails now answer in one closed vocabulary, `unauthorized` / `rate_limited`
+/ `export_failed`, carried on a `CloudExportError`, and the surface resolves
+each to translated copy. Unwrapping `export-data`'s envelope is not enough on
+its own: that function's `error` field carries internal English sentences
+(`run fetch failed`, `signed URL failed`) which are no more copy than the
+transport's, so only the two codes a subject can act on are kept and the rest
+is logged and generalised.
+
+The wait was preserved rather than dropped. An existing guard pinned that a
+429's window "must come from the response, not be invented", and collapsing to
+a bare code would have quietly deleted that: `CloudExportError` carries
+`retryAfterS`, read from `Retry-After` on both rails — including the Edge
+Function one, where supabase-js hands the whole `Response` over on `context` —
+and the copy renders it through `rateLimitWait`, the same localized duration
+phrase the P0001 rate-limit path uses. Only delta-seconds are parsed; the
+HTTP-date form is refused, because a wrong wait is worse than no wait.
+
+Three new keys in all seven catalogues, resolved into the EXISTING
+`exportFailed` framing key rather than replacing it — which also keeps the two
+Playwright specs asserting `/Export failed:/` describing the same surface.
+Pinned by two source guards: every `throw` out of `cloud_export.ts` is a
+`CloudExportError` whose code is one of exactly three, and `edgeFunctionExport`
+reads the envelope instead of rethrowing.

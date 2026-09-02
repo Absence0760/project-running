@@ -26,6 +26,7 @@
 /// invoking.
 
 import { env } from '$env/dynamic/public';
+import { edgeFunctionErrorCode } from '../core/edge_function_error';
 import { supabase } from '../core/supabase';
 import {
 	type CloudExportFormat,
@@ -47,19 +48,54 @@ export type CloudExportStart =
 	| { kind: 'ready'; response: CloudExportResponse }
 	| { kind: 'queued'; job: CloudExportJob };
 
+/// The three refusals an export caller can act on differently. Both
+/// transports answer in this vocabulary so the surface maps ONE set of
+/// codes rather than branching on which rail was configured, and so
+/// nothing a server said reaches a toast: the Go service's body is raw
+/// text and `export-data`'s `error` field carries internal English
+/// sentences ("run fetch failed"), neither of which is copy.
+export type CloudExportFailure = 'unauthorized' | 'rate_limited' | 'export_failed';
+
+/// A refusal the export surface can act on. `message` is the code so an
+/// `instanceof` miss still degrades to the generic branch rather than to
+/// a raw sentence, and `retryAfterS` is the server's OWN wait — read off
+/// the response, never invented, so the copy can name it.
+export class CloudExportError extends Error {
+	constructor(
+		readonly code: CloudExportFailure,
+		readonly retryAfterS: number | null = null,
+	) {
+		super(code);
+		this.name = 'CloudExportError';
+	}
+}
+
+/// `Retry-After` in delta-seconds. The HTTP-date form is deliberately not
+/// parsed: showing a wrong wait is worse than showing none, and both of
+/// our own rails emit seconds.
+function retryAfterSeconds(headers: Headers): number | null {
+	const raw = headers.get('retry-after');
+	if (raw === null) return null;
+	const n = Number.parseInt(raw.trim(), 10);
+	return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 async function hubSession(): Promise<string> {
 	const { data } = await supabase.auth.getSession();
 	const token = data.session?.access_token;
-	if (!token) throw new Error('Not signed in');
+	if (!token) throw new CloudExportError('unauthorized');
 	return token;
 }
 
 function throwForStatus(res: Response, body: string): never {
+	if (res.status === 401 || res.status === 403) throw new CloudExportError('unauthorized');
 	if (res.status === 429) {
-		const retryAfter = res.headers.get('retry-after');
-		throw new Error(`Rate-limited — try again in ${retryAfter ?? '60'}s.`);
+		throw new CloudExportError('rate_limited', retryAfterSeconds(res.headers));
 	}
-	throw new Error(`Export failed (${res.status}): ${body || 'no detail'}`);
+	// `body` is the server's own text and deliberately does not travel: it
+	// used to be pasted into the failure toast verbatim.
+	console.error('cloud export failed', res.status, body);
+	throw new CloudExportError('export_failed');
 }
 
 /// Ask for an export.
@@ -129,9 +165,31 @@ async function edgeFunctionExport(
 	const { data, error } = await supabase.functions.invoke('export-data', {
 		body: { format },
 	});
-	if (error) throw error;
+	if (error) {
+		// Rethrowing left supabase-js's fixed "Edge Function returned a
+		// non-2xx status code" as the `{error}` the failure toast
+		// interpolates, so the subject read a statement about our transport.
+		// The envelope's own code is not copy either — `export-data` answers
+		// `run fetch failed` and `signed URL failed` — so it is narrowed to
+		// the vocabulary a surface can map, and the rest is logged.
+		const code = await edgeFunctionErrorCode(error);
+		if (code === 'unauthorized') throw new CloudExportError('unauthorized');
+		if (code === 'rate_limit_exceeded') {
+			// The limiter sets Retry-After on its own 429, and supabase-js
+			// hands the whole Response over on `context` — so the wait is
+			// available here too and is read rather than invented.
+			const ctx = (error as { context?: Response }).context;
+			throw new CloudExportError(
+				'rate_limited',
+				ctx?.headers ? retryAfterSeconds(ctx.headers) : null,
+			);
+		}
+		console.error('cloud export failed', code ?? error);
+		throw new CloudExportError('export_failed');
+	}
 	if (!data || typeof data !== 'object') {
-		throw new Error('Export response was empty');
+		console.error('cloud export returned an empty body');
+		throw new CloudExportError('export_failed');
 	}
 	return data as CloudExportResponse;
 }
