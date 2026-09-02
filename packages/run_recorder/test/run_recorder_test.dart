@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
@@ -1020,4 +1023,230 @@ void main() {
       expect(round[1]['distance_m'], 600.0);
     });
   });
+  // The filter chain LOOKS like it screens every fix and does not: every
+  // comparison against a NaN delta is false, so a corrupt fix merely fails
+  // the movement test, and the two paths that append WITHOUT consulting the
+  // delta — the first fix after begin(), and the post-gap re-anchor — took it
+  // straight into the track. Nothing downstream re-checks, and both the local
+  // store and ApiClient._uploadTrack serialise the track with jsonEncode,
+  // which refuses a non-finite double: one such fix does not corrupt a number
+  // on a screen, it makes the whole run unsaveable and unuploadable.
+  group('an unusable fix never reaches the track', () {
+    test('a non-finite first fix does not become the track anchor', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0)
+          .copyWithLatitude(double.nan));
+
+      expect(r.debugTrack, isEmpty);
+      expect(r.debugWeakGps, isTrue);
+
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 1));
+      expect(r.debugTrack, hasLength(1));
+      expect(r.debugWeakGps, isFalse);
+      r.dispose();
+    });
+
+    test('a non-finite fix after a GPS gap does not re-anchor the track', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+
+      // 12 s later: past the re-anchor window, which appends unconditionally.
+      r.debugInjectPosition(makePosition(metresEast: 500, secondsFromStart: 12)
+          .copyWithLatitude(double.infinity));
+
+      expect(r.debugTrack, hasLength(1));
+      expect(r.debugDistanceMetres, 0);
+      r.dispose();
+    });
+
+    test('an out-of-range coordinate is refused', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+
+      r.debugInjectPosition(
+          makePosition(metresEast: 0, secondsFromStart: 0).copyWithLatitude(91));
+
+      expect(r.debugTrack, isEmpty);
+      r.dispose();
+    });
+
+    test('the finished run always encodes, whatever the sensor sent',
+        () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0)
+          .copyWithLatitude(double.nan));
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 1));
+      r.debugInjectPosition(makePosition(metresEast: 10, secondsFromStart: 3));
+      r.debugInjectPosition(makePosition(metresEast: 20, secondsFromStart: 5)
+          .copyWithLatitude(-double.infinity));
+      r.debugInjectPosition(makePosition(metresEast: 20, secondsFromStart: 7));
+
+      final run = await r.stop();
+
+      expect(run.track, hasLength(3));
+      // The save path is `jsonEncode(track)`; a non-finite double throws a
+      // JsonUnsupportedObjectError there and takes the run with it.
+      expect(() => jsonEncode(run.toJson()), returnsNormally);
+    });
+
+    test('a negative accuracy is refused — CoreLocation disowns the fix', () {
+      // Apple documents a negative horizontalAccuracy as meaning the latitude
+      // and longitude are INVALID, and geolocator passes it through untouched.
+      // `-1 > gate` is false, so the recorder was treating a fix the OS had
+      // explicitly disowned as a perfect one.
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+
+      r.debugInjectPosition(
+          makePosition(metresEast: 0, secondsFromStart: 0, accuracy: -1));
+
+      expect(r.debugTrack, isEmpty);
+      expect(r.debugWeakGps, isTrue);
+      r.dispose();
+    });
+
+    test('a non-finite accuracy fails closed', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+
+      r.debugInjectPosition(makePosition(
+          metresEast: 0, secondsFromStart: 0, accuracy: double.nan));
+
+      expect(r.debugTrack, isEmpty,
+          reason: 'a platform that cannot state its accuracy has not '
+              'thereby stated a good one',);
+      expect(r.debugWeakGps, isTrue);
+      r.dispose();
+    });
+
+    test('an accuracy exactly at the gate is still accepted', () {
+      final r = RunRecorder()..debugPrepareWithoutStream(accuracyGateMetres: 20);
+      r.begin();
+
+      r.debugInjectPosition(
+          makePosition(metresEast: 0, secondsFromStart: 0, accuracy: 20));
+
+      expect(r.debugTrack, hasLength(1));
+      expect(r.debugWeakGps, isFalse);
+      r.dispose();
+    });
+
+    test('an accuracy of zero is accepted — Android means unknown, not bad',
+        () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+
+      r.debugInjectPosition(
+          makePosition(metresEast: 0, secondsFromStart: 0, accuracy: 0));
+
+      expect(r.debugTrack, hasLength(1));
+      r.dispose();
+    });
+  });
+
+  // L4 (an auxiliary consumer of the snapshot stream) must not be able to
+  // break L1 (GPS distance) or L0 (the clock). Asserted as a property — the
+  // effect actually throws — rather than as the shape of a try/catch.
+  group('layered resilience — a throwing snapshot consumer', () {
+    test('cannot stop distance accumulating', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      var delivered = 0;
+      var caught = 0;
+      late final StreamSubscription<RunSnapshot> sub;
+      runZonedGuarded(() {
+        sub = r.snapshots.listen((_) {
+          delivered++;
+          throw StateError('auxiliary consumer blew up');
+        });
+      }, (_, _) => caught++);
+
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      await Future<void>.delayed(Duration.zero);
+      r.debugInjectPosition(makePosition(metresEast: 10, secondsFromStart: 2));
+      await Future<void>.delayed(Duration.zero);
+      r.debugInjectPosition(makePosition(metresEast: 20, secondsFromStart: 4));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(caught, greaterThanOrEqualTo(3),
+          reason: 'the consumer must really have thrown, or this proves '
+              'nothing');
+      expect(delivered, greaterThanOrEqualTo(3),
+          reason: 'a throw must not unsubscribe the consumer either');
+      expect(r.debugDistanceMetres, closeTo(20, 0.5));
+      expect(r.debugTrack, hasLength(3));
+
+      await sub.cancel();
+      r.dispose();
+    });
+
+    test('cannot stall the elapsed-time timer', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      var delivered = 0;
+      late final StreamSubscription<RunSnapshot> sub;
+      runZonedGuarded(() {
+        sub = r.snapshots.listen((_) {
+          delivered++;
+          throw StateError('auxiliary consumer blew up');
+        });
+      }, (_, _) {});
+
+      r.begin();
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+
+      expect(delivered, greaterThanOrEqualTo(2),
+          reason: 'the 1 s timer must keep emitting past a consumer throw');
+      expect(r.debugElapsed.inMilliseconds, greaterThan(2000));
+
+      await sub.cancel();
+      r.dispose();
+    });
+  });
+
+  // A 240-mile finish is ~112 hours. Nothing in the elapsed / lap path may
+  // wrap or lose precision at that scale, and the run still has to serialise.
+  group('multi-day durations', () {
+    test('a 112-hour resumed session keeps its elapsed total through stop()',
+        () async {
+      final r = RunRecorder();
+      r.debugResumeWithoutStream(
+        track: const [],
+        distanceMetres: 386_000,
+        elapsed: const Duration(hours: 112),
+        startedAt: DateTime(2026, 4, 6, 8),
+      );
+
+      expect(r.lap(), 1);
+      final run = await r.stop();
+
+      expect(run.duration.inHours, 112);
+      expect(run.startedAt, DateTime(2026, 4, 6, 8));
+      final laps = (run.metadata!['laps'] as List).cast<Map<String, dynamic>>();
+      expect(laps.single['duration_s'], 112 * 3600);
+      expect(laps.single['distance_m'], 386_000);
+      expect(() => jsonEncode(run.toJson()), returnsNormally);
+    });
+  });
+
+}
+
+/// Rebuild a fixture [Position] with a different latitude. `Position` has no
+/// copyWith, and every field is required.
+extension on Position {
+  Position copyWithLatitude(double value) => Position(
+        longitude: longitude,
+        latitude: value,
+        timestamp: timestamp,
+        accuracy: accuracy,
+        altitude: altitude,
+        altitudeAccuracy: altitudeAccuracy,
+        heading: heading,
+        headingAccuracy: headingAccuracy,
+        speed: speed,
+        speedAccuracy: speedAccuracy,
+      );
 }

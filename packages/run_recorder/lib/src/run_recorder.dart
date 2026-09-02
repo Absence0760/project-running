@@ -1034,22 +1034,67 @@ class RunRecorder {
     _treadmillNeedsRebaseline = false;
   }
 
+  /// Whether a fix carries a usable WGS84 coordinate.
+  ///
+  /// Nothing between here and Storage re-checks: the waypoint goes into
+  /// `_track`, `stop()` hands the track to the caller, and both the local
+  /// store and `ApiClient._uploadTrack` serialise it with `jsonEncode`, which
+  /// REFUSES a non-finite double. One such fix therefore does not corrupt a
+  /// number on a screen — it makes the whole run unsaveable and unuploadable,
+  /// which on a multi-day effort is the entire record. The filter chain below
+  /// looks like it would catch it and does not: every comparison against a NaN
+  /// delta is false, so a NaN fix merely fails the movement test, and the two
+  /// paths that append WITHOUT consulting the delta — the first fix after
+  /// [begin], and the post-gap re-anchor — take it straight into the track.
+  ///
+  /// The range half is the same bound the route importers apply, for the same
+  /// reason: a latitude past ±90 is not a place, and a finite-but-absurd pair
+  /// overflows a haversine to a non-finite distance downstream.
+  static bool _isUsableFix(Position pos) =>
+      pos.latitude.isFinite &&
+      pos.longitude.isFinite &&
+      pos.latitude.abs() <= 90 &&
+      pos.longitude.abs() <= 180;
+
+  /// Whether the reported horizontal accuracy clears the gate.
+  ///
+  /// Written as "not <= gate" rather than "> gate" so a NaN fails CLOSED: a
+  /// platform that cannot state its accuracy has not thereby stated a good
+  /// one, and `NaN > gate` is false, which admitted it as if it were perfect.
+  /// A NEGATIVE accuracy is the concrete case — CoreLocation documents a
+  /// negative `horizontalAccuracy` as meaning the latitude and longitude are
+  /// INVALID, and geolocator passes the value through untouched, so on iOS
+  /// the recorder was taking a fix the OS had explicitly disowned and letting
+  /// it drive distance and the map. Zero stays acceptable: Android reports it
+  /// for "no accuracy attached", which is unknown, not disowned.
+  bool _accuracyClearsGate(Position pos) =>
+      pos.accuracy >= 0 && pos.accuracy <= _accuracyGateMetres;
+
+  /// Drop the current fix, flag the stall, and log at most once per 5 s — an
+  /// always-bad stream would otherwise log at the sensor's rate for the whole
+  /// run.
+  void _dropFix(String reason) {
+    _weakGps = true;
+    final now = DateTime.now();
+    final last = _lastAccuracyDropLogAt;
+    if (last == null || now.difference(last) >= const Duration(seconds: 5)) {
+      _lastAccuracyDropLogAt = now;
+      debugPrint('RunRecorder: dropping fix — $reason');
+    }
+  }
+
   void _onPosition(Position pos) {
     if (_paused) return;
 
-    if (pos.accuracy > _accuracyGateMetres) {
-      _weakGps = true;
-      final now = DateTime.now();
-      final last = _lastAccuracyDropLogAt;
-      if (last == null ||
-          now.difference(last) >= const Duration(seconds: 5)) {
-        _lastAccuracyDropLogAt = now;
-        debugPrint(
-          'RunRecorder: dropping fix — accuracy '
-          '${pos.accuracy.toStringAsFixed(1)}m > gate '
-          '${_accuracyGateMetres.toStringAsFixed(0)}m',
-        );
-      }
+    if (!_isUsableFix(pos)) {
+      _dropFix('not a usable coordinate '
+          '(${pos.latitude}, ${pos.longitude})');
+      return;
+    }
+
+    if (!_accuracyClearsGate(pos)) {
+      _dropFix('accuracy ${pos.accuracy.toStringAsFixed(1)}m outside '
+          '0..${_accuracyGateMetres.toStringAsFixed(0)}m');
       return;
     }
     _weakGps = false;
