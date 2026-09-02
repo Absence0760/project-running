@@ -1202,9 +1202,7 @@ jobs:
           fi
 
   watch-ios-locale-parity:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    name: watchOS String Catalog vs its locale declarations
+    name: watchOS source-level guards (catalog, declarations, duplicated sources)
     # decisions.md § 761 — apps/watch_ios/scripts/check_xcstrings_parity.sh has
     # existed since the catalog did and ran in NO job: a translation missing
     # from Localizable.xcstrings, or a locale translated but absent from
@@ -1219,12 +1217,19 @@ jobs:
     # `test-watch-ios` builds and runs the Swift suite; it does not read the
     # catalog, and paying for macOS minutes to parse JSON would be silly.
     #
-    # Gated on `needs.changes.outputs.code` deliberately, and the § 756
-    # objection to that gate does NOT apply here: the three files this reads
-    # (Localizable.xcstrings, Info.plist, project.pbxproj) are none of them
-    # `docs/`, `.claude/` or `*.md`, so any diff that can break this guard
-    # sets `code=true`. `parity-matrix` is ungated for the opposite reason —
-    # everything it reads IS markdown.
+    # UNGATED, and it used to be gated. § 761 gated it on
+    # `needs.changes.outputs.code` on the stated ground that none of the three
+    # files it read (Localizable.xcstrings, Info.plist, project.pbxproj) was
+    # `docs/`, `.claude/` or `*.md`, so every diff able to break it set
+    # `code=true`. § 886's guard reads `Complications/README.md` — the only
+    # instruction an operator has for typing the App Group identifier into
+    # Xcode — and that reasoning stops holding the moment a markdown file
+    # enters the read set: a README-only rename sets `code=false`, the gate
+    # counts the skip as a pass, and the drift the claim exists to catch ships
+    # green. `parity-matrix` is ungated for exactly this reason. The whole job
+    # is `python3` plus a bare `node` against a checkout — no `npm ci`, no
+    # Xcode, seconds on a Linux runner — so running it on a docs-only PR costs
+    # less than reasoning about whether it needed to.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1250,6 +1255,31 @@ jobs:
           if ! node --test scripts/check_xcstrings_parity.test.mjs; then
             echo "::error::The watchOS String Catalog guard's own unit tests failed. The catalog itself is fine — the check above just passed — so this is a defect in apps/watch_ios/scripts/check_xcstrings_parity.sh, not a half-declared locale."
             echo "Reproduce with: node --test scripts/check_xcstrings_parity.test.mjs (stdlib only, needs python3 + bash, no install needed)."
+            exit 1
+          fi
+      # decisions.md § 884 – § 886. The guard above holds the catalog against
+      # its two locale-declaration sites and nothing else about the tier. This
+      # one holds the other five things a Linux parse can honestly claim about
+      # `apps/watch_ios`: a localization key with no catalog entry (renders
+      # English in every locale and throws nothing), a catalog entry no Swift
+      # references, a capability declared without the call that needs it or
+      # exercised without the declaration, the complication's duplicated
+      # formatters drifting from their `RunFormat.swift` copies, and the App
+      # Group named two different ways. Every one of them is silent on the
+      # platform, so the macOS `test-watch-ios` job would pass through all of
+      # them.
+      - name: watchOS catalog usage, native declarations and duplicated sources
+        run: |
+          if ! node scripts/check_watch_ios_source.mjs; then
+            echo "::error::apps/watch_ios carries a source-level defect no compiler reports — a localizing literal with no String Catalog entry, a catalog entry nothing references, an Info.plist / entitlements capability that disagrees with the code, a complication formatter that has drifted from its RunFormat copy, or an App Group named two ways. Nothing here is about a half-declared locale; that is the check above."
+            echo "The failing line above names the file, the line and the fix. Reproduce with: node scripts/check_watch_ios_source.mjs (stdlib only, no Xcode needed). decisions § 884 – § 886."
+            exit 1
+          fi
+      - name: The watchOS source guard's own unit tests
+        run: |
+          if ! node --test scripts/check_watch_ios_source.test.mjs; then
+            echo "::error::The watchOS source guard's own unit tests failed. The tree itself is fine — the check above just passed — so this is a defect in scripts/check_watch_ios_source.mjs, not a defect in apps/watch_ios."
+            echo "Reproduce with: node --test scripts/check_watch_ios_source.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
 

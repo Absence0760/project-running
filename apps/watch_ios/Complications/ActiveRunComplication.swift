@@ -172,15 +172,23 @@ private struct CornerView: View {
     }
 }
 
+/// Distance and pace on one line, assembled OUTSIDE any `Text` / `Label`
+/// literal. Both halves are already formatted and already localized, so a
+/// literal carrying the interpolations would be a `LocalizedStringKey`
+/// lookup for a key with nothing in it to translate — and Xcode's next
+/// string extraction would add that key to `Localizable.xcstrings`, where
+/// the locale-parity guard would then demand six translations of a middle
+/// dot. Passing a `String` selects the non-localizing overload instead.
+private func statLine(_ entry: ActiveRunEntry) -> String {
+    "\(formatDistanceKm(entry.distanceMeters)) · \(formatPaceSecPerKm(entry.paceSecPerKm))"
+}
+
 private struct InlineView: View {
     let entry: ActiveRunEntry
 
     var body: some View {
         if entry.isActive {
-            Label(
-                "\(formatDistanceKm(entry.distanceMeters)) · \(formatPaceSecPerKm(entry.paceSecPerKm))",
-                systemImage: "figure.run",
-            )
+            Label(statLine(entry), systemImage: "figure.run")
         } else {
             Label("Tap to start", systemImage: "figure.run")
         }
@@ -203,7 +211,7 @@ private struct RectangularView: View {
                     .font(.title2.weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text("\(formatDistanceKm(entry.distanceMeters)) · \(formatPaceSecPerKm(entry.paceSecPerKm))")
+                Text(statLine(entry))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
