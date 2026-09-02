@@ -1301,6 +1301,8 @@ class RunRecorder {
       final q = route.waypoints[i];
       remaining += _haversine(p.lat, p.lng, q.lat, q.lng);
     }
+    // Same seed-untouched case as [_routeProgress]; the three must agree.
+    if (!remaining.isFinite) return null;
     return remaining;
   }
 
@@ -1339,6 +1341,14 @@ class RunRecorder {
     final tail = _routeTailAfter;
     final remaining = segLen * (1 - tAtClosest) +
         (tail != null && closestSegmentIdx < tail.length ? tail[closestSegmentIdx] : 0);
+    // The running minimum is seeded at +Infinity, and a NaN never compares
+    // less than it, so a route every one of whose segments projects to NaN
+    // leaves the seed untouched and reports the runner as infinitely far off
+    // course. "No usable projection" is the same answer as "no route": null,
+    // which every consumer already handles. Reporting a non-finite figure
+    // instead put it on the live stats readout and, before the detector was
+    // taught to refuse one, spent the run's single off-route escalation.
+    if (!minDist.isFinite || !remaining.isFinite) return null;
     return (offRoute: minDist, remaining: remaining);
   }
 
@@ -1401,6 +1411,8 @@ class RunRecorder {
       final d = _distanceToSegmentMetres(pos.lat, pos.lng, a.lat, a.lng, b.lat, b.lng);
       if (d < minDist) minDist = d;
     }
+    // Same seed-untouched case as [_routeProgress]; the two must agree.
+    if (!minDist.isFinite) return null;
     return minDist;
   }
 

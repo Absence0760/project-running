@@ -645,4 +645,111 @@ void main() {
       expect(r.waypoints[1].lng, closeTo(-0.13, 1e-4));
     });
   });
+
+  // `double.tryParse` accepts the literals `NaN`, `Infinity` and
+  // `-Infinity`, so a null-check alone let a non-finite coordinate through
+  // into a Waypoint on every text format. Nothing downstream re-checked: the
+  // route's own haversine distance went NaN, and once such a route was
+  // selected for a run the recorder's off-route projection collapsed to a
+  // non-finite reading. The web importer has guarded every coordinate site
+  // with `Number.isFinite` since it was written.
+  group('non-finite coordinates are refused', () {
+    test('GPX: a NaN or Infinity trkpt is dropped, the rest survive', () {
+      const gpx = '''<?xml version="1.0"?>
+<gpx version="1.1"><trk><name>Bad</name><trkseg>
+  <trkpt lat="0.0" lon="0.0"/>
+  <trkpt lat="NaN" lon="0.001"/>
+  <trkpt lat="0.0" lon="Infinity"/>
+  <trkpt lat="-Infinity" lon="-Infinity"/>
+  <trkpt lat="0.0" lon="0.001"/>
+</trkseg></trk></gpx>''';
+
+      final r = RouteParser.fromGpx(gpx);
+
+      expect(r.waypoints, hasLength(2));
+      for (final w in r.waypoints) {
+        expect(w.lat.isFinite, isTrue);
+        expect(w.lng.isFinite, isTrue);
+      }
+      expect(r.distanceMetres.isFinite, isTrue,
+          reason: 'one bad point used to poison the whole route distance');
+      expect(r.distanceMetres, closeTo(_equatorOneThousandthDeg, 0.01));
+    });
+
+    test('GPX: a non-finite <ele> drops the elevation, not the point', () {
+      const gpx = '''<?xml version="1.0"?>
+<gpx version="1.1"><trk><trkseg>
+  <trkpt lat="0.0" lon="0.0"><ele>10.0</ele></trkpt>
+  <trkpt lat="0.0" lon="0.001"><ele>NaN</ele></trkpt>
+</trkseg></trk></gpx>''';
+
+      final r = RouteParser.fromGpx(gpx);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.waypoints[1].elevationMetres, isNull);
+      expect(r.elevationGainMetres.isFinite, isTrue);
+    });
+
+    test('GPX: a loose <wpt> with a non-finite coordinate is dropped', () {
+      const gpx = '''<?xml version="1.0"?>
+<gpx version="1.1">
+  <wpt lat="0.0" lon="0.0"/>
+  <wpt lat="Infinity" lon="0.001"/>
+  <wpt lat="0.0" lon="0.001"/>
+</gpx>''';
+
+      final r = RouteParser.fromGpx(gpx);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.distanceMetres.isFinite, isTrue);
+    });
+
+    test('KML: a non-finite coordinate triple is dropped', () {
+      const kml = '''<?xml version="1.0"?>
+<kml><Document><Placemark><name>Bad</name><LineString><coordinates>
+0.0,0.0,10 0.001,NaN,10 Infinity,0.0,10 0.001,0.0,10
+</coordinates></LineString></Placemark></Document></kml>''';
+
+      final r = RouteParser.fromKml(kml);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.distanceMetres.isFinite, isTrue);
+    });
+
+    test('TCX: a non-finite trackpoint is dropped', () {
+      const tcx = '''<?xml version="1.0"?>
+<TrainingCenterDatabase><Activities><Activity><Lap><Track>
+  <Trackpoint><Position><LatitudeDegrees>0.0</LatitudeDegrees><LongitudeDegrees>0.0</LongitudeDegrees></Position></Trackpoint>
+  <Trackpoint><Position><LatitudeDegrees>NaN</LatitudeDegrees><LongitudeDegrees>0.001</LongitudeDegrees></Position></Trackpoint>
+  <Trackpoint><Position><LatitudeDegrees>0.0</LatitudeDegrees><LongitudeDegrees>0.001</LongitudeDegrees></Position><AltitudeMeters>Infinity</AltitudeMeters></Trackpoint>
+</Track></Lap></Activity></Activities></TrainingCenterDatabase>''';
+
+      final r = RouteParser.fromTcx(tcx);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.waypoints[1].elevationMetres, isNull);
+      expect(r.distanceMetres.isFinite, isTrue);
+    });
+
+    test('GeoJSON: a non-finite coordinate pair is dropped', () {
+      final json = <String, dynamic>{
+        'properties': <String, dynamic>{'name': 'Bad'},
+        'geometry': <String, dynamic>{
+          'type': 'LineString',
+          'coordinates': <dynamic>[
+            <dynamic>[0.0, 0.0],
+            <dynamic>[0.001, double.nan],
+            <dynamic>[double.infinity, 0.0],
+            <dynamic>[0.001, 0.0, double.nan],
+          ],
+        },
+      };
+
+      final r = RouteParser.fromGeoJson(json);
+
+      expect(r.waypoints, hasLength(2));
+      expect(r.waypoints[1].elevationMetres, isNull);
+      expect(r.distanceMetres.isFinite, isTrue);
+    });
+  });
 }
