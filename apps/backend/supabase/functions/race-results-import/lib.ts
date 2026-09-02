@@ -12,6 +12,7 @@
 // (the EF itself returns 503 when a provider's creds are unset — see index.ts).
 
 import type { Json } from '../_shared/database.ts';
+import { isIsoCalendarDate } from '../_shared/calendar_date.ts';
 import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
 
 export const MAX_FIELD_LEN = 200;
@@ -48,21 +49,6 @@ export function capField(raw: unknown, max: number = MAX_FIELD_LEN): string {
 }
 
 /** Parse "H:MM:SS" / "MM:SS" / "SS" into whole seconds. 0 on garbage. */
-/// A bare `YYYY-MM-DD` calendar date, which is what the synthetic start
-/// clock is appended to. Deliberately narrower than `isValidTimestamptz`:
-/// this is the date half only, and a value carrying its own time would
-/// produce two clocks in one literal.
-export function isIsoCalendarDate(v: unknown): boolean {
-  if (typeof v !== 'string') return false;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
-  if (!m) return false;
-  const [year, month, day] = [m[1], m[2], m[3]].map(Number);
-  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
-  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-  const lengths = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return day <= lengths[month - 1];
-}
-
 export function parseClockToSeconds(time: unknown): number {
   const s = capField(time);
   if (!s) return 0;

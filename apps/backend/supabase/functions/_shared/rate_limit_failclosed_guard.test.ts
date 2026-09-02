@@ -107,7 +107,13 @@ Deno.test('the guard reads real call sites, in more than one function', () => {
 });
 
 Deno.test('every rate-limit call site is fail-closed', () => {
-  const open = callSites().filter((s) => !/failClosed:\s*true/.test(s.args));
+  const sites = callSites();
+  // The floor is restated here rather than left to the test above: "no site
+  // falls open" is satisfied by finding no sites at all, and a neutered or
+  // relocated tree does exactly that. The vacuity operator scored this case as
+  // surviving until the floor moved into it.
+  assert(sites.length >= 12, `only ${sites.length} rate-limit call sites found`);
+  const open = sites.filter((s) => !/failClosed:\s*true/.test(s.args));
   assertEquals(
     open.map((s) => s.file),
     [],
