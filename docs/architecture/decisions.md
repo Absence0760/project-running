@@ -15091,3 +15091,50 @@ untouched: an unreadable label is no reason to refuse an archive that built.
 Mirror-tested on both sides (known tokens survive, `"zip"` and a non-string
 become absent, the status stays `ready`) and mirrored byte-identically into
 `apps/mobile_ios`.
+
+## 981. Two elevation-gain rules, one question, and the phone had already picked a side
+
+`runs/run_stats.ts`'s `elevationGainMetres` summed every upward delta.
+`routes/route_simplify.ts`'s `computeElevationGain` gates at
+`ELEVATION_GAIN_MIN_DELTA_M` (3 m) and drops its reference on a real descent.
+Both carry the dropout carry-forward, so the gate was the whole difference —
+and the run-detail "Elevation" stat used the first while the route a runner
+saves FROM that run used the second. The same track therefore claimed one
+number as a run and a materially smaller one as a route, with nothing
+anywhere explaining the drop.
+
+Measured before deciding, over a deterministic AR(1) altitude-error model
+(rho 0.98 — real altitude error drifts, it does not resample independently,
+and white noise overstates the per-sample delta badly), 1 Hz:
+
+| track | truth | ungated | gated |
+|---|---|---|---|
+| flat 30 min, barometer-grade error (sigma 1 m) | 0 m | **143 m** | 3 m |
+| 200 m climb, 30 min, same error | 200 m | 267 m | **197 m** |
+| flat 30 min, GPS altitude (sigma 8 m) | 0 m | 1140 m | 574 m |
+| 6 h ultra, 1500 m real vert, GPS altitude | 1500 m | 14112 m | 7154 m |
+| clean staircase, no error at all | 225 m | **225 m** | **225 m** |
+
+The gated rule is closer on every noisy case and identical where there is no
+noise, so the gate costs nothing on real signal. 143 metres of climb on a flat
+half-hour is not a rounding preference.
+
+The filing framed this as a product decision between gating the run stat and
+documenting the two as answering different questions. It is neither, because
+the question was already settled elsewhere: **mobile has never had a second
+rule.** `run_detail_screen.dart` computes a run's climb through the Dart
+`computeElevationGain`, so the same run has been reading 267 m on the web and
+197 m on the phone. Documenting a divergence that also crosses platforms would
+be writing down a bug.
+
+`elevationGainMetres` now delegates: guards its nullable input, calls
+`computeElevationGain`, rounds. The rule is not restated, so a future tweak to
+the gate cannot reach one surface and not the other. It was delegated rather
+than deleted because its one call site is `routes/runs/[id]/+page.svelte`,
+outside this lane's paths; deleting the adapter and importing
+`computeElevationGain` there directly — exactly what mobile does — remains the
+tidier end state and is filed. `route_simplify` is half of a registered parity
+pair and is untouched by this, so nothing is owed on the Dart side; the watch
+DOES carry a faithful port of the old ungated `run_stats` rule
+([§ 902](decisions.md)) which is now a port of an adapter, and that is filed
+for the watch lane.
