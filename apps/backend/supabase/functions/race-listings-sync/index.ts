@@ -37,7 +37,14 @@ Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const denied = await checkRateLimitTiered(supabase, user.id, 'race-listings-sync', 2, 8, 3600);
+  // Fail-closed, same reason as the sibling importers: the sync walks a
+  // provider's upcoming-races feed on OUR credential, and it writes to the
+  // shared public calendar rather than to the caller's own rows — so a limiter
+  // that disappears on an RPC blip drops the only bound on how often one
+  // account can drive that (decisions § 974).
+  const denied = await checkRateLimitTiered(supabase, user.id, 'race-listings-sync', 2, 8, 3600, {
+    failClosed: true,
+  });
   if (denied) return denied;
 
   // Fail closed on the missing provider key — the chosen leg is inert until its

@@ -75,7 +75,8 @@ Deno.test('the caller is identified and throttled before the gate is spent', () 
   assert(auth < limit, 'the caller must be identified before their bucket is chosen');
   assert(limit < gate, 'the throttle must precede the provider work');
   assert(
-    /checkRateLimitTiered\(supabase, user\.id, 'race-listings-sync', 2, 8, 3600\)/.test(SRC),
-    'the tiered ceilings and window must stay 2 / 8 per hour',
+    /checkRateLimitTiered\(supabase, user\.id, 'race-listings-sync', 2, 8, 3600, \{\s*failClosed: true,?\s*\}\)/
+      .test(SRC),
+    'the tiered ceilings and window must stay 2 / 8 per hour, and fail closed',
   );
 });

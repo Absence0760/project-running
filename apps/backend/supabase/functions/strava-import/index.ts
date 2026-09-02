@@ -116,11 +116,17 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 	// the pro 16/h still stays well inside that envelope while
 	// removing the "refresh again in an hour" UX friction for paying
 	// users.
-	// `connect` is fail-closed: it exchanges an OAuth code (one-shot,
-	// time-bounded by Strava) and writes credentials to Vault. Letting
-	// the limiter fall open on RPC error means a stolen JWT during a
-	// DB blip can spam-exchange codes against Strava's per-app budget.
-	// `sync` stays fail-open — it's idempotent and read-mostly.
+	// Every action is fail-closed, `sync` most of all. It used to be the one
+	// exception here, on the grounds that it is "idempotent and read-mostly" —
+	// but the resource a sync spends is not ours: it walks ~20 pages of Strava's
+	// API and uploads a track per activity against Strava's PER-APPLICATION
+	// budget, which every user of this deployment shares. The posture was
+	// therefore inverted relative to the helper's own rule, guarding the two
+	// cheap single-write actions and dropping the guard on the expensive one.
+	// And the fail-open buys nothing even for the caller: the RPC that failed is
+	// `check_rate_limit` on the SAME database this import must then write its
+	// runs rows to, so letting the request through spends third-party quota on a
+	// walk that ends in a 500 at the insert (decisions § 974).
 	const denied = action === 'connect'
 		? await checkRateLimit(supabase, user.id, 'strava-import:connect', 10, 3600, {
 			failClosed: true,
@@ -129,7 +135,9 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 			? await checkRateLimit(supabase, user.id, 'strava-import:disconnect', 10, 3600, {
 				failClosed: true,
 			})
-			: await checkRateLimitTiered(supabase, user.id, 'strava-import:sync', 4, 16, 3600);
+			: await checkRateLimitTiered(supabase, user.id, 'strava-import:sync', 4, 16, 3600, {
+				failClosed: true,
+			});
 	if (denied) return denied;
 
 	// A switch over the narrowed union rather than three `if`s and a trailing

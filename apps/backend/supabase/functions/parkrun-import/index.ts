@@ -59,7 +59,17 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   // still letting a user retry after a glitch. The pro multiplier is
   // 4× — enough that a Pro user importing across multiple historic
   // athlete numbers in one sitting doesn't hit the wall.
-  const denied = await checkRateLimitTiered(supabase, user.id, 'parkrun-import', 4, 16, 3600);
+  //
+  // Fail-closed. The scrape this gate stands in front of spends parkrun.org.uk's
+  // tolerance of OUR outbound IP — the resource this function's own comment
+  // below names ("drain our IP reputation with parkrun") — which is shared by
+  // every user of the deployment and cannot be rate-limited back into existence
+  // once it is spent. Nor does falling open buy the caller anything: the RPC
+  // that failed is on the same database the import must then read and write
+  // `runs` against (decisions § 974).
+  const denied = await checkRateLimitTiered(supabase, user.id, 'parkrun-import', 4, 16, 3600, {
+    failClosed: true,
+  });
   if (denied) return denied;
 
   const { athleteNumber } = (guarded.body ?? {}) as { athleteNumber?: unknown };

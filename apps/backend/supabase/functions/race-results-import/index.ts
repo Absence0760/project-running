@@ -54,7 +54,14 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const denied = await checkRateLimitTiered(supabase, user.id, 'race-results-import', 8, 32, 3600);
+  // Fail-closed: every provider leg past this point makes an outbound call
+  // carrying OUR RunSignUp / ChronoTrack / UltraSignup credential, whose budget
+  // is per-application and shared by the whole deployment. Falling open on an
+  // RPC error would spend that budget on a request whose `runs` insert is
+  // headed for the same database that just failed (decisions § 974).
+  const denied = await checkRateLimitTiered(supabase, user.id, 'race-results-import', 8, 32, 3600, {
+    failClosed: true,
+  });
   if (denied) return denied;
 
   const body = (guarded.body ?? {}) as RequestBody;
