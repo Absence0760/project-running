@@ -369,6 +369,9 @@ export interface RaceImportGate {
   ok: boolean;
   status?: number;
   error?: string;
+  /// Why, when the `error` code alone would send a reader looking for the
+  /// wrong thing. Only the UltraSignup leg carries one today.
+  reason?: string;
 }
 
 const GATE_OK: RaceImportGate = { ok: true };
@@ -434,6 +437,49 @@ export function ultraSignUpScopeGate(scope: { athleteId?: string }): RaceImportG
     ok: false,
     status: 400,
     error: 'ultrasignup_athlete_id_required',
+  };
+}
+
+/**
+ * The UltraSignup leg's availability gate, and it refuses.
+ *
+ * `ultraSignUpResultsUrl` builds `/service/events.svc/results/athlete?uid=` —
+ * one athlete's WHOLE history, with no race parameter on it, which is what
+ * makes `ultraSignUpScopeGate`'s athlete id the only scope there is to require.
+ * Every row that comes back is then mapped through the ONE
+ * `public_race_listings` row the request named, so a runner with twenty past
+ * ultras gets twenty `runs` rows all dated on the target race's date, all at its
+ * distance and all pointing at its `race_listing_id` — measured, three rows
+ * differing only in bib and finishing time (decisions § 975). That is not a
+ * performance defect: a 2:58 road marathon becomes a 2:58 hundred-miler, which
+ * then feeds `personal_records`, `award_achievements_for_user` and every
+ * challenge leaderboard.
+ *
+ * A result can only be recorded against a listing if the ROW says it belongs to
+ * that listing, and `UltraSignUpResult` declares no field that could — the live
+ * payload has not been observed from here, and guessing a field name would put
+ * the wrong race on a runner's history on a hunch. So the leg refuses before it
+ * reads the credential and before it fetches: a missing race is a worse import
+ * than no import, a wrong one is worse than both.
+ *
+ * The code is `provider_not_configured` because that is the seam both clients
+ * already act on — they disable the tile with an unavailable explainer — and
+ * because a leg that cannot be used has no working configuration whatever env
+ * vars exist. `reason` is what stops an operator who HAS set the key hunting
+ * for a missing one.
+ *
+ * **Lifting this needs two things, not one:** UltraSignup's real athlete-feed
+ * payload observed, so the race identifier's field name is a fact; and a filter
+ * on it applied to the mapped rows against the listing's `provider_race_id`, so
+ * a row that names a different race is dropped rather than stamped. Deleting
+ * the gate on its own restores the defect exactly.
+ */
+export function ultraSignUpAttributionGate(): RaceImportGate {
+  return {
+    ok: false,
+    status: 503,
+    error: 'provider_not_configured',
+    reason: 'results_unattributable',
   };
 }
 

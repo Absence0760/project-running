@@ -19,6 +19,7 @@ import {
   parseRaceResultRow,
   runSignUpResultsUrl,
   runSignUpScopeGate,
+  ultraSignUpAttributionGate,
   ultraSignUpScopeGate,
   ultraSignUpResultsUrl,
   type MappedRaceRun,
@@ -83,11 +84,13 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     ) {
       return Response.json({ error: 'provider_not_configured' }, { status: 503 });
     }
-    if (
-      provider === 'ultrasignup' &&
-      !(Deno.env.get('ULTRASIGNUP_API_KEY') && Deno.env.get('ULTRASIGNUP_API_SECRET'))
-    ) {
-      return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+    // UltraSignup answers unavailable whether or not its keys are set: the
+    // athlete feed carries no race identifier, so nothing it returns can be
+    // attributed to the listing a caller names (decisions § 975). Reporting it
+    // available would light up a tile whose very next call refuses.
+    if (provider === 'ultrasignup') {
+      const gate = ultraSignUpAttributionGate();
+      return Response.json({ error: gate.error, reason: gate.reason }, { status: gate.status });
     }
     if (!['runsignup', 'ultrasignup', 'chronotrack', 'paste'].includes(provider)) {
       // An unrecognised provider is not "configured" — answering true for it is
@@ -188,6 +191,19 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     // without this a bib-only request would still map the whole field.
     if (runSignUpBib) mapped = filterResultsByBib(mapped, runSignUpBib);
   } else if (provider === 'ultrasignup') {
+    // Before the credential is read and before anything is fetched: the feed
+    // this leg reads is one ATHLETE'S whole history and carries no race
+    // identifier, so every row it returns would be stamped with the target
+    // listing's name, date and distance. The gate's own doc says what lifting
+    // it costs — an observed payload plus a filter on the race id, not just
+    // deleting these three lines (decisions § 975).
+    const attribution = ultraSignUpAttributionGate();
+    if (!attribution.ok) {
+      return Response.json(
+        { error: attribution.error, reason: attribution.reason },
+        { status: attribution.status },
+      );
+    }
     // Fail closed when the provider key is unconfigured — the UltraSignup leg
     // mirrors RunSignUp's missing-credential gate (integrations.md + the race
     // calendar ADR). Until the key is provisioned the EF is inert and the UI
