@@ -1716,3 +1716,26 @@ touch a web half: `npm run test:unit --workspace=apps/web` is 4657 pass / 0
 fail. `check_parity_pair_registry` reports 109 pairs registered identically in
 both registries, `check_twin_claims` reports 105 declarations with an EMPTY
 `KNOWN_GAPS`, and `check_shared_constants` 40 checks.
+
+## Round 32 — the database tier (2026-09-02)
+
+The sql lane's own runner produced these. `supabase db reset` and
+`supabase test db` were both run from this branch's own `apps/backend`, so the
+schema under test is this branch's migrations.
+
+### `apps/backend/supabase/tests/runs_physical_quantity_bounds_test.sql` — 16 tests (new)
+
+`runs_distance_m_check` / `runs_duration_s_check` / `runs_elevation_gain_m_check`
+(migration `20270704000001`), asserted from the ordinary `authenticated` seat
+because the self-owned INSERT policy is the only privilege the exploit needs.
+Two of the sixteen pin the Postgres facts the constraint is shaped around —
+`'NaN'::numeric >= 0` is true and NaN outranks every real value — so the reason
+each bound names NaN cannot be simplified away later. One pins that an infinite
+`distance_m` is refused with a 22003 by the `numeric(10, 2)` scale rather than a
+23514, which is why that bound carries no infinity term while
+`elevation_gain_m`'s bare `numeric` does. The last is the consequence rather
+than the constraint: the 5k personal record is the honest run, which is what
+goes red when the duration floor is removed. Three mutations killed — the
+distance bound reduced to a bare `>= 0` (tests 6, 7, 16), the duration bound
+dropped (9, 16), the elevation bound losing its Infinity term (14) — each
+restored and re-run green. See [decisions § 939](../architecture/decisions.md).

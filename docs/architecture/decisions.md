@@ -14199,6 +14199,58 @@ Three mutations, each killed: restoring the old any-number behaviour,
 over-correcting so `1.` never interrupts either, and dropping the
 leading-whitespace allowance so an indented continuation escapes the rule.
 
+## 939. `NaN >= 0` is true, so a bare `>= 0` is not a bound — and one run could top every distance leaderboard
+
+**Decided 2026-09-02.** `public.runs` carried no constraint on any of its three
+physical quantities. Measured against the local stack over PostgREST, signed in
+as the seeded runner with an ordinary password-grant JWT — no service role, no
+admin path, nothing but the self-owned INSERT policy every account has:
+
+```
+POST /rest/v1/runs
+{"distance_m":"NaN","duration_s":-60,"elevation_gain_m":"Infinity", ...}
+-> 201, row stored verbatim
+```
+
+`numeric` holds NaN and PostgREST coerces the JSON string `"NaN"` into it. Two
+consequences, and the first one is against shared state rather than the writer's
+own:
+
+- **NaN outranks every real value in Postgres numeric ordering.**
+  `challenge_leaderboard` ranks on `rank() over (order by value desc)` over
+  `sum(r.distance_m)`. One NaN run inside the window put its author at rank 1 of
+  every distance challenge they had joined — measured, with a genuine 90 km
+  entrant demoted to rank 2 behind a value the board rendered as `NaN`.
+  `sum(coalesce(elevation_gain_m, 0))` is the same story for a `vert` challenge,
+  where that column's bare `numeric` type accepts Infinity as well.
+- **A negative `duration_s` is a personal record.** The whole-run branch of
+  `refresh_personal_records_for_user` orders by `duration_s asc` and filters
+  only for NOT NULL; the promoted `fastest_*_s` branches beside it already carry
+  a `>= 0` floor, and the branch reading the run's own duration did not.
+
+The correction that matters is the shape of the bound, not its existence. The
+client that was written believing this constraint already existed named it as
+`distance_m >= 0`, and `'NaN'::numeric >= 0` is **true** — so the obvious
+constraint would have shipped, passed its own test against a negative, and left
+the leaderboard exploit exactly where it was. Every numeric bound here names NaN
+explicitly, and `elevation_gain_m` names Infinity too because bare `numeric`
+accepts one where `distance_m`'s `numeric(10, 2)` scale rejects it with a 22003
+field overflow before any CHECK is consulted. The suite pins that asymmetry
+directly, so neither term can be tidied away as redundant.
+
+No upper bound, deliberately. The honest ceiling for one activity is not a
+number this schema knows — a 240-mile ultra is 386 km and a multi-day push is
+longer — and refusing a real measurement is worse than admitting an absurd one
+that can no longer make an aggregate return NaN.
+
+Two smaller judgements. The constraints are **not** registered in
+`check_constraint_unions.mjs`: its coverage rule reads `check (col in (…))`
+clauses only, and an entry naming a column with no set-shaped CHECK fails the
+guard rather than satisfying it. And the migration repairs before it validates —
+predicate-scoped `UPDATE`s that match nothing on a healthy database — because an
+out-of-range row here is bad data, not an attack artifact, and aborting a
+production deploy on one is worse than correcting it to 0 (distance, duration)
+or to NULL (ascent, which is nullable and where NULL is the honest "unknown").
 ## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
 
 **Decided 2026-09-02.** PR #849 went up green on every suite this round ran and

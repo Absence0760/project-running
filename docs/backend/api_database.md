@@ -21,15 +21,15 @@ create table runs (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid references auth.users not null,
   started_at    timestamptz not null,
-  duration_s    integer not null,           -- elapsed seconds
-  distance_m    numeric(10, 2) not null,    -- metres
+  duration_s    integer not null,           -- elapsed seconds; >= 0 (CHECK, 20270704000001)
+  distance_m    numeric(10, 2) not null,    -- metres; >= 0 and not NaN (CHECK, 20270704000001)
   route_id      uuid references routes,     -- linked planned route, if any
   event_id      uuid references events,     -- linked club event instance, if any
   source        text not null,              -- see RunSource enum below
   activity_type text not null default 'run' -- run|walk|hike|cycle|stroller (CHECK). Promoted from metadata in 20261207_001 (F3)
                 check (activity_type in ('run','walk','hike','cycle','stroller')),
   is_dnf        boolean not null default false, -- did-not-finish; PR engine excludes these. Promoted from metadata in 20261207_001 (F3)
-  elevation_gain_m numeric,                 -- total ascent (metres). Nullable; backfilled from metadata.elevation_m in 20270302_001 (ADR §186), summed by the vert challenge metric, projected into activities.summary + public_runs. Writers populate both this + metadata.elevation_m.
+  elevation_gain_m numeric,                 -- total ascent (metres); null or (>= 0, finite, not NaN) (CHECK, 20270704000001). Nullable; backfilled from metadata.elevation_m in 20270302_001 (ADR §186), summed by the vert challenge metric, projected into activities.summary + public_runs. Writers populate both this + metadata.elevation_m.
   fastest_5k_s  integer,                    -- embedded-best seconds (fastest rolling 5 km window in the track). Promoted from metadata in 20270325_001; PR-candidate read by refresh_personal_records_for_user, exposed on public_runs.
   fastest_10k_s integer,                    -- same, rolling 10 km window (20270325_001)
   fastest_half_marathon_s integer,          -- same, rolling 21.0975 km window (20270325_001)
@@ -58,6 +58,8 @@ create index runs_public on runs (is_public, started_at desc) where is_public = 
 ```
 
 **`runs_user_started_at` is NOT redundant with `runs_user_source`** (F2f, verified by EXPLAIN). The audit hypothesised that `runs_user_source (user_id, source, started_at DESC)` (migration `20260407_001`) might subsume `runs_user_started_at (user_id, started_at DESC)`. It does not: the history / dashboard list query filters on `user_id` and orders by `started_at DESC` with **no `source` predicate**, and `started_at` is the *third* column of `runs_user_source` (behind `source`), so that index can't supply the ordering without a `source` equality. EXPLAIN over 5 000 synthetic runs picks `runs_user_started_at` for the no-source query; dropping it forces a Seq Scan + top-N Sort (cost ~222 vs ~6), and even with `enable_seqscan=off` the planner falls back to a bitmap scan on `runs_user_distance` + Sort — it never chooses `runs_user_source` for an ordered scan. Both indexes are kept: `runs_user_source` serves the source-filtered dashboard query, `runs_user_started_at` serves the unfiltered timeline.
+
+**The three physical quantities are bounded, and the bound names NaN explicitly** (`20270704000001`). `runs_distance_m_check`, `runs_duration_s_check` and `runs_elevation_gain_m_check` were added after a measurement showed an ordinary authenticated account could POST `{"distance_m":"NaN","duration_s":-60,"elevation_gain_m":"Infinity"}` through PostgREST and have it stored verbatim — the self-owned INSERT policy is the only privilege the write needs. `'NaN'::numeric >= 0` is **true**, so a bare `>= 0` would not have closed it; each numeric bound carries an explicit `<> 'NaN'` term, and `elevation_gain_m` carries `<> 'Infinity'` too because its bare `numeric` type accepts one where `distance_m`'s `numeric(10, 2)` scale rejects it with a 22003 before any CHECK runs. The two consequences that motivated it: NaN outranks every real value in numeric ordering and `challenge_leaderboard` ranks on `sum(distance_m)` descending, so one NaN run took rank 1 of every distance challenge its author had joined; and a negative `duration_s` became the account's 5k best, because the whole-run branch of `refresh_personal_records_for_user` orders on `duration_s asc` with no floor of its own where the promoted `fastest_*_s` branches already carry one. Deliberately no upper bound — a 240-mile ultra is 386 km and refusing a real measurement is worse than admitting an absurd one that no longer poisons an aggregate. Pinned by `runs_physical_quantity_bounds_test.sql`.
 
 **GPS tracks** are stored as gzipped JSON files in the `runs` Storage bucket at `{user_id}/{run_id}.json.gz`. The `track_url` column points to the file. Tracks are never returned by list queries -- they are fetched on demand when the run detail screen is opened.
 
