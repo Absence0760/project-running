@@ -60,6 +60,21 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 	// whole handler so the operator-facing error stays in the logs
 	// while the client gets a generic 503.
 	try {
+		// POST only, like the osrm-proxy Lambda's GET-only gate. All three
+		// dev wrappers under `src/routes/api/coach/` export `POST` alone, so
+		// SvelteKit answers 405 to anything else while this — the surface
+		// that actually runs in production — ran the full turn: a GET
+		// reaching `handleCoach` bills an Anthropic call and spends a
+		// daily-quota increment on a method the endpoint does not support,
+		// and every intermediary in the path treats a GET as safe to replay.
+		// A missing `requestContext` throws into the outer envelope rather
+		// than defaulting to POST, which is the same fail-closed shape
+		// osrm-proxy has (decisions § 896).
+		if (event.requestContext.http.method !== 'POST') {
+			writeJson(responseStream, 405, { error: 'method not allowed' }, { allow: 'POST' });
+			return;
+		}
+
 		// CloudFront routes the whole `/api/coach/*` prefix to this
 		// Function URL. The route-describe sub-path is a separate,
 		// non-streaming handler (a Pro perk that enhances a route
@@ -84,6 +99,24 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		const provider = (process.env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
 		if (provider !== 'anthropic' && provider !== 'openai') {
 			console.error(`[coach lambda] invalid COACH_PROVIDER value: '${provider}'`);
+			writeJson(responseStream, 503, { error: 'Coach is not configured.' });
+			return;
+		}
+		// The core defaults an absent `openaiBaseUrl` to
+		// `http://localhost:11434/v1`, which is right for dev (Ollama on the
+		// developer's own machine) and meaningless inside a Lambda sandbox.
+		// Refuse up front, symmetrically with the core's missing-Anthropic-key
+		// branch: without this the turn passes auth, the paywall check and the
+		// daily-quota INCREMENT before failing on a connection to a port
+		// nothing is listening on, so a misconfigured provider spends the
+		// runner's daily allowance on a call that cannot succeed
+		// (decisions § 898).
+		if (provider === 'openai' && !process.env.OPENAI_BASE_URL?.trim()) {
+			console.error(
+				'[coach lambda] COACH_PROVIDER=openai with no OPENAI_BASE_URL — ' +
+					'set it to the OpenAI-compatible endpoint, or unset COACH_PROVIDER ' +
+					'to use Anthropic.',
+			);
 			writeJson(responseStream, 503, { error: 'Coach is not configured.' });
 			return;
 		}
@@ -162,7 +195,16 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 				stream.write(Buffer.from(chunk));
 			}
 		} catch (e) {
-			console.error('[coach lambda] stream pump failed', e);
+			// Normalised, never the raw caught value. This one is thrown by the
+			// PROVIDER STREAM, whose payload is the runner's own coaching
+			// conversation; a provider SDK's error object can carry the
+			// response body or the request that produced it, and spreading it
+			// into CloudWatch would put that conversation in the log
+			// (decisions § 897).
+			console.error('[coach lambda] stream pump failed', {
+				message: e instanceof Error ? e.message : String(e),
+				stack: e instanceof Error ? e.stack : undefined,
+			});
 		} finally {
 			stream.end();
 		}
@@ -179,7 +221,10 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		try {
 			writeJson(responseStream, 503, { error: 'Coach is temporarily unavailable.' });
 		} catch (writeErr) {
-			console.error('[coach lambda] failed to write 503 envelope', writeErr);
+			console.error('[coach lambda] failed to write 503 envelope', {
+				message: writeErr instanceof Error ? writeErr.message : String(writeErr),
+				stack: writeErr instanceof Error ? writeErr.stack : undefined,
+			});
 		}
 	}
 	},
@@ -219,7 +264,7 @@ async function dispatchRouteDescribe(
 		publicSupabaseAnonKey: requireEnv('PUBLIC_SUPABASE_ANON_KEY'),
 		bypassPaywallEnabled: false,
 	});
-	writeJson(responseStream, result.status, JSON.parse(result.body));
+	writeResult(responseStream, result);
 }
 
 // Route-request sub-handler — the REQUEST half of the AI route assistant.
@@ -257,15 +302,40 @@ async function dispatchRouteRequest(
 		publicSupabaseAnonKey: requireEnv('PUBLIC_SUPABASE_ANON_KEY'),
 		bypassPaywallEnabled: false,
 	});
-	writeJson(responseStream, result.status, JSON.parse(result.body));
+	writeResult(responseStream, result);
 }
 
-function writeJson(responseStream: ResponseStream, status: number, body: unknown): void {
+function writeJson(
+	responseStream: ResponseStream,
+	status: number,
+	body: unknown,
+	extraHeaders: Record<string, string> = {},
+): void {
 	const stream = awslambda.HttpResponseStream.from(responseStream, {
 		statusCode: status,
-		headers: { 'content-type': 'application/json' },
+		headers: { 'content-type': 'application/json', ...extraHeaders },
 	});
 	stream.write(JSON.stringify(body));
+	stream.end();
+}
+
+// The core's own status, headers and body, forwarded verbatim. The two
+// sub-dispatchers used to write `JSON.parse(result.body)` back out under a
+// hardcoded `content-type`, which discards whatever the core chose to send —
+// a `retry-after` on a rate-limited turn, a `cache-control`, anything a
+// future refusal wants to carry — and adds a parse that can throw on a body
+// the core meant to be sent as-is, turning a handled refusal into a 503.
+// The streaming coach path already forwards `result.headers`; this makes the
+// non-streaming pair agree with it (decisions § 896).
+function writeResult(
+	responseStream: ResponseStream,
+	result: { status: number; headers: Record<string, string>; body: string },
+): void {
+	const stream = awslambda.HttpResponseStream.from(responseStream, {
+		statusCode: result.status,
+		headers: result.headers,
+	});
+	stream.write(result.body);
 	stream.end();
 }
 

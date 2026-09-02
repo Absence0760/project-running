@@ -12915,3 +12915,223 @@ generator and serves `round_trip` — correct today and deliberate, but it is th
 only one of the three engine URLs preview cannot set, and the asymmetry is
 undocumented. Filed with the measurement rather than closed, because adding a
 variable preview has no engine for would be scaffolding.
+
+## 894. The CloudFront Function on every request to the site had never been run, and was serving the whole site at a second host
+
+**Decided 2026-09-02.** `infra/modules/web-stack/functions/www_redirect.js` is
+associated with **every** cache behaviour on the distribution — twelve
+`function_association` blocks in `main.tf` — so it is the first code any
+visitor, crawler or API client touches. [§ 757](#757) put it in a tsc program
+of its own (`tsconfig.cloudfront.json`, `lib: es5` because `cloudfront-js-2.0`
+is neither Node nor a browser) and that closed the hole it was filed for. It
+did not close this one: **nothing executed the function.** A typecheck cannot
+tell a redirect that fires from one that silently does not, and a grep-style
+guard cannot either. Fourteen behavioural cases against real viewer-request
+events found two defects, both of them the function failing at the one job it
+exists to do.
+
+**The host test was case-sensitive.** `host.indexOf('www.') !== 0` against the
+raw header value, so `WWW.threkir.com` fell through to `return request` and was
+**served**. A hostname is case-insensitive (RFC 9110 § 4.2.3, RFC 3986
+§ 3.2.2) — a client may send any casing, DNS still resolves it here and
+CloudFront still matches the alias — and nothing in the event contract promises
+a lowercased header *value*; only header *names* are documented as normalised.
+So the duplicate-content split the function exists to close stayed open to
+anyone who did not lowercase first, which is precisely the population a
+canonical-consolidation redirect is aimed at. The fix lowercases once, before
+both the test and the rebuilt apex, so the `Location` also advertises one
+spelling rather than echoing back `https://THREKIR.com/`.
+
+**The redirect was a 301 on every method.** A 301 says the resource moved
+permanently and says nothing about preserving the method: browsers and most
+HTTP clients rewrite a POST to a GET and drop the body, which RFC 9110
+§ 15.4.2 explicitly permits. Because the function is on every behaviour, not
+just the page ones, a `POST https://www.threkir.com/api/coach` was answered
+with a redirect that turned it into a bodiless GET — a request that neither
+works nor fails visibly. GET and HEAD keep the 301 crawlers have always seen;
+everything else now gets a **308**, the method-preserving permanent redirect,
+which carries the same permanence signal to a search engine. The status is
+chosen from the method rather than the status being widened to 308 for
+everyone, because the SEO consolidation is the reason the function exists and
+301 is the form every crawler has understood for twenty years.
+
+The suite lives beside the function (`www_redirect.test.mjs`) rather than under
+`scripts/`, and evaluates the source to pull `handler` out of the resulting
+scope — there is no module system at the edge, so there is nothing to import,
+and the same trick pins that the file really does declare a top-level
+`function handler` rather than a `const` or an `export` the runtime could not
+call. It is stdlib-only and runs as its own step in `parity-types`.
+
+## 895. `siteOrigin` had no callers, and every production Lambda folded the origin with `??` instead
+
+**Decided 2026-09-02.** Every crawler-facing surface on this site is rendered
+in production by a Lambda and never by SvelteKit — adapter-static drops the
+`+server` / `+page.ts` halves ([§ 53](#53)) — so `/share/{run,route,badge,
+event,profile,club,race,session,workout}`, `/recap/share/*` and the five
+`/og/*` PNGs each get their absolute `og:url`, `og:image`, canonical and
+JSON-LD `url` from one line in a Lambda:
+
+```
+const siteUrl = process.env.PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
+```
+
+The twenty in-app callers under `src/routes/` spell it
+`env.PUBLIC_SITE_URL || DEFAULT_SITE_URL`. **Those are not the same fold.**
+`??` fires only on null/undefined, so a `PUBLIC_SITE_URL=""` — a deploy that
+failed to configure it, an `extra_lambda_env` that set the key empty, a
+self-hosted stack — survives as the empty string and is handed to the head
+builders as the origin. `normaliseSiteUrl` then tolerates it (its own comment
+says so), and the rendered head carries `<meta property="og:url"
+content="/share/event/e1">` and `<meta property="og:image"
+content="/og-default.png">`. Open Graph requires an absolute URL, and a
+root-relative unfurl image is precisely what `share_url_source_guard.test.ts`
+already bans **in the sources** — banned where it was written, still reachable
+through the environment.
+
+The helper for this exact fold already existed. `siteOrigin` folds blank *and*
+whitespace-only to the default and trims a trailing slash, and its doc comment
+states the rule outright: "an env var set to the empty string is a deploy that
+failed to configure it, not a request to serve canonicals from nowhere." It was
+unit-tested and had **zero callers** — the module's split into a constant and a
+function had migrated the 28 copies of the *constant* and left the *fold* on
+every caller. All five Lambdas now go through it.
+
+Pinned two ways, because neither reaches the other's failure. A source register
+walks `apps/web/lambda/` and requires every `PUBLIC_SITE_URL` read to be
+`siteOrigin(process.env.PUBLIC_SITE_URL…)`, with a population floor so a broken
+walker fails instead of reporting a clean tree; reverting one Lambda fails it by
+name. And a behavioural pair drives the head builders the Lambdas actually call:
+one asserts what a blank origin produces (the root-relative `og:image`, so the
+consequence is written down rather than described), the other asserts that
+`undefined`, `null`, `''`, `'   '` and a trailing-slash origin all yield an
+absolute, single-slashed `og:url` and `og:image`.
+
+The `src/` half is not fixed here and is filed instead: `||` gets the blank case
+right, so those twenty callers are correct today, but none of them trims a
+trailing slash and none goes through the helper either.
+
+## 896. Seven of the eight production Lambdas had never been executed, and the two POST-only ones accepted any method
+
+**Decided 2026-09-02.** `apps/web/lambda/` holds the only server-side compute
+outside Supabase — the coach endpoint, the route generator, the OSRM proxy and
+five share/OG renderers ([§ 53](#53)). Of the eight, exactly one
+(`share-entity`) had ever been driven by a test. `coach` and `osrm-proxy`
+appeared in `security_guards.test.ts` and `share-run` in
+`share_run_cache_control.test.ts`, but every one of those reads the file as
+TEXT. A source guard is the right instrument for "this line must not change"
+and a poor one for "this endpoint refuses what it should refuse", and the gap
+between the two is where these findings were.
+
+They turn out to be drivable in-process. The coach wrapper reads a
+runtime-provided `awslambda` global at import time, so a stub installed before
+a dynamic import is enough; every case that matters stops before a network
+call, because each core refuses an unauthenticated or unconfigured request
+before it constructs a Supabase client. Nineteen behavioural cases across the
+two POST endpoints found two defects.
+
+**Neither POST-only Lambda checked the method.** All four dev wrappers under
+`src/routes/api/` export `POST` alone (`osrm` exports `GET` alone), so
+SvelteKit answers 405 to anything else — and `osrm-proxy`'s Lambda carries the
+matching gate. `coach` and `generate-route` did not, and their CloudFront
+behaviours declare
+`allowed_methods = ["GET","HEAD","OPTIONS","PUT","POST","PATCH","DELETE"]`.
+So a `GET https://threkir.com/api/coach` carrying a body ran the whole turn:
+the paywall check, the daily-quota increment, the billed Anthropic call —
+on a method the endpoint does not support and that every intermediary in the
+path treats as safe to replay. It is not a cross-user cache leak (the
+`lambda_passthrough` cache policy is all-TTL-0, so nothing on that behaviour
+is stored), which is why this is a divergence rather than an incident: dev
+refuses it, prod bills for it. Both now answer `405` with an `Allow: POST`
+header, reading `event.requestContext.http.method` exactly as `osrm-proxy`
+does — a missing `requestContext` throws into the outer envelope rather than
+defaulting to POST, which is the same fail-closed shape that Lambda already
+had.
+
+**The two non-streaming coach sub-dispatchers discarded the core's headers.**
+`route-describe` and `route-request` wrote
+`writeJson(stream, result.status, JSON.parse(result.body))` — re-deriving the
+response from a parsed copy under a hardcoded `content-type`, where the
+streaming coach path beside them forwards `result.headers` intact. Both cores
+emit only `content-type` today, so nothing was being dropped *yet*; what makes
+it worth fixing rather than filing is that the wrapper is the layer a header
+has to survive, and the first refusal that wants to carry a `retry-after`
+would lose it silently in production while dev returned it correctly. The
+parse is also a throw path: a body the core did not mean as JSON turns a
+handled refusal into a 503. They now forward the result verbatim. The
+behavioural half of that test cannot discriminate while both cores agree, and
+says so; the assertion that does is structural — neither dispatcher may
+re-derive the response from a parsed copy.
+
+The suites also pin what was already right, because none of it was proven:
+each sub-path's own byte cap (256 KB / 32 KB / 16 KB — three different
+constants, so a dispatcher wired to the wrong one is invisible without a case
+per path), the caps counting BYTES rather than `String.length` (the multi-byte
+smuggle `body.ts` was written for, now measured through the wrapper that calls
+it), the base64 decode firing on the flag and only on the flag, the JWT being
+read from `x-supabase-authorization` and never `Authorization` (CloudFront's
+OAC signs that slot), the provider check not gating the two route sub-paths,
+and the outer envelope answering a generic 503 that does not name the env var
+it failed on.
+
+## 897. The Lambda tree's log lines are a declared shape, because the copy-paste that breaks it is one line
+
+**Decided 2026-09-02.** The eight handlers under `apps/web/lambda/` see the
+most sensitive values the product has. The osrm-proxy's request PATH *is* the
+runner's waypoint coordinates
+(`/api/routes/osrm/route/v1/foot/-0.1,51.5;-0.12,51.51`), the generate-route
+body carries a start coordinate, and the coach's provider stream carries the
+runner's own coaching conversation. Nothing constrained what a log line could
+name, and the audit answer "no PII reaches CloudWatch today" is true and worth
+about a week: the five share Lambdas log `path: event.rawPath` — correct
+there, a share path is a public URL naming a public entity — and that catch
+block is precisely the thing a sibling gets by copy-paste.
+
+One thing was already loose. `console.error('[coach lambda] stream pump
+failed', e)` handed the whole caught value over, where every other catch in the
+tree normalises to `{ message, stack }`. That `e` comes from iterating the
+PROVIDER stream, and a provider SDK's error object can carry the response body
+or the request that produced it, so the one log line in the tree that spread a
+raw error was the one downstream of the coaching conversation. Both raw-value
+logs in that file now normalise.
+
+The guard states two rules, each derived from the shape the tree already uses
+rather than invented for it. **A handler declares which `event.<field>` its log
+lines may name** — the five share Lambdas declare `rawPath`, the other three
+declare nothing, and a Lambda missing from the table fails rather than
+defaulting to permissive, so a ninth handler has to answer the question. **A
+log line is a literal message plus object literals** — anything else is a value
+whose shape nobody controls. Both are measured against the sources with a
+population floor, and both were checked to discriminate: adding
+`path: event.rawPath` to osrm-proxy's catch fails the first by name, reverting
+the pump log fails the second.
+
+The rules deliberately do not try to recognise PII. A matcher for coordinates
+or emails would pass everything it had not thought of, which is the failure
+mode of every allowlist-of-banned-things in this repo; naming what may be
+logged is the direction that closes.
+
+## 898. `COACH_PROVIDER=openai` with no base URL spent the runner's daily message on a call to localhost
+
+**Decided 2026-09-02.** The coach core refuses up front when the Anthropic
+branch is unconfigured — `provider === 'anthropic' && !anthropicApiKey`
+answers a 503 before anything else runs. The OpenAI branch has no equivalent,
+because it does not need one in the place it was written for: an absent
+`openaiBaseUrl` defaults to `http://localhost:11434/v1`, which is exactly right
+for a developer running Ollama on their own machine.
+
+Inside a Lambda that default is a port nothing is listening on, and the failure
+lands in the wrong place. `COACH_PROVIDER=openai` with `OPENAI_BASE_URL` unset
+— a plausible self-host or partial-apply configuration — passes the auth check,
+passes the paywall check, and passes the daily-quota **increment**, and only
+then fails on the connection. So the runner loses a coach message from their
+daily cap to a configuration error, every time they try, while the operator
+sees a connection error rather than "not configured."
+
+The gate goes in the production wrapper rather than the core, for the same
+reason `bypassPaywallEnabled: false` is hardcoded there: the core's default is
+correct for dev, and what the Lambda knows that the core does not is that
+localhost means nothing here. It refuses with the core's own status and
+message, so the client behaves as it already does for a missing Anthropic key.
+The test shows the gate is the gate rather than a blanket refusal of the
+provider — with a base URL configured the turn hands over and is refused by the
+core's auth check instead.
