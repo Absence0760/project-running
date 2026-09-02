@@ -59,7 +59,7 @@ owner. That is a property of the design worth keeping.
 | UARTE1 → TCP (`tasks::phone`) | the same `link::status_frame` bytes, unencrypted and unauthenticated | **simulator only** — the module is `#![cfg(not(feature = "ble"))]`, so it is compiled out of every hardware build |
 
 **The BLE data plane is fail-closed** ([§ 285](../architecture/decisions.md#285-run-store-v2-byte-15-becomes-a-record-tag-laps-interleave-with-points-and-a-full-slot-decimates-instead-of-truncating-the-threkir-gatt-service-is-encrypted-only-with-one-persisted-bond),
-issue #598). All nine characteristics carry `security = "justworks"` —
+issue #598). Every characteristic carries `security = "justworks"` —
 Security Mode 1 Level 2 — so the SoftDevice rejects every read, write and CCCD
 subscription from an unencrypted connection. An unbonded central can discover
 the service's shape and nothing else. This is **build-verified only** and can
