@@ -35,6 +35,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { hclResources } from './hcl_lex.mjs';
 import { splitShellCommands } from './shell_lex.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,88 +59,12 @@ export const RELEASE_FILE =
 export const ENV = '<env>';
 
 /**
- * @typedef {{ label: string, body: string }} HclResource
  * @typedef {{ label: string, aliasName: string | null, functionLabel: string | null, functionName: string | null }} TerraformAlias
  * @typedef {{ resourcePrefix: string | null, functions: Map<string, string>, aliases: TerraformAlias[] }} TerraformModule
  * @typedef {{ functions: string[], assignments: string[][], loopVar: string | null, templates: string[], template: string | null, prefix: string | null, templateVar: string | null, aliasNames: Set<string> }} SyncScript
  * @typedef {{ outputKey: string | null, aliasName: string | null, functionName: string | null }} ReleaseEntry
  * @typedef {{ outputs: Map<string, string>, entries: ReleaseEntry[] }} ReleaseWorkflow
  */
-
-// ─────────────────────────── HCL block reader ───────────────────────────
-
-// Index of the byte just past the block that opens at `open`, or -1. Braces
-// inside strings and comments do not count, which is what keeps a
-// `"${local.resource_prefix}-coach"` interpolation from unbalancing the scan.
-/**
- * @param {string} src
- * @param {number} open
- * @returns {number}
- */
-function blockEnd(src, open) {
-  let depth = 0;
-  let inString = false;
-  let inLine = false;
-  let inBlock = false;
-  for (let i = open; i < src.length; i++) {
-    const c = src[i];
-    const n = src[i + 1];
-    if (inLine) {
-      if (c === '\n') inLine = false;
-      continue;
-    }
-    if (inBlock) {
-      if (c === '*' && n === '/') {
-        inBlock = false;
-        i++;
-      }
-      continue;
-    }
-    if (inString) {
-      if (c === '\\') i++;
-      else if (c === '"') inString = false;
-      continue;
-    }
-    if (c === '"') inString = true;
-    else if (c === '#') inLine = true;
-    else if (c === '/' && n === '/') {
-      inLine = true;
-      i++;
-    } else if (c === '/' && n === '*') {
-      inBlock = true;
-      i++;
-    } else if (c === '{') depth++;
-    else if (c === '}') {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
-}
-
-/**
- * Every `resource "<type>" "<label>" { … }` of one type, as {label, body}.
- *
- * @param {string} src
- * @param {string} type
- * @returns {HclResource[]}
- */
-export function hclResources(src, type) {
-  const re = new RegExp(
-    `(?:^|\\n)\\s*resource\\s+"${type}"\\s+"([A-Za-z0-9_-]+)"\\s*\\{`,
-    'g',
-  );
-  /** @type {HclResource[]} */
-  const out = [];
-  let m;
-  while ((m = re.exec(src)) !== null) {
-    const open = m.index + m[0].length - 1;
-    const close = blockEnd(src, open);
-    if (close < 0) continue;
-    out.push({ label: m[1], body: src.slice(open + 1, close) });
-  }
-  return out;
-}
 
 // ─────────────────────────────── parsers ────────────────────────────────
 
