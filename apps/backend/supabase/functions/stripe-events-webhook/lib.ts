@@ -17,7 +17,11 @@
 /// entrypoint. `wiring.test.ts` fails the moment it stops being type-only.
 
 import type Stripe from '../_shared/stripe.ts';
-import { hmacHex, timingSafeEqual } from '../_shared/webhook_security.ts';
+import {
+  hmacHex,
+  shouldReleaseDedupe,
+  timingSafeEqual,
+} from '../_shared/webhook_security.ts';
 import {
   type CapacityOutcome,
   capacityDecision,
@@ -27,6 +31,11 @@ import {
 // shared capacity decision (single source of math — see events-checkout/lib.ts).
 export { capacityDecision };
 export type { CapacityOutcome };
+
+// Re-exported from the shared webhook primitives: the insert-first dedupe
+// release rule is the same for every provider that writes the row before the
+// side effect, and this webhook is only one of them.
+export { shouldReleaseDedupe };
 
 /// A compile-time assertion that Stripe's own declared shape is assignable
 /// to the narrow shape this webhook reads it as. Instantiating it with a
@@ -772,20 +781,3 @@ export function attendeeRowFromSession(session: CheckoutSession): AttendeeRow | 
   return { event_id, user_id: buyer_user_id, instance_start, order_id };
 }
 
-/// Whether a dispatched handler's response means the insert-first dedupe row
-/// must be given back before returning.
-///
-/// The dedupe row is written BEFORE the side effect so two concurrent
-/// deliveries of one event can't both act. The cost is that a handler which
-/// fails owes the row back: Stripe retries on a non-2xx, and the retry would
-/// otherwise hit the 23505 path, answer 200 `duplicate_event`, and close the
-/// delivery permanently. For `checkout.session.completed` that leaves a
-/// charged card with the order stuck `pending`, no seat issued, and no
-/// corrective event coming — nothing sweeps a lapsed reservation.
-///
-/// Keyed on 5xx specifically: the handlers return 200 for every outcome that
-/// is genuinely final (unknown donation, missing metadata, already-terminal
-/// status), and reserve 5xx for "we could not complete this — try again".
-export function shouldReleaseDedupe(status: number): boolean {
-  return status >= 500;
-}
