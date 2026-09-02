@@ -304,8 +304,21 @@ export async function ingestActivity(
 					}
 				}
 			}
-		} catch (_) {
-			// Swallow — the row is still valid without a track.
+		} catch (err) {
+			// The row is still valid without a track, so this never fails the
+			// import — but it is logged rather than swallowed. Silent, the arm
+			// covered a 404 for an indoor activity (expected, frequent) and a
+			// systematic breakage — a changed streams endpoint, a revoked
+			// Storage grant, a quota — with the same perfect silence, and the
+			// second one loses the GPS trace of every run imported while it
+			// lasts with nothing anywhere recording that it happened.
+			// Message only: an error off PostgREST carries `details`/`hint`
+			// that can echo row values into the shared log aggregator.
+			console.error('strava ingest: track unavailable for activity', {
+				activityId: act.id,
+				runId,
+				error: err instanceof Error ? err.message : 'unknown',
+			});
 		}
 	}
 }
@@ -383,7 +396,17 @@ export async function uploadTrack(
 			upsert: true,
 		});
 	if (upErr) throw upErr;
-	await supabase.from('runs').update({ track_url: path }).eq('id', runId);
+	// And the pointer, checked. A swallowed error here is the mirror of the
+	// swallowed upload above: the object is in Storage and no row names it, so
+	// every reader shows a run with no trace while the bytes sit there. It is
+	// unrecoverable without operator work — `isAlreadyImported` matches on
+	// `metadata.strava_id`, so the next sync skips the activity and never
+	// retries the pointer.
+	const { error: ptrErr } = await supabase
+		.from('runs')
+		.update({ track_url: path })
+		.eq('id', runId);
+	if (ptrErr) throw ptrErr;
 }
 
 // ---------------------------------------------------------------------------

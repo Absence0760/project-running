@@ -232,3 +232,82 @@ Deno.test('ingestActivity — a stream fetch that fails leaves the row standing'
     globalThis.fetch = original;
   }
 });
+
+Deno.test('ingestActivity — a track that cannot be stored is logged, never swallowed silently', async () => {
+  // The arm is best-effort by design, and the case above pins that the row
+  // survives it. What nothing asked is whether the failure leaves any trace:
+  // an indoor activity's 404 and a systematic breakage — a changed streams
+  // endpoint, a revoked Storage grant, a quota — both reached the same
+  // `catch (_) {}`, so a fault losing the GPS trace of every run imported
+  // while it lasted was indistinguishable from normal operation.
+  const original = globalThis.fetch;
+  const originalError = console.error;
+  const lines: unknown[][] = [];
+  globalThis.fetch = ((url: string | URL | Request) => {
+    const href = typeof url === 'string' ? url : url.toString();
+    if (href.includes('/streams')) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            latlng: { data: [[1, 2], [1.0001, 2.0001]] },
+            time: { data: [0, 1] },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response('{}', { status: 404 }));
+  }) as typeof fetch;
+  console.error = (...args: unknown[]) => {
+    lines.push(args);
+  };
+  try {
+    const db = dbStub();
+    // The Storage upload is what fails here: `dbStub` has no `storage`, so
+    // `uploadTrack` throws on the first property read — the shape of any
+    // upload-side fault, from a revoked grant to a quota.
+    await ingestActivity(db.client, 'u1', 'tok', act({ distance: 5000 }));
+    assertEquals(db.inserted.length, 1, 'the row must still stand');
+    assertEquals(lines.length, 1, 'exactly one line, for one failure');
+    const [message, detail] = lines[0] as [string, Record<string, unknown>];
+    assert(
+      message.includes('track'),
+      `the line must name what was lost, got: ${message}`,
+    );
+    assertEquals(detail.activityId, 12345, 'the line must name the activity to be actionable');
+    assert(
+      typeof detail.error === 'string' && detail.error.length > 0,
+      'the line must carry the failure, not just the fact of one',
+    );
+    // PostgREST errors travel with `details` / `hint` that can echo row
+    // values into the shared log aggregator; only the message may ship.
+    assertEquals(detail.details, undefined);
+    assertEquals(detail.hint, undefined);
+  } finally {
+    globalThis.fetch = original;
+    console.error = originalError;
+  }
+});
+
+Deno.test('ingestActivity — a stream that yields no track logs nothing', async () => {
+  // The positive control beside the case above: the common, expected outcome
+  // for an indoor activity must not page anyone. A log on every treadmill run
+  // is the same as no log at all.
+  const original = globalThis.fetch;
+  const originalError = console.error;
+  const lines: unknown[][] = [];
+  globalThis.fetch = (() =>
+    Promise.resolve(new Response('{}', { status: 404 }))) as typeof fetch;
+  console.error = (...args: unknown[]) => {
+    lines.push(args);
+  };
+  try {
+    const db = dbStub();
+    await ingestActivity(db.client, 'u1', 'tok', act({ distance: 5000 }));
+    assertEquals(db.inserted.length, 1);
+    assertEquals(lines, [], 'an activity with no stream is not a failure');
+  } finally {
+    globalThis.fetch = original;
+    console.error = originalError;
+  }
+});
