@@ -16,11 +16,14 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# ─────────────────── Route 53 ───────────────────
-
-resource "aws_route53_zone" "apex" {
-  name = var.apex_domain
-  tags = merge(
+# Baseline tags for every taggable resource in this stack, matching the shape
+# `bootstrap` and `github-oidc` use. AWS treats tag keys as case-sensitive, so a
+# resource carrying only the caller's `var.tags` is absent from any Cost
+# Explorer or Resource Groups query that groups by `Stack` — which is the
+# breakage `bootstrap/main.tf` records having already hit once, and which the
+# ACM cert below was silently reproducing.
+locals {
+  dns_tags = merge(
     {
       Project   = "run-app"
       Stack     = "dns"
@@ -28,6 +31,13 @@ resource "aws_route53_zone" "apex" {
     },
     var.tags,
   )
+}
+
+# ─────────────────── Route 53 ───────────────────
+
+resource "aws_route53_zone" "apex" {
+  name = var.apex_domain
+  tags = local.dns_tags
 
   # Destroying the hosted zone wipes every NS-delegation chain
   # anchored at the registrar — recovery requires updating NS at the
@@ -52,7 +62,7 @@ resource "aws_acm_certificate" "apex" {
   domain_name               = var.apex_domain
   subject_alternative_names = local.effective_sans
   validation_method         = "DNS"
-  tags                      = var.tags
+  tags                      = local.dns_tags
 
   # Destroying the cert breaks CloudFront → DNS for both envs until
   # ACM revalidates (~30 min after re-issue + DNS propagation).
