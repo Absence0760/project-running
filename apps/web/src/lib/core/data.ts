@@ -3307,7 +3307,14 @@ export async function startConnectOnboarding(): Promise<{ url: string }> {
 	const { data, error } = await supabase.functions.invoke('events-connect-onboard', {
 		body: {}
 	});
-	if (error) throw error;
+	if (error) {
+		// As in startEventCheckout: supabase-js's FunctionsHttpError message
+		// is the fixed "Edge Function returned a non-2xx status code", so the
+		// caller's not-configured branch could never match on it and every
+		// keyless build reported a red failure carrying that internal string.
+		const code = await edgeFunctionErrorCode(error);
+		throw new Error(code ?? (error instanceof Error ? error.message : 'onboard_failed'));
+	}
 	const url = (data as { url?: string } | null)?.url;
 	if (!url) throw new Error('No onboarding URL returned');
 	return { url };
@@ -3375,7 +3382,16 @@ export async function startEventCheckout(
 	const { data, error } = await supabase.functions.invoke('events-checkout', {
 		body: { event_id: eventId, instance_start: instanceStart }
 	});
-	if (error) throw error;
+	if (error) {
+		// supabase-js reports every non-2xx as a FunctionsHttpError whose
+		// message is the fixed internal string "Edge Function returned a
+		// non-2xx status code"; the function's own `{ error: '<code>' }`
+		// envelope rides on `context`. Rethrowing as-is put that internal
+		// sentence in front of the buyer for sold-out, sales-closed and a
+		// host who cannot take money alike. Same unwrap as cancelEventOrder.
+		const code = await edgeFunctionErrorCode(error);
+		throw new Error(code ?? (error instanceof Error ? error.message : 'checkout_failed'));
+	}
 	// `checkout_url`, matching what the Edge Function actually returns and the
 	// `startDonationCheckout` sibling below. Reading `url` here meant this
 	// never resolved: the function had already created a live Stripe session

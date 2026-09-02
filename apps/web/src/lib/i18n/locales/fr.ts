@@ -4497,6 +4497,7 @@ export const messages = {
 	"clubEvent.paymentConfirmed": "Paiement confirmé — vous êtes inscrit.",
 	"clubEvent.paymentProcessingSlow": "Paiement reçu — votre place apparaîtra bientôt. Actualisez si ce n’est pas le cas.",
 	"clubEvent.registerFailed": "Impossible de démarrer le paiement. Veuillez réessayer.",
+	"clubEvent.registerHostUnavailable": "L'organisateur ne peut pas encaisser de paiement pour cet événement pour le moment. Réessayez plus tard ou contactez-le.",
 	"clubEvent.priceLabel": "Prix",
 	"clubEvent.refundPolicyFullUntilStart": "Annulation gratuite jusqu'au début de l'événement",
 	"clubEvent.refundPolicyFullUntil24h": "Annulation gratuite jusqu'à 24 heures avant le début",

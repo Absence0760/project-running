@@ -42,7 +42,11 @@
 			// upgrade page's not-configured fallback: an info toast, no
 			// red error, page stays usable.
 			const msg = err instanceof Error ? err.message : String(err);
-			if (/not[_ ]configured|503/i.test(msg)) {
+			// `startConnectOnboarding` unwraps the function's own
+			// `{ error: '<code>' }` envelope, so the machine code arrives
+			// here. The pattern stays as tolerance for a refusal whose body
+			// could not be read at all.
+			if (msg === 'stripe_not_configured' || /not[_ ]configured|503/i.test(msg)) {
 				showToast(m('payouts.notConfigured'), 'info');
 			} else {
 				showToast(m('payouts.setupFailed', { error: msg }), 'error');
