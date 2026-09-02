@@ -5,7 +5,7 @@
 // job compiles it — `test-watch-ios`, on a macOS runner — and every other
 // claim about it rests on reading. `apps/watch_ios/scripts/check_xcstrings_parity.sh`
 // already holds the String Catalog against its two locale-declaration sites
-// (decisions § 761 / § 795). This guard holds the five *other* things about
+// (decisions § 761 / § 795). This guard holds the six *other* things about
 // the tier that a bare `node` on Linux can honestly measure, each of which
 // fails in a way no Swift test and no `xcodebuild` run would report:
 //
@@ -39,6 +39,14 @@
 //   (5) The App Group identifier in `ActiveRunBridge.swift` matches the one
 //       `Complications/README.md` instructs an operator to type into Xcode. A
 //       mismatch there is a shared container that silently never binds.
+//
+//   (6) Every key the watch packs into the `WCSession.transferFile` metadata
+//       envelope is lifted back out by the phone's `WatchIngestBridge.swift`,
+//       and vice versa. Both ends are hand-written key lists in two different
+//       apps, and the drift has already happened once: the Apr 2026
+//       cross-client audit found Apple-Watch runs landing on the phone with no
+//       `activity_type`. Nothing fails when a key is dropped — the run syncs,
+//       one column short.
 //
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
@@ -211,6 +219,14 @@ export const FORMATTER_ORIGIN = join('WatchApp', 'RunFormat.swift');
 export const FORMATTER_COPY = join('Complications', 'ActiveRunComplication.swift');
 export const BRIDGE = join('WatchApp', 'ActiveRunBridge.swift');
 export const COMPLICATION_README = join('Complications', 'README.md');
+export const SYNC_SITE = join('WatchApp', 'ContentView.swift');
+
+/**
+ * The phone half of the run hand-off. Outside `apps/watch_ios` on purpose:
+ * the envelope has two ends and a guard that reads only the watch's end
+ * cannot see the drift.
+ */
+export const INGEST = join('apps', 'mobile_ios', 'ios', 'Runner', 'WatchIngestBridge.swift');
 
 // --- text utilities ---------------------------------------------------------
 
@@ -375,6 +391,60 @@ export function parseFlatPlist(xml) {
 }
 
 /**
+ * The keys the watch packs into the `WCSession.transferFile(_:metadata:)`
+ * envelope: the literal keys of the `metadata` dictionary, plus every key
+ * assigned into it afterwards (`avg_bpm` is conditional on the run having a
+ * heart-rate average).
+ *
+ * Returns null when the dictionary literal is not there to read. That is the
+ * honest answer rather than "no keys": the whole claim rests on finding it,
+ * and a shape change that silently yielded an empty set would turn the check
+ * into a report that the phone reads eight keys nobody sends.
+ * @param {string} src comment-stripped `ContentView.swift`
+ * @returns {Set<string> | null}
+ */
+export function watchEnvelopeKeys(src) {
+	const decl = /var\s+metadata\s*:\s*\[String\s*:\s*Any\]\s*=\s*\[/.exec(src);
+	if (decl === null) return null;
+	/** @type {Set<string>} */
+	const keys = new Set();
+	{
+		const open = decl.index + decl[0].length - 1;
+		let depth = 0;
+		let end = open;
+		for (let i = open; i < src.length; i += 1) {
+			if (src[i] === '[') depth += 1;
+			else if (src[i] === ']') {
+				depth -= 1;
+				if (depth === 0) {
+					end = i;
+					break;
+				}
+			}
+		}
+		for (const m of src.slice(open, end).matchAll(/"([^"\\\n]+)"\s*:/g)) keys.add(m[1]);
+	}
+	for (const m of src.matchAll(/\bmetadata\s*\[\s*"([^"\\\n]+)"\s*\]\s*=/g)) keys.add(m[1]);
+	return keys;
+}
+
+/**
+ * The keys the phone lifts back out of that envelope — the required-field
+ * loop's array literal plus every individual `metadata["…"]` read.
+ * @param {string} src comment-stripped `WatchIngestBridge.swift`
+ */
+export function phoneEnvelopeKeys(src) {
+	/** @type {Set<string>} */
+	const keys = new Set();
+	for (const loop of src.matchAll(/for\s+\w+\s+in\s+\[([^\]]*)\]/g)) {
+		if (!/metadata\s*\[/.test(src.slice(loop.index, loop.index + 400))) continue;
+		for (const m of loop[1].matchAll(/"([^"\\\n]+)"/g)) keys.add(m[1]);
+	}
+	for (const m of src.matchAll(/\bmetadata\s*\[\s*"([^"\\\n]+)"\s*\]/g)) keys.add(m[1]);
+	return keys;
+}
+
+/**
  * The text of a top-level `func <name>(` through its matching close brace,
  * signature line included. Returns null when the function is not in this
  * source.
@@ -401,9 +471,12 @@ export function functionBody(src, name) {
 
 /**
  * @param {string} watchRoot absolute path to an `apps/watch_ios` tree
+ * @param {string | null} [ingestPath] absolute path to the phone's
+ *   `WatchIngestBridge.swift`; null skips claim (6), which is only for a
+ *   caller that has no phone half staged.
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function check(watchRoot) {
+export function check(watchRoot, ingestPath = null) {
 	/** @type {string[]} */ const errors = [];
 	/** @type {string[]} */ const ok = [];
 	/** @param {string} rel */
@@ -592,12 +665,45 @@ export function check(watchRoot) {
 		);
 	}
 
+	// (6) The run hand-off envelope, read from both ends.
+	if (ingestPath !== null) {
+		const sent = watchEnvelopeKeys(stripSwiftComments(read(SYNC_SITE)));
+		const lifted = phoneEnvelopeKeys(stripSwiftComments(readFileSync(ingestPath, 'utf8')));
+		if (sent === null || sent.size === 0 || lifted.size === 0) {
+			errors.push(
+				'Parsed no metadata keys out of one end of the run hand-off envelope — claim (6) would ' +
+					'pass vacuously. Either the dictionary literal in ContentView.syncRun or the lift in ' +
+					'WatchIngestBridge.swift changed shape.',
+			);
+		} else {
+			const dropped = [...sent].filter((k) => !lifted.has(k)).sort();
+			const invented = [...lifted].filter((k) => !sent.has(k)).sort();
+			for (const key of dropped) {
+				errors.push(
+					`The watch puts \`${key}\` in the WCSession metadata envelope and ${INGEST} never ` +
+						'lifts it out, so it is dropped on the way to the row. Silently: the run still ' +
+						'syncs, just without that field — which is exactly how Apple-Watch runs reached ' +
+						'the phone with no `activity_type` (the Apr 2026 cross-client audit).',
+				);
+			}
+			for (const key of invented) {
+				errors.push(
+					`${INGEST} reads \`${key}\` out of the WCSession metadata envelope and the watch ` +
+						'never puts it there, so the phone is waiting for a field that cannot arrive.',
+				);
+			}
+			if (dropped.length === 0 && invented.length === 0) {
+				ok.push(`all ${sent.size} run hand-off metadata keys are lifted out on the phone side`);
+			}
+		}
+	}
+
 	return { errors, ok };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	const root = process.argv[2] ?? join(REPO_ROOT, 'apps', 'watch_ios');
-	const { errors, ok } = check(root);
+	const { errors, ok } = check(root, process.argv[3] ?? join(REPO_ROOT, INGEST));
 	for (const line of ok) console.log(`  ok: ${line}`);
 	if (errors.length > 0) {
 		console.error(`\nFAIL: ${errors.length} problem(s) in apps/watch_ios:`);

@@ -23,11 +23,14 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
 import {
+	INGEST,
 	check,
 	functionBody,
 	normalizeKey,
 	parseFlatPlist,
+	phoneEnvelopeKeys,
 	stripSwiftComments,
+	watchEnvelopeKeys,
 } from './check_watch_ios_source.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -40,6 +43,10 @@ const BRIDGE = join('WatchApp', 'ActiveRunBridge.swift');
 const COPY = join('Complications', 'ActiveRunComplication.swift');
 const ORIGIN = join('WatchApp', 'RunFormat.swift');
 const README = join('Complications', 'README.md');
+const SYNC = join('WatchApp', 'ContentView.swift');
+const INGEST_ABS = join(REPO_ROOT, INGEST);
+/** Where `stage()` parks a copy of the phone's half of the envelope. */
+const STAGED_INGEST = 'WatchIngestBridge.swift';
 
 /** Copy only the files the guard reads into a throwaway tree. */
 function stage() {
@@ -54,6 +61,7 @@ function stage() {
 		mkdirSync(join(dir, dirname(rel)), { recursive: true });
 		cpSync(join(WATCH_IOS, rel), join(dir, rel));
 	}
+	cpSync(INGEST_ABS, join(dir, STAGED_INGEST));
 	return dir;
 }
 
@@ -65,7 +73,7 @@ function runMutated(mutate) {
 	const dir = stage();
 	try {
 		mutate(dir);
-		return check(dir);
+		return check(dir, join(dir, STAGED_INGEST));
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -91,9 +99,9 @@ const matched = (errors, re) => errors.filter((e) => re.test(e));
 // --- the positive control ---------------------------------------------------
 
 test('the shipped apps/watch_ios tree satisfies every claim', () => {
-	const { errors, ok } = check(WATCH_IOS);
+	const { errors, ok } = check(WATCH_IOS, INGEST_ABS);
 	assert.deepEqual(errors, []);
-	assert.ok(ok.length >= 12, `only ${ok.length} claims were exercised`);
+	assert.ok(ok.length >= 13, `only ${ok.length} claims were exercised`);
 });
 
 // --- claim 1: a localizing literal with no catalog entry --------------------
@@ -168,7 +176,7 @@ test('a key reached only through String(localized:) is not reported as orphaned'
 	// The sync-status strings are the ones that are not SwiftUI `Text`. Claim 2
 	// searches every string literal rather than only the localizing-API call
 	// sites precisely so an unlisted API cannot manufacture a dead key.
-	const { errors, ok } = check(WATCH_IOS);
+	const { errors, ok } = check(WATCH_IOS, INGEST_ABS);
 	assert.deepEqual(matched(errors, /no Swift/), []);
 	assert.ok(ok.some((o) => /String Catalog entries are still referenced/.test(o)));
 });
@@ -374,4 +382,70 @@ test('functionBody balances braces rather than stopping at the first close', () 
 	assert.ok(body?.endsWith('return 0\n}'), body ?? 'null');
 	assert.doesNotMatch(body ?? '', /func g/);
 	assert.equal(functionBody(src, 'missing'), null);
+});
+
+// --- claim 6: the run hand-off envelope, read from both ends ----------------
+
+test('a metadata key the watch sends and the phone never lifts is refused', () => {
+	// The already-happened failure. Nothing throws: the file transfers, the
+	// row is inserted, and one column is simply absent.
+	const { errors } = runMutated((dir) => {
+		edit(dir, SYNC, (s) => s.replace('"source": "watch",', '"source": "watch",\n                "cadence_spm": 0,'));
+	});
+	assert.equal(matched(errors, /`cadence_spm`.*never\s+lifts it out/s).length, 1, errors.join('\n'));
+});
+
+test('a metadata key the phone reads and the watch never sends is refused', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_INGEST, (s) =>
+			s.replace('if let v = metadata["avg_bpm"]', 'if let v = metadata["laps"] { payload["laps"] = v }\n        if let v = metadata["avg_bpm"]'),
+		);
+	});
+	assert.equal(matched(errors, /reads `laps`.*never puts it there/s).length, 1, errors.join('\n'));
+});
+
+test('an unparseable envelope on either end fails loudly rather than vacuously', () => {
+	// Both extractors read a hand-written literal. If either shape changes,
+	// the honest answer is "this claim can no longer be made", not silence.
+	const { errors } = runMutated((dir) => {
+		edit(dir, SYNC, (s) => s.replace('var metadata: [String: Any] = [', 'var metadata = buildMetadata(['));
+	});
+	assert.equal(matched(errors, /pass vacuously/).length, 1, errors.join('\n'));
+});
+
+test('claim 6 is skipped, not faked, when no phone half is available', () => {
+	const { errors, ok } = check(WATCH_IOS);
+	assert.deepEqual(errors, []);
+	assert.deepEqual(ok.filter((o) => /run hand-off metadata keys/.test(o)), []);
+});
+
+test('watchEnvelopeKeys reads the dictionary literal and the conditional assignment', () => {
+	const keys = watchEnvelopeKeys(
+		'var metadata: [String: Any] = [\n  "id": run.id,\n  "nested": ["a": 1],\n]\nif x { metadata["avg_bpm"] = bpm }\n',
+	);
+	assert.deepEqual([...(keys ?? [])].sort(), ['a', 'avg_bpm', 'id', 'nested']);
+});
+
+test('watchEnvelopeKeys returns null when the dictionary literal is not there to read', () => {
+	assert.equal(watchEnvelopeKeys('var metadata = buildMetadata([\n  "id": run.id,\n])\n'), null);
+});
+
+test('watchEnvelopeKeys balances the nested array rather than stopping at its close bracket', () => {
+	// A non-balancing scan ends the dictionary at the inner `]` and loses every
+	// key after it — which on the live file is `last_modified_at`, the one the
+	// phone delta-fetch filters on.
+	const keys = watchEnvelopeKeys('var metadata: [String: Any] = [\n  "a": [1, 2],\n  "z": 3,\n]\n');
+	assert.ok(keys?.has('z'), [...(keys ?? [])].join(','));
+});
+
+test('phoneEnvelopeKeys reads the required-field loop and the individual reads', () => {
+	const keys = phoneEnvelopeKeys(
+		'for key in ["id", "source"] {\n  if let v = metadata[key] { payload[key] = v }\n}\n' +
+			'if let v = metadata["avg_bpm"] { payload["avg_bpm"] = v }\n',
+	);
+	assert.deepEqual([...keys].sort(), ['avg_bpm', 'id', 'source']);
+});
+
+test('phoneEnvelopeKeys ignores an array literal that has nothing to do with the envelope', () => {
+	assert.deepEqual([...phoneEnvelopeKeys('for x in ["unrelated"] { print(x) }\n')], []);
 });

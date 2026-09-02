@@ -1257,22 +1257,25 @@ jobs:
             echo "Reproduce with: node --test scripts/check_xcstrings_parity.test.mjs (stdlib only, needs python3 + bash, no install needed)."
             exit 1
           fi
-      # decisions.md § 884 – § 886. The guard above holds the catalog against
+      # decisions.md § 884 – § 887. The guard above holds the catalog against
       # its two locale-declaration sites and nothing else about the tier. This
-      # one holds the other five things a Linux parse can honestly claim about
+      # one holds the other six things a Linux parse can honestly claim about
       # `apps/watch_ios`: a localization key with no catalog entry (renders
       # English in every locale and throws nothing), a catalog entry no Swift
       # references, a capability declared without the call that needs it or
       # exercised without the declaration, the complication's duplicated
-      # formatters drifting from their `RunFormat.swift` copies, and the App
-      # Group named two different ways. Every one of them is silent on the
-      # platform, so the macOS `test-watch-ios` job would pass through all of
-      # them.
+      # formatters drifting from their `RunFormat.swift` copies, the App Group
+      # named two different ways, and a key one end of the run hand-off
+      # envelope sends that the other end never lifts out. Every one of them is
+      # silent on the platform, so the macOS `test-watch-ios` job would pass
+      # through all of them. The last claim reads the phone's
+      # `WatchIngestBridge.swift` as well: the envelope has two ends, and a
+      # guard holding only the watch's cannot see the drift.
       - name: watchOS catalog usage, native declarations and duplicated sources
         run: |
           if ! node scripts/check_watch_ios_source.mjs; then
-            echo "::error::apps/watch_ios carries a source-level defect no compiler reports — a localizing literal with no String Catalog entry, a catalog entry nothing references, an Info.plist / entitlements capability that disagrees with the code, a complication formatter that has drifted from its RunFormat copy, or an App Group named two ways. Nothing here is about a half-declared locale; that is the check above."
-            echo "The failing line above names the file, the line and the fix. Reproduce with: node scripts/check_watch_ios_source.mjs (stdlib only, no Xcode needed). decisions § 884 – § 886."
+            echo "::error::apps/watch_ios carries a source-level defect no compiler reports — a localizing literal with no String Catalog entry, a catalog entry nothing references, an Info.plist / entitlements capability that disagrees with the code, a complication formatter that has drifted from its RunFormat copy, an App Group named two ways, or a run hand-off metadata key one end of the WCSession envelope sends and the other never lifts out. Nothing here is about a half-declared locale; that is the check above."
+            echo "The failing line above names the file, the line and the fix. Reproduce with: node scripts/check_watch_ios_source.mjs (stdlib only, no Xcode needed). decisions § 884 – § 887."
             exit 1
           fi
       - name: The watchOS source guard's own unit tests
