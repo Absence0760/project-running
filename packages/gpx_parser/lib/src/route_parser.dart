@@ -129,9 +129,9 @@ class RouteParser {
       if (parts.length < 2) continue;
       final lng = double.tryParse(parts[0]);
       final lat = double.tryParse(parts[1]);
-      final ele = parts.length >= 3 ? double.tryParse(parts[2]) : null;
-      if (lat != null && lng != null) {
-        points.add(Waypoint(lat: lat, lng: lng, elevationMetres: ele));
+      final ele = _finiteOrNull(parts.length >= 3 ? double.tryParse(parts[2]) : null);
+      if (_isUsableCoord(lat) && _isUsableCoord(lng)) {
+        points.add(Waypoint(lat: lat!, lng: lng!, elevationMetres: ele));
       }
     }
     return points;
@@ -167,17 +167,18 @@ class RouteParser {
 
       final lat = double.tryParse(latNode.innerText);
       final lng = double.tryParse(lngNode.innerText);
-      if (lat == null || lng == null) continue;
+      if (!_isUsableCoord(lat) || !_isUsableCoord(lng)) continue;
 
       final eleNode = pt.findElements('AltitudeMeters').firstOrNull;
-      final ele = eleNode != null ? double.tryParse(eleNode.innerText) : null;
+      final ele = _finiteOrNull(
+          eleNode != null ? double.tryParse(eleNode.innerText) : null);
 
       final timeNode = pt.findElements('Time').firstOrNull;
       final time = timeNode != null ? DateTime.tryParse(timeNode.innerText) : null;
 
       points.add(Waypoint(
-        lat: lat,
-        lng: lng,
+        lat: lat!,
+        lng: lng!,
         elevationMetres: ele,
         timestamp: time,
       ));
@@ -206,11 +207,14 @@ class RouteParser {
         final lngRaw = c[0];
         final latRaw = c[1];
         if (lngRaw is! num || latRaw is! num) continue;
+        final lat = latRaw.toDouble();
+        final lng = lngRaw.toDouble();
+        if (!_isUsableCoord(lat) || !_isUsableCoord(lng)) continue;
         final eleRaw = c.length >= 3 ? c[2] : null;
-        final ele = eleRaw is num ? eleRaw.toDouble() : null;
+        final ele = _finiteOrNull(eleRaw is num ? eleRaw.toDouble() : null);
         points.add(Waypoint(
-          lat: latRaw.toDouble(),
-          lng: lngRaw.toDouble(),
+          lat: lat,
+          lng: lng,
           elevationMetres: ele,
         ));
       }
@@ -218,6 +222,22 @@ class RouteParser {
 
     return _buildRoute(name, points);
   }
+
+  /// Whether a parsed coordinate can be used as one. `double.tryParse`
+  /// accepts the literals `NaN`, `Infinity` and `-Infinity`, so a
+  /// null-check alone lets a non-finite coordinate into a [Waypoint] — and
+  /// nothing downstream re-checks. One such point poisons the route's
+  /// haversine distance to NaN, and, once the route is being run, collapses
+  /// the recorder's off-route projection to a non-finite reading that the
+  /// sustained-off-route detector had to be taught to refuse. The web
+  /// importer has guarded every one of its coordinate sites with
+  /// `Number.isFinite` since it was written; this is the same contract for
+  /// the same file formats.
+  static bool _isUsableCoord(double? v) => v != null && v.isFinite;
+
+  /// Elevation is optional, so an unusable one degrades to absent rather than
+  /// dropping the whole point — the same choice the web importer makes.
+  static double? _finiteOrNull(double? v) => v != null && v.isFinite ? v : null;
 
   /// First non-empty `<name>` that is a DIRECT child of one of the given
   /// container elements, tried in priority order. Avoids picking up a
@@ -239,10 +259,11 @@ class RouteParser {
   static Waypoint? _waypointFromGpxNode(XmlElement node) {
     final lat = double.tryParse(node.getAttribute('lat') ?? '');
     final lng = double.tryParse(node.getAttribute('lon') ?? '');
-    if (lat == null || lng == null) return null;
+    if (!_isUsableCoord(lat) || !_isUsableCoord(lng)) return null;
 
     final eleNode = node.findElements('ele').firstOrNull;
-    final ele = eleNode != null ? double.tryParse(eleNode.innerText) : null;
+    final ele = _finiteOrNull(
+        eleNode != null ? double.tryParse(eleNode.innerText) : null);
 
     final timeNode = node.findElements('time').firstOrNull;
     final time = timeNode != null
@@ -250,8 +271,8 @@ class RouteParser {
         : null;
 
     return Waypoint(
-      lat: lat,
-      lng: lng,
+      lat: lat!,
+      lng: lng!,
       elevationMetres: ele,
       timestamp: time,
     );

@@ -1,8 +1,8 @@
 /// Pure waypoint-generation helpers for the Route Builder's
-/// "Generate by distance" feature. Mirrors
-/// `apps/web/src/lib/route_loop.ts` — keep in lockstep (the math has
-/// had two field-reported bugs around degenerate inputs, so changes
-/// on either side must land on both).
+/// "Generate by distance" feature. TS-Dart parity pair with
+/// `apps/web/src/lib/routes/route_loop.ts` — keep in lockstep (the
+/// math has had two field-reported bugs around degenerate inputs, so
+/// changes on either side must land on both).
 import 'dart:math' as math;
 
 import 'package:latlong2/latlong.dart';

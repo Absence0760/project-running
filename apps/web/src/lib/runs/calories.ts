@@ -10,8 +10,8 @@
 // the persona finding asked us to document + apply).
 //
 // This module is the single source of truth for the estimate, used
-// by both the web run-detail page and the mobile equivalent. Mirrored
-// byte-for-byte in `apps/mobile_android/lib/calories.dart` (and the
+// by both the web run-detail page and the mobile equivalent. TS<->Dart
+// parity pair with `apps/mobile_android/lib/calories.dart` (and the
 // iOS twin per the one-Dart-codebase rule).
 //
 // See `docs/architecture/decisions.md § 77` for the full formula choice + sources.
@@ -76,18 +76,41 @@ export interface EstimateRunCaloriesInput {
 	gender?: CalorieGender;
 }
 
+/// Ceiling on an estimate either platform can carry the same way. Past 2^53-1
+/// a JS number stops being an exact integer while Dart's `int` saturates at
+/// 2^63-1, so the same absurd input yields two different figures -- and an
+/// estimate that large is not one. Reported as no estimate, the same answer a
+/// negative distance gets.
+export const MAX_ESTIMABLE_KCAL = Number.MAX_SAFE_INTEGER;
+
 /// Returns the estimated calorie burn for a run, rounded to the
 /// nearest integer. Always non-negative.
 export function estimateRunCalories(input: EstimateRunCaloriesInput): number {
 	const distanceKm = Math.max(0, input.distanceM) / 1000;
+	// Weight and coefficient are checked for FINITENESS, not just for sign. A
+	// NaN fails the `> 0` test the way a zero does and so already fell back to
+	// the default, but an Infinity passed it -- returning Infinity here while
+	// the Dart twin threw, because `.round()` refuses a non-finite double, and
+	// this is read from a getter during a widget build. An unusable weight is
+	// no more usable than an absent one, so both take the documented default.
 	const weight =
-		input.weightKg != null && input.weightKg > 0
+		input.weightKg != null && Number.isFinite(input.weightKg) && input.weightKg > 0
 			? input.weightKg
 			: DEFAULT_BODY_WEIGHT_KG;
 	const activityCoef =
-		input.activityKcalPerKgPerKm != null && input.activityKcalPerKgPerKm > 0
+		input.activityKcalPerKgPerKm != null &&
+		Number.isFinite(input.activityKcalPerKgPerKm) &&
+		input.activityKcalPerKgPerKm > 0
 			? input.activityKcalPerKgPerKm
 			: ACTIVITY_KCAL_PER_KG_PER_KM.run;
 	const g = genderMultiplier(input.gender);
-	return Math.round(weight * activityCoef * distanceKm * g);
+	// One comparison does both jobs, which is why there is no separate
+	// finiteness test here: a NaN and a +Infinity each FAIL `<=`, and the
+	// remaining inputs cannot produce a negative product. That covers the
+	// DISTANCE too -- a NaN survives `Math.max` where the Dart twin's `> 0`
+	// test sends it to zero, but either way the product is unusable, so
+	// grading the product is what makes the two agree rather than a per-input
+	// check no input could reach past this one.
+	const kcal = weight * activityCoef * distanceKm * g;
+	return kcal <= MAX_ESTIMABLE_KCAL ? Math.round(kcal) : 0;
 }

@@ -39,6 +39,17 @@
  *     deployment_lean.md) /settings/upgrade deliberately shows the
  *     "coming soon" teaser instead of selling, so an empty checkout
  *     link is the intended config, not a broken one.
+ *   - The OPTIONAL origins below (PUBLIC_SITE_URL, PUBLIC_LIVE_HUB_URL,
+ *     PUBLIC_EXPORT_HUB_URL) may be unset — each has a defined
+ *     unconfigured behaviour — but a value that IS set has to be a
+ *     production URL by the same test PUBLIC_SUPABASE_URL takes. This
+ *     is the mirror of `env_isolation.mjs`, which refuses these three
+ *     when they are NOT loopback in dev and had nothing saying the
+ *     opposite for a release. A `.env.development` value inherited into
+ *     a release build bakes `http://localhost:7777` into every
+ *     prerendered canonical and og:url, and points the live + export
+ *     hubs at each visitor's own machine — all three fail silently, in
+ *     the artifact, for everyone.
  *
  * NOT enforced (intentional):
  *   - PUBLIC_REVENUECAT_WEB_PORTAL_URL — the manage-subscription portal
@@ -121,6 +132,14 @@ export function redactCredentials(url) {
 }
 
 /**
+ * Origins the bundle may legitimately ship without, but must not ship pointing
+ * somewhere local. Each is an absolute base other code concatenates paths onto
+ * (`siteOrigin`, `buildSnapshotUrl`, `buildCloudExportJobsUrl`), so a
+ * loopback or placeholder value is inert in production rather than noisy.
+ */
+const OPTIONAL_ENDPOINT_VARS = ['PUBLIC_SITE_URL', 'PUBLIC_LIVE_HUB_URL', 'PUBLIC_EXPORT_HUB_URL'];
+
+/**
  * @typedef {{ envVar: string; value: string; reason: string }} Finding
  * @typedef {{ ok: boolean; findings: Finding[] }} GuardResult
  */
@@ -167,6 +186,21 @@ export function checkProductionEnv(env) {
 			value: '<empty>',
 			reason: 'Missing / empty. The og:image prerender + every maplibre tile request would ship as broken URLs in the static bundle.',
 		});
+	}
+
+	// Optional origins: unset is a real configuration (each has a defined
+	// unconfigured behaviour -- `siteOrigin` folds to DEFAULT_SITE_URL, the
+	// live hub reports itself off, the export hub falls back to the Edge
+	// Function). A value that is SET has to be a production URL, because none
+	// of these fails loudly: a loopback origin renders a canonical nobody can
+	// follow and posts every runner's telemetry at their own machine.
+	for (const envVar of OPTIONAL_ENDPOINT_VARS) {
+		const value = String(env[envVar] ?? '').trim();
+		if (!value) continue;
+		const problem = productionUrlProblem(value);
+		if (problem) {
+			findings.push({ envVar, value: redactCredentials(value), reason: problem });
+		}
 	}
 
 	const proSellable =

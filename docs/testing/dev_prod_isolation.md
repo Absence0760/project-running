@@ -44,6 +44,8 @@ The guard ships with two enforcement points and a shared check.
 `apps/web/vite.config.ts` wires the `envIsolationGuard()` plugin. On every `vite dev` start the plugin reads `process.env` + `.env.local` and aborts the boot if anything looks non-local. This is the primary control:
 
 - `PUBLIC_SUPABASE_URL` / `SUPABASE_URL` / `OPENAI_BASE_URL` / `LIVE_HUB_URL` / `PUBLIC_LIVE_HUB_URL` / `PUBLIC_EXPORT_HUB_URL` / `PUBLIC_OSRM_URL` / `OSRM_URL` / `PUBLIC_SITE_URL` — must be loopback when set. The PUBLIC_-prefixed pair (`LIVE_HUB_URL` / `EXPORT_HUB_URL`) is what the web client reads at build time; the un-prefixed `LIVE_HUB_URL` is the Dart twin's dotenv form. Both forms are guarded so a stray inherited-shell env doesn't slip past either path. `OSRM_URL` is server-only on web (the dev `/api/routes/osrm` proxy reads it — issue #198) and doubles as the Dart twin's dotenv form; `PUBLIC_OSRM_URL` is unread by code since the proxy landed but stays guarded so a stale prod value in a `.env.local` is flagged, not silently ignored.
+- `GRAPHHOPPER_URL` / `GRAPH_CYCLE_URL` — the two route-generation engines the dev `/api/routes/generate` route reads from private env. Same risk shape as the hubs above with a price attached: one generate races `REQUEST_MULTIPLIERS` × seeds, up to 32 upstream fetches, so an inherited value naming the production GraphHopper or graph-cycle sidecar turns every local route build into a burst against a billed prod engine. Both were unguarded from the day the generator chain landed.
+- `PUBLIC_TILE_STYLE_URL` / `PUBLIC_REVENUECAT_WEB_CHECKOUT_URL` / `PUBLIC_REVENUECAT_WEB_PORTAL_URL` are URL-shaped and deliberately **not** required to be loopback — they are declared in `NOT_ISOLATED_URL_VARS` with the reason. A test walks the web tree for URL-shaped env reads and fails when one is neither guarded nor declared, so the list can no longer silently miss the next endpoint the way it missed these five.
 - `STRIPE_SECRET_KEY` / `PUBLIC_STRIPE_KEY` — refuses `sk_live_…` / `pk_live_…`; expects `sk_test_…` / `pk_test_…`.
 
 ### 2. Playwright globalSetup (e2e)
@@ -52,7 +54,7 @@ The guard ships with two enforcement points and a shared check.
 
 ### 3. Unit tests
 
-`apps/web/scripts/env_isolation.test.mjs` has 19 `node:test` cases covering loopback / prod-URL / live-key / override / multi-finding paths. Run via `node --test apps/web/scripts/env_isolation.test.mjs` (or your IDE's test runner). The `env-isolation` job in `ci.yml` runs it on every non-docs PR, and the `CI gate` waits for that job ([decisions § 862](../architecture/decisions.md)) — it used to live in a path-filtered workflow of its own, which no required check waited for.
+`apps/web/scripts/env_isolation.test.mjs` has 22 `node:test` cases covering loopback / prod-URL / live-key / override / multi-finding paths plus the coverage walk over the tree's own URL-shaped env reads. Run via `node --test apps/web/scripts/env_isolation.test.mjs` (or your IDE's test runner). The `env-isolation` job in `ci.yml` runs it on every non-docs PR, and the `CI gate` waits for that job ([decisions § 862](../architecture/decisions.md)) — it used to live in a path-filtered workflow of its own, which no required check waited for.
 
 ## The override (escape hatch)
 

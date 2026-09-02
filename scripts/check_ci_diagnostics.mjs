@@ -51,6 +51,15 @@
 //      job fails too, because a deleted job leaves a name the aggregator will
 //      never hear from.
 //
+//   4. That aggregator's own verdict is derived from the jobs it waits for.
+//      Rule 3 is only half of what makes a merge blocked and the other half
+//      lived in a shell block nothing read: drop the job's `if: always()` and
+//      GitHub skips the gate on exactly the runs where something failed (a
+//      skipped required check holds nothing); stop reading the `needs` context
+//      and the gate passes over a red job; read every result and never exit
+//      non-zero and the failure is printed as text on a green check. All three
+//      leave rule 3 satisfied, so all three were reachable (decisions § 909).
+//
 // Line-based rather than YAML-parsed on purpose: the `workflow-lint` job runs
 // `node` against a bare checkout with no `npm ci`, so only the stdlib is
 // available. Same constraint check_toolchain_pins.mjs works under.
@@ -510,17 +519,163 @@ export function checkGateCoverage(files) {
 	return { errors, ok, covered };
 }
 
+/// One job's whole block, from its key to the next job key (or the end of the
+/// `jobs:` mapping). Job-level keys — `if:`, `needs:`, `runs-on:` — sit at four
+/// spaces inside it, which is what separates them from a step's own.
+/**
+ * @param {string} text
+ * @param {string} job
+ * @returns {string | null}
+ */
+export function parseJobBlock(text, job) {
+	const lines = text.split('\n');
+	let inJobs = false;
+	let start = -1;
+	for (let i = 0; i < lines.length; i++) {
+		const top = lines[i].match(/^([A-Za-z0-9_-]+):/);
+		if (top) {
+			if (start !== -1) return lines.slice(start, i).join('\n');
+			inJobs = top[1] === 'jobs';
+			continue;
+		}
+		if (!inJobs) continue;
+		const key = lines[i].match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+		if (!key) continue;
+		if (start !== -1) return lines.slice(start, i).join('\n');
+		if (key[1] === job) start = i;
+	}
+	return start === -1 ? null : lines.slice(start).join('\n');
+}
+
+/// A job's own `if:`, read from the block ABOVE its `steps:` so a step's
+/// condition is never mistaken for the job's.
+/**
+ * @param {string} text
+ * @param {string} job
+ * @returns {string | null}
+ */
+export function parseJobIf(text, job) {
+	const block = parseJobBlock(text, job);
+	if (block === null) return null;
+	const lines = block.split('\n');
+	const at = lines.findIndex((l) => /^ {4}steps:\s*$/.test(l));
+	for (const line of at === -1 ? lines : lines.slice(0, at)) {
+		const m = line.match(/^ {4}if:\s*(.*?)\s*$/);
+		if (m) return m[1];
+	}
+	return null;
+}
+
+/// `always()` — without it GitHub SKIPS a job whose `needs:` did not all
+/// succeed, and a skipped required check does not hold a merge.
+export const ALWAYS_CONDITION = /\balways\s*\(\s*\)/;
+/// `toJSON(needs)` — one read that covers every needed job at once.
+export const WHOLE_NEEDS_READ = /toJSON\s*\(\s*needs\s*\)/;
+/// `needs.<job>.result` / `.outcome` — a read that covers exactly one.
+export const PER_JOB_NEEDS_READ = /needs\.([A-Za-z0-9_-]+)\.(?:result|outcome)\b/g;
+/// A non-zero exit. A gate that reads every result and then exits 0 whatever
+/// they say reports the same green as one that read nothing.
+export const FAILING_EXIT = /\bexit\s+[1-9]/;
+
+/// Rule 4 — the aggregator's own verdict is derived from the jobs it waits for.
+///
+/// Rule 3 asserts the gate NEEDS every job; that is only half of what makes a
+/// merge blocked, and the other half lives in a shell block nothing read. All
+/// three ways it breaks leave rule 3 green: drop `if: always()` and the gate is
+/// skipped on exactly the runs where a job failed; stop reading `needs` and it
+/// passes over a red one; read every result and never exit non-zero and it
+/// prints the failure as text on a green check.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkGateVerdict(files) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+
+	for (const { name, text } of files) {
+		if (!parseJobKeys(text).includes(GATE_JOB)) continue;
+
+		const cond = parseJobIf(text, GATE_JOB);
+		if (cond === null || !ALWAYS_CONDITION.test(cond)) {
+			errors.push(
+				`${name} — \`${GATE_JOB}\` carries ${cond === null ? 'no job-level `if:`' : `\`if: ${cond}\``}, ` +
+					`so GitHub skips it on any run where a needed job did not succeed — which is ` +
+					`every run it exists to block. A skipped required check does not hold a merge. ` +
+					`Restore \`if: always()\`.`,
+			);
+		}
+
+		const steps = parseSteps(text).filter((s) => s.job === GATE_JOB && s.hasRun);
+		if (steps.length === 0) {
+			errors.push(
+				`${name} — \`${GATE_JOB}\` runs no command at all, so it reports success as ` +
+					`soon as its runner starts, whatever the jobs it needs did.`,
+			);
+			continue;
+		}
+		/// The whole step, not just its `run:`. A workflow that injects the
+		/// context through the step's `env:` — `NEEDS_JSON: ${{ toJSON(needs) }}`,
+		/// which is how you read it without interpolating into the shell — reads
+		/// `needs` above the `run:` line, not inside it.
+		const body = steps.map((s) => s.body).join('\n');
+		const commands = steps.map((s) => runBody(s)).join('\n');
+
+		const needs = parseNeeds(text, GATE_JOB) ?? [];
+		if (WHOLE_NEEDS_READ.test(body)) {
+			ok.push(`${name} -> ${GATE_JOB} reads the whole \`needs\` context`);
+		} else {
+			const named = new Set([...body.matchAll(PER_JOB_NEEDS_READ)].map((m) => m[1]));
+			const unread = needs.filter((job) => !named.has(job));
+			if (named.size === 0) {
+				errors.push(
+					`${name} — \`${GATE_JOB}\` never reads the \`needs\` context, so its exit ` +
+						`status cannot depend on whether the ${needs.length} job(s) it waits for ` +
+						`passed. It is then a green row that means nothing, and rule 3 above — which ` +
+						`only asserts the \`needs:\` list is complete — stays satisfied. Read every ` +
+						`result (\`toJSON(needs)\`) and fail on any that is neither success nor skipped.`,
+				);
+			} else if (unread.length > 0) {
+				errors.push(
+					`${name} — \`${GATE_JOB}\` waits for ${needs.length} job(s) but its verdict reads ` +
+						`only ${named.size} of them; ${unread.join(', ')} could fail with the gate still ` +
+						`green. Read the whole context with \`toJSON(needs)\` rather than naming jobs one ` +
+						`by one, or the next job added is silently unjudged.`,
+				);
+			} else {
+				ok.push(`${name} -> ${GATE_JOB} reads all ${needs.length} needed result(s) by name`);
+			}
+		}
+
+		if (!FAILING_EXIT.test(commands)) {
+			errors.push(
+				`${name} — \`${GATE_JOB}\` has no non-zero \`exit\` on any path, so a failed ` +
+					`upstream job is at most printed. A required check that reports the failure ` +
+					`as text on a green run blocks nothing.`,
+			);
+		} else {
+			ok.push(`${name} -> ${GATE_JOB} exits non-zero on a bad result`);
+		}
+	}
+
+	return { errors, ok };
+}
+
 /** @param {readonly WorkflowFile[]} files */
 export function checkAll(files) {
 	const scoping = checkFailureScoping(files);
 	const diagnoses = checkStepDiagnoses(files);
 	const gate = checkGateCoverage(files);
+	const verdict = checkGateVerdict(files);
 	return {
-		errors: [...scoping.errors, ...diagnoses.errors, ...gate.errors],
-		ok: [...scoping.ok, ...diagnoses.ok, ...gate.ok],
+		errors: [...scoping.errors, ...diagnoses.errors, ...gate.errors, ...verdict.errors],
+		ok: [...scoping.ok, ...diagnoses.ok, ...gate.ok, ...verdict.ok],
 		scoping,
 		diagnoses,
 		gate,
+		verdict,
 	};
 }
 
@@ -556,7 +711,8 @@ function main() {
 			`${diagnoses.ok.length} step(s) across ${diagnoses.bundles.size} derived + ` +
 			`${DIAGNOSING_JOBS.size} listed bundled job(s) diagnose themselves, with ` +
 			`${diagnoses.exempt.length} unnamed non-guard step(s) outside the rule; ` +
-			`\`${GATE_JOB}\` waits for all ${gate.covered} of them.`,
+			`\`${GATE_JOB}\` waits for all ${gate.covered} of them, and derives its own ` +
+			`exit status from every one.`,
 	);
 	return 0;
 }

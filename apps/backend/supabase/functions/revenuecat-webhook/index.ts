@@ -10,13 +10,14 @@
 /// Supabase service role so it can update any user's tier.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.110.0';
-import type { Database, TablesUpdate } from '../_shared/database.ts';
+import type { Database, DbClient, TablesUpdate } from '../_shared/database.ts';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { isValidUuid } from '../_shared/input_validation.ts';
 import {
   hmacHex,
   isAnonymousAppUserId,
+  shouldReleaseDedupe,
   timingSafeEqual,
   validateFreshness,
 } from '../_shared/webhook_security.ts';
@@ -118,10 +119,10 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
   // Reserve the event-id row before doing any tier work. The unique
   // constraint on (provider, event_id) means a replayed delivery
   // raises 23505 which we map to a 200 (RevenueCat retries on
-  // non-2xx). Insert-first means the side effect can't run twice
-  // even if the function crashes between the insert and the update —
-  // the worst case is a missed update, which RC's next renewal/state
-  // event corrects.
+  // non-2xx). Insert-first means the side effect can't run twice even
+  // if the function crashes between the insert and the update; the
+  // release below is what keeps that from also meaning it can never
+  // run at all.
   const { error: dedupeErr } = await supabase
     .from('webhook_events')
     .insert({ provider: 'revenuecat', event_id: eventId });
@@ -137,6 +138,49 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
     return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
   }
 
+  // Apply behind a dedupe release. The dedupe row is written BEFORE the tier
+  // work (so two concurrent deliveries of one event can't both act), which
+  // means an application that fails owes the row back: RevenueCat retries on a
+  // non-2xx, and the retry would hit the 23505 path above, answer 200
+  // 'duplicate_event', and close the delivery for good. "The next renewal
+  // corrects it" was the reasoning for not doing this, and it does not hold for
+  // a NON_RENEWING_PURCHASE: a lifetime buyer has no later event, so a single
+  // transient failure on the profile write leaves them paid-up and on `free`
+  // permanently. stripe-events-webhook and strava-webhook both give the row
+  // back for the same reason.
+  let res: Response;
+  try {
+    res = await applyRevenueCatEvent(supabase, event, userId, eventTsMs);
+  } catch (err) {
+    await releaseDedupe(supabase, eventId);
+    throw err;
+  }
+  if (shouldReleaseDedupe(res.status)) {
+    await releaseDedupe(supabase, eventId);
+  }
+  return res;
+}));
+
+/// Give back the insert-first dedupe row so RevenueCat's retry is processed
+/// instead of being swallowed as a duplicate. Best-effort: if this fails the
+/// event is stuck either way, and logging is all we can usefully do.
+async function releaseDedupe(supabase: DbClient, eventId: string): Promise<void> {
+  const { error } = await supabase
+    .from('webhook_events')
+    .delete()
+    .eq('provider', 'revenuecat')
+    .eq('event_id', eventId);
+  if (error) {
+    console.error('failed to release dedupe row before retry (code):', error?.code ?? 'unknown');
+  }
+}
+
+async function applyRevenueCatEvent(
+  supabase: DbClient,
+  event: RevenueCatEvent,
+  userId: string,
+  eventTsMs: number,
+): Promise<Response> {
   // Resolve the user's current tier so the tier mapper can avoid demoting a
   // `lifetime` holder — for EVERY event that can move the tier, not only the
   // deactivating ones and PRODUCT_CHANGE. "Other activating events always
@@ -204,7 +248,8 @@ Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
     new_tier: newTier,
     billing_issue_at: billingIssueAt ?? undefined,
   });
-}));
+}
+
 
 interface RevenueCatEvent {
   type: string;

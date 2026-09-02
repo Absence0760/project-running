@@ -251,7 +251,13 @@ pub fn predict_race_ladder(efforts: &[Effort]) -> Option<RacePrediction> {
         }
     }
 
-    let anchor = best.unwrap();
+    // Fail closed rather than reset. Every candidate can still lose the strict
+    // `<` against the `f64::INFINITY` seed — a positive-but-denormal distance
+    // makes `riegel_predict` overflow to infinity — and the unwrap that stood
+    // here panicked, which on a device with no operating system is a reset in
+    // the middle of a race. `None` is what the doc comment already promises for
+    // a pool nothing can be anchored on.
+    let anchor = best?;
     let days_since_best = libm::round(anchor.age_days) as i32;
 
     let mut rungs = [LadderRung {
@@ -460,5 +466,39 @@ mod tests {
                 reason: PredictionReason::Limited,
             }
         );
+    }
+
+    // Every candidate can lose the strict `<` against the f64::INFINITY seed:
+    // a positive-but-denormal distance overflows riegel_predict to infinity, so
+    // neither the weighted pass nor the unweighted fallback ever assigns an
+    // anchor. The unwrap that stood there panicked - a reset mid-race.
+    #[test]
+    fn an_unanchorable_pool_returns_none_rather_than_panicking() {
+        let efforts = [Effort {
+            distance_m: 1e-320,
+            duration_s: 1200,
+            age_days: 1.0,
+        }];
+        assert!(predict_race_ladder(&efforts).is_none());
+    }
+
+    // ...and one real effort beside it still anchors, so the guard fails closed
+    // on the pool rather than on the presence of one bad row.
+    #[test]
+    fn a_real_effort_beside_an_unanchorable_one_still_predicts() {
+        let efforts = [
+            Effort {
+                distance_m: 1e-320,
+                duration_s: 1200,
+                age_days: 1.0,
+            },
+            Effort {
+                distance_m: 10_000.0,
+                duration_s: 2700,
+                age_days: 5.0,
+            },
+        ];
+        let out = predict_race_ladder(&efforts).expect("the clean effort anchors");
+        assert!((out.anchor.distance_m - 10_000.0).abs() < 1e-9);
     }
 }

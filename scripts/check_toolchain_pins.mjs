@@ -45,6 +45,21 @@
 // ended SHA updates for it. Three declarations plus this check keeps both
 // properties.
 //
+//   Node — every `actions/setup-node` step names a `node-version`, and all of
+//     them agree. Same shape as Flutter and for the same reason: no in-repo
+//     file resolves the runtime, so the workflows ARE the source of truth, and
+//     a release built on a Node that CI never ran is an untested binary. A step
+//     with no `node-version` at all is the `channel: stable` shape one more
+//     time — it takes whatever the runner image ships that week.
+//
+//   The developer toolchain — `.tool-versions`, the file a contributor points
+//     `asdf install` / `mise install` at. Every line in it, ACTIVE OR
+//     COMMENTED, is compared against the pin the repo enforces for that
+//     toolchain, because a commented pin is a claim the next reader will
+//     uncomment (the § 711 reasoning about a commented action pin). Nothing
+//     read this file, and it pinned `nodejs 22` while all 21 setup-node steps
+//     ran 24 (decisions § 911).
+//
 //   Rust (firmware) — `apps/custom_watch/rust-toolchain.toml` names an EXACT
 //     `MAJOR.MINOR.PATCH` channel, never `stable`/`beta`/`nightly` and never a
 //     two-component `1.98`. The firmware job runs clippy with `-D warnings`
@@ -98,6 +113,9 @@ export const LOCKFILE = join(REPO_ROOT, 'pubspec.lock');
 // One file resolves the firmware's Rust channel, and every firmware job
 // installs from it (`rustup show` honours it automatically).
 export const RUST_TOOLCHAIN = join(REPO_ROOT, 'apps', 'custom_watch', 'rust-toolchain.toml');
+export const TOOL_VERSIONS = join(REPO_ROOT, '.tool-versions');
+export const GO_MODS = ['apps/job_worker/go.mod', 'apps/graph_cycle/go.mod'];
+export const TERRAFORM_WORKFLOW = 'terraform.yml';
 
 const ACTION = 'subosito/flutter-action@';
 const ENV_KEY = 'FLUTTER_VERSION';
@@ -122,6 +140,76 @@ const ACTION_REF = /^([\w][\w.-]*(?:\/[\w.-]+)+)@(\S+)$/;
 ///
 /// Line-based rather than YAML-parsed on purpose: the guard jobs run `node`
 /// against a bare checkout with no `npm ci`, so only the stdlib is available.
+/// A step that `uses:` one particular action, and the version key inside it.
+///
+/// The `uses:` is found wherever it sits: a step written `- uses: x` carries it
+/// on the marker line, and a step written `- name: …` then `uses: x` carries it
+/// one line down. Reading only the first form is not hypothetical — it is how
+/// this file's Node rail first shipped, and `audit.yml`'s setup-node step is
+/// written the second way, so the one workflow whose comment CLAIMS it "matches
+/// the rest of the workflows in this repo" was the one the guard could not see.
+/// 54 steps across the committed workflows use that form.
+/**
+ * @param {string} text
+ * @param {RegExp} usesRe with the indent as group 1 and the `- ` marker as group 2
+ * @param {string} versionKey
+ * @returns {VersionedLine[]}
+ */
+export function parseUsesStepVersions(text, usesRe, versionKey) {
+	const lines = text.split('\n');
+	const keyRe = new RegExp(`^\\s*${versionKey}:\\s*(.*?)\\s*$`);
+	/** @type {VersionedLine[]} */
+	const steps = [];
+
+	for (let i = 0; i < lines.length; i++) {
+		if (lines[i].trimStart().startsWith('#')) continue;
+		const m = lines[i].match(usesRe);
+		if (!m) continue;
+
+		let start = i;
+		let markerIndent = m[1].length;
+		if (!m[2]) {
+			// Walk back to the step's own `- ` marker, past the sibling keys of
+			// this step (`with:`, `env:` and their children), which are all at or
+			// deeper than the `uses:` line.
+			start = -1;
+			for (let j = i - 1; j >= 0; j--) {
+				const line = lines[j];
+				if (!line.trim() || line.trimStart().startsWith('#')) continue;
+				if (line.length - line.trimStart().length >= m[1].length) continue;
+				const dash = line.match(/^(\s*)-\s/);
+				if (dash) {
+					start = j;
+					markerIndent = dash[1].length;
+				}
+				break;
+			}
+			// A `uses:` under no list marker is not a step; reporting it would
+			// invent a site.
+			if (start === -1) continue;
+		}
+
+		/** @type {string | null} */
+		let version = null;
+		for (let j = start + 1; j < lines.length; j++) {
+			const line = lines[j];
+			if (!line.trim() || line.trimStart().startsWith('#')) continue;
+			if (line.length - line.trimStart().length <= markerIndent) break;
+			const v = line.match(keyRe);
+			if (v) {
+				version = unquote(v[1]);
+				break;
+			}
+		}
+		steps.push({ line: start + 1, version });
+	}
+
+	return steps;
+}
+
+export const FLUTTER_USES = /^(\s*)(-\s+)?uses:\s*\S*subosito\/flutter-action@\S+/;
+export const SETUP_NODE_USES = /^(\s*)(-\s+)?uses:\s*\S*actions\/setup-node@\S+/;
+
 /**
  * @param {string} text
  * @returns {{ declared: string | null, steps: VersionedLine[] }}
@@ -146,28 +234,7 @@ export function parseWorkflow(text) {
 		return null;
 	})();
 
-	/** @type {VersionedLine[]} */
-	const steps = [];
-	for (let i = 0; i < lines.length; i++) {
-		const head = lines[i].match(/^(\s*)-\s+uses:\s*\S*subosito\/flutter-action@\S+/);
-		if (!head) continue;
-		const markerIndent = head[1].length;
-		let version = null;
-		for (let j = i + 1; j < lines.length; j++) {
-			const line = lines[j];
-			if (!line.trim() || line.trimStart().startsWith('#')) continue;
-			const indent = line.length - line.trimStart().length;
-			if (indent <= markerIndent) break;
-			const m = line.match(/^\s*flutter-version:\s*(.*?)\s*$/);
-			if (m) {
-				version = unquote(m[1]);
-				break;
-			}
-		}
-		steps.push({ line: i + 1, version });
-	}
-
-	return { declared, steps };
+	return { declared, steps: parseUsesStepVersions(text, FLUTTER_USES, 'flutter-version') };
 }
 
 /** @param {string} value */
@@ -676,20 +743,272 @@ export function checkActionPins(files) {
  * @param {WorkflowFile[]} [compositeFiles]
  * @param {string | null} [rustToolchainText]
  */
-export function checkAll(files, lockText, compositeFiles = [], rustToolchainText = null) {
+/// Every `actions/setup-node` step, with the `node-version:` it carries (null
+/// when it carries none and therefore takes the runner image's default).
+/// Shaped exactly like `parseWorkflow`'s Flutter steps and for the same
+/// reason — a step's version is read from the step's own block, not from
+/// anywhere else in the file that happens to say a number.
+/**
+ * @param {string} text
+ * @returns {VersionedLine[]}
+ */
+export function parseNodeSteps(text) {
+	return parseUsesStepVersions(text, SETUP_NODE_USES, 'node-version');
+}
+
+/// Rule: every setup-node step names a version, and every one names the same.
+/**
+ * @param {WorkflowFile[]} files
+ * @returns {{ errors: string[], ok: string[], versions: Map<string, string[]> }}
+ */
+export function checkNode(files) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	/** @type {Map<string, string[]>} */
+	const versions = new Map();
+
+	for (const { name, text } of files) {
+		for (const step of parseNodeSteps(text)) {
+			const where = `${name}:${step.line}`;
+			if (step.version === null) {
+				errors.push(
+					`${where} — this \`actions/setup-node\` step names no \`node-version\`, so ` +
+						`it installs whatever the runner image ships that week. That is the ` +
+						`\`channel: stable\` shape § 595 was about: the runtime moves under code ` +
+						`nobody touched, and the blame lands on whichever PR ran next.`,
+				);
+				continue;
+			}
+			ok.push(`${where} -> node ${step.version}`);
+			const sites = versions.get(step.version) ?? [];
+			sites.push(where);
+			versions.set(step.version, sites);
+		}
+	}
+
+	if (ok.length === 0 && errors.length === 0) {
+		errors.push(
+			`no \`actions/setup-node\` steps found in any workflow. Either every Node job ` +
+				`was removed, or the action was renamed and this rule now checks nothing.`,
+		);
+	}
+
+	if (versions.size > 1) {
+		const detail = [...versions.entries()]
+			.sort((a, b) => a[0].localeCompare(b[0]))
+			.map(([version, sites]) => `    ${version} — ${sites.join(', ')}`)
+			.join('\n');
+		errors.push(
+			`workflows pin ${versions.size} different Node versions:\n${detail}\n` +
+				`  CI is what validates the code the release workflows ship, so a release ` +
+				`built on a runtime CI never ran is an untested binary — the same argument ` +
+				`§ 595 makes for the Flutter SDK.`,
+		);
+	}
+
+	return { errors, ok, versions };
+}
+
+/// Every `<plugin> <version>` line of `.tool-versions`, commented or not.
+/// A commented line is kept rather than skipped: uncommenting it is one
+/// keystroke and the version it then installs is the claim being checked.
+/**
+ * @param {string} text
+ * @returns {Map<string, { line: number, version: string, commented: boolean }>}
+ */
+export function parseToolVersions(text) {
+	/** @type {Map<string, { line: number, version: string, commented: boolean }>} */
+	const out = new Map();
+	text.split('\n').forEach((raw, i) => {
+		const m = raw.match(/^(#\s*)?([a-z][a-z0-9_-]*)\s+(\S+)\s*$/);
+		if (!m) return;
+		if (out.has(m[2])) return;
+		out.set(m[2], { line: i + 1, version: m[3], commented: m[1] !== undefined });
+	});
+	return out;
+}
+
+/// The pins the repo itself enforces, as `plugin -> { version, source }`.
+/// Only these can be checked; a plugin the repo does not pin is reported as
+/// unbacked rather than compared against nothing.
+/**
+ * @param {{ flutter?: string | null, rust?: string | null, node?: string | null, go?: string | null, terraform?: string | null }} pins
+ * @returns {Map<string, { version: string, source: string }>}
+ */
+export function repoPins(pins) {
+	/** @type {Map<string, { version: string, source: string }>} */
+	const out = new Map();
+	if (pins.node) out.set('nodejs', { version: pins.node, source: "each workflow's `actions/setup-node` step" });
+	if (pins.rust) out.set('rust', { version: pins.rust, source: 'apps/custom_watch/rust-toolchain.toml' });
+	if (pins.go) out.set('golang', { version: pins.go, source: GO_MODS.join(' + ') });
+	if (pins.flutter) out.set('flutter', { version: pins.flutter, source: "each workflow's top-level env.FLUTTER_VERSION" });
+	if (pins.terraform) out.set('terraform', { version: pins.terraform, source: `.github/workflows/${TERRAFORM_WORKFLOW}` });
+	return out;
+}
+
+/// `nodejs` is compared on the MAJOR alone: asdf needs a version it can
+/// resolve to a build, CI states a major, and demanding they match to the
+/// patch would make every runner-image bump a repo edit. Every other pin is
+/// exact, because both sides already state one.
+/** @param {string} plugin @param {string} declared @param {string} pinned */
+export function toolVersionAgrees(plugin, declared, pinned) {
+	if (plugin === 'nodejs') return declared.split('.')[0] === pinned.split('.')[0];
+	return declared === pinned;
+}
+
+/**
+ * @param {string | null} toolVersionsText
+ * @param {Map<string, { version: string, source: string }>} pins
+ * @returns {{ errors: string[], ok: string[], unbacked: string[] }}
+ */
+export function checkToolVersions(toolVersionsText, pins) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	/** @type {string[]} */
+	const unbacked = [];
+
+	if (toolVersionsText === null) {
+		errors.push(
+			`.tool-versions is missing. It is what a contributor points \`asdf install\` / ` +
+				`\`mise install\` at, so without it the developer toolchain is whatever each ` +
+				`machine happens to have.`,
+		);
+		return { errors, ok, unbacked };
+	}
+
+	const declared = parseToolVersions(toolVersionsText);
+	for (const [plugin, { version, source }] of pins) {
+		const entry = declared.get(plugin);
+		if (!entry) {
+			errors.push(
+				`.tool-versions names no \`${plugin}\` line, but this repo pins ${plugin} to ` +
+					`${version} in ${source}. A contributor installing from that file gets ` +
+					`whatever their machine has for a toolchain CI holds to an exact version.`,
+			);
+			continue;
+		}
+		if (!toolVersionAgrees(plugin, entry.version, version)) {
+			errors.push(
+				`.tool-versions:${entry.line} — ${entry.commented ? 'the commented ' : ''}` +
+					`\`${plugin} ${entry.version}\` disagrees with the ${version} this repo pins ` +
+					`in ${source}. ${entry.commented
+						? 'A commented pin is not dead: uncommenting it is one keystroke, and it ' +
+							'then installs the wrong version silently.'
+						: 'A contributor who installs from this file develops on a toolchain CI ' +
+							'never runs.'}`,
+			);
+			continue;
+		}
+		ok.push(`.tool-versions:${entry.line} -> ${plugin} ${entry.version} matches ${source}`);
+	}
+
+	for (const [plugin, entry] of declared) {
+		if (pins.has(plugin)) continue;
+		unbacked.push(
+			`.tool-versions:${entry.line} — \`${plugin} ${entry.version}\` has no in-repo pin ` +
+				`to check it against`,
+		);
+	}
+
+	return { errors, ok, unbacked };
+}
+
+/// The `go` directive of every module, which must agree with itself before it
+/// can be a pin.
+/**
+ * @param {readonly {path: string, text: string}[]} mods
+ * @returns {{ version: string | null, errors: string[] }}
+ */
+export function parseGoDirective(mods) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {Map<string, string[]>} */
+	const seen = new Map();
+	for (const { path, text } of mods) {
+		const m = text.split('\n').find((l) => /^go\s+\d/.test(l));
+		if (!m) {
+			errors.push(`${path} declares no \`go\` directive`);
+			continue;
+		}
+		const v = m.replace(/^go\s+/, '').trim();
+		seen.set(v, [...(seen.get(v) ?? []), path]);
+	}
+	if (seen.size > 1) {
+		errors.push(
+			`the Go modules declare ${seen.size} different \`go\` directives: ` +
+				`${[...seen.entries()].map(([v, p]) => `${v} (${p.join(', ')})`).join('; ')}`,
+		);
+		return { version: null, errors };
+	}
+	return { version: [...seen.keys()][0] ?? null, errors };
+}
+
+/** @param {string} text */
+export function parseTerraformVersion(text) {
+	const m = text.split('\n').find((l) => /^\s*terraform_version:/.test(l));
+	return m ? unquote(m.replace(/^\s*terraform_version:\s*/, '')) : null;
+}
+
+/**
+ * @param {WorkflowFile[]} files
+ * @param {string} lockText
+ * @param {WorkflowFile[]} [compositeFiles]
+ * @param {string | null} [rustToolchainText]
+ * @param {string | null} [toolVersionsText]
+ * @param {readonly {path: string, text: string}[]} [goMods]
+ */
+export function checkAll(
+	files,
+	lockText,
+	compositeFiles = [],
+	rustToolchainText = null,
+	toolVersionsText = null,
+	goMods = [],
+) {
 	const flutter = checkFlutter(files);
 	const melos = checkMelos(files, lockText);
 	const defmt = checkDefmtPrint(files);
 	const actions = checkActionPins([...files, ...compositeFiles]);
 	const rust = checkRustToolchain(rustToolchainText);
+	const node = checkNode(files);
+	const go = parseGoDirective(goMods);
+	const terraform = (() => {
+		const f = files.find((x) => x.name === TERRAFORM_WORKFLOW);
+		return f ? parseTerraformVersion(f.text) : null;
+	})();
+	const tools = checkToolVersions(
+		toolVersionsText,
+		repoPins({
+			node: node.versions.size === 1 ? [...node.versions.keys()][0] : null,
+			rust: rust.channel ?? null,
+			go: go.version,
+			flutter: flutter.versions.size === 1 ? [...flutter.versions.keys()][0] : null,
+			terraform,
+		}),
+	);
 	return {
-		errors: [...flutter.errors, ...melos.errors, ...defmt.errors, ...actions.errors, ...rust.errors],
-		ok: [...flutter.ok, ...melos.ok, ...defmt.ok, ...actions.ok, ...rust.ok],
+		errors: [
+			...flutter.errors,
+			...melos.errors,
+			...defmt.errors,
+			...actions.errors,
+			...rust.errors,
+			...node.errors,
+			...go.errors,
+			...tools.errors,
+		],
+		ok: [...flutter.ok, ...melos.ok, ...defmt.ok, ...actions.ok, ...rust.ok, ...node.ok, ...tools.ok],
 		flutter,
 		melos,
 		defmt,
 		actions,
 		rust,
+		node,
+		tools,
 	};
 }
 
@@ -716,14 +1035,20 @@ export function readCompositeActions(dir) {
 }
 
 function main() {
-	const { errors, ok, flutter, melos, defmt, actions, rust } = checkAll(
+	const { errors, ok, flutter, melos, defmt, actions, rust, node, tools } = checkAll(
 		readWorkflows(WORKFLOW_DIR),
 		readFileSync(LOCKFILE, 'utf-8'),
 		readCompositeActions(ACTION_DIR),
 		existsSync(RUST_TOOLCHAIN) ? readFileSync(RUST_TOOLCHAIN, 'utf-8') : null,
+		existsSync(TOOL_VERSIONS) ? readFileSync(TOOL_VERSIONS, 'utf-8') : null,
+		GO_MODS.filter((m) => existsSync(join(REPO_ROOT, m))).map((path) => ({
+			path,
+			text: readFileSync(join(REPO_ROOT, path), 'utf-8'),
+		})),
 	);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
+	for (const line of tools.unbacked) console.log(`[SKIP] ${line}`);
 	for (const line of errors) console.error(`[FAIL] ${line}`);
 
 	if (errors.length > 0) {
@@ -736,7 +1061,10 @@ function main() {
 			`melos ${melos.locked}, matching pubspec.lock; defmt-print pinned to ` +
 			`${[...defmt.versions.keys()][0]} with matching cache keys; ` +
 			`${actions.ok.length} third-party action reference(s) pinned by commit SHA; ` +
-			`the firmware's Rust channel pinned to ${rust.channel}.`,
+			`the firmware's Rust channel pinned to ${rust.channel}; ` +
+			`${node.ok.length} setup-node step(s) on Node ${[...node.versions.keys()][0]}; ` +
+			`${tools.ok.length} of .tool-versions' line(s) match the pin this repo enforces, ` +
+			`with ${tools.unbacked.length} carrying no in-repo pin to check.`,
 	);
 	return 0;
 }

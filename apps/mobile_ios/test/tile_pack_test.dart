@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/tile_pack.dart';
 
-/// Mirror of `apps/web/src/lib/routes/tile_pack.test.ts`. Keep these 8
+/// Mirror of `apps/web/src/lib/routes/tile_pack.test.ts`. Keep these 10
 /// cases in lockstep. Pure slippy-map math, so both platforms must
 /// enumerate identical tile sets.
 void main() {
@@ -67,6 +67,41 @@ void main() {
     expect(
       tilesForBbox(swapped, minZoom: 14, maxZoom: 14),
       tilesForBbox(smallBox, minZoom: 14, maxZoom: 14),
+    );
+  });
+
+  test('a non-finite bbox corner is refused, not silently empty', () {
+    // The corner used to reach `.floor()`, which throws an unrelated
+    // "Unsupported operation" the caller reported as "too large", while the
+    // web twin returned an EMPTY pack for the same input.
+    for (final bad in [double.nan, double.infinity, double.negativeInfinity]) {
+      expect(
+        () => tilesForBbox(
+            TileBbox(minLat: bad, minLng: 8.53, maxLat: 47.39, maxLng: 8.56),
+            minZoom: 12,
+            maxZoom: 12),
+        throwsA(isA<ArgumentError>()),
+        reason: 'minLat $bad',
+      );
+      expect(
+        () => tilesForBbox(
+            TileBbox(minLat: 47.36, minLng: 8.53, maxLat: 47.39, maxLng: bad),
+            minZoom: 12,
+            maxZoom: 12),
+        throwsA(isA<ArgumentError>()),
+        reason: 'maxLng $bad',
+      );
+    }
+  });
+
+  test('estimateTileCount refuses a non-finite corner too', () {
+    expect(
+      () => estimateTileCount(
+          const TileBbox(
+              minLat: double.nan, minLng: 8.53, maxLat: 47.39, maxLng: 8.56),
+          minZoom: 12,
+          maxZoom: 12),
+      throwsA(isA<ArgumentError>()),
     );
   });
 }

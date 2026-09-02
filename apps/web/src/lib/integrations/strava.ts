@@ -10,6 +10,7 @@
 
 import { env } from '$env/dynamic/public';
 import { supabase } from '../core/supabase';
+import { edgeFunctionErrorMessage } from '../core/edge_function_error';
 import {
 	STRAVA_LOOKBACK_DEFAULT_DAYS,
 	parseStravaSyncResult,
@@ -132,7 +133,10 @@ export async function completeStravaOAuth(
 	const { data, error: fnError } = await supabase.functions.invoke('strava-import', {
 		body: { action: 'connect', code, scope, redirect_uri },
 	});
-	if (fnError) throw fnError;
+	// The function's own `{ error: '<code>' }` envelope, not supabase-js's
+	// fixed "Edge Function returned a non-2xx status code" — the card
+	// interpolates this into a slot written to carry a reason.
+	if (fnError) throw new Error(await edgeFunctionErrorMessage(fnError, 'connect_failed'));
 	// Graded, not cast: the function reports whether it walked the whole
 	// lookback window, and a cast would let a body that says nothing about
 	// that render as a finished import. See `strava_sync_result.ts`.
@@ -148,6 +152,6 @@ export async function syncStrava(
 	const { data, error } = await supabase.functions.invoke('strava-import', {
 		body: { action: 'sync', lookbackDays },
 	});
-	if (error) throw error;
+	if (error) throw new Error(await edgeFunctionErrorMessage(error, 'sync_failed'));
 	return parseStravaSyncResult(data);
 }

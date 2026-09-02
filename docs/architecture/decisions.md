@@ -13320,3 +13320,928 @@ region without any behaviour test noticing.
 No consumer on the wrist: the settings menu has no week-start row and
 `current_week::WeekStart` is a separate enum fed from the pushed settings frame.
 Port fidelity, and a doc claim that had become false.
+
+## 904. supabase-js hands every Edge Function refusal the same sentence, and three money-and-integration surfaces put it in front of users
+
+**Decided 2026-09-02.** `supabase.functions.invoke` reports every non-2xx as a
+`FunctionsHttpError` whose `message` is the fixed string "Edge Function returned
+a non-2xx status code"; the function's own `{ error: '<code>' }` envelope rides
+on `context`, the raw `Response`, and reading it costs an `await`. A private
+helper in `core/data.ts` did exactly that, and exactly one of the four call
+sites that needed it used it.
+
+The other three shipped the internal sentence to a person, each in a slot
+written to carry a reason:
+
+- **Register on a priced club event** toasted `e.message`, so `event_full`,
+  `sales_closed`, `host_cannot_take_payment` and a genuine outage all read
+  identically to a buyer about to pay.
+- **`/settings/payouts`** chose between its calm not-configured info toast and a
+  red error by pattern-matching the thrown message for `not_configured` or
+  `503`. Neither token is ever in that fixed sentence, so the info branch was
+  **unreachable** and every keyless build reported a red failure carrying it.
+  This is the fail-open shape: the guard was written, looked right, and had
+  never once selected the branch it exists for.
+- **The Strava card** interpolated it into "Strava sync failed: {error}", so a
+  build with no keys and a connection whose refresh token Strava has revoked —
+  which needs a reconnect, not a retry — were the same line.
+
+The unwrap moves to `core/edge_function_error.ts` beside a second export,
+`edgeFunctionErrorMessage(error, fallback)`: the envelope's code when there is
+one, and otherwise **the caller's own fallback**, never the error's message.
+An error carrying a `context` Response has no message worth showing, so falling
+back to it is how the internal sentence would return the moment a refusal
+arrived with an unreadable body. Each suite pins that leg explicitly.
+
+Only the code is machine-readable, so the two surfaces that can act on a
+specific refusal map it to copy: the event page needs one new key for the
+host-capability refusals (no retry fixes them, so the generic retry line
+misstates them), and Strava reaches the not-configured copy it already had.
+
+This class is invisible to a unit test — the shape only exists once a real
+`Response` has been through supabase-js — and invisible to a spec that mocks
+the endpoint's SUCCESS. It took driving the refusal through the browser.
+
+## 905. A consent gate nothing ever executed: seeded consent and a mocked endpoint both hide it
+
+**Decided 2026-09-02.** Three coverage rounds passed over the versioned
+AI-processing consent record and the Art 9 health-data consent without a single
+end-to-end test of either, and the reason is structural rather than an
+oversight. `seed.sql` stamps all three seeded users at the current disclosure
+version and with `health_data_consent_at` set, so any spec that signs in as one
+of them is testing the CONSENTED path whatever it asserts; and the one spec that
+drives the AI route assistant fulfils `/api/coach/route-describe` itself, so the
+gate ahead of the tier check was never reached. On the health side every spec
+that touches the consent checkbox deliberately restores it and leaves the write
+unmade, because a real withdrawal against a shared seed user erases USER_A's
+demographics for the rest of the shard — so the destructive half had never run.
+
+Both are now driven against an ephemeral saga user, which starts with neither
+record. That buys three things a seeded user cannot: the FIRST-use disclosure is
+observable at all; the refusal is real, so `/api/coach/route-describe` really
+403s and the page's consent-gap copy is reached rather than assumed; and the
+withdrawal can be executed rather than described, which is what makes it
+possible to assert its two opposite halves at once — every Art 9 field and the
+`user_settings.prefs` date-of-birth MIRROR go, while `user_profiles.date_of_birth`
+stays, because the age record backs the under-18 discoverability floor and
+carries no consent term.
+
+The `/coach` gate is additionally checked at the NETWORK layer, counting
+requests to `/api/coach**` before the accept click rather than only asserting the
+composer is absent: "render-gated" and "disabled" look the same to a DOM
+assertion and differ entirely in whether a person's data can reach Anthropic
+before they agreed.
+## 909. The required check's `needs:` list was guarded; its verdict was not
+
+**Decided 2026-09-02.** `scripts/check_ci_diagnostics.mjs` rule 3 asserts every
+job in `ci.yml` is named in the `CI gate` aggregator's `needs:` list, on the
+stated premise that the aggregator "passes when every job it needs passed OR was
+skipped". That premise is not a property of `needs:` at all — it is implemented
+in a nine-line shell block inside the gate job, and nothing read it. Three edits
+to that block leave rule 3 green and make the single required status check
+report success over a red repository, all three confirmed by mutating the
+committed `ci.yml` and re-running the guard:
+
+- delete the job's `if: always()` and GitHub SKIPS the gate on any run where a
+  needed job did not succeed — precisely the runs it exists to block — and a
+  skipped required check does not hold a merge;
+- stop reading the `needs` context (`run: echo ok`) and the exit status cannot
+  depend on what the 31 jobs did;
+- read every result and never `exit` non-zero, and the failure is printed as
+  text under a green check.
+
+Rule 4 now reads the gate job itself: the job-level `if:` must call `always()`,
+the steps must read the `needs` context, and some command must exit non-zero.
+The context read is accepted whole (`toJSON(needs)`, which covers every job at
+once and keeps covering the next one added) or per job by name, in which case
+every needed job must be named — a hand-written subset is reported with the jobs
+it cannot judge. It is read from the WHOLE step rather than its `run:` block,
+because the safe way to consume the context is the step's `env:` mapping, which
+sits above the `run:` line.
+
+The job-level `if:` is read from the block above `steps:`. A step's own
+condition sits deeper, and a rule that accepted it would have passed on a gate
+whose only `always()` was on an artifact upload.
+
+`exit 1` is a coarse proxy for "this can fail" and is deliberately coarse: the
+guard's job is to notice that the failing path was removed, not to re-derive
+what the shell block means.
+
+## 910. Both parity registries can agree perfectly about a pair that is in neither
+
+**Decided 2026-09-02.** `check_parity_pair_registry.mjs` cross-checks CLAUDE.md's
+lockstep bullet against the shared-library-syncer agent's table in both
+directions, and every path either names. Mutating the committed docs confirms all
+four of its properties fire. What it cannot see is a pair **absent from both** —
+and that is the failure this repo has actually had twice: `turn_cues` diverged in
+three implementations at once because the pair was registered in neither registry
+(§ 641), and the web/mobile accent fold sat diverged for eighteen days while both
+doc comments claimed lockstep (§ 760). CLAUDE.md states the mode outright, and
+the guard it points at is structurally unable to detect it.
+
+`check_twin_claims.mjs` takes the **source** as its subject instead. A header
+comment saying "Dart twin of `apps/web/src/lib/x/y.ts`" is a lockstep claim made
+where a reader will see it, and it is the earliest artifact a pair has — written
+with the second half, months before anyone thinks about a registry. Two
+properties: the counterpart path exists, and some row of the syncer table carries
+both files.
+
+Over the tree that is 105 declarations, **13 of them violating**. Nine pairs
+declare lockstep in both headers and are registered nowhere: `tile_pack`,
+`streaks`, `fundraiser_progress`, `readiness`, `calories`, `column_limits`,
+`cycle_plan`, `text_limits`, `route_loop`. CLAUDE.md's own `streak_card` entry
+calls one of them "the compute pair" while nothing registers it, and `route_loop`
+carries 35 mirror tests on web against 20 on Dart. Five declarations name a path
+the counterpart moved out of, including one belonging to a pair that IS
+registered — the registries hold paths of their own, so a stale path in a header
+is invisible to them.
+
+Registration is checked by PATH, not by name: the registry keys a pair on its WEB
+basename, so `gear_rotation_pick.dart` is registered under `rotation_pick`, and a
+name-keyed check would report it and teach the next reader to distrust the guard.
+The declaring verb is an allowlist rather than a keyword sweep — "in lockstep
+with" is this repo's phrase for every kind of coupling, a client and an SQL CHECK
+included, and reading it as a parity claim reports a dozen relationships that are
+not pairs.
+
+The 13 live violations are in `KNOWN_GAPS` because closing one means editing
+CLAUDE.md, the syncer table or a source header, and each entry names which
+property it breaks and where the fix lives. The register can only shrink: an
+entry that has stopped being a violation fails, and so does one naming a
+declaration that no longer exists.
+
+## 911. `.tool-versions` pinned Node two majors behind CI, and nothing had ever read it
+
+**Decided 2026-09-02.** `.tool-versions` is the file a contributor points `asdf
+install` / `mise install` at. It said `nodejs 22`. All 21 `actions/setup-node`
+steps in this repo say 24. Nothing in `scripts/`, `.github/` or `docs/`
+referenced the file at all, so the divergence was undetectable and the only
+symptom is a contributor debugging a `node --test` difference against CI.
+
+Its commented lines were worse, and they are guarded too. The file's own header
+says "uncomment the toolchains this project actually uses"; that adjustment was
+never made, so it still carried the template's `# rust 1.84.0` (the firmware
+pins 1.98.0), `# flutter 3.27.1` (CI pins 3.47.0), `# golang 1.23.5` (both
+modules declare 1.26.6) and `# terraform 1.15.0` (the workflow uses 1.13.0).
+Every one is a version a reader installs by deleting a `#`, which is the same
+argument § 711 made for a commented-out action pin: a commented pin is not dead
+code. `check_toolchain_pins` now compares every line, commented or not, against
+the pin the repo enforces for that toolchain, and reports a plugin with no
+in-repo pin (`deno`, floating at `v2.x` in CI; `python`) as unbacked rather than
+comparing it against nothing.
+
+Node gains a rail of its own on the Flutter policy, for the Flutter reason: no
+in-repo file resolves the runtime, so the workflows are the source of truth, all
+of them must agree, and a step with no `node-version` takes whatever the runner
+image ships that week. `nodejs` is the one plugin compared to `.tool-versions` on
+the MAJOR alone — asdf wants a version it can resolve to a build, CI states a
+major, and demanding a patch match would make every runner-image bump a repo
+edit.
+
+Writing that rail surfaced a blind spot in the Flutter one it was copied from.
+Both scans anchored on `- uses:`, the marker-line form. `audit.yml`'s setup-node
+step is written `- name:` then `uses:` — 54 steps across the committed workflows
+use that form — so the first cut of the Node rail found 20 of 21 sites, and the
+one it missed was the one whose comment claims it "matches the rest of the
+workflows in this repo". Every flutter-action step happens to use the marker
+form today, so the Flutter rail has never lost a site; it would have, silently,
+on the first one written with a name. Both now read through one resolver that
+finds the `uses:` wherever it sits and walks back to the step's own `- ` marker.
+
+## 912. The Playwright action's repair path had never been executed, and it is the half that only runs when something is already wrong
+
+**Decided 2026-09-02.** `start-supabase` extracted its probe loop into
+`wait_for_sidecars.sh` explicitly so it could be unit-tested, and that suite
+found the loop was vacuous. Its sibling `install-playwright` kept the same class
+of logic inline in `action.yml`: a Chromium launch check, a bounded three-attempt
+`playwright install-deps` fallback with an apt-lock reap between attempts, and a
+second launch as the verdict. A composite action's steps are in no job's test
+suite, so none of it had ever been executed by anything but CI itself — and the
+apt branch fires only after a launch has already failed, which the incident
+history it carries says is rare. The entire repair path was unrun.
+
+Extracted to `verify_chromium.sh` on the sibling's pattern, with nine cases. Two
+of them assert the property the code's own comment states and nothing checked:
+apt failing all three attempts still PASSES when the browser then launches (it
+can fail on a mirror having already installed what was missing), and apt
+succeeding still FAILS when the browser does not (install-deps can succeed and
+leave the launch broken). One asserts the lock reap runs between attempts, which
+is what stops the next attempt failing on "Could not get lock" and hiding the
+mirror behind our own leftovers.
+
+One case exists for a hazard the extraction created rather than found. The apt
+timeout config is written through a `<<'CONF'` heredoc, and a heredoc terminator
+must sit at column 0 of the script the shell sees. Inline, it was indented
+inside a YAML block scalar and only YAML's dedent put it there; in a `.sh` file
+nothing dedents anything. An indented terminator never closes, and the shell
+would swallow the retry loop and the final verdict as heredoc content — the
+script would write a garbage apt.conf and exit 0 having verified nothing. The
+test asserts the terminator is anchored, which `bash -n` alone does not catch.
+
+The `sudo` stub records rather than executes. Nothing in the script branches on
+what any of its calls return — the apt.conf write, the lock reap and the sources
+dump are each `|| true` or ignored — so executing them would buy no coverage and
+would write to `/etc`.
+
+## 913. The guard census walks `scripts/`, and the two composite-action shells were outside it
+
+**Decided 2026-09-02.** `check_ci_diagnostics.test.mjs` holds this repo's census
+of its own guards: every guard is invoked by some workflow, every guard has a
+suite, and every suite is run by a job the required gate waits for — the last of
+which is § 863, filed after `check_production_env.test.mjs` satisfied "run by
+some workflow" for its whole life from inside a path-filtered workflow the gate
+never waited for. The census enumerates `.mjs` files under three `scripts/`
+directories.
+
+`.github/actions/` is not one of them. Both composite-action shells —
+`start-supabase/wait_for_sidecars.sh` and, since § 912,
+`install-playwright/verify_chromium.sh` — were extracted from an `action.yml`
+precisely because a composite action's steps run inside no job's test suite, and
+each turned out to carry a branch nothing had ever executed. Their suites are
+the only thing that reads them, and nothing asserted those suites are run at
+all: deleting either `workflow-lint` step would have been silent.
+
+Two cases now cover that directory. Every `.sh` under it has a same-named
+`.test.mjs` driving it, and every such suite is run by a `ci.yml` job. Both
+count their subjects first, so a directory that stops yielding shells fails
+rather than passing over an empty walk — the § 850 shape, where the tsconfig
+coverage guard passed because its own test had emptied the tree it scanned.
+## 914. Both run importers deduped against the database and never against themselves, so a repeated result lost the whole batch
+
+**Decided 2026-09-02.** `parkrun-import` and `race-results-import` each build a
+batch of `runs` rows, read back the `external_id`s they already have stored, and
+insert the difference in ONE statement. `runs_user_external_id` (migration
+`20260528000003`) is a per-user partial unique index over
+`(user_id, external_id)`, so two rows in that one statement carrying the same id
+raise 23505 and take **every other result down with them** — not the duplicate.
+The caller gets a bare 500, nothing is imported, and a retry over the same input
+produces the same 500 because nothing about the input has changed.
+
+Reachable on both, and on the primary provider rather than a hostile edge.
+`extractRunSignUpResults` flattens every `individual_results_sets[]` entry —
+one per event, plus re-scored and provisional sets — so a runner posted in more
+than one set yields two rows whose `race:{name}:{date}:{bib}` id matches on the
+bib, since the name and the date both come from the ONE listing. The UltraSignup
+leg stamps one athlete's whole history with a single listing's name and date, so
+its ids differ by bib alone across races the runner may well have worn the same
+number in. And parkrun's scraper selects `table tbody tr` across every table on
+the page, so a result repeated in a second table is a second row with the same
+`parkrun:{event}:{date}`.
+
+The invariant this restores is the one both files already state in their own
+comments — "one junk row silently imported nothing for the athlete", "ONE
+unattributable date loses the whole race rather than one result". Both were
+closed by dropping the offending ROW. A duplicate is the same shape and had no
+such guard, at the one step where the blast radius is the whole batch.
+
+`reconcileImportBatch` in `_shared/external_id_batch.ts` takes the stored ids and
+the batch and answers both halves, returning `skipped` rather than leaving each
+call site to subtract it. That subtraction was written out twice, and it is the
+honesty half: a row dropped for duplicating a stored id and a row dropped for
+duplicating its batch-mate are the same answer to the caller — not imported, not
+lost either — so the two handlers must not be able to come to mean different
+things by one number. The guard beside it is on the SHAPE, not merely on the
+import: each of them reached the bug by writing the reconciliation out inline, so
+an `index.ts` that re-derives `fresh` from a local `Set` fails.
+
+## 915. RevenueCat reserved its dedupe row before granting a tier and never gave it back, so a transient failure closed the delivery for good
+
+**Decided 2026-09-02.** All three webhooks here write their `webhook_events` row
+BEFORE the side effect, so two concurrent deliveries of one event cannot both
+act. The price is that a handler which fails owes the row back: the provider
+retries on a non-2xx, and the retry hits the 23505 path, answers 200
+`duplicate_event`, and closes the delivery permanently. `stripe-events-webhook`
+released it and `strava-webhook` released it. `revenuecat-webhook` — the one
+that grants the paid tier — did not, and its 500 from the `user_profiles` patch
+was therefore terminal.
+
+The comment above its insert argued the cost was "a missed update, which RC's
+next renewal/state event corrects". That holds for a subscription and not for
+`NON_RENEWING_PURCHASE`: a lifetime buyer has no later event, so a single
+transient failure leaves them paid-up and on `free` with nothing coming to fix
+it. The same argument is weaker than it reads even for a renewal — the
+correction is a month away.
+
+The rule moves out of the Stripe lib into `_shared/webhook_security.ts` beside
+`validateFreshness`, since it is one rule for every insert-first deduper and the
+one that did not have it is the one that moves money's worth of entitlement; the
+Stripe lib re-exports it so its own importers and tests are unmoved. The handler
+now dispatches the way the Stripe one does — the post-dedupe work is one
+function whose response is checked — with the rethrow arm covering an uncaught
+throw that `withSentry` would otherwise turn into an unreleased 500.
+
+The guard is derived from the tree rather than listed: every `index.ts` that
+inserts a `webhook_events` row must also delete one, so a fourth webhook is
+covered the day it lands, and the set it finds is asserted so an emptied loop
+cannot pass for a clean sweep. Reserving without releasing is not a stricter
+posture — it is a delivery that can never be retried.
+
+## 916. A Strava track was uploaded and the pointer write's error was discarded, inside an arm that could not report it
+
+**Decided 2026-09-02.** `uploadTrack` checked the Storage upload and threw on
+it, then wrote `runs.track_url` and discarded that error. A failed pointer write
+therefore left the gzipped trace in Storage under the owner's prefix with no row
+naming it: every reader shows a run with no GPS trace while the bytes sit there.
+Nothing retries — `isAlreadyImported` matches on `metadata.strava_id`, so the
+next sync skips the activity entirely and the pointer is never attempted again.
+The suite had pinned the converse (a failed upload must not stamp a pointer at
+nothing) and never asked this direction, which is the shape worth recording: the
+asymmetric half of a two-step write is exactly where a test written from the
+first half does not look.
+
+The arm around it swallowed with `catch (_) {}` and no log at all, so a 404 for
+an indoor activity — expected, frequent — and a systematic breakage were
+perfectly indistinguishable. A changed streams endpoint, a revoked Storage
+grant or a quota would lose the trace of every run imported while it lasted,
+across both `strava-import` and `strava-webhook`, with nothing anywhere
+recording that it happened. It still never fails the import; it is now logged,
+and a positive control pins that an activity with no stream stays silent,
+because a line on every treadmill run is the same as no line.
+
+One thing the first fix got wrong and the mutation round caught: supabase-js
+rejects with a plain `{ message, details, hint, code }` object rather than an
+`Error`, and `uploadTrack` rethrows it as it stands — so an `instanceof Error`
+test alone reported every storage and pointer fault as `'unknown'`, a line
+saying a track was lost and nothing about why. `errorMessage` reads the message
+off both shapes and still ships only that half: `details` and `hint` carry the
+offending row's values into the shared function-log aggregator. The test now
+supplies that real shape, which is also what stops the redaction assertion
+beside it being vacuous — a thrown `Error` has no `details` for it to catch.
+## 919. A log-hygiene guard follows the code into CloudWatch, not the directory
+
+**Decided 2026-09-02.** The rule that no production Lambda may hand a caught
+value straight to a log line was enforced by walking `apps/web/lambda/*/src`.
+Every one of those handlers is a thin wrapper whose whole job is to call a
+transport-agnostic core under `src/lib`, and it is the core that makes the
+provider call, catches its error, and logs it — into the wrapper's own log
+group. The walk therefore checked every file except the two holding the exact
+shape the rule was written against: `route_request` and `route_describe` both
+did `console.error('…', e)` on an Anthropic SDK error, whose 400 body quotes the
+part of the request it objected to. On `/route-request` that is the runner's
+typed sentence and the location label the endpoint sends with it.
+
+Both now normalise to `{ message, stack }`, the shape the wrappers already use,
+and the guard's population is derived by following relative imports from each
+Lambda entry point rather than by listing a directory. The new rule is narrower
+than the wrappers' — an argument may not be a bare identifier or member chain,
+the caught value itself — because everything already in that set narrows first
+(`supabaseErrorFields(...)`, `e.message`), so nothing is grandfathered in. The
+general shape: a guard scoped to the file the framework happens to load is
+scoped to the wrong thing when the wrapper is a wrapper.
+
+## 920. The dev/prod isolation list is derived from the tree's own env reads
+
+**Decided 2026-09-02.** `env_isolation.mjs` refuses a local run configured
+against a remote endpoint, and its list of endpoints was hand-kept. It has now
+missed three times: `PUBLIC_LIVE_HUB_URL` and `PUBLIC_EXPORT_HUB_URL` were each
+added only after someone noticed, and `GRAPHHOPPER_URL` / `GRAPH_CYCLE_URL` were
+unguarded from the day the route-generation chain landed. Those two carry a
+price the hubs do not: one generate races the request-multiplier spread against
+the seed count, up to 32 upstream fetches, so an inherited shell env or a stale
+`.env.local` turned every local route build into a burst against a billed prod
+engine.
+
+A hand-kept list cannot notice its own gap, so the list stops being the thing
+that has to remember. A test walks `apps/web/src` and `apps/web/lambda` for
+URL-shaped env reads and fails when one is neither in `KNOWN_ENV_VARS` nor in
+the new `NOT_ISOLATED_URL_VARS` with the reason it need not be loopback. Three
+genuinely need not be — a read-only basemap style and two RevenueCat hosted
+pages, none of which has a loopback form or writes anything — and they now say
+so in writing rather than by being absent. The exemptions are checked for
+staleness in the same test: an entry naming a var nothing reads any more is a
+blind spot re-opening under a rename.
+
+## 921. The release guard mirrors the dev guard, or one direction goes unwatched
+
+**Decided 2026-09-02.** `PUBLIC_SITE_URL`, `PUBLIC_LIVE_HUB_URL` and
+`PUBLIC_EXPORT_HUB_URL` were refused by the dev guard when they were NOT
+loopback, and nothing said the opposite for a release. All three are optional —
+unset has a defined behaviour in each case, so a release must still pass without
+them — but all three are absolute origins other code concatenates paths onto,
+and every one of them fails *silently* when set wrong in a build: the site origin
+is baked into the canonical and the `og:url` of every prerendered share page, the
+live hub receives each runner's telemetry, the export hub receives each Art 20
+enqueue. A `.env.development` value inherited into a release ships localhost to
+every crawler and every visitor with nothing at runtime to notice.
+
+A value that is SET now takes the same production-URL test the Supabase URL
+takes, and a mirror test reads the dev guard's own list and fails when a
+`PUBLIC_` origin is watched in one direction and not the other. The server-only
+vars stay dev-side only by design — they never reach a client bundle, so a
+release has nothing to bake them into.
+
+## 922. A paged read is ordered on a total order, or it is not a read of the table
+
+**Decided 2026-09-02.** PostgREST turns `.range(from, to)` into `LIMIT`/`OFFSET`.
+Postgres promises nothing about the order of rows a query does not order, and
+nothing about which of two equal sort keys comes first, so an OFFSET walk over a
+non-unique `ORDER BY` can return a row on a page boundary twice and another not
+at all. Four load-more readers in `core/data.ts` already carried a "secondary key
+so offset pages are stable" note and a unique tiebreak; five paged readers did
+not, and they are the ones where it costs most.
+
+`createBackup` paged `runs` on `started_at` alone and paged `routes` with no
+`ORDER BY` whatsoever, then wrote a manifest saying `complete` — so the archive
+someone wipes a device on could be missing a route and carrying another twice,
+under a whole all-clear. `fetchRuns` pages the entire history behind the recap,
+the heatmap and the account export. Both ZIP importers page the dedupe set, where
+a dropped row re-imports a run the runner already has.
+
+All five now end their ordering on the primary key, and `paged_read_guards`
+makes it a rule rather than a habit: it walks every `.range()` in the tree —
+following a closure builder, which is how `fetchRuns` keeps its ordering out of
+the chain — and fails when the last order key is not unique per row. The unique
+set is `id` plus the three membership keys whose other half the query already
+fixes with an `.eq()`, which is why those readers tiebreak on the user rather
+than on an id they do not have.
+
+## 923. A timing cell holding only separators is an error row, not a zero
+
+**Decided 2026-09-02.** `Number('')` is `0`, so an empty component in a
+colon-separated chip-timing cell parsed as a real time: `':'` and `'::'` scored
+0 s, `'1:'` scored 60 s, and `'1::30'` scored 3630 s off a component nobody
+typed. On a finished row a 0 s time sorts first and stands as the event record,
+so a stray colon in an organiser's timing sheet silently minted a course record
+for a runner who did not set one. The wholly blank cell was already rejected as
+unparseable, which is what makes the gap visible as a gap: the parser had the
+right verdict for the empty cell and the wrong one for the cell that is empty
+apart from its punctuation.
+
+Every component is now required to be a plain decimal count, spelled out rather
+than left to `Number`, which also read `'0x10'` as 16 seconds, `'1e3'` as 1000
+and `'+5'` as 5. Per-component whitespace stays tolerated — a hand-typed sheet
+spaces its colons and that is still a time. The general shape is the one the
+codebase keeps meeting from the other side: a coercion that answers for an input
+it was never given is worse than one that refuses, because the refusal reaches
+the organiser and the answer does not.
+## 924. A panicking job handler ended the process, and the queue could never look at that job again
+
+**Decided 2026-09-02.** `Worker.handle` called `dispatch` directly. Go does not
+recover a panic for you, and the worker loop runs in `main`'s own goroutine — so
+a panic in any per-kind handler unwound `main` and ended the process. That
+process is not only the worker: `startHealthServer` mounts the live-spectator
+hub, the two data-export endpoints, the Strava webhook, the RFC 8058
+unsubscribe endpoint and the provider bounce webhook on the same binary. One
+malformed payload therefore stopped live tracking for every spectator watching
+every runner, which is the layered-resilience contract read backwards.
+
+The job was then unreachable. `claim_next_job` selects `status = 'queued'`
+only, `claim_next_job` itself moves the row to `running`, and nothing anywhere
+moves a row back out — `find_stuck_jobs` (migration `20260731_001`) deliberately
+only reports, because auto-failing a row would race a worker about to call
+`finish_job`. `handle`'s own doc comment claimed such a job is "recovered on the
+next process start because attempts < max_attempts"; it is not, and the comment
+is corrected rather than kept.
+
+`dispatchSafely` recovers, logs the value with `debug.Stack()`, and reports a
+`*panicError`. **The classification is deliberate and not merely a default**:
+`isTransient` falls back to substring-sniffing the message for network markers,
+and a panic value is arbitrary text — `panic("read tcp …: i/o timeout")` would
+have read as a retryable blip and been deferred. `isTransient` refuses a
+`*panicError` before reaching that sniffing, so a panic is always permanent. The
+row is stamped `failed`, which is what the `jobs-failed-alert` cron looks at.
+
+Pinned by four cases: the loop survives and reports; a panic whose text mentions
+a timeout is still permanent; the stack reaches the log; and a runtime
+nil-dereference is caught, not only an explicit `panic()`.
+
+## 925. The third parity rail's date comparison finds a port that fell behind, not one that was never faithful
+
+**Decided 2026-09-02.** Two `watch_core` modules were compared case-for-case
+against the web `.test.ts` they were ported from and both carried divergences
+that no guard could see. Both had been edited hours earlier, so the
+date-comparison sweep that produced the current firmware followups list read
+them as in sync — which is the finding worth recording: comparing modification
+dates detects a port that stopped following its source, and says nothing about a
+port that never matched it.
+
+`track_projection::or_epsilon` was written against the JS `value || 1e-6`, which
+is falsy-only: it catches an exact zero and lets a `1e-7` span through. Web
+replaced that with `Number.isFinite(v) && v > 1e-6` — matching the Dart twin's
+`max(span, 1e-6)` — and this rail kept the old form, so a centimetre of jitter
+(a runner who hit Start and Stop indoors) fitted the whole 92 px drawable band
+where web collapses it to about 8 px. The module's own second export,
+`isTrackRenderable`, had never been ported at all, so the rail had no way to
+refuse a stationary cluster in the first place; its four web cases port
+directly, including the one where a raw min/max reads jitter at the
+antimeridian as a 359.99 deg span and passes exactly the standing-still track
+the gate exists to catch.
+
+`route_simplify::compute_elevation_gain` carried **neither** of the two rules
+web's own doc calls load-bearing. It summed every positive sample-to-sample
+delta, so a 1 Hz sawtooth of ±1 m on a flat road reads as metres of phantom
+climb per minute — on the one device in this repo whose headline ultra metric is
+cumulative vert, a 100-mile day integrates that into thousands. And a `None`
+elevation broke the chain instead of being skipped with the last reading carried
+across, erasing the climb spanning a tree-covered section. A test named "null
+elevations are skipped" asserted a gain of 0 across exactly that gap, encoding
+the divergence as intent; it is replaced by web's own case rather than kept
+beside it. `ELEVATION_GAIN_MIN_DELTA_M` is now the 3 m the other two rails use,
+and a real descent moves the reference to the valley so the next climb is not
+measured from the previous summit.
+
+`summarize_route_from_track` was a third defect in the same module: it graded
+the SIMPLIFIED polyline. RDP measures perpendicular distance in 2-D, so a
+straight road over a summit collapses to its endpoints and its 50 m climb read
+as 0 — the identical bug web's own comment says it fixed.
+
+**Scope of the ports is unchanged.** `route_geometry`'s `markerPointAtDistance`
+stays unported: it is the route-editor "place this marker at mile 5" path, and
+authoring is web-canonical. The gap is filed rather than closed silently.
+
+## 926. Two unproven unwraps in `watch_core` reset the device instead of failing closed
+
+**Decided 2026-09-02.** `overflow-checks = false` in the release profile means
+arithmetic overflow wraps rather than traps, so the panics that survive to the
+wrist are the ones `Option::unwrap` and slice indexing raise. On a Cortex-M4F
+with no operating system a panic is a reset. Two sites were reachable from data
+rather than from a coding mistake, and both are now failures of the value rather
+than of the device.
+
+`predict_race_ladder` seeds both anchor loops with `f64::INFINITY` and takes the
+strict `<`. A candidate whose Riegel equivalent IS infinity therefore never
+wins — a positive-but-denormal distance overflows `libm::pow` — so neither the
+weighted pass nor the unweighted fallback assigns an anchor and `best.unwrap()`
+panicked, on a function whose own doc comment already promises `None` for a pool
+it cannot anchor. It is now `best?`.
+
+`compute_calibration` graded the numerator: `km <= 0.0` is false for a NaN
+distance because NaN fails every comparison, so `trimp / NaN` went into the
+list. One such row made the whole window's fallback rate NaN, and a second row
+beside it panicked `median`'s comparator — which was
+`partial_cmp(b).unwrap()`, the one comparator that returns `None` for exactly a
+NaN. The rate is graded now, and the comparator is `f64::total_cmp`, so the
+source guard and the sort are independent rails rather than one.
+
+Recorded because the sweep that found them is repeatable: every `.unwrap()`,
+`.expect(` and `panic!` outside a test module in `apps/custom_watch`, checked
+for whether the surrounding code proves the case away. Five others do — `cum`
+always carries its pushed zero, `by_day` is emptiness-guarded, `computed` is
+`Some` exactly when the match arm taking it is chosen, `view` is `Some` exactly
+when the `unfed` arm above did not return — and are left alone.
+
+## 927. A CPU-bound search bounded only by the caller's patience, and a refusal that read as a loop-poor neighbourhood
+
+**Decided 2026-09-02.** `graph_cycle`'s `/cycle` and `/route` handlers passed
+`r.Context()` straight into the search and had no clock of their own. Go
+cancels a request context when the client goes away, so the common case was
+bounded — but `main.go`'s `WriteTimeout` is 30 s and does **not** cancel the
+handler context, it only fails the connection write, so a search running past it
+burns a core producing a response no one can receive. And a caller that holds
+the connection open pins that core for as long as it likes, on an endpoint that
+is public behind one shared secret because the generate-route Lambda runs on AWS
+with no 6PN path into Fly.
+
+A 20 s server-side deadline leaves headroom under the 30 s write budget so the
+refusal can actually be written, and sits well past the web client's own 8 s
+`AbortController`, so in normal operation the caller still gives up first and
+this never fires.
+
+**The refusal must not be `found: false`.** That flag is a product claim — the
+client turns it into "the best loop near you is ~X km" — and a search that ran
+out of clock has established nothing about the neighbourhood. A deadline is a
+503 and an abandoned caller is a 499; the web client falls back to `round_trip`
+on either, with the reason intact, which is what its own `GraphCycleError`
+distinction exists for.
+
+Two more holes in the same surface. `decodeBody` accepted a body carrying a
+SECOND JSON value and silently discarded the tail, which is the laxness
+`DisallowUnknownFields` on the line above exists to refuse. And `NearestNode`
+spun for **33 s on a 9x9 test grid** given a non-finite query: `haversineM`
+returns NaN, `d < bestD` is false for every candidate, `best` never leaves `-1`,
+the early break can never fire, and the ring range comes from an `int32`
+conversion of NaN. That is the same class as the off-extract case the sweep's
+own comment records ("a start point outside the loaded PBF used to pin a core
+for minutes"), left open for input the two HTTP callers were trusted to have
+rejected. The guard is in `NearestNode` now, where it belongs on an exported
+function, with the request-level check kept as the outer wall.
+
+## 928. The live-hub's 403 body told a blocked person that they were blocked
+
+**Decided 2026-09-02.** `livehub.authorize` echoed the authorizer's own error
+into the response. That error distinguishes `auth: unknown run`, `auth: not the
+run owner` and `auth: blocked by run owner`, so a caller probing
+`/v1/live/{run_id}` learned which run ids exist and — the one that actually
+matters — a blocked person learned that a specific runner had blocked them. The
+product does not disclose a block anywhere else, and this endpoint reaches
+anonymous spectators by design.
+
+One opaque `forbidden` body for every denial, reason to the operator's log. That
+is the shape the two sibling servers in the same binary already use: the
+data-export and premium `extractUserID` collapse every verification failure to
+`missing_bearer` / `invalid_token` rather than surfacing what the JWKS verifier
+said. Nothing in the web client parses this body, and no test asserted on it.
+
+Pinned in both directions — the three reasons produce a body naming none of
+them while the log still carries each, and a push refusal and a snapshot refusal
+produce byte-identical bodies, so the response cannot be read as an oracle for
+which action was attempted either.
+
+## 929. A non-finite reading is not a measurement — the off-route escalation, the route projection, and the parser that fed both
+
+**Decided 2026-09-02.** `OffRouteAlertDetector.update` escalates a sustained
+off-route condition to the runner's trusted contact exactly once per run, and it
+graded the distance with `<= threshold`. Every comparison against a NaN is
+false, and an `Infinity` is genuinely greater than 75, so an unusable reading
+started the 90 s sustain clock, fired, and latched — pinging the contact about a
+runner who was on route, and leaving a runner who later went genuinely off
+course with a silently dead safety net for the rest of the run.
+
+The reading was reachable, through three rungs that each declined to check.
+`double.tryParse` accepts the literals `NaN`, `Infinity` and `-Infinity`, so
+`RouteParser`'s null-check let a non-finite coordinate into a `Waypoint` on all
+four text formats (GPX, KML, TCX, GeoJSON) — where the web importer had guarded
+every one of its own coordinate sites with `Number.isFinite` since it was
+written. The recorder's `_routeProgress` then seeds its running minimum at
+`+Infinity` and a NaN never compares less than it, so a route every segment of
+which projects to NaN left the seed untouched and reported the runner as
+infinitely far off course. And the detector took that figure at face value.
+
+Fixed at all three, because each is wrong on its own: the parser drops an
+unusable point (an unusable *elevation* only drops the elevation), the
+recorder's three projection helpers answer null — "no usable projection" is the
+same answer as "no route", which every consumer already handles — and the
+detector reads a non-finite distance as the same state as null. The same class
+turned up twice more in the same session and is recorded with each: an
+`estimateRunCalories` that returned `NaN kcal` on one platform and threw on the
+other, and a tile-pack bbox corner that produced an empty pack on one and an
+unrelated exception on the other.
+
+## 930. A backwards wall-clock step re-anchors a sustain window rather than stranding it
+
+**Decided 2026-09-02.** The same off-route detector anchors its sustain window
+at the first over-threshold snapshot and compares `nowMs - sinceMs` on every
+one after. The caller feeds it `DateTime.now().millisecondsSinceEpoch`, which is
+wall clock: an NTP correction, a manual clock change or a timezone-database
+update mid-run can step it backwards. The anchor then sat in the future and the
+elapsed comparison stayed negative for as long as the step was large — an hour's
+correction disarmed the alert for an hour of genuine off-course running, and the
+detector never reset because it only resets when the runner comes back on route.
+
+The window now re-anchors whenever `nowMs` is below the anchor. That restarts
+the measurement, which is the honest answer: across a clock jump we cannot say
+how long the departure has lasted, and both wrong answers — firing early off a
+forward jump, or never firing at all — are worse than measuring again. Both
+suites pin that a step back *shorter* than the window does not shorten it
+either, so the correction cannot be read as elapsed time.
+
+## 931. Registering a parity pair means measuring it first, not reading it and agreeing that it looks alike
+
+**Decided 2026-09-02.** Thirteen twin declarations named a counterpart that no
+`shared-library-syncer` row carried, so nine pairs described themselves as being
+in lockstep while nothing had ever compared them. Registering them on the
+strength of the code reading alike would have made the guard green over whatever
+had already drifted, which is the failure the register exists to surface.
+
+Each was measured instead, by running both halves over the same input grid and
+diffing the outputs: `route_loop` over 5,543 inputs (8 start coordinates
+including both poles and both sides of the antimeridian, crossed with end pins,
+targets, scales, point counts and radial seeds), `streaks` over 16,449 (every
+subset of a 12-day window crossed with four `bestSince` bounds, plus a
+spring-forward boundary), `fundraiser_progress` over 225, `e164` over 3,478 and
+`calories` over 13,500. Five pairs came back identical and were registered as
+they stood. Four had diverged, and all four diverged on the same axis: an input
+the two languages disagree about. `Math.round` keeps a double where Dart's
+`.round()` throws on a non-finite one and saturates at 2^63-1 on a large one;
+`parseInt` yields NaN where `int.parse` throws; `Array.prototype.sort` is stable
+where `List.sort` is not. None of the four was visible by reading either half —
+only by reading both and asking what each does with the input the other cannot
+represent.
+
+The register is empty now. Its own unit test asserted it was non-empty, which
+was true when it was written and became the wrong assertion the moment the last
+entry closed; an empty register is the goal state, and emptying it by accident
+cannot hide anything, because the guard already fails on a declaration that
+neither a row nor a gap covers.
+
+## 932. Which of two tied contributors wins is a contract, not an implementation detail
+
+**Decided 2026-09-02.** `computeReadiness`'s `dominantAdvice` picks the
+contributor with the largest absolute delta and shows that contributor's
+sentence. Ties are common by construction: a TSB of -12 and six hours of sleep
+both score -12, an all-neutral day scores three zeroes, and each carries
+different copy. `Array.prototype.sort` is stable, so the web half deterministically
+shows the first contributor added. Dart's `List.sort` is documented as unstable
+and only happened to agree because its small-list path is an insertion sort — an
+implementation detail of the current SDK, not a promise.
+
+The Dart half carries an explicit index tiebreak now, and both suites pin the
+tie rather than only the clear-winner case. The general rule: wherever a ranked
+pick drives visible copy and the ranking key can tie, the tiebreak is part of
+the algorithm and belongs in both halves in writing.
+
+## 933. A normalisation class is spelled out by code point, or it is three of eleven
+
+**Decided 2026-09-02.** `normaliseE164` repairs a typed or pasted phone number
+into the bare E.164 the `safety_contacts.contact_phone` CHECK enforces, and a
+number it fails to repair is a trusted contact the overdue escalation cannot
+reach. Its separator class carried three members of the hyphen family (U+002D,
+U+2011, U+2013) under a comment claiming the family, and the single test pinning
+it exercised two of the three. macOS and Word autocorrect a typed hyphen to an
+EN DASH — folded — or an EM DASH, which was not, so the same contact card pasted
+twice could be accepted once and refused once; a CJK keyboard produces U+FF0D
+and a spreadsheet export U+2212.
+
+All eleven are folded now, written out by code point on both rails rather than
+left to a `Dash_Punctuation` property, and the space family runs U+2000..U+200D
+as one range so the zero-width characters a paste off a web page carries are
+taken with it. One structural rule came out of it and is stated in both files:
+the bracket set in the trunk-zero regex must match the bracket set in the
+separator class. A bracket the separator class folds but the trunk-zero one does
+not leaves the national `0` behind and yields a *different, conforming* number,
+which is the exact silent misdelivery the whole-deletion exists to prevent. A
+separator neither class knows is still refused rather than dropped.
+
+## 934. An importer grades what it parses — the CSV path was deferring to a CHECK that does not exist
+
+**Decided 2026-09-02.** `CsvRunImporter` passed a negative distance and duration
+straight through, pinned by a test whose own title said "(DB rejects on upsert)"
+and whose comment cited "the DB CHECK (distance_m >= 0, duration_s >= 0)".
+`public.runs` has neither. Those CHECKs are on `event_results` and
+`gym_workouts`; `runs.distance_m` is `numeric(10, 2) not null` with no
+constraint at all. So a -100 m run from a hand-edited or third-party CSV stored,
+and every SQL aggregate that sums it came out short. Postgres `numeric` also
+holds NaN, which `double.tryParse` will produce from the literal, and that was
+refused only by accident — `_syntheticExternalId` calls `.round()` on the
+distance and `.round()` throws on a non-finite double, so the runner saw
+"Unsupported operation" rather than a bad measurement.
+
+The activity type was the same shape one level up. It was written into the
+metadata bag verbatim, so `Ride` imported, reported success, and then failed to
+sync forever on a `runs_activity_type_check` 23514 the runner never saw. It is
+graded at import now, against the vocabulary read off the existing
+`ActivityType` rail rather than retyped, with case normalised first and a
+genuinely different activity refused rather than defaulted to `run` — filing a
+bike ride as a run is worse than not filing it.
+
+Two lessons, both general. A validation deferred to a constraint is only as good
+as the constraint being there, and the deferral has to name it precisely enough
+to be checked. And a test that pins the absence of a guard must state the reason
+it believes the guard is unnecessary, so the belief can be falsified — this one
+did, which is the only reason the missing CHECK was found rather than the test
+simply being deleted.
+## 935. The most concurrent binary in the repo had never met the race detector
+
+**Decided 2026-09-02.** Both Go jobs ran a plain `go test ./...`. `job_worker`
+is an in-process pub/sub hub with per-room goroutines, a GC sweeper, a bridge
+poller, an atomic heartbeat and six HTTP servers on one mux; `graph_cycle` runs
+concurrent workers over a shared graph. A plain run cannot observe a data race
+at all — it observes whichever interleaving it happened to get — so the suite
+being green said nothing about the property, and the first place an unsynchronised
+map write would surface is production, which is the one place it cannot be
+debugged.
+
+Both jobs now run `go test -race ./...`. Both suites are race-clean today,
+measured on this branch rather than assumed: `job_worker` 20 s to 35 s,
+`graph_cycle` 5 s to 5.5 s. The flag replaces the plain run rather than adding a
+second step, so neither job becomes a bundled one under the § 764 rule and
+neither needs its own `::error::`.
+
+The reason this went unnoticed is worth stating: `go vet` sits beside `go test`
+in both jobs and reads as a concurrency check to a passing eye, but `vet` is a
+static pass with no view of interleaving. Two guards in a job is not two
+questions answered.
+
+## 936. A threshold on three rails, registered on none, and the rail that was missing it
+
+**Decided 2026-09-02.** `ELEVATION_GAIN_MIN_DELTA_M` is 3 m on web, mobile and —
+since the firmware port was corrected this round — the watch. It was in no
+registry, which is precisely how the watch came to ship without it at all: a
+value with no home has no guard, and a port that omits it produces a plausible
+number rather than a failure.
+
+Registered as a `CONSTANT_ROWS` row in `check_watch_wire_vectors.mjs`, the
+registry built for this shape (it already holds the off-route hysteresis and five
+Minetti coefficients across four rails each). All three rails are now read on
+every PR and a one-sided change fails the `watch-wire-vectors` job.
+
+Worth naming what kind of value this is, because the registry's other rows are
+mostly wire fields: this is a THRESHOLD. Nothing decodes it, no format version
+moves when it drifts, and no frame fails to parse — the three rails simply
+answer different numbers for the same track, silently and plausibly, which is
+the failure mode that survives longest.
+
+The mutation check was run in all three directions rather than one: moving the
+web rail to 4, the Dart rail to 5 and the Rust rail to 2 each fails the guard,
+and the baseline is green again after each restore. A registry row that only
+detects a change on one rail is the kind of half-guard § 909 is about.
+
+Not closed here: the 5 m span in `isTrackRenderable` is a bare literal on all
+three rails, so registering it means naming it on each first.
+
+## 937. A secret floor its sibling had, and the CI fixture that was blocking it
+
+**Decided 2026-09-02.** `refresh-tokens` runs `verify_jwt = false`, so the
+bearer it compares is the only thing standing in front of a loop over the entire
+`integrations` table against Strava's OAuth endpoint. `strava-webhook` — same
+posture, same class of gate, reachable by URL alone — has carried a 32-character
+minimum on its secret since the May 2026 audit. This one had none, so
+`CRON_SECRET=test` would have deployed and worked.
+
+The floor is now here too, before the timing-safe compare, answering the same
+`cron_not_configured` 503 an absent secret gets. A short secret is a
+misconfiguration rather than an attack: the deployer needs to learn the config
+is wrong, and a caller must learn nothing about the secret's length, which one
+shared response gives both.
+
+**The reason this could not land when it was found is the part worth recording.**
+`ci.yml` set `CRON_SECRET=ci-cron-secret` — fifteen characters — for the
+served-envelope lane. Adding a 32-char floor would have made CI's authorized leg
+503, and the tempting repair is to lower the floor to fit the fixture. A floor
+chosen to accommodate a test fixture is not a floor. The fixture was lengthened
+instead, and the source guard now reads BOTH: the function's floor, its ordering
+before the compare, the sibling's matching floor, and `ci.yml`'s own value
+against 32. Shortening the fixture back now fails the guard rather than silently
+reducing the envelope lane to testing only its 503 branch.
+
+Writing the guard also caught a defect in the guard: the ordering assertion used
+`indexOf('timingSafeEqual')`, which finds the named import at the top of the
+file, so it could never have failed. It searches for the call now. The four
+mutations — floor to 8, fixture back to 15, sibling floor to 4, and the ordering
+— are each killed.
+
+Not closed: the IP-keyed rate limit the sibling also carries. `ipBucketKey`
+collapses every caller the trusted header does not identify into one bucket, and
+it is not established that pg_cron's invocation carries `cf-connecting-ip`, so
+limiting before the compare could let an attacker starve the hourly refresh out
+of the same bucket. Spending the bucket only on a failed compare is the likely
+answer, but it is a deliberate divergence from the sibling and wants deciding on
+purpose rather than by copying.
+
+## 938. A section reference that soft-wrapped onto a line start read as an ordered list, and hid 92 of 109 parity pairs
+
+**Decided 2026-09-02.** Registering the `calories` pair added a sentence ending
+"... see § 77. Distinct from `exercise_calories` ..." to CLAUDE.md's parity
+bullet. `foldSoftWraps` treats any line matching `\d+[.)] ` as opening a new
+block, so once the bullet grew long enough for `77.` to land at the start of a
+reflowed line, the fold stopped there and `parseClaudePairs` saw 17 pairs
+instead of 109 — **with zero errors reported**, because every anti-vacuity check
+in the guard was satisfied by the text before the break.
+
+That is § 604's defect exactly, inside the guard written to catch § 604's
+defect. It was invisible on each contributing branch: the reflow-invariance test
+only fails once the paragraph is long enough for a wrap to land on a digit, so
+the branch that added the sentence and the branch that lengthened the bullet
+were each green, and only the merged tree was red. The lane that added it
+reported the registry guards green, having run the guard scripts rather than
+their suites.
+
+**Fixed at the parser, not in the prose.** CommonMark: an ordered list may
+interrupt a paragraph only when it starts at 1 — every other number stays part
+of the paragraph, which is precisely why a renderer shows that sentence as
+prose. `foldedLines` now applies that rule when deciding whether a line
+interrupts an OPEN paragraph; a number at the start of a block is still a list
+whatever its value, because the rule is about interruption, not about the digit.
+Rewording the sentence would have been the shortcut, and the next ADR reference
+past § 1 would have re-broken it.
+
+Three mutations, each killed: restoring the old any-number behaviour,
+over-correcting so `1.` never interrupts either, and dropping the
+leading-whitespace allowance so an indented continuation escapes the rule.
+
+## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
+
+**Decided 2026-09-02.** PR #849 went up green on every suite this round ran and
+came back red on two checks. Both are worth recording, because they are
+different kinds of miss.
+
+**`check:script-types`.** Round 31 added `scripts/check_twin_claims.mjs` and
+grew `check_toolchain_pins.mjs`, and neither carried JSDoc on the new
+signatures. `scripts/` is inside `tsconfig.scripts.json` with `checkJs` +
+`strict` (§ 757), so fourteen implicit-`any` and argument-type errors failed the
+`parity-types` job. The integration verification ran `node --test
+scripts/*.test.mjs` — the suites — and not the typecheck, which is a different
+question about the same files. **A lane that adds or edits a file under
+`scripts/`, `apps/backend/scripts/`, `.github/` or `infra/` must run `npm run
+check:script-types`**, the exact sibling of the rule § 848 already records for a
+`.test.ts` under `apps/web/src` needing `npm run check`. Two roots, two rules,
+same shape: the suite passing is not the typecheck passing.
+
+**CodeQL, high — and it took two attempts, which is the instructive part.** A
+new test asserted the apt-sources dump with
+`assert.match(after, /azure\.archive\.ubuntu\.com/)`. CodeQL reads an
+unanchored host-shaped pattern as a bypassable URL check
+(`js/regex/missing-regexp-anchor`). Anchoring was not available — the hostname
+appears inside a larger log line, so `^`/`$` would have broken the assertion —
+so the first fix dropped the regex for `after.includes('azure.archive.ubuntu.com')`.
+
+That closed the alert and opened a different one at the same line:
+`js/incomplete-url-substring-sanitization`, also high, saying the host "can be
+anywhere in the URL". **CodeQL objects to the substring form exactly as it
+objects to the regex form**, so trading one for the other moves the alert
+rather than removing it. Both are false positives on a log assertion — nothing
+here validates a URL — but two high alerts in a row is the query telling you
+the shape is wrong, not that the tool is.
+
+The shape that is actually right: the dump prints ONE ORIGIN PER LINE, so split
+the log and compare a trimmed line for **equality**. That is not a search at
+all, so neither query applies, and it is the stronger assertion — it now fails
+if the origin is ever printed embedded in some longer string, which the
+substring form would have accepted. Suppressing the alert was available
+throughout and was not taken: it leaves the next reader to rediscover why.
+
+The conversion was mutation-checked against the code rather than against itself:
+deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
+That check mattered — the first mutation attempted was weakening the assertion
+to `includes('')`, which passes trivially and measures nothing. **Mutate the
+subject, not the assertion.**

@@ -67,3 +67,27 @@ test('swapped min/max corners are normalised, not empty', () => {
 	const swapped: TileBbox = { minLat: 47.39, minLng: 8.56, maxLat: 47.36, maxLng: 8.53 };
 	assert.deepEqual(tilesForBbox(swapped, 14, 14), tilesForBbox(smallBox, 14, 14));
 });
+
+test('a non-finite bbox corner is refused, not silently empty', () => {
+	// The corner used to survive every clamp and yield an EMPTY pack here
+	// while the Dart twin's `.floor()` threw on the same input.
+	for (const bad of [NaN, Infinity, -Infinity]) {
+		assert.throws(
+			() => tilesForBbox({ minLat: bad, minLng: 8.53, maxLat: 47.39, maxLng: 8.56 }, 12, 12),
+			/not finite/,
+			`minLat ${bad}`,
+		);
+		assert.throws(
+			() => tilesForBbox({ minLat: 47.36, minLng: 8.53, maxLat: 47.39, maxLng: bad }, 12, 12),
+			/not finite/,
+			`maxLng ${bad}`,
+		);
+	}
+});
+
+test('estimateTileCount refuses a non-finite corner too', () => {
+	assert.throws(
+		() => estimateTileCount({ minLat: NaN, minLng: 8.53, maxLat: 47.39, maxLng: 8.56 }, 12, 12),
+		/not finite/,
+	);
+});

@@ -1,5 +1,5 @@
 // Dart port of the parity-helper test suite at
-// `apps/web/src/lib/route_loop.test.ts`. The math has had two
+// `apps/web/src/lib/routes/route_loop.test.ts`. The math has had two
 // field-reported bugs around degenerate inputs (near-equal
 // start/end, NaN target). Keeping the test surface in sync with
 // the web side means a regression on either platform fails loud.
@@ -338,6 +338,195 @@ void main() {
       expect(anchors.length, 2);
       expect(anchors.first.latitude, start.latitude);
       expect(anchors.last.latitude, close.latitude);
+    });
+
+    test('a 4-point polyline is already long enough for two midpoints', () {
+      // The shortest polyline that clears the >= 4 guard: mid1Idx = 1,
+      // mid2Idx = 2, distinct, so both are emitted. One index short of this
+      // the whole midpoint block is skipped.
+      final poly = [
+        for (var i = 0; i < 4; i++) LatLng(37.6 + i * 0.001, -77.4),
+      ];
+      final anchors = selectLoopAnchors(
+        polyline: poly,
+        start: start,
+        close: start,
+      );
+      expect(anchors.length, 4);
+      expect(anchors[1], isNot(anchors[2]));
+    });
+
+    test('midpoints stay distinct on a long polyline', () {
+      final poly = [for (var i = 0; i < 30; i++) LatLng(i * 0.01, i * 0.01)];
+      final anchors = selectLoopAnchors(
+        polyline: poly,
+        start: start,
+        close: start,
+      );
+      expect(anchors.length, 4);
+      expect(anchors[1], isNot(anchors[2]));
+    });
+
+    test('point-to-point keeps BOTH user pins exactly', () {
+      // The routing layer trusts that the first and last anchors are the
+      // user's own pins, not wherever the router snapped them.
+      const close = LatLng(37.7, -77.2);
+      final poly = [
+        for (var i = 0; i < 50; i++) LatLng(37.652 + i * 0.001, -77.3612 + i * 0.001),
+      ];
+      final anchors = selectLoopAnchors(
+        polyline: poly,
+        start: start,
+        close: close,
+      );
+      expect(anchors.length, 4);
+      expect(anchors.first.latitude, start.latitude);
+      expect(anchors.first.longitude, start.longitude);
+      expect(anchors.last.latitude, close.latitude);
+      expect(anchors.last.longitude, close.longitude);
+    });
+  });
+
+  group('acceptance band edges', () {
+    test('a ratio just inside either edge is accepted', () {
+      final justInsideLow = 5000 / (kAcceptBandMax - 0.001);
+      final justInsideHigh = 5000 / (kAcceptBandMin + 0.001);
+      expect(
+        isWithinAcceptBand(
+            targetDistanceMetres: 5000, actualDistanceMetres: justInsideLow),
+        isTrue,
+      );
+      expect(
+        isWithinAcceptBand(
+            targetDistanceMetres: 5000, actualDistanceMetres: justInsideHigh),
+        isTrue,
+      );
+    });
+
+    test('a ratio exactly on either edge is rejected (strict comparison)', () {
+      expect(
+        isWithinAcceptBand(
+            targetDistanceMetres: 5000,
+            actualDistanceMetres: 5000 / kAcceptBandMax),
+        isFalse,
+      );
+      expect(
+        isWithinAcceptBand(
+            targetDistanceMetres: 5000,
+            actualDistanceMetres: 5000 / kAcceptBandMin),
+        isFalse,
+      );
+    });
+  });
+
+  group('bisectScale bounds and purity', () {
+    test('never leaves [kScaleFactorMin, kScaleFactorMax] over many rounds',
+        () {
+      var range = initScaleRange();
+      var scale = kDefaultScaleFactor;
+      for (var i = 0; i < 10; i++) {
+        final r = bisectScale(
+          range: range,
+          currentScale: scale,
+          targetDistanceMetres: 5000,
+          actualDistanceMetres: 50,
+        );
+        scale = r.scale;
+        range = r.range;
+        expect(scale, greaterThanOrEqualTo(kScaleFactorMin));
+        expect(scale, lessThanOrEqualTo(kScaleFactorMax));
+      }
+    });
+
+    test('does not mutate the range handed in', () {
+      final range = initScaleRange();
+      final lower = range.lower;
+      final upper = range.upper;
+      bisectScale(
+        range: range,
+        currentScale: 0.5,
+        targetDistanceMetres: 5000,
+        actualDistanceMetres: 7000,
+      );
+      expect(range.lower, lower);
+      expect(range.upper, upper);
+    });
+  });
+
+  // The field coordinate the generate-by-distance bugs were reported at,
+  // pinned across the race distances a runner actually asks for. A refactor
+  // that swaps sin for cos in the radial offset, or loses the exact-endpoint
+  // guarantee the routing layer depends on, fails here rather than in the
+  // field. Mirrors the web suite's field-coord battery.
+  group('field coordinates', () {
+    const fieldStart = LatLng(37.6519, -77.3611);
+    const targets = <String, double>{
+      '3.1mi': 4988.78,
+      '5km': 5000,
+      '10km': 10000,
+      'half': 21100,
+      'full': 42200,
+    };
+
+    targets.forEach((name, metres) {
+      test('$name emits start + 4 interior + close, endpoints exact', () {
+        final w = generateLoopWaypoints(
+          start: fieldStart,
+          targetDistanceMetres: metres,
+        );
+        expect(w.length, 6);
+        expect(w.first.latitude, fieldStart.latitude);
+        expect(w.first.longitude, fieldStart.longitude);
+        expect(w.last.latitude, fieldStart.latitude);
+        expect(w.last.longitude, fieldStart.longitude);
+      });
+
+      test('$name interior waypoints orbit start at the expected radius', () {
+        final w = generateLoopWaypoints(
+          start: fieldStart,
+          targetDistanceMetres: metres,
+        );
+        final expectedRadiusM =
+            (metres * kDefaultScaleFactor) / (2 * math.pi);
+        for (final p in w.sublist(1, w.length - 1)) {
+          final d = haversineMetres(
+            fieldStart.latitude,
+            fieldStart.longitude,
+            p.latitude,
+            p.longitude,
+          );
+          expect(d, closeTo(expectedRadiusM, expectedRadiusM * 0.02));
+        }
+      });
+
+      test('$name an end pin inside kNearPointMetres still closes at start',
+          () {
+        // ~11 m north — map-click precision, not a point-to-point request.
+        final w = generateLoopWaypoints(
+          start: fieldStart,
+          end: LatLng(fieldStart.latitude + 0.0001, fieldStart.longitude),
+          targetDistanceMetres: metres,
+        );
+        expect(w.last.latitude, fieldStart.latitude);
+        expect(w.last.longitude, fieldStart.longitude);
+      });
+
+      test('$name a distant end pin keeps both endpoints exact', () {
+        const far = LatLng(37.7519, -77.2611);
+        final w = generateLoopWaypoints(
+          start: fieldStart,
+          end: far,
+          targetDistanceMetres: metres,
+        );
+        expect(w.first.latitude, fieldStart.latitude);
+        expect(w.first.longitude, fieldStart.longitude);
+        expect(w.last.latitude, far.latitude);
+        expect(w.last.longitude, far.longitude);
+      });
+
+      test('$name is a valid generate target', () {
+        expect(isValidTargetDistance(metres), isTrue);
+      });
     });
   });
 }

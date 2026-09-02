@@ -49,6 +49,58 @@ void main() {
     expect(d.update(over, now + offRouteAlertSustainMs * 2), true);
   });
 
+  test('a non-finite distance never arms the clock and never spends the latch',
+      () {
+    for (final bogus in [double.nan, double.infinity, double.negativeInfinity]) {
+      final d = OffRouteAlertDetector();
+      expect(d.update(bogus, now), false,
+          reason: '$bogus must not start the clock');
+      expect(d.update(bogus, now + offRouteAlertSustainMs * 10), false,
+          reason: '$bogus must never fire');
+      expect(d.hasFired, false, reason: '$bogus must not spend the latch');
+    }
+  });
+
+  test('a non-finite reading resets the clock the way a null one does', () {
+    final d = OffRouteAlertDetector();
+    expect(d.update(over, now), false);
+    expect(d.update(double.nan, now + 1000), false);
+    expect(d.update(over, now + offRouteAlertSustainMs), false);
+    expect(d.update(over, now + offRouteAlertSustainMs * 2), true);
+  });
+
+  test('a non-finite run leaves a later genuine departure still able to fire',
+      () {
+    final d = OffRouteAlertDetector();
+    for (var i = 0; i < 20; i++) {
+      d.update(double.infinity, now + i * offRouteAlertSustainMs);
+    }
+    final later = now + 100 * offRouteAlertSustainMs;
+    expect(d.update(500, later), false);
+    expect(d.update(500, later + offRouteAlertSustainMs), true,
+        reason: 'the latch was still there');
+  });
+
+  test('a backwards clock step re-anchors instead of wedging the detector', () {
+    final d = OffRouteAlertDetector();
+    expect(d.update(500, now), false, reason: 'anchor at now');
+    // NTP corrects the device clock back an hour mid-run.
+    const back = now - 3600000;
+    expect(d.update(500, back), false, reason: 're-anchored, window restarts');
+    expect(d.update(500, back + offRouteAlertSustainMs - 1), false,
+        reason: 'still inside the restarted window');
+    expect(d.update(500, back + offRouteAlertSustainMs), true,
+        reason: 'fires a sustain window after the corrected clock');
+  });
+
+  test('a backwards step does not shorten the window either', () {
+    final d = OffRouteAlertDetector();
+    expect(d.update(500, now), false);
+    expect(d.update(500, now - 10000), false);
+    expect(d.update(500, now - 10000 + offRouteAlertSustainMs - 1), false);
+    expect(d.update(500, now - 10000 + offRouteAlertSustainMs), true);
+  });
+
   test('reset() re-arms a fired detector', () {
     final d = OffRouteAlertDetector();
     d.update(over, now);

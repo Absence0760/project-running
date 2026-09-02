@@ -1300,7 +1300,22 @@
 			const { url } = await startEventCheckout(event.id, activeInstance);
 			window.location.href = url;
 		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : m('clubEvent.registerFailed'), 'error');
+			// The refusals only the server can know, arriving after the click:
+			// the two the page also renders for itself when it can see them
+			// coming, plus the host-capability ones, which no retry fixes.
+			const code = e instanceof Error ? e.message : '';
+			const key =
+				code === 'event_full'
+					? 'clubEvent.registerSoldOut'
+					: code === 'sales_closed' || code === 'instance_cancelled'
+						? 'clubEvent.registerSalesClosed'
+						: code === 'host_cannot_take_payment' ||
+							  code === 'event_has_no_host' ||
+							  code === 'event_not_priced' ||
+							  code === 'stripe_not_configured'
+							? 'clubEvent.registerHostUnavailable'
+							: 'clubEvent.registerFailed';
+			showToast(m(key), 'error');
 			registering = false;
 		}
 	}

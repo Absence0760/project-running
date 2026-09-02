@@ -308,7 +308,12 @@ export async function handleRouteDescribe(
 		// Any provider failure (rate limit, timeout, 5xx, network) →
 		// templated description. Layered resilience: the L4 enhancement
 		// can never break the L1 baseline.
-		console.error('[route-describe] provider call failed — serving templated description', e);
+		// Normalised rather than handed over whole -- see the sibling note in
+		// route_request/handler.ts.
+		console.error('[route-describe] provider call failed — serving templated description', {
+			message: e instanceof Error ? e.message : String(e),
+			stack: e instanceof Error ? e.stack : undefined,
+		});
 		return json(200, { description: templated, source: 'template' });
 	}
 }

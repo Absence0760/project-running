@@ -24,6 +24,7 @@ import {
   type MappedRaceRun,
 } from './lib.ts';
 import { publishableKey } from '../_shared/api_keys.ts';
+import { reconcileImportBatch } from '../_shared/external_id_batch.ts';
 
 interface RequestBody {
   provider?: unknown; // 'runsignup' | 'ultrasignup' | 'chronotrack' | 'paste'
@@ -336,11 +337,19 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     .select('external_id')
     .eq('user_id', user.id)
     .in('external_id', externalIds);
-  const seen = new Set((seenRows ?? []).map((r) => r.external_id));
-  const fresh = mapped
-    .filter((r) => !seen.has(r.external_id))
-    .map((r) => ({ ...r, id: crypto.randomUUID(), user_id: user.id }));
-  const skipped = mapped.length - fresh.length;
+  // Reconciled against the batch itself as well as against what is stored.
+  // `external_id` is `race:{name}:{date}:{bib}` and both the name and the date
+  // come from the ONE listing, so two mapped results carrying the same bib
+  // collide — which the RunSignUp extractor produces whenever a runner appears
+  // in more than one of the race's `individual_results_sets`. The insert below
+  // is a single statement against a per-user unique index, so that collision
+  // loses every other result in the import rather than the duplicate.
+  const batch = reconcileImportBatch(
+    mapped,
+    (seenRows ?? []).map((r) => r.external_id).filter((id): id is string => id !== null),
+  );
+  const fresh = batch.fresh.map((r) => ({ ...r, id: crypto.randomUUID(), user_id: user.id }));
+  const skipped = batch.skipped;
 
   let imported = 0;
   if (fresh.length > 0) {

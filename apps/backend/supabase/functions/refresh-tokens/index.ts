@@ -30,6 +30,19 @@ Deno.serve(withSentry('refresh-tokens', async (req: Request) => {
     // Fail-closed when misconfigured. Same posture as strava-webhook.
     return Response.json({ error: 'cron_not_configured' }, { status: 503 });
   }
+  // Same 32-char floor strava-webhook carries, and for the same reason: a
+  // timing-safe compare closes the per-byte channel but does nothing about a
+  // secret short enough to guess offline, and the case that actually happens
+  // is a misconfigured deploy (`CRON_SECRET=test`). This function is
+  // `verify_jwt = false`, so the bearer is the only gate in front of a loop
+  // over the whole `integrations` table against Strava's OAuth endpoint.
+  // A short secret is a misconfiguration, not an attack, so it answers the
+  // same `cron_not_configured` 503 as an absent one rather than 403 — a
+  // deployer reading the log learns the config is wrong, and a caller learns
+  // nothing about the secret's length either way.
+  if (cronSecret.length < 32) {
+    return Response.json({ error: 'cron_not_configured' }, { status: 503 });
+  }
   const auth = req.headers.get('Authorization') ?? '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token || !timingSafeEqual(token, cronSecret)) {

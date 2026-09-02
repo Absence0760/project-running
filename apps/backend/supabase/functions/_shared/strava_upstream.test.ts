@@ -257,3 +257,34 @@ Deno.test('uploadTrack — a failed upload throws rather than pointing the row a
 	assert(err !== null, 'a failed upload must not resolve');
 	assertEquals(updated, false);
 });
+
+Deno.test('uploadTrack — a failed POINTER write throws too, or the object is orphaned', async () => {
+	// The mirror of the case above, and the one nothing asked. The upload
+	// succeeds, the `track_url` update fails, and the error used to be
+	// discarded: the gzipped trace sits in Storage under the owner's prefix
+	// with no row naming it, so every reader shows a run with no GPS trace.
+	// There is no self-healing path — `isAlreadyImported` matches on
+	// `metadata.strava_id`, so the next sync skips the activity entirely and
+	// the pointer is never retried.
+	let attempted = false;
+	// deno-lint-ignore no-explicit-any
+	const supabase: any = {
+		storage: {
+			from: () => ({ upload: () => Promise.resolve({ error: null }) }),
+		},
+		from: () => {
+			// deno-lint-ignore no-explicit-any
+			const b: any = {};
+			b.update = () => b;
+			b.eq = () => {
+				attempted = true;
+				return Promise.resolve({ error: { code: '40001', message: 'serialization failure' } });
+			};
+			return b;
+		},
+	};
+	const err = await uploadTrack(supabase, 'u', 'r', [{ lat: 1, lng: 2 }])
+		.then(() => null, (e: unknown) => e);
+	assert(attempted, 'the pointer write must have been attempted at all');
+	assert(err !== null, 'a failed pointer write must not resolve as a success');
+});

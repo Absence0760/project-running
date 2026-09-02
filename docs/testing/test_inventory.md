@@ -917,6 +917,26 @@ A closure that throws SYNCHRONOUSLY takes a different path out of `runZoned` tha
 
 *host-tested*. The Sunday-first region table is a transcription of web's, and the port was frozen before web replaced the hand-written 16-region list with the 56 CLDR reports ([decisions § 903](../architecture/decisions.md)). One case names the 19 regions the old list got wrong — AR listed and Monday-first, plus 18 Sunday-first regions omitted. The other is a sort-and-dedupe check on the table itself: a transcription slip narrows the set by a region, and no behaviour test written against the regions someone thought to name would notice.
 
+### `apps/job_worker/internal/worker_panic_test.go` — 4 tests
+
+Round 31. Go does not recover a panic for you, and the worker loop runs in `main`'s own goroutine alongside the live-spectator hub, the export endpoints, the Strava webhook, the unsubscribe endpoint and the bounce webhook — all on one binary. The suite drives a `Matcher` that panics through the real `map_match` dispatch and pins that `Run` still returns, that the job reports back `failed` rather than staying claimed at `status='running'` where `claim_next_job` can never look at it again, that a panic whose text says `i/o timeout` is still permanent (`isTransient` substring-sniffs, so this is the one case that would otherwise be deferred), that the stack reaches the log, and that a runtime nil-dereference is caught and not only an explicit `panic()`. Four mutations: the barrier removed (the whole package panics), the `isTransient` short-circuit removed, the stack dropped from the log line, and a recover that reports the job `done`. [decisions § 924](../architecture/decisions.md).
+
+### `apps/job_worker/internal/livehub/auth_disclosure_test.go` — 2 tests
+
+Round 31. `livehub.authorize` echoed the authorizer's own error into the 403 body, and that error separates `auth: unknown run`, `auth: not the run owner` and `auth: blocked by run owner` — so the response told a blocked person that a specific runner had blocked them, on an endpoint anonymous spectators reach by design. Both directions are asserted: each of the three reasons produces a body naming none of them while the operator's log still carries it, and a push refusal and a snapshot refusal produce byte-identical bodies, so the response is not an oracle for which action was attempted either. Three mutations: the reason echoed again, the log line stripped of it, and the body differentiated by action. [decisions § 928](../architecture/decisions.md).
+
+### `apps/graph_cycle/internal/api/server_bounds_test.go` — 8 tests, `internal/graph/build_test.go` — 1 added
+
+Round 31. The HTTP boundary of the loop-generator sidecar, which had no test for anything past its validation table. The searches had no clock of their own — `main.go`'s `WriteTimeout` fails the connection write without cancelling the handler context — so a `SearchTimeout` field now bounds them and both handlers are pinned to answer **503** on a deadline and **499** on a caller that left, never `found: false`: that flag is the product's loop-poor claim and a search that ran out of clock has established nothing about the neighbourhood. Beside it: a body carrying a second JSON value is rejected (it used to be accepted with the tail discarded), the untested `maxBodyBytes` cap is asserted in both directions plus the decode-then-overrun case, `/nearest` refuses `NaN` / `Inf` (which `strconv.ParseFloat` happily returns), and two concurrency cases exercise the graph's "immutable after Build, read concurrently without locking" claim, which nothing had. In the graph package, `NearestNode` spun for **33 s on a 9x9 grid** given a non-finite query — `haversineM` returns NaN, no candidate ever wins, the early break can never fire, and the ring range comes from an `int32` conversion of NaN — measured by mutating the request-level check away; the guard is in `NearestNode` now and its test bounds the call at 2 s. Seven mutations across the two files, all red. [decisions § 927](../architecture/decisions.md).
+
+### `apps/custom_watch/core/src/track_projection.rs` — 10 tests (5 added) and `route_simplify.rs` — 28 (4 added, 1 replaced)
+
+Round 31, *host-tested*. Both modules had been edited hours earlier by the round-30 sweep, so the date comparison that produced the firmware followups list read them as in sync — the divergences here are ones the port never had, not ones it lost. `track_projection`'s `or_epsilon` was the falsy-only JS `value || 1e-6`, which catches an exact zero and lets a `1e-7` span through: a centimetre of jitter fitted the whole 92 px band where web collapses it to about 8 px. `isTrackRenderable`, the module's other export and the gate in front of the projection, had never been ported at all; its four web cases come across, including the antimeridian one where a raw min/max reads a stationary cluster as a 359.99° span and passes exactly the standing-still track the gate exists to catch. In `route_simplify`, `compute_elevation_gain` carried neither of the two rules web's own doc calls load-bearing — no `ELEVATION_GAIN_MIN_DELTA_M` noise gate, and a `None` broke the chain instead of carrying the last reading across — and `summarize_route_from_track` graded the SIMPLIFIED polyline, so a straight road over a summit collapsed to two endpoints and its 50 m climb read as 0. A test named "null elevations are skipped" asserted a gain of 0 across the dropout, encoding the divergence as intent; it is replaced by web's own case. Seven mutations across the two modules, all red. [decisions § 925](../architecture/decisions.md).
+
+### `apps/custom_watch/core/src/training_load.rs` — 22 tests (2 added) and `race_predictor.rs` — 15 (2 added)
+
+Round 31, *host-tested*. Two panics reachable from data rather than from a coding mistake, on a device where a panic is a reset. `predict_race_ladder` seeds both anchor loops with `f64::INFINITY` and takes the strict `<`, so a candidate whose Riegel equivalent IS infinity never wins — a positive-but-denormal distance overflows `libm::pow` — and `best.unwrap()` panicked on a function whose doc already promises `None` for a pool it cannot anchor; the second case pins that one clean effort beside the bad row still predicts, so the guard fails closed on the pool and not on the presence of one row. `compute_calibration` graded the numerator, and `km <= 0.0` is false for a NaN distance, so `trimp / NaN` reached the list: one such row made the window's fallback rate NaN and a second beside it panicked `median`'s `partial_cmp().unwrap()`. Both rails are pinned separately — the source guard by the infinite-distance case, the `total_cmp` comparator by the NaN one. [decisions § 926](../architecture/decisions.md).
+
 ### `apps/mobile_android/test/social_service_test.dart` — 13 tests
 
 Pure-unit coverage for the value classes and helpers exposed by `lib/social_service.dart`. Covers `ClubView.isAdmin` / `isEventOrganiser` / `isRaceDirector` / `isMember` (the booleans that drive admin-only buttons + race-director Arm/Fire on `club_detail_screen` + `event_detail_screen`) — pinning that owner / admin both grant the full ladder, that `event_organiser` and `race_director` are siloed, that `member` carries no special affordances, and that an unrecognised viewerRole string is treated as not-admin so a future role we haven't taught the client about doesn't accidentally inherit admin powers. Plus 6 tests for `parseBydayCodes` (the byday-jsonb parser used by `_enrichEvents` + `fetchNextRsvpedEvent`): valid 'MO','WE','FR' shape, order + duplicate preservation, non-array fallback, empty + all-unknown → null (caller treats as "no override"), mixed known/unknown filters to known.
@@ -971,11 +991,13 @@ pgTAP tests against the highest-blast-radius RLS policies, run by `cd apps/backe
 
 These twenty-three files cover the tables + RPCs + triggers where a single-row leak / single-trigger bypass would be a privacy, impersonation, or revenue incident. They do NOT exhaustively cover every table (37 in total) — the original seven gaps (`clubs`, `club_members`, `club_posts`, `events`, `event_attendees`, `route_reviews`, `segments`) are now closed; remaining uncovered tables are lower-blast-radius (`run_kudos` / `run_comments` / `run_photos` are pinned indirectly via the `engagement_chain` helper, plus auxiliary tables like `webhook_events`, `rate_limits`, etc. that don't carry user content). Add a file when you touch a sensitive policy, or when an audit lands.
 
-### `apps/backend/supabase/functions/**/*.test.ts` — 861 deno tests across 63 files
+### `apps/backend/supabase/functions/**/*.test.ts` — 879 deno tests across 64 files
 
 Run the pure-helper slices with `cd apps/backend && deno test --no-check supabase/functions/_shared/*.test.ts` plus the per-function `lib.test.ts` / `wiring.test.ts` / `handler.test.ts` files (`auth-email`, `delete-account`, `donations-checkout`, `events-cancel`, `events-checkout`, `events-connect-onboard`, `export-data`, `parkrun-import`, `race-results-import`, `refresh-tokens`, `revenuecat-webhook`, `strava-import`, `strava-webhook`, `stripe-events-webhook`); the network-touching ones (e.g. `_shared/handler_envelope.test.ts`) need `SUPABASE_TEST_URL=http://127.0.0.1:54321 supabase functions serve --env-file .env.local` and the `--allow-net --allow-env` flags. The `edge-functions` CI job runs all of them on every PR.
 
-- **`_shared/webhook_security.test.ts`** — 15 tests. `hmacHex` against the RFC 4868 §2.7.2 case 4 reference vector (with byte-exact `Uint8Array` inputs — the function accepts `string | Uint8Array` on both `secret` and `body`); `timingSafeEqual` (equal / unequal-same-length / length-mismatch / no-short-circuit-on-first-mismatch); `validateFreshness` (recent / 7-day boundary / too-old / clock-skew tolerance / custom window + skew args); `isAnonymousAppUserId` (`$RCAnonymousID` prefix detected, others false). `isValidUuid` moved to `_shared/input_validation.ts` when the four uuid/timestamptz 500s were closed — it is a PostgREST-cast guard, not a webhook concern. The `timingSafeEqual` and `validateFreshness` helpers were extracted out of the two webhook `index.ts` files so the production code path now imports the tested module directly — no duplicate definition can drift.
+- **`_shared/webhook_security.test.ts`** — 21 tests. `hmacHex` against the RFC 4868 §2.7.2 case 4 reference vector (with byte-exact `Uint8Array` inputs — the function accepts `string | Uint8Array` on both `secret` and `body`); `timingSafeEqual` (equal / unequal-same-length / length-mismatch / no-short-circuit-on-first-mismatch); `validateFreshness` (recent / 7-day boundary / too-old / clock-skew tolerance / custom window + skew args); `isAnonymousAppUserId` (`$RCAnonymousID` prefix detected, others false). `isValidUuid` moved to `_shared/input_validation.ts` when the four uuid/timestamptz 500s were closed — it is a PostgREST-cast guard, not a webhook concern. The `timingSafeEqual` and `validateFreshness` helpers were extracted out of the two webhook `index.ts` files so the production code path now imports the tested module directly — no duplicate definition can drift.
+- **`_shared/webhook_security.test.ts` (round 31 additions)** — 4 more, over `shouldReleaseDedupe` and the three insert-first dedupers that depend on it ([decisions § 915](../architecture/decisions.md)). The 5xx boundary both ways (500 releases, 499 and every 4xx keep the row); and three cross-function guards **derived from the tree rather than listed**, so a fourth webhook that reserves a dedupe row is covered the day it lands: every `index.ts` that inserts a `webhook_events` row must also delete one, and the set the sweep finds is asserted (`revenuecat-webhook`, `strava-webhook`, `stripe-events-webhook`) so an emptied loop cannot pass for a clean sweep; the two that dispatch behind a release gate on `shouldReleaseDedupe(res.status)` and may not re-spell `>= 500` inline; and both carry a rethrow arm that releases before the throw, since `withSentry`'s 500 never passes through the status check. All six mutations were verified killing them.
+- **`_shared/external_id_batch.test.ts`** — 11 tests over `reconcileImportBatch`, the step both run importers now share ([decisions § 914](../architecture/decisions.md)). A repeat INSIDE the batch is dropped with first-occurrence-wins (three copies still yield one row); an already-stored id is dropped as it always was; the two reasons are counted identically, because the caller reports one `skipped` number; `skipped` is the arithmetic complement of `fresh` across five shapes, the subtraction having been written out at each call site before; input order survives; a batch with nothing stored and nothing repeated passes every row through **by identity**, which is the positive control against a filter that happens to empty the batch; an empty batch is not an error; and the caller's stored-id array is not mutated. Two source guards on the call sites: both importers must import and call it, neither may re-derive `fresh` from a local `Set` (the shape each of them reached the bug by writing out), and the reconciliation must precede the single-statement insert. Six mutations verified killing them, including reverting each call site.
 - **`_shared/input_validation.test.ts`** — 6 tests. `isValidUuid` (8-4-4-4-12 hex, rejects malformed / non-string) and `isValidTimestamptz` (accepts every shape the clients emit — `toISOString`, Dart `toIso8601String`, PostgREST read-back, naive literal; rejects a bare date, the JS `toString()` form `Date.parse` happily accepts but Postgres does not, and an in-shape out-of-range date like `2026-02-30` that V8 silently rolls forward). Both exist to turn a Postgres cast failure (`22P02` / `22007`, surfacing as a 500) into a 400.
 - **`_shared/redirect_allowlist.test.ts`** — 19 tests over the redirect allowlist four Edge Functions share (`strava-import` on `STRAVA_ALLOWED_REDIRECTS`; `donations-checkout` / `events-checkout` / `events-connect-onboard` on `STRIPE_EVENTS_ALLOWED_REDIRECTS`). `parseRedirectAllowlist` (single / several / trimmed / blanks dropped — a parse that kept `''` would admit a caller claiming an empty `redirect_uri` / unset / whitespace-only). `isExactRedirectAllowed` **both ways**: the configured callback accepted, accepted from anywhere in a multi-entry list, a custom-scheme mobile callback accepted; and refused for a foreign origin, **another path under the same origin** (the window Strava's own path-prefix-loose domain check leaves open), a prefix or extension of an entry, a case-folded host or scheme, an empty allowlist, and a non-string claim. Four source guards: `strava-import` routes through the shared module, gates BEFORE the `/oauth/token` exchange, still fails closed on an unset allowlist, and no function re-spells the parse inline. Two lane guards pin `.env.development` + `.env.example`'s `STRAVA_ALLOWED_REDIRECTS` to the port `apps/web/tests-e2e/fixtures/base-url.ts` declares and the path the web client sends, so the dev callback URL has one source. All six of the mutations these exist to catch were verified killing them — see [decisions § 750](../architecture/decisions.md)
 - **`_shared/param_validation_wiring.test.ts`** — 5 source-grep guards, in the `delete-account/wiring.test.ts` idiom. Pins that `events-cancel`, `events-checkout`, `donations-checkout`, and `race-results-import` each shape-check their caller-supplied uuid / timestamptz BEFORE the query that would cast it — and that the two anon-reachable functions (`donations-checkout`, `clip-public-track`) do it before spending the IP rate-limit bucket.
@@ -994,7 +1016,8 @@ Run the pure-helper slices with `cd apps/backend && deno test --no-check supabas
 - **`_shared/handler_envelope.test.ts`** — HTTP-level tests over the five webhook / cron / hook handlers that bypass the platform `verify_jwt` gate. **Auth-rejection branches:** refresh-tokens (403 on missing / wrong / non-Bearer Authorization), strava-webhook (403 on POST with no `?secret=`, on GET with no `?secret=` but a CORRECT `hub.verify_token` — the bare GET was answered by the verify-token gate whatever the secret gate did, § 815 — on POST with a wrong `?secret=`, and on a GET with a valid `?secret=` but a wrong `hub.verify_token`, a gate that had no case at all before § 815), revenuecat-webhook (405 on GET, 401 missing_signature, 401 bad_signature), auth-email (405 on GET; 401 missing_headers without the Standard Webhooks headers; 401 bad_signature on a fresh-timestamped wrong signature — proves an unsigned caller can't make GoTrue's send-email hook render + send auth mail). **Positive / gate branches:** revenuecat-webhook 200 on a valid-HMAC anonymous event, 400 event_outside_freshness_window on a stale event, 400 missing_event_timestamp_ms; strava-webhook GET handshake echoes hub.challenge, 200 "OK" on a non-create event whose `event_time` is deliberately 30 days stale (a fresh one is answered identically by the not-connected-athlete branch further down, so the stale timestamp is what makes the 200 a claim about the early return), 400 on a create-shaped event with no ids. **Side-effect (the write, not just the envelope):** revenuecat-webhook drives an ephemeral user INITIAL_PURCHASE → dedupe-replay → EXPIRATION → lifetime → lifetime-protected PRODUCT_CHANGE and reads `user_profiles.subscription_tier` back at each step (proves the decided tier reaches the column, that a replay is deduped not re-applied, and that PRODUCT_CHANGE reads the written current tier); stripe-events-webhook `account.updated` mirrors charges/payouts/details + onboarded_at into `instructor_payout_accounts` and dedupes a replay. The two side-effect tests are gated on `SUPABASE_SERVICE_ROLE_KEY` (in addition to `SUPABASE_TEST_URL`) to plant + read the row; without it they skip. The CI job replaces the auto-started edge runtime with `supabase functions serve --env-file` because the auto-started runtime ignores `.env.local` and 503's every secret-gated call — the gated branches are only reachable when the secret is configured. All 23 cases are mutation-checked against the SERVED tree by `check_served_envelope_mutations.mjs` in the same job ([decisions § 815](../architecture/decisions.md)): 20 single-gate mutations, 24 declared kills, 0 survivors, 0 unmeasured, and a case no mutation claims fails the build.
 - **`export-data/render.test.ts`** — 13 tests over the two text renderers the Art 20 archive is made of, split out of `index.ts` into `render.ts` so a test can call them at all ([decisions § 834](../architecture/decisions.md)). `csvRow` emits exactly one value per `CSV_COLS` entry (an added header with no matching value shifts every later field for the whole export, silently) and each value lands under the header its name promises; a title carrying comma / quote / CR / LF survives a round trip through a real RFC 4180 splitter; `track_url` stays absent from the CSV. `buildGpx` escapes `startedAt` and each point's `ts` as well as the title (the Go twin escapes all three and this one escaped only the title, [§ 832](../architecture/decisions.md)); a non-numeric or non-finite `lat`/`lng` drops the point rather than closing the quoted attribute with it, while the placeable points around it are kept; a non-numeric `ele`/`bpm` omits its tag; `bpm` is truncated to the integer the element requires; and an empty track still frames a document that opens and closes every tag exactly once. `canonicalTrackUrl` / `canonicalHrUrl` refuse seven near-misses each — including each other's suffix, or the hr sweep downloads the track and files it under `hr/`.
 - **`_shared/sentry.test.ts`** — 6 tests over `withSentry`, the envelope all sixteen functions return through, which had none ([decisions § 835](../architecture/decisions.md)). A handler's own `Response` passes through with its status, headers and body intact; nine deliberate refusal statuses stay themselves rather than collapsing into one 500; a thrown error yields exactly `500 {"error":"internal_error"}` with neither the message nor the function name in the body, while the operator log still gets both (the silent-500 failure is the control for the leak test and vice versa); a thrown non-`Error` — string, object, `null`, `undefined`, number — takes the same path rather than throwing inside the catch; a rejected promise AND a synchronous throw are both caught, which is what forces the `await` to sit inside the `try`; and the original request reaches the handler with its method, headers and RAW body unconsumed, since every HMAC path verifies over the bytes.
-- **`_shared/strava_upstream.test.ts`** — 10 tests over three exported helpers that had no direct coverage. `fetchStravaActivity`'s three-state answer decides whether the webhook returns 500 (Strava REDELIVERS) or 200 (Strava drops the activity forever), so 429 / 503 are pinned as `rate_limited` and seven other statuses as `not_found` — collapsing either direction loses runs or retries a delivery that can never succeed; the success case pins the activity id into the path and the token into the bearer. `isAlreadyImported` is pinned as a head-only exact count over all three predicates (`user_id`, `source`, `metadata->>strava_id`), with the id compared as TEXT because the jsonb extraction yields text, and an unknown count read as not-imported rather than imported. `gzipBytes` is measured as a real gunzip round trip (an implementation returning its input, or dropping every chunk after the first, satisfies any length assertion but not this) plus the empty-input member. `uploadTrack` pins the `{user_id}/{run_id}.json.gz` path both readers re-derive, and that a failed upload throws rather than stamping `track_url` for an object that does not exist.
+- **`_shared/strava_upstream.test.ts`** — 10 tests over three exported helpers that had no direct coverage. `fetchStravaActivity`'s three-state answer decides whether the webhook returns 500 (Strava REDELIVERS) or 200 (Strava drops the activity forever), so 429 / 503 are pinned as `rate_limited` and seven other statuses as `not_found` — collapsing either direction loses runs or retries a delivery that can never succeed; the success case pins the activity id into the path and the token into the bearer. `isAlreadyImported` is pinned as a head-only exact count over all three predicates (`user_id`, `source`, `metadata->>strava_id`), with the id compared as TEXT because the jsonb extraction yields text, and an unknown count read as not-imported rather than imported. `gzipBytes` is measured as a real gunzip round trip (an implementation returning its input, or dropping every chunk after the first, satisfies any length assertion but not this) plus the empty-input member. `uploadTrack` pins the `{user_id}/{run_id}.json.gz` path both readers re-derive, and that a failed upload throws rather than stamping `track_url` for an object that does not exist. Round 31 added the asymmetric half nothing had asked ([decisions § 916](../architecture/decisions.md)): a failed POINTER write must throw too, or the trace sits in Storage with no row naming it and `isAlreadyImported` makes sure no later sync ever retries.
+- **`_shared/ingest_activity.test.ts`** — 12 tests over `ingestActivity`, the one writer both Strava paths share (`strava-import` reaches it through `backfill`, `strava-webhook` calls it directly, so its defensive arms belong to neither suite). A non-run-family payload is refused even though both callers pre-filter, the legacy `type` field is honoured when `sport_type` is absent, an imported run is private unless the caller says so, a refused insert throws so the caller can count it, duration falls back to elapsed time, elevation reaches BOTH the column and the metadata bag, and walk / hike survive the trip to the column. Round 31 added the two the swallow made unaskable ([decisions § 916](../architecture/decisions.md)): a track that cannot be stored is **logged** rather than swallowed silently — with the failure supplied in the shape supabase-js actually rejects in (a plain `{ message, details, hint, code }`, not an `Error`), which is what makes both halves of the assertion bite, the message reaching the line at all and `details` / `hint` being kept out of the shared log aggregator — and the positive control beside it, that an activity with no stream logs **nothing**, because a line on every treadmill run is the same as no line. Five of the six mutations were verified killing them; the sixth exposed that an `instanceof Error` test alone reported every fault as `'unknown'`, which is the defect the ADR records.
 - **`refresh-tokens/sweep_invariants.test.ts`** — 7 tests over the QUERY the cron sweep sends, which the sibling suite's mock recorded none of. The provider predicate (without it every Garmin and parkrun row goes through Strava's OAuth endpoint), the `token_expiry` horizon bracketed against the test's own clock (without it the whole table refreshes hourly), and the `order` + `limit(500)` pair as ONE invariant — a cap with no order spends the budget on an arbitrary slice and can leave the soonest-to-expire untouched run after run. The select is pinned to the two columns it uses and to carrying no token material. The disconnect write is pinned to BOTH predicates, or a dead Strava grant disconnects the runner's Garmin. An unreadable vault row skips that integration and the sweep carries on; a row with no refresh token never reaches Strava; and each integration is refreshed with its OWN token, stated as a per-row pairing rather than a count.
 - **`clip-public-track/wiring.test.ts`** — 6 source-grep guards on the only anon-reachable path to another runner's GPS trace, which had no test file of its own. The clip is taken against `ownerId` and never the viewer (one identifier's difference, no error, publishes the owner's home); a row whose owner cannot be resolved is refused before the Storage path is derived; the owner bypass demands a non-null caller; the anon bucket is IP-derived, spent through the service role (the user-context guard rejects a synthetic key on any other client) and fails closed; the decode sits inside a try that answers 502 rather than throwing into a 500 ([§ 832](../architecture/decisions.md)); and both amplification bounds still guard their own quantity, with the compressed cap ahead of inflation.
 - **`race-listings-sync/wiring.test.ts`** — 5 source-grep guards on a function that had none. An unrecognised provider answers 400 `unknown_provider` rather than being coerced to RunSignUp ([§ 832](../architecture/decisions.md)), with the sibling `race-results-import` read in the same test so the two legs of one feature cannot drift apart again unnoticed; an omitted provider still defaults; each leg is gated on its own key AND secret, fail-closed, ahead of the success answer; and the caller is identified then throttled at the documented 2 / 8 per hour before any provider work.
@@ -1124,7 +1147,12 @@ tests-e2e/
     run-detail-non-owner.spec.ts — /runs/[id]'s NON-OWNER branch (issue #666): alex opens runner's PUBLIC run on the canonical signed-in surface, the run renders with owner attribution, kudos + the comment composer work (DB row asserted, author = alex), the branch POSTs to clip-public-track with the run id (the observable that proves the track is not taken from the owner's direct Storage path), and no visibility chip / Edit / Delete-run control renders. A PRIVATE run by the same owner still lands on not-found — entitlement is a `public_runs` row, not "not mine"
     follows.spec.ts            — morgan follows runner, counter increments, unfollow
     notifications.spec.ts      — kudos → bell badge update + popover entry
+    event-register-refusal.spec.ts (clubs/) — what a BUYER reads when `events-checkout` refuses after the click, which had no spec: `event-paid-register.spec.ts` covers only the states the page works out for itself before it (sold out / sales closed from the pure `registrationOpen` helper). Stubs the function at the network layer and drives `event_full` / `sales_closed` / `host_cannot_take_payment` / an unrecognised 500, asserting each reads as its own sentence, that the host-capability refusal is NOT the retryable copy, and that nothing renders the string supabase-js actually throws. Found the live defect: `functions.invoke` reports every non-2xx as a FunctionsHttpError whose message is the fixed "Edge Function returned a non-2xx status code" (the `{error: '<code>'}` envelope rides on `context`), and the page toasted `e.message` — so every refusal read as that internal sentence
+    strava-sync-refusal.spec.ts (settings/) — the third site of the same defect: /settings/integrations interpolates a failed sync or connect into "Strava sync failed: {error}", a slot written to carry a reason, and every non-2xx filled it with supabase-js's fixed invoke sentence. `integrations-connected.spec.ts` presses Sync only over the success path. Stubs the function at 503 `strava_not_configured` (its own sentence now), 502 `refresh_failed` (the revoked-token case, reported as itself), and a 500 with an UNREADABLE body — the fail-closed leg, which pins that a missing envelope falls back to the caller's own wording rather than putting the internal sentence back. A fifth case covers DISCONNECT, which rides the same function on purpose (it revokes at Strava's end and wipes the vault rows rather than doing a bare DELETE) into the same reason-shaped slot — found by the `src/lib/edge_function_error_guard.test.ts` source guard rather than by reading, which is the argument for the guard
+    payouts-not-configured.spec.ts (settings/) — /settings/payouts Connect-onboarding refusals. The page intends an INFO toast on a keyless build and a red error otherwise, choosing by pattern-matching the thrown message; `event-paid-register.spec.ts` walks the button but only asserts no navigation, so which answer appeared was never checked — and it was the wrong one, because the pattern was applied to the same fixed invoke string. Asserts the info branch on `stripe_not_configured`, the error branch carrying a machine code on a real failure, and that neither leaks the invoke internals
   cross-cutting/               — span >1 page or >1 session
+    ai-consent-lifecycle.spec.ts — the versioned AI-processing consent record end to end, against a saga user who genuinely has none (every other AI spec either mocks the endpoint or runs as a seed user `seed.sql` already stamps): /coach RENDER-gates the chat behind the first-use disclosure and no `/api/coach**` request fires before the click; accepting records the CURRENT version server-side, not the Coach's own minimum; withdrawing on /settings/account clears both consent columns (Art 7(3)) and the /coach gate re-engages on the next visit; and with the record withdrawn the UNMOCKED `/api/coach/route-describe` really 403s, so /routes/[id] shows the consent-gap copy pointing at Settings rather than the retryable "try again", with the L1 templated sentence still rendered beside it. Each test sets its own precondition through the service role, so no test depends on the one before it
+    health-consent-withdrawal.spec.ts — the Art 7(3) withdrawal of the health-data consent driven through the real Save on /settings/account, which no other spec performs: `settings/account.spec.ts` and `settings/preferences.spec.ts` both restore the box and leave the write unmade, because a real withdrawal against the shared seed user would erase USER_A's demographics for the whole shard. A saga user makes the destructive half safe. Asserts both directions at once — the Art 9 set goes (stamp, gender, height, the whole `body_metrics` weight series, and the `user_settings.prefs.date_of_birth` MIRROR the health-use surfaces actually read), while `user_profiles.date_of_birth` STAYS, because the age record backs the under-18 discoverability floor and carries no consent term (§ 718 / § 721). Second test reads the withheld state back off a real page: with a date on record and the stamp gone, /nutrition/targets says "Needs health-data consent" rather than printing the age or claiming "Not set" about a date the runner did set
     architecture-guards.spec.ts — Node-side static guards: every authed +page.svelte that fetches in onMount waits for `auth.user` (catches the auth-race pattern that bit 9+ pages); login snapshots `return_to` at mount; /live/[id] data path runs independently of map.on(load); pushPing guards every map.* call with `if (!map)`
     billing-issue-banner.spec.ts — global "Update your card to keep Pro" banner end-to-end: service-role plant `user_profiles.billing_issue_at`, banner visible on /dashboard with relative-days copy ("3 days ago"); no flag → no banner; "today" copy for a flag set within 24h; non-service-role UPDATE of billing_issue_at raises 42501 (lock_subscription_columns defence in depth — prevents client-side suppression of the banner)
     job-tier-priority.spec.ts  — tier-aware job-queue scheduling. Plant runner (free) + morgan (pro) runs back-to-back; assert morgan's map_match `scheduled_at` is at least 25 s earlier than runner's (the helper offsets free by +30 s). Direct unit test of the `job_scheduled_at_for_user(uuid)` helper (pro → ≈ now, free → now+30s, unknown user → free fallback). Manual rematch via `enqueue_run_rematch` RPC also honours the same tier offset (pinned because rematch is a separate enqueue site)
@@ -1315,6 +1343,7 @@ whole suite, not the added files.
 |---|---|---|---|
 | Web unit | `npm run test:unit --workspace=apps/web` | 4413 | 4508 |
 | Edge Functions (Deno) | `deno test --no-check supabase/functions/` | 618 | 785 |
+| Edge Functions (Deno), round 31 | `deno test --no-check supabase/functions/` | 861 | 879 |
 | pgTAP | `supabase test db --local` | 2242 in 265 files | 2406 in 272 files |
 | Repo guards | `node --test 'scripts/*.test.mjs'` | 556 | 613 |
 | Backend guards | `node --test 'apps/backend/scripts/*.test.mjs'` | 124 | 128 |
@@ -1341,3 +1370,349 @@ environmental and pre-existing: it fails identically on the untouched base
 commit (265 files / 2242 tests, same file, same `planned 19 tests but ran 0`).
 The workstation CLI is 2.109.1 against CI's pinned 2.84.2, and the two disagree
 about `service_role` EXECUTE on `fundraiser_totals`.
+
+## Round 31 — the guard tier's own coverage (2026-09-02)
+
+Nothing guards the guards. This round's subject was the ~30 `scripts/*.test.mjs`
+suites themselves: for each of the highest-blast-radius ones, the exact
+violation it exists to catch was introduced into its REAL subject — the
+committed `ci.yml`, `CLAUDE.md`, the syncer table, `.tool-versions`,
+`package.json`, `deno.lock`, the fold table, the ligature vocabulary — and the
+guard required to fail. Repo guards: **830** tests (up from 788); the two composite-action suites: **19** (up from 6).
+
+Guards mutation-checked against their own subject and confirmed capable of
+failing, with no defect found: `check_parity_pair_registry` (all four
+properties — a pair dropped from either registry, a dead path, a path the two
+registries disagree about), `check_shared_constants` (a bent rail on the web,
+Dart and SQL sides of three different constants), `check_workflow_binaries` (an
+`npx` of an undeclared binary), `check_root_scripts` (a script `cd`-ing into a
+missing directory), `check_pnpm_overrides` (a CVE pin deleted), `sync_deno_lock
+--check` (a drifted workspace section), `check_dead_dependencies` (an unread
+dependency), `check_catalogue_fold_table` (one code point bent, and the Unicode
+version claim bent), `web_icon_font` (a shipped ligature removed from the
+vocabulary), `tsconfig_coverage` (a compilable `.mjs` outside every root).
+
+Three that could not fail, each fixed with the case that pins it:
+
+### `scripts/check_ci_diagnostics.test.mjs` — 36 tests (10 added)
+
+Rule 3 asserts every job is named in the `CI gate` aggregator's `needs:` list,
+on the premise that the aggregator passes only when every needed job passed or
+was skipped. That premise lives in a shell block inside the gate job and nothing
+read it. Three edits to that block leave rule 3 green while the single required
+status check reports success over a red repository — all three applied to the
+committed `ci.yml` and confirmed to pass the guard: removing the job-level
+`if: always()` (GitHub then SKIPS the gate on exactly the runs it exists to
+block, and a skipped required check holds nothing), replacing the `run:` with an
+`echo` (the exit status stops depending on the 31 jobs), and deleting the
+`exit 1` (the failure prints under a green check). Rule 4 now reads the gate
+itself; the eight branches it added are each mutation-checked, including the two
+block-boundary cases the first cut of the tests could not reach.
+[decisions § 909](../architecture/decisions.md).
+
+### `scripts/check_twin_claims.test.mjs` — 15 tests (new)
+
+`check_parity_pair_registry` cross-checks CLAUDE.md against the syncer table in
+both directions, and both can agree perfectly about a pair that is in NEITHER —
+the `turn_cues` (§ 641) and accent-fold (§ 760) failure, which CLAUDE.md names
+outright. The new guard takes the SOURCE as its subject: a header declaring a
+cross-platform twin must name a file that exists and a pair some syncer row
+carries. Over the tree that is **105 declarations, 13 violating** — nine pairs
+declared in both headers and registered nowhere, five headers naming a path the
+counterpart moved out of. They sit in `KNOWN_GAPS`, which fails when an entry
+stops being a violation, so the register can only shrink; the two open sets are
+in `followups.md`. Run as a fifth step of `parity-matrix`.
+[decisions § 910](../architecture/decisions.md).
+
+### `scripts/check_toolchain_pins.test.mjs` — 67 tests (17 added)
+
+`.tool-versions` pinned `nodejs 22` while all 21 `actions/setup-node` steps say
+24, and nothing in the repo read the file. Its commented lines carried the
+template's rust / flutter / golang / terraform versions against the repo's real
+ones. Two rails added — every setup-node step names a `node-version` and all
+agree, and every `.tool-versions` line (commented included) matches the pin the
+repo enforces — and writing the first surfaced a blind spot in the Flutter rail
+it was copied from: both anchored on the `- uses:` marker form, and `audit.yml`'s
+step is written `- name:` then `uses:`, so the first cut found 20 of 21 sites and
+missed the one whose comment claims it matches the rest. 54 steps in the
+committed workflows use that form. [decisions § 911](../architecture/decisions.md).
+
+### `.github/actions/install-playwright/verify_chromium.test.mjs` — 9 tests (new)
+
+The other composite action's shell, which had never been executed by anything.
+Its verification + apt fallback lived inline in `action.yml`, where nothing
+could drive it, and its apt branch runs only after a launch has already failed —
+so the whole repair path shipped unrun. Extracted to `verify_chromium.sh` on the
+sibling's pattern and driven with stub `node` / `pnpm` / `sudo` / `timeout` on
+PATH. Two cases assert the property the code's own comment states and nothing
+checked: `install-deps` failing all three attempts still PASSES when the browser
+then launches, and `install-deps` succeeding still FAILS when it does not. One
+covers a hazard the extraction created rather than found — the apt.conf heredoc
+terminator was anchored only by YAML's dedent, and in a `.sh` an indented `CONF`
+would swallow the retry loop and the verdict as heredoc content.
+[decisions § 912](../architecture/decisions.md).
+
+Two of the nine could not fail when first written, found by mutating the script
+they cover: an ordering assertion built on a bare `indexOf` (which answers -1 for
+"not found", ordering before everything, so an apt.conf never written read as
+"written first"), and a match on the browser's error anywhere in the log, where
+the first failed launch has already printed the same text.
+
+### `scripts/check_ci_diagnostics.test.mjs` census — 2 more tests
+
+The census walks three `scripts/` directories, and `.github/actions/` is not one
+of them, so nothing asserted either composite-action suite is run at all —
+deleting a `workflow-lint` step would have been silent. Every `.sh` under that
+directory now needs a same-named `.test.mjs`, and every such suite must be run by
+a `ci.yml` job. Both count their subjects first, so an empty walk fails rather
+than passing. [decisions § 913](../architecture/decisions.md).
+
+### `.github/actions/start-supabase/wait_for_sidecars.test.mjs` — 10 tests (4 added)
+
+The script exists because the loop it replaced accepted kong's own answer as the
+upstream's, and its header names the answer each of its three probes requires.
+Only the edge-runtime one was ever driven: the stub answered a fixed 200 to
+storage and auth, so neither pattern was asked anything, and a stub that always
+says 200 would also have passed with the URLs swapped. Added: kong's own 503 on
+the storage path is not storage answering (and short-circuits, so no ready line
+can print under a failure); storage's own 4xx IS; a password grant GoTrue refuses
+is not auth being ready, which is why that probe is a grant rather than
+`/health`; and each probe addresses its own sidecar's path.
+---
+
+## Added by the #789 coverage round 31 — web unit lane (2026-09-02)
+
+Five defects, each pinned by the cases that found it. Every assertion below was
+mutation-checked: the fix reverted, the case observed failing with the message
+it claims, the fix restored, the case observed green.
+
+### `apps/web/src/lib/runs/event_results_csv.test.ts` — 25 tests (3 added)
+
+A chip-timing cell holding only separators. `Number('')` is `0`, so `':'`,
+`'::'`, `'  :  '`, `'1:'`, `':30'` and `'1::30'` all parsed as real times and a
+finished row carried a 0 s finish that sorts first and stands as the event
+record. The suite already pinned the wholly blank cell as an error row, which is
+what makes the gap a gap. A second case pins the accepted class as plain decimal
+counts — `'0x10'` read as 16 s, `'1e3'` as 1000 and `'+5'` as 5 — while keeping
+per-component whitespace tolerated (`'1 : 00 : 30'`), and a third drives the
+whole parser so the organiser sees `Row 2 … unparseable`. All three fail against
+the pre-fix source. See [decisions § 923](../architecture/decisions.md).
+
+### `apps/web/src/lib/lambda_log_hygiene.test.ts` — 3 tests (1 added)
+
+The two rules, applied one frame down. The Lambda handlers are wrappers whose
+job is to call a transport-agnostic core under `src/lib`, and the core is what
+catches the provider error and logs it — into the wrapper's own log group. The
+new case derives its population by following relative imports from each Lambda
+entry point (69 modules, 58 console calls) and fails when an argument is a bare
+identifier or member chain, which is the caught value itself. Both offenders it
+named on the pre-fix tree — `route_request` and `route_describe`, each doing
+`console.error('…', e)` on an Anthropic error whose 400 body quotes the runner's
+own typed request — are fixed in the same commit. Carries two population floors
+so a broken import walk fails rather than reporting a clean tree. See
+[decisions § 919](../architecture/decisions.md).
+
+### `apps/web/src/lib/paged_read_guards.test.ts` — 1 test (new)
+
+Every `.range()` read in the web tree, and whether its ordering is a total
+order. PostgREST turns `.range()` into `LIMIT`/`OFFSET`, so a non-unique (or
+absent) `ORDER BY` lets a row on a page boundary be returned twice or not at
+all. The walker reads each chain backwards over balanced brackets — a naive
+slice at the nearest delimiter is cut by the `{ ascending: false }` inside every
+`.order()` — blanks comments so prose about a paged read is not read as one, and
+follows a closure builder, which is where `fetchRuns` keeps its ordering. On the
+pre-fix tree it names six reads: `createBackup`'s runs page (ordered on
+`started_at` alone) and its routes page (no order at all, under a manifest
+claiming `complete`), both `fetchRuns` branches, and both ZIP importers' dedupe
+reads. Population floor of eight `.range()` reads. See
+[decisions § 922](../architecture/decisions.md).
+
+### `apps/web/scripts/env_isolation.test.mjs` — 22 tests (3 added)
+
+Two behavioural cases for the route-generation engines the guard had never
+watched — a remote `GRAPHHOPPER_URL` / `GRAPH_CYCLE_URL` refused, a loopback
+pair accepted — and one coverage case that stops the list being the thing that
+has to remember: it walks `apps/web/src` and `apps/web/lambda` for URL-shaped
+env reads and fails when one is neither guarded nor declared in
+`NOT_ISOLATED_URL_VARS` with a reason. The same case fails an exemption naming a
+var nothing reads any more, and one that is both guarded and exempt. Deleting
+the two engine entries fails two of the three by name. See
+[decisions § 920](../architecture/decisions.md).
+
+### `apps/web/scripts/check_production_env.test.mjs` — 27 tests (6 added)
+
+The release-side mirror. `PUBLIC_SITE_URL`, `PUBLIC_LIVE_HUB_URL` and
+`PUBLIC_EXPORT_HUB_URL` are optional — one case pins that a release with none of
+them set still passes — but a value that IS set now takes the same
+production-URL test the Supabase URL takes: a loopback site origin (which bakes
+localhost into the canonical and `og:url` of every prerendered share page), a
+loopback live or export hub, and a `TODO-set-me` that is not a URL at all. A
+sixth case reads the dev guard's own `KNOWN_ENV_VARS` and fails when a `PUBLIC_`
+origin is watched in one direction and not the other. Removing the sweep fails
+four of the six. See [decisions § 921](../architecture/decisions.md).
+
+### Lane totals
+
+| Lane | Command | Before | After |
+|---|---|---|---|
+| Web unit | `npm run test:unit --workspace=apps/web` | 4625 | 4630 |
+| apps/web guards | `node --test apps/web/scripts/*.test.mjs` | 86 | 95 |
+
+`npm run check` (svelte-check) reports 0 errors over 2489 files, with the five
+pre-existing `state_referenced_locally` warnings in `PlanEditor.svelte` — a file
+this lane did not touch. `npm run check:node-types` is clean; it caught an
+untyped recursive helper in the new coverage walker that the suite itself ran
+green over, `apps/web/scripts` being inside that root under `checkJs`.
+
+## Added by the #789 coverage round 31 — mobile lane (2026-09-02)
+
+Every entry below is a matched web/Dart pair unless it says otherwise: this
+lane's subject was the TS-Dart parity surface, so a test added to one side is
+a test added to both. Each was mutation-checked — the code it covers was
+broken, the failure confirmed to be the one expected, and the change reverted
+and re-run green — inside a single script invocation so a timeout could not
+strand a mutation.
+
+### `off_route_alert` — the sustained-off-route escalation
+
+Five mirror cases each (`apps/web/src/lib/safety/off_route_alert.test.ts`,
+`apps/mobile_android/test/off_route_alert_test.dart`, mirrored to the iOS twin):
+a non-finite distance never arms the clock and never spends the once-per-run
+latch, over `NaN` / `Infinity` / `-Infinity`; it resets the window the way a
+null does; a whole run of unusable readings leaves a later genuine departure
+still able to fire; a backwards clock step re-anchors instead of wedging; and a
+backwards step shorter than the window does not shorten it either. Four
+mutations pinned across the two sides. Web 10 → 15, Dart 12 → 17. See
+[decisions §§ 929-930](../architecture/decisions.md).
+
+### Non-finite coordinates at the parser and recorder rungs
+
+`packages/gpx_parser/test/route_parser_test.dart` gains six cases — one per text
+format plus the elevation-only degradation — pinning that `double.tryParse`'s
+acceptance of the `NaN` / `Infinity` literals no longer reaches a `Waypoint`,
+and that one bad point no longer poisons the route's own distance. 38 → 44.
+`packages/run_recorder/test/route_helpers_test.dart` gains four, pinning that
+the three route-projection helpers answer null rather than `+Infinity` when
+every segment projects to NaN, and that a non-finite runner position is refused
+on a good route. 29 → 33. Two mutations each, both sides.
+
+### Parity pairs registered after being measured
+
+Nine pairs whose own headers claimed lockstep while no syncer row carried them.
+Each was measured with a throwaway differential harness — both halves run over
+the same input grid, outputs diffed — before any registration. The harnesses
+are not committed (they are one-shot, and the committed mirror tests are what a
+future change is graded against); the grids are recorded in
+[decisions § 931](../architecture/decisions.md).
+
+| Pair | Measured over | Outcome | Tests before → after |
+|---|---|---|---|
+| `route_loop` | 5,543 inputs | identical | web 71, Dart 20 → 52 |
+| `streaks` | 16,449 inputs | identical | unchanged (22 each) |
+| `text_limits` | data pair, third rail already guarded | identical | unchanged (web 3, Dart 6) |
+| `column_limits` | data pair, third rail already guarded | identical | unchanged (web 7, Dart 11) |
+| `fundraiser_progress` | 225 inputs | identical (one unreachable shape difference) | unchanged (11 each) |
+| `calories` | 13,500 inputs | **diverged** | 12 → 18 each |
+| `tile_pack` | non-finite bbox corners | **diverged** | 8 → 10 each |
+| `readiness` | tie behaviour under both sorts | **diverged** | 11 → 14 each |
+| `cycle_plan` | malformed date anchors | **diverged** | 22 → 26 each |
+
+`route_loop`'s two suites still differ in raw count after the Dart one gained
+the web battery, and legitimately: web runs nine cases per field coordinate
+where the Dart mirror runs five, because three of web's nine (the waypoint
+count, the exact start pin and the closing-equals-start check) are one case on
+the Dart side and the other two — the radial-seed rotation and the anchor
+collapse — are already covered by that suite's own non-parameterised cases. The
+differential harness, not the count, is what establishes the two agree.
+
+The four divergent pairs' new cases are the interesting half. `calories` pins
+that every input is graded for finiteness and that the result is always a
+finite non-negative integer, over a cross-product sweep of eight values of
+distance against eight of weight; `tile_pack` that a non-finite bbox corner is
+refused rather than yielding an empty pack on one platform and an exception on
+the other; `readiness` that a tie in absolute delta resolves to the first
+contributor added, including an all-zero three-way tie, and that the tiebreak
+does not override a genuinely larger contributor; `cycle_plan` that an
+unreadable date anchor makes all four entry points decline rather than one
+guessing and the other throwing. Fourteen mutations across the four.
+
+### `e164` — the trusted-contact phone repair
+
+Four mirror cases each: every one of the eleven hyphen-family code points is
+folded (the class carried three); the invisible characters a paste carries
+(soft hyphen, the zero-width trio, BOM, ideographic and medium-mathematical
+space) are folded; a FULLWIDTH parenthesised trunk zero is deleted whole like
+the ASCII one, which is the pinning of the structural rule that the two bracket
+sets must match; and an unknown separator is still refused rather than dropped.
+16 → 20 each, six mutations pinned, and the two halves measured identical over
+3,478 inputs. See [decisions § 933](../architecture/decisions.md).
+
+### `csv_run_importer` — mobile only, no web twin
+
+Twelve new cases in `apps/mobile_android/test/csv_run_importer_test.dart`
+(mirrored to the iOS twin): negative distance, negative duration and the three
+non-finite literals are refused with a message naming the cell, zero stays
+legal, every value the registered `ActivityType` rail carries is accepted, case
+is normalised rather than refused, and a value `runs_activity_type_check`
+cannot hold is refused at import instead of syncing forever on a 23514. 22 →
+34. Two existing cases were CORRECTED rather than deleted: both asserted the
+old pass-through behaviour on the stated grounds that `public.runs` carries
+`distance_m >= 0` and `duration_s >= 0` CHECKs, which it does not — the missing
+constraints are filed in `followups.md`. Five mutations pinned; the first pass
+left one alive, because the assertion matched the accidental `.round()` throw's
+message as well as the deliberate refusal's, and was tightened. See
+[decisions § 934](../architecture/decisions.md).
+
+### `strava_importer` and the run-screen layering contract — mobile only
+
+`stravaCsvDistanceMetres`' doc names web's `stravaDistanceMetres` as its
+mirror, and that one has guarded on `Number.isFinite` since it was written
+while this one used `?? 0` — which catches an unparseable cell, not an unusable
+one. Five cases in `apps/mobile_android/test/strava_importer_zip_test.dart`
+pin that the three non-finite literals read as 0 in both the raw-metres and the
+two-column paths, and that an unparseable cell still reads as 0 so the existing
+behaviour is not what changed. 26 → 31, one mutation.
+
+`architecture_guards_test.dart` gains two cases on the L0-L4 contract, both in
+the gap between the two guards already there. The existing pair proves the
+L0/L1 publish precedes the first effect and that each effect has its own
+try/catch; neither can see what a catch DOES, so a `catch (e) { rethrow; }` or
+an empty `catch (e) {}` kept the pair count intact while defeating the rule.
+All fourteen catches in `_onSnapshot` are clean today and nothing said so. The
+first new case reads each catch body brace-matched and requires it non-empty,
+reporting, and not rethrowing; the second requires everything after the publish
+to sit inside a try/catch, with the publish expression and the debug-only
+mirror assert as the two stated allowances — a bare statement dropped between
+two try-blocks throws straight out and skips every effect below it. 232 → 234,
+three mutations (a rethrowing catch, an empty catch, a bare statement).
+
+### Lane totals
+
+| Suite | Command | Before | After |
+|---|---|---|---|
+| `off_route_alert` (Dart) | `flutter test test/off_route_alert_test.dart` | 12 | 17 |
+| `route_parser` | `dart test` in `packages/gpx_parser` | 38 | 44 |
+| `route_helpers` | `flutter test test/route_helpers_test.dart` | 29 | 33 |
+| `route_loop` (Dart) | `flutter test test/route_loop_test.dart` | 20 | 52 |
+| `calories` (Dart) | `flutter test test/calories_test.dart` | 12 | 18 |
+| `tile_pack` (Dart) | `flutter test test/tile_pack_test.dart` | 8 | 10 |
+| `readiness` (Dart) | `flutter test test/readiness_test.dart` | 11 | 14 |
+| `cycle_plan` (Dart) | `flutter test test/cycle_plan_test.dart` | 22 | 26 |
+| `e164` (Dart) | `flutter test test/e164_test.dart` | 16 | 20 |
+| `csv_run_importer` | `flutter test test/csv_run_importer_test.dart` | 22 | 34 |
+| `strava_importer_zip` | `flutter test test/strava_importer_zip_test.dart` | 26 | 31 |
+| `architecture_guards` | `flutter test test/architecture_guards_test.dart` | 232 | 234 |
+
+The web halves of the six shared pairs move by the same counts and are run with
+`npx tsx --test` from `apps/web`. The full Flutter suite was NOT run — the box
+is 14 GB and the standing rule is targeted files only, so what is claimed here
+is what was executed: the twelve suites above, plus the three `import_screen`
+suites the CSV change could reach (36 pass) and `packages/gpx_parser`'s and
+`packages/run_recorder`'s own. `flutter analyze` reports zero `warning` and
+zero `error` on both `mobile_android` and `mobile_ios` (the ~3,455 remaining
+issues are all `info`, the acknowledged tech debt). On the web side the FULL
+unit suite was run rather than a subset, because six of this lane's changes
+touch a web half: `npm run test:unit --workspace=apps/web` is 4657 pass / 0
+fail. `check_parity_pair_registry` reports 109 pairs registered identically in
+both registries, `check_twin_claims` reports 105 declarations with an EMPTY
+`KNOWN_GAPS`, and `check_shared_constants` 40 checks.

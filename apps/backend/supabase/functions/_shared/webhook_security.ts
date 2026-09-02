@@ -109,3 +109,29 @@ export function validateFreshness(
 export function isAnonymousAppUserId(s: string): boolean {
   return typeof s === 'string' && s.startsWith('$RCAnonymousID');
 }
+
+/// Whether a dispatched handler's response means the insert-first dedupe row
+/// must be given back before returning.
+///
+/// The dedupe row is written BEFORE the side effect so two concurrent
+/// deliveries of one event can't both act. The cost is that a handler which
+/// fails owes the row back: every provider here retries on a non-2xx, and the
+/// retry would otherwise hit the 23505 path, answer 200 `duplicate_event`, and
+/// close the delivery permanently. For `checkout.session.completed` that
+/// leaves a charged card with the order stuck `pending`, no seat issued, and no
+/// corrective event coming — nothing sweeps a lapsed reservation. For a
+/// RevenueCat `NON_RENEWING_PURCHASE` it leaves a paid-for lifetime tier
+/// ungranted, and unlike a subscription there is no later renewal to correct
+/// it.
+///
+/// Keyed on 5xx specifically: the handlers return 200 for every outcome that
+/// is genuinely final (unknown donation, missing metadata, already-terminal
+/// status, an anonymous app user), and reserve 5xx for "we could not complete
+/// this — try again".
+///
+/// It lives beside `validateFreshness` rather than in one webhook's lib
+/// because it is the same rule for all three insert-first dedupers, and the
+/// one that did not have it is the one that grants a paid tier.
+export function shouldReleaseDedupe(status: number): boolean {
+  return status >= 500;
+}

@@ -38,6 +38,27 @@
 /// comment.
 const BLOCK_START = /^\s*(?:[-*+] |\d+[.)] |#{1,6} |>|\||```|~~~|<!--)/;
 
+/// CommonMark: an ordered list may interrupt a paragraph ONLY when it starts at
+/// 1. Every other number stays part of the paragraph, which is what makes a
+/// sentence ending "... see § 77. Distinct from ..." safe to soft-wrap. Without
+/// this, a wrap that happens to put `77.` at a line start reads as a new block
+/// and every guard folding that paragraph silently loses the rest of it — on the
+/// committed parity bullet that hid 92 of its 109 pairs, with no error, which is
+/// the § 604 defect the fold was written to prevent.
+const ORDERED_ITEM = /^\s*(\d+)[.)] /;
+
+/**
+ * Whether `line` opens a new block against an OPEN paragraph above it.
+ *
+ * @param {string} line
+ * @returns {boolean}
+ */
+function interruptsParagraph(line) {
+	const ordered = ORDERED_ITEM.exec(line);
+	if (ordered !== null) return ordered[1] === '1';
+	return BLOCK_START.test(line);
+}
+
 /// A markdown cell may carry a literal pipe as `\|`, which does not open a
 /// column. Park those before splitting, restore them after.
 const PARKED_PIPE = '\u0000';
@@ -220,7 +241,7 @@ export function foldedLines(text) {
 			previous.text.trim() !== '' &&
 			line.trim() !== '' &&
 			!inTable.has(index + 1) &&
-			!BLOCK_START.test(line)
+			!interruptsParagraph(line)
 		) {
 			previous.text = `${previous.text} ${line.trim()}`;
 			return;

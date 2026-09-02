@@ -12,9 +12,12 @@ import {
 	GATE_JOB,
 	checkFailureScoping,
 	checkGateCoverage,
+	checkGateVerdict,
 	checkStepDiagnoses,
 	derivedBundles,
 	isGuardStep,
+	parseJobBlock,
+	parseJobIf,
 	parseJobKeys,
 	parseNeeds,
 	parseSteps,
@@ -351,6 +354,128 @@ test('a gate with no needs at all is green whatever the file does, and fails', (
 	assert.match(errors[0], /declares no `needs:`/);
 });
 
+/// A workflow whose `ci-gate` waits for `jobs` and judges them with `verdict`.
+/// The default verdict is the real one's shape: the whole context injected
+/// through `env:`, and a non-zero exit on anything that is neither success nor
+/// skipped.
+/**
+ * @param {readonly string[]} jobs
+ * @param {{ cond?: string | null, verdict?: string }} [opts]
+ */
+const gateWith = (jobs, opts = {}) => {
+	const cond = opts.cond === undefined ? '    if: always()\n' : opts.cond === null ? '' : `    if: ${opts.cond}\n`;
+	const verdict =
+		opts.verdict ??
+		`      - name: Require every upstream job to have passed\n` +
+			`        env:\n` +
+			`          NEEDS_JSON: \${{ toJSON(needs) }}\n` +
+			`        run: |\n` +
+			`          if [ -n "$NEEDS_JSON" ]; then\n` +
+			`            exit 1\n` +
+			`          fi\n`;
+	return (
+		`name: CI\non:\n  push:\njobs:\n` +
+		jobs.map((job) => `  ${job}:\n    steps:\n      - run: echo hi\n`).join('') +
+		`  ${GATE_JOB}:\n${cond}    needs:\n${jobs.map((n) => `      - ${n}\n`).join('')}` +
+		`    steps:\n${verdict}`
+	);
+};
+
+test('parseJobBlock and parseJobIf read the job level, not a step’s condition', () => {
+	const text = gateWith(['a']);
+	const block = parseJobBlock(text, GATE_JOB);
+	assert.ok(block !== null && block.startsWith(`  ${GATE_JOB}:`));
+	assert.ok(!block.includes('  a:\n'), 'the gate block must stop at the previous job');
+	assert.equal(parseJobIf(text, GATE_JOB), 'always()');
+	assert.equal(parseJobIf(text, 'a'), null);
+	// A step's own `if:` sits deeper and is not the job's. Asserted on a
+	// `steps:` line the block-scan cannot recognise (a trailing comment), which
+	// is the one shape that puts the step lines inside the scanned range: with a
+	// bare `steps:` the slice already excludes them, so a looser condition
+	// pattern would go unnoticed there.
+	assert.equal(
+		parseJobIf(`name: CI\njobs:\n  a:\n    steps: # the checks\n      - if: failure()\n        run: echo hi\n`, 'a'),
+		null,
+	);
+	// The gate is the last job in the real file, so the block runs to EOF. A
+	// top-level key AFTER the mapping is the other boundary, and it is a
+	// different branch.
+	const trailing = `${gateWith(['a'])}defaults:\n  run:\n    shell: bash\n`;
+	const gateBlock = parseJobBlock(trailing, GATE_JOB);
+	assert.ok(gateBlock !== null && !gateBlock.includes('defaults:'), gateBlock ?? 'null');
+	assert.equal(parseJobBlock(gateWith(['a']), 'nope'), null);
+});
+
+// The real gate at the time rule 4 was written, so a rewrite of the shape has
+// to keep meaning the same thing rather than merely keep passing.
+test('the repo’s own gate derives its verdict from every job it waits for', () => {
+	const { errors, ok } = checkGateVerdict(readWorkflows(WORKFLOW_DIR));
+	assert.deepEqual(errors, []);
+	assert.ok(
+		ok.some((l) => /reads the whole `needs` context/.test(l)),
+		`expected a whole-context read, got ${JSON.stringify(ok)}`,
+	);
+	assert.ok(ok.some((l) => /exits non-zero/.test(l)));
+});
+
+// Rule 3 is satisfied in every one of the four fixtures below — the `needs:`
+// list is complete in all of them. That is the point: the list being right is
+// not what makes a merge blocked.
+test('a gate without `always()` is skipped on exactly the runs it exists to block', () => {
+	for (const cond of [null, "github.event_name == 'push'"]) {
+		const text = gateWith(['a', 'b'], { cond });
+		assert.deepEqual(checkGateCoverage([{ name: 'ci.yml', text }]).errors, []);
+		const { errors } = checkGateVerdict([{ name: 'ci.yml', text }]);
+		assert.equal(errors.length, 1, `cond=${cond}`);
+		assert.match(errors[0], /skipped required check does not hold a merge/);
+	}
+	assert.deepEqual(checkGateVerdict([{ name: 'ci.yml', text: gateWith(['a'], { cond: 'always()' }) }]).errors, []);
+});
+
+test('a gate that never reads the needs context is a green row that means nothing', () => {
+	const text = gateWith(['a', 'b'], {
+		verdict: `      - run: |\n          echo "all good"\n          exit 1\n`,
+	});
+	assert.deepEqual(checkGateCoverage([{ name: 'ci.yml', text }]).errors, []);
+	const { errors } = checkGateVerdict([{ name: 'ci.yml', text }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /never reads the `needs` context/);
+});
+
+test('a gate reading only some of the jobs it waits for names the ones it cannot judge', () => {
+	const text = gateWith(['a', 'b', 'c'], {
+		verdict:
+			`      - run: |\n` +
+			`          if [ "\${{ needs.a.result }}" != success ]; then exit 1; fi\n`,
+	});
+	const { errors } = checkGateVerdict([{ name: 'ci.yml', text }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /reads only 1 of them; b, c could fail with the gate still green/);
+});
+
+test('a gate that reads every result and never exits non-zero prints the failure on a green check', () => {
+	const text = gateWith(['a', 'b'], {
+		verdict:
+			`      - env:\n          NEEDS_JSON: \${{ toJSON(needs) }}\n` +
+			`        run: echo "$NEEDS_JSON"\n`,
+	});
+	const { errors } = checkGateVerdict([{ name: 'ci.yml', text }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /no non-zero `exit` on any path/);
+});
+
+test('a gate with no command at all reports success as soon as its runner starts', () => {
+	const text = gateWith(['a'], { verdict: `      - uses: actions/checkout@v5\n` });
+	const { errors } = checkGateVerdict([{ name: 'ci.yml', text }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /runs no command at all/);
+});
+
+test('checkGateVerdict says nothing about a workflow that defines no gate', () => {
+	const text = 'name: Release\njobs:\n  a:\n    steps:\n      - run: echo hi\n';
+	assert.deepEqual(checkGateVerdict([{ name: 'release.yml', text }]), { errors: [], ok: [] });
+});
+
 test('checkGateCoverage fails rather than passing vacuously when the gate is gone', () => {
 	const { errors } = checkGateCoverage([
 		{ name: 'ci.yml', text: 'name: CI\njobs:\n  a:\n    steps:\n      - run: echo hi\n' },
@@ -640,6 +765,61 @@ test('the guards the required gate does not wait for are named, with a reason', 
 		assert.ok(existsSync(join(CENSUS_ROOT, path)), `OFF_THE_GATE names ${path}, which is gone`);
 		assert.ok(why.length > 40, `OFF_THE_GATE's reason for ${path} has to say something`);
 	}
+});
+
+/// Every shell a composite action runs, and every suite that drives one. The
+/// census above walks `scripts/` only, so this directory — where two
+/// non-trivial shells live — was outside it entirely.
+/** @returns {{ shells: string[], suites: string[] }} */
+function compositeActionFiles() {
+	const root = join(CENSUS_ROOT, '.github', 'actions');
+	/** @type {string[]} */
+	const shells = [];
+	/** @type {string[]} */
+	const suites = [];
+	for (const entry of readdirSync(root, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		for (const f of readdirSync(join(root, entry.name))) {
+			const rel = `.github/actions/${entry.name}/${f}`;
+			if (f.endsWith('.sh')) shells.push(rel);
+			if (f.endsWith('.test.mjs')) suites.push(rel);
+		}
+	}
+	return { shells: shells.sort(), suites: suites.sort() };
+}
+
+// A composite action's steps run inside no job's test suite, so a shell that
+// lives there is executed by CI and by nothing else. Both of the ones this repo
+// has were extracted from an `action.yml` for exactly that reason, and both
+// turned out to have a branch that had never run (decisions § 912).
+test('every composite-action shell has a suite that drives it', () => {
+	const { shells, suites } = compositeActionFiles();
+	assert.ok(shells.length >= 2, `expected the composite-action shells, found ${shells.length}`);
+	const undriven = shells.filter(
+		(sh) => !suites.some((t) => t.replace(/\.test\.mjs$/, '.sh') === sh),
+	);
+	assert.deepEqual(
+		undriven,
+		[],
+		'a composite-action shell with no suite is executed only by CI, and its repair ' +
+			'branches only by CI on a bad day. Extract it and drive it with stubs, the way ' +
+			'wait_for_sidecars.sh and verify_chromium.sh are.',
+	);
+});
+
+// § 863, applied to the directory the census does not walk: these suites are
+// the only thing that reads those shells, so a suite the required gate does not
+// wait for leaves them read by nothing that can block a merge.
+test('every composite-action suite is run by a ci.yml job', () => {
+	const automation = allAutomation();
+	const { suites } = compositeActionFiles();
+	assert.ok(suites.length >= 2, `expected the composite-action suites, found ${suites.length}`);
+	assert.deepEqual(
+		suites.filter((p) => !invokers(p, automation).includes('ci.yml')),
+		[],
+		'the required status check is a job named `CI gate` inside ci.yml, so a suite run ' +
+			'only by another workflow — or by nothing — blocks no merge (decisions § 863).',
+	);
 });
 
 test('a NOT_A_GUARD entry that no longer exists fails rather than sitting as cover', () => {

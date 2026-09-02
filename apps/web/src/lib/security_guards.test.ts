@@ -1330,6 +1330,54 @@ test('refresh-tokens fails closed (503) when CRON_SECRET env is absent', () => {
 	);
 });
 
+test('refresh-tokens refuses a CRON_SECRET too short to be one, and CI supplies one that clears the floor', () => {
+	// Reason: refresh-tokens is `verify_jwt = false`, so the bearer is the
+	// only thing in front of a loop over the whole `integrations` table
+	// against Strava's OAuth endpoint. `timingSafeEqual` closes the per-byte
+	// channel; it does nothing about a secret short enough to guess offline,
+	// and the case that actually happens is a misconfigured deploy
+	// (`CRON_SECRET=test`). strava-webhook — same posture, same gate class —
+	// has carried a 32-char floor since the May 2026 audit; this one had none.
+	//
+	// The second assertion is the point of pinning this at the source level
+	// rather than only in the function. The floor could not land while
+	// ci.yml set a 15-character CRON_SECRET for the served-envelope lane,
+	// and the tempting fix is to lower the floor to fit the fixture — which
+	// is not a floor. So the fixture is read here too: if someone shortens
+	// it back, this fails rather than the authorized leg of the envelope
+	// suite quietly starting to 503.
+	const source = read('../backend/supabase/functions/refresh-tokens/index.ts');
+	assert.match(
+		source,
+		/cronSecret\.length\s*<\s*32/,
+		'refresh-tokens must refuse a CRON_SECRET shorter than 32 characters, matching strava-webhook.',
+	);
+	const floorIdx = source.search(/cronSecret\.length\s*<\s*32/);
+	// The CALL, not the import — `timingSafeEqual` appears at the top of the
+	// file as a named import, so a bare indexOf finds line 1 and this
+	// ordering check can never fail.
+	const compareIdx = source.search(/timingSafeEqual\s*\(/);
+	assert.ok(
+		floorIdx !== -1 && compareIdx !== -1 && floorIdx < compareIdx,
+		'The length floor must come BEFORE the timing-safe compare — a floor checked after the compare has already spent the work it exists to refuse.',
+	);
+
+	const webhook = read('../backend/supabase/functions/strava-webhook/index.ts');
+	assert.match(
+		webhook,
+		/webhookSecret\.length\s*<\s*32/,
+		'strava-webhook must keep its own 32-char floor — the two are deliberately symmetric.',
+	);
+
+	const workflow = read('../../.github/workflows/ci.yml');
+	const m = workflow.match(/CRON_SECRET=(\S+)/);
+	assert.ok(m, 'ci.yml must set a CRON_SECRET for the served-envelope lane.');
+	assert.ok(
+		m[1].length >= 32,
+		`ci.yml's CRON_SECRET is ${m[1].length} characters and the function refuses anything under 32, so the envelope lane would exercise only the 503 branch. Lengthen the fixture; do not lower the floor.`,
+	);
+});
+
 test('revenuecat-webhook verifies HMAC before constructing the Supabase client', () => {
 	// Reason: the webhook is the ONLY legitimate writer of
 	// user_profiles.subscription_tier (the lock_subscription_columns

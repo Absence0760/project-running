@@ -110,6 +110,9 @@ export async function importStravaZip(
 			.select('metadata, external_id')
 			.eq('user_id', uid)
 			.order('started_at', { ascending: false })
+			// Secondary key: a row dropped at a page boundary is an id missing
+			// from the dedupe set, which re-imports the activity.
+			.order('id', { ascending: false })
 			.range(from, to)
 			.then(({ data, error }): StravaDedupeRow[] | null =>
 				error ? null : (data as StravaDedupeRow[]),

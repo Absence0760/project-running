@@ -13,6 +13,7 @@ import {
   readBodyTextWithCap,
 } from './lib.ts';
 import { publishableKey } from '../_shared/api_keys.ts';
+import { reconcileImportBatch } from '../_shared/external_id_batch.ts';
 
 Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   const guarded = await readJsonWithLimit<{ athleteNumber?: unknown }>(req, 1024);
@@ -164,9 +165,17 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
       .select('external_id')
       .eq('user_id', user.id)
       .in('external_id', externalIds);
-    const seen = new Set((existing ?? []).map((r) => r.external_id));
-    const fresh = runs.filter((r) => !seen.has(r.external_id));
-    skipped = runs.length - fresh.length;
+    // Reconciled against the batch itself as well as against what is stored:
+    // the insert below is ONE statement against a per-user unique index, so a
+    // scrape that repeated a result would raise 23505 and lose every OTHER
+    // result in it — which is exactly what the two row-level skips above exist
+    // to stop one row from doing.
+    const batch = reconcileImportBatch(
+      runs,
+      (existing ?? []).map((r) => r.external_id).filter((id): id is string => id !== null),
+    );
+    const fresh = batch.fresh;
+    skipped = batch.skipped;
     if (fresh.length > 0) {
       const { error } = await supabase.from('runs').insert(fresh);
       if (error) {

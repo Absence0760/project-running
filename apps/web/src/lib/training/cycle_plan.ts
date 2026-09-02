@@ -65,13 +65,29 @@ const QUALITY_KINDS = new Set(['tempo', 'interval', 'marathon_pace']);
 // Whole-day differences via UTC epoch-day math so they never drift across a
 // local-midnight / DST boundary. ISO `YYYY-MM-DD` in, day counts out.
 
-function isoToEpochDay(iso: string): number {
+/// A calendar date and nothing else. The anchors this module reads --
+/// last-period start, due date -- come out of the settings bag, which is
+/// jsonb, so an entry another client or a hand edit wrote is a string of
+/// unknown shape. `parseInt` returns NaN for one and the NaN propagates to a
+/// null result here, while the Dart twin's `int.parse` THROWS, so the check
+/// has to be stated on both sides rather than left to a coincidence of
+/// numeric-parse conventions.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isoToEpochDay(iso: string): number | null {
+	if (!ISO_DATE.test(iso)) return null;
 	const [y, m, d] = iso.split('-').map((n) => parseInt(n, 10));
-	return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+	const ms = Date.UTC(y, m - 1, d);
+	return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : null;
 }
 
-export function daysBetweenIso(fromIso: string, toIso: string): number {
-	return isoToEpochDay(toIso) - isoToEpochDay(fromIso);
+/// Whole days from one ISO date to another, or null when either is not an ISO
+/// date. Fail-safe like everything else here: leaving the plan as prescribed
+/// beats easing it off an anchor we could not read.
+export function daysBetweenIso(fromIso: string, toIso: string): number | null {
+	const from = isoToEpochDay(fromIso);
+	const to = isoToEpochDay(toIso);
+	return from == null || to == null ? null : to - from;
 }
 
 // ─────────────────────── Menstrual cycle ───────────────────────
@@ -103,7 +119,7 @@ export function cycleDayInfo(
 		return null;
 	}
 	const raw = daysBetweenIso(lastPeriodStartIso, dateIso);
-	if (!Number.isFinite(raw)) return null;
+	if (raw == null) return null;
 	const len = Math.round(cycleLengthDays);
 	const dayInCycle = ((raw % len) + len) % len;
 
@@ -132,7 +148,7 @@ export function cycleDayInfo(
  */
 export function trimesterForDate(dueDateIso: string, dateIso: string): Trimester | null {
 	const daysUntilDue = daysBetweenIso(dateIso, dueDateIso);
-	if (!Number.isFinite(daysUntilDue)) return null;
+	if (daysUntilDue == null) return null;
 	const gestWeeks = GESTATION_WEEKS - daysUntilDue / 7;
 	if (gestWeeks < 0) return null; // before conception — not pregnant yet on this date
 	if (gestWeeks > GESTATION_WEEKS + 2) return null; // >2wk past due — stop adjusting stale weeks

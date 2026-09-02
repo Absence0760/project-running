@@ -183,8 +183,13 @@ fn banister_trimp(duration_s: u32, avg_bpm: f64, rest: f64, max: f64) -> f64 {
     duration_min * hrr * 0.64 * libm::exp(k * hrr)
 }
 
+/// Median of a NON-EMPTY slice. `total_cmp` rather than `partial_cmp().unwrap()`:
+/// on a device with no operating system a comparator that panics on a NaN is a
+/// reset mid-run, and `partial_cmp` returns `None` for exactly that. The caller
+/// below already refuses a non-finite rate, so this is the second rail, not the
+/// first.
 fn median(xs: &mut [f64]) -> f64 {
-    xs.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+    xs.sort_unstable_by(f64::total_cmp);
     let mid = xs.len() / 2;
     if xs.len().is_multiple_of(2) {
         (xs[mid - 1] + xs[mid]) / 2.0
@@ -223,8 +228,13 @@ pub fn compute_calibration(runs: &[RunForLoad], prefs: &HrPrefs) -> StressCalibr
             continue;
         }
         let trimp = banister_trimp(r.duration_s, avg, rest, max);
-        if trimp > 0.0 {
-            let _ = trimps_per_km.push(trimp / km);
+        // Grade the RATE, not the numerator. `km <= 0.0` is false for a NaN
+        // distance, so a single corrupt odometer reading used to reach the
+        // median as a NaN — which both poisoned the whole window's fallback
+        // rate and, with a second run in the list, panicked the comparator.
+        let rate = trimp / km;
+        if trimp > 0.0 && rate.is_finite() && rate > 0.0 {
+            let _ = trimps_per_km.push(rate);
         }
     }
 
@@ -991,5 +1001,61 @@ mod tests {
         let series = compute_training_load_series(&runs, &no_prefs(), 90, REF, &[]);
         assert!(series.iter().all(|p| p.lift_stress == 0.0));
         assert!(series.iter().all(|p| p.stress == p.run_stress));
+    }
+
+    // A corrupt odometer reading reaches this window as a NaN distance, and
+    // `km <= 0.0` does not catch it: NaN fails every comparison. It used to be
+    // pushed as a NaN rate, which made the whole window's fallback NaN and, with
+    // a second run in the list, panicked the median comparator - a reset
+    // mid-race on a device with no operating system.
+    #[test]
+    fn a_nan_distance_neither_panics_nor_poisons_the_fallback_rate() {
+        let prefs = HrPrefs {
+            resting_hr_bpm: Some(50.0),
+            max_hr_bpm: Some(190.0),
+        };
+        let runs = [
+            RunForLoad {
+                day: 0,
+                duration_s: 1800,
+                distance_m: f64::NAN,
+                avg_bpm: Some(150.0),
+            },
+            RunForLoad {
+                day: 1,
+                duration_s: 1800,
+                distance_m: 10_000.0,
+                avg_bpm: Some(150.0),
+            },
+            RunForLoad {
+                day: 2,
+                duration_s: 1800,
+                distance_m: 8_000.0,
+                avg_bpm: Some(150.0),
+            },
+        ];
+        let cal = compute_calibration(&runs, &prefs);
+        assert_eq!(cal.mode, StressMode::Trimp);
+        let rate = cal.trimp_per_km_fallback.expect("two clean runs calibrate");
+        assert!(rate.is_finite() && rate > 0.0, "rate = {rate}");
+    }
+
+    // An infinite distance divides to a zero rate, which is not a rate at all -
+    // it would tell the window that a run costs nothing per kilometre.
+    #[test]
+    fn an_infinite_distance_is_not_a_zero_rate() {
+        let prefs = HrPrefs {
+            resting_hr_bpm: Some(50.0),
+            max_hr_bpm: Some(190.0),
+        };
+        let runs = [RunForLoad {
+            day: 0,
+            duration_s: 1800,
+            distance_m: f64::INFINITY,
+            avg_bpm: Some(150.0),
+        }];
+        let cal = compute_calibration(&runs, &prefs);
+        assert_eq!(cal.mode, StressMode::Distance);
+        assert_eq!(cal.trimp_per_km_fallback, None);
     }
 }
