@@ -71,8 +71,20 @@ export const VALIDATE_EXEMPT = new Map([
 ]);
 
 /**
- * @typedef {{ label: string, kind: 'errors' | 'p95' | 'other', functions: string[] }} Alarm
+ * @typedef {'errors' | 'p95' | 'cf4xx' | 'cf5xx' | 'other'} AlarmKind
+ * @typedef {{ label: string, kind: AlarmKind, functions: string[] }} Alarm
  */
+
+/// The two distribution-level alarms, and what each one is the only witness to.
+/// alarms.tf's own first line and apps/web/deployment.md both claimed these
+/// existed while every alarm in the file was per-Lambda; the observability bar
+/// deployment.md sets for v1 — "someone gets paged when the site is down" — was
+/// met by nothing (decisions § 890).
+/** @type {Map<AlarmKind, string>} */
+export const DISTRIBUTION_ALARMS = new Map([
+  ['cf4xx', 'a step change in 4xx — mass auth failure, a behaviour that stopped routing, an SPA fallback that stopped falling back'],
+  ['cf5xx', 'an origin failing for a share of viewers, whichever one it is'],
+]);
 
 // ─────────────────────────────── parsers ────────────────────────────────
 
@@ -191,9 +203,12 @@ export function parseAlarms(raw) {
   /** @type {Alarm[]} */
   const out = [];
   for (const { label, body } of hclResources(src, 'aws_cloudwatch_metric_alarm')) {
-    /** @type {Alarm['kind']} */
+    /** @type {AlarmKind} */
     let kind = 'other';
-    if (
+    if (/namespace\s*=\s*"AWS\/CloudFront"/.test(body)) {
+      if (/metric_name\s*=\s*"4xxErrorRate"/.test(body)) kind = 'cf4xx';
+      else if (/metric_name\s*=\s*"5xxErrorRate"/.test(body)) kind = 'cf5xx';
+    } else if (
       /extended_statistic\s*=\s*"p95"/.test(body) &&
       /metric_name\s*=\s*"Duration"/.test(body)
     ) {
@@ -311,10 +326,24 @@ export function compareSources(dirs, matrix, dependabot, functions, alarms) {
         'pass vacuously.',
     );
   }
+  /** @type {{ errors: Set<string>, p95: Set<string> }} */
   const watched = { errors: new Set(), p95: new Set() };
   for (const alarm of alarms) {
-    if (alarm.kind === 'other') continue;
+    if (alarm.kind !== 'errors' && alarm.kind !== 'p95') continue;
     for (const fn of alarm.functions) watched[alarm.kind].add(fn);
+  }
+
+  const kinds = new Set(alarms.map((a) => a.kind));
+  for (const [kind, witnesses] of DISTRIBUTION_ALARMS) {
+    if (!kinds.has(kind)) {
+      errors.push(
+        `no ${kind === 'cf4xx' ? '4xxErrorRate' : '5xxErrorRate'} alarm on the CloudFront ` +
+          `distribution. It is the only witness to ${witnesses}; every other alarm in the file ` +
+          'is scoped to one Lambda and cannot see the distribution at all.',
+      );
+    } else {
+      ok.push(`CloudFront distribution: ${kind === 'cf4xx' ? '4xx' : '5xx'} rate alarm`);
+    }
   }
   if (watched.errors.size === 0 && watched.p95.size === 0 && functions.length > 0) {
     errors.push(

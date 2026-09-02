@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
   ALARMS_FILE,
+  DISTRIBUTION_ALARMS,
   DEPENDABOT_FILE,
   INFRA_DIR,
   MODULE_FILE,
@@ -34,6 +35,8 @@ const ALARMS = [
   { label: 'share_errors', kind: 'errors', functions: ['share_run'] },
   { label: 'share_p95', kind: 'p95', functions: ['share_run'] },
   { label: 'throttles', kind: 'other', functions: ['coach'] },
+  { label: 'cf_4xx', kind: 'cf4xx', functions: [] },
+  { label: 'cf_5xx', kind: 'cf5xx', functions: [] },
 ];
 
 /**
@@ -130,6 +133,34 @@ test('a Lambda with no error-rate alarm fails', () => {
 test('a new Lambda with no alarms at all fails on both', () => {
   const { errors } = run({ functions: [...FUNCTIONS, 'share_badge'] });
   assert.ok(has(errors, /share_badge has no errors and no p95 alarm/), errors.join('\n'));
+});
+
+test('dropping the distribution 5xx alarm fails', () => {
+  const { errors } = run({ alarms: ALARMS.filter((a) => a.label !== 'cf_5xx') });
+  assert.ok(has(errors, /no 5xxErrorRate alarm on the CloudFront distribution/), errors.join('\n'));
+});
+
+test('dropping the distribution 4xx alarm fails', () => {
+  const { errors } = run({ alarms: ALARMS.filter((a) => a.label !== 'cf_4xx') });
+  assert.ok(has(errors, /no 4xxErrorRate alarm on the CloudFront distribution/), errors.join('\n'));
+});
+
+test('every distribution alarm says what it is the only witness to', () => {
+  for (const [kind, witnesses] of DISTRIBUTION_ALARMS) {
+    assert.ok(witnesses.length > 30, `${kind} needs the reason, not a label`);
+  }
+});
+
+test('parseAlarms classifies the two distribution alarms', () => {
+  const src =
+    'resource "aws_cloudwatch_metric_alarm" "cf4" {\n' +
+    '  metric_name = "4xxErrorRate"\n  namespace   = "AWS/CloudFront"\n}\n\n' +
+    'resource "aws_cloudwatch_metric_alarm" "cf5" {\n' +
+    '  metric_name = "5xxErrorRate"\n  namespace   = "AWS/CloudFront"\n}\n';
+  assert.deepEqual(
+    parseAlarms(src).map((a) => a.kind),
+    ['cf4xx', 'cf5xx'],
+  );
 });
 
 test('a classifier that stopped matching fails rather than passing vacuously', () => {

@@ -134,7 +134,7 @@ Numbers are USD/month at the launch tier (1000 active users, ~5 runs/user/month)
 Each spend vector carries at least two independent caps — one in IaC, one (where possible) in the provider console:
 
 - **AWS account total** — `aws_budgets_budget` in [`infra/envs/prod/budgets.tf`](../../infra/envs/prod/budgets.tf) fires at 50 % / 100 % ACTUAL and 100 % FORECASTED of `monthly_budget_limit_usd` (default $200). The FORECASTED notification is the one that catches a runaway *during* the month — ACTUAL lags by up to 24 h.
-- **Lambda concurrency** — `lambda_reserved_concurrency` in [`infra/envs/{prod,preview}/main.tf`](../../infra/envs/prod/main.tf) caps per-env concurrency (prod 20, preview 5). Throttle alarm fires on the first throttled invocation. Subscribed via `alert_emails` (validated non-empty + placeholder-rejected on both envs).
+- **Lambda concurrency** — `lambda_reserved_concurrency` in [`infra/envs/{prod,preview}/main.tf`](../../infra/envs/prod/main.tf) caps per-env concurrency (prod 20, preview 5). Throttle alarms cover coach, generate-route and osrm-proxy; prod fires on the first throttled invocation (`lambda_throttle_alarm_threshold = 1`), preview at 5. Subscribed via `alert_emails` (validated non-empty + placeholder-rejected on both envs).
 - **CloudFront edge cost** — `price_class = PriceClass_100` in [`infra/modules/web-stack/main.tf`](../../infra/modules/web-stack/main.tf) bills only NA + EU edge locations (skips SA + AU which 10× the per-GB cost). WAF `aws_wafv2_web_acl` rate-limits `/api/coach*` at 100 req / 5 min / IP via the scope-down filter — keeps static-asset traffic outside the rate-limit envelope.
 - **CloudWatch log retention** — every log group sets `retention_in_days` ≤ 90 (default "Never expire" is $0.50/GB/month forever).
 - **S3 lifecycle** — non-current versions expire at 30 d, incomplete multipart uploads abort at 7 d (prevents version-history cost ramp).
@@ -152,7 +152,7 @@ The bar for v1 is: **someone gets paged when the site is down, can read the rele
 
 | Surface | Tool | What we get | Cost |
 |---|---|---|---|
-| Web (AWS) | CloudFront access logs (S3) + CloudWatch Logs (Lambda) + CloudWatch Metrics | request volume, 4xx/5xx rate, cache hit ratio, Lambda p95 + cold-start rate | <$1/mo |
+| Web (AWS) | CloudWatch Logs (Lambda) + CloudWatch Metrics + CloudWatch alarms | request volume, 4xx/5xx rate, cache hit ratio, Lambda p95 + cold-start rate | <$1/mo |
 | Backend (Supabase) | Supabase Dashboard → Logs | Postgres slow queries, EF invocations, Auth events | included |
 | Worker + OSRM (Fly.io) | `fly logs -a threkir-worker` / `fly logs -a osrm` + native metrics | per-machine CPU/RAM, restart history, log stream | included |
 | Cross-service errors | **Sentry** — single org, separate projects per service | grouped exceptions, release tagging, breadcrumb trail on mobile | $0 (free tier) → $26 (team) |

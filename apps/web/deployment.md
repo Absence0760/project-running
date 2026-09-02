@@ -223,9 +223,9 @@ Distance-targeted loop generation (decisions §575). `apps/web/lambda/generate-r
 
 **CloudWatch alarms (wired by the `web-stack` module, same SNS topic as coach):**
 
-- generate-route Lambda error rate >2% over 5 min → `web-prod-alerts`
+- generate-route Lambda error rate >2% across two 5-min windows → `threkir-web-<env>-alerts`
 - generate-route Lambda p95 duration >12 s over 5 min (approaching the 15 s timeout, a sign the engine is slow / overloaded) → same topic
-- generate-route Lambda throttles >0 in any 1 min window → same topic
+- generate-route Lambda throttles ≥ the per-env threshold → same topic (the reserved concurrency is the engine's load ceiling; a throttle increments `Throttles`, never `Errors`, so the error-rate alarm above cannot see it)
 
 A spike in `502`s is the engine-down signal — the alarms above plus a Better Stack probe of the GraphHopper Fly app's health endpoint catch it; the client degrades to the OSRM heuristic in the meantime, so an engine outage is a quality regression, not an outage of the route builder.
 
@@ -245,7 +245,7 @@ The server hop for the route builder's manual waypoint snapping (`/nearest/v1/..
 
 **Memory + timeout.** 256 MB, 15 s. Each invocation is one auth round trip + one engine fetch (10 s upstream timeout inside the handler).
 
-**CloudWatch alarms (same SNS topic as coach):** error rate >2% over two 5-min windows, plus an `engine_unreachable` log-metric alarm mirroring generate-route's — a down OSRM engine is a clean 502, not a Lambda throw, so the Errors metric alone would sleep through the outage while every user silently degrades to straight-line segments.
+**CloudWatch alarms (same SNS topic as coach):** error rate >2% over two 5-min windows, a p95 duration alarm at >12 s against the 15 s timeout, a throttle alarm, and an `engine_unreachable` log-metric alarm mirroring generate-route's — a down OSRM engine is a clean 502, not a Lambda throw, so the Errors metric alone would sleep through the outage while every user silently degrades to straight-line segments. A *slow* engine is the same story one step earlier: the duration climbs toward the timeout with a flat error rate, which is why the p95 alarm matters here and why it was the one this Lambda shipped without (added 2026-09-02, [decisions § 890](../../docs/architecture/decisions.md)).
 
 ---
 
@@ -287,13 +287,27 @@ The `Notifications` row in the database carries the user's subscription endpoint
 
 **CloudWatch alarms (wired by the `web-stack` module):**
 
-- Coach Lambda error rate >2% over 5 min → SNS topic `web-prod-alerts`
-- Coach Lambda p95 duration >25 s over 5 min (approaching the 30 s timeout) → same topic
-- Coach Lambda throttles >0 in any 1 min window → same topic
-- generate-route Lambda error rate / p95 duration / throttles → same topic (thresholds in the generate-route section above — its timeout is 15 s, so the duration alarm fires at >12 s)
-- Each of the four share Lambdas (run / route / recap / badge): error rate / p95 duration → same topic; plus a `share-<surface>-upstream-unreachable` log-metric-filter alarm that fires when the lookup logs `[share-<surface>] upstream_unreachable` (Supabase down → every unfurl silently degrades to the branded fallback card at HTTP 200/404, which the `Errors` metric can't see — the sibling of generate-route's `engine_unreachable` alarm)
-- 4xx rate at the CloudFront distribution >5% over 5 min → same topic (catches mass auth failures, SPA fallback misconfig, etc.)
-- 5xx rate at the distribution >1% over 5 min → same topic
+Every alarm evaluates two consecutive 5-minute windows and treats missing data
+as not-breaching, so a quiet preview env never sits in ALARM.
+
+- Coach Lambda error rate >2% → SNS topic `threkir-web-<env>-alerts`
+- Coach Lambda p95 duration >25 s (approaching the 30 s timeout) → same topic
+- Throttles ≥ `lambda_throttle_alarm_threshold` (prod 1, preview 5) on **coach, generate-route and osrm-proxy** → same topic. A throttled invocation increments `Throttles` and never `Errors`, so no error-rate alarm can see one; these three are the functions whose reserved concurrency is a deliberate ceiling on spend or on an engine's load. The five share Lambdas deliberately have none — concurrency-capped buffered reads whose degradation their upstream alarms already cover.
+- generate-route Lambda error rate >2% / p95 duration >12 s (its timeout is 15 s) → same topic
+- osrm-proxy Lambda error rate >2% / p95 duration >12 s → same topic
+- Each of the **five** share Lambdas (run / route / recap / badge / entity): error rate >2% / p95 duration >12 s → same topic; plus a `share-<surface>-upstream-unreachable` log-metric-filter alarm that fires when the lookup logs `[share-<surface>] upstream_unreachable` (Supabase down → every unfurl silently degrades to the branded fallback card at HTTP 200/404, which the `Errors` metric can't see — the sibling of generate-route's `engine_unreachable` alarm). The shared entity Lambda serves six surfaces, so it carries six of those filters against its one log group.
+- 4xx rate at the CloudFront distribution >5% → same topic (mass auth failure, a behaviour that stopped routing, an SPA fallback that stopped falling back)
+- 5xx rate at the distribution >1% → same topic
+
+> The two distribution alarms landed 2026-09-02. Until then this list claimed
+> them and `alarms.tf` declared neither, so the v1 observability bar below —
+> "someone gets paged when the site is down" — was met by per-Lambda alarms
+> alone. `scripts/check_infra_coverage.mjs` now fails the PR if either is
+> removed. Note what even the 5xx alarm cannot see: CloudFront applies custom
+> error responses per **distribution**, so this stack's SPA `403/404 →
+> /index.html at 200` fallback rewrites a Lambda-origin 403 or 404 before it is
+> ever counted ([decisions § 890](../../docs/architecture/decisions.md)). The
+> per-Lambda alarms are the only witness to those.
 
 The SNS topic forks to email (oncall) and PagerDuty if/when set up. For pre-launch a single email subscription is enough; route to `oncall@threkir.com` once the team is real.
 
