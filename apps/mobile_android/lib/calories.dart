@@ -1,7 +1,7 @@
 /// Calorie estimate for a recorded run.
 ///
 /// Persona-hunt Round 3 finding Woman #5. Dart twin of
-/// `apps/web/src/lib/calories.ts` — keep both in lockstep. See
+/// `apps/web/src/lib/runs/calories.ts` — keep both in lockstep. See
 /// `docs/architecture/decisions.md § 77` for the formula choice + sources.
 ///
 /// Pure functions, no Flutter / Supabase deps.
@@ -42,14 +42,27 @@ int estimateRunCalories({
   double? activityKcalPerKgPerKm,
   CalorieGender gender,
 }) {
-  final dist = distanceM > 0 ? distanceM : 0.0;
+  // Every input is checked for finiteness, not just for sign. `.round()`
+  // THROWS on a non-finite double, and this getter is read during a widget
+  // build, so an Infinity distance or weight took the run-detail screen down
+  // where the web twin rendered `NaN kcal` for the same NaN. One formula
+  // cannot have two answers, and neither of those two was the right one: an
+  // unusable measurement contributes nothing, and an unusable weight or
+  // coefficient falls back to the documented default exactly as an absent one
+  // does.
+  final dist = distanceM.isFinite && distanceM > 0 ? distanceM : 0.0;
   final distanceKm = dist / 1000;
-  final weight = (weightKg != null && weightKg > 0)
+  final weight = (weightKg != null && weightKg.isFinite && weightKg > 0)
       ? weightKg
       : kDefaultBodyWeightKg;
-  final coef = (activityKcalPerKgPerKm != null && activityKcalPerKgPerKm > 0)
+  final coef = (activityKcalPerKgPerKm != null &&
+          activityKcalPerKgPerKm.isFinite &&
+          activityKcalPerKgPerKm > 0)
       ? activityKcalPerKgPerKm
       : kActivityKcalPerKgPerKm['run']!;
   final g = _genderMultiplier(gender);
-  return (weight * coef * distanceKm * g).round();
+  // Finite inputs can still multiply out past the double range; the estimate
+  // is a display figure, so an unrepresentable one is no estimate at all.
+  final kcal = weight * coef * distanceKm * g;
+  return kcal.isFinite ? kcal.round() : 0;
 }

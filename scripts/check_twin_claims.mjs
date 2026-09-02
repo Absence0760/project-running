@@ -114,13 +114,6 @@ export const KNOWN_GAPS = [
 		reason: 'both headers declare the pair; neither registry carries it',
 	},
 	{
-		file: 'apps/mobile_android/lib/calories.dart',
-		counterpart: 'apps/web/src/lib/calories.ts',
-		reason:
-			'unregistered, and the path is stale — the web half moved to ' +
-			'apps/web/src/lib/runs/calories.ts',
-	},
-	{
 		file: 'apps/mobile_android/lib/column_limits.dart',
 		counterpart: 'apps/web/src/lib/core/column_limits.ts',
 		reason: 'unregistered; the two halves expose differently-named APIs and different test counts',

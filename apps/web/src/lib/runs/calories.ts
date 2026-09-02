@@ -10,8 +10,8 @@
 // the persona finding asked us to document + apply).
 //
 // This module is the single source of truth for the estimate, used
-// by both the web run-detail page and the mobile equivalent. Mirrored
-// byte-for-byte in `apps/mobile_android/lib/calories.dart` (and the
+// by both the web run-detail page and the mobile equivalent. TS<->Dart
+// parity pair with `apps/mobile_android/lib/calories.dart` (and the
 // iOS twin per the one-Dart-codebase rule).
 //
 // See `docs/architecture/decisions.md § 77` for the full formula choice + sources.
@@ -79,15 +79,30 @@ export interface EstimateRunCaloriesInput {
 /// Returns the estimated calorie burn for a run, rounded to the
 /// nearest integer. Always non-negative.
 export function estimateRunCalories(input: EstimateRunCaloriesInput): number {
-	const distanceKm = Math.max(0, input.distanceM) / 1000;
+	// Every input is checked for finiteness, not just for sign. A NaN fails
+	// the `> 0` tests the way a zero does but survives `Math.max`, so an
+	// unusable distance used to reach the caller as a rendered `NaN kcal`
+	// while the Dart twin -- whose `.round()` throws on a non-finite double --
+	// answered 0 for the same NaN and threw outright for an Infinity, inside a
+	// widget getter read during build. One formula cannot have two answers, and
+	// neither of those two was the right one: an unusable measurement
+	// contributes nothing, and an unusable weight or coefficient falls back to
+	// the documented default exactly as an absent one does.
+	const distanceM = Number.isFinite(input.distanceM) ? input.distanceM : 0;
+	const distanceKm = Math.max(0, distanceM) / 1000;
 	const weight =
-		input.weightKg != null && input.weightKg > 0
+		input.weightKg != null && Number.isFinite(input.weightKg) && input.weightKg > 0
 			? input.weightKg
 			: DEFAULT_BODY_WEIGHT_KG;
 	const activityCoef =
-		input.activityKcalPerKgPerKm != null && input.activityKcalPerKgPerKm > 0
+		input.activityKcalPerKgPerKm != null &&
+		Number.isFinite(input.activityKcalPerKgPerKm) &&
+		input.activityKcalPerKgPerKm > 0
 			? input.activityKcalPerKgPerKm
 			: ACTIVITY_KCAL_PER_KG_PER_KM.run;
 	const g = genderMultiplier(input.gender);
-	return Math.round(weight * activityCoef * distanceKm * g);
+	// Finite inputs can still multiply out past the double range; the estimate
+	// is a display figure, so an unrepresentable one is no estimate at all.
+	const kcal = weight * activityCoef * distanceKm * g;
+	return Number.isFinite(kcal) ? Math.round(kcal) : 0;
 }

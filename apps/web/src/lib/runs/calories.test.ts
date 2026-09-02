@@ -141,6 +141,57 @@ test('estimateRunCalories: negative distance is clamped to 0 (not a crash)', () 
 	assert.equal(estimateRunCalories({ distanceM: -5_000, weightKg: 70 }), 0);
 });
 
+test('estimateRunCalories: a non-finite distance contributes nothing', () => {
+	// A NaN fails every `> 0` test the way a zero does but survives
+	// Math.max, so it used to render as "NaN kcal". The Dart twin answered 0
+	// for the same NaN and threw outright for an Infinity, inside a getter
+	// read during a widget build.
+	for (const d of [NaN, Infinity, -Infinity]) {
+		assert.equal(estimateRunCalories({ distanceM: d, weightKg: 70 }), 0, `distance ${d}`);
+	}
+});
+
+test('estimateRunCalories: a non-finite weight falls back to the default', () => {
+	const expected = estimateRunCalories({ distanceM: 5_000 });
+	for (const w of [NaN, Infinity, -Infinity]) {
+		assert.equal(estimateRunCalories({ distanceM: 5_000, weightKg: w }), expected, `weight ${w}`);
+	}
+});
+
+test('estimateRunCalories: a non-finite activity coefficient falls back to run', () => {
+	const expected = estimateRunCalories({ distanceM: 5_000, weightKg: 70 });
+	for (const c of [NaN, Infinity, -Infinity]) {
+		assert.equal(
+			estimateRunCalories({ distanceM: 5_000, weightKg: 70, activityKcalPerKgPerKm: c }),
+			expected,
+			`coefficient ${c}`,
+		);
+	}
+});
+
+test('estimateRunCalories: an unrepresentable product is no estimate', () => {
+	// Every input finite, the product past the double range.
+	assert.equal(
+		estimateRunCalories({
+			distanceM: 1e300,
+			weightKg: 1e300,
+			activityKcalPerKgPerKm: 1e300,
+		}),
+		0,
+	);
+});
+
+test('estimateRunCalories: always returns a finite integer', () => {
+	const inputs = [NaN, Infinity, -Infinity, -1, 0, 1, 5_000, 1e300];
+	for (const d of inputs) {
+		for (const w of inputs) {
+			const v = estimateRunCalories({ distanceM: d, weightKg: w });
+			assert.ok(Number.isInteger(v), `distance ${d} weight ${w} gave ${v}`);
+			assert.ok(v >= 0, `distance ${d} weight ${w} gave ${v}`);
+		}
+	}
+});
+
 test('estimateRunCalories: DEFAULT_BODY_WEIGHT_KG is 70', () => {
 	// Pinned because callers reference the constant; if the value
 	// changes the run-detail label copy ("Calories kcal (est)") must

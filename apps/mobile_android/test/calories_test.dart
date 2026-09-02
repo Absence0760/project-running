@@ -113,6 +113,66 @@ void main() {
       expect(estimateRunCalories(distanceM: -5000, weightKg: 70), 0);
     });
 
+    test('a non-finite distance contributes nothing', () {
+      // A NaN fails every `> 0` test the way a zero does; the web twin
+      // rendered "NaN kcal" for it while `.round()` THREW here for an
+      // Infinity, inside a getter read during a widget build.
+      for (final d in [double.nan, double.infinity, double.negativeInfinity]) {
+        expect(estimateRunCalories(distanceM: d, weightKg: 70), 0,
+            reason: 'distance $d');
+      }
+    });
+
+    test('a non-finite weight falls back to the default', () {
+      final expected = estimateRunCalories(distanceM: 5000);
+      for (final w in [double.nan, double.infinity, double.negativeInfinity]) {
+        expect(estimateRunCalories(distanceM: 5000, weightKg: w), expected,
+            reason: 'weight $w');
+      }
+    });
+
+    test('a non-finite activity coefficient falls back to run', () {
+      final expected = estimateRunCalories(distanceM: 5000, weightKg: 70);
+      for (final c in [double.nan, double.infinity, double.negativeInfinity]) {
+        expect(
+          estimateRunCalories(
+              distanceM: 5000, weightKg: 70, activityKcalPerKgPerKm: c),
+          expected,
+          reason: 'coefficient $c',
+        );
+      }
+    });
+
+    test('an unrepresentable product is no estimate', () {
+      expect(
+        estimateRunCalories(
+          distanceM: 1e300,
+          weightKg: 1e300,
+          activityKcalPerKgPerKm: 1e300,
+        ),
+        0,
+      );
+    });
+
+    test('always returns a finite non-negative integer', () {
+      const inputs = [
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+        -1.0,
+        0.0,
+        1.0,
+        5000.0,
+        1e300,
+      ];
+      for (final d in inputs) {
+        for (final w in inputs) {
+          final v = estimateRunCalories(distanceM: d, weightKg: w);
+          expect(v, greaterThanOrEqualTo(0), reason: 'distance $d weight $w');
+        }
+      }
+    });
+
     test('kDefaultBodyWeightKg is 70', () {
       expect(kDefaultBodyWeightKg, 70);
     });
