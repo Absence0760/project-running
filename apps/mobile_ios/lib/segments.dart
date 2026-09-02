@@ -5,7 +5,7 @@ import 'package:core_models/core_models.dart';
 
 import 'geo.dart' show unwrapLonDeg;
 
-/// Pure Dart port of `apps/web/src/lib/segments.ts` (decisions §37).
+/// Pure Dart port of `apps/web/src/lib/segments/segments.ts` (decisions §37).
 /// Walks a run track to extract elapsed time over a (start, end)
 /// distance window of a saved route. Stays in sync with the web copy.
 

@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/social_service.dart';
 
 /// Parity tests for `SocialService.createClub` — the insert-body
-/// shape must match `apps/web/src/lib/data.ts:createClub` so a club
+/// shape must match `apps/web/src/lib/core/data.ts:createClub` so a club
 /// created on either platform stores identically.
 ///
 /// History: mobile + web diverged in four ways before this round

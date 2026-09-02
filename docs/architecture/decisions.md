@@ -15209,3 +15209,33 @@ mobile platforms rather than a KML/KMZ row that said `✓`.
 The copy is pinned to the picker rather than kept in step by hand: the suite
 reads all seven ARBs and fails if any omits a format the picker offers or names
 one nothing can open.
+
+## 989. The five stale twin headers were already fixed; twenty-six others were not
+
+The filed item named five Dart headers pointing at web paths their counterpart
+had moved out of. All five were already correct on `main` — closed in the same
+round that filed them. What no one had done was ask the question generally.
+
+Scanning every `apps/web/src/**` path mentioned from `apps/mobile_android/lib`,
+`apps/mobile_android/test` and `packages/**`: 211 references, **26 distinct
+paths that did not exist**, cited from 37 files. They are the residue of the
+2026 `src/lib` re-foldering, and they are not obscure — `privacy`, `segments`,
+`training`, `training_load`, `recurrence`, `fitness`, `search_ranking`,
+`settings` and `routing_quality` are all registered TS-Dart parity pairs whose
+Dart half named a file that had not been there for months, plus five `.test.ts`
+counterparts the mirror suites cite as the thing they mirror.
+
+`check_parity_pair_registry.mjs` cannot see any of this, and the filing was
+right about why: it holds paths of its own and compares two registries, never
+reading the headers. So a header is documentation nothing checks — which is how
+26 of them rotted in silence.
+
+The guard is a Dart test rather than a script under `scripts/`, deliberately.
+The claim is about mobile source comments and the artefacts are mobile files,
+so it belongs in the suite that already reads them; it needs no new CI wiring
+(the `Test Flutter packages` job runs it), and being in `test/` it is mirrored
+into the iOS twin for free. It walks the three trees, extracts every
+`apps/web/src/**.{ts,svelte,mjs}` reference and fails on any that does not
+resolve — plus a floor on the number of references scanned, so a broken regex
+or a broken walk fails loudly instead of passing with zero findings, which is
+the failure mode a guard of this shape actually has.

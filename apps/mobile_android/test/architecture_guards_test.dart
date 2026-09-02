@@ -6300,4 +6300,46 @@ void main() {
       }
     });
   });
+
+  group('a header that names its web twin names a file that exists', () {
+    // A doc comment pointing at a path the counterpart moved out of is a
+    // claim the next reader cannot follow, and it is invisible to
+    // `check_parity_pair_registry.mjs`, which holds paths of its own rather
+    // than reading these. Twenty-six distinct web paths had gone stale under
+    // the 2026 `src/lib` re-foldering — including registered pairs such as
+    // `privacy`, `segments`, `training` and `training_load` — before anything
+    // read them (decisions § 989).
+    final ref = RegExp(r'apps/web/src/[A-Za-z0-9_./\-]+\.(?:ts|svelte|mjs)');
+    final repoRoot = Directory('../..');
+
+    Iterable<File> dartSources() sync* {
+      for (final base in <String>['lib', 'test', '../../packages']) {
+        final dir = Directory(base);
+        if (!dir.existsSync()) continue;
+        for (final e in dir.listSync(recursive: true)) {
+          if (e is File && e.path.endsWith('.dart')) yield e;
+        }
+      }
+    }
+
+    test('every referenced web path resolves', () {
+      final stale = <String, Set<String>>{};
+      var scanned = 0;
+      for (final f in dartSources()) {
+        for (final m in ref.allMatches(f.readAsStringSync())) {
+          scanned++;
+          final target = File('${repoRoot.path}/${m.group(0)}');
+          if (!target.existsSync()) {
+            stale.putIfAbsent(m.group(0)!, () => <String>{}).add(f.path);
+          }
+        }
+      }
+      expect(scanned, greaterThan(100),
+          reason: 'the scan found almost nothing — the pattern or the walk '
+              'is broken, not the tree');
+      expect(stale, isEmpty,
+          reason: 'a header names a web file that no longer exists at that '
+              'path; find where it moved and update the comment');
+    });
+  });
 }

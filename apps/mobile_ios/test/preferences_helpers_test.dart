@@ -149,7 +149,7 @@ void main() {
   });
 
   group('UnitFormat.elevation', () {
-    // Mirrors `formatElevation` in `apps/web/src/lib/units.svelte.ts`.
+    // Mirrors `formatElevation` in `apps/web/src/lib/format/units.svelte.ts`.
     // Persona-hunt Round 3 finding Ultra #4: vert is a first-class
     // metric for ultra / pro runners and the dashboard hid it.
     test('km mode renders metres rounded to the nearest integer', () {

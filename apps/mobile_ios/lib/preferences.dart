@@ -1103,7 +1103,7 @@ class UnitFormat {
   /// Format cumulative elevation gain: "120 m" / "394 ft". Integer
   /// rounding because sub-metre precision on cumulative gain is the
   /// GPS-noise floor. Null renders as em-dash. Mirrors web
-  /// `formatElevation` in `apps/web/src/lib/units.svelte.ts`.
+  /// `formatElevation` in `apps/web/src/lib/format/units.svelte.ts`.
   static String elevation(double? metres, DistanceUnit unit) {
     if (metres == null) return '—';
     if (unit == DistanceUnit.mi) {
@@ -1237,7 +1237,7 @@ String formatDistanceForPref(double metres) =>
     UnitFormat.distance(metres, activeDistanceUnit);
 
 /// Format an elevation gain using the active user unit pref. Mirrors
-/// `formatElevation` in `apps/web/src/lib/units.svelte.ts`. Null →
+/// `formatElevation` in `apps/web/src/lib/format/units.svelte.ts`. Null →
 /// em-dash.
 String formatElevationForPref(double? metres) =>
     UnitFormat.elevation(metres, activeDistanceUnit);

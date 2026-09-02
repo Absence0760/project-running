@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart';
 
-/// Pure Dart port of `apps/web/src/lib/training_load.ts` (decisions §34).
+/// Pure Dart port of `apps/web/src/lib/training/training_load.ts` (decisions §34).
 /// Computes a per-run training-stress score (TRIMP when HR available,
 /// distance proxy otherwise), aggregates by local calendar day, and
 /// returns a 90-day daily series with the EWMA Fitness / Fatigue / Form

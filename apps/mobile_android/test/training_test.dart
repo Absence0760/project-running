@@ -1,4 +1,4 @@
-// Mirrors apps/web/src/lib/training.test.ts. These two suites must stay in
+// Mirrors apps/web/src/lib/training/training.test.ts. These two suites must stay in
 // sync — the Dart engine is expected to produce the same paces and phase
 // assignments as the TS engine for the same inputs.
 
@@ -269,7 +269,7 @@ void main() {
 
     // Persona-hunt Round 3 finding Woman #3 — gender calibration.
     // Mirror of `pacesFromGoalPace: female calibration ...` + companion
-    // tests in `apps/web/src/lib/training.test.ts`. Keep both suites
+    // tests in `apps/web/src/lib/training/training.test.ts`. Keep both suites
     // in lockstep — `shared-library-syncer` agent flags divergence.
     test('omitting gender returns the existing (male-curve) values', () {
       final noGender = pacesFromGoalPace(240);
@@ -804,7 +804,7 @@ void main() {
     });
 
     // ─────────── masters age-band calibration (#30) ───────────
-    // Mirrors the masters tests in apps/web/src/lib/training.test.ts.
+    // Mirrors the masters tests in apps/web/src/lib/training/training.test.ts.
 
     test('isMastersAge: boundary 50 inclusive; null is not masters', () {
       expect(isMastersAge(49), isFalse);

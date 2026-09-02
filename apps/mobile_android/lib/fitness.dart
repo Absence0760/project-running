@@ -6,7 +6,7 @@ import 'training_load.dart' show kLayoffResetDays;
 
 /// Fitness metrics — VO2 max + training-load math.
 ///
-/// Dart port of `apps/web/src/lib/fitness.ts`. Pure functions; inputs are
+/// Dart port of `apps/web/src/lib/training/fitness.ts`. Pure functions; inputs are
 /// plain `Run` objects, outputs are scalars / small structs. No
 /// Supabase or auth calls. Keep the formulas in sync with the web module
 /// — the same numbers should appear on every surface.
@@ -147,7 +147,7 @@ double? vo2MaxFromVdot(double? vdot) => vdot;
 ///
 /// Spot checks against Daniels' published table — VDOT 50 → 4:15/km,
 /// VDOT 60 → 3:40/km, VDOT 70 → 3:14/km — match within a couple of
-/// seconds across VDOT 30-70. Mirrors apps/web/src/lib/fitness.ts.
+/// seconds across VDOT 30-70. Mirrors apps/web/src/lib/training/fitness.ts.
 double? thresholdPaceSecPerKmFromVdot(double? vdot) {
   if (vdot == null || vdot <= 0) return null;
   final target = 0.88 * vdot + 4.6;

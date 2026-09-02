@@ -24,7 +24,7 @@ import '../lib/local_run_store.dart';
 ///
 /// If you change the format on either side, this test must be updated
 /// in lockstep with `apps/job_worker/internal/dataexport/server.go`'s
-/// `BuildBackupZip` AND `apps/web/src/lib/backup_writer.ts`'s
+/// `BuildBackupZip` AND `apps/web/src/lib/backup/backup_writer.ts`'s
 /// `buildBackupZip`. The trio is the wire contract.
 
 bool _supabaseReady = false;

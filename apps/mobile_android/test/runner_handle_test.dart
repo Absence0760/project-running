@@ -4,7 +4,7 @@ import '../lib/runner_handle.dart';
 
 void main() {
   // Persona-hunt Round 3 finding Privacy #5. Dart twin of
-  // `apps/web/src/lib/runner_handle.test.ts` — keep in lockstep.
+  // `apps/web/src/lib/social/runner_handle.test.ts` — keep in lockstep.
   group('runnerHandle', () {
     test('returns Runner #ABCD for a v4 uuid (first 4 hex chars, uppercased)',
         () {

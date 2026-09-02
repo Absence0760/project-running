@@ -3,7 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:test/test.dart';
 
 /// Parity tests for `ApiClient.comparePeopleRank` — Dart port of
-/// `apps/web/src/lib/search_ranking.ts:comparePeopleRank`. Anti-spam
+/// `apps/web/src/lib/social/search_ranking.ts:comparePeopleRank`. Anti-spam
 /// phase 1: a bot mass-creating empty accounts has zero public runs
 /// and zero shared clubs. Ranking on those signals first surfaces
 /// real users above bots even when a bot's display name is a closer
@@ -15,7 +15,7 @@ import 'package:test/test.dart';
 /// in arbitrary order. Mobile now applies the same comparator
 /// post-fetch so search results match across platforms.
 ///
-/// Pairs 1:1 with `apps/web/src/lib/search_ranking.test.ts`.
+/// Pairs 1:1 with `apps/web/src/lib/social/search_ranking.test.ts`.
 void main() {
   PeopleSuggestion p({
     String id = 'id',

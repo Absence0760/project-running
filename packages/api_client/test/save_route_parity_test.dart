@@ -3,7 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:test/test.dart';
 
 /// Parity tests for [ApiClient.saveRoute] — the insert-body shape must
-/// match `apps/web/src/lib/data.ts:saveRoute` so a route created on
+/// match `apps/web/src/lib/core/data.ts:saveRoute` so a route created on
 /// either platform reads back identically. The helper
 /// [ApiClient.buildSaveRouteBody] is a pure function; these tests
 /// exercise it without standing up a Supabase fixture.

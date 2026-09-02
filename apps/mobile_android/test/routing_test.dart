@@ -222,7 +222,7 @@ void main() {
       // to reach unbounded distance to find a road — a tap on a
       // stream / parking lot / private drive snaps to a road
       // 800m+ away. Pinned at 250 m to match
-      // `apps/web/src/lib/routing_quality.ts:OSRM_SNAP_RADIUS_M`.
+      // `apps/web/src/lib/routes/routing_quality.ts:OSRM_SNAP_RADIUS_M`.
       final stub = _StubFetcher(jsonEncode({
         'code': 'Ok',
         'waypoints': [{'location': [8.5, 47.5]}],

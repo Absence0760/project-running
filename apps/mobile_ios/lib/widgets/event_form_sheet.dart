@@ -162,7 +162,7 @@ class _EventFormState extends State<_EventForm> {
       _error = null;
     });
     try {
-      // Recurrence mapping mirrors `apps/web/src/lib/recurrence.ts`:
+      // Recurrence mapping mirrors `apps/web/src/lib/social/recurrence.ts`:
       // weekly → FREQ=WEEKLY, biweekly → WEEKLY+INTERVAL=2 (we collapse
       // to "weekly_alt" via a byday hint for v1), monthly → MONTHLY.
       String? freq;

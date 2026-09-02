@@ -4,7 +4,7 @@ import '../lib/event_gym_template.dart';
 import '../lib/social_service.dart';
 
 /// Parity tests for `SocialService.createEvent` — the insert-body
-/// shape must match `apps/web/src/lib/data.ts:createEvent` so events
+/// shape must match `apps/web/src/lib/core/data.ts:createEvent` so events
 /// created on either platform store identically.
 ///
 /// History: mobile + web diverged in four ways before this round
