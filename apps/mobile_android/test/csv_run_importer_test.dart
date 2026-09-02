@@ -470,16 +470,21 @@ void main() {
       expect(result.failures.total, 1);
     });
 
-    test('a non-finite distance is refused with a message about the value', () {
+    test('a non-finite distance is refused AS a bad measurement', () {
       // Previously refused only by accident: _syntheticExternalId calls
-      // .round() on it, which throws, and the runner saw the throw rather
-      // than a bad measurement.
+      // .round() on it, which throws "Unsupported operation: Infinity or NaN
+      // toInt", and the runner saw that rather than a bad measurement. The
+      // assertion is on the guard's OWN wording, because the accidental
+      // throw's message happens to contain "NaN" and "Infinity" as well and
+      // a substring test on the value alone cannot tell the two apart.
       for (final bad in ['NaN', 'Infinity', '-Infinity']) {
         final result =
             CsvRunImporter.parse(rowsCsv(['2026-05-20T08:00:00Z,$bad,1500,300,app']));
         expect(result.runs, isEmpty, reason: bad);
         expect(result.failures.total, 1, reason: bad);
-        expect(result.failures.items.single.detail, contains(bad), reason: bad);
+        final detail = result.failures.items.single.detail;
+        expect(detail, contains('must be zero or more'), reason: bad);
+        expect(detail, contains(bad), reason: bad);
       }
     });
 
