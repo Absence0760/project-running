@@ -12004,3 +12004,37 @@ pseudo-role, because PUBLIC is the entry an image default moves underneath us.
 The revoke is catalog-only and instant, so `migration_locks.md` does not govern
 it. The test that caught it is unchanged: it now proves the fix rather than
 recording the gap.
+
+## 878. `scrollUntilVisible` and `ensureVisible` each pass on one Flutter version and fail on the other, and the duplicate-week test needed both
+
+**Decided 2026-09-01.** `plan_detail_adherence_test.dart`'s two duplicate-week
+cases were failing on `origin/main` before this branch touched anything — the
+`Test Flutter packages` job was red at `0634844` with exactly these two names —
+so they arrived here inherited. The previous round filed them as local-only
+Flutter version skew. That was half right and the wrong half was the important
+one: they fail on CI too, for a *different* reason, and each environment's
+failure hid the other's.
+
+The button is reached through `find.byTooltip('Duplicate week')`. On CI's pinned
+3.47 it is in the tree and sits at `Offset(746.5, 612.5)`, below the 800x600
+test viewport, so `tap()` reports "would not hit test on the specified widget …
+outside the bounds of the root of the render tree". On the workstation's 3.44 it
+is not in the tree at all, and a finder that matches nothing makes
+`ensureVisible` throw `Bad state: No element`.
+
+The two primitives answer different questions and neither answers both.
+`scrollUntilVisible` scrolls until the finder MATCHES, so it builds a lazily
+built child — and returns immediately, having scrolled nothing, when the child
+is already built but off-screen. `ensureVisible` scrolls until the element is
+inside the viewport — and requires the element to exist first. The test had only
+the first, which is why it was green on neither. It now calls both, in that
+order, which is correct under either version: the scroll is a no-op where the
+child is already built, and the ensure is a no-op where the scroll already
+revealed it.
+
+The general form is worth keeping: **a widget test that taps something below the
+fold wants `scrollUntilVisible` for existence and `ensureVisible` for position**,
+and a suite that runs against two Flutter versions cannot pick one. It is also
+a second instance of the round's other lesson ([§ 877](#877)) — a failure
+reproduced in one environment and attributed to that environment is not
+diagnosed, only relocated.
