@@ -132,7 +132,17 @@ over the Wearable Data Layer. `mobile_android` pushes `{access_token,
 refresh_token, user_id, base_url, anon_key, expires_at_ms}` to
 `/supabase_session` whenever Supabase's `onAuthStateChange` fires;
 `SessionBridge` on the watch receives it and `SessionStore` caches it to
-DataStore so a cold launch while offline still has credentials.
+DataStore so a cold launch while offline still has credentials. **The receive
+side grades before it applies** (`decisions.md § 879`): `fromDataMapOrNull`
+refuses a push whose access token, refresh token, user id, base URL or anon key
+is missing or blank, because the accept path SAVES over the encrypted cached
+session and sets `authed = true` — so a half-formed push used to destroy the one
+credential an out-of-range watch still had and then hide the sign-in affordance
+behind it. A refusal drops the event rather than emitting `SessionEvent.Cleared`:
+`Cleared` runs `tearDownSession`, which wipes the unsynced-run queue, so treating
+a corrupt frame as a sign-out would be worse than the bug. `DataLayerContractTest`
+compares the path and the `DataMap` key set against the phone's writer, in both
+directions.
 `RunViewModel.refreshIfExpired` exchanges the refresh token for a new
 access token automatically, and `drainQueue` retries once on HTTP 401 by
 refreshing then re-pushing.
@@ -225,6 +235,13 @@ safe-for-release baseline, so nothing here can leak into a release artifact.
 Edit it locally for a real MapTiler/Sentry key but **don't commit the change**
 (`git update-index --skip-worktree` it). Changes require a rebuild
 (`./gradlew installDebug`).
+
+Boolean flags accept the repo's set — `1`, `true`, `yes`, `on`, trimmed and
+case-insensitive — and nothing else, matching `apps/web/src/lib/core/env_flag.ts`
+and `apps/mobile_android/lib/env_flag.dart`. `EnvFlagParityTest` reads the
+accepted set off the web rail rather than restating it, so a fifth affirmative
+added there fails here rather than leaving this rail behind
+(`decisions.md § 880`).
 
 | Flag | Default | Effect |
 |---|---|---|
@@ -364,6 +381,16 @@ or hammering the NotificationManager:
 Permissions added in the manifest: `FOREGROUND_SERVICE`,
 `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`,
 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+
+**Declaring a permission is half of it.** A runtime permission also has to be
+asked for, and the only place this app asks is `permissionLauncher.launch(...)`
+in `ui/RunWatchApp.kt`. `POST_NOTIFICATIONS` was declared and never requested,
+so on API 33+ the ongoing-activity notification never reached the shade
+(`decisions.md § 881`). `ManifestPermissionCoverageTest` derives the obligation
+from the manifest: every declared permission is requested, install-time, or a
+registered exemption with its reason. `BODY_SENSORS_BACKGROUND` is the one open
+exemption — a background permission needs its own second request after the
+foreground half is granted, tracked in `docs/product/followups.md`.
 
 ## What's still deferred
 
