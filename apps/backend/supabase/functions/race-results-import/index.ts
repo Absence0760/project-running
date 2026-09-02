@@ -17,6 +17,7 @@ import {
   mapUltraSignUpResult,
   matchResultGate,
   parseRaceResultRow,
+  resultsPossiblyTruncated,
   runSignUpResultsUrl,
   runSignUpScopeGate,
   ultraSignUpAttributionGate,
@@ -146,6 +147,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   };
 
   let mapped: MappedRaceRun[] = [];
+  // Whether the provider fetch may have been cut short of the whole field. A
+  // paste carries one row and can never be, so it stays false.
+  let complete = true;
 
   if (provider === 'runsignup') {
     // Fail closed when the provider key is unconfigured. The whole RunSignUp
@@ -184,7 +188,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     } catch (_) {
       return Response.json({ error: 'runsignup upstream not JSON' }, { status: 502 });
     }
-    mapped = extractRunSignUpResults(payload)
+    const rows = extractRunSignUpResults(payload);
+    complete = !resultsPossiblyTruncated(rows.length);
+    mapped = rows
       .map((r) => mapRunSignUpResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
     // A bib-scoped request narrows here: the API filters only by user id, so
@@ -234,7 +240,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     } catch (_) {
       return Response.json({ error: 'ultrasignup upstream not JSON' }, { status: 502 });
     }
-    mapped = extractUltraSignUpResults(payload)
+    const rows = extractUltraSignUpResults(payload);
+    complete = !resultsPossiblyTruncated(rows.length);
+    mapped = rows
       .map((r) => mapUltraSignUpResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
   } else if (provider === 'chronotrack') {
@@ -280,7 +288,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     } catch (_) {
       return Response.json({ error: 'chronotrack upstream not JSON' }, { status: 502 });
     }
-    mapped = extractChronoTrackResults(payload)
+    const rows = extractChronoTrackResults(payload);
+    complete = !resultsPossiblyTruncated(rows.length);
+    mapped = rows
       .map((r) => mapChronoTrackResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
     // Narrow client-side too, exactly as the RunSignUp leg does: the gate only
@@ -303,7 +313,18 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   }
 
   if (mapped.length === 0) {
-    return Response.json({ imported: 0, skipped: 0, enriched: 0 });
+    // "We read the whole field and you are not in it" and "we read the first
+    // 2,000 finishers and you were not among them" are different sentences, and
+    // reporting the second as the first tells a runner they did not finish a
+    // race they finished. Refuse rather than answer a successful import of
+    // nothing (decisions § 976).
+    if (!complete) {
+      return Response.json(
+        { error: 'upstream_results_truncated', complete: false },
+        { status: 502 },
+      );
+    }
+    return Response.json({ imported: 0, skipped: 0, enriched: 0, complete: true });
   }
 
   // Enrich an existing recorded run rather than inserting a duplicate when the
@@ -348,7 +369,7 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     if (error) {
       return Response.json({ error: 'failed to enrich run' }, { status: 500 });
     }
-    return Response.json({ imported: 0, skipped: 0, enriched: 1 });
+    return Response.json({ imported: 0, skipped: 0, enriched: 1, complete });
   }
 
   // Plain-insert path (no recorded counterpart). Dedupe per-user against
@@ -383,5 +404,5 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     imported = fresh.length;
   }
 
-  return Response.json({ imported, skipped, enriched: 0 });
+  return Response.json({ imported, skipped, enriched: 0, complete });
 }));

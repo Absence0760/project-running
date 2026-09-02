@@ -17,6 +17,29 @@ import { SYNTHETIC_START_TIME_UTC } from '../_shared/synthetic_start_time.ts';
 export const MAX_FIELD_LEN = 200;
 export const MAX_RESULTS_ROWS = 2000;
 
+/**
+ * Whether a provider fetch may have been cut off by `MAX_RESULTS_ROWS`.
+ *
+ * The three extractors stop pushing at the cap and return a plain array, so the
+ * only evidence of a truncation is the length — and a page carrying exactly
+ * `MAX_RESULTS_ROWS` results is indistinguishable from one that carried more.
+ * This reads that ambiguity the fail-closed way: exactly-at-the-cap is
+ * "possibly truncated", because a false "possibly" costs a caller one honest
+ * sentence while a false "complete" costs them the belief that they were not in
+ * a race they finished.
+ *
+ * It matters most on the RunSignUp bib-scoped path, which is the one that is
+ * reachable rather than theoretical: `runSignUpResultsUrl` narrows upstream by
+ * USER ID only, so a request scoped by bib alone fetches the WHOLE finisher
+ * field and `filterResultsByBib` narrows afterwards. A major with 30,000
+ * finishers therefore truncates at 2,000 BEFORE the bib filter runs, and a
+ * runner whose bib sits past that slice is told nothing was found
+ * (decisions § 976).
+ */
+export function resultsPossiblyTruncated(rowCount: number): boolean {
+  return rowCount >= MAX_RESULTS_ROWS;
+}
+
 /** Trim + truncate an untrusted text field. Non-strings become ''. */
 export function capField(raw: unknown, max: number = MAX_FIELD_LEN): string {
   if (typeof raw !== 'string') return '';
