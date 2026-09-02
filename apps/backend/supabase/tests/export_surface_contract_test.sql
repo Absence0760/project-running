@@ -30,7 +30,7 @@
 
 begin;
 
-select plan(17);
+select plan(20);
 
 -- ── the exports bucket ──────────────────────────────────────────────────────
 
@@ -184,11 +184,16 @@ insert into storage.objects (bucket_id, name, created_at) values
   ('exports', 'e8000000-0000-0000-0000-0000000000a2/fresh.zip', now() - interval '1 day'),
   ('runs',    'e8000000-0000-0000-0000-0000000000a2/track.json.gz', now() - interval '8 days');
 
--- Newer storage-api images (the workstation CLI's, not CI's pinned 2.84.2)
--- carry a `protect_objects_delete` trigger that refuses a direct DELETE from
--- `storage.objects` outside the Storage API. Setting its escape GUC here is a
--- no-op on an image without the trigger, so the file reads the same on both.
-set local "storage.allow_delete_query" = 'true';
+-- The GUC is deliberately NOT set here. storage-api's
+-- `0055-prevent-direct-deletes` migration installs a BEFORE DELETE FOR EACH
+-- STATEMENT trigger on `storage.objects` that raises 42501 unless
+-- `storage.allow_delete_query` is `'true'`, and it is present in the image
+-- BOTH CLIs start — v1.44.11 for CI's pinned 2.84.2 and v1.62.5 for the
+-- workstation's 2.109.1 (§ 839 said CI's image lacked it; measured, it does
+-- not). Setting it in the fixture is what made the sweep look sound: the
+-- function set nothing of its own, so production raised nightly while this
+-- file stayed green. 20270703000001 moved the escape into the function, and
+-- these assertions now drive it.
 
 -- (11) Everything the sweep is about is present first.
 select is(
@@ -219,6 +224,57 @@ select results_eq(
       where id = 'e8000000-0000-0000-0000-0000000000d2' $$,
   $$ values ('expired', null::text) $$,
   'the ready row is expired and its path cleared by the same sweep — a ready row cannot outlive its object');
+
+-- ── a sweep that cannot sweep must not read as a sweep that found nothing ───
+-- (14) The belt for (11)-(13). Those pass on an image WITHOUT the trigger
+-- whatever the function does, so on such an image nothing would notice the
+-- escape being deleted again — and a Cloud project WITH the trigger would then
+-- go back to raising nightly. This reads the applied body, which is a weaker
+-- claim than driving it and is here only to cover that one case.
+select ok(
+  (select prosrc from pg_proc where proname = 'cleanup_stale_export_blobs')
+    like '%storage.allow_delete_query%',
+  'the sweep carries its own escape from storage-api''s protect_delete() rather than borrowing a caller''s');
+
+-- (15) The negative control, and the reason the post-condition check exists at
+-- all. `get diagnostics row_count` counts what the statement deleted, not what
+-- the window required, so a delete that is FILTERED rather than refused looks
+-- exactly like a night with nothing stale. A row-level trigger returning null
+-- is the cheapest way to produce that shape; an RLS policy on
+-- `storage.objects` or a future guard that skips instead of raising would
+-- produce the same one. Before 20270703000001 this returned 0.
+insert into data_export_jobs (id, user_id, format, status, object_path, finished_at)
+values ('e8000000-0000-0000-0000-0000000000d3', 'e8000000-0000-0000-0000-0000000000a2',
+        'backup', 'ready', 'e8000000-0000-0000-0000-0000000000a2/blocked.zip',
+        now() - interval '9 days');
+
+insert into storage.objects (bucket_id, name, created_at) values
+  ('exports', 'e8000000-0000-0000-0000-0000000000a2/blocked.zip', now() - interval '9 days');
+
+create function public.pgtap_skip_object_delete() returns trigger
+language plpgsql as $skip$ begin return null; end; $skip$;
+
+create trigger zzz_pgtap_skip_object_delete
+  before delete on storage.objects
+  for each row execute function public.pgtap_skip_object_delete();
+
+select throws_ok(
+  $$ select cleanup_stale_export_blobs() $$,
+  'P0001',
+  null,
+  'a sweep whose delete was filtered raises instead of reporting zero — the archive is still readable and the operator has to hear about it');
+
+-- (16) And it fails CLOSED: the raise takes the expiry with it, so no row
+-- claims its object is gone while the object is still there. That ordering is
+-- the whole point of checking before `expire_stale_export_jobs()` rather than
+-- after.
+select is(
+  (select status from data_export_jobs where id = 'e8000000-0000-0000-0000-0000000000d3'),
+  'ready',
+  'and the job row is left alone — an expired row pointing at a surviving archive is worse than either failure on its own');
+
+drop trigger zzz_pgtap_skip_object_delete on storage.objects;
+drop function public.pgtap_skip_object_delete();
 
 select * from finish();
 
