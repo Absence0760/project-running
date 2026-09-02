@@ -41,7 +41,15 @@
 #      will need `Communications`, which is exactly when this claim earns its
 #      keep.
 #
-#   4. Every `Rez.Strings.X` the source loads, and every `@Strings.X` the
+#   4. The values other rails read out of this file are NAMED, not literals.
+#      `scripts/check_watch_wire_vectors.mjs` reads this file by regex, so a
+#      constant spelled inline is a rail that cannot be compared however loudly
+#      a comment on the far side claims a relationship. That is how the 99:00
+#      live-pace ceiling sat at the head of a four-rail chain — firmware GAP,
+#      firmware alerts, the phone's WKT1 encoder — with every link enforced
+#      except the one it starts at.
+#
+#   5. Every `Rez.Strings.X` the source loads, and every `@Strings.X` the
 #      manifest names, has an entry in `resources/strings/strings.xml` — and
 #      every entry is claimed by one of them. A missing entry is a build error
 #      the SDK would catch; an ORPHANED entry is not, and it makes the string
@@ -307,7 +315,43 @@ for perm in sorted(declared - {p for _, p, _ in used}):
     )
 
 # --------------------------------------------------------------------------
-# 4. String resources: referenced <-> defined, both directions.
+# 4. The cross-rail constants are named, and used by name.
+# --------------------------------------------------------------------------
+# name -> the magic number it must not be spelled as inline, anywhere in the
+# file other than its own declaration.
+#
+# FLAT_COST is deliberately absent: 3.6 is also the constant term of the
+# Minetti polynomial in `costAtGrade`, because C(0) IS that term — the two
+# copies are one identity, not a duplication, and every rail spells it twice
+# for the same reason. Both halves are independently registered across the
+# four rails by `scripts/check_watch_wire_vectors.mjs` (the fit, and C(0)),
+# and `flatFactorIsOne` in the (:test) suite pins them equal.
+NAMED_CONSTANTS = {
+    "MIN_SEGMENT_M": "5.0",
+    "MAX_GRADE": "0.45",
+    "MIN_SPEED_MPS": "0.4",
+    "MAX_PACE_S": "5940.0",
+}
+for name, literal in sorted(NAMED_CONSTANTS.items()):
+    decl = re.search(r"\bconst\s+%s\s*=\s*([^;]+);" % name, gap)
+    if decl is None:
+        fail(
+            "source/GradeAdjustedPaceView.mc declares no `const %s`. Another "
+            "rail reads this value by name; spelled inline it cannot be "
+            "compared, and a comment on the far side claiming it mirrors this "
+            "one is then an instruction rather than an enforcement." % name
+        )
+        continue
+    rest = gap[: decl.start()] + gap[decl.end():]
+    if re.search(r"(?<![\w.])%s(?![\d])" % re.escape(literal), rest):
+        fail(
+            "source/GradeAdjustedPaceView.mc spells `%s` inline somewhere "
+            "other than the `const %s` declaration. Use the name: a second "
+            "copy is what drifts." % (literal, name)
+        )
+
+# --------------------------------------------------------------------------
+# 5. String resources: referenced <-> defined, both directions.
 # --------------------------------------------------------------------------
 strings_xml = read("resources/strings/strings.xml")
 defined = set(re.findall(r'<string\s+id="([^"]+)"', strings_xml))

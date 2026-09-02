@@ -32,6 +32,21 @@ const MIN_SPEED_MPS = 0.4;
 // not point-to-point.
 const MIN_SEGMENT_M = 5.0;
 
+// Live-pace ceiling, 99:00 per unit. Past this the value is a runaway from a
+// near-zero adjusted speed, not a pace, and the native cell cannot render a
+// three-digit minute anyway.
+//
+// This is the HEAD of a four-rail chain and was a bare literal, which is the
+// one link in it nothing could read. The firmware's
+// `grade_adjusted_pace::MAX_PACE_S_PER_KM` says in its own doc comment that it
+// "mirrors the Garmin field's formatPace guard"; a firmware unit test pins
+// that equal to `alerts::PACE_BAND_MAX_S_PER_KM`; and THAT is held against the
+// phone's `kWorkoutPaceMaxSecPerKm` by `scripts/check_watch_wire_vectors.mjs`.
+// Every link is enforced except the one starting here, where a comment claims
+// a relationship and nothing checks it -- exactly the shape decisions.md § 641
+// exists to replace. Naming the value is what lets a rail read it.
+const MAX_PACE_S = 5940.0;
+
 // The rolling grade estimate, as its own object so the whole state machine --
 // not only the pure math under it -- is unit-testable without an
 // Activity.Info, which only the simulator can construct.
@@ -179,7 +194,7 @@ class GradeAdjustedPaceView extends WatchUi.SimpleDataField {
     static function formatPace(totalSeconds as Float) as String {
         // Guard against a runaway value (e.g. near-zero gapSpeed) blowing
         // past a sane pace ceiling the native field could render.
-        if (totalSeconds > 5940.0) { // 99:00 per unit
+        if (totalSeconds > MAX_PACE_S) {
             return "--:--";
         }
         var total = Math.round(totalSeconds).toNumber();
