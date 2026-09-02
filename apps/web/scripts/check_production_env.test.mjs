@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { checkProductionEnv, productionUrlProblem, redactCredentials } from './check_production_env.mjs';
@@ -325,4 +326,92 @@ test('a public https host on a domain that is not supabase.co is allowed', () =>
 	// A self-hosted Supabase behind a custom domain is a legitimate production
 	// config, so the rule is https-on-a-public-host, not `*.supabase.co`.
 	assert.equal(productionUrlProblem('https://supabase.threkir.com'), null);
+});
+
+/** A release env with nothing wrong in it, so a case adds exactly one fault. */
+const RELEASE_ENV = {
+	PUBLIC_SUPABASE_URL: 'https://prod-project.supabase.co',
+	PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_real_key_12345',
+	PUBLIC_MAPTILER_KEY: 'real-maptiler-key',
+};
+
+test('the optional origins may be absent — unset is a real configuration', () => {
+	// siteOrigin folds an empty value to DEFAULT_SITE_URL, the live hub
+	// reports itself off, and the export hub falls back to the Edge Function.
+	// None of the three is required, so absence must not fail a release.
+	const r = checkProductionEnv({ ...RELEASE_ENV });
+	assert.equal(r.ok, true);
+});
+
+test('a loopback PUBLIC_SITE_URL is refused — it bakes localhost canonicals', () => {
+	// The one that fails most quietly: every prerendered share page carries a
+	// <link rel="canonical"> and an og:url built off this origin, so a value
+	// inherited from .env.development ships localhost to every crawler and
+	// every unfurl, with nothing at runtime to notice.
+	const r = checkProductionEnv({ ...RELEASE_ENV, PUBLIC_SITE_URL: 'http://localhost:7777' });
+	assert.equal(r.ok, false);
+	assert.deepEqual(r.findings.map((f) => f.envVar), ['PUBLIC_SITE_URL']);
+	assert.match(r.findings[0].reason, /loopback/);
+});
+
+test('a loopback live or export hub is refused', () => {
+	// Both are absolute bases the client concatenates paths onto, so a
+	// loopback value posts each runner's telemetry at their own machine and
+	// enqueues each export against nothing.
+	const r = checkProductionEnv({
+		...RELEASE_ENV,
+		PUBLIC_LIVE_HUB_URL: 'http://127.0.0.1:8080',
+		PUBLIC_EXPORT_HUB_URL: 'http://host.docker.internal:8080',
+	});
+	assert.equal(r.ok, false);
+	assert.deepEqual(
+		r.findings.map((f) => f.envVar).sort(),
+		['PUBLIC_EXPORT_HUB_URL', 'PUBLIC_LIVE_HUB_URL'],
+	);
+});
+
+test('real optional origins pass', () => {
+	const r = checkProductionEnv({
+		...RELEASE_ENV,
+		PUBLIC_SITE_URL: 'https://threkir.com',
+		PUBLIC_LIVE_HUB_URL: 'https://live.threkir.com',
+		PUBLIC_EXPORT_HUB_URL: 'https://export.threkir.com/',
+	});
+	assert.equal(r.ok, true);
+});
+
+test('an optional origin that is not a URL at all is refused', () => {
+	const r = checkProductionEnv({ ...RELEASE_ENV, PUBLIC_EXPORT_HUB_URL: 'TODO-set-me' });
+	assert.equal(r.ok, false);
+	assert.deepEqual(r.findings.map((f) => f.envVar), ['PUBLIC_EXPORT_HUB_URL']);
+});
+
+test('every origin env_isolation guards on the dev side is answered on the prod side', () => {
+	// The two guards are mirrors: one refuses these when they are NOT loopback
+	// in dev, the other when they ARE in a release. A var named on only one
+	// side is a direction nobody is watching, which is what left the two
+	// route-generation engines unguarded in dev and the three origins here
+	// unguarded in prod. Server-only vars are dev-side only by design — they
+	// never reach a client bundle — so the mirror is over the PUBLIC_ ones.
+	const guardSrc = readFileSync(
+		fileURLToPath(new URL('./env_isolation.mjs', import.meta.url)),
+		'utf-8',
+	);
+	const listBlock = guardSrc.match(/KNOWN_ENV_VARS\s*=\s*\[([\s\S]*?)\];/);
+	assert.ok(listBlock, 'Could not locate KNOWN_ENV_VARS in env_isolation.mjs.');
+	const devPublicOrigins = [...listBlock[1].matchAll(/'(PUBLIC_[A-Z0-9_]*)'/g)].map((m) => m[1]);
+	assert.ok(devPublicOrigins.length >= 4, 'KNOWN_ENV_VARS unexpectedly small.');
+
+	const prodSrc = readFileSync(SCRIPT_PATH, 'utf-8');
+	for (const name of devPublicOrigins) {
+		// PUBLIC_OSRM_URL is guarded in dev only because a stale value in a
+		// .env.local should still be flagged; nothing reads it since the proxy
+		// landed, so a release has nothing to bake it into.
+		if (name === 'PUBLIC_OSRM_URL') continue;
+		assert.match(
+			prodSrc,
+			new RegExp(`\\b${name}\\b`),
+			`${name} is guarded against a prod value in dev but nothing checks it in a release build.`,
+		);
+	}
 });
