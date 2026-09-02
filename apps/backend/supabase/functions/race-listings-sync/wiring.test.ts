@@ -143,3 +143,27 @@ Deno.test('the response says what it could not read, so a wrong shape is visible
     );
   }
 });
+
+Deno.test('a call that did not ask for a sync performs none', () => {
+  // Every caller in the tree is a credential probe — web's two
+  // `isRunSignUpConfigured` / `isUltraSignUpConfigured` invocations and mobile's
+  // two `probeFunction` entries — and nothing reads `synced`. A probe that
+  // walked the provider feed would write the shared calendar on a page load and
+  // spend the 2/hour bucket, so the second probe in an hour would 429 and the
+  // tile would read unavailable for the rest of it (decisions § 977).
+  const gate = SRC.indexOf('if (body.sync !== true) {');
+  const out = SRC.indexOf('await fetch(');
+  const write = SRC.indexOf('.insert(');
+  assert(gate !== -1, 'a sync runs without the caller asking for one');
+  assert(out !== -1 && write !== -1);
+  assert(gate < out, 'the opt-in must precede the outbound fetch');
+  assert(gate < write, 'the opt-in must precede any write');
+  assert(
+    /if \(body\.sync !== true\) \{\s*return Response\.json\(\{ configured: true \}\);/.test(SRC),
+    'a probe must answer the credential verdict, not a sync result',
+  );
+  // And it must sit BEHIND the credential gate, or an unprovisioned deploy
+  // would report itself configured.
+  const cred = SRC.indexOf('if (!apiKey || !apiSecret)');
+  assert(cred !== -1 && cred < gate, 'the probe answer must follow the credential gate');
+});

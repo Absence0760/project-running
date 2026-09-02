@@ -40,8 +40,9 @@ import {
 // and spends their rate-limit bucket.
 
 interface RequestBody {
-  near?: unknown; // { lng, lat, radius_m } region hint (future)
-  provider?: unknown; // 'runsignup' (default) | 'ultrasignup' — which leg to gate/probe
+  near?: unknown; // { lng, lat, radius_m } region hint
+  provider?: unknown; // 'runsignup' (default) | 'ultrasignup' — which leg to gate/sync
+  sync?: unknown; // true to actually walk the feed; anything else is a credential probe
 }
 
 Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
@@ -93,6 +94,21 @@ Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
     : Deno.env.get('RUNSIGNUP_API_SECRET');
   if (!apiKey || !apiSecret) {
     return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+  }
+
+  // Every caller in the tree today is a CREDENTIAL PROBE, not a sync: web's
+  // `isRunSignUpConfigured` / `isUltraSignUpConfigured` invoke this with `{}`
+  // and `{ provider: 'ultrasignup' }` to decide whether to offer the affordance
+  // or the unavailable explainer, and mobile's `raceImportProviders` names it as
+  // two `probeFunction`s. Nothing anywhere reads `synced`. While the leg was a
+  // stub that cost nothing; now that it walks a provider feed and writes the
+  // shared calendar, a page load must not trigger one — it would also spend the
+  // 2/hour bucket, so the second probe in an hour would 429 and the tile would
+  // read unavailable for the rest of it. So a sync is opt-IN, the same shape
+  // `race-results-import` already uses for its own probe mode, and the default
+  // answer is the credential verdict alone (decisions § 977).
+  if (body.sync !== true) {
+    return Response.json({ configured: true });
   }
 
   const nearHint = parseNearHint(body.near);
