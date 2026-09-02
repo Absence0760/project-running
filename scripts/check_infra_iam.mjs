@@ -83,6 +83,11 @@ export const OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 export const OIDC_AUDIENCE = 'sts.amazonaws.com';
 export const CLAIM_PREFIX = 'token.actions.githubusercontent.com';
 
+/// The same prefix as a regex-safe literal. Spelled out rather than escaped at
+/// the use site: the dots are metacharacters, and an escape applied by a call
+/// is one a reader (and a scanner) has to notice to trust the pattern.
+export const CLAIM_PREFIX_PATTERN = 'token\\.actions\\.githubusercontent\\.com';
+
 /// Actions granted on `Resource: "*"` because AWS models no resource for them,
 /// each with the reason. An action on `*` that is absent from this map fails;
 /// an entry here that no statement uses fails too, because a stale exemption
@@ -272,7 +277,7 @@ export function parseOidcStack(raw) {
         }
         for (const m of condition.matchAll(
           new RegExp(
-            `"${CLAIM_PREFIX.replaceAll('.', '\\.')}:([a-z_]+)"\\s*=\\s*"([^"]*)"`,
+            `"${CLAIM_PREFIX_PATTERN}:([a-z_]+)"\\s*=\\s*"([^"]*)"`,
             'g',
           ),
         )) {

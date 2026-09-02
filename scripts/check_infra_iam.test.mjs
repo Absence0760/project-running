@@ -15,6 +15,8 @@ import {
   parseStatements,
   parseWebStack,
   stringsFor,
+  CLAIM_PREFIX,
+  CLAIM_PREFIX_PATTERN,
 } from './check_infra_iam.mjs';
 
 // ─────────────────────────────── fixtures ───────────────────────────────
@@ -433,4 +435,13 @@ test('the parsers actually reach the committed sources', () => {
   const release = parseReleaseWorkflow(readFileSync(RELEASE_FILE, 'utf-8'));
   assert.equal(release.environment.whenTrue, 'production');
   assert.equal(release.resourceEnv.whenTrue, 'prod');
+});
+
+// The regex-safe spelling is a second copy of the claim prefix. Nothing but
+// this pins them together, and a prefix that drifts from its pattern reads
+// every trust policy as having no claims at all — the guard would pass an
+// empty condition rather than fail it.
+test('the claim prefix and its regex-safe spelling describe the same host', () => {
+  assert.match(CLAIM_PREFIX, new RegExp(`^${CLAIM_PREFIX_PATTERN}$`));
+  assert.doesNotMatch('tokenXactionsXgithubusercontentXcom', new RegExp(`^${CLAIM_PREFIX_PATTERN}$`));
 });
