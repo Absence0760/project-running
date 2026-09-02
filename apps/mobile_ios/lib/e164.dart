@@ -25,11 +25,36 @@ final RegExp e164Pattern = RegExp(r'^\+[1-9][0-9]{6,14}$');
 
 /// The parenthesised national trunk prefix, e.g. the `(0)` in
 /// `+44 (0) 7700 900123`. Deleted whole — see the note above.
-final RegExp _trunkZero = RegExp(r'\(\s*0\s*\)');
+///
+/// The bracket set here MUST match the bracket set in [_separators]. A bracket
+/// the separator class folds but this one does not turn `+44（0）7700900123`
+/// into `+4407700900123` — a different, CONFORMING number — which is the exact
+/// silent misdelivery the whole-deletion exists to prevent.
+final RegExp _trunkZero = RegExp(r'[(\uFF08]\s*0\s*[)\uFF09]');
 
-/// Punctuation people write inside a phone number: ASCII and non-breaking
-/// spaces, the hyphen family, brackets, dots and slashes.
-final RegExp _separators = RegExp(r'[ \t\u00A0\u202F()\-\u2011\u2013./]');
+/// Punctuation people write inside a phone number, spelled out by code point
+/// rather than left to `\s` or a `Dash_Punctuation` property, so both rails
+/// fold exactly the same set (the convention `gym_prs`'s whitespace class
+/// records).
+///
+/// The hyphen family is the reason: this used to carry three of its members
+/// (U+002D, U+2011, U+2013) under a comment claiming the family, and the test
+/// pinning it exercised two. A macOS or Word autocorrect turns a typed hyphen
+/// into an EN DASH — folded — or an EM DASH, which was not, so the same
+/// contact card pasted twice could be accepted once and refused once. A
+/// number typed on a CJK keyboard carries U+FF0D, a spreadsheet export
+/// U+2212. All eleven are folded now.
+///
+/// The space family runs U+2000..U+200D as one range, which also takes the
+/// zero-width space, non-joiner and joiner: invisible characters a paste from
+/// a web page carries and no reader can see to delete. U+00AD (soft hyphen)
+/// and U+FEFF are the other two invisibles that survive a copy.
+///
+/// A separator that is NOT here is refused rather than guessed at, which is
+/// the safe direction — the owner sees an error and retypes.
+final RegExp _separators = RegExp(
+    r'[ \t\u00A0\u00AD\u2000-\u200D\u202F\u205F\u3000\uFEFF'
+    r'\-\u2010-\u2015\u2212\uFE58\uFE63\uFF0D()\uFF08\uFF09./]');
 
 /// Repair [raw] into bare E.164, or null when it cannot be. Null covers both
 /// "nothing was entered" and "this is not a reachable international number";
