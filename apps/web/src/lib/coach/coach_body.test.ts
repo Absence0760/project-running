@@ -109,3 +109,36 @@ test('checkBodyByteLimit — Uint8Array path mirrors ArrayBuffer path', () => {
 	assert.equal(result.ok, false);
 	if (!result.ok) assert.equal(result.status, 413);
 });
+
+test('a malformed base64 body is decoded, not refused — the 400 branch is not for that', () => {
+	// The filing behind decisions § 969 read the `400 invalid body encoding`
+	// branch as dead code, on the grounds that `Buffer.from(s, 'base64')`
+	// ignores invalid characters rather than throwing. The first half is right
+	// and is measured here: no STRING reaches the branch, whatever it contains.
+	for (const raw of ['!!!!not base64!!!!', 'a', 'aGVsbG8', '\0\0', '\uD800', '\u{1F600}ࠀ']) {
+		const result = decodeLambdaBody(raw, true);
+		assert.equal(result.ok, true, `${JSON.stringify(raw)} was refused as unreadable`);
+	}
+});
+
+test('a body that is not a string at all IS refused 400, and does not throw', () => {
+	// The second half of that filing — "so delete it" — is wrong. The branch is
+	// unreachable only through the DECLARED type; the values it defends against
+	// are the ones a Lambda event can really carry, because an event body is
+	// parsed JSON and nothing at runtime enforces the `string | null` signature.
+	// `Buffer.from(123, 'base64')` throws a TypeError, and without the catch it
+	// escapes to the wrapper's outer envelope: a client-side malformation
+	// answered as a generic 503, logged as `unhandled_error`.
+	for (const raw of [123, true, {}, Symbol('x')] as unknown[]) {
+		const result = decodeLambdaBody(raw as string, true);
+		assert.equal(result.ok, false, `${String(raw)} was accepted as a body`);
+		assert.equal(result.ok === false && result.status, 400);
+		assert.equal(result.ok === false && result.error, 'invalid body encoding');
+	}
+
+	// An ARRAY is the exception and is not a gap: `Buffer.from` reads one as a
+	// byte array, so it decodes rather than throwing. Nothing on this path can
+	// send one — a Function URL body is a string — and reading `[65, 66]` as
+	// `AB` is a defined answer, not a swallowed error.
+	assert.equal(decodeLambdaBody([] as unknown as string, true).ok, true);
+});

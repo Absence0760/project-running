@@ -48,6 +48,8 @@ interface ResponseStream {
 import {
 	decodeLambdaBody,
 	COACH_BODY_LIMIT_BYTES,
+	ROUTE_DESCRIBE_BODY_LIMIT_BYTES,
+	ROUTE_REQUEST_BODY_LIMIT_BYTES,
 } from '../../../src/lib/coach/body';
 
 // The production path table, anchored — `^…$`, never `rawPath.includes(…)`.
@@ -264,7 +266,7 @@ async function dispatchRouteDescribe(
 	const decoded = decodeLambdaBody(
 		event.body,
 		event.isBase64Encoded === true,
-		32 * 1024,
+		ROUTE_DESCRIBE_BODY_LIMIT_BYTES,
 	);
 	if (!decoded.ok) {
 		writeJson(responseStream, decoded.status, { error: decoded.error });
@@ -302,7 +304,7 @@ async function dispatchRouteRequest(
 	const decoded = decodeLambdaBody(
 		event.body,
 		event.isBase64Encoded === true,
-		16 * 1024,
+		ROUTE_REQUEST_BODY_LIMIT_BYTES,
 	);
 	if (!decoded.ok) {
 		writeJson(responseStream, decoded.status, { error: decoded.error });
