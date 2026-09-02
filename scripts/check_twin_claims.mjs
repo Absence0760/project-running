@@ -143,14 +143,6 @@ export const KNOWN_GAPS = [
 			'apps/web/src/lib/training/readiness.ts',
 	},
 	{
-		file: 'apps/mobile_android/lib/route_loop.dart',
-		counterpart: 'apps/web/src/lib/route_loop.ts',
-		reason:
-			'unregistered, and the path is stale — the web half is at ' +
-			'apps/web/src/lib/routes/route_loop.ts, which carries 35 mirror tests to the ' +
-			"Dart side's 20",
-	},
-	{
 		file: 'apps/mobile_android/lib/runner_handle.dart',
 		counterpart: 'apps/web/src/lib/runner_handle.ts',
 		reason:
