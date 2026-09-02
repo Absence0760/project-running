@@ -5,9 +5,11 @@ import {
   assertEquals,
   assertStrictEquals,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
   hmacHex,
   isAnonymousAppUserId,
+  shouldReleaseDedupe,
   timingSafeEqual,
   validateFreshness,
 } from './webhook_security.ts';
@@ -178,4 +180,84 @@ Deno.test('validateFreshness — the future edge is exclusive, like the past one
   const skew = 60 * 1000;
   assertEquals(validateFreshness(now + skew, now), 'ok');
   assertEquals(validateFreshness(now + skew + 1, now), 'too_future');
+});
+
+// ── insert-first dedupe: the row has to come back ────────────────────────────
+//
+// Every webhook here reserves `webhook_events` BEFORE the side effect, so two
+// concurrent deliveries of one event cannot both act. The price is that a
+// handler which fails owes the row back — the provider retries on a non-2xx
+// and the retry hits the 23505 path, answers 200 `duplicate_event`, and closes
+// the delivery for good. Stripe and Strava released it; RevenueCat did not,
+// and RevenueCat is the one that grants a paid tier.
+
+Deno.test('shouldReleaseDedupe — every 5xx, and the boundary is 500 exactly', () => {
+  for (const status of [500, 502, 503, 504, 599]) {
+    assertEquals(shouldReleaseDedupe(status), true, `status ${status} must release`);
+  }
+  for (const status of [200, 201, 204, 400, 401, 404, 409, 429, 499]) {
+    assertEquals(shouldReleaseDedupe(status), false, `status ${status} must keep the row`);
+  }
+});
+
+Deno.test('every insert-first deduper gives the row back on a 5xx', async () => {
+  // Derived from the tree rather than listed, so a fourth webhook that
+  // reserves a dedupe row is covered the day it lands. The pairing is the
+  // whole check: reserving without releasing is not a stricter posture, it is
+  // a delivery that can never be retried.
+  const dir = new URL('../', import.meta.url);
+  const reserving: string[] = [];
+  for await (const entry of Deno.readDir(dir)) {
+    if (!entry.isDirectory || entry.name.startsWith('_')) continue;
+    let src: string;
+    try {
+      src = await Deno.readTextFile(new URL(`${entry.name}/index.ts`, dir));
+    } catch {
+      continue;
+    }
+    if (!/\.from\('webhook_events'\)\s*\n?\s*\.insert\(/.test(src)) continue;
+    reserving.push(entry.name);
+    assert(
+      /\.from\('webhook_events'\)\s*\n?\s*\.delete\(\)/.test(src),
+      `${entry.name} reserves a webhook_events row and never deletes one, so a failed ` +
+        'delivery is answered 200 duplicate_event on every retry and is lost',
+    );
+  }
+  // A positive control: an empty tree, or a rename of the table, would satisfy
+  // the loop above by iterating zero times.
+  assertEquals(
+    reserving.sort(),
+    ['revenuecat-webhook', 'strava-webhook', 'stripe-events-webhook'],
+    'the set of insert-first dedupers changed — check the new one releases too',
+  );
+});
+
+Deno.test('the two webhooks that dispatch behind a release use this rule, not a local one', async () => {
+  // Stripe's copy lived in its own lib for as long as RevenueCat went without
+  // any. Both now read the same function, so the boundary cannot drift to two
+  // different numbers on two providers whose retry envelopes are the same.
+  for (const fn of ['stripe-events-webhook', 'revenuecat-webhook']) {
+    const src = await Deno.readTextFile(new URL(`../${fn}/index.ts`, import.meta.url));
+    assert(
+      /if \(shouldReleaseDedupe\(res\.status\)\) \{/.test(src),
+      `${fn} must gate its release on shouldReleaseDedupe(res.status)`,
+    );
+    assert(
+      !/res\.status >= 500/.test(src),
+      `${fn} must not re-spell the 5xx boundary inline`,
+    );
+  }
+});
+
+Deno.test('a throw past the dispatcher releases the row too', async () => {
+  // withSentry answers 500 for an uncaught throw, and that 500 never passes
+  // through the status check above it — so the catch arm is the only thing
+  // between a thrown handler and a permanently-swallowed delivery.
+  for (const fn of ['stripe-events-webhook', 'revenuecat-webhook']) {
+    const src = await Deno.readTextFile(new URL(`../${fn}/index.ts`, import.meta.url));
+    assert(
+      /\} catch \(err\) \{\s*\n\s*await releaseDedupe\([^)]*\);\s*\n\s*throw err;/.test(src),
+      `${fn} must release the dedupe row before rethrowing`,
+    );
+  }
 });
