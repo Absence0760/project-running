@@ -66,12 +66,28 @@ pub fn default_unit_for_locale(locale: &str) -> DistanceUnit {
     }
 }
 
-/// Sunday-first-week regions. Europe / ISO-8601 is Monday-first; the Americas,
-/// much of East Asia, and Israel start on Sunday. A region-less locale stays on
-/// the neutral ISO/Monday default (mirrors the km default above) rather than
-/// letting a maximization step promote `en` to `en-US` to Sunday.
-const SUNDAY_FIRST_REGIONS: [&str; 16] = [
-    "US", "CA", "JP", "IL", "KR", "TW", "HK", "IN", "PH", "BR", "MX", "ZA", "CO", "AR", "PE", "VE",
+/// Regions whose CLDR week data starts the week on SUNDAY. Derived from Intl
+/// week data (`firstDay === 7`) over every assigned ISO 3166-1 alpha-2 region,
+/// so the table cannot disagree with the `Intl` lookup web consults first.
+///
+/// Kept identical to web's `SUNDAY_FIRST_REGIONS` and the Dart
+/// `_sundayFirstRegions`. The hand-written 16-region version all three once
+/// shared disagreed with CLDR for 19 of them — it wrongly listed AR (Argentina
+/// is Monday-first) and omitted PT, TH, ID, SG, SA, DO, GT, HN, SV, NI, PA, PY,
+/// KE, ET, PK, BD, YE, NP and LA. Web and mobile were corrected on 2026-08-11;
+/// this port was taken a month earlier and kept the old list, which is the
+/// whole reason to write the table's provenance down rather than its contents.
+///
+/// A region-less locale stays on the neutral ISO/Monday default (mirroring the
+/// km default above) rather than letting a maximization step promote `en` to
+/// `en-US` to Sunday. Saturday-first regions (`firstDay === 6`: EG, JO, KW, IR,
+/// AF, the Gulf states) are deliberately absent — the setting models only
+/// sunday | monday and every platform falls through to monday for them.
+const SUNDAY_FIRST_REGIONS: [&str; 56] = [
+    "AG", "AS", "BD", "BR", "BS", "BT", "BW", "BZ", "CA", "CO", "DM", "DO", "ET", "GT", "GU", "HK",
+    "HN", "ID", "IL", "IN", "IS", "JM", "JP", "KE", "KH", "KR", "LA", "MH", "MM", "MO", "MT", "MX",
+    "MZ", "NI", "NP", "PA", "PE", "PH", "PK", "PR", "PT", "PY", "SA", "SG", "SV", "TH", "TT", "TW",
+    "UM", "US", "VE", "VI", "WS", "YE", "ZA", "ZW",
 ];
 
 pub fn default_week_start_for_locale(locale: &str) -> WeekStart {
@@ -112,6 +128,35 @@ mod tests {
         assert_eq!(default_week_start_for_locale("de-DE"), WeekStart::Monday);
         assert_eq!(default_week_start_for_locale("fr-FR"), WeekStart::Monday);
         assert_eq!(default_week_start_for_locale("en-GB"), WeekStart::Monday);
+    }
+
+    #[test]
+    fn default_week_start_matches_cldr_where_the_hand_written_table_did_not() {
+        // The 16-region table these three platforms once shared was wrong for
+        // 19 regions. Argentina is Monday-first and was listed; the rest were
+        // Sunday-first and were missing.
+        assert_eq!(default_week_start_for_locale("es-AR"), WeekStart::Monday);
+        for tag in [
+            "pt-PT", "th-TH", "id-ID", "en-SG", "ar-SA", "es-DO", "es-GT", "es-HN", "es-SV",
+            "es-NI", "es-PA", "es-PY", "sw-KE", "am-ET", "ur-PK", "bn-BD", "ar-YE", "ne-NP",
+            "lo-LA",
+        ] {
+            assert_eq!(
+                default_week_start_for_locale(tag),
+                WeekStart::Sunday,
+                "{tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_sunday_first_table_is_sorted_and_holds_no_duplicate() {
+        // The table is transcribed from web's; a sort-and-dedupe check is what
+        // makes a transcription slip visible rather than silently narrowing the
+        // set by one region.
+        for w in SUNDAY_FIRST_REGIONS.windows(2) {
+            assert!(w[0] < w[1], "{} must sort before {}", w[0], w[1]);
+        }
     }
 
     #[test]
