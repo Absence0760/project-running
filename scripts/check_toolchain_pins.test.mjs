@@ -5,25 +5,44 @@ import assert from 'node:assert/strict';
 
 import {
 	ACTION_DIR,
+	GO_MODS,
 	LOCKFILE,
 	RUST_TOOLCHAIN,
+	SETUP_NODE_USES,
+	TOOL_VERSIONS,
 	WORKFLOW_DIR,
 	checkActionPins,
 	checkAll,
 	checkDefmtPrint,
 	checkFlutter,
 	checkMelos,
+	checkNode,
 	checkRustToolchain,
+	checkToolVersions,
 	parseActionUses,
 	parseDefmtPrint,
 	parseDefmtPrintByJob,
 	parseLockedVersion,
 	parseMelosActivations,
+	parseGoDirective,
+	parseNodeSteps,
 	parseRustChannel,
+	parseToolVersions,
+	parseUsesStepVersions,
 	parseWorkflow,
 	readCompositeActions,
+	repoPins,
 	resolveVersion,
+	toolVersionAgrees,
 } from './check_toolchain_pins.mjs';
+
+const REPO_ROOT = join(WORKFLOW_DIR, '..', '..');
+
+/// The two arguments checkAll grew for the developer-toolchain rail, read from
+/// the committed tree.
+const realToolVersions = () => readFileSync(TOOL_VERSIONS, 'utf-8');
+const realGoMods = () =>
+	GO_MODS.map((path) => ({ path, text: readFileSync(join(REPO_ROOT, path), 'utf-8') }));
 
 /// A firmware-sim job shaped like the real one: an actions/cache step whose
 /// key embeds the version, then the `command -v || cargo install` line.
@@ -530,11 +549,13 @@ test('the repo’s real workflows and lockfile agree on both toolchains', () => 
 	const files = readdirSync(WORKFLOW_DIR)
 		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
 		.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') }));
-	const { errors, flutter, melos, defmt, actions, rust } = checkAll(
+	const { errors, flutter, melos, defmt, actions, rust, node, tools } = checkAll(
 		files,
 		readFileSync(LOCKFILE, 'utf-8'),
 		readCompositeActions(ACTION_DIR),
 		readFileSync(RUST_TOOLCHAIN, 'utf-8'),
+		realToolVersions(),
+		realGoMods(),
 	);
 	assert.match(String(rust.channel), /^\d+\.\d+\.\d+$/);
 	assert.deepEqual(errors, []);
@@ -548,6 +569,14 @@ test('the repo’s real workflows and lockfile agree on both toolchains', () => 
 	);
 	assert.ok(melos.ok.length >= 6, `expected every melos activation, found ${melos.ok.length}`);
 	assert.ok(defmt.ok.length >= 4, `expected both installs + both cache keys, found ${defmt.ok.length}`);
+	// Every setup-node step in the tree, including audit.yml's — which is
+	// written `- name:` then `uses:` and was invisible to the first cut of the
+	// Node rail, while its own comment claimed it "matches the rest of the
+	// workflows in this repo".
+	assert.ok(node.ok.length >= 21, `expected every setup-node step, found ${node.ok.length}`);
+	assert.equal(node.versions.size, 1);
+	// The developer toolchain is compared against the pins, not merely parsed.
+	assert.ok(tools.ok.length >= 5, `expected the checked .tool-versions lines, found ${tools.ok.length}`);
 });
 
 /// decisions.md § 705. The firmware channel is the one toolchain in this repo
@@ -610,7 +639,160 @@ test('a floating firmware channel reaches checkAll rather than stopping at its o
 		readFileSync(LOCKFILE, 'utf-8'),
 		readCompositeActions(ACTION_DIR),
 		'[toolchain]\nchannel = "stable"\n',
+		realToolVersions(),
+		realGoMods(),
 	);
-	assert.equal(errors.length, 1);
+	// The rust rail's own error, plus the .tool-versions line that now
+	// disagrees with a channel name rather than a version.
+	assert.equal(errors.length, 2);
 	assert.match(errors[0], /rust-toolchain\.toml/);
+	assert.match(errors[1], /\.tool-versions/);
+});
+
+// --- Node + developer toolchain -------------------------------------------
+
+// The blind spot the shared resolver exists for. `audit.yml` writes its
+// setup-node step as `- name:` then `uses:`, so a scan anchored on `- uses:`
+// found nothing there — and 54 steps across the committed workflows use that
+// form, including every flutter-action step's nearest neighbours.
+test('a step whose uses: sits under a name: is found, with its version', () => {
+	const named =
+		'jobs:\n  a:\n    steps:\n      - name: Set up Node\n' +
+		'        uses: actions/setup-node@abc\n        with:\n          node-version: 24\n';
+	assert.deepEqual(parseNodeSteps(named), [{ line: 4, version: '24' }]);
+	// And the marker-line form still reads the same.
+	const marker =
+		'jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n' +
+		'        with:\n          node-version: 24\n';
+	assert.deepEqual(parseNodeSteps(marker), [{ line: 4, version: '24' }]);
+});
+
+test('a with: block written above the uses: does not hide the step marker', () => {
+	const text =
+		'jobs:\n  a:\n    steps:\n      - name: Set up Node\n        with:\n' +
+		'          node-version: 24\n        uses: actions/setup-node@abc\n';
+	assert.deepEqual(parseNodeSteps(text), [{ line: 4, version: '24' }]);
+});
+
+test('a uses: under no list marker is not invented as a step', () => {
+	assert.deepEqual(parseNodeSteps('uses: actions/setup-node@abc\n'), []);
+});
+
+test('the version is read from the step, not from a neighbour', () => {
+	const text =
+		'jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n' +
+		'      - name: something else\n        with:\n          node-version: 22\n';
+	assert.deepEqual(parseNodeSteps(text), [{ line: 4, version: null }]);
+});
+
+test('a setup-node step naming no version floats to the runner image, and fails', () => {
+	const { errors } = checkNode([
+		{ name: 'ci.yml', text: 'jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n' },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /names no `node-version`/);
+});
+
+test('two workflows on different Node versions is the reported bug', () => {
+	const wf = (/** @type {string} */ v) =>
+		`jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n        with:\n          node-version: ${v}\n`;
+	const { errors } = checkNode([
+		{ name: 'ci.yml', text: wf('24') },
+		{ name: 'release-web.yml', text: wf('26') },
+	]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /pin 2 different Node versions/);
+	assert.match(errors[0], /release-web\.yml/);
+});
+
+test('checkNode fails rather than passing vacuously over no setup-node step', () => {
+	const { errors } = checkNode([{ name: 'ci.yml', text: 'jobs:\n  a:\n    steps:\n      - run: hi\n' }]);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /now checks nothing/);
+});
+
+test('quoting is not a divergence', () => {
+	const wf = (/** @type {string} */ v) =>
+		`jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@abc\n        with:\n          node-version: ${v}\n`;
+	const { errors, versions } = checkNode([
+		{ name: 'a.yml', text: wf('24') },
+		{ name: 'b.yml', text: wf('"24"') },
+		{ name: 'c.yml', text: wf("'24'") },
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(versions.size, 1);
+});
+
+test('parseToolVersions keeps a commented line, and takes the first spelling of a plugin', () => {
+	const parsed = parseToolVersions('nodejs 24\n# rust 1.98.0\n\n# a comment\nrust 1.0.0\n');
+	assert.deepEqual(parsed.get('nodejs'), { line: 1, version: '24', commented: false });
+	assert.deepEqual(parsed.get('rust'), { line: 2, version: '1.98.0', commented: true });
+});
+
+// § 711's reasoning applied one file over: a commented pin is one keystroke
+// from being the version a contributor installs.
+test('a commented .tool-versions line that disagrees with the repo pin fails', () => {
+	const pins = repoPins({ rust: '1.98.0' });
+	const { errors } = checkToolVersions('# rust 1.84.0\n', pins);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /the commented `rust 1\.84\.0` disagrees with the 1\.98\.0/);
+	assert.match(errors[0], /uncommenting it is one keystroke/);
+});
+
+test('an active .tool-versions line that disagrees says the contributor develops off CI', () => {
+	const { errors } = checkToolVersions('nodejs 22\n', repoPins({ node: '24' }));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /`nodejs 22` disagrees with the 24/);
+	assert.match(errors[0], /a toolchain CI\s+never runs/);
+});
+
+test('a toolchain the repo pins and the file omits fails', () => {
+	const { errors } = checkToolVersions('nodejs 24\n', repoPins({ node: '24', flutter: '3.47.0' }));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /names no `flutter` line/);
+});
+
+test('a plugin with no in-repo pin is reported, not compared against nothing', () => {
+	const { errors, unbacked } = checkToolVersions('nodejs 24\n# zola 0.22.1\n', repoPins({ node: '24' }));
+	assert.deepEqual(errors, []);
+	assert.equal(unbacked.length, 1);
+	assert.match(unbacked[0], /`zola 0\.22\.1` has no in-repo pin/);
+});
+
+test('a missing .tool-versions fails rather than reading as nothing to check', () => {
+	const { errors } = checkToolVersions(null, repoPins({ node: '24' }));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /\.tool-versions is missing/);
+});
+
+// nodejs is the one plugin compared on the major: asdf wants a resolvable
+// build, CI states a major, and demanding a patch match would make every
+// runner-image bump a repo edit.
+test('nodejs agrees on the major; every other plugin is exact', () => {
+	assert.equal(toolVersionAgrees('nodejs', '24.9.0', '24'), true);
+	assert.equal(toolVersionAgrees('nodejs', '22.11.0', '24'), false);
+	assert.equal(toolVersionAgrees('rust', '1.98', '1.98.0'), false);
+	assert.equal(toolVersionAgrees('rust', '1.98.0', '1.98.0'), true);
+});
+
+test('parseGoDirective refuses to pin when the modules disagree', () => {
+	assert.equal(
+		parseGoDirective([{ path: 'a/go.mod', text: 'module a\ngo 1.26.6\n' }]).version,
+		'1.26.6',
+	);
+	const split = parseGoDirective([
+		{ path: 'a/go.mod', text: 'module a\ngo 1.26.6\n' },
+		{ path: 'b/go.mod', text: 'module b\ngo 1.25.0\n' },
+	]);
+	assert.equal(split.version, null);
+	assert.equal(split.errors.length, 1);
+	assert.match(split.errors[0], /2 different `go` directives/);
+});
+
+test('parseUsesStepVersions is what both rails read through', () => {
+	const text =
+		'jobs:\n  a:\n    steps:\n      - name: SDK\n        uses: subosito/flutter-action@abc\n' +
+		'        with:\n          flutter-version: 3.47.0\n';
+	assert.deepEqual(parseUsesStepVersions(text, SETUP_NODE_USES, 'node-version'), []);
+	assert.deepEqual(parseWorkflow(text).steps, [{ line: 4, version: '3.47.0' }]);
 });

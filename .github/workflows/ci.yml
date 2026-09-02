@@ -189,11 +189,11 @@ jobs:
       # comment, which is how release-ios.yml's TestFlight upload survived the
       # sweep that pinned everything else, and including composite actions
       # under .github/actions, which Dependabot does not scan at all.
-      - name: Toolchain pin drift (Flutter SDK + melos + Rust channel + action SHAs)
+      - name: Toolchain pin drift (Flutter + melos + Rust + Node + action SHAs + .tool-versions)
         run: |
           if ! node scripts/check_toolchain_pins.mjs; then
-            echo "::error::A toolchain this build installs is unpinned or two call sites disagree — a floating Flutter SDK, a melos version that does not match pubspec.lock, an unpinned defmt-print or a stale cache key for it, a firmware rust-toolchain.toml channel that is not an exact version, or a third-party action on a mutable tag instead of a commit SHA. Nothing here is about workflow syntax or the CI diagnoses; those are other checks in this job."
-            echo "The failing line above names the file, the line and the value to pin. decisions § 595 is why the Flutter version is declared once per workflow file rather than inherited from 'channel: stable'."
+            echo "::error::A toolchain this build installs is unpinned or two call sites disagree — a floating Flutter SDK, a melos version that does not match pubspec.lock, an unpinned defmt-print or a stale cache key for it, a firmware rust-toolchain.toml channel that is not an exact version, an actions/setup-node step naming no node-version or naming a different one than the rest, a .tool-versions line (commented or not) disagreeing with the pin this repo enforces, or a third-party action on a mutable tag instead of a commit SHA. Nothing here is about workflow syntax or the CI diagnoses; those are other checks in this job."
+            echo "The failing line above names the file, the line and the value to pin. decisions § 595 is why the Flutter version is declared once per workflow file rather than inherited from 'channel: stable'; § 911 is why .tool-versions is read against those pins, commented lines included."
             exit 1
           fi
           if ! node --test scripts/check_toolchain_pins.test.mjs; then

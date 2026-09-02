@@ -13399,3 +13399,41 @@ CLAUDE.md, the syncer table or a source header, and each entry names which
 property it breaks and where the fix lives. The register can only shrink: an
 entry that has stopped being a violation fails, and so does one naming a
 declaration that no longer exists.
+
+## 911. `.tool-versions` pinned Node two majors behind CI, and nothing had ever read it
+
+**Decided 2026-09-02.** `.tool-versions` is the file a contributor points `asdf
+install` / `mise install` at. It said `nodejs 22`. All 21 `actions/setup-node`
+steps in this repo say 24. Nothing in `scripts/`, `.github/` or `docs/`
+referenced the file at all, so the divergence was undetectable and the only
+symptom is a contributor debugging a `node --test` difference against CI.
+
+Its commented lines were worse, and they are guarded too. The file's own header
+says "uncomment the toolchains this project actually uses"; that adjustment was
+never made, so it still carried the template's `# rust 1.84.0` (the firmware
+pins 1.98.0), `# flutter 3.27.1` (CI pins 3.47.0), `# golang 1.23.5` (both
+modules declare 1.26.6) and `# terraform 1.15.0` (the workflow uses 1.13.0).
+Every one is a version a reader installs by deleting a `#`, which is the same
+argument § 711 made for a commented-out action pin: a commented pin is not dead
+code. `check_toolchain_pins` now compares every line, commented or not, against
+the pin the repo enforces for that toolchain, and reports a plugin with no
+in-repo pin (`deno`, floating at `v2.x` in CI; `python`) as unbacked rather than
+comparing it against nothing.
+
+Node gains a rail of its own on the Flutter policy, for the Flutter reason: no
+in-repo file resolves the runtime, so the workflows are the source of truth, all
+of them must agree, and a step with no `node-version` takes whatever the runner
+image ships that week. `nodejs` is the one plugin compared to `.tool-versions` on
+the MAJOR alone — asdf wants a version it can resolve to a build, CI states a
+major, and demanding a patch match would make every runner-image bump a repo
+edit.
+
+Writing that rail surfaced a blind spot in the Flutter one it was copied from.
+Both scans anchored on `- uses:`, the marker-line form. `audit.yml`'s setup-node
+step is written `- name:` then `uses:` — 54 steps across the committed workflows
+use that form — so the first cut of the Node rail found 20 of 21 sites, and the
+one it missed was the one whose comment claims it "matches the rest of the
+workflows in this repo". Every flutter-action step happens to use the marker
+form today, so the Flutter rail has never lost a site; it would have, silently,
+on the first one written with a name. Both now read through one resolver that
+finds the `uses:` wherever it sits and walks back to the step's own `- ` marker.
