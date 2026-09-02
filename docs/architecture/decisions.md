@@ -12194,3 +12194,188 @@ and a suite that runs against two Flutter versions cannot pick one. It is also
 a second instance of the round's other lesson ([§ 877](#877)) — a failure
 reproduced in one environment and attributed to that environment is not
 diagnosed, only relocated.
+
+## 899. A one-way parity port has no detector, so its divergence is measured by date, not by a guard
+
+**Decided 2026-09-02.** Roughly half of `watch_core` is a one-way faithful port
+of a shipped web helper. [§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+makes those ports additive, so they sit **outside** the enforced web/mobile
+lockstep on purpose — `shared-library-syncer` does not know they exist, and
+`check_parity_pair_registry.mjs` compares the two *registries*, neither of which
+lists the wrist. The consequence has been stated in the docs as a scope
+decision and never as a risk: **a port whose source has since changed diverges
+silently, and nothing anywhere fails.**
+
+This round measured it rather than reasoning about it. For every
+`core/src/<m>.rs` with a same-named `apps/web/src/lib/**/<m>.ts`, compare the
+last commit date of each: **49 modules pair up, and on 16 of them the web
+source moved after the port was last touched.** That is not a defect count —
+several of those web commits are additions with no wrist surface — but it is
+the population a human has to read, and reading it found five real divergences,
+four of which are behaviour and one of which had made a doc comment false.
+Test-count comparison is the weaker second signal and mostly measures scope:
+`live_freshness` is 5 against web's 16 because only `freshnessFor` is ported,
+which the module doc already says.
+
+**The date comparison is the whole method and it is worth writing down**, because
+it is cheap, it needs no registry, and it does not rot: `git log -1 --format=%cs`
+on each side of a name pair. It is not a guard — a guard would have to decide
+what a legitimate scope difference is, and every one of the 16 needs a human to
+read the intervening diff. What it replaces is the alternative, which was
+nothing.
+
+Filed rather than fixed, with their measurement, in
+[`followups.md`](../product/followups.md): the remaining ten, each named with
+the web commit that moved it.
+
+## 900. `distanceAlongRoute` ranked candidate segments in incommensurable frames, and an unknown fix read as the start line
+
+**Decided 2026-09-02.** Two defects in `watch_core::route_geometry`, both of
+them fixes web landed in the #747 sweep and neither of which reached the port.
+
+**The ranking frame.** Each segment was projected in its own local
+equirectangular frame — correct, since the frame is anchored at that segment's
+start — and then the candidates were ranked by the *residual inside that frame*.
+That residual is scaled by the cosine of the segment's own start latitude, so
+the numbers are not comparable across segments. Measured on a 3.47 km
+out-and-back at 45°N: the return limb anchors 3.5 km further north where
+`cos(lat)` is smaller and therefore always reports the smaller offset to a
+point exactly as far from both, so **moving the input 1 cm sideways moved the
+answer 3474.8 m onto the wrong limb.** Ranking by the great-circle distance to
+the projected foot compares every candidate in one frame; the per-segment frame
+still does the projection, where it is anchored and accurate. A second case
+pins that the fix did not degenerate into "always the first segment" — an L
+probed 2 m off its vertical leg still resolves into the second.
+
+**The non-finite fix.** Every ordering test against NaN is false, so `best`
+stayed at its initialiser and a fix the caller could not establish came back as
+`Some(0.0)`. That is not a small error: 0 is the START of the course, so a
+consumer feeding cut-off maths names the first cutoff and measures its
+distance-to-go from the start line. It returns `None`, which is what the web
+signature has said for a year and what every consumer's null branch was written
+for. `cutoff_eta` already carried its own NaN guard at its boundary; that guard
+could never have seen this, because the value arriving was a clean `0.0`.
+
+Six new cases, 30 → 36. Four were confirmed to fail against the arithmetic they
+replace. **Host-tested only, and the module has no consumer on the wrist** —
+`course.rs` is the live nav path and shares no code with this port. This is
+port fidelity, not a repair to a shipped path.
+
+## 901. The § 468 antimeridian mirror finally crosses back to the wrist, and the haversine keeps `atan2`
+
+**Decided 2026-09-02.** [§ 463](#463-the-along-course-axis-inherits-the-courses-topology-and-the-forward-bias-may-never-outrank-the-geometry)
+normalised every planar frame in the **live position pipeline** — the course
+projection, the recorder's per-segment hop, the trackback origin frame — and
+deliberately left the parity ports carrying the raw longitude subtraction, on
+the stated grounds that the web originals carried it too and "fixing the watch's
+copy would break the port without fixing the product".
+[§ 468](#468-the-antimeridian-fix-crosses-back-from-the-watch-to-web-and-mobile-and-the-normalisation-is-owned-once-per-platform)
+then fixed web, mirrored to Dart, and named five sites.
+
+**The day § 468 landed, § 463's reason stopped being true, and nothing noticed
+for a month.** That is § 899 in one sentence: the port was left diverging on
+purpose, the purpose expired, and no artefact recorded the dependency between
+the two. Four of § 468's five sites exist here and all four still had it.
+
+- `route_geometry`: the `distanceAlongRoute` frame and the `interpolateAlongRoute`
+  longitude lerp. A leg across 180° interpolated to 0.01°, half a world from the
+  leg; a point past the line projected to the END of the course rather than its
+  midpoint.
+- `route_simplify`: the RDP perpendicular is the same subtraction wearing a
+  different shape — it converts each longitude to metres east of the **prime
+  meridian** and subtracts after — so a straight line across the line kept every
+  interior point it should have collapsed. `summarize_route_from_track`'s
+  equirectangular leg measured one 0.06° leg as **40,023 km**.
+- `track_projection` and `run_heatmap`: both bounding boxes read a track
+  straddling the line as spanning **359.99°**, so the thumbnail's fitted scale
+  collapses to a dot and the heat box fits the planet instead of the runner's
+  streets. Both are UNWRAPPED rather than delta'd, as web does it — every
+  longitude expressed on the first point's side, east allowed to sit past 180 —
+  because clamping back into range reintroduces the wrap the box exists to avoid.
+
+The fifth site, `route_snap`, has no wrist port; its role is filled by
+`course.rs`, which § 463 already fixed.
+
+**A sixth site exists on web that § 468 did not name**: `segments.ts` gained an
+`unwrapLonDeg` bounding-box prefilter in #733. The watch's `segments.rs` has no
+bbox prefilter at all, so there is nothing there to be wrong — recorded so the
+absence is not later read as an oversight.
+
+**The shared haversine is repaired differently from web's, on § 468's own
+precedent.** `watch_core` has exactly one haversine and seven modules call it;
+rounding can put `a` a hair above 1 for a near-antipodal pair and `sqrt(1 - a)`
+is then NaN, which propagates through a distance, a pace and a cut-off margin
+without throwing. Web repaired its copy by switching to `2·asin(√a)`. That is
+the same quantity in exact arithmetic and **not** in floating point: adopting
+the form here moves two pinned `course` projection figures by one ULP. Clamping
+`a` into `[0, 1]` and keeping `atan2` is identity for every `a` below 1, closes
+the hole, and leaves every existing expected number where it is — which is the
+bar § 468 set for itself, and the same reasoning `geo::unwrap_lon_deg` records
+for not being spelled web's way. Measured on `(-87.5, 0, 87.5, 180)`: NaN
+before, 20015086.796 after. It is defensive rather than reachable: no pair of
+points in a recorded track or a pushed course is near-antipodal.
+
+**Host-tested + build-verified**: eleven new cases across the four modules, of
+which nine were confirmed to fail against the arithmetic they replace (the
+tenth is the guard against over-fixing — a real 50 m deviation across the line
+must still survive RDP — and the eleventh is the antipodal pair); the whole
+workspace builds for `thumbv7em-none-eabihf` and the `clippy -D warnings` gate
+passes. **Nothing here is sim-verified**: no Renode fixture carries a course or
+a track near 180°, and none of these four modules has a glance page to dump.
+Bench verification would need a run near the antimeridian and is not a claim
+this branch may make.
+
+## 902. `elevation_gain_metres` lost a whole climb to one missing sample, and the live vert path is a different mechanism
+
+**Decided 2026-09-02.** `run_stats::elevation_gain_metres` paired ADJACENT track
+points and skipped any pair missing an elevation. `[1000, None, 2000]` has no
+pair carrying two elevations, so a kilometre of ascent read as **0 m gained**.
+Web fixed this on 2026-07-17 by carrying the last valid elevation forward across
+the gap, naming this device's runner in the commit — tree cover, tunnels,
+satellite reacquisition over a long ultra. The wrist port was taken six days
+earlier and never followed.
+
+**On this device the gap is routine rather than exotic**, which is the part
+worth recording: `record_cadence::ele_dm_from_m` drops any altitude outside the
+wire format's ±3276.7 m decimetre field, and both `elevation::plausible_alt` and
+`plausible_gps` drop an implausible reading — so a mountain track carries `None`
+exactly where the vert is.
+
+The existing case asserted the defect (a 10 m climb across one missing sample
+reading 0), so it is **replaced** by web's own replacement for it rather than
+kept beside the new one; the multi-point-gap case comes across with it and its
+embedded descent is the guard that the carry-forward cannot manufacture gain.
+Three cases fail against the adjacent-pair loop and two pass either way.
+
+**The live vert path was checked and is not affected.**
+`elevation::VertAccumulator::push` returns early on an implausible sample,
+moving no state and banking nothing, so its reference survives the dropout and
+the climb across it is banked whole on the next plausible sample. That is a
+different mechanism in a different module, and saying so is the point: the
+defect is in a port with no consumer on the wrist, and reporting it as a vert
+bug on the device would be false.
+
+## 903. A region table is a transcription, so what is written down is where it came from
+
+**Decided 2026-09-02.** `locale_defaults::default_week_start_for_locale` carried
+the hand-written 16-region Sunday-first list all three platforms once shared. It
+disagrees with CLDR for **19 regions**: it lists AR, which is Monday-first, and
+omits PT, TH, ID, SG, SA, DO, GT, HN, SV, NI, PA, PY, KE, ET, PK, BD, YE, NP and
+LA. Web and mobile replaced it on 2026-08-11 with the 56 regions Intl week data
+reports `firstDay === 7` for; this port was taken a month earlier, kept the old
+one, and its own doc comment still claimed the tables "agree with `Intl` for
+every pinned test case" — a claim that had quietly become false, which is worse
+than the table being short.
+
+The doc comment now records the table's **provenance** rather than restating its
+contents: derived from Intl week data over every assigned ISO 3166-1 alpha-2
+region, kept identical to the two names it mirrors, with the 19 the old list got
+wrong spelled out and the Saturday-first regions named as a deliberate absence
+(the setting models only sunday | monday and every platform falls through to
+monday for them). Two tests: the 19 regions, and a sort-and-dedupe check on the
+table itself — it is a transcription, and a slip in one narrows the set by a
+region without any behaviour test noticing.
+
+No consumer on the wrist: the settings menu has no week-start row and
+`current_week::WeekStart` is a separate enum fed from the pushed settings frame.
+Port fidelity, and a doc claim that had become false.
