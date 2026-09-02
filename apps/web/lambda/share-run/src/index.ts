@@ -52,6 +52,12 @@ declare const __SPA_SHELL_HTML__: string;
 const CACHE_CONTROL =
 	'public, max-age=300, s-maxage=300, stale-while-revalidate=60';
 
+// A 503 here is an unexpected throw, and it is the ONE response on these
+// behaviours that must not carry the window above. Cached for five minutes at
+// the edge, a transient failure becomes a five-minute outage for every viewer
+// who shares a cache node with the request that tripped it (decisions § 970).
+const NO_STORE = 'no-store';
+
 const HTML_PATH_RE = /^\/share\/run\/([^/]+)\/?$/;
 const PNG_PATH_RE = /^\/og\/run\/([^/]+)\.png$/;
 
@@ -86,14 +92,14 @@ export const handler = async (
 		// Anything else routed to this Lambda is a misconfiguration
 		// (CloudFront behaviour should never send us paths other than
 		// the patterns above). Return a 404 rather than guess.
-		return jsonResponse(404, { error: 'not found' });
+		return jsonResponse(404, { error: 'not found' }, CACHE_CONTROL);
 	} catch (err) {
 		console.error('[share-run lambda] unhandled_error', {
 			path: event.rawPath,
 			message: err instanceof Error ? err.message : String(err),
 			stack: err instanceof Error ? err.stack : undefined,
 		});
-		return jsonResponse(503, { error: 'temporarily unavailable' });
+		return jsonResponse(503, { error: 'temporarily unavailable' }, NO_STORE);
 	}
 };
 
@@ -176,10 +182,11 @@ async function handlePng(
 function jsonResponse(
 	statusCode: number,
 	body: unknown,
+	cacheControl: string,
 ): LambdaFunctionURLResult {
 	return {
 		statusCode,
-		headers: { 'content-type': 'application/json' },
+		headers: { 'content-type': 'application/json', 'cache-control': cacheControl },
 		body: JSON.stringify(body),
 	};
 }

@@ -59,6 +59,12 @@ declare const __SPA_SHELL_HTML__: string;
 
 const CACHE_CONTROL = 'public, max-age=300, s-maxage=300, stale-while-revalidate=60';
 
+// A 503 here is an unexpected throw, and it is the ONE response on these
+// behaviours that must not carry the window above. Cached for five minutes at
+// the edge, a transient failure becomes a five-minute outage for every viewer
+// who shares a cache node with the request that tripped it (decisions § 970).
+const NO_STORE = 'no-store';
+
 interface Config {
 	supabaseUrl: string;
 	supabaseAnonKey: string;
@@ -156,14 +162,14 @@ export const handler = async (
 			if (!headTags) return html(404, notFoundHtml());
 			return html(200, injectEntityHead(__SPA_SHELL_HTML__, headTags));
 		}
-		return json(404, { error: 'not found' });
+		return json(404, { error: 'not found' }, CACHE_CONTROL);
 	} catch (err) {
 		console.error('[share-entity lambda] unhandled_error', {
 			path: event.rawPath,
 			message: err instanceof Error ? err.message : String(err),
 			stack: err instanceof Error ? err.stack : undefined,
 		});
-		return json(503, { error: 'temporarily unavailable' });
+		return json(503, { error: 'temporarily unavailable' }, NO_STORE);
 	}
 };
 
@@ -189,10 +195,14 @@ function notFoundHtml(): string {
 	return '<!doctype html><html><head><meta charset="utf-8"><title>Threkir</title><meta name="robots" content="noindex"></head><body><p>This link isn’t available.</p></body></html>';
 }
 
-function json(statusCode: number, body: unknown): LambdaFunctionURLResult {
+function json(
+	statusCode: number,
+	body: unknown,
+	cacheControl: string,
+): LambdaFunctionURLResult {
 	return {
 		statusCode,
-		headers: { 'content-type': 'application/json' },
+		headers: { 'content-type': 'application/json', 'cache-control': cacheControl },
 		body: JSON.stringify(body),
 	};
 }

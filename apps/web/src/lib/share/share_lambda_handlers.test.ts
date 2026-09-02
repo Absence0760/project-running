@@ -195,3 +195,32 @@ test('an unexpected throw is a generic 503 on every share Lambda', async () => {
 		assert.deepEqual(JSON.parse(String(out.body)), { error: 'temporarily unavailable' }, dir);
 	}
 });
+
+// The JSON pair was the only response on these behaviours that declared no
+// `cache-control` at all, so its TTL was whatever the behaviour's cache policy
+// decided rather than something this surface chose (decisions § 970). The two
+// want OPPOSITE answers, which is why one shared header would have been the
+// wrong fix: the 404 is a deploy-stable misconfiguration and takes the same
+// five-minute window as every other response here, while the 503 is a transient
+// throw that must not be cached at all — five minutes at the edge turns a blip
+// into a five-minute outage for every viewer behind the same cache node.
+test('the JSON 404 carries the shared window and the JSON 503 is never cached', async () => {
+	for (const { dir, handler } of Object.values(BY_ORIGIN)) {
+		const missing = await invoke(handler, '/a-path-no-behaviour-sends');
+		assert.equal(missing.statusCode, 404, dir);
+		assert.equal(missing.headers?.['content-type'], 'application/json', dir);
+		assert.equal(
+			missing.headers?.['cache-control'],
+			CACHE_CONTROL,
+			`${dir}: the JSON 404 must declare the same window as every sibling response`,
+		);
+
+		const thrown = await invoke(handler, 42);
+		assert.equal(thrown.statusCode, 503, dir);
+		assert.equal(
+			thrown.headers?.['cache-control'],
+			'no-store',
+			`${dir}: a transient 503 must never be cached at the edge`,
+		);
+	}
+});
