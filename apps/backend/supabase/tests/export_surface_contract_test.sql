@@ -18,8 +18,15 @@
 -- compares the migration TEXT against the two client lists, which is a
 -- different claim from what the applied `storage.buckets` row says — a manual
 -- console edit, a partially applied migration, or a bucket created by
--- storage-api's own defaults is invisible to it. Nothing in the pgtap suite
--- mentions `heic` at all.
+-- storage-api's own defaults is invisible to it. The two claims are kept
+-- side by side rather than one replacing the other: the script reads four
+-- source files against each other and can say the clients and the migration
+-- agree, which no SQL assertion can; these read the row and can say the
+-- database holds it, which no source read can.
+--
+-- The photo-bucket population here is DERIVED — every bucket accepting any
+-- `image/` type — so a fifth image bucket is held to § 557 the day it appears
+-- rather than the day somebody remembers to extend a list of four names.
 --
 -- `data_export_jobs` is asserted on both rails, because the migration's own
 -- header says it is on both deliberately: RLS with no policies, AND no client
@@ -30,7 +37,7 @@
 
 begin;
 
-select plan(20);
+select plan(21);
 
 -- ── the exports bucket ──────────────────────────────────────────────────────
 
@@ -54,31 +61,57 @@ select cmp_ok(
   'and is bigger than the runs bucket, which truncated a full-history export');
 
 -- ── the photo buckets ───────────────────────────────────────────────────────
+-- § 557 made the accepted set BE the strippable set. `check_shared_constants`
+-- compares the migration TEXT against the two client lists, which is a claim
+-- about four source files agreeing with each other; these three are the claim
+-- about what the database actually holds. Neither subsumes the other — the
+-- script cannot see a console edit or an unapplied migration, and pgtap cannot
+-- read `STRIPPABLE_IMAGE_MIME_TYPES` at all.
 
--- (3) Exactly the strippable set, in both directions. `@>` alone would pass a
--- bucket narrowed to `['image/png']`, which breaks every JPEG upload; `<@`
--- alone would pass an empty list.
+-- (3) The POPULATION is derived, not named: every bucket that accepts any
+-- image type at all. A fifth image bucket — created by a later migration, by
+-- the dashboard, or by storage-api with its own defaults — lands in this set
+-- and fails until somebody holds it to § 557, which a hard-coded list of four
+-- names could never do. It is also what makes (4) non-vacuous: a bucket whose
+-- list went null drops out of this set rather than out of that filter.
 select is(
-  (select coalesce(string_agg(id || ': ' || array_to_string(allowed_mime_types, ','),
+  (select coalesce(string_agg(id, ', ' order by id), '')
+     from storage.buckets
+    where exists (select 1 from unnest(allowed_mime_types) t where t like 'image/%')),
+  'avatars, club-photos, route-photos, run-photos',
+  'exactly four buckets accept images — a new one is held to the strippable set or it is not created');
+
+-- (4) And each accepts exactly the strippable set, in both directions. `@>`
+-- alone would pass a bucket narrowed to `['image/png']`, which breaks every
+-- JPEG upload; `<@` alone would pass an empty list. The `coalesce(..., true)`
+-- is the null arm: `null @> array[...]` is null, so without it a bucket that
+-- lost its allowlist entirely would be filtered out of its own check.
+select is(
+  (select coalesce(string_agg(id || ': ' || coalesce(array_to_string(allowed_mime_types, ','), '<null>'),
                               '; ' order by id), '')
      from storage.buckets
     where id in ('run-photos', 'route-photos', 'club-photos', 'avatars')
-      and not (allowed_mime_types @> array['image/jpeg', 'image/png', 'image/webp']
-               and allowed_mime_types <@ array['image/jpeg', 'image/png', 'image/webp'])),
+      and coalesce(not (allowed_mime_types @> array['image/jpeg', 'image/png', 'image/webp']
+                        and allowed_mime_types <@ array['image/jpeg', 'image/png', 'image/webp']), true)),
   '',
   'every photo bucket accepts exactly the strippable set — an accepted-but-unstrippable upload serves its GPS EXIF back through a signed URL');
 
--- (4) And the population is the four buckets, so (3) cannot pass by naming
--- buckets that are not there.
+-- (5) The formats § 557 is about, named. 20270622000002 removed HEIC/HEIF from
+-- three buckets that had advertised them since 20260620_001 / 20270114_001 /
+-- 20270301_001; `stripImageExif` returns an unrecognised format unchanged and
+-- the bucket then serves the geotagged original. This is bucket-agnostic on
+-- purpose — (3) and (4) are about the four we know, this one holds for any
+-- bucket that ever exists, including `runs` and `exports`.
 select is(
-  (select count(*)::int from storage.buckets
-    where id in ('run-photos', 'route-photos', 'club-photos', 'avatars')),
-  4,
-  'all four photo buckets exist to be checked');
+  (select coalesce(string_agg(b.id || ': ' || t, ', ' order by b.id, t), '')
+     from storage.buckets b, unnest(b.allowed_mime_types) t
+    where t in ('image/heic', 'image/heif')),
+  '',
+  'no bucket anywhere accepts image/heic or image/heif — an image we cannot strip is an image we do not accept');
 
 -- ── data_export_jobs: both rails ────────────────────────────────────────────
 
--- (5) The grant rail. The migration grants `authenticated` nothing at all.
+-- (6) The grant rail. The migration grants `authenticated` nothing at all.
 select is(
   (select coalesce(string_agg(r.role || ' ' || v.verb, ', ' order by r.role, v.verb), '')
      from (values ('anon'::name), ('authenticated'::name)) r(role)
@@ -87,7 +120,7 @@ select is(
   '',
   'no client role holds any grant on data_export_jobs — the second rail behind RLS');
 
--- (6) The positive control for (5): the only writer keeps its whole surface,
+-- (7) The positive control for (6): the only writer keeps its whole surface,
 -- so an empty client set is a withholding rather than a table nobody can use.
 select is(
   (select coalesce(string_agg(v.verb, ', ' order by v.verb), '')
@@ -96,7 +129,7 @@ select is(
   '',
   'service_role keeps full DML on data_export_jobs — the Go worker is the only writer');
 
--- (7) The RLS rail, which the grant rail is deliberately redundant with.
+-- (8) The RLS rail, which the grant rail is deliberately redundant with.
 select results_eq(
   $$ select c.relrowsecurity, (select count(*)::int from pg_policy p where p.polrelid = c.oid)
        from pg_class c where c.oid = 'public.data_export_jobs'::regclass $$,
@@ -113,7 +146,7 @@ insert into data_export_jobs (id, user_id, format, status, object_path)
 values ('e8000000-0000-0000-0000-0000000000d1', 'e8000000-0000-0000-0000-0000000000a1',
         'backup', 'ready', 'e8000000-0000-0000-0000-0000000000a1/export.zip');
 
--- (8) `error_code` is a machine token, never prose: a raw upstream error
+-- (9) `error_code` is a machine token, never prose: a raw upstream error
 -- string carries paths and addresses into a durable row.
 select lives_ok(
   $$ update data_export_jobs set error_code = repeat('a', 64)
@@ -127,7 +160,7 @@ select throws_ok(
   null,
   'a 65-character error_code is rejected — the column is a token, not a place to put prose');
 
--- (9) One in-flight export per subject. This is what makes a re-POST
+-- (10) One in-flight export per subject. This is what makes a re-POST
 -- idempotent rather than a second full archive build charged to Storage.
 insert into data_export_jobs (user_id, format, status)
 values ('e8000000-0000-0000-0000-0000000000a1', 'csv', 'queued');
@@ -144,7 +177,7 @@ select lives_ok(
        values ('e8000000-0000-0000-0000-0000000000a1', 'gpx', 'failed') $$,
   'but a terminal-status row is not in flight, so the index is partial rather than one-row-per-user');
 
--- (10) Art 17. The table comment claims it "cascades away with the account";
+-- (11) Art 17. The table comment claims it "cascades away with the account";
 -- nothing measured it, and the row carries the fact and timing of a DSAR plus
 -- a Storage key naming the subject.
 select cmp_ok(
@@ -195,7 +228,7 @@ insert into storage.objects (bucket_id, name, created_at) values
 -- file stayed green. 20270703000001 moved the escape into the function, and
 -- these assertions now drive it.
 
--- (11) Everything the sweep is about is present first.
+-- (12) Everything the sweep is about is present first.
 select is(
   (select count(*)::int from storage.objects
     where name like 'e8000000-0000-0000-0000-0000000000a2/%'),
@@ -207,7 +240,7 @@ select is(
   1,
   'the sweep runs and returns a row');
 
--- (12) The stale archive in the new bucket AND the one at the legacy prefix
+-- (13) The stale archive in the new bucket AND the one at the legacy prefix
 -- are both gone; the fresh archive and an unrelated track are both kept.
 select is(
   (select coalesce(string_agg(bucket_id || '/' || name, ', ' order by name), '')
@@ -217,7 +250,7 @@ select is(
   'runs/e8000000-0000-0000-0000-0000000000a2/track.json.gz',
   'the sweep removes the stale archive from BOTH the exports bucket and the legacy runs/{uid}/exports/ prefix, and touches nothing else');
 
--- (13) And the row that pointed at the deleted object was expired in the same
+-- (14) And the row that pointed at the deleted object was expired in the same
 -- call — the composition, not a second cron entry somebody has to remember.
 select results_eq(
   $$ select status, object_path from data_export_jobs
@@ -226,7 +259,7 @@ select results_eq(
   'the ready row is expired and its path cleared by the same sweep — a ready row cannot outlive its object');
 
 -- ── a sweep that cannot sweep must not read as a sweep that found nothing ───
--- (14) The belt for (11)-(13). Those pass on an image WITHOUT the trigger
+-- (15) The belt for (12)-(14). Those pass on an image WITHOUT the trigger
 -- whatever the function does, so on such an image nothing would notice the
 -- escape being deleted again — and a Cloud project WITH the trigger would then
 -- go back to raising nightly. This reads the applied body, which is a weaker
@@ -236,7 +269,7 @@ select ok(
     like '%storage.allow_delete_query%',
   'the sweep carries its own escape from storage-api''s protect_delete() rather than borrowing a caller''s');
 
--- (15) The negative control, and the reason the post-condition check exists at
+-- (16) The negative control, and the reason the post-condition check exists at
 -- all. `get diagnostics row_count` counts what the statement deleted, not what
 -- the window required, so a delete that is FILTERED rather than refused looks
 -- exactly like a night with nothing stale. A row-level trigger returning null
@@ -264,7 +297,7 @@ select throws_ok(
   null,
   'a sweep whose delete was filtered raises instead of reporting zero — the archive is still readable and the operator has to hear about it');
 
--- (16) And it fails CLOSED: the raise takes the expiry with it, so no row
+-- (17) And it fails CLOSED: the raise takes the expiry with it, so no row
 -- claims its object is gone while the object is still there. That ordering is
 -- the whole point of checking before `expire_stale_export_jobs()` rather than
 -- after.
