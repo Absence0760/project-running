@@ -46,6 +46,20 @@ void main() {
       expect(identityInitial(''), '?');
       expect(identityInitial('   '), '?');
     });
+
+    test('takes a whole grapheme, not half a surrogate pair', () {
+      // `substring(0, 1)` cut an astral character in half and the avatar
+      // rendered the lone surrogate as the replacement glyph.
+      expect(identityInitial('\u{1F600}bob'), '\u{1F600}');
+      expect(identityInitial('\u{1F468}\u200D\u{1F469}\u200D\u{1F467}'),
+          '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}');
+      for (final s in <String>['\u{1F600}bob', '\u{1D400}X']) {
+        expect(identityInitial(s).runes.first, s.runes.first);
+        expect(identityInitial(s).codeUnits.first & 0xFC00 == 0xDC00, isFalse,
+            reason: 'never a bare low surrogate');
+      }
+    });
+
   });
 
   group('identityBackground + identityForeground', () {

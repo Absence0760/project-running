@@ -32,6 +32,16 @@ class StatGrid extends StatelessWidget {
 
   final List<Widget> cells;
 
+  /// Width of one cell when [available] is a real bound: the widest that lets
+  /// as many cells as will fit share the row, floored so `columns` of them can
+  /// never total more than [available] through floating-point drift and push
+  /// the last onto its own run.
+  static double _cellWidth(double available, double minWidth, int cellCount) {
+    final columns =
+        (available / minWidth).floor().clamp(1, math.min(_maxColumns, cellCount));
+    return (available / columns).floorToDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (cells.isEmpty) return const SizedBox.shrink();
@@ -39,12 +49,15 @@ class StatGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final available = constraints.maxWidth;
-        final columns = (available / minWidth)
-            .floor()
-            .clamp(1, math.min(_maxColumns, cells.length));
-        // Floored so `columns` cells can never total more than `available`
-        // through floating-point drift and push the last one onto its own run.
-        final width = (available / columns).floorToDouble();
+        // An unbounded width — a horizontal scroller, a `Row` child with no
+        // `Expanded` — offers nothing to divide, and `Infinity.floor()` does
+        // not degrade: it throws `UnsupportedError` out of `build`, taking the
+        // whole screen rather than laying the grid out badly. Every cell still
+        // has to be BOUNDED, which is what a `StatTile`'s `BoxFit.scaleDown`
+        // needs, so each gets exactly the width one cell asks for.
+        final width = available.isFinite
+            ? _cellWidth(available, minWidth, cells.length)
+            : minWidth;
         return Wrap(
           runSpacing: 12,
           children: [
