@@ -1631,34 +1631,87 @@ test('CloudFront Permissions-Policy disables sensors / payment / FLoC + Privacy 
 	}
 });
 
-test('Coach Lambda Function URL is AWS_IAM-auth + CloudFront-only', () => {
+// Every top-level `resource "<type>" "<label>" { … }` in a Terraform file, as
+// `{ label, body }`. Deliberately a split on the header at column 0 rather than
+// a brace-matching parse: nothing here is HCL evaluation, and every resource in
+// this module is top-level, so the next header is the end of the previous body.
+function tfResources(src: string, type: string): Array<{ label: string; body: string }> {
+	const out: Array<{ label: string; body: string }> = [];
+	const header = new RegExp(`^resource "${type}" "([A-Za-z0-9_-]+)" \\{$`, 'gm');
+	let m: RegExpExecArray | null;
+	while ((m = header.exec(src))) {
+		const rest = src.slice(m.index + m[0].length);
+		const next = rest.search(/^resource "/m);
+		out.push({ label: m[1], body: next < 0 ? rest : rest.slice(0, next) });
+	}
+	return out;
+}
+
+test('EVERY Lambda Function URL is AWS_IAM-auth + CloudFront-only', () => {
 	// Reason: pass-1 /audit/infra H3 (commit 6614d89) flipped the
 	// Function URL from authorization_type=NONE to AWS_IAM and added
 	// a CloudFront OAC of type "lambda" that signs every request.
 	// Reverting any of these makes the .lambda-url.* hostname directly
 	// reachable by anyone — bypasses CloudFront, the WAF tier, and
 	// every CSP / per-IP guard the distribution applies.
+	//
+	// This used to be four `/aws_lambda_function_url[\s\S]*?authorization_type
+	// = "AWS_IAM"/` matches against the whole file, which say only that SOME
+	// Function URL somewhere is AWS_IAM and SOME permission somewhere names
+	// CloudFront. The module holds eight of each. Measured: appending a ninth
+	// Function URL with `authorization_type = "NONE"`, and a ninth permission
+	// with `principal = "*"`, left this test green — the exact regression it is
+	// written to catch, on the exact resource type it names. Read per resource
+	// instead, so the assertion is about all of them.
 	const tf = read('../../infra/modules/web-stack/main.tf');
-	assert.match(
-		tf,
-		/aws_lambda_function_url[\s\S]*?authorization_type\s*=\s*"AWS_IAM"/,
-		'Lambda Function URL must use authorization_type=AWS_IAM — pass-1 /audit/infra H3.',
-	);
-	assert.match(
-		tf,
-		/aws_cloudfront_origin_access_control[\s\S]*?origin_access_control_origin_type\s*=\s*"lambda"/,
+
+	const urls = tfResources(tf, 'aws_lambda_function_url');
+	assert.ok(urls.length >= 8, `read only ${urls.length} Function URLs — parser broken?`);
+	for (const { label, body } of urls) {
+		assert.match(
+			body,
+			/^\s*authorization_type\s*=\s*"AWS_IAM"$/m,
+			`aws_lambda_function_url.${label} must use authorization_type=AWS_IAM — anything else ` +
+				'makes its .lambda-url.* hostname world-invocable, bypassing CloudFront and the WAF.',
+		);
+	}
+
+	const oacs = tfResources(tf, 'aws_cloudfront_origin_access_control');
+	assert.ok(
+		oacs.some((o) => /origin_access_control_origin_type\s*=\s*"lambda"/.test(o.body)),
 		'CloudFront must have an origin_access_control of type "lambda" so it sigv4-signs every Function URL request.',
 	);
-	assert.match(
-		tf,
-		/aws_lambda_permission[\s\S]*?principal\s*=\s*"cloudfront\.amazonaws\.com"/,
-		'aws_lambda_permission must restrict principal to cloudfront.amazonaws.com (was * before pass-1 /audit/infra H3).',
+	for (const { label, body } of oacs) {
+		assert.match(
+			body,
+			/signing_behavior\s*=\s*"always"/,
+			`aws_cloudfront_origin_access_control.${label} must sign always — "never" leaves the ` +
+				'origin reached unsigned, which an AWS_IAM Function URL then rejects and the SPA ' +
+				'fallback hides behind a 200 shell.',
+		);
+	}
+
+	const permissions = tfResources(tf, 'aws_lambda_permission');
+	assert.ok(
+		permissions.length >= 16,
+		`read only ${permissions.length} lambda permissions — parser broken?`,
 	);
-	assert.match(
-		tf,
-		/aws_lambda_permission[\s\S]*?function_url_auth_type\s*=\s*"AWS_IAM"/,
-		'aws_lambda_permission must declare function_url_auth_type=AWS_IAM.',
-	);
+	for (const { label, body } of permissions) {
+		assert.match(
+			body,
+			/^\s*principal\s*=\s*"cloudfront\.amazonaws\.com"$/m,
+			`aws_lambda_permission.${label} must restrict principal to cloudfront.amazonaws.com ` +
+				'(was * before pass-1 /audit/infra H3).',
+		);
+		if (/action\s*=\s*"lambda:InvokeFunctionUrl"/.test(body)) {
+			assert.match(
+				body,
+				/^\s*function_url_auth_type\s*=\s*"AWS_IAM"$/m,
+				`aws_lambda_permission.${label} grants InvokeFunctionUrl and must declare ` +
+					'function_url_auth_type=AWS_IAM.',
+			);
+		}
+	}
 });
 
 test('S3 site bucket lifecycle aborts incomplete multipart uploads', () => {
