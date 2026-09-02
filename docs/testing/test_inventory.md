@@ -1220,6 +1220,48 @@ Mirror of the web suite above, vector for vector. Twelve of the fourteen fail ag
 The accent-fold drift guard, and the generator under it. Pins that the two causes of a mismatch are reported as different sentences — a hand-edit or a stale commit against a Node whose Unicode tables have moved — because the second reaches a PR that touched none of it, and sending that reader hunting for an edit they did not make wastes the run. Plus: a render that lost its version stamp is itself a finding (without it the guard cannot tell the causes apart), the committed table is what the generator renders, its keys are strictly ascending and parallel to its values, the Hangul arithmetic reproduces NFD across all 11,172 syllables independently of the generator's own assertion, the fold answers the divergence classes and leaves the undecomposable letters alone, and `dartLiteral` emits ASCII only.
 
 
+### `scripts/check_infra_iam.test.mjs` — 29 tests
+
+The IAM rails under `infra/`, which no test had reached. `infra/github-oidc/`
+mints the only two identities anything outside the AWS account can assume, and
+the guard it now has ([decisions § 889](../architecture/decisions.md)) is
+measured the way that file's failure modes actually occur: a fixture faithful
+enough to carry the interpolated ARNs, the prose comment above an `Action` list
+and the two-role shape, asserted to pass first, so every case below is the
+mutation and not the fixture. `StringLike` for `StringEquals`; a `*` in the sub;
+a `:ref:`-shaped and a `:pull_request`-shaped sub; an unpinned `:aud`; a second
+provider audience; a role name disagreeing with its `Environment` tag; a
+`github_repo` variable given a default. Then the lockstep: renaming the GitHub
+environment on the workflow side alone — verbatim the `web@1.0.3` failure —
+reported from BOTH directions, and the two environments crossed over each other.
+Then scope: `s3:*`; a new action on `Resource "*"`; an exemption nothing uses; a
+preview role reaching a prod bucket; an ARN wildcarding its account field; a
+Lambda the module declares that the deploy policy omits, and a grant naming a
+function that does not exist. Then reachability: a Function URL left at `NONE`,
+the plain `lambda:InvokeFunction` grant dropped (issue #590), a grant open to any
+distribution. Two closing cases run the whole comparison against the COMMITTED
+tree and assert the parsers reached it — a passing run that checked almost
+nothing is not a pass.
+
+### `scripts/check_infra_coverage.test.mjs` — 25 tests
+
+What in `infra/` is watched by nothing ([decisions § 890](../architecture/decisions.md)).
+Two halves, each mutated on its own. Stack coverage: a new directory missing from
+the terraform workflow's `stack:` matrix, one missing from `dependabot.yml`, a
+matrix entry and a dependabot entry naming directories that are gone, an
+exemption that is no longer needed and one for a directory that no longer exists,
+and a matrix the parser can no longer read — which must fail rather than certify
+nothing. Alarm coverage: a Lambda with no p95 alarm (the real `osrm-proxy` gap),
+one with no error-rate alarm, a new Lambda with neither, either distribution
+alarm removed, a classifier that stopped matching, and an empty function list —
+the last two because a guard that resolves nothing reports every subject as fine.
+The parsers are exercised separately, including the `for_each`-through-a-locals-map
+resolution that makes the five share Lambdas read as five. One case runs the real
+script end to end through `execFileSync` against a copy of `alarms.tf` with the
+`osrm-proxy` p95 alarm stripped, asserting the process exits non-zero: the guard
+is shown to fail on the exact regression it was written for, exit code and all.
+
+
 ---
 
 ## Suite totals after the #789 coverage round (2026-08-31)

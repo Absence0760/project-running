@@ -21,9 +21,54 @@ infra/
 
 Each stack has its own remote state in the bucket created by `bootstrap`. State locking is S3-native via `use_lockfile = true` (Terraform ≥ 1.10) — no DynamoDB table required. The `dns` and `github-oidc` outputs are consumed by per-env stacks via `terraform_remote_state`.
 
-**Region.** Everything sits in `us-east-1`. The ACM cert for CloudFront *has* to live there regardless, and putting the rest of the stack alongside it avoids cross-region complexity. The per-env stacks still expose a `us_east_1` provider alias so a future region move only touches the primary region. To deploy somewhere else, change the default in every `aws_region` variable + every `region` field in the `backend.tf` files + the `AWS_REGION` env in `.github/workflows/release-web.yml`.
+**Region.** Everything sits in `us-east-1`. The ACM cert for CloudFront *has* to live there regardless, and putting the rest of the stack alongside it avoids cross-region complexity. The per-env stacks still expose a `us_east_1` provider alias so a future region move only touches the primary region. To deploy somewhere else, change the default in every `aws_region` variable + every `region` field in the `backend.tf` files + the `AWS_REGION` env in `.github/workflows/release-web.yml` — and read the two `aws_cloudfront_*` alarms in `modules/web-stack/alarms.tf`, which deliberately use the DEFAULT provider: CloudFront publishes its metrics only in `us-east-1`, and a CloudWatch alarm's actions must live in the alarm's own region as `aws_sns_topic.alerts` does.
 
 **Cost.** Idle monthly: hosted zone $0.50 + 2 KMS keys $2 + S3 / CloudFront / Lambda well under $1 = **~$3/month**. Plus domain registration if you don't already own one (~$15/year for a `.app`).
+
+## What CI enforces about this tree
+
+Three jobs read `infra/`, none of which needs AWS credentials:
+
+| Job (`.github/workflows/…`) | What it proves |
+|---|---|
+| `fmt + validate` (`terraform.yml`, one per stack) | `terraform fmt -check` and `terraform validate` with `-backend=false`. Syntax, provider constraints, reference shapes. **Not** anything about applied state. |
+| `Trivy IaC scan` (`terraform.yml`) | Known-bad IaC patterns across the whole tree. Suppressions with rationale live in `.trivyignore` at the repo root. |
+| `infra-guards` (`ci.yml`) | `scripts/check_infra_iam.mjs` + `scripts/check_infra_coverage.mjs` — see below. In the required `CI gate` aggregator's `needs:` list. |
+
+**`check_infra_iam.mjs`** reads `github-oidc/main.tf`, `modules/web-stack/main.tf`
+and `.github/workflows/release-web.yml`:
+
+- each deploy role's trust policy uses `StringEquals` (never `StringLike`) on a
+  wildcard-free `repo:<owner/repo>:environment:<name>` sub, with `:aud` pinned;
+- the GitHub environments `release-web.yml` can declare are exactly the ones the
+  roles trust, paired through the one `refs/tags/web@` predicate both branch on
+  — the lockstep whose breakage failed the `web@1.0.3` release;
+- no action ending in `:*`, and `Resource = "*"` only for actions declared in the
+  guard's `RESOURCELESS_ACTIONS` with the reason AWS models no resource for them;
+- every resource ARN in a role's policy carries that role's own environment
+  token and none of the other's, so a copy-pasted `prod` in the preview policy
+  fails rather than reading as two tidy blocks;
+- the eight Lambda ARNs in each deploy policy match the module's functions;
+- every Lambda Function URL is `AWS_IAM`-authed and carries **both** CloudFront
+  grants (`lambda:InvokeFunctionUrl` and plain `lambda:InvokeFunction`).
+
+**`check_infra_coverage.mjs`** reads the directory listing, `terraform.yml`,
+`.github/dependabot.yml` and the module:
+
+- every directory holding `.tf` is in the terraform workflow's `stack:` matrix
+  (or exempt with the measured reason `validate` cannot run against it) **and**
+  has a `terraform` ecosystem entry in `dependabot.yml`, in both directions;
+- every `aws_lambda_function` in the module carries an error-rate alarm and a
+  p95 alarm, and the distribution carries a 4xx and a 5xx rate alarm.
+
+Each guard has its own `node --test` suite, run in the same job: a source-reading
+guard's failure mode is a parser that silently stops matching and passes
+vacuously, not a false negative. See [decisions.md §§ 889-893](../docs/architecture/decisions.md)
+for what each rule is about, and § 893 for where the guards stop — nothing here
+compares the Terraform against applied state, which needs credentials and a plan.
+
+Adding a stack means: the directory, an entry in the `stack:` matrix, an entry in
+`dependabot.yml`. Both guards will tell you which one you forgot.
 
 ## First-time deploy
 

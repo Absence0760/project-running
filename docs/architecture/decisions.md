@@ -12194,3 +12194,305 @@ and a suite that runs against two Flutter versions cannot pick one. It is also
 a second instance of the round's other lesson ([§ 877](#877)) — a failure
 reproduced in one environment and attributed to that environment is not
 diagnosed, only relocated.
+
+## 889. The OIDC trust conditions are read, not trusted, and the half that failed the `web@1.0.3` release now moves in lockstep with the half it belongs to
+
+**Decided 2026-09-02.** Numbered 889 rather than 879 because round 30's lanes
+hold 879-893 and were already in flight; the number is an identifier, not a
+chronology.
+
+`infra/github-oidc/` mints the only two AWS identities anything outside the
+account can assume, and the line that decides who may assume the production one
+is `"token.actions.githubusercontent.com:sub" =
+"repo:${var.github_repo}:environment:production"` inside a `StringEquals`
+block. Nothing read it. Every other high-value property in the tree had picked
+up a guard over the last several audit passes — the Function URL's
+`authorization_type`, the CSP, the Permissions-Policy, the alarm subscribers,
+the CloudFront price class, the KMS role-name suffix — and the trust policy,
+which is the one place a mistake is reachable from outside the account, had
+none. That is not an accident of priorities: a trust policy has no runtime
+symptom. It is either correct or someone else can deploy to production, and
+both look identical from inside.
+
+`scripts/check_infra_iam.mjs` reads it, along with the web-stack module and
+`release-web.yml`. Six properties:
+
+**The condition operator must be exactly `StringEquals`.** `StringLike` is one
+word away and turns the sub from an identity into a pattern; a pattern is then
+one `*` from matching a fork. The guard rejects any other operator, including
+the `ForAnyValue:` and `…IgnoreCase` forms, and rejects a `*` or `?` anywhere in
+the sub itself — under `StringEquals` a wildcard matches nothing at all, which
+fails closed but silently, and under `StringLike` it matches far too much.
+
+**The sub must name a GitHub ENVIRONMENT.** A `:ref:` or `:pull_request` shape
+is assumable by any branch or any PR build, including one opened from a fork.
+
+**The environment set must move with the workflow.** This is the half that has
+already come apart. The file's own header records it: `web@1.0.3` failed
+`AssumeRoleWithWebIdentity` when the deploy jobs started declaring GitHub
+environments while the trust policies still matched `refs/tags/web@*`, and the
+header closes "the two halves must move together" — a rule stated in prose and
+enforced by nothing, the [§ 439](#439) shape. The guard derives the pairing
+rather than transcribing it: `release-web.yml`'s job-level `environment: name:`
+expression yields `production` or `preview`, its `Determine env + version` shell
+yields `prod` or `preview`, both branch on the same `refs/tags/web@` predicate,
+and the guard asserts that predicate is shared before pairing the branches. A
+run that would declare an environment no role trusts, a role trusting an
+environment no run declares, and the two crossed over each other are three
+separate failures with three separate messages.
+
+**No wildcard grant.** No action ending in `:*`, and `Resource = "*"` only for
+actions AWS models no resource for. Those are declared in the guard with the
+reason — `cloudfront:CreateInvalidation` (IAM does not match distribution ARNs
+for it) and `cloudfront:ListDistributions` (a list action has nothing to scope
+to) — and an exemption nothing uses fails as loudly as a missing one, per
+[§ 830](#830)'s class.
+
+**One environment's resources per role.** Every resource ARN in a role's policy
+must carry that role's own environment token and none of the other's. This is
+the check with no prior art in the tree and the one worth having most: a
+copy-pasted `prod` in the preview policy would hand every preview deploy write
+access to the production bucket, and the policy would still read as two tidy
+symmetrical blocks. Nothing about the shape of the file would look wrong.
+
+**The Lambda list is a fourth transcription.** Each deploy policy enumerates
+eight function ARNs, which is the same list `check_lambda_alias_sync.mjs`
+already compares across the module, `bin/lambda-alias-sync.sh` and
+`release-web.yml` ([§ 433](#433)). It was outside that guard's three sources.
+A ninth Lambda added correctly to all three still fails at `aws lambda
+update-function-code` with `AccessDenied` — mid-release, against production,
+after the S3 sync has already landed. The guard now compares all four.
+
+## 890. A Lambda-origin failure on this distribution is invisible, so the alarm IS the contract — and `osrm-proxy` shipped without half of it
+
+**Decided 2026-09-02.**
+
+CloudFront models custom error responses per DISTRIBUTION, not per cache
+behaviour. There is no per-behaviour form. The web stack's SPA fallback maps
+both 403 and 404 to `/index.html` at 200, which is the right idiom for an S3
+origin serving a prerendered SvelteKit build — and it applies just as much to
+the eight Lambda origins sitting on ordered behaviours above it.
+
+The module contained two comments that could not both be true about this. The
+one above `aws_lambda_permission.cloudfront_invoke_function` states the
+measurement: with only one of the two OAC grants the Function URL 403s before
+invocation, "the distribution's SPA error fallback rewrites that 403 into the
+shell at 200, so the surface looks healthy while the Lambda never runs" — issue
+#590, proven empirically on 2026-07-21. The one above `custom_error_response`,
+twelve hundred lines down, claimed the opposite: that a Lambda's own 404
+"surfaces as a real 404 … not the SPA shell" because its behaviour runs first.
+That is the load-bearing one, because it is the sentence a reader reaches while
+deciding whether a Lambda failure needs monitoring. It was wrong, and it is
+corrected in place rather than deleted — a reader who has seen it needs to know
+which claim survived.
+
+What follows from the correction is a monitoring contract. A failing Lambda
+origin here is invisible to a viewer, to a synthetic HTTP check, and to anyone
+reading a CloudFront error-rate metric that never sees a non-2xx. The CloudWatch
+alarms are the only signal these failures have.
+
+**`osrm-proxy` had half of them.** `alarms.tf` says in its own comment that the
+proxy "mirrors generate-route's failure shape" and gives it an error-rate alarm
+and an `engine_unreachable` log filter; generate-route has those two plus a p95
+duration alarm at 12 s against a 15 s timeout. The proxy carries the same 15 s
+timeout and the same clean-502 degradation, so a slow OSRM engine walks its
+duration toward the timeout with a flat error rate, the route builder quietly
+falls back to straight-line segments, and nobody is paged. The alarm is added.
+
+`scripts/check_infra_coverage.mjs` pins it: every `aws_lambda_function` in the
+module carries an error-rate alarm and a p95 alarm, resolved through the
+`for_each` locals maps so the five share Lambdas read as five rather than as one
+unattributable `each.value`. It fails against the tree as it stood before the
+fix, which is how the guard is known to be about something.
+
+**And the distribution had no alarm at all.** `alarms.tf`'s own first line reads
+"CloudWatch alarms for the coach Lambda + the CloudFront distribution", and
+`apps/web/deployment.md` listed "4xx rate at the CloudFront distribution >5%"
+and "5xx rate at the distribution >1%" under "wired by the `web-stack` module".
+The file declared neither, and every alarm in it was scoped to one Lambda — so
+nothing could see a broken behaviour ordering, an origin the OAC had stopped
+signing for, or S3 itself serving errors. That is the same shape as
+[§ 877](#877): a header arguing for a rail it never wrote, believed by everyone
+downstream because it was stated three times. Both alarms are added, var-driven,
+on the module's default provider rather than the `aws.us_east_1` alias — a
+CloudWatch alarm's actions must live in its own region and `aws_sns_topic.alerts`
+is created by the default provider, and CloudFront publishes its metrics only in
+us-east-1, which the whole stack already is. The same pass added the
+generate-route and osrm-proxy throttle alarms the doc also claimed: a throttled
+invocation increments `Throttles` and never `Errors`, so no error-rate alarm can
+see one, and those two functions' reserved concurrency is a ceiling on an
+engine's load exactly as coach's is on spend.
+
+Note the ordering of the two findings, because it compounds: the distribution
+5xx alarm cannot see a Lambda-origin 403 or 404 either, since the SPA fallback
+rewrites those before CloudFront counts them. The per-Lambda alarms are the only
+witness to that class, and the distribution alarms are the only witness to
+everything the per-Lambda ones cannot reach. Neither set is redundant with the
+other, which is why the guard requires both.
+
+Cost: four added alarms per env (two distribution, two throttle) at CloudWatch's
+$0.10 standard-alarm rate is ~$0.40/env/month, ~$0.80 across prod and preview.
+Worth noting because `monthly_budget_limit_usd`'s own description already
+understated the alarm line at "~$1.50" — the module was at 30 alarms per env
+before this and is at 34 after, so that figure was stale before this change
+touched it. The prod budget default of $30 has ample headroom either way; the
+number in that description is what wants correcting, not the limit.
+
+The same guard closes a second unenforced obligation stated in prose, in
+`.github/workflows/terraform.yml`'s header: "when adding a new stack: append it
+to the `stack` matrix below AND add a `terraform` ecosystem entry to
+`.github/dependabot.yml`". Both lists are hand-maintained transcriptions of a
+directory listing. A stack absent from the matrix gets no `fmt`, no `validate`
+and no Trivy verdict; one absent from dependabot never hears about a provider
+CVE and its `.terraform.lock.hcl` pins a version nothing will move. Neither
+absence is red — the workflow simply shows one fewer green row than it could,
+which is invisible beside the twenty it does show. The guard derives the
+directory set by listing `infra/` for `.tf` files and compares both lists
+against it in both directions. `infra/modules/web-stack` is the one exemption,
+with the reason measured rather than assumed: a standalone `terraform validate`
+there fails with "Provider configuration not present" because the module takes
+an `aws.us_east_1` aliased provider from its caller. It is validated
+transitively by `envs/prod` and `envs/preview`.
+
+## 891. An account admin CAN decrypt this project's production secrets, and the comment denying it was the defect — not the policy
+
+**Decided 2026-09-02.**
+
+`aws_kms_key.secrets` carries an explicit key policy whose header argued for a
+posture it does not have. It opened by naming the risk — the AWS-default policy
+means "anyone with `AdministratorAccess` through Identity Center could decrypt
+sops-encrypted secrets via the console" — and then claimed this policy avoids
+it: root "may manage the key (revoke / re-grant), but not call Decrypt directly
+without going through a delegated principal".
+
+That was true for as long as the policy had three statements. The fourth,
+`AllowOperatorSopsUseViaIamPolicies`, delegates `kms:Encrypt`, `kms:Decrypt`,
+`kms:ReEncrypt*` and `kms:GenerateDataKey*` to the account root — which under
+KMS means "whatever this account's own IAM policies allow", and an admin's
+allow it. Its own comment explains why it was added (without `Encrypt`, no
+principal in the account could sops-encrypt at all, breaking
+`bin/sops-init.sh`), and it is genuinely load-bearing beyond that: `sops <file>`,
+`sops --set` (`bin/secret-set.sh`) and `sops updatekeys` (`bin/key-rotate.sh`)
+all decrypt before they re-encrypt. An operator with no `Decrypt` cannot rotate
+a secret.
+
+**So the policy is right and the header was wrong.** The decision recorded here
+is to keep the statement and fix the sentence, because the sentence is the one a
+reader carries into a threat model. The header now states the posture plainly —
+an account admin can read this env's sops secrets, deliberately — says what the
+enumeration buys over the AWS default (root's data-plane grant is listed rather
+than `kms:*`, so a new privileged action is a deliberate edit; CloudWatch Logs
+is scoped by encryption context to this env's log groups; the delegated roles get
+`Decrypt` + `DescribeKey` and never `GenerateDataKey`), and points at the
+followup that tracks narrowing it.
+
+Narrowing it means a dedicated operator principal that the key policy names
+instead of root, not deleting the statement. That is a change to who holds the
+rotation flows, not a Terraform edit, which is why it is a followup and not this
+round's work.
+
+The generalisation is [§ 877](#877)'s, one layer over: **a header that argues
+for a property is not the property.** There it was a migration arguing that a
+new table inherits nothing while the image granted it four verbs. Here it is a
+key policy arguing that root cannot decrypt while a statement below grants
+exactly that. In both cases the comment was written when it was true and stayed
+after the code moved, and in both cases the comment is what a later reader
+believed.
+
+## 892. The GitHub deploy roles hold `kms:Decrypt` on the secrets key for a `terraform apply` that no workflow performs
+
+**Decided 2026-09-02.** Filed rather than fixed — the remedy requires an apply,
+and this lane holds no credentials and touches no state.
+
+Both env stacks pass their env's OIDC deploy role into the module as
+`kms_decrypt_principal_arn`, which puts the role in the
+`AllowLambdaAndDeployRolesToDecrypt` statement of the secrets CMK's key policy.
+`envs/prod/main.tf` justifies it: "lets the prod deploy role decrypt sops at
+`terraform apply` time from the GitHub Actions runner. Without this, only the AWS
+account root could re-apply the stack post first-deploy."
+
+No workflow in this repo runs `terraform apply`. `terraform.yml` runs `fmt`,
+`init -backend=false` and `validate`, with no AWS credentials by design.
+`release-web.yml` syncs S3, updates eight Lambdas and invalidates CloudFront.
+`budgets.tf` says so outright about a sibling concern — "the GitHub OIDC deploy
+role does not [have `budgets:*`] — these resources are intended to be applied
+locally, not from CI" — and `bin/deploy-prod.sh` applies under the operator's own
+SSO profile. The deploy policies carry no S3 access to the tfstate bucket and no
+`lambda:UpdateFunctionConfiguration`, so the role could not complete an apply
+even with the decrypt.
+
+What this grants, concretely: a principal assumable by any job running in the
+`production` GitHub environment can call `kms:Decrypt` against the key that
+protects `ANTHROPIC_API_KEY` and `SUPABASE_SECRET_KEY`. It is not a path to the
+plaintext on its own — the ciphertext lives in the private estate repo, which
+CI does not check out — but it is a grant the pipeline does not use, on the one
+key in the account whose compromise is unrecoverable.
+
+**Remedy, for an operator with credentials:** set
+`kms_decrypt_principal_arn = ""` in `infra/envs/prod/main.tf` and
+`infra/envs/preview/main.tf` (the module's `compact()` drops it from the
+statement's `identifiers` list), then `terraform apply` in each env stack. The
+Lambda execution role's decrypt is a separate identifier in the same statement
+and is untouched. Restore it the day a workflow genuinely applies. Tracked in
+`docs/product/followups.md`.
+
+## 893. What this infra sweep checked by hand and where the guards stop
+
+**Decided 2026-09-02.**
+
+Three findings became guards ([§ 889](#889), [§ 890](#890)) and three became
+corrections in place ([§ 890](#890), [§ 891](#891)). This entry records the
+rest, because a sweep that reports only its hits reads as if everything else
+went unexamined.
+
+**Checked by hand and correct, guarded by nothing new:** both S3 buckets carry a
+full public-access block, versioning, SSE and a non-current-version expiry;
+`force_destroy = false` and `prevent_destroy` on the state bucket, the site
+bucket, the hosted zone, the ACM cert and both KMS keys; `enable_key_rotation`
+on the KMS keys with a 30-day deletion window; all eight Lambda log groups at 30
+days' retention encrypted with the env's CMK; the SNS alerts topic encrypted
+with the same; `minimum_protocol_version = "TLSv1.2_2021"` and `https-only` to
+every Lambda origin; the site bucket policy admitting only
+`cloudfront.amazonaws.com` conditioned on this distribution's ARN; and no
+security group, no VPC and no EC2 anywhere in the tree — there is nothing to
+leave open. Several of these already have guards in
+`apps/web/src/lib/security_guards.test.ts` (log-group retention, the price
+class, the WAF scope-down, the CSP, the Permissions-Policy, the OIDC role tags,
+the alarm subscribers); the rest are properties Trivy's IaC pass covers, which
+is why no third scanner was introduced this round.
+
+**Fixed in passing:** `aws_acm_certificate.apex` in the `dns` stack was handed
+only the caller's `var.tags`, which defaults to empty, while the hosted zone
+beside it built the `Project`/`Stack`/`ManagedBy` baseline inline.
+`bootstrap/main.tf` records what that costs — AWS tag keys are case-sensitive,
+and a resource missing `Stack` drops out of the Cost Explorer grouping every
+other stack is tagged for, which broke a query once already. Hoisted to
+`local.dns_tags` so both resources carry it.
+
+**Where the guards stop, stated so nobody reads more into them:**
+
+- They read SOURCE. Nothing here compares the Terraform against what is actually
+  applied; a console edit, a drifted resource or a manually attached policy is
+  outside every check in this round. Only a `terraform plan` against real state
+  sees that, and it needs credentials.
+- `terraform validate` with `-backend=false` proves syntax, provider
+  constraints and reference shapes. It does not evaluate `count`/`for_each`
+  against real values, resolve remote state, or say anything about IAM
+  semantics.
+- The IAM guard checks the SHAPE of a grant, not its sufficiency. It can say the
+  preview role names no prod resource; it cannot say the actions it lists are
+  the ones the pipeline calls. A grant that is too narrow still fails at deploy
+  time, loudly, which is the direction that is safe to leave unguarded.
+- The alarm-coverage guard proves an alarm EXISTS with the right shape. Whether
+  its threshold is well chosen, and whether the SNS subscription was ever
+  confirmed by its recipient, are both outside it — an unconfirmed email
+  subscription is functionally identical to no alarm and nothing static can see
+  it.
+
+**Left as a followup, not fixed:** the `preview` env stack declares no
+`graph_cycle_url` variable and passes none to the module, while `prod` wires
+one. The module defaults it to `""`, so preview simply skips the graph-cycle
+generator and serves `round_trip` — correct today and deliberate, but it is the
+only one of the three engine URLs preview cannot set, and the asymmetry is
+undocumented. Filed with the measurement rather than closed, because adding a
+variable preview has no engine for would be scaffolding.
