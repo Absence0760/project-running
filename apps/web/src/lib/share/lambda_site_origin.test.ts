@@ -17,66 +17,18 @@
 // ("an env var set to the empty string is a deploy that failed to configure
 // it, not a request to serve canonicals from nowhere"). It was unit-tested and
 // had no callers at all. See decisions § 895.
+//
+// The REGISTER of callers now lives beside the helper, in
+// `core/site_url.test.ts`, which walks `src` and `lambda` together — the same
+// twenty-seven reads, one walker (decisions § 971). What stays here is the half
+// that walker cannot state: what the head builders actually emit when the fold
+// is wrong.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-
 import { DEFAULT_SITE_URL, siteOrigin } from '../core/site_url.js';
 import { buildShareRunMeta, renderShareRunHeadTags } from './share_run_meta.js';
 import { buildShareEventHead, renderShareEventHeadTags } from './share_event_meta.js';
-
-const lambdaRoot = resolve(import.meta.dirname, '..', '..', '..', 'lambda');
-
-function sourceFiles(dir: string): string[] {
-	let out: string[] = [];
-	for (const entry of readdirSync(dir)) {
-		if (entry === 'node_modules' || entry === 'dist') continue;
-		const full = join(dir, entry);
-		if (statSync(full).isDirectory()) out = out.concat(sourceFiles(full));
-		else if (/\.(ts|mjs)$/.test(entry)) out.push(full);
-	}
-	return out;
-}
-
-/** Comment bodies blanked, so the prose above a fold is not read as a fold. */
-function code(src: string): string {
-	return src
-		.replace(/\/\*[\s\S]*?\*\//g, ' ')
-		.split('\n')
-		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n');
-}
-
-test('every Lambda read of PUBLIC_SITE_URL goes through siteOrigin', () => {
-	const offenders: string[] = [];
-	let reads = 0;
-
-	for (const file of sourceFiles(lambdaRoot)) {
-		const rel = file.slice(lambdaRoot.length + 1);
-		for (const line of code(readFileSync(file, 'utf-8')).split('\n')) {
-			if (!line.includes('PUBLIC_SITE_URL')) continue;
-			reads++;
-			if (!/siteOrigin\(\s*process\.env\.PUBLIC_SITE_URL/.test(line)) {
-				offenders.push(`${rel}: ${line.trim().slice(0, 90)}`);
-			}
-		}
-	}
-
-	// Population: a walker that found nothing would satisfy the assertion below
-	// while proving nothing.
-	assert.ok(reads >= 5, `found only ${reads} PUBLIC_SITE_URL reads under lambda/ — walker broken?`);
-
-	assert.deepEqual(
-		offenders.sort(),
-		[],
-		'these resolve the site origin by hand. A `?? DEFAULT_SITE_URL` keeps an ' +
-			'empty env var as the origin and every og:url / og:image the function ' +
-			'emits comes out root-relative; `siteOrigin` folds blank to the default ' +
-			'and trims a trailing slash.',
-	);
-});
 
 test('a blank origin makes the unfurl tags root-relative, which siteOrigin prevents', () => {
 	const run = {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+	import { siteOrigin } from '$lib/core/site_url';
 	import { lengthLimit } from '$lib/core/column_limits';
 	import { activeFormatLocale } from '$lib/format/time';
 	import { m as tr } from '$lib/i18n/store.svelte';
@@ -71,7 +71,7 @@
 	// /share/club/[slug] twin so search engines consolidate ranking
 	// signal there rather than splitting it across two URLs.
 	let canonicalUrl = $derived(
-		buildClubShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, slug)
+		buildClubShareCanonical(siteOrigin(env.PUBLIC_SITE_URL), slug)
 	);
 	let club = $state<ClubWithMeta | null>(null);
 	let upcoming = $state<EventWithMeta[]>([]);

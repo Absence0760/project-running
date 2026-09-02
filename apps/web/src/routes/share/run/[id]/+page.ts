@@ -2,7 +2,7 @@ import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
 import { lookupSharedRun } from '$lib/share/share_run_lookup';
-import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+import { siteOrigin } from '$lib/core/site_url';
 
 // Canonical host for the absolute <link rel="canonical"> + og:url +
 // JSON-LD URLs — same source + fallback as /sitemap.xml and the
@@ -30,6 +30,6 @@ export const load: PageLoad = async ({ params }) => {
 			? { supabaseUrl: PUBLIC_SUPABASE_URL, supabaseAnonKey: PUBLIC_SUPABASE_ANON_KEY }
 			: null,
 	);
-	const siteUrl = env.PUBLIC_SITE_URL || DEFAULT_SITE_URL;
+	const siteUrl = siteOrigin(env.PUBLIC_SITE_URL);
 	return { id: params.id, run: lookup.run, displayName: lookup.displayName, siteUrl };
 };

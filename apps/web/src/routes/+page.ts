@@ -1,6 +1,6 @@
 import type { PageLoad } from './$types';
 import { env } from '$env/dynamic/public';
-import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+import { siteOrigin } from '$lib/core/site_url';
 
 // Canonical host for the landing page's <link rel="canonical"> + og:url
 // + JSON-LD URLs. Same source + fallback as /sitemap.xml, /learn, and
@@ -9,5 +9,5 @@ import { DEFAULT_SITE_URL } from '$lib/core/site_url';
 // the prod host).
 
 export const load: PageLoad = () => {
-	return { siteUrl: env.PUBLIC_SITE_URL || DEFAULT_SITE_URL };
+	return { siteUrl: siteOrigin(env.PUBLIC_SITE_URL) };
 };
