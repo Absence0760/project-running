@@ -15061,3 +15061,33 @@ fallback, coarse-wins, neither-present) and a source guard in
 `strava_zip_strictness.test.ts` — `strava-zip.ts` imports supabase-js and
 cannot be executed under `tsx --test`, which is why that file's coverage has
 always been source-level.
+
+## 980. The one field the export-job normaliser cast rather than graded
+
+`cloudExportJobFromResponse`'s own doc block is about being fail-closed, and it
+is — for `status`, and for a `ready` job that arrived without a URL. `format`
+was `str(body.format) as CloudExportFormat | undefined`: a cast, so the type
+asserted a three-token vocabulary the value had never been checked against.
+A server answering `format: "zip"` produced a `CloudExportJob` whose `format`
+field claimed to be `'csv' | 'gpx' | 'backup'` and held `"zip"`.
+
+The filing described it as cosmetic on the grounds that the card renders it.
+It does not: web reads the field only as `exportJob?.format === 'gpx'` and
+`=== 'backup'`, and mobile only as `job.format == 'csv' ? 'csv' : 'zip'`, so an
+unknown token compares false on every live rail and no user-visible string
+changes either before or after this. What was actually wrong is narrower and
+worse-wearing: the field is the one place in the module where the TYPE is not
+backed by a check, so the next reader who writes an exhaustive `switch` over
+`job.format` gets a compiler's assurance the value cannot honour.
+
+Graded on both rails rather than one. `cloud_export_helpers.ts` ↔
+`export_job.dart` is a registered parity pair whose declared scope names
+`exportJobFromResponse`, and the Dart half typed `format` as a bare `String?`
+and passed it through — honest about its own type, but not the same
+normalisation. Narrowing only web would have made the two clients answer
+differently about the same body, which is exactly what the pair exists to
+prevent. An unrecognised format is dropped, not carried, and the STATUS is
+untouched: an unreadable label is no reason to refuse an archive that built.
+Mirror-tested on both sides (known tokens survive, `"zip"` and a non-string
+become absent, the status stays `ready`) and mirrored byte-identically into
+`apps/mobile_ios`.

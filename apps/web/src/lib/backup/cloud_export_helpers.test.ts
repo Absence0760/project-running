@@ -114,6 +114,34 @@ test('cloudExportJobFromResponse — a ready job carries its URL and counts', ()
 	assert.deepEqual(cloudExportShortfall(job), { count: 5000, total: 7412 });
 });
 
+test('cloudExportJobFromResponse — a format this build does not know is dropped, not carried', () => {
+	// `format` is typed as one of three tokens. It used to be a cast, so
+	// the type asserted a vocabulary the value had never been checked
+	// against — the one ungraded field in a module whose contract is that
+	// there are none. An unreadable label is no reason to refuse an
+	// archive that built, so the status survives and only the name goes.
+	const job = cloudExportJobFromResponse({
+		status: 'ready',
+		format: 'zip',
+		url: 'https://signed.example/x',
+	});
+	assert.equal(job.status, 'ready');
+	assert.equal(job.format, undefined);
+	for (const known of ['csv', 'gpx', 'backup']) {
+		const ok = cloudExportJobFromResponse({
+			status: 'ready',
+			format: known,
+			url: 'https://signed.example/x',
+		});
+		assert.equal(ok.format, known);
+	}
+	// A non-string is not a near-miss token either.
+	assert.equal(
+		cloudExportJobFromResponse({ status: 'queued', format: 7 }).format,
+		undefined,
+	);
+});
+
 test('cloudExportJobFromResponse — a status this build does not know is terminal, not a poll forever', () => {
 	// A client that keeps asking about a status it cannot interpret spins
 	// until the tab closes; one that guesses `ready` offers a download it

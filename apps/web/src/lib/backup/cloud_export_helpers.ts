@@ -102,6 +102,8 @@ export interface CloudExportJob {
 	error_code?: string;
 }
 
+const KNOWN_JOB_FORMATS: readonly string[] = ['csv', 'gpx', 'backup'];
+
 const KNOWN_JOB_STATUSES: readonly string[] = [
 	'none',
 	'queued',
@@ -114,12 +116,23 @@ const KNOWN_JOB_STATUSES: readonly string[] = [
 
 /// Normalise a status-endpoint body into a `CloudExportJob`.
 ///
-/// Fail-closed in two directions, and both matter. A status this build
-/// does not recognise becomes `failed` carrying the raw token: a client
-/// that keeps polling a status it cannot interpret spins for ever, and
-/// one that guesses `ready` offers a download it has no URL for. And a
-/// `ready` job that arrived without a URL is not offerable either, so it
-/// is reported as a failure rather than rendered as a dead button.
+/// Fail-closed in three directions, and each matters. A status this
+/// build does not recognise becomes `failed` carrying the raw token: a
+/// client that keeps polling a status it cannot interpret spins for
+/// ever, and one that guesses `ready` offers a download it has no URL
+/// for. A `ready` job that arrived without a URL is not offerable
+/// either, so it is reported as a failure rather than rendered as a dead
+/// button. And a `format` the build does not know is dropped rather than
+/// carried: the field is typed as one of three tokens, so passing an
+/// arbitrary string through makes the type a claim the value does not
+/// support — the status is unaffected, because an unreadable label is no
+/// reason to refuse an archive that built.
+function knownFormat(value: unknown): CloudExportFormat | undefined {
+	return typeof value === 'string' && KNOWN_JOB_FORMATS.includes(value)
+		? (value as CloudExportFormat)
+		: undefined;
+}
+
 export function cloudExportJobFromResponse(raw: unknown): CloudExportJob {
 	if (!raw || typeof raw !== 'object') {
 		return { status: 'failed', error_code: 'unreadable_response' };
@@ -137,7 +150,7 @@ export function cloudExportJobFromResponse(raw: unknown): CloudExportJob {
 	const job: CloudExportJob = {
 		status: status as CloudExportJobStatus,
 		job_id: str(body.job_id),
-		format: str(body.format) as CloudExportFormat | undefined,
+		format: knownFormat(body.format),
 		requested_at: str(body.requested_at),
 		url: str(body.url),
 		expires_in: num(body.expires_in),
