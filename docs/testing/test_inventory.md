@@ -1563,3 +1563,126 @@ pre-existing `state_referenced_locally` warnings in `PlanEditor.svelte` — a fi
 this lane did not touch. `npm run check:node-types` is clean; it caught an
 untyped recursive helper in the new coverage walker that the suite itself ran
 green over, `apps/web/scripts` being inside that root under `checkJs`.
+
+## Added by the #789 coverage round 31 — mobile lane (2026-09-02)
+
+Every entry below is a matched web/Dart pair unless it says otherwise: this
+lane's subject was the TS-Dart parity surface, so a test added to one side is
+a test added to both. Each was mutation-checked — the code it covers was
+broken, the failure confirmed to be the one expected, and the change reverted
+and re-run green — inside a single script invocation so a timeout could not
+strand a mutation.
+
+### `off_route_alert` — the sustained-off-route escalation
+
+Five mirror cases each (`apps/web/src/lib/safety/off_route_alert.test.ts`,
+`apps/mobile_android/test/off_route_alert_test.dart`, mirrored to the iOS twin):
+a non-finite distance never arms the clock and never spends the once-per-run
+latch, over `NaN` / `Infinity` / `-Infinity`; it resets the window the way a
+null does; a whole run of unusable readings leaves a later genuine departure
+still able to fire; a backwards clock step re-anchors instead of wedging; and a
+backwards step shorter than the window does not shorten it either. Four
+mutations pinned across the two sides. Web 10 → 15, Dart 12 → 17. See
+[decisions §§ 929-930](../architecture/decisions.md).
+
+### Non-finite coordinates at the parser and recorder rungs
+
+`packages/gpx_parser/test/route_parser_test.dart` gains six cases — one per text
+format plus the elevation-only degradation — pinning that `double.tryParse`'s
+acceptance of the `NaN` / `Infinity` literals no longer reaches a `Waypoint`,
+and that one bad point no longer poisons the route's own distance. 38 → 44.
+`packages/run_recorder/test/route_helpers_test.dart` gains four, pinning that
+the three route-projection helpers answer null rather than `+Infinity` when
+every segment projects to NaN, and that a non-finite runner position is refused
+on a good route. 29 → 33. Two mutations each, both sides.
+
+### Parity pairs registered after being measured
+
+Nine pairs whose own headers claimed lockstep while no syncer row carried them.
+Each was measured with a throwaway differential harness — both halves run over
+the same input grid, outputs diffed — before any registration. The harnesses
+are not committed (they are one-shot, and the committed mirror tests are what a
+future change is graded against); the grids are recorded in
+[decisions § 931](../architecture/decisions.md).
+
+| Pair | Measured over | Outcome | Tests before → after |
+|---|---|---|---|
+| `route_loop` | 5,543 inputs | identical | web 71, Dart 20 → 52 |
+| `streaks` | 16,449 inputs | identical | unchanged (22 each) |
+| `text_limits` | data pair, third rail already guarded | identical | unchanged (web 3, Dart 6) |
+| `column_limits` | data pair, third rail already guarded | identical | unchanged (web 7, Dart 11) |
+| `fundraiser_progress` | 225 inputs | identical (one unreachable shape difference) | unchanged (11 each) |
+| `calories` | 13,500 inputs | **diverged** | 12 → 18 each |
+| `tile_pack` | non-finite bbox corners | **diverged** | 8 → 10 each |
+| `readiness` | tie behaviour under both sorts | **diverged** | 11 → 14 each |
+| `cycle_plan` | malformed date anchors | **diverged** | 22 → 26 each |
+
+`route_loop`'s two suites still differ in raw count after the Dart one gained
+the web battery, and legitimately: web runs nine cases per field coordinate
+where the Dart mirror runs five, because three of web's nine (the waypoint
+count, the exact start pin and the closing-equals-start check) are one case on
+the Dart side and the other two — the radial-seed rotation and the anchor
+collapse — are already covered by that suite's own non-parameterised cases. The
+differential harness, not the count, is what establishes the two agree.
+
+The four divergent pairs' new cases are the interesting half. `calories` pins
+that every input is graded for finiteness and that the result is always a
+finite non-negative integer, over a cross-product sweep of eight values of
+distance against eight of weight; `tile_pack` that a non-finite bbox corner is
+refused rather than yielding an empty pack on one platform and an exception on
+the other; `readiness` that a tie in absolute delta resolves to the first
+contributor added, including an all-zero three-way tie, and that the tiebreak
+does not override a genuinely larger contributor; `cycle_plan` that an
+unreadable date anchor makes all four entry points decline rather than one
+guessing and the other throwing. Fourteen mutations across the four.
+
+### `e164` — the trusted-contact phone repair
+
+Four mirror cases each: every one of the eleven hyphen-family code points is
+folded (the class carried three); the invisible characters a paste carries
+(soft hyphen, the zero-width trio, BOM, ideographic and medium-mathematical
+space) are folded; a FULLWIDTH parenthesised trunk zero is deleted whole like
+the ASCII one, which is the pinning of the structural rule that the two bracket
+sets must match; and an unknown separator is still refused rather than dropped.
+16 → 20 each, six mutations pinned, and the two halves measured identical over
+3,478 inputs. See [decisions § 933](../architecture/decisions.md).
+
+### `csv_run_importer` — mobile only, no web twin
+
+Twelve new cases in `apps/mobile_android/test/csv_run_importer_test.dart`
+(mirrored to the iOS twin): negative distance, negative duration and the three
+non-finite literals are refused with a message naming the cell, zero stays
+legal, every value the registered `ActivityType` rail carries is accepted, case
+is normalised rather than refused, and a value `runs_activity_type_check`
+cannot hold is refused at import instead of syncing forever on a 23514. 22 →
+34. Two existing cases were CORRECTED rather than deleted: both asserted the
+old pass-through behaviour on the stated grounds that `public.runs` carries
+`distance_m >= 0` and `duration_s >= 0` CHECKs, which it does not — the missing
+constraints are filed in `followups.md`. Five mutations pinned; the first pass
+left one alive, because the assertion matched the accidental `.round()` throw's
+message as well as the deliberate refusal's, and was tightened. See
+[decisions § 934](../architecture/decisions.md).
+
+### Lane totals
+
+| Suite | Command | Before | After |
+|---|---|---|---|
+| `off_route_alert` (Dart) | `flutter test test/off_route_alert_test.dart` | 12 | 17 |
+| `route_parser` | `dart test` in `packages/gpx_parser` | 38 | 44 |
+| `route_helpers` | `flutter test test/route_helpers_test.dart` | 29 | 33 |
+| `route_loop` (Dart) | `flutter test test/route_loop_test.dart` | 20 | 52 |
+| `calories` (Dart) | `flutter test test/calories_test.dart` | 12 | 18 |
+| `tile_pack` (Dart) | `flutter test test/tile_pack_test.dart` | 8 | 10 |
+| `readiness` (Dart) | `flutter test test/readiness_test.dart` | 11 | 14 |
+| `cycle_plan` (Dart) | `flutter test test/cycle_plan_test.dart` | 22 | 26 |
+| `e164` (Dart) | `flutter test test/e164_test.dart` | 16 | 20 |
+| `csv_run_importer` | `flutter test test/csv_run_importer_test.dart` | 22 | 34 |
+
+The web halves of the six shared pairs move by the same counts and are run with
+`npx tsx --test` from `apps/web`. The full Flutter suite was NOT run — the box
+is 14 GB and the standing rule is targeted files only, so what is claimed here
+is what was executed: the ten suites above, plus the three `import_screen`
+suites the CSV change could reach (36 pass), `packages/run_recorder`'s
+`route_helpers`, and on the web side `decisions_numbering_guard`,
+`check_parity_pair_registry`, `check_twin_claims` and its own unit test, and
+`check_shared_constants` (40 checks).

@@ -13936,3 +13936,147 @@ Pinned in both directions — the three reasons produce a body naming none of
 them while the log still carries each, and a push refusal and a snapshot refusal
 produce byte-identical bodies, so the response cannot be read as an oracle for
 which action was attempted either.
+
+## 929. A non-finite reading is not a measurement — the off-route escalation, the route projection, and the parser that fed both
+
+**Decided 2026-09-02.** `OffRouteAlertDetector.update` escalates a sustained
+off-route condition to the runner's trusted contact exactly once per run, and it
+graded the distance with `<= threshold`. Every comparison against a NaN is
+false, and an `Infinity` is genuinely greater than 75, so an unusable reading
+started the 90 s sustain clock, fired, and latched — pinging the contact about a
+runner who was on route, and leaving a runner who later went genuinely off
+course with a silently dead safety net for the rest of the run.
+
+The reading was reachable, through three rungs that each declined to check.
+`double.tryParse` accepts the literals `NaN`, `Infinity` and `-Infinity`, so
+`RouteParser`'s null-check let a non-finite coordinate into a `Waypoint` on all
+four text formats (GPX, KML, TCX, GeoJSON) — where the web importer had guarded
+every one of its own coordinate sites with `Number.isFinite` since it was
+written. The recorder's `_routeProgress` then seeds its running minimum at
+`+Infinity` and a NaN never compares less than it, so a route every segment of
+which projects to NaN left the seed untouched and reported the runner as
+infinitely far off course. And the detector took that figure at face value.
+
+Fixed at all three, because each is wrong on its own: the parser drops an
+unusable point (an unusable *elevation* only drops the elevation), the
+recorder's three projection helpers answer null — "no usable projection" is the
+same answer as "no route", which every consumer already handles — and the
+detector reads a non-finite distance as the same state as null. The same class
+turned up twice more in the same session and is recorded with each: an
+`estimateRunCalories` that returned `NaN kcal` on one platform and threw on the
+other, and a tile-pack bbox corner that produced an empty pack on one and an
+unrelated exception on the other.
+
+## 930. A backwards wall-clock step re-anchors a sustain window rather than stranding it
+
+**Decided 2026-09-02.** The same off-route detector anchors its sustain window
+at the first over-threshold snapshot and compares `nowMs - sinceMs` on every
+one after. The caller feeds it `DateTime.now().millisecondsSinceEpoch`, which is
+wall clock: an NTP correction, a manual clock change or a timezone-database
+update mid-run can step it backwards. The anchor then sat in the future and the
+elapsed comparison stayed negative for as long as the step was large — an hour's
+correction disarmed the alert for an hour of genuine off-course running, and the
+detector never reset because it only resets when the runner comes back on route.
+
+The window now re-anchors whenever `nowMs` is below the anchor. That restarts
+the measurement, which is the honest answer: across a clock jump we cannot say
+how long the departure has lasted, and both wrong answers — firing early off a
+forward jump, or never firing at all — are worse than measuring again. Both
+suites pin that a step back *shorter* than the window does not shorten it
+either, so the correction cannot be read as elapsed time.
+
+## 931. Registering a parity pair means measuring it first, not reading it and agreeing that it looks alike
+
+**Decided 2026-09-02.** Thirteen twin declarations named a counterpart that no
+`shared-library-syncer` row carried, so nine pairs described themselves as being
+in lockstep while nothing had ever compared them. Registering them on the
+strength of the code reading alike would have made the guard green over whatever
+had already drifted, which is the failure the register exists to surface.
+
+Each was measured instead, by running both halves over the same input grid and
+diffing the outputs: `route_loop` over 5,543 inputs (8 start coordinates
+including both poles and both sides of the antimeridian, crossed with end pins,
+targets, scales, point counts and radial seeds), `streaks` over 16,449 (every
+subset of a 12-day window crossed with four `bestSince` bounds, plus a
+spring-forward boundary), `fundraiser_progress` over 225, `e164` over 3,478 and
+`calories` over 13,500. Five pairs came back identical and were registered as
+they stood. Four had diverged, and all four diverged on the same axis: an input
+the two languages disagree about. `Math.round` keeps a double where Dart's
+`.round()` throws on a non-finite one and saturates at 2^63-1 on a large one;
+`parseInt` yields NaN where `int.parse` throws; `Array.prototype.sort` is stable
+where `List.sort` is not. None of the four was visible by reading either half —
+only by reading both and asking what each does with the input the other cannot
+represent.
+
+The register is empty now. Its own unit test asserted it was non-empty, which
+was true when it was written and became the wrong assertion the moment the last
+entry closed; an empty register is the goal state, and emptying it by accident
+cannot hide anything, because the guard already fails on a declaration that
+neither a row nor a gap covers.
+
+## 932. Which of two tied contributors wins is a contract, not an implementation detail
+
+**Decided 2026-09-02.** `computeReadiness`'s `dominantAdvice` picks the
+contributor with the largest absolute delta and shows that contributor's
+sentence. Ties are common by construction: a TSB of -12 and six hours of sleep
+both score -12, an all-neutral day scores three zeroes, and each carries
+different copy. `Array.prototype.sort` is stable, so the web half deterministically
+shows the first contributor added. Dart's `List.sort` is documented as unstable
+and only happened to agree because its small-list path is an insertion sort — an
+implementation detail of the current SDK, not a promise.
+
+The Dart half carries an explicit index tiebreak now, and both suites pin the
+tie rather than only the clear-winner case. The general rule: wherever a ranked
+pick drives visible copy and the ranking key can tie, the tiebreak is part of
+the algorithm and belongs in both halves in writing.
+
+## 933. A normalisation class is spelled out by code point, or it is three of eleven
+
+**Decided 2026-09-02.** `normaliseE164` repairs a typed or pasted phone number
+into the bare E.164 the `safety_contacts.contact_phone` CHECK enforces, and a
+number it fails to repair is a trusted contact the overdue escalation cannot
+reach. Its separator class carried three members of the hyphen family (U+002D,
+U+2011, U+2013) under a comment claiming the family, and the single test pinning
+it exercised two of the three. macOS and Word autocorrect a typed hyphen to an
+EN DASH — folded — or an EM DASH, which was not, so the same contact card pasted
+twice could be accepted once and refused once; a CJK keyboard produces U+FF0D
+and a spreadsheet export U+2212.
+
+All eleven are folded now, written out by code point on both rails rather than
+left to a `Dash_Punctuation` property, and the space family runs U+2000..U+200D
+as one range so the zero-width characters a paste off a web page carries are
+taken with it. One structural rule came out of it and is stated in both files:
+the bracket set in the trunk-zero regex must match the bracket set in the
+separator class. A bracket the separator class folds but the trunk-zero one does
+not leaves the national `0` behind and yields a *different, conforming* number,
+which is the exact silent misdelivery the whole-deletion exists to prevent. A
+separator neither class knows is still refused rather than dropped.
+
+## 934. An importer grades what it parses — the CSV path was deferring to a CHECK that does not exist
+
+**Decided 2026-09-02.** `CsvRunImporter` passed a negative distance and duration
+straight through, pinned by a test whose own title said "(DB rejects on upsert)"
+and whose comment cited "the DB CHECK (distance_m >= 0, duration_s >= 0)".
+`public.runs` has neither. Those CHECKs are on `event_results` and
+`gym_workouts`; `runs.distance_m` is `numeric(10, 2) not null` with no
+constraint at all. So a -100 m run from a hand-edited or third-party CSV stored,
+and every SQL aggregate that sums it came out short. Postgres `numeric` also
+holds NaN, which `double.tryParse` will produce from the literal, and that was
+refused only by accident — `_syntheticExternalId` calls `.round()` on the
+distance and `.round()` throws on a non-finite double, so the runner saw
+"Unsupported operation" rather than a bad measurement.
+
+The activity type was the same shape one level up. It was written into the
+metadata bag verbatim, so `Ride` imported, reported success, and then failed to
+sync forever on a `runs_activity_type_check` 23514 the runner never saw. It is
+graded at import now, against the vocabulary read off the existing
+`ActivityType` rail rather than retyped, with case normalised first and a
+genuinely different activity refused rather than defaulted to `run` — filing a
+bike ride as a run is worse than not filing it.
+
+Two lessons, both general. A validation deferred to a constraint is only as good
+as the constraint being there, and the deferral has to name it precisely enough
+to be checked. And a test that pins the absence of a guard must state the reason
+it believes the guard is unnecessary, so the belief can be falsified — this one
+did, which is the only reason the missing CHECK was found rather than the test
+simply being deleted.
