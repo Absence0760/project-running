@@ -13320,3 +13320,111 @@ region without any behaviour test noticing.
 No consumer on the wrist: the settings menu has no week-start row and
 `current_week::WeekStart` is a separate enum fed from the pushed settings frame.
 Port fidelity, and a doc claim that had become false.
+
+## 919. A log-hygiene guard follows the code into CloudWatch, not the directory
+
+**Decided 2026-09-02.** The rule that no production Lambda may hand a caught
+value straight to a log line was enforced by walking `apps/web/lambda/*/src`.
+Every one of those handlers is a thin wrapper whose whole job is to call a
+transport-agnostic core under `src/lib`, and it is the core that makes the
+provider call, catches its error, and logs it — into the wrapper's own log
+group. The walk therefore checked every file except the two holding the exact
+shape the rule was written against: `route_request` and `route_describe` both
+did `console.error('…', e)` on an Anthropic SDK error, whose 400 body quotes the
+part of the request it objected to. On `/route-request` that is the runner's
+typed sentence and the location label the endpoint sends with it.
+
+Both now normalise to `{ message, stack }`, the shape the wrappers already use,
+and the guard's population is derived by following relative imports from each
+Lambda entry point rather than by listing a directory. The new rule is narrower
+than the wrappers' — an argument may not be a bare identifier or member chain,
+the caught value itself — because everything already in that set narrows first
+(`supabaseErrorFields(...)`, `e.message`), so nothing is grandfathered in. The
+general shape: a guard scoped to the file the framework happens to load is
+scoped to the wrong thing when the wrapper is a wrapper.
+
+## 920. The dev/prod isolation list is derived from the tree's own env reads
+
+**Decided 2026-09-02.** `env_isolation.mjs` refuses a local run configured
+against a remote endpoint, and its list of endpoints was hand-kept. It has now
+missed three times: `PUBLIC_LIVE_HUB_URL` and `PUBLIC_EXPORT_HUB_URL` were each
+added only after someone noticed, and `GRAPHHOPPER_URL` / `GRAPH_CYCLE_URL` were
+unguarded from the day the route-generation chain landed. Those two carry a
+price the hubs do not: one generate races the request-multiplier spread against
+the seed count, up to 32 upstream fetches, so an inherited shell env or a stale
+`.env.local` turned every local route build into a burst against a billed prod
+engine.
+
+A hand-kept list cannot notice its own gap, so the list stops being the thing
+that has to remember. A test walks `apps/web/src` and `apps/web/lambda` for
+URL-shaped env reads and fails when one is neither in `KNOWN_ENV_VARS` nor in
+the new `NOT_ISOLATED_URL_VARS` with the reason it need not be loopback. Three
+genuinely need not be — a read-only basemap style and two RevenueCat hosted
+pages, none of which has a loopback form or writes anything — and they now say
+so in writing rather than by being absent. The exemptions are checked for
+staleness in the same test: an entry naming a var nothing reads any more is a
+blind spot re-opening under a rename.
+
+## 921. The release guard mirrors the dev guard, or one direction goes unwatched
+
+**Decided 2026-09-02.** `PUBLIC_SITE_URL`, `PUBLIC_LIVE_HUB_URL` and
+`PUBLIC_EXPORT_HUB_URL` were refused by the dev guard when they were NOT
+loopback, and nothing said the opposite for a release. All three are optional —
+unset has a defined behaviour in each case, so a release must still pass without
+them — but all three are absolute origins other code concatenates paths onto,
+and every one of them fails *silently* when set wrong in a build: the site origin
+is baked into the canonical and the `og:url` of every prerendered share page, the
+live hub receives each runner's telemetry, the export hub receives each Art 20
+enqueue. A `.env.development` value inherited into a release ships localhost to
+every crawler and every visitor with nothing at runtime to notice.
+
+A value that is SET now takes the same production-URL test the Supabase URL
+takes, and a mirror test reads the dev guard's own list and fails when a
+`PUBLIC_` origin is watched in one direction and not the other. The server-only
+vars stay dev-side only by design — they never reach a client bundle, so a
+release has nothing to bake them into.
+
+## 922. A paged read is ordered on a total order, or it is not a read of the table
+
+**Decided 2026-09-02.** PostgREST turns `.range(from, to)` into `LIMIT`/`OFFSET`.
+Postgres promises nothing about the order of rows a query does not order, and
+nothing about which of two equal sort keys comes first, so an OFFSET walk over a
+non-unique `ORDER BY` can return a row on a page boundary twice and another not
+at all. Four load-more readers in `core/data.ts` already carried a "secondary key
+so offset pages are stable" note and a unique tiebreak; five paged readers did
+not, and they are the ones where it costs most.
+
+`createBackup` paged `runs` on `started_at` alone and paged `routes` with no
+`ORDER BY` whatsoever, then wrote a manifest saying `complete` — so the archive
+someone wipes a device on could be missing a route and carrying another twice,
+under a whole all-clear. `fetchRuns` pages the entire history behind the recap,
+the heatmap and the account export. Both ZIP importers page the dedupe set, where
+a dropped row re-imports a run the runner already has.
+
+All five now end their ordering on the primary key, and `paged_read_guards`
+makes it a rule rather than a habit: it walks every `.range()` in the tree —
+following a closure builder, which is how `fetchRuns` keeps its ordering out of
+the chain — and fails when the last order key is not unique per row. The unique
+set is `id` plus the three membership keys whose other half the query already
+fixes with an `.eq()`, which is why those readers tiebreak on the user rather
+than on an id they do not have.
+
+## 923. A timing cell holding only separators is an error row, not a zero
+
+**Decided 2026-09-02.** `Number('')` is `0`, so an empty component in a
+colon-separated chip-timing cell parsed as a real time: `':'` and `'::'` scored
+0 s, `'1:'` scored 60 s, and `'1::30'` scored 3630 s off a component nobody
+typed. On a finished row a 0 s time sorts first and stands as the event record,
+so a stray colon in an organiser's timing sheet silently minted a course record
+for a runner who did not set one. The wholly blank cell was already rejected as
+unparseable, which is what makes the gap visible as a gap: the parser had the
+right verdict for the empty cell and the wrong one for the cell that is empty
+apart from its punctuation.
+
+Every component is now required to be a plain decimal count, spelled out rather
+than left to `Number`, which also read `'0x10'` as 16 seconds, `'1e3'` as 1000
+and `'+5'` as 5. Per-component whitespace stays tolerated — a hand-typed sheet
+spaces its colons and that is still a time. The general shape is the one the
+codebase keeps meeting from the other side: a coercion that answers for an input
+it was never given is worse than one that refuses, because the refusal reaches
+the organiser and the answer does not.

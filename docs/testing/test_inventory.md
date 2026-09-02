@@ -1341,3 +1341,89 @@ environmental and pre-existing: it fails identically on the untouched base
 commit (265 files / 2242 tests, same file, same `planned 19 tests but ran 0`).
 The workstation CLI is 2.109.1 against CI's pinned 2.84.2, and the two disagree
 about `service_role` EXECUTE on `fundraiser_totals`.
+
+---
+
+## Added by the #789 coverage round 31 — web unit lane (2026-09-02)
+
+Five defects, each pinned by the cases that found it. Every assertion below was
+mutation-checked: the fix reverted, the case observed failing with the message
+it claims, the fix restored, the case observed green.
+
+### `apps/web/src/lib/runs/event_results_csv.test.ts` — 25 tests (3 added)
+
+A chip-timing cell holding only separators. `Number('')` is `0`, so `':'`,
+`'::'`, `'  :  '`, `'1:'`, `':30'` and `'1::30'` all parsed as real times and a
+finished row carried a 0 s finish that sorts first and stands as the event
+record. The suite already pinned the wholly blank cell as an error row, which is
+what makes the gap a gap. A second case pins the accepted class as plain decimal
+counts — `'0x10'` read as 16 s, `'1e3'` as 1000 and `'+5'` as 5 — while keeping
+per-component whitespace tolerated (`'1 : 00 : 30'`), and a third drives the
+whole parser so the organiser sees `Row 2 … unparseable`. All three fail against
+the pre-fix source. See [decisions § 923](../architecture/decisions.md).
+
+### `apps/web/src/lib/lambda_log_hygiene.test.ts` — 3 tests (1 added)
+
+The two rules, applied one frame down. The Lambda handlers are wrappers whose
+job is to call a transport-agnostic core under `src/lib`, and the core is what
+catches the provider error and logs it — into the wrapper's own log group. The
+new case derives its population by following relative imports from each Lambda
+entry point (69 modules, 58 console calls) and fails when an argument is a bare
+identifier or member chain, which is the caught value itself. Both offenders it
+named on the pre-fix tree — `route_request` and `route_describe`, each doing
+`console.error('…', e)` on an Anthropic error whose 400 body quotes the runner's
+own typed request — are fixed in the same commit. Carries two population floors
+so a broken import walk fails rather than reporting a clean tree. See
+[decisions § 919](../architecture/decisions.md).
+
+### `apps/web/src/lib/paged_read_guards.test.ts` — 1 test (new)
+
+Every `.range()` read in the web tree, and whether its ordering is a total
+order. PostgREST turns `.range()` into `LIMIT`/`OFFSET`, so a non-unique (or
+absent) `ORDER BY` lets a row on a page boundary be returned twice or not at
+all. The walker reads each chain backwards over balanced brackets — a naive
+slice at the nearest delimiter is cut by the `{ ascending: false }` inside every
+`.order()` — blanks comments so prose about a paged read is not read as one, and
+follows a closure builder, which is where `fetchRuns` keeps its ordering. On the
+pre-fix tree it names six reads: `createBackup`'s runs page (ordered on
+`started_at` alone) and its routes page (no order at all, under a manifest
+claiming `complete`), both `fetchRuns` branches, and both ZIP importers' dedupe
+reads. Population floor of eight `.range()` reads. See
+[decisions § 922](../architecture/decisions.md).
+
+### `apps/web/scripts/env_isolation.test.mjs` — 22 tests (3 added)
+
+Two behavioural cases for the route-generation engines the guard had never
+watched — a remote `GRAPHHOPPER_URL` / `GRAPH_CYCLE_URL` refused, a loopback
+pair accepted — and one coverage case that stops the list being the thing that
+has to remember: it walks `apps/web/src` and `apps/web/lambda` for URL-shaped
+env reads and fails when one is neither guarded nor declared in
+`NOT_ISOLATED_URL_VARS` with a reason. The same case fails an exemption naming a
+var nothing reads any more, and one that is both guarded and exempt. Deleting
+the two engine entries fails two of the three by name. See
+[decisions § 920](../architecture/decisions.md).
+
+### `apps/web/scripts/check_production_env.test.mjs` — 27 tests (6 added)
+
+The release-side mirror. `PUBLIC_SITE_URL`, `PUBLIC_LIVE_HUB_URL` and
+`PUBLIC_EXPORT_HUB_URL` are optional — one case pins that a release with none of
+them set still passes — but a value that IS set now takes the same
+production-URL test the Supabase URL takes: a loopback site origin (which bakes
+localhost into the canonical and `og:url` of every prerendered share page), a
+loopback live or export hub, and a `TODO-set-me` that is not a URL at all. A
+sixth case reads the dev guard's own `KNOWN_ENV_VARS` and fails when a `PUBLIC_`
+origin is watched in one direction and not the other. Removing the sweep fails
+four of the six. See [decisions § 921](../architecture/decisions.md).
+
+### Lane totals
+
+| Lane | Command | Before | After |
+|---|---|---|---|
+| Web unit | `npm run test:unit --workspace=apps/web` | 4625 | 4630 |
+| apps/web guards | `node --test apps/web/scripts/*.test.mjs` | 74 | 83 |
+
+`npm run check` (svelte-check) reports 0 errors over 2489 files, with the five
+pre-existing `state_referenced_locally` warnings in `PlanEditor.svelte` — a file
+this lane did not touch. `npm run check:node-types` is clean; it caught an
+untyped recursive helper in the new coverage walker that the suite itself ran
+green over, `apps/web/scripts` being inside that root under `checkJs`.
