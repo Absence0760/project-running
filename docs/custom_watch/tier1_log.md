@@ -1206,6 +1206,52 @@ NVMC at all, so the stall the ring is sized against has never been produced; the
 [`quality_standards.md`](quality_standards.md) keeps its pass criterion and changes only its
 expectation, from up to 326 bytes lost to zero. See [§ 698](../architecture/decisions.md).
 
+## 2026-09-02 — the parity ports are re-measured against their sources, and five had drifted
+
+No new capability, no new page. Roughly half of `watch_core` is a one-way faithful
+port of a shipped web helper, and nothing in the repo detects a port whose source
+has moved since it was taken. This entry is the first time that was measured
+rather than reasoned about: for every `core/src/<m>.rs` with a same-named
+`apps/web/src/lib/**/<m>.ts`, compare the last commit date on each side. Forty-nine
+modules pair up; on sixteen the web source moved after the port was last touched.
+
+Five of the sixteen carried a real divergence and were fixed
+([decisions § 900](../architecture/decisions.md) through
+[§ 903](../architecture/decisions.md)):
+
+- `route_geometry` ranked candidate segments by a perpendicular measured inside
+  each segment's own planar frame, so 1 cm of sideways jitter moved the answer
+  3474.8 m onto the wrong limb of a 3.47 km out-and-back; and a non-finite fix
+  came back as `Some(0.0)`, which is the start of the course, not an unknown
+  position.
+- The four § 468 antimeridian sites that exist here — `route_geometry`'s two,
+  `route_simplify`'s RDP perpendicular and equirectangular leg (one 0.06° leg
+  measured 40,023 km), and `track_projection`'s and `run_heatmap`'s bounding
+  boxes (359.99° spans). § 463 left the ports carrying the bug because web
+  carried it too; § 468 fixed web and the reason expired with nothing recording
+  the dependency.
+- `run_stats::elevation_gain_metres` paired adjacent points, so one missing
+  sample in the middle of a climb lost the whole climb. The live `VertAccumulator`
+  was checked and is a different mechanism — it holds its reference across a
+  dropped sample — so this is a port defect, not a vert defect on the device.
+- The shared haversine returned NaN for a near-antipodal pair; clamped rather
+  than re-expressed as `asin`, so no pinned `course` figure moves.
+- `locale_defaults`' Sunday-first region table was the hand-written 16-region
+  list, wrong for 19 regions against CLDR, under a doc comment claiming it agreed
+  with `Intl`.
+
+Evidence: `watch_core` host suite 2351 → 2367, whole workspace green; the whole
+workspace builds for `thumbv7em-none-eabihf` and `clippy -D warnings` passes;
+`cargo fmt --check` clean; `check_watch_doc_counts.mjs` and
+`check_watch_wire_vectors.mjs` both green. Nine of the sixteen new cases were
+confirmed to fail against the arithmetic they replace before the fix landed.
+**Sim-verified: nothing** — no Renode fixture carries a course or a track near
+180°, and none of these modules has a glance page to dump. **Bench-verified:
+nothing.** None of the five modules has a consumer on the wrist today; this is
+port fidelity, and reporting any of it as a device defect would be false. The
+remaining eleven of the sixteen are filed with their measurement in
+[`followups.md`](../product/followups.md). § 82 unchanged.
+
 ## Next entry expected
 
 Parts order + first flash (blink on the real DK) — see [`parts.md`](parts.md), now fully

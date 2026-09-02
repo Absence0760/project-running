@@ -18,6 +18,8 @@ use core::f64::consts::PI;
 
 use heapless::Vec;
 
+use crate::geo::unwrap_lon_deg;
+
 /// Web's default `pad` argument, exposed so callers match the browser inset.
 pub const DEFAULT_PROJECT_PAD: f64 = 4.0;
 
@@ -67,10 +69,14 @@ pub fn project_track(
     if points.len() < 2 {
         return out;
     }
+    // Longitudes are expressed on the first point's side of the antimeridian,
+    // so a track that crosses it spans its own width instead of ~360 deg (which
+    // collapsed the fitted scale to a dot). Identity inside a hemisphere.
+    let ref_lng = points[0].lng;
     let mut min_lat = points[0].lat;
     let mut max_lat = points[0].lat;
-    let mut min_lng = points[0].lng;
-    let mut max_lng = points[0].lng;
+    let mut min_lng = ref_lng;
+    let mut max_lng = ref_lng;
     for p in points {
         if p.lat < min_lat {
             min_lat = p.lat;
@@ -78,11 +84,12 @@ pub fn project_track(
         if p.lat > max_lat {
             max_lat = p.lat;
         }
-        if p.lng < min_lng {
-            min_lng = p.lng;
+        let lng = unwrap_lon_deg(ref_lng, p.lng);
+        if lng < min_lng {
+            min_lng = lng;
         }
-        if p.lng > max_lng {
-            max_lng = p.lng;
+        if lng > max_lng {
+            max_lng = lng;
         }
     }
     // A degree of longitude is shorter than a degree of latitude everywhere
@@ -100,7 +107,7 @@ pub fn project_track(
     let off_y = pad + (vb_h - pad * 2.0 - d_lat * scale) / 2.0;
     for p in points {
         let projected = Projected {
-            x: off_x + (p.lng - min_lng) * lng_scale * scale,
+            x: off_x + (unwrap_lon_deg(ref_lng, p.lng) - min_lng) * lng_scale * scale,
             // SVG y grows downward; invert latitude so north is up.
             y: off_y + (max_lat - p.lat) * scale,
         };
@@ -185,6 +192,50 @@ mod tests {
         assert!(
             padded_span < tight_span,
             "padded {padded_span} should be < tight {tight_span}"
+        );
+    }
+
+    #[test]
+    fn a_track_across_the_antimeridian_fits_its_own_width_not_the_whole_world() {
+        // A 0.01 deg x 0.01 deg box straddling the line. Its longitudes span
+        // 0.01 deg, not the 359.99 deg a raw min/max reads, so the fit is the
+        // same one the identical box a degree west of the line gets.
+        let across = [
+            pt(0.0, 179.995),
+            pt(0.01, 179.995),
+            pt(0.01, -179.995),
+            pt(0.0, -179.995),
+        ];
+        let west = [
+            pt(0.0, 178.995),
+            pt(0.01, 178.995),
+            pt(0.01, 179.005),
+            pt(0.0, 179.005),
+        ];
+        let a = project_track(&across, 100.0, 100.0, DEFAULT_PROJECT_PAD);
+        let w = project_track(&west, 100.0, 100.0, DEFAULT_PROJECT_PAD);
+        assert_eq!(a.len(), 4);
+        for i in 0..a.len() {
+            assert!(
+                libm::fabs(a[i].x - w[i].x) < 1e-6,
+                "x[{}] {} vs {}",
+                i,
+                a[i].x,
+                w[i].x
+            );
+            assert!(
+                libm::fabs(a[i].y - w[i].y) < 1e-6,
+                "y[{}] {} vs {}",
+                i,
+                a[i].y,
+                w[i].y
+            );
+        }
+        // And the box actually uses the panel rather than collapsing to a dot.
+        assert!(
+            libm::fabs(a[2].x - a[0].x) > 50.0,
+            "span {}",
+            libm::fabs(a[2].x - a[0].x)
         );
     }
 }

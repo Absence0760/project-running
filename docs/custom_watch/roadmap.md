@@ -102,6 +102,18 @@ Nothing in this section is ticked, and **that is a verification statement, not a
 
 **On the ported cores without a UI.** `watch_core` holds **104** modules against **41** built-in glance pages, so most modules back no page at all — and that is the design, not a gap. The rest are not a backlog of unfinished screens — the third parity rail is a *one-way faithful port* of the shipped web helper (see [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md) and the `CLAUDE.md` parity-pair list), and a good number of them are deliberately UI-less per [§ 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) because their domain is phone-side (`badges`, `challenge_progress`, `recap`'s share path, `nutrition_targets`, `hydration`, `age_grade`, `finisher_certificate`, `relink_candidates`, `run_heatmap`, `privacy`, `locale_defaults`) or because they are helpers other cores reuse (`route_geometry`, `route_markers`, `exercise_calories`, `track_projection`). Don't read "no page" as "owed a page" — check whether an on-wrist surface is wanted at all before wiring one.
 
+**A port without a UI also has no detector, and that is the part that costs.**
+A one-way port sits outside the enforced web/mobile lockstep by design, so
+`shared-library-syncer` never sees it and `check_parity_pair_registry.mjs`
+compares two registries neither of which lists the wrist. A port whose *source*
+has since changed therefore diverges in silence. The cheap measurement is a date
+comparison — `git log -1 --format=%cs` on each side of a same-named pair — and
+running it on 2026-09-02 found five real divergences, four of them behaviour and
+one a doc comment that had become false ([decisions § 899](../architecture/decisions.md)
+through [§ 903](../architecture/decisions.md)). Do that before assuming a port
+still agrees with the helper it was taken from; the rest of what it turned up is
+in [`followups.md`](../product/followups.md).
+
 ### Recording & on-run guidance
 
 - [ ] **Activity profiles** — at minimum Run / Trail Run / Ultra / Hike, each with its own data screens + defaults. **Implemented** (2026-07-28, [decisions § 353](../architecture/decisions.md)): `watch_core::profiles` defines the four profiles as **macros over existing knobs** — a curated §284 page mask (Run drops the pushed-course cluster, Hike the racing cluster, Trail/Ultra keep the full cycle; every preset keeps the Dashboard + the Back-to-start safety page) plus a GNSS mode (Performance / Balanced / Expedition / Expedition) — selected from a fourth §351 settings-menu row as a clamped directional ladder, applied through the same channels a phone push and the quick cycle ride (last-writer-wins, no third state system), persisted in CFG1 behind a new flags bit, and re-applied at boot. Deliberately no per-profile alert cadences (§24 — the desert case has its `SET1` wire). Host-tested + build-verified. **T2** keeps nothing.

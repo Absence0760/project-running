@@ -32,6 +32,8 @@ use core::f64::consts::PI;
 
 use heapless::Vec;
 
+use crate::geo::{lon_delta_deg, unwrap_lon_deg};
+
 const R_M: f64 = 6_371_000.0;
 
 /// Default simplification epsilon in metres — the web `simplifyTrack` default.
@@ -197,9 +199,19 @@ fn priority_split<const CAP: usize, F: Fn(usize, usize, usize) -> f64>(
 fn perp_distance_metres(p: &LatLng, a: &LatLng, b: &LatLng) -> f64 {
     let lat_rad = a.lat * PI / 180.0;
     let cos_lat = libm::cos(lat_rad);
-    let x = |w: &LatLng| (w.lng * PI / 180.0) * cos_lat * R_M;
+    let x = |lng_deg: f64| (lng_deg * PI / 180.0) * cos_lat * R_M;
     let y = |w: &LatLng| (w.lat * PI / 180.0) * R_M;
-    point_segment_distance(x(p), y(p), x(a), y(a), x(b), y(b))
+    // The frame is absolute — every longitude becomes metres east of the prime
+    // meridian before anything is subtracted — so `b` and `p` are expressed on
+    // `a`'s side of the antimeridian first. Identity inside a hemisphere.
+    point_segment_distance(
+        x(unwrap_lon_deg(a.lng, p.lng)),
+        y(p),
+        x(a.lng),
+        y(a),
+        x(unwrap_lon_deg(a.lng, b.lng)),
+        y(b),
+    )
 }
 
 /// Distance from the planar point `(px, py)` to the segment
@@ -259,7 +271,7 @@ pub fn summarize_route_from_track(track: &[LatLng], epsilon_metres: f64) -> Rout
         let a = simplified[i - 1];
         let b = simplified[i];
         let d_lat = (b.lat - a.lat) * PI / 180.0;
-        let d_lng = (b.lng - a.lng) * PI / 180.0;
+        let d_lng = lon_delta_deg(a.lng, b.lng) * PI / 180.0;
         let mid_lat = ((a.lat + b.lat) / 2.0) * PI / 180.0;
         let x = d_lng * libm::cos(mid_lat);
         let y = d_lat;
@@ -567,6 +579,40 @@ mod tests {
             (ratio - 0.5).abs() < 0.001,
             "expected cos(60) ~ 0.5 ratio, got {}",
             ratio
+        );
+    }
+
+    #[test]
+    fn simplify_a_straight_line_across_the_antimeridian_collapses_to_its_endpoints() {
+        let line = [
+            ll(0.0, 179.98),
+            ll(0.0, 179.99),
+            ll(0.0, -180.0),
+            ll(0.0, -179.99),
+            ll(0.0, -179.98),
+        ];
+        let out = simplify_track(&line, 10.0);
+        assert_eq!(out.len(), 2, "kept {:?}", out.len());
+        assert_eq!(out[0], line[0]);
+        assert_eq!(out[1], line[4]);
+    }
+
+    #[test]
+    fn simplify_a_real_deviation_across_the_antimeridian_survives() {
+        // 50 m north of the chord, well clear of the 10 m tolerance.
+        let off = 50.0 / 111_194.93;
+        let line = [ll(0.0, 179.98), ll(off, -179.99), ll(0.0, -179.96)];
+        let out = simplify_track(&line, 10.0);
+        assert_eq!(out.len(), 3, "a real deviation must survive");
+    }
+
+    #[test]
+    fn summarize_a_leg_across_the_antimeridian_measures_the_short_way() {
+        let out = summarize_route_from_track(&[ll(0.0, 179.98), ll(0.0, -179.96)], 10.0);
+        assert!(
+            libm::fabs(out.distance_m - 6671.7) < 1.0,
+            "got {}",
+            out.distance_m
         );
     }
 }
