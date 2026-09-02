@@ -1888,11 +1888,14 @@ test('every two-wrapper endpoint enforces one shared body cap, on both wrappers'
 	let capped = 0;
 	for (const file of wrappers) {
 		const rel = file.slice(file.indexOf('apps/web/') + 'apps/web/'.length);
+		// Line comments blanked BEFORE block comments are stripped — a `//`
+		// containing `/*` otherwise opens a block that swallows real code
+		// (decisions § 972).
 		const src = readFileSync(file, 'utf-8')
-			.replace(/\/\*[\s\S]*?\*\//g, ' ')
 			.split('\n')
 			.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-			.join('\n');
+			.join('\n')
+			.replace(/\/\*[\s\S]*?\*\//g, ' ');
 		if (!/BODY_LIMIT_BYTES/.test(src)) continue;
 		capped++;
 
@@ -3513,5 +3516,60 @@ test('the message thread renders a route attachment through DmRouteAttachment', 
 		source,
 		/fetchClippedRouteForViewer|fetchRouteById/,
 		'the thread page must not resolve a route itself — it goes through DmRouteAttachment, which is the surface the clip guard covers.',
+	);
+});
+
+test('a source-scanning guard blanks line comments before it strips block comments', () => {
+	// Reason: a guard that reads source as text has to blank comments, or the
+	// prose above a rule reads as a use of it. Both orders look equivalent and
+	// only one is: `//` is a comment to the language but `/*` inside one is
+	// still an opening delimiter to a regex, so stripping block comments FIRST
+	// makes `// exactly as /clubs/* already do` open a block that runs to the
+	// next `*/` in the file and swallows every line of real code between.
+	//
+	// Measured over this tree at the time of the fix: the wrong order hid 779
+	// lines across 3 files — 485 of them in `runs/[id]/+page.svelte`, which
+	// carries a `PUBLIC_SITE_URL` fold that `site_url.test.ts` was therefore
+	// scanning right past while reporting a pass. A guard that cannot see the
+	// code it guards is worse than no guard, because it is believed
+	// (decisions § 972).
+	const files: string[] = [];
+	(function walk(dir: string): void {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			if (entry.name === 'node_modules') continue;
+			const full = resolve(dir, entry.name);
+			if (entry.isDirectory()) walk(full);
+			else if (entry.name.endsWith('.test.ts')) files.push(full);
+		}
+	})(__dirname);
+
+	// Population: a walker that found nothing would satisfy the assertion below
+	// while proving nothing (decisions § 534).
+	assert.ok(files.length > 100, `found only ${files.length} test files — walker broken?`);
+
+	const blockStrip = /\.replace\(\s*\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g/;
+	const lineStrip = /\\\/\\\/(?:\[\^\\n\]\*|\.\*\$)|\/\^\\s\*\(?\\\/\\\//;
+	const offenders: string[] = [];
+	let scanning = 0;
+
+	for (const file of files) {
+		const src = readFileSync(file, 'utf-8');
+		const block = src.search(blockStrip);
+		const line = src.search(lineStrip);
+		// Only a guard that strips BOTH can get the order wrong. A CSS scanner
+		// strips block comments alone, because `//` is not a comment in CSS.
+		if (block < 0 || line < 0) continue;
+		scanning++;
+		if (block < line) {
+			offenders.push(file.slice(file.indexOf('src/')));
+		}
+	}
+
+	assert.ok(scanning >= 6, `only ${scanning} guards strip both comment forms — walker broken?`);
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		'these strip block comments before blanking line comments, so a `//` ' +
+			'containing `/*` hides every line up to the next `*/` from the scan.',
 	);
 });

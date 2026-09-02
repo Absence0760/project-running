@@ -55,10 +55,10 @@ function sources(dir: string): string[] {
 /** Comment bodies blanked, so prose about a paged read is not read as one. */
 function code(src: string): string {
 	return src
-		.replace(/\/\*[\s\S]*?\*\//g, ' ')
 		.split('\n')
 		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n');
+		.join('\n')
+		.replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 /**

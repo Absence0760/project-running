@@ -264,10 +264,10 @@ test('a sub-path refusal forwards the core\'s own status, headers and body', asy
 		resolve(import.meta.dirname, '..', '..', '..', 'lambda', 'coach', 'src', 'index.ts'),
 		'utf-8',
 	)
-		.replace(/\/\*[\s\S]*?\*\//g, ' ')
 		.split('\n')
 		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n');
+		.join('\n')
+		.replace(/\/\*[\s\S]*?\*\//g, ' ');
 	assert.doesNotMatch(
 		src,
 		/JSON\.parse\(result\.body\)/,
@@ -382,10 +382,10 @@ test('the Lambda routes exactly the sub-paths the dev route table declares', () 
 	// No survivor of the substring dispatch: a bare `includes` on the path is
 	// what let one sub-path shadow another.
 	const code = src
-		.replace(/\/\*[\s\S]*?\*\//g, ' ')
 		.split('\n')
 		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n');
+		.join('\n')
+		.replace(/\/\*[\s\S]*?\*\//g, ' ');
 	assert.doesNotMatch(
 		code,
 		/rawPath\.includes\(/,
