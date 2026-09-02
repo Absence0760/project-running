@@ -145,13 +145,16 @@ test('a browser that will not launch falls through to apt and is re-verified', (
 	assert.match(r.out, /launched after installing/);
 	assert.equal(installDeps(r.commands).length, 1);
 	assert.equal(r.launches, 2);
-	// The apt timeout config is written before the first attempt, not after a
-	// failure — an unbounded first attempt is what the mirror outages spent.
-	assert.ok(
-		r.commands.findIndex((c) => c.includes('99-ci-timeouts')) <
-			r.commands.findIndex((c) => c.includes('install-deps')),
-		r.commands.join('\n'),
-	);
+	// The apt timeout config is written, and written BEFORE the first attempt
+	// rather than after a failure — an unbounded first attempt is what the
+	// mirror outages spent. Both halves: an `indexOf` that finds nothing
+	// answers -1, which orders before everything and would read as "written
+	// first" for a config that is never written at all.
+	const confAt = r.commands.findIndex((c) => c.includes('99-ci-timeouts'));
+	const aptAt = r.commands.findIndex((c) => c.includes('install-deps'));
+	assert.ok(confAt >= 0, `apt.conf never written: ${r.commands.join('\n')}`);
+	assert.ok(aptAt >= 0, `install-deps never run: ${r.commands.join('\n')}`);
+	assert.ok(confAt < aptAt, r.commands.join('\n'));
 });
 
 // The property the script's own comment claims and nothing asserted: apt
@@ -193,8 +196,12 @@ test('each failed attempt reaps apt before the next one', () => {
 test('giving up prints the browser’s own error and the apt sources', () => {
 	const r = run({ launches: ['fail', 'fail'], apt: ['fail'] });
 	assert.equal(r.status, 1);
-	assert.match(r.out, /libnss3/);
-	assert.match(r.out, /azure\.archive\.ubuntu\.com/);
+	// Under the `::error::`, not merely somewhere in the log: the first failed
+	// launch already printed the same message under a `::warning::`, so a
+	// bare match on the library name passes with the final dump deleted.
+	const after = r.out.slice(r.out.indexOf('::error::'));
+	assert.match(after, /libnss3/, r.out);
+	assert.match(after, /azure\.archive\.ubuntu\.com/, r.out);
 });
 
 // The apt.conf heredoc's terminator has to sit at column 0 of the script the
