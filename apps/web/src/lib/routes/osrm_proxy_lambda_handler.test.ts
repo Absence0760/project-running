@@ -37,6 +37,11 @@ interface FunctionUrlResponse {
 
 const ROUTE_PATH = '/api/routes/osrm/route/v1/foot/-0.1,51.5;-0.12,51.51';
 
+/// The log lines the last `invoke` produced. The auth gate is the only thing
+/// in this path that logs, so its absence is how a case says the request never
+/// reached it.
+let logged: string[] = [];
+
 async function invoke(
 	event: Record<string, unknown>,
 	env: Record<string, string | undefined> = {},
@@ -47,10 +52,11 @@ async function invoke(
 		if (v === undefined) delete process.env[k];
 		else process.env[k] = v;
 	}
+	logged = [];
 	const realError = console.error;
 	const realWarn = console.warn;
-	console.error = () => {};
-	console.warn = () => {};
+	console.error = (...args: unknown[]) => void logged.push(String(args[0]));
+	console.warn = (...args: unknown[]) => void logged.push(String(args[0]));
 	try {
 		return (await handler({
 			requestContext: { http: { method: 'GET' } },
@@ -134,11 +140,19 @@ test('a configured engine still refuses an unauthenticated caller', async () => 
 test('the viewer JWT is read from x-supabase-authorization, not Authorization', async () => {
 	// CloudFront's Lambda OAC owns `Authorization` for its sigv4 signature, so
 	// a JWT arriving there is the signature and must not be read as a token.
+	//
+	// The status alone cannot say this: reading the wrong header yields a
+	// token, and GoTrue then refuses it with the same 401 — measured, the
+	// status-only form of this test survived swapping the header name. What
+	// separates them is that reading the wrong header SPENDS a GoTrue round
+	// trip on the sigv4 signature and logs the refusal; the right one answers
+	// before any client is built.
 	const out = await invoke(
 		{ headers: { authorization: 'Bearer viewer-jwt' } },
 		{ OSRM_URL: 'http://osrm.invalid' },
 	);
 	assert.equal(out.statusCode, 401, 'a JWT in Authorization must not authenticate the caller');
+	assert.deepEqual(logged, [], 'the auth gate ran, so the signature header was read as a token');
 });
 
 test('query parameters reach the core, which validates them', async () => {
