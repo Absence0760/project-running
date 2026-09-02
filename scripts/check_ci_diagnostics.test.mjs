@@ -447,6 +447,7 @@ const NOT_A_GUARD = new Map([
 	['scripts/shell_lex.mjs', 'a lexer, consumed by two guards'],
 	['scripts/web_icon_font.mjs', "the icon extractor, consumed by the generator and its suite"],
 	['scripts/gen_web_icon_font.mjs', 'a generator; its output is what the guard checks'],
+	['scripts/gen_catalogue_fold_table.mjs', 'a generator; its output is what the guard checks'],
 	['scripts/sync_deno_lock.mjs', 'a syncer; ci.yml runs it with --check'],
 	['scripts/dev_run_graphhopper.mjs', 'a local dev tool'],
 	['scripts/dev_run_osrm.mjs', 'a local dev tool'],
