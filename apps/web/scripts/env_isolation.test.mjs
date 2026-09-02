@@ -221,8 +221,14 @@ test('loopback engines pass', () => {
 	assert.equal(r.ok, true);
 });
 
-/** Every source file under a web tree the guard is meant to cover. */
+/**
+ * Every source file under a web tree the guard is meant to cover.
+ *
+ * @param {string} dir
+ * @returns {string[]}
+ */
 function webSources(dir) {
+	/** @type {string[]} */
 	const out = [];
 	for (const entry of readdirSync(dir)) {
 		const full = join(dir, entry);
