@@ -336,4 +336,50 @@ class ScreenWiringTest {
             semanticsBlocks >= 6,
         )
     }
+
+    @Test fun `the signed-out notice says signed out, not offline`() {
+        // The pre-run header renders two DIFFERENT facts a few lines apart:
+        // `!online && authed` -> the watch cannot reach the network, and
+        // `!authed` -> nobody has signed in on this wrist. Both branches
+        // rendered `R.string.offline`.
+        //
+        // Nothing fails when they share a string. The runner is simply told
+        // the wrong thing about a watch that is usually perfectly online, and
+        // sent to check Bluetooth instead of tapping the Sign in chip
+        // immediately below it — the affordance that actually fixes what they
+        // are looking at. Grep-level rather than Compose-level for the reason
+        // the class comment gives; the branch body is read on its own so a
+        // match from the sibling `!online` branch cannot satisfy it.
+        val src = readRunWatchApp()
+        val at = src.indexOf("if (!authed) {")
+        assertTrue("the `if (!authed) {` pre-run branch is gone", at >= 0)
+        var depth = 0
+        var end = at
+        for (i in src.indexOf('{', at) until src.length) {
+            if (src[i] == '{') depth += 1
+            if (src[i] == '}') {
+                depth -= 1
+                if (depth == 0) { end = i; break }
+            }
+        }
+        val branch = src.substring(at, end)
+        assertTrue(
+            "the signed-out branch must render R.string.not_signed_in",
+            branch.contains("R.string.not_signed_in"),
+        )
+        assertTrue(
+            "the signed-out branch must NOT render R.string.offline — a " +
+                "runner who has not signed in is usually online, and the " +
+                "offline notice belongs to the `!online && authed` branch",
+            !branch.contains("R.string.offline"),
+        )
+        assertTrue(
+            "the network branch must still render R.string.offline",
+            src.contains("!online && authed"),
+        )
+        assertTrue(
+            "values/strings.xml must carry the English copy for not_signed_in",
+            readDefaultStrings().contains("<string name=\"not_signed_in\">Not signed in</string>"),
+        )
+    }
 }

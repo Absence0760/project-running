@@ -281,6 +281,122 @@ module GradeAdjustedPaceTest {
         return true;
     }
 
+    // ---- GradeTracker: the rolling state machine ------------------------
+
+    // The grade only rolls forward once MIN_SEGMENT_M of horizontal travel
+    // has been covered. Anything shorter is GPS-altitude jitter, and the
+    // whole reason the anchor exists is that a 1 m wobble over a 1 m step
+    // reads as a 100% wall.
+    (:test)
+    function trackerHoldsGradeUntilASegmentIsCovered(logger as Test.Logger) as Boolean {
+        var t = new GradeTracker();
+        t.onSample(0.0, 100.0);       // seeds the anchor, no grade yet
+        Test.assertEqualMessage(t.grade(), 0.0, "seed sample must not set a grade");
+        t.onSample(3.0, 103.0);       // 3 m run: under the gate, ignored
+        Test.assertEqualMessage(t.grade(), 0.0, "a 3 m run is jitter, not a 100% wall");
+        t.onSample(10.0, 101.0);      // 10 m run, +1 m rise -> 10% grade
+        return approx(logger, "grade after a real segment", t.grade(), 0.10);
+    }
+
+    // The clamp applies to the measured grade too, not only to the factor:
+    // a GPS altitude spike over a short-but-qualifying segment must not
+    // store a grade the Minetti fit was never defined for.
+    (:test)
+    function trackerClampsAMeasuredSpike(logger as Test.Logger) as Boolean {
+        // `$.` is the global scope the file-level consts in
+        // GradeAdjustedPaceView.mc live in; reading the constant rather than
+        // restating 0.45 keeps this test honest if the clamp ever moves.
+        var maxG = $.MAX_GRADE;
+        var t = new GradeTracker();
+        t.onSample(0.0, 100.0);
+        t.onSample(6.0, 130.0);       // 30 m rise over 6 m = 500% grade
+        Test.assertEqualMessage(t.grade(), maxG, "a measured spike must clamp to MAX_GRADE");
+        var t2 = new GradeTracker();
+        t2.onSample(0.0, 100.0);
+        t2.onSample(6.0, 70.0);
+        Test.assertEqualMessage(t2.grade(), 0.0 - maxG, "a downward spike must clamp to -MAX_GRADE");
+        return true;
+    }
+
+    // The defect this class was extracted for. `elapsedDistance` restarts at
+    // 0 when the recorder resets or discards an activity. With the anchor
+    // still parked at the old total, every later run measures NEGATIVE, so
+    // the `run >= MIN_SEGMENT_M` gate never opens again and the grade of the
+    // discarded activity's last hill is applied to the whole of the next
+    // run -- silently, as a confident number.
+    (:test)
+    function trackerRecoversFromADistanceRewind(logger as Test.Logger) as Boolean {
+        var t = new GradeTracker();
+        t.onSample(0.0, 100.0);
+        t.onSample(20.0, 106.0);      // 30% climb
+        if (!approx(logger, "grade before the reset", t.grade(), 0.30)) { return false; }
+
+        t.onSample(0.0, 106.0);       // the reset: distance rewinds
+        Test.assertEqualMessage(
+            t.grade(), 0.0,
+            "a distance rewind must drop the discarded activity's grade, got " + t.grade().toString());
+
+        // and the tracker must be able to measure again immediately, not
+        // after re-covering the whole discarded distance.
+        t.onSample(10.0, 105.0);      // 10 m run, -1 m -> -10%
+        return approx(logger, "grade measured after the rewind", t.grade(), -0.10);
+    }
+
+    // `reset()` is what the field's onTimerReset calls. It must clear the
+    // anchors as well as the grade: clearing only the grade would leave the
+    // anchor at the old total and reproduce the rewind bug exactly.
+    (:test)
+    function trackerResetClearsAnchorsNotJustTheGrade(logger as Test.Logger) as Boolean {
+        var t = new GradeTracker();
+        t.onSample(1000.0, 100.0);
+        t.onSample(1020.0, 106.0);    // 30% climb, anchor now at 1020 m
+        Test.assert(t.grade() > 0.2);
+
+        t.reset();
+        Test.assertEqualMessage(t.grade(), 0.0, "reset must clear the grade");
+
+        // A fresh activity starts at 0 again. If reset had left the anchor at
+        // 1020 the first sample below would measure -1020 and the second
+        // would still be under the gate; with the anchors cleared the first
+        // seeds and the second measures.
+        t.onSample(0.0, 200.0);
+        t.onSample(10.0, 201.0);
+        return approx(logger, "grade after reset then a fresh segment", t.grade(), 0.10);
+    }
+
+    // Flat ground with no altitude change stays at exactly 0.0 however many
+    // segments go by -- the marathoner's "the field must not invent a grade"
+    // guard, at the state-machine level rather than the polynomial's.
+    (:test)
+    function trackerStaysFlatOnLevelGround(logger as Test.Logger) as Boolean {
+        var t = new GradeTracker();
+        var d = 0.0;
+        for (var i = 0; i < 20; i += 1) {
+            t.onSample(d, 42.0);
+            d += 7.0;
+        }
+        Test.assertEqualMessage(t.grade(), 0.0, "level ground must measure exactly 0.0");
+        return true;
+    }
+
+    // A run of exactly MIN_SEGMENT_M qualifies (the gate is `>=`), and the
+    // anchor advances with it -- so the next segment is measured from the
+    // new point, not from the original one.
+    (:test)
+    function trackerAnchorAdvancesOnEachAcceptedSegment(logger as Test.Logger) as Boolean {
+        var t = new GradeTracker();
+        t.onSample(0.0, 0.0);
+        t.onSample(5.0, 1.0);         // exactly at the gate -> 20%
+        if (!approx(logger, "grade at exactly MIN_SEGMENT_M", t.grade(), 0.20)) { return false; }
+        // If the anchor had NOT advanced, this next sample would measure
+        // (2-0)/10 = 20% again; with it advanced it measures (2-1)/5 = 20%.
+        // Use an asymmetric second leg so the two answers differ: from the
+        // advanced anchor (5, 1) a sample at (10, 1) is a flat 0%, while from
+        // a stuck anchor at (0, 0) it would read 10%.
+        t.onSample(10.0, 1.0);
+        return approx(logger, "grade from the advanced anchor", t.grade(), 0.0);
+    }
+
     // ---- Sanity: factor sign relative to flat across the whole range -----
 
     // Uphill is always >= flat cost; the gentle-descent band is always < flat;

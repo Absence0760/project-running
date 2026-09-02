@@ -65,9 +65,29 @@ monkey.jungle                        build config (source + source-test paths, `
 resources/strings/strings.xml        AppName + field label
 resources/drawables/                 launcher_icon.png + drawables.xml
 source/RunGarminApp.mc               AppBase entry (getInitialView → the field)
-source/GradeAdjustedPaceView.mc      SimpleDataField: Minetti-model GAP
+source/GradeAdjustedPaceView.mc      GradeTracker (rolling grade state) + the
+                                     SimpleDataField: Minetti-model GAP
 source-test/GradeAdjustedPaceTest.mc CIQ (:test) unit tests for the GAP model
+scripts/check_garmin_source.sh       source-level guard, runs on Linux with no SDK
 ```
+
+`scripts/check_garmin_source.sh` is the only thing in this repo that reads this
+app on every change and can fail. It needs no Connect IQ SDK — bash + python3,
+same shape as `apps/watch_ios/scripts/check_xcstrings_parity.sh` — and holds
+four claims the compiler cannot: the grade tracker recovers from a distance
+rewind and `onTimerReset` clears it; `source-test/` stays annotated and
+excluded from release builds; a permission-gated Toybox module is declared in
+`manifest.xml` before it is used; and the string table and its call sites agree
+in both directions. It is **not yet wired into CI** — see
+[followups.md](../../docs/product/followups.md).
+
+`GradeTracker` is the rolling (distance, altitude) → grade state machine, split
+out of the view so it can be reset and unit-tested without an `Activity.Info`.
+Its `reset()` is what `onTimerReset` calls, and a NEGATIVE run re-anchors it:
+`elapsedDistance` restarts at 0 when the recorder resets or discards an
+activity, and an anchor left at the old total makes every later run measure
+negative, so the `MIN_SEGMENT_M` gate never opens and the discarded activity's
+last grade is applied to the whole of the next run.
 
 The Minetti GAP math (`costAtGrade` / `gradeFactor` / `gapPace` / `formatPace`)
 is exposed as **static** functions so `source-test/GradeAdjustedPaceTest.mc` can

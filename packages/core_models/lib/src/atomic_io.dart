@@ -9,6 +9,48 @@ import 'dart:io';
 /// semantics of a bare `writeAsString`).
 int _atomicWriteSeq = 0;
 
+/// How many suffixes [_createExclusiveTemp] will try before giving up and
+/// reporting the filesystem's own error. Only a collision advances the
+/// counter, so reaching this means something other than concurrency is
+/// refusing the create.
+const int _atomicTempAttempts = 64;
+
+/// Claim a temp sibling of [file] that no other writer holds.
+///
+/// The counter alone is not enough: it is a Dart static, so it is
+/// PER-ISOLATE, and the stores are explicitly written for a second isolate
+/// over the same directory (the WorkManager background sync — see
+/// `serialiseStoreWrite`, whose own serialisation stops at the same
+/// boundary, and `kAtomicOrphanMinAge`, which exists because a genuinely
+/// concurrent writer may own a temp file). Both isolates start their counter
+/// at 0, so two concurrent writes to one row pick the SAME `.0.tmp`, both
+/// truncate and stream into it, and whichever renames second publishes an
+/// interleaved file over the real one — the exact partial-file corruption
+/// this whole function exists to prevent, arriving through the door it left
+/// open. `create(exclusive: true)` is O_EXCL: the collision is resolved by
+/// the filesystem rather than by hoping two counters disagree.
+Future<File> _createExclusiveTemp(File file) async {
+  for (var attempt = 0; attempt < _atomicTempAttempts; attempt++) {
+    final tmp = File('${file.path}.${_atomicWriteSeq++}.tmp');
+    try {
+      await tmp.create(exclusive: true);
+      return tmp;
+    } on FileSystemException {
+      // Taken, or the directory is unusable. Only the first is worth
+      // retrying, and the loop bound is what stops the second from spinning:
+      // the last attempt rethrows the filesystem's own error to the caller.
+      if (attempt == _atomicTempAttempts - 1) rethrow;
+    }
+  }
+  throw StateError('unreachable');
+}
+
+/// Test-only: claim a temp sibling of [file] through the same path
+/// [writeStringAtomic] uses. `package:meta` is not a dependency of this
+/// package, so the annotation this would otherwise carry is a doc comment:
+/// nothing in `lib/` may call it.
+Future<File> debugClaimAtomicTemp(File file) => _createExclusiveTemp(file);
+
 /// Atomically replace [file]'s contents with [contents].
 ///
 /// A bare `File.writeAsString` truncates the destination to zero bytes
@@ -20,7 +62,7 @@ int _atomicWriteSeq = 0;
 /// ext4·f2fs / iOS APFS: a reader sees either the old file or the fully
 /// written new one, never a partial.
 Future<void> writeStringAtomic(File file, String contents) async {
-  final tmp = File('${file.path}.${_atomicWriteSeq++}.tmp');
+  final tmp = await _createExclusiveTemp(file);
   try {
     await tmp.writeAsString(contents, flush: true);
     await tmp.rename(file.path);

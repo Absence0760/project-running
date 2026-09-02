@@ -1631,34 +1631,170 @@ test('CloudFront Permissions-Policy disables sensors / payment / FLoC + Privacy 
 	}
 });
 
-test('Coach Lambda Function URL is AWS_IAM-auth + CloudFront-only', () => {
+// Every top-level `resource "<type>" "<label>" { … }` in a Terraform file, as
+// `{ label, body }`. Deliberately a split on the header at column 0 rather than
+// a brace-matching parse: nothing here is HCL evaluation, and every resource in
+// this module is top-level, so the next header is the end of the previous body.
+function tfResources(src: string, type: string): Array<{ label: string; body: string }> {
+	const out: Array<{ label: string; body: string }> = [];
+	const header = new RegExp(`^resource "${type}" "([A-Za-z0-9_-]+)" \\{$`, 'gm');
+	let m: RegExpExecArray | null;
+	while ((m = header.exec(src))) {
+		const rest = src.slice(m.index + m[0].length);
+		const next = rest.search(/^resource "/m);
+		out.push({ label: m[1], body: next < 0 ? rest : rest.slice(0, next) });
+	}
+	return out;
+}
+
+test('EVERY Lambda Function URL is AWS_IAM-auth + CloudFront-only', () => {
 	// Reason: pass-1 /audit/infra H3 (commit 6614d89) flipped the
 	// Function URL from authorization_type=NONE to AWS_IAM and added
 	// a CloudFront OAC of type "lambda" that signs every request.
 	// Reverting any of these makes the .lambda-url.* hostname directly
 	// reachable by anyone — bypasses CloudFront, the WAF tier, and
 	// every CSP / per-IP guard the distribution applies.
+	//
+	// This used to be four `/aws_lambda_function_url[\s\S]*?authorization_type
+	// = "AWS_IAM"/` matches against the whole file, which say only that SOME
+	// Function URL somewhere is AWS_IAM and SOME permission somewhere names
+	// CloudFront. The module holds eight of each. Measured: appending a ninth
+	// Function URL with `authorization_type = "NONE"`, and a ninth permission
+	// with `principal = "*"`, left this test green — the exact regression it is
+	// written to catch, on the exact resource type it names. Read per resource
+	// instead, so the assertion is about all of them.
 	const tf = read('../../infra/modules/web-stack/main.tf');
-	assert.match(
-		tf,
-		/aws_lambda_function_url[\s\S]*?authorization_type\s*=\s*"AWS_IAM"/,
-		'Lambda Function URL must use authorization_type=AWS_IAM — pass-1 /audit/infra H3.',
-	);
-	assert.match(
-		tf,
-		/aws_cloudfront_origin_access_control[\s\S]*?origin_access_control_origin_type\s*=\s*"lambda"/,
+
+	const urls = tfResources(tf, 'aws_lambda_function_url');
+	assert.ok(urls.length >= 8, `read only ${urls.length} Function URLs — parser broken?`);
+	for (const { label, body } of urls) {
+		assert.match(
+			body,
+			/^\s*authorization_type\s*=\s*"AWS_IAM"$/m,
+			`aws_lambda_function_url.${label} must use authorization_type=AWS_IAM — anything else ` +
+				'makes its .lambda-url.* hostname world-invocable, bypassing CloudFront and the WAF.',
+		);
+	}
+
+	const oacs = tfResources(tf, 'aws_cloudfront_origin_access_control');
+	assert.ok(
+		oacs.some((o) => /origin_access_control_origin_type\s*=\s*"lambda"/.test(o.body)),
 		'CloudFront must have an origin_access_control of type "lambda" so it sigv4-signs every Function URL request.',
 	);
-	assert.match(
-		tf,
-		/aws_lambda_permission[\s\S]*?principal\s*=\s*"cloudfront\.amazonaws\.com"/,
-		'aws_lambda_permission must restrict principal to cloudfront.amazonaws.com (was * before pass-1 /audit/infra H3).',
+	for (const { label, body } of oacs) {
+		assert.match(
+			body,
+			/signing_behavior\s*=\s*"always"/,
+			`aws_cloudfront_origin_access_control.${label} must sign always — "never" leaves the ` +
+				'origin reached unsigned, which an AWS_IAM Function URL then rejects and the SPA ' +
+				'fallback hides behind a 200 shell.',
+		);
+	}
+
+	const permissions = tfResources(tf, 'aws_lambda_permission');
+	assert.ok(
+		permissions.length >= 16,
+		`read only ${permissions.length} lambda permissions — parser broken?`,
 	);
-	assert.match(
-		tf,
-		/aws_lambda_permission[\s\S]*?function_url_auth_type\s*=\s*"AWS_IAM"/,
-		'aws_lambda_permission must declare function_url_auth_type=AWS_IAM.',
+	for (const { label, body } of permissions) {
+		assert.match(
+			body,
+			/^\s*principal\s*=\s*"cloudfront\.amazonaws\.com"$/m,
+			`aws_lambda_permission.${label} must restrict principal to cloudfront.amazonaws.com ` +
+				'(was * before pass-1 /audit/infra H3).',
+		);
+		if (/action\s*=\s*"lambda:InvokeFunctionUrl"/.test(body)) {
+			assert.match(
+				body,
+				/^\s*function_url_auth_type\s*=\s*"AWS_IAM"$/m,
+				`aws_lambda_permission.${label} grants InvokeFunctionUrl and must declare ` +
+					'function_url_auth_type=AWS_IAM.',
+			);
+		}
+	}
+});
+
+// The three operator scripts that address the estate secrets file all have to
+// agree about two strings: where the file lives, and what the not-yet-wired
+// placeholder in the estate `.sops.yaml` is called. `sops-init.sh` writes the
+// placeholder, `secret-set.sh` writes into the file, and `key-rotate.sh` reads
+// the rule back to decide which key the file should be under.
+//
+// key-rotate.sh had gone stale on both. It anchored on `<env>/secrets` and
+// recognised `REPLACE_<ENV>_KMS_ARN`, which are the in-repo layout from before
+// the secrets moved to the estate repo; neither string occurs in the estate
+// config, so BOTH envs matched no rule and the script died claiming an
+// unresolved placeholder — including on prod, whose key is fully wired — and
+// sent the operator to re-run sops-init.sh, which would tell them it was
+// already resolved. Key rotation is the compromise-response path, so it being
+// unconditionally broken is exactly the thing nobody discovers in advance.
+test('the three sops operator scripts agree on the estate path and the placeholder token', () => {
+	const sopsInit = read('../../bin/sops-init.sh');
+	const secretSet = read('../../bin/secret-set.sh');
+	const keyRotate = read('../../bin/key-rotate.sh');
+
+	const slugs = new Map<string, string>();
+	for (const [name, src] of [
+		['sops-init.sh', sopsInit],
+		['secret-set.sh', secretSet],
+		['key-rotate.sh', keyRotate],
+	] as const) {
+		const slug = src.match(/^PROJECT_SLUG="([a-z0-9-]+)"$/m)?.[1];
+		assert.ok(slug, `${name} declares no PROJECT_SLUG — it addresses the estate repo by hand.`);
+		slugs.set(name, slug!);
+		assert.match(
+			src,
+			/\$INFRA_SECRETS_DIR\/\$PROJECT_SLUG\//,
+			`${name} must build the estate path from $PROJECT_SLUG, not spell the subdirectory out.`,
+		);
+	}
+	assert.equal(
+		new Set(slugs.values()).size,
+		1,
+		`the scripts disagree about the estate subdirectory: ${[...slugs].map(([k, v]) => `${k}=${v}`).join(', ')}`,
 	);
+	const slug = [...slugs.values()][0];
+
+	// What sops-init.sh actually writes into the estate config, per env.
+	const written = new Map<string, string>();
+	for (const m of sopsInit.matchAll(/^\s*([a-z]+]?)\)\s*echo "([A-Z0-9_]+)"\s*;;/gm)) {
+		written.set(m[1].replace(/\]$/, ''), m[2]);
+	}
+	assert.ok(
+		written.size >= 2,
+		`read only ${written.size} placeholder token(s) out of sops-init.sh — parser broken?`,
+	);
+
+	// What key-rotate.sh derives. The derivation is required to be a derivation
+	// rather than a literal, so a third env cannot be added to one script alone.
+	assert.match(
+		keyRotate,
+		/placeholder="KMS_\$\(echo "\$\{PROJECT_SLUG\}_\$\{ENV_NAME\}" \| tr '\[:lower:\]-' '\[:upper:\]_'\)_ARN_PLACEHOLDER"/,
+		'key-rotate.sh must derive the placeholder token from the slug and the env, ' +
+			'the way sops-init.sh names it — a literal here is how the two came apart.',
+	);
+	for (const [env, token] of written) {
+		const derived = `KMS_${slug}_${env}`.toUpperCase().replace(/-/g, '_') + '_ARN_PLACEHOLDER';
+		assert.equal(
+			derived,
+			token,
+			`key-rotate.sh would look for ${derived} where sops-init.sh writes ${token} for ${env}.`,
+		);
+	}
+
+	// The rule it reads back must be the one naming this file, not a path from
+	// a layout that no longer exists.
+	assert.match(
+		keyRotate,
+		/rule_anchor="\$PROJECT_SLUG\/\$ENV_NAME"/,
+		'key-rotate.sh must anchor on the estate rule for its own file.',
+	);
+	for (const stale of ['preview/secrets', 'prod/secrets', 'REPLACE_PROD_KMS_ARN']) {
+		assert.ok(
+			!keyRotate.includes(stale),
+			`key-rotate.sh still refers to ${stale}, which no estate config contains.`,
+		);
+	}
 });
 
 test('S3 site bucket lifecycle aborts incomplete multipart uploads', () => {

@@ -624,8 +624,14 @@ private fun PreRunScreen(
                 )
             }
             if (!authed) {
+                // NOT `offline`. A runner who has never signed in on the wrist
+                // is usually perfectly online, and telling them the watch is
+                // offline sends them to check Bluetooth while the affordance
+                // that actually fixes it -- Sign in, immediately below -- is
+                // the one they walk away from. The two branches render two
+                // different facts and shared one string.
                 Text(
-                    stringResource(R.string.offline),
+                    stringResource(R.string.not_signed_in),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )

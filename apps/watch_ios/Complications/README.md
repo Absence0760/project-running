@@ -8,7 +8,7 @@ This note is the one-time wiring. Once it's done, the complication ticks up in [
 
 - `ActiveRunComplication.swift` — the `Widget` definition, `TimelineProvider`, four `widgetFamily` views (Circular / Corner / Inline / Rectangular), and pure formatters that mirror the Wear OS tile.
 - `WatchApp/ActiveRunBridge.swift` — the App-Group-backed handoff between the host app and the widget extension. Wired into the existing WatchApp target's `project.pbxproj` so the host build keeps compiling on `xcodebuild`.
-- `WatchApp/WorkoutManager.swift` — `publishComplicationSnapshot()` is called on every state transition (`start`, `pause`, `resume`, `stop`, `reset`); writes the snapshot and nudges `WidgetCenter.shared.reloadTimelines(ofKind: "ActiveRunComplication")`.
+- `WatchApp/WorkoutManager.swift` — `publishComplicationSnapshot()` is called on every state transition (`start`, `pause`, `resume`, `stop`, `reset`); writes the snapshot and nudges `WidgetCenter.shared.reloadTimelines(ofKind: ActiveRunBridge.complicationKind)`. The kind is a constant on `ActiveRunBridge`, not a literal on either side: `reloadTimelines` with a kind no widget declares is a **silent no-op**, so a rename on one side alone would leave the watch face showing the pre-run state for up to ~30 minutes into a run with nothing reporting it.
 
 ## Manual steps in Xcode
 

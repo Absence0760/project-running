@@ -244,7 +244,10 @@ struct ActiveRunComplicationBundle: WidgetBundle {
 }
 
 struct ActiveRunComplication: Widget {
-    let kind: String = "ActiveRunComplication"
+    /// One constant, read by both targets — see `ActiveRunBridge`. The host
+    /// app's `reloadTimelines(ofKind:)` must name exactly this, and a kind no
+    /// widget declares is a silent no-op there.
+    let kind: String = ActiveRunBridge.complicationKind
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: ActiveRunProvider()) { entry in

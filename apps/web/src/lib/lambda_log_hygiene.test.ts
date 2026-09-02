@@ -96,8 +96,13 @@ function lambdaReachableLibSources(): Array<{ rel: string; src: string }> {
 		if (file.startsWith(libRoot + '/')) {
 			out.push({ rel: file.slice(resolve(libRoot, '..', '..').length + 1), src });
 		}
-		for (const m of src.matchAll(/from '(\.[^']*)'/g)) {
-			const base = resolve(dirname(file), m[1]);
+		for (const m of src.matchAll(/from '([^']+)'/g)) {
+			const specifier = m[1];
+			/** @see the closure test at the bottom of this file */
+			let base: string;
+			if (specifier.startsWith('.')) base = resolve(dirname(file), specifier);
+			else if (specifier.startsWith('$lib/')) base = join(libRoot, specifier.slice(5));
+			else continue;
 			for (const candidate of [`${base}.ts`, join(base, 'index.ts')]) {
 				try {
 					if (statSync(candidate).isFile()) {
@@ -273,5 +278,96 @@ test('no lambda-reachable core hands a caught value straight to CloudWatch', () 
 		[],
 		'a Lambda-reachable core logs a value it has not narrowed. Normalise a ' +
 			'caught error to { message, stack } the way the wrappers do.',
+	);
+});
+
+// The walk is by reachability precisely so it cannot go stale, and a specifier
+// spelling it does not follow is exactly the way it would go stale anyway: a
+// module one importer names through the `$lib` alias and another names
+// relatively runs in the Lambda's process and writes to its log group either
+// way. The walk followed only the relative spelling until this test was
+// written.
+//
+// The property is closure — every module in the set resolves every import it
+// makes into another module in the set — and it is checkable without naming a
+// module. The resolution here is deliberately its OWN, not the walker's: a test
+// that asks the walker how to resolve an import agrees with the walker by
+// construction and cannot fail, which is what the first draft of this test did.
+test('the reachable set is closed under both import spellings src/lib uses', () => {
+	const modules = lambdaReachableLibSources();
+	const webRoot = resolve(import.meta.dirname, '..', '..');
+	const reached = new Set(modules.map((m) => resolve(webRoot, m.rel)));
+	const missed: string[] = [];
+	for (const { rel, src } of modules) {
+		const from = resolve(webRoot, rel);
+		for (const m of src.matchAll(/from '([^']+)'/g)) {
+			const specifier = m[1];
+			const base = specifier.startsWith('$lib/')
+				? join(libRoot, specifier.slice(5))
+				: specifier.startsWith('.')
+					? resolve(dirname(from), specifier)
+					: null;
+			if (base === null) continue;
+			for (const candidate of [`${base}.ts`, join(base, 'index.ts')]) {
+				let isFile = false;
+				try {
+					isFile = statSync(candidate).isFile();
+				} catch {
+					continue;
+				}
+				if (!isFile) continue;
+				if (candidate.startsWith(`${libRoot}/`) && !reached.has(candidate)) {
+					missed.push(`${rel} imports '${specifier}', which the walk never reached`);
+				}
+				break;
+			}
+		}
+	}
+	assert.ok(modules.length >= 20, `only ${modules.length} modules reached — walk broken?`);
+	assert.deepEqual(
+		missed.sort(),
+		[],
+		'a module a Lambda can reach is outside the set these rules are applied to.',
+	);
+});
+
+// The caller's own bearer token is the third thing that must not reach
+// CloudWatch, alongside a request field and a raw caught error. Five of these
+// cores logged `tokenPrefix: accessToken.slice(0, 20) + '...'` on a failed
+// auth. For a Supabase JWT those twenty characters are the base64url header,
+// byte-identical for every token the project ever issues, so the field
+// identified nothing while writing bytes of a live credential into a log group
+// kept for thirty days; Supabase's newer `sb_…` keys are opaque strings whose
+// first twenty characters are not a constant at all.
+//
+// The rule is the token name, because that is what a source guard can read:
+// the identifier holding the credential may not appear in a log line's
+// arguments, in any spelling — sliced, interpolated, or whole. Whether the
+// value was a JWT at all is already in the GoTrue error these lines log
+// beside it.
+test('no Lambda-reachable log line names the caller\'s bearer token', () => {
+	const CREDENTIAL = /\b(accessToken|authHeader|refreshToken|apiKey|anonKey|secretKey)\b/;
+	const offenders: string[] = [];
+	let calls = 0;
+	const modules = [
+		...handlerSources().map((h) => ({ rel: h.rel, src: h.src })),
+		...lambdaReachableLibSources(),
+	];
+	for (const { rel, src } of modules) {
+		for (const args of consoleCallArgs(code(src))) {
+			calls++;
+			for (const arg of args) {
+				const named = arg.match(CREDENTIAL);
+				if (named) offenders.push(`${rel}: logs \`${named[1]}\``);
+			}
+		}
+	}
+	assert.ok(calls >= 20, `found only ${calls} console calls — walker broken?`);
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		"a log line names the caller's credential. No part of a bearer token is " +
+			'worth thirty days in CloudWatch; the GoTrue error beside it already ' +
+			'says whether the value parsed.',
 	);
 });

@@ -379,7 +379,7 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             lastUpdatedEpoch: Date().timeIntervalSince1970,
         )
         ActiveRunBridge.write(snapshot)
-        WidgetCenter.shared.reloadTimelines(ofKind: "ActiveRunComplication")
+        WidgetCenter.shared.reloadTimelines(ofKind: ActiveRunBridge.complicationKind)
     }
 
     // MARK: - Formatting

@@ -44,6 +44,21 @@
 //      rewrites that 403 into the shell at 200, so the surface reads healthy
 //      while the function never runs.
 //
+//   7. Alias lockstep. Each Function URL is created ON the function's `live`
+//      alias, and a Lambda resource policy is attached per qualifier — so a
+//      grant written without the alias qualifier covers the unqualified ARN and
+//      not the one CloudFront invokes. That is #590's failure exactly, one
+//      field over, and it fails the same invisible way. The parser also
+//      declares how many blocks it SKIPPED: a Function URL written so the
+//      function-name regex misses it is one whose auth type nothing reads, and
+//      a smaller loop looks identical to a smaller stack.
+//
+//   8. Secret scope. No Lambda environment merges the decrypted sops map whole.
+//      A key added to the file for one function otherwise reaches every
+//      function whose env takes the bag, which is the same over-grant as a
+//      wildcard Action and is invisible in exactly the same way — the
+//      Terraform reads as one tidy `merge(...)` line either way.
+//
 // Offline by design: three files, no AWS credentials, no `terraform init`.
 // Nothing here is transcribed — every name, every environment and every
 // function suffix is read out of one of the three sources.
@@ -113,8 +128,15 @@ export const RESOURCELESS_ACTIONS = new Map([
  *             policies: RolePolicy[] }} OidcStack
  * @typedef {{ predicate: string | null, whenTrue: string | null, whenFalse: string | null }} Branch
  * @typedef {{ environment: Branch, resourceEnv: Branch }} ReleaseWorkflow
- * @typedef {{ prefix: string | null, functions: Map<string, string>, urls: Map<string, string | null>,
- *             permissions: { fn: string | null, action: string | null, principal: string | null, sourceArn: string | null }[] }} WebStack
+ * @typedef {{ authType: string | null, qualifier: string | null }} FunctionUrl
+ * @typedef {{ fn: string | null, action: string | null, principal: string | null,
+ *             sourceArn: string | null, qualifier: string | null }} InvokeGrant
+ * @typedef {{ label: string, name: string | null, fn: string | null }} FunctionAlias
+ * @typedef {{ local: string, filter: string | null }} SecretMerge
+ * @typedef {{ prefix: string | null, functions: Map<string, string>, urls: Map<string, FunctionUrl>,
+ *             aliases: Map<string, FunctionAlias>, permissions: InvokeGrant[],
+ *             secretMerges: SecretMerge[],
+ *             declared: { urls: number, permissions: number } }} WebStack
  */
 
 // ───────────────────────────── value readers ─────────────────────────────
@@ -367,22 +389,37 @@ export function parseWebStack(raw) {
     functions.set(label, name.slice('${local.resource_prefix}-'.length));
   }
 
-  /** @type {Map<string, string | null>} */
+  /** @type {Map<string, FunctionAlias>} */
+  const aliases = new Map();
+  for (const { label, body } of hclResources(src, 'aws_lambda_alias')) {
+    aliases.set(label, {
+      label,
+      name: body.match(/^\s*name\s*=\s*"([^"]*)"/m)?.[1] ?? null,
+      fn:
+        body.match(
+          /^\s*function_name\s*=\s*aws_lambda_function\.([A-Za-z0-9_-]+)\./m,
+        )?.[1] ?? null,
+    });
+  }
+
+  const urlBlocks = hclResources(src, 'aws_lambda_function_url');
+  /** @type {Map<string, FunctionUrl>} */
   const urls = new Map();
-  for (const { body } of hclResources(src, 'aws_lambda_function_url')) {
+  for (const { body } of urlBlocks) {
     const fn = body.match(
       /^\s*function_name\s*=\s*aws_lambda_function\.([A-Za-z0-9_-]+)\./m,
     )?.[1];
     if (fn === undefined) continue;
-    urls.set(
-      fn,
-      body.match(/^\s*authorization_type\s*=\s*"([^"]*)"/m)?.[1] ?? null,
-    );
+    urls.set(fn, {
+      authType: body.match(/^\s*authorization_type\s*=\s*"([^"]*)"/m)?.[1] ?? null,
+      qualifier: body.match(/^\s*qualifier\s*=\s*(\S+)/m)?.[1] ?? null,
+    });
   }
 
-  /** @type {WebStack['permissions']} */
+  const permissionBlocks = hclResources(src, 'aws_lambda_permission');
+  /** @type {InvokeGrant[]} */
   const permissions = [];
-  for (const { body } of hclResources(src, 'aws_lambda_permission')) {
+  for (const { body } of permissionBlocks) {
     permissions.push({
       fn:
         body.match(
@@ -391,10 +428,84 @@ export function parseWebStack(raw) {
       action: body.match(/^\s*action\s*=\s*"([^"]*)"/m)?.[1] ?? null,
       principal: body.match(/^\s*principal\s*=\s*"([^"]*)"/m)?.[1] ?? null,
       sourceArn: body.match(/^\s*source_arn\s*=\s*(\S+)/m)?.[1] ?? null,
+      qualifier: body.match(/^\s*qualifier\s*=\s*(\S+)/m)?.[1] ?? null,
     });
   }
 
-  return { prefix, functions, urls, permissions };
+  return {
+    prefix,
+    functions,
+    urls,
+    aliases,
+    permissions,
+    secretMerges: parseSecretMerges(src),
+    declared: { urls: urlBlocks.length, permissions: permissionBlocks.length },
+  };
+}
+
+/// Index of the `)` closing the call that opens at `open`, or -1. Parens inside
+/// a double-quoted string do not count.
+/**
+ * @param {string} src
+ * @param {number} open
+ * @returns {number}
+ */
+function parenEnd(src, open) {
+  let depth = 0;
+  let inString = false;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === '(') depth++;
+    else if (c === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/// Every place a `*_lambda_env` local reaches into the decrypted sops map, and
+/// the filter — if any — standing between the map and the Lambda's
+/// environment. A reference wrapped in `{ for k, v in <map> : k => v if … }`
+/// admits the keys the predicate names; a bare reference admits the file.
+/**
+ * @param {string} src comment-stripped module source
+ * @returns {SecretMerge[]}
+ */
+export function parseSecretMerges(src) {
+  /** @type {SecretMerge[]} */
+  const out = [];
+  const envLocal = /^\s*([A-Za-z0-9_]*lambda_env)\s*=\s*merge\(/gm;
+  let m;
+  while ((m = envLocal.exec(src)) !== null) {
+    const open = src.indexOf('(', m.index + m[0].length - 1);
+    const close = parenEnd(src, open);
+    if (close < 0) continue;
+    const body = src.slice(open + 1, close);
+    for (const ref of body.matchAll(/data\.sops_file\.secrets\[0\]\.data/g)) {
+      const before = body.slice(0, ref.index);
+      const brace = before.lastIndexOf('{');
+      // `{ for k, v in ` is the only thing that may sit between the opening
+      // brace and the map. Anything else — including no brace at all — is the
+      // whole file arriving in the environment.
+      const comprehension =
+        brace >= 0 && /^\s*for\s+[A-Za-z0-9_]+\s*,\s*[A-Za-z0-9_]+\s+in\s*$/.test(before.slice(brace + 1));
+      if (!comprehension) {
+        out.push({ local: m[1], filter: null });
+        continue;
+      }
+      const after = body.slice(ref.index + ref[0].length);
+      const predicate = after.match(/^\s*:[^\n}]*?\bif\b([^\n}]*)/)?.[1] ?? null;
+      out.push({ local: m[1], filter: predicate === null ? null : predicate.trim() });
+    }
+  }
+  return out;
 }
 
 // ────────────────────────────── comparison ──────────────────────────────
@@ -757,7 +868,63 @@ export function compareSources(oidc, release, web, oidcVars) {
         'check would pass vacuously.',
     );
   }
-  for (const [fn, authType] of web.urls) {
+  // A block whose `function_name` is not written as `aws_lambda_function.<label>.`
+  // is skipped by the parser above, and a skipped Function URL is one whose
+  // authorization_type nothing reads. That is silent: the loop below simply has
+  // one fewer thing to iterate, which looks exactly like a stack with one fewer
+  // Lambda.
+  if (web.declared.urls !== web.urls.size) {
+    errors.push(
+      `${web.declared.urls} aws_lambda_function_url block(s) in the module, ${web.urls.size} read. ` +
+        'A block naming its function some other way is skipped, and a skipped Function URL is one ' +
+        'whose auth type and CloudFront grants are checked by nothing.',
+    );
+  }
+  const unattributed = web.permissions.filter((p) => p.fn === null).length;
+  if (unattributed > 0) {
+    errors.push(
+      `${unattributed} aws_lambda_permission block(s) name no aws_lambda_function, so they belong to ` +
+        'no function below and every grant they carry went unread.',
+    );
+  }
+  for (const [fn, url] of web.urls) {
+    const authType = url.authType;
+    // The Function URL is created ON THE ALIAS, so the URL invokes the alias
+    // ARN. A resource-policy statement carrying no qualifier is attached to the
+    // UNQUALIFIED function and does not authorise that invocation: the URL 403s
+    // before invocation and the distribution's SPA error fallback rewrites the
+    // 403 into the shell at 200 — the same invisible outage issue #590
+    // measured, one field over.
+    if (url.qualifier !== null) {
+      const aliasLabel = url.qualifier.match(/^aws_lambda_alias\.([A-Za-z0-9_-]+)\.name$/)?.[1];
+      const alias = aliasLabel === undefined ? undefined : web.aliases.get(aliasLabel);
+      if (alias === undefined) {
+        errors.push(
+          `aws_lambda_function_url for ${fn}: qualifier ${JSON.stringify(url.qualifier)} does not ` +
+            'name an aws_lambda_alias this module declares, so which version the URL serves could ' +
+            'not be read.',
+        );
+      } else if (alias.fn !== fn) {
+        errors.push(
+          `aws_lambda_function_url for ${fn}: qualified by aws_lambda_alias.${alias.label}, which is ` +
+            `an alias of ${alias.fn}. Every alias here is named "live", so this applies cleanly and ` +
+            'serves the wrong function rather than failing.',
+        );
+      }
+    }
+    const grants = web.permissions.filter((p) => p.fn === fn);
+    for (const action of ['lambda:InvokeFunctionUrl', 'lambda:InvokeFunction']) {
+      const grant = grants.find((g) => g.action === action);
+      if (grant !== undefined && grant.qualifier !== url.qualifier) {
+        errors.push(
+          `${fn}: the Function URL is qualified by ${JSON.stringify(url.qualifier)} but its ${action} ` +
+            `grant by ${JSON.stringify(grant.qualifier)}. A Lambda resource policy is attached per ` +
+            'qualifier, so the grant does not cover the ARN CloudFront actually invokes: the URL ' +
+            "403s before invocation and the distribution's SPA fallback rewrites that into the shell " +
+            'at 200, so the surface reads healthy while the function never runs (issue #590).',
+        );
+      }
+    }
     if (authType !== 'AWS_IAM') {
       errors.push(
         `aws_lambda_function_url for ${fn}: authorization_type is ${JSON.stringify(authType)}. ` +
@@ -765,7 +932,6 @@ export function compareSources(oidc, release, web, oidcVars) {
           'its WAF rate limits and its response-headers policy.',
       );
     }
-    const grants = web.permissions.filter((p) => p.fn === fn);
     for (const action of ['lambda:InvokeFunctionUrl', 'lambda:InvokeFunction']) {
       const grant = grants.find((g) => g.action === action);
       if (grant === undefined) {
@@ -793,6 +959,26 @@ export function compareSources(oidc, release, web, oidcVars) {
     }
     if (grants.length >= 2) {
       ok.push(`${fn}: AWS_IAM Function URL with both CloudFront invoke grants`);
+    }
+  }
+
+  // ── 8. no Lambda environment takes the secrets file whole ──
+  if (web.secretMerges.length === 0) {
+    errors.push(
+      'no `*_lambda_env` local was read reaching into data.sops_file — either no Lambda takes a ' +
+        'secret any more, or this reader stopped matching and a whole-file merge would go unseen.',
+    );
+  }
+  for (const merge of web.secretMerges) {
+    if (merge.filter === null) {
+      errors.push(
+        `local.${merge.local} merges the decrypted sops map whole. Every key the file grows for any ` +
+          "OTHER consumer then lands in that function's environment whether its handler reads it or " +
+          'not — readable by anyone who can call GetFunctionConfiguration, and by any code-execution ' +
+          'bug in the handler. Take the keys by name, the way the generate-route env does.',
+      );
+    } else {
+      ok.push(`local.${merge.local}: sops keys filtered by \`${merge.filter}\``);
     }
   }
 

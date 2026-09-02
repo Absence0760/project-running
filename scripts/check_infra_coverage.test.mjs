@@ -16,6 +16,7 @@ import {
   compareSources,
   parseAlarms,
   parseDependabotTerraform,
+  parseDistribution,
   parseModuleFunctions,
   parseStackMatrix,
   terraformDirs,
@@ -39,9 +40,38 @@ const ALARMS = [
   { label: 'cf_5xx', kind: 'cf5xx', functions: [] },
 ];
 
+/** @param {Partial<import('./check_infra_coverage.mjs').Behaviour>} [over] */
+function behaviour(over = {}) {
+  return {
+    pattern: '/share/run/*',
+    origin: 'lambda-share-run',
+    viewerProtocol: 'redirect-to-https',
+    responseHeadersPolicy: 'aws_cloudfront_response_headers_policy.security.id',
+    cachePolicy: 'aws_cloudfront_cache_policy.share_run.id',
+    viewerRequestSources: ['local.www_redirect_associations'],
+    ...over,
+  };
+}
+
+/** @param {Partial<NonNullable<import('./check_infra_coverage.mjs').Distribution>>} [over] */
+function distribution(over = {}) {
+  return {
+    originIds: ['s3-site', 'lambda-share-run'],
+    originsMissingOac: [],
+    insecureOrigins: [],
+    behaviours: [
+      behaviour({ pattern: '(default)', origin: 's3-site' }),
+      behaviour(),
+    ],
+    headerPolicies: new Map([['security', { csp: true, permissionsPolicy: true }]]),
+    ...over,
+  };
+}
+
 /**
  * @param {Partial<{ dirs: string[], matrix: string[], dependabot: string[],
- *                   functions: string[], alarms: import('./check_infra_coverage.mjs').Alarm[] }>} [over]
+ *                   functions: string[], alarms: import('./check_infra_coverage.mjs').Alarm[],
+ *                   distribution: import('./check_infra_coverage.mjs').Distribution }>} [over]
  */
 function run(over = {}) {
   return compareSources(
@@ -50,6 +80,7 @@ function run(over = {}) {
     over.dependabot ?? DEPENDABOT,
     over.functions ?? FUNCTIONS,
     over.alarms ?? ALARMS,
+    over.distribution === undefined ? distribution() : over.distribution,
   );
 }
 
@@ -227,6 +258,7 @@ test('the committed infra/ tree is fully covered', () => {
     parseDependabotTerraform(readFileSync(DEPENDABOT_FILE, 'utf-8')),
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
+    parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
   );
   assert.deepEqual(errors, []);
   assert.ok(ok.length >= 12, 'a passing run that checked almost nothing is not a pass');
@@ -260,5 +292,171 @@ test('the guard exits non-zero when a source really is short', () => {
         stdio: 'pipe',
       }),
     /has no p95 alarm/,
+  );
+});
+
+// ───────────────── distribution behaviour coverage ─────────────────
+//
+// Each of these is the mutation the guard exists to catch, applied to the
+// fixture: the property is stated once per behaviour by hand, CloudFront
+// inherits none of them, and a page that renders is what the failure looks
+// like from outside.
+
+test('a behaviour with no response-headers policy is reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      behaviours: [behaviour(), behaviour({ pattern: '/og/run/*', responseHeadersPolicy: null })],
+    }),
+  });
+  assert.ok(has(errors, /"\/og\/run\/\*": no response_headers_policy_id/), errors.join('\n'));
+});
+
+test('a behaviour with no viewer-request function association is reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      behaviours: [behaviour(), behaviour({ pattern: '/share/new/*', viewerRequestSources: [] })],
+    }),
+  });
+  assert.ok(has(errors, /"\/share\/new\/\*": no viewer-request function_association/), errors.join('\n'));
+});
+
+test('two behaviours associating different viewer-request functions are reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      behaviours: [
+        behaviour(),
+        behaviour({ pattern: '/og/run/*', viewerRequestSources: ['local.other_associations'] }),
+      ],
+    }),
+  });
+  assert.ok(has(errors, /2 different viewer-request functions/), errors.join('\n'));
+});
+
+test('an allow-all viewer protocol policy is reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      behaviours: [behaviour(), behaviour({ pattern: '/og/run/*', viewerProtocol: 'allow-all' })],
+    }),
+  });
+  assert.ok(has(errors, /viewer_protocol_policy is "allow-all"/), errors.join('\n'));
+});
+
+test('a behaviour pointing at an origin the distribution does not declare is reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      behaviours: [behaviour(), behaviour({ pattern: '/og/run/*', origin: 'lambda-typo' })],
+    }),
+  });
+  assert.ok(has(errors, /names no origin this distribution declares/), errors.join('\n'));
+});
+
+test('a behaviour with no cache policy is reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      behaviours: [behaviour(), behaviour({ pattern: '/og/run/*', cachePolicy: null })],
+    }),
+  });
+  assert.ok(has(errors, /no cache_policy_id/), errors.join('\n'));
+});
+
+test('two behaviours naming different response-headers policies are reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      behaviours: [
+        behaviour(),
+        behaviour({
+          pattern: '/og/run/*',
+          responseHeadersPolicy: 'aws_cloudfront_response_headers_policy.lax.id',
+        }),
+      ],
+    }),
+  });
+  assert.ok(has(errors, /2 different response-headers policies/), errors.join('\n'));
+});
+
+test('the shared response-headers policy losing its CSP is reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      headerPolicies: new Map([['security', { csp: false, permissionsPolicy: true }]]),
+    }),
+  });
+  assert.ok(has(errors, /no content_security_policy/), errors.join('\n'));
+});
+
+test('the shared response-headers policy losing Permissions-Policy is reported', () => {
+  const { errors } = run({
+    distribution: distribution({
+      headerPolicies: new Map([['security', { csp: true, permissionsPolicy: false }]]),
+    }),
+  });
+  assert.ok(has(errors, /no Permissions-Policy header/), errors.join('\n'));
+});
+
+test('an origin with no origin access control is reported', () => {
+  const { errors } = run({
+    distribution: distribution({ originsMissingOac: ['lambda-share-run'] }),
+  });
+  assert.ok(has(errors, /declares no origin_access_control_id/), errors.join('\n'));
+});
+
+test('an origin CloudFront may reach over plaintext http is reported', () => {
+  const { errors } = run({ distribution: distribution({ insecureOrigins: ['lambda-share-run'] }) });
+  assert.ok(has(errors, /origin_protocol_policy = "https-only"/), errors.join('\n'));
+});
+
+// A parse that stopped matching returns an empty behaviour list, and every
+// per-behaviour assertion above then holds vacuously. That is the failure mode
+// a source-reading guard has instead of a false negative.
+test('a distribution whose behaviours could not be read fails rather than passing', () => {
+  const { errors } = run({ distribution: distribution({ behaviours: [] }) });
+  assert.ok(has(errors, /cache behaviour\(s\) were read/), errors.join('\n'));
+});
+
+test('no distribution at all fails rather than passing', () => {
+  const { errors } = run({ distribution: null });
+  assert.ok(has(errors, /no aws_cloudfront_distribution was read/), errors.join('\n'));
+});
+
+// ─────────────── parseDistribution against the real module ───────────────
+
+test('parseDistribution reads every behaviour and origin of the committed distribution', () => {
+  const dist = parseDistribution(readFileSync(MODULE_FILE, 'utf-8'));
+  assert.ok(dist);
+  assert.ok(dist.behaviours.length >= 18, `read only ${dist.behaviours.length} behaviours`);
+  assert.ok(dist.originIds.length >= 9, `read only ${dist.originIds.length} origins`);
+  assert.equal(dist.behaviours.filter((b) => b.pattern === '(default)').length, 1);
+  // Every behaviour resolved all four fields — a parser returning nulls would
+  // report eighteen findings rather than passing, but it would also mean the
+  // reader below is not reading the file it thinks it is.
+  for (const b of dist.behaviours) {
+    assert.ok(b.origin, `${b.pattern}: no target_origin_id read`);
+    assert.ok(b.viewerProtocol, `${b.pattern}: no viewer_protocol_policy read`);
+    assert.ok(b.responseHeadersPolicy, `${b.pattern}: no response_headers_policy_id read`);
+    assert.equal(b.viewerRequestSources.length, 1, `${b.pattern}: viewer-request associations`);
+  }
+});
+
+test('the guard exits non-zero when a behaviour loses the security headers policy', () => {
+  // End to end through main(), on a copy of the real module with the
+  // response-headers policy struck off the /og/run/* behaviour — the one-line
+  // omission a new behaviour is copy-pasted into existence with.
+  const dir = mkdtempSync(join(tmpdir(), 'infra-coverage-dist-'));
+  const src = readFileSync(MODULE_FILE, 'utf-8');
+  const behaviour = /path_pattern\s*=\s*"\/og\/run\/\*"[\s\S]*?\n\s*response_headers_policy_id\s*=\s*[^\n]*\n/;
+  assert.match(src, behaviour, 'the /og/run/* behaviour moved; re-anchor this test');
+  const cut = src.replace(behaviour, (block) =>
+    block.replace(/\n\s*response_headers_policy_id\s*=\s*[^\n]*\n/, '\n'),
+  );
+  assert.notEqual(cut, src, 'the strike-out did not change anything');
+  const path = join(dir, 'main.tf');
+  writeFileSync(path, cut);
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, ['scripts/check_infra_coverage.mjs'], {
+        env: { ...process.env, INFRA_COVERAGE_MODULE: path },
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }),
+    /no response_headers_policy_id/,
   );
 });

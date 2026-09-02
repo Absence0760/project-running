@@ -126,4 +126,99 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('104:32:11'), findsOneWidget);
   });
+  // `Infinity.floor()` throws UnsupportedError rather than degrading, so a
+  // StatGrid handed an unbounded width took the whole screen down out of
+  // build() instead of laying out badly. A shared widget cannot choose its
+  // parents: a horizontal scroller and a Row child with no Expanded both
+  // offer one.
+  group('StatGrid under an unbounded width', () {
+    testWidgets('lays out inside a horizontal scroller', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: StatGrid(
+                cells: const [
+                  StatTile.small(
+                      icon: Icons.route,
+                      label: 'Distance',
+                      value: '42.2',
+                    ),
+                  StatTile.small(
+                      icon: Icons.timer,
+                      label: 'Time',
+                      value: '104:32:11',
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('104:32:11'), findsOneWidget);
+    });
+
+    testWidgets('every cell is still bounded, so a long value can scale down',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: StatGrid(
+                cells: const [
+                  StatTile.small(
+                      icon: Icons.timer,
+                      label: 'Time',
+                      value: '104:32:11',
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final box = tester.renderObject<RenderBox>(
+        find.ancestor(
+          of: find.text('104:32:11'),
+          matching: find.byType(SizedBox),
+        ).first,
+      );
+      expect(box.size.width.isFinite, isTrue,
+          reason: 'an unbounded cell is what BoxFit.scaleDown cannot work in');
+      expect(box.size.width, kStatCellMinWidth);
+    });
+
+    testWidgets('a Row child with no Expanded lays out', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [
+                StatGrid(
+                  cells: const [
+                    StatTile.small(
+                      icon: Icons.route,
+                      label: 'Distance',
+                      value: '42.2',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+    });
+  });
+
 }

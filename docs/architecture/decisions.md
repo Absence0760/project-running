@@ -14199,6 +14199,784 @@ Three mutations, each killed: restoring the old any-number behaviour,
 over-correcting so `1.` never interrupts either, and dropping the
 leading-whitespace allowance so an indented continuation escapes the rule.
 
+## 939. `NaN >= 0` is true, so a bare `>= 0` is not a bound — and one run could top every distance leaderboard
+
+**Decided 2026-09-02.** `public.runs` carried no constraint on any of its three
+physical quantities. Measured against the local stack over PostgREST, signed in
+as the seeded runner with an ordinary password-grant JWT — no service role, no
+admin path, nothing but the self-owned INSERT policy every account has:
+
+```
+POST /rest/v1/runs
+{"distance_m":"NaN","duration_s":-60,"elevation_gain_m":"Infinity", ...}
+-> 201, row stored verbatim
+```
+
+`numeric` holds NaN and PostgREST coerces the JSON string `"NaN"` into it. Two
+consequences, and the first one is against shared state rather than the writer's
+own:
+
+- **NaN outranks every real value in Postgres numeric ordering.**
+  `challenge_leaderboard` ranks on `rank() over (order by value desc)` over
+  `sum(r.distance_m)`. One NaN run inside the window put its author at rank 1 of
+  every distance challenge they had joined — measured, with a genuine 90 km
+  entrant demoted to rank 2 behind a value the board rendered as `NaN`.
+  `sum(coalesce(elevation_gain_m, 0))` is the same story for a `vert` challenge,
+  where that column's bare `numeric` type accepts Infinity as well.
+- **A negative `duration_s` is a personal record.** The whole-run branch of
+  `refresh_personal_records_for_user` orders by `duration_s asc` and filters
+  only for NOT NULL; the promoted `fastest_*_s` branches beside it already carry
+  a `>= 0` floor, and the branch reading the run's own duration did not.
+
+The correction that matters is the shape of the bound, not its existence. The
+client that was written believing this constraint already existed named it as
+`distance_m >= 0`, and `'NaN'::numeric >= 0` is **true** — so the obvious
+constraint would have shipped, passed its own test against a negative, and left
+the leaderboard exploit exactly where it was. Every numeric bound here names NaN
+explicitly, and `elevation_gain_m` names Infinity too because bare `numeric`
+accepts one where `distance_m`'s `numeric(10, 2)` scale rejects it with a 22003
+field overflow before any CHECK is consulted. The suite pins that asymmetry
+directly, so neither term can be tidied away as redundant.
+
+No upper bound, deliberately. The honest ceiling for one activity is not a
+number this schema knows — a 240-mile ultra is 386 km and a multi-day push is
+longer — and refusing a real measurement is worse than admitting an absurd one
+that can no longer make an aggregate return NaN.
+
+Two smaller judgements. The constraints are **not** registered in
+`check_constraint_unions.mjs`: its coverage rule reads `check (col in (…))`
+clauses only, and an entry naming a column with no set-shaped CHECK fails the
+guard rather than satisfying it. And the migration repairs before it validates —
+predicate-scoped `UPDATE`s that match nothing on a healthy database — because an
+out-of-range row here is bad data, not an attack artifact, and aborting a
+production deploy on one is worse than correcting it to 0 (distance, duration)
+or to NULL (ascent, which is nullable and where NULL is the honest "unknown").
+
+## 940. A one-sided numeric bound is not a bound, and 26 of them were the only bound their column had
+
+**Decided 2026-09-02.** § 939 closed `runs`; the same question asked of the rest
+of the schema found the class rather than the instance. Every single-column
+numeric CHECK in `public` was evaluated by pulling its own `pg_get_expr` body
+out of the catalogue, substituting the column for `'NaN'`, and executing it —
+not by reading the SQL and agreeing it looked right. **26 constraints across
+eleven tables admitted NaN.** Every one of them was one-sided; every two-sided
+bound was immune for free, because its upper edge is the half NaN fails
+(`NaN <= 500` is false). That is the whole rule, and it is why the exposure
+tracked the constraint's SHAPE rather than the care taken writing it.
+
+What a NaN costs once one lands, since it is absorbing under every aggregate and
+outranks every real value in a descending sort:
+
+- `gym_sets.weight_kg` feeds `refresh_gym_workout_totals`, so one NaN set makes
+  the **derived cache** `gym_workouts.volume_kg` NaN for that workout — and
+  `docs/backend/derived_state.md`'s contract still holds, because the cache
+  faithfully equals the authoritative query. Both are NaN. A cache invariant
+  cannot save you from a poisoned input. `gym_workout_summaries.is_pr` compares
+  against `max(weight_kg)`, which NaN wins.
+- the nine `food_log` nutrient columns are summed for the day and then compared
+  against a ceiling. `NaN >= ceiling` is true, so the diary tells the runner
+  they blew past their sodium limit off a value nothing measured.
+- `recipes.servings` is a divisor and `recipe_ingredients.quantity` a
+  multiplier.
+- `challenges.goal_value` NaN makes `recompute_challenge_completion`'s
+  `value >= goal` false forever. The challenge becomes unwinnable and silent
+  about it — which is the exact defect `challenges_goal_ck` was written to
+  prevent, and whose client half (`Number.isFinite` in `checkChallengeGoal`)
+  already refused a non-finite goal. The two halves disagreed about a row that
+  could exist.
+- `segments.end_distance_m` had no bound of its own at all. `end > start` and
+  `end - start >= 100` are BOTH true for a NaN end against a real start, so the
+  pair constraints looked like they stood in for one and did not.
+
+Infinity is named only where the column can hold one: a `numeric(p, s)` refuses
+an infinite value at the type with a 22003 field overflow before any CHECK is
+consulted, so the term would be dead on a scaled column. `-Infinity` needs no
+term anywhere — every bound here has a lower edge that already excludes it.
+
+The durable half is the test, not the migration. `numeric_bounds_reject_nan_test.sql`
+re-runs the same catalogue evaluation on every pgtap run, so a bound added
+tomorrow in the one-sided shape fails the job instead of joining the list. It
+carries an **operator validation**: before it asks the real schema anything, it
+creates a table with a bare `>= 0` CHECK and requires the sweep to name that
+column as admitting NaN and Infinity. A sweep that had quietly stopped
+evaluating anything would satisfy every emptiness assertion for free, and the
+population floors alone would not catch a substitution that had become a no-op.
+A second rule covers what the first cannot reach: an expression is only
+evaluable when every column it names is substituted, so a numeric column
+appearing ONLY in a multi-column CHECK must also carry a single-column one, or
+be exempted by name with a reason. That rule is what makes `end_distance_m`'s
+absence a failure rather than a silence, and `challenges.goal_value` — whose
+bound is inherently window-relative — is the single exemption, pinned instead by
+value in `challenge_goal_check_test.sql`.
+
+Left open, and filed: 31 numeric columns in `public` carry no CHECK at all,
+including `live_run_pings.lat` / `lng` and `race_pings.lat` / `lng`, which are
+client-written and rendered on a public spectator map. That is a different
+question — what each column's honest range is — and it wants a per-column answer
+rather than a sweep.
+
+## 941. A shadow-hidden account could unhide itself, and the guard that stops it cannot read the JWT
+
+**Decided 2026-09-02.** `shadow_hidden` is the moderation bit. `auto_hide_target`
+raises it when a target crosses the report threshold, and `admin_unhide_target`
+— SECURITY DEFINER, gated on `private.is_admin` — is the only intended way down.
+All three tables it lives on carried a table-level UPDATE grant, so from an
+ordinary authenticated session under the row owner's own JWT, with no second
+account and no service key:
+
+```
+update user_profiles set shadow_hidden = false where id = auth.uid();
+update clubs         set shadow_hidden = false where id = <my club>;
+update routes        set shadow_hidden = false where id = <my route>;
+```
+
+each returned the target to every surface that filters on it. `user_profiles`
+was reachable a second way even without the UPDATE — it carries a "users delete
+own profile" policy, so DELETE + re-INSERT reaches every column an UPDATE grant
+could withhold, which is § 584's round trip verbatim.
+
+Four more from the same seat. A club created with `is_verified => true` kept the
+trust badge, because `clubs_protect_is_verified_trg` is BEFORE **UPDATE** only
+and nobody had asked what INSERT did (`race_listings_force_unverified`, two
+tables over, is BEFORE INSERT OR UPDATE and is the shape that holds).
+`clubs.member_count` set to 999999 stayed there — the maintaining trigger
+recomputes on a `club_members` change and a club nobody joins never has one —
+and `search_clubs` sorts on it, so the forged club ranked first. `routes.run_count`
+set to 4242 promoted the route into the `popular` lens of
+`discoverable_routes_in_bbox` and out of `hidden_gems`; `is_featured` put it in
+the admin-curated lens outright. And `update routes set geom_public = geom`
+overwrote the privacy-zone clip that `routes_within_box` — granted to `anon` —
+runs its `ST_Intersects` against, because that column's maintaining trigger
+watches `waypoints` and a write touching only the geometry is never recomputed.
+
+**Two design choices, and both are the interesting part.**
+
+*Discard, do not refuse.* The obvious fix was the § 584 shape — revoke the table
+verb, re-grant column by column — and it was written first and then thrown away.
+A grant refuses with a 42501, and a refusal on `shadow_hidden` tells the hidden
+account that it is hidden, which is the one thing a *shadow* hide must not do.
+It also breaks any caller that hands a table a whole row it read back earlier:
+`backup.dart`'s restore upserts a `select()`ed route verbatim, so every one of
+these columns is in its statement's column list and every route in an archive
+would have failed to import. Silently keeping the write and discarding the value
+is not the weaker guard here; it is the correct behaviour, and it is what a
+restore should do with a moderation bit and a derived cache anyway.
+
+*The guard cannot read the JWT.* Every legitimate writer of these columns —
+`admin_unhide_target`, `auto_hide_target`, `refresh_route_run_count`,
+`refresh_club_member_count`, `refresh_gym_workout_totals`,
+`sync_challenge_participant_count`, `routes_set_geom` — is SECURITY DEFINER and
+is called **by an ordinary user's session**. So inside all of them the JWT role
+claim reads `authenticated`, and `current_setting('role')` reads the session's
+`SET ROLE`, which is also `authenticated`. Those are the two signals
+`lock_subscription_columns` and `force_unverified_listing` key on, and either
+one here would have locked the moderator out of the unhide while every
+"the forge is refused" assertion still passed. `current_user` is the signal that
+survives, because in a SECURITY **INVOKER** function it follows the effective
+user: `postgres` inside a definer body, `authenticated` on a direct PostgREST
+write. Measured on this Postgres with one trigger and one session. Making these
+guards SECURITY DEFINER would defeat them outright — the definer switch masks
+`current_user` to the owner, so every caller would look trusted. The suite kills
+exactly that mutation, and kills a JWT-role-keyed variant on the assertion that
+an admin can still unhide.
+
+One residual, asserted rather than hidden: the DELETE + re-INSERT path now
+produces a *fresh* profile row, which is not hidden. A new row is not a hidden
+row, and a guard that carried the flag across a delete would be inventing state
+for a row that does not exist yet. Re-applying the hide to a re-created account
+is the moderator's, and the test says so in its own assertion text.
+
+## 942. Two hygiene rules the schema followed everywhere and stated nowhere
+
+**Decided 2026-09-02.** A SECURITY DEFINER function runs as its owner, so RLS is
+not consulted for anything it touches: the row-level guard behind every other
+write in the schema is simply absent, and whatever authorization exists has to
+be written into the body. **45 such functions are reachable by `anon` or
+`authenticated` and write**, and nothing said they had to check anything. The
+two named hygiene suites each pin the specific functions an audit pass happened
+to look at, and `function_search_path_test` pins the *hijack* defence rather
+than the authorization — so a definer mutator shipped with no gate at all would
+have failed none of them.
+
+All 45 were swept and **all 45 gate**, which is the outcome worth recording as
+much as a defect would have been: the rule was being followed, and now it is
+enforced. The one function whose body never names its caller,
+`confirm_safety_contact_by_token`, authenticates by an emailed single-use
+`gen_random_uuid` token instead — a trusted contact confirms from a link with no
+account — and is registered with that reason.
+
+**The rule is about presence, not position, and that is the design decision.**
+The obvious formulation is "the authorization check must come before the first
+write". Run against this schema it flags five *correct* functions, because most
+of them authorize inside the mutation's own `WHERE` clause —
+`update runs ... where r.user_id = auth.uid()` — which is authorization AT the
+write and is strictly harder to get wrong than a separate earlier check. A
+positional rule would have taught the next author to move a predicate for the
+guard's benefit. What cannot be argued with is a body that never names the
+caller at all, so that is what is asserted. Stated in the suite's own header:
+this proves each function ASKS about its caller, not that the question is the
+right one.
+
+The vocabulary of authorization primitives is spelled out rather than left to a
+loose pattern, so adding one is a deliberate edit and no body satisfies the rule
+by coincidence. The sweep carries an operator validation in both directions — it
+plants a client-executable definer mutator that names no caller and requires
+itself to report it, and separately requires that it does **not** flag a
+function that gates only in its `WHERE` clause. The exemption registry is
+checked against reality too: an entry naming a function that has since grown a
+caller check, or one whose reason is too short to be a reason, fails.
+
+A second sweep in the same pass found nothing and is recorded here so it is not
+re-run from scratch. 26 write policies are declared `to public` rather than
+`to authenticated`, and their predicates never mention `auth.uid()` — the shape
+that would be anon-reachable. All 26 delegate to `is_club_admin`,
+`is_event_organiser` or `is_race_director`, and all three read the caller, so an
+anon request satisfies none of them. The caller reference is one level down,
+which is exactly why a text sweep of policy expressions alone would have
+reported 26 findings and been wrong about every one.
+## 944. The Garmin data field carried the grade of a discarded activity into the next one, and nothing in the repo had ever read that tier
+
+`apps/watch_garmin` is a Connect IQ data field that injects one metric — Minetti
+grade-adjusted pace — into Garmin's native run screen. No CI job builds it, no
+CI job runs its `(:test)` suite, the Connect IQ SDK is on no machine here, and
+until this round the only thing in the repo that read a line of it was
+`scripts/check_watch_wire_vectors.mjs`, which pins four numbers (the polynomial,
+the +/-45% clamp, C(0) and the 5 m segment gate) and nothing else. Everything
+BETWEEN those numbers was unread, including the state machine that decides which
+grade they are applied to.
+
+`Activity.Info.elapsedDistance` restarts at 0 when the recorder resets or
+discards an activity. The field's grade anchor stayed parked at the old total,
+so every later sample measured a NEGATIVE run, the `run >= MIN_SEGMENT_M` gate
+never opened again, and the grade last measured before the reset was applied for
+the whole of the next run. Nothing throws and nothing blanks: a runner who
+reset at the top of a 10% wall would see the flat road that followed reported at
+a 1.66x factor — 5:00/km raw rendered as 3:01/km GAP — as a confident number
+for as long as the field was on screen. The gate could only re-open after the
+runner covered the entire discarded distance again, which on any real activity
+means never.
+
+The firmware twin has always had the reset this rail lacked: `GapEstimator`
+carries an explicit `reset()` and the recorder calls it at every start. The
+Monkey C had no equivalent because it had no separable state to reset — the
+anchors were three private fields on the view. So the state moved into a
+`GradeTracker` with a `reset()`, `onTimerReset` was overridden to call it, and a
+negative run re-anchors: the general recovery, which also covers a rewind no
+callback reports, and which sets the grade back to 0.0 rather than to the last
+measured value, because 0.0 (GAP == raw pace) is what the field already reports
+before its first segment and on a watch feeding it no altitude at all.
+
+The six new `(:test)` cases are **authored, not executed** — there is no
+`monkeyc` here, exactly as the nineteen already in that file are. So the enforcing
+artefact is `apps/watch_garmin/scripts/check_garmin_source.sh`: bash + python3,
+no SDK, the same shape as the watchOS String Catalog guard. It holds five claims
+a compiler cannot — the reset wiring above; `source-test/` staying annotated
+`(:test)` and `monkey.jungle` still excluding it, since `base.sourcePath`
+compiles that directory into every build and only the annotation keeps it off a
+watch with tens of KB of headroom; a permission-gated Toybox module being
+declared in `manifest.xml` before it is used, because the runtime refuses such a
+call mid-activity and the build says nothing; the cross-rail constants being
+named rather than spelled inline; and the string table agreeing with its call
+sites in both directions. Fifteen mutations were run against it and each produced
+the message naming its own defect.
+
+It is deliberately NOT wired into CI in this change — `ci.yml` belongs to no
+lane this round — and a guard nothing runs is a script. The wiring is one job
+plus one line in the gate's `needs:` list, and is filed in `followups.md`.
+
+## 945. A four-rail chain, every link enforced except the one it starts at
+
+The 99:00-per-unit live-pace ceiling exists four times. The Garmin field's
+`formatPace` guards on it; the firmware's `grade_adjusted_pace::MAX_PACE_S_PER_KM`
+says in its own doc comment that it "mirrors the Garmin field's `formatPace`
+guard"; a firmware unit test pins that equal to `alerts::PACE_BAND_MAX_S_PER_KM`;
+and `check_watch_wire_vectors.mjs` holds THAT against the phone's
+`kWorkoutPaceMaxSecPerKm`. Three of the four links are enforced by something
+that can fail.
+
+The fourth was a bare `5940.0` inline in an `if`. A rail read by regex cannot
+see a literal, so the head of the chain was the one link where a comment claimed
+a relationship and nothing checked it — § 641's shape, in the tier least able to
+notice it. Naming the constant is what makes it readable; registering it as a
+fifth rail on that row is a `scripts/` change and is filed rather than taken.
+
+The new guard's fourth claim generalises the lesson rather than pinning this one
+value: the constants other rails read out of that file must be declared by name
+AND used by name, so the next value promoted to a cross-rail contract cannot be
+inlined back into invisibility. `FLAT_COST` is exempt with the reason recorded —
+3.6 is also the Minetti polynomial's own constant term, because C(0) *is* that
+term, and every rail spells it twice for the same reason.
+
+## 946. Six Wear OS guards could not see their own inputs, and reported green on exactly the changes they exist to catch
+
+Six unit tests in the Wear OS module are source-level guards over files OUTSIDE
+that Gradle build, reached with `WearLocales.findUp`: the phone's two
+`Wear*Bridge.kt`, the web env-flag parser, the `runs.metadata` registry, the
+`activity_type` migration and the two client label catalogues it is held
+against. The build script declared `src/main/res` and the three build scripts as
+test-task inputs — with a comment explaining precisely why a guarded file must
+be a declared input — and none of the six.
+
+Measured on three, not inferred. Renaming `anon_key` to `anonKey` in the phone's
+`WearAuthBridge` — the `/supabase_session` drift whose consequence is a wrist
+that is never signed in, and the exact defect `DataLayerContractTest` was
+written for — left `testDebugUnitTest` UP-TO-DATE and the build SUCCESSFUL.
+Widening the canonical affirmative set in `env_flag.ts` did the same. So did
+narrowing the recording service's `foregroundServiceType` in the manifest, which
+turned out to be undeclared too: it is on no unit test's classpath, so nothing
+else was making it an input either. With the inputs declared, all three go red
+on the guard that names them.
+
+CI escapes this only because it checks out clean every run, so nothing there is
+ever up to date — which is why four rounds of coverage work never saw it. A
+local `./gradlew testDebugUnitTest` reporting green on the change a guard exists
+to catch is worse than having no guard, because it reads as coverage.
+
+The repo-root walk is a `generateSequence` up from `rootProject.projectDir`
+looking for the Wear build script itself, not a hardcoded `../../..`; a missing
+file in an input collection is not an error, so a checkout without the sibling
+trees still builds, and the guards already assert they located what they read,
+so a genuinely absent tree fails loudly in the test rather than quietly here.
+
+## 947. The complication kind was the same string typed into two targets, and a mismatch is a silent no-op
+
+`WidgetCenter.shared.reloadTimelines(ofKind:)` in the watchOS host app and `let
+kind` in the widget extension were the same literal written twice, in two
+different Xcode targets, with nothing able to compare them — the shape § 887
+closed for the run hand-off envelope and § 640-era work closed for the App Group
+name, arrived at from a third direction.
+
+`reloadTimelines(ofKind:)` with a kind no widget declares does not throw, does
+not log and returns nothing to check. So a rename on either side alone leaves
+the host writing snapshots the complication is never told to re-read, and the
+watch face keeps showing the pre-run state until the platform's own refresh
+budget comes round — up to about half an hour into a run. That is the failure
+the nudge exists to prevent, reintroduced from the other end, and it is the same
+class as the missing App Group entitlement that made this complication receive
+no data at all.
+
+Derived rather than guarded. The kind moved onto `ActiveRunBridge`, the file
+whose whole purpose is being compiled into BOTH targets and which already
+centralises `appGroup` for exactly this reason; both call sites and the operator
+README now read the one constant. A guard over two copies would have been the
+smaller change and would have left two copies. Source-level only — there is no
+Xcode on Linux, so this is read, not compiled; the two existing watchOS source
+guards still pass and prove nothing about whether it builds.
+
+## 948. What a Linux-only round may claim about three wrist tiers
+
+Of the three wrist platforms, exactly one can be executed here. The Wear OS
+suite was run (`./gradlew --no-daemon testDebugUnitTest`, green, and red under
+each of the mutations § 946 records). watchOS has no compiler on this machine —
+`test-watch-ios` is a macOS job — so every claim about it in this round is a
+source-level read, and the word "verified" is not available for it. Garmin is
+the same and worse: no SDK exists on any machine in this project, so its
+`(:test)` suite has never been executed by anyone, and saying its expected
+values are pinned to the TS/Dart oracle describes an intention rather than a
+measurement.
+
+That asymmetry is why the two uncompilable tiers got guards rather than tests.
+A source-level guard runs where the compiler cannot and fails on the drift the
+compiler would not have caught anyway; a Swift or Monkey C test that no machine
+runs is a comment with parentheses in it. Both new guards therefore say in their
+own headers what they do not prove, and both docs say the suites beside them are
+authored and unexecuted.
+
+One contract was found unregistered and deliberately left so. The phone-to-watch
+route push — `WatchIngestBridge.routeUserInfo` writing five keys into a
+`transferUserInfo` payload and `ArmedRoute.decode` reading them back, with the
+Dart method-channel args a third rail — is the same envelope shape as the run
+hand-off, on the same `WCSession`, in the opposite direction, and nothing
+compares the three key lists. They agree today; that was checked by hand. The
+guard belongs in `scripts/`, which no lane owns this round, so it is filed with
+the rails and the key set named rather than half-built here.
+
+The dividend of being able to execute one of the three showed up in the last
+find of the lane. The Wear OS pre-run header renders two different facts a few
+lines apart — `!online && authed` means the watch cannot reach the network,
+`!authed` means nobody has signed in on this wrist — and both branches rendered
+`R.string.offline`. Two conditions sharing one string fails nothing, which is
+why four coverage rounds went past it; what it costs is the runner being told
+the wrong thing about a watch that is usually perfectly online, and sent to
+check Bluetooth while the Sign in chip directly beneath it, the affordance that
+actually fixes what they are looking at, is the one they walk away from. On
+this tier the fix could be *pinned by a test that runs* rather than by a guard:
+a new `not_signed_in` across all seven catalogues, held by the existing locale
+parity guards, and a branch-scoped assertion that reads the `!authed` body on
+its own so a match from the sibling branch cannot satisfy it. Three mutations,
+each killed — the string reverted, the English copy dropped, and one translated
+locale dropped. That is the shape the other two tiers cannot have, and the
+reason they got guards instead.
+## 949. CloudFront inherits nothing between behaviours, and eighteen hand-written copies of that fact were checked by nothing
+
+The distribution carries eighteen cache behaviours — one default plus one per
+routed path — and each of them re-states, by hand, three properties that decide
+whether the path is safe: `response_headers_policy_id` (the CSP, HSTS,
+X-Frame-Options and Permissions-Policy live in that policy and nowhere else), an
+https `viewer_protocol_policy`, and the `dynamic "function_association"` that
+runs the viewer-request function redirecting a `www.` host to the apex.
+CloudFront applies a response-headers policy and an edge function PER
+BEHAVIOUR. Nothing is inherited from the default behaviour. All eighteen were
+correct, and nothing in the repo said so.
+
+A nineteenth behaviour copy-pasted without the `response_headers_policy_id`
+line answers that path with no CSP at all; one without the association serves
+the whole site at a second host on that path. Both render a page. That is
+exactly how the `www_redirect` function shipped serving `WWW.threkir.com` —
+correct config, correct code, a casing it did not cover, and a page that
+appeared.
+
+`check_infra_coverage.mjs` gains this as its third half, beside stack coverage
+and Lambda alarm coverage; all three are the same shape, a hand-maintained list
+that has to be edited for a new thing to be covered with nothing failing when it
+is not. `parseDistribution` reads the origins, the behaviours and what each
+response-headers policy actually carries. Every behaviour must name a declared
+origin, an https viewer policy, a cache policy, the same response-headers policy
+as its siblings, and the same viewer-request function; that shared policy must
+carry a `content_security_policy` block and a `Permissions-Policy` header rather
+than merely exist; every origin must be OAC-signed and https-only. A behaviour
+list that came back short fails rather than passing vacuously.
+
+`nestedBlocks` is the repeated-block reader `hcl_lex.mjs` was missing —
+`nestedBlock` returns the first, and a distribution has eighteen. It resumes past
+each block's closing brace, so a header nested inside a block it already
+returned is not counted twice.
+
+Six mutations against the real Terraform, each killed: a behaviour losing the
+headers policy, one losing the association, one going `allow-all`, an origin
+losing its OAC, an origin falling back to `http-only`, and the shared policy
+losing its CSP.
+
+## 950. The Function URL is created on the alias, so a grant without the qualifier authorises the wrong ARN
+
+Every `aws_lambda_function_url` in the web-stack module carries
+`qualifier = aws_lambda_alias.<x>.name`, so CloudFront invokes the ALIAS ARN.
+A Lambda resource policy is attached per qualifier: an `aws_lambda_permission`
+written without one covers the unqualified function and not the ARN the URL
+actually invokes. The consequence is the one issue #590 measured, one field
+over — the Function URL 403s before invocation, the distribution's
+403-to-`/index.html` fallback rewrites that into the SPA shell at 200, and the
+page renders while the Lambda never runs. All sixteen grants match today. The
+guard read `authorization_type`, `action`, `principal` and `source_arn`, and
+never the qualifier.
+
+It now also pins that the qualifier resolves to an alias OF THAT FUNCTION.
+Every alias in the module is literally named `live`, so a copy-pasted
+`aws_lambda_alias.share_recap_live` on the share-route URL applies cleanly at
+`terraform apply` and serves the wrong function rather than failing.
+
+And the parser now declares what it SKIPPED. A Function URL whose
+`function_name` is written any other way was silently `continue`d, leaving its
+auth type read by nothing — and a loop with one fewer entry is indistinguishable
+from a stack with one fewer Lambda. The count of blocks in the file must equal
+the count read, and a permission attributable to no function is reported rather
+than dropped. The fixture module gained the alias and qualifiers it was missing,
+so every mutation below it is a real mutation.
+
+## 951. Two ways this repo addressed its secrets file wrongly: an env that took all of it, and a rotation script that found none of it
+
+`local.lambda_env` was `merge(base, has_secrets ? sops.data : {})` — the entire
+decrypted `../infra-secrets/running/<env>.sops.yaml`. That file is shared:
+`GRAPHHOPPER_API_KEY` and `GRAPH_CYCLE_API_KEY` live in it for the
+generate-route Lambda, and every key it grows for any future consumer would land
+in the coach function's environment whether the handler reads it or not —
+readable by anyone who can call `GetFunctionConfiguration`, and by any
+code-execution bug in the one function in the estate that talks to a third-party
+LLM.
+
+`generate_route_lambda_env` already took exactly the two keys it uses, and its
+own comment named this env as the contrast: "ONLY those keys, not the whole
+secret bag the coach Lambda gets". So the over-grant was noticed, written down,
+and left. The narrowing is that same shape applied to the bag it was contrasting
+with: a declared `coach_secret_keys` list, filtered with the same `for … if`
+comprehension. The list is what the coach handler and its cores read out of
+`process.env`, minus the two `PUBLIC_` values that arrive as module vars. A key
+the coach needs and the list omits is an unset env, which the handler already
+answers as a tagged 503 — the fail-closed direction.
+
+`check_infra_iam.mjs` gains the rule as its eighth: no `*_lambda_env` local may
+reach the sops map except through a `for … if` filter, and a comprehension
+carrying no predicate counts as taking the file whole. A reader that stopped
+matching reports that rather than passing. This is a least-privilege rule in the
+same sense as the wildcard-Action one already there, and it is invisible in the
+same way: the Terraform reads as one tidy `merge(...)` line either way.
+
+`terraform fmt -check` is clean. Nothing here was planned or applied — this lane
+had no AWS credentials and wanted none.
+
+The second half is `bin/key-rotate.sh`, which reads the estate
+`.sops.yaml` back to decide which key the encrypted file should be under. It
+grepped for `preview/secrets` / `prod/secrets` and recognised an unwired key by
+the token `REPLACE_<ENV>_KMS_ARN`. Both are the in-repo layout from before the
+secrets moved to the private estate repo. Neither string occurs in the estate
+config, whose rules are `^running/<env>\.sops\.yaml$` carrying a
+`KMS_RUNNING_<ENV>_ARN_PLACEHOLDER`, so BOTH envs matched no rule and the script
+died with "has unresolved KMS placeholder … run bin/sops-init.sh first" — on
+prod, whose key is fully wired, pointing the operator at a script that would
+tell them it was already resolved. Key rotation is the compromise-response path.
+It was unconditionally broken and nothing said so.
+
+Two mistakes, not one, and the second is the subtler: the VALUE of `path_regex`
+is itself a regex, so an anchor whose `\.` means "a literal dot" matches
+nothing at all against a rule that spells the dots `\.`. That is a second
+silent way to find no rule, and it fails identically to the first. The anchor is
+now built from the same `$PROJECT_SLUG/$ENV_NAME` every other script addressing
+that repo uses, tolerant of the escaping, and the three outcomes are three
+sentences — no rule matches this file, the rule is still a placeholder, the ARN
+could not be read — because collapsing them is what made a stale anchor look
+like an un-run init.
+
+Verified by running both the old and the new extraction against a fixture and
+against the real estate config: the old says unresolved-placeholder for both
+envs, the new says resolved for prod and placeholder for preview, which is that
+config's true state. Nothing was decrypted and no ARN left the machine; a
+creation-rules file is metadata.
+
+The guard is a three-script agreement: `sops-init.sh`, `secret-set.sh` and
+`key-rotate.sh` must declare the same `PROJECT_SLUG`, build the estate path from
+it rather than spelling the subdirectory out, and name the same placeholder
+token — which `key-rotate.sh` must DERIVE from the slug and the env rather than
+spell, so a third env cannot be added to one script alone. Five mutations, each
+killed.
+
+## 952. What may reach CloudWatch: a request field, a caught error, and now the caller's own credential
+
+Five Lambda-reachable auth gates — coach, generate-route, osrm-proxy,
+route-describe, route-request — logged
+`tokenPrefix: accessToken.slice(0, 20) + '...'` when GoTrue refused a token. For
+a Supabase JWT those twenty characters are the base64url header, byte-identical
+for every token the project ever issues, so the field identified nothing while
+writing bytes of a live credential into a log group retained for thirty days;
+Supabase's newer opaque `sb_…` keys have no such constant prefix at all. Whether
+the value even parsed as a JWT is already in the `error` the same line logs
+beside it. Dropped rather than replaced: there is no shape of the token worth
+keeping.
+
+`lambda_log_hygiene.test.ts` gains it as a third rule beside the two it already
+carried (no request field, no raw caught value): the identifier holding a
+credential may not appear in a log line's arguments, in any spelling — sliced,
+interpolated, or whole.
+
+The same file's reachability walk had a hole. It follows a Lambda entry point
+into `src/lib` so the rules bind the cores that do the logging rather than only
+the thin wrappers, and it followed only relative specifiers. Modules under
+`src/lib` import each other both ways, so a core reached through `$lib/x` was
+outside the set — running in the Lambda's process, writing to its log group,
+read by nothing. Measured before the fix: 69 modules reached, three `$lib`
+imports inside them naming a seventieth that was not.
+
+The new closure test states the property rather than naming a module: every
+module in the set resolves every import it makes into another module in the set.
+Its resolution is deliberately its OWN, not the walker's — the first draft asked
+the walker how to resolve an import, which agrees with the walker by
+construction, and reverting the walker to relative-only left it green. A test
+that cannot disagree with the thing it tests is not a test.
+
+## 953. Six of the eight production Lambda wrappers had never been executed, and the guards over them could not fail
+
+The wrappers are the only code between a Function URL event and a
+transport-agnostic core, and each owns things the core cannot see: a method
+gate, a path strip, a hardcoded config value, an outer envelope. Two of the
+eight had wrapper tests. This closes osrm-proxy and the four share Lambdas
+(share-run, share-route, share-recap, share-badge); share-entity already had
+partial coverage.
+
+`share_run_cache_control.test.ts` says driving the share Lambdas "would require
+a Supabase fake". It does not: with the Supabase env absent every lookup misses,
+the HTML path takes its not-found branch and the PNG path renders its generic
+branded card, and nothing touches the network. That sentence had stood as the
+reason four request-time production handlers were only ever grepped.
+
+Two defects fell out. The osrm-proxy wrapper's 405 carried no `Allow` header
+where both sibling wrappers send one — required by RFC 9110 15.5.6, and that
+behaviour's CloudFront `allowed_methods` include POST/PUT/PATCH/DELETE, so a
+non-GET really does reach the Lambda rather than being refused at the edge. And
+the source guard asserting the Function URLs are locked down was four
+`/aws_lambda_function_url[\s\S]*?authorization_type = "AWS_IAM"/` matches
+against the whole module — a lazy match across a file holding eight Function
+URLs, eight OACs and sixteen permissions says only that SOME resource somewhere
+has the property. Measured: appending a ninth Function URL with
+`authorization_type = "NONE"` and a ninth permission with `principal = "*"` left
+it green, which is the exact regression it names on the exact resource type it
+names. It reads per resource now, with a population floor, and expresses two
+properties the whole-file form could not: every OAC signs `always`, and only the
+`InvokeFunctionUrl` grants are required to declare `function_url_auth_type`
+(the field is invalid on the plain `InvokeFunction` ones, which is why the old
+regex could only ever check that one grant had it).
+
+The routing case is the one nothing else could state. A behaviour's
+`path_pattern` in Terraform and the path regex in the Lambda it targets are two
+independent spellings of one route, and the test reads the first out of
+`main.tf` rather than listing it: every share behaviour the module declares must
+be a path its own Lambda routes. A mismatch answers the Lambda's JSON 404, the
+distribution's 404-to-`/index.html` fallback turns that into the SPA shell at
+200, and the surface renders while the page never existed — the shape § 949 is
+also about.
+
+One case had to be strengthened after it survived its own mutation. Reading
+`authorization` instead of `x-supabase-authorization` still yields a token,
+GoTrue refuses the sigv4 signature, and the answer is the same 401 — so a
+status-only assertion could not tell the two headers apart. What separates them
+is the round trip: the wrong header spends a GoTrue call on the signature and
+logs the refusal, the right one answers before a client is built. The case
+requires silence.
+## 954. A finite coordinate is not automatically a coordinate
+
+**Decided 2026-09-02.** `double.tryParse` accepts the literals `NaN`,
+`Infinity` and `-Infinity`, and closing that on all four route formats left
+behind a guard that admits any finite double. `lat="1e308"` clears it. The
+haversine then computes `lat2 - lat1`, which overflows to infinity, and
+`sin(infinity)` is NaN — so the route lands with exactly the NaN
+`distanceMetres` the finiteness guard exists to prevent, one step later.
+
+That is not a wrong number on a screen. `Route.toJson` reaches disk through
+`jsonEncode`, which refuses a non-finite double outright, so the file parses
+"successfully" and then cannot be saved at all. The same overflow reaches
+`elevationGainMetres` from a pair of individually-finite elevations
+(`1e308` after `-1e308`), which is why that delta is checked too rather than
+only its operands.
+
+The bound is latitude ±90 and longitude ±180 on GPX, KML, TCX and GeoJSON.
+It is not a heuristic: GPX's `latitudeType`, RFC 7946 and the KML spec all
+state it, so a value outside is a malformed file rather than an unusual place.
+The exact bounds stay accepted, pinned, so the guard cannot creep into
+rejecting a pole or the antimeridian.
+
+FIT has the same defect from the other direction and no parse to blame.
+Semicircles span the whole signed 32-bit range, so the conversion maps a
+byte-shifted or mislabelled word onto a perfectly finite degree value anywhere
+in [-180, 180) — 0x7EFFFFFF is 178.59 degrees. No bounds check on the raw
+integer could catch that; the check has to be on the decoded latitude.
+
+Five mutations, each killed: a bare `isFinite` on each of the two bounds
+separately, both at once (which is what puts the NaN back into
+`distanceMetres`), dropping the elevation-delta guard, dropping the FIT
+guard, and narrowing the FIT bound to ±60 so a legitimate 69°N record is
+refused.
+
+## 955. A GeoJSON importer that reads one of the four document shapes
+
+**Decided 2026-09-02.** `RouteParser.fromGeoJson` read `json['geometry']
+['coordinates']` and nothing else. A `FeatureCollection` — which is what
+geojson.io, QGIS and Overpass turbo actually emit — has no top-level
+`geometry`, so it found no coordinates and returned a route with zero
+waypoints and zero distance, reported to the caller as a successful import.
+So did a bare geometry object and a `MultiLineString`, whose `coordinates` are
+a list of LINES rather than of points.
+
+This is the same silent-empty failure as the KML `<Point>` placemark winning
+the `<coordinates>` lookup and the document-wide `trkpt` sweep joining two
+cities into one polyline — both of which this file already carries fixes and
+comments for. The web importer has read all four shapes since it was written,
+so the two clients disagreed about whether the commonest export format is
+importable at all.
+
+A `MultiLineString` becomes one route per member line, never one polyline
+through all of them, for the reason the multi-track fix gives: joining
+unrelated lines invents a leg between them that poisons distance, elevation
+and map. That is why `routesFromGeoJson` exists and `fromGeoJson` delegates to
+it — the singular/plural shape the GPX and KML entry points already have.
+
+Every container read is shape-checked rather than cast. A `geometry` that was
+a list, a `properties` that was a string and a `properties.name` that was a
+number each threw a `TypeError` — an `Error`, not an `Exception` — out of a
+parser whose coordinate reads one level down had already been hardened against
+precisely that, with a comment saying so. A malformed document is an import
+that found nothing, which every caller already handles.
+
+Five mutations, each killed: not recognising `FeatureCollection`, letting
+`MultiLineString` fall through to the flat-line read, casting the geometry,
+casting `properties.name`, and dropping the bare-geometry branch.
+
+## 956. Two append paths in the recorder never consulted the delta, and the accuracy gate failed open
+
+**Decided 2026-09-02.** `RunRecorder._onPosition` looks like it screens every
+fix through the movement threshold, the 100 m hop cap and the speed clamp. It
+does not screen two of them: the FIRST fix after `begin()` becomes the track
+anchor unconditionally, and the post-gap re-anchor branch appends
+unconditionally by design. A fix carrying a NaN or an out-of-range coordinate
+therefore went straight into the track — and the filter chain cannot catch it
+even where it does run, because every comparison against a NaN delta is false,
+so such a fix merely fails the movement test rather than being rejected.
+
+Nothing downstream re-checks. Both the local run store and
+`ApiClient._uploadTrack` serialise the track with `jsonEncode`, which refuses a
+non-finite double, so one such fix does not corrupt a number on a screen: it
+makes the whole run unsaveable and unuploadable, which on a multi-day effort
+is the entire record. The waypoint is now rejected at the one entry point,
+with the same WGS84 bound the route importers apply.
+
+The accuracy gate had the same fail-open shape for a different reason. Written
+as `pos.accuracy > _accuracyGateMetres`, it admitted a NaN accuracy as if it
+were perfect, and it admitted a NEGATIVE one — which is the concrete case,
+because CoreLocation documents a negative `horizontalAccuracy` as meaning the
+latitude and longitude are INVALID, and geolocator passes the value through
+untouched. On iOS the recorder was taking a fix the OS had explicitly disowned
+and letting it drive distance and the live map. Written as "not `<=` gate"
+plus a floor at zero it fails closed. Zero stays acceptable: Android reports it
+for "no accuracy attached", which is unknown rather than disowned.
+
+The layering contract is now asserted as a property rather than as the shape of
+a try/catch — a snapshot consumer that really throws, with distance and the
+elapsed timer asserted to have advanced anyway, and the throw itself asserted
+to have happened so the test cannot pass vacuously.
+
+Six mutations, each killed: dropping the coordinate gate, keeping only its
+finiteness half, restoring the fail-open `>` accuracy comparison, tightening
+the accuracy floor so a zero or an at-gate reading is refused, stopping
+distance accumulating, and dropping the resumed elapsed offset from `stop()`.
+
+## 957. The atomic write named its temp sibling and never claimed it
+
+**Decided 2026-09-02.** `writeStringAtomic` gives each in-flight write its own
+`.tmp` sibling from a static counter. A Dart static is per-ISOLATE, and these
+stores are explicitly written for a second isolate over the same directory:
+`serialiseStoreWrite`'s own doc says its serialisation stops at that boundary,
+and `kAtomicOrphanMinAge` exists precisely because a genuinely concurrent
+writer may own a temp file.
+
+Both isolates start their counter at 0. Two concurrent writes to one row
+therefore picked the SAME `.0.tmp`, both truncated it and streamed into it, and
+whichever renamed second published an interleaved file over the real one — the
+partial-file corruption the whole function exists to prevent, arriving through
+the door it left open.
+
+`create(exclusive: true)` is O_EXCL, so the collision is settled by the
+filesystem rather than by hoping two counters disagree. The retry loop is
+bounded, so a directory that cannot be written reports the filesystem's own
+error instead of spinning on it.
+
+The test reaches the collision without a second isolate: claim one suffix, free
+its path again, and put a foreign payload at the path the counter is about to
+reach. That is the state a second isolate leaves — the counter has moved on,
+the filesystem has not. Two mutations killed: naming the temp without creating
+it (the pre-fix behaviour), and creating it non-exclusively so a held temp is
+truncated.
+
+## 958. A shared widget cannot choose its parents, and an initial is a grapheme
+
+**Decided 2026-09-02.** `StatGrid` derives its column count by dividing the
+available width by a cell floor and calling `.floor()` on the quotient. An
+unbounded width makes that quotient `Infinity`, and `Infinity.floor()` does not
+degrade — it throws `UnsupportedError` out of `build()`, taking the whole
+screen rather than laying the grid out badly. A widget in `ui_kit` is used by
+screens it will never see, and both a horizontal scroller and a `Row` child
+with no `Expanded` hand it an unbounded width. Each cell now takes exactly the
+width one cell asks for, which keeps the property the grid exists for: every
+cell BOUNDED, so a `StatTile`'s `BoxFit.scaleDown` has something to shrink
+into. Leaving them unbounded would compile and lay out and quietly undo that.
+
+`identityInitial` took `substring(0, 1)`, which cuts an astral character in
+half at its surrogate pair. A display name starting with an emoji gave every
+social surface an avatar drawing a lone unpaired surrogate as the replacement
+glyph. A grapheme cluster is the unit a reader sees, so a ZWJ sequence is one
+initial too — taking the first rune instead would fix the crash-shaped half and
+still split a family emoji.
+
+Four mutations, each killed: restoring the unguarded divide, sizing the
+unbounded cells to `double.infinity`, restoring `substring(0, 1)`, and taking
+the first rune rather than the first grapheme.
+
 ## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
 
 **Decided 2026-09-02.** PR #849 went up green on every suite this round ran and

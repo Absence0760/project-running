@@ -262,4 +262,69 @@ void main() {
       expect(errors.single, contains('x.json.0.tmp'));
     });
   });
+  // The suffix counter is a Dart static, so it is PER-ISOLATE, and these
+  // stores are explicitly written for a second isolate over the same
+  // directory (serialiseStoreWrite says its own serialisation stops at that
+  // boundary; kAtomicOrphanMinAge exists because a genuinely concurrent
+  // writer may own a temp file). Both isolates start at 0, so two concurrent
+  // writes to one row picked the SAME `.0.tmp`, both truncated and streamed
+  // into it, and whichever renamed second published an interleaved file over
+  // the real one — the partial-file corruption the whole function exists to
+  // prevent, arriving through the door it left open.
+  group('the temp sibling is claimed, not merely named', () {
+    int suffixOf(File tmp) {
+      final parts = tmp.path.split('.');
+      return int.parse(parts[parts.length - 2]);
+    }
+
+    test('claiming creates the file, so a second claim cannot pick it',
+        () async {
+      final file = File('${dir.path}/row.json');
+
+      final a = await debugClaimAtomicTemp(file);
+      final b = await debugClaimAtomicTemp(file);
+
+      expect(a.existsSync(), isTrue,
+          reason: 'a name nobody holds is not a claim');
+      expect(b.existsSync(), isTrue);
+      expect(a.path, isNot(b.path));
+    });
+
+    test('a temp path a concurrent writer holds is stepped over, not truncated',
+        () async {
+      final file = File('${dir.path}/row.json');
+      file.writeAsStringSync('{"v":0}');
+
+      // Consume one suffix, then free its path again: the counter has moved
+      // on but the filesystem has not, which is exactly the state a second
+      // isolate leaves — its own counter is at 0 while ours is not.
+      final claimed = await debugClaimAtomicTemp(file);
+      final next = suffixOf(claimed) + 1;
+      if (claimed.existsSync()) claimed.deleteSync();
+
+      // The other isolate's in-flight write, holding the very path this one's
+      // counter is about to reach.
+      final held = File('${file.path}.$next.tmp')
+        ..writeAsStringSync('OTHER ISOLATE PAYLOAD');
+
+      await writeStringAtomic(file, '{"v":1}');
+
+      expect(file.readAsStringSync(), '{"v":1}');
+      expect(held.existsSync(), isTrue,
+          reason: 'the concurrent write must still own its temp file');
+      expect(held.readAsStringSync(), 'OTHER ISOLATE PAYLOAD',
+          reason: 'sharing the path is what interleaved the two writes');
+    });
+
+    test('a directory that cannot be written reports the filesystem error',
+        () async {
+      final missing = File('${dir.path}/no-such-dir/row.json');
+
+      await expectLater(
+        writeStringAtomic(missing, 'x'),
+        throwsA(isA<FileSystemException>()),
+      );
+    });
+  });
+
 }

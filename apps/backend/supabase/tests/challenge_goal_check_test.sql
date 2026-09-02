@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(9);
+select plan(13);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values ('00000000-0000-0000-0000-0000c9000001', 'authenticated', 'authenticated',
@@ -48,6 +48,51 @@ select lives_ok(
               '00000000-0000-0000-0000-0000c9000001', 'GK null', 'distance',
               'individual', null, '2027-01-01 00:00:00+00', '2027-01-31 00:00:00+00')$$,
   'a goal-less (pure-ranking) board is still allowed'
+);
+
+-- ── the non-finite goals ────────────────────────────────────────────────────
+-- `NaN > 0` is TRUE for numeric — Postgres orders NaN above every real value
+-- rather than making the comparison unknown — so the `goal_value > 0` term
+-- alone admitted one, and `goal_value` is bare `numeric`, which holds Infinity
+-- as well. Both are silent: `recompute_challenge_completion` compares
+-- `value >= goal`, which is false forever against NaN and against Infinity, so
+-- the challenge is unwinnable and nothing on either client says so. The
+-- client half already refuses a non-finite goal (`Number.isFinite` in
+-- `checkChallengeGoal`), so the two halves disagreed about a row that could
+-- exist. Migration 20270704000002 added the two terms; these are the
+-- by-value pins the schema-wide sweep in numeric_bounds_reject_nan_test.sql
+-- exempts this column in favour of.
+select throws_ok(
+  $$insert into challenges (creator_id, title, metric, scope, goal_value, starts_at, ends_at)
+      values ('00000000-0000-0000-0000-0000c9000001', 'GK nan', 'distance',
+              'individual', 'NaN', '2027-01-01 00:00:00+00', '2027-01-31 00:00:00+00')$$,
+  '23514',
+  null,
+  'a NaN goal is refused — NaN > 0 is true, so the positivity term alone let it in'
+);
+
+select throws_ok(
+  $$insert into challenges (creator_id, title, metric, scope, goal_value, starts_at, ends_at)
+      values ('00000000-0000-0000-0000-0000c9000001', 'GK inf', 'distance',
+              'individual', 'Infinity', '2027-01-01 00:00:00+00', '2027-01-31 00:00:00+00')$$,
+  '23514',
+  null,
+  'an infinite goal is refused — the column is bare numeric and holds one'
+);
+
+-- The same value arriving through the edit path.
+select throws_ok(
+  $$update challenges set goal_value = 'NaN'
+      where id = 'e9000000-0000-0000-0000-000000000001'$$,
+  '23514',
+  null,
+  'a NaN goal is refused on UPDATE, not only on INSERT'
+);
+
+-- The reason the terms are spelled out rather than left to `> 0`.
+select ok(
+  ('NaN'::numeric > 0),
+  'NaN passes a bare positivity test, which is why the constraint names it'
 );
 
 -- ── streak_days ceiling ─────────────────────────────────────────────────────

@@ -53,6 +53,22 @@ public enum ActiveRunBridge {
     /// Capabilities pane in Xcode and the README in this directory.
     public static let appGroup = "group.com.threkir.app.activerun"
 
+    /// The widget's `kind`, centralised here for the same reason `appGroup`
+    /// is: it was a hand-written literal in two different TARGETS — the host
+    /// app's `WidgetCenter.shared.reloadTimelines(ofKind:)` and the widget's
+    /// own `let kind` — with nothing able to compare them.
+    ///
+    /// `reloadTimelines(ofKind:)` with a kind no widget declares is a silent
+    /// no-op. It does not throw, does not log, and returns nothing to check.
+    /// So a rename on either side leaves the host writing snapshots the
+    /// complication never gets told to re-read, and the watch face keeps
+    /// showing "ready to run" for up to the platform's own refresh budget
+    /// (~30 minutes) after the runner has started — which is the whole
+    /// failure this nudge exists to prevent, arrived at from the other
+    /// direction. Deriving both sites from one constant is what removes the
+    /// possibility rather than guarding against it.
+    public static let complicationKind = "ActiveRunComplication"
+
     private static let key = "active_run_snapshot_v1"
 
     private static var defaults: UserDefaults? {

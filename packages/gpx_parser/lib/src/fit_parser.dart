@@ -205,6 +205,13 @@ class FitParser {
 
     final lat = rawLat * _semicirclesToDegrees;
     final lng = rawLng * _semicirclesToDegrees;
+    // Semicircles cover the whole signed 32-bit range, so the conversion maps
+    // a garbage word onto a perfectly finite degree value anywhere in
+    // [-180, 180) — a byte offset off by one, or a field the definition
+    // mislabelled as position, decodes as a latitude of 178 rather than as
+    // anything a bounds check on the raw integer would catch. Latitude past
+    // ±90 is not a place, so refuse the point, exactly as the XML parsers do.
+    if (lat.abs() > 90 || lng.abs() > 180) return null;
 
     double? elevation;
     if (rawEnhancedAlt != null) {

@@ -106,6 +106,12 @@ retention cron referenced in a comment that was never created.
   form). A bare `count(*)` would overcount by including private runs and runs
   whose author cannot see the route, leaving the cache permanently above what
   the trigger maintains.
+- **Client writes are discarded (`20270704000003`):** the column carried no lock,
+  and the `popular` lens of `discoverable_routes_in_bbox` gates on
+  `featured OR run_count > 0` while `hidden_gems` excludes a route with any —
+  so an author setting their own route's count promoted it into a map every
+  viewer sees. `routes_freeze_managed_columns` discards a client's value, along
+  with `is_featured` / `featured_at` and the three derived geometries.
 - **Pinned by:** `routes_run_count_test.sql` (match, private-run exclusion, move
   between routes, delete, the went-private-then-detached decrement, the
   visibility gate, and the self-heal on the next touch — each asserted against
@@ -143,6 +149,14 @@ retention cron referenced in a comment that was never created.
   `user_id` change would leave the value computed against the previous owner's
   zones. Routes never change hands today; the same assumption already underpins
   `start_point`.
+- **Client writes are discarded (`20270704000003`):** that same `OF waypoints`
+  watch meant a write touching only this column was never recomputed, so
+  `update routes set geom_public = geom` from the route's own author stood —
+  putting the in-zone tail back inside a box oracle `anon` may query.
+  `routes_freeze_managed_columns` restores the previous value first and the
+  derivation trigger then recomputes if `waypoints` really changed; it is named
+  to sort ahead of `routes_geom_trigger`, so on INSERT it nulls the client's
+  geometry and the derivation computes the real one.
 - **Manual rebuild:** `update routes r set geom_public =
   privacy_aware_route_geom(r.waypoints, r.user_id) where r.geom is not null;`
   (batch it by id range on a populated database — `20270509_001`'s backfill is
@@ -168,8 +182,14 @@ retention cron referenced in a comment that was never created.
   a partial-update bug can't accumulate drift; an UPDATE that moves a set between
   workouts refreshes both. Migration `20261214_001`.
 - **Manual rebuild:** `select refresh_gym_workout_totals(id) from gym_workouts;`
+- **Client writes are discarded (`20270704000003`):** `gym_workouts_freeze_managed_columns`,
+  for uniformity rather than for a measured exploit — after that migration no
+  client writes a trigger-maintained cache anywhere in the schema, which is a
+  rule that can be checked, where "these matter and those do not" is a judgement
+  that has to be re-made every time a cache is added.
 - **Pinned by:** `gym_workout_totals_test.sql` (insert/update/delete a set, assert
-  both the columns and the view summary track the recompute).
+  both the columns and the view summary track the recompute) and
+  `frozen_managed_columns_test.sql`.
 
 ## `user_coach_usage`
 
@@ -230,15 +250,20 @@ retention cron referenced in a comment that was never created.
   don't own has no UPDATE grant on the `challenges` row (the update RLS policy is
   creator/club-admin only), so the recompute must bypass it. Recompute-from-`count(*)`
   (not ±1) is self-healing — the cache can't drift.
-- **Known drift (accepted):** the column is writable by the challenge's
-  creator/club-admin via the normal `challenges` UPDATE policy (no column lock).
-  The client never writes it (`createChallenge`/`updateChallenge` omit it) and the
-  next join/leave recomputes from source, so a hand-forged value self-heals and
-  only ever skews the ranking of the forger's own public challenge.
+- **Client writes are discarded (`20270704000003`):** the column used to be
+  writable by the challenge's creator/club-admin through the normal `challenges`
+  UPDATE policy, and this file recorded that as accepted drift on the grounds
+  that the next join recomputes it. `clubs.member_count` had the same shape and
+  did **not** self-heal — a club nobody joins never gets a recompute, and
+  `search_clubs` sorts on it — so the whole class was closed rather than the one
+  instance: `challenges_freeze_managed_columns` (a SECURITY INVOKER BEFORE
+  INSERT OR UPDATE trigger keyed on `current_user`) discards a client's value
+  and leaves the trigger's.
 - **Manual rebuild:** `update challenges c set participant_count = (select count(*)
   from challenge_participants p where p.challenge_id = c.id);`
 - **Pinned by:** `challenge_browse_test.sql` (asserts cache == count(*) on insert +
-  decrement on delete).
+  decrement on delete) and `frozen_managed_columns_test.sql` (a client-declared
+  count at INSERT lands as the cache's own value).
 
 ---
 
@@ -271,6 +296,12 @@ retention cron referenced in a comment that was never created.
   a statement changing both ran both: approving a pending member into another
   club in one UPDATE incremented the destination twice, and demoting an active
   member while moving them decremented the source twice.
+- **Client writes are discarded (`20270704000003`):** the column carried no lock
+  at all, and an owner setting it to 999999 kept that value and ranked first in
+  `search_clubs` — the trigger only recomputes on a `club_members` change, and a
+  club nobody joins never has one, so this was the cache in the registry that
+  could NOT self-heal. `clubs_freeze_managed_columns` discards a client's value,
+  alongside `shadow_hidden` and `is_verified` on the same table.
 - **Manual rebuild:** `select refresh_club_member_count(id) from clubs;`
 - **Pinned by:** `clubs_member_count_test.sql` (mutate `club_members` through
   insert-active / insert-pending / approve / leave / demote / move club /
@@ -290,6 +321,14 @@ When you add a trigger-maintained denormalised column or a derived table:
 
 1. Add a row to this file: authoritative recompute, trigger/writer, manual
    rebuild, retention (if it grows), pgtap.
+1b. Make the column unwritable by a client. The default column grants let the
+   row's owner set any cache to any value, and a cache the metered party can
+   rewrite is not a cache — `clubs.member_count` ranked a global search off a
+   self-declared 999999 for as long as nobody joined the club. The shape is a
+   SECURITY INVOKER BEFORE INSERT OR UPDATE trigger keyed on `current_user`
+   (`20270704000003`), which discards the client's value while leaving every
+   SECURITY DEFINER writer — including the maintaining trigger itself —
+   untouched.
 2. Recompute from scratch in the trigger where it's cheap (one parent's children)
    rather than incrementing — drift-proof beats a micro-optimisation.
 3. Add a pgtap that mutates the source and asserts the cache equals the

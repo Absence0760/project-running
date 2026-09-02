@@ -38,6 +38,7 @@
     <string name="start">Iniciar</string>
     <string name="sync_count">Sincronizar %1$d</string>
     <string name="offline">Off-line</string>
+    <string name="not_signed_in">Sem sessão iniciada</string>
     <string name="race_armed">PROVA PRONTA</string>
     <string name="race_live">PROVA AO VIVO</string>
     <string name="event">Evento</string>

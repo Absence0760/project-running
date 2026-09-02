@@ -20,9 +20,14 @@ int identityHue(String seed) {
 }
 
 /// Initial letter for an avatar bubble.
+///
+/// Taken as a GRAPHEME CLUSTER, not as a UTF-16 code unit. `substring(0, 1)`
+/// cuts a display name starting with an emoji — or any astral character — in
+/// half at the surrogate pair, and the avatar every social surface draws then
+/// renders a lone unpaired surrogate as the replacement glyph.
 String identityInitial(String? name) {
   final c = (name ?? '?').trim();
-  return c.isEmpty ? '?' : c.substring(0, 1).toUpperCase();
+  return c.isEmpty ? '?' : c.characters.first.toUpperCase();
 }
 
 double _relativeLuminance(Color c) {

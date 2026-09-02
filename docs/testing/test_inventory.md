@@ -820,9 +820,9 @@ The chunked following-feed reads (was 12). Three added cases: `FEED_FOLLOWEE_CHU
 
 Both gained a non-vacuity control (was 5 and 2). Each guard reports an empty offender list when it works AND when it sees nothing at all, and only the matcher half had fixtures: a walk that reaches no file, an `aria-live` filter that stops matching the app's own markup, or a `<TrackPreview` matcher that stops seeing a mount each turns the guard into a green check over an unscanned tree ([§ 762](../architecture/decisions.md)'s rule, applied to two guards that predate it). The `TrackPreview` control is a POSITIVE one taken off the real permitted wrappers rather than a fixture, so it cannot drift away from what it checks.
 
-### `apps/watch_wear/.../*Test.kt` — 665 Wear OS Kotlin/JUnit tests across 64 files
+### `apps/watch_wear/.../*Test.kt` — 666 Wear OS Kotlin/JUnit tests across 64 files
 
-Run with `cd apps/watch_wear/android && ./gradlew testDebugUnitTest`. Pure-JVM tests — no Android instrumentation, no Robolectric. The team deliberately avoided UI-test infrastructure (see `apps/watch_wear/CLAUDE.md`'s "layouts can't be unit-tested without Robolectric"); the pattern is to extract pure helpers from the Android-bound classes and exercise them at the JVM level.
+Run with `cd apps/watch_wear/android && ./gradlew testDebugUnitTest`. Pure-JVM tests — no Android instrumentation, no Robolectric. **Six of them read files outside this Gradle build** (the phone's two `Wear*Bridge.kt`, `apps/web/src/lib/core/env_flag.ts`, `docs/backend/metadata.md`, the `activity_type` migration and the two client label catalogues), plus the manifest, and none was a declared input of the test task until [decisions § 946](../architecture/decisions.md) — so a local run reported UP-TO-DATE and SUCCESSFUL on exactly the drift those guards exist to catch. They are declared now; if you add a guard that reads anything outside `app/src`, add it to `guardedCrossTreeFiles` / `guardedCrossTreeSets` in `app/build.gradle.kts` in the same change or it will not re-run when its subject changes. `ScreenWiringTest` also now pins the pre-run signed-out notice ([decisions § 948](../architecture/decisions.md)): the `!authed` branch renders `not_signed_in` and NOT `offline`, read branch-scoped so the sibling `!online && authed` branch a few lines above cannot satisfy it — two conditions sharing one string breaks nothing, so only an assertion about which branch says which can see it. The team deliberately avoided UI-test infrastructure (see `apps/watch_wear/CLAUDE.md`'s "layouts can't be unit-tested without Robolectric"); the pattern is to extract pure helpers from the Android-bound classes and exercise them at the JVM level.
 
 **Sync / auth coverage (~95 tests)** — the highest-impact surface. `DrainQueueLoopTest.kt` (18) covers the offline-runs drain orchestrator extracted from `RunViewModel.drainQueue`: per-error-class branches (skip / stop / refresh-and-retry), the one-shot 401 refresh-then-retry, partial-failure mid-loop, transient-vs-permanent backoff arming, side-effect ordering, the 409-is-a-permanent-skip-not-a-drop guard (issue #404). `DrainBackoffTest.kt` (7) — exponential backoff math. `SupabaseErrorClassificationTest.kt` (19) — error → `DrainAction` mapping, the post-stop "unauthorized" regression guard. `StoredSessionTest.kt` (10) — auth session cache + `isExpired` math. `SessionBridgeTest.kt` (13) — Data Layer auth handover from the paired phone: the sealed-event shape, the dual TYPE_CHANGED / TYPE_DELETED listener, and the receive-side grading ([decisions § 879](../architecture/decisions.md)). The grading half is pure — `DataMap` is a Play Services type no host JVM can build, so `SessionPayload.fromFields(String?, …, Long)` takes the five load-bearing strings directly and each is refused null, empty and whitespace-only, with a zero expiry pinned as NOT a refusal (the `StoredSession.isExpired` contract) and a source guard that both call sites route through the adapter and that no `?: ""` coercion survives. `DataLayerContractTest.kt` (5) reads BOTH rails of both Wearable Data Layer contracts — the phone's `WearAuthBridge.kt` / `WearRoutesBridge.kt` against the watch's `SessionBridge.kt` / `RoutesBridge.kt` — and compares the `PATH` constants and the `DataMap` key sets symmetrically, replacing a hardcoded literal under a comment telling the other rail what to do ([§ 883](../architecture/decisions.md)); a vacuity case comes first because set equality is satisfied by two empty sets. `RoutesBridgeJsonTest.kt` + sibling fixtures (68 tests across 5 classes) — pure-JVM coverage of every load-bearing piece of the phone→watch route push pipeline. The Wearable DataLayer listener itself can't run on a host JVM, so the testable seam is the JSON contract + the pure-logic gates that surround it. Five classes:
 
@@ -880,6 +880,10 @@ The watchOS String Catalog guard (`apps/watch_ios/scripts/check_xcstrings_parity
 ### `scripts/check_watch_ios_source.test.mjs` — 37 tests
 
 `apps/watch_ios` is compiled by one job, on a macOS runner, and every claim about it otherwise rests on reading. `scripts/check_watch_ios_source.mjs` makes the six such claims a bare `node` on Linux can honestly make, and every failure it exists to catch is silent on the platform: a `Text("…")` with no String Catalog entry falls back to the key, so the watch renders English in every locale and nothing throws; an entitlement nothing exercises builds, links and ships, and is refused months later by App Review; two copies of one formatter drifting apart leaves the Swift suite green because `ActiveRunComplication.swift` is in no target and `@testable import WatchApp` therefore links only the other copy; and a metadata key one end of the WCSession run hand-off sends and the other never lifts out costs the row a column with nothing raised anywhere. So the guard is measured the way its sibling above is — a copy of the real tree mutated into each shape it must refuse, with the unmutated copy as the positive control. Sixteen cases are those mutations, one per refusal in each direction: a literal with no key, an accessibility hint with no key, a catalog entry nothing references, a purpose string dropped while its call stays and one declared with no call, a background mode each way, the HealthKit entitlement dropped, an unclaimed entitlement (the live `healthkit.background-delivery` defect, replanted), an App Group entitlement present but empty, a formatter that drifted and one deleted outright, an App Group renamed in Swift but not in the README, and a metadata key dropped on each end. Three assert the guard does NOT fire where it must not — `Text(verbatim:)` needs no entry (or the fix the guard recommends would fail the guard recommending it), a literal inside a comment is not a key, and a key reached only through `String(localized:)` is not reported as dead. Two are vacuity: a tree with no Swift, and an empty catalog. The rest measure the parsers directly, each against the specific way it was first written wrong — comment stripping that ate `http://` out of a URL literal, an interpolation matcher that stopped at the inner paren of `\(Int(bpm.rounded()))` and reported a live call site as missing, a dictionary scan that ended at a nested `]` and lost `last_modified_at`. `parseFlatPlist` is additionally asserted against the two real files it reads, because a hand-rolled reader written to avoid a dependency is only worth having if it answers what the dependency would. Run as a fourth step of the ungated `watch-ios-locale-parity` job with its own `::error::`. See [decisions § 884](../architecture/decisions.md) – [§ 888](../architecture/decisions.md).
+
+### `apps/watch_garmin/scripts/check_garmin_source.sh` — 5 source-level claims, 15 mutations run by hand
+
+The Connect IQ tier had no automated verification of any kind: no CI job builds it, no CI job runs its `(:test)` suite, and the SDK is installed on no machine in this project — so `source-test/GradeAdjustedPaceTest.mc`'s twenty-five cases are **authored and have never been executed by anyone**, and the only thing in the repo that read the tier at all was `check_watch_wire_vectors.mjs`'s four Minetti constants. This guard is bash + python3, needs no SDK, and holds the five things a Linux runner can honestly say about Monkey C: that `GradeTracker` re-anchors on a negative run and `onTimerReset` clears it (the [§ 944](../architecture/decisions.md) grade-freeze, whose symptom is a confident wrong pace and no error anywhere); that every file under `source-test/` carries `(:test)` and `monkey.jungle` still excludes that annotation, since `base.sourcePath` compiles the directory into every build and only the exclusion keeps test code off a watch with tens of KB of headroom; that a permission-gated Toybox module is declared in `manifest.xml` before it is used, because the runtime refuses such a call mid-activity and the build says nothing; that the cross-rail constants are declared by name AND used by name, which is what makes them readable by a rail at all ([§ 945](../architecture/decisions.md)); and that the string table and its call sites agree in both directions. It is measured the way its watchOS siblings are, by mutation: the negative-run branch deleted, one anchor left behind, the callback renamed, the callback emptied, `reset()` clearing only the grade, `excludeAnnotations` pointed elsewhere, `source-test` dropped from the source path, an unannotated file added under it, a gated module imported with no permission, an orphaned string, a referenced-but-undefined string, both class names renamed as the vacuity control, and three more against the named-constant claim (the ceiling reverted to a bare literal, the literal re-inlined at the use site while the constant stays, and `MIN_SEGMENT_M` inlined in the tracker) — each produced the message naming its own defect, with the unmutated tree green either side. **It runs in no CI job yet** ([followups.md](../product/followups.md)), and it does not compile Monkey C, so nothing here is evidence that the app builds.
 
 ### `scripts/tsconfig_coverage.test.mjs` — 7 tests (3 added)
 
@@ -1716,3 +1720,299 @@ touch a web half: `npm run test:unit --workspace=apps/web` is 4657 pass / 0
 fail. `check_parity_pair_registry` reports 109 pairs registered identically in
 both registries, `check_twin_claims` reports 105 declarations with an EMPTY
 `KNOWN_GAPS`, and `check_shared_constants` 40 checks.
+
+## Round 32 — the database tier (2026-09-02)
+
+The sql lane's own runner produced these. `supabase db reset` and
+`supabase test db` were both run from this branch's own `apps/backend`, so the
+schema under test is this branch's migrations.
+
+### `apps/backend/supabase/tests/runs_physical_quantity_bounds_test.sql` — 16 tests (new)
+
+`runs_distance_m_check` / `runs_duration_s_check` / `runs_elevation_gain_m_check`
+(migration `20270704000001`), asserted from the ordinary `authenticated` seat
+because the self-owned INSERT policy is the only privilege the exploit needs.
+Two of the sixteen pin the Postgres facts the constraint is shaped around —
+`'NaN'::numeric >= 0` is true and NaN outranks every real value — so the reason
+each bound names NaN cannot be simplified away later. One pins that an infinite
+`distance_m` is refused with a 22003 by the `numeric(10, 2)` scale rather than a
+23514, which is why that bound carries no infinity term while
+`elevation_gain_m`'s bare `numeric` does. The last is the consequence rather
+than the constraint: the 5k personal record is the honest run, which is what
+goes red when the duration floor is removed. Three mutations killed — the
+distance bound reduced to a bare `>= 0` (tests 6, 7, 16), the duration bound
+dropped (9, 16), the elevation bound losing its Infinity term (14) — each
+restored and re-run green. See [decisions § 939](../architecture/decisions.md).
+
+### `apps/backend/supabase/tests/numeric_bounds_reject_nan_test.sql` — 6 tests (new)
+
+The catch-all behind [decisions § 940](../architecture/decisions.md). It pulls
+every single-column numeric CHECK in `public` out of the catalogue, substitutes
+the column for `'NaN'` (and for `'Infinity'` where the column's typmod can hold
+one), and EXECUTES the expression — so a bound added later in the one-sided
+shape fails here rather than joining the list. Two rules: rule 1 grades the
+evaluable set; rule 2 requires every numeric column appearing only in a
+multi-column CHECK to also carry a single-column one, which is what made
+`segments.end_distance_m`'s absence a failure rather than a silence.
+`challenges.goal_value` is the one exemption (its bound is window-relative and
+cannot be written one column at a time) and is pinned by value in
+`challenge_goal_check_test.sql` instead — that suite grew from 9 to 13.
+
+The sweep carries an **operator validation**: before it asks the real schema
+anything it creates `public.nan_bound_probe (v numeric check (v >= 0))` inside
+its own transaction and requires the sweep to name that column as admitting
+both literals. A substitution that had quietly become a no-op would satisfy
+every emptiness assertion for free, and the two population floors alone would
+not catch it. Four mutations killed: `gym_sets.weight_kg` reduced to a bare
+`>= 0` (rule 1 NaN), `segment_efforts.time_seconds` losing only its Infinity
+term (rule 1 Infinity), `segments_end_distance_m_check` dropped entirely
+(rule 2), and `challenges_goal_ck` losing its NaN term (the by-value pins).
+
+### `apps/backend/supabase/tests/frozen_managed_columns_test.sql` — 16 tests (new)
+
+The eleven managed columns of [decisions § 941](../architecture/decisions.md),
+each asserted against the write that reached it, all from an ordinary
+`authenticated` session under the row owner's own JWT. Value comparisons rather
+than `throws_ok`, because the guard discards rather than refuses — a 42501 on
+`shadow_hidden` would tell a hidden account that it is hidden.
+
+Three of the sixteen exist to catch over-reach rather than under-reach, and they
+are the ones that make the design falsifiable: the route still has its derived
+geometry after the freeze (a guard ordered after the derivation would leave the
+route with no line at all), an admin can still unhide through
+`admin_unhide_target`, and the club really is unhidden afterwards. Five
+mutations killed — the routes trigger dropped, the `user_profiles` trigger
+dropped, the clubs trigger reduced to BEFORE UPDATE (the original bug's shape),
+the routes guard made SECURITY DEFINER (which masks `current_user` and lets
+every caller through), and the clubs guard re-keyed on the JWT role, which fails
+the "an admin can still unhide" assertion precisely because every legitimate
+writer is a definer function called by an ordinary user's session.
+
+### `apps/backend/supabase/tests/definer_mutator_authorization_test.sql` — 6 tests (new)
+
+The catch-all behind [decisions § 942](../architecture/decisions.md): every
+SECURITY DEFINER function `anon` or `authenticated` may EXECUTE and that writes
+must name its caller somewhere in its body, because RLS is not consulted for
+anything such a function touches. 45 functions in scope, all 45 gate, one
+registered exemption (`confirm_safety_contact_by_token`, which authenticates by
+an emailed single-use token). No defect found — the value is that the rule is
+now enforced rather than followed by habit.
+
+Two of the six assertions are the operator validation, and they point in
+opposite directions: the sweep must NAME a planted client-executable definer
+mutator that mentions no caller, and must NOT flag `set_run_expected_return`,
+which authorizes only inside its own `WHERE` clause. Five mutations killed — a
+real function stripped of its `auth.uid()`, the exemption registry emptied, the
+vocabulary stripped of `auth.uid` (which fails the do-not-over-flag assertion
+too), an exemption whose reason is too short, and a stale exemption naming a
+function that does gate.
+
+### Round 32 sql-lane suite totals
+
+| Suite | Command | Before | After |
+|---|---|---|---|
+| pgTAP | `supabase test db` from `apps/backend` | 2526 in 281 files | 2548 in 283 files |
+| Backend guards | `node --test apps/backend/scripts/*.test.mjs` | 147 | 147 |
+| pgtap refusal mutation guard | `node apps/backend/scripts/check_pgtap_refusal_assertions.mjs` | 179 assertions / 5 expected survivors | 179 / 5 |
+
+The four new files add 44 assertions between them and none is a refusal in the
+guard's vocabulary — every one is a value comparison or a catalogue read, which
+is why its total is unchanged.
+
+The one pgtap failure on this branch is `donations_status_lock_test`, which is
+the known workstation-vs-CI Supabase CLI image split (2.109.1 against CI's
+2.84.2 disagreeing about `service_role` EXECUTE on `fundraiser_totals`) and
+fails identically on the untouched base commit.
+---
+
+## Added by the #789 coverage round 32 — infra + Lambda tier (2026-09-02)
+
+### `scripts/check_infra_coverage.test.mjs` — 40 tests (15 added)
+
+A third half beside stack coverage and Lambda alarm coverage: the eighteen cache
+behaviours on the CloudFront distribution, each of which re-states by hand the
+three properties CloudFront inherits between behaviours for none of. Twelve
+fixture mutations, each the omission a nineteenth behaviour is copy-pasted into
+existence with — no `response_headers_policy_id`, no viewer-request
+`function_association`, two behaviours associating different functions, an
+`allow-all` viewer policy, a `target_origin_id` naming no declared origin, no
+`cache_policy_id`, two different response-headers policies, that shared policy
+losing its CSP and losing its `Permissions-Policy`, an origin with no OAC, and an
+origin CloudFront may reach over plaintext http. Two more require the guard to
+fail rather than pass vacuously when the behaviour list or the whole distribution
+comes back unreadable. `parseDistribution` is then run against the COMMITTED
+module and required to resolve all four fields on every behaviour, and one case
+drives the real script end to end through `execFileSync` against a copy of
+`main.tf` with the `/og/run/*` behaviour's headers policy struck off, asserting a
+non-zero exit. Mutation-checked a second time against the real Terraform outside
+the suite: six edits, six reds, each naming the behaviour or origin. See
+[decisions § 949](../architecture/decisions.md).
+
+### `scripts/check_infra_iam.test.mjs` — 41 tests (12 added)
+
+The alias half of origin reachability, plus what the parser was silently
+skipping. The fixture module gains the `aws_lambda_alias` and the `qualifier`
+lines the real one carries, so it is faithful and every case below it is a real
+mutation: a grant that drops the alias qualifier while the Function URL keeps it
+(the resource policy then covers the unqualified ARN, not the one CloudFront
+invokes — issue #590 one field over), a Function URL qualified by another
+function's alias (every alias here is named `live`, so this applies cleanly and
+serves the wrong function), and a qualifier naming an alias the module does not
+declare. Two more require a block the parser could not attribute to be REPORTED
+rather than dropped — a Function URL whose `function_name` is written another way
+was `continue`d, and one fewer loop iteration is indistinguishable from one fewer
+Lambda. Then the secret-scope rule: a `*_lambda_env` local merging the decrypted
+sops map whole, a comprehension carrying no predicate (which looks filtered and
+is not), and no sops reference at all, which must fail rather than certify a tree
+the reader stopped reading. Two closing cases assert the committed module's
+aliases, qualifiers and filters. Mutation-checked against the real Terraform as
+well: three edits, three reds. See [decisions §§ 950-951](../architecture/decisions.md).
+
+### `scripts/hcl_lex.test.mjs` — 14 tests (5 added)
+
+`nestedBlocks`, the repeated-block reader the lexer was missing — `nestedBlock`
+returns the first match and a CloudFront distribution declares eighteen cache
+behaviours and nine origins. The cases pin source order, that a global regex does
+not skip the first match, that a block which never closes stops the scan rather
+than looping, that an absent header returns nothing, and — the one that matters —
+that the scan resumes past a block's CLOSING brace, so a header nested inside a
+block it already returned is not counted twice.
+
+### `apps/web/src/lib/routes/osrm_proxy_lambda_handler.test.ts` — 11 tests (new)
+
+The third of the three API Lambda wrappers, and the last one nothing had ever
+executed. Eleven cases over what the wrapper owns and the core cannot see: the
+GET-only gate (which fails without the `Allow` header this round added), the
+`/api/routes/osrm` prefix strip shown by the status it produces (a 501 is the
+CORE's answer to an unconfigured engine, which it only reaches once the path has
+parsed, where a 400 would prove the strip did not happen), a path outside the
+prefix and a missing `rawPath` both refused by the wrapper, a malformed sub-path
+refused by the core, the hardcoded `allowDemoFallback: false` for both an unset
+and an empty `OSRM_URL` — an unconfigured deploy must refuse rather than relay
+the runner's waypoint coordinates, routinely their home, to
+`router.project-osrm.org` (issue #198) — an absent `queryStringParameters`
+substituted rather than thrown on, and the outer 503 envelope. The
+header-source case requires SILENCE as well as a 401: reading `authorization`
+instead of `x-supabase-authorization` still yields a token and GoTrue still
+answers 401, so the status alone could not tell the two apart, measured. Every
+case stops before a network call. Mutation-checked: five edits, five reds. See
+[decisions § 953](../architecture/decisions.md).
+
+### `apps/web/src/lib/share/share_lambda_handlers.test.ts` — 5 tests (new)
+
+The four share Lambda wrappers — share-run, share-route, share-recap,
+share-badge — none of which any test had ever called, and the routing contract
+between them and CloudFront. `share_run_cache_control.test.ts` says driving them
+"would require a Supabase fake"; it does not, and that sentence is why four
+request-time production handlers were only ever grepped. With the Supabase env
+absent every lookup misses, the HTML path takes its not-found branch and the PNG
+path renders its generic branded card, and nothing touches the network.
+
+The routing case reads every share `path_pattern` out of
+`infra/modules/web-stack/main.tf` rather than listing it, and requires each to be
+a path its own Lambda actually routes: a behaviour's pattern and the Lambda's
+regex are two independent spellings of one route, and a mismatch answers the
+Lambda's JSON 404, which the distribution's 404-to-`/index.html` fallback then
+renders as the SPA shell at 200. The remaining four pin what the siblings must
+agree on and no single file can show — the same five-minute plus
+stale-while-revalidate `Cache-Control` on both paths, the asymmetric not-found
+contract (a `noindex` HTML 404 for the page, a 200 PNG for the image so a social
+unfurl never renders a broken card) with the body checked for a real PNG
+signature and the `isBase64Encoded` flag a Function URL binary body needs, the
+JSON 404 for a path outside a Lambda's own two routes, and the outer 503
+envelope. Mutation-checked: five edits across four different Lambdas, five reds.
+See [decisions § 953](../architecture/decisions.md).
+
+### `apps/web/src/lib/lambda_log_hygiene.test.ts` — 5 tests (2 added)
+
+A third rule and a hole in the walk that feeds all of them. The rule: the
+identifier holding a credential may not appear in a log line's arguments, in any
+spelling. Five Lambda-reachable auth gates logged
+`tokenPrefix: accessToken.slice(0, 20) + '...'`, which for a Supabase JWT is the
+base64url header — identical for every token the project issues, so it
+identified nothing while writing bytes of a live credential into a log group
+retained for thirty days.
+
+The hole: the reachability walk followed only relative import specifiers, so a
+core reached through `$lib/x` was outside the set these rules are applied to
+(69 modules reached, three `$lib` imports naming a seventieth that was not). The
+new closure case states the property rather than naming a module — every module
+in the set resolves every import it makes into another module in the set — and
+resolves specifiers with its OWN resolver, not the walker's: the first draft
+asked the walker how to resolve an import, which agrees with the walker by
+construction, and reverting the walker to relative-only left it green.
+Mutation-checked: reverting the walker, restoring a token slice in a core, and
+adding an `event.rawPath` to osrm-proxy's log line each go red on the right case.
+See [decisions § 952](../architecture/decisions.md).
+
+### `apps/web/src/lib/security_guards.test.ts` — 89 tests (1 added, 1 rewritten)
+
+The added one is a three-script agreement over the estate secrets file, which
+nothing had ever read together: `sops-init.sh` writes the not-yet-wired
+placeholder token into the estate `.sops.yaml`, `secret-set.sh` writes into the
+encrypted file, and `key-rotate.sh` reads the rule back to decide which key the
+file should be under. All three must declare the same `PROJECT_SLUG`, build the
+estate path from it rather than spelling the subdirectory out, and name the same
+placeholder token — which `key-rotate.sh` must DERIVE from the slug and the env
+rather than spell, so a third env cannot be added to one script alone. It fails
+on the pre-fix source: `key-rotate.sh` anchored on `<env>/secrets` and
+`REPLACE_<ENV>_KMS_ARN`, neither of which occurs in the estate config, so both
+envs matched no rule. Mutation-checked: reverting the anchor, reverting the
+placeholder to a literal, renaming a token in `sops-init.sh` alone, one script
+disagreeing about the slug, and one spelling the subdirectory out — five edits,
+five reds.
+
+The rewritten one: `Coach Lambda Function URL is AWS_IAM-auth + CloudFront-only` was four
+`/aws_lambda_function_url[\s\S]*?authorization_type = "AWS_IAM"/`-shaped matches
+against the whole module. A lazy match across a file holding eight Function URLs,
+eight OACs and sixteen permissions says only that SOME resource somewhere has the
+property; measured, appending a ninth Function URL with
+`authorization_type = "NONE"` and a ninth permission with `principal = "*"` left
+it green. Renamed to `EVERY Lambda Function URL …` and read per resource, with a
+population floor and two properties the whole-file form could not express: every
+OAC signs `always`, and only the `InvokeFunctionUrl` grants are required to
+declare `function_url_auth_type`. Mutation-checked: five edits, five reds. The
+other ten infra assertions in this file were mutation-checked in place and all
+ten already discriminated. See [decisions § 953](../architecture/decisions.md).
+## Round 32 — shared Dart packages (2026-09-02)
+
+Five defects fixed with their pinning tests
+([decisions §§ 954-958](../architecture/decisions.md)). Counts before → after,
+each suite run under `systemd-run --user --scope -p MemoryMax=4G
+-p MemorySwapMax=0 -- flutter test --concurrency=2` from the package
+directory:
+
+| suite | command | before | after |
+|---|---|---|---|
+| `route_parser` (gpx_parser) | `flutter test test/route_parser_test.dart` | 44 | 60 |
+| `run_recorder` | `flutter test test/run_recorder_test.dart` | 62 | 73 |
+| `atomic_io` (core_models) | `flutter test test/atomic_io_test.dart` | 14 | 17 |
+| `ui_kit` (whole package) | `flutter test` | 278 | 282 |
+
+What the new cases ask that nothing asked before: that a FINITE coordinate is
+still refused when it is not a coordinate (the NaN guard's sibling — `1e308`
+overflows the haversine to a NaN `distanceMetres` that `jsonEncode` then
+refuses, so the import parses and cannot be saved); that a GeoJSON
+`FeatureCollection`, bare geometry and `MultiLineString` import at all; that a
+malformed GeoJSON container is an empty import rather than a `TypeError`; that
+the recorder's two unconditional append paths — the first fix after `begin()`
+and the post-gap re-anchor — refuse an unusable fix; that the accuracy gate
+fails CLOSED on a NaN and on the negative value CoreLocation uses to disown a
+fix; that a throwing snapshot consumer stops neither distance nor the elapsed
+timer (asserted as a property, with the throw itself asserted so the test
+cannot pass vacuously); that a 112-hour resumed session survives lap
+serialisation and `stop()`; that an atomic write claims its temp sibling rather
+than naming it; and that `StatGrid` lays out under an unbounded width instead
+of throwing `UnsupportedError` out of `build()`.
+
+Every new assertion was mutation-checked: 22 mutations across the four
+packages, each confirmed to turn the intended test red and each restored to
+green (the scripts are the round's `reviews/mutate*.sh`, gitignored).
+`flutter analyze` reports zero `warning` and zero `error` in all five packages;
+the remaining issues are `info`. `npx tsx --test
+src/lib/decisions_numbering_guard.test.ts` from `apps/web` passes 3/3 over the
+appended ADRs.
+
+NOT run by this lane, and not claimed: the full Flutter workspace suite, the
+`api_client` suite (unchanged by this lane), Gradle, Playwright, and anything
+needing the local Supabase stack.

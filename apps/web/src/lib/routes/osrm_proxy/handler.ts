@@ -178,7 +178,6 @@ function supabaseAuthChecker(config: OsrmProxyConfig) {
 			// Log the detail, return a generic verdict so the GoTrue error can't
 			// be used as a token-shape oracle (mirrors the coach handler).
 			console.error('[osrm-proxy] auth failed', {
-				tokenPrefix: accessToken.slice(0, 20) + '...',
 				error: userRes.error?.message ?? 'no user returned',
 			});
 			return 'unauthenticated';

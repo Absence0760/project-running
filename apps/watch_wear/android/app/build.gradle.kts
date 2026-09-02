@@ -1,3 +1,4 @@
+import java.io.File
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -187,10 +188,32 @@ android {
 // Neither is an input to the test task by default, so adding an undeclared
 // `values-xx/strings.xml` leaves `testDebugUnitTest` UP-TO-DATE and reports
 // green on exactly the change the guards exist to catch.
+//
+// Six more of those files live OUTSIDE this Gradle build entirely, reached via
+// `WearLocales.findUp`, and the same hole was open on all of them. Measured,
+// not inferred: renaming `anon_key` to `anonKey` in the phone's
+// `WearAuthBridge.kt` — the /supabase_session drift `DataLayerContractTest`
+// exists to catch, whose consequence is a wrist that is never signed in —
+// left `testDebugUnitTest` UP-TO-DATE and the build SUCCESSFUL. CI escapes it
+// only because it checks out clean each run, so nothing there is ever
+// up to date; a local `./gradlew testDebugUnitTest` reported green.
+//
+// A missing file in an input collection is not an error, so a checkout without
+// the sibling trees still builds — and the guards themselves already assert
+// they located what they read, so a tree that is genuinely absent fails loudly
+// in the test rather than quietly here.
+val repoRoot: File? = generateSequence(rootProject.projectDir) { it.parentFile }
+    .firstOrNull { File(it, "apps/watch_wear/android/app/build.gradle.kts").isFile }
+
 tasks.withType<Test>().configureEach {
     inputs.dir("src/main/res")
         .withPathSensitivity(PathSensitivity.RELATIVE)
         .withPropertyName("guardedResourceSet")
+    // ManifestGuardsTest + ManifestPermissionCoverageTest read this directly.
+    // It is not on a unit test's classpath, so nothing else makes it an input.
+    inputs.file("src/main/AndroidManifest.xml")
+        .withPathSensitivity(PathSensitivity.NAME_ONLY)
+        .withPropertyName("guardedManifest")
     inputs.files(
         project.file("build.gradle.kts"),
         rootProject.file("build.gradle.kts"),
@@ -198,6 +221,29 @@ tasks.withType<Test>().configureEach {
     )
         .withPathSensitivity(PathSensitivity.RELATIVE)
         .withPropertyName("guardedBuildScripts")
+    repoRoot?.let { root ->
+        inputs.files(
+            // DataLayerContractTest: both halves of the two Wearable Data
+            // Layer contracts.
+            root.resolve("apps/mobile_android/android/app/src/main/kotlin/com/threkir/app/WearAuthBridge.kt"),
+            root.resolve("apps/mobile_android/android/app/src/main/kotlin/com/threkir/app/WearRoutesBridge.kt"),
+            // EnvFlagParityTest: the canonical accepted-affirmative set.
+            root.resolve("apps/web/src/lib/core/env_flag.ts"),
+            // MetadataRegistryTest: the runs.metadata key registry.
+            root.resolve("docs/backend/metadata.md"),
+        )
+            .withPathSensitivity(PathSensitivity.NAME_ONLY)
+            .withPropertyName("guardedCrossTreeFiles")
+        // ActivityTypeVocabularyTest: the activity_type CHECK and the two
+        // client label catalogues it is held against.
+        inputs.files(
+            fileTree(root.resolve("apps/backend/supabase/migrations")),
+            fileTree(root.resolve("apps/web/src/lib/i18n/locales")),
+            fileTree(root.resolve("apps/mobile_android/lib/l10n")),
+        )
+            .withPathSensitivity(PathSensitivity.RELATIVE)
+            .withPropertyName("guardedCrossTreeSets")
+    }
 }
 
 dependencies {
