@@ -329,3 +329,44 @@ test('the reachable set is closed under both import spellings src/lib uses', () 
 		'a module a Lambda can reach is outside the set these rules are applied to.',
 	);
 });
+
+// The caller's own bearer token is the third thing that must not reach
+// CloudWatch, alongside a request field and a raw caught error. Five of these
+// cores logged `tokenPrefix: accessToken.slice(0, 20) + '...'` on a failed
+// auth. For a Supabase JWT those twenty characters are the base64url header,
+// byte-identical for every token the project ever issues, so the field
+// identified nothing while writing bytes of a live credential into a log group
+// kept for thirty days; Supabase's newer `sb_…` keys are opaque strings whose
+// first twenty characters are not a constant at all.
+//
+// The rule is the token name, because that is what a source guard can read:
+// the identifier holding the credential may not appear in a log line's
+// arguments, in any spelling — sliced, interpolated, or whole. Whether the
+// value was a JWT at all is already in the GoTrue error these lines log
+// beside it.
+test('no Lambda-reachable log line names the caller\'s bearer token', () => {
+	const CREDENTIAL = /\b(accessToken|authHeader|refreshToken|apiKey|anonKey|secretKey)\b/;
+	const offenders: string[] = [];
+	let calls = 0;
+	const modules = [
+		...handlerSources().map((h) => ({ rel: h.rel, src: h.src })),
+		...lambdaReachableLibSources(),
+	];
+	for (const { rel, src } of modules) {
+		for (const args of consoleCallArgs(code(src))) {
+			calls++;
+			for (const arg of args) {
+				const named = arg.match(CREDENTIAL);
+				if (named) offenders.push(`${rel}: logs \`${named[1]}\``);
+			}
+		}
+	}
+	assert.ok(calls >= 20, `found only ${calls} console calls — walker broken?`);
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		"a log line names the caller's credential. No part of a bearer token is " +
+			'worth thirty days in CloudWatch; the GoTrue error beside it already ' +
+			'says whether the value parsed.',
+	);
+});

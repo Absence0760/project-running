@@ -212,7 +212,6 @@ export async function handleRouteRequest(
 		// return a generic 401 so the GoTrue error can't be used as a
 		// token-shape oracle.
 		console.error('[route-request] auth failed', {
-			tokenPrefix: accessToken.slice(0, 20) + '...',
 			error: userRes.error?.message ?? 'no user returned',
 		});
 		return json(401, { error: 'not authenticated' });

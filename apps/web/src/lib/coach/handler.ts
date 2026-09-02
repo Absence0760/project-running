@@ -116,8 +116,14 @@ export async function handleCoach(
 		// JWT-shape details that give an attacker an oracle for
 		// probing token formats. Log them server-side; surface a
 		// generic 401 to the client.
+		// The caller's token itself is never written down. The first 20
+		// characters of a Supabase JWT are its base64url header, identical for
+		// every token the project issues, so the field that used to sit here
+		// identified nothing while putting bytes of a live credential into a
+		// log group kept for 30 days -- and Supabase's newer keys are opaque
+		// strings whose first 20 characters are not a constant at all. Whether
+		// the value was even a JWT is already in `error`.
 		console.error('[coach] auth failed', {
-			tokenPrefix: accessToken.slice(0, 20) + '...',
 			error: userRes.error?.message ?? 'no user returned',
 		});
 		return jsonError(401, 'not authenticated');

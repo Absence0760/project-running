@@ -125,7 +125,6 @@ function supabaseProChecker(config: GenerateConfig) {
 			// Mirror the coach handler: log the detail, return a generic
 			// verdict so the GoTrue error can't be used as a token-shape oracle.
 			console.error('[generate] auth failed', {
-				tokenPrefix: accessToken.slice(0, 20) + '...',
 				error: userRes.error?.message ?? 'no user returned',
 			});
 			return 'unauthenticated';
