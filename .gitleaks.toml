@@ -13,9 +13,11 @@ useDefault = true
 #
 # Scoped two ways: the committed dev-only env files by path, and the
 # demo-issuer JWT body by regex — so a *non-demo* JWT pasted anywhere is still
-# caught. The env-isolation workflow additionally greps these same files for
-# live Stripe / Anthropic / Supabase patterns, so "no real secret here" is
-# enforced, not just trusted.
+# caught. The `env-isolation` job in ci.yml additionally greps these same files
+# for live Stripe / Anthropic / Supabase patterns, so "no real secret here" is
+# enforced, not just trusted — and since decisions § 862 that job is one the
+# required `CI gate` waits for, rather than a workflow of its own on a path
+# filter that this file's own path list did not match.
 [allowlist]
 description = "Local-dev demo keys + seed creds in committed dev env defaults"
 paths = [

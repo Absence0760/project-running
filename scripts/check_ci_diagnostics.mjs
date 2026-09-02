@@ -28,6 +28,9 @@
 // guards since the day it was written, was never added, and its absence was
 // filed and deferred twice before anyone reached it — while `workflow-lint`
 // (five guards) and env-isolation's `unit` (two) were never noticed at all.
+// That last job is now ci.yml's `env-isolation` — the workflow it lived in was
+// folded in and deleted (decisions § 862), which is also why rule 3 below can
+// reach it.
 // A job that runs more than one of this repo's own guards is bundled by that
 // fact; nothing has to remember to say so (decisions § 764). DIAGNOSING_JOBS
 // survives for the bundles the derivation cannot see — `edge-functions` runs

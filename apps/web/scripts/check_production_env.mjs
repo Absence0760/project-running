@@ -49,9 +49,13 @@
  *     disables Sentry rather than breaking anything; small projects
  *     ship without it deliberately.
  *
- * The check is invoked by `npm run check:prod-env` (CLI entry below)
- * and by the release-web.yml workflow as a pre-build step. The
- * `check_production_env.test.mjs` suite covers the matcher.
+ * The CLI below is invoked by the release-web.yml workflow as a
+ * pre-build step, and only there: it asserts about a RELEASE env, and
+ * CI has placeholders by design (`build-web` compiles against
+ * `placeholder.supabase.co`, which this guard exists to refuse). What
+ * the required `CI gate` holds is the `check_production_env.test.mjs`
+ * suite — it covers the matcher and spawns this CLI against crafted
+ * envs — from the `env-isolation` job of ci.yml (decisions § 862).
  */
 
 import { isTruthyFlagValue } from '../src/lib/core/env_flag.ts';
