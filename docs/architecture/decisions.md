@@ -13985,3 +13985,42 @@ detects a change on one rail is the kind of half-guard § 909 is about.
 
 Not closed here: the 5 m span in `isTrackRenderable` is a bare literal on all
 three rails, so registering it means naming it on each first.
+
+## 937. A secret floor its sibling had, and the CI fixture that was blocking it
+
+**Decided 2026-09-02.** `refresh-tokens` runs `verify_jwt = false`, so the
+bearer it compares is the only thing standing in front of a loop over the entire
+`integrations` table against Strava's OAuth endpoint. `strava-webhook` — same
+posture, same class of gate, reachable by URL alone — has carried a 32-character
+minimum on its secret since the May 2026 audit. This one had none, so
+`CRON_SECRET=test` would have deployed and worked.
+
+The floor is now here too, before the timing-safe compare, answering the same
+`cron_not_configured` 503 an absent secret gets. A short secret is a
+misconfiguration rather than an attack: the deployer needs to learn the config
+is wrong, and a caller must learn nothing about the secret's length, which one
+shared response gives both.
+
+**The reason this could not land when it was found is the part worth recording.**
+`ci.yml` set `CRON_SECRET=ci-cron-secret` — fifteen characters — for the
+served-envelope lane. Adding a 32-char floor would have made CI's authorized leg
+503, and the tempting repair is to lower the floor to fit the fixture. A floor
+chosen to accommodate a test fixture is not a floor. The fixture was lengthened
+instead, and the source guard now reads BOTH: the function's floor, its ordering
+before the compare, the sibling's matching floor, and `ci.yml`'s own value
+against 32. Shortening the fixture back now fails the guard rather than silently
+reducing the envelope lane to testing only its 503 branch.
+
+Writing the guard also caught a defect in the guard: the ordering assertion used
+`indexOf('timingSafeEqual')`, which finds the named import at the top of the
+file, so it could never have failed. It searches for the call now. The four
+mutations — floor to 8, fixture back to 15, sibling floor to 4, and the ordering
+— are each killed.
+
+Not closed: the IP-keyed rate limit the sibling also carries. `ipBucketKey`
+collapses every caller the trusted header does not identify into one bucket, and
+it is not established that pg_cron's invocation carries `cf-connecting-ip`, so
+limiting before the compare could let an attacker starve the hourly refresh out
+of the same bucket. Spending the bucket only on a failed compare is the likely
+answer, but it is a deliberate divergence from the sibling and wants deciding on
+purpose rather than by copying.
