@@ -15239,3 +15239,35 @@ into the iOS twin for free. It walks the three trees, extracts every
 resolve — plus a floor on the number of references scanned, so a broken regex
 or a broken walk fails loudly instead of passing with zero findings, which is
 the failure mode a guard of this shape actually has.
+
+## 990. A wait whose predicate the dialog itself satisfies
+
+Two waits in `nutrition_screen_test.dart` asked for "the saved template to
+appear in the picker" with `find.text('Dinner again')`. `find.text` matches an
+`EditableText` as well as a `Text`, and the string had just been typed into the
+naming dialog's own field — so the predicate was true before the save was even
+requested. Instrumenting `pumpUntil` to count its loop turns measured it
+directly:
+
+```
+PUMPUNTIL_SPINS 0 for the saved template to appear in the picker
+PUMPUNTIL_SPINS 0 for the saved recipe to appear in the picker
+```
+
+Zero turns is a wait that converted nothing. The entry filing this had left it
+deliberately, on the grounds that `pumpUntil` cannot drive a route transition
+under the fake clock — `pump()` takes no duration, so a dialog's pop animation
+never progresses inside it — and that every predicate about the picker
+therefore risks a timeout instead.
+
+That reasoning is right about the picker and wrong about what the wait is for.
+The thing being waited on is a real file write; the picker is only where its
+effect eventually shows. The store's own entry file under the fake
+`path_provider` root is observable **without** any route transition completing,
+so the predicate now reads the disk. Measured after: 5 turns each, and pointing
+the helper at a directory that is never written makes both time out naming what
+they wait for — so the wait is now load-bearing in both directions.
+
+The `pumpAndSettle` that follows still does the route work, unchanged. Every
+other `pumpUntil` in the file was measured in the same pass; all nine spend at
+least one turn.

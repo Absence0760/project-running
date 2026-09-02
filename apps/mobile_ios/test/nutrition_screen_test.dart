@@ -60,6 +60,21 @@ Future<void> _pumpUntil(
 }) =>
     pumpUntil(tester, done, describe: describe, timeout: timeout);
 
+/// Whether the `OfflineSyncStore` at `<appDocs>/[subdir]` holds an entry yet.
+///
+/// The wait these two tests need is for a real file write to land, and the
+/// predicate that named it used `find.text(<the name>)` — which matches the
+/// naming dialog's own `EditableText`, so it was already true at the moment it
+/// was asked and spent zero loop turns (decisions § 990). The store's own
+/// entry file is observable without the dialog's route pop completing, which a
+/// clock-less `pump` cannot drive anyway.
+bool _storedUnder(Directory appDocs, String subdir) {
+  final dir = Directory('${appDocs.path}/$subdir');
+  if (!dir.existsSync()) return false;
+  return dir.listSync().whereType<File>().any(
+      (f) => f.path.endsWith('.json') && !f.path.endsWith('index.json'));
+}
+
 /// Close the armed undo window so the deferred commit runs. The delete tap
 /// itself must NOT be wrapped in `runAsync` any more — deferring means no store
 /// I/O happens at tap time, and a timer armed in the real zone could not be
@@ -808,9 +823,8 @@ void _diaryDayTests() {
           matching: find.widgetWithText(TextButton, 'Save meal'),
         ));
       });
-      await _pumpUntil(
-          tester, () => find.text('Dinner again').evaluate().isNotEmpty,
-          describe: 'the saved template to appear in the picker');
+      await _pumpUntil(tester, () => _storedUnder(pp, 'meal_templates'),
+          describe: 'the saved template to be written to disk');
       await tester.pumpAndSettle();
 
       await tester.runAsync(() async {
@@ -860,9 +874,8 @@ void _diaryDayTests() {
           matching: find.widgetWithText(TextButton, 'Save recipe'),
         ));
       });
-      await _pumpUntil(
-          tester, () => find.text('Big pot').evaluate().isNotEmpty,
-          describe: 'the saved recipe to appear in the picker');
+      await _pumpUntil(tester, () => _storedUnder(pp, 'recipes'),
+          describe: 'the saved recipe to be written to disk');
       await tester.pumpAndSettle();
 
       await tester.runAsync(() async {
