@@ -93,7 +93,17 @@ export function parseDurationToSeconds(raw: string | undefined): number | null {
 		if (parts.length > 3) return null;
 		let total = 0;
 		for (let i = 0; i < parts.length; i++) {
-			const n = Number(parts[i]);
+			const raw = parts[i].trim();
+			// Every component must be a plain decimal count. `Number('')` is 0,
+			// so a stray or doubled colon used to parse as a real time: ':',
+			// '::', '1:' and '  :  ' all returned a number, and a finished row
+			// then carried a 0 s finish that ranks first and mints a course
+			// record out of an empty cell. The blank-cell case is already
+			// rejected; a cell holding only separators has to be too. The class
+			// is spelled out rather than left to `Number`, which also reads
+			// '0x10', '1e3' and '+5' as counts of seconds.
+			if (!/^\d+(?:\.\d+)?$/.test(raw)) return null;
+			const n = Number(raw);
 			if (!Number.isFinite(n) || n < 0) return null;
 			// Only the leading field is unbounded (hours, or total minutes in
 			// MM:SS). A minutes/seconds field >= 60 is a malformed time
@@ -105,6 +115,7 @@ export function parseDurationToSeconds(raw: string | undefined): number | null {
 		}
 		return Math.round(total);
 	}
+	if (!/^\d+(?:\.\d+)?$/.test(s)) return null;
 	const n = Number(s);
 	if (!Number.isFinite(n) || n < 0) return null;
 	return Math.round(n);

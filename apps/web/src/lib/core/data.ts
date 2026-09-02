@@ -176,7 +176,11 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 			.eq('user_id', userId);
 		if (opts?.startedAtFrom != null) q = q.gte('started_at', opts.startedAtFrom);
 		if (opts?.startedAtBefore != null) q = q.lt('started_at', opts.startedAtBefore);
-		return q.order('started_at', { ascending: false });
+		// Secondary key so the paged branch below composes into the whole
+		// history: two runs sharing a `started_at` straddling a page boundary
+		// can otherwise be returned twice or dropped. Same rule
+		// `fetchClubMembers` states for its load-more pages.
+		return q.order('started_at', { ascending: false }).order('id', { ascending: false });
 	};
 
 	let rows: any[];

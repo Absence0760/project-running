@@ -13,13 +13,23 @@
 //
 // Two rules, both derived from the shape the tree already uses. See
 // decisions § 897.
+//
+// The rules follow the CODE INTO CloudWatch, not the directory. Each of these
+// handlers is a thin wrapper whose whole job is to call a transport-agnostic
+// core under `src/lib` (decisions § 53), and it is the core that makes the
+// provider call, catches its error, and logs it -- into the wrapper's own log
+// group. Walking `lambda/` alone therefore checked every file except the ones
+// holding the shape the rules exist to stop, which is how
+// `console.error('[route-request] provider call failed', e)` sat two frames
+// below a guard written against exactly that line.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 const lambdaRoot = resolve(import.meta.dirname, '..', '..', 'lambda');
+const libRoot = resolve(import.meta.dirname);
 
 /**
  * Which `event.<field>` reads each handler's log lines may name. A share path
@@ -50,6 +60,54 @@ function handlerSources(): Array<{ lambda: string; rel: string; src: string }> {
 				rel: `${lambda}/src/${entry}`,
 				src: readFileSync(join(srcDir, entry), 'utf-8'),
 			});
+		}
+	}
+	return out;
+}
+
+/**
+ * Every module under `src/lib` transitively reachable from a Lambda entry
+ * point, by following relative imports. These run in the Lambda's process and
+ * write to its log group, so the same two rules bind them -- but they are also
+ * ordinary app modules, so the walk is by reachability rather than by a hand
+ * kept list that would go stale the first time a handler grew an import.
+ */
+function lambdaReachableLibSources(): Array<{ rel: string; src: string }> {
+	const seen = new Set<string>();
+	const queue: string[] = [];
+	for (const lambda of readdirSync(lambdaRoot)) {
+		const srcDir = join(lambdaRoot, lambda, 'src');
+		if (!statSync(join(lambdaRoot, lambda)).isDirectory()) continue;
+		for (const entry of readdirSync(srcDir)) {
+			if (entry.endsWith('.ts')) queue.push(join(srcDir, entry));
+		}
+	}
+	const out: Array<{ rel: string; src: string }> = [];
+	while (queue.length > 0) {
+		const file = queue.pop()!;
+		if (seen.has(file)) continue;
+		seen.add(file);
+		let src: string;
+		try {
+			src = readFileSync(file, 'utf-8');
+		} catch {
+			continue;
+		}
+		if (file.startsWith(libRoot + '/')) {
+			out.push({ rel: file.slice(resolve(libRoot, '..', '..').length + 1), src });
+		}
+		for (const m of src.matchAll(/from '(\.[^']*)'/g)) {
+			const base = resolve(dirname(file), m[1]);
+			for (const candidate of [`${base}.ts`, join(base, 'index.ts')]) {
+				try {
+					if (statSync(candidate).isFile()) {
+						queue.push(candidate);
+						break;
+					}
+				} catch {
+					// not this shape; try the next
+				}
+			}
 		}
 	}
 	return out;
@@ -173,5 +231,47 @@ test('every Lambda log line is a fixed message plus an object literal, never a r
 		'a log line opens with something other than a literal message, or hands ' +
 			'over a value that is not an object literal. Normalise a caught error ' +
 			'to { message, stack } the way every other catch in this tree does.',
+	);
+});
+
+test('no lambda-reachable core hands a caught value straight to CloudWatch', () => {
+	// The wrapper's rule, applied one frame down. An argument that is a bare
+	// identifier or member chain is the caught value itself: an Anthropic
+	// `APIError` carries the response body, and for a 400 that body quotes the
+	// part of the request it objected to -- on `/route-request` that is the
+	// runner's typed sentence and their location label. Everything already in
+	// this set narrows first (`supabaseErrorFields(...)`, `e.message`), so the
+	// test admits a call or a conditional and refuses only the raw value.
+	const BARE = /^[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*$/;
+	const offenders: string[] = [];
+	let calls = 0;
+	const modules = lambdaReachableLibSources();
+
+	for (const { rel, src } of modules) {
+		for (const args of consoleCallArgs(code(src))) {
+			calls++;
+			const [first, ...rest] = args;
+			if (!first || !/^['"`]/.test(first)) {
+				offenders.push(`${rel}: opens with ${(first ?? '(no argument)').slice(0, 60)}`);
+			}
+			for (const arg of rest) {
+				if (BARE.test(arg)) offenders.push(`${rel}: logs the raw value \`${arg}\``);
+			}
+		}
+	}
+
+	// Population: the walk resolving nothing would satisfy the assertion below
+	// while proving nothing. Both counts are well under what the tree holds.
+	assert.ok(
+		modules.length >= 20,
+		`only ${modules.length} lib modules reached from lambda/ — import walk broken?`,
+	);
+	assert.ok(calls >= 20, `found only ${calls} console calls in those modules — walker broken?`);
+
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		'a Lambda-reachable core logs a value it has not narrowed. Normalise a ' +
+			'caught error to { message, stack } the way the wrappers do.',
 	);
 });
