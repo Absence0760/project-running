@@ -1974,3 +1974,45 @@ OAC signs `always`, and only the `InvokeFunctionUrl` grants are required to
 declare `function_url_auth_type`. Mutation-checked: five edits, five reds. The
 other ten infra assertions in this file were mutation-checked in place and all
 ten already discriminated. See [decisions § 953](../architecture/decisions.md).
+## Round 32 — shared Dart packages (2026-09-02)
+
+Five defects fixed with their pinning tests
+([decisions §§ 954-958](../architecture/decisions.md)). Counts before → after,
+each suite run under `systemd-run --user --scope -p MemoryMax=4G
+-p MemorySwapMax=0 -- flutter test --concurrency=2` from the package
+directory:
+
+| suite | command | before | after |
+|---|---|---|---|
+| `route_parser` (gpx_parser) | `flutter test test/route_parser_test.dart` | 44 | 60 |
+| `run_recorder` | `flutter test test/run_recorder_test.dart` | 62 | 73 |
+| `atomic_io` (core_models) | `flutter test test/atomic_io_test.dart` | 14 | 17 |
+| `ui_kit` (whole package) | `flutter test` | 278 | 282 |
+
+What the new cases ask that nothing asked before: that a FINITE coordinate is
+still refused when it is not a coordinate (the NaN guard's sibling — `1e308`
+overflows the haversine to a NaN `distanceMetres` that `jsonEncode` then
+refuses, so the import parses and cannot be saved); that a GeoJSON
+`FeatureCollection`, bare geometry and `MultiLineString` import at all; that a
+malformed GeoJSON container is an empty import rather than a `TypeError`; that
+the recorder's two unconditional append paths — the first fix after `begin()`
+and the post-gap re-anchor — refuse an unusable fix; that the accuracy gate
+fails CLOSED on a NaN and on the negative value CoreLocation uses to disown a
+fix; that a throwing snapshot consumer stops neither distance nor the elapsed
+timer (asserted as a property, with the throw itself asserted so the test
+cannot pass vacuously); that a 112-hour resumed session survives lap
+serialisation and `stop()`; that an atomic write claims its temp sibling rather
+than naming it; and that `StatGrid` lays out under an unbounded width instead
+of throwing `UnsupportedError` out of `build()`.
+
+Every new assertion was mutation-checked: 22 mutations across the four
+packages, each confirmed to turn the intended test red and each restored to
+green (the scripts are the round's `reviews/mutate*.sh`, gitignored).
+`flutter analyze` reports zero `warning` and zero `error` in all five packages;
+the remaining issues are `info`. `npx tsx --test
+src/lib/decisions_numbering_guard.test.ts` from `apps/web` passes 3/3 over the
+appended ADRs.
+
+NOT run by this lane, and not claimed: the full Flutter workspace suite, the
+`api_client` suite (unchanged by this lane), Gradle, Playwright, and anything
+needing the local Supabase stack.

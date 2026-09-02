@@ -14866,3 +14866,159 @@ status-only assertion could not tell the two headers apart. What separates them
 is the round trip: the wrong header spends a GoTrue call on the signature and
 logs the refusal, the right one answers before a client is built. The case
 requires silence.
+## 954. A finite coordinate is not automatically a coordinate
+
+**Decided 2026-09-02.** `double.tryParse` accepts the literals `NaN`,
+`Infinity` and `-Infinity`, and closing that on all four route formats left
+behind a guard that admits any finite double. `lat="1e308"` clears it. The
+haversine then computes `lat2 - lat1`, which overflows to infinity, and
+`sin(infinity)` is NaN — so the route lands with exactly the NaN
+`distanceMetres` the finiteness guard exists to prevent, one step later.
+
+That is not a wrong number on a screen. `Route.toJson` reaches disk through
+`jsonEncode`, which refuses a non-finite double outright, so the file parses
+"successfully" and then cannot be saved at all. The same overflow reaches
+`elevationGainMetres` from a pair of individually-finite elevations
+(`1e308` after `-1e308`), which is why that delta is checked too rather than
+only its operands.
+
+The bound is latitude ±90 and longitude ±180 on GPX, KML, TCX and GeoJSON.
+It is not a heuristic: GPX's `latitudeType`, RFC 7946 and the KML spec all
+state it, so a value outside is a malformed file rather than an unusual place.
+The exact bounds stay accepted, pinned, so the guard cannot creep into
+rejecting a pole or the antimeridian.
+
+FIT has the same defect from the other direction and no parse to blame.
+Semicircles span the whole signed 32-bit range, so the conversion maps a
+byte-shifted or mislabelled word onto a perfectly finite degree value anywhere
+in [-180, 180) — 0x7EFFFFFF is 178.59 degrees. No bounds check on the raw
+integer could catch that; the check has to be on the decoded latitude.
+
+Five mutations, each killed: a bare `isFinite` on each of the two bounds
+separately, both at once (which is what puts the NaN back into
+`distanceMetres`), dropping the elevation-delta guard, dropping the FIT
+guard, and narrowing the FIT bound to ±60 so a legitimate 69°N record is
+refused.
+
+## 955. A GeoJSON importer that reads one of the four document shapes
+
+**Decided 2026-09-02.** `RouteParser.fromGeoJson` read `json['geometry']
+['coordinates']` and nothing else. A `FeatureCollection` — which is what
+geojson.io, QGIS and Overpass turbo actually emit — has no top-level
+`geometry`, so it found no coordinates and returned a route with zero
+waypoints and zero distance, reported to the caller as a successful import.
+So did a bare geometry object and a `MultiLineString`, whose `coordinates` are
+a list of LINES rather than of points.
+
+This is the same silent-empty failure as the KML `<Point>` placemark winning
+the `<coordinates>` lookup and the document-wide `trkpt` sweep joining two
+cities into one polyline — both of which this file already carries fixes and
+comments for. The web importer has read all four shapes since it was written,
+so the two clients disagreed about whether the commonest export format is
+importable at all.
+
+A `MultiLineString` becomes one route per member line, never one polyline
+through all of them, for the reason the multi-track fix gives: joining
+unrelated lines invents a leg between them that poisons distance, elevation
+and map. That is why `routesFromGeoJson` exists and `fromGeoJson` delegates to
+it — the singular/plural shape the GPX and KML entry points already have.
+
+Every container read is shape-checked rather than cast. A `geometry` that was
+a list, a `properties` that was a string and a `properties.name` that was a
+number each threw a `TypeError` — an `Error`, not an `Exception` — out of a
+parser whose coordinate reads one level down had already been hardened against
+precisely that, with a comment saying so. A malformed document is an import
+that found nothing, which every caller already handles.
+
+Five mutations, each killed: not recognising `FeatureCollection`, letting
+`MultiLineString` fall through to the flat-line read, casting the geometry,
+casting `properties.name`, and dropping the bare-geometry branch.
+
+## 956. Two append paths in the recorder never consulted the delta, and the accuracy gate failed open
+
+**Decided 2026-09-02.** `RunRecorder._onPosition` looks like it screens every
+fix through the movement threshold, the 100 m hop cap and the speed clamp. It
+does not screen two of them: the FIRST fix after `begin()` becomes the track
+anchor unconditionally, and the post-gap re-anchor branch appends
+unconditionally by design. A fix carrying a NaN or an out-of-range coordinate
+therefore went straight into the track — and the filter chain cannot catch it
+even where it does run, because every comparison against a NaN delta is false,
+so such a fix merely fails the movement test rather than being rejected.
+
+Nothing downstream re-checks. Both the local run store and
+`ApiClient._uploadTrack` serialise the track with `jsonEncode`, which refuses a
+non-finite double, so one such fix does not corrupt a number on a screen: it
+makes the whole run unsaveable and unuploadable, which on a multi-day effort
+is the entire record. The waypoint is now rejected at the one entry point,
+with the same WGS84 bound the route importers apply.
+
+The accuracy gate had the same fail-open shape for a different reason. Written
+as `pos.accuracy > _accuracyGateMetres`, it admitted a NaN accuracy as if it
+were perfect, and it admitted a NEGATIVE one — which is the concrete case,
+because CoreLocation documents a negative `horizontalAccuracy` as meaning the
+latitude and longitude are INVALID, and geolocator passes the value through
+untouched. On iOS the recorder was taking a fix the OS had explicitly disowned
+and letting it drive distance and the live map. Written as "not `<=` gate"
+plus a floor at zero it fails closed. Zero stays acceptable: Android reports it
+for "no accuracy attached", which is unknown rather than disowned.
+
+The layering contract is now asserted as a property rather than as the shape of
+a try/catch — a snapshot consumer that really throws, with distance and the
+elapsed timer asserted to have advanced anyway, and the throw itself asserted
+to have happened so the test cannot pass vacuously.
+
+Six mutations, each killed: dropping the coordinate gate, keeping only its
+finiteness half, restoring the fail-open `>` accuracy comparison, tightening
+the accuracy floor so a zero or an at-gate reading is refused, stopping
+distance accumulating, and dropping the resumed elapsed offset from `stop()`.
+
+## 957. The atomic write named its temp sibling and never claimed it
+
+**Decided 2026-09-02.** `writeStringAtomic` gives each in-flight write its own
+`.tmp` sibling from a static counter. A Dart static is per-ISOLATE, and these
+stores are explicitly written for a second isolate over the same directory:
+`serialiseStoreWrite`'s own doc says its serialisation stops at that boundary,
+and `kAtomicOrphanMinAge` exists precisely because a genuinely concurrent
+writer may own a temp file.
+
+Both isolates start their counter at 0. Two concurrent writes to one row
+therefore picked the SAME `.0.tmp`, both truncated it and streamed into it, and
+whichever renamed second published an interleaved file over the real one — the
+partial-file corruption the whole function exists to prevent, arriving through
+the door it left open.
+
+`create(exclusive: true)` is O_EXCL, so the collision is settled by the
+filesystem rather than by hoping two counters disagree. The retry loop is
+bounded, so a directory that cannot be written reports the filesystem's own
+error instead of spinning on it.
+
+The test reaches the collision without a second isolate: claim one suffix, free
+its path again, and put a foreign payload at the path the counter is about to
+reach. That is the state a second isolate leaves — the counter has moved on,
+the filesystem has not. Two mutations killed: naming the temp without creating
+it (the pre-fix behaviour), and creating it non-exclusively so a held temp is
+truncated.
+
+## 958. A shared widget cannot choose its parents, and an initial is a grapheme
+
+**Decided 2026-09-02.** `StatGrid` derives its column count by dividing the
+available width by a cell floor and calling `.floor()` on the quotient. An
+unbounded width makes that quotient `Infinity`, and `Infinity.floor()` does not
+degrade — it throws `UnsupportedError` out of `build()`, taking the whole
+screen rather than laying the grid out badly. A widget in `ui_kit` is used by
+screens it will never see, and both a horizontal scroller and a `Row` child
+with no `Expanded` hand it an unbounded width. Each cell now takes exactly the
+width one cell asks for, which keeps the property the grid exists for: every
+cell BOUNDED, so a `StatTile`'s `BoxFit.scaleDown` has something to shrink
+into. Leaving them unbounded would compile and lay out and quietly undo that.
+
+`identityInitial` took `substring(0, 1)`, which cuts an astral character in
+half at its surrogate pair. A display name starting with an emoji gave every
+social surface an avatar drawing a lone unpaired surrogate as the replacement
+glyph. A grapheme cluster is the unit a reader sees, so a ZWJ sequence is one
+initial too — taking the first rune instead would fix the crash-shaped half and
+still split a family emoji.
+
+Four mutations, each killed: restoring the unguarded divide, sizing the
+unbounded cells to `double.infinity`, restoring `substring(0, 1)`, and taking
+the first rune rather than the first grapheme.

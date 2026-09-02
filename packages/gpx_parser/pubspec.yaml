@@ -1,5 +1,5 @@
 name: gpx_parser
-description: GPX, KML, KMZ, and GeoJSON parsing into Route objects.
+description: GPX, KML, GeoJSON, TCX and FIT parsing into Route objects.
 version: 0.1.0
 publish_to: none
 resolution: workspace
