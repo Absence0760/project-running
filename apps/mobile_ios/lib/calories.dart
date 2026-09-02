@@ -66,12 +66,13 @@ int estimateRunCalories({
       ? activityKcalPerKgPerKm
       : kActivityKcalPerKgPerKm['run']!;
   final g = _genderMultiplier(gender);
-  // The tail guard carries the DISTANCE. A NaN goes to zero here where the web
-  // twin's `Math.max` keeps it, and either way the product is then unusable,
-  // so grading the product is what makes the two agree rather than a third
-  // per-input check that no input could reach past this one. Finite inputs can
-  // also multiply out past the range the two platforms share — see
-  // [kMaxEstimableKcal].
+  // One comparison does both jobs, which is why there is no separate
+  // finiteness test here: a NaN and a +Infinity each FAIL `<=`, and the
+  // remaining inputs cannot produce a negative product. That covers the
+  // DISTANCE too — a NaN goes to zero here where the web twin's `Math.max`
+  // keeps it, but either way the product is unusable, so grading the product
+  // is what makes the two agree rather than a per-input check no input could
+  // reach past this one.
   final kcal = weight * coef * distanceKm * g;
-  return kcal.isFinite && kcal <= kMaxEstimableKcal ? kcal.round() : 0;
+  return kcal <= kMaxEstimableKcal ? kcal.round() : 0;
 }

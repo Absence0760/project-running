@@ -104,12 +104,13 @@ export function estimateRunCalories(input: EstimateRunCaloriesInput): number {
 			? input.activityKcalPerKgPerKm
 			: ACTIVITY_KCAL_PER_KG_PER_KM.run;
 	const g = genderMultiplier(input.gender);
-	// The tail guard carries the DISTANCE. A NaN survives `Math.max` where the
-	// Dart twin's `> 0` test sends it to zero, and either way the product is
-	// then unusable, so grading the product is what makes the two agree rather
-	// than a third per-input check that no input could reach past this one.
-	// Finite inputs can also multiply out past the range the two platforms
-	// share -- see MAX_ESTIMABLE_KCAL.
+	// One comparison does both jobs, which is why there is no separate
+	// finiteness test here: a NaN and a +Infinity each FAIL `<=`, and the
+	// remaining inputs cannot produce a negative product. That covers the
+	// DISTANCE too -- a NaN survives `Math.max` where the Dart twin's `> 0`
+	// test sends it to zero, but either way the product is unusable, so
+	// grading the product is what makes the two agree rather than a per-input
+	// check no input could reach past this one.
 	const kcal = weight * activityCoef * distanceKm * g;
-	return Number.isFinite(kcal) && kcal <= MAX_ESTIMABLE_KCAL ? Math.round(kcal) : 0;
+	return kcal <= MAX_ESTIMABLE_KCAL ? Math.round(kcal) : 0;
 }
