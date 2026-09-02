@@ -113,6 +113,18 @@ func (g *Graph) NearestNode(lat, lng float64) (int32, bool) {
 	if g.NumNodes() == 0 {
 		return 0, false
 	}
+	// A non-finite query is not a location, and it is not merely a wrong
+	// answer here: haversineM returns NaN, `d < bestD` is false for every
+	// candidate, so `best` never leaves -1 and the early break below can never
+	// fire — the sweep then walks the whole ring range, which `col`/`row`
+	// derive from an int32 conversion of NaN and is therefore enormous.
+	// Measured at 33 s on a 9x9 test grid before this guard existed, on a
+	// country-scale extract far worse. This is the same class as the
+	// off-extract case the sweep comment below records, left open for input
+	// the callers were trusted to have rejected.
+	if math.IsNaN(lat) || math.IsNaN(lng) || math.IsInf(lat, 0) || math.IsInf(lng, 0) {
+		return 0, false
+	}
 	gr := g.grid
 	cr := gr.row(lat)
 	cc := gr.col(lng)

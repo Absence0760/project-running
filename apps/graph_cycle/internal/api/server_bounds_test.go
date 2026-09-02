@@ -112,8 +112,11 @@ func TestCycleAnsweringACallerWhoLeftIsNotLoopPoor(t *testing.T) {
 	}
 }
 
-// strconv.ParseFloat accepts "NaN" and "Inf", so /nearest's own finite check is
-// the only thing between a hostile query and a NaN reaching the grid.
+// strconv.ParseFloat accepts "NaN", "Inf" and "+Inf", so without point.valid()
+// a NaN reaches the grid — where it is not a wrong answer but an unbounded
+// sweep: measured at 33 s on this 9x9 test grid, and far worse on a
+// country-scale extract. NearestNode now refuses one itself (see
+// TestNearestNodeRefusesANonFiniteQuery); this is the outer wall.
 func TestNearestRejectsNonFiniteQueryCoordinates(t *testing.T) {
 	s, _, _ := testServer(t)
 	for _, q := range []string{
