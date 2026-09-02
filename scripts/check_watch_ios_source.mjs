@@ -5,7 +5,7 @@
 // job compiles it — `test-watch-ios`, on a macOS runner — and every other
 // claim about it rests on reading. `apps/watch_ios/scripts/check_xcstrings_parity.sh`
 // already holds the String Catalog against its two locale-declaration sites
-// (decisions § 761 / § 795). This guard holds the six *other* things about
+// (decisions § 761 / § 850). This guard holds the six *other* things about
 // the tier that a bare `node` on Linux can honestly measure, each of which
 // fails in a way no Swift test and no `xcodebuild` run would report:
 //
