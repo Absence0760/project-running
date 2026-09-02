@@ -14636,3 +14636,20 @@ hand-off, on the same `WCSession`, in the opposite direction, and nothing
 compares the three key lists. They agree today; that was checked by hand. The
 guard belongs in `scripts/`, which no lane owns this round, so it is filed with
 the rails and the key set named rather than half-built here.
+
+The dividend of being able to execute one of the three showed up in the last
+find of the lane. The Wear OS pre-run header renders two different facts a few
+lines apart — `!online && authed` means the watch cannot reach the network,
+`!authed` means nobody has signed in on this wrist — and both branches rendered
+`R.string.offline`. Two conditions sharing one string fails nothing, which is
+why four coverage rounds went past it; what it costs is the runner being told
+the wrong thing about a watch that is usually perfectly online, and sent to
+check Bluetooth while the Sign in chip directly beneath it, the affordance that
+actually fixes what they are looking at, is the one they walk away from. On
+this tier the fix could be *pinned by a test that runs* rather than by a guard:
+a new `not_signed_in` across all seven catalogues, held by the existing locale
+parity guards, and a branch-scoped assertion that reads the `!authed` body on
+its own so a match from the sibling branch cannot satisfy it. Three mutations,
+each killed — the string reverted, the English copy dropped, and one translated
+locale dropped. That is the shape the other two tiers cannot have, and the
+reason they got guards instead.
