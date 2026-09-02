@@ -1420,7 +1420,7 @@ four of the six. See [decisions § 921](../architecture/decisions.md).
 | Lane | Command | Before | After |
 |---|---|---|---|
 | Web unit | `npm run test:unit --workspace=apps/web` | 4625 | 4630 |
-| apps/web guards | `node --test apps/web/scripts/*.test.mjs` | 74 | 83 |
+| apps/web guards | `node --test apps/web/scripts/*.test.mjs` | 86 | 95 |
 
 `npm run check` (svelte-check) reports 0 errors over 2489 files, with the five
 pre-existing `state_referenced_locally` warnings in `PlanEditor.svelte` — a file
