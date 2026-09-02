@@ -13321,6 +13321,76 @@ No consumer on the wrist: the settings menu has no week-start row and
 `current_week::WeekStart` is a separate enum fed from the pushed settings frame.
 Port fidelity, and a doc claim that had become false.
 
+## 904. supabase-js hands every Edge Function refusal the same sentence, and three money-and-integration surfaces put it in front of users
+
+**Decided 2026-09-02.** `supabase.functions.invoke` reports every non-2xx as a
+`FunctionsHttpError` whose `message` is the fixed string "Edge Function returned
+a non-2xx status code"; the function's own `{ error: '<code>' }` envelope rides
+on `context`, the raw `Response`, and reading it costs an `await`. A private
+helper in `core/data.ts` did exactly that, and exactly one of the four call
+sites that needed it used it.
+
+The other three shipped the internal sentence to a person, each in a slot
+written to carry a reason:
+
+- **Register on a priced club event** toasted `e.message`, so `event_full`,
+  `sales_closed`, `host_cannot_take_payment` and a genuine outage all read
+  identically to a buyer about to pay.
+- **`/settings/payouts`** chose between its calm not-configured info toast and a
+  red error by pattern-matching the thrown message for `not_configured` or
+  `503`. Neither token is ever in that fixed sentence, so the info branch was
+  **unreachable** and every keyless build reported a red failure carrying it.
+  This is the fail-open shape: the guard was written, looked right, and had
+  never once selected the branch it exists for.
+- **The Strava card** interpolated it into "Strava sync failed: {error}", so a
+  build with no keys and a connection whose refresh token Strava has revoked —
+  which needs a reconnect, not a retry — were the same line.
+
+The unwrap moves to `core/edge_function_error.ts` beside a second export,
+`edgeFunctionErrorMessage(error, fallback)`: the envelope's code when there is
+one, and otherwise **the caller's own fallback**, never the error's message.
+An error carrying a `context` Response has no message worth showing, so falling
+back to it is how the internal sentence would return the moment a refusal
+arrived with an unreadable body. Each suite pins that leg explicitly.
+
+Only the code is machine-readable, so the two surfaces that can act on a
+specific refusal map it to copy: the event page needs one new key for the
+host-capability refusals (no retry fixes them, so the generic retry line
+misstates them), and Strava reaches the not-configured copy it already had.
+
+This class is invisible to a unit test — the shape only exists once a real
+`Response` has been through supabase-js — and invisible to a spec that mocks
+the endpoint's SUCCESS. It took driving the refusal through the browser.
+
+## 905. A consent gate nothing ever executed: seeded consent and a mocked endpoint both hide it
+
+**Decided 2026-09-02.** Three coverage rounds passed over the versioned
+AI-processing consent record and the Art 9 health-data consent without a single
+end-to-end test of either, and the reason is structural rather than an
+oversight. `seed.sql` stamps all three seeded users at the current disclosure
+version and with `health_data_consent_at` set, so any spec that signs in as one
+of them is testing the CONSENTED path whatever it asserts; and the one spec that
+drives the AI route assistant fulfils `/api/coach/route-describe` itself, so the
+gate ahead of the tier check was never reached. On the health side every spec
+that touches the consent checkbox deliberately restores it and leaves the write
+unmade, because a real withdrawal against a shared seed user erases USER_A's
+demographics for the rest of the shard — so the destructive half had never run.
+
+Both are now driven against an ephemeral saga user, which starts with neither
+record. That buys three things a seeded user cannot: the FIRST-use disclosure is
+observable at all; the refusal is real, so `/api/coach/route-describe` really
+403s and the page's consent-gap copy is reached rather than assumed; and the
+withdrawal can be executed rather than described, which is what makes it
+possible to assert its two opposite halves at once — every Art 9 field and the
+`user_settings.prefs` date-of-birth MIRROR go, while `user_profiles.date_of_birth`
+stays, because the age record backs the under-18 discoverability floor and
+carries no consent term.
+
+The `/coach` gate is additionally checked at the NETWORK layer, counting
+requests to `/api/coach**` before the accept click rather than only asserting the
+composer is absent: "render-gated" and "disabled" look the same to a DOM
+assertion and differ entirely in whether a person's data can reach Anthropic
+before they agreed.
 ## 909. The required check's `needs:` list was guarded; its verdict was not
 
 **Decided 2026-09-02.** `scripts/check_ci_diagnostics.mjs` rule 3 asserts every

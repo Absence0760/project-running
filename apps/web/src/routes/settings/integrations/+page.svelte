@@ -127,7 +127,16 @@
 					result.complete ? 'success' : 'info',
 				);
 			} catch (err) {
-				showToast(m('settingsIntegrations.stravaConnectFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
+				// `exchangeStravaCode` rethrows the function's machine code, so
+				// the not-configured build gets its own sentence instead of a
+				// code in a slot the runner cannot read.
+				const code = err instanceof Error ? err.message : String(err);
+				showToast(
+					code === 'strava_not_configured'
+						? m('settingsIntegrations.stravaNotConfigured')
+						: m('settingsIntegrations.stravaConnectFailed', { error: code }),
+					'error',
+				);
 			} finally {
 				if (strava) strava.loading = false;
 				// Remove the OAuth params from history so a refresh is clean.
@@ -345,7 +354,13 @@
 				result.complete ? 'success' : 'info',
 			);
 		} catch (err) {
-			showToast(m('settingsIntegrations.stravaSyncFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
+			const code = err instanceof Error ? err.message : String(err);
+			showToast(
+				code === 'strava_not_configured'
+					? m('settingsIntegrations.stravaNotConfigured')
+					: m('settingsIntegrations.stravaSyncFailed', { error: code }),
+				'error',
+			);
 		} finally {
 			item.loading = false;
 		}
