@@ -185,3 +185,41 @@ test('pregnancy: leaves rest untouched', () => {
 		null
 	);
 });
+
+test('daysBetweenIso: a string that is not an ISO date yields null', () => {
+	// The anchors come out of the jsonb settings bag, so an entry another
+	// client or a hand edit wrote is a string of unknown shape. The Dart
+	// twin's `int.parse` throws on one where `parseInt` returns NaN, so both
+	// sides state the check rather than leaving it to numeric-parse luck.
+	for (const bad of ['', 'today', '2026-6-1', '2026/06/01', '2026-06', 'NaN-NaN-NaN']) {
+		assert.equal(daysBetweenIso(bad, '2026-06-08'), null, `from ${bad}`);
+		assert.equal(daysBetweenIso('2026-06-01', bad), null, `to ${bad}`);
+	}
+});
+
+test('cycleDayInfo refuses an unreadable anchor rather than easing off it', () => {
+	assert.equal(cycleDayInfo('not-a-date', 28, '2026-06-08'), null);
+	assert.equal(cycleDayInfo('2026-06-01', 28, 'not-a-date'), null);
+});
+
+test('trimesterForDate refuses an unreadable due date', () => {
+	assert.equal(trimesterForDate('not-a-date', '2026-06-08'), null);
+	assert.equal(trimesterForDate('2026-12-01', 'not-a-date'), null);
+});
+
+test('cyclePlanWorkoutPatch leaves the workout alone on an unreadable anchor', () => {
+	assert.equal(
+		cyclePlanWorkoutPatch(
+			{ kind: 'tempo', target_distance_m: 10_000, scheduled_date: '2026-06-08' },
+			{ mode: 'cycle', cycleLengthDays: 28, lastPeriodStartIso: 'nope' },
+		),
+		null,
+	);
+	assert.equal(
+		cyclePlanWorkoutPatch(
+			{ kind: 'tempo', target_distance_m: 10_000, scheduled_date: '2026-06-08' },
+			{ mode: 'pregnancy', dueDateIso: 'nope' },
+		),
+		null,
+	);
+});

@@ -147,4 +147,58 @@ void main() {
       expect(cyclePlanWorkoutPatch('rest', null, '2026-11-01', preg), null);
     });
   });
+
+  group('unreadable dates fail closed', () {
+    test('daysBetweenIso: a string that is not an ISO date yields null', () {
+      // The anchors come out of the jsonb settings bag, so an entry another
+      // client or a hand edit wrote is a string of unknown shape. `int.parse`
+      // THROWS on one where the web twin's `parseInt` returns NaN, so both
+      // sides state the check rather than leaving it to numeric-parse luck.
+      for (final bad in [
+        '',
+        'today',
+        '2026-6-1',
+        '2026/06/01',
+        '2026-06',
+        'NaN-NaN-NaN'
+      ]) {
+        expect(daysBetweenIso(bad, '2026-06-08'), isNull, reason: 'from $bad');
+        expect(daysBetweenIso('2026-06-01', bad), isNull, reason: 'to $bad');
+      }
+    });
+
+    test('cycleDayInfo refuses an unreadable anchor rather than easing off it',
+        () {
+      expect(cycleDayInfo('not-a-date', 28, '2026-06-08'), isNull);
+      expect(cycleDayInfo('2026-06-01', 28, 'not-a-date'), isNull);
+    });
+
+    test('trimesterForDate refuses an unreadable due date', () {
+      expect(trimesterForDate('not-a-date', '2026-06-08'), isNull);
+      expect(trimesterForDate('2026-12-01', 'not-a-date'), isNull);
+    });
+
+    test('cyclePlanWorkoutPatch leaves the workout alone on an unreadable anchor',
+        () {
+      expect(
+        cyclePlanWorkoutPatch(
+          'tempo',
+          10000,
+          '2026-06-08',
+          const CyclePlanConfig.cycle(
+              cycleLengthDays: 28, lastPeriodStartIso: 'nope'),
+        ),
+        isNull,
+      );
+      expect(
+        cyclePlanWorkoutPatch(
+          'tempo',
+          10000,
+          '2026-06-08',
+          const CyclePlanConfig.pregnancy(dueDateIso: 'nope'),
+        ),
+        isNull,
+      );
+    });
+  });
 }

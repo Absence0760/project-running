@@ -91,11 +91,6 @@ export const MIN_DECLARATIONS = 60;
 /// somewhere this guard cannot reach.
 /** @type {readonly KnownGap[]} */
 export const KNOWN_GAPS = [
-	{
-		file: 'apps/mobile_android/lib/cycle_plan.dart',
-		counterpart: 'apps/web/src/lib/training/cycle_plan.ts',
-		reason: 'both headers say "TS<->Dart parity pair"; neither registry carries it',
-	},
 ];
 
 /**

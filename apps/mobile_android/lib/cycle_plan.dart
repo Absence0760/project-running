@@ -41,7 +41,16 @@ const Set<String> _qualityKinds = {'tempo', 'interval', 'marathon_pace'};
 
 // ─────────────────────── Date helpers ───────────────────────
 
-int _isoToEpochDay(String iso) {
+/// A calendar date and nothing else. The anchors this module reads —
+/// last-period start, due date — come out of the settings bag, which is jsonb,
+/// so an entry another client or a hand edit wrote is a string of unknown
+/// shape. `int.parse` THROWS on one where the web twin's `parseInt` returns
+/// NaN and propagates it to a null result, so the check has to be stated on
+/// both sides rather than left to a coincidence of numeric-parse conventions.
+final RegExp _isoDate = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+int? _isoToEpochDay(String iso) {
+  if (!_isoDate.hasMatch(iso)) return null;
   final parts = iso.split('-');
   final utc = DateTime.utc(
     int.parse(parts[0]),
@@ -51,8 +60,14 @@ int _isoToEpochDay(String iso) {
   return (utc.millisecondsSinceEpoch / 86400000).floor();
 }
 
-int daysBetweenIso(String fromIso, String toIso) =>
-    _isoToEpochDay(toIso) - _isoToEpochDay(fromIso);
+/// Whole days from one ISO date to another, or null when either is not an ISO
+/// date. Fail-safe like everything else here: leaving the plan as prescribed
+/// beats easing it off an anchor we could not read.
+int? daysBetweenIso(String fromIso, String toIso) {
+  final from = _isoToEpochDay(fromIso);
+  final to = _isoToEpochDay(toIso);
+  return from == null || to == null ? null : to - from;
+}
 
 // ─────────────────────── Menstrual cycle ───────────────────────
 
@@ -81,6 +96,7 @@ CycleDayInfo? cycleDayInfo(
     return null;
   }
   final raw = daysBetweenIso(lastPeriodStartIso, dateIso);
+  if (raw == null) return null;
   final len = cycleLengthDays;
   final dayInCycle = ((raw % len) + len) % len;
 
@@ -111,6 +127,7 @@ CycleDayInfo? cycleDayInfo(
 /// than two weeks past the due date — so those weeks run as prescribed.
 int? trimesterForDate(String dueDateIso, String dateIso) {
   final daysUntilDue = daysBetweenIso(dateIso, dueDateIso);
+  if (daysUntilDue == null) return null;
   final gestWeeks = _gestationWeeks - daysUntilDue / 7;
   if (gestWeeks < 0) return null;
   if (gestWeeks > _gestationWeeks + 2) return null;

@@ -185,8 +185,13 @@ test('the tree’s twin declarations are all clean or registered as a known gap'
 // The register is a list of what is still owed, so it has to be readable as
 // one: every entry says which of the two properties it breaks and where the fix
 // lives.
+//
+// An EMPTY register is the goal state, not a broken one -- it means every twin
+// declaration in the tree is carried by a syncer row -- so there is no
+// non-empty floor here. Emptying it by accident cannot hide anything either:
+// `checkDeclarations` fails on a declaration that neither a row nor a gap
+// covers, which the test above runs over the whole tree.
 test('every KNOWN_GAPS entry carries a reason', () => {
-	assert.ok(KNOWN_GAPS.length > 0);
 	for (const gap of KNOWN_GAPS) {
 		assert.ok(gap.reason.length > 20, `${gap.file}: ${gap.reason}`);
 		assert.match(gap.file, /^(?:apps|packages)\//);
