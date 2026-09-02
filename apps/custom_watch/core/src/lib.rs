@@ -225,8 +225,10 @@
 //!   the age-band vocabulary + crown-label enum (port of web
 //!   `segments/segments.ts`)
 //! - [`track_projection`] — project a lat/lng track into panel x/y for a
-//!   preview thumbnail (port of web `routes/track_projection.ts`; the Dart twin
-//!   `projectTrack` lives inside `track_preview.dart`)
+//!   preview thumbnail, plus the `is_track_renderable` 5 m span gate that
+//!   refuses to draw a stationary jitter cluster (port of web
+//!   `routes/track_projection.ts`; the Dart twin `projectTrack` /
+//!   `isTrackRenderable` lives inside `track_preview.dart`)
 //! - [`run_heatmap`] — grid-quantise many tracks into clamped weighted cells +
 //!   the fit box (port of web `routes/run_heatmap.ts`; the MapLibre GeoJSON
 //!   emitters are web-only)

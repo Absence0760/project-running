@@ -339,12 +339,27 @@ The worker reports back to the queue on every job:
   cron sees it — migration `20261201_001_jobs_failed_alert.sql`.
 - **permanent** (4xx, malformed payload, missing run, RLS denial) →
   `finish_job(failed, msg)`.
+- **panic** → caught by `dispatchSafely`'s barrier, logged with its stack, and
+  reported as **permanent**. `isTransient` refuses a `*panicError` outright
+  rather than letting it reach the substring sniffing below: a panic value is
+  arbitrary text, and one that happens to say `i/o timeout` would otherwise
+  read as a network blip worth retrying.
 
 The classifier lives in `isTransient` in `worker.go`. It branches on
 `HTTPError.StatusCode` first (typed error from `supabase.go`), then
 falls back to substring sniffing the message for network-layer
 markers — same shape as the watch's drain classifier in
 `apps/watch_wear/.../RunViewModel.kt`.
+
+**Why the barrier is not optional.** The worker loop runs in `main`'s own
+goroutine, and `startHealthServer` mounts the live-spectator hub, the
+data-export endpoints, the Strava webhook, the unsubscribe endpoint and the
+bounce webhook on the SAME process. An escaping panic therefore ends live
+tracking for every spectator watching every runner, not just the one job. And
+the job itself would be unreachable afterwards: `claim_next_job` selects only
+`status = 'queued'`, nothing moves a row back out of `running`, and
+`find_stuck_jobs` (migration `20260731_001`) deliberately only alerts. Pinned
+by `worker_panic_test.go`.
 
 ## Re-upload race
 

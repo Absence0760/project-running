@@ -46,13 +46,25 @@ pub struct Projected {
     pub y: f64,
 }
 
-/// Mirrors JS `value || 1e-6`: a zero (or NaN) span collapses to a tiny
-/// positive number so a degenerate track can't divide by zero.
-fn or_epsilon(value: f64) -> f64 {
-    if value == 0.0 || value.is_nan() {
-        1e-6
-    } else {
+/// A positive, finite span for the projection scale. Mirrors web's
+/// `spanOrEpsilon` and the Dart twin's `_spanOrEpsilon`.
+///
+/// Deliberately NOT the JS `value || 1e-6` this port was first written against.
+/// That form is falsy-only: it catches an exact zero and lets a 1e-7 span
+/// through, which fits a stationary jitter cluster — a runner who hit Start and
+/// Stop indoors — across the whole panel instead of collapsing it to the dot it
+/// is. Web fixed that; this rail did not follow.
+///
+/// The `is_finite` half mirrors web's `Number.isFinite` and is belt-and-braces
+/// on both rails rather than a live path: reaching an infinite span needs an
+/// infinite latitude, and `cos(inf)` has already poisoned `lng_scale` to NaN by
+/// then, so both forms hand back NaN either way. It is untested for that
+/// reason, not by omission.
+fn span_or_epsilon(value: f64) -> f64 {
+    if value.is_finite() && value > 1e-6 {
         value
+    } else {
+        1e-6
     }
 }
 
@@ -98,8 +110,8 @@ pub fn project_track(
     // units so a square loop renders square.
     let mid_lat = (min_lat + max_lat) / 2.0;
     let lng_scale = libm::fabs(libm::cos(mid_lat * PI / 180.0));
-    let d_lat = or_epsilon(max_lat - min_lat);
-    let d_lng = or_epsilon((max_lng - min_lng) * lng_scale);
+    let d_lat = span_or_epsilon(max_lat - min_lat);
+    let d_lng = span_or_epsilon((max_lng - min_lng) * lng_scale);
     let scale_x = (vb_w - pad * 2.0) / d_lng;
     let scale_y = (vb_h - pad * 2.0) / d_lat;
     let scale = if scale_x < scale_y { scale_x } else { scale_y };
@@ -116,6 +128,46 @@ pub fn project_track(
         }
     }
     out
+}
+
+/// True iff the track's bounding-box diagonal exceeds ~5 m — i.e. it is worth
+/// drawing at panel scale. A runner who hits Start + Stop indoors records a
+/// non-empty run of near-identical fixes; without this gate the preview
+/// projects them all onto one pixel and renders a meaningless dot.
+///
+/// Longitudes are unwrapped onto the first fix's side of the antimeridian
+/// first: a raw min/max reads a jitter cluster AT the line as a 359.99 deg span,
+/// which defeats the gate for exactly the stationary case it exists to catch.
+///
+/// Port of web `isTrackRenderable`; the Dart twin lives inside
+/// `track_preview.dart`.
+pub fn is_track_renderable(track: &[TrackPoint]) -> bool {
+    if track.len() < 2 {
+        return false;
+    }
+    let ref_lng = track[0].lng;
+    let mut min_lat = track[0].lat;
+    let mut max_lat = track[0].lat;
+    let mut min_lng = ref_lng;
+    let mut max_lng = ref_lng;
+    for p in track {
+        if p.lat < min_lat {
+            min_lat = p.lat;
+        }
+        if p.lat > max_lat {
+            max_lat = p.lat;
+        }
+        let lng = unwrap_lon_deg(ref_lng, p.lng);
+        if lng < min_lng {
+            min_lng = lng;
+        }
+        if lng > max_lng {
+            max_lng = lng;
+        }
+    }
+    let d_lat_m = (max_lat - min_lat) * 111_320.0;
+    let d_lng_m = (max_lng - min_lng) * 111_320.0 * libm::cos(min_lat * PI / 180.0);
+    libm::sqrt(d_lat_m * d_lat_m + d_lng_m * d_lng_m) > 5.0
 }
 
 #[cfg(test)]
@@ -195,6 +247,27 @@ mod tests {
         );
     }
 
+    // Web's `spanOrEpsilon` clamps at 1e-6; the falsy-only `|| 1e-6` this port
+    // was written against caught only an exact zero. A sub-epsilon span is the
+    // stationary jitter cluster the preview exists to collapse, so the two
+    // forms disagree by four orders of magnitude on exactly that track.
+    #[test]
+    fn a_sub_epsilon_span_is_clamped_not_fitted_to_the_panel() {
+        // ~1 cm of jitter in both axes at the equator: both spans land far
+        // under 1e-6 deg, so the clamp decides the whole fit.
+        let jitter = [pt(0.0, 0.0), pt(9e-8, 9e-8)];
+        let projected = project_track(&jitter, 100.0, 100.0, DEFAULT_PROJECT_PAD);
+        assert_eq!(projected.len(), 2);
+        let spread_y = libm::fabs(projected[1].y - projected[0].y);
+        let spread_x = libm::fabs(projected[1].x - projected[0].x);
+        // 9e-8 / 1e-6 of the 92 px drawable band is ~8.3 px. Passing the raw
+        // span through instead would fit the cluster across the whole 92 px.
+        assert!(
+            spread_y < 12.0 && spread_x < 12.0,
+            "a centimetre of jitter must stay a blob: x={spread_x} y={spread_y}"
+        );
+    }
+
     #[test]
     fn a_track_across_the_antimeridian_fits_its_own_width_not_the_whole_world() {
         // A 0.01 deg x 0.01 deg box straddling the line. Its longitudes span
@@ -237,5 +310,45 @@ mod tests {
             "span {}",
             libm::fabs(a[2].x - a[0].x)
         );
+    }
+
+    #[test]
+    fn renderable_rejects_empty_single_point_and_sub_5m_jitter() {
+        assert!(!is_track_renderable(&[]));
+        assert!(!is_track_renderable(&[pt(51.5074, -0.1278)]));
+        // ~1 m diagonal - GPS noise from a stationary device.
+        assert!(!is_track_renderable(&[
+            pt(51.5074, -0.1278),
+            pt(51.507_400_9, -0.127_800_9),
+        ]));
+    }
+
+    #[test]
+    fn renderable_accepts_a_tiny_but_genuine_lap() {
+        // ~14 m diagonal - small but real.
+        assert!(is_track_renderable(&[
+            pt(51.5074, -0.1278),
+            pt(51.507_49, -0.127_81),
+        ]));
+    }
+
+    #[test]
+    fn renderable_rejects_a_stationary_jitter_cluster_on_the_antimeridian() {
+        // ~2 m of jitter straddling 180 deg. A raw min/max reads the span as
+        // 359.99 deg (~40,000 km), so the gate passes exactly the standing-still
+        // case it exists to catch.
+        assert!(!is_track_renderable(&[
+            pt(0.0, 179.999_992),
+            pt(0.0, -179.999_992),
+            pt(0.000_009, 179.999_995),
+        ]));
+    }
+
+    #[test]
+    fn renderable_accepts_a_genuine_run_crossing_the_antimeridian() {
+        assert!(is_track_renderable(&[
+            pt(0.0, 179.999_5),
+            pt(0.0, -179.999_5),
+        ]));
     }
 }

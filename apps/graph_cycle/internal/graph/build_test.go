@@ -334,3 +334,45 @@ func TestNearestNodeOffExtractStaysBounded(t *testing.T) {
 		t.Fatalf("snapped to lat %.6f, want the extract's northern edge %.6f", g.lat[got], wantLat)
 	}
 }
+
+// A non-finite query is not a wrong answer, it is an unbounded sweep:
+// haversineM returns NaN so no candidate ever wins, the early break can never
+// fire, and the ring range comes from an int32 conversion of NaN. Measured at
+// 33 s on this 9x9 grid before the guard existed. Both /cycle and /nearest
+// validate their inputs, but NearestNode is exported and must not depend on
+// every caller remembering to.
+func TestNearestNodeRefusesANonFiniteQuery(t *testing.T) {
+	g, _ := BuildTestGrid(9, 9, 100, 40.0, -77.0)
+	nan := math.NaN()
+	inf := math.Inf(1)
+	for _, c := range []struct {
+		name     string
+		lat, lng float64
+	}{
+		{"nan lat", nan, -77.0},
+		{"nan lng", 40.0, nan},
+		{"+inf lat", inf, -77.0},
+		{"-inf lng", 40.0, math.Inf(-1)},
+	} {
+		done := make(chan struct{})
+		var ok bool
+		go func() {
+			defer close(done)
+			_, ok = g.NearestNode(c.lat, c.lng)
+		}()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: NearestNode did not return within 2 s", c.name)
+		}
+		if ok {
+			t.Errorf("%s: found a node for a non-finite query", c.name)
+		}
+	}
+
+	// A finite query on the same grid still resolves, so the guard is not
+	// refusing everything.
+	if _, ok := g.NearestNode(40.0, -77.0); !ok {
+		t.Fatal("a finite query stopped resolving")
+	}
+}

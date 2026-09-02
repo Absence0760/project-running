@@ -285,7 +285,15 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, runID string,
 	}
 	if err := s.Authorizer(r, runID, action); err != nil {
 		s.bumpAuthFail()
-		http.Error(w, err.Error(), http.StatusForbidden)
+		// The reason goes to the log, never to the caller. The authorizer
+		// separates "unknown run", "not the run owner" and "blocked by run
+		// owner", and handing those back tells an unauthenticated prober
+		// which run ids exist and — the one that actually matters — tells a
+		// blocked person that a specific runner has blocked them. One opaque
+		// body for every denial, the same shape the dataexport and premium
+		// servers already use for their 401s.
+		s.log().Info("livehub: authorization denied", "run_id", runID, "action", action, "err", err)
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return false
 	}
 	return true
