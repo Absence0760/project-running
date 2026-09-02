@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -11,6 +10,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../share_sheet.dart';
+import 'capture_png.dart';
 import 'top_banner.dart';
 
 /// Opens a modal sheet showing the finisher certificate for an eligible
@@ -79,12 +79,7 @@ class _CertificateSheetState extends State<_CertificateSheet> {
     setState(() => _capturing = true);
     try {
       await WidgetsBinding.instance.endOfFrame;
-      final boundary =
-          _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
+      final bytes = await capturePngBytes(_cardKey);
 
       final safe = widget.eventTitle
           .replaceAll(RegExp('[^A-Za-z0-9]+'), '-')

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
@@ -12,6 +11,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../map_tile_readiness.dart';
 import '../preferences.dart';
 import '../share_sheet.dart';
+import 'capture_png.dart';
 import 'live_run_map.dart'
     show basemapTileLayer, basemapVoidColour, tileUrlFor;
 import 'map_attribution.dart';
@@ -85,13 +85,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
       }
       await WidgetsBinding.instance.endOfFrame;
 
-      final boundary = _cardKey.currentContext!.findRenderObject()
-          as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
+      final bytes = await capturePngBytes(_cardKey);
 
       final tmp = await getTemporaryDirectory();
       final file = File('${tmp.path}/route-${widget.route.id}.png');
@@ -139,7 +133,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
                   aspectRatio: 9 / 16,
                   child: RepaintBoundary(
                     key: _cardKey,
-                    child: _ShareCardContent(
+                    child: RouteShareCard(
                       route: widget.route,
                       preferences: widget.preferences,
                       tileReadiness: _tiles,
@@ -172,7 +166,14 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
   }
 }
 
-class _ShareCardContent extends StatelessWidget {
+/// Portrait route share card — route map on top, headline stats on the
+/// bottom over a dark background. Wrap in a [RepaintBoundary] and capture it
+/// to produce a shareable PNG. Intended to be rendered at a 9:16 aspect ratio.
+///
+/// Public, like its sibling [RunShareCard], so the card can be mounted on its
+/// own: what it draws is the artifact that goes to social media, and a private
+/// class left that unreachable from a test.
+class RouteShareCard extends StatelessWidget {
   final cm.Route route;
   final Preferences preferences;
 
@@ -180,7 +181,8 @@ class _ShareCardContent extends StatelessWidget {
   /// basemap instead of sleeping.
   final MapTileReadiness? tileReadiness;
 
-  const _ShareCardContent({
+  const RouteShareCard({
+    super.key,
     required this.route,
     required this.preferences,
     this.tileReadiness,
@@ -278,8 +280,10 @@ class _ShareCardContent extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final unit = preferences.unit;
     final dist = UnitFormat.distance(route.distanceMetres, unit);
+    // Through the same unit preference the distance above it takes: a
+    // mile-unit runner was shown "3.11 mi" beside "128 m" on one card.
     final ele = route.elevationGainMetres > 0
-        ? '${route.elevationGainMetres.round()} m'
+        ? UnitFormat.elevation(route.elevationGainMetres, unit)
         : null;
 
     return Container(

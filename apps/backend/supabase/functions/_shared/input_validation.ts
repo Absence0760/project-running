@@ -50,6 +50,11 @@ export function isValidTimestamptz(s: unknown): boolean {
 
   const [year, month, day, hour, minute] = [m[1], m[2], m[3], m[4], m[5]].map(Number);
   const second = m[6] === undefined ? 0 : Number(m[6]);
+  // There is no year zero: ISO 8601 uses 0000 for 1 BC, Postgres does not
+  // accept it at all, and `0000-01-01T00:00:00Z` therefore passed this gate
+  // and raised 22008 on the wire — the class of 500 the gate exists to turn
+  // into a 400.
+  if (year < 1) return false;
   if (month < 1 || month > 12) return false;
   if (day < 1 || day > daysInMonth(year, month)) return false;
   // 24:00:00 is a legal end-of-day literal, which Postgres also takes;

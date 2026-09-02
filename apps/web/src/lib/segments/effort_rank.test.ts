@@ -158,3 +158,78 @@ test('an unknown pill carries an accessible name, not a bare em dash', () => {
 		'the placeholder glyph needs a localized label for assistive tech',
 	);
 });
+
+// The absence §746 closed came back in through the wire coercion the
+// module added to close it. `Number()` answers 1 for values that carry no
+// rank at all, and 1 is the crown.
+
+test('a non-numeric wire value is no answer, never the crown', () => {
+	for (const rank of [true, false, [1], ['1'], {}, [], new Date(0)] as unknown[]) {
+		assert.equal(
+			readRankRows([{ effort_id: 'e-1', rank }]).size,
+			0,
+			`a ${JSON.stringify(rank)} in the rank position must be dropped, not coerced`,
+		);
+		assert.equal(
+			rankPillClass(rank as number | null),
+			'',
+			`a ${JSON.stringify(rank)} must not be rendered as a medal`,
+		);
+		assert.equal(rankPillText(rank as number | null), UNKNOWN_RANK_TEXT);
+	}
+	// The specific coercions that produced a GOLD crown from nothing.
+	assert.equal(rankPillClass(true as unknown as number), '');
+	assert.equal(rankPillClass([1] as unknown as number), '');
+});
+
+test('a numeric string is still a real answer', () => {
+	// PostgREST serves a `bigint` count as a JSON string, so this is the
+	// one non-number shape the wire genuinely produces.
+	assert.equal(readRankRows([{ effort_id: 'e-1', rank: '4' }]).get('e-1'), 4);
+	assert.equal(rankPillClass('1' as unknown as number), 'gold');
+	assert.equal(rankPillText('12' as unknown as number), '#12');
+});
+
+test('a non-integer ordinal is no answer', () => {
+	// The RPC returns `1 + count(...)`. A fraction is exactly the "came from
+	// a wire coercion going wrong" case the doc names, and `#2.5` is not an
+	// ordinal any surface should render.
+	for (const rank of [2.5, 1.0001, 0.5, '3.5']) {
+		assert.equal(readRankRows([{ effort_id: 'e-1', rank }]).size, 0);
+		assert.equal(rankPillText(rank as unknown as number), UNKNOWN_RANK_TEXT);
+		assert.equal(rankPillClass(rank as unknown as number), '');
+	}
+	assert.equal(rankPillText(2), '#2', 'a whole ordinal still renders');
+});
+
+test('a rank below 1 is no answer, and 1 remains the floor', () => {
+	for (const rank of [0, -1, -0.5]) {
+		assert.equal(readRankRows([{ effort_id: 'e-1', rank }]).size, 0);
+		assert.equal(rankPillText(rank), UNKNOWN_RANK_TEXT);
+	}
+	assert.equal(rankPillText(1), '#1');
+});
+
+test('a repeated effort_id keeps the last row the RPC sent', () => {
+	// Undocumented before this test and reachable: the RPC unions two rank
+	// sources. Last-wins is what the loop does; pinning it stops a silent
+	// flip to first-wins from changing which standing a pill shows.
+	const map = readRankRows([
+		{ effort_id: 'e-1', rank: 9 },
+		{ effort_id: 'e-1', rank: 2 },
+	]);
+	assert.equal(map.size, 1);
+	assert.equal(map.get('e-1'), 2);
+});
+
+test('an unusable rank does not evict a usable one for another effort', () => {
+	const map = readRankRows([
+		{ effort_id: 'e-1', rank: 3 },
+		{ effort_id: 'e-2', rank: true },
+		{ effort_id: '', rank: 1 },
+		null,
+		'nonsense',
+	]);
+	assert.deepEqual([...map.entries()], [['e-1', 3]]);
+});
+

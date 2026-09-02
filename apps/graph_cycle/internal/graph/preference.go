@@ -89,7 +89,14 @@ func (g *Graph) preferredShare(l *Loop, pref Preference) float64 {
 		return 0
 	}
 	if pref == PrefCulDeSac {
-		return l.stubM / l.DistanceM
+		// Clamped like the geometric branch below, not because the search can
+		// currently over-credit — augmentCulDeSac splices the stubs into the
+		// path it then measures, so stubM is part of DistanceM — but because
+		// this function's whole contract is that it returns a fraction. It is
+		// reported to the runner as `preferenceShare` and multiplied into
+		// scoreLoop, and a value above 1 would both claim more of the loop
+		// than exists and buy a candidate unbounded rank.
+		return math.Min(1, l.stubM/l.DistanceM)
 	}
 	preferred := 0.0
 	for i := 1; i < len(l.path); i++ {

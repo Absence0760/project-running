@@ -1456,6 +1456,7 @@ export const messages = {
 	"settingsAccount.exportPartialNotice": "Dein letzter Export ist unvollständig: Er enthält {count} der {total} Läufe in deinem Konto. Es wurde nichts gelöscht — exportiere erneut, um es noch einmal zu versuchen. Das vollständige Kontoarchiv nennt jeden unvollständigen Abschnitt in seiner manifest.json.",
 	"settingsAccount.backupFailed": "Backup fehlgeschlagen: {error}",
 	"settingsAccount.backupPartialNotice": "In diesem Backup fehlen {missing} von {wanted} GPS-Tracks — sie konnten nicht geladen werden. Die manifest.json sagt das auch. Lade es bei stabilerer Verbindung erneut herunter, um eine vollständige Datei zu bekommen.",
+	"settingsAccount.backupPartialSections": "Dieses Backup ist unvollständig: {sections} konnte nicht vollständig gelesen werden. Die manifest.json sagt das auch. Erstelle es bei stabilerer Verbindung erneut, bevor du dich darauf verlässt.",
 	"settingsAccount.restoreArchiveIncomplete": "Dieses Archiv bezeichnet sich selbst als unvollständig: {sections} waren beim Schreiben zu kurz. Es wurde nichts überschrieben — stelle aus einem vollständigen Backup wieder her, um die Lücken zu füllen.",
 	"settingsAccount.restoreArchiveIncompleteUnnamed": "Dieses Archiv bezeichnet sich selbst als unvollständig — es deckte beim Schreiben nicht das ganze Konto ab. Es wurde nichts überschrieben.",
 	"settingsAccount.identitiesLoadFailed": "Anmeldemethoden konnten nicht geladen werden: {error}",

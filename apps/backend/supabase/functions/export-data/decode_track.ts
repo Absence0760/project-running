@@ -22,6 +22,21 @@ export class TrackTooLargeError extends Error {
 	}
 }
 
+/// The blob decoded to something that is not a list of points.
+///
+/// Thrown for the same reason `TrackTooLargeError` is: the GPX loop's
+/// `catch` is what tolerates one unreadable object, and the return type
+/// promised an array that `JSON.parse` had no obligation to produce. An
+/// object decoded here reached `buildGpx`'s `for…of`, whose TypeError
+/// escaped the loop's guard (`track.length < 2` is false for `undefined`)
+/// and failed the WHOLE export on one bad blob.
+export class TrackShapeError extends Error {
+	constructor() {
+		super('track is not a list of points');
+		this.name = 'TrackShapeError';
+	}
+}
+
 export interface TrackPoint {
 	lat: number;
 	lng: number;
@@ -45,5 +60,7 @@ export async function decodeTrack(blob: Blob): Promise<TrackPoint[]> {
 		.DecompressionStream('gzip');
 	const stream = new Response(gz).body!.pipeThrough(ds);
 	const txt = await new Response(stream).text();
-	return JSON.parse(txt) as TrackPoint[];
+	const parsed: unknown = JSON.parse(txt);
+	if (!Array.isArray(parsed)) throw new TrackShapeError();
+	return parsed as TrackPoint[];
 }

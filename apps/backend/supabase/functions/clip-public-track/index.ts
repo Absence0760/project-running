@@ -171,11 +171,21 @@ Deno.serve(withSentry('clip-public-track', async (req: Request) => {
   if (gz.byteLength > 5 * 1024 * 1024) {
     return Response.json({ error: 'track too large' }, { status: 502 });
   }
-  const ds = new (globalThis as { DecompressionStream: typeof DecompressionStream })
-    .DecompressionStream('gzip');
-  const stream = new Response(gz).body!.pipeThrough(ds);
-  const txt = await new Response(stream).text();
-  const points = JSON.parse(txt);
+  // Both steps throw on a blob that is not gzip, or that inflates to
+  // something that is not JSON — and both used to throw PAST the handler, so
+  // `withSentry` answered 500 and the `!Array.isArray` refusal below was dead
+  // for exactly the input it was written for. A stored object we cannot read
+  // is an upstream fault, not a caller fault: 502, like the download failure
+  // above it.
+  let points: unknown;
+  try {
+    const ds = new (globalThis as { DecompressionStream: typeof DecompressionStream })
+      .DecompressionStream('gzip');
+    const stream = new Response(gz).body!.pipeThrough(ds);
+    points = JSON.parse(await new Response(stream).text());
+  } catch {
+    return Response.json({ error: 'malformed track' }, { status: 502 });
+  }
   if (!Array.isArray(points)) {
     return Response.json({ error: 'malformed track' }, { status: 502 });
   }

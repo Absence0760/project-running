@@ -14,12 +14,22 @@
 /** Shown in place of "#3" when the standing is unknown. */
 export const UNKNOWN_RANK_TEXT = '—';
 
-/** A usable ordinal: the RPC returns `1 + count(...)`, so anything else came
- *  from a wire coercion going wrong and is treated as no answer. */
-function usableRank(rank: number | null | undefined): number | null {
-	if (rank == null) return null;
+/**
+ * A usable ordinal: the RPC returns `1 + count(...)`, a positive INTEGER, so
+ * anything else came from a wire coercion going wrong and is treated as no
+ * answer.
+ *
+ * The type gate is the point. `Number()` alone is what let the absence back
+ * in through the door §746 closed: `Number(true)` and `Number([1])` are both
+ * `1`, so a boolean or a single-element array anywhere in the `rank` position
+ * rendered a GOLD CROWN — the most flattering claim these surfaces make,
+ * produced by a wire shape carrying no rank at all. A numeric STRING is still
+ * accepted, because PostgREST serves a `bigint` count as one.
+ */
+function usableRank(rank: unknown): number | null {
+	if (typeof rank !== 'number' && typeof rank !== 'string') return null;
 	const n = Number(rank);
-	return Number.isFinite(n) && n >= 1 ? n : null;
+	return Number.isInteger(n) && n >= 1 ? n : null;
 }
 
 /**
@@ -36,7 +46,7 @@ export function readRankRows(rows: unknown): Map<string, number> {
 		if (row == null || typeof row !== 'object') continue;
 		const { effort_id: id, rank } = row as { effort_id?: unknown; rank?: unknown };
 		if (typeof id !== 'string' || id === '') continue;
-		const usable = usableRank(rank as number | null | undefined);
+		const usable = usableRank(rank);
 		if (usable != null) out.set(id, usable);
 	}
 	return out;

@@ -1836,13 +1836,18 @@ test('export-data validates track_url against the canonical Storage path', () =>
 	// 20260621_001 added a CHECK constraint on the column shape — this
 	// assertion is the runtime backstop that catches a row that
 	// somehow bypasses the CHECK.
-	const ef = read('../backend/supabase/functions/export-data/index.ts');
-	// The invariant is the COMPARISON, not the name it is held under: the
-	// streaming rewrite inlined what used to be an `expectedTrackUrl`
-	// variable, which failed this guard while satisfying it exactly. So
-	// match the canonical template being compared against `track_url`,
-	// either inline or through a variable, in either polarity — the gate
-	// is a predicate the download sweeps filter on.
+	// The invariant is the COMPARISON and the fact that every download
+	// site is filtered through it — not the file either lives in. The
+	// streaming rewrite already inlined what used to be an
+	// `expectedTrackUrl` variable, and the §832 round moved the
+	// comparison itself into `render.ts`; both satisfied the property
+	// exactly while failing a guard pinned to `index.ts`. So read the
+	// module and its renderers together, then assert separately that
+	// `index.ts` still resolves its keys through the helper — otherwise
+	// a live comparison in a function nobody calls would pass this.
+	const index = read('../backend/supabase/functions/export-data/index.ts');
+	const render = read('../backend/supabase/functions/export-data/render.ts');
+	const ef = `${index}\n${render}`;
 	const canonical = String.raw`\`\$\{[^}]*user_id[^}]*\}\/\$\{[^}]*\.id[^}]*\}\.json\.gz\``;
 	assert.match(
 		ef,
@@ -1853,6 +1858,15 @@ test('export-data validates track_url against the canonical Storage path', () =>
 		ef,
 		new RegExp(canonical),
 		'export-data must build the canonical path as `${user_id}/${run_id}.json.gz`.',
+	);
+	// Every service-role Storage download of a track must take its key
+	// from the checked helper. A bare `r.track_url` at a download site
+	// is the regression this backstop exists to stop.
+	const trackKeySites = [...index.matchAll(/canonicalTrackUrl\(/g)];
+	assert.ok(
+		trackKeySites.length >= 2,
+		'export-data must resolve every track download key through canonicalTrackUrl — found ' +
+			`${trackKeySites.length} call site(s).`,
 	);
 });
 

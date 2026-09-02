@@ -408,15 +408,7 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
               break;
             case SyncState.pendingDelete:
               await pushDelete(api, stored);
-              // Same rule as markSynced: only drop the row we actually
-              // deleted. A row re-created during the push is a NEW local row
-              // that has never been sent.
-              if (identical(rowsById[stored.id], stored)) {
-                await dropRow(stored.id);
-              } else {
-                debugPrint('$debugLabel: ${stored.id} was replaced during its '
-                    'delete push — keeping the resident row');
-              }
+              await dropIfUnchanged(stored);
               drained++;
               break;
             case SyncState.synced:
@@ -448,15 +440,50 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// Entries are immutable and every mutation installs a new instance, so
   /// identity is an exact "did this row change under us" test. A false
   /// negative only costs one more drain.
+  ///
+  /// The test runs INSIDE the write chain, because [persist] only QUEUES:
+  /// a screen's edit fired while the chain was busy — which is where the
+  /// drain's own previous mark leaves it — had not yet installed its new
+  /// instance when the check looked, so the check passed and the pre-push
+  /// copy then landed on top of the edit, marked `synced`. That is the loss
+  /// this guard exists to prevent, moved one step later and made permanent:
+  /// a `synced` row is never pushed again, and `replaceFromServer`'s
+  /// newer-wins keeps the local copy. `LocalRunStore.markSynced` had it
+  /// inside its chain already.
+  /// [serialiseStoreWrite] is re-entrant, so the [persist] inside runs INLINE
+  /// rather than queueing behind the chain this already holds — which is what
+  /// lets the decision and the write it implies be one step, without closing
+  /// the subclass seam that lets a fake store persist nowhere.
   Future<void> markSynced(S pushed) async {
-    final existing = rowsById[pushed.id];
-    if (existing == null) return;
-    if (!identical(existing, pushed)) {
-      debugPrint('$debugLabel: ${pushed.id} changed during its push — left '
-          'pending for the next drain');
-      return;
-    }
-    await persist(asSynced(existing));
+    await _serialised(() async {
+      final existing = rowsById[pushed.id];
+      if (existing == null) return;
+      if (!identical(existing, pushed)) {
+        debugPrint('$debugLabel: ${pushed.id} changed during its push — left '
+            'pending for the next drain');
+        return;
+      }
+      await persist(asSynced(existing));
+    });
+  }
+
+  /// Drop [pushed] now that its server DELETE has returned — but only while
+  /// it is still the resident copy, and decided inside the write chain for
+  /// exactly the reason [markSynced] is. A row re-created during the push is
+  /// a NEW local row that has never been sent, and dropping it deletes a row
+  /// the runner is looking at.
+  @protected
+  Future<void> dropIfUnchanged(S pushed) async {
+    await _serialised(() async {
+      final existing = rowsById[pushed.id];
+      if (existing == null) return;
+      if (!identical(existing, pushed)) {
+        debugPrint('$debugLabel: ${pushed.id} was replaced during its delete '
+            'push — keeping the resident row');
+        return;
+      }
+      await dropRow(pushed.id);
+    });
   }
 
   /// Refuse a write on a store that was never [init]ed.
@@ -567,12 +594,26 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       if (keep.contains(entity.path)) continue;
       try {
         await entity.delete();
+        // And forget what that file held. The diff-skip above trusts
+        // `_writtenJson` to say what is already on disk, so a row pruned here
+        // and handed back UNCHANGED by a later fetch matched its own stale
+        // entry and was never rewritten: resident, rendered, and absent from
+        // disk until the next cold load dropped it.
+        _writtenJson.remove(_idOfRowFile(entity.path));
       } catch (e) {
         debugPrint('$debugLabel: orphan delete failed ${entity.path}: $e');
       }
     }
     _rebuildSummaries();
     await _persistIndex();
+  }
+
+  /// The row id a `<id>.json` path carries.
+  static String _idOfRowFile(String path) {
+    final name = path.split(Platform.pathSeparator).last;
+    return name.endsWith('.json')
+        ? name.substring(0, name.length - '.json'.length)
+        : name;
   }
 
   /// Hydrate rows from a backup archive (the entry `toJson()` shape). Each is

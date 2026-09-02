@@ -9,6 +9,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { interpolate } from './interpolate';
 import { CATALOGUE_LOADERS } from './catalogues';
@@ -194,3 +196,76 @@ for (const loc of SUPPORTED_LOCALES) {
 		);
 	});
 }
+
+// ─────────── the SQL rail ───────────
+//
+// `BUCKET_KEY`'s doc claims it holds "every bucket enforce_create_rate_limit
+// is called with today", and the list above restates the same eleven names by
+// hand. Both were written from the migrations and neither reads them, so a
+// twelfth bucket degrades that refusal to `rateLimit.generic` in all seven
+// locales — "You're doing that too quickly", about an act the sentence cannot
+// name — and both hand-written lists go on passing. That is § 737's defect
+// exactly: the two direct-message buckets spent a whole round on the generic
+// wording for want of a map entry.
+
+const MIGRATIONS = resolve('../backend/supabase/migrations');
+
+/// Every bucket the SQL throttles, read from the `enforce_create_rate_limit`
+/// call sites themselves.
+function sqlBuckets(): string[] {
+	const found = new Set<string>();
+	for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql'))) {
+		const sql = readFileSync(resolve(MIGRATIONS, file), 'utf-8');
+		for (const m of sql.matchAll(/enforce_create_rate_limit\(\s*'([a-z_]+)'/g)) {
+			found.add(m[1]);
+		}
+	}
+	assert.ok(
+		found.size >= 11,
+		`found only ${found.size} throttled buckets in the migrations — the reader is stale`,
+	);
+	return [...found].sort();
+}
+
+test('every throttled bucket in SQL names its own act, never the generic sentence', async () => {
+	const t = await translatorFor('en');
+	const generic = t('rateLimit.generic', { wait: 'X' });
+	const unnamed: string[] = [];
+	for (const bucket of sqlBuckets()) {
+		const rendered = rateLimitErrorMessage(t, err(bucket, 42));
+		assert.ok(rendered, `${bucket} produced no message at all`);
+		if (rendered === generic) unnamed.push(bucket);
+	}
+	assert.deepEqual(
+		unnamed,
+		[],
+		`These buckets are throttled in SQL and have no entry in BUCKET_KEY, so the ` +
+			`refusal reads as "doing that too quickly" in every locale: ${unnamed.join(', ')}`,
+	);
+});
+
+test("the test's own bucket list is the SQL's, not a copy that has drifted", () => {
+	// Every assertion above loops over BUCKETS. A bucket added to SQL and not
+	// to that array is a bucket this file silently stops covering.
+	assert.deepEqual([...BUCKETS].sort(), sqlBuckets());
+});
+
+test('no mapped bucket has stopped being throttled', () => {
+	// A dead entry is not a user-visible failure, but it is the sign the map
+	// and the schema have parted company — and the direction that goes
+	// unnoticed longest.
+	const source = readFileSync(resolve('src/lib/i18n/rate_limit_message.ts'), 'utf-8');
+	const block = source.slice(
+		source.indexOf('const BUCKET_KEY'),
+		source.indexOf('const MINUTE_CUTOFF_S'),
+	);
+	assert.ok(block.length > 0, 'BUCKET_KEY no longer found — did it move?');
+	const mapped = [...block.matchAll(/^\t([a-z_]+):/gm)].map((m) => m[1]).sort();
+	assert.ok(mapped.length >= 11, `parsed only ${mapped.length} BUCKET_KEY entries`);
+	assert.deepEqual(
+		mapped,
+		sqlBuckets(),
+		'BUCKET_KEY and the enforce_create_rate_limit call sites name different buckets',
+	);
+});
+

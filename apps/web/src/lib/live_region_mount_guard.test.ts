@@ -109,6 +109,21 @@ export function regionsMountedByABranch(source: string): number[] {
 	return hits;
 }
 
+test('the scan reaches the tree and still finds live regions in it', () => {
+	// The fixtures below prove the matcher; nothing proved the WALK. A
+	// walk that reaches no file, or an `aria-live` filter that stops
+	// matching the app's own markup, reports the same empty offender list
+	// a clean tree reports (§ 762).
+	const files = svelteFiles(SRC);
+	assert.ok(files.length > 100, `the walk reached only ${files.length} .svelte files`);
+	const withRegions = files.filter((f) => LIVE_ATTR.test(readFileSync(f, 'utf-8')));
+	assert.ok(
+		withRegions.length >= 10,
+		`only ${withRegions.length} components carry a live region — the filter has ` +
+			'drifted from the markup it is meant to read, so every file is now skipped',
+	);
+});
+
 test('no live region is mounted by the same conditional that supplies its text', () => {
 	const offenders: string[] = [];
 	for (const file of svelteFiles(SRC)) {

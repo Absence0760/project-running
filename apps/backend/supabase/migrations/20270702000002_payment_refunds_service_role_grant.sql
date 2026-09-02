@@ -1,0 +1,47 @@
+-- The refund ledger's only writer holds its privileges by accident.
+--
+-- `20270630000001` created `payment_refunds` and wrote one privilege
+-- statement: `revoke all on public.payment_refunds from anon, authenticated`.
+-- It never granted anything to `service_role`, which is the sole writer --
+-- `recordPaymentRefund` in `stripe-events-webhook` upserts every
+-- `refund.created` / `refund.updated` / `refund.failed` delivery through it.
+-- That works today only because Supabase's `alter default privileges` for
+-- `postgres` grants every DML verb to anon, authenticated AND service_role BY
+-- NAME, so a fresh table arrives with service_role already holding them and
+-- the revoke strips only the two client roles.
+--
+-- Inheriting a privilege from an image default is not the same as having it.
+-- `20270625000001` measured the same default moving underneath this schema in
+-- the other direction: the workstation CLI's current image (2.109.1) ships a
+-- `postgres` default ACL of `{postgres=X/postgres}`, where a fresh object comes
+-- up on Postgres's own owner+PUBLIC default instead. On that image
+-- `payment_refunds` lands with `service_role=Dxtm/postgres` -- TRUNCATE,
+-- REFERENCES, TRIGGER, MAINTAIN and none of SELECT/INSERT/UPDATE/DELETE -- and
+-- the webhook's upsert raises 42501. Measured: it is the ONLY base table in
+-- `public` that service_role cannot fully read and write there, and
+-- `global_segment_grants_test`'s "a table shipped with no grants at all fails
+-- HERE" assertion names it.
+--
+-- The consequence if that default ever reaches the deployed image is not a
+-- degraded read. `recordPaymentRefund` logs the upsert failure and returns 500,
+-- so Stripe retries the delivery indefinitely while every refund goes
+-- unrecorded -- and `fundraiser_totals` computes what the charity KEPT from
+-- the `failed`/`canceled` children in that same table, so the thermometer
+-- silently reverts to counting a bounced refund as money returned.
+--
+-- `20270603_001` states exactly this grant for `data_export_jobs`, its sibling
+-- in the same service-role-only posture, one paragraph after arguing that "a
+-- new table inherits nothing". `20270630000001` did not. This restates the
+-- privilege the deployed image already gives it, so it is a no-op against
+-- Supabase Cloud and CI's pinned 2.84.2 and a repair everywhere else.
+--
+-- The client rails are untouched and re-stated here only in the assertion
+-- registry: anon and authenticated keep nothing, RLS stays on, and there are
+-- no policies -- a refund's existence, amount and failure reason are not a
+-- client read path.
+--
+-- Online-safety (docs/backend/migration_locks.md): GRANT takes no lock on the
+-- relation -- the only lock is an AccessShareLock on the catalog object. No
+-- scan, no rewrite, no constraint to validate.
+
+grant select, insert, update, delete on public.payment_refunds to service_role;

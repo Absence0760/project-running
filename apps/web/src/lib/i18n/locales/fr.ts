@@ -1456,6 +1456,7 @@ export const messages = {
 	"settingsAccount.exportPartialNotice": "Ton dernier export est partiel : il contient {count} des {total} courses de ton compte. Rien n'a été supprimé — relance l'export pour réessayer. L'archive complète du compte indique chaque section incomplète dans son manifest.json.",
 	"settingsAccount.backupFailed": "Échec de la sauvegarde : {error}",
 	"settingsAccount.backupPartialNotice": "Il manque {missing} des {wanted} traces GPS dans cette sauvegarde : elles n'ont pas pu être téléchargées. Son manifest.json le signale. Retélécharge-la avec une connexion plus stable pour obtenir un fichier complet.",
+	"settingsAccount.backupPartialSections": "Cette sauvegarde est incomplète : {sections} n'a pas pu être lu en entier. Son manifest.json le signale. Refais-la avec une connexion plus stable avant de compter dessus.",
 	"settingsAccount.restoreArchiveIncomplete": "Cette archive se déclare incomplète : {sections} étaient partielles au moment de sa création. Rien n'a été écrasé — restaure depuis une sauvegarde complète pour combler les manques.",
 	"settingsAccount.restoreArchiveIncompleteUnnamed": "Cette archive se déclare incomplète — elle ne couvrait pas tout le compte au moment de sa création. Rien n'a été écrasé.",
 	"settingsAccount.identitiesLoadFailed": "Échec du chargement des méthodes de connexion : {error}",

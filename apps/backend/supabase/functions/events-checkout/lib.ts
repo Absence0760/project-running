@@ -34,6 +34,14 @@ export function computeApplicationFeeCents(
   amountCents: number,
   platformFeeBps: number,
 ): number {
+  // `NaN <= 0` is false, so a non-numeric column value used to fall through
+  // both guards and return NaN — which the destination-charge builder then
+  // put in `application_fee_amount`. Every other reader in this tier
+  // (`readRefund`, `refundedCentsOfCharge`, `validateDonationAmount`) fails
+  // closed on a value it cannot use as an integer; this one is the money
+  // split and must too. Zero is the safe answer: the platform takes no fee
+  // rather than an unknown one.
+  if (!Number.isFinite(amountCents) || !Number.isFinite(platformFeeBps)) return 0;
   if (amountCents <= 0 || platformFeeBps <= 0) return 0;
   const fee = Math.floor((amountCents * platformFeeBps) / 10000);
   return Math.min(fee, amountCents);

@@ -246,8 +246,16 @@ void main() {
       await _pump(tester, training: training, social: social);
 
       final dup = find.byTooltip('Duplicate week');
+      // Both primitives, because the two Flutter versions leave the button in
+      // different states: scrollUntilVisible builds it where the list is lazy
+      // (it is absent from the tree entirely on 3.44), and ensureVisible then
+      // pulls it inside the 800x600 viewport where it is built but below the
+      // fold (3.47 lands it at y=612.5, so the tap misses the render tree).
+      // Either one alone passes on one version and fails on the other.
       await tester.scrollUntilVisible(dup, 200,
           scrollable: find.byType(Scrollable).first);
+      await tester.ensureVisible(dup);
+      await tester.pumpAndSettle();
       expect(dup, findsOneWidget);
       await tester.tap(dup);
       await tester.pumpAndSettle();
@@ -275,8 +283,16 @@ void main() {
       await _pump(tester, training: training, social: social);
 
       final dup = find.byTooltip('Duplicate week');
+      // Both primitives, because the two Flutter versions leave the button in
+      // different states: scrollUntilVisible builds it where the list is lazy
+      // (it is absent from the tree entirely on 3.44), and ensureVisible then
+      // pulls it inside the 800x600 viewport where it is built but below the
+      // fold (3.47 lands it at y=612.5, so the tap misses the render tree).
+      // Either one alone passes on one version and fails on the other.
       await tester.scrollUntilVisible(dup, 200,
           scrollable: find.byType(Scrollable).first);
+      await tester.ensureVisible(dup);
+      await tester.pumpAndSettle();
       await tester.tap(dup);
       await tester.pumpAndSettle();
       await tester.tap(find.descendant(

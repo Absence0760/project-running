@@ -441,4 +441,54 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		);
 		expect(data).toHaveLength(0);
 	});
+
+	test('a truncated FIRST-CONNECT backfill leaves the card saying so', async ({ page }) => {
+		// The connect callback is a different code path from "Sync now",
+		// and it used to grade its result and then drop everything but the
+		// toast (§ 846). It is also the sync MOST likely to come up short —
+		// the only one that walks the whole lookback window — so a silent
+		// card here is where "sync again" would never be said at all, and
+		// the un-imported runs are reachable only until they age out.
+		//
+		// The card renders the note only for a CONNECTED integration, so
+		// the row is planted: the exchange itself is mocked, and this is
+		// the state the page is in once it has refreshed after one.
+		await plantIntegration({ provider: 'strava', lastSyncAt: null });
+
+		// OAuth 2.0 §10.12: completeStravaOAuth refuses to exchange unless
+		// the echoed state matches what it stashed before redirecting out.
+		await page.addInitScript(() => {
+			sessionStorage.setItem('strava_oauth_state', 'e2e-connect-state');
+		});
+
+		let sawConnect = false;
+		await page.route('**/functions/v1/strava-import**', async (route) => {
+			const body = route.request().postDataJSON() as { action?: string } | null;
+			if (body?.action === 'connect') sawConnect = true;
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					imported: 5,
+					skipped: 0,
+					failed: 0,
+					rate_limited: false,
+					complete: false,
+					resumable: true,
+				}),
+			});
+		});
+
+		await page.goto(
+			'/settings/integrations?code=e2e-code&scope=read,activity:read_all&state=e2e-connect-state',
+		);
+
+		const stravaCard = page.locator('.integration-card', { hasText: 'Strava' });
+		const note = stravaCard.getByTestId('strava-partial-note');
+		await expect(note).toBeVisible({ timeout: 10_000 });
+		await expect(note).toContainText(/picks up where it stopped/i);
+		expect(sawConnect, 'the connect exchange must have been the call that produced it').toBe(
+			true,
+		);
+	});
 });

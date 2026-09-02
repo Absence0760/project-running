@@ -253,3 +253,18 @@ Deno.test('buildCheckoutSessionParams — the order id reaches the metadata the 
   ]);
   assertEquals(params.metadata.order_id, 'ord_9');
 });
+
+Deno.test('computeApplicationFeeCents — a value it cannot use as money takes no fee', () => {
+  // `NaN <= 0` is false, so a non-numeric `price_cents` or `platform_fee_bps`
+  // fell through both guards and returned NaN, which the destination-charge
+  // builder put straight into `application_fee_amount`. Every other reader in
+  // this tier fails closed on a value it cannot read as an integer.
+  for (const bad of [NaN, Infinity, -Infinity]) {
+    assertEquals(computeApplicationFeeCents(bad, 250), 0, `amount ${bad}`);
+    assertEquals(computeApplicationFeeCents(5000, bad), 0, `bps ${bad}`);
+  }
+  assertEquals(computeApplicationFeeCents(NaN, NaN), 0);
+  // The positive control beside it: a real pair still yields a real fee, so
+  // the guard is not a blanket zero.
+  assertEquals(computeApplicationFeeCents(5000, 250), 125);
+});

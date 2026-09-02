@@ -1451,6 +1451,7 @@ export const messages = {
 	"settingsAccount.exportPartialNotice": "前回のエクスポートは一部のみです。アカウントにある {total} 件のランのうち {count} 件を含んでいます。データは削除されていません — もう一度エクスポートしてください。アカウント全体のアーカイブでは、不完全なセクションが manifest.json に記載されます。",
 	"settingsAccount.backupFailed": "バックアップに失敗しました: {error}",
 	"settingsAccount.backupPartialNotice": "このバックアップには GPS トラック {wanted} 件のうち {missing} 件が含まれていません（ダウンロードできませんでした）。manifest.json にもその旨が記録されています。完全なファイルが必要な場合は、通信が安定した状態でもう一度ダウンロードしてください。",
+	"settingsAccount.backupPartialSections": "このバックアップは不完全です。{sections} を最後まで読み取れませんでした。manifest.json にもその旨が記録されています。信頼して使う前に、通信が安定した状態で取り直してください。",
 	"settingsAccount.restoreArchiveIncomplete": "このアーカイブは不完全だと自ら記録しています: 作成時に {sections} が不足していました。何も上書きされていません — 不足分を埋めるには完全なバックアップから復元してください。",
 	"settingsAccount.restoreArchiveIncompleteUnnamed": "このアーカイブは不完全だと自ら記録しています — 作成時にアカウント全体をカバーしていませんでした。何も上書きされていません。",
 	"settingsAccount.identitiesLoadFailed": "ログイン方法を読み込めませんでした: {error}",

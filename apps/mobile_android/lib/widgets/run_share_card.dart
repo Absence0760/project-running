@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
@@ -20,6 +19,7 @@ import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../share_sheet.dart';
+import 'capture_png.dart';
 import '../widgets/top_banner.dart';
 
 /// Whether the share card for [run] draws a basemap at all, and therefore
@@ -93,12 +93,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
       }
       await WidgetsBinding.instance.endOfFrame;
 
-      final boundary = _cardKey.currentContext!.findRenderObject()
-          as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
+      final bytes = await capturePngBytes(_cardKey);
 
       final tmp = await getTemporaryDirectory();
       final file = File('${tmp.path}/run-${widget.run.id}.png');

@@ -87,6 +87,15 @@ export function validateFreshness(
   windowMs: number = 7 * 24 * 60 * 60 * 1000,
   clockSkewMs: number = 60 * 1000,
 ): FreshnessOutcome {
+  // A timestamp that is not a number has no age, and every comparison
+  // against NaN is false — so the two gates below both fell through to
+  // 'ok' and the replay window opened for anything a caller could make
+  // unparseable. Both live callers happen to type-check their field
+  // first, which is why nothing had noticed; the gate itself must not
+  // depend on that. `too_old` rather than a fourth outcome: the callers
+  // answer 400 on anything but 'ok', and an unusable stamp is at least
+  // as suspect as a stale one.
+  if (!Number.isFinite(eventTsMs) || !Number.isFinite(nowMs)) return 'too_old';
   const ageMs = nowMs - eventTsMs;
   if (ageMs > windowMs) return 'too_old';
   if (ageMs < -clockSkewMs) return 'too_future';

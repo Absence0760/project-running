@@ -76,6 +76,16 @@ import {
 	type ResumableUpload,
 	resumableWritable,
 } from './resumable_upload.ts';
+import {
+	buildGpx,
+	canonicalHrUrl,
+	canonicalTrackUrl,
+	CSV_COLS,
+	csvRow,
+	type GpxRef,
+	type RenderRunRow,
+	type RenderTrackPoint,
+} from './render.ts';
 
 const SIGNED_URL_TTL_S = 600; // 10 minutes
 
@@ -89,40 +99,14 @@ const EXPORT_BUCKET = 'exports';
 const RUNS_SELECT =
 	'id, user_id, started_at, duration_s, distance_m, source, activity_type, is_dnf, external_id, metadata, track_url, hr_series_url, is_public, event_id, route_id, created_at, updated_at';
 
-type RunRow = {
-	id: string;
-	user_id: string;
-	started_at: string;
-	duration_s: number;
-	distance_m: number;
-	source: string;
-	activity_type: string;
-	is_dnf: boolean;
-	external_id: string | null;
-	metadata: Record<string, unknown> | null;
-	track_url: string | null;
-	hr_series_url: string | null;
-	is_public: boolean | null;
-	event_id: string | null;
-	route_id: string | null;
-	created_at: string;
-	updated_at: string;
-};
+type RunRow = RenderRunRow;
 
-type TrackPoint = {
-	lat: number;
-	lng: number;
-	ele?: number;
-	ts?: string;
-	bpm?: number;
-};
+type TrackPoint = RenderTrackPoint;
 
 /// A Storage object the archive still owes, kept instead of the whole
 /// row so the object sweeps don't reintroduce a per-run memory cost.
 type BlobRef = { id: string; key: string };
 
-/// What a per-run GPX needs, and nothing else.
-type GpxRef = { id: string; startedAt: string; title: string; key: string };
 
 type PageFetcher<T> = (offset: number, limit: number) => Promise<SectionPage<T> | null>;
 
@@ -277,62 +261,6 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	});
 }));
 
-// Field set kept stable across the GDPR export so a user-owned
-// pipeline can rely on the column shape. New metadata keys go in
-// the `metadata` column as JSON rather than expanding the header.
-const CSV_COLS = [
-	'id',
-	'started_at',
-	'distance_m',
-	'duration_s',
-	'source',
-	'activity_type',
-	'is_dnf',
-	'title',
-	'avg_bpm',
-	'steps',
-	'elevation_m',
-	'route_id',
-	'event_id',
-	'external_id',
-	'is_public',
-	// `track_url` deliberately omitted: the GPX export already
-	// includes the actual track bytes per run; the CSV consumer
-	// needs the run shape, not the Storage path. Removing it
-	// closes a leak path where the CSV (which the user might
-	// share or store off-device) carries the raw owner-folder
-	// Storage path that bypasses the clip-public-track EF for any
-	// active session JWT. /audit/all storage Low.
-	'metadata',
-	'created_at',
-	'updated_at',
-];
-
-function csvRow(r: RunRow): string {
-	const md = r.metadata ?? {};
-	return [
-		csvEscape(r.id),
-		csvEscape(r.started_at),
-		String(r.distance_m),
-		String(r.duration_s),
-		csvEscape(r.source),
-		// activity_type + is_dnf are real columns now (F3).
-		csvEscape(r.activity_type ?? ''),
-		csvEscape(String(r.is_dnf ?? false)),
-		csvEscape((md.title as string | undefined) ?? ''),
-		csvEscape(stringy(md.avg_bpm)),
-		csvEscape(stringy(md.steps)),
-		csvEscape(stringy(md.elevation_m)),
-		csvEscape(r.route_id ?? ''),
-		csvEscape(r.event_id ?? ''),
-		csvEscape(r.external_id ?? ''),
-		csvEscape(String(r.is_public ?? false)),
-		csvEscape(JSON.stringify(md)),
-		csvEscape(r.created_at),
-		csvEscape(r.updated_at),
-	].join(',');
-}
-
 async function writeCsv(
 	upload: ResumableUpload,
 	runsPage: PageFetcher<RunRow>,
@@ -350,40 +278,6 @@ async function writeCsv(
 	if (runs.written === 0 && !runs.complete) throw new RunFetchError('runs read failed');
 	await upload.finish();
 	return { runs, incomplete: budget.deadlineSkipped() };
-}
-
-function csvEscape(v: string): string {
-	// RFC 4180 minimal: wrap in quotes if the value contains comma,
-	// quote, newline, or carriage return; escape interior quotes by
-	// doubling.
-	if (v === '') return '';
-	if (/[",\n\r]/.test(v)) {
-		return '"' + v.replace(/"/g, '""') + '"';
-	}
-	return v;
-}
-
-function stringy(v: unknown): string {
-	if (v == null) return '';
-	if (typeof v === 'string') return v;
-	if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-	return JSON.stringify(v);
-}
-
-// Path-shape assertion mirroring the one in clip-public-track. RLS
-// guarantees the user owns these rows, but a corrupt or legacy row with
-// a malformed track_url would otherwise feed an unconstrained string
-// into the service-role downloader. The CHECK constraint in
-// 20260621_001 means new writes always match this shape; these are the
-// runtime backstop.
-function canonicalTrackUrl(r: RunRow): string | null {
-	if (!r.track_url) return null;
-	return r.track_url === `${r.user_id}/${r.id}.json.gz` ? r.track_url : null;
-}
-
-function canonicalHrUrl(r: RunRow): string | null {
-	if (!r.hr_series_url) return null;
-	return r.hr_series_url === `${r.user_id}/${r.id}.hr.json.gz` ? r.hr_series_url : null;
 }
 
 /// Wrap a pooled `load` so it stops fetching once the wall clock is
@@ -506,44 +400,6 @@ async function downloadBytes(
 import { decodeTrack as _decodeTrack } from './decode_track.ts';
 async function decodeTrack(blob: Blob): Promise<TrackPoint[]> {
 	return (await _decodeTrack(blob)) as TrackPoint[];
-}
-
-function buildGpx(run: GpxRef, track: TrackPoint[]): string {
-	// Minimal GPX 1.1 — track points only, no waypoints / routes. Loaders
-	// (Strava, Garmin Connect, GPX viewers) handle this shape uniformly.
-	const escapedTitle = xmlEscape(run.title);
-	const lines: string[] = [];
-	lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-	lines.push(
-		'<gpx version="1.1" creator="Runonward" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">',
-	);
-	lines.push(`  <metadata><name>${escapedTitle}</name><time>${run.startedAt}</time></metadata>`);
-	lines.push('  <trk>');
-	lines.push(`    <name>${escapedTitle}</name>`);
-	lines.push('    <trkseg>');
-	for (const p of track) {
-		const eleTag = p.ele != null ? `<ele>${p.ele}</ele>` : '';
-		const timeTag = p.ts ? `<time>${p.ts}</time>` : '';
-		const hrExt = p.bpm
-			? `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${p.bpm}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>`
-			: '';
-		lines.push(
-			`      <trkpt lat="${p.lat}" lon="${p.lng}">${eleTag}${timeTag}${hrExt}</trkpt>`,
-		);
-	}
-	lines.push('    </trkseg>');
-	lines.push('  </trk>');
-	lines.push('</gpx>');
-	return lines.join('\n') + '\n';
-}
-
-function xmlEscape(v: string): string {
-	return v
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&apos;');
 }
 
 // Backup format — mirrors the Go worker's BuildBackupZip archive

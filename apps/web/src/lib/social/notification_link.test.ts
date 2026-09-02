@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { notificationLinkFor, type NotificationLinkInput } from './notification_link';
 
 function make(overrides: {
@@ -124,3 +126,99 @@ test('an unknown future kind falls through to null, never undefined', () => {
 	assert.equal(href, null);
 	assert.notEqual(href, undefined);
 });
+
+// ─────────── the CHECK rail ───────────
+//
+// `row.kind` is typed `string` on purpose, so this module stays free of a
+// runtime import from core/data.ts — which also means `tsc` gives no
+// exhaustiveness here, and `notification_link.ts` is not one of the rails
+// scripts/check_constraint_unions.mjs registers for `notifications.kind`.
+// Nothing anywhere compares the switch to the column. An eighteenth kind
+// therefore lands on `default: null` — a notification the reader cannot
+// click — with every guard in the tree green.
+
+const MIGRATIONS = resolve('../backend/supabase/migrations');
+
+/// Every value the LIVE `notifications_kind_check` admits. The constraint
+/// is dropped and re-added as the set widens, so the last migration that
+/// mentions it is the one in force.
+function notificationKinds(): string[] {
+	const files = readdirSync(MIGRATIONS)
+		.filter((f) => f.endsWith('.sql'))
+		.sort();
+	let latest: string | null = null;
+	for (const f of files) {
+		const sql = readFileSync(resolve(MIGRATIONS, f), 'utf-8');
+		const at = sql.lastIndexOf('add constraint notifications_kind_check');
+		if (at === -1) continue;
+		const open = sql.indexOf('kind in (', at);
+		const close = sql.indexOf(')', open);
+		assert.ok(open !== -1 && close !== -1, `unreadable kind list in ${f}`);
+		latest = sql.slice(open, close);
+	}
+	assert.ok(latest, 'no migration defines notifications_kind_check any more');
+	const kinds = [...latest.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+	assert.ok(kinds.length >= 17, `parsed only ${kinds.length} kinds — the reader is stale`);
+	return kinds;
+}
+
+/// The kinds that deliberately carry no destination, each with its reason.
+/// Anything else the column can hold must route somewhere.
+const DELIBERATELY_UNLINKED: Record<string, string> = {
+	content_hidden:
+		'a moderation notice about the reader\'s own content — there is nothing to open',
+};
+
+test('every kind the column can hold is routed by name, not by the default arm', () => {
+	const source = readFileSync(resolve('src/lib/social/notification_link.ts'), 'utf-8');
+	const unhandled = notificationKinds().filter(
+		(kind) => !source.includes(`case '${kind}':`),
+	);
+	assert.deepEqual(
+		unhandled,
+		[],
+		`notifications.kind admits ${unhandled.join(', ')} and notificationLinkFor has no ` +
+			'case for it, so the row renders as an unclickable notification. Add a case — ' +
+			'or, if it genuinely has nowhere to go, add it to DELIBERATELY_UNLINKED with a reason.',
+	);
+});
+
+test('every routed kind reaches a destination when it has its ids', () => {
+	const fullyPopulated = {
+		run_id: 'r-1',
+		actor_id: 'u-1',
+		event_id: 'e-1',
+		plan_id: 'p-1',
+		achievement_id: 'a-1',
+		challenge_id: 'c-1',
+		event_club_slug: 'club',
+		club_slug: 'club',
+	};
+	for (const kind of notificationKinds()) {
+		const href = notificationLinkFor(make({ kind, ...fullyPopulated }));
+		if (kind in DELIBERATELY_UNLINKED) {
+			assert.equal(
+				href,
+				null,
+				`${kind} is registered as unlinked (${DELIBERATELY_UNLINKED[kind]}) but now links to ${href}`,
+			);
+			continue;
+		}
+		assert.ok(
+			typeof href === 'string' && href.startsWith('/'),
+			`${kind} carried every id and still routed nowhere`,
+		);
+	}
+});
+
+test('the unlinked register does not name a kind the column dropped', () => {
+	const kinds = new Set(notificationKinds());
+	for (const kind of Object.keys(DELIBERATELY_UNLINKED)) {
+		assert.ok(
+			kinds.has(kind),
+			`${kind} is registered as deliberately unlinked but notifications.kind no ` +
+				'longer admits it — the exemption is covering nothing',
+		);
+	}
+});
+

@@ -44,7 +44,17 @@ Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
   // credential lands (integrations.md + decisions ADR). Defaults to RunSignUp so
   // the existing probe is unchanged; UltraSignup is gated symmetrically.
   const body = (guarded.body ?? {}) as RequestBody;
-  const provider = body.provider === 'ultrasignup' ? 'ultrasignup' : 'runsignup';
+  // An unrecognised provider is refused, not silently read as the default.
+  // Coercing it to RunSignUp gated the caller's request on a credential for a
+  // provider they never asked for — a 503 when RunSignUp's key is missing, and
+  // a `synced: 0` success once it lands, for a provider this function has
+  // never heard of. `race-results-import` already answers 400 here and names
+  // this the same class of bug as claiming an unconfigured leg is configured.
+  const requested = body.provider ?? 'runsignup';
+  if (requested !== 'runsignup' && requested !== 'ultrasignup') {
+    return Response.json({ error: 'unknown_provider' }, { status: 400 });
+  }
+  const provider = requested;
   const apiKey = provider === 'ultrasignup'
     ? Deno.env.get('ULTRASIGNUP_API_KEY')
     : Deno.env.get('RUNSIGNUP_API_KEY');

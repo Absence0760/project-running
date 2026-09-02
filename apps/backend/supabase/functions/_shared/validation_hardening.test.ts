@@ -206,3 +206,16 @@ Deno.test('selectEffectivePricing — the first matching row decides, determinis
   assertEquals(selectEffectivePricing(rows, '2026-06-01T18:00:00Z')?.id, 'first');
   assertEquals(selectEffectivePricing(rows, '2026-06-08T18:00:00Z')?.id, 'default-a');
 });
+
+Deno.test('isValidTimestamptz — the calendar starts at year 1, because Postgres does', () => {
+  // ISO 8601 writes 1 BC as 0000; Postgres has no year zero and raises 22008
+  // on it. The gate exists to turn exactly that class of cast failure into a
+  // 400, and it used to admit the value and let it 500 on the wire.
+  assertEquals(isValidTimestamptz('0000-01-01T00:00:00Z'), false);
+  assertEquals(isValidTimestamptz('0000-12-31T23:59:59+00:00'), false);
+  // The first year Postgres will take, and the four-digit years around it,
+  // are still admitted — the guard is a floor, not a narrowing.
+  assertEquals(isValidTimestamptz('0001-01-01T00:00:00Z'), true);
+  assertEquals(isValidTimestamptz('1999-12-31T23:59:59Z'), true);
+  assertEquals(isValidTimestamptz('9999-12-31T23:59:59Z'), true);
+});

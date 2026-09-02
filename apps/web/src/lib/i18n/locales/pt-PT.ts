@@ -1455,6 +1455,7 @@ export const messages = {
 	"settingsAccount.exportPartialNotice": "Sua última exportação está parcial: contém {count} das {total} corridas da sua conta. Nada foi eliminado — exporte novamente para tentar outra vez. O ficheiro completo da conta lista cada secção incompleta no manifest.json.",
 	"settingsAccount.backupFailed": "Falha no backup: {error}",
 	"settingsAccount.backupPartialNotice": "Faltam {missing} de {wanted} trajetos GPS neste backup: não foi possível transferi-los. O manifest.json dele regista isto. Transfira novamente com uma ligação mais estável para ter um ficheiro completo.",
+	"settingsAccount.backupPartialSections": "Este backup ficou incompleto: não foi possível ler {sections} por inteiro. O manifest.json dele regista isto. Faça-o novamente com uma ligação mais estável antes de confiar nele.",
 	"settingsAccount.restoreArchiveIncomplete": "Esse ficheiro diz que está incompleto: {sections} ficaram faltando quando ele foi gerado. Nada foi sobrescrito — restaure a partir de um backup completo para preencher as lacunas.",
 	"settingsAccount.restoreArchiveIncompleteUnnamed": "Esse ficheiro diz que está incompleto — não cobria a conta inteira quando foi gerado. Nada foi sobrescrito.",
 	"settingsAccount.identitiesLoadFailed": "Falha ao carregar os métodos de login: {error}",

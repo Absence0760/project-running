@@ -215,3 +215,24 @@ Deno.test('a replacement hold never reuses the superseded hold\'s key', () => {
   assertStrictEquals(inHold.key === afterLapse.key, false);
   assertStrictEquals(afterLapse.body.metadata.order_id === 'order-1', false);
 });
+
+Deno.test('isSalesWindowOpen — a later occurrence of a started series is still on sale', () => {
+  // The instant the two arguments disagree about, stated as a difference so
+  // it cannot be satisfied by a function that ignores its first argument.
+  // A weekly class whose first session ran in January, being bought for a
+  // session next week: the series start is long past, the occurrence is not.
+  const seriesStartMs = Date.parse('2026-01-05T18:00:00Z');
+  const occurrenceMs = Date.parse('2026-03-02T18:00:00Z');
+  const nowMs = Date.parse('2026-02-27T09:00:00Z');
+  assertEquals(isSalesWindowOpen(seriesStartMs, 0, nowMs), false);
+  assertEquals(isSalesWindowOpen(occurrenceMs, 0, nowMs), true);
+});
+
+Deno.test('isSalesWindowOpen — an unparseable instant refuses the sale', () => {
+  // Every caller reaches this having already shape-checked its input, but a
+  // naive literal Postgres accepts can still parse to NaN on some paths, and
+  // both comparisons against NaN are false. Closed is the right answer: we
+  // would rather refuse a sale than open one against an instant we cannot
+  // place.
+  assertEquals(isSalesWindowOpen(NaN, 0, Date.parse('2026-02-27T09:00:00Z')), false);
+});
