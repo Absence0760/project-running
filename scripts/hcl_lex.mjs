@@ -129,3 +129,56 @@ export function nestedBlock(body, header) {
   if (close < 0) return null;
   return body.slice(open + 1, close);
 }
+
+/**
+ * `src` with every `#` / `//` line comment and `/* … *\/` block comment
+ * replaced by an equal number of spaces and newlines, so offsets and line
+ * numbers are preserved. Quoted strings are left intact — a `#` inside one is
+ * data, not a comment.
+ *
+ * Callers that pull quoted values out of a policy document need this: several
+ * statements in infra/github-oidc/main.tf carry a prose comment above the
+ * `Action` list, and a naive scan for `"…"` reads whatever that prose quotes as
+ * one more granted action.
+ *
+ * @param {string} src
+ * @returns {string}
+ */
+export function stripComments(src) {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i];
+    const n = src[i + 1];
+    if (inString) {
+      out += c;
+      if (c === '\\') {
+        out += n ?? '';
+        i++;
+      } else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+      continue;
+    }
+    if (c === '#' || (c === '/' && n === '/')) {
+      while (i < src.length && src[i] !== '\n') {
+        out += ' ';
+        i++;
+      }
+      out += '\n';
+      continue;
+    }
+    if (c === '/' && n === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end < 0 ? src.length : end + 2;
+      for (let j = i; j < stop; j++) out += src[j] === '\n' ? '\n' : ' ';
+      i = stop - 1;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
