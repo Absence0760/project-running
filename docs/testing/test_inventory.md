@@ -1199,6 +1199,23 @@ The script uploads a Melbourne-region track, inserts a run (firing the trigger t
 
 This is **not** wired into CI — both the OSM extract download and the OSRM build are too heavy for the GitHub runner. It's a developer-machine sanity check before shipping a matcher change.
 
+### `apps/web/src/lib/segments/catalogue_browse.test.ts` — 41 tests (13 added)
+
+The catalogue browse shaping, plus a new `fold` block. Every vector in that block is one the Dart twin's hand-written fold table answered differently: Vietnamese tone marks over a barred D that must NOT fold, Greek breathings, the two sigmas, the pinyin tone letters, Cyrillic, a spacing diacritic deleted outright, a combining mark outside the five blocks the old table knew, a Georgian Mtavruli capital, a CJK compatibility ideograph, a Hangul syllable decomposing to jamo, the stroke and ligature letters that stay unfolded, and the widening property the whole helper rests on. The Dart suite carries the same 14, so the pair's agreement is visible rather than asserted ([decisions § 852](../architecture/decisions.md)).
+
+### `apps/web/src/lib/segments/catalogue_fold_table.test.ts` — 5 tests
+
+The rail between the SHIPPED web `fold` and the generated table the phone reads. `scripts/check_catalogue_fold_table.mjs` compares the committed table with what the generator renders, which cannot see the generator and web's `fold` drifting apart — both spell the fold out, only one reaches a browser. So this parses the committed Dart table, replays the algorithm `catalogue_browse.dart` implements over it, and asserts `fold` answers identically per entry and end to end over a corpus of real names. Deliberately one-directional: it does not sweep the code space for MISSING entries, because that is what a Node whose ICU has moved produces and the drift guard is the one that knows to say "regenerate" ([decisions § 855](../architecture/decisions.md)). Opens by asserting the table parsed into thousands of ascending, parallel entries, so a file it stops being able to read fails rather than passing over nothing.
+
+### `apps/mobile_android/test/catalogue_browse_test.dart` — 41 tests (14 added)
+
+Mirror of the web suite above, vector for vector. Twelve of the fourteen fail against the table this replaced — measured by running the old fold over the same inputs — and the two that pass are the invariants it got right: a combining mark inside the ranges it knew, and the letters with no canonical decomposition, which must stay unfolded on both platforms. One extra case has no web analogue: the generated table's own shape, since the Dart side binary-searches it and an unsorted table would not fail loudly, it would quietly stop folding some letters.
+
+### `scripts/check_catalogue_fold_table.test.mjs` — 13 tests
+
+The accent-fold drift guard, and the generator under it. Pins that the two causes of a mismatch are reported as different sentences — a hand-edit or a stale commit against a Node whose Unicode tables have moved — because the second reaches a PR that touched none of it, and sending that reader hunting for an edit they did not make wastes the run. Plus: a render that lost its version stamp is itself a finding (without it the guard cannot tell the causes apart), the committed table is what the generator renders, its keys are strictly ascending and parallel to its values, the Hangul arithmetic reproduces NFD across all 11,172 syllables independently of the generator's own assertion, the fold answers the divergence classes and leaves the undecomposable letters alone, and `dartLiteral` emits ASCII only.
+
+
 ---
 
 ## Suite totals after the #789 coverage round (2026-08-31)

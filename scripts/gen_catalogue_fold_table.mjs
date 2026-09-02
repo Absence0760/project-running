@@ -23,7 +23,7 @@
 // between the two platforms. decisions § 852.
 //
 // The pipeline is per-code-point by construction, which is what makes a table
-// a faithful port: measured over every scalar value in two neighbouring
+// a faithful port: measured over every scalar value in three neighbouring
 // contexts, the ONLY code point whose fold depends on what surrounds it was
 // U+03A3 (the Final_Sigma rule in `toLowerCase`), and web now collapses ς onto
 // σ for that reason (decisions § 853). The one residual is canonical

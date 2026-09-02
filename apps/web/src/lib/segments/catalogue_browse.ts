@@ -61,7 +61,7 @@ export interface CatalogueFilters {
  * else — which made this fold the only sigma-SENSITIVE search key in the
  * product ("οδοσ" did not reach "ΟΔΟΣ", though "οδος" did) and, worse, made it
  * the one function here whose answer depends on the characters AROUND the one
- * being folded. Measured across every Unicode scalar value in two neighbouring
+ * being folded. Measured across every Unicode scalar value in three neighbouring
  * contexts, U+03A3 was the only such code point. Collapsing ς onto σ widens the
  * key like every other step and leaves a fold that is decided one code point at
  * a time — which is what lets the Dart twin, whose runtime has neither
