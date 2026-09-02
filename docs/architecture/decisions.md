@@ -15195,3 +15195,40 @@ strips only one is not swept up in it. This is the third guard in this issue
 found to be a false pass rather than a latent one; the lesson is the same each
 time: a guard that cannot see the code it guards is worse than no guard,
 because it is believed.
+
+## 972. The share Lambdas have no method gate, and the Terraform value that makes that safe was asserted nowhere
+
+The three API Lambdas each gate their own HTTP method — coach and
+generate-route on POST, osrm-proxy on GET — because their CloudFront behaviours
+must allow POST and a GET reaching `handleCoach` bills an Anthropic call and
+spends a daily-quota increment (§ 896). The five share Lambdas carry no such
+gate at all.
+
+That is correct rather than an oversight: their fourteen behaviours declare
+`allowed_methods = ["GET", "HEAD", "OPTIONS"]`, so CloudFront refuses a
+mutating method before the origin is reached. What was missing is that
+**nothing compared the two**. A share Lambda's entire method safety lived in a
+Terraform list one copy-paste from an `/api/*` block away, and the sibling
+routing test in `share_lambda_handlers.test.ts` was already reading that same
+file for `path_pattern` — it simply never looked at the methods. Two
+independent spellings of one rule with nothing comparing them is § 967 one
+layer up.
+
+The origin does real work on a method the behaviour lets through, which is what
+makes this worth a guard rather than a comment: measured, an `OPTIONS` to
+`/og/run/<id>.png` runs a full ~50 ms `resvg` render and answers `200
+image/png`. OPTIONS is allowed and forwarded, so that path is already exercised
+today; a behaviour widened to POST would be the same render on a method nothing
+about the surface expects, on paths the WAF rate-limit rules do not scope (they
+cover only `/api/coach`, `/api/routes/generate` and `/api/routes/osrm`).
+
+The guard parses every `ordered_cache_behavior` block targeting a
+`lambda-share-*` origin and fails when one allows POST, PUT, PATCH or DELETE.
+Because this lane must not edit `infra/`, the check could not be falsified by
+mutating its input, so the check is a pure function over the parsed blocks and
+a second case runs it against a synthetic behaviour shaped exactly like
+`/api/coach*` — the guard carries its own proof that it fires. The alternative
+fix, adding a method gate to all five Lambdas, was not taken: it would turn
+today's OPTIONS 200 into a 405 with no way to verify from here that no client
+sends a preflight against these paths, and the coupling is better made visible
+than papered over from the wrong side.

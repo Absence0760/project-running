@@ -224,3 +224,94 @@ test('the JSON 404 carries the shared window and the JSON 503 is never cached', 
 		);
 	}
 });
+
+/// The methods a behaviour declares, for every `ordered_cache_behavior` block
+/// in the given Terraform whose target origin is a share Lambda.
+function shareBehaviourMethods(
+	tf: string,
+): Array<{ pattern: string; origin: string; methods: string[] }> {
+	const out: Array<{ pattern: string; origin: string; methods: string[] }> = [];
+	for (const [block] of tf.matchAll(/ordered_cache_behavior \{[\s\S]*?\n {2}\}/g)) {
+		const origin = block.match(/target_origin_id\s*=\s*"([^"]+)"/);
+		const pattern = block.match(/path_pattern\s*=\s*"([^"]+)"/);
+		const allowed = block.match(/allowed_methods\s*=\s*\[([^\]]*)\]/);
+		if (!origin || !pattern || !origin[1].startsWith('lambda-share-')) continue;
+		out.push({
+			pattern: pattern[1],
+			origin: origin[1],
+			methods: [...allowed![1].matchAll(/"([A-Z]+)"/g)].map((m) => m[1]),
+		});
+	}
+	return out;
+}
+
+const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+/// A share behaviour that would let a mutating method reach its Lambda.
+function overPermissive(
+	behaviours: ReturnType<typeof shareBehaviourMethods>,
+): string[] {
+	return behaviours
+		.filter((b) => b.methods.some((m) => MUTATING_METHODS.includes(m)))
+		.map((b) => `${b.pattern} -> ${b.origin}: ${b.methods.join(', ')}`)
+		.sort();
+}
+
+// The three API Lambdas each gate their own method — the coach and
+// generate-route on POST, osrm-proxy on GET — because their behaviours must
+// allow POST and a GET reaching `handleCoach` bills an Anthropic call
+// (decisions § 896). The five share Lambdas have NO method gate, and that is
+// correct rather than an oversight: their behaviours allow only GET, HEAD and
+// OPTIONS, so CloudFront refuses a mutating method before the origin sees it.
+//
+// But nothing asserted that list, so the whole of their method safety sat in a
+// Terraform value one copy-paste from a `/api/*` block away — two independent
+// spellings of one rule with nothing comparing them, the shape § 967 is about
+// one layer up. Measured while filing it: an OPTIONS to `/og/run/<id>.png`
+// already runs a full ~50 ms resvg render and answers 200, so the origin does
+// do real work on a non-GET the behaviour lets through.
+test('no share behaviour lets a mutating method reach a Lambda that does not gate one', () => {
+	const tf = readFileSync(
+		resolve(import.meta.dirname, '../../../../../infra/modules/web-stack/main.tf'),
+		'utf-8',
+	);
+	const behaviours = shareBehaviourMethods(tf);
+
+	// Population: a parser that matched nothing would satisfy the assertion
+	// below while proving nothing (decisions § 534).
+	assert.ok(
+		behaviours.length >= 12,
+		`parsed only ${behaviours.length} share behaviours from main.tf — parser broken?`,
+	);
+	for (const b of behaviours) {
+		assert.ok(b.methods.includes('GET'), `${b.pattern} does not allow GET — parser broken?`);
+	}
+
+	assert.deepEqual(
+		overPermissive(behaviours),
+		[],
+		'these send a mutating method at a share Lambda that has no method gate. ' +
+			'Either narrow allowed_methods to GET/HEAD/OPTIONS, or add the gate the ' +
+			'three /api Lambdas carry.',
+	);
+});
+
+// The check above reads a file this lane must not edit, so it cannot be
+// falsified by mutating its input. This falsifies it directly: the same
+// function, over a behaviour block shaped exactly like the `/api/coach*` one.
+test('that check fires on a share behaviour widened to the /api shape', () => {
+	const synthetic = `
+  ordered_cache_behavior {
+    path_pattern               = "/share/run/*"
+    target_origin_id           = "lambda-share-run"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+    cached_methods             = ["GET", "HEAD"]
+  }
+`;
+	const parsed = shareBehaviourMethods(synthetic);
+	assert.equal(parsed.length, 1);
+	assert.deepEqual(overPermissive(parsed), [
+		'/share/run/* -> lambda-share-run: GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE',
+	]);
+});

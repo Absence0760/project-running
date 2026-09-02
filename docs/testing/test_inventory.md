@@ -2037,6 +2037,10 @@ The rewritten one is the body-cap guard, which named only `/api/coach` and now w
 
 Drives all five share Lambdas for the two JSON responses that declared no `cache-control`. The 404 must carry the same five-minute window as every sibling response; the 503 must be `no-store`, because caching a transient failure at the edge turns a blip into a five-minute outage. Fails in both directions — dropping the window from the 404, and giving the 503 the window.
 
+### `apps/web/src/lib/share/share_lambda_handlers.test.ts` — 8 tests (2 more added)
+
+A second pair covers what makes the five share Lambdas safe without a method gate. The first parses every `ordered_cache_behavior` block in `infra/modules/web-stack/main.tf` targeting a `lambda-share-*` origin (14 of them) and fails when one allows POST, PUT, PATCH or DELETE — the value their whole method safety rests on, which nothing had asserted. Because this lane must not edit `infra/`, that check could not be falsified by mutating its input: the check is a pure function over parsed blocks, and the second case runs it against a synthetic behaviour shaped exactly like `/api/coach*` and requires it to name that behaviour. The guard carries its own proof that it fires. See [decisions § 972](../architecture/decisions.md).
+
 ### `apps/web/src/lib/core/site_url.test.ts` — 3 tests (1 added)
 
 The added one is the **register** that moved here from `lambda_site_origin.test.ts`: every `PUBLIC_SITE_URL` read under `src` and `lambda` must fold through `siteOrigin`, in either runtime's spelling. It reuses the walker the sibling default-is-spelled-once scan already had, and has a population floor of 27 reads. Reverting any one of the 22 in-app folds to `env.PUBLIC_SITE_URL || DEFAULT_SITE_URL` fails it by name — but only since the comment-stripper fix in [§ 971](../architecture/decisions.md); with the old order, reverting the fold in `runs/[id]/+page.svelte` left this file green, which is how that false pass was found.
