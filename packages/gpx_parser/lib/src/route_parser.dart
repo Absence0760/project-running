@@ -130,7 +130,7 @@ class RouteParser {
       final lng = double.tryParse(parts[0]);
       final lat = double.tryParse(parts[1]);
       final ele = _finiteOrNull(parts.length >= 3 ? double.tryParse(parts[2]) : null);
-      if (_isUsableCoord(lat) && _isUsableCoord(lng)) {
+      if (_isUsableLat(lat) && _isUsableLng(lng)) {
         points.add(Waypoint(lat: lat!, lng: lng!, elevationMetres: ele));
       }
     }
@@ -167,7 +167,7 @@ class RouteParser {
 
       final lat = double.tryParse(latNode.innerText);
       final lng = double.tryParse(lngNode.innerText);
-      if (!_isUsableCoord(lat) || !_isUsableCoord(lng)) continue;
+      if (!_isUsableLat(lat) || !_isUsableLng(lng)) continue;
 
       final eleNode = pt.findElements('AltitudeMeters').firstOrNull;
       final ele = _finiteOrNull(
@@ -209,7 +209,7 @@ class RouteParser {
         if (lngRaw is! num || latRaw is! num) continue;
         final lat = latRaw.toDouble();
         final lng = lngRaw.toDouble();
-        if (!_isUsableCoord(lat) || !_isUsableCoord(lng)) continue;
+        if (!_isUsableLat(lat) || !_isUsableLng(lng)) continue;
         final eleRaw = c.length >= 3 ? c[2] : null;
         final ele = _finiteOrNull(eleRaw is num ? eleRaw.toDouble() : null);
         points.add(Waypoint(
@@ -223,17 +223,30 @@ class RouteParser {
     return _buildRoute(name, points);
   }
 
-  /// Whether a parsed coordinate can be used as one. `double.tryParse`
+  /// Whether a parsed latitude can be used as one. `double.tryParse`
   /// accepts the literals `NaN`, `Infinity` and `-Infinity`, so a
   /// null-check alone lets a non-finite coordinate into a [Waypoint] — and
   /// nothing downstream re-checks. One such point poisons the route's
   /// haversine distance to NaN, and, once the route is being run, collapses
   /// the recorder's off-route projection to a non-finite reading that the
-  /// sustained-off-route detector had to be taught to refuse. The web
-  /// importer has guarded every one of its coordinate sites with
-  /// `Number.isFinite` since it was written; this is the same contract for
-  /// the same file formats.
-  static bool _isUsableCoord(double? v) => v != null && v.isFinite;
+  /// sustained-off-route detector had to be taught to refuse.
+  ///
+  /// Finite is not sufficient, which is why the bound is here rather than a
+  /// bare `isFinite`: `lat="1e308"` is finite, clears every null and NaN
+  /// check, and then overflows the haversine's `lat2 - lat1` to infinity —
+  /// `sin(infinity)` is NaN, so the route lands with exactly the NaN
+  /// `distanceMetres` the finiteness guard exists to prevent, one step
+  /// later. A NaN there is not merely a wrong number: `Route.toJson` is
+  /// written to disk through `jsonEncode`, which refuses a non-finite
+  /// double outright, so the import parses "successfully" and then cannot
+  /// be saved. The range is not a heuristic either — GPX's `latitudeType`,
+  /// RFC 7946 and the KML spec all constrain latitude to ±90 and longitude
+  /// to ±180, so a value outside it is a malformed file, not a place.
+  static bool _isUsableLat(double? v) => v != null && v.isFinite && v.abs() <= 90;
+
+  /// Longitude half of [_isUsableLat]. Separate bound, same contract.
+  static bool _isUsableLng(double? v) =>
+      v != null && v.isFinite && v.abs() <= 180;
 
   /// Elevation is optional, so an unusable one degrades to absent rather than
   /// dropping the whole point — the same choice the web importer makes.
@@ -259,7 +272,7 @@ class RouteParser {
   static Waypoint? _waypointFromGpxNode(XmlElement node) {
     final lat = double.tryParse(node.getAttribute('lat') ?? '');
     final lng = double.tryParse(node.getAttribute('lon') ?? '');
-    if (!_isUsableCoord(lat) || !_isUsableCoord(lng)) return null;
+    if (!_isUsableLat(lat) || !_isUsableLng(lng)) return null;
 
     final eleNode = node.findElements('ele').firstOrNull;
     final ele = _finiteOrNull(
@@ -291,7 +304,12 @@ class RouteParser {
       final prev = points[i - 1].elevationMetres;
       final curr = points[i].elevationMetres;
       if (prev != null && curr != null && curr > prev) {
-        elevationGain += curr - prev;
+        // Each elevation is finite on its own ([_finiteOrNull]) yet their
+        // difference need not be: `<ele>1e308</ele>` after `<ele>-1e308</ele>`
+        // overflows to infinity, and an infinite `elevationGainMetres` is the
+        // same unsaveable route a NaN distance is — `jsonEncode` refuses it.
+        final gain = curr - prev;
+        if (gain.isFinite) elevationGain += gain;
       }
     }
     return Route(
