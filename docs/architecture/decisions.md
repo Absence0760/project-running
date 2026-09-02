@@ -14385,6 +14385,55 @@ produces a *fresh* profile row, which is not hidden. A new row is not a hidden
 row, and a guard that carried the flag across a delete would be inventing state
 for a row that does not exist yet. Re-applying the hide to a re-created account
 is the moderator's, and the test says so in its own assertion text.
+
+## 942. Two hygiene rules the schema followed everywhere and stated nowhere
+
+**Decided 2026-09-02.** A SECURITY DEFINER function runs as its owner, so RLS is
+not consulted for anything it touches: the row-level guard behind every other
+write in the schema is simply absent, and whatever authorization exists has to
+be written into the body. **45 such functions are reachable by `anon` or
+`authenticated` and write**, and nothing said they had to check anything. The
+two named hygiene suites each pin the specific functions an audit pass happened
+to look at, and `function_search_path_test` pins the *hijack* defence rather
+than the authorization — so a definer mutator shipped with no gate at all would
+have failed none of them.
+
+All 45 were swept and **all 45 gate**, which is the outcome worth recording as
+much as a defect would have been: the rule was being followed, and now it is
+enforced. The one function whose body never names its caller,
+`confirm_safety_contact_by_token`, authenticates by an emailed single-use
+`gen_random_uuid` token instead — a trusted contact confirms from a link with no
+account — and is registered with that reason.
+
+**The rule is about presence, not position, and that is the design decision.**
+The obvious formulation is "the authorization check must come before the first
+write". Run against this schema it flags five *correct* functions, because most
+of them authorize inside the mutation's own `WHERE` clause —
+`update runs ... where r.user_id = auth.uid()` — which is authorization AT the
+write and is strictly harder to get wrong than a separate earlier check. A
+positional rule would have taught the next author to move a predicate for the
+guard's benefit. What cannot be argued with is a body that never names the
+caller at all, so that is what is asserted. Stated in the suite's own header:
+this proves each function ASKS about its caller, not that the question is the
+right one.
+
+The vocabulary of authorization primitives is spelled out rather than left to a
+loose pattern, so adding one is a deliberate edit and no body satisfies the rule
+by coincidence. The sweep carries an operator validation in both directions — it
+plants a client-executable definer mutator that names no caller and requires
+itself to report it, and separately requires that it does **not** flag a
+function that gates only in its `WHERE` clause. The exemption registry is
+checked against reality too: an entry naming a function that has since grown a
+caller check, or one whose reason is too short to be a reason, fails.
+
+A second sweep in the same pass found nothing and is recorded here so it is not
+re-run from scratch. 26 write policies are declared `to public` rather than
+`to authenticated`, and their predicates never mention `auth.uid()` — the shape
+that would be anon-reachable. All 26 delegate to `is_club_admin`,
+`is_event_organiser` or `is_race_director`, and all three read the caller, so an
+anon request satisfies none of them. The caller reference is one level down,
+which is exactly why a text sweep of policy expressions alone would have
+reported 26 findings and been wrong about every one.
 ## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
 
 **Decided 2026-09-02.** PR #849 went up green on every suite this round ran and

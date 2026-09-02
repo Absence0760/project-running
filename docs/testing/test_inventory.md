@@ -1784,13 +1784,36 @@ every caller through), and the clubs guard re-keyed on the JWT role, which fails
 the "an admin can still unhide" assertion precisely because every legitimate
 writer is a definer function called by an ordinary user's session.
 
+### `apps/backend/supabase/tests/definer_mutator_authorization_test.sql` — 6 tests (new)
+
+The catch-all behind [decisions § 942](../architecture/decisions.md): every
+SECURITY DEFINER function `anon` or `authenticated` may EXECUTE and that writes
+must name its caller somewhere in its body, because RLS is not consulted for
+anything such a function touches. 45 functions in scope, all 45 gate, one
+registered exemption (`confirm_safety_contact_by_token`, which authenticates by
+an emailed single-use token). No defect found — the value is that the rule is
+now enforced rather than followed by habit.
+
+Two of the six assertions are the operator validation, and they point in
+opposite directions: the sweep must NAME a planted client-executable definer
+mutator that mentions no caller, and must NOT flag `set_run_expected_return`,
+which authorizes only inside its own `WHERE` clause. Five mutations killed — a
+real function stripped of its `auth.uid()`, the exemption registry emptied, the
+vocabulary stripped of `auth.uid` (which fails the do-not-over-flag assertion
+too), an exemption whose reason is too short, and a stale exemption naming a
+function that does gate.
+
 ### Round 32 sql-lane suite totals
 
 | Suite | Command | Before | After |
 |---|---|---|---|
-| pgTAP | `supabase test db` from `apps/backend` | 2526 in 281 files | 2542 in 282 files |
+| pgTAP | `supabase test db` from `apps/backend` | 2526 in 281 files | 2548 in 283 files |
 | Backend guards | `node --test apps/backend/scripts/*.test.mjs` | 147 | 147 |
 | pgtap refusal mutation guard | `node apps/backend/scripts/check_pgtap_refusal_assertions.mjs` | 179 assertions / 5 expected survivors | 179 / 5 |
+
+The four new files add 44 assertions between them and none is a refusal in the
+guard's vocabulary — every one is a value comparison or a catalogue read, which
+is why its total is unchanged.
 
 The one pgtap failure on this branch is `donations_status_lock_test`, which is
 the known workstation-vs-CI Supabase CLI image split (2.109.1 against CI's
