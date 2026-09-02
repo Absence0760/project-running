@@ -55,13 +55,34 @@ export class OffRouteAlertDetector {
 	/// and false while on-route or still within the debounce window.
 	update(offRouteDistanceMetres: number | null, nowMs: number): boolean {
 		if (this.fired) return false;
-		if (offRouteDistanceMetres == null || offRouteDistanceMetres <= this.thresholdM) {
+		// A non-finite reading is the SAME epistemic state as null — we do not
+		// know how far off route the runner is — and must be read that way
+		// rather than fall through the `<=` comparison, which every non-finite
+		// value fails. Treating one as "off route" starts the sustain clock and
+		// then spends the once-per-run latch on a reading that measured
+		// nothing, leaving a runner who later goes genuinely off course with a
+		// silently dead safety net. Reachable: the recorder's route projection
+		// leaves its running minimum at +Infinity when every segment yields a
+		// NaN distance, which a route whose waypoints carry non-finite
+		// coordinates does.
+		if (
+			offRouteDistanceMetres == null ||
+			!Number.isFinite(offRouteDistanceMetres) ||
+			offRouteDistanceMetres <= this.thresholdM
+		) {
 			// Back on (or near enough) the route — reset the sustain clock.
 			this.sinceMs = null;
 			return false;
 		}
-		// Beyond the threshold. Start the clock on the first such snapshot.
-		if (this.sinceMs == null) {
+		// Beyond the threshold. Start the clock on the first such snapshot, and
+		// re-anchor it whenever the wall clock steps BACKWARDS (an NTP
+		// correction, a manual clock change, a timezone-database update mid
+		// run). Without the re-anchor the anchor stays stranded in the future
+		// and the elapsed comparison stays negative for as long as the step was
+		// large — an hour's correction disarms the alert for an hour of genuine
+		// off-course running. Restarting the measurement is the honest answer:
+		// across a clock jump we cannot say how long the departure has lasted.
+		if (this.sinceMs == null || nowMs < this.sinceMs) {
 			this.sinceMs = nowMs;
 			return false;
 		}
