@@ -50,14 +50,31 @@ export interface CatalogueFilters {
 
 /**
  * Case- and diacritic-insensitive search key. Applied to BOTH sides of every
- * comparison, and built character-by-character (NFD decompose → drop combining
- * marks → lowercase), so it can only ever widen a match: anything that matched
+ * comparison (NFD decompose → drop every `Diacritic` → lowercase → collapse the
+ * Greek final sigma), so it can only ever widen a match: anything that matched
  * on the raw strings still matches on the folded ones. That's what lets a
  * reader type "champs-elysees" and reach "Champs-Élysées" without a keyboard
  * that has the accent.
+ *
+ * The last step is the one that isn't NFD. `toLowerCase` implements Unicode's
+ * Final_Sigma rule, so `Σ` becomes `ς` at the end of a word and `σ` everywhere
+ * else — which made this fold the only sigma-SENSITIVE search key in the
+ * product ("οδοσ" did not reach "ΟΔΟΣ", though "οδος" did) and, worse, made it
+ * the one function here whose answer depends on the characters AROUND the one
+ * being folded. Measured across every Unicode scalar value in two neighbouring
+ * contexts, U+03A3 was the only such code point. Collapsing ς onto σ widens the
+ * key like every other step and leaves a fold that is decided one code point at
+ * a time — which is what lets the Dart twin, whose runtime has neither
+ * normalisation nor the `Diacritic` property, carry the same answer as a
+ * generated table (`scripts/gen_catalogue_fold_table.mjs`, decisions § 852
+ * and § 853).
  */
-function fold(value: string): string {
-	return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+export function fold(value: string): string {
+	return value
+		.normalize('NFD')
+		.replace(/\p{Diacritic}/gu, '')
+		.toLowerCase()
+		.replace(/\u03c2/g, '\u03c3');
 }
 
 /** Finite numeric value of a possibly-stringly `numeric` column, else null. */
