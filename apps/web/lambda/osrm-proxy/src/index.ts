@@ -39,8 +39,16 @@ export const handler = async (
 	// unexpected throw becomes a generic 503 to the wire and a tagged operator
 	// log line, never the runtime's default error envelope.
 	try {
+		// `Allow` is required on a 405 (RFC 9110 15.5.6), and the coach and
+		// generate-route wrappers both send it. This behaviour's CloudFront
+		// allowed_methods include POST/PUT/PATCH/DELETE, so a non-GET really
+		// does reach this Lambda rather than being refused at the edge.
 		if (event.requestContext.http.method !== 'GET') {
-			return json(405, { error: 'method not allowed' });
+			return {
+				statusCode: 405,
+				headers: { 'content-type': 'application/json', allow: 'GET' },
+				body: JSON.stringify({ error: 'method not allowed' }),
+			};
 		}
 		const rawPath = event.rawPath ?? '';
 		if (!rawPath.startsWith(PATH_PREFIX)) {
