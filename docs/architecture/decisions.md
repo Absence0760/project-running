@@ -13356,3 +13356,46 @@ whose only `always()` was on an artifact upload.
 `exit 1` is a coarse proxy for "this can fail" and is deliberately coarse: the
 guard's job is to notice that the failing path was removed, not to re-derive
 what the shell block means.
+
+## 910. Both parity registries can agree perfectly about a pair that is in neither
+
+**Decided 2026-09-02.** `check_parity_pair_registry.mjs` cross-checks CLAUDE.md's
+lockstep bullet against the shared-library-syncer agent's table in both
+directions, and every path either names. Mutating the committed docs confirms all
+four of its properties fire. What it cannot see is a pair **absent from both** —
+and that is the failure this repo has actually had twice: `turn_cues` diverged in
+three implementations at once because the pair was registered in neither registry
+(§ 641), and the web/mobile accent fold sat diverged for eighteen days while both
+doc comments claimed lockstep (§ 760). CLAUDE.md states the mode outright, and
+the guard it points at is structurally unable to detect it.
+
+`check_twin_claims.mjs` takes the **source** as its subject instead. A header
+comment saying "Dart twin of `apps/web/src/lib/x/y.ts`" is a lockstep claim made
+where a reader will see it, and it is the earliest artifact a pair has — written
+with the second half, months before anyone thinks about a registry. Two
+properties: the counterpart path exists, and some row of the syncer table carries
+both files.
+
+Over the tree that is 105 declarations, **13 of them violating**. Nine pairs
+declare lockstep in both headers and are registered nowhere: `tile_pack`,
+`streaks`, `fundraiser_progress`, `readiness`, `calories`, `column_limits`,
+`cycle_plan`, `text_limits`, `route_loop`. CLAUDE.md's own `streak_card` entry
+calls one of them "the compute pair" while nothing registers it, and `route_loop`
+carries 35 mirror tests on web against 20 on Dart. Five declarations name a path
+the counterpart moved out of, including one belonging to a pair that IS
+registered — the registries hold paths of their own, so a stale path in a header
+is invisible to them.
+
+Registration is checked by PATH, not by name: the registry keys a pair on its WEB
+basename, so `gear_rotation_pick.dart` is registered under `rotation_pick`, and a
+name-keyed check would report it and teach the next reader to distrust the guard.
+The declaring verb is an allowlist rather than a keyword sweep — "in lockstep
+with" is this repo's phrase for every kind of coupling, a client and an SQL CHECK
+included, and reading it as a parity claim reports a dozen relationships that are
+not pairs.
+
+The 13 live violations are in `KNOWN_GAPS` because closing one means editing
+CLAUDE.md, the syncer table or a source header, and each entry names which
+property it breaks and where the fix lives. The register can only shrink: an
+entry that has stopped being a violation fails, and so does one naming a
+declaration that no longer exists.
