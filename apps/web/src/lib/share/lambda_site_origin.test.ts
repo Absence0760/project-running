@@ -20,7 +20,7 @@
 //
 // The REGISTER of callers now lives beside the helper, in
 // `core/site_url.test.ts`, which walks `src` and `lambda` together — the same
-// twenty-seven reads, one walker (decisions § 971). What stays here is the half
+// twenty-seven reads, one walker (decisions § 970). What stays here is the half
 // that walker cannot state: what the head builders actually emit when the fold
 // is wrong.
 

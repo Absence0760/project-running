@@ -101,7 +101,7 @@ test('siteOrigin folds a blank env to the default and trims a trailing slash', (
  * used `|| DEFAULT_SITE_URL`, which does catch the empty string — but not a
  * whitespace-only value, which is truthy and produced a canonical of
  * `   /share/run/<id>`, and not a trailing slash, which produced
- * `https://threkir.com//share/run/<id>` (both measured, § 971).
+ * `https://threkir.com//share/run/<id>` (both measured, § 970).
  *
  * `siteOrigin` is the one place either question is answered. This registers
  * every caller so a twenty-eighth cannot re-decide it.

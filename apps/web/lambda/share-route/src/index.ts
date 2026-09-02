@@ -50,7 +50,7 @@ const CACHE_CONTROL =
 // A 503 here is an unexpected throw, and it is the ONE response on these
 // behaviours that must not carry the window above. Cached for five minutes at
 // the edge, a transient failure becomes a five-minute outage for every viewer
-// who shares a cache node with the request that tripped it (decisions § 970).
+// who shares a cache node with the request that tripped it (decisions § 969).
 const NO_STORE = 'no-store';
 
 const HTML_PATH_RE = /^\/share\/route\/([^/]+)\/?$/;

@@ -111,7 +111,7 @@ test('checkBodyByteLimit — Uint8Array path mirrors ArrayBuffer path', () => {
 });
 
 test('a malformed base64 body is decoded, not refused — the 400 branch is not for that', () => {
-	// The filing behind decisions § 969 read the `400 invalid body encoding`
+	// The filing behind decisions § 968 read the `400 invalid body encoding`
 	// branch as dead code, on the grounds that `Buffer.from(s, 'base64')`
 	// ignores invalid characters rather than throwing. The first half is right
 	// and is measured here: no STRING reaches the branch, whatever it contains.

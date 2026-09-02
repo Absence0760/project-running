@@ -300,7 +300,7 @@ test('a sub-path is matched by its whole path, not by a substring of it', async 
 	// route table that is exact (`src/routes/api/coach/route-describe/
 	// +server.ts`). Measured before the fix: every path below reached the
 	// route-describe or route-request handler and answered its own
-	// `400 invalid route …`, where dev answers 404 (decisions § 968).
+	// `400 invalid route …`, where dev answers 404 (decisions § 967).
 	for (const rawPath of [
 		'/api/coach/route-describe-v2',
 		'/api/coach/route-describeZZ',

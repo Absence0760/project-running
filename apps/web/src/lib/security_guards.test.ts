@@ -1854,7 +1854,7 @@ test('every two-wrapper endpoint enforces one shared body cap, on both wrappers'
 	// untouched one endpoint over for as long: /api/routes/generate spelled a
 	// 4 KB cap twice and re-implemented the decode, and the coach's own two
 	// sub-paths spelled theirs as a named constant in the dev wrapper and a
-	// bare literal in the Lambda (decisions § 969).
+	// bare literal in the Lambda (decisions § 968).
 	//
 	// Derived, not listed: any wrapper that caps a body must IMPORT the cap and
 	// call the shared helper, so a new endpoint inlining its own fails here
@@ -1890,7 +1890,7 @@ test('every two-wrapper endpoint enforces one shared body cap, on both wrappers'
 		const rel = file.slice(file.indexOf('apps/web/') + 'apps/web/'.length);
 		// Line comments blanked BEFORE block comments are stripped — a `//`
 		// containing `/*` otherwise opens a block that swallows real code
-		// (decisions § 972).
+		// (decisions § 971).
 		const src = readFileSync(file, 'utf-8')
 			.split('\n')
 			.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
@@ -3532,7 +3532,7 @@ test('a source-scanning guard blanks line comments before it strips block commen
 	// carries a `PUBLIC_SITE_URL` fold that `site_url.test.ts` was therefore
 	// scanning right past while reporting a pass. A guard that cannot see the
 	// code it guards is worse than no guard, because it is believed
-	// (decisions § 972).
+	// (decisions § 971).
 	const files: string[] = [];
 	(function walk(dir: string): void {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {

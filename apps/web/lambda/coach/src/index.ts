@@ -55,7 +55,7 @@ import {
 // The production path table, anchored — `^…$`, never `rawPath.includes(…)`.
 // A substring test matches anywhere in the path, so `/api/coach/route-describe-v2`
 // and `/api/coach/x/route-describeZZ` both dispatched at the FIRST `includes`
-// while dev answered them 404 (measured, decisions § 968). Not exploitable with
+// while dev answered them 404 (measured, decisions § 967). Not exploitable with
 // the two sub-paths shipped today — both are Pro-gated and carry a SMALLER body
 // cap than the coach path, so a mismatch lands a caller on a stricter handler —
 // but it becomes a live defect the moment a third sub-path's name contains an
@@ -115,7 +115,7 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		// SvelteKit answers it 404 in dev; prod used to fall through to the
 		// coach turn, which spends an auth round-trip and the daily quota on a
 		// path that does not exist and hands it the coach's own 256 KB cap
-		// rather than the smaller one its name suggests (decisions § 968).
+		// rather than the smaller one its name suggests (decisions § 967).
 		if (!COACH_PATH_RE.test(rawPath)) {
 			writeJson(responseStream, 404, { error: 'not found' });
 			return;

@@ -198,7 +198,7 @@ test('an unexpected throw is a generic 503 on every share Lambda', async () => {
 
 // The JSON pair was the only response on these behaviours that declared no
 // `cache-control` at all, so its TTL was whatever the behaviour's cache policy
-// decided rather than something this surface chose (decisions § 970). The two
+// decided rather than something this surface chose (decisions § 969). The two
 // want OPPOSITE answers, which is why one shared header would have been the
 // wrong fix: the 404 is a deploy-stable misconfiguration and takes the same
 // five-minute window as every other response here, while the 503 is a transient

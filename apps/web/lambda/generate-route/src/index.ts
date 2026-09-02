@@ -59,7 +59,7 @@ export const handler = async (
 		// `decodeLambdaBody`, not a private Buffer + byteLength pair: the coach's
 		// two wrappers once diverged on exactly that, a UTF-16 `length` check
 		// against a byte cap, and let a multi-byte payload roughly 3x the cap
-		// through. One decoder, one cap, both wrappers (decisions § 969).
+		// through. One decoder, one cap, both wrappers (decisions § 968).
 		const decoded = decodeLambdaBody(
 			event.body,
 			event.isBase64Encoded === true,
