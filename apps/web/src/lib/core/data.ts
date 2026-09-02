@@ -2,7 +2,7 @@
  * Data access layer — all Supabase queries in one place.
  */
 import { supabase } from './supabase';
-import { edgeFunctionErrorCode } from './edge_function_error';
+import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function_error';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { isEntityId } from './entity_id';
 import { loadSettings, effective } from '../settings/settings';
@@ -1942,7 +1942,10 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 		const { error: fnError } = await supabase.functions.invoke('strava-import', {
 			body: { action: 'disconnect' },
 		});
-		if (fnError) throw fnError;
+		// The caller renders this into "Couldn't disconnect: {error}", a slot
+		// written for a reason — so it gets the function's own code, not
+		// supabase-js's fixed non-2xx sentence (decisions § 904).
+		if (fnError) throw new Error(await edgeFunctionErrorMessage(fnError, 'disconnect_failed'));
 		return;
 	}
 

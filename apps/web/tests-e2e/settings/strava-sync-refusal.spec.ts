@@ -97,6 +97,34 @@ test.describe('/settings/integrations — Strava sync refusals', () => {
 		await expect(page.locator('.toast')).not.toContainText(/non-2xx|Edge Function/);
 	});
 
+	test('a refused disconnect says what refused it, not that it was non-2xx', async ({ page }) => {
+		// Disconnect goes through the same function on purpose — it revokes at
+		// Strava's end and wipes the vault rows rather than doing a bare DELETE
+		// — so it inherits the same envelope, into the same reason-shaped slot
+		// ("Couldn't disconnect: {error}").
+		await page.route('**/functions/v1/strava-import', async (route) => {
+			await route.fulfill({
+				status: 503,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'strava_not_configured' }),
+			});
+		});
+		await page.goto('/settings/integrations');
+		const card = page.locator('.integration-card', { hasText: 'Strava' });
+		await expect(card).toBeVisible({ timeout: 15_000 });
+		await card.getByRole('button', { name: 'Disconnect' }).click();
+		const confirm = page.locator('.modal', { hasText: 'Disconnect integration?' });
+		await expect(confirm).toBeVisible({ timeout: 5_000 });
+		await confirm.getByRole('button', { name: 'Disconnect' }).click();
+
+		const toast = page.locator('.toast').first();
+		await expect(toast).toBeVisible({ timeout: 10_000 });
+		await expect(toast).toContainText('strava_not_configured');
+		await expect(page.locator('.toast')).not.toContainText(/non-2xx|Edge Function/);
+		// The card must still say connected: the refusal left the row alone.
+		await expect(card).toHaveClass(/connected/);
+	});
+
 	test('the Sync button is released after a refusal', async ({ page }) => {
 		await syncWith(page, 503, { error: 'strava_not_configured' });
 		const card = page.locator('.integration-card', { hasText: 'Strava' });
