@@ -64,6 +64,13 @@ export async function createBackup(
 			.select('*')
 			.eq('user_id', userId)
 			.order('started_at', { ascending: false })
+			// Secondary key so the pages compose into the whole table: LIMIT /
+			// OFFSET over a non-unique sort key lets a row on a page boundary
+			// be returned twice or not at all, and this read is the one whose
+			// manifest then claims `complete`. Same rule `fetchClubMembers`
+			// states for load-more, where the cost is a visibly duplicated
+			// name rather than a run missing from an archive.
+			.order('id', { ascending: false })
 			.range(from, to)
 	);
 	// Nothing at all is a failed backup, not a short one — the runner gets
@@ -74,7 +81,16 @@ export async function createBackup(
 
 	onProgress?.({ stage: 'routes', current: 0, total: 1 });
 	const routesRead = await readAllRows<Record<string, unknown>>((from, to) =>
-		supabase.from('routes').select('*').eq('user_id', userId).range(from, to)
+		// Ordered on the primary key alone: `routes` has no natural sort and a
+		// paged read with no ORDER BY is undefined -- Postgres may answer two
+		// OFFSETs from different row orders, so an account past one page could
+		// archive a route twice and lose another, under a whole manifest.
+		supabase
+			.from('routes')
+			.select('*')
+			.eq('user_id', userId)
+			.order('id', { ascending: true })
+			.range(from, to)
 	);
 	const routes = routesRead.rows;
 

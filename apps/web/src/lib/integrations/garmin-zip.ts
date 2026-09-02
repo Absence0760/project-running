@@ -137,6 +137,9 @@ export async function importGarminBundle(
 			.select('started_at, distance_m')
 			.eq('user_id', uid)
 			.order('started_at', { ascending: false })
+			// Secondary key: a row dropped at a page boundary is an identity
+			// missing from the dedupe set, which re-imports the run.
+			.order('id', { ascending: false })
 			.range(from, to)
 			.then(({ data, error }): RawRunRow[] | null => (error ? null : (data as RawRunRow[]))),
 	);
