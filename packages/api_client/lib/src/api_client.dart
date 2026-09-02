@@ -1571,7 +1571,14 @@ class ApiClient {
     required String runId,
     required List<Waypoint> track,
   }) async {
-    final json = jsonEncode(track.map(_waypointToJson).toList());
+    final usable = finiteWaypoints(track);
+    if (usable.length != track.length) {
+      debugPrint(
+        'ApiClient: dropped ${track.length - usable.length} non-finite '
+        'waypoint(s) from run $runId before upload',
+      );
+    }
+    final json = _trackBlobJson(usable);
     final bytes = Uint8List.fromList(gzip.encode(utf8.encode(json)));
     final path = '$userId/$runId.json.gz';
     await _client.storage.from(StorageBuckets.runs).uploadBinary(
@@ -1589,6 +1596,23 @@ class ApiClient {
         );
     return path;
   }
+
+  /// The exact bytes the `runs` bucket holds for a track, before gzip.
+  ///
+  /// Filters through [finiteWaypoints] because `jsonEncode` REFUSES a
+  /// non-finite double, and a refusal here is permanent: the run fails its
+  /// track upload on every sync cycle forever, with nothing in the failure to
+  /// distinguish it from a lost network. Only one of this method's producers
+  /// screened for one — the recorder (decisions § 956) — leaving the Wear OS
+  /// and watchOS bridges, the Strava API importer, the backup-restore path
+  /// and `resumeSession`'s seeded track able to strand a run.
+  static String _trackBlobJson(List<Waypoint> track) =>
+      jsonEncode(finiteWaypoints(track).map(_waypointToJson).toList());
+
+  /// Test-only: the blob [_uploadTrack] gzips and stores.
+  @visibleForTesting
+  static String debugTrackBlobJson(List<Waypoint> track) =>
+      _trackBlobJson(track);
 
   Future<List<Waypoint>> _downloadTrack(String path) async {
     final bytes = await _client.storage.from(StorageBuckets.runs).download(path);

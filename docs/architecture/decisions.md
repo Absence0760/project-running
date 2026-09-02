@@ -15076,3 +15076,56 @@ back unquoted), so the cast cannot meet a shape it rejects.
 One consequence recorded rather than fixed here: a row decoded with a NaN and
 then re-encoded through `toJson` hits `jsonEncode`'s refusal of non-finite
 doubles. That is the same class as §986 and is answered there.
+
+## 986. A point that is not a location cannot strand a run, and there is no terminal error because there is no terminal failure
+
+`jsonEncode` refuses a non-finite double. Measured:
+
+```
+jsonEncode([{'lat': double.nan}])
+-> JsonUnsupportedObjectError: Converting object to an encodable object
+   failed: NaN     isError=true  isException=false
+```
+
+It is an `Error`, so `on Exception` never saw it, and it is thrown from the
+two places every run's track passes through on its way out of memory:
+`ApiClient._uploadTrack` and the local store's `jsonEncode`. One such point
+therefore made a run **unsaveable and unuploadable at once**, and permanently:
+`saveRunsBatch` parks the run for retry, the next cycle encodes the same track
+and fails identically, and nothing in the failure distinguishes it from a lost
+network. A four-day desert effort stays on the phone forever.
+
+Only the recorder screened for one (§ 956). The Wear OS and watchOS bridges,
+`strava_importer.dart`'s API path, the backup-restore path and
+`resumeSession`'s caller-supplied seeded track all reach `saveRun` unscreened.
+
+**The screen goes at the serializers, not at the five producers.** A rule of
+the form "every producer must remember" is the shape this repo keeps filing
+against; a filter in the two places a track becomes bytes covers every producer
+that exists and every one that will. `finiteWaypoints` in `core_models` is
+that filter, applied in `Run.toJson` (which is the local store's five encode
+sites and the backup archive at once), in the in-progress slice writer, and in
+`ApiClient._trackBlobJson`.
+
+**It drops rather than refuses.** A non-finite coordinate is not a location but
+the absence of one (§ 954), so dropping it removes nothing real, and the
+alternative — refusing the upload — is the outcome the runner already has. The
+recorder and the four route importers already answer this way at their own
+boundaries; this is the same answer at the far end. The drop is counted and
+`debugPrint`ed at the upload site, never silent.
+
+`Run.toJson` also resolves a non-finite `distanceMetres` to zero. That value
+would fail the same encode, and it does not fail alone: the local index every
+other run shares is written in the same pass, so one NaN distance could take
+the whole store's index with it. Zero is what `runs_distance_m_check` (§ 939)
+would demand of the column anyway.
+
+**No terminal-error taxonomy was added, deliberately.** The obvious durable
+shape here is a classifiable permanent failure the sync drain can park instead
+of retrying. But the retry loop is a symptom of a permanent failure existing;
+removing the failure removes the loop, and a new error category with no
+reachable member is a preemptive abstraction. What remains unanswered — and is
+filed rather than invented — is whether any OTHER permanent per-run upload
+failure exists (a blob past the bucket's size limit is the candidate). That is
+a question about a failure we have not observed, and the taxonomy should be
+built the day one is.
