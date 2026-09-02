@@ -1744,8 +1744,13 @@ Fetches and imports a user's full parkrun history.
 
 **Response:**
 ```json
-{ "imported": 23, "skipped": 0 }
+{ "imported": 23, "skipped": 0, "total": 23, "complete": true }
 ```
+
+`total` is every usable result the page carried; `imported + skipped` stops at
+`MAX_PARKRUN_ROWS` (5000). `complete` is the explicit claim in the shape
+`parseStravaSyncResult` established — **a client must treat an absent `complete`
+as PARTIAL**, never as whole (decisions § 976).
 
 ---
 
@@ -1765,10 +1770,21 @@ Imports an official race result onto a `source='race'` run, or enriches an exist
 2. `provider='runsignup'`: **fail closed** — if `RUNSIGNUP_API_KEY`/`_SECRET` are unset return `503 {error:'provider_not_configured'}`; else call the RunSignUp results endpoint, map each finisher to a run row (`source='race'`, `external_id=race:{name}:{date}:{bib}`, the owner-only race metadata). Fail-loud on a non-2xx upstream (502).
 3. `provider='chronotrack'`: **fail closed** — if `CHRONOTRACK_CLIENT_ID`/`CHRONOTRACK_USER_ID`/`CHRONOTRACK_PASSWORD` are unset return `503 {error:'provider_not_configured'}`; else call the ChronoTrack Live results endpoint (event id = the listing's `provider_race_id`), map each finisher with the same shaping as RunSignUp. Fail-loud on a non-2xx upstream (502).
 4. `provider='paste'`: map the single pasted result row.
-5. `probe=true`: report provider availability without a listing — `503 provider_not_configured` when `provider='chronotrack'` is unconfigured, else `{configured:true}`. Drives the ChronoTrack Settings card.
-6. `matchRunId` set → merge the metadata + set `race_listing_id` onto that owner-scoped run (no duplicate). Else dedup per-user against existing `external_id`s and insert the fresh rows.
+5. `provider='ultrasignup'`: **refuses unconditionally** — `503 {error:'provider_not_configured', reason:'results_unattributable'}`, before the credential read and before the fetch. The endpoint is an athlete history feed with no race identifier on a row, so every result would be stamped with the listing's race (decisions § 975).
+6. `probe=true`: report provider availability without a listing — `503 provider_not_configured` when `provider='chronotrack'` is unconfigured or `provider='ultrasignup'` (always), else `{configured:true}`. Drives the ChronoTrack + UltraSignup Settings cards.
+7. `matchRunId` set → merge the metadata + set `race_listing_id` onto that owner-scoped run (no duplicate). Else dedup per-user against existing `external_id`s and insert the fresh rows.
 
-**Response:** `{ "imported": 1, "skipped": 0, "enriched": 0 }` (the `matchRunId` path returns `enriched: 1`).
+**Response:** `{ "imported": 1, "skipped": 0, "enriched": 0, "complete": true }` (the `matchRunId` path returns `enriched: 1`).
+
+`complete` is false when the provider fetch may have been cut off at
+`MAX_RESULTS_ROWS` (2000). It is reachable rather than theoretical:
+`runSignUpResultsUrl` narrows upstream by **user id only**, so a request scoped
+by bib alone fetches the whole finisher field and the bib filter runs afterwards
+— a major with 30,000 finishers truncates before it. A truncated fetch that
+matched nothing answers `502 {error:'upstream_results_truncated', complete:false}`
+rather than a successful import of nothing, because "we read the whole field and
+you are not in it" and "we read the first 2,000 and you were not among them" are
+different sentences (decisions § 976).
 
 ### `POST /race-listings-sync`
 

@@ -15162,3 +15162,52 @@ probe, and making the gate answer yes.
 
 Noted while there and left alone: no client sends `provider: 'ultrasignup'` to
 anything but the probe and this branch, so nothing else changes shape.
+
+## 976. Two silent truncations, and the reachable one was not the filed one
+
+**Decided 2026-09-02.** `parkrun-import` stopped its scrape at
+`MAX_PARKRUN_ROWS` and answered `{ imported, skipped }`, where `skipped` means
+"already had it" — no field could distinguish a whole import from a capped one.
+That was the filing, and it was correct. Its reachability estimate was also
+correct: 5,000 parkruns is about 96 years of weekly Saturdays.
+
+**The same class one function over is reachable today.**
+`race-results-import`'s three extractors cap at `MAX_RESULTS_ROWS` (2,000) and
+its response could not say so either — and `runSignUpResultsUrl` narrows
+upstream by **user id only**, so a request scoped by BIB alone fetches the whole
+finisher field and `filterResultsByBib` narrows afterwards. A major with 30,000
+finishers therefore truncates at 2,000 before the bib filter runs. Driven rather
+than described: 30,000 rows in, 2,000 extracted, `filterResultsByBib(mapped,
+'25000')` returns nothing. The runner is told no result was found for a race
+they finished.
+
+Both now report. parkrun answers `{ imported, skipped, total, complete }`, where
+`total` is every usable result the page carried — the walk no longer stops dead
+at the cap, which had bounded the result set and destroyed the evidence that it
+had been bounded in the same statement; the bound now lives on the push alone,
+and the walk is already bounded by the 2 MB HTML cap that refuses loudly.
+`race-results-import` answers `complete` on every success shape.
+
+The default is `parseStravaSyncResult`'s, not `cloudExportShortfall`'s: **an
+absent `complete` is PARTIAL.** The two chose opposite defaults for a stated
+reason — the export has two transports of different vintages, so warning on
+every export would be its own dishonesty, whereas here (as on the Strava side)
+there is one transport shipped alongside its callers and the cost is asymmetric.
+`resultsPossiblyTruncated` reads exactly-at-the-cap as truncated for the same
+reason: a page carrying exactly 2,000 is indistinguishable from one carrying
+more, and a false "possibly" costs a sentence where a false "complete" costs a
+runner the belief that they were not in a race they finished.
+
+One case gets more than a field. A truncated fetch that matched nothing now
+answers `502 upstream_results_truncated` rather than `{ imported: 0 }`, because
+"we read the whole field and you are not in it" and "we read the first 2,000
+finishers and you were not among them" are different sentences and only one of
+them is true.
+
+`_shared/import_truncation.test.ts` drives the 30,000-finisher case rather than
+asserting about the constant, and pins both response shapes. Three mutations
+killed: reverting parkrun's walk and response, removing the race-results
+refusal, and making the truncation predicate strict at the cap.
+
+**The client half is owed and filed**, not done here: neither web nor mobile
+reads `complete` off either importer, so today the field is honest and unread.
