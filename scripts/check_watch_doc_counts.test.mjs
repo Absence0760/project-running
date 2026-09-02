@@ -26,25 +26,23 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GUARD = join(HERE, 'check_watch_doc_counts.mjs');
 
-/** Every source file some registry row resolves through. */
-const SOURCES = [
-	'apps/custom_watch/app/src/tasks/ble.rs',
-	...[
-		'page',
-		'screens',
-		'settings_menu',
-		'face',
-		'flash_store',
-		'run_store',
-		'waypoints',
-		'timers',
-		'settings',
-		'course',
-		'trackback',
-		'gnss_mode',
-		'profiles',
-	].map((m) => `apps/custom_watch/core/src/${m}.rs`),
-];
+/**
+ * Every source file some registry row resolves through, RECORDED rather than
+ * listed: a hand-written list is one more transcription, and this file exists
+ * because transcriptions rot.
+ * @returns {string[]}
+ */
+function sourcePaths() {
+	/** @type {Set<string>} */
+	const seen = new Set();
+	for (const row of REGISTRY) {
+		row.resolve((p) => {
+			seen.add(p);
+			return loadSource(p);
+		});
+	}
+	return [...seen];
+}
 
 /**
  * A throwaway copy of exactly what the guard reads, so a mutation can be shown
@@ -55,7 +53,7 @@ const SOURCES = [
 function runOnCopy(mutate) {
 	const dir = mkdtempSync(join(tmpdir(), 'watch-doc-counts-'));
 	try {
-		for (const rel of [...DOC_FILES, ...SOURCES]) {
+		for (const rel of [...DOC_FILES, ...sourcePaths()]) {
 			const dest = join(dir, rel);
 			mkdirSync(dirname(dest), { recursive: true });
 			cpSync(join(ROOT, rel), dest);

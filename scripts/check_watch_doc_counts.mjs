@@ -459,6 +459,54 @@ export const REGISTRY = [
 		phrases: ['defines {n} modes'],
 	},
 	{
+		id: 'run_store.laps',
+		symbol: '`run_store::MAX_STORED_LAPS`',
+		resolve: (read) => constValue(read(`${CORE}/run_store.rs`), 'MAX_STORED_LAPS'),
+		phrases: ['{n}-lap storage budget', 'lap budget is {n} records'],
+	},
+	{
+		id: 'autolap.rungs',
+		symbol: '`auto_lap::AutoLap` variants',
+		resolve: (read) => enumVariants(read(`${CORE}/auto_lap.rs`), 'AutoLap').length,
+		phrases: ['closed {n}-rung catalogue'],
+	},
+	{
+		id: 'elevation.profile',
+		symbol: '`record::ELEV_PROFILE_CAP`',
+		resolve: (read) => constValue(read(`${CORE}/record.rs`), 'ELEV_PROFILE_CAP'),
+		phrases: ['{n}-sample elevation ring'],
+	},
+	{
+		id: 'panel.cols',
+		symbol: '`face::COLS`',
+		resolve: (read) => constValue(read(`${CORE}/face.rs`), 'COLS'),
+		phrases: ['{n} text columns'],
+	},
+	{
+		id: 'panel.rows',
+		symbol: '`face::ROWS`',
+		resolve: (read) => constValue(read(`${CORE}/face.rs`), 'ROWS'),
+		phrases: ['{n} rows of the 8×16 font', 'a panel of {n} (144 px', 'filled the {n}-row'],
+	},
+	{
+		id: 'grid.capacity',
+		symbol: '`page_grid::GRID_CAPACITY` (`GRID_COLS` × `face::ROWS` less `GRID_TOP_ROW`)',
+		resolve: (read) => {
+			const grid = read(`${CORE}/page_grid.rs`);
+			const cols = constValue(grid, 'GRID_COLS');
+			const top = constValue(grid, 'GRID_TOP_ROW');
+			const rows = constValue(read(`${CORE}/face.rs`), 'ROWS');
+			derivedValue(grid, 'GRID_BODY_ROWS', 'ROWS - GRID_TOP_ROW', rows - top);
+			return derivedValue(
+				grid,
+				'GRID_CAPACITY',
+				'GRID_COLS * GRID_BODY_ROWS',
+				cols * (rows - top),
+			);
+		},
+		phrases: ['= {n} cells'],
+	},
+	{
 		id: 'profiles.count',
 		symbol: '`profiles::ActivityProfile` variants',
 		resolve: (read) => enumVariants(read(`${CORE}/profiles.rs`), 'ActivityProfile').length,
@@ -496,6 +544,10 @@ export const SWEEP_NOUNS = [
 	'-slot newest-wins',
 	'-point course cap',
 	'-point trackback',
+	'-lap storage budget',
+	'-rung catalogue',
+	'text columns',
+	'-sample elevation ring',
 ];
 
 /**
