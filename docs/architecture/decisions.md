@@ -15277,3 +15277,17 @@ been observed. Both spellings are now refused and the race keeps a null distance
 Five mutations killed: the write moving to the caller's client, the failed-read
 refusal, the `unusable` counter, the calendar check in the slash branch, and the
 within-batch duplicate reconciliation.
+
+**And the function's only callers turned out not to want a sync at all.** Every
+invocation in the tree is a CREDENTIAL PROBE: web's `isRunSignUpConfigured` and
+`isUltraSignUpConfigured` invoke it with `{}` and `{ provider: 'ultrasignup' }`
+to decide whether to offer the affordance or the unavailable explainer, mobile's
+`raceImportProviders` names it as two `probeFunction`s, and nothing on either
+platform reads `synced`. While the leg was a stub that cost nothing. Writing it
+would have made a page load walk a provider feed, write the shared calendar, and
+spend the 2/hour bucket — so the SECOND probe within an hour would 429 and the
+tile would read unavailable for the rest of it. A sync is therefore opt-IN
+(`{ sync: true }`), the shape `race-results-import` already uses for its probe
+mode, and the default answer is the credential verdict alone. Behind the
+credential gate, not in front of it, or an unprovisioned deploy would report
+itself configured; both placements are pinned.
