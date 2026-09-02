@@ -12398,3 +12398,218 @@ The cross-tree read is the same shape `MetadataRegistryTest` (which reads
 `docs/backend/metadata.md`) and `WearRoutesFixtureTest` (a repo-root fixture)
 already use, and it runs in the `build-watch-wear` job, which is code-gated —
 so a phone-side rename, being code, runs it.
+
+## 884. Every localizing literal on watchOS is now read against the String Catalog, in both directions — and the complication was passing two formatted numbers through a `LocalizedStringKey`
+
+**Decided 2026-09-02.** Numbered out of a range reserved for this round's lane
+rather than appended in sequence; the number is an identifier, not a chronology.
+
+`apps/watch_ios` is the least verifiable tier in the repo. One job compiles it —
+`test-watch-ios`, on a macOS runner — and [§ 761](#761)'s
+`check_xcstrings_parity.sh`, given its own suite by [§ 850](#850), holds the
+catalog against `CFBundleLocalizations` and `knownRegions`. Between those two facts sits a gap nobody had measured:
+whether the *source* and the *catalog* agree at all. Neither end was read
+against the other.
+
+**A SwiftUI literal with no catalog entry is silent in every direction that
+matters.** `Text("…")` is a `LocalizedStringKey`, and a key the catalog does not
+carry falls back to the key itself — so a German wrist renders the English
+literal, nothing throws, `xcodebuild test` passes, and § 761's guard passes too
+because the catalog is internally consistent about the keys it *does* hold. The
+cost lands later and somewhere else: `SWIFT_EMIT_LOC_STRINGS = YES` means the
+next Xcode build extracts the literal into `Localizable.xcstrings` as a new
+untranslated key, and *then* the parity guard fails a PR that never touched
+localization.
+
+**Two live instances, both in the complication, both the same authoring slip.**
+`InlineView` and `RectangularView` each rendered
+`"\(formatDistanceKm(…)) · \(formatPaceSecPerKm(…))"` inside a `Text` / `Label`
+literal. Both interpolands are already formatted and already localized — a
+`NumberFormatter` decimal separator and a `MeasurementFormatter` unit word have
+been applied by the time they arrive — so the enclosing literal is a
+`LocalizedStringKey` lookup for `%@ · %@`, a key with nothing in it to
+translate. Everywhere else in the same file the author had it right:
+`Text(formatElapsed(entry.elapsedSeconds))` passes a `String`, which selects the
+non-localizing `StringProtocol` overload. The fix follows that existing shape —
+one `private func statLine(_:)` both views call — rather than adding a middle
+dot to six catalogues.
+
+**The reverse direction found nothing, which is the point of running it.** All
+56 catalog entries are still referenced. Claim (2) deliberately searches *every*
+string literal rather than only the localizing call sites, because eight of the
+56 are reached through `String(localized:)`, `.configurationDisplayName(…)` and
+`.description(…)` — a dead-key check keyed on the same curated API list as claim
+(1) would have reported all eight as orphans on its first run, and the fix for
+that false alarm is deleting live translations.
+
+**Interpolation is matched on shape, not on type, and the guard says so.** A
+literal and the key Xcode extracted from it differ (`\(queuedCount)` against
+`%lld`), so both are normalised to a placeholder. That makes `\(anInt)` and
+`\(aString)` indistinguishable under one key — a real gap, recorded in the
+guard's header rather than papered over, because closing it needs a type-checker
+and this runs on Linux. The normaliser balances parens rather than matching
+non-greedily: the first by-hand pass over this used `\\(.*?\\)`, stopped inside
+`\(Int(bpm.rounded()))`, and reported a correct call site as a missing key.
+
+## 885. The complication's duplicated formatters are held byte-identical by a Linux guard, because the Swift suite that claims to pin them links the other copy
+
+**Decided 2026-09-02.** `Complications/ActiveRunComplication.swift` and
+`WatchApp/RunFormat.swift` each carry `formatElapsed` / `formatDistanceKm` /
+`formatPaceSecPerKm`. The duplication is deliberate and correct — the widget
+builds in a separate Widget Extension target that cannot link `RunFormat.swift`
+— and three separate comments said "keep the two in lockstep". Nothing enforced
+it.
+
+**`ComplicationFormatterTests` could not, and its doc comment said it did.** The
+suite opened by claiming it "pins the active-run complication's pure formatters
+… in `Complications/ActiveRunComplication.swift`". It does not: that file is in
+no target at all (the Widget Extension is a manual Xcode step, see
+`Complications/README.md`), so `@testable import WatchApp` reaches only the
+`RunFormat.swift` copy. Every one of its 13 assertions is about the copy the
+watch face will never execute. A drift between the two would leave the suite
+green, `xcodebuild` green, and the watch face rounding a distance differently
+from the run screen two inches away.
+
+This is the same shape as the parity pairs the repo already guards: a lockstep
+asserted in prose, in a language whose tests cannot see both sides. The
+resolution is the same one [§ 641](#641) reached for `turn_cues` — the guard
+lives outside both toolchains, in the one place that can read them together.
+`scripts/check_watch_ios_source.mjs` extracts each function by balancing braces
+from its `func` line and compares the text. The three are identical today, so
+this is a guard over a seam that is currently correct; the divergence it
+prevents is the kind nothing else in the repo could have reported.
+
+All three comments now name the guard and say plainly that no Swift test can do
+this, so a later reader does not delete it on the grounds that the suite covers
+the duplication.
+
+## 886. watchOS capabilities are derived from the calls that need them, both directions — which found an unclaimed health entitlement and a missing App Group
+
+**Decided 2026-09-02.** `scripts/check_ios_native_declarations.mjs` has done
+exactly this for the phone since [§ 742](#742): every `UIBackgroundModes` entry,
+entitlement and purpose string is derived from the code that needs it, and a
+declaration nothing claims is an error rather than a warning. It reads nothing
+under `apps/watch_ios`. The watch's `Info.plist` and `WatchApp.entitlements`
+were read by one guard, for one key (`CFBundleLocalizations`), and by nothing
+else.
+
+**Two defects, opposite directions, both silent.**
+
+`com.apple.developer.healthkit.background-delivery` was declared and nothing
+anywhere calls `enableBackgroundDelivery`. That entitlement authorises
+`HKObserverQuery` wakeups; the app's background HealthKit work is an
+`HKWorkoutSession` plus an `HKLiveWorkoutBuilder`, which the
+`workout-processing` background mode authorises and which is separately
+declared. It is removed. An unexercised capability is an App Review rejection on
+its own, and for a *health* capability it is also an over-claim about what the
+watch collects — the same reading `docs/features/` gives the App Store privacy
+labels.
+
+`com.apple.security.application-groups` was absent while `ActiveRunBridge` binds
+`UserDefaults(suiteName: "group.com.threkir.app.activerun")`. Without the
+entitlement that initialiser yields no shared store, so every
+`publishComplicationSnapshot()` — called on all five workout transitions —
+wrote nowhere. `ActiveRunBridge.write` fails closed, which is correct and is
+also why the failure had no symptom: nothing thrown, nothing logged. The
+entitlement is added. `Complications/README.md` step 3 still stands for the
+Widget Extension target, which does not exist in the repo.
+
+**Two purpose strings were checked and kept, and the reason one of them is kept
+is a repo precedent rather than a fresh judgement.**
+`NSLocationAlwaysAndWhenInUseUsageDescription` is derived from
+`allowsBackgroundLocationUpdates = true`, not from `requestAlwaysAuthorization`
+— which this app never calls. Deriving it from the Always request would have
+concluded the key was an over-claim and deleted it. The phone guard's own rule
+for the same key names the same background-updates call, and one derivation for
+one key across two tiers is worth more than each tier reasoning separately about
+Apple's grant model.
+
+**The job is ungated now, and that is a consequence of what the guard reads.**
+[§ 761](#761) gated `watch-ios-locale-parity` on `changes.outputs.code`, with
+the stated ground that none of its three inputs was `docs/`, `.claude/` or
+`*.md`. Claim (5) reads `Complications/README.md` — the only instruction an
+operator has for typing the App Group identifier into two Xcode capability
+panes — and the moment a markdown file enters the read set, that reasoning
+stops holding: a README-only rename sets `code=false`, the gate counts the skip
+as a pass, and the drift ships green. This is [§ 869](#869)'s rule applied to a
+job that had grown a new input, and `parity-matrix` is ungated for the same
+reason. The whole job is `python3` plus a bare `node` against a checkout — no
+`npm ci`, no Xcode — so running it on a docs-only PR costs less than reasoning
+about whether it needed to.
+
+## 887. The run hand-off metadata envelope is read from both ends, because it broke once already and nothing noticed until an audit
+
+**Decided 2026-09-02.** `ContentView.syncRun` packs eight keys into the
+`WCSession.transferFile(_:metadata:)` envelope; `WatchIngestBridge.swift` on the
+phone lifts them back out with a second hand-written key list, in a different
+app, in a different target, five files away. Neither end knows about the other.
+
+**The failure mode is one column short, not one error.** A key the watch adds
+and the phone never reads is dropped on the way to the row: the file transfers,
+`transferRun` returns true, the run is marked synced, the row is inserted, and
+one field is absent. Nothing in either app can report it — not the Swift suite,
+not `xcodebuild`, not the phone's Dart tests, because every layer did exactly
+what it was told.
+
+**It has already happened.** The comment sitting in that dictionary today
+records it: "Apr 2026 cross-client audit caught Apple-Watch runs arriving on the
+phone with no `activity_type`, even though `WatchIngestBridge.swift` filters for
+it." The hardcoded `"run"` beside that comment is the repair. An audit found it;
+no guard did.
+
+The claim reads both ends and fails in both directions. The eight agree today,
+so like [§ 885](#885) this is a guard over a currently-correct seam — the value
+is that the next key added to one end cannot ship without the other. It returns
+null rather than an empty set when the dictionary literal is not where it
+expects: an end whose shape has changed must report that the claim can no longer
+be made, because an empty set silently becomes "the phone reads eight keys
+nobody sends" — a vacuity that fails loudly for the wrong reason and would be
+fixed by deleting the phone's reads.
+
+## 888. Nothing in this round was compiled, and the register of what that leaves unverified
+
+**Decided 2026-09-02.** There is no Xcode on the workstation this was authored
+on, and `test-watch-ios` is the only job in the repo that builds Swift. Per
+`docs/custom_watch/quality_standards.md`, everything below is at the weakest
+rung available — **read, not built** — and the distinction is recorded here
+rather than left for a reader to infer from an absent claim.
+
+**What is genuinely evidenced.** `scripts/check_watch_ios_source.mjs` parses
+files and its 37-test suite mutates a copy of the real tree into each shape it
+must refuse, with the unmutated copy as the positive control. That is real
+evidence *about those files*. `python3 -c "plistlib.load(...)"` accepted both
+edited plists, so a real plist parser agrees the XML is well-formed and the
+hand-rolled reader in the guard answers the same as it does on the two files it
+reads — asserted in the suite rather than assumed, because a reader written to
+avoid a dependency is only worth having if it agrees with the thing it replaced.
+
+**What is not.** No compiler has seen the Swift edits (the `statLine` helper and
+its two call sites, three comment rewrites). No signing has seen the entitlement
+edits — CI passes `CODE_SIGNING_ALLOWED=NO`, so `test-watch-ios` cannot regress
+on an entitlement in either direction, which is why the removal was safe to make
+and also why it proves nothing. No simulator has rendered any of it. The
+`statLine` fix is asserted to select Swift's non-localizing `StringProtocol`
+overload on the strength of the same construction already shipping four lines
+away in the same file; that is a reading of existing code, not a type-checker's
+answer.
+
+**Two documented numbers were wrong and are corrected here rather than
+guarded.** `parity.md` described the watchOS catalog as "43 strings × 6 locales"
+with "six locales in `CFBundleLocalizations` + `knownRegions`". It is 56 strings
+across seven locales — six explicit plus an implicit `en` — and both declaration
+sites hold seven. § 761 added the seventh and the prose was not swept. The
+counts are not given a guard: [§ 868](#868)'s finding was that a documented count
+either earns a derivation or loses its number, and these are the second case —
+the sentence says what ships, and the size of the catalog is `check_xcstrings_parity.sh`'s
+output, not a claim prose needs to restate.
+
+**One gap is filed, not fixed.** The four `NS*UsageDescription` strings in
+`Info.plist` are English-only: there is no `InfoPlist.xcstrings` anywhere in the
+tree, so the health-data and location consent prompts — the most
+privacy-sensitive strings the watch shows, and the only ones a reader is
+required to act on — render in English on a German, Japanese or Portuguese
+wrist while all 56 UI strings localize. Closing it means a new resource file
+*and* four `project.pbxproj` insertions no build here can validate, and the
+phone carries the same shape (`Base.lproj` holds two storyboards and no
+`InfoPlist.strings`), so fixing one tier alone would be inconsistent as well as
+unverified. Filed in `followups.md` with the measurement.
