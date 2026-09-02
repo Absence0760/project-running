@@ -388,11 +388,21 @@ test('parseJobBlock and parseJobIf read the job level, not a step’s condition'
 	assert.ok(!block.includes('  a:\n'), 'the gate block must stop at the previous job');
 	assert.equal(parseJobIf(text, GATE_JOB), 'always()');
 	assert.equal(parseJobIf(text, 'a'), null);
-	// A step's own `if:` sits deeper and is not the job's.
+	// A step's own `if:` sits deeper and is not the job's. Asserted on a
+	// `steps:` line the block-scan cannot recognise (a trailing comment), which
+	// is the one shape that puts the step lines inside the scanned range: with a
+	// bare `steps:` the slice already excludes them, so a looser condition
+	// pattern would go unnoticed there.
 	assert.equal(
-		parseJobIf(`name: CI\njobs:\n  a:\n    steps:\n      - if: failure()\n        run: echo hi\n`, 'a'),
+		parseJobIf(`name: CI\njobs:\n  a:\n    steps: # the checks\n      - if: failure()\n        run: echo hi\n`, 'a'),
 		null,
 	);
+	// The gate is the last job in the real file, so the block runs to EOF. A
+	// top-level key AFTER the mapping is the other boundary, and it is a
+	// different branch.
+	const trailing = `${gateWith(['a'])}defaults:\n  run:\n    shell: bash\n`;
+	const gateBlock = parseJobBlock(trailing, GATE_JOB);
+	assert.ok(gateBlock !== null && !gateBlock.includes('defaults:'), gateBlock ?? 'null');
 	assert.equal(parseJobBlock(gateWith(['a']), 'nope'), null);
 });
 
