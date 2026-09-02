@@ -79,7 +79,7 @@ drains and the 7-day `cleanup_stale_export_blobs` sweep covers.
 `storage.objects`, and it is present in the image both the CI-pinned and
 the workstation CLI start — so the nightly job raised on every run, even
 on a night with nothing stale, and the `data_export_jobs` expiry that
-follows it in the same call never ran either. `20270703000001` sets the
+follows it in the same call never ran either. `20270703000002` sets the
 documented escape GUC transaction-locally and makes the sweep verify its
 own post-condition, so a blocked sweep fails loudly instead of reporting
 the same zero a clean night reports ([decisions § 857](../architecture/decisions.md)).

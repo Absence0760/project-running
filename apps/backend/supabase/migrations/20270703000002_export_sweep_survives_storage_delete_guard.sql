@@ -114,7 +114,7 @@ comment on function cleanup_stale_export_blobs() is
   'Sets storage.allow_delete_query transaction-locally so storage-api''s '
   'protect_delete() trigger admits the DELETE, and raises if any stale '
   'object survives it, so a blocked sweep cannot read as an empty one '
-  '(20270703000001). SECURITY DEFINER + executes as the postgres role, '
+  '(20270703000002). SECURITY DEFINER + executes as the postgres role, '
   'which has bypassrls on Supabase Cloud so the direct DELETE on '
   'storage.objects fires regardless of the storage schema RLS. pg_cron '
   'runs the job; service_role grant lets ops invoke manually if needed. '

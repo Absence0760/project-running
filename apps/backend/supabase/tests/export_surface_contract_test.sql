@@ -225,7 +225,7 @@ insert into storage.objects (bucket_id, name, created_at) values
 -- workstation's 2.109.1 (§ 839 said CI's image lacked it; measured, it does
 -- not). Setting it in the fixture is what made the sweep look sound: the
 -- function set nothing of its own, so production raised nightly while this
--- file stayed green. 20270703000001 moved the escape into the function, and
+-- file stayed green. 20270703000002 moved the escape into the function, and
 -- these assertions now drive it.
 
 -- (12) Everything the sweep is about is present first.
@@ -275,7 +275,7 @@ select ok(
 -- exactly like a night with nothing stale. A row-level trigger returning null
 -- is the cheapest way to produce that shape; an RLS policy on
 -- `storage.objects` or a future guard that skips instead of raising would
--- produce the same one. Before 20270703000001 this returned 0.
+-- produce the same one. Before 20270703000002 this returned 0.
 insert into data_export_jobs (id, user_id, format, status, object_path, finished_at)
 values ('e8000000-0000-0000-0000-0000000000d3', 'e8000000-0000-0000-0000-0000000000a2',
         'backup', 'ready', 'e8000000-0000-0000-0000-0000000000a2/blocked.zip',
