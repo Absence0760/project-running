@@ -113,8 +113,10 @@ back to Brazilian.
   `xcodebuild` and the guard above pass. It cost two literals in the complication
   ([decisions § 884](../../docs/architecture/decisions.md)). The same guard holds
   `Info.plist` / `WatchApp.entitlements` against the calls that need them, the
-  complication's duplicated formatters against their `RunFormat.swift` copies, and
-  the run hand-off metadata envelope against the phone's end of it — see the file's
+  complication's duplicated formatters against their `RunFormat.swift` copies, the
+  run hand-off metadata envelope against the phone's end of it, and the route-push
+  envelope across all three of its ends (`apple_watch_route_bridge.dart` →
+  `WatchIngestBridge.routeUserInfo` → `ArmedRoute.decode`) — see the file's
   own header. **A literal that only stitches already-formatted values together is
   not a translatable string**: pass it as a `String` (or `Text(verbatim:)`) so it is
   not a key at all, the way `statLine(_:)` does.

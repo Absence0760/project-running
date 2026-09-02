@@ -15217,3 +15217,35 @@ installs through asdf is still held to the repo's. Deno is installed by its own
 installer on this workstation, so it belongs with those four rather than with
 `nodejs`. Deleting the line outright fails; leaving it at the template's stale
 `2.1.5`, commented or not, fails.
+
+## 966. The route-push envelope has three ends, and every rejection in it drops the whole route
+
+`check_watch_ios_source.mjs`'s claim (6) reads the run hand-off envelope — watch
+to phone, `transferFile` metadata — from both ends. The route push is the same
+`WCSession` going the other way and was read from none: `apple_watch_route_bridge.dart`
+names five keys as method-channel arguments, `WatchIngestBridge.routeUserInfo`
+lifts them out and repacks them into a `transferUserInfo` payload, and
+`ArmedRoute.decode` reads them back on the wrist. Three hand-written key lists,
+three languages, three apps, and nothing compared them.
+
+What makes this worse than the hand-off it mirrors is the failure shape. A
+dropped hand-off key costs the run one column. Every rejection in the route
+chain is deliberately all-or-nothing — `ArmedRoute.decode`'s own comment says a
+truncated polyline is worse than none, because the runner would be measured
+off-route against a line the route does not have — so a key spelled differently
+on one rail is not a degraded route, it is no route, and the phone has already
+reported the arm as succeeded.
+
+Three things about the shape of the check. It is **pairwise over all three
+rails**, not "the two Swift ends agree": two of three is not the claim, and a
+caller holding only the Swift halves is now told nothing rather than half of it.
+The phone rail's parse reads its `args[…]` subscripts **and** its repacked
+dictionary literal, because `routeUserInfo` does both in one function and a key
+it lifts under one name and forwards under another is a field dropped between
+two of its own lines. And an unreadable rail is a hard error rather than an empty
+set: the guard must not report that two rails agree on five keys nobody sends.
+
+Measured before writing it: all three rails parse to the same five keys, so the
+previous round's hand check was right and this closes a future gap rather than a
+live defect. The Dart rail is read at `apps/mobile_android/lib` — the twin's
+canonical copy per § 39 — so reading one reads both.

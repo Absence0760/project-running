@@ -24,12 +24,16 @@ import { fileURLToPath } from 'node:url';
 
 import {
 	INGEST,
+	ROUTE_BRIDGE,
 	check,
+	dartInvokeKeys,
+	methodBody,
 	functionBody,
 	normalizeKey,
 	parseFlatPlist,
 	phoneEnvelopeKeys,
 	stripSwiftComments,
+	swiftPayloadKeys,
 	watchEnvelopeKeys,
 } from './check_watch_ios_source.mjs';
 
@@ -45,8 +49,12 @@ const ORIGIN = join('WatchApp', 'RunFormat.swift');
 const README = join('Complications', 'README.md');
 const SYNC = join('WatchApp', 'ContentView.swift');
 const INGEST_ABS = join(REPO_ROOT, INGEST);
+const ROUTE_BRIDGE_ABS = join(REPO_ROOT, ROUTE_BRIDGE);
 /** Where `stage()` parks a copy of the phone's half of the envelope. */
 const STAGED_INGEST = 'WatchIngestBridge.swift';
+/** …and of the Dart end of the route-push envelope. */
+const STAGED_ROUTE_BRIDGE = 'apple_watch_route_bridge.dart';
+const ARMED = join('WatchApp', 'ArmedRoute.swift');
 
 /** Copy only the files the guard reads into a throwaway tree. */
 function stage() {
@@ -62,6 +70,7 @@ function stage() {
 		cpSync(join(WATCH_IOS, rel), join(dir, rel));
 	}
 	cpSync(INGEST_ABS, join(dir, STAGED_INGEST));
+	cpSync(ROUTE_BRIDGE_ABS, join(dir, STAGED_ROUTE_BRIDGE));
 	return dir;
 }
 
@@ -73,7 +82,7 @@ function runMutated(mutate) {
 	const dir = stage();
 	try {
 		mutate(dir);
-		return check(dir, join(dir, STAGED_INGEST));
+		return check(dir, join(dir, STAGED_INGEST), join(dir, STAGED_ROUTE_BRIDGE));
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -99,7 +108,7 @@ const matched = (errors, re) => errors.filter((e) => re.test(e));
 // --- the positive control ---------------------------------------------------
 
 test('the shipped apps/watch_ios tree satisfies every claim', () => {
-	const { errors, ok } = check(WATCH_IOS, INGEST_ABS);
+	const { errors, ok } = check(WATCH_IOS, INGEST_ABS, ROUTE_BRIDGE_ABS);
 	assert.deepEqual(errors, []);
 	assert.ok(ok.length >= 13, `only ${ok.length} claims were exercised`);
 });
@@ -176,7 +185,7 @@ test('a key reached only through String(localized:) is not reported as orphaned'
 	// The sync-status strings are the ones that are not SwiftUI `Text`. Claim 2
 	// searches every string literal rather than only the localizing-API call
 	// sites precisely so an unlisted API cannot manufacture a dead key.
-	const { errors, ok } = check(WATCH_IOS, INGEST_ABS);
+	const { errors, ok } = check(WATCH_IOS, INGEST_ABS, ROUTE_BRIDGE_ABS);
 	assert.deepEqual(matched(errors, /no Swift/), []);
 	assert.ok(ok.some((o) => /String Catalog entries are still referenced/.test(o)));
 });
@@ -413,10 +422,91 @@ test('an unparseable envelope on either end fails loudly rather than vacuously',
 	assert.equal(matched(errors, /pass vacuously/).length, 1, errors.join('\n'));
 });
 
-test('claim 6 is skipped, not faked, when no phone half is available', () => {
+test('claims 6 and 7 are skipped, not faked, when no phone half is available', () => {
 	const { errors, ok } = check(WATCH_IOS);
 	assert.deepEqual(errors, []);
 	assert.deepEqual(ok.filter((o) => /run hand-off metadata keys/.test(o)), []);
+	assert.deepEqual(ok.filter((o) => /route-push keys/.test(o)), []);
+});
+
+test('claim 7 is skipped when the Dart rail alone is unavailable', () => {
+	// The route envelope has three ends. Two of them agreeing is not the claim,
+	// so a caller holding only the two Swift ones must be told nothing rather
+	// than told half of it.
+	const { errors, ok } = check(WATCH_IOS, INGEST_ABS);
+	assert.deepEqual(errors, []);
+	assert.ok(ok.some((o) => /run hand-off metadata keys/.test(o)));
+	assert.deepEqual(ok.filter((o) => /route-push keys/.test(o)), []);
+});
+
+// --- claim 7: the route-push envelope, three rails --------------------------
+
+test('the three route-push rails agree on the shipped tree', () => {
+	const { errors, ok } = check(WATCH_IOS, INGEST_ABS, ROUTE_BRIDGE_ABS);
+	assert.deepEqual(matched(errors, /route/), []);
+	assert.ok(ok.some((o) => /^all 5 route-push keys agree/.test(o)));
+});
+
+test('a key renamed on the Dart rail alone is refused', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_ROUTE_BRIDGE, (s) => s.replace("'route_lng':", "'route_lon':"));
+	});
+	assert.ok(matched(errors, /`route_lon` is on .*apple_watch_route_bridge\.dart/).length >= 1, errors.join('\n'));
+	assert.ok(matched(errors, /`route_lng` is on .*WatchIngestBridge\.swift/).length >= 1, errors.join('\n'));
+});
+
+test('a key renamed on the phone repack alone is refused', () => {
+	// The failure this claim exists for: the phone reads `route_name` off the
+	// channel and forwards it under a different key, so `ArmedRoute.decode`
+	// rejects the payload, the whole push is dropped, and the runner was
+	// already told the route was armed.
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_INGEST, (s) => s.replace('"route_name": name,', '"routeName": name,'));
+	});
+	assert.ok(matched(errors, /`routeName` is on .*WatchIngestBridge\.swift/).length >= 1, errors.join('\n'));
+});
+
+test('a key renamed on the watch decode alone is refused', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, ARMED, (s) => s.replace('payload["route_distance_m"]', 'payload["route_distance"]'));
+	});
+	assert.ok(matched(errors, /`route_distance` is on .*ArmedRoute\.swift/).length >= 1, errors.join('\n'));
+});
+
+test('a route push whose Dart call site changed shape fails vacuity rather than passing', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, STAGED_ROUTE_BRIDGE, (s) => s.replace("invokeMethod<void>('push'", "invokeMethod<void>('pushRoute'"));
+	});
+	assert.equal(matched(errors, /Parsed no route-push keys/).length, 1, errors.join('\n'));
+});
+
+test('a decode that stops subscripting the payload fails vacuity rather than passing', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, ARMED, (s) => s.replace(/payload\[/g, 'input['));
+	});
+	assert.equal(matched(errors, /Parsed no route-push keys/).length, 1, errors.join('\n'));
+});
+
+test('swiftPayloadKeys reads both the subscripts and the repacked literal', () => {
+	// The phone rail does both in one function, and a key it reads but does not
+	// forward is a field dropped between two lines of it.
+	const body = 'guard let a = args["k"] as? String else { return nil }\nreturn ["k": a, "extra": 1]\n';
+	assert.deepEqual([...(swiftPayloadKeys(body, 'args') ?? [])].sort(), ['extra', 'k']);
+	assert.equal(swiftPayloadKeys('return ["k": 1]', 'args'), null);
+});
+
+test('dartInvokeKeys spans the nested collection literals in the map it reads', () => {
+	// `route_lat` / `route_lng` are `[for (…) …]` comprehensions, so a scan
+	// that stopped at the first `]` would lose everything after the first one.
+	const src = "await _c.invokeMethod<void>('push', {\n  'a': 1,\n  'b': [for (final p in ps) p.x],\n  'c': 2,\n});";
+	assert.deepEqual([...(dartInvokeKeys(src, 'push') ?? [])].sort(), ['a', 'b', 'c']);
+	assert.equal(dartInvokeKeys(src, 'nope'), null);
+});
+
+test('methodBody finds an indented method with modifiers in front of func', () => {
+	const src = 'struct S {\n    private static func decode(_ p: [String: Any]) -> S? {\n        return nil\n    }\n}\n';
+	assert.match(methodBody(src, 'decode') ?? '', /return nil/);
+	assert.equal(methodBody(src, 'encode'), null);
 });
 
 test('watchEnvelopeKeys reads the dictionary literal and the conditional assignment', () => {
