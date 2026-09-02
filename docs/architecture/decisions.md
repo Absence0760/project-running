@@ -13437,3 +13437,38 @@ workflows in this repo". Every flutter-action step happens to use the marker
 form today, so the Flutter rail has never lost a site; it would have, silently,
 on the first one written with a name. Both now read through one resolver that
 finds the `uses:` wherever it sits and walks back to the step's own `- ` marker.
+
+## 912. The Playwright action's repair path had never been executed, and it is the half that only runs when something is already wrong
+
+**Decided 2026-09-02.** `start-supabase` extracted its probe loop into
+`wait_for_sidecars.sh` explicitly so it could be unit-tested, and that suite
+found the loop was vacuous. Its sibling `install-playwright` kept the same class
+of logic inline in `action.yml`: a Chromium launch check, a bounded three-attempt
+`playwright install-deps` fallback with an apt-lock reap between attempts, and a
+second launch as the verdict. A composite action's steps are in no job's test
+suite, so none of it had ever been executed by anything but CI itself — and the
+apt branch fires only after a launch has already failed, which the incident
+history it carries says is rare. The entire repair path was unrun.
+
+Extracted to `verify_chromium.sh` on the sibling's pattern, with nine cases. Two
+of them assert the property the code's own comment states and nothing checked:
+apt failing all three attempts still PASSES when the browser then launches (it
+can fail on a mirror having already installed what was missing), and apt
+succeeding still FAILS when the browser does not (install-deps can succeed and
+leave the launch broken). One asserts the lock reap runs between attempts, which
+is what stops the next attempt failing on "Could not get lock" and hiding the
+mirror behind our own leftovers.
+
+One case exists for a hazard the extraction created rather than found. The apt
+timeout config is written through a `<<'CONF'` heredoc, and a heredoc terminator
+must sit at column 0 of the script the shell sees. Inline, it was indented
+inside a YAML block scalar and only YAML's dedent put it there; in a `.sh` file
+nothing dedents anything. An indented terminator never closes, and the shell
+would swallow the retry loop and the final verdict as heredoc content — the
+script would write a garbage apt.conf and exit 0 having verified nothing. The
+test asserts the terminator is anchored, which `bash -n` alone does not catch.
+
+The `sudo` stub records rather than executes. Nothing in the script branches on
+what any of its calls return — the apt.conf write, the lock reap and the sources
+dump are each `|| true` or ignored — so executing them would buy no coverage and
+would write to `/etc`.

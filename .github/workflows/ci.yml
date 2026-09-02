@@ -243,6 +243,17 @@ jobs:
             echo "Reproduce with: node --test .github/actions/start-supabase/wait_for_sidecars.test.mjs (drives the loop with stub curl/docker on PATH)."
             exit 1
           fi
+      # Same shape as the step above, one action over. install-playwright's
+      # verification + apt fallback was inline in its action.yml, where nothing
+      # could run it — and its apt branch fires only after a launch has already
+      # failed, so the whole repair path shipped unexecuted (decisions § 912).
+      - name: Playwright Chromium verification + apt fallback
+        run: |
+          if ! node --test .github/actions/install-playwright/verify_chromium.test.mjs; then
+            echo "::error::The install-playwright composite action's Chromium verification regressed — the launch check, the conditional apt fallback, or the rule that the final verdict is a browser launch rather than apt's exit code. That shell runs inside a composite action, so it is in no job's test suite and this is the only thing that reads it. Nothing here is about workflow syntax, the toolchain pins or the CI diagnoses."
+            echo "Reproduce with: node --test .github/actions/install-playwright/verify_chromium.test.mjs (drives the script with stub node/pnpm/sudo on PATH)."
+            exit 1
+          fi
       # `npm run test:scripts` was the only caller of check_root_scripts.mjs and
       # no job invoked it, so the guard enforced nothing for as long as it had
       # existed (§ 439). It reads package.json and the workspace manifests as
