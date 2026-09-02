@@ -15023,3 +15023,39 @@ deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
 That check mattered — the first mutation attempted was weakening the assertion
 to `includes('')`, which passes trivially and measures nothing. **Mutate the
 subject, not the assertion.**
+
+## 960. A hand-written register the compiler cannot see: `unfed::ALL`, and the const block that walks it
+
+`unfed.rs` is the module whose whole purpose is that every empty page on the
+watch speaks one vocabulary — one reason line per situation, drawn from one
+register, so a runner meeting `NO CUTOFF AHEAD` on one page and `LAST AID
+PASSED` on the next can tell whether the two mean the same thing. `class()`,
+`reason()`, `hint()` and `slot_token()` are exhaustive matches, so a new variant
+cannot be added without answering all of them; the compiler enforces that half.
+
+`Unfed::ALL` and `UnfedClass::ALL` are plain arrays, and enforce nothing. They
+are what the `const` block walks to assert every reason fits `face::COLS` (21),
+so a variant added and not registered is a variant whose width is never
+measured. That is not hypothetical, and it is not a compile error: adding a
+variant with the 29-character reason `NO TIDE DATA AVAILABLE AT ALL`, updating
+the two matches the compiler demands, and leaving `ALL` alone **compiles
+clean**, and the page then draws off the panel. Nothing checked two variants did
+not answer the same `reason()` either, which defeats the same purpose from the
+other direction — one sentence for two causes is a vocabulary lying about being
+one.
+
+The module had zero runtime tests; its whole coverage was the `const` block that
+the missing registration bypasses. It now has five, and the register is held
+against the enum by parsing this module's own source through `include_str!`
+rather than by counting: a count alone accepts a swap (one variant added, one
+dropped), and `std::mem::variant_count` is unstable. The comparison is ordered
+and by name, so a duplicate entry, an omission and a reordering each fail. Each
+of the four claims was shown to fire against the mutation it exists to catch
+before it was committed — the unregistered variant above, two variants sharing a
+reason, two classes sharing a slot token, and a `Sensor` reason offering a hint
+about something the runner cannot act on.
+
+Rust source-parsed in a `#[cfg(test)]` module rather than a `scripts/*.mjs`
+guard: it needs no CI wiring (`cargo test --workspace` already runs in
+`build-firmware`, already in the `CI gate` list), and it lives beside the arrays
+it speaks for rather than in a file that has to remember they exist.
