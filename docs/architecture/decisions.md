@@ -15291,3 +15291,17 @@ tile would read unavailable for the rest of it. A sync is therefore opt-IN
 mode, and the default answer is the credential verdict alone. Behind the
 credential gate, not in front of it, or an unprovisioned deploy would report
 itself configured; both placements are pinned.
+
+**Which surfaced a live defect the clients had already learned to live with.**
+The probe spends this function's rate-limit bucket, and the bucket is 2/hour
+free — while BOTH web probes (`isRunSignUpConfigured` and
+`isUltraSignUpConfigured`) hit this one function. So one page load exhausts a
+free user's whole allowance and the next load 429s, which
+`isProviderNotConfigured` then fail-closes into "provider unavailable" for a
+provider that is configured and working. Web's own comment describes the
+symptom — "several probes per page/test exceed the free tier" — without naming
+the cause, and mobile's `isProviderConfigured` fails OPEN on the same 429, so
+the two platforms disagree about a configured provider on the second page load
+of an hour. The probe now has its own generous bucket
+(`race-listings-sync:probe`, 60/240), which costs nothing and removes the false
+unavailability; the sync keeps 2/8. Both fail closed.
