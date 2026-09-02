@@ -66,9 +66,18 @@ DateTime? parseStravaDate(String raw) {
 /// column is absent. [lowerHeader] must be lower-cased (as the importer keeps
 /// it). Mirrors web `stravaDistanceMetres` in strava-zip-header.ts.
 double stravaCsvDistanceMetres(List<String> lowerHeader, List<dynamic> row) {
-  double parse(int i) => (i >= 0 && i < row.length)
-      ? (double.tryParse(row[i].toString().replaceAll(',', '')) ?? 0)
-      : 0;
+  // `?? 0` catches an UNPARSEABLE cell, which is not the same question as an
+  // unusable one: `double.tryParse` returns a value for the literals `NaN`,
+  // `Infinity` and `-Infinity`, so those three fell through to the imported
+  // run's `distance_m` — a `numeric(10, 2)` column with no CHECK, whose
+  // aggregates then read NaN. The web twin this function's doc names has
+  // guarded on `Number.isFinite` since it was written; this half only tested
+  // for null, which is the drift.
+  double parse(int i) {
+    if (i < 0 || i >= row.length) return 0;
+    final v = double.tryParse(row[i].toString().replaceAll(',', ''));
+    return v != null && v.isFinite ? v : 0;
+  }
   int findAny(List<String> names) {
     for (final n in names) {
       final i = lowerHeader.indexWhere((h) => h.trim() == n);

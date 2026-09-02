@@ -280,6 +280,30 @@ void main() {
         8047,
       );
     });
+
+    test('pure helper: a non-finite cell reads as 0, like the web twin', () {
+      // `double.tryParse` returns a VALUE for these three literals, so the
+      // old `?? 0` -- which only tested for an unparseable cell -- let them
+      // through into the imported run's distance_m, a numeric(10, 2) column
+      // with no CHECK whose aggregates then read NaN. The web
+      // `stravaDistanceMetres` this function's doc names as its mirror has
+      // guarded on Number.isFinite since it was written.
+      for (final bad in ['NaN', 'Infinity', '-Infinity']) {
+        expect(stravaCsvDistanceMetres(['distance (m)'], [bad]), 0,
+            reason: bad);
+        expect(
+          stravaCsvDistanceMetres(['distance', 'x', 'distance'],
+              ['5.0', 'y', bad]),
+          0,
+          reason: 'raw column $bad',
+        );
+      }
+    });
+
+    test('pure helper: an unparseable cell still reads as 0', () {
+      expect(stravaCsvDistanceMetres(['distance (m)'], ['not a number']), 0);
+      expect(stravaCsvDistanceMetres(['distance (m)'], ['']), 0);
+    });
   });
 
   group('multi-row imports', () {
