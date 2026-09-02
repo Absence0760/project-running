@@ -13,6 +13,7 @@ import {
   parseOidcStack,
   parseReleaseWorkflow,
   parseStatements,
+  parseSecretMerges,
   parseWebStack,
   stringsFor,
   CLAIM_PREFIX,
@@ -120,7 +121,12 @@ const RELEASE =
   '          fi\n';
 
 const MODULE =
-  'locals {\n  resource_prefix = "threkir-web-${var.env}"\n}\n\n' +
+  'locals {\n  resource_prefix = "threkir-web-${var.env}"\n' +
+  '  coach_secret_keys = ["ANTHROPIC_API_KEY"]\n' +
+  '  lambda_env = merge(\n' +
+  '    local.base_lambda_env,\n' +
+  '    local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if contains(local.coach_secret_keys, k) } : {},\n' +
+  '  )\n}\n\n' +
   '# A comment whose stray brace { must not unbalance the scan.\n' +
   'resource "aws_lambda_function" "coach" {\n' +
   '  function_name = "${local.resource_prefix}-coach"\n' +
@@ -530,5 +536,64 @@ test('parseWebStack reads the committed module\'s aliases and qualifiers', () =>
   assert.equal(web.permissions.filter((p) => p.fn === null).length, 0);
   for (const [fn, url] of web.urls) {
     assert.ok(url.qualifier, `${fn}: no qualifier read off the Function URL`);
+  }
+});
+
+// ───────────── 8. what reaches a Lambda's environment ─────────────
+//
+// The coach env used to be `local.has_secrets ? data.sops_file.secrets[0].data
+// : {}` — the whole decrypted file. Every key it grows for any other consumer
+// lands in that function's environment whether the handler reads it or not,
+// and the Terraform reads as the same tidy merge() line either way.
+
+test('a Lambda env that merges the whole sops map fails', () => {
+  const { errors } = run({
+    module: MODULE.replace(
+      '{ for k, v in data.sops_file.secrets[0].data : k => v if contains(local.coach_secret_keys, k) }',
+      'data.sops_file.secrets[0].data',
+    ),
+  });
+  assert.ok(has(errors, /local\.lambda_env merges the decrypted sops map whole/), errors.join('\n'));
+});
+
+test('a Lambda env with no sops reference at all fails rather than passing', () => {
+  const { errors } = run({
+    module: MODULE.replace(
+      'local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if contains(local.coach_secret_keys, k) } : {},\n',
+      '',
+    ),
+  });
+  assert.ok(has(errors, /no `\*_lambda_env` local was read/), errors.join('\n'));
+});
+
+test('parseSecretMerges tells a filtered reference from a bare one', () => {
+  const filtered = parseSecretMerges(
+    'locals {\n  a_lambda_env = merge(\n' +
+      '    { X = 1 },\n' +
+      '    { for k, v in data.sops_file.secrets[0].data : k => v if k == "A" || k == "B" },\n  )\n}\n',
+  );
+  assert.deepEqual(filtered, [{ local: 'a_lambda_env', filter: 'k == "A" || k == "B"' }]);
+
+  const bare = parseSecretMerges(
+    'locals {\n  b_lambda_env = merge(\n    { X = 1 },\n    data.sops_file.secrets[0].data,\n  )\n}\n',
+  );
+  assert.deepEqual(bare, [{ local: 'b_lambda_env', filter: null }]);
+});
+
+// A comprehension with no `if` admits the whole map through a shape that looks
+// filtered, which is the one way past this reader worth spelling out.
+test('parseSecretMerges refuses a comprehension carrying no predicate', () => {
+  const out = parseSecretMerges(
+    'locals {\n  c_lambda_env = merge(\n' +
+      '    { for k, v in data.sops_file.secrets[0].data : k => v },\n  )\n}\n',
+  );
+  assert.deepEqual(out, [{ local: 'c_lambda_env', filter: null }]);
+});
+
+test('the committed module takes only named keys into every Lambda env', () => {
+  const web = parseWebStack(readFileSync(MODULE_FILE, 'utf-8'));
+  assert.ok(web.secretMerges.length >= 2, JSON.stringify(web.secretMerges));
+  for (const merge of web.secretMerges) {
+    assert.ok(merge.filter, `local.${merge.local} takes the sops file whole`);
   }
 });

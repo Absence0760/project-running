@@ -27,9 +27,33 @@ locals {
     var.extra_lambda_env,
   )
 
+  # The coach Lambda's half of the secrets file, by name. This env used to be
+  # the whole decrypted map: every key the file grows for any OTHER consumer —
+  # the routing engines' shared X-Engine-Key today, a payments or mail key
+  # tomorrow — landed in this function's environment whether the handler reads
+  # it or not, visible to anyone who can call GetFunctionConfiguration and to
+  # any code-execution bug in the handler. `generate_route_lambda_env` below
+  # already takes only the two keys it uses, and its comment names this env as
+  # the contrast ("not the whole secret bag the coach Lambda gets"); this is
+  # that same narrowing applied to the bag it was contrasting with.
+  #
+  # The list is the set the coach handler and its cores read out of
+  # process.env, minus the two PUBLIC_ values that come from module vars. A key
+  # the coach needs and this list omits is an unset env, which the handler
+  # already answers as a tagged 503 rather than as a silent degrade — the
+  # fail-closed direction.
+  coach_secret_keys = [
+    "ANTHROPIC_API_KEY",
+    "SUPABASE_SECRET_KEY",
+    "COACH_PROVIDER",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENAI_MODEL",
+  ]
+
   lambda_env = merge(
     local.base_lambda_env,
-    local.has_secrets ? data.sops_file.secrets[0].data : {},
+    local.has_secrets ? { for k, v in data.sops_file.secrets[0].data : k => v if contains(local.coach_secret_keys, k) } : {},
   )
 
   # share-run Lambda env. Doesn't need any sops-decrypted secrets —

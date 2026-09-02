@@ -53,6 +53,12 @@
 //      function-name regex misses it is one whose auth type nothing reads, and
 //      a smaller loop looks identical to a smaller stack.
 //
+//   8. Secret scope. No Lambda environment merges the decrypted sops map whole.
+//      A key added to the file for one function otherwise reaches every
+//      function whose env takes the bag, which is the same over-grant as a
+//      wildcard Action and is invisible in exactly the same way — the
+//      Terraform reads as one tidy `merge(...)` line either way.
+//
 // Offline by design: three files, no AWS credentials, no `terraform init`.
 // Nothing here is transcribed — every name, every environment and every
 // function suffix is read out of one of the three sources.
@@ -126,8 +132,10 @@ export const RESOURCELESS_ACTIONS = new Map([
  * @typedef {{ fn: string | null, action: string | null, principal: string | null,
  *             sourceArn: string | null, qualifier: string | null }} InvokeGrant
  * @typedef {{ label: string, name: string | null, fn: string | null }} FunctionAlias
+ * @typedef {{ local: string, filter: string | null }} SecretMerge
  * @typedef {{ prefix: string | null, functions: Map<string, string>, urls: Map<string, FunctionUrl>,
  *             aliases: Map<string, FunctionAlias>, permissions: InvokeGrant[],
+ *             secretMerges: SecretMerge[],
  *             declared: { urls: number, permissions: number } }} WebStack
  */
 
@@ -430,8 +438,74 @@ export function parseWebStack(raw) {
     urls,
     aliases,
     permissions,
+    secretMerges: parseSecretMerges(src),
     declared: { urls: urlBlocks.length, permissions: permissionBlocks.length },
   };
+}
+
+/// Index of the `)` closing the call that opens at `open`, or -1. Parens inside
+/// a double-quoted string do not count.
+/**
+ * @param {string} src
+ * @param {number} open
+ * @returns {number}
+ */
+function parenEnd(src, open) {
+  let depth = 0;
+  let inString = false;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === '(') depth++;
+    else if (c === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/// Every place a `*_lambda_env` local reaches into the decrypted sops map, and
+/// the filter — if any — standing between the map and the Lambda's
+/// environment. A reference wrapped in `{ for k, v in <map> : k => v if … }`
+/// admits the keys the predicate names; a bare reference admits the file.
+/**
+ * @param {string} src comment-stripped module source
+ * @returns {SecretMerge[]}
+ */
+export function parseSecretMerges(src) {
+  /** @type {SecretMerge[]} */
+  const out = [];
+  const envLocal = /^\s*([A-Za-z0-9_]*lambda_env)\s*=\s*merge\(/gm;
+  let m;
+  while ((m = envLocal.exec(src)) !== null) {
+    const open = src.indexOf('(', m.index + m[0].length - 1);
+    const close = parenEnd(src, open);
+    if (close < 0) continue;
+    const body = src.slice(open + 1, close);
+    for (const ref of body.matchAll(/data\.sops_file\.secrets\[0\]\.data/g)) {
+      const before = body.slice(0, ref.index);
+      const brace = before.lastIndexOf('{');
+      // `{ for k, v in ` is the only thing that may sit between the opening
+      // brace and the map. Anything else — including no brace at all — is the
+      // whole file arriving in the environment.
+      const comprehension =
+        brace >= 0 && /^\s*for\s+[A-Za-z0-9_]+\s*,\s*[A-Za-z0-9_]+\s+in\s*$/.test(before.slice(brace + 1));
+      if (!comprehension) {
+        out.push({ local: m[1], filter: null });
+        continue;
+      }
+      const after = body.slice(ref.index + ref[0].length);
+      const predicate = after.match(/^\s*:[^\n}]*?\bif\b([^\n}]*)/)?.[1] ?? null;
+      out.push({ local: m[1], filter: predicate === null ? null : predicate.trim() });
+    }
+  }
+  return out;
 }
 
 // ────────────────────────────── comparison ──────────────────────────────
@@ -885,6 +959,26 @@ export function compareSources(oidc, release, web, oidcVars) {
     }
     if (grants.length >= 2) {
       ok.push(`${fn}: AWS_IAM Function URL with both CloudFront invoke grants`);
+    }
+  }
+
+  // ── 8. no Lambda environment takes the secrets file whole ──
+  if (web.secretMerges.length === 0) {
+    errors.push(
+      'no `*_lambda_env` local was read reaching into data.sops_file — either no Lambda takes a ' +
+        'secret any more, or this reader stopped matching and a whole-file merge would go unseen.',
+    );
+  }
+  for (const merge of web.secretMerges) {
+    if (merge.filter === null) {
+      errors.push(
+        `local.${merge.local} merges the decrypted sops map whole. Every key the file grows for any ` +
+          "OTHER consumer then lands in that function's environment whether its handler reads it or " +
+          'not — readable by anyone who can call GetFunctionConfiguration, and by any code-execution ' +
+          'bug in the handler. Take the keys by name, the way the generate-route env does.',
+      );
+    } else {
+      ok.push(`local.${merge.local}: sops keys filtered by \`${merge.filter}\``);
     }
   }
 
