@@ -14198,3 +14198,37 @@ past § 1 would have re-broken it.
 Three mutations, each killed: restoring the old any-number behaviour,
 over-correcting so `1.` never interrupts either, and dropping the
 leading-whitespace allowance so an indented continuation escapes the rule.
+
+## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
+
+**Decided 2026-09-02.** PR #849 went up green on every suite this round ran and
+came back red on two checks. Both are worth recording, because they are
+different kinds of miss.
+
+**`check:script-types`.** Round 31 added `scripts/check_twin_claims.mjs` and
+grew `check_toolchain_pins.mjs`, and neither carried JSDoc on the new
+signatures. `scripts/` is inside `tsconfig.scripts.json` with `checkJs` +
+`strict` (§ 757), so fourteen implicit-`any` and argument-type errors failed the
+`parity-types` job. The integration verification ran `node --test
+scripts/*.test.mjs` — the suites — and not the typecheck, which is a different
+question about the same files. **A lane that adds or edits a file under
+`scripts/`, `apps/backend/scripts/`, `.github/` or `infra/` must run `npm run
+check:script-types`**, the exact sibling of the rule § 848 already records for a
+`.test.ts` under `apps/web/src` needing `npm run check`. Two roots, two rules,
+same shape: the suite passing is not the typecheck passing.
+
+**CodeQL `js/regex/missing-regexp-anchor`, high.** A new test asserted the
+apt-sources dump with `assert.match(after, /azure\.archive\.ubuntu\.com/)`.
+CodeQL reads an unanchored host-shaped pattern as a bypassable URL check. It is
+a false positive on a log assertion — nothing here validates a URL — but the
+assertion wanted a substring rather than a pattern in the first place, so
+`after.includes('azure.archive.ubuntu.com')` costs nothing and removes the
+regex the query fires on. Anchoring was not available: the hostname appears
+inside a larger log line, so `^`/`$` would have broken the assertion, and the
+alternative of suppressing the alert leaves the next reader to rediscover why.
+
+The conversion was mutation-checked against the code rather than against itself:
+deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
+That check mattered — the first mutation attempted was weakening the assertion
+to `includes('')`, which passes trivially and measures nothing. **Mutate the
+subject, not the assertion.**

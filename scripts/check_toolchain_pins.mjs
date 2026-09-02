@@ -953,6 +953,14 @@ export function parseTerraformVersion(text) {
 	return m ? unquote(m.replace(/^\s*terraform_version:\s*/, '')) : null;
 }
 
+/**
+ * @param {WorkflowFile[]} files
+ * @param {string} lockText
+ * @param {WorkflowFile[]} [compositeFiles]
+ * @param {string | null} [rustToolchainText]
+ * @param {string | null} [toolVersionsText]
+ * @param {readonly {path: string, text: string}[]} [goMods]
+ */
 export function checkAll(
 	files,
 	lockText,

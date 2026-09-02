@@ -21,7 +21,12 @@ import {
 	registeredPaths,
 } from './check_twin_claims.mjs';
 
-/** A source file with `head` as its `///` header and one line of code. */
+/**
+ * A source file with `head` as its `///` header and one line of code.
+ *
+ * @param {string} path
+ * @param {string} head
+ */
 const dartSource = (path, head) => ({
 	path,
 	text: `${head
@@ -30,7 +35,12 @@ const dartSource = (path, head) => ({
 		.join('\n')}\nint answer() => 42;\n`,
 });
 
-/** The same for a web module, written as a JSDoc block comment. */
+/**
+ * The same for a web module, written as a JSDoc block comment.
+ *
+ * @param {string} path
+ * @param {string} head
+ */
 const tsSource = (path, head) => ({
 	path,
 	text: `/**\n${head

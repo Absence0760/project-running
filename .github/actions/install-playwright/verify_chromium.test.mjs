@@ -201,7 +201,12 @@ test('giving up prints the browser’s own error and the apt sources', () => {
 	// bare match on the library name passes with the final dump deleted.
 	const after = r.out.slice(r.out.indexOf('::error::'));
 	assert.match(after, /libnss3/, r.out);
-	assert.match(after, /azure\.archive\.ubuntu\.com/, r.out);
+	// A plain substring check, deliberately not a regex: this is a hostname,
+	// and CodeQL's js/regex/missing-regexp-anchor reads an unanchored
+	// host-shaped pattern as a bypassable URL check (high severity). It is
+	// a false positive on a log assertion, but the assertion wants a
+	// substring rather than a pattern anyway, so there is nothing to trade.
+	assert.ok(after.includes('azure.archive.ubuntu.com'), r.out);
 });
 
 // The apt.conf heredoc's terminator has to sit at column 0 of the script the
