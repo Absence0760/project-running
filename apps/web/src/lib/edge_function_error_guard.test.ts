@@ -41,13 +41,6 @@ const REDTHROW_EXEMPT = new Map<string, string>([
 			'showing the message.',
 	],
 	[
-		'data.ts::donations-checkout',
-		'The fundraiser page catches and shows the fixed fundraiser.donateFailed, ' +
-			'so no internal sentence reaches a donor. What is lost is the refusal ' +
-			'code itself (fundraiser_closed, host_cannot_take_payment) — filed in ' +
-			'followups.md, and it needs its own copy decisions.',
-	],
-	[
 		'data.ts::race-results-import',
 		'Rethrown only after isProviderNotConfigured() has already read the ' +
 			'envelope off `context`, which is the unwrap this rule is about.',

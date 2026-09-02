@@ -15138,3 +15138,39 @@ pair and is untouched by this, so nothing is owed on the Dart side; the watch
 DOES carry a faithful port of the old ungated `run_stats` rule
 ([§ 902](decisions.md)) which is now a port of an adapter, and that is filed
 for the watch lane.
+
+## 982. A donor who cannot tell "this fundraiser has ended" from "try again in a minute"
+
+`startDonationCheckout` rethrew supabase-js's `FunctionsHttpError` and the
+fundraiser page caught it and showed the fixed `fundraiser.donateFailed`, so
+no internal sentence ever reached a donor — which is why this was exempt from
+[§ 904](decisions.md)'s rule rather than a leak. What it lost was the refusal
+itself. `donations-checkout` answers `fundraiser_closed` when the campaign is
+over, `owner_cannot_take_payment` when the host has no payable Stripe account,
+`amount_too_small` / `amount_too_large`, `fundraiser_not_found`, and three
+`idempotency_*` conflicts — all of them collapsed into "Couldn't start the
+donation. Please try again.", which is advice that cannot work for four of
+those six and sends the donor round the loop again.
+
+Unwrapped with `edgeFunctionErrorCode` and mapped on the page, the same shape
+the event-register path already uses. Five new keys across all seven locale
+catalogues; the generic line stays as the fallback for the codes a donor can
+do nothing with (`checkout_failed`, `stripe_checkout_failed`, the client-bug
+400s).
+
+The guard is the interesting part. The page now compares string literals
+written in TypeScript against codes written in Deno with nothing between them
+— the same cross-language gap `edge_function_contract.test.ts` was built for
+when `events-checkout` returned `checkout_url` and its caller read `url`. So
+that file gained the refusal vocabulary too: every code the page compares must
+be one the function can actually send, and the three refusals a donor can act
+on must map to three DIFFERENT keys. This is not hypothetical rigour — the
+followup that requested this work named `host_cannot_take_payment`, a code the
+function has never returned (it is `owner_cannot_take_payment`), and a map
+written from the filing would have compiled, run, and silently never matched.
+The guard was mutation-checked with exactly that typo and fails on it.
+
+Removing `data.ts::donations-checkout` from `edge_function_error_guard.ts`'s
+exemption list is the second rail: with the unwrap reverted the guard's "no
+site rethrows unexamined" test fails, and had the exemption been left behind
+its own staleness test would have.
