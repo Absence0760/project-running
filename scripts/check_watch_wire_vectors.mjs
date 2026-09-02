@@ -304,6 +304,7 @@ const RS_ALERTS = 'apps/custom_watch/core/src/alerts.rs';
 const RS_GAP = 'apps/custom_watch/core/src/grade_adjusted_pace.rs';
 const RS_WORKOUT_CORE = 'apps/custom_watch/core/src/workout.rs';
 const RS_RECORD = 'apps/custom_watch/core/src/record.rs';
+const RS_ROUTE_SIMPLIFY = 'apps/custom_watch/core/src/route_simplify.rs';
 const DL_COURSE = 'apps/mobile_android/lib/watch_course.dart';
 const DL_WORKOUT = 'apps/mobile_android/lib/watch_workout.dart';
 const DL_ROADBOOK = 'apps/mobile_android/lib/watch_roadbook.dart';
@@ -518,6 +519,15 @@ export const CONSTANT_ROWS = [
       dartRail(DL_GAP, dartConst('minettiFlatCost')),
       otherRail(TS_GAP, tsConst('MINETTI_FLAT_COST')),
       otherRail(MC_GAP, mcConst('FLAT_COST')),
+    ],
+  },
+  {
+    name: 'elevation-gain noise gate (m)',
+    why: 'the threshold a climb must clear before it counts as gain. A rail without it — which is what the firmware shipped with until this round — reads a plus/minus 1 m barometric sawtooth as metres of phantom vert per minute, on the device whose headline metric is cumulative climb. It is a THRESHOLD rather than a wire field, so no format version moves when it drifts and no decode fails; the three rails simply answer different numbers for the same track',
+    rails: [
+      rustRail(RS_ROUTE_SIMPLIFY, rustConst('ELEVATION_GAIN_MIN_DELTA_M')),
+      dartRail('apps/mobile_android/lib/route_simplify.dart', dartConst('kElevationGainMinDeltaM')),
+      otherRail('apps/web/src/lib/routes/route_simplify.ts', tsConst('ELEVATION_GAIN_MIN_DELTA_M')),
     ],
   },
   {

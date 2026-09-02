@@ -13958,3 +13958,30 @@ The reason this went unnoticed is worth stating: `go vet` sits beside `go test`
 in both jobs and reads as a concurrency check to a passing eye, but `vet` is a
 static pass with no view of interleaving. Two guards in a job is not two
 questions answered.
+
+## 936. A threshold on three rails, registered on none, and the rail that was missing it
+
+**Decided 2026-09-02.** `ELEVATION_GAIN_MIN_DELTA_M` is 3 m on web, mobile and —
+since the firmware port was corrected this round — the watch. It was in no
+registry, which is precisely how the watch came to ship without it at all: a
+value with no home has no guard, and a port that omits it produces a plausible
+number rather than a failure.
+
+Registered as a `CONSTANT_ROWS` row in `check_watch_wire_vectors.mjs`, the
+registry built for this shape (it already holds the off-route hysteresis and five
+Minetti coefficients across four rails each). All three rails are now read on
+every PR and a one-sided change fails the `watch-wire-vectors` job.
+
+Worth naming what kind of value this is, because the registry's other rows are
+mostly wire fields: this is a THRESHOLD. Nothing decodes it, no format version
+moves when it drifts, and no frame fails to parse — the three rails simply
+answer different numbers for the same track, silently and plausibly, which is
+the failure mode that survives longest.
+
+The mutation check was run in all three directions rather than one: moving the
+web rail to 4, the Dart rail to 5 and the Rust rail to 2 each fails the guard,
+and the baseline is green again after each restore. A registry row that only
+detects a change on one rail is the kind of half-guard § 909 is about.
+
+Not closed here: the 5 m span in `isTrackRenderable` is a bare literal on all
+three rails, so registering it means naming it on each first.
