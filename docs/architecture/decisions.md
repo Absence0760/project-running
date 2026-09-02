@@ -14167,3 +14167,34 @@ limiting before the compare could let an attacker starve the hourly refresh out
 of the same bucket. Spending the bucket only on a failed compare is the likely
 answer, but it is a deliberate divergence from the sibling and wants deciding on
 purpose rather than by copying.
+
+## 938. A section reference that soft-wrapped onto a line start read as an ordered list, and hid 92 of 109 parity pairs
+
+**Decided 2026-09-02.** Registering the `calories` pair added a sentence ending
+"... see § 77. Distinct from `exercise_calories` ..." to CLAUDE.md's parity
+bullet. `foldSoftWraps` treats any line matching `\d+[.)] ` as opening a new
+block, so once the bullet grew long enough for `77.` to land at the start of a
+reflowed line, the fold stopped there and `parseClaudePairs` saw 17 pairs
+instead of 109 — **with zero errors reported**, because every anti-vacuity check
+in the guard was satisfied by the text before the break.
+
+That is § 604's defect exactly, inside the guard written to catch § 604's
+defect. It was invisible on each contributing branch: the reflow-invariance test
+only fails once the paragraph is long enough for a wrap to land on a digit, so
+the branch that added the sentence and the branch that lengthened the bullet
+were each green, and only the merged tree was red. The lane that added it
+reported the registry guards green, having run the guard scripts rather than
+their suites.
+
+**Fixed at the parser, not in the prose.** CommonMark: an ordered list may
+interrupt a paragraph only when it starts at 1 — every other number stays part
+of the paragraph, which is precisely why a renderer shows that sentence as
+prose. `foldedLines` now applies that rule when deciding whether a line
+interrupts an OPEN paragraph; a number at the start of a block is still a list
+whatever its value, because the rule is about interruption, not about the digit.
+Rewording the sentence would have been the shortcut, and the next ADR reference
+past § 1 would have re-broken it.
+
+Three mutations, each killed: restoring the old any-number behaviour,
+over-correcting so `1.` never interrupts either, and dropping the
+leading-whitespace allowance so an indented continuation escapes the rule.
