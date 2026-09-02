@@ -15172,3 +15172,40 @@ So a past-the-end range is safe **only** while no caller asks for an exact
 count. None of the six do. The requirement is now stated in the function's own
 contract rather than left implicit, because a caller that adds a count would
 turn every complete read into a thrown error.
+
+## 988. Three dispatches, three different answers about which route formats mobile imports
+
+The Routes screen's empty-state comment said Import "covers GPX / KML / KMZ /
+GeoJSON / TCX files". `l10n.routesEmptyBody` said GPX, KML or TCX. The picker
+took `['gpx', 'kml']`. And `parity.md` marked GeoJSON import, TCX import and
+KML/KMZ import all Android-`✓`. Four statements, four different sets, and the
+smallest of them was the one that ran.
+
+There were literally three dispatches. `routesFromImportedFile` branched
+`format == 'kml' ? kml : gpx`; `detectRouteFormat` resolved an extension
+against a two-element set and otherwise sniffed for `<kml>` or `<gpx>`; and
+`_parseRouteFile` in `routes_screen.dart` — the file-picker path — did its own
+`req.ext == 'kml' ? 'kml' : 'gpx'`, never consulting the sniff at all. So a
+`.tcx` or `.geojson` arriving through the OS share sheet was parsed as GPX and
+failed, and `RouteParser.fromTcx` / `routesFromGeoJson` — both shipped, both
+tested — were unreachable from the app.
+
+Widened rather than trimmed, because the parsers already exist: the format set
+is `{gpx, kml, geojson, tcx}`, the picker's allowlist is *derived* from it plus
+an alias map (`json` -> `geojson`, which web's own `accept` has always taken),
+the third dispatch is deleted in favour of `detectRouteFormat`, and the sniff
+learned `<TrainingCenterDatabase` and a JSON document opening.
+
+**KMZ is deliberately not added, and every promise of it is gone instead.** A
+KMZ is a zip; `gpx_parser` documents itself as archive-free and web unzips with
+JSZip before reaching its own KML path. The blocker here is not the missing
+parser, which is one call — it is that the whole mobile import pipeline is
+`String`-typed from `File.readAsString` through the `compute` isolate request
+to the dispatch, and `readAsString` throws on a zip before any of it. Supporting
+KMZ means a bytes pipeline, which is a larger change than this one and is filed
+as its own item. `parity.md` now carries a KMZ row that says `✗` for both
+mobile platforms rather than a KML/KMZ row that said `✓`.
+
+The copy is pinned to the picker rather than kept in step by hand: the suite
+reads all seven ARBs and fails if any omits a format the picker offers or names
+one nothing can open.

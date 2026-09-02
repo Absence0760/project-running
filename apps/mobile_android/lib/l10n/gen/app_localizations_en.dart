@@ -2857,7 +2857,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Tap Build to draw a route on the map, or Import a GPX, KML, or TCX file.';
+      'Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.';
 
   @override
   String get routesBuild => 'Build';

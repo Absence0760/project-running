@@ -791,7 +791,7 @@
   "historySelectionHint": "ランを長押しすると複数選択できます",
   "routesSelectionHint": "ルートを長押しすると複数選択できます",
   "routesEmptyTitle": "まだルートがありません",
-  "routesEmptyBody": "「作成」をタップして地図上にルートを描くか、GPX・KML・TCX ファイルをインポートしてください。",
+  "routesEmptyBody": "「作成」をタップして地図上にルートを描くか、GPX・KML・GeoJSON・TCX ファイルをインポートしてください。",
   "routesBuild": "作成",
   "routesImport": "インポート",
   "routesNoMatch": "これらのフィルターに一致するルートはありません",

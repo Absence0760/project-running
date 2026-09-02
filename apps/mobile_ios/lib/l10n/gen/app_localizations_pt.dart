@@ -2884,7 +2884,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML ou TCX.';
+      'Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Criar';
@@ -16820,7 +16820,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routesEmptyBody =>
-      'Toque em Criar para desenhar uma rota no mapa ou importe um arquivo GPX, KML ou TCX.';
+      'Toque em Criar para desenhar uma rota no mapa ou importe um arquivo GPX, KML, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Criar';

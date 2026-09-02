@@ -2744,7 +2744,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      '「作成」をタップして地図上にルートを描くか、GPX・KML・TCX ファイルをインポートしてください。';
+      '「作成」をタップして地図上にルートを描くか、GPX・KML・GeoJSON・TCX ファイルをインポートしてください。';
 
   @override
   String get routesBuild => '作成';
