@@ -19,13 +19,26 @@ val envProps = Properties().apply {
     rootProject.file(".env.local").takeIf { it.exists() }
         ?.inputStream()?.use { load(it) }
 }
-fun envFlag(key: String, default: Boolean = false): Boolean {
+// The accepted-affirmative set is the repo's, not this file's: `1`, `true`,
+// `yes`, `on`, trimmed and case-insensitive. It used to be `== "true"` alone,
+// which is the decisions.md § 709 defect on a fourth rail — and the two flags
+// it carries are NEGATIVE, so the narrow parse failed OPEN. `DISABLE_HR=1`
+// left the emulator's synthetic heart-rate samples streaming into the runs
+// table, which is the exact thing the flag exists to stop. Canonical rails:
+// `apps/web/src/lib/core/env_flag.ts` + `apps/mobile_android/lib/env_flag.dart`;
+// `EnvFlagParityTest` reads the web one and fails when this drifts from it.
+fun envFlag(key: String): Boolean {
     val raw = envProps.getProperty(key) ?: project.findProperty(key) as? String
-    return raw?.trim()?.lowercase() == "true"
+    val v = (raw ?: "").trim().lowercase()
+    return v == "1" || v == "true" || v == "yes" || v == "on"
 }
+// A key present but empty falls back to `default` rather than to "" — an
+// operator who writes `APP_RELEASE=` has supplied no release name, and the
+// difference is visible: Sentry tags anything that is not "dev" as the
+// production environment.
 fun envString(key: String, default: String = ""): String {
     val raw = envProps.getProperty(key) ?: project.findProperty(key) as? String
-    return raw?.trim() ?: default
+    return raw?.trim()?.takeIf { it.isNotEmpty() } ?: default
 }
 
 kotlin {

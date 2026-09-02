@@ -12242,3 +12242,39 @@ guard pins that both call sites — the `TYPE_CHANGED` branch and the cold-start
 `current()` read, which applies a session on the identical path — route through
 the adapter, and that no `?: ""` coercion survives on the receive side. Same
 shape as `RoutesBridge`'s pure `parseRoutesJson` plus `RoutesBridgeWiringTest`.
+
+## 880. The Wear build script was a fourth rail of the flag parser, and being the only NEGATIVE one made its narrow copy fail open
+
+`apps/watch_wear/android/app/build.gradle.kts` reads `BYPASS_LOGIN`,
+`DISABLE_HR` and `DISABLE_TTS` out of `.env.development` / `.env.local` at
+Gradle-configure time and emits them as `BuildConfig` booleans. Its `envFlag`
+accepted `raw?.trim()?.lowercase() == "true"` and nothing else, where the
+canonical parser ([§ 709](#709), `apps/web/src/lib/core/env_flag.ts` twinned
+into `apps/mobile_android/lib/env_flag.dart`) accepts `1` / `true` / `yes` /
+`on`. Same defect, fourth rail — and this rail is the one where the narrow
+parse fails **open**, because two of its three flags are negatives:
+`ENABLE_HR = !envFlag("DISABLE_HR")`, so `DISABLE_HR=1` parsed as false and
+left heart rate ON. The Wear OS emulator synthesises HR samples that look
+real; keeping them out of the runs table is the entire reason the flag exists.
+
+The guard reads the accepted set **off** the canonical rail rather than
+restating it. A list written into the Kotlin test would pin the tokens someone
+remembered on the day, and web adding a fifth affirmative would leave this rail
+behind silently — which is precisely how the drift arose. `EnvFlagParityTest`
+extracts the quoted tokens from `isTruthyFlagValue`'s body and from `envFlag`'s
+and compares the two sets, plus asserts the trim and lowercase calls (the set
+can be right and the behaviour still wrong), and that no `.env` read spells an
+inline comparison instead of going through the two helpers.
+
+Two smaller things fell out of the same reading. `envFlag`'s `default: Boolean
+= false` parameter was never read by the body and never passed by a caller — a
+parameter that documents a behaviour the function does not have. And
+`envString` returned `""` for a key that is present but empty, so
+`APP_RELEASE=` yielded `""` rather than the declared `"dev"`, which
+`MainActivity` then reports to Sentry as the `production` environment. Both are
+now what they say they are.
+
+`build.gradle.kts` is already a declared input of the test task
+(`guardedBuildScripts`, added for the locale guards), so an edit to it re-runs
+this rather than leaving `testDebugUnitTest` UP-TO-DATE on exactly the change
+the guard exists to catch.
