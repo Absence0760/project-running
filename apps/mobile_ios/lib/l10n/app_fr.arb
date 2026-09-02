@@ -791,7 +791,7 @@
   "historySelectionHint": "Appuyez longuement sur une course pour en sélectionner plusieurs",
   "routesSelectionHint": "Appuyez longuement sur un itinéraire pour en sélectionner plusieurs",
   "routesEmptyTitle": "Aucun itinéraire pour l'instant",
-  "routesEmptyBody": "Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML ou TCX.",
+  "routesEmptyBody": "Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML, GeoJSON ou TCX.",
   "routesBuild": "Créer",
   "routesImport": "Importer",
   "routesNoMatch": "Aucun itinéraire ne correspond à ces filtres",

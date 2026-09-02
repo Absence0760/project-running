@@ -585,12 +585,17 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
 
       svc.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      // _trySync is fire-and-forget from the observer; let microtasks drain.
-      await Future<void>.delayed(Duration.zero);
-      // The sync future itself is async; let one more macrotask round trip.
-      await pumpEventQueue();
+      // Await the cycle itself, not a proxy for it. `pumpEventQueue()` used to
+      // stand in here, and it returns when the event loop goes quiet for a
+      // bounded number of turns — which the batch push satisfies long before
+      // `markManySynced` has finished writing. The cycle then outlived the
+      // test and raced this group's teardown into the store directory, which
+      // is CI run 33690185523's `errno 39`. See decisions § 991.
+      await svc.debugInFlightSync;
 
       expect(api.saveBatchCallCount, 1);
+      expect(svc.debugInFlightSync, isNull,
+          reason: 'the cycle must have finished, not merely started');
     });
 
     test('didChangeAppLifecycleState(paused) does NOT trigger a sync',
@@ -685,8 +690,11 @@ void main() {
       final svc = SyncService(apiClient: api, runStore: store);
 
       svc.start();
-      // Wait for the startup _trySync future.
-      await pumpEventQueue();
+      // The startup cycle itself, not a bounded number of event-loop turns:
+      // the batch push settles the loop long before `markManySynced` has
+      // finished writing, so a pumped wait leaves the cycle running into this
+      // group's teardown (decisions § 991).
+      await svc.debugInFlightSync;
 
       expect(api.saveBatchCallCount, 1, reason: 'startup _trySync should fire');
 
@@ -694,8 +702,9 @@ void main() {
       // observer. Save a fresh run, simulate a resume.
       await store.save(makeRun('r-2'));
       svc.didChangeAppLifecycleState(AppLifecycleState.resumed);
-      await pumpEventQueue();
+      await svc.debugInFlightSync;
       expect(api.saveBatchCallCount, 2);
+      expect(svc.debugInFlightSync, isNull);
 
       svc.stop();
     });
@@ -705,9 +714,9 @@ void main() {
       final api = _FakeApiClient();
       final svc = SyncService(apiClient: api, runStore: store);
       svc.start();
-      // Allow startup _trySync to settle (no runs to push, so it's a
-      // no-op anyway).
-      await pumpEventQueue();
+      // Let the startup cycle finish (no runs to push, so it's a no-op
+      // anyway) rather than assuming a pumped loop outran it.
+      await svc.debugInFlightSync;
       svc.stop();
 
       // After stop, lifecycle events on the binding don't route to us

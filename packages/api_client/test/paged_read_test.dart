@@ -49,13 +49,48 @@ void main() {
       expect(rows.toSet().length, rows.length, reason: 'no duplicated row');
     });
 
-    test('a short first page stops after one request', () async {
+    test('a short FIRST page costs one confirming request', () async {
+      // A first page short of the ask has no predecessor to be shorter than,
+      // and "the result set holds 12 rows" is indistinguishable from "the
+      // server capped this range at 12" without asking again. The second
+      // range starts at what was RECEIVED, not at the page size, so a cap
+      // could not skip the rows it withheld.
       final s = server(12);
       final rows = await readAllPages(s.fetch);
       expect(rows.length, 12);
       expect(s.calls, [
-        [0, 999]
+        [0, 999],
+        [12, 1011],
       ]);
+    });
+
+    test('a server capping below the page size is NOT read as exhausted',
+        () async {
+      // The bug this function exists to remove, from the other side: with
+      // `db.max-rows` at 500 the first 1000-row range comes back with 500
+      // rows and a 200, and a loop that stops on any short page reports a
+      // 1,400-run history as 500 runs with no error anywhere.
+      final s = server(1400, serverCap: 500);
+      final rows = await readAllPages(s.fetch);
+      expect(rows.length, 1400);
+      expect(rows, List<int>.generate(1400, (i) => i));
+      expect(s.calls, [
+        [0, 999],
+        [500, 1499],
+        [1000, 1999],
+      ]);
+    });
+
+    test('a capped server whose total is a multiple of the cap exhausts',
+        () async {
+      final s = server(1000, serverCap: 500);
+      expect((await readAllPages(s.fetch)).length, 1000);
+    });
+
+    test('a cap ABOVE the page size still pages by the page size', () async {
+      final s = server(2500, serverCap: 5000);
+      final rows = await readAllPages(s.fetch);
+      expect(rows, List<int>.generate(2500, (i) => i));
     });
 
     test('an exact multiple of the page size takes one extra empty request',

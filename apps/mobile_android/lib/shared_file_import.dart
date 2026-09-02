@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_models/core_models.dart' as cm;
@@ -8,11 +9,34 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import 'local_route_store.dart';
 
-/// Route-file formats importable from another app. Matches the Routes
-/// screen file-picker (`allowedExtensions: ['gpx', 'kml']`); KMZ/TCX/GeoJSON
-/// are parseable by [RouteParser] but deliberately not offered here so the
-/// two import entry points stay in lockstep.
-const Set<String> kSupportedRouteImportExtensions = {'gpx', 'kml'};
+/// Route-file formats importable from another app, and the file-picker's
+/// allowlist — the two entry points offer exactly the same set.
+///
+/// KMZ is the one format [RouteParser] cannot read and is deliberately absent
+/// from every promise the app makes: a KMZ is a zip, this pipeline is
+/// string-typed end to end, and `readAsString` on one throws before a parser
+/// is reached. Web unzips with JSZip and hands the inner document to its own
+/// KML path; doing the same here needs a bytes pipeline, not just a parser.
+const Set<String> kSupportedRouteImportExtensions = {
+  'gpx',
+  'kml',
+  'geojson',
+  'tcx',
+};
+
+/// Filename extensions that name a supported format under another spelling.
+/// A GeoJSON route is routinely saved as `.json`, which web's own `accept`
+/// list has always taken.
+const Map<String, String> kRouteImportExtensionAliases = <String, String>{
+  'json': 'geojson',
+};
+
+/// The picker's `allowedExtensions`, derived so it cannot drift from what the
+/// dispatch below can actually parse.
+final List<String> kRouteImportPickerExtensions = <String>[
+  ...kSupportedRouteImportExtensions,
+  ...kRouteImportExtensionAliases.keys,
+];
 
 /// Pure format dispatch shared by the file-picker import (routes_screen)
 /// and the OS "Open with" / share import ([SharedFileImportService]) — the
@@ -22,11 +46,19 @@ cm.Route routeFromImportedFile({
   required String content,
 }) {
   final all = routesFromImportedFile(format: format, content: content);
-  return all.isEmpty
-      ? (format == 'kml'
-          ? RouteParser.fromKml(content)
-          : RouteParser.fromGpx(content))
-      : all.first;
+  if (all.isNotEmpty) return all.first;
+  // The single-route parsers reach shapes the multi-route ones do not — a GPX
+  // `<rte>` rather than a `<trk>`, a KML `<Placemark>` with bare coordinates.
+  switch (format) {
+    case 'kml':
+      return RouteParser.fromKml(content);
+    case 'geojson':
+      return RouteParser.fromGeoJson(_geoJsonDocument(content));
+    case 'tcx':
+      return RouteParser.fromTcx(content);
+    default:
+      return RouteParser.fromGpx(content);
+  }
 }
 
 /// Every route a file contains — one per GPX `<trk>` / KML `<LineString>`.
@@ -40,26 +72,45 @@ List<cm.Route> routesFromImportedFile({
   required String format,
   required String content,
 }) {
-  return format == 'kml'
-      ? RouteParser.routesFromKml(content)
-      : RouteParser.routesFromGpx(content);
+  switch (format) {
+    case 'kml':
+      return RouteParser.routesFromKml(content);
+    case 'geojson':
+      return RouteParser.routesFromGeoJson(_geoJsonDocument(content));
+    case 'tcx':
+      return <cm.Route>[RouteParser.fromTcx(content)];
+    default:
+      return RouteParser.routesFromGpx(content);
+  }
 }
 
+/// A GeoJSON document is always a JSON object — a FeatureCollection, a
+/// Feature, or a bare geometry. Anything else throws, which every caller
+/// already treats as an unreadable file.
+Map<String, dynamic> _geoJsonDocument(String content) =>
+    jsonDecode(content) as Map<String, dynamic>;
+
 /// Resolve the route format from a filename extension, falling back to a
-/// cheap XML root-element sniff when the extension is missing or unknown.
+/// cheap root-element sniff when the extension is missing or unknown.
 /// WhatsApp shares a `.gpx` as `application/octet-stream` and the cached
 /// copy the OS hands over can arrive without a usable extension, so the
 /// content probe is what makes those imports work. Returns null when
-/// neither the extension nor the content looks like a GPX/KML route.
+/// neither the extension nor the content looks like a route file.
 String? detectRouteFormat({String? extension, required String content}) {
   final ext = extension?.toLowerCase();
-  if (ext != null && kSupportedRouteImportExtensions.contains(ext)) return ext;
+  if (ext != null) {
+    if (kSupportedRouteImportExtensions.contains(ext)) return ext;
+    final alias = kRouteImportExtensionAliases[ext];
+    if (alias != null) return alias;
+  }
   final head = content.trimLeft();
   final probe = head.length > 2048 ? head.substring(0, 2048) : head;
   // KML checked first: a KMZ-unzipped-to-text edge case can contain a
   // `<gpx>` string in a description, but a real GPX never contains `<kml`.
   if (probe.contains('<kml')) return 'kml';
+  if (probe.contains('<TrainingCenterDatabase')) return 'tcx';
   if (probe.contains('<gpx')) return 'gpx';
+  if (probe.startsWith('{') && probe.contains('"type"')) return 'geojson';
   return null;
 }
 

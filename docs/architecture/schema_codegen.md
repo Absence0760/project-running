@@ -79,6 +79,8 @@ class RunRow {
 }
 ```
 
+Every `double` column reads through the `_toDoubleOrNull` / `_toDouble` helpers the generator emits at the top of the file, never through a bare `as num` cast: Postgres renders a `numeric` value JSON has no literal for as a JSON *string* (`{"distance_m":"NaN"}`), which a cast can only throw on. An unusable value resolves to `null` for a nullable column and `double.nan` for a non-nullable one — see [decisions § 985](decisions.md). Integer columns keep the cast; no integer Postgres type has a value `to_json` quotes.
+
 `ApiClient` uses these rows as the wire format. It constructs a `RunRow` from a domain `Run` before upserting, and runs `RunRow.fromJson` before building a domain `Run` back. Column names are always referenced through the generated constants — `RunRow.colStartedAt`, never the string literal `'started_at'` — so a rename propagates as a compile error.
 
 The rich `Run` / `Route` / `Waypoint` domain classes in `core_models/lib/src/` are kept — they hold `Duration`, `DateTime`, the `RunSource` enum, and drop unused columns (`user_id`, `updated_at`). The generated rows are the DTO layer underneath them.

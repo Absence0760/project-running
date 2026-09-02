@@ -5,7 +5,7 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
-/// Dart port of `apps/web/src/lib/revenuecat.ts` — RevenueCat native
+/// Dart port of `apps/web/src/lib/billing/revenuecat.ts` — RevenueCat native
 /// SDK wrapper for the in-app Pro purchase sheet. The wrapper has
 /// three jobs:
 ///

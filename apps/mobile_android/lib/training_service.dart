@@ -181,7 +181,7 @@ class TrainingService extends ChangeNotifier {
 
   /// Publish one of the viewer's plans as a template under a club they
   /// admin. Returns the new template id. Mirrors the canonical web
-  /// path at `apps/web/src/lib/data.ts#publishPlanAsTemplate` — a
+  /// path at `apps/web/src/lib/core/data.ts#publishPlanAsTemplate` — a
   /// multi-table INSERT rather than an RPC (there is no
   /// `publish_plan_as_template` function server-side; only
   /// `clone_plan_template` exists, for the adopt direction).
@@ -894,7 +894,7 @@ class TrainingService extends ChangeNotifier {
 
   /// Pure helper: trim a string then collapse empty-after-trim to
   /// null. Mirrors web's `s?.trim() || null` pattern used across
-  /// `apps/web/src/lib/data.ts` for every optional text column.
+  /// `apps/web/src/lib/core/data.ts` for every optional text column.
   /// Exposed `@visibleForTesting` so the contract can be pinned in
   /// the parity test suite alongside the other normalisation helpers.
   @visibleForTesting

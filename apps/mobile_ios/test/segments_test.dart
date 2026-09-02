@@ -8,7 +8,7 @@ import '../lib/segments.dart';
 /// roughly `stepM` of distance and `stepS` seconds. Lat advances along
 /// a meridian (~111_320 m per degree) so haversine-cumulated distance
 /// matches `(i * stepM)` to about half a metre. Mirrors the
-/// `straightTrack` helper in `apps/web/src/lib/segments.test.ts`.
+/// `straightTrack` helper in `apps/web/src/lib/segments/segments.test.ts`.
 List<Waypoint> _straightTrack({
   required int points,
   required double stepM,

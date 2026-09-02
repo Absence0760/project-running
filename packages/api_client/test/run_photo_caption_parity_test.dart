@@ -3,7 +3,7 @@ import 'package:test/test.dart';
 
 /// Parity tests for `ApiClient.normaliseRunPhotoCaption` — the pure
 /// helper that backs both `addRunPhoto` and `updateRunPhotoCaption`.
-/// Mirrors `apps/web/src/lib/data.ts`'s `input.caption?.trim() || null`
+/// Mirrors `apps/web/src/lib/core/data.ts`'s `input.caption?.trim() || null`
 /// contract used in both `addRunPhoto` and `updateRunPhotoCaption`
 /// on web.
 ///

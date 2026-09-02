@@ -1,5 +1,5 @@
 // Client-side expansion of the enum-recurrence model used by Phase 2 events.
-// Dart port of apps/web/src/lib/recurrence.ts. The two implementations must
+// Dart port of apps/web/src/lib/social/recurrence.ts. The two implementations must
 // stay in sync so web and Android render the same instance timestamps for a
 // given event row. See docs/architecture/decisions.md #10.
 

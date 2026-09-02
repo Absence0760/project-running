@@ -15,7 +15,7 @@ import '../training_load.dart';
 ///
 /// Mirrors the web `/fitness` summary so the same numbers appear on
 /// every surface — tweak `fitness.dart` (the Dart port of
-/// `apps/web/src/lib/fitness.ts`) and you'll get the matching change
+/// `apps/web/src/lib/training/fitness.ts`) and you'll get the matching change
 /// here.
 class FitnessCard extends StatelessWidget {
   final List<Run> runs;

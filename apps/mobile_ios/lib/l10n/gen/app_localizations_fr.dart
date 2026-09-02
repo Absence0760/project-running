@@ -2896,7 +2896,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML ou TCX.';
+      'Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Créer';

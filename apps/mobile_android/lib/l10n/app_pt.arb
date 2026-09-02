@@ -791,7 +791,7 @@
   "historySelectionHint": "Toca e mantém numa corrida para selecionar várias",
   "routesSelectionHint": "Toca e mantém numa rota para selecionar várias",
   "routesEmptyTitle": "Nenhuma rota ainda",
-  "routesEmptyBody": "Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML ou TCX.",
+  "routesEmptyBody": "Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML, GeoJSON ou TCX.",
   "routesBuild": "Criar",
   "routesImport": "Importar",
   "routesNoMatch": "Nenhuma rota corresponde a esses filtros",

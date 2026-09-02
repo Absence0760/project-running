@@ -3,7 +3,7 @@
 /// (the byte-identical Flutter twin) and any future server-side
 /// caller can reuse the same logic.
 ///
-/// Mirrors `apps/web/src/lib/segments.ts` (assignCompetitionRanks +
+/// Mirrors `apps/web/src/lib/segments/segments.ts` (assignCompetitionRanks +
 /// SEGMENT_AGE_BANDS). Keep the two in lockstep — the
 /// shared-library-syncer agent watches the pair.
 library;
@@ -38,7 +38,7 @@ List<int> assignCompetitionRanks<T>(
 }
 
 /// Strava-style age bins for tiered segment leaderboards. Must match
-/// `apps/web/src/lib/segments.ts#SEGMENT_AGE_BANDS` and the buckets
+/// `apps/web/src/lib/segments/segments.ts#SEGMENT_AGE_BANDS` and the buckets
 /// the `segment_leaderboard_tiered` RPC accepts (migration
 /// 20260829_001).
 const kSegmentAgeBands = <String>[
@@ -68,7 +68,7 @@ const int kGlobalSegmentCatalogueLimit = 500;
 /// Tooltip / accessibility label for the KOM/QOM crown badge.
 /// Describes which tier the rank-1 holder owns ("Fastest woman 35-39",
 /// "Fastest overall", etc.) given the active filter. Mirrors
-/// `apps/web/src/lib/segments.ts#crownLabel`.
+/// `apps/web/src/lib/segments/segments.ts#crownLabel`.
 String crownLabel(String? genderFilter, String? ageFilter) {
   final subject = switch (genderFilter) {
     null => null,

@@ -15684,3 +15684,304 @@ setter, on a restore that drops the epoch check, and on an epoch read at restore
 time instead of captured before the defer (a live read always equals itself).
 Source-level because the page is a `.svelte` file that `tsx --test` cannot
 execute, the same shape `strava_zip_strictness.test.ts` uses.
+## 985. A numeric column can arrive as a JSON string, and the generator cast could only crash
+
+`scripts/gen_dart_models.dart` emitted `(json['x'] as num).toDouble()` for every
+`double` column — 69 reads in `db_rows.dart`. `as num` is a cast, not a
+coercion: a `String` on the wire is a `TypeError` thrown inside `fromJson`,
+which kills the whole screen rather than one field. The filing that raised this
+called the string arrival hypothetical. It is not. Measured against the local
+stack:
+
+```
+select coalesce(json_agg(_postgrest_t), '[]')::character varying
+from (select 'NaN'::numeric as distance_m, 'Infinity'::numeric as elevation_m,
+             12.5::numeric as ok) _postgrest_t;
+-> [{"distance_m":"NaN","elevation_m":"Infinity","ok":12.5}]
+```
+
+`json_agg` is the shape PostgREST builds its response body with, and JSON has
+no literal for NaN or Infinity, so Postgres quotes them. The column's own CHECK
+is no defence: `'NaN'::numeric >= 100` is **true**, so
+`global_segments_distance_m_check` admits exactly the value that then cannot be
+decoded. The same package already believed this — `effort_rank.dart`'s
+`_usableRank` accepts `raw is String ? num.tryParse(raw)` — so two boundaries
+in one package disagreed about one risk, and the generated half was the one
+that crashed.
+
+The generator now emits a pair of helpers and routes every `double` column
+through them. An unusable value resolves to the field type's own "no number":
+`null` for a nullable column, `double.nan` for a non-nullable one. Three
+choices inside that, each deliberate.
+
+**Non-finite is unusable, not a value.** A parsed `"NaN"` is `double.nan` in
+Dart, so accepting the parse and stopping there would swap a crash for a poison
+number propagating into arithmetic. The helper screens `isFinite`, the same
+rule §940 and §954 applied at the SQL and coordinate boundaries.
+
+**Zero is never the fallback.** A 0 m segment is a plausible-looking lie; a NaN
+is unmistakably no answer, and every finiteness screen already in the tree —
+`sortCatalogue`'s "absent or non-finite sorts LAST" among them — is written to
+recognise it.
+
+**NaN for a non-nullable column is what the web twin already does.**
+`Number("NaN")` is NaN, so web renders the row and sorts it last where mobile
+died. The point of the fix is that both platforms now answer the same way about
+the same byte.
+
+Ints are deliberately left on `as num`. `int2`/`int4`/`int8` have no non-finite
+values and `to_json` never quotes them (measured: `9223372036854775807` comes
+back unquoted), so the cast cannot meet a shape it rejects.
+
+One consequence recorded rather than fixed here: a row decoded with a NaN and
+then re-encoded through `toJson` hits `jsonEncode`'s refusal of non-finite
+doubles. That is the same class as §986 and is answered there.
+
+## 986. A point that is not a location cannot strand a run, and there is no terminal error because there is no terminal failure
+
+`jsonEncode` refuses a non-finite double. Measured:
+
+```
+jsonEncode([{'lat': double.nan}])
+-> JsonUnsupportedObjectError: Converting object to an encodable object
+   failed: NaN     isError=true  isException=false
+```
+
+It is an `Error`, so `on Exception` never saw it, and it is thrown from the
+two places every run's track passes through on its way out of memory:
+`ApiClient._uploadTrack` and the local store's `jsonEncode`. One such point
+therefore made a run **unsaveable and unuploadable at once**, and permanently:
+`saveRunsBatch` parks the run for retry, the next cycle encodes the same track
+and fails identically, and nothing in the failure distinguishes it from a lost
+network. A four-day desert effort stays on the phone forever.
+
+Only the recorder screened for one (§ 956). The Wear OS and watchOS bridges,
+`strava_importer.dart`'s API path, the backup-restore path and
+`resumeSession`'s caller-supplied seeded track all reach `saveRun` unscreened.
+
+**The screen goes at the serializers, not at the five producers.** A rule of
+the form "every producer must remember" is the shape this repo keeps filing
+against; a filter in the two places a track becomes bytes covers every producer
+that exists and every one that will. `finiteWaypoints` in `core_models` is
+that filter, applied in `Run.toJson` (which is the local store's five encode
+sites and the backup archive at once), in the in-progress slice writer, and in
+`ApiClient._trackBlobJson`.
+
+**It drops rather than refuses.** A non-finite coordinate is not a location but
+the absence of one (§ 954), so dropping it removes nothing real, and the
+alternative — refusing the upload — is the outcome the runner already has. The
+recorder and the four route importers already answer this way at their own
+boundaries; this is the same answer at the far end. The drop is counted and
+`debugPrint`ed at the upload site, never silent.
+
+`Run.toJson` also resolves a non-finite `distanceMetres` to zero. That value
+would fail the same encode, and it does not fail alone: the local index every
+other run shares is written in the same pass, so one NaN distance could take
+the whole store's index with it. Zero is what `runs_distance_m_check` (§ 939)
+would demand of the column anyway.
+
+**No terminal-error taxonomy was added, deliberately.** The obvious durable
+shape here is a classifiable permanent failure the sync drain can park instead
+of retrying. But the retry loop is a symptom of a permanent failure existing;
+removing the failure removes the loop, and a new error category with no
+reachable member is a preemptive abstraction. What remains unanswered — and is
+filed rather than invented — is whether any OTHER permanent per-run upload
+failure exists (a blob past the bucket's size limit is the candidate). That is
+a question about a failure we have not observed, and the taxonomy should be
+built the day one is.
+
+## 987. The paging loop that removed silent truncation could still silently truncate
+
+`readAllPages` exists because a bare PostgREST `.select()` comes back capped at
+`db.max-rows` with a 200 and no flag, so a read whose contract is "every row"
+returns the first page and reads as complete. Its own doc said exactly that,
+and then used `page.length < pageSize` as the exhausted signal with `pageSize`
+fixed at 1000 — which is the same bug from the other side. A deployment whose
+cap is below 1000 answers the FIRST range short, and the loop reports a
+1,400-run history as 500 runs. Nothing anywhere asserted that the server's cap
+and `kPostgrestPageSize` agree, and `config.toml` sets no `max_rows` at all, so
+this rested entirely on a platform default nobody had written down.
+
+Two shapes were on the table. A startup assertion against the deployment's cap
+was rejected: PostgREST does not tell a client what its cap is, so the
+assertion would have to infer it — which is what the loop now does anyway,
+without a second mechanism to keep in step.
+
+The loop instead advances by the rows it **received** rather than by the size
+it asked for, and stops on an empty page or on a page that is both short of the
+ask and shorter than the page before it. Advancing by the receipt is the half
+that matters most: a loop that detected the cap but still advanced by 1000
+would skip the 500 rows the server withheld, turning a truncation into a
+corruption.
+
+The cost is one extra round trip when the FIRST page is short — that page has
+no predecessor to be shorter than, and "the table holds 12 rows" is
+indistinguishable from "the server capped this range at 12" without asking
+again. Every other shape costs exactly what it did before, including the
+common full-page walk.
+
+This makes the loop depend on a behaviour that was worth measuring rather than
+assuming. Against the local stack, PostgREST 14.14:
+
+```
+Range: 1000-1999                      -> 200  []
+Range: 1000-1999, Prefer: count=exact -> 416 Requested Range Not Satisfiable
+```
+
+So a past-the-end range is safe **only** while no caller asks for an exact
+count. None of the six do. The requirement is now stated in the function's own
+contract rather than left implicit, because a caller that adds a count would
+turn every complete read into a thrown error.
+
+## 988. Three dispatches, three different answers about which route formats mobile imports
+
+The Routes screen's empty-state comment said Import "covers GPX / KML / KMZ /
+GeoJSON / TCX files". `l10n.routesEmptyBody` said GPX, KML or TCX. The picker
+took `['gpx', 'kml']`. And `parity.md` marked GeoJSON import, TCX import and
+KML/KMZ import all Android-`✓`. Four statements, four different sets, and the
+smallest of them was the one that ran.
+
+There were literally three dispatches. `routesFromImportedFile` branched
+`format == 'kml' ? kml : gpx`; `detectRouteFormat` resolved an extension
+against a two-element set and otherwise sniffed for `<kml>` or `<gpx>`; and
+`_parseRouteFile` in `routes_screen.dart` — the file-picker path — did its own
+`req.ext == 'kml' ? 'kml' : 'gpx'`, never consulting the sniff at all. So a
+`.tcx` or `.geojson` arriving through the OS share sheet was parsed as GPX and
+failed, and `RouteParser.fromTcx` / `routesFromGeoJson` — both shipped, both
+tested — were unreachable from the app.
+
+Widened rather than trimmed, because the parsers already exist: the format set
+is `{gpx, kml, geojson, tcx}`, the picker's allowlist is *derived* from it plus
+an alias map (`json` -> `geojson`, which web's own `accept` has always taken),
+the third dispatch is deleted in favour of `detectRouteFormat`, and the sniff
+learned `<TrainingCenterDatabase` and a JSON document opening.
+
+**KMZ is deliberately not added, and every promise of it is gone instead.** A
+KMZ is a zip; `gpx_parser` documents itself as archive-free and web unzips with
+JSZip before reaching its own KML path. The blocker here is not the missing
+parser, which is one call — it is that the whole mobile import pipeline is
+`String`-typed from `File.readAsString` through the `compute` isolate request
+to the dispatch, and `readAsString` throws on a zip before any of it. Supporting
+KMZ means a bytes pipeline, which is a larger change than this one and is filed
+as its own item. `parity.md` now carries a KMZ row that says `✗` for both
+mobile platforms rather than a KML/KMZ row that said `✓`.
+
+The copy is pinned to the picker rather than kept in step by hand: the suite
+reads all seven ARBs and fails if any omits a format the picker offers or names
+one nothing can open.
+
+## 989. The five stale twin headers were already fixed; twenty-six others were not
+
+The filed item named five Dart headers pointing at web paths their counterpart
+had moved out of. All five were already correct on `main` — closed in the same
+round that filed them. What no one had done was ask the question generally.
+
+Scanning every `apps/web/src/**` path mentioned from `apps/mobile_android/lib`,
+`apps/mobile_android/test` and `packages/**`: 211 references, **26 distinct
+paths that did not exist**, cited from 37 files. They are the residue of the
+2026 `src/lib` re-foldering, and they are not obscure — `privacy`, `segments`,
+`training`, `training_load`, `recurrence`, `fitness`, `search_ranking`,
+`settings` and `routing_quality` are all registered TS-Dart parity pairs whose
+Dart half named a file that had not been there for months, plus five `.test.ts`
+counterparts the mirror suites cite as the thing they mirror.
+
+`check_parity_pair_registry.mjs` cannot see any of this, and the filing was
+right about why: it holds paths of its own and compares two registries, never
+reading the headers. So a header is documentation nothing checks — which is how
+26 of them rotted in silence.
+
+The guard is a Dart test rather than a script under `scripts/`, deliberately.
+The claim is about mobile source comments and the artefacts are mobile files,
+so it belongs in the suite that already reads them; it needs no new CI wiring
+(the `Test Flutter packages` job runs it), and being in `test/` it is mirrored
+into the iOS twin for free. It walks the three trees, extracts every
+`apps/web/src/**.{ts,svelte,mjs}` reference and fails on any that does not
+resolve — plus a floor on the number of references scanned, so a broken regex
+or a broken walk fails loudly instead of passing with zero findings, which is
+the failure mode a guard of this shape actually has.
+
+## 990. A wait whose predicate the dialog itself satisfies
+
+Two waits in `nutrition_screen_test.dart` asked for "the saved template to
+appear in the picker" with `find.text('Dinner again')`. `find.text` matches an
+`EditableText` as well as a `Text`, and the string had just been typed into the
+naming dialog's own field — so the predicate was true before the save was even
+requested. Instrumenting `pumpUntil` to count its loop turns measured it
+directly:
+
+```
+PUMPUNTIL_SPINS 0 for the saved template to appear in the picker
+PUMPUNTIL_SPINS 0 for the saved recipe to appear in the picker
+```
+
+Zero turns is a wait that converted nothing. The entry filing this had left it
+deliberately, on the grounds that `pumpUntil` cannot drive a route transition
+under the fake clock — `pump()` takes no duration, so a dialog's pop animation
+never progresses inside it — and that every predicate about the picker
+therefore risks a timeout instead.
+
+That reasoning is right about the picker and wrong about what the wait is for.
+The thing being waited on is a real file write; the picker is only where its
+effect eventually shows. The store's own entry file under the fake
+`path_provider` root is observable **without** any route transition completing,
+so the predicate now reads the disk. Measured after: 5 turns each, and pointing
+the helper at a directory that is never written makes both time out naming what
+they wait for — so the wait is now load-bearing in both directions.
+
+The `pumpAndSettle` that follows still does the route work, unchanged. Every
+other `pumpUntil` in the file was measured in the same pass; all nine spend at
+least one turn.
+
+## 991. A pumped event loop is not a completion signal, and the cycle it stood in for outlived the test
+
+CI run 33690185523 on `bb87b5ab3` failed `Test Flutter packages` with
+
+```
+SyncService — lifecycle wiring didChangeAppLifecycleState(resumed) triggers a sync
+FileSystemException: Deletion failed, path = '/tmp/sync_service_test_PKKBEB'
+  (OS Error: Directory not empty, errno = 39)
+```
+
+on a tree that had passed the same job minutes earlier. The teardown's
+`deleteSync(recursive: true)` listed the directory, removed what it saw, and
+then failed to `rmdir` because a file had appeared in the meantime — a store
+write, or the `.tmp` sibling § 957 makes it claim.
+
+The test's wait was `await Future.delayed(Duration.zero)` then
+`pumpEventQueue()`, and its assertion was `saveBatchCallCount == 1`. Both are
+proxies. The batch push happens near the START of a cycle;
+`runStore.markManySynced` and its `_persistSyncedIds` write run after it, so
+the loop can go quiet with the cycle still in flight. Whether the write lands
+before, during or after the teardown is a scheduling accident, which is exactly
+the shape of a job that is green on one runner and red on the next.
+
+The cause is one layer down from the test. `didChangeAppLifecycleState` is a
+`void` observer callback and `start()` returns `void`, so both call `_trySync`
+and **discard the future** — nothing anywhere could know a cycle had finished.
+`SyncService` now keeps the in-flight cycle in `_inFlight`, cleared when it
+completes and readable as `debugInFlightSync`; the three tests that pumped for
+it await it instead, and two of them additionally assert the handle has gone
+back to null, so "started" cannot pass for "finished".
+
+**Proved structurally, not by re-running.** With a 200 ms delay injected into
+`LocalRunStore._persistSyncedIds` and a print at the end of `_trySync`:
+
+```
+before:  ORDER: tearDown deleting /tmp/sync_service_test_CYPKGX
+         (the cycle's "finished" line never printed at all)
+after:   ORDER: cycle finished (foreground)
+         ORDER: tearDown deleting /tmp/sync_service_test_VYOKPQ
+```
+
+The old form let the test complete, and the teardown delete, with the store
+write still pending; the new one cannot. Nothing was retried, delayed,
+swallowed or marked flaky — a teardown that fails because a write is still
+running is a true signal and stays able to fire.
+
+The class was surveyed: of 86 mobile test files that create a temp directory,
+9 uses of a bare `pumpEventQueue()` exist across 2 files, and the other file
+(`run_detail_screen_test.dart`) pumps inside a bounded loop over an observable
+predicate, which is the correct shape. 28 files pair a temp directory with
+widget taps and no `pumpUntil` at all; identifying which of those actually
+outlive their writes needs the instrumented run this round could not afford,
+and is filed rather than guessed at.

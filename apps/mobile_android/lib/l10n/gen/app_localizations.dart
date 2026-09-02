@@ -4862,7 +4862,7 @@ abstract class AppLocalizations {
   /// Empty-state body shown when the route library is empty
   ///
   /// In en, this message translates to:
-  /// **'Tap Build to draw a route on the map, or Import a GPX, KML, or TCX file.'**
+  /// **'Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.'**
   String get routesEmptyBody;
 
   /// Label on the build-route FAB and the empty-state legend reminder

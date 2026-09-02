@@ -4,7 +4,7 @@ import '../lib/training_service.dart';
 
 /// Parity tests for the trim-and-null normalisation now applied to
 /// `TrainingService.createPlan.notes`. Mirrors web's
-/// `apps/web/src/lib/data.ts:createTrainingPlan`, which writes
+/// `apps/web/src/lib/core/data.ts:createTrainingPlan`, which writes
 /// `notes: input.notes?.trim() || null`.
 ///
 /// Before this round, mobile passed `notes?.trim()` — empty-after-trim

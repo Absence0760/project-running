@@ -7,7 +7,7 @@ import 'package:core_models/core_models.dart' show Waypoint;
 import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-/// Dart port of `apps/web/src/lib/routing.ts` — OSRM client for the
+/// Dart port of `apps/web/src/lib/routes/routing.ts` — OSRM client for the
 /// in-app route builder. Two helpers: [snapToRoad] for the
 /// nearest-road service, and [fetchRouteThrough] for a full route
 /// through N waypoints.
@@ -27,7 +27,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// public demo — keeping the binary from silently leaking user
 /// waypoints to an uncontracted third party. Mirrors the web
 /// `assertOsrmConfiguredForProd` in
-/// `apps/web/src/lib/routing.ts`. See audit/third-party-data-flows
+/// `apps/web/src/lib/routes/routing.ts`. See audit/third-party-data-flows
 /// (2026-05-25).
 
 const _kPublicDemoOsrm = 'https://router.project-osrm.org';
@@ -118,7 +118,7 @@ const Duration kOsrmRouteTimeout = Duration(seconds: 8);
 /// from a tap. 500 m still rejects the absurd cases (>1 km detour)
 /// while keeping the visible-pin-snaps-to-road contract the user
 /// expects. Kept in lockstep with
-/// `apps/web/src/lib/routing_quality.ts:OSRM_SNAP_RADIUS_M`.
+/// `apps/web/src/lib/routes/routing_quality.ts:OSRM_SNAP_RADIUS_M`.
 const int kOsrmSnapRadiusM = 500;
 
 /// Per-segment retry count for transient OSRM failures (5xx,

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-/// Pure Dart port of `apps/web/src/lib/privacy.ts` (decisions §33).
+/// Pure Dart port of `apps/web/src/lib/routes/privacy.ts` (decisions §33).
 /// Geofences clipped from the start and end of a track before it
 /// renders on any public surface. Owner-side preview only — non-owner
 /// clipping happens server-side via the `clip_track_for_user` RPC.

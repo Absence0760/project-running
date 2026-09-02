@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 /// merge helper that backs both `updateUniversal` and `updateDevice`.
 ///
 /// Mirrors the merge loop in
-/// `apps/web/src/lib/settings.ts:updateUniversal` / `updateDevice`,
+/// `apps/web/src/lib/settings/settings.ts:updateUniversal` / `updateDevice`,
 /// which does the same key-level overlay on a `PrefsBag`. Pinning
 /// the helper output across the same set of inputs both clients see
 /// in production keeps the two prefs bags converging when read from

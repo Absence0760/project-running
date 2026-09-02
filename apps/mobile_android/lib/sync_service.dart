@@ -71,7 +71,29 @@ class SyncService with WidgetsBindingObserver {
   void start() {
     WidgetsBinding.instance.addObserver(this);
     _connectivitySub = Connectivity().onConnectivityChanged.listen(_onConnectivity);
-    _trySync('startup');
+    _fireSync('startup');
+  }
+
+  /// The cycle a fire-and-forget trigger started, until it finishes.
+  ///
+  /// [start] and [didChangeAppLifecycleState] cannot await a cycle — an
+  /// observer callback returns `void` — but discarding the future left
+  /// NOTHING able to know when one had finished, and a cycle outlives the
+  /// call that started it by however long its store writes take. Holding it
+  /// is what lets a caller (today, a test whose teardown deletes the store
+  /// directory the cycle is still writing into) wait for the real thing
+  /// rather than for a proxy that happens to be fast enough.
+  Future<void>? _inFlight;
+
+  @visibleForTesting
+  Future<void>? get debugInFlightSync => _inFlight;
+
+  void _fireSync(String reason) {
+    final cycle = _trySync(reason);
+    _inFlight = cycle;
+    cycle.whenComplete(() {
+      if (identical(_inFlight, cycle)) _inFlight = null;
+    });
   }
 
   /// Public entry point for callers that need to drive a sync from a
@@ -89,7 +111,7 @@ class SyncService with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _trySync('foreground');
+      _fireSync('foreground');
     }
   }
 

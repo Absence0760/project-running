@@ -2886,7 +2886,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Toca Crear para dibujar una ruta en el mapa, o importa un archivo GPX, KML o TCX.';
+      'Toca Crear para dibujar una ruta en el mapa, o importa un archivo GPX, KML, GeoJSON o TCX.';
 
   @override
   String get routesBuild => 'Crear';

@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:core_models/core_models.dart' show Waypoint;
 
-/// Dart port of `apps/web/src/lib/elevation.ts`. Fetches elevation
+/// Dart port of `apps/web/src/lib/routes/elevation.ts`. Fetches elevation
 /// from the public Open-Meteo Elevation API (no API key required) and
 /// derives total elevation gain.
 ///
@@ -23,7 +23,7 @@ const int kElevationBatchSize = 100;
 /// without a client-side timeout an Open-Meteo outage pins the whole
 /// iteration's Future and the "Calculating route…" spinner never
 /// resolves. Mirrors the 8s `AbortSignal.timeout` on the web port
-/// (`apps/web/src/lib/elevation.ts`).
+/// (`apps/web/src/lib/routes/elevation.ts`).
 const Duration kElevationFetchTimeout = Duration(seconds: 8);
 
 typedef ElevationFetcher = Future<String> Function(Uri url);

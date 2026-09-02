@@ -4,7 +4,7 @@ import '../lib/calories.dart';
 
 void main() {
   // Persona-hunt Round 3 finding Woman #5. Dart twin of
-  // `apps/web/src/lib/calories.test.ts` — keep in lockstep.
+  // `apps/web/src/lib/runs/calories.test.ts` — keep in lockstep.
 
   group('estimateRunCalories — defaults + weight scaling', () {
     test('no weight → uses kDefaultBodyWeightKg (70)', () {

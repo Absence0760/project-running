@@ -509,7 +509,7 @@ class SocialService extends ChangeNotifier {
   }
 
   /// Region-aware club search. Mirrors web's `searchClubs` in
-  /// `apps/web/src/lib/data.ts`. Tries to geocode the query first
+  /// `apps/web/src/lib/core/data.ts`. Tries to geocode the query first
   /// (so "Virginia" → centroid + ~470 km radius → ST_DWithin against
   /// `clubs.location_point`) and forwards the bbox params to the
   /// `search_clubs` RPC. Falls back to [browseClubs] when the
@@ -684,7 +684,7 @@ class SocialService extends ChangeNotifier {
 
   /// Create a new club. The `enroll_club_owner` trigger auto-inserts
   /// the owner's `club_members` row, so we don't add it here.
-  /// Create a club. Mirrors `apps/web/src/lib/data.ts:createClub`:
+  /// Create a club. Mirrors `apps/web/src/lib/core/data.ts:createClub`:
   ///   - trims `name` and normalises `description` / `locationLabel`
   ///     (trim → empty becomes null), so whitespace-only inputs don't
   ///     survive to the DB regardless of how the caller pre-processed
@@ -957,7 +957,7 @@ class SocialService extends ChangeNotifier {
 
   /// Redeem a club invite token. Returns the slug of the club the
   /// user just joined so the caller can navigate to its detail
-  /// screen. Mirrors web `joinClubByToken` (apps/web/src/lib/data.ts).
+  /// screen. Mirrors web `joinClubByToken` (apps/web/src/lib/core/data.ts).
   /// Surfaces the RPC's own error messages on failure ("expired",
   /// "already a member", "invalid token") so the caller can render
   /// them as-is.
@@ -987,7 +987,7 @@ class SocialService extends ChangeNotifier {
 
   /// Create a new event under a club. Recurrence fields are raw
   /// strings — `recurrence.dart` produces them. Admin-write-gated by RLS.
-  /// Create an event. Mirrors `apps/web/src/lib/data.ts:createEvent`:
+  /// Create an event. Mirrors `apps/web/src/lib/core/data.ts:createEvent`:
   ///   - trims `title` and normalises `description` / `meetLabel`
   ///     (trim → empty becomes null) regardless of how the caller
   ///     pre-processed them.
@@ -1440,7 +1440,7 @@ class SocialService extends ChangeNotifier {
     // is needed by the leaderboard UI). Mobile previously read the
     // base table with `select()`, leaking those fields to non-owner
     // viewers — the same data-leak the audit-pass-3 fix closed on
-    // web's `fetchEventResults`. See apps/web/src/lib/data.ts.
+    // web's `fetchEventResults`. See apps/web/src/lib/core/data.ts.
     final rows = await _c
         .from('event_results_redacted')
         .select(
@@ -1580,7 +1580,7 @@ class SocialService extends ChangeNotifier {
   /// `is_auto_approve` column and the participant-submit pipeline reads
   /// it to decide whether to flip new results to `approved` on insert.
   ///
-  /// Mirrors `apps/web/src/lib/data.ts:armRace`. Keep the two in sync
+  /// Mirrors `apps/web/src/lib/core/data.ts:armRace`. Keep the two in sync
   /// — the rest of the stack expects both clients to write identical
   /// rows.
   Future<RaceSessionRow> armRace({
@@ -1717,7 +1717,7 @@ class SocialService extends ChangeNotifier {
   }
 
   /// Replies to [parentId], oldest-first. Capped at [limit] (default
-  /// 200) to match `apps/web/src/lib/data.ts:fetchPostReplies` — a
+  /// 200) to match `apps/web/src/lib/core/data.ts:fetchPostReplies` — a
   /// popular thread that accumulates thousands of replies otherwise
   /// pulls them all down on every open.
   Future<List<ClubPostView>> fetchPostReplies(

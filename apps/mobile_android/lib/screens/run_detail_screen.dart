@@ -1610,7 +1610,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
   // Calorie estimate routes through the shared pure helper in
   // `lib/calories.dart` (mirrored byte-for-byte to web's
-  // `apps/web/src/lib/calories.ts`) so the formula stays in lockstep
+  // `apps/web/src/lib/runs/calories.ts`) so the formula stays in lockstep
   // across surfaces. Applies the cross-formula female calibration
   // when `_viewerGender == 'female'` (loaded in initState). Persona-
   // hunt Round 3 finding Woman #5 + ADR §77.
@@ -3387,7 +3387,7 @@ class _SegmentStatsCard extends StatelessWidget {
 
 /// Apply a user's edit-dialog input (title + notes) to the existing
 /// metadata bag. Mirrors the web `applyRunMetadataPatch` in
-/// `apps/web/src/lib/data_normalise.ts`:
+/// `apps/web/src/lib/core/data_normalise.ts`:
 ///   - Trim each field.
 ///   - If empty-after-trim, REMOVE the key from the bag (so render-
 ///     when-present UI sees the field as cleared).

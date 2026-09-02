@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-/// Dart port of `apps/web/src/lib/strava.ts` — Strava OAuth helper
+/// Dart port of `apps/web/src/lib/integrations/strava.ts` — Strava OAuth helper
 /// surface for the mobile clients. The `strava-import` Edge Function
 /// is already wired through `ApiClient.syncStrava`; this module
 /// covers the *connect* half of the flow.
