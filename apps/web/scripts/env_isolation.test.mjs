@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { checkEnvIsolation, formatGuardError } from './env_isolation.mjs';
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+import {
+	checkEnvIsolation,
+	formatGuardError,
+	NOT_ISOLATED_URL_VARS,
+} from './env_isolation.mjs';
 
 test('passes when only loopback URLs are set', () => {
 	const r = checkEnvIsolation({
@@ -188,4 +195,98 @@ test('detects multiple findings independently', () => {
 		STRIPE_SECRET_KEY: 'sk_live_abc',
 	});
 	assert.equal(r.findings.length, 3);
+});
+
+test('a dev build aimed at a production route-generation engine is refused', () => {
+	// One generate races REQUEST_MULTIPLIERS x seeds -- up to 32 upstream
+	// fetches -- so an inherited `GRAPHHOPPER_URL` turns a local route build
+	// into a burst against a billed prod engine. Same for the graph-cycle
+	// sidecar, which searches the production street graph.
+	const r = checkEnvIsolation({
+		GRAPHHOPPER_URL: 'https://gh.threkir.com',
+		GRAPH_CYCLE_URL: 'https://graph.threkir.com',
+	});
+	assert.equal(r.ok, false);
+	assert.deepEqual(
+		r.findings.map((f) => f.envVar).sort(),
+		['GRAPHHOPPER_URL', 'GRAPH_CYCLE_URL'],
+	);
+});
+
+test('loopback engines pass', () => {
+	const r = checkEnvIsolation({
+		GRAPHHOPPER_URL: 'http://127.0.0.1:8989',
+		GRAPH_CYCLE_URL: 'http://localhost:8090',
+	});
+	assert.equal(r.ok, true);
+});
+
+/** Every source file under a web tree the guard is meant to cover. */
+function webSources(dir) {
+	const out = [];
+	for (const entry of readdirSync(dir)) {
+		const full = join(dir, entry);
+		if (statSync(full).isDirectory()) {
+			if (entry === 'node_modules' || entry === '.svelte-kit') continue;
+			out.push(...webSources(full));
+			continue;
+		}
+		if (!/\.(ts|js|mjs|svelte)$/.test(entry)) continue;
+		// A test may name any var in a fixture or an assertion string; only a
+		// real read is a real endpoint.
+		if (/\.test\.(ts|js|mjs)$/.test(entry)) continue;
+		out.push(full);
+	}
+	return out;
+}
+
+test('every URL-shaped env var the web tree reads is guarded or declared exempt', () => {
+	// The list drifted three times: PUBLIC_LIVE_HUB_URL and
+	// PUBLIC_EXPORT_HUB_URL were each added only after someone noticed, and
+	// GRAPHHOPPER_URL / GRAPH_CYCLE_URL were unguarded from the day the
+	// generator chain landed. A hand-kept list cannot notice its own gap, so
+	// this derives the population from the code that does the reading and
+	// makes the next endpoint var a decision somebody has to write down.
+	const helperSrc = readFileSync(resolve(import.meta.dirname, 'env_isolation.mjs'), 'utf-8');
+	const listBlock = helperSrc.match(/KNOWN_ENV_VARS\s*=\s*\[([\s\S]*?)\];/);
+	assert.ok(listBlock, 'Could not locate KNOWN_ENV_VARS in env_isolation.mjs.');
+	const guarded = new Set(
+		[...listBlock[1].matchAll(/'([A-Z][A-Z0-9_]*)'/g)].map((m) => m[1]),
+	);
+
+	const roots = [resolve(import.meta.dirname, '..', 'src'), resolve(import.meta.dirname, '..', 'lambda')];
+	const read = new Set();
+	for (const root of roots) {
+		for (const file of webSources(root)) {
+			const src = readFileSync(file, 'utf-8');
+			for (const m of src.matchAll(
+				/(?:process\.)?env(?:\.|\[['"])([A-Z][A-Z0-9_]*)['"]?\]?/g,
+			)) {
+				if (/(?:_URL|_URI|_ENDPOINT)$/.test(m[1])) read.add(m[1]);
+			}
+		}
+	}
+
+	// Population: an empty walk would satisfy the assertion below while
+	// proving nothing. The tree reads about a dozen.
+	assert.ok(read.size >= 8, `only found ${read.size} URL-shaped env reads — walker broken?`);
+
+	const unaccounted = [...read]
+		.filter((v) => !guarded.has(v) && !(v in NOT_ISOLATED_URL_VARS))
+		.sort();
+	assert.deepEqual(
+		unaccounted,
+		[],
+		'a URL-shaped env var the web tree reads is neither guarded by ' +
+			'KNOWN_ENV_VARS nor declared in NOT_ISOLATED_URL_VARS with the reason ' +
+			'it need not be loopback in dev.',
+	);
+
+	// The exemptions are for vars that actually exist. A stale entry would
+	// quietly widen the guard's blind spot the next time a var is renamed.
+	for (const [name, reason] of Object.entries(NOT_ISOLATED_URL_VARS)) {
+		assert.ok(read.has(name), `NOT_ISOLATED_URL_VARS names ${name}, which nothing reads any more.`);
+		assert.ok(reason.length > 40, `NOT_ISOLATED_URL_VARS.${name} needs a real reason.`);
+		assert.ok(!guarded.has(name), `${name} is both guarded and exempt.`);
+	}
 });
