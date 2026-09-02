@@ -14434,52 +14434,6 @@ that would be anon-reachable. All 26 delegate to `is_club_admin`,
 anon request satisfies none of them. The caller reference is one level down,
 which is exactly why a text sweep of policy expressions alone would have
 reported 26 findings and been wrong about every one.
-## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
-
-**Decided 2026-09-02.** PR #849 went up green on every suite this round ran and
-came back red on two checks. Both are worth recording, because they are
-different kinds of miss.
-
-**`check:script-types`.** Round 31 added `scripts/check_twin_claims.mjs` and
-grew `check_toolchain_pins.mjs`, and neither carried JSDoc on the new
-signatures. `scripts/` is inside `tsconfig.scripts.json` with `checkJs` +
-`strict` (§ 757), so fourteen implicit-`any` and argument-type errors failed the
-`parity-types` job. The integration verification ran `node --test
-scripts/*.test.mjs` — the suites — and not the typecheck, which is a different
-question about the same files. **A lane that adds or edits a file under
-`scripts/`, `apps/backend/scripts/`, `.github/` or `infra/` must run `npm run
-check:script-types`**, the exact sibling of the rule § 848 already records for a
-`.test.ts` under `apps/web/src` needing `npm run check`. Two roots, two rules,
-same shape: the suite passing is not the typecheck passing.
-
-**CodeQL, high — and it took two attempts, which is the instructive part.** A
-new test asserted the apt-sources dump with
-`assert.match(after, /azure\.archive\.ubuntu\.com/)`. CodeQL reads an
-unanchored host-shaped pattern as a bypassable URL check
-(`js/regex/missing-regexp-anchor`). Anchoring was not available — the hostname
-appears inside a larger log line, so `^`/`$` would have broken the assertion —
-so the first fix dropped the regex for `after.includes('azure.archive.ubuntu.com')`.
-
-That closed the alert and opened a different one at the same line:
-`js/incomplete-url-substring-sanitization`, also high, saying the host "can be
-anywhere in the URL". **CodeQL objects to the substring form exactly as it
-objects to the regex form**, so trading one for the other moves the alert
-rather than removing it. Both are false positives on a log assertion — nothing
-here validates a URL — but two high alerts in a row is the query telling you
-the shape is wrong, not that the tool is.
-
-The shape that is actually right: the dump prints ONE ORIGIN PER LINE, so split
-the log and compare a trimmed line for **equality**. That is not a search at
-all, so neither query applies, and it is the stronger assertion — it now fails
-if the origin is ever printed embedded in some longer string, which the
-substring form would have accepted. Suppressing the alert was available
-throughout and was not taken: it leaves the next reader to rediscover why.
-
-The conversion was mutation-checked against the code rather than against itself:
-deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
-That check mattered — the first mutation attempted was weakening the assertion
-to `includes('')`, which passes trivially and measures nothing. **Mutate the
-subject, not the assertion.**
 ## 944. The Garmin data field carried the grade of a discarded activity into the next one, and nothing in the repo had ever read that tier
 
 `apps/watch_garmin` is a Connect IQ data field that injects one metric — Minetti
@@ -15022,3 +14976,50 @@ still split a family emoji.
 Four mutations, each killed: restoring the unguarded divide, sizing the
 unbounded cells to `double.infinity`, restoring `substring(0, 1)`, and taking
 the first rune rather than the first grapheme.
+
+## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
+
+**Decided 2026-09-02.** PR #849 went up green on every suite this round ran and
+came back red on two checks. Both are worth recording, because they are
+different kinds of miss.
+
+**`check:script-types`.** Round 31 added `scripts/check_twin_claims.mjs` and
+grew `check_toolchain_pins.mjs`, and neither carried JSDoc on the new
+signatures. `scripts/` is inside `tsconfig.scripts.json` with `checkJs` +
+`strict` (§ 757), so fourteen implicit-`any` and argument-type errors failed the
+`parity-types` job. The integration verification ran `node --test
+scripts/*.test.mjs` — the suites — and not the typecheck, which is a different
+question about the same files. **A lane that adds or edits a file under
+`scripts/`, `apps/backend/scripts/`, `.github/` or `infra/` must run `npm run
+check:script-types`**, the exact sibling of the rule § 848 already records for a
+`.test.ts` under `apps/web/src` needing `npm run check`. Two roots, two rules,
+same shape: the suite passing is not the typecheck passing.
+
+**CodeQL, high — and it took two attempts, which is the instructive part.** A
+new test asserted the apt-sources dump with
+`assert.match(after, /azure\.archive\.ubuntu\.com/)`. CodeQL reads an
+unanchored host-shaped pattern as a bypassable URL check
+(`js/regex/missing-regexp-anchor`). Anchoring was not available — the hostname
+appears inside a larger log line, so `^`/`$` would have broken the assertion —
+so the first fix dropped the regex for `after.includes('azure.archive.ubuntu.com')`.
+
+That closed the alert and opened a different one at the same line:
+`js/incomplete-url-substring-sanitization`, also high, saying the host "can be
+anywhere in the URL". **CodeQL objects to the substring form exactly as it
+objects to the regex form**, so trading one for the other moves the alert
+rather than removing it. Both are false positives on a log assertion — nothing
+here validates a URL — but two high alerts in a row is the query telling you
+the shape is wrong, not that the tool is.
+
+The shape that is actually right: the dump prints ONE ORIGIN PER LINE, so split
+the log and compare a trimmed line for **equality**. That is not a search at
+all, so neither query applies, and it is the stronger assertion — it now fails
+if the origin is ever printed embedded in some longer string, which the
+substring form would have accepted. Suppressing the alert was available
+throughout and was not taken: it leaves the next reader to rediscover why.
+
+The conversion was mutation-checked against the code rather than against itself:
+deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
+That check mattered — the first mutation attempted was weakening the assertion
+to `includes('')`, which passes trivially and measures nothing. **Mutate the
+subject, not the assertion.**
