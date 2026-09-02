@@ -2,6 +2,8 @@ package com.runapp.watchwear
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -68,6 +70,115 @@ class SessionBridgeTest {
         val a: SessionEvent = SessionEvent.Cleared
         val b: SessionEvent = SessionEvent.Cleared
         assertSame(a, b)
+    }
+
+    // ─────────────── receive-side grading (fail-closed) ───────────────
+
+    private fun fields(
+        accessToken: String? = "a",
+        refreshToken: String? = "r",
+        userId: String? = "u",
+        baseUrl: String? = "http://b",
+        anonKey: String? = "k",
+        expiresAtMs: Long = 12345L,
+    ) = SessionPayload.fromFields(
+        accessToken = accessToken,
+        refreshToken = refreshToken,
+        userId = userId,
+        baseUrl = baseUrl,
+        anonKey = anonKey,
+        expiresAtMs = expiresAtMs,
+    )
+
+    @Test
+    fun `a complete push carries every field through`() {
+        assertEquals(samplePayload, fields())
+    }
+
+    @Test
+    fun `a push with no access token is refused, not blanked`() {
+        // The regression: an absent field was coerced to "". The
+        // ViewModel then SAVED that over the encrypted cached session —
+        // the one credential a watch out of Bluetooth range still holds —
+        // and set authed = true, so the sign-in affordance stayed hidden
+        // behind a session that can never authenticate one request.
+        assertNull(fields(accessToken = null))
+        assertNull(fields(accessToken = ""))
+    }
+
+    @Test
+    fun `a push with no refresh token is refused`() {
+        // Reachable from a shipped writer, not only from corruption:
+        // the phone's `wear_auth_bridge.dart` sends
+        // `session.refreshToken ?? ''`, and the phone-side parser checks
+        // presence and type but never emptiness — so an empty string is
+        // a value the sender is built to produce.
+        assertNull(fields(refreshToken = null))
+        assertNull(fields(refreshToken = ""))
+    }
+
+    @Test
+    fun `a push with no user id is refused`() {
+        assertNull(fields(userId = null))
+        assertNull(fields(userId = ""))
+    }
+
+    @Test
+    fun `a push with no base url is refused`() {
+        assertNull(fields(baseUrl = null))
+        assertNull(fields(baseUrl = ""))
+    }
+
+    @Test
+    fun `a push with no anon key is refused`() {
+        assertNull(fields(anonKey = null))
+        assertNull(fields(anonKey = ""))
+    }
+
+    @Test
+    fun `a whitespace-only field is refused like an absent one`() {
+        // A DataMap carrying " " is exactly as unusable as one carrying
+        // nothing, and reads as present to a null check.
+        assertNull(fields(accessToken = " "))
+        assertNull(fields(anonKey = "\t"))
+    }
+
+    @Test
+    fun `a zero expiry is NOT a refusal`() {
+        // `StoredSession.isExpired` documents 0 as NOT expired and
+        // `StoredSessionTest` pins it. Grading the expiry here would
+        // reject a session the rest of the app calls valid; the five
+        // strings are the load-bearing set.
+        assertEquals(0L, fields(expiresAtMs = 0L)?.expiresAtMs)
+    }
+
+    @Test
+    fun `an unusable push does not reach the flow, and is not a sign-out`() {
+        // Source-level: the TYPE_CHANGED branch must grade through
+        // `fromDataMapOrNull` and emit only on a non-null. Emitting
+        // `Cleared` instead would be worse than the bug — it runs
+        // `tearDownSession`, which WIPES the unsynced-run queue and its
+        // track files (LocalRunStore.clear, fail-closed against
+        // cross-user upload). A malformed push must leave the session
+        // the watch already holds alone.
+        val src = File(
+            "src/main/kotlin/com/runapp/watchwear/SessionBridge.kt"
+        ).readText()
+        assertTrue(
+            "the TYPE_CHANGED branch must grade the DataMap through " +
+                "fromDataMapOrNull before emitting",
+            src.contains("fromDataMapOrNull(dm)?.let"),
+        )
+        assertTrue(
+            "the cold-start current() read must grade through the same " +
+                "helper — it applies a session on exactly the same path",
+            src.contains("fromDataMapOrNull(DataMapItem.fromDataItem(item).dataMap)"),
+        )
+        assertFalse(
+            "no field may be coerced to an empty string on the receive " +
+                "side — that coercion IS the bug",
+            src.contains("?: \"\""),
+        )
     }
 
     // ─────────────────── source-level fix guard ───────────────────

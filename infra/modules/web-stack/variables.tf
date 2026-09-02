@@ -205,6 +205,18 @@ variable "lambda_throttle_alarm_threshold" {
   default     = 5
 }
 
+variable "cloudfront_4xx_alarm_threshold" {
+  description = "Percentage of CloudFront requests answered 4xx that fires the distribution alarm, measured across two consecutive 5-min windows. A static SPA answers plenty of 404s for missing assets and stale bookmarks, so this sits well above zero; it is looking for a step change — mass auth failure, a behaviour ordering that stopped routing an /api path, an SPA fallback that stopped falling back."
+  type        = number
+  default     = 5
+}
+
+variable "cloudfront_5xx_alarm_threshold" {
+  description = "Percentage of CloudFront requests answered 5xx that fires the distribution alarm, measured across two consecutive 5-min windows. Tighter than the 4xx threshold because a 5xx is never the viewer's doing: an origin is failing. Note this cannot see a Lambda-origin 403 or 404 — the distribution-wide SPA error fallback rewrites those to 200 (decisions § 890) — which is why every Lambda also carries its own error-rate and p95 alarms."
+  type        = number
+  default     = 1
+}
+
 # ─────────────────── Tagging ───────────────────
 
 variable "tags" {

@@ -12194,3 +12194,1129 @@ and a suite that runs against two Flutter versions cannot pick one. It is also
 a second instance of the round's other lesson ([§ 877](#877)) — a failure
 reproduced in one environment and attributed to that environment is not
 diagnosed, only relocated.
+
+## 879. The Wear OS session bridge trusted its sender, so a half-formed push overwrote the one credential an out-of-range watch still had
+
+`SessionPayload.fromDataMap` on the watch read the `/supabase_session` DataMap
+with `dm.getString(k) ?: ""` on all five string fields. Every absent field
+became an empty string and the payload was constructed regardless, so
+`RunViewModel.bootstrapAuth` ran the full accept path on it:
+`sessionStore.save(stored)` wrote the blanks over the **encrypted** cached
+session — which exists precisely so a cold launch out of Bluetooth range still
+has credentials — and `applySession` then set `authed = true` and
+`authReady = true`. The wrist reported itself signed in, hid the sign-in
+affordance behind that state, and drained the upload queue under an empty
+bearer token against an empty base URL. A single malformed push destroyed
+working credentials and left no way back on the watch.
+
+The receive side had no guard because the send side has one. The phone's
+`WearAuthBridge.parseWearAuthPushArgs` refuses a push missing any of the six
+fields, and its own comment names this exact hazard — "rather than shipping a
+half-formed DataItem that the watch's SessionBridge would silently apply". That
+is a sender-side guard describing a receiver-side hole. **A receiver that trusts
+its sender has no contract, only a habit**, and this habit was already broken in
+a shipped writer: the phone parser checks presence and type, never emptiness, and
+`wear_auth_bridge.dart` sends `session.refreshToken ?? ''` — an empty string is
+a value the sender is built to produce.
+
+`fromDataMapOrNull` now grades through the pure `fromFields`, refusing when any
+of the five load-bearing strings is null or blank. Whitespace is refused with
+the absent case: a DataMap carrying `" "` is exactly as unusable and reads as
+present to a null check. `expiresAtMs` is deliberately NOT graded — 0 reads as
+NOT expired (`StoredSession.isExpired`), which is the documented contract that
+`StoredSessionTest` pins, and grading it here would reject a session the rest of
+the app calls valid.
+
+A refusal drops the event rather than emitting `Cleared`. That direction is
+load-bearing: `Cleared` runs `tearDownSession`, which wipes the unsynced-run
+queue **and its on-disk track files** (fail-closed against cross-user upload,
+`LocalRunStore.clear`), so treating a malformed push as a sign-out would be
+worse than the bug it replaces — it would convert a corrupt frame into data
+loss. A push the watch cannot read must leave the session it already holds
+exactly as it was.
+
+The extraction is what makes the contract testable at all: `DataMap` is a Google
+Play Services type no host JVM test can build, so the grading lives in a pure
+`fromFields(String?, ..., Long)` the suite calls directly, and a source-level
+guard pins that both call sites — the `TYPE_CHANGED` branch and the cold-start
+`current()` read, which applies a session on the identical path — route through
+the adapter, and that no `?: ""` coercion survives on the receive side. Same
+shape as `RoutesBridge`'s pure `parseRoutesJson` plus `RoutesBridgeWiringTest`.
+
+## 880. The Wear build script was a fourth rail of the flag parser, and being the only NEGATIVE one made its narrow copy fail open
+
+`apps/watch_wear/android/app/build.gradle.kts` reads `BYPASS_LOGIN`,
+`DISABLE_HR` and `DISABLE_TTS` out of `.env.development` / `.env.local` at
+Gradle-configure time and emits them as `BuildConfig` booleans. Its `envFlag`
+accepted `raw?.trim()?.lowercase() == "true"` and nothing else, where the
+canonical parser ([§ 709](#709), `apps/web/src/lib/core/env_flag.ts` twinned
+into `apps/mobile_android/lib/env_flag.dart`) accepts `1` / `true` / `yes` /
+`on`. Same defect, fourth rail — and this rail is the one where the narrow
+parse fails **open**, because two of its three flags are negatives:
+`ENABLE_HR = !envFlag("DISABLE_HR")`, so `DISABLE_HR=1` parsed as false and
+left heart rate ON. The Wear OS emulator synthesises HR samples that look
+real; keeping them out of the runs table is the entire reason the flag exists.
+
+The guard reads the accepted set **off** the canonical rail rather than
+restating it. A list written into the Kotlin test would pin the tokens someone
+remembered on the day, and web adding a fifth affirmative would leave this rail
+behind silently — which is precisely how the drift arose. `EnvFlagParityTest`
+extracts the quoted tokens from `isTruthyFlagValue`'s body and from `envFlag`'s
+and compares the two sets, plus asserts the trim and lowercase calls (the set
+can be right and the behaviour still wrong), and that no `.env` read spells an
+inline comparison instead of going through the two helpers.
+
+Two smaller things fell out of the same reading. `envFlag`'s `default: Boolean
+= false` parameter was never read by the body and never passed by a caller — a
+parameter that documents a behaviour the function does not have. And
+`envString` returned `""` for a key that is present but empty, so
+`APP_RELEASE=` yielded `""` rather than the declared `"dev"`, which
+`MainActivity` then reports to Sentry as the `production` environment. Both are
+now what they say they are.
+
+`build.gradle.kts` is already a declared input of the test task
+(`guardedBuildScripts`, added for the locale guards), so an edit to it re-runs
+this rather than leaving `testDebugUnitTest` UP-TO-DATE on exactly the change
+the guard exists to catch.
+
+## 881. `POST_NOTIFICATIONS` was declared and never asked for, and nothing in the module could tell those two facts apart
+
+`AndroidManifest.xml` says what the Wear app MAY hold.
+`RunWatchApp.kt`'s `permissionLauncher.launch(...)` is the only place it ever
+ASKS. Nothing compared the two lists, and `POST_NOTIFICATIONS` was in the first
+and not the second — so on any watch running API 33 or later it was never
+granted.
+
+The reason this survived a suite of 638 tests is that the failure produces no
+error anywhere. `RunRecordingService` builds its `OngoingActivity` notification
+and calls `startForeground` on every run; the service starts, the recording
+runs, `nm.notify` returns normally, and the platform simply keeps the
+notification out of the shade. What the runner loses is the ongoing-activity
+chip on the watch face — the way back into a live run once they have swiped
+away from the app, and the only indication from outside the app that a run is
+recording at all. A watch app whose entire job is to record while the wearer is
+looking at something else lost its one glanceable handle, silently.
+
+The permission is requested behind a `TIRAMISU` gate because `minSdk` here is
+30 and the permission is API 33+. The guard pins the gate as well as the
+request: a version check is exactly the kind of thing that would later be
+tightened into removing the request again.
+
+`ManifestPermissionCoverageTest` DERIVES the obligation from the manifest
+rather than listing it. Every declared permission must be requested at runtime,
+be install-time (so there is nothing to request), or carry a registered reason —
+and an exemption naming a permission the manifest no longer declares fails too,
+so the register cannot rot in the quiet direction. Two entries are registered
+today: `ACCESS_COARSE_LOCATION`, which the platform grants alongside the fine
+one, and `BODY_SENSORS_BACKGROUND`, which is the same defect a second time and
+is NOT fixed here — a background permission cannot ride the same request as its
+foreground half, so it needs a two-step flow and a watch to verify it on. It is
+in `followups.md` with the measurement rather than fixed blind.
+
+The same test carries the other half of the manifest pair nothing checked:
+every `FOREGROUND_SERVICE_<TYPE>` permission declared must appear in the
+service's own `foregroundServiceType`, and vice versa. The two halves sit in
+different elements of one file, neither implies the other, and a
+`FOREGROUND_SERVICE_HEALTH` without `health` in the type list is a
+`SecurityException` the moment a run starts on API 34+.
+
+## 882. `distance_km_recorded` had no mile sibling, and the one screen never handed `preferredUnit` was the one that used it
+
+Every distance read-out on the wrist is chosen by `DistanceUnit`:
+`distanceLabel`, `distanceToGoLabel` and `paceLabel` each `when (unit)` over a
+matched pair of string resources, and the recording service's notification does
+the same. The crash-recovery prompt did not. It called
+`stringResource(R.string.distance_km_recorded, formatKm(distance))` — a
+kilometre number under a kilometre word — so a miles runner opening the app
+after a process kill was told "6.44 km recorded" about their four-mile run, on
+the single screen where the figure's whole job is to let them recognise which
+run survived.
+
+Two independent things had to be true for it to reach a release, and each hid
+the other. `distance_km_recorded` was the only unit-bearing key in the
+catalogue with no `_mi` sibling, so there was nothing to dispatch to; and
+`PreRunScreen` was the only screen never passed `preferredUnit`, so there was
+nothing to dispatch on. Neither absence is visible to any guard that looks at
+one locale at a time: the key was present and correctly translated in all seven
+catalogues, so `L10nResourceParityTest` was satisfied, and a reviewer reading
+the prompt sees a `stringResource` call that looks like every other one.
+
+So the guard is over the catalogue's SHAPE rather than its contents. A key
+carrying a `km` segment must have the `mi` key that swapping that segment
+names, and vice versa — segment-wise, because the unit is not always the last
+word (`distance_km_to_go`). And both halves of a pair must be referenced from
+the source, since a pair that exists and is half-wired is indistinguishable
+from this defect at the resource level.
+
+The same reading found the inverse: three keys — `tile_stat_row`,
+`pace_placeholder`, `pace_per_km_compact` — declared in all seven catalogues
+and referenced from nowhere, left behind when the tile moved to composing those
+strings in Kotlin. Twenty-one dead entries translators maintain, and two of
+them hardcode `/km`: a later call site wiring up `pace_placeholder` would have
+inherited this exact bug from a string that looked already-translated and
+already-reviewed. They are deleted, and a third guard fails on any key the
+catalogue declares that no call site names. `formatKm` went with them — its own
+doc comment named the two km-only call sites it existed for, the notification
+and the recovery prompt, and neither is one any more.
+
+## 883. Both Wearable Data Layer contracts were pinned by a comment telling the other rail what to do
+
+The phone writes a `DataItem` at a path with a set of `DataMap` keys; the watch
+listens at a path and reads a set of keys. Two files, two apps, no shared type,
+and a mismatch that surfaces as nothing at all — a renamed path means the
+listener never fires, a renamed key reads as absent, and neither process logs a
+word. The runner sees that starring a route on the phone stopped reaching the
+wrist, or that the watch never signs in, with nothing to attribute it to.
+
+What stood in for a contract on `/saved_routes` was
+`assertTrue(src.contains("\"/saved_routes\""))` in `RoutesBridgeWiringTest`,
+under a comment reading "must match the phone-side WearRoutesBridge.kt PATH".
+That is an instruction, not an enforcement — exactly the failure
+`scripts/check_watch_wire_vectors.mjs` was written to replace on the firmware
+rails ([§ 641](#641)): rename the path on the phone and the watch suite stays
+green while the feature is dead. `/supabase_session` had no assertion of the
+kind on either side, so the six-field session wire was held together entirely
+by the two files happening to agree.
+
+`DataLayerContractTest` reads both rails and compares them: the `PATH`
+constants per bridge, and the set of keys the phone's `dataMap.put*` writes
+against the set the watch's `dm.get*` reads. The comparison is symmetric on
+purpose — a key the watch reads and the phone never writes is the same defect
+from the other end, and at runtime it is a field that is permanently absent
+rather than an error. A vacuity check comes first, because "these two sets are
+equal" is satisfied by two empty sets, which is what a regex that stopped
+matching would produce.
+
+A fifth case closes the seam between the two guards over the session's field
+list: the phone's `parseWearAuthPushArgs` validates a list of method-channel
+args and the watch (§ 879) refuses blanks in a list of DataMap fields, and a
+field added to the wire on one side alone would be validated by neither. It is
+asserted that the args the phone validates are exactly the keys the phone
+writes.
+
+The cross-tree read is the same shape `MetadataRegistryTest` (which reads
+`docs/backend/metadata.md`) and `WearRoutesFixtureTest` (a repo-root fixture)
+already use, and it runs in the `build-watch-wear` job, which is code-gated —
+so a phone-side rename, being code, runs it.
+
+## 884. Every localizing literal on watchOS is now read against the String Catalog, in both directions — and the complication was passing two formatted numbers through a `LocalizedStringKey`
+
+**Decided 2026-09-02.** Numbered out of a range reserved for this round's lane
+rather than appended in sequence; the number is an identifier, not a chronology.
+
+`apps/watch_ios` is the least verifiable tier in the repo. One job compiles it —
+`test-watch-ios`, on a macOS runner — and [§ 761](#761)'s
+`check_xcstrings_parity.sh`, given its own suite by [§ 850](#850), holds the
+catalog against `CFBundleLocalizations` and `knownRegions`. Between those two facts sits a gap nobody had measured:
+whether the *source* and the *catalog* agree at all. Neither end was read
+against the other.
+
+**A SwiftUI literal with no catalog entry is silent in every direction that
+matters.** `Text("…")` is a `LocalizedStringKey`, and a key the catalog does not
+carry falls back to the key itself — so a German wrist renders the English
+literal, nothing throws, `xcodebuild test` passes, and § 761's guard passes too
+because the catalog is internally consistent about the keys it *does* hold. The
+cost lands later and somewhere else: `SWIFT_EMIT_LOC_STRINGS = YES` means the
+next Xcode build extracts the literal into `Localizable.xcstrings` as a new
+untranslated key, and *then* the parity guard fails a PR that never touched
+localization.
+
+**Two live instances, both in the complication, both the same authoring slip.**
+`InlineView` and `RectangularView` each rendered
+`"\(formatDistanceKm(…)) · \(formatPaceSecPerKm(…))"` inside a `Text` / `Label`
+literal. Both interpolands are already formatted and already localized — a
+`NumberFormatter` decimal separator and a `MeasurementFormatter` unit word have
+been applied by the time they arrive — so the enclosing literal is a
+`LocalizedStringKey` lookup for `%@ · %@`, a key with nothing in it to
+translate. Everywhere else in the same file the author had it right:
+`Text(formatElapsed(entry.elapsedSeconds))` passes a `String`, which selects the
+non-localizing `StringProtocol` overload. The fix follows that existing shape —
+one `private func statLine(_:)` both views call — rather than adding a middle
+dot to six catalogues.
+
+**The reverse direction found nothing, which is the point of running it.** All
+56 catalog entries are still referenced. Claim (2) deliberately searches *every*
+string literal rather than only the localizing call sites, because eight of the
+56 are reached through `String(localized:)`, `.configurationDisplayName(…)` and
+`.description(…)` — a dead-key check keyed on the same curated API list as claim
+(1) would have reported all eight as orphans on its first run, and the fix for
+that false alarm is deleting live translations.
+
+**Interpolation is matched on shape, not on type, and the guard says so.** A
+literal and the key Xcode extracted from it differ (`\(queuedCount)` against
+`%lld`), so both are normalised to a placeholder. That makes `\(anInt)` and
+`\(aString)` indistinguishable under one key — a real gap, recorded in the
+guard's header rather than papered over, because closing it needs a type-checker
+and this runs on Linux. The normaliser balances parens rather than matching
+non-greedily: the first by-hand pass over this used `\\(.*?\\)`, stopped inside
+`\(Int(bpm.rounded()))`, and reported a correct call site as a missing key.
+
+## 885. The complication's duplicated formatters are held byte-identical by a Linux guard, because the Swift suite that claims to pin them links the other copy
+
+**Decided 2026-09-02.** `Complications/ActiveRunComplication.swift` and
+`WatchApp/RunFormat.swift` each carry `formatElapsed` / `formatDistanceKm` /
+`formatPaceSecPerKm`. The duplication is deliberate and correct — the widget
+builds in a separate Widget Extension target that cannot link `RunFormat.swift`
+— and three separate comments said "keep the two in lockstep". Nothing enforced
+it.
+
+**`ComplicationFormatterTests` could not, and its doc comment said it did.** The
+suite opened by claiming it "pins the active-run complication's pure formatters
+… in `Complications/ActiveRunComplication.swift`". It does not: that file is in
+no target at all (the Widget Extension is a manual Xcode step, see
+`Complications/README.md`), so `@testable import WatchApp` reaches only the
+`RunFormat.swift` copy. Every one of its 13 assertions is about the copy the
+watch face will never execute. A drift between the two would leave the suite
+green, `xcodebuild` green, and the watch face rounding a distance differently
+from the run screen two inches away.
+
+This is the same shape as the parity pairs the repo already guards: a lockstep
+asserted in prose, in a language whose tests cannot see both sides. The
+resolution is the same one [§ 641](#641) reached for `turn_cues` — the guard
+lives outside both toolchains, in the one place that can read them together.
+`scripts/check_watch_ios_source.mjs` extracts each function by balancing braces
+from its `func` line and compares the text. The three are identical today, so
+this is a guard over a seam that is currently correct; the divergence it
+prevents is the kind nothing else in the repo could have reported.
+
+All three comments now name the guard and say plainly that no Swift test can do
+this, so a later reader does not delete it on the grounds that the suite covers
+the duplication.
+
+## 886. watchOS capabilities are derived from the calls that need them, both directions — which found an unclaimed health entitlement and a missing App Group
+
+**Decided 2026-09-02.** `scripts/check_ios_native_declarations.mjs` has done
+exactly this for the phone since [§ 742](#742): every `UIBackgroundModes` entry,
+entitlement and purpose string is derived from the code that needs it, and a
+declaration nothing claims is an error rather than a warning. It reads nothing
+under `apps/watch_ios`. The watch's `Info.plist` and `WatchApp.entitlements`
+were read by one guard, for one key (`CFBundleLocalizations`), and by nothing
+else.
+
+**Two defects, opposite directions, both silent.**
+
+`com.apple.developer.healthkit.background-delivery` was declared and nothing
+anywhere calls `enableBackgroundDelivery`. That entitlement authorises
+`HKObserverQuery` wakeups; the app's background HealthKit work is an
+`HKWorkoutSession` plus an `HKLiveWorkoutBuilder`, which the
+`workout-processing` background mode authorises and which is separately
+declared. It is removed. An unexercised capability is an App Review rejection on
+its own, and for a *health* capability it is also an over-claim about what the
+watch collects — the same reading `docs/features/` gives the App Store privacy
+labels.
+
+`com.apple.security.application-groups` was absent while `ActiveRunBridge` binds
+`UserDefaults(suiteName: "group.com.threkir.app.activerun")`. Without the
+entitlement that initialiser yields no shared store, so every
+`publishComplicationSnapshot()` — called on all five workout transitions —
+wrote nowhere. `ActiveRunBridge.write` fails closed, which is correct and is
+also why the failure had no symptom: nothing thrown, nothing logged. The
+entitlement is added. `Complications/README.md` step 3 still stands for the
+Widget Extension target, which does not exist in the repo.
+
+**Two purpose strings were checked and kept, and the reason one of them is kept
+is a repo precedent rather than a fresh judgement.**
+`NSLocationAlwaysAndWhenInUseUsageDescription` is derived from
+`allowsBackgroundLocationUpdates = true`, not from `requestAlwaysAuthorization`
+— which this app never calls. Deriving it from the Always request would have
+concluded the key was an over-claim and deleted it. The phone guard's own rule
+for the same key names the same background-updates call, and one derivation for
+one key across two tiers is worth more than each tier reasoning separately about
+Apple's grant model.
+
+**The job is ungated now, and that is a consequence of what the guard reads.**
+[§ 761](#761) gated `watch-ios-locale-parity` on `changes.outputs.code`, with
+the stated ground that none of its three inputs was `docs/`, `.claude/` or
+`*.md`. Claim (5) reads `Complications/README.md` — the only instruction an
+operator has for typing the App Group identifier into two Xcode capability
+panes — and the moment a markdown file enters the read set, that reasoning
+stops holding: a README-only rename sets `code=false`, the gate counts the skip
+as a pass, and the drift ships green. This is [§ 869](#869)'s rule applied to a
+job that had grown a new input, and `parity-matrix` is ungated for the same
+reason. The whole job is `python3` plus a bare `node` against a checkout — no
+`npm ci`, no Xcode — so running it on a docs-only PR costs less than reasoning
+about whether it needed to.
+
+## 887. The run hand-off metadata envelope is read from both ends, because it broke once already and nothing noticed until an audit
+
+**Decided 2026-09-02.** `ContentView.syncRun` packs eight keys into the
+`WCSession.transferFile(_:metadata:)` envelope; `WatchIngestBridge.swift` on the
+phone lifts them back out with a second hand-written key list, in a different
+app, in a different target, five files away. Neither end knows about the other.
+
+**The failure mode is one column short, not one error.** A key the watch adds
+and the phone never reads is dropped on the way to the row: the file transfers,
+`transferRun` returns true, the run is marked synced, the row is inserted, and
+one field is absent. Nothing in either app can report it — not the Swift suite,
+not `xcodebuild`, not the phone's Dart tests, because every layer did exactly
+what it was told.
+
+**It has already happened.** The comment sitting in that dictionary today
+records it: "Apr 2026 cross-client audit caught Apple-Watch runs arriving on the
+phone with no `activity_type`, even though `WatchIngestBridge.swift` filters for
+it." The hardcoded `"run"` beside that comment is the repair. An audit found it;
+no guard did.
+
+The claim reads both ends and fails in both directions. The eight agree today,
+so like [§ 885](#885) this is a guard over a currently-correct seam — the value
+is that the next key added to one end cannot ship without the other. It returns
+null rather than an empty set when the dictionary literal is not where it
+expects: an end whose shape has changed must report that the claim can no longer
+be made, because an empty set silently becomes "the phone reads eight keys
+nobody sends" — a vacuity that fails loudly for the wrong reason and would be
+fixed by deleting the phone's reads.
+
+## 888. Nothing in this round was compiled, and the register of what that leaves unverified
+
+**Decided 2026-09-02.** There is no Xcode on the workstation this was authored
+on, and `test-watch-ios` is the only job in the repo that builds Swift. Per
+`docs/custom_watch/quality_standards.md`, everything below is at the weakest
+rung available — **read, not built** — and the distinction is recorded here
+rather than left for a reader to infer from an absent claim.
+
+**What is genuinely evidenced.** `scripts/check_watch_ios_source.mjs` parses
+files and its 37-test suite mutates a copy of the real tree into each shape it
+must refuse, with the unmutated copy as the positive control. That is real
+evidence *about those files*. `python3 -c "plistlib.load(...)"` accepted both
+edited plists, so a real plist parser agrees the XML is well-formed and the
+hand-rolled reader in the guard answers the same as it does on the two files it
+reads — asserted in the suite rather than assumed, because a reader written to
+avoid a dependency is only worth having if it agrees with the thing it replaced.
+
+**What is not.** No compiler has seen the Swift edits (the `statLine` helper and
+its two call sites, three comment rewrites). No signing has seen the entitlement
+edits — CI passes `CODE_SIGNING_ALLOWED=NO`, so `test-watch-ios` cannot regress
+on an entitlement in either direction, which is why the removal was safe to make
+and also why it proves nothing. No simulator has rendered any of it. The
+`statLine` fix is asserted to select Swift's non-localizing `StringProtocol`
+overload on the strength of the same construction already shipping four lines
+away in the same file; that is a reading of existing code, not a type-checker's
+answer.
+
+**Two documented numbers were wrong and are corrected here rather than
+guarded.** `parity.md` described the watchOS catalog as "43 strings × 6 locales"
+with "six locales in `CFBundleLocalizations` + `knownRegions`". It is 56 strings
+across seven locales — six explicit plus an implicit `en` — and both declaration
+sites hold seven. § 761 added the seventh and the prose was not swept. The
+counts are not given a guard: [§ 868](#868)'s finding was that a documented count
+either earns a derivation or loses its number, and these are the second case —
+the sentence says what ships, and the size of the catalog is `check_xcstrings_parity.sh`'s
+output, not a claim prose needs to restate.
+
+**One gap is filed, not fixed.** The four `NS*UsageDescription` strings in
+`Info.plist` are English-only: there is no `InfoPlist.xcstrings` anywhere in the
+tree, so the health-data and location consent prompts — the most
+privacy-sensitive strings the watch shows, and the only ones a reader is
+required to act on — render in English on a German, Japanese or Portuguese
+wrist while all 56 UI strings localize. Closing it means a new resource file
+*and* four `project.pbxproj` insertions no build here can validate, and the
+phone carries the same shape (`Base.lproj` holds two storyboards and no
+`InfoPlist.strings`), so fixing one tier alone would be inconsistent as well as
+unverified. Filed in `followups.md` with the measurement.
+
+## 889. The OIDC trust conditions are read, not trusted, and the half that failed the `web@1.0.3` release now moves in lockstep with the half it belongs to
+
+**Decided 2026-09-02.** Numbered 889 rather than 879 because round 30's lanes
+hold 879-893 and were already in flight; the number is an identifier, not a
+chronology.
+
+`infra/github-oidc/` mints the only two AWS identities anything outside the
+account can assume, and the line that decides who may assume the production one
+is `"token.actions.githubusercontent.com:sub" =
+"repo:${var.github_repo}:environment:production"` inside a `StringEquals`
+block. Nothing read it. Every other high-value property in the tree had picked
+up a guard over the last several audit passes — the Function URL's
+`authorization_type`, the CSP, the Permissions-Policy, the alarm subscribers,
+the CloudFront price class, the KMS role-name suffix — and the trust policy,
+which is the one place a mistake is reachable from outside the account, had
+none. That is not an accident of priorities: a trust policy has no runtime
+symptom. It is either correct or someone else can deploy to production, and
+both look identical from inside.
+
+`scripts/check_infra_iam.mjs` reads it, along with the web-stack module and
+`release-web.yml`. Six properties:
+
+**The condition operator must be exactly `StringEquals`.** `StringLike` is one
+word away and turns the sub from an identity into a pattern; a pattern is then
+one `*` from matching a fork. The guard rejects any other operator, including
+the `ForAnyValue:` and `…IgnoreCase` forms, and rejects a `*` or `?` anywhere in
+the sub itself — under `StringEquals` a wildcard matches nothing at all, which
+fails closed but silently, and under `StringLike` it matches far too much.
+
+**The sub must name a GitHub ENVIRONMENT.** A `:ref:` or `:pull_request` shape
+is assumable by any branch or any PR build, including one opened from a fork.
+
+**The environment set must move with the workflow.** This is the half that has
+already come apart. The file's own header records it: `web@1.0.3` failed
+`AssumeRoleWithWebIdentity` when the deploy jobs started declaring GitHub
+environments while the trust policies still matched `refs/tags/web@*`, and the
+header closes "the two halves must move together" — a rule stated in prose and
+enforced by nothing, the [§ 439](#439) shape. The guard derives the pairing
+rather than transcribing it: `release-web.yml`'s job-level `environment: name:`
+expression yields `production` or `preview`, its `Determine env + version` shell
+yields `prod` or `preview`, both branch on the same `refs/tags/web@` predicate,
+and the guard asserts that predicate is shared before pairing the branches. A
+run that would declare an environment no role trusts, a role trusting an
+environment no run declares, and the two crossed over each other are three
+separate failures with three separate messages.
+
+**No wildcard grant.** No action ending in `:*`, and `Resource = "*"` only for
+actions AWS models no resource for. Those are declared in the guard with the
+reason — `cloudfront:CreateInvalidation` (IAM does not match distribution ARNs
+for it) and `cloudfront:ListDistributions` (a list action has nothing to scope
+to) — and an exemption nothing uses fails as loudly as a missing one, per
+[§ 830](#830)'s class.
+
+**One environment's resources per role.** Every resource ARN in a role's policy
+must carry that role's own environment token and none of the other's. This is
+the check with no prior art in the tree and the one worth having most: a
+copy-pasted `prod` in the preview policy would hand every preview deploy write
+access to the production bucket, and the policy would still read as two tidy
+symmetrical blocks. Nothing about the shape of the file would look wrong.
+
+**The Lambda list is a fourth transcription.** Each deploy policy enumerates
+eight function ARNs, which is the same list `check_lambda_alias_sync.mjs`
+already compares across the module, `bin/lambda-alias-sync.sh` and
+`release-web.yml` ([§ 433](#433)). It was outside that guard's three sources.
+A ninth Lambda added correctly to all three still fails at `aws lambda
+update-function-code` with `AccessDenied` — mid-release, against production,
+after the S3 sync has already landed. The guard now compares all four.
+
+## 890. A Lambda-origin failure on this distribution is invisible, so the alarm IS the contract — and `osrm-proxy` shipped without half of it
+
+**Decided 2026-09-02.**
+
+CloudFront models custom error responses per DISTRIBUTION, not per cache
+behaviour. There is no per-behaviour form. The web stack's SPA fallback maps
+both 403 and 404 to `/index.html` at 200, which is the right idiom for an S3
+origin serving a prerendered SvelteKit build — and it applies just as much to
+the eight Lambda origins sitting on ordered behaviours above it.
+
+The module contained two comments that could not both be true about this. The
+one above `aws_lambda_permission.cloudfront_invoke_function` states the
+measurement: with only one of the two OAC grants the Function URL 403s before
+invocation, "the distribution's SPA error fallback rewrites that 403 into the
+shell at 200, so the surface looks healthy while the Lambda never runs" — issue
+#590, proven empirically on 2026-07-21. The one above `custom_error_response`,
+twelve hundred lines down, claimed the opposite: that a Lambda's own 404
+"surfaces as a real 404 … not the SPA shell" because its behaviour runs first.
+That is the load-bearing one, because it is the sentence a reader reaches while
+deciding whether a Lambda failure needs monitoring. It was wrong, and it is
+corrected in place rather than deleted — a reader who has seen it needs to know
+which claim survived.
+
+What follows from the correction is a monitoring contract. A failing Lambda
+origin here is invisible to a viewer, to a synthetic HTTP check, and to anyone
+reading a CloudFront error-rate metric that never sees a non-2xx. The CloudWatch
+alarms are the only signal these failures have.
+
+**`osrm-proxy` had half of them.** `alarms.tf` says in its own comment that the
+proxy "mirrors generate-route's failure shape" and gives it an error-rate alarm
+and an `engine_unreachable` log filter; generate-route has those two plus a p95
+duration alarm at 12 s against a 15 s timeout. The proxy carries the same 15 s
+timeout and the same clean-502 degradation, so a slow OSRM engine walks its
+duration toward the timeout with a flat error rate, the route builder quietly
+falls back to straight-line segments, and nobody is paged. The alarm is added.
+
+`scripts/check_infra_coverage.mjs` pins it: every `aws_lambda_function` in the
+module carries an error-rate alarm and a p95 alarm, resolved through the
+`for_each` locals maps so the five share Lambdas read as five rather than as one
+unattributable `each.value`. It fails against the tree as it stood before the
+fix, which is how the guard is known to be about something.
+
+**And the distribution had no alarm at all.** `alarms.tf`'s own first line reads
+"CloudWatch alarms for the coach Lambda + the CloudFront distribution", and
+`apps/web/deployment.md` listed "4xx rate at the CloudFront distribution >5%"
+and "5xx rate at the distribution >1%" under "wired by the `web-stack` module".
+The file declared neither, and every alarm in it was scoped to one Lambda — so
+nothing could see a broken behaviour ordering, an origin the OAC had stopped
+signing for, or S3 itself serving errors. That is the same shape as
+[§ 877](#877): a header arguing for a rail it never wrote, believed by everyone
+downstream because it was stated three times. Both alarms are added, var-driven,
+on the module's default provider rather than the `aws.us_east_1` alias — a
+CloudWatch alarm's actions must live in its own region and `aws_sns_topic.alerts`
+is created by the default provider, and CloudFront publishes its metrics only in
+us-east-1, which the whole stack already is. The same pass added the
+generate-route and osrm-proxy throttle alarms the doc also claimed: a throttled
+invocation increments `Throttles` and never `Errors`, so no error-rate alarm can
+see one, and those two functions' reserved concurrency is a ceiling on an
+engine's load exactly as coach's is on spend.
+
+Note the ordering of the two findings, because it compounds: the distribution
+5xx alarm cannot see a Lambda-origin 403 or 404 either, since the SPA fallback
+rewrites those before CloudFront counts them. The per-Lambda alarms are the only
+witness to that class, and the distribution alarms are the only witness to
+everything the per-Lambda ones cannot reach. Neither set is redundant with the
+other, which is why the guard requires both.
+
+Cost: four added alarms per env (two distribution, two throttle) at CloudWatch's
+$0.10 standard-alarm rate is ~$0.40/env/month, ~$0.80 across prod and preview.
+Worth noting because `monthly_budget_limit_usd`'s own description already
+understated the alarm line at "~$1.50" — the module was at 30 alarms per env
+before this and is at 34 after, so that figure was stale before this change
+touched it. The prod budget default of $30 has ample headroom either way; the
+number in that description is what wants correcting, not the limit.
+
+The same guard closes a second unenforced obligation stated in prose, in
+`.github/workflows/terraform.yml`'s header: "when adding a new stack: append it
+to the `stack` matrix below AND add a `terraform` ecosystem entry to
+`.github/dependabot.yml`". Both lists are hand-maintained transcriptions of a
+directory listing. A stack absent from the matrix gets no `fmt`, no `validate`
+and no Trivy verdict; one absent from dependabot never hears about a provider
+CVE and its `.terraform.lock.hcl` pins a version nothing will move. Neither
+absence is red — the workflow simply shows one fewer green row than it could,
+which is invisible beside the twenty it does show. The guard derives the
+directory set by listing `infra/` for `.tf` files and compares both lists
+against it in both directions. `infra/modules/web-stack` is the one exemption,
+with the reason measured rather than assumed: a standalone `terraform validate`
+there fails with "Provider configuration not present" because the module takes
+an `aws.us_east_1` aliased provider from its caller. It is validated
+transitively by `envs/prod` and `envs/preview`.
+
+## 891. An account admin CAN decrypt this project's production secrets, and the comment denying it was the defect — not the policy
+
+**Decided 2026-09-02.**
+
+`aws_kms_key.secrets` carries an explicit key policy whose header argued for a
+posture it does not have. It opened by naming the risk — the AWS-default policy
+means "anyone with `AdministratorAccess` through Identity Center could decrypt
+sops-encrypted secrets via the console" — and then claimed this policy avoids
+it: root "may manage the key (revoke / re-grant), but not call Decrypt directly
+without going through a delegated principal".
+
+That was true for as long as the policy had three statements. The fourth,
+`AllowOperatorSopsUseViaIamPolicies`, delegates `kms:Encrypt`, `kms:Decrypt`,
+`kms:ReEncrypt*` and `kms:GenerateDataKey*` to the account root — which under
+KMS means "whatever this account's own IAM policies allow", and an admin's
+allow it. Its own comment explains why it was added (without `Encrypt`, no
+principal in the account could sops-encrypt at all, breaking
+`bin/sops-init.sh`), and it is genuinely load-bearing beyond that: `sops <file>`,
+`sops --set` (`bin/secret-set.sh`) and `sops updatekeys` (`bin/key-rotate.sh`)
+all decrypt before they re-encrypt. An operator with no `Decrypt` cannot rotate
+a secret.
+
+**So the policy is right and the header was wrong.** The decision recorded here
+is to keep the statement and fix the sentence, because the sentence is the one a
+reader carries into a threat model. The header now states the posture plainly —
+an account admin can read this env's sops secrets, deliberately — says what the
+enumeration buys over the AWS default (root's data-plane grant is listed rather
+than `kms:*`, so a new privileged action is a deliberate edit; CloudWatch Logs
+is scoped by encryption context to this env's log groups; the delegated roles get
+`Decrypt` + `DescribeKey` and never `GenerateDataKey`), and points at the
+followup that tracks narrowing it.
+
+Narrowing it means a dedicated operator principal that the key policy names
+instead of root, not deleting the statement. That is a change to who holds the
+rotation flows, not a Terraform edit, which is why it is a followup and not this
+round's work.
+
+The generalisation is [§ 877](#877)'s, one layer over: **a header that argues
+for a property is not the property.** There it was a migration arguing that a
+new table inherits nothing while the image granted it four verbs. Here it is a
+key policy arguing that root cannot decrypt while a statement below grants
+exactly that. In both cases the comment was written when it was true and stayed
+after the code moved, and in both cases the comment is what a later reader
+believed.
+
+## 892. The GitHub deploy roles hold `kms:Decrypt` on the secrets key for a `terraform apply` that no workflow performs
+
+**Decided 2026-09-02.** Filed rather than fixed — the remedy requires an apply,
+and this lane holds no credentials and touches no state.
+
+Both env stacks pass their env's OIDC deploy role into the module as
+`kms_decrypt_principal_arn`, which puts the role in the
+`AllowLambdaAndDeployRolesToDecrypt` statement of the secrets CMK's key policy.
+`envs/prod/main.tf` justifies it: "lets the prod deploy role decrypt sops at
+`terraform apply` time from the GitHub Actions runner. Without this, only the AWS
+account root could re-apply the stack post first-deploy."
+
+No workflow in this repo runs `terraform apply`. `terraform.yml` runs `fmt`,
+`init -backend=false` and `validate`, with no AWS credentials by design.
+`release-web.yml` syncs S3, updates eight Lambdas and invalidates CloudFront.
+`budgets.tf` says so outright about a sibling concern — "the GitHub OIDC deploy
+role does not [have `budgets:*`] — these resources are intended to be applied
+locally, not from CI" — and `bin/deploy-prod.sh` applies under the operator's own
+SSO profile. The deploy policies carry no S3 access to the tfstate bucket and no
+`lambda:UpdateFunctionConfiguration`, so the role could not complete an apply
+even with the decrypt.
+
+What this grants, concretely: a principal assumable by any job running in the
+`production` GitHub environment can call `kms:Decrypt` against the key that
+protects `ANTHROPIC_API_KEY` and `SUPABASE_SECRET_KEY`. It is not a path to the
+plaintext on its own — the ciphertext lives in the private estate repo, which
+CI does not check out — but it is a grant the pipeline does not use, on the one
+key in the account whose compromise is unrecoverable.
+
+**Remedy, for an operator with credentials:** set
+`kms_decrypt_principal_arn = ""` in `infra/envs/prod/main.tf` and
+`infra/envs/preview/main.tf` (the module's `compact()` drops it from the
+statement's `identifiers` list), then `terraform apply` in each env stack. The
+Lambda execution role's decrypt is a separate identifier in the same statement
+and is untouched. Restore it the day a workflow genuinely applies. Tracked in
+`docs/product/followups.md`.
+
+## 893. What this infra sweep checked by hand and where the guards stop
+
+**Decided 2026-09-02.**
+
+Three findings became guards ([§ 889](#889), [§ 890](#890)) and three became
+corrections in place ([§ 890](#890), [§ 891](#891)). This entry records the
+rest, because a sweep that reports only its hits reads as if everything else
+went unexamined.
+
+**Checked by hand and correct, guarded by nothing new:** both S3 buckets carry a
+full public-access block, versioning, SSE and a non-current-version expiry;
+`force_destroy = false` and `prevent_destroy` on the state bucket, the site
+bucket, the hosted zone, the ACM cert and both KMS keys; `enable_key_rotation`
+on the KMS keys with a 30-day deletion window; all eight Lambda log groups at 30
+days' retention encrypted with the env's CMK; the SNS alerts topic encrypted
+with the same; `minimum_protocol_version = "TLSv1.2_2021"` and `https-only` to
+every Lambda origin; the site bucket policy admitting only
+`cloudfront.amazonaws.com` conditioned on this distribution's ARN; and no
+security group, no VPC and no EC2 anywhere in the tree — there is nothing to
+leave open. Several of these already have guards in
+`apps/web/src/lib/security_guards.test.ts` (log-group retention, the price
+class, the WAF scope-down, the CSP, the Permissions-Policy, the OIDC role tags,
+the alarm subscribers); the rest are properties Trivy's IaC pass covers, which
+is why no third scanner was introduced this round.
+
+**Fixed in passing:** `aws_acm_certificate.apex` in the `dns` stack was handed
+only the caller's `var.tags`, which defaults to empty, while the hosted zone
+beside it built the `Project`/`Stack`/`ManagedBy` baseline inline.
+`bootstrap/main.tf` records what that costs — AWS tag keys are case-sensitive,
+and a resource missing `Stack` drops out of the Cost Explorer grouping every
+other stack is tagged for, which broke a query once already. Hoisted to
+`local.dns_tags` so both resources carry it.
+
+**Where the guards stop, stated so nobody reads more into them:**
+
+- They read SOURCE. Nothing here compares the Terraform against what is actually
+  applied; a console edit, a drifted resource or a manually attached policy is
+  outside every check in this round. Only a `terraform plan` against real state
+  sees that, and it needs credentials.
+- `terraform validate` with `-backend=false` proves syntax, provider
+  constraints and reference shapes. It does not evaluate `count`/`for_each`
+  against real values, resolve remote state, or say anything about IAM
+  semantics.
+- The IAM guard checks the SHAPE of a grant, not its sufficiency. It can say the
+  preview role names no prod resource; it cannot say the actions it lists are
+  the ones the pipeline calls. A grant that is too narrow still fails at deploy
+  time, loudly, which is the direction that is safe to leave unguarded.
+- The alarm-coverage guard proves an alarm EXISTS with the right shape. Whether
+  its threshold is well chosen, and whether the SNS subscription was ever
+  confirmed by its recipient, are both outside it — an unconfirmed email
+  subscription is functionally identical to no alarm and nothing static can see
+  it.
+
+**Left as a followup, not fixed:** the `preview` env stack declares no
+`graph_cycle_url` variable and passes none to the module, while `prod` wires
+one. The module defaults it to `""`, so preview simply skips the graph-cycle
+generator and serves `round_trip` — correct today and deliberate, but it is the
+only one of the three engine URLs preview cannot set, and the asymmetry is
+undocumented. Filed with the measurement rather than closed, because adding a
+variable preview has no engine for would be scaffolding.
+
+## 894. The CloudFront Function on every request to the site had never been run, and was serving the whole site at a second host
+
+**Decided 2026-09-02.** `infra/modules/web-stack/functions/www_redirect.js` is
+associated with **every** cache behaviour on the distribution — twelve
+`function_association` blocks in `main.tf` — so it is the first code any
+visitor, crawler or API client touches. [§ 757](#757) put it in a tsc program
+of its own (`tsconfig.cloudfront.json`, `lib: es5` because `cloudfront-js-2.0`
+is neither Node nor a browser) and that closed the hole it was filed for. It
+did not close this one: **nothing executed the function.** A typecheck cannot
+tell a redirect that fires from one that silently does not, and a grep-style
+guard cannot either. Fourteen behavioural cases against real viewer-request
+events found two defects, both of them the function failing at the one job it
+exists to do.
+
+**The host test was case-sensitive.** `host.indexOf('www.') !== 0` against the
+raw header value, so `WWW.threkir.com` fell through to `return request` and was
+**served**. A hostname is case-insensitive (RFC 9110 § 4.2.3, RFC 3986
+§ 3.2.2) — a client may send any casing, DNS still resolves it here and
+CloudFront still matches the alias — and nothing in the event contract promises
+a lowercased header *value*; only header *names* are documented as normalised.
+So the duplicate-content split the function exists to close stayed open to
+anyone who did not lowercase first, which is precisely the population a
+canonical-consolidation redirect is aimed at. The fix lowercases once, before
+both the test and the rebuilt apex, so the `Location` also advertises one
+spelling rather than echoing back `https://THREKIR.com/`.
+
+**The redirect was a 301 on every method.** A 301 says the resource moved
+permanently and says nothing about preserving the method: browsers and most
+HTTP clients rewrite a POST to a GET and drop the body, which RFC 9110
+§ 15.4.2 explicitly permits. Because the function is on every behaviour, not
+just the page ones, a `POST https://www.threkir.com/api/coach` was answered
+with a redirect that turned it into a bodiless GET — a request that neither
+works nor fails visibly. GET and HEAD keep the 301 crawlers have always seen;
+everything else now gets a **308**, the method-preserving permanent redirect,
+which carries the same permanence signal to a search engine. The status is
+chosen from the method rather than the status being widened to 308 for
+everyone, because the SEO consolidation is the reason the function exists and
+301 is the form every crawler has understood for twenty years.
+
+The suite lives beside the function (`www_redirect.test.mjs`) rather than under
+`scripts/`, and evaluates the source to pull `handler` out of the resulting
+scope — there is no module system at the edge, so there is nothing to import,
+and the same trick pins that the file really does declare a top-level
+`function handler` rather than a `const` or an `export` the runtime could not
+call. It is stdlib-only and runs as its own step in `parity-types`.
+
+## 895. `siteOrigin` had no callers, and every production Lambda folded the origin with `??` instead
+
+**Decided 2026-09-02.** Every crawler-facing surface on this site is rendered
+in production by a Lambda and never by SvelteKit — adapter-static drops the
+`+server` / `+page.ts` halves ([§ 53](#53)) — so `/share/{run,route,badge,
+event,profile,club,race,session,workout}`, `/recap/share/*` and the five
+`/og/*` PNGs each get their absolute `og:url`, `og:image`, canonical and
+JSON-LD `url` from one line in a Lambda:
+
+```
+const siteUrl = process.env.PUBLIC_SITE_URL ?? DEFAULT_SITE_URL;
+```
+
+The twenty in-app callers under `src/routes/` spell it
+`env.PUBLIC_SITE_URL || DEFAULT_SITE_URL`. **Those are not the same fold.**
+`??` fires only on null/undefined, so a `PUBLIC_SITE_URL=""` — a deploy that
+failed to configure it, an `extra_lambda_env` that set the key empty, a
+self-hosted stack — survives as the empty string and is handed to the head
+builders as the origin. `normaliseSiteUrl` then tolerates it (its own comment
+says so), and the rendered head carries `<meta property="og:url"
+content="/share/event/e1">` and `<meta property="og:image"
+content="/og-default.png">`. Open Graph requires an absolute URL, and a
+root-relative unfurl image is precisely what `share_url_source_guard.test.ts`
+already bans **in the sources** — banned where it was written, still reachable
+through the environment.
+
+The helper for this exact fold already existed. `siteOrigin` folds blank *and*
+whitespace-only to the default and trims a trailing slash, and its doc comment
+states the rule outright: "an env var set to the empty string is a deploy that
+failed to configure it, not a request to serve canonicals from nowhere." It was
+unit-tested and had **zero callers** — the module's split into a constant and a
+function had migrated the 28 copies of the *constant* and left the *fold* on
+every caller. All five Lambdas now go through it.
+
+Pinned two ways, because neither reaches the other's failure. A source register
+walks `apps/web/lambda/` and requires every `PUBLIC_SITE_URL` read to be
+`siteOrigin(process.env.PUBLIC_SITE_URL…)`, with a population floor so a broken
+walker fails instead of reporting a clean tree; reverting one Lambda fails it by
+name. And a behavioural pair drives the head builders the Lambdas actually call:
+one asserts what a blank origin produces (the root-relative `og:image`, so the
+consequence is written down rather than described), the other asserts that
+`undefined`, `null`, `''`, `'   '` and a trailing-slash origin all yield an
+absolute, single-slashed `og:url` and `og:image`.
+
+The `src/` half is not fixed here and is filed instead: `||` gets the blank case
+right, so those twenty callers are correct today, but none of them trims a
+trailing slash and none goes through the helper either.
+
+## 896. Seven of the eight production Lambdas had never been executed, and the two POST-only ones accepted any method
+
+**Decided 2026-09-02.** `apps/web/lambda/` holds the only server-side compute
+outside Supabase — the coach endpoint, the route generator, the OSRM proxy and
+five share/OG renderers ([§ 53](#53)). Of the eight, exactly one
+(`share-entity`) had ever been driven by a test. `coach` and `osrm-proxy`
+appeared in `security_guards.test.ts` and `share-run` in
+`share_run_cache_control.test.ts`, but every one of those reads the file as
+TEXT. A source guard is the right instrument for "this line must not change"
+and a poor one for "this endpoint refuses what it should refuse", and the gap
+between the two is where these findings were.
+
+They turn out to be drivable in-process. The coach wrapper reads a
+runtime-provided `awslambda` global at import time, so a stub installed before
+a dynamic import is enough; every case that matters stops before a network
+call, because each core refuses an unauthenticated or unconfigured request
+before it constructs a Supabase client. Nineteen behavioural cases across the
+two POST endpoints found two defects.
+
+**Neither POST-only Lambda checked the method.** All four dev wrappers under
+`src/routes/api/` export `POST` alone (`osrm` exports `GET` alone), so
+SvelteKit answers 405 to anything else — and `osrm-proxy`'s Lambda carries the
+matching gate. `coach` and `generate-route` did not, and their CloudFront
+behaviours declare
+`allowed_methods = ["GET","HEAD","OPTIONS","PUT","POST","PATCH","DELETE"]`.
+So a `GET https://threkir.com/api/coach` carrying a body ran the whole turn:
+the paywall check, the daily-quota increment, the billed Anthropic call —
+on a method the endpoint does not support and that every intermediary in the
+path treats as safe to replay. It is not a cross-user cache leak (the
+`lambda_passthrough` cache policy is all-TTL-0, so nothing on that behaviour
+is stored), which is why this is a divergence rather than an incident: dev
+refuses it, prod bills for it. Both now answer `405` with an `Allow: POST`
+header, reading `event.requestContext.http.method` exactly as `osrm-proxy`
+does — a missing `requestContext` throws into the outer envelope rather than
+defaulting to POST, which is the same fail-closed shape that Lambda already
+had.
+
+**The two non-streaming coach sub-dispatchers discarded the core's headers.**
+`route-describe` and `route-request` wrote
+`writeJson(stream, result.status, JSON.parse(result.body))` — re-deriving the
+response from a parsed copy under a hardcoded `content-type`, where the
+streaming coach path beside them forwards `result.headers` intact. Both cores
+emit only `content-type` today, so nothing was being dropped *yet*; what makes
+it worth fixing rather than filing is that the wrapper is the layer a header
+has to survive, and the first refusal that wants to carry a `retry-after`
+would lose it silently in production while dev returned it correctly. The
+parse is also a throw path: a body the core did not mean as JSON turns a
+handled refusal into a 503. They now forward the result verbatim. The
+behavioural half of that test cannot discriminate while both cores agree, and
+says so; the assertion that does is structural — neither dispatcher may
+re-derive the response from a parsed copy.
+
+The suites also pin what was already right, because none of it was proven:
+each sub-path's own byte cap (256 KB / 32 KB / 16 KB — three different
+constants, so a dispatcher wired to the wrong one is invisible without a case
+per path), the caps counting BYTES rather than `String.length` (the multi-byte
+smuggle `body.ts` was written for, now measured through the wrapper that calls
+it), the base64 decode firing on the flag and only on the flag, the JWT being
+read from `x-supabase-authorization` and never `Authorization` (CloudFront's
+OAC signs that slot), the provider check not gating the two route sub-paths,
+and the outer envelope answering a generic 503 that does not name the env var
+it failed on.
+
+## 897. The Lambda tree's log lines are a declared shape, because the copy-paste that breaks it is one line
+
+**Decided 2026-09-02.** The eight handlers under `apps/web/lambda/` see the
+most sensitive values the product has. The osrm-proxy's request PATH *is* the
+runner's waypoint coordinates
+(`/api/routes/osrm/route/v1/foot/-0.1,51.5;-0.12,51.51`), the generate-route
+body carries a start coordinate, and the coach's provider stream carries the
+runner's own coaching conversation. Nothing constrained what a log line could
+name, and the audit answer "no PII reaches CloudWatch today" is true and worth
+about a week: the five share Lambdas log `path: event.rawPath` — correct
+there, a share path is a public URL naming a public entity — and that catch
+block is precisely the thing a sibling gets by copy-paste.
+
+One thing was already loose. `console.error('[coach lambda] stream pump
+failed', e)` handed the whole caught value over, where every other catch in the
+tree normalises to `{ message, stack }`. That `e` comes from iterating the
+PROVIDER stream, and a provider SDK's error object can carry the response body
+or the request that produced it, so the one log line in the tree that spread a
+raw error was the one downstream of the coaching conversation. Both raw-value
+logs in that file now normalise.
+
+The guard states two rules, each derived from the shape the tree already uses
+rather than invented for it. **A handler declares which `event.<field>` its log
+lines may name** — the five share Lambdas declare `rawPath`, the other three
+declare nothing, and a Lambda missing from the table fails rather than
+defaulting to permissive, so a ninth handler has to answer the question. **A
+log line is a literal message plus object literals** — anything else is a value
+whose shape nobody controls. Both are measured against the sources with a
+population floor, and both were checked to discriminate: adding
+`path: event.rawPath` to osrm-proxy's catch fails the first by name, reverting
+the pump log fails the second.
+
+The rules deliberately do not try to recognise PII. A matcher for coordinates
+or emails would pass everything it had not thought of, which is the failure
+mode of every allowlist-of-banned-things in this repo; naming what may be
+logged is the direction that closes.
+
+## 898. `COACH_PROVIDER=openai` with no base URL spent the runner's daily message on a call to localhost
+
+**Decided 2026-09-02.** The coach core refuses up front when the Anthropic
+branch is unconfigured — `provider === 'anthropic' && !anthropicApiKey`
+answers a 503 before anything else runs. The OpenAI branch has no equivalent,
+because it does not need one in the place it was written for: an absent
+`openaiBaseUrl` defaults to `http://localhost:11434/v1`, which is exactly right
+for a developer running Ollama on their own machine.
+
+Inside a Lambda that default is a port nothing is listening on, and the failure
+lands in the wrong place. `COACH_PROVIDER=openai` with `OPENAI_BASE_URL` unset
+— a plausible self-host or partial-apply configuration — passes the auth check,
+passes the paywall check, and passes the daily-quota **increment**, and only
+then fails on the connection. So the runner loses a coach message from their
+daily cap to a configuration error, every time they try, while the operator
+sees a connection error rather than "not configured."
+
+The gate goes in the production wrapper rather than the core, for the same
+reason `bypassPaywallEnabled: false` is hardcoded there: the core's default is
+correct for dev, and what the Lambda knows that the core does not is that
+localhost means nothing here. It refuses with the core's own status and
+message, so the client behaves as it already does for a missing Anthropic key.
+The test shows the gate is the gate rather than a blanket refusal of the
+provider — with a base URL configured the turn hands over and is refused by the
+core's auth check instead.
+
+## 899. A one-way parity port has no detector, so its divergence is measured by date, not by a guard
+
+**Decided 2026-09-02.** Roughly half of `watch_core` is a one-way faithful port
+of a shipped web helper. [§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+makes those ports additive, so they sit **outside** the enforced web/mobile
+lockstep on purpose — `shared-library-syncer` does not know they exist, and
+`check_parity_pair_registry.mjs` compares the two *registries*, neither of which
+lists the wrist. The consequence has been stated in the docs as a scope
+decision and never as a risk: **a port whose source has since changed diverges
+silently, and nothing anywhere fails.**
+
+This round measured it rather than reasoning about it. For every
+`core/src/<m>.rs` with a same-named `apps/web/src/lib/**/<m>.ts`, compare the
+last commit date of each: **49 modules pair up, and on 16 of them the web
+source moved after the port was last touched.** That is not a defect count —
+several of those web commits are additions with no wrist surface — but it is
+the population a human has to read, and reading it found five real divergences,
+four of which are behaviour and one of which had made a doc comment false.
+Test-count comparison is the weaker second signal and mostly measures scope:
+`live_freshness` is 5 against web's 16 because only `freshnessFor` is ported,
+which the module doc already says.
+
+**The date comparison is the whole method and it is worth writing down**, because
+it is cheap, it needs no registry, and it does not rot: `git log -1 --format=%cs`
+on each side of a name pair. It is not a guard — a guard would have to decide
+what a legitimate scope difference is, and every one of the 16 needs a human to
+read the intervening diff. What it replaces is the alternative, which was
+nothing.
+
+Filed rather than fixed, with their measurement, in
+[`followups.md`](../product/followups.md): the remaining ten, each named with
+the web commit that moved it.
+
+## 900. `distanceAlongRoute` ranked candidate segments in incommensurable frames, and an unknown fix read as the start line
+
+**Decided 2026-09-02.** Two defects in `watch_core::route_geometry`, both of
+them fixes web landed in the #747 sweep and neither of which reached the port.
+
+**The ranking frame.** Each segment was projected in its own local
+equirectangular frame — correct, since the frame is anchored at that segment's
+start — and then the candidates were ranked by the *residual inside that frame*.
+That residual is scaled by the cosine of the segment's own start latitude, so
+the numbers are not comparable across segments. Measured on a 3.47 km
+out-and-back at 45°N: the return limb anchors 3.5 km further north where
+`cos(lat)` is smaller and therefore always reports the smaller offset to a
+point exactly as far from both, so **moving the input 1 cm sideways moved the
+answer 3474.8 m onto the wrong limb.** Ranking by the great-circle distance to
+the projected foot compares every candidate in one frame; the per-segment frame
+still does the projection, where it is anchored and accurate. A second case
+pins that the fix did not degenerate into "always the first segment" — an L
+probed 2 m off its vertical leg still resolves into the second.
+
+**The non-finite fix.** Every ordering test against NaN is false, so `best`
+stayed at its initialiser and a fix the caller could not establish came back as
+`Some(0.0)`. That is not a small error: 0 is the START of the course, so a
+consumer feeding cut-off maths names the first cutoff and measures its
+distance-to-go from the start line. It returns `None`, which is what the web
+signature has said for a year and what every consumer's null branch was written
+for. `cutoff_eta` already carried its own NaN guard at its boundary; that guard
+could never have seen this, because the value arriving was a clean `0.0`.
+
+Six new cases, 30 → 36. Four were confirmed to fail against the arithmetic they
+replace. **Host-tested only, and the module has no consumer on the wrist** —
+`course.rs` is the live nav path and shares no code with this port. This is
+port fidelity, not a repair to a shipped path.
+
+## 901. The § 468 antimeridian mirror finally crosses back to the wrist, and the haversine keeps `atan2`
+
+**Decided 2026-09-02.** [§ 463](#463-the-along-course-axis-inherits-the-courses-topology-and-the-forward-bias-may-never-outrank-the-geometry)
+normalised every planar frame in the **live position pipeline** — the course
+projection, the recorder's per-segment hop, the trackback origin frame — and
+deliberately left the parity ports carrying the raw longitude subtraction, on
+the stated grounds that the web originals carried it too and "fixing the watch's
+copy would break the port without fixing the product".
+[§ 468](#468-the-antimeridian-fix-crosses-back-from-the-watch-to-web-and-mobile-and-the-normalisation-is-owned-once-per-platform)
+then fixed web, mirrored to Dart, and named five sites.
+
+**The day § 468 landed, § 463's reason stopped being true, and nothing noticed
+for a month.** That is § 899 in one sentence: the port was left diverging on
+purpose, the purpose expired, and no artefact recorded the dependency between
+the two. Four of § 468's five sites exist here and all four still had it.
+
+- `route_geometry`: the `distanceAlongRoute` frame and the `interpolateAlongRoute`
+  longitude lerp. A leg across 180° interpolated to 0.01°, half a world from the
+  leg; a point past the line projected to the END of the course rather than its
+  midpoint.
+- `route_simplify`: the RDP perpendicular is the same subtraction wearing a
+  different shape — it converts each longitude to metres east of the **prime
+  meridian** and subtracts after — so a straight line across the line kept every
+  interior point it should have collapsed. `summarize_route_from_track`'s
+  equirectangular leg measured one 0.06° leg as **40,023 km**.
+- `track_projection` and `run_heatmap`: both bounding boxes read a track
+  straddling the line as spanning **359.99°**, so the thumbnail's fitted scale
+  collapses to a dot and the heat box fits the planet instead of the runner's
+  streets. Both are UNWRAPPED rather than delta'd, as web does it — every
+  longitude expressed on the first point's side, east allowed to sit past 180 —
+  because clamping back into range reintroduces the wrap the box exists to avoid.
+
+The fifth site, `route_snap`, has no wrist port; its role is filled by
+`course.rs`, which § 463 already fixed.
+
+**A sixth site exists on web that § 468 did not name**: `segments.ts` gained an
+`unwrapLonDeg` bounding-box prefilter in #733. The watch's `segments.rs` has no
+bbox prefilter at all, so there is nothing there to be wrong — recorded so the
+absence is not later read as an oversight.
+
+**The shared haversine is repaired differently from web's, on § 468's own
+precedent.** `watch_core` has exactly one haversine and seven modules call it;
+rounding can put `a` a hair above 1 for a near-antipodal pair and `sqrt(1 - a)`
+is then NaN, which propagates through a distance, a pace and a cut-off margin
+without throwing. Web repaired its copy by switching to `2·asin(√a)`. That is
+the same quantity in exact arithmetic and **not** in floating point: adopting
+the form here moves two pinned `course` projection figures by one ULP. Clamping
+`a` into `[0, 1]` and keeping `atan2` is identity for every `a` below 1, closes
+the hole, and leaves every existing expected number where it is — which is the
+bar § 468 set for itself, and the same reasoning `geo::unwrap_lon_deg` records
+for not being spelled web's way. Measured on `(-87.5, 0, 87.5, 180)`: NaN
+before, 20015086.796 after. It is defensive rather than reachable: no pair of
+points in a recorded track or a pushed course is near-antipodal.
+
+**Host-tested + build-verified**: eleven new cases across the four modules, of
+which nine were confirmed to fail against the arithmetic they replace (the
+tenth is the guard against over-fixing — a real 50 m deviation across the line
+must still survive RDP — and the eleventh is the antipodal pair); the whole
+workspace builds for `thumbv7em-none-eabihf` and the `clippy -D warnings` gate
+passes. **Nothing here is sim-verified**: no Renode fixture carries a course or
+a track near 180°, and none of these four modules has a glance page to dump.
+Bench verification would need a run near the antimeridian and is not a claim
+this branch may make.
+
+## 902. `elevation_gain_metres` lost a whole climb to one missing sample, and the live vert path is a different mechanism
+
+**Decided 2026-09-02.** `run_stats::elevation_gain_metres` paired ADJACENT track
+points and skipped any pair missing an elevation. `[1000, None, 2000]` has no
+pair carrying two elevations, so a kilometre of ascent read as **0 m gained**.
+Web fixed this on 2026-07-17 by carrying the last valid elevation forward across
+the gap, naming this device's runner in the commit — tree cover, tunnels,
+satellite reacquisition over a long ultra. The wrist port was taken six days
+earlier and never followed.
+
+**On this device the gap is routine rather than exotic**, which is the part
+worth recording: `record_cadence::ele_dm_from_m` drops any altitude outside the
+wire format's ±3276.7 m decimetre field, and both `elevation::plausible_alt` and
+`plausible_gps` drop an implausible reading — so a mountain track carries `None`
+exactly where the vert is.
+
+The existing case asserted the defect (a 10 m climb across one missing sample
+reading 0), so it is **replaced** by web's own replacement for it rather than
+kept beside the new one; the multi-point-gap case comes across with it and its
+embedded descent is the guard that the carry-forward cannot manufacture gain.
+Three cases fail against the adjacent-pair loop and two pass either way.
+
+**The live vert path was checked and is not affected.**
+`elevation::VertAccumulator::push` returns early on an implausible sample,
+moving no state and banking nothing, so its reference survives the dropout and
+the climb across it is banked whole on the next plausible sample. That is a
+different mechanism in a different module, and saying so is the point: the
+defect is in a port with no consumer on the wrist, and reporting it as a vert
+bug on the device would be false.
+
+## 903. A region table is a transcription, so what is written down is where it came from
+
+**Decided 2026-09-02.** `locale_defaults::default_week_start_for_locale` carried
+the hand-written 16-region Sunday-first list all three platforms once shared. It
+disagrees with CLDR for **19 regions**: it lists AR, which is Monday-first, and
+omits PT, TH, ID, SG, SA, DO, GT, HN, SV, NI, PA, PY, KE, ET, PK, BD, YE, NP and
+LA. Web and mobile replaced it on 2026-08-11 with the 56 regions Intl week data
+reports `firstDay === 7` for; this port was taken a month earlier, kept the old
+one, and its own doc comment still claimed the tables "agree with `Intl` for
+every pinned test case" — a claim that had quietly become false, which is worse
+than the table being short.
+
+The doc comment now records the table's **provenance** rather than restating its
+contents: derived from Intl week data over every assigned ISO 3166-1 alpha-2
+region, kept identical to the two names it mirrors, with the 19 the old list got
+wrong spelled out and the Saturday-first regions named as a deliberate absence
+(the setting models only sunday | monday and every platform falls through to
+monday for them). Two tests: the 19 regions, and a sort-and-dedupe check on the
+table itself — it is a transcription, and a slip in one narrows the set by a
+region without any behaviour test noticing.
+
+No consumer on the wrist: the settings menu has no week-start row and
+`current_week::WeekStart` is a separate enum fed from the pushed settings frame.
+Port fidelity, and a doc claim that had become false.

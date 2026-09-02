@@ -1,4 +1,4 @@
-# CloudWatch alarms for the coach Lambda + the CloudFront distribution.
+# CloudWatch alarms for the eight web Lambdas + the CloudFront distribution.
 #
 # All alarms route to the same SNS topic per env. Email subscribers are
 # managed in Terraform via `var.alert_emails` (per-env tfvars) so a
@@ -241,6 +241,33 @@ resource "aws_cloudwatch_metric_alarm" "osrm_proxy_lambda_errors" {
   }
 }
 
+# The p95 alarm generate-route carries, on the sibling the comment above calls
+# its mirror. It was missing: the proxy shares generate-route's 15 s timeout and
+# its clean-502 degradation, so a slow engine walks the duration toward the
+# timeout while the error rate stays flat, the route builder quietly falls back
+# to straight-line segments, and — because the distribution's SPA error fallback
+# rewrites a Lambda-origin 403/404 into the shell at 200 — nothing downstream
+# looks wrong either. The alarm is the only place that outage becomes visible.
+resource "aws_cloudwatch_metric_alarm" "osrm_proxy_lambda_p95_duration" {
+  alarm_name          = "${local.resource_prefix}-osrm-proxy-lambda-p95"
+  alarm_description   = "Osrm-proxy Lambda p95 duration >12 s across two consecutive 5-min windows (approaching the 15 s timeout). Usually a slow / overloaded OSRM engine."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = 12000
+  treat_missing_data  = "notBreaching"
+  metric_name         = "Duration"
+  namespace           = "AWS/Lambda"
+  period              = 300
+  extended_statistic  = "p95"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  dimensions = {
+    FunctionName = aws_lambda_function.osrm_proxy.function_name
+  }
+}
+
 resource "aws_cloudwatch_log_metric_filter" "osrm_proxy_engine_unreachable" {
   name           = "${local.resource_prefix}-osrm-proxy-engine-unreachable"
   log_group_name = aws_cloudwatch_log_group.lambda_osrm_proxy.name
@@ -366,13 +393,21 @@ resource "aws_cloudwatch_metric_alarm" "coach_bypass_paywall" {
   tags                = var.tags
 }
 
-# The four share-card Lambdas (share-run/route/recap/badge) are homogeneous —
-# 512 MB, 15 s timeout, SVG→PNG render with a graceful branded-fallback card at
-# HTTP 200 — so one error-rate + one p95 alarm each, generated with for_each and
-# routed to the same SNS topic. A throttle alarm is lower-value here (reserved-
+# The five share Lambdas are homogeneous ENOUGH to share one alarm pair each:
+# a 15 s timeout and a graceful degradation that returns HTTP 200/404 rather
+# than throwing, so the Errors metric alone would sleep through a bad deploy.
+# One error-rate + one p95 alarm apiece, generated with for_each and routed to
+# the same SNS topic. A throttle alarm is lower-value here (reserved-
 # concurrency-capped, buffered read surface) so it's omitted; the error-rate
 # alarm is the signal that was missing — an erroring share Lambda otherwise
 # breaks social unfurls with nobody paged. /audit/infra N1 2026-07-02.
+#
+# They are NOT identical, and this comment claimed they were: it said "the four
+# share-card Lambdas (share-run/route/recap/badge) … 512 MB, SVG→PNG render"
+# while the map below has carried `entity` since the shared entity-SSR Lambda
+# landed. That one is 256 MB and HTML-only — no resvg, no og:image PNG — which
+# is exactly why the p95 threshold below is a shared 12 s against the shared
+# timeout rather than anything derived from the render budget.
 locals {
   share_lambdas = {
     run    = aws_lambda_function.share_run.function_name
@@ -450,9 +485,91 @@ resource "aws_cloudwatch_metric_alarm" "share_lambda_p95_duration" {
   }
 }
 
+# ─────────────────── Distribution-level error rates ───────────────────
+#
+# This file's own first line said "alarms for the coach Lambda + the CloudFront
+# distribution" and apps/web/deployment.md listed a 4xx and a 5xx distribution
+# alarm under "CloudWatch alarms (wired by the web-stack module)". Neither
+# existed: every alarm here was per-Lambda, so the observability bar that
+# document sets for v1 — "someone gets paged when the site is down" — was met by
+# nothing. A per-Lambda alarm cannot see a distribution serving errors from S3,
+# a broken behaviour ordering, or an origin the OAC has stopped signing for.
+#
+# Rate metrics, not counts: CloudFront publishes 4xxErrorRate / 5xxErrorRate as
+# percentages of requests, so the alarm does not need a traffic-volume baseline
+# to be meaningful, and `notBreaching` on missing data keeps a quiet preview env
+# out of ALARM.
+#
+# CloudFront metrics are published ONLY in us-east-1, under a fixed
+# `Region = "Global"` dimension. These use the module's default provider rather
+# than the aws.us_east_1 alias because a CloudWatch alarm's actions must live in
+# the alarm's own region and aws_sns_topic.alerts is created by the default
+# provider. Both are us-east-1 today (infra/README.md § Region); moving the
+# stack's primary region is already a manual multi-file edit, and this is one
+# more file it has to touch.
+resource "aws_cloudwatch_metric_alarm" "cloudfront_4xx" {
+  alarm_name          = "${local.resource_prefix}-cloudfront-4xx"
+  alarm_description   = "CloudFront 4xx rate over ${var.cloudfront_4xx_alarm_threshold}% across two consecutive 5-min windows. Catches mass auth failures, a broken behaviour ordering, or an SPA fallback misconfiguration."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = var.cloudfront_4xx_alarm_threshold
+  treat_missing_data  = "notBreaching"
+  metric_name         = "4xxErrorRate"
+  namespace           = "AWS/CloudFront"
+  period              = 300
+  statistic           = "Average"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  dimensions = {
+    DistributionId = aws_cloudfront_distribution.this.id
+    Region         = "Global"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cloudfront_5xx" {
+  alarm_name          = "${local.resource_prefix}-cloudfront-5xx"
+  alarm_description   = "CloudFront 5xx rate over ${var.cloudfront_5xx_alarm_threshold}% across two consecutive 5-min windows. The site is failing for a share of viewers, whichever origin is at fault."
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  threshold           = var.cloudfront_5xx_alarm_threshold
+  treat_missing_data  = "notBreaching"
+  metric_name         = "5xxErrorRate"
+  namespace           = "AWS/CloudFront"
+  period              = 300
+  statistic           = "Average"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+
+  dimensions = {
+    DistributionId = aws_cloudfront_distribution.this.id
+    Region         = "Global"
+  }
+}
+
+# ─────────────────── Throttles ───────────────────
+#
+# A throttled invocation increments Throttles, never Errors, so none of the
+# error-rate alarms above can see one. Declared for the three functions whose
+# reserved concurrency is a deliberate ceiling on spend or on an engine's load —
+# hitting it must be loud, which is coach's rationale applied to its two
+# siblings; apps/web/deployment.md already listed generate-route's. The five
+# share Lambdas keep the omission the block below records: concurrency-capped
+# buffered reads whose degradation is already covered by their upstream alarms.
+locals {
+  throttle_alarms = {
+    coach          = aws_lambda_function.coach.function_name
+    generate-route = aws_lambda_function.generate_route.function_name
+    osrm-proxy     = aws_lambda_function.osrm_proxy.function_name
+  }
+}
+
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
-  alarm_name        = "${local.resource_prefix}-coach-lambda-throttles"
-  alarm_description = "Coach Lambda throttled (≥${var.lambda_throttle_alarm_threshold} throttles across two 5-min windows). Concurrent execution cap is being hit."
+  for_each          = local.throttle_alarms
+  alarm_name        = "${local.resource_prefix}-${each.key}-lambda-throttles"
+  alarm_description = "${each.key} Lambda throttled (≥${var.lambda_throttle_alarm_threshold} throttles across two 5-min windows). Concurrent execution cap is being hit."
   # Threshold parameterised per-env: preview keeps the default 5
   # (single noisy demo session can briefly touch the cap and clear
   # inside 60 s — alarming on that would be pure noise). Prod should
@@ -472,6 +589,6 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   tags                = var.tags
 
   dimensions = {
-    FunctionName = aws_lambda_function.coach.function_name
+    FunctionName = each.value
   }
 }

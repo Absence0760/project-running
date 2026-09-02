@@ -93,20 +93,34 @@ pub fn moving_time_seconds(track: &[TrackPoint], min_speed_mps: f64) -> i32 {
 }
 
 /// Total positive elevation gain in metres. Sums upward deltas between
-/// consecutive points, ignoring descents; a pair missing either `ele` is
-/// skipped.
+/// successive points that carry an elevation, ignoring descents.
+///
+/// Points without an `ele` are skipped, but the last valid elevation is
+/// CARRIED FORWARD across the gap so an intermittent altitude dropout does not
+/// silently zero out the real climb spanning the missing samples. Pairing
+/// adjacent points instead loses a climb entirely to one missing sample in the
+/// middle of it — `[1000, None, 2000]` has no pair with two elevations, so it
+/// reads as 0 m gained over a kilometre of ascent. On this device the gap is
+/// routine rather than exotic: the wire format's decimetre field drops any
+/// altitude outside +/-3276.7 m, and [`crate::elevation::plausible_alt`] /
+/// `plausible_gps` drop an implausible reading, so a mountain track carries
+/// `None` exactly where the vert is.
 pub fn elevation_gain_metres(track: &[TrackPoint]) -> i32 {
     if track.len() < 2 {
         return 0;
     }
     let mut gain = 0.0_f64;
-    for w in track.windows(2) {
-        let (Some(prev), Some(curr)) = (w[0].ele, w[1].ele) else {
+    let mut last_ele: Option<f64> = None;
+    for p in track {
+        let Some(ele) = p.ele else {
             continue;
         };
-        if curr > prev {
-            gain += curr - prev;
+        if let Some(prev) = last_ele {
+            if ele > prev {
+                gain += ele - prev;
+            }
         }
+        last_ele = Some(ele);
     }
     js_round(gain)
 }
@@ -427,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn elevation_gain_null_elevations_skipped() {
+    fn elevation_gain_climb_across_a_missing_elevation_gap_is_carried_forward() {
         let pts = [
             TrackPoint {
                 lat: 0.0,
@@ -448,7 +462,9 @@ mod tests {
                 ele: Some(110.0),
             },
         ];
-        assert_eq!(elevation_gain_metres(&pts), 0);
+        // The runner climbed 10 m across the dropout; skipping the gap
+        // entirely (the old adjacent-pair behaviour) wrongly reported 0.
+        assert_eq!(elevation_gain_metres(&pts), 10);
     }
 
     #[test]
@@ -590,5 +606,54 @@ mod tests {
         for s in &splits {
             assert_eq!(s.elevation_m, None);
         }
+    }
+
+    #[test]
+    fn elevation_gain_carries_the_last_elevation_across_a_dropout() {
+        // A kilometre of climb with one sample missing in the middle of it.
+        // Pairing adjacent points finds no pair carrying two elevations, so
+        // the whole climb reads as zero.
+        let pts = [
+            TrackPoint {
+                lat: 0.0,
+                lng: 0.0,
+                ts: None,
+                ele: Some(1000.0),
+            },
+            TrackPoint {
+                lat: 0.0,
+                lng: 0.001,
+                ts: None,
+                ele: None,
+            },
+            TrackPoint {
+                lat: 0.0,
+                lng: 0.002,
+                ts: None,
+                ele: Some(2000.0),
+            },
+        ];
+        assert_eq!(elevation_gain_metres(&pts), 1000);
+    }
+
+    #[test]
+    fn elevation_gain_carries_the_last_elevation_across_a_multi_point_gap() {
+        let ele = |e: Option<f64>, lng: f64| TrackPoint {
+            lat: 0.0,
+            lng,
+            ts: None,
+            ele: e,
+        };
+        let pts = [
+            ele(Some(100.0), 0.0),
+            ele(None, 0.001),
+            ele(None, 0.002),
+            ele(Some(130.0), 0.003),
+            // A descent is still ignored, so the carry-forward cannot turn
+            // one into gain.
+            ele(Some(120.0), 0.004),
+            ele(Some(125.0), 0.005),
+        ];
+        assert_eq!(elevation_gain_metres(&pts), 35);
     }
 }

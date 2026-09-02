@@ -105,6 +105,19 @@ back to Brazilian.
   with that set. Pure `python3` — runs on Linux / CI without a Mac. It is wired into
   the `watch-ios-locale-parity` job in `.github/workflows/ci.yml`; before 2026-08-27
   it ran nowhere but a developer's own shell. Run it after editing the catalog.
+- **Source-vs-catalog check (also no Xcode)**: `node scripts/check_watch_ios_source.mjs`
+  reads the other direction — every literal handed to a localizing API must have a
+  catalog entry, and every catalog entry must still be referenced. **A `Text("…")`
+  with no entry is not an error anywhere**: `LocalizedStringKey` falls back to the
+  key, so every locale renders the English literal, nothing throws, and both
+  `xcodebuild` and the guard above pass. It cost two literals in the complication
+  ([decisions § 884](../../docs/architecture/decisions.md)). The same guard holds
+  `Info.plist` / `WatchApp.entitlements` against the calls that need them, the
+  complication's duplicated formatters against their `RunFormat.swift` copies, and
+  the run hand-off metadata envelope against the phone's end of it — see the file's
+  own header. **A literal that only stitches already-formatted values together is
+  not a translatable string**: pass it as a `String` (or `Text(verbatim:)`) so it is
+  not a key at all, the way `statLine(_:)` does.
 - **Complication caveat**: the complication's `.xcstrings` localisation only takes
   effect once `Localizable.xcstrings` is added to the Widget Extension target's bundle
   — see step 5 in `Complications/README.md`. Until that target exists in Xcode the
@@ -115,8 +128,16 @@ back to Brazilian.
   'platform=watchOS Simulator,id=<sim>'` runs the whole `WatchAppTests` suite green on
   a Mac (Xcode 26.4, watchOS 26.4). Target the simulator by **id**: the `Apple Watch
   Series 9` this file used to name no longer exists, and `Series 11 (46mm)` is
-  ambiguous when two are paired. What is still outstanding is only the visual
-  spot-check of each locale in the simulator.
+  ambiguous when two are paired. What is still outstanding is the visual spot-check
+  of each locale in the simulator, and — since 2026-09-02 — the Swift and
+  entitlement edits of [decisions § 884 – § 888](../../docs/architecture/decisions.md),
+  which no compiler, signer or simulator has seen. Both are filed in
+  `docs/product/followups.md`.
+- **The permission prompts are not localized.** `Info.plist`'s four
+  `NS*UsageDescription` strings are English-only — there is no `InfoPlist.xcstrings`
+  in this app or the phone's — so the HealthKit and location consent dialogs read
+  English on a wrist whose other 56 strings do not. Filed, with what closing it
+  costs, in `docs/product/followups.md`.
 
 ## What's real vs stubbed
 

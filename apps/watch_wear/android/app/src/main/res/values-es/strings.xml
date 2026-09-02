@@ -8,6 +8,7 @@
     <string name="pace_per_km">%1$s /km</string>
     <string name="distance_mi">%1$s mi</string>
     <string name="distance_mi_to_go">%1$s mi restantes</string>
+    <string name="distance_mi_recorded">%1$s mi registradas</string>
     <string name="pace_per_mi">%1$s /mi</string>
     <string name="bpm">%1$d ppm</string>
     <string name="bpm_zone">%1$d ppm · Z%2$d</string>
@@ -26,9 +27,6 @@
     <string name="tile_tap_to_start">Toca para empezar</string>
     <string name="tile_running">EN MARCHA</string>
     <string name="tile_paused">EN PAUSA</string>
-    <string name="tile_stat_row">%1$s · %2$s</string>
-    <string name="pace_placeholder">—:—/km</string>
-    <string name="pace_per_km_compact">%1$s/km</string>
 
     <string name="notif_recording_run">Registrando carrera</string>
     <string name="notif_paused">En pausa</string>

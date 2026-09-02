@@ -697,6 +697,17 @@ jobs:
             echo "Reproduce locally with: npm ci && npm run check:tsconfig-coverage."
             exit 1
           fi
+      # Typechecking the edge function proved it compiles; nothing ever ran
+      # it. This drives `handler` against real viewer-request events — the
+      # first code every visitor, crawler and API client to the site touches.
+      # Stdlib only, so it needs nothing installed (decisions § 894).
+      - name: CloudFront edge function behaviour
+        run: |
+          if ! node --test infra/modules/web-stack/functions/www_redirect.test.mjs; then
+            echo "::error::The www-to-apex CloudFront Function does not behave as specified. It runs at the edge on every request to the site; nothing here is about the schema or the generated types."
+            echo "Reproduce with: node --test infra/modules/web-stack/functions/www_redirect.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2
@@ -1202,9 +1213,7 @@ jobs:
           fi
 
   watch-ios-locale-parity:
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    name: watchOS String Catalog vs its locale declarations
+    name: watchOS source-level guards (catalog, declarations, duplicated sources)
     # decisions.md § 761 — apps/watch_ios/scripts/check_xcstrings_parity.sh has
     # existed since the catalog did and ran in NO job: a translation missing
     # from Localizable.xcstrings, or a locale translated but absent from
@@ -1219,12 +1228,19 @@ jobs:
     # `test-watch-ios` builds and runs the Swift suite; it does not read the
     # catalog, and paying for macOS minutes to parse JSON would be silly.
     #
-    # Gated on `needs.changes.outputs.code` deliberately, and the § 756
-    # objection to that gate does NOT apply here: the three files this reads
-    # (Localizable.xcstrings, Info.plist, project.pbxproj) are none of them
-    # `docs/`, `.claude/` or `*.md`, so any diff that can break this guard
-    # sets `code=true`. `parity-matrix` is ungated for the opposite reason —
-    # everything it reads IS markdown.
+    # UNGATED, and it used to be gated. § 761 gated it on
+    # `needs.changes.outputs.code` on the stated ground that none of the three
+    # files it read (Localizable.xcstrings, Info.plist, project.pbxproj) was
+    # `docs/`, `.claude/` or `*.md`, so every diff able to break it set
+    # `code=true`. § 886's guard reads `Complications/README.md` — the only
+    # instruction an operator has for typing the App Group identifier into
+    # Xcode — and that reasoning stops holding the moment a markdown file
+    # enters the read set: a README-only rename sets `code=false`, the gate
+    # counts the skip as a pass, and the drift the claim exists to catch ships
+    # green. `parity-matrix` is ungated for exactly this reason. The whole job
+    # is `python3` plus a bare `node` against a checkout — no `npm ci`, no
+    # Xcode, seconds on a Linux runner — so running it on a docs-only PR costs
+    # less than reasoning about whether it needed to.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1250,6 +1266,34 @@ jobs:
           if ! node --test scripts/check_xcstrings_parity.test.mjs; then
             echo "::error::The watchOS String Catalog guard's own unit tests failed. The catalog itself is fine — the check above just passed — so this is a defect in apps/watch_ios/scripts/check_xcstrings_parity.sh, not a half-declared locale."
             echo "Reproduce with: node --test scripts/check_xcstrings_parity.test.mjs (stdlib only, needs python3 + bash, no install needed)."
+            exit 1
+          fi
+      # decisions.md § 884 – § 887. The guard above holds the catalog against
+      # its two locale-declaration sites and nothing else about the tier. This
+      # one holds the other six things a Linux parse can honestly claim about
+      # `apps/watch_ios`: a localization key with no catalog entry (renders
+      # English in every locale and throws nothing), a catalog entry no Swift
+      # references, a capability declared without the call that needs it or
+      # exercised without the declaration, the complication's duplicated
+      # formatters drifting from their `RunFormat.swift` copies, the App Group
+      # named two different ways, and a key one end of the run hand-off
+      # envelope sends that the other end never lifts out. Every one of them is
+      # silent on the platform, so the macOS `test-watch-ios` job would pass
+      # through all of them. The last claim reads the phone's
+      # `WatchIngestBridge.swift` as well: the envelope has two ends, and a
+      # guard holding only the watch's cannot see the drift.
+      - name: watchOS catalog usage, native declarations and duplicated sources
+        run: |
+          if ! node scripts/check_watch_ios_source.mjs; then
+            echo "::error::apps/watch_ios carries a source-level defect no compiler reports — a localizing literal with no String Catalog entry, a catalog entry nothing references, an Info.plist / entitlements capability that disagrees with the code, a complication formatter that has drifted from its RunFormat copy, an App Group named two ways, or a run hand-off metadata key one end of the WCSession envelope sends and the other never lifts out. Nothing here is about a half-declared locale; that is the check above."
+            echo "The failing line above names the file, the line and the fix. Reproduce with: node scripts/check_watch_ios_source.mjs (stdlib only, no Xcode needed). decisions § 884 – § 887."
+            exit 1
+          fi
+      - name: The watchOS source guard's own unit tests
+        run: |
+          if ! node --test scripts/check_watch_ios_source.test.mjs; then
+            echo "::error::The watchOS source guard's own unit tests failed. The tree itself is fine — the check above just passed — so this is a defect in scripts/check_watch_ios_source.mjs, not a defect in apps/watch_ios."
+            echo "Reproduce with: node --test scripts/check_watch_ios_source.test.mjs (stdlib only, no install needed)."
             exit 1
           fi
 
@@ -1278,6 +1322,63 @@ jobs:
         run: |
           node scripts/check_lambda_alias_sync.mjs
           node --test scripts/check_lambda_alias_sync.test.mjs
+
+  infra-guards:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: Infra IAM + coverage guards
+    # The Terraform under infra/ provisions the production web stack, the KMS
+    # keys behind sops, the GitHub OIDC deploy roles and DNS, and most of what
+    # is load-bearing about it was stated in prose and enforced by nothing.
+    # Two guards, both offline — no AWS credentials, no `terraform init`, so
+    # this job needs neither the Terraform CLI nor a network round trip:
+    #
+    #   check_infra_iam.mjs      the OIDC trust contract (StringEquals on a
+    #                            wildcard-free environment-shaped sub, the
+    #                            environment set moving in lockstep with
+    #                            release-web.yml — the half that failed the
+    #                            web@1.0.3 release), no wildcard grant, one
+    #                            environment's ARNs per role, and every Lambda
+    #                            Function URL AWS_IAM-authed with BOTH
+    #                            CloudFront invoke grants (issue #590).
+    #   check_infra_coverage.mjs every Terraform directory validated and
+    #                            dependency-tracked, and every Lambda in the
+    #                            module carrying an error-rate and a p95 alarm
+    #                            — the only signal a Lambda-origin failure has,
+    #                            since the distribution-wide 403/404 fallback
+    #                            rewrites one into a 200 shell.
+    #
+    # Each guard's own `node --test` suite runs beside it: a parser that
+    # silently stops matching passes vacuously, which is the failure mode a
+    # source-reading guard has instead of a false negative.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: IAM least privilege + the OIDC trust contract
+        run: |
+          if ! node scripts/check_infra_iam.mjs; then
+            echo "::error::An IAM rail under infra/ is wider than the pipeline uses, or the two halves of the OIDC trust contract have come apart. Nothing here is about alarm or stack coverage; that is the other check in this job."
+            echo "The failing line above names the role, the statement and the property. decisions § 889 is why the trust conditions are read rather than trusted."
+            exit 1
+          fi
+          if ! node --test scripts/check_infra_iam.test.mjs; then
+            echo "::error::The infra IAM guard's own unit tests failed. The Terraform itself is fine — the check above just passed — so this is a defect in scripts/check_infra_iam.mjs, and a parser that stopped matching would have passed the check vacuously."
+            exit 1
+          fi
+      - name: Every stack validated, every Lambda alarmed
+        run: |
+          if ! node scripts/check_infra_coverage.mjs; then
+            echo "::error::A Terraform directory under infra/ is validated or dependency-tracked by nothing, or a Lambda in the web-stack module has no error-rate or p95 alarm. Nothing here is about IAM scope or the OIDC trust policies; that is the other check in this job."
+            echo "The failing line above names the directory or the function. decisions § 890 is why a Lambda-origin failure is invisible without its alarm."
+            exit 1
+          fi
+          if ! node --test scripts/check_infra_coverage.test.mjs; then
+            echo "::error::The infra coverage guard's own unit tests failed. The Terraform itself is fine — the check above just passed — so this is a defect in scripts/check_infra_coverage.mjs."
+            exit 1
+          fi
 
   build-watch-wear:
     needs: changes
@@ -3052,6 +3153,7 @@ jobs:
       - ios-native-declarations
       - watch-ios-locale-parity
       - lambda-alias-coverage
+      - infra-guards
       - build-watch-wear
       - build-firmware
       - sim-firmware

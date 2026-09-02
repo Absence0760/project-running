@@ -1,14 +1,22 @@
 import XCTest
 @testable import WatchApp
 
-/// Pins the active-run complication's pure formatters
-/// (`formatElapsed` / `formatDistanceKm` / `formatPaceSecPerKm` in
-/// `Complications/ActiveRunComplication.swift`). They are a deliberate
-/// second copy of the recording-screen formatting — the complication
-/// builds in a separate Widget Extension target that can't link
-/// `RunFormat.swift` — so they must be tested independently and kept in
-/// lockstep with `RunFormatTests`. Mirrors the Wear OS twin's
-/// `ActiveRunTileFormattersTest.kt`.
+/// Pins the behaviour of `formatElapsed` / `formatDistanceKm` /
+/// `formatPaceSecPerKm` — a deliberate second copy of the recording-screen
+/// formatting, because the complication builds in a separate Widget
+/// Extension target that can't link `RunFormat.swift`. Mirrors the Wear OS
+/// twin's `ActiveRunTileFormattersTest.kt`.
+///
+/// **Which copy this links, and what that means.** `@testable import
+/// WatchApp` reaches the copy in `WatchApp/RunFormat.swift`, not the one in
+/// `Complications/ActiveRunComplication.swift`: that file is in no target
+/// until the Widget Extension is added in Xcode (see
+/// `Complications/README.md`), so nothing here compiles it and a green run
+/// says nothing about the code the watch face will actually execute. The
+/// two copies are held byte-identical by
+/// `scripts/check_watch_ios_source.mjs`, on Linux, which is what makes this
+/// suite's verdict transfer to the widget at all. Do not delete that guard
+/// on the grounds that these tests cover the duplication — they cannot.
 final class ComplicationFormatterTests: XCTestCase {
     private var savedUnit: String?
 

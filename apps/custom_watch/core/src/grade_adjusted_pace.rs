@@ -322,6 +322,19 @@ impl GapEstimator {
 /// agree segment for segment. The canonical copy for `watch_core`: the privacy,
 /// roadbook, route-description, route-geometry, and turn-cue modules all call
 /// this rather than keep their own.
+///
+/// `a` is clamped into `[0, 1]` before the arc. Rounding can push it a hair
+/// above 1 for a near-antipodal pair, and `sqrt(1 - a)` is then NaN — which
+/// propagates silently through every consumer rather than throwing, and this
+/// is the one copy they all share. Measured on `(-87.5, 0, 87.5, 180)`:
+/// unclamped NaN, clamped 20015086.796.
+///
+/// Web makes the same repair by switching to `2 * asin(sqrt(a))`, which is the
+/// same quantity in exact arithmetic but not in floating point: adopting it
+/// here moves two pinned `course` projection figures by one ULP. The clamp
+/// alone is identity for every `a` below 1, so it closes the NaN and leaves
+/// every existing expected number where it is — the same reasoning
+/// [`crate::geo::unwrap_lon_deg`] records for not being spelled web's way.
 pub fn haversine_metres(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
     const R: f64 = 6_371_000.0;
     let d_lat = (lat2 - lat1) * core::f64::consts::PI / 180.0;
@@ -333,6 +346,7 @@ pub fn haversine_metres(lat1: f64, lng1: f64, lat2: f64, lng2: f64) -> f64 {
             * libm::cos(lat2 * core::f64::consts::PI / 180.0)
             * sin_lng
             * sin_lng;
+    let a = a.clamp(0.0, 1.0);
     R * 2.0 * libm::atan2(libm::sqrt(a), libm::sqrt(1.0 - a))
 }
 
@@ -754,5 +768,18 @@ mod tests {
         let d = haversine_metres_f32(-40.0, 75.0, 40.0, -105.0);
         assert!(d.is_finite(), "antipodal distance {d}");
         assert!((d - 20_015_000.0).abs() < 5_000.0, "antipodal distance {d}");
+    }
+
+    #[test]
+    fn haversine_of_a_near_antipodal_pair_is_half_the_globe_not_nan() {
+        // Rounding pushes `a` a hair above 1 here, and sqrt(1 - a) is then NaN
+        // — which every consumer of this one shared copy would carry silently
+        // into a distance, a pace and a cut-off margin.
+        let d = haversine_metres(-87.5, 0.0, 87.5, 180.0);
+        assert!(d.is_finite(), "got {}", d);
+        assert!(libm::fabs(d - 20_015_086.796) < 1.0, "got {}", d);
+        // A hemisphere apart, exactly antipodal: half the great circle.
+        let half = haversine_metres(0.0, 0.0, 0.0, 180.0);
+        assert!(half.is_finite() && libm::fabs(half - 20_015_086.796) < 1.0);
     }
 }

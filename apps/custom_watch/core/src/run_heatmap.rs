@@ -19,6 +19,8 @@
 
 use heapless::Vec;
 
+use crate::geo::unwrap_lon_deg;
+
 /// ~33 m at the equator. Fine enough that distinct streets stay distinct,
 /// coarse enough that one route's thousands of samples collapse to a
 /// manageable cell count.
@@ -113,10 +115,17 @@ pub fn build_heat_cells(
 }
 
 /// Bounding box of a set of cells. `None` when there's nothing to fit.
+///
+/// Longitudes are expressed on the first cell's side of the antimeridian, so a
+/// runner whose tracks straddle 180 deg gets a box spanning their own streets
+/// rather than the 359.9 deg a raw min/max reads (which fits the whole planet).
+/// `east` may therefore sit outside [-180, 180]; a renderer reads that as the
+/// adjacent world copy, which is exactly the intent.
 pub fn heat_bounds(cells: &[HeatCell]) -> Option<HeatBounds> {
     if cells.is_empty() {
         return None;
     }
+    let ref_lng = cells[0].lng;
     let mut b = HeatBounds {
         west: f64::INFINITY,
         south: f64::INFINITY,
@@ -130,11 +139,12 @@ pub fn heat_bounds(cells: &[HeatCell]) -> Option<HeatBounds> {
         if c.lat > b.north {
             b.north = c.lat;
         }
-        if c.lng < b.west {
-            b.west = c.lng;
+        let lng = unwrap_lon_deg(ref_lng, c.lng);
+        if lng < b.west {
+            b.west = lng;
         }
-        if c.lng > b.east {
-            b.east = c.lng;
+        if lng > b.east {
+            b.east = lng;
         }
     }
     Some(b)
@@ -293,5 +303,27 @@ mod tests {
             build_heat_cells(&[&track], -5.0),
             build_heat_cells(&[&track], DEFAULT_GRID_DEG)
         );
+    }
+
+    #[test]
+    fn heat_bounds_spans_the_short_way_round_the_antimeridian() {
+        let track = [
+            HeatLatLng {
+                lat: 0.0,
+                lng: 179.995,
+            },
+            HeatLatLng {
+                lat: 0.01,
+                lng: -179.995,
+            },
+        ];
+        let out = cells(&[&track]);
+        let b = heat_bounds(&out).unwrap();
+        assert!(b.west <= b.east && b.south <= b.north);
+        // The runner's own streets — ~0.01 deg, not the 359.99 deg a raw
+        // min/max reads.
+        assert!(b.east - b.west < 0.05, "span {}", b.east - b.west);
+        // East deliberately carries past 180 rather than jumping to -179.
+        assert!(b.east > 180.0, "east {}", b.east);
     }
 }
