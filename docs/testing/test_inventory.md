@@ -1349,7 +1349,7 @@ suites themselves: for each of the highest-blast-radius ones, the exact
 violation it exists to catch was introduced into its REAL subject — the
 committed `ci.yml`, `CLAUDE.md`, the syncer table, `.tool-versions`,
 `package.json`, `deno.lock`, the fold table, the ligature vocabulary — and the
-guard required to fail. Repo guards: **828** tests (up from 788).
+guard required to fail. Repo guards: **830** tests (up from 788); the two composite-action suites: **19** (up from 6).
 
 Guards mutation-checked against their own subject and confirmed capable of
 failing, with no defect found: `check_parity_pair_registry` (all four
@@ -1407,6 +1407,36 @@ it was copied from: both anchored on the `- uses:` marker form, and `audit.yml`'
 step is written `- name:` then `uses:`, so the first cut found 20 of 21 sites and
 missed the one whose comment claims it matches the rest. 54 steps in the
 committed workflows use that form. [decisions § 911](../architecture/decisions.md).
+
+### `.github/actions/install-playwright/verify_chromium.test.mjs` — 9 tests (new)
+
+The other composite action's shell, which had never been executed by anything.
+Its verification + apt fallback lived inline in `action.yml`, where nothing
+could drive it, and its apt branch runs only after a launch has already failed —
+so the whole repair path shipped unrun. Extracted to `verify_chromium.sh` on the
+sibling's pattern and driven with stub `node` / `pnpm` / `sudo` / `timeout` on
+PATH. Two cases assert the property the code's own comment states and nothing
+checked: `install-deps` failing all three attempts still PASSES when the browser
+then launches, and `install-deps` succeeding still FAILS when it does not. One
+covers a hazard the extraction created rather than found — the apt.conf heredoc
+terminator was anchored only by YAML's dedent, and in a `.sh` an indented `CONF`
+would swallow the retry loop and the verdict as heredoc content.
+[decisions § 912](../architecture/decisions.md).
+
+Two of the nine could not fail when first written, found by mutating the script
+they cover: an ordering assertion built on a bare `indexOf` (which answers -1 for
+"not found", ordering before everything, so an apt.conf never written read as
+"written first"), and a match on the browser's error anywhere in the log, where
+the first failed launch has already printed the same text.
+
+### `scripts/check_ci_diagnostics.test.mjs` census — 2 more tests
+
+The census walks three `scripts/` directories, and `.github/actions/` is not one
+of them, so nothing asserted either composite-action suite is run at all —
+deleting a `workflow-lint` step would have been silent. Every `.sh` under that
+directory now needs a same-named `.test.mjs`, and every such suite must be run by
+a `ci.yml` job. Both count their subjects first, so an empty walk fails rather
+than passing. [decisions § 913](../architecture/decisions.md).
 
 ### `.github/actions/start-supabase/wait_for_sidecars.test.mjs` — 10 tests (4 added)
 
