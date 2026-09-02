@@ -1788,7 +1788,13 @@ different sentences (decisions § 976).
 
 ### `POST /race-listings-sync`
 
-Pulls upcoming RunSignUp races near a region into `race_listings` (v1 seam — the actual fetch+upsert is a scoped follow-up). **Fail closed**: returns `503 {error:'provider_not_configured'}` when `RUNSIGNUP_API_KEY`/`_SECRET` are unset; the web + mobile UIs probe it to decide whether to show the RunSignUp affordance or the unavailable explainer.
+Pulls a provider's upcoming races into `race_listings`. **Fail closed**: returns `503 {error:'provider_not_configured'}` when the chosen provider's key/secret are unset (`RUNSIGNUP_API_KEY`/`_SECRET`, or `ULTRASIGNUP_API_KEY`/`_SECRET` for `provider:'ultrasignup'`); the web + mobile UIs probe it to decide whether to show the affordance or the unavailable explainer. An unrecognised `provider` is `400 unknown_provider`, never coerced to the default.
+
+**Request:** `{ "provider": "runsignup" | "ultrasignup", "near": { "lng": -106.9, "lat": 37.8, "radius_m": 50000 } }` — `near` is optional; present-but-unusable is a `400`, never a silent fall back to no hint.
+
+**Flow:** auth → tiered rate limit (fail-closed) → provider gate → credential gate → fetch the provider feed → read each row through that provider's reader → reconcile against the stored `(provider, provider_race_id)` rows → insert the new ones and update only the changed ones, **as the service role** (`race_listings_force_unverified` forces `is_verified` false for every other role, and the INSERT policy requires `submitted_by = auth.uid()`). There is no upsert: `race_listings_provider_uniq` is a PARTIAL unique index and PostgREST cannot supply its predicate as an `ON CONFLICT` arbiter (42P10).
+
+**Response:** `{ "synced": 4, "updated": 1, "skipped": 0, "unusable": 0, "total": 5, "complete": true }`. `unusable` is rows the provider returned that could not yield the name and date `race_listings` requires — the field names in `lib.ts` are **unverified against a live payload** (no credential exists), so a differently-shaped feed answers `synced: 0` with `unusable` equal to the row count rather than writing junk into a public calendar (decisions § 977). A non-2xx or unparseable upstream is `502` and writes nothing.
 
 **Env:** `RUNSIGNUP_API_KEY`, `RUNSIGNUP_API_SECRET` (both required for the RunSignUp legs — unset → 503), `CHRONOTRACK_CLIENT_ID`, `CHRONOTRACK_USER_ID`, `CHRONOTRACK_PASSWORD` (all three required for the ChronoTrack leg — any unset → 503), `RACE_IMPORT_USER_AGENT` (optional, defaults `RunApp/1.0`).
 

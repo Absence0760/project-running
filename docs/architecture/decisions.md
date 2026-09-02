@@ -15211,3 +15211,69 @@ refusal, and making the truncation predicate strict at the cap.
 
 **The client half is owed and filed**, not done here: neither web nor mobile
 reads `complete` off either importer, so today the field is honest and unread.
+
+## 977. The race-listings sync was a stub for want of a payload, and the deferral cost more than it saved
+
+**Decided 2026-09-02.** `race-listings-sync` validated its credentials and
+returned `{ synced: 0 }`. Its own comment had said the fetch and upsert were a
+scoped follow-up since it shipped, and the reasoning was defensible: no
+credential exists for either provider, the response shape cannot be observed
+without one, and guessing it is the fragility the per-site scrapers were
+deferred for.
+
+**What that reasoning missed is the cost of the other side.** With the leg a
+stub, no provider race can enter the calendar at all — so a fully provisioned
+deployment still holds only parkrun, crowd submissions and hand inserts, and
+issue #10's remaining work is not "a key" but this function. The repo's own rule
+for a feature blocked on a credential is to write the whole code path and keep
+the gate in config; this is that case, one door over from a compliance gate.
+
+The whole path is written: the region-hint validation, the URL, the envelope
+walk, the per-provider readers, the constraint-shaped field caps, the batch
+reconciliation, the insert, the differential update, and the error
+classification. What the missing key genuinely prevents is VERIFYING the field
+names and the endpoints, so that is handled explicitly rather than hidden:
+
+- Every reading is optional-with-drop, and a row that does not yield the two
+  things `race_listings` requires is COUNTED. A payload shaped differently
+  answers `synced: 0, unusable: <row count>` on the first call — visible at once
+  — instead of writing junk into a calendar every user reads.
+- A wrong endpoint answers a non-2xx, which is refused as `502 <provider>
+  upstream <status>` under the same fail-loud rule both sibling importers
+  already follow. It costs one request and announces itself.
+
+Four judgements inside it are worth recording. **The write runs as the service
+role**: `race_listings_force_unverified` forces `is_verified` false for every
+other role and the INSERT policy requires `submitted_by = auth.uid()`, so a
+provider race written on the caller's client would land as an unverified crowd
+submission attributed to whoever triggered the sync. **There is no upsert**: the
+unique index is PARTIAL (`where provider_race_id is not null`) and PostgREST
+cannot supply an index predicate as an `ON CONFLICT` arbiter (42P10, the lesson
+`parkrun-import` already carries), so the function reads what is stored and
+splits the batch — and a failed read is a 500 rather than an empty set, because
+treating it as empty re-inserts the whole feed. **Only changed rows are
+rewritten**, since without an upsert each rewrite is its own round trip and a
+steady-state feed would otherwise issue one per race every hour. **A row with no
+provider race id is dropped**, because the unique index does not cover nulls and
+such a row would be re-inserted on every sync.
+
+Two things the tests found in the new code before it was committed. A slash
+date is read US month-first (both platforms are US, and `parseParkrunDate`
+already reads the UK site's slashes day-first for the mirror-image reason), and
+a first component past 12 is refused rather than transposed — so a day-first
+feed announces itself on the first race past the 12th of a month. The explicit
+`month > 12` test written for that **could never fail**: the candidate
+`2027-20-06` is refused by the calendar check one line later. It is gone, and
+the mutation that proves the point is on the calendar check instead.
+
+And `distanceMetresFrom` folded `'M'` onto metres. US race listings write MILES
+as `M` while SI writes METRES as `m`, so a case-insensitive unit table files a
+100-MILE race as a 100-METRE one, at the wrong end of every band
+`search_race_listings` sorts into. A case-sensitive table would have been worse:
+it silently picks one reading of a letter whose meaning in this feed has not
+been observed. Both spellings are now refused and the race keeps a null distance
+— which the column is nullable for — instead of somebody else's band.
+
+Five mutations killed: the write moving to the caller's client, the failed-read
+refusal, the `unusable` counter, the calendar check in the slash branch, and the
+within-batch duplicate reconciliation.
