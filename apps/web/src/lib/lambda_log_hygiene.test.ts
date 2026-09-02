@@ -283,9 +283,10 @@ test('no lambda-reachable core hands a caught value straight to CloudWatch', () 
 
 // The walk is by reachability precisely so it cannot go stale, and a specifier
 // spelling it does not follow is exactly the way it would go stale anyway: a
-// module reached through `$lib/x` by one importer and `../x` by another runs in
-// the Lambda's process and writes to its log group either way. The walk
-// followed only the relative spelling until this test was written.
+// module one importer names through the `$lib` alias and another names
+// relatively runs in the Lambda's process and writes to its log group either
+// way. The walk followed only the relative spelling until this test was
+// written.
 //
 // The property is closure — every module in the set resolves every import it
 // makes into another module in the set — and it is checkable without naming a
