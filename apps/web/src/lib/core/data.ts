@@ -2,6 +2,7 @@
  * Data access layer — all Supabase queries in one place.
  */
 import { supabase } from './supabase';
+import { edgeFunctionErrorCode } from './edge_function_error';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { isEntityId } from './entity_id';
 import { loadSettings, effective } from '../settings/settings';
@@ -3449,21 +3450,6 @@ export async function cancelEventOrder(
 	const action = (data as { action?: string } | null)?.action;
 	if (!action) throw new Error('cancel_failed');
 	return { action };
-}
-
-/// Pull the machine `error` code out of a supabase-js FunctionsHttpError —
-/// its `context` is the raw Response, whose JSON body carries our
-/// `{ error: '<code>' }` envelope. Null when the body can't be read.
-async function edgeFunctionErrorCode(error: unknown): Promise<string | null> {
-	const ctx = (error as { context?: Response })?.context;
-	if (!ctx || typeof ctx.clone !== 'function') return null;
-	try {
-		const body = await ctx.clone().json();
-		const code = (body as { error?: string })?.error;
-		return typeof code === 'string' ? code : null;
-	} catch {
-		return null;
-	}
 }
 
 /// Cancel a single occurrence of a recurring event (the rest of the series
