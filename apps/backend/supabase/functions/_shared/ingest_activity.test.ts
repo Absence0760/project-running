@@ -263,9 +263,26 @@ Deno.test('ingestActivity — a track that cannot be stored is logged, never swa
   };
   try {
     const db = dbStub();
-    // The Storage upload is what fails here: `dbStub` has no `storage`, so
-    // `uploadTrack` throws on the first property read — the shape of any
-    // upload-side fault, from a revoked grant to a quota.
+    // The Storage upload is what fails, and it fails the way supabase-js
+    // actually fails: a resolved `{ error: { message, details, hint, code } }`
+    // that `uploadTrack` rethrows as it stands — a plain object, not an Error.
+    // Both halves of the assertion below need that shape: `instanceof Error`
+    // alone reports it as 'unknown', and a thrown Error carries no `details`
+    // for the redaction check to have anything to redact.
+    // deno-lint-ignore no-explicit-any
+    (db.client as any).storage = {
+      from: () => ({
+        upload: () =>
+          Promise.resolve({
+            error: {
+              message: 'new row violates row-level security policy',
+              details: 'Key (user_id)=(u1) is not present',
+              hint: 'the offending row values',
+              code: '42501',
+            },
+          }),
+      }),
+    };
     await ingestActivity(db.client, 'u1', 'tok', act({ distance: 5000 }));
     assertEquals(db.inserted.length, 1, 'the row must still stand');
     assertEquals(lines.length, 1, 'exactly one line, for one failure');
@@ -275,14 +292,18 @@ Deno.test('ingestActivity — a track that cannot be stored is logged, never swa
       `the line must name what was lost, got: ${message}`,
     );
     assertEquals(detail.activityId, 12345, 'the line must name the activity to be actionable');
-    assert(
-      typeof detail.error === 'string' && detail.error.length > 0,
-      'the line must carry the failure, not just the fact of one',
+    assertEquals(
+      detail.error,
+      'new row violates row-level security policy',
+      'a supabase-js rejection is a plain object, so an instanceof test alone ' +
+        "names no cause at all — every fault would read as 'unknown'",
     );
-    // PostgREST errors travel with `details` / `hint` that can echo row
-    // values into the shared log aggregator; only the message may ship.
+    // PostgREST errors travel with `details` / `hint` that can echo the
+    // offending row's values into the shared log aggregator; only the message
+    // may ship. The stub supplies both, so this bites.
     assertEquals(detail.details, undefined);
     assertEquals(detail.hint, undefined);
+    assertEquals(detail.code, undefined);
   } finally {
     globalThis.fetch = original;
     console.error = originalError;
