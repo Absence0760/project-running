@@ -45,6 +45,18 @@ export const handler = async (
 	// unexpected throw becomes a generic 503 to the wire and a tagged operator
 	// log line, never the runtime's default error envelope.
 	try {
+		// POST only, mirroring the osrm-proxy Lambda's GET-only gate. The dev
+		// wrapper (`src/routes/api/routes/generate/+server.ts`) exports `POST`
+		// alone, so SvelteKit answers 405 to anything else while this — the
+		// surface that runs in production — ran the full Pro-gated engine call
+		// on any method (decisions § 896).
+		if (event.requestContext.http.method !== 'POST') {
+			return {
+				statusCode: 405,
+				headers: { 'content-type': 'application/json', allow: 'POST' },
+				body: JSON.stringify({ error: 'method not allowed' }),
+			};
+		}
 		const raw = event.body ?? '';
 		const decoded = event.isBase64Encoded === true ? Buffer.from(raw, 'base64') : Buffer.from(raw, 'utf-8');
 		if (decoded.byteLength > BODY_LIMIT_BYTES) {

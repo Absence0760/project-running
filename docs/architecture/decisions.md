@@ -12288,3 +12288,66 @@ absolute, single-slashed `og:url` and `og:image`.
 The `src/` half is not fixed here and is filed instead: `||` gets the blank case
 right, so those twenty callers are correct today, but none of them trims a
 trailing slash and none goes through the helper either.
+
+## 896. Seven of the eight production Lambdas had never been executed, and the two POST-only ones accepted any method
+
+**Decided 2026-09-02.** `apps/web/lambda/` holds the only server-side compute
+outside Supabase — the coach endpoint, the route generator, the OSRM proxy and
+five share/OG renderers ([§ 53](#53)). Of the eight, exactly one
+(`share-entity`) had ever been driven by a test. `coach` and `osrm-proxy`
+appeared in `security_guards.test.ts` and `share-run` in
+`share_run_cache_control.test.ts`, but every one of those reads the file as
+TEXT. A source guard is the right instrument for "this line must not change"
+and a poor one for "this endpoint refuses what it should refuse", and the gap
+between the two is where these findings were.
+
+They turn out to be drivable in-process. The coach wrapper reads a
+runtime-provided `awslambda` global at import time, so a stub installed before
+a dynamic import is enough; every case that matters stops before a network
+call, because each core refuses an unauthenticated or unconfigured request
+before it constructs a Supabase client. Nineteen behavioural cases across the
+two POST endpoints found two defects.
+
+**Neither POST-only Lambda checked the method.** All four dev wrappers under
+`src/routes/api/` export `POST` alone (`osrm` exports `GET` alone), so
+SvelteKit answers 405 to anything else — and `osrm-proxy`'s Lambda carries the
+matching gate. `coach` and `generate-route` did not, and their CloudFront
+behaviours declare
+`allowed_methods = ["GET","HEAD","OPTIONS","PUT","POST","PATCH","DELETE"]`.
+So a `GET https://threkir.com/api/coach` carrying a body ran the whole turn:
+the paywall check, the daily-quota increment, the billed Anthropic call —
+on a method the endpoint does not support and that every intermediary in the
+path treats as safe to replay. It is not a cross-user cache leak (the
+`lambda_passthrough` cache policy is all-TTL-0, so nothing on that behaviour
+is stored), which is why this is a divergence rather than an incident: dev
+refuses it, prod bills for it. Both now answer `405` with an `Allow: POST`
+header, reading `event.requestContext.http.method` exactly as `osrm-proxy`
+does — a missing `requestContext` throws into the outer envelope rather than
+defaulting to POST, which is the same fail-closed shape that Lambda already
+had.
+
+**The two non-streaming coach sub-dispatchers discarded the core's headers.**
+`route-describe` and `route-request` wrote
+`writeJson(stream, result.status, JSON.parse(result.body))` — re-deriving the
+response from a parsed copy under a hardcoded `content-type`, where the
+streaming coach path beside them forwards `result.headers` intact. Both cores
+emit only `content-type` today, so nothing was being dropped *yet*; what makes
+it worth fixing rather than filing is that the wrapper is the layer a header
+has to survive, and the first refusal that wants to carry a `retry-after`
+would lose it silently in production while dev returned it correctly. The
+parse is also a throw path: a body the core did not mean as JSON turns a
+handled refusal into a 503. They now forward the result verbatim. The
+behavioural half of that test cannot discriminate while both cores agree, and
+says so; the assertion that does is structural — neither dispatcher may
+re-derive the response from a parsed copy.
+
+The suites also pin what was already right, because none of it was proven:
+each sub-path's own byte cap (256 KB / 32 KB / 16 KB — three different
+constants, so a dispatcher wired to the wrong one is invisible without a case
+per path), the caps counting BYTES rather than `String.length` (the multi-byte
+smuggle `body.ts` was written for, now measured through the wrapper that calls
+it), the base64 decode firing on the flag and only on the flag, the JWT being
+read from `x-supabase-authorization` and never `Authorization` (CloudFront's
+OAC signs that slot), the provider check not gating the two route sub-paths,
+and the outer envelope answering a generic 503 that does not name the env var
+it failed on.

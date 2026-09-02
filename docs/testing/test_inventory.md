@@ -1228,6 +1228,14 @@ The first tests over `infra/modules/web-stack/functions/`. The CloudFront Functi
 
 Which origin the five share Lambdas resolve `PUBLIC_SITE_URL` to, and what the wrong fold emits. A source register requires every `PUBLIC_SITE_URL` read under `apps/web/lambda/` to go through `siteOrigin`, with a population floor so an empty walk fails rather than reporting a clean tree; reverting one Lambda to `?? DEFAULT_SITE_URL` fails it by name. Two behavioural cases drive the head builders the Lambdas actually call — the first asserts what a blank origin produces (a root-relative `og:url` and `og:image`, the same shape `share_url_source_guard.test.ts` bans in the sources), the second that `undefined`, `null`, `''`, `'   '` and a trailing-slash origin all come out absolute and single-slashed. See [decisions § 895](../architecture/decisions.md).
 
+### `apps/web/src/lib/coach/coach_lambda_handler.test.ts` — 13 tests (new)
+
+The production coach Lambda's own wrapper layer, which `handler.test.ts` structurally cannot reach: which sub-path a request dispatches to, which of the three byte caps that sub-path gets, the base64 decode, the custom auth header, the hardcoded `bypassPaywallEnabled: false`, and the outer fail-closed envelope. The module reads a runtime-provided `awslambda` global at import time, so the stub is installed before a dynamic import; every case stops before a network call. Two cases fail without the fixes they pin — a non-POST reaching the core, and a sub-dispatcher re-deriving its response from a parsed copy of the core's body. The rest pin what was right but unproven: each cap measured in bytes rather than `String.length`, the decode firing on the base64 flag and only on it, the JWT read from `x-supabase-authorization` and never `Authorization`, the provider check not gating the route sub-paths, and a missing env var answering a generic 503 that does not name itself. See [decisions § 896](../architecture/decisions.md).
+
+### `apps/web/src/lib/routes/generate_lambda_handler.test.ts` — 6 tests (new)
+
+The generate-route Lambda's wrapper, measured the same way. The method gate (which fails without the fix), the 4 KB cap against decoded bytes including the multi-byte case, the base64 decode shown to be flag-driven in both directions, that a well-formed POST reaches the CORE (the 501 is the core's, so the wrapper handed over rather than answering for it), and that every refusal is parseable JSON with a JSON content-type. See [decisions § 896](../architecture/decisions.md).
+
 ---
 
 ## Suite totals after the #789 coverage round (2026-08-31)

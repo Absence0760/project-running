@@ -156,7 +156,7 @@ The bar for v1 is: **someone gets paged when the site is down, can read the rele
 | Backend (Supabase) | Supabase Dashboard → Logs | Postgres slow queries, EF invocations, Auth events | included |
 | Worker + OSRM (Fly.io) | `fly logs -a threkir-worker` / `fly logs -a osrm` + native metrics | per-machine CPU/RAM, restart history, log stream | included |
 | Cross-service errors | **Sentry** — single org, separate projects per service | grouped exceptions, release tagging, breadcrumb trail on mobile | $0 (free tier) → $26 (team) |
-| Uptime | **Better Stack** or **UptimeRobot** | external probe of `/`, `<ref>.supabase.co/rest/v1/…`, `threkir.com/api/coach` (HEAD-only) | $0 (free tier) |
+| Uptime | **Better Stack** or **UptimeRobot** | external probe of `/`, `<ref>.supabase.co/rest/v1/…`, `threkir.com/api/coach` (HEAD-only — expect **405 + `Allow: POST`**, not a 2xx: the coach Lambda is POST-only since [decisions § 896](../architecture/decisions.md), and before that a HEAD answered 401. Either status is proof the function is alive; configure the monitor on the status, not on 2xx) | $0 (free tier) |
 | RevenueCat / Stripe events | dashboards on each | subscription lifecycle, churn signals | included |
 
 **Alerts that page someone** (Better Stack → email + push):
