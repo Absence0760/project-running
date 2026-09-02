@@ -15088,3 +15088,30 @@ runner with HR prefs configured and no HR-carrying run in the window hands
 `median` an empty slice on every recalculation. Removing the `is_empty` branch
 from `median` now fails five tests rather than none, three of which are the
 pre-existing calibration cases; before the fold it would have failed nothing.
+
+## 962. The 99:00 ceiling and the 0.4 m/s walk gate: two registered rails, and two links deliberately not restated
+
+`check_watch_wire_vectors.mjs` now holds `grade_adjusted_pace::MAX_PACE_S_PER_KM`
+against the Garmin field's `MAX_PACE_S`, and `MIN_SPEED_MPS` against its
+namesake. Both firmware constants carried a doc comment naming the Monkey C
+field as their source, which is an instruction rather than an enforcement — the
+§ 641 shape, where three implementations of `turn_cues` diverged at once because
+their headers claimed a mirror nothing compared.
+
+The ceiling was filed with a suggestion to close the chain end to end through
+`alerts::PACE_BAND_MAX_S_PER_KM` and the phone's `kWorkoutPaceMaxSecPerKm`. It
+is not extended, and the reason is that the rest of the chain is already
+enforced twice over: `alerts.rs`'s own
+`the_pace_band_ceiling_is_the_apps_own_live_pace_ceiling` asserts the alerts
+constant equals the GAP one, and `cargo test --workspace` runs in
+`build-firmware`, which is in the `CI gate` list; the `pace-band ceiling (s/km)`
+row already holds the alerts constant against the phone's. Adding those two
+rails to this row would state the same two claims in a third and fourth place,
+and a value that must be changed in four registries to change once is a registry
+that gets worked around. The `why` names where the other links live so the next
+reader does not re-derive it.
+
+The walk gate is two rails and stays two. The web and Dart GAP helpers are batch
+— they take a track, not a per-sample speed — so there is no third copy of this
+number to hold, which the `why` says outright rather than leaving the absence to
+read as an omission.

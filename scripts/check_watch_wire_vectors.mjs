@@ -531,6 +531,22 @@ export const CONSTANT_ROWS = [
     ],
   },
   {
+    name: 'live-pace ceiling (s/km)',
+    why: 'the head of a four-rail chain, and the one link nothing could read. Past 99:00 a live pace is a runaway from a near-zero adjusted speed rather than a pace, and both rails render `--:--` instead. The other two links are already enforced elsewhere and are deliberately not restated here: the firmware\'s own `alerts::the_pace_band_ceiling_is_the_apps_own_live_pace_ceiling` pins `alerts::PACE_BAND_MAX_S_PER_KM` equal to this value, and the `pace-band ceiling (s/km)` row above pins THAT against the phone',
+    rails: [
+      rustRail(RS_GAP, rustConst('MAX_PACE_S_PER_KM')),
+      otherRail(MC_GAP, mcConst('MAX_PACE_S')),
+    ],
+  },
+  {
+    name: 'live-pace walk gate (m/s)',
+    why: 'below this the runner is walking or stopped and an instantaneous pace is noise, so both streaming rails blank the cell. A rail with a lower gate reports a pace on a power-hike the other calls unreadable, and the two wrists then disagree about whether there is a number at all. Streaming-only: the web and Dart GAP helpers are batch, take no per-sample speed, and have no analogue to hold',
+    rails: [
+      rustRail(RS_GAP, rustConst('MIN_SPEED_MPS')),
+      otherRail(MC_GAP, mcConst('MIN_SPEED_MPS')),
+    ],
+  },
+  {
     name: 'minimum segment before a grade sample is trusted (m)',
     why: 'the anchored window every rail measures grade over; a shorter one on one rail reads GPS-altitude jitter as a wall',
     rails: [
