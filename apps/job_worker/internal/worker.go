@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -334,11 +335,17 @@ func (w *Worker) Run(ctx context.Context) error {
 }
 
 // handle wraps the per-job work with a timeout + result reporting.
-// Always reports back to the queue: a panic-free error path is
-// finish_job(failed, …); a transient one is defer_job(delay, …).
-// Lost jobs (worker crashes mid-handle) are recovered on the next
-// process start because attempts < max_attempts and locked_at can be
-// reaped by an external watchdog (out of scope for v1).
+// Always reports back to the queue: a permanent error is
+// finish_job(failed, …); a transient one is defer_job(delay, …); a panicking
+// handler is caught by dispatchSafely and reported as permanent.
+//
+// A job whose process dies mid-handle (SIGKILL, OOM) is NOT recovered on the
+// next start: claim_next_job only ever selects `status = 'queued'` and nothing
+// moves a row back out of `running`, so the attempts < max_attempts budget
+// never gets to apply. find_stuck_jobs (migration 20260731_001) surfaces those
+// rows for operator remediation and deliberately does not rewrite them. The
+// panic barrier exists so the commonest way to reach that state — a bug in one
+// handler — reports back instead.
 func (w *Worker) handle(ctx context.Context, job *Job) {
 	jobCtx, cancel := context.WithTimeout(ctx, w.handleTimeoutFor(job.Kind))
 	defer cancel()
@@ -346,7 +353,7 @@ func (w *Worker) handle(ctx context.Context, job *Job) {
 	logger := w.Log.With("job_id", job.ID, "kind", job.Kind, "attempt", job.Attempts)
 	logger.Info("handling job")
 
-	err := w.dispatch(jobCtx, job)
+	err := w.dispatchSafely(jobCtx, job)
 	if err == nil {
 		if ferr := w.Backend.FinishJob(ctx, job.ID, "done", nil); ferr != nil {
 			logger.Error("finish_job(done) failed", "err", ferr)
@@ -397,6 +404,50 @@ func (w *Worker) handleTimeoutFor(kind string) time.Duration {
 		return w.Config.HandleTimeout
 	}
 	return 5 * time.Minute
+}
+
+// panicError wraps a value recovered from a panicking job handler. It is a
+// distinct type so isTransient can refuse it outright: a panic message is
+// arbitrary text and the substring sniffing below would happily read
+// `index out of range` in a stack that also mentions "timeout" as a network
+// blip worth retrying. A panic is a bug, never a condition that clears on its
+// own.
+type panicError struct {
+	value any
+}
+
+func (e *panicError) Error() string {
+	return fmt.Sprintf("panic in job handler: %v", e.value)
+}
+
+// dispatchSafely runs the per-kind handler behind a panic barrier.
+//
+// Without it a single panicking handler ends the PROCESS, not the job: the
+// worker loop runs in main's own goroutine alongside the live-spectator hub,
+// the data-export endpoints, the Strava webhook, the unsubscribe endpoint and
+// the bounce webhook, all of which share this binary. One malformed payload
+// would therefore stop live tracking for every spectator watching every runner
+// — the layered-resilience contract says an auxiliary failure may not take a
+// lower layer with it.
+//
+// The recovered panic is reported as a PERMANENT failure so the row is stamped
+// `failed`. That matters more than the retry question: `claim_next_job` only
+// ever looks at `status = 'queued'`, and nothing resets a row out of
+// `running`, so a job whose handler killed the process before it could report
+// back is invisible to the queue for ever (find_stuck_jobs only alerts — by
+// design, migration 20260731_001, it deliberately does not rewrite status).
+func (w *Worker) dispatchSafely(ctx context.Context, job *Job) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			w.Log.Error("job handler panicked",
+				"job_id", job.ID,
+				"kind", job.Kind,
+				"panic", fmt.Sprint(r),
+				"stack", string(debug.Stack()))
+			err = &panicError{value: r}
+		}
+	}()
+	return w.dispatch(ctx, job)
 }
 
 // dispatch picks the per-kind handler. New job types plug in here —
@@ -644,6 +695,10 @@ func isRetryableUpstreamStatus(status int) bool {
 // notifications.web_push_sent_at null with no job left to drive it. 408 and
 // 425 are the same shape.
 func isTransient(err error) bool {
+	var pErr *panicError
+	if errors.As(err, &pErr) {
+		return false
+	}
 	var hErr *HTTPError
 	if errors.As(err, &hErr) {
 		return isRetryableUpstreamStatus(hErr.StatusCode)
