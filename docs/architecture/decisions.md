@@ -15129,3 +15129,46 @@ filed rather than invented — is whether any OTHER permanent per-run upload
 failure exists (a blob past the bucket's size limit is the candidate). That is
 a question about a failure we have not observed, and the taxonomy should be
 built the day one is.
+
+## 987. The paging loop that removed silent truncation could still silently truncate
+
+`readAllPages` exists because a bare PostgREST `.select()` comes back capped at
+`db.max-rows` with a 200 and no flag, so a read whose contract is "every row"
+returns the first page and reads as complete. Its own doc said exactly that,
+and then used `page.length < pageSize` as the exhausted signal with `pageSize`
+fixed at 1000 — which is the same bug from the other side. A deployment whose
+cap is below 1000 answers the FIRST range short, and the loop reports a
+1,400-run history as 500 runs. Nothing anywhere asserted that the server's cap
+and `kPostgrestPageSize` agree, and `config.toml` sets no `max_rows` at all, so
+this rested entirely on a platform default nobody had written down.
+
+Two shapes were on the table. A startup assertion against the deployment's cap
+was rejected: PostgREST does not tell a client what its cap is, so the
+assertion would have to infer it — which is what the loop now does anyway,
+without a second mechanism to keep in step.
+
+The loop instead advances by the rows it **received** rather than by the size
+it asked for, and stops on an empty page or on a page that is both short of the
+ask and shorter than the page before it. Advancing by the receipt is the half
+that matters most: a loop that detected the cap but still advanced by 1000
+would skip the 500 rows the server withheld, turning a truncation into a
+corruption.
+
+The cost is one extra round trip when the FIRST page is short — that page has
+no predecessor to be shorter than, and "the table holds 12 rows" is
+indistinguishable from "the server capped this range at 12" without asking
+again. Every other shape costs exactly what it did before, including the
+common full-page walk.
+
+This makes the loop depend on a behaviour that was worth measuring rather than
+assuming. Against the local stack, PostgREST 14.14:
+
+```
+Range: 1000-1999                      -> 200  []
+Range: 1000-1999, Prefer: count=exact -> 416 Requested Range Not Satisfiable
+```
+
+So a past-the-end range is safe **only** while no caller asks for an exact
+count. None of the six do. The requirement is now stated in the function's own
+contract rather than left implicit, because a caller that adds a count would
+turn every complete read into a thrown error.
