@@ -15271,3 +15271,57 @@ they wait for — so the wait is now load-bearing in both directions.
 The `pumpAndSettle` that follows still does the route work, unchanged. Every
 other `pumpUntil` in the file was measured in the same pass; all nine spend at
 least one turn.
+
+## 991. A pumped event loop is not a completion signal, and the cycle it stood in for outlived the test
+
+CI run 33690185523 on `bb87b5ab3` failed `Test Flutter packages` with
+
+```
+SyncService — lifecycle wiring didChangeAppLifecycleState(resumed) triggers a sync
+FileSystemException: Deletion failed, path = '/tmp/sync_service_test_PKKBEB'
+  (OS Error: Directory not empty, errno = 39)
+```
+
+on a tree that had passed the same job minutes earlier. The teardown's
+`deleteSync(recursive: true)` listed the directory, removed what it saw, and
+then failed to `rmdir` because a file had appeared in the meantime — a store
+write, or the `.tmp` sibling § 957 makes it claim.
+
+The test's wait was `await Future.delayed(Duration.zero)` then
+`pumpEventQueue()`, and its assertion was `saveBatchCallCount == 1`. Both are
+proxies. The batch push happens near the START of a cycle;
+`runStore.markManySynced` and its `_persistSyncedIds` write run after it, so
+the loop can go quiet with the cycle still in flight. Whether the write lands
+before, during or after the teardown is a scheduling accident, which is exactly
+the shape of a job that is green on one runner and red on the next.
+
+The cause is one layer down from the test. `didChangeAppLifecycleState` is a
+`void` observer callback and `start()` returns `void`, so both call `_trySync`
+and **discard the future** — nothing anywhere could know a cycle had finished.
+`SyncService` now keeps the in-flight cycle in `_inFlight`, cleared when it
+completes and readable as `debugInFlightSync`; the three tests that pumped for
+it await it instead, and two of them additionally assert the handle has gone
+back to null, so "started" cannot pass for "finished".
+
+**Proved structurally, not by re-running.** With a 200 ms delay injected into
+`LocalRunStore._persistSyncedIds` and a print at the end of `_trySync`:
+
+```
+before:  ORDER: tearDown deleting /tmp/sync_service_test_CYPKGX
+         (the cycle's "finished" line never printed at all)
+after:   ORDER: cycle finished (foreground)
+         ORDER: tearDown deleting /tmp/sync_service_test_VYOKPQ
+```
+
+The old form let the test complete, and the teardown delete, with the store
+write still pending; the new one cannot. Nothing was retried, delayed,
+swallowed or marked flaky — a teardown that fails because a write is still
+running is a true signal and stays able to fire.
+
+The class was surveyed: of 86 mobile test files that create a temp directory,
+9 uses of a bare `pumpEventQueue()` exist across 2 files, and the other file
+(`run_detail_screen_test.dart`) pumps inside a bounded loop over an observable
+predicate, which is the correct shape. 28 files pair a temp directory with
+widget taps and no `pumpUntil` at all; identifying which of those actually
+outlive their writes needs the instrumented run this round could not afford,
+and is filed rather than guessed at.
