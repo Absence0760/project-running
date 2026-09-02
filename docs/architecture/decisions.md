@@ -12319,3 +12319,42 @@ service's own `foregroundServiceType`, and vice versa. The two halves sit in
 different elements of one file, neither implies the other, and a
 `FOREGROUND_SERVICE_HEALTH` without `health` in the type list is a
 `SecurityException` the moment a run starts on API 34+.
+
+## 882. `distance_km_recorded` had no mile sibling, and the one screen never handed `preferredUnit` was the one that used it
+
+Every distance read-out on the wrist is chosen by `DistanceUnit`:
+`distanceLabel`, `distanceToGoLabel` and `paceLabel` each `when (unit)` over a
+matched pair of string resources, and the recording service's notification does
+the same. The crash-recovery prompt did not. It called
+`stringResource(R.string.distance_km_recorded, formatKm(distance))` — a
+kilometre number under a kilometre word — so a miles runner opening the app
+after a process kill was told "6.44 km recorded" about their four-mile run, on
+the single screen where the figure's whole job is to let them recognise which
+run survived.
+
+Two independent things had to be true for it to reach a release, and each hid
+the other. `distance_km_recorded` was the only unit-bearing key in the
+catalogue with no `_mi` sibling, so there was nothing to dispatch to; and
+`PreRunScreen` was the only screen never passed `preferredUnit`, so there was
+nothing to dispatch on. Neither absence is visible to any guard that looks at
+one locale at a time: the key was present and correctly translated in all seven
+catalogues, so `L10nResourceParityTest` was satisfied, and a reviewer reading
+the prompt sees a `stringResource` call that looks like every other one.
+
+So the guard is over the catalogue's SHAPE rather than its contents. A key
+carrying a `km` segment must have the `mi` key that swapping that segment
+names, and vice versa — segment-wise, because the unit is not always the last
+word (`distance_km_to_go`). And both halves of a pair must be referenced from
+the source, since a pair that exists and is half-wired is indistinguishable
+from this defect at the resource level.
+
+The same reading found the inverse: three keys — `tile_stat_row`,
+`pace_placeholder`, `pace_per_km_compact` — declared in all seven catalogues
+and referenced from nowhere, left behind when the tile moved to composing those
+strings in Kotlin. Twenty-one dead entries translators maintain, and two of
+them hardcode `/km`: a later call site wiring up `pace_placeholder` would have
+inherited this exact bug from a string that looked already-translated and
+already-reviewed. They are deleted, and a third guard fails on any key the
+catalogue declares that no call site names. `formatKm` went with them — its own
+doc comment named the two km-only call sites it existed for, the notification
+and the recovery prompt, and neither is one any more.

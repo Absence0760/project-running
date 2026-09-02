@@ -90,7 +90,6 @@ import com.runapp.watchwear.R
 import com.runapp.watchwear.RunViewModel
 import com.runapp.watchwear.Stage
 import com.runapp.watchwear.hrZoneOf
-import com.runapp.watchwear.recording.formatKm
 import com.runapp.watchwear.system.BatteryOptimization
 import android.app.Activity
 import kotlinx.coroutines.Job
@@ -165,6 +164,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             batteryOptimised = state.batteryOptimised,
                             batteryPercent = state.batteryPercent,
                             pendingRecoveryDistance = state.pendingRecovery?.distanceM,
+                            preferredUnit = state.preferredUnit,
                             activityType = state.activityType,
                             activeRace = state.activeRace,
                             selectedRouteName = state.selectedRoute?.name,
@@ -480,6 +480,7 @@ private fun PreRunScreen(
     batteryPercent: Int?,
     activeRace: com.runapp.watchwear.ActiveRaceState?,
     pendingRecoveryDistance: Double?,
+    preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     activityType: String,
     selectedRouteName: String?,
     selectedRouteWaypoints: List<com.runapp.watchwear.recording.RouteMath.LatLng>,
@@ -503,7 +504,7 @@ private fun PreRunScreen(
                 Text(stringResource(R.string.recover_unsaved_run), style = MaterialTheme.typography.title3, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    stringResource(R.string.distance_km_recorded, formatKm(pendingRecoveryDistance)),
+                    distanceRecordedLabel(pendingRecoveryDistance, preferredUnit),
                     style = MaterialTheme.typography.caption2,
                     color = DuskPalette.haze,
                 )
@@ -1888,6 +1889,23 @@ private fun distanceLabel(
     val res = when (unit) {
         com.runapp.watchwear.recording.DistanceUnit.KM -> R.string.distance_km
         com.runapp.watchwear.recording.DistanceUnit.MI -> R.string.distance_mi
+    }
+    return stringResource(res, num)
+}
+
+/// Localized "X.XX km/mi recorded" for the crash-recovery prompt, in the
+/// runner's [unit]. The prompt is how a runner decides whether the surviving
+/// checkpoint is the run they care about, so a figure in the unit they do not
+/// think in is the one place a wrong unit costs something.
+@Composable
+private fun distanceRecordedLabel(
+    distanceM: Double,
+    unit: com.runapp.watchwear.recording.DistanceUnit,
+): String {
+    val num = com.runapp.watchwear.recording.formatDistance(distanceM, unit)
+    val res = when (unit) {
+        com.runapp.watchwear.recording.DistanceUnit.KM -> R.string.distance_km_recorded
+        com.runapp.watchwear.recording.DistanceUnit.MI -> R.string.distance_mi_recorded
     }
     return stringResource(res, num)
 }
