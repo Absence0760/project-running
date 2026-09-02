@@ -20,7 +20,7 @@ import org.junit.Test
 /// under a comment reading "must match the phone-side WearRoutesBridge.kt
 /// PATH". That is an instruction, not an enforcement, and it is the exact
 /// shape `scripts/check_watch_wire_vectors.mjs` exists to replace on the
-/// firmware rails ([decisions § 641](../../../../../../../docs/architecture/decisions.md)):
+/// firmware rails (`decisions.md § 641`):
 /// rename the path on the phone and this suite stays green while the feature
 /// is dead. The session bridge had no such assertion at all, on either side.
 ///
