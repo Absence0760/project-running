@@ -271,11 +271,49 @@ test('a bucket allowlist is the last statement that set it, not the first', () =
 	]);
 });
 
-test('a bucket nothing ever set produces no site, which the caller reports', () => {
+// Both of these used to yield fewer sites, and the entry compares with
+// match 'all', which has no key coverage check — three buckets agreeing with
+// each other is a pass, so a bucket the reader lost is a rail going blind on
+// it in silence. The rail-level "produced no sites" guard cannot see it
+// either: the rail is not empty.
+test('a bucket nothing ever set is refused, not quietly dropped from the comparison', () => {
 	const dir = migrationsFixture({
 		'20260101_001_a.sql': 'create or replace function f() returns int language sql as $$ select 1; $$;',
 	});
-	assert.deepEqual(bucketMimeSites(indexMigrations(dir), ['run-photos']), []);
+	assert.throws(() => bucketMimeSites(indexMigrations(dir), ['run-photos']), /no migration sets allowed_mime_types/);
+});
+
+// And skipping the unreadable statement is worse than not reading it at all:
+// the loop would keep the value from the migration BEFORE it, which is the
+// state this statement exists to change — here, a bucket that still looks
+// narrowed while it accepts anything storage-api will take. A concatenation
+// (`= allowed_mime_types || array['image/heic']`) is the one unreadable shape
+// that does NOT need this: the reader finds that array and reports the
+// appended element as the whole list, which disagrees with the client rails
+// and fails on its own.
+test('a statement that clears the column is refused, not skipped back to the older one', () => {
+	const dir = migrationsFixture({
+		'20260101_001_create.sql':
+			"insert into storage.buckets (id, name, allowed_mime_types) values ('run-photos', 'run-photos', array['image/jpeg']);",
+		'20260102_001_clear.sql':
+			"update storage.buckets set allowed_mime_types = null where id = 'run-photos';\n" +
+			'create or replace function f() returns int language sql as $$ select 1; $$;',
+	});
+	assert.throws(() => bucketMimeSites(indexMigrations(dir), ['run-photos']), /shape this reader does not understand/);
+});
+
+// A statement naming the bucket but not the column is not its business.
+test('a statement that names the bucket without touching its allowlist is passed over', () => {
+	const dir = migrationsFixture({
+		'20260101_001_create.sql':
+			"insert into storage.buckets (id, name, allowed_mime_types) values ('run-photos', 'run-photos', array['image/jpeg']);",
+		'20260102_001_private.sql':
+			"update storage.buckets set public = false where id = 'run-photos';\n" +
+			'create or replace function f() returns int language sql as $$ select 1; $$;',
+	});
+	assert.deepEqual(bucketMimeSites(indexMigrations(dir), ['run-photos']), [
+		{ key: 'run-photos', where: 'run-photos in 20260101_001_create.sql', values: ['image/jpeg'] },
+	]);
 });
 
 // ── Comparison: match 'all' ────────────────────────────────────────────────
