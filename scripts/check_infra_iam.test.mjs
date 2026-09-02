@@ -126,19 +126,27 @@ const MODULE =
   '  function_name = "${local.resource_prefix}-coach"\n' +
   '  environment {\n    variables = {\n      FOO = "bar"\n    }\n  }\n' +
   '}\n\n' +
+  'resource "aws_lambda_alias" "live" {\n' +
+  '  name             = "live"\n' +
+  '  function_name    = aws_lambda_function.coach.function_name\n' +
+  '  function_version = aws_lambda_function.coach.version\n' +
+  '}\n\n' +
   'resource "aws_lambda_function_url" "coach" {\n' +
   '  function_name      = aws_lambda_function.coach.function_name\n' +
+  '  qualifier          = aws_lambda_alias.live.name\n' +
   '  authorization_type = "AWS_IAM"\n' +
   '}\n\n' +
   'resource "aws_lambda_permission" "cf_url" {\n' +
   '  action        = "lambda:InvokeFunctionUrl"\n' +
   '  function_name = aws_lambda_function.coach.function_name\n' +
+  '  qualifier     = aws_lambda_alias.live.name\n' +
   '  principal     = "cloudfront.amazonaws.com"\n' +
   '  source_arn    = aws_cloudfront_distribution.this.arn\n' +
   '}\n\n' +
   'resource "aws_lambda_permission" "cf_fn" {\n' +
   '  action        = "lambda:InvokeFunction"\n' +
   '  function_name = aws_lambda_function.coach.function_name\n' +
+  '  qualifier     = aws_lambda_alias.live.name\n' +
   '  principal     = "cloudfront.amazonaws.com"\n' +
   '  source_arn    = aws_cloudfront_distribution.this.arn\n' +
   '}\n';
@@ -389,15 +397,7 @@ test('a Function URL left unauthenticated fails', () => {
 
 test('dropping the plain lambda:InvokeFunction grant fails — issue #590', () => {
   const { errors } = run({
-    module: MODULE.replace(
-      'resource "aws_lambda_permission" "cf_fn" {\n' +
-        '  action        = "lambda:InvokeFunction"\n' +
-        '  function_name = aws_lambda_function.coach.function_name\n' +
-        '  principal     = "cloudfront.amazonaws.com"\n' +
-        '  source_arn    = aws_cloudfront_distribution.this.arn\n' +
-        '}\n',
-      '',
-    ),
+    module: MODULE.replace(/resource "aws_lambda_permission" "cf_fn" \{[\s\S]*?\n\}\n/, ''),
   });
   assert.ok(has(errors, /needs BOTH grants/), errors.join('\n'));
 });
@@ -444,4 +444,91 @@ test('the parsers actually reach the committed sources', () => {
 test('the claim prefix and its regex-safe spelling describe the same host', () => {
   assert.match(CLAIM_PREFIX, new RegExp(`^${CLAIM_PREFIX_PATTERN}$`));
   assert.doesNotMatch('tokenXactionsXgithubusercontentXcom', new RegExp(`^${CLAIM_PREFIX_PATTERN}$`));
+});
+
+// ───────────── 7. alias lockstep + what the parser skipped ─────────────
+//
+// The Function URL is created ON the alias, so CloudFront invokes the alias
+// ARN. Lambda attaches a resource-policy statement per qualifier: a grant
+// written without one covers the unqualified function and not the ARN the URL
+// actually invokes. That is issue #590's failure exactly, one field over — the
+// URL 403s before invocation and the distribution rewrites the 403 into the
+// SPA shell at 200, so the surface renders while the Lambda never runs.
+
+test('a grant that drops the alias qualifier fails', () => {
+  const { errors } = run({
+    module: MODULE.replace(
+      '  action        = "lambda:InvokeFunction"\n' +
+        '  function_name = aws_lambda_function.coach.function_name\n' +
+        '  qualifier     = aws_lambda_alias.live.name\n',
+      '  action        = "lambda:InvokeFunction"\n' +
+        '  function_name = aws_lambda_function.coach.function_name\n',
+    ),
+  });
+  assert.ok(has(errors, /grant by null/), errors.join('\n'));
+  assert.ok(has(errors, /issue #590/), errors.join('\n'));
+});
+
+test('a Function URL qualified by another function\'s alias fails', () => {
+  const module =
+    MODULE +
+    '\nresource "aws_lambda_function" "share_run" {\n' +
+    '  function_name = "${local.resource_prefix}-share-run"\n}\n' +
+    '\nresource "aws_lambda_alias" "share_run_live" {\n' +
+    '  name          = "live"\n' +
+    '  function_name = aws_lambda_function.share_run.function_name\n}\n';
+  const { errors } = run({
+    module: module.replace(
+      'resource "aws_lambda_function_url" "coach" {\n' +
+        '  function_name      = aws_lambda_function.coach.function_name\n' +
+        '  qualifier          = aws_lambda_alias.live.name\n',
+      'resource "aws_lambda_function_url" "coach" {\n' +
+        '  function_name      = aws_lambda_function.coach.function_name\n' +
+        '  qualifier          = aws_lambda_alias.share_run_live.name\n',
+    ),
+  });
+  assert.ok(has(errors, /an alias of share_run/), errors.join('\n'));
+});
+
+test('a Function URL qualified by an alias the module does not declare fails', () => {
+  const { errors } = run({
+    module: MODULE.replace('aws_lambda_alias.live.name\n' + '  authorization_type', 'aws_lambda_alias.ghost.name\n' + '  authorization_type'),
+  });
+  assert.ok(has(errors, /does not name an aws_lambda_alias this module declares/), errors.join('\n'));
+});
+
+// A block written so the function-name regex misses it is skipped, and the
+// loop then has one fewer thing to iterate — which looks exactly like a stack
+// with one fewer Lambda. Only the declared-vs-read count can tell them apart.
+test('a Function URL the parser could not attribute fails rather than vanishing', () => {
+  const { errors } = run({
+    module:
+      MODULE +
+      '\nresource "aws_lambda_function_url" "ghost" {\n' +
+      '  function_name      = local.some_other_reference\n' +
+      '  authorization_type = "NONE"\n}\n',
+  });
+  assert.ok(has(errors, /2 aws_lambda_function_url block\(s\) in the module, 1 read/), errors.join('\n'));
+});
+
+test('an aws_lambda_permission naming no function fails rather than vanishing', () => {
+  const { errors } = run({
+    module:
+      MODULE +
+      '\nresource "aws_lambda_permission" "ghost" {\n' +
+      '  action        = "lambda:InvokeFunction"\n' +
+      '  function_name = local.some_other_reference\n' +
+      '  principal     = "*"\n}\n',
+  });
+  assert.ok(has(errors, /name no aws_lambda_function/), errors.join('\n'));
+});
+
+test('parseWebStack reads the committed module\'s aliases and qualifiers', () => {
+  const web = parseWebStack(readFileSync(MODULE_FILE, 'utf-8'));
+  assert.ok(web.aliases.size >= 8, `read only ${web.aliases.size} aliases`);
+  assert.equal(web.declared.urls, web.urls.size);
+  assert.equal(web.permissions.filter((p) => p.fn === null).length, 0);
+  for (const [fn, url] of web.urls) {
+    assert.ok(url.qualifier, `${fn}: no qualifier read off the Function URL`);
+  }
 });

@@ -44,6 +44,15 @@
 //      rewrites that 403 into the shell at 200, so the surface reads healthy
 //      while the function never runs.
 //
+//   7. Alias lockstep. Each Function URL is created ON the function's `live`
+//      alias, and a Lambda resource policy is attached per qualifier — so a
+//      grant written without the alias qualifier covers the unqualified ARN and
+//      not the one CloudFront invokes. That is #590's failure exactly, one
+//      field over, and it fails the same invisible way. The parser also
+//      declares how many blocks it SKIPPED: a Function URL written so the
+//      function-name regex misses it is one whose auth type nothing reads, and
+//      a smaller loop looks identical to a smaller stack.
+//
 // Offline by design: three files, no AWS credentials, no `terraform init`.
 // Nothing here is transcribed — every name, every environment and every
 // function suffix is read out of one of the three sources.
@@ -113,8 +122,13 @@ export const RESOURCELESS_ACTIONS = new Map([
  *             policies: RolePolicy[] }} OidcStack
  * @typedef {{ predicate: string | null, whenTrue: string | null, whenFalse: string | null }} Branch
  * @typedef {{ environment: Branch, resourceEnv: Branch }} ReleaseWorkflow
- * @typedef {{ prefix: string | null, functions: Map<string, string>, urls: Map<string, string | null>,
- *             permissions: { fn: string | null, action: string | null, principal: string | null, sourceArn: string | null }[] }} WebStack
+ * @typedef {{ authType: string | null, qualifier: string | null }} FunctionUrl
+ * @typedef {{ fn: string | null, action: string | null, principal: string | null,
+ *             sourceArn: string | null, qualifier: string | null }} InvokeGrant
+ * @typedef {{ label: string, name: string | null, fn: string | null }} FunctionAlias
+ * @typedef {{ prefix: string | null, functions: Map<string, string>, urls: Map<string, FunctionUrl>,
+ *             aliases: Map<string, FunctionAlias>, permissions: InvokeGrant[],
+ *             declared: { urls: number, permissions: number } }} WebStack
  */
 
 // ───────────────────────────── value readers ─────────────────────────────
@@ -367,22 +381,37 @@ export function parseWebStack(raw) {
     functions.set(label, name.slice('${local.resource_prefix}-'.length));
   }
 
-  /** @type {Map<string, string | null>} */
+  /** @type {Map<string, FunctionAlias>} */
+  const aliases = new Map();
+  for (const { label, body } of hclResources(src, 'aws_lambda_alias')) {
+    aliases.set(label, {
+      label,
+      name: body.match(/^\s*name\s*=\s*"([^"]*)"/m)?.[1] ?? null,
+      fn:
+        body.match(
+          /^\s*function_name\s*=\s*aws_lambda_function\.([A-Za-z0-9_-]+)\./m,
+        )?.[1] ?? null,
+    });
+  }
+
+  const urlBlocks = hclResources(src, 'aws_lambda_function_url');
+  /** @type {Map<string, FunctionUrl>} */
   const urls = new Map();
-  for (const { body } of hclResources(src, 'aws_lambda_function_url')) {
+  for (const { body } of urlBlocks) {
     const fn = body.match(
       /^\s*function_name\s*=\s*aws_lambda_function\.([A-Za-z0-9_-]+)\./m,
     )?.[1];
     if (fn === undefined) continue;
-    urls.set(
-      fn,
-      body.match(/^\s*authorization_type\s*=\s*"([^"]*)"/m)?.[1] ?? null,
-    );
+    urls.set(fn, {
+      authType: body.match(/^\s*authorization_type\s*=\s*"([^"]*)"/m)?.[1] ?? null,
+      qualifier: body.match(/^\s*qualifier\s*=\s*(\S+)/m)?.[1] ?? null,
+    });
   }
 
-  /** @type {WebStack['permissions']} */
+  const permissionBlocks = hclResources(src, 'aws_lambda_permission');
+  /** @type {InvokeGrant[]} */
   const permissions = [];
-  for (const { body } of hclResources(src, 'aws_lambda_permission')) {
+  for (const { body } of permissionBlocks) {
     permissions.push({
       fn:
         body.match(
@@ -391,10 +420,18 @@ export function parseWebStack(raw) {
       action: body.match(/^\s*action\s*=\s*"([^"]*)"/m)?.[1] ?? null,
       principal: body.match(/^\s*principal\s*=\s*"([^"]*)"/m)?.[1] ?? null,
       sourceArn: body.match(/^\s*source_arn\s*=\s*(\S+)/m)?.[1] ?? null,
+      qualifier: body.match(/^\s*qualifier\s*=\s*(\S+)/m)?.[1] ?? null,
     });
   }
 
-  return { prefix, functions, urls, permissions };
+  return {
+    prefix,
+    functions,
+    urls,
+    aliases,
+    permissions,
+    declared: { urls: urlBlocks.length, permissions: permissionBlocks.length },
+  };
 }
 
 // ────────────────────────────── comparison ──────────────────────────────
@@ -757,7 +794,63 @@ export function compareSources(oidc, release, web, oidcVars) {
         'check would pass vacuously.',
     );
   }
-  for (const [fn, authType] of web.urls) {
+  // A block whose `function_name` is not written as `aws_lambda_function.<label>.`
+  // is skipped by the parser above, and a skipped Function URL is one whose
+  // authorization_type nothing reads. That is silent: the loop below simply has
+  // one fewer thing to iterate, which looks exactly like a stack with one fewer
+  // Lambda.
+  if (web.declared.urls !== web.urls.size) {
+    errors.push(
+      `${web.declared.urls} aws_lambda_function_url block(s) in the module, ${web.urls.size} read. ` +
+        'A block naming its function some other way is skipped, and a skipped Function URL is one ' +
+        'whose auth type and CloudFront grants are checked by nothing.',
+    );
+  }
+  const unattributed = web.permissions.filter((p) => p.fn === null).length;
+  if (unattributed > 0) {
+    errors.push(
+      `${unattributed} aws_lambda_permission block(s) name no aws_lambda_function, so they belong to ` +
+        'no function below and every grant they carry went unread.',
+    );
+  }
+  for (const [fn, url] of web.urls) {
+    const authType = url.authType;
+    // The Function URL is created ON THE ALIAS, so the URL invokes the alias
+    // ARN. A resource-policy statement carrying no qualifier is attached to the
+    // UNQUALIFIED function and does not authorise that invocation: the URL 403s
+    // before invocation and the distribution's SPA error fallback rewrites the
+    // 403 into the shell at 200 — the same invisible outage issue #590
+    // measured, one field over.
+    if (url.qualifier !== null) {
+      const aliasLabel = url.qualifier.match(/^aws_lambda_alias\.([A-Za-z0-9_-]+)\.name$/)?.[1];
+      const alias = aliasLabel === undefined ? undefined : web.aliases.get(aliasLabel);
+      if (alias === undefined) {
+        errors.push(
+          `aws_lambda_function_url for ${fn}: qualifier ${JSON.stringify(url.qualifier)} does not ` +
+            'name an aws_lambda_alias this module declares, so which version the URL serves could ' +
+            'not be read.',
+        );
+      } else if (alias.fn !== fn) {
+        errors.push(
+          `aws_lambda_function_url for ${fn}: qualified by aws_lambda_alias.${alias.label}, which is ` +
+            `an alias of ${alias.fn}. Every alias here is named "live", so this applies cleanly and ` +
+            'serves the wrong function rather than failing.',
+        );
+      }
+    }
+    const grants = web.permissions.filter((p) => p.fn === fn);
+    for (const action of ['lambda:InvokeFunctionUrl', 'lambda:InvokeFunction']) {
+      const grant = grants.find((g) => g.action === action);
+      if (grant !== undefined && grant.qualifier !== url.qualifier) {
+        errors.push(
+          `${fn}: the Function URL is qualified by ${JSON.stringify(url.qualifier)} but its ${action} ` +
+            `grant by ${JSON.stringify(grant.qualifier)}. A Lambda resource policy is attached per ` +
+            'qualifier, so the grant does not cover the ARN CloudFront actually invokes: the URL ' +
+            "403s before invocation and the distribution's SPA fallback rewrites that into the shell " +
+            'at 200, so the surface reads healthy while the function never runs (issue #590).',
+        );
+      }
+    }
     if (authType !== 'AWS_IAM') {
       errors.push(
         `aws_lambda_function_url for ${fn}: authorization_type is ${JSON.stringify(authType)}. ` +
@@ -765,7 +858,6 @@ export function compareSources(oidc, release, web, oidcVars) {
           'its WAF rate limits and its response-headers policy.',
       );
     }
-    const grants = web.permissions.filter((p) => p.fn === fn);
     for (const action of ['lambda:InvokeFunctionUrl', 'lambda:InvokeFunction']) {
       const grant = grants.find((g) => g.action === action);
       if (grant === undefined) {
