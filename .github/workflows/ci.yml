@@ -697,6 +697,17 @@ jobs:
             echo "Reproduce locally with: npm ci && npm run check:tsconfig-coverage."
             exit 1
           fi
+      # Typechecking the edge function proved it compiles; nothing ever ran
+      # it. This drives `handler` against real viewer-request events — the
+      # first code every visitor, crawler and API client to the site touches.
+      # Stdlib only, so it needs nothing installed (decisions § 894).
+      - name: CloudFront edge function behaviour
+        run: |
+          if ! node --test infra/modules/web-stack/functions/www_redirect.test.mjs; then
+            echo "::error::The www-to-apex CloudFront Function does not behave as specified. It runs at the edge on every request to the site; nothing here is about the schema or the generated types."
+            echo "Reproduce with: node --test infra/modules/web-stack/functions/www_redirect.test.mjs (stdlib only, no install needed)."
+            exit 1
+          fi
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
           version: 2.84.2

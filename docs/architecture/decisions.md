@@ -12194,3 +12194,49 @@ and a suite that runs against two Flutter versions cannot pick one. It is also
 a second instance of the round's other lesson ([§ 877](#877)) — a failure
 reproduced in one environment and attributed to that environment is not
 diagnosed, only relocated.
+
+## 894. The CloudFront Function on every request to the site had never been run, and was serving the whole site at a second host
+
+**Decided 2026-09-02.** `infra/modules/web-stack/functions/www_redirect.js` is
+associated with **every** cache behaviour on the distribution — twelve
+`function_association` blocks in `main.tf` — so it is the first code any
+visitor, crawler or API client touches. [§ 757](#757) put it in a tsc program
+of its own (`tsconfig.cloudfront.json`, `lib: es5` because `cloudfront-js-2.0`
+is neither Node nor a browser) and that closed the hole it was filed for. It
+did not close this one: **nothing executed the function.** A typecheck cannot
+tell a redirect that fires from one that silently does not, and a grep-style
+guard cannot either. Fourteen behavioural cases against real viewer-request
+events found two defects, both of them the function failing at the one job it
+exists to do.
+
+**The host test was case-sensitive.** `host.indexOf('www.') !== 0` against the
+raw header value, so `WWW.threkir.com` fell through to `return request` and was
+**served**. A hostname is case-insensitive (RFC 9110 § 4.2.3, RFC 3986
+§ 3.2.2) — a client may send any casing, DNS still resolves it here and
+CloudFront still matches the alias — and nothing in the event contract promises
+a lowercased header *value*; only header *names* are documented as normalised.
+So the duplicate-content split the function exists to close stayed open to
+anyone who did not lowercase first, which is precisely the population a
+canonical-consolidation redirect is aimed at. The fix lowercases once, before
+both the test and the rebuilt apex, so the `Location` also advertises one
+spelling rather than echoing back `https://THREKIR.com/`.
+
+**The redirect was a 301 on every method.** A 301 says the resource moved
+permanently and says nothing about preserving the method: browsers and most
+HTTP clients rewrite a POST to a GET and drop the body, which RFC 9110
+§ 15.4.2 explicitly permits. Because the function is on every behaviour, not
+just the page ones, a `POST https://www.threkir.com/api/coach` was answered
+with a redirect that turned it into a bodiless GET — a request that neither
+works nor fails visibly. GET and HEAD keep the 301 crawlers have always seen;
+everything else now gets a **308**, the method-preserving permanent redirect,
+which carries the same permanence signal to a search engine. The status is
+chosen from the method rather than the status being widened to 308 for
+everyone, because the SEO consolidation is the reason the function exists and
+301 is the form every crawler has understood for twenty years.
+
+The suite lives beside the function (`www_redirect.test.mjs`) rather than under
+`scripts/`, and evaluates the source to pull `handler` out of the resulting
+scope — there is no module system at the edge, so there is nothing to import,
+and the same trick pins that the file really does declare a top-level
+`function handler` rather than a `const` or an `export` the runtime could not
+call. It is stdlib-only and runs as its own step in `parity-types`.
