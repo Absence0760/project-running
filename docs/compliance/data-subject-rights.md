@@ -74,6 +74,18 @@ surfaced as a failed upload rather than a short archive. Exports now
 live in their own `exports` bucket (migration `20270602_001`, 5 GiB,
 signed-URL-only, no `storage.objects` policies), which `delete-account`
 drains and the 7-day `cleanup_stale_export_blobs` sweep covers.
+**That sweep did not run.** storage-api installs a statement-level
+`protect_objects_delete` trigger refusing a direct DELETE from
+`storage.objects`, and it is present in the image both the CI-pinned and
+the workstation CLI start — so the nightly job raised on every run, even
+on a night with nothing stale, and the `data_export_jobs` expiry that
+follows it in the same call never ran either. `20270703000002` sets the
+documented escape GUC transaction-locally and makes the sweep verify its
+own post-condition, so a blocked sweep fails loudly instead of reporting
+the same zero a clean night reports ([decisions § 857](../architecture/decisions.md)).
+**Open, and an owner call:** the sweep deletes `storage.objects` ROWS,
+and that trigger exists because a row delete is not an object delete —
+whether the backing bytes are reaped is not measured here.
 **One bound is a deploy-time operator step, not code:** Supabase also
 enforces a project-level upload limit (50 MB by default) and the
 effective ceiling is the lower of the two, so until that is raised the
