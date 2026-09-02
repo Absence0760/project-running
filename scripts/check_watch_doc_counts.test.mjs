@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	cpSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -7,6 +15,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
 import {
+	DATED_LOGS,
 	DOC_FILES,
 	NOT_A_SYMBOL_COUNT,
 	REGISTRY,
@@ -21,6 +30,7 @@ import {
 	loadDocs,
 	loadSource,
 	numberOf,
+	unregisteredDocs,
 } from './check_watch_doc_counts.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -372,4 +382,25 @@ test('every NOT_A_SYMBOL_COUNT entry names a doc in DOC_FILES and carries a reas
 		assert.ok(DOC_FILES.includes(e.file), `${e.file} is not in DOC_FILES`);
 		assert.ok(e.reason.length > 40, `the exemption for "${e.text}" needs a written reason`);
 	}
+});
+
+// --- the doc set reconciles with the directory ------------------------------
+
+test('every markdown under docs/custom_watch is registered or named a dated log', () => {
+	assert.deepEqual(unregisteredDocs(readdirSync(join(ROOT, 'docs/custom_watch'))), []);
+	for (const log of DATED_LOGS) assert.ok(!DOC_FILES.includes(log), `${log} is in both lists`);
+});
+
+test('a new doc under docs/custom_watch fails the guard rather than going unread', () => {
+	assert.deepEqual(unregisteredDocs(['README.md', 'invented.md']), [
+		'docs/custom_watch/invented.md',
+	]);
+	const res = runOnCopy((dir) => {
+		writeFileSync(
+			join(dir, 'docs/custom_watch/invented.md'),
+			'# invented\n\nThe wrist holds twelve waypoints.\n',
+		);
+	});
+	assert.equal(res.status, 1);
+	assert.match(res.stderr, /invented\.md is under docs\/custom_watch but in neither DOC_FILES/);
 });

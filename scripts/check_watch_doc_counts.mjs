@@ -47,7 +47,7 @@
 //      `CI gate` aggregator's `needs:` list.
 // Unit tests: `node --test scripts/check_watch_doc_counts.test.mjs`
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -71,10 +71,41 @@ export const DOC_FILES = [
 	'docs/custom_watch/vision.md',
 	'docs/custom_watch/prototyping.md',
 	'docs/custom_watch/performance_path.md',
+	'docs/custom_watch/bom.md',
+	'docs/custom_watch/parts.md',
+	'docs/custom_watch/competitive_landscape.md',
+	'docs/custom_watch/vendor_research.md',
 	'apps/custom_watch/CLAUDE.md',
 	'apps/custom_watch/local_testing.md',
 	'CLAUDE.md',
 ];
+
+/**
+ * The dated logs, excluded on § 793's own rule: they record what was true when
+ * written, and scanning them would demand history be rewritten every time a page
+ * lands. Named rather than merely absent, so `docs/custom_watch/` reconciles
+ * exactly and a NEW doc cannot arrive unread.
+ */
+export const DATED_LOGS = ['docs/custom_watch/tier1_log.md'];
+
+/** The directory `DOC_FILES` plus `DATED_LOGS` must account for, file for file. */
+export const WATCH_DOC_DIR = 'docs/custom_watch';
+
+/**
+ * Markdown under `WATCH_DOC_DIR` that neither list claims. A doc added there and
+ * not registered is a doc whose counts go unread, which is the one hole a
+ * registry of files cannot see from the inside.
+ * @param {string[]} entries file names in the directory
+ * @returns {string[]}
+ */
+export function unregisteredDocs(entries) {
+	const known = new Set([...DOC_FILES, ...DATED_LOGS]);
+	return entries
+		.filter((f) => f.endsWith('.md'))
+		.map((f) => `${WATCH_DOC_DIR}/${f}`)
+		.filter((f) => !known.has(f))
+		.sort();
+}
 
 const CORE = 'apps/custom_watch/core/src';
 
@@ -751,6 +782,15 @@ export function check(
 
 /** @returns {Record<string, string>} */
 export function loadDocs() {
+	const stray = unregisteredDocs(readdirSync(join(ROOT, WATCH_DOC_DIR)));
+	if (stray.length > 0) {
+		throw new Error(
+			`check_watch_doc_counts: ${stray.join(', ')} is under ${WATCH_DOC_DIR} but in ` +
+				'neither DOC_FILES nor DATED_LOGS, so any firmware count it states goes ' +
+				'unread. Add it to DOC_FILES, or to DATED_LOGS if it stamps its entries ' +
+				'with a date and records what was true when written.',
+		);
+	}
 	/** @type {Record<string, string>} */
 	const out = {};
 	for (const f of DOC_FILES) out[f] = readFileSync(join(ROOT, f), 'utf-8');
