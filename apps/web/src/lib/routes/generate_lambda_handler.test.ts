@@ -23,15 +23,26 @@ process.env.PUBLIC_SUPABASE_ANON_KEY = 'anon';
 const BODY_LIMIT_BYTES = 4 * 1024;
 const REQUEST = JSON.stringify({ start: { lat: 51.5, lng: -0.1 }, targetDistanceM: 5000 });
 
-async function invoke(event: Record<string, unknown>) {
+/**
+ * What this wrapper actually returns. `LambdaFunctionURLResult` is a union that
+ * also admits a bare string, so it exposes none of these fields; the wrapper
+ * only ever returns the response object.
+ */
+interface FunctionUrlResponse {
+	statusCode: number;
+	headers?: Record<string, string>;
+	body?: string;
+}
+
+async function invoke(event: Record<string, unknown>): Promise<FunctionUrlResponse> {
 	const realError = console.error;
 	console.error = () => {};
 	try {
-		return await handler({
+		return (await handler({
 			requestContext: { http: { method: 'POST' } },
 			headers: {},
 			...event,
-		} as never);
+		} as never)) as FunctionUrlResponse;
 	} finally {
 		console.error = realError;
 	}
