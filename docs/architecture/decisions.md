@@ -14217,15 +14217,28 @@ check:script-types`**, the exact sibling of the rule § 848 already records for 
 `.test.ts` under `apps/web/src` needing `npm run check`. Two roots, two rules,
 same shape: the suite passing is not the typecheck passing.
 
-**CodeQL `js/regex/missing-regexp-anchor`, high.** A new test asserted the
-apt-sources dump with `assert.match(after, /azure\.archive\.ubuntu\.com/)`.
-CodeQL reads an unanchored host-shaped pattern as a bypassable URL check. It is
-a false positive on a log assertion — nothing here validates a URL — but the
-assertion wanted a substring rather than a pattern in the first place, so
-`after.includes('azure.archive.ubuntu.com')` costs nothing and removes the
-regex the query fires on. Anchoring was not available: the hostname appears
-inside a larger log line, so `^`/`$` would have broken the assertion, and the
-alternative of suppressing the alert leaves the next reader to rediscover why.
+**CodeQL, high — and it took two attempts, which is the instructive part.** A
+new test asserted the apt-sources dump with
+`assert.match(after, /azure\.archive\.ubuntu\.com/)`. CodeQL reads an
+unanchored host-shaped pattern as a bypassable URL check
+(`js/regex/missing-regexp-anchor`). Anchoring was not available — the hostname
+appears inside a larger log line, so `^`/`$` would have broken the assertion —
+so the first fix dropped the regex for `after.includes('azure.archive.ubuntu.com')`.
+
+That closed the alert and opened a different one at the same line:
+`js/incomplete-url-substring-sanitization`, also high, saying the host "can be
+anywhere in the URL". **CodeQL objects to the substring form exactly as it
+objects to the regex form**, so trading one for the other moves the alert
+rather than removing it. Both are false positives on a log assertion — nothing
+here validates a URL — but two high alerts in a row is the query telling you
+the shape is wrong, not that the tool is.
+
+The shape that is actually right: the dump prints ONE ORIGIN PER LINE, so split
+the log and compare a trimmed line for **equality**. That is not a search at
+all, so neither query applies, and it is the stronger assertion — it now fails
+if the origin is ever printed embedded in some longer string, which the
+substring form would have accepted. Suppressing the alert was available
+throughout and was not taken: it leaves the next reader to rediscover why.
 
 The conversion was mutation-checked against the code rather than against itself:
 deleting the mirror-dump line from `verify_chromium.sh` still fails the test.
