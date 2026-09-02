@@ -767,6 +767,61 @@ test('the guards the required gate does not wait for are named, with a reason', 
 	}
 });
 
+/// Every shell a composite action runs, and every suite that drives one. The
+/// census above walks `scripts/` only, so this directory — where two
+/// non-trivial shells live — was outside it entirely.
+/** @returns {{ shells: string[], suites: string[] }} */
+function compositeActionFiles() {
+	const root = join(CENSUS_ROOT, '.github', 'actions');
+	/** @type {string[]} */
+	const shells = [];
+	/** @type {string[]} */
+	const suites = [];
+	for (const entry of readdirSync(root, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		for (const f of readdirSync(join(root, entry.name))) {
+			const rel = `.github/actions/${entry.name}/${f}`;
+			if (f.endsWith('.sh')) shells.push(rel);
+			if (f.endsWith('.test.mjs')) suites.push(rel);
+		}
+	}
+	return { shells: shells.sort(), suites: suites.sort() };
+}
+
+// A composite action's steps run inside no job's test suite, so a shell that
+// lives there is executed by CI and by nothing else. Both of the ones this repo
+// has were extracted from an `action.yml` for exactly that reason, and both
+// turned out to have a branch that had never run (decisions § 912).
+test('every composite-action shell has a suite that drives it', () => {
+	const { shells, suites } = compositeActionFiles();
+	assert.ok(shells.length >= 2, `expected the composite-action shells, found ${shells.length}`);
+	const undriven = shells.filter(
+		(sh) => !suites.some((t) => t.replace(/\.test\.mjs$/, '.sh') === sh),
+	);
+	assert.deepEqual(
+		undriven,
+		[],
+		'a composite-action shell with no suite is executed only by CI, and its repair ' +
+			'branches only by CI on a bad day. Extract it and drive it with stubs, the way ' +
+			'wait_for_sidecars.sh and verify_chromium.sh are.',
+	);
+});
+
+// § 863, applied to the directory the census does not walk: these suites are
+// the only thing that reads those shells, so a suite the required gate does not
+// wait for leaves them read by nothing that can block a merge.
+test('every composite-action suite is run by a ci.yml job', () => {
+	const automation = allAutomation();
+	const { suites } = compositeActionFiles();
+	assert.ok(suites.length >= 2, `expected the composite-action suites, found ${suites.length}`);
+	assert.deepEqual(
+		suites.filter((p) => !invokers(p, automation).includes('ci.yml')),
+		[],
+		'the required status check is a job named `CI gate` inside ci.yml, so a suite run ' +
+			'only by another workflow — or by nothing — blocks no merge (decisions § 863).',
+	);
+});
+
 test('a NOT_A_GUARD entry that no longer exists fails rather than sitting as cover', () => {
 	const present = new Set(allScripts());
 	assert.deepEqual(

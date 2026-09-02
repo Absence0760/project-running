@@ -13472,3 +13472,27 @@ The `sudo` stub records rather than executes. Nothing in the script branches on
 what any of its calls return — the apt.conf write, the lock reap and the sources
 dump are each `|| true` or ignored — so executing them would buy no coverage and
 would write to `/etc`.
+
+## 913. The guard census walks `scripts/`, and the two composite-action shells were outside it
+
+**Decided 2026-09-02.** `check_ci_diagnostics.test.mjs` holds this repo's census
+of its own guards: every guard is invoked by some workflow, every guard has a
+suite, and every suite is run by a job the required gate waits for — the last of
+which is § 863, filed after `check_production_env.test.mjs` satisfied "run by
+some workflow" for its whole life from inside a path-filtered workflow the gate
+never waited for. The census enumerates `.mjs` files under three `scripts/`
+directories.
+
+`.github/actions/` is not one of them. Both composite-action shells —
+`start-supabase/wait_for_sidecars.sh` and, since § 912,
+`install-playwright/verify_chromium.sh` — were extracted from an `action.yml`
+precisely because a composite action's steps run inside no job's test suite, and
+each turned out to carry a branch nothing had ever executed. Their suites are
+the only thing that reads them, and nothing asserted those suites are run at
+all: deleting either `workflow-lint` step would have been silent.
+
+Two cases now cover that directory. Every `.sh` under it has a same-named
+`.test.mjs` driving it, and every such suite is run by a `ci.yml` job. Both
+count their subjects first, so a directory that stops yielding shells fails
+rather than passing over an empty walk — the § 850 shape, where the tsconfig
+coverage guard passed because its own test had emptied the tree it scanned.
