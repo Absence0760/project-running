@@ -13320,3 +13320,39 @@ region without any behaviour test noticing.
 No consumer on the wrist: the settings menu has no week-start row and
 `current_week::WeekStart` is a separate enum fed from the pushed settings frame.
 Port fidelity, and a doc claim that had become false.
+
+## 909. The required check's `needs:` list was guarded; its verdict was not
+
+**Decided 2026-09-02.** `scripts/check_ci_diagnostics.mjs` rule 3 asserts every
+job in `ci.yml` is named in the `CI gate` aggregator's `needs:` list, on the
+stated premise that the aggregator "passes when every job it needs passed OR was
+skipped". That premise is not a property of `needs:` at all — it is implemented
+in a nine-line shell block inside the gate job, and nothing read it. Three edits
+to that block leave rule 3 green and make the single required status check
+report success over a red repository, all three confirmed by mutating the
+committed `ci.yml` and re-running the guard:
+
+- delete the job's `if: always()` and GitHub SKIPS the gate on any run where a
+  needed job did not succeed — precisely the runs it exists to block — and a
+  skipped required check does not hold a merge;
+- stop reading the `needs` context (`run: echo ok`) and the exit status cannot
+  depend on what the 31 jobs did;
+- read every result and never `exit` non-zero, and the failure is printed as
+  text under a green check.
+
+Rule 4 now reads the gate job itself: the job-level `if:` must call `always()`,
+the steps must read the `needs` context, and some command must exit non-zero.
+The context read is accepted whole (`toJSON(needs)`, which covers every job at
+once and keeps covering the next one added) or per job by name, in which case
+every needed job must be named — a hand-written subset is reported with the jobs
+it cannot judge. It is read from the WHOLE step rather than its `run:` block,
+because the safe way to consume the context is the step's `env:` mapping, which
+sits above the `run:` line.
+
+The job-level `if:` is read from the block above `steps:`. A step's own
+condition sits deeper, and a rule that accepted it would have passed on a gate
+whose only `always()` was on an artifact upload.
+
+`exit 1` is a coarse proxy for "this can fail" and is deliberately coarse: the
+guard's job is to notice that the failing path was removed, not to re-derive
+what the shell block means.
