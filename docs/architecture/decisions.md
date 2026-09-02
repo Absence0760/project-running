@@ -12194,3 +12194,51 @@ and a suite that runs against two Flutter versions cannot pick one. It is also
 a second instance of the round's other lesson ([§ 877](#877)) — a failure
 reproduced in one environment and attributed to that environment is not
 diagnosed, only relocated.
+
+## 879. The Wear OS session bridge trusted its sender, so a half-formed push overwrote the one credential an out-of-range watch still had
+
+`SessionPayload.fromDataMap` on the watch read the `/supabase_session` DataMap
+with `dm.getString(k) ?: ""` on all five string fields. Every absent field
+became an empty string and the payload was constructed regardless, so
+`RunViewModel.bootstrapAuth` ran the full accept path on it:
+`sessionStore.save(stored)` wrote the blanks over the **encrypted** cached
+session — which exists precisely so a cold launch out of Bluetooth range still
+has credentials — and `applySession` then set `authed = true` and
+`authReady = true`. The wrist reported itself signed in, hid the sign-in
+affordance behind that state, and drained the upload queue under an empty
+bearer token against an empty base URL. A single malformed push destroyed
+working credentials and left no way back on the watch.
+
+The receive side had no guard because the send side has one. The phone's
+`WearAuthBridge.parseWearAuthPushArgs` refuses a push missing any of the six
+fields, and its own comment names this exact hazard — "rather than shipping a
+half-formed DataItem that the watch's SessionBridge would silently apply". That
+is a sender-side guard describing a receiver-side hole. **A receiver that trusts
+its sender has no contract, only a habit**, and this habit was already broken in
+a shipped writer: the phone parser checks presence and type, never emptiness, and
+`wear_auth_bridge.dart` sends `session.refreshToken ?? ''` — an empty string is
+a value the sender is built to produce.
+
+`fromDataMapOrNull` now grades through the pure `fromFields`, refusing when any
+of the five load-bearing strings is null or blank. Whitespace is refused with
+the absent case: a DataMap carrying `" "` is exactly as unusable and reads as
+present to a null check. `expiresAtMs` is deliberately NOT graded — 0 reads as
+NOT expired (`StoredSession.isExpired`), which is the documented contract that
+`StoredSessionTest` pins, and grading it here would reject a session the rest of
+the app calls valid.
+
+A refusal drops the event rather than emitting `Cleared`. That direction is
+load-bearing: `Cleared` runs `tearDownSession`, which wipes the unsynced-run
+queue **and its on-disk track files** (fail-closed against cross-user upload,
+`LocalRunStore.clear`), so treating a malformed push as a sign-out would be
+worse than the bug it replaces — it would convert a corrupt frame into data
+loss. A push the watch cannot read must leave the session it already holds
+exactly as it was.
+
+The extraction is what makes the contract testable at all: `DataMap` is a Google
+Play Services type no host JVM test can build, so the grading lives in a pure
+`fromFields(String?, ..., Long)` the suite calls directly, and a source-level
+guard pins that both call sites — the `TYPE_CHANGED` branch and the cold-start
+`current()` read, which applies a session on the identical path — route through
+the adapter, and that no `?: ""` coercion survives on the receive side. Same
+shape as `RoutesBridge`'s pure `parseRoutesJson` plus `RoutesBridgeWiringTest`.

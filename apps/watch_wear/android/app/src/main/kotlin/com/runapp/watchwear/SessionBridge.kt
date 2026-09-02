@@ -26,16 +26,64 @@ data class SessionPayload(
     companion object {
         const val PATH = "/supabase_session"
 
-        fun fromDataMap(dm: com.google.android.gms.wearable.DataMap): SessionPayload {
+        /// Grade a `/supabase_session` DataMap's fields into a payload, or
+        /// refuse it.
+        ///
+        /// All five strings are load-bearing: without them the watch cannot
+        /// authenticate one request. Coercing an absent field to `""` — which
+        /// is what this did — produced a payload the ViewModel accepted:
+        /// `sessionStore.save` OVERWROTE the encrypted cached session, which
+        /// is the one credential a watch out of Bluetooth range still has,
+        /// and `applySession` then set `authed = true`, hiding the sign-in
+        /// affordance behind a session that can never succeed. A partial push
+        /// destroyed working credentials and left no way back on the wrist.
+        ///
+        /// The phone's `WearAuthBridge.parseWearAuthPushArgs` refuses a
+        /// half-formed push for exactly this reason, and its own comment says
+        /// so — "rather than shipping a half-formed DataItem that the watch's
+        /// SessionBridge would silently apply". That was the whole guard: a
+        /// sender-side one. A receiver that trusts its sender has no contract,
+        /// only a habit, and the phone's own presence-and-type check passes an
+        /// EMPTY string through (`session.refreshToken ?? ''` in
+        /// `wear_auth_bridge.dart` sends one).
+        ///
+        /// Refusing is not a sign-out: a malformed push must leave the session
+        /// the watch already holds alone rather than tearing it down.
+        /// `expiresAtMs` is deliberately not graded — 0 reads as NOT expired
+        /// (`StoredSession.isExpired`), which is the documented contract.
+        internal fun fromFields(
+            accessToken: String?,
+            refreshToken: String?,
+            userId: String?,
+            baseUrl: String?,
+            anonKey: String?,
+            expiresAtMs: Long,
+        ): SessionPayload? {
+            if (accessToken.isNullOrBlank()) return null
+            if (refreshToken.isNullOrBlank()) return null
+            if (userId.isNullOrBlank()) return null
+            if (baseUrl.isNullOrBlank()) return null
+            if (anonKey.isNullOrBlank()) return null
             return SessionPayload(
-                accessToken = dm.getString("access_token") ?: "",
-                refreshToken = dm.getString("refresh_token") ?: "",
-                userId = dm.getString("user_id") ?: "",
-                baseUrl = dm.getString("base_url") ?: "",
-                anonKey = dm.getString("anon_key") ?: "",
-                expiresAtMs = dm.getLong("expires_at_ms"),
+                accessToken = accessToken,
+                refreshToken = refreshToken,
+                userId = userId,
+                baseUrl = baseUrl,
+                anonKey = anonKey,
+                expiresAtMs = expiresAtMs,
             )
         }
+
+        fun fromDataMapOrNull(
+            dm: com.google.android.gms.wearable.DataMap,
+        ): SessionPayload? = fromFields(
+            accessToken = dm.getString("access_token"),
+            refreshToken = dm.getString("refresh_token"),
+            userId = dm.getString("user_id"),
+            baseUrl = dm.getString("base_url"),
+            anonKey = dm.getString("anon_key"),
+            expiresAtMs = dm.getLong("expires_at_ms"),
+        )
     }
 }
 
@@ -63,7 +111,12 @@ class SessionBridge(context: Context) {
                 when (event.type) {
                     DataEvent.TYPE_CHANGED -> {
                         val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
-                        trySend(SessionEvent.Updated(SessionPayload.fromDataMap(dm)))
+                        // A push missing a load-bearing field is dropped, not
+                        // applied and not treated as a sign-out — see
+                        // `SessionPayload.fromFields`.
+                        SessionPayload.fromDataMapOrNull(dm)?.let {
+                            trySend(SessionEvent.Updated(it))
+                        }
                     }
                     DataEvent.TYPE_DELETED -> {
                         // Phone-side `WearAuthBridge.clear` deleted the
@@ -86,7 +139,7 @@ class SessionBridge(context: Context) {
         val buffer = dataClient.getDataItems(uri).await()
         return try {
             buffer.firstOrNull()?.let { item ->
-                SessionPayload.fromDataMap(DataMapItem.fromDataItem(item).dataMap)
+                SessionPayload.fromDataMapOrNull(DataMapItem.fromDataItem(item).dataMap)
             }
         } finally {
             buffer.release()
