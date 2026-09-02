@@ -22,15 +22,29 @@ func doCtx(t *testing.T, s *Server, ctx context.Context, method, target, body st
 }
 
 // A body past maxBodyBytes is a 400, not a 200 off a half-read stream. The cap
-// is enforced by MaxBytesReader; nothing exercised it.
+// is enforced by MaxBytesReader; nothing exercised it. Both directions are
+// asserted so the test cannot pass by rejecting everything.
 func TestCycleRejectsAnOversizeBody(t *testing.T) {
 	s, cLat, cLng := testServer(t)
-	// Valid JSON whose leading whitespace alone blows the 4 KiB cap.
-	body := strings.Repeat(" ", maxBodyBytes+1) +
-		`{"start":{"lat":` + ftoa(cLat) + `,"lng":` + ftoa(cLng) + `},"targetDistanceM":800}`
-	rec := do(t, s, http.MethodPost, "/cycle", body)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	req := `{"start":{"lat":` + ftoa(cLat) + `,"lng":` + ftoa(cLng) + `},"targetDistanceM":800}`
+
+	// Valid JSON whose leading whitespace alone blows the cap.
+	over := strings.Repeat(" ", maxBodyBytes+1) + req
+	if rec := do(t, s, http.MethodPost, "/cycle", over); rec.Code != http.StatusBadRequest {
+		t.Fatalf("oversize status = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	// The same padding one byte under the cap is served normally.
+	under := strings.Repeat(" ", maxBodyBytes-len(req)-1) + req
+	if rec := do(t, s, http.MethodPost, "/cycle", under); rec.Code != http.StatusOK {
+		t.Fatalf("under-cap status = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	// And a body that DECODES inside the cap but keeps going past it is caught
+	// by the trailing-data check rather than sailing through on a short prefix.
+	trailing := req + strings.Repeat(" ", maxBodyBytes)
+	if rec := do(t, s, http.MethodPost, "/cycle", trailing); rec.Code != http.StatusBadRequest {
+		t.Fatalf("prefix-then-oversize status = %d, want 400", rec.Code)
 	}
 }
 
