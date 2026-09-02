@@ -32,11 +32,72 @@ const MIN_SPEED_MPS = 0.4;
 // not point-to-point.
 const MIN_SEGMENT_M = 5.0;
 
-class GradeAdjustedPaceView extends WatchUi.SimpleDataField {
+// The rolling grade estimate, as its own object so the whole state machine --
+// not only the pure math under it -- is unit-testable without an
+// Activity.Info, which only the simulator can construct.
+class GradeTracker {
 
     private var mLastAltitude as Float or Null = null;
     private var mLastDistance as Float or Null = null;
     private var mGrade as Float = 0.0;
+
+    function initialize() {
+    }
+
+    function grade() as Float {
+        return mGrade;
+    }
+
+    // Forget the anchors and the grade. `elapsedDistance` restarts at 0 when
+    // the recorder resets or discards an activity, so everything measured
+    // before that belongs to a run that no longer exists. 0.0 is the honest
+    // no-information answer -- it is what the field reports before the first
+    // segment and on a watch feeding it no altitude at all.
+    function reset() as Void {
+        mLastAltitude = null;
+        mLastDistance = null;
+        mGrade = 0.0;
+    }
+
+    // Feed one (cumulative activity distance, altitude) sample. The first
+    // seeds the anchors; later ones roll the grade forward only once a real
+    // segment has been covered, because GPS altitude is jittery point to
+    // point.
+    //
+    // A NEGATIVE run means `elapsedDistance` went backwards, which is what a
+    // reset or a discard does. Re-anchoring on it is the whole point: the old
+    // anchor is now unreachably far ahead, so `run >= MIN_SEGMENT_M` would
+    // stay false until the runner had covered the entire discarded distance
+    // again -- and until then the field would go on applying the grade of a
+    // hill from a thrown-away activity, as a confident number, for the whole
+    // of the next one.
+    function onSample(dist as Float, alt as Float) as Void {
+        if (mLastDistance == null || mLastAltitude == null) {
+            mLastDistance = dist;
+            mLastAltitude = alt;
+            return;
+        }
+        var run = dist - mLastDistance;
+        if (run < 0.0) {
+            mLastDistance = dist;
+            mLastAltitude = alt;
+            mGrade = 0.0;
+            return;
+        }
+        if (run >= MIN_SEGMENT_M) {
+            var g = (alt - mLastAltitude) / run;
+            if (g > MAX_GRADE) { g = MAX_GRADE; }
+            if (g < -MAX_GRADE) { g = -MAX_GRADE; }
+            mGrade = g;
+            mLastDistance = dist;
+            mLastAltitude = alt;
+        }
+    }
+}
+
+class GradeAdjustedPaceView extends WatchUi.SimpleDataField {
+
+    private var mTracker as GradeTracker = new GradeTracker();
     private var mMetric as Boolean = true;
 
     function initialize() {
@@ -55,7 +116,17 @@ class GradeAdjustedPaceView extends WatchUi.SimpleDataField {
         updateGrade(info);
 
         var unitMeters = mMetric ? 1000.0 : 1609.344;
-        return gapPace(speed, mGrade, unitMeters);
+        return gapPace(speed, mTracker.grade(), unitMeters);
+    }
+
+    // The recorder reset or discarded the activity. Without this the tracker
+    // keeps an anchor at the old distance total, every later sample measures
+    // a negative run, and the grade freezes at whatever the discarded
+    // activity last saw -- so a field that read 3:01 on a 10% wall goes on
+    // reporting a 10% wall on the flat, with nothing on screen or in the log
+    // to say the number is stale.
+    function onTimerReset() as Void {
+        mTracker.reset();
     }
 
     // The whole speed -> grade-adjusted-pace pipeline as one pure function so
@@ -84,28 +155,16 @@ class GradeAdjustedPaceView extends WatchUi.SimpleDataField {
         return costAtGrade(g) / FLAT_COST;
     }
 
-    // Roll the grade estimate forward only when we've covered a real segment.
+    // Read the two sensors the grade needs and hand them to the tracker. A
+    // watch with no altitude signal at all simply never feeds one, and the
+    // tracker's grade stays 0.0, i.e. GAP == raw pace.
     private function updateGrade(info as Activity.Info) as Void {
         var dist = info.elapsedDistance;
         var alt = info.altitude;
         if (dist == null || alt == null) {
             return;
         }
-        if (mLastDistance == null || mLastAltitude == null) {
-            mLastDistance = dist;
-            mLastAltitude = alt;
-            return;
-        }
-        var run = dist - mLastDistance;
-        if (run >= MIN_SEGMENT_M) {
-            var rise = alt - mLastAltitude;
-            var g = rise / run;
-            if (g > MAX_GRADE) { g = MAX_GRADE; }
-            if (g < -MAX_GRADE) { g = -MAX_GRADE; }
-            mGrade = g;
-            mLastDistance = dist;
-            mLastAltitude = alt;
-        }
+        mTracker.onSample(dist, alt);
     }
 
     // Minetti 2002 5th-order fit: C(i) in J/kg/m, i fractional gradient.
