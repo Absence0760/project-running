@@ -1663,6 +1663,29 @@ left one alive, because the assertion matched the accidental `.round()` throw's
 message as well as the deliberate refusal's, and was tightened. See
 [decisions § 934](../architecture/decisions.md).
 
+### `strava_importer` and the run-screen layering contract — mobile only
+
+`stravaCsvDistanceMetres`' doc names web's `stravaDistanceMetres` as its
+mirror, and that one has guarded on `Number.isFinite` since it was written
+while this one used `?? 0` — which catches an unparseable cell, not an unusable
+one. Five cases in `apps/mobile_android/test/strava_importer_zip_test.dart`
+pin that the three non-finite literals read as 0 in both the raw-metres and the
+two-column paths, and that an unparseable cell still reads as 0 so the existing
+behaviour is not what changed. 26 → 31, one mutation.
+
+`architecture_guards_test.dart` gains two cases on the L0-L4 contract, both in
+the gap between the two guards already there. The existing pair proves the
+L0/L1 publish precedes the first effect and that each effect has its own
+try/catch; neither can see what a catch DOES, so a `catch (e) { rethrow; }` or
+an empty `catch (e) {}` kept the pair count intact while defeating the rule.
+All fourteen catches in `_onSnapshot` are clean today and nothing said so. The
+first new case reads each catch body brace-matched and requires it non-empty,
+reporting, and not rethrowing; the second requires everything after the publish
+to sit inside a try/catch, with the publish expression and the debug-only
+mirror assert as the two stated allowances — a bare statement dropped between
+two try-blocks throws straight out and skips every effect below it. 232 → 234,
+three mutations (a rethrowing catch, an empty catch, a bare statement).
+
 ### Lane totals
 
 | Suite | Command | Before | After |
@@ -1677,12 +1700,19 @@ message as well as the deliberate refusal's, and was tightened. See
 | `cycle_plan` (Dart) | `flutter test test/cycle_plan_test.dart` | 22 | 26 |
 | `e164` (Dart) | `flutter test test/e164_test.dart` | 16 | 20 |
 | `csv_run_importer` | `flutter test test/csv_run_importer_test.dart` | 22 | 34 |
+| `strava_importer_zip` | `flutter test test/strava_importer_zip_test.dart` | 26 | 31 |
+| `architecture_guards` | `flutter test test/architecture_guards_test.dart` | 232 | 234 |
 
 The web halves of the six shared pairs move by the same counts and are run with
 `npx tsx --test` from `apps/web`. The full Flutter suite was NOT run — the box
 is 14 GB and the standing rule is targeted files only, so what is claimed here
-is what was executed: the ten suites above, plus the three `import_screen`
-suites the CSV change could reach (36 pass), `packages/run_recorder`'s
-`route_helpers`, and on the web side `decisions_numbering_guard`,
-`check_parity_pair_registry`, `check_twin_claims` and its own unit test, and
-`check_shared_constants` (40 checks).
+is what was executed: the twelve suites above, plus the three `import_screen`
+suites the CSV change could reach (36 pass) and `packages/gpx_parser`'s and
+`packages/run_recorder`'s own. `flutter analyze` reports zero `warning` and
+zero `error` on both `mobile_android` and `mobile_ios` (the ~3,455 remaining
+issues are all `info`, the acknowledged tech debt). On the web side the FULL
+unit suite was run rather than a subset, because six of this lane's changes
+touch a web half: `npm run test:unit --workspace=apps/web` is 4657 pass / 0
+fail. `check_parity_pair_registry` reports 109 pairs registered identically in
+both registries, `check_twin_claims` reports 105 declarations with an EMPTY
+`KNOWN_GAPS`, and `check_shared_constants` 40 checks.
