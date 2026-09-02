@@ -15215,3 +15215,39 @@ Playwright specs asserting `/Export failed:/` describing the same surface.
 Pinned by two source guards: every `throw` out of `cloud_export.ts` is a
 `CloudExportError` whose code is one of exactly three, and `edgeFunctionExport`
 reads the envelope instead of rethrowing.
+
+## 984. A deferred restore has to know what it is restoring into
+
+`removeWearLog` on `/settings/gear` is the undo queue's only adopter. It
+captured `before = wearLogs`, dropped the row from the local list, and handed
+the queue a `restore` that put `before` back. The queue calls `restore` on undo
+OR on a commit that later fails, and those two happen at very different times:
+undo is immediate, while the commit runs when the undo window closes — by which
+point the runner may have closed that pair's modal and opened another's. The
+restore then wrote gear X's observations into gear Y's open modal. Nothing was
+destroyed (the row survived, which is the fail-safe direction) and a reload
+fixed it, so this was cosmetic — but it is the shape the SECOND adopter will
+get wrong somewhere it matters, and the queue's whole premise is that undo
+cannot fail.
+
+The queue's contract is not the problem and is unchanged, so `undo_queue.ts` ↔
+`undo_queue.dart` stay in lockstep with nothing owed on the Dart side: this is
+a property of the call site. `restore` now no-ops when the list it snapshotted
+is no longer the one on screen.
+
+Reference identity was the obvious test and is the wrong one here: `wearLogs`
+is a `$state` array, so Svelte hands back a proxy and comparing the assigned
+array with the one read back is not a comparison of the same thing. An explicit
+epoch is, and it also says what it means. Every replacement of the list goes
+through one `setWearLogs` that bumps it, and the restore compares the epoch it
+captured before deferring. A commit failure whose list has moved on is silent
+about the list and loud about the failure — `onCommitError` still raises the
+toast, which is the part the runner needs.
+
+The enforcement is the second half. A new `wearLogs = …` written in the obvious
+shape would compile, run, look right, and make the check vacuous for that path
+alone — so `gear_undo_scope.test.ts` fails the PR on any assignment outside the
+setter, on a restore that drops the epoch check, and on an epoch read at restore
+time instead of captured before the defer (a live read always equals itself).
+Source-level because the page is a `.svelte` file that `tsx --test` cannot
+execute, the same shape `strava_zip_strictness.test.ts` uses.

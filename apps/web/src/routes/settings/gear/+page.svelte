@@ -58,6 +58,19 @@
 
 	// Wear log — loaded lazily when the edit modal opens for an existing item.
 	let wearLogs = $state<GearWearLog[]>([]);
+	/// Bumped by every replacement of the list above, so a DEFERRED restore
+	/// can tell whether the list it snapshotted is still the one on screen.
+	/// The wear-log delete commits when the undo window closes, which may be
+	/// after the runner has closed this modal and opened another pair's —
+	/// and a restore that fires then writes one pair's observations under
+	/// another pair's name. Every write goes through `setWearLogs` so a new
+	/// one cannot forget to bump it; `gear_undo_scope.test.ts` pins that.
+	let wearLogsEpoch = $state(0);
+
+	function setWearLogs(next: GearWearLog[]) {
+		wearLogs = next;
+		wearLogsEpoch += 1;
+	}
 	let wearLogLoading = $state(false);
 	let wearNote = $state('');
 	let wearArea = $state<GearWearArea | ''>('');
@@ -76,7 +89,7 @@
 	async function loadWearLogs(gearId: string) {
 		wearLogLoading = true;
 		try {
-			wearLogs = await fetchGearWearLogs(gearId);
+			setWearLogs(await fetchGearWearLogs(gearId));
 		} finally {
 			wearLogLoading = false;
 		}
@@ -92,7 +105,7 @@
 				note,
 				area: wearArea || null,
 			});
-			wearLogs = [created, ...wearLogs];
+			setWearLogs([created, ...wearLogs]);
 			wearNote = '';
 			wearArea = '';
 		} catch (e) {
@@ -110,12 +123,20 @@
 	// their confirms: those cascade.
 	function removeWearLog(log: GearWearLog) {
 		const before = wearLogs;
-		wearLogs = wearLogs.filter((l) => l.id !== log.id);
+		setWearLogs(wearLogs.filter((l) => l.id !== log.id));
+		const epoch = wearLogsEpoch;
 		deferDestructive({
 			message: t('settingsGear.wearLogRemoved'),
 			commit: () => deleteGearWearLog(log.id),
 			restore: () => {
-				wearLogs = before;
+				// Undo runs immediately, so the epoch still matches and the
+				// list goes back. A failed COMMIT can arrive much later,
+				// against a list that has moved on — a different pair's
+				// modal, a reload, a note added since. The row survived
+				// either way (the fail-safe direction) and `onCommitError`
+				// still says so, so there is nothing to put back here.
+				if (wearLogsEpoch !== epoch) return;
+				setWearLogs(before);
 			},
 			onCommitError: (e) =>
 				showToast(
@@ -311,7 +332,7 @@
 		formTargetDisplay = '';
 		formNotes = '';
 		editingId = null;
-		wearLogs = [];
+		setWearLogs([]);
 		wearNote = '';
 		wearArea = '';
 		dirty.rebaseline();
@@ -325,7 +346,7 @@
 		formPurchased = g.purchased_at ?? '';
 		formTargetDisplay = metresToTargetDisplay(g.target_distance_m);
 		formNotes = g.notes ?? '';
-		wearLogs = [];
+		setWearLogs([]);
 		wearNote = '';
 		wearArea = '';
 		dirty.rebaseline();
