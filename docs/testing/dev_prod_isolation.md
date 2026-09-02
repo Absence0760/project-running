@@ -33,7 +33,7 @@ Per-toolchain loader (only Vite has a real "mode", so the mechanics differ):
 - **Wear (Gradle):** reads `.env.development` then overlays `.env.local`; release reads neither.
 - **job_worker (Go):** a stdlib `loadEnvFiles(".env.local", ".env.development")` at startup; existing env wins. Prod ships only the binary (multi-stage image), so neither file is present and Fly secrets are the sole source.
 
-The committed `.env.development` files carry only the public Supabase demo JWTs; the `gitleaks` allowlist and the `env-isolation` workflow scan them by path so a *real* key slipping in fails the build.
+The committed `.env.development` files carry only the public Supabase demo JWTs; the `gitleaks` allowlist and the `env-isolation` job in [ci.yml](../../.github/workflows/ci.yml) scan them by path so a *real* key slipping in fails the build.
 
 ## What is guarded
 
@@ -52,7 +52,7 @@ The guard ships with two enforcement points and a shared check.
 
 ### 3. Unit tests
 
-`apps/web/scripts/env_isolation.test.mjs` has 13 `node:test` cases covering loopback / prod-URL / live-key / override / multi-finding paths. Run via `node --test apps/web/scripts/env_isolation.test.mjs` (or your IDE's test runner). The CI workflow exercises it on every PR.
+`apps/web/scripts/env_isolation.test.mjs` has 19 `node:test` cases covering loopback / prod-URL / live-key / override / multi-finding paths. Run via `node --test apps/web/scripts/env_isolation.test.mjs` (or your IDE's test runner). The `env-isolation` job in `ci.yml` runs it on every non-docs PR, and the `CI gate` waits for that job ([decisions § 862](../architecture/decisions.md)) — it used to live in a path-filtered workflow of its own, which no required check waited for.
 
 ## The override (escape hatch)
 

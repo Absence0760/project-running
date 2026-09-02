@@ -282,6 +282,16 @@ export const PHOTO_BUCKETS = ['run-photos', 'route-photos', 'club-photos', 'avat
 // on creation and narrowed by `update storage.buckets set allowed_mime_types`
 // later, so the value is the LAST statement that names both the bucket and the
 // column — the same replay the function index does, one table over.
+//
+// Both failure modes THROW rather than yielding fewer sites, because this
+// entry compares with `match: 'all'` and that mode has no key coverage check:
+// a bucket the reader lost simply stops being compared, and the remaining
+// three agree with each other exactly as before. The rail-level "produced no
+// sites" guard cannot see it either — the rail is not empty. So a statement
+// that assigns the column in a shape this reader does not understand must not
+// fall back to the older statement it can read (that reports the value the
+// bucket had BEFORE the change, which is the drift), and a bucket nothing
+// resolved for must not vanish quietly.
 /** @param {SqlIndex} sql @param {readonly string[]} [buckets] @returns {Site[]} */
 export function bucketMimeSites(sql, buckets = PHOTO_BUCKETS) {
 	/** @type {Site[]} */
@@ -292,11 +302,27 @@ export function bucketMimeSites(sql, buckets = PHOTO_BUCKETS) {
 		for (const { file, sql: statement } of sql.statements) {
 			if (!/storage\.buckets/i.test(statement)) continue;
 			if (!statement.includes(`'${bucket}'`)) continue;
+			if (!/allowed_mime_types/i.test(statement)) continue;
 			const arr = /allowed_mime_types[\s\S]{0,80}?array\s*\[([^\]]*)\]/i.exec(statement);
-			if (!arr) continue;
+			if (!arr) {
+				throw new Error(
+					`check_shared_constants: ${file} sets allowed_mime_types for '${bucket}' in a ` +
+						`shape this reader does not understand (it looks for an array[…] literal). ` +
+						`Skipping it would silently report the value from an earlier migration — the ` +
+						`state before this statement, which is the drift. Teach bucketMimeSites the ` +
+						`new form.`,
+				);
+			}
 			last = { key: bucket, where: `${bucket} in ${file}`, values: sqlStringList(arr[1]) };
 		}
-		if (last !== null) out.push(last);
+		if (last === null) {
+			throw new Error(
+				`check_shared_constants: no migration sets allowed_mime_types for the '${bucket}' ` +
+					`bucket. Under match 'all' a missing bucket is not a disagreement — the other ` +
+					`buckets still agree with each other — so the rail would go blind on it silently.`,
+			);
+		}
+		out.push(last);
 	}
 	return out;
 }

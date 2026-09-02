@@ -1,13 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/catalogue_browse.dart';
+import '../lib/catalogue_fold_table.dart';
 
 /// Mirror suite for `apps/web/src/lib/segments/catalogue_browse.test.ts`.
-/// 27 tests here against web's 28: the extra web case pins the PostgREST
+/// 41 tests here against web's 42: the extra web case pins the PostgREST
 /// stringly-`numeric` coercion, which `GlobalSegmentRow.fromJson` already
 /// performs at this side's own boundary, so the Dart helper never sees a
 /// string. Its sibling — a value that does not resolve to a finite number —
 /// is covered below.
+///
+/// The `fold` group is the half that used to diverge: every case in it is one
+/// the hand-written fold table answered differently from web (decisions § 852).
+/// What binds the generated table to web's own `fold` is
+/// `apps/web/src/lib/segments/catalogue_fold_table.test.ts`, which runs web's
+/// implementation against this file's committed table.
 
 CatalogueSegment seg(
   String id, {
@@ -261,6 +268,119 @@ void main() {
       final before = ids(catalogue);
       sortCatalogue(catalogue, CatalogueSort.longest);
       expect(ids(catalogue), before);
+    });
+  });
+
+  group('fold', () {
+    // Every case below is one the hand-written table this pair used to carry
+    // got wrong: it stopped at Latin Extended-A, so 14,719 code points folded
+    // one way on web and another here (decisions § 852).
+
+    test('Vietnamese: the tone marks fold, the barred D does not', () {
+      // Latin Extended Additional, all 245 of which the old table missed. Đ is
+      // the deliberate exception in the other direction: it has no canonical
+      // decomposition, so web keeps it too.
+      expect(fold('Đèo Hải Vân'), 'đeo hai van');
+      expect(fold('Ơn Ưu'), 'on uu');
+    });
+
+    test('Greek: breathings, accents and both sigmas fold onto the letter', () {
+      expect(fold('Ἀθήνα'), 'αθηνα');
+      expect(fold('Ῥόδος'), 'ροδοσ');
+    });
+
+    test('the two sigmas fold together, so the search key is sigma-blind', () {
+      // web's toLowerCase applies Unicode's Final_Sigma rule, which made ΟΔΟΣ
+      // fold to a key the query "οδοσ" could not reach. Both sides now collapse
+      // ς onto σ (decisions § 853).
+      expect(fold('ΟΔΟΣ'), fold('οδος'));
+      expect(fold('οδοσ'), fold('οδος'));
+    });
+
+    test('pinyin tone letters fold to the bare vowel', () {
+      expect(fold('Huángshān Lǎodào'), 'huangshan laodao');
+      expect(fold('ǎǐǒǔ'), 'aiou');
+    });
+
+    test('Cyrillic accents fold', () {
+      expect(fold('Ё'), 'е');
+      expect(fold('Ї'), 'і');
+    });
+
+    test('a spacing diacritic is deleted, not kept', () {
+      // The seven inside Latin-1 itself, which web strips because they carry
+      // the Diacritic property even though they stand alone.
+      expect(fold('a´b'), 'ab');
+      expect(fold('¨¯¸·`^'), '');
+    });
+
+    test('a combining mark is dropped wherever it sits in the block', () {
+      // The old ranges covered five blocks; the property covers more.
+      expect(fold('Xī̌ān'), 'xian');
+    });
+
+    test('a case mapping Dart itself does not know still folds', () {
+      // Georgian Mtavruli. Dart's toLowerCase leaves 466 code points uppercase
+      // that web lowercases, which is why the table carries the case mapping
+      // rather than composing with String.toLowerCase.
+      expect(fold('Ⴧ'), 'ⴧ');
+    });
+
+    test('a CJK compatibility ideograph folds to its unified form', () {
+      expect(fold('\u{F900}'), '\u{8C48}');
+    });
+
+    test('a Hangul syllable decomposes to its jamo, as NFD does', () {
+      expect(
+        fold('북한산'),
+        String.fromCharCodes(
+          <int>[0x1107, 0x116E, 0x11A8, 0x1112, 0x1161, 0x11AB, 0x1109, 0x1161, 0x11AB],
+        ),
+      );
+    });
+
+    test('letters with no canonical decomposition stay unfolded', () {
+      // Folding these would invent an equivalence Unicode does not have, and
+      // web does not fold them either.
+      expect(fold('Øst Đông Straße'), 'øst đong straße');
+      expect(fold('ħŧæœðþı'), 'ħŧæœðþı');
+    });
+
+    test('folding only ever widens: an ASCII query reaches every variant', () {
+      // The property the whole helper rests on — it is applied to BOTH sides of
+      // every comparison, so anything that matched raw still matches folded.
+      const names = <String>[
+        'Đèo Hải Vân',
+        'Champs-Élysées',
+        'Huángshān',
+        'Ἀθήνα',
+      ];
+      for (final name in names) {
+        expect(fold(name).contains(fold(name)), isTrue);
+        expect(fold(name.toUpperCase()).contains(fold(name)), isTrue);
+      }
+      expect(fold('Đèo Hải Vân').contains(fold('hai')), isTrue);
+      expect(fold('Huángshān').contains(fold('huangshan')), isTrue);
+    });
+
+    test('the generated table is a well-formed parallel pair', () {
+      expect(kCatalogueFoldKeys.length, kCatalogueFoldValues.length);
+      expect(kCatalogueFoldKeys.length, greaterThan(4000));
+      for (var i = 1; i < kCatalogueFoldKeys.length; i++) {
+        expect(kCatalogueFoldKeys[i], greaterThan(kCatalogueFoldKeys[i - 1]),
+            reason: 'keys must be ascending for the binary search');
+      }
+      // The search reaches the ends of the table, not just its middle.
+      expect(fold(String.fromCharCode(kCatalogueFoldKeys.first)),
+          kCatalogueFoldValues.first);
+      expect(fold(String.fromCharCode(kCatalogueFoldKeys.last)),
+          kCatalogueFoldValues.last);
+    });
+
+    test('a name outside the table passes through untouched', () {
+      expect(fold(''), '');
+      expect(fold('central park - harlem hill'), 'central park - harlem hill');
+      expect(fold('東京 5K'), '東京 5k');
     });
   });
 }

@@ -5,6 +5,7 @@ import {
 	catalogueRegions,
 	catalogueSurfaces,
 	filterCatalogue,
+	fold,
 	sortCatalogue,
 	type CatalogueSegment,
 } from './catalogue_browse';
@@ -260,4 +261,88 @@ test('sortCatalogue: does not mutate its input', () => {
 	const before = ids(CATALOGUE);
 	sortCatalogue(CATALOGUE, 'longest');
 	assert.deepEqual(ids(CATALOGUE), before);
+});
+
+// The `fold` block below is the mirror half of the Dart suite's `fold` group.
+// Every vector in it is one the Dart twin's hand-written table answered
+// differently until decisions § 852 replaced it with a generated one; keeping
+// the two vector sets identical is what makes the pair's agreement visible.
+// What ties the generated table to THIS implementation is
+// `catalogue_fold_table.test.ts`, which runs this `fold` against it.
+
+test('fold: Vietnamese tone marks fold, the barred D does not', () => {
+	assert.equal(fold('Đèo Hải Vân'), 'đeo hai van');
+	assert.equal(fold('Ơn Ưu'), 'on uu');
+});
+
+test('fold: Greek breathings, accents and both sigmas fold onto the letter', () => {
+	assert.equal(fold('Ἀθήνα'), 'αθηνα');
+	assert.equal(fold('Ῥόδος'), 'ροδοσ');
+});
+
+test('fold: the two sigmas fold together, so the search key is sigma-blind', () => {
+	// toLowerCase applies Unicode's Final_Sigma rule, so ΟΔΟΣ used to fold to a
+	// key the query "οδοσ" could not reach — the only context-dependent step in
+	// the fold, and the one thing standing between it and a per-code-point port
+	// (decisions § 853).
+	assert.equal(fold('ΟΔΟΣ'), fold('οδος'));
+	assert.equal(fold('οδοσ'), fold('οδος'));
+});
+
+test('fold: pinyin tone letters fold to the bare vowel', () => {
+	assert.equal(fold('Huángshān Lǎodào'), 'huangshan laodao');
+	assert.equal(fold('ǎǐǒǔ'), 'aiou');
+});
+
+test('fold: Cyrillic accents fold', () => {
+	assert.equal(fold('Ё'), 'е');
+	assert.equal(fold('Ї'), 'і');
+});
+
+test('fold: a spacing diacritic is deleted, not kept', () => {
+	assert.equal(fold('a´b'), 'ab');
+	assert.equal(fold('¨¯¸·`^'), '');
+});
+
+test('fold: a combining mark is dropped wherever it sits', () => {
+	assert.equal(fold('Xī̌ān'), 'xian');
+});
+
+test('fold: a case mapping outside the older Unicode tables still folds', () => {
+	// Georgian Mtavruli. Trivial here and load-bearing on the Dart side, where
+	// the runtime's own case tables leave 466 code points uppercase — which is
+	// why the generated table carries the case mapping rather than composing
+	// with String.toLowerCase.
+	assert.equal(fold('Ⴧ'), 'ⴧ');
+});
+
+test('fold: a CJK compatibility ideograph folds to its unified form', () => {
+	assert.equal(fold('\u{F900}'), '\u{8C48}');
+});
+
+test('fold: a Hangul syllable decomposes to its jamo', () => {
+	assert.equal(
+		fold('북한산'),
+		String.fromCharCode(0x1107, 0x116e, 0x11a8, 0x1112, 0x1161, 0x11ab, 0x1109, 0x1161, 0x11ab),
+	);
+});
+
+test('fold: letters with no canonical decomposition stay unfolded', () => {
+	// Folding these would invent an equivalence Unicode does not have.
+	assert.equal(fold('Øst Đông Straße'), 'øst đong straße');
+	assert.equal(fold('ħŧæœðþı'), 'ħŧæœðþı');
+});
+
+test('fold: folding only ever widens — an ASCII query reaches every variant', () => {
+	for (const name of ['Đèo Hải Vân', 'Champs-Élysées', 'Huángshān', 'Ἀθήνα']) {
+		assert.ok(fold(name.toUpperCase()).includes(fold(name)));
+	}
+	assert.ok(fold('Đèo Hải Vân').includes(fold('hai')));
+	assert.ok(fold('Huángshān').includes(fold('huangshan')));
+});
+
+test('fold: a name outside the table passes through untouched', () => {
+	assert.equal(fold(''), '');
+	assert.equal(fold('central park - harlem hill'), 'central park - harlem hill');
+	assert.equal(fold('東京 5K'), '東京 5k');
 });

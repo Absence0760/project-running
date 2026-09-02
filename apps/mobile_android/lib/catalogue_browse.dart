@@ -10,6 +10,8 @@
 /// Pure module — no Supabase, no Flutter, no localisation.
 library;
 
+import 'catalogue_fold_table.dart';
+
 /// The `routes.surface` / `global_segments.surface` vocabulary, in the
 /// canonical order the route builder offers it. Mirrors
 /// `ENUM_VOCABULARIES.routeSurface`; both must stay in lockstep with the CHECK
@@ -47,69 +49,88 @@ class CatalogueSegment {
 /// divergence.
 enum CatalogueSort { name, shortest, longest, climb }
 
-/// Base letter for every precomposed Latin letter whose Unicode canonical
-/// decomposition is `base + combining mark`, keyed by that base.
-///
-/// Web folds by decomposing to NFD and dropping the combining marks. Dart has
-/// no normalisation in its core library, so the same class is spelled out here
-/// rather than left to a runtime that cannot do it — the discipline
-/// `gym_prs.dart`'s `kExerciseWhitespace` follows.
-///
-/// Letters with NO canonical decomposition are deliberately absent, because web
-/// keeps them too: the stroke and ligature letters (`ø`, `đ`, `ħ`, `ł`, `ŧ`,
-/// `æ`, `œ`, `ð`, `þ`, `ß`, `ı`) are base letters in their own right, and
-/// folding them would invent an equivalence NFD does not have.
-const Map<String, String> _foldGroups = <String, String>{
-  'a': 'àáâãäåāăą',
-  'c': 'çćĉċč',
-  'd': 'ď',
-  'e': 'èéêëēĕėęě',
-  'g': 'ĝğġģ',
-  'h': 'ĥ',
-  'i': 'ìíîïĩīĭį',
-  'j': 'ĵ',
-  'k': 'ķ',
-  'l': 'ĺļľ',
-  'n': 'ñńņň',
-  'o': 'òóôõöōŏő',
-  'r': 'ŕŗř',
-  's': 'śŝşš',
-  't': 'ţť',
-  'u': 'ùúûüũūŭůűų',
-  'w': 'ŵ',
-  'y': 'ýÿŷ',
-  'z': 'źżž',
-};
-
-final Map<int, int> _foldMap = <int, int>{
-  for (final entry in _foldGroups.entries)
-    for (final unit in entry.value.codeUnits) unit: entry.key.codeUnitAt(0),
-};
-
-/// Whether [unit] is a combining mark, i.e. what an already-decomposed name
-/// carries where a precomposed one carries a single letter. Dropping these is
-/// the other half of web's NFD-then-strip, so both spellings of the same place
-/// fold to the same key.
-bool _isCombiningMark(int unit) =>
-    (unit >= 0x0300 && unit <= 0x036f) ||
-    (unit >= 0x1ab0 && unit <= 0x1aff) ||
-    (unit >= 0x1dc0 && unit <= 0x1dff) ||
-    (unit >= 0x20d0 && unit <= 0x20f0) ||
-    (unit >= 0xfe20 && unit <= 0xfe2f);
-
 /// Case- and diacritic-insensitive search key. Applied to BOTH sides of every
 /// comparison, so it can only ever widen a match: anything that matched on the
 /// raw strings still matches on the folded ones. That is what lets a reader
 /// type "champs-elysees" and reach "Champs-Élysées" without a keyboard that has
 /// the accent.
+///
+/// Must answer exactly as web's `fold` — NFD, drop every code point carrying
+/// the Unicode `Diacritic` property, lowercase, collapse the Greek final sigma.
+/// Dart's core library has none of those, so the answer is READ from
+/// [kCatalogueFoldKeys] / [kCatalogueFoldValues], generated from Unicode's own
+/// data by `scripts/gen_catalogue_fold_table.mjs`. The table it replaced was
+/// hand-written and reached only as far as Latin Extended-A, which left 14,719
+/// code points folding differently from web — every Vietnamese letter, all of
+/// Greek, 57 Cyrillic, the pinyin tone letters, every Hangul syllable and the
+/// CJK compatibility ideographs (decisions § 852).
+///
+/// The table carries the case mapping too, rather than composing with
+/// [String.toLowerCase]. Dart's case tables are older than the web's — 466 code
+/// points, among them the Georgian Mtavruli capitals, Cherokee, Osage and
+/// Adlam, lowercase on web and stay uppercase here — so a fold that leaned on
+/// them would keep importing that gap. Reading the whole answer from generated
+/// data makes this side independent of the runtime's Unicode version.
+///
+/// Letters with NO canonical decomposition stay unfolded, because web keeps
+/// them too: the stroke and ligature letters (`ø`, `đ`, `ħ`, `ł`, `ŧ`, `æ`,
+/// `œ`, `ð`, `þ`, `ß`, `ı`) are base letters in their own right, and folding
+/// them would invent an equivalence Unicode does not have.
+///
+/// The one deliberate residual is canonical REORDERING. NFD sorts a run of
+/// combining marks by combining class; this walks the runes in the order they
+/// arrive. The two can only disagree on a string carrying two adjacent marks
+/// that BOTH survive the diacritic strip, in non-canonical order — which no
+/// normalised text (NFC or NFD alike, both canonically ordered) can be.
 String fold(String value) {
-  final lower = value.toLowerCase();
-  final out = <int>[];
-  for (final unit in lower.codeUnits) {
-    if (_isCombiningMark(unit)) continue;
-    out.add(_foldMap[unit] ?? unit);
+  final out = StringBuffer();
+  for (final rune in value.runes) {
+    final index = _foldIndex(rune);
+    if (index >= 0) {
+      out.write(kCatalogueFoldValues[index]);
+      continue;
+    }
+    if (_writeHangulJamo(out, rune)) continue;
+    out.writeCharCode(rune);
   }
-  return String.fromCharCodes(out);
+  return out.toString();
+}
+
+/// Position of [rune] in [kCatalogueFoldKeys], or -1. The keys are ascending,
+/// so this is a binary search — the alternative, materialising a 4,400-entry
+/// map on first use, allocates on a path a keystroke runs.
+int _foldIndex(int rune) {
+  var lo = 0;
+  var hi = kCatalogueFoldKeys.length - 1;
+  while (lo <= hi) {
+    final mid = (lo + hi) >> 1;
+    final key = kCatalogueFoldKeys[mid];
+    if (key == rune) return mid;
+    if (key < rune) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return -1;
+}
+
+/// Writes [rune]'s Hangul jamo to [out], reporting whether it was a syllable.
+///
+/// UAX #15 decomposes the 11,172 syllables arithmetically rather than by table,
+/// and none of the jamo carries a diacritic or a case, so the decomposition IS
+/// the fold. The generator asserts this reproduces NFD for every syllable, so
+/// the 11,172 rows it saves cost nothing in fidelity.
+bool _writeHangulJamo(StringBuffer out, int rune) {
+  final index = rune - kHangulSyllableBase;
+  if (index < 0 || index >= kHangulSyllableCount) return false;
+  final trail = index % kHangulTrailCount;
+  out.writeCharCode(kHangulLeadBase + index ~/ kHangulVowelTrailCount);
+  out.writeCharCode(
+    kHangulVowelBase + (index % kHangulVowelTrailCount) ~/ kHangulTrailCount,
+  );
+  if (trail != 0) out.writeCharCode(kHangulTrailBase + trail);
+  return true;
 }
 
 /// Finite numeric value of a possibly-absent column, else null.

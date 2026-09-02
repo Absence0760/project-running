@@ -447,6 +447,7 @@ const NOT_A_GUARD = new Map([
 	['scripts/shell_lex.mjs', 'a lexer, consumed by two guards'],
 	['scripts/web_icon_font.mjs', "the icon extractor, consumed by the generator and its suite"],
 	['scripts/gen_web_icon_font.mjs', 'a generator; its output is what the guard checks'],
+	['scripts/gen_catalogue_fold_table.mjs', 'a generator; its output is what the guard checks'],
 	['scripts/sync_deno_lock.mjs', 'a syncer; ci.yml runs it with --check'],
 	['scripts/dev_run_graphhopper.mjs', 'a local dev tool'],
 	['scripts/dev_run_osrm.mjs', 'a local dev tool'],
@@ -468,16 +469,35 @@ const NOT_A_GUARD = new Map([
 const OFF_THE_GATE = new Map([
 	[
 		'apps/web/scripts/check_production_env.mjs',
-		'release-web.yml at tag time, plus env-isolation.yml on a path filter — so a ' +
-			'regression to the release-build env guard reaches no required check on the PR ' +
-			'that causes it. Same shape as the bundle budget before § 775 moved it into ' +
-			'build-web.',
+		'release-web.yml at tag time, and only there — the guard is an assertion ABOUT a ' +
+			'release env (a real https Supabase host, a set anon + MapTiler key), and CI has ' +
+			'placeholders by design: `build-web` compiles against placeholder.supabase.co, ' +
+			'which this guard exists to refuse. Its CLI in ci.yml could therefore only ever ' +
+			'fail, or be inverted into an assertion that also passes when the guard crashes. ' +
+			'What the gate holds instead is its SUITE, which spawns that CLI against crafted ' +
+			'envs, in the `env-isolation` job of ci.yml (decisions § 862).',
 	],
 	[
 		'scripts/check_compliance_drift.mjs',
 		'compliance-drift.yml, deliberately advisory (COMPLIANCE_DRIFT_MODE=warn) — it ' +
 			'reports findings and never fails the job, so being off the gate is the design ' +
 			'rather than a gap.',
+	],
+]);
+
+/// Guard SUITES ci.yml does not run — the same judgement as OFF_THE_GATE, one
+/// level down. A guard can legitimately live off the required check (a release
+/// gate, an advisory sweep); its own tests measure the GUARD, which is repo
+/// source like any other, so they belong on the gate even when the guard's
+/// subject does not exist there. The one exception is a guard that is advisory
+/// end to end.
+const SUITE_OFF_THE_GATE = new Map([
+	[
+		'scripts/check_compliance_drift.test.mjs',
+		'compliance-drift.yml, alongside the advisory guard it tests — that guard never ' +
+			'fails its job (COMPLIANCE_DRIFT_MODE=warn), so neither half of the pair is ' +
+			'something a merge waits for, and moving only the suite would gate the ' +
+			'instrument while its verdict stayed advisory.',
 	],
 ]);
 
@@ -568,19 +588,35 @@ test('every guard this repo ships is invoked by some workflow', () => {
 	);
 });
 
-test("every guard's own unit suite exists and is run by some workflow", () => {
+test("every guard's own unit suite exists and is run by the required gate", () => {
 	const automation = allAutomation();
 	const guards = allScripts().filter((p) => !p.endsWith('.test.mjs') && !NOT_A_GUARD.has(p));
 	const missing = guards.filter((p) => !existsSync(join(CENSUS_ROOT, p.replace(/\.mjs$/, '.test.mjs'))));
 	assert.deepEqual(missing, [], 'a guard with no suite of its own is one nothing proves fires');
+	const suites = guards.map((p) => p.replace(/\.mjs$/, '.test.mjs'));
 	assert.deepEqual(
-		guards
-			.map((p) => p.replace(/\.mjs$/, '.test.mjs'))
-			.filter((p) => invokers(p, automation).length === 0),
+		suites.filter((p) => invokers(p, automation).length === 0),
 		[],
 		"a guard whose own tests no job runs can regress into passing over anything, and " +
 			'the guard would still report success (decisions § 711).',
 	);
+	assert.deepEqual(
+		suites.filter((p) => !SUITE_OFF_THE_GATE.has(p) && !invokers(p, automation).includes('ci.yml')),
+		[],
+		'a suite run by SOME workflow is not a suite the merge waits for. `check_production_env.test.mjs` ' +
+			'satisfied the assertion above for its whole life from inside env-isolation.yml, a ' +
+			'path-filtered workflow in no `needs:` of the `CI gate` (decisions § 863). Run it from a ' +
+			'ci.yml job, or record it in SUITE_OFF_THE_GATE with a reason.',
+	);
+	assert.deepEqual(
+		[...SUITE_OFF_THE_GATE.keys()].filter((p) => invokers(p, automation).includes('ci.yml')),
+		[],
+		'a SUITE_OFF_THE_GATE entry for a suite that ci.yml now runs is cover for nothing — delete it.',
+	);
+	for (const [path, why] of SUITE_OFF_THE_GATE) {
+		assert.ok(existsSync(join(CENSUS_ROOT, path)), `SUITE_OFF_THE_GATE names ${path}, which is gone`);
+		assert.ok(why.length > 40, `SUITE_OFF_THE_GATE's reason for ${path} has to say something`);
+	}
 });
 
 test('the guards the required gate does not wait for are named, with a reason', () => {
