@@ -14251,6 +14251,69 @@ predicate-scoped `UPDATE`s that match nothing on a healthy database — because 
 out-of-range row here is bad data, not an attack artifact, and aborting a
 production deploy on one is worse than correcting it to 0 (distance, duration)
 or to NULL (ascent, which is nullable and where NULL is the honest "unknown").
+
+## 940. A one-sided numeric bound is not a bound, and 26 of them were the only bound their column had
+
+**Decided 2026-09-02.** § 939 closed `runs`; the same question asked of the rest
+of the schema found the class rather than the instance. Every single-column
+numeric CHECK in `public` was evaluated by pulling its own `pg_get_expr` body
+out of the catalogue, substituting the column for `'NaN'`, and executing it —
+not by reading the SQL and agreeing it looked right. **26 constraints across
+eleven tables admitted NaN.** Every one of them was one-sided; every two-sided
+bound was immune for free, because its upper edge is the half NaN fails
+(`NaN <= 500` is false). That is the whole rule, and it is why the exposure
+tracked the constraint's SHAPE rather than the care taken writing it.
+
+What a NaN costs once one lands, since it is absorbing under every aggregate and
+outranks every real value in a descending sort:
+
+- `gym_sets.weight_kg` feeds `refresh_gym_workout_totals`, so one NaN set makes
+  the **derived cache** `gym_workouts.volume_kg` NaN for that workout — and
+  `docs/backend/derived_state.md`'s contract still holds, because the cache
+  faithfully equals the authoritative query. Both are NaN. A cache invariant
+  cannot save you from a poisoned input. `gym_workout_summaries.is_pr` compares
+  against `max(weight_kg)`, which NaN wins.
+- the nine `food_log` nutrient columns are summed for the day and then compared
+  against a ceiling. `NaN >= ceiling` is true, so the diary tells the runner
+  they blew past their sodium limit off a value nothing measured.
+- `recipes.servings` is a divisor and `recipe_ingredients.quantity` a
+  multiplier.
+- `challenges.goal_value` NaN makes `recompute_challenge_completion`'s
+  `value >= goal` false forever. The challenge becomes unwinnable and silent
+  about it — which is the exact defect `challenges_goal_ck` was written to
+  prevent, and whose client half (`Number.isFinite` in `checkChallengeGoal`)
+  already refused a non-finite goal. The two halves disagreed about a row that
+  could exist.
+- `segments.end_distance_m` had no bound of its own at all. `end > start` and
+  `end - start >= 100` are BOTH true for a NaN end against a real start, so the
+  pair constraints looked like they stood in for one and did not.
+
+Infinity is named only where the column can hold one: a `numeric(p, s)` refuses
+an infinite value at the type with a 22003 field overflow before any CHECK is
+consulted, so the term would be dead on a scaled column. `-Infinity` needs no
+term anywhere — every bound here has a lower edge that already excludes it.
+
+The durable half is the test, not the migration. `numeric_bounds_reject_nan_test.sql`
+re-runs the same catalogue evaluation on every pgtap run, so a bound added
+tomorrow in the one-sided shape fails the job instead of joining the list. It
+carries an **operator validation**: before it asks the real schema anything, it
+creates a table with a bare `>= 0` CHECK and requires the sweep to name that
+column as admitting NaN and Infinity. A sweep that had quietly stopped
+evaluating anything would satisfy every emptiness assertion for free, and the
+population floors alone would not catch a substitution that had become a no-op.
+A second rule covers what the first cannot reach: an expression is only
+evaluable when every column it names is substituted, so a numeric column
+appearing ONLY in a multi-column CHECK must also carry a single-column one, or
+be exempted by name with a reason. That rule is what makes `end_distance_m`'s
+absence a failure rather than a silence, and `challenges.goal_value` — whose
+bound is inherently window-relative — is the single exemption, pinned instead by
+value in `challenge_goal_check_test.sql`.
+
+Left open, and filed: 31 numeric columns in `public` carry no CHECK at all,
+including `live_run_pings.lat` / `lng` and `race_pings.lat` / `lng`, which are
+client-written and rendered on a public spectator map. That is a different
+question — what each column's honest range is — and it wants a per-column answer
+rather than a sweep.
 ## 959. Two CI failures the local verification could not have caught, and the one that was my own gap
 
 **Decided 2026-09-02.** PR #849 went up green on every suite this round ran and
