@@ -1823,3 +1823,139 @@ The one pgtap failure on this branch is `donations_status_lock_test`, which is
 the known workstation-vs-CI Supabase CLI image split (2.109.1 against CI's
 2.84.2 disagreeing about `service_role` EXECUTE on `fundraiser_totals`) and
 fails identically on the untouched base commit.
+---
+
+## Added by the #789 coverage round 32 — infra + Lambda tier (2026-09-02)
+
+### `scripts/check_infra_coverage.test.mjs` — 40 tests (15 added)
+
+A third half beside stack coverage and Lambda alarm coverage: the eighteen cache
+behaviours on the CloudFront distribution, each of which re-states by hand the
+three properties CloudFront inherits between behaviours for none of. Twelve
+fixture mutations, each the omission a nineteenth behaviour is copy-pasted into
+existence with — no `response_headers_policy_id`, no viewer-request
+`function_association`, two behaviours associating different functions, an
+`allow-all` viewer policy, a `target_origin_id` naming no declared origin, no
+`cache_policy_id`, two different response-headers policies, that shared policy
+losing its CSP and losing its `Permissions-Policy`, an origin with no OAC, and an
+origin CloudFront may reach over plaintext http. Two more require the guard to
+fail rather than pass vacuously when the behaviour list or the whole distribution
+comes back unreadable. `parseDistribution` is then run against the COMMITTED
+module and required to resolve all four fields on every behaviour, and one case
+drives the real script end to end through `execFileSync` against a copy of
+`main.tf` with the `/og/run/*` behaviour's headers policy struck off, asserting a
+non-zero exit. Mutation-checked a second time against the real Terraform outside
+the suite: six edits, six reds, each naming the behaviour or origin. See
+[decisions § 949](../architecture/decisions.md).
+
+### `scripts/check_infra_iam.test.mjs` — 41 tests (12 added)
+
+The alias half of origin reachability, plus what the parser was silently
+skipping. The fixture module gains the `aws_lambda_alias` and the `qualifier`
+lines the real one carries, so it is faithful and every case below it is a real
+mutation: a grant that drops the alias qualifier while the Function URL keeps it
+(the resource policy then covers the unqualified ARN, not the one CloudFront
+invokes — issue #590 one field over), a Function URL qualified by another
+function's alias (every alias here is named `live`, so this applies cleanly and
+serves the wrong function), and a qualifier naming an alias the module does not
+declare. Two more require a block the parser could not attribute to be REPORTED
+rather than dropped — a Function URL whose `function_name` is written another way
+was `continue`d, and one fewer loop iteration is indistinguishable from one fewer
+Lambda. Then the secret-scope rule: a `*_lambda_env` local merging the decrypted
+sops map whole, a comprehension carrying no predicate (which looks filtered and
+is not), and no sops reference at all, which must fail rather than certify a tree
+the reader stopped reading. Two closing cases assert the committed module's
+aliases, qualifiers and filters. Mutation-checked against the real Terraform as
+well: three edits, three reds. See [decisions §§ 950-951](../architecture/decisions.md).
+
+### `scripts/hcl_lex.test.mjs` — 14 tests (5 added)
+
+`nestedBlocks`, the repeated-block reader the lexer was missing — `nestedBlock`
+returns the first match and a CloudFront distribution declares eighteen cache
+behaviours and nine origins. The cases pin source order, that a global regex does
+not skip the first match, that a block which never closes stops the scan rather
+than looping, that an absent header returns nothing, and — the one that matters —
+that the scan resumes past a block's CLOSING brace, so a header nested inside a
+block it already returned is not counted twice.
+
+### `apps/web/src/lib/routes/osrm_proxy_lambda_handler.test.ts` — 11 tests (new)
+
+The third of the three API Lambda wrappers, and the last one nothing had ever
+executed. Eleven cases over what the wrapper owns and the core cannot see: the
+GET-only gate (which fails without the `Allow` header this round added), the
+`/api/routes/osrm` prefix strip shown by the status it produces (a 501 is the
+CORE's answer to an unconfigured engine, which it only reaches once the path has
+parsed, where a 400 would prove the strip did not happen), a path outside the
+prefix and a missing `rawPath` both refused by the wrapper, a malformed sub-path
+refused by the core, the hardcoded `allowDemoFallback: false` for both an unset
+and an empty `OSRM_URL` — an unconfigured deploy must refuse rather than relay
+the runner's waypoint coordinates, routinely their home, to
+`router.project-osrm.org` (issue #198) — an absent `queryStringParameters`
+substituted rather than thrown on, and the outer 503 envelope. The
+header-source case requires SILENCE as well as a 401: reading `authorization`
+instead of `x-supabase-authorization` still yields a token and GoTrue still
+answers 401, so the status alone could not tell the two apart, measured. Every
+case stops before a network call. Mutation-checked: five edits, five reds. See
+[decisions § 953](../architecture/decisions.md).
+
+### `apps/web/src/lib/share/share_lambda_handlers.test.ts` — 5 tests (new)
+
+The four share Lambda wrappers — share-run, share-route, share-recap,
+share-badge — none of which any test had ever called, and the routing contract
+between them and CloudFront. `share_run_cache_control.test.ts` says driving them
+"would require a Supabase fake"; it does not, and that sentence is why four
+request-time production handlers were only ever grepped. With the Supabase env
+absent every lookup misses, the HTML path takes its not-found branch and the PNG
+path renders its generic branded card, and nothing touches the network.
+
+The routing case reads every share `path_pattern` out of
+`infra/modules/web-stack/main.tf` rather than listing it, and requires each to be
+a path its own Lambda actually routes: a behaviour's pattern and the Lambda's
+regex are two independent spellings of one route, and a mismatch answers the
+Lambda's JSON 404, which the distribution's 404-to-`/index.html` fallback then
+renders as the SPA shell at 200. The remaining four pin what the siblings must
+agree on and no single file can show — the same five-minute plus
+stale-while-revalidate `Cache-Control` on both paths, the asymmetric not-found
+contract (a `noindex` HTML 404 for the page, a 200 PNG for the image so a social
+unfurl never renders a broken card) with the body checked for a real PNG
+signature and the `isBase64Encoded` flag a Function URL binary body needs, the
+JSON 404 for a path outside a Lambda's own two routes, and the outer 503
+envelope. Mutation-checked: five edits across four different Lambdas, five reds.
+See [decisions § 953](../architecture/decisions.md).
+
+### `apps/web/src/lib/lambda_log_hygiene.test.ts` — 5 tests (2 added)
+
+A third rule and a hole in the walk that feeds all of them. The rule: the
+identifier holding a credential may not appear in a log line's arguments, in any
+spelling. Five Lambda-reachable auth gates logged
+`tokenPrefix: accessToken.slice(0, 20) + '...'`, which for a Supabase JWT is the
+base64url header — identical for every token the project issues, so it
+identified nothing while writing bytes of a live credential into a log group
+retained for thirty days.
+
+The hole: the reachability walk followed only relative import specifiers, so a
+core reached through `$lib/x` was outside the set these rules are applied to
+(69 modules reached, three `$lib` imports naming a seventieth that was not). The
+new closure case states the property rather than naming a module — every module
+in the set resolves every import it makes into another module in the set — and
+resolves specifiers with its OWN resolver, not the walker's: the first draft
+asked the walker how to resolve an import, which agrees with the walker by
+construction, and reverting the walker to relative-only left it green.
+Mutation-checked: reverting the walker, restoring a token slice in a core, and
+adding an `event.rawPath` to osrm-proxy's log line each go red on the right case.
+See [decisions § 952](../architecture/decisions.md).
+
+### `apps/web/src/lib/security_guards.test.ts` — 88 tests (1 rewritten)
+
+`Coach Lambda Function URL is AWS_IAM-auth + CloudFront-only` was four
+`/aws_lambda_function_url[\s\S]*?authorization_type = "AWS_IAM"/`-shaped matches
+against the whole module. A lazy match across a file holding eight Function URLs,
+eight OACs and sixteen permissions says only that SOME resource somewhere has the
+property; measured, appending a ninth Function URL with
+`authorization_type = "NONE"` and a ninth permission with `principal = "*"` left
+it green. Renamed to `EVERY Lambda Function URL …` and read per resource, with a
+population floor and two properties the whole-file form could not express: every
+OAC signs `always`, and only the `InvokeFunctionUrl` grants are required to
+declare `function_url_auth_type`. Mutation-checked: five edits, five reds. The
+other ten infra assertions in this file were mutation-checked in place and all
+ten already discriminated. See [decisions § 953](../architecture/decisions.md).

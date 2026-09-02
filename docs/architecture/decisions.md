@@ -14653,3 +14653,181 @@ its own so a match from the sibling branch cannot satisfy it. Three mutations,
 each killed — the string reverted, the English copy dropped, and one translated
 locale dropped. That is the shape the other two tiers cannot have, and the
 reason they got guards instead.
+## 949. CloudFront inherits nothing between behaviours, and eighteen hand-written copies of that fact were checked by nothing
+
+The distribution carries eighteen cache behaviours — one default plus one per
+routed path — and each of them re-states, by hand, three properties that decide
+whether the path is safe: `response_headers_policy_id` (the CSP, HSTS,
+X-Frame-Options and Permissions-Policy live in that policy and nowhere else), an
+https `viewer_protocol_policy`, and the `dynamic "function_association"` that
+runs the viewer-request function redirecting a `www.` host to the apex.
+CloudFront applies a response-headers policy and an edge function PER
+BEHAVIOUR. Nothing is inherited from the default behaviour. All eighteen were
+correct, and nothing in the repo said so.
+
+A nineteenth behaviour copy-pasted without the `response_headers_policy_id`
+line answers that path with no CSP at all; one without the association serves
+the whole site at a second host on that path. Both render a page. That is
+exactly how the `www_redirect` function shipped serving `WWW.threkir.com` —
+correct config, correct code, a casing it did not cover, and a page that
+appeared.
+
+`check_infra_coverage.mjs` gains this as its third half, beside stack coverage
+and Lambda alarm coverage; all three are the same shape, a hand-maintained list
+that has to be edited for a new thing to be covered with nothing failing when it
+is not. `parseDistribution` reads the origins, the behaviours and what each
+response-headers policy actually carries. Every behaviour must name a declared
+origin, an https viewer policy, a cache policy, the same response-headers policy
+as its siblings, and the same viewer-request function; that shared policy must
+carry a `content_security_policy` block and a `Permissions-Policy` header rather
+than merely exist; every origin must be OAC-signed and https-only. A behaviour
+list that came back short fails rather than passing vacuously.
+
+`nestedBlocks` is the repeated-block reader `hcl_lex.mjs` was missing —
+`nestedBlock` returns the first, and a distribution has eighteen. It resumes past
+each block's closing brace, so a header nested inside a block it already
+returned is not counted twice.
+
+Six mutations against the real Terraform, each killed: a behaviour losing the
+headers policy, one losing the association, one going `allow-all`, an origin
+losing its OAC, an origin falling back to `http-only`, and the shared policy
+losing its CSP.
+
+## 950. The Function URL is created on the alias, so a grant without the qualifier authorises the wrong ARN
+
+Every `aws_lambda_function_url` in the web-stack module carries
+`qualifier = aws_lambda_alias.<x>.name`, so CloudFront invokes the ALIAS ARN.
+A Lambda resource policy is attached per qualifier: an `aws_lambda_permission`
+written without one covers the unqualified function and not the ARN the URL
+actually invokes. The consequence is the one issue #590 measured, one field
+over — the Function URL 403s before invocation, the distribution's
+403-to-`/index.html` fallback rewrites that into the SPA shell at 200, and the
+page renders while the Lambda never runs. All sixteen grants match today. The
+guard read `authorization_type`, `action`, `principal` and `source_arn`, and
+never the qualifier.
+
+It now also pins that the qualifier resolves to an alias OF THAT FUNCTION.
+Every alias in the module is literally named `live`, so a copy-pasted
+`aws_lambda_alias.share_recap_live` on the share-route URL applies cleanly at
+`terraform apply` and serves the wrong function rather than failing.
+
+And the parser now declares what it SKIPPED. A Function URL whose
+`function_name` is written any other way was silently `continue`d, leaving its
+auth type read by nothing — and a loop with one fewer entry is indistinguishable
+from a stack with one fewer Lambda. The count of blocks in the file must equal
+the count read, and a permission attributable to no function is reported rather
+than dropped. The fixture module gained the alias and qualifiers it was missing,
+so every mutation below it is a real mutation.
+
+## 951. The coach Lambda took the whole secrets file; its sibling already took two keys by name
+
+`local.lambda_env` was `merge(base, has_secrets ? sops.data : {})` — the entire
+decrypted `../infra-secrets/running/<env>.sops.yaml`. That file is shared:
+`GRAPHHOPPER_API_KEY` and `GRAPH_CYCLE_API_KEY` live in it for the
+generate-route Lambda, and every key it grows for any future consumer would land
+in the coach function's environment whether the handler reads it or not —
+readable by anyone who can call `GetFunctionConfiguration`, and by any
+code-execution bug in the one function in the estate that talks to a third-party
+LLM.
+
+`generate_route_lambda_env` already took exactly the two keys it uses, and its
+own comment named this env as the contrast: "ONLY those keys, not the whole
+secret bag the coach Lambda gets". So the over-grant was noticed, written down,
+and left. The narrowing is that same shape applied to the bag it was contrasting
+with: a declared `coach_secret_keys` list, filtered with the same `for … if`
+comprehension. The list is what the coach handler and its cores read out of
+`process.env`, minus the two `PUBLIC_` values that arrive as module vars. A key
+the coach needs and the list omits is an unset env, which the handler already
+answers as a tagged 503 — the fail-closed direction.
+
+`check_infra_iam.mjs` gains the rule as its eighth: no `*_lambda_env` local may
+reach the sops map except through a `for … if` filter, and a comprehension
+carrying no predicate counts as taking the file whole. A reader that stopped
+matching reports that rather than passing. This is a least-privilege rule in the
+same sense as the wildcard-Action one already there, and it is invisible in the
+same way: the Terraform reads as one tidy `merge(...)` line either way.
+
+`terraform fmt -check` is clean. Nothing here was planned or applied — this lane
+had no AWS credentials and wanted none.
+
+## 952. What may reach CloudWatch: a request field, a caught error, and now the caller's own credential
+
+Five Lambda-reachable auth gates — coach, generate-route, osrm-proxy,
+route-describe, route-request — logged
+`tokenPrefix: accessToken.slice(0, 20) + '...'` when GoTrue refused a token. For
+a Supabase JWT those twenty characters are the base64url header, byte-identical
+for every token the project ever issues, so the field identified nothing while
+writing bytes of a live credential into a log group retained for thirty days;
+Supabase's newer opaque `sb_…` keys have no such constant prefix at all. Whether
+the value even parsed as a JWT is already in the `error` the same line logs
+beside it. Dropped rather than replaced: there is no shape of the token worth
+keeping.
+
+`lambda_log_hygiene.test.ts` gains it as a third rule beside the two it already
+carried (no request field, no raw caught value): the identifier holding a
+credential may not appear in a log line's arguments, in any spelling — sliced,
+interpolated, or whole.
+
+The same file's reachability walk had a hole. It follows a Lambda entry point
+into `src/lib` so the rules bind the cores that do the logging rather than only
+the thin wrappers, and it followed only relative specifiers. Modules under
+`src/lib` import each other both ways, so a core reached through `$lib/x` was
+outside the set — running in the Lambda's process, writing to its log group,
+read by nothing. Measured before the fix: 69 modules reached, three `$lib`
+imports inside them naming a seventieth that was not.
+
+The new closure test states the property rather than naming a module: every
+module in the set resolves every import it makes into another module in the set.
+Its resolution is deliberately its OWN, not the walker's — the first draft asked
+the walker how to resolve an import, which agrees with the walker by
+construction, and reverting the walker to relative-only left it green. A test
+that cannot disagree with the thing it tests is not a test.
+
+## 953. Six of the eight production Lambda wrappers had never been executed, and the guards over them could not fail
+
+The wrappers are the only code between a Function URL event and a
+transport-agnostic core, and each owns things the core cannot see: a method
+gate, a path strip, a hardcoded config value, an outer envelope. Two of the
+eight had wrapper tests. This closes osrm-proxy and the four share Lambdas
+(share-run, share-route, share-recap, share-badge); share-entity already had
+partial coverage.
+
+`share_run_cache_control.test.ts` says driving the share Lambdas "would require
+a Supabase fake". It does not: with the Supabase env absent every lookup misses,
+the HTML path takes its not-found branch and the PNG path renders its generic
+branded card, and nothing touches the network. That sentence had stood as the
+reason four request-time production handlers were only ever grepped.
+
+Two defects fell out. The osrm-proxy wrapper's 405 carried no `Allow` header
+where both sibling wrappers send one — required by RFC 9110 15.5.6, and that
+behaviour's CloudFront `allowed_methods` include POST/PUT/PATCH/DELETE, so a
+non-GET really does reach the Lambda rather than being refused at the edge. And
+the source guard asserting the Function URLs are locked down was four
+`/aws_lambda_function_url[\s\S]*?authorization_type = "AWS_IAM"/` matches
+against the whole module — a lazy match across a file holding eight Function
+URLs, eight OACs and sixteen permissions says only that SOME resource somewhere
+has the property. Measured: appending a ninth Function URL with
+`authorization_type = "NONE"` and a ninth permission with `principal = "*"` left
+it green, which is the exact regression it names on the exact resource type it
+names. It reads per resource now, with a population floor, and expresses two
+properties the whole-file form could not: every OAC signs `always`, and only the
+`InvokeFunctionUrl` grants are required to declare `function_url_auth_type`
+(the field is invalid on the plain `InvokeFunction` ones, which is why the old
+regex could only ever check that one grant had it).
+
+The routing case is the one nothing else could state. A behaviour's
+`path_pattern` in Terraform and the path regex in the Lambda it targets are two
+independent spellings of one route, and the test reads the first out of
+`main.tf` rather than listing it: every share behaviour the module declares must
+be a path its own Lambda routes. A mismatch answers the Lambda's JSON 404, the
+distribution's 404-to-`/index.html` fallback turns that into the SPA shell at
+200, and the surface renders while the page never existed — the shape § 949 is
+also about.
+
+One case had to be strengthened after it survived its own mutation. Reading
+`authorization` instead of `x-supabase-authorization` still yields a token,
+GoTrue refuses the sigv4 signature, and the answer is the same 401 — so a
+status-only assertion could not tell the two headers apart. What separates them
+is the round trip: the wrong header spends a GoTrue call on the signature and
+logs the refusal, the right one answers before a client is built. The case
+requires silence.
