@@ -1,0 +1,35 @@
+-- `data_export_jobs` was created stating a second rail it never built.
+--
+-- 20270603_001's own comment says `authenticated` "is granted NOTHING at all,
+-- which puts this table in the same class as `deletion_audit_log`", and that
+-- "denying at the grant level as well as through RLS means a policy added by
+-- mistake still cannot reach it". It then wrote only the positive half —
+-- `grant select, insert, update, delete on data_export_jobs to service_role`
+-- — and no revoke. `deletion_audit_log`, the sibling it names, carries
+-- `revoke all ... from public, anon, authenticated` (20260917_001); so does
+-- `payment_refunds` (20270630000001). This table did not.
+--
+-- On the CLI image the workstation runs that omission is invisible: the table
+-- lands with no client privileges and the stated rail appears to exist. On the
+-- image CI and Supabase Cloud run, `alter default privileges` in `public`
+-- grants new tables to `anon` and `authenticated`, so the table shipped with
+-- all four verbs held by both — measured on CI as `anon DELETE, anon INSERT,
+-- anon SELECT, anon UPDATE, authenticated DELETE, ...`. RLS was the only thing
+-- between an anonymous caller and the export-jobs table, which is exactly the
+-- single point of failure the comment said it was avoiding.
+--
+-- Nothing is known to have been reachable through it — RLS is enabled and the
+-- table carries no policy admitting a client role — so this closes the rail the
+-- migration claimed rather than repairing an exposure. It is the same class as
+-- the anon-EXECUTE sweep in 20270626000001: a privilege withheld by assumption
+-- rather than by statement.
+--
+-- `from public, anon, authenticated` matches `deletion_audit_log` verbatim
+-- rather than `payment_refunds`' shorter `from anon, authenticated`, because
+-- the PUBLIC pseudo-role is the one an image default can move underneath us.
+revoke all on public.data_export_jobs from public, anon, authenticated;
+
+-- The positive half is restated so the two travel together and a future reader
+-- sees the whole grant surface in one place. It is a no-op against
+-- 20270603_001's grant.
+grant select, insert, update, delete on public.data_export_jobs to service_role;

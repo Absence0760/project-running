@@ -11948,3 +11948,59 @@ Two of this branch's three local pgtap failures were that one omission. The thir
 **`jobs_kind_chk` and `dispatch` are the two ends of the queue and nothing compared them.** A kind the CHECK admits with no `case` is claimed, failed as an unknown kind, retried to exhaustion and lost — indistinguishable from an outage, and the user-visible effect is that an export or a safety alert simply never happens. A `case` for a kind the CHECK forbids is dead code reading as a shipped feature. The forward direction drives `dispatch` rather than reading it, with an unroutable kind as a negative control so the assertion is shown to discriminate before it is applied; the reverse has to read the switch's labels, and a size comparison catches the duplicated `case` neither direction can see.
 
 **Every localized string the worker interpolates into is a format string, and its arity was never checked.** `fmt.Sprintf` does not fail on a mismatch — it writes the mismatch into the output, so a translator who drops one `%s` from `safety_overdue.body[0]` ships `%!(EXTRA string=15:04 UTC on 2 Jan)` into the "is my runner OK" mail a safety contact opens, and every parity check the package had passes, because those only ask whether the string is non-empty. Measured now by rendering through the real functions across all seven locales and both arms of the `overdue` / `off_route` split, which pick different paragraphs with different argument counts. The `emailShared` completeness check is reflective rather than a hand-written field list for the same reason the locale set is derived rather than restated ([§ 748](#748) / [§ 755](#755)): the list the package had named 6 of the 15 fields, so a blank `footerAccountDeleted` or `digestStatRuns` would have shipped unseen, and a sixteenth field is covered the moment it exists.
+
+## 877. `data_export_jobs` stated a grant-level rail it never wrote, and the one guard that would have seen it had been told to skip that table
+
+**Decided 2026-09-01.** Numbered 877 rather than 852 because round 29's five
+lanes hold 852-876 and were already in flight; the number is an identifier, not
+a chronology.
+
+[§ 839](#839)'s new `export_surface_contract_test` asserted that no client role
+holds any grant on `data_export_jobs`. It passed on the workstation and failed
+on CI at `have: anon DELETE, anon INSERT, anon SELECT, anon UPDATE,
+authenticated DELETE, authenticated INSERT, authenticated SELECT, authenticated
+UPDATE` against `want: ''` — all four verbs, both client roles. The test was
+right and the schema was wrong.
+
+`20270603_001` says in its own comment that `authenticated` "is granted NOTHING
+at all, which puts this table in the same class as `deletion_audit_log`", and
+that denying at the grant level as well as through RLS means a policy added by
+mistake still cannot reach it. It then wrote only the positive half — the
+`service_role` grant — and no revoke. `deletion_audit_log` carries `revoke all
+… from public, anon, authenticated` (`20260917_001`), `app_quota` carries it
+(`20261106_001`), `payment_refunds` carries it (`20270630000001`). Those are
+the four tables `role_grant_matrix_test`'s catch-all excludes as
+"intentionally service_role-only", and `data_export_jobs` was the only one of
+the four where the exclusion was the *only* thing saying so. **An exemption
+recorded an assumption, and the assumption was never measured** — the same shape
+as [§ 830](#830)'s stale exemption class, one layer up.
+
+**The workstation could not have found this, and that is the whole mechanism.**
+The two CLI images disagree about `alter default privileges` in `public`: the
+2.109.1 image the workstation runs creates the table with no client privileges,
+so the absent revoke is invisible and the stated rail appears to exist; the
+2.84.2 image CI and Supabase Cloud run grants new tables to `anon` and
+`authenticated`, so the table shipped with both roles holding full DML. [§ 840](#840), in this same round, got the mechanism exactly right one table
+over — it explains that the default privileges grant every DML verb to anon,
+authenticated AND service_role by name, which is why `payment_refunds`' bare
+revoke leaves its writer intact — and then drew the one conclusion that kept
+this gap invisible: that `20270603_001` "did not rely on that" because it argues
+in its own header that a new table inherits nothing and writes its grant out.
+Writing the grant out is not the same as not relying on the default. The header
+was an argument about what should be true, and the table inherited the client
+grants regardless.
+
+Every other note on this split ([§ 793](#793), and the round-27 anon-EXECUTE
+sweep in `20270626000001`) recorded it as a source of spurious LOCAL failures.
+This is the first time it hid a real gap in the other direction, and the lesson
+generalises: **on the grant rail, a local ACL reading is not evidence about
+production in either direction.** Only a statement in a migration is.
+
+Nothing is known to have been reachable through it. RLS is enabled on the table
+and it carries no policy admitting a client role, so the second rail was absent
+rather than breached, and `20270703000001` closes it with `deletion_audit_log`'s
+verbatim form — `from public, anon, authenticated`, including the PUBLIC
+pseudo-role, because PUBLIC is the entry an image default moves underneath us.
+The revoke is catalog-only and instant, so `migration_locks.md` does not govern
+it. The test that caught it is unchanged: it now proves the fix rather than
+recording the gap.
