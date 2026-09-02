@@ -96,8 +96,17 @@ export async function importStravaZip(
 	// insensitively and by alias. If we can't find the essentials, bail.
 	const header = rows[0];
 	const idx = indexHeader(header);
-	if (idx.id < 0 || idx.filename < 0) {
-		throw new Error('activities.csv is missing required columns (Activity ID / Filename).');
+	// The activity-type column is as required as the other two. `indexHeader`
+	// answers -1 for a header it cannot find and `row[-1]` is `undefined`, so
+	// without this every row would classify as an untyped one and `importOne`
+	// would default it to `run`: a migrant's whole history — rides, swims,
+	// yoga — imported as runs, counted as imported, with nothing said.
+	// Refusing at the header is the only place the difference between "this
+	// export names no type" and "this row's cell is blank" is still visible.
+	if (idx.id < 0 || idx.filename < 0 || idx.type < 0) {
+		throw new Error(
+			'activities.csv is missing required columns (Activity ID / Filename / Activity Type).',
+		);
 	}
 
 	// Page the dedupe read: an unbounded PostgREST SELECT caps at 1000 rows, so

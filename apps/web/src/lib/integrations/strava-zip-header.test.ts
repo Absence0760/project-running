@@ -92,3 +92,30 @@ test('explicit "Distance in Kilometers" header is km', () => {
 	assert.equal(idx.distanceIsMiles, false);
 	assert.equal(stravaDistanceMetres(['1', '10', 'a.gpx'], idx), 10000);
 });
+
+// A Strava export era that renamed or dropped the coarse "Activity Type"
+// column used to leave `type` at -1, and `row[-1]` is `undefined` — so every
+// row classified as untyped and `importOne` defaulted it to `run`. Two rails
+// close that: `type` reads "Sport Type" when the coarse column is absent, and
+// `importStravaZip` refuses a header carrying neither (pinned by
+// strava_zip_strictness.test.ts).
+test('type falls back to Sport Type when the coarse column is absent', () => {
+	const header = ['Activity ID', 'Activity Date', 'Sport Type', 'Distance', 'Filename'];
+	const idx = indexHeader(header);
+	assert.equal(idx.type, 2);
+	assert.equal(idx.stravaType, 2);
+});
+
+test('the coarse column still wins when both are present', () => {
+	const header = ['Activity ID', 'Activity Type', 'Sport Type', 'Distance', 'Filename'];
+	const idx = indexHeader(header);
+	assert.equal(idx.type, 1);
+	assert.equal(idx.stravaType, 2);
+});
+
+test('a header naming no activity type at all reports -1 rather than a usable index', () => {
+	const header = ['Activity ID', 'Activity Date', 'Distance', 'Filename'];
+	const idx = indexHeader(header);
+	assert.equal(idx.type, -1);
+	assert.equal(idx.stravaType, -1);
+});

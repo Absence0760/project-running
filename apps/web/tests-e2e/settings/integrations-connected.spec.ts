@@ -72,6 +72,29 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(stravaCard.getByTestId('strava-lookback')).toHaveValue('90');
 	});
 
+	// If this one is red on your machine and green on CI, read this before
+	// debugging the diff. Disconnect goes through the `strava-import` Edge
+	// Function on purpose (it revokes at Strava's end and wipes the vault rows
+	// rather than doing a bare DELETE), so it is the only test in this file
+	// that needs the local functions host to be able to boot a worker at all.
+	//
+	// It does NOT need Strava credentials, and the failure has nothing to do
+	// with them: `plantIntegration` writes no tokens, so `handleDisconnect`
+	// resolves an empty access token and SKIPS the deauthorize call entirely.
+	// CI's `e2e-web` job carries no Strava env either — it runs `supabase
+	// start` and never `functions serve --env-file`, and there is no committed
+	// `apps/backend/supabase/.env` — so an env-keyed auto-skip would skip on
+	// CI too and delete the coverage rather than explain the red.
+	//
+	// What actually breaks locally is the SHARED edge-runtime container: it is
+	// bind-mounted at the worktree it was started from, and once that
+	// directory has been replaced under it every invoke answers
+	// `{"code":"BOOT_ERROR"}` with a 503 — measured 2026-09-02, where the
+	// container's own log showed `failed to determine entrypoint` for
+	// strava-import, race-listings-sync and race-results-import alike. Any
+	// spec that invokes any Edge Function is red in that state, so the fix is
+	// to recreate the local stack, not to touch this file. decisions § 983's
+	// followup box in `docs/testing/test_inventory.md` carries the detail.
 	test('Disconnect Strava → confirm → card flips to disconnected + DB row gone', async ({
 		page,
 	}) => {

@@ -15457,3 +15457,230 @@ fix, adding a method gate to all five Lambdas, was not taken: it would turn
 today's OPTIONS 200 into a 405 with no way to verify from here that no client
 sends a preflight against these paths, and the coupling is better made visible
 than papered over from the wrong side.
+## 979. A missing activity-type column is a header failure, not a row that happens to be untyped
+
+`indexHeader` answers `-1` for a column it cannot find, and `row[-1]` is
+`undefined`. Every other required column is checked before the import loop
+runs; `Activity Type` was not. So an export era that renamed or dropped it
+left `idx.type === -1`, `classifyStravaRow('')` fell through the
+`t && !t.includes('run')` guard to `import`, and `importOne`'s
+`(row[idx.type] ?? 'run')` then stamped the whole file `run`. A migrant's
+five years of rides, swims and yoga would import as runs, silently, with the
+disposition counter reporting them as imported and the summary toast agreeing.
+
+The filing asked whether to make it fatal or to drop the untyped row as
+`unsupported`. Dropping is the wrong answer for this case: with the column
+absent EVERY row is untyped, so the import ends at zero imported and several
+thousand "dropped", which is a worse message than a named header failure and
+still leaves the operator guessing which column moved. Refusing at the header
+is also the only point where "this export names no activity type" and "this
+row's cell is blank" are still distinguishable — past it, both are the empty
+string. The blank cell keeps its existing lenient behaviour deliberately: on
+an export that DOES carry the column, a blank cell is a Strava artifact and
+`run` is the overwhelmingly likely truth.
+
+Two rails, because a hard refusal on its own would reject an export we could
+in fact read. `type` now falls back to `Sport Type`, which every modern export
+carries beside the coarse column and whose foot-sport values spell their family
+out (`TrailRun`, `VirtualRun`, `Walk`, `Hike`) — so the existing substring test
+reads it unchanged. The refusal fires only when the header names NEITHER. On
+every export shipped to date the coarse column is present and still wins, so
+neither rail changes any real import.
+
+`classifyStravaRow` and `indexHeader` are web-only; the mobile Strava importer
+takes a different path and does not share the defect, so nothing is owed on the
+Dart side. Pinned by three cases in `strava-zip-header.test.ts` (Sport-Type
+fallback, coarse-wins, neither-present) and a source guard in
+`strava_zip_strictness.test.ts` — `strava-zip.ts` imports supabase-js and
+cannot be executed under `tsx --test`, which is why that file's coverage has
+always been source-level.
+
+## 980. The one field the export-job normaliser cast rather than graded
+
+`cloudExportJobFromResponse`'s own doc block is about being fail-closed, and it
+is — for `status`, and for a `ready` job that arrived without a URL. `format`
+was `str(body.format) as CloudExportFormat | undefined`: a cast, so the type
+asserted a three-token vocabulary the value had never been checked against.
+A server answering `format: "zip"` produced a `CloudExportJob` whose `format`
+field claimed to be `'csv' | 'gpx' | 'backup'` and held `"zip"`.
+
+The filing described it as cosmetic on the grounds that the card renders it.
+It does not: web reads the field only as `exportJob?.format === 'gpx'` and
+`=== 'backup'`, and mobile only as `job.format == 'csv' ? 'csv' : 'zip'`, so an
+unknown token compares false on every live rail and no user-visible string
+changes either before or after this. What was actually wrong is narrower and
+worse-wearing: the field is the one place in the module where the TYPE is not
+backed by a check, so the next reader who writes an exhaustive `switch` over
+`job.format` gets a compiler's assurance the value cannot honour.
+
+Graded on both rails rather than one. `cloud_export_helpers.ts` ↔
+`export_job.dart` is a registered parity pair whose declared scope names
+`exportJobFromResponse`, and the Dart half typed `format` as a bare `String?`
+and passed it through — honest about its own type, but not the same
+normalisation. Narrowing only web would have made the two clients answer
+differently about the same body, which is exactly what the pair exists to
+prevent. An unrecognised format is dropped, not carried, and the STATUS is
+untouched: an unreadable label is no reason to refuse an archive that built.
+Mirror-tested on both sides (known tokens survive, `"zip"` and a non-string
+become absent, the status stays `ready`) and mirrored byte-identically into
+`apps/mobile_ios`.
+
+## 981. Two elevation-gain rules, one question, and the phone had already picked a side
+
+`runs/run_stats.ts`'s `elevationGainMetres` summed every upward delta.
+`routes/route_simplify.ts`'s `computeElevationGain` gates at
+`ELEVATION_GAIN_MIN_DELTA_M` (3 m) and drops its reference on a real descent.
+Both carry the dropout carry-forward, so the gate was the whole difference —
+and the run-detail "Elevation" stat used the first while the route a runner
+saves FROM that run used the second. The same track therefore claimed one
+number as a run and a materially smaller one as a route, with nothing
+anywhere explaining the drop.
+
+Measured before deciding, over a deterministic AR(1) altitude-error model
+(rho 0.98 — real altitude error drifts, it does not resample independently,
+and white noise overstates the per-sample delta badly), 1 Hz:
+
+| track | truth | ungated | gated |
+|---|---|---|---|
+| flat 30 min, barometer-grade error (sigma 1 m) | 0 m | **143 m** | 3 m |
+| 200 m climb, 30 min, same error | 200 m | 267 m | **197 m** |
+| flat 30 min, GPS altitude (sigma 8 m) | 0 m | 1140 m | 574 m |
+| 6 h ultra, 1500 m real vert, GPS altitude | 1500 m | 14112 m | 7154 m |
+| clean staircase, no error at all | 225 m | **225 m** | **225 m** |
+
+The gated rule is closer on every noisy case and identical where there is no
+noise, so the gate costs nothing on real signal. 143 metres of climb on a flat
+half-hour is not a rounding preference.
+
+The filing framed this as a product decision between gating the run stat and
+documenting the two as answering different questions. It is neither, because
+the question was already settled elsewhere: **mobile has never had a second
+rule.** `run_detail_screen.dart` computes a run's climb through the Dart
+`computeElevationGain`, so the same run has been reading 267 m on the web and
+197 m on the phone. Documenting a divergence that also crosses platforms would
+be writing down a bug.
+
+`elevationGainMetres` now delegates: guards its nullable input, calls
+`computeElevationGain`, rounds. The rule is not restated, so a future tweak to
+the gate cannot reach one surface and not the other. It was delegated rather
+than deleted because its one call site is `routes/runs/[id]/+page.svelte`,
+outside this lane's paths; deleting the adapter and importing
+`computeElevationGain` there directly — exactly what mobile does — remains the
+tidier end state and is filed. `route_simplify` is half of a registered parity
+pair and is untouched by this, so nothing is owed on the Dart side; the watch
+DOES carry a faithful port of the old ungated `run_stats` rule
+([§ 902](decisions.md)) which is now a port of an adapter, and that is filed
+for the watch lane.
+
+## 982. A donor who cannot tell "this fundraiser has ended" from "try again in a minute"
+
+`startDonationCheckout` rethrew supabase-js's `FunctionsHttpError` and the
+fundraiser page caught it and showed the fixed `fundraiser.donateFailed`, so
+no internal sentence ever reached a donor — which is why this was exempt from
+[§ 904](decisions.md)'s rule rather than a leak. What it lost was the refusal
+itself. `donations-checkout` answers `fundraiser_closed` when the campaign is
+over, `owner_cannot_take_payment` when the host has no payable Stripe account,
+`amount_too_small` / `amount_too_large`, `fundraiser_not_found`, and three
+`idempotency_*` conflicts — all of them collapsed into "Couldn't start the
+donation. Please try again.", which is advice that cannot work for four of
+those six and sends the donor round the loop again.
+
+Unwrapped with `edgeFunctionErrorCode` and mapped on the page, the same shape
+the event-register path already uses. Five new keys across all seven locale
+catalogues; the generic line stays as the fallback for the codes a donor can
+do nothing with (`checkout_failed`, `stripe_checkout_failed`, the client-bug
+400s).
+
+The guard is the interesting part. The page now compares string literals
+written in TypeScript against codes written in Deno with nothing between them
+— the same cross-language gap `edge_function_contract.test.ts` was built for
+when `events-checkout` returned `checkout_url` and its caller read `url`. So
+that file gained the refusal vocabulary too: every code the page compares must
+be one the function can actually send, and the three refusals a donor can act
+on must map to three DIFFERENT keys. This is not hypothetical rigour — the
+followup that requested this work named `host_cannot_take_payment`, a code the
+function has never returned (it is `owner_cannot_take_payment`), and a map
+written from the filing would have compiled, run, and silently never matched.
+The guard was mutation-checked with exactly that typo and fails on it.
+
+Removing `data.ts::donations-checkout` from `edge_function_error_guard.ts`'s
+exemption list is the second rail: with the unwrap reverted the guard's "no
+site rethrows unexamined" test fails, and had the exemption been left behind
+its own staleness test would have.
+
+## 983. The export failure toast was rendering a sentence about our transport
+
+The filing said neither `startDonationCheckout` nor `edgeFunctionExport` puts
+its message in front of a person, and that the export path's "message reaches a
+generic toast that reads as a generic failure either way". Half of that is
+wrong, and it is the half that matters: `settingsAccount.exportFailed` is
+`"Export failed: {error}"` and the handler interpolated `(e as Error).message`.
+So a subject asking for their own GDPR Art 20 archive read **"Export failed:
+Edge Function returned a non-2xx status code"** — supabase-js's fixed internal
+sentence, in English, whatever locale they had chosen. The exemption that let
+this stand in `edge_function_error_guard.ts` was written from the same belief.
+
+The hub rail leaked in the other direction. `throwForStatus` built
+`` `Export failed (${res.status}): ${body || 'no detail'}` `` — the Go service's
+raw response body pasted into the same slot — and its 429 branch assembled an
+English sentence no locale could translate.
+
+Both rails now answer in one closed vocabulary, `unauthorized` / `rate_limited`
+/ `export_failed`, carried on a `CloudExportError`, and the surface resolves
+each to translated copy. Unwrapping `export-data`'s envelope is not enough on
+its own: that function's `error` field carries internal English sentences
+(`run fetch failed`, `signed URL failed`) which are no more copy than the
+transport's, so only the two codes a subject can act on are kept and the rest
+is logged and generalised.
+
+The wait was preserved rather than dropped. An existing guard pinned that a
+429's window "must come from the response, not be invented", and collapsing to
+a bare code would have quietly deleted that: `CloudExportError` carries
+`retryAfterS`, read from `Retry-After` on both rails — including the Edge
+Function one, where supabase-js hands the whole `Response` over on `context` —
+and the copy renders it through `rateLimitWait`, the same localized duration
+phrase the P0001 rate-limit path uses. Only delta-seconds are parsed; the
+HTTP-date form is refused, because a wrong wait is worse than no wait.
+
+Three new keys in all seven catalogues, resolved into the EXISTING
+`exportFailed` framing key rather than replacing it — which also keeps the two
+Playwright specs asserting `/Export failed:/` describing the same surface.
+Pinned by two source guards: every `throw` out of `cloud_export.ts` is a
+`CloudExportError` whose code is one of exactly three, and `edgeFunctionExport`
+reads the envelope instead of rethrowing.
+
+## 984. A deferred restore has to know what it is restoring into
+
+`removeWearLog` on `/settings/gear` is the undo queue's only adopter. It
+captured `before = wearLogs`, dropped the row from the local list, and handed
+the queue a `restore` that put `before` back. The queue calls `restore` on undo
+OR on a commit that later fails, and those two happen at very different times:
+undo is immediate, while the commit runs when the undo window closes — by which
+point the runner may have closed that pair's modal and opened another's. The
+restore then wrote gear X's observations into gear Y's open modal. Nothing was
+destroyed (the row survived, which is the fail-safe direction) and a reload
+fixed it, so this was cosmetic — but it is the shape the SECOND adopter will
+get wrong somewhere it matters, and the queue's whole premise is that undo
+cannot fail.
+
+The queue's contract is not the problem and is unchanged, so `undo_queue.ts` ↔
+`undo_queue.dart` stay in lockstep with nothing owed on the Dart side: this is
+a property of the call site. `restore` now no-ops when the list it snapshotted
+is no longer the one on screen.
+
+Reference identity was the obvious test and is the wrong one here: `wearLogs`
+is a `$state` array, so Svelte hands back a proxy and comparing the assigned
+array with the one read back is not a comparison of the same thing. An explicit
+epoch is, and it also says what it means. Every replacement of the list goes
+through one `setWearLogs` that bumps it, and the restore compares the epoch it
+captured before deferring. A commit failure whose list has moved on is silent
+about the list and loud about the failure — `onCommitError` still raises the
+toast, which is the part the runner needs.
+
+The enforcement is the second half. A new `wearLogs = …` written in the obvious
+shape would compile, run, look right, and make the check vacuous for that path
+alone — so `gear_undo_scope.test.ts` fails the PR on any assignment outside the
+setter, on a restore that drops the epoch check, and on an epoch read at restore
+time instead of captured before the defer (a live read always equals itself).
+Source-level because the page is a `.svelte` file that `tsx --test` cannot
+execute, the same shape `strava_zip_strictness.test.ts` uses.

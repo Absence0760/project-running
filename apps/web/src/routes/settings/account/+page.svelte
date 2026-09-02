@@ -38,7 +38,12 @@
 		unsubscribeFromPush,
 		getCurrentSubscription,
 	} from '$lib/util/push';
-	import { fetchCloudExportJob, startCloudExport } from '$lib/backup/cloud_export';
+	import {
+		CloudExportError,
+		fetchCloudExportJob,
+		startCloudExport
+	} from '$lib/backup/cloud_export';
+	import { rateLimitWait } from '$lib/i18n/rate_limit_message';
 	import {
 		type CloudExportFormat,
 		type CloudExportJob,
@@ -801,7 +806,24 @@
 			showToast(m('settingsAccount.exportQueued'), 'info');
 			scheduleExportPoll(0);
 		} catch (e) {
-			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
+			// Both transports answer in one small vocabulary, so the reason is
+			// resolved to LOCALIZED copy rather than interpolated raw. This
+			// slot used to carry supabase-js's "Edge Function returned a
+			// non-2xx status code" — a sentence about our transport, in
+			// English, in front of a subject asking for their own data.
+			const code = e instanceof Error ? e.message : '';
+			const reason =
+				code === 'unauthorized'
+					? m('settingsAccount.exportReasonSignedOut')
+					: code === 'rate_limited'
+						? m('settingsAccount.exportReasonRateLimited', {
+								wait: rateLimitWait(
+									m,
+									e instanceof CloudExportError ? e.retryAfterS : null,
+								),
+							})
+						: m('settingsAccount.exportReasonServer');
+			showToast(m('settingsAccount.exportFailed', { error: reason }), 'error');
 		}
 	}
 
