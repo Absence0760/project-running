@@ -1945,9 +1945,24 @@ Mutation-checked: reverting the walker, restoring a token slice in a core, and
 adding an `event.rawPath` to osrm-proxy's log line each go red on the right case.
 See [decisions § 952](../architecture/decisions.md).
 
-### `apps/web/src/lib/security_guards.test.ts` — 88 tests (1 rewritten)
+### `apps/web/src/lib/security_guards.test.ts` — 89 tests (1 added, 1 rewritten)
 
-`Coach Lambda Function URL is AWS_IAM-auth + CloudFront-only` was four
+The added one is a three-script agreement over the estate secrets file, which
+nothing had ever read together: `sops-init.sh` writes the not-yet-wired
+placeholder token into the estate `.sops.yaml`, `secret-set.sh` writes into the
+encrypted file, and `key-rotate.sh` reads the rule back to decide which key the
+file should be under. All three must declare the same `PROJECT_SLUG`, build the
+estate path from it rather than spelling the subdirectory out, and name the same
+placeholder token — which `key-rotate.sh` must DERIVE from the slug and the env
+rather than spell, so a third env cannot be added to one script alone. It fails
+on the pre-fix source: `key-rotate.sh` anchored on `<env>/secrets` and
+`REPLACE_<ENV>_KMS_ARN`, neither of which occurs in the estate config, so both
+envs matched no rule. Mutation-checked: reverting the anchor, reverting the
+placeholder to a literal, renaming a token in `sops-init.sh` alone, one script
+disagreeing about the slug, and one spelling the subdirectory out — five edits,
+five reds.
+
+The rewritten one: `Coach Lambda Function URL is AWS_IAM-auth + CloudFront-only` was four
 `/aws_lambda_function_url[\s\S]*?authorization_type = "AWS_IAM"/`-shaped matches
 against the whole module. A lazy match across a file holding eight Function URLs,
 eight OACs and sixteen permissions says only that SOME resource somewhere has the

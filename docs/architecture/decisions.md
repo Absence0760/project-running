@@ -14719,7 +14719,7 @@ the count read, and a permission attributable to no function is reported rather
 than dropped. The fixture module gained the alias and qualifiers it was missing,
 so every mutation below it is a real mutation.
 
-## 951. The coach Lambda took the whole secrets file; its sibling already took two keys by name
+## 951. Two ways this repo addressed its secrets file wrongly: an env that took all of it, and a rotation script that found none of it
 
 `local.lambda_env` was `merge(base, has_secrets ? sops.data : {})` — the entire
 decrypted `../infra-secrets/running/<env>.sops.yaml`. That file is shared:
@@ -14749,6 +14749,41 @@ same way: the Terraform reads as one tidy `merge(...)` line either way.
 
 `terraform fmt -check` is clean. Nothing here was planned or applied — this lane
 had no AWS credentials and wanted none.
+
+The second half is `bin/key-rotate.sh`, which reads the estate
+`.sops.yaml` back to decide which key the encrypted file should be under. It
+grepped for `preview/secrets` / `prod/secrets` and recognised an unwired key by
+the token `REPLACE_<ENV>_KMS_ARN`. Both are the in-repo layout from before the
+secrets moved to the private estate repo. Neither string occurs in the estate
+config, whose rules are `^running/<env>\.sops\.yaml$` carrying a
+`KMS_RUNNING_<ENV>_ARN_PLACEHOLDER`, so BOTH envs matched no rule and the script
+died with "has unresolved KMS placeholder … run bin/sops-init.sh first" — on
+prod, whose key is fully wired, pointing the operator at a script that would
+tell them it was already resolved. Key rotation is the compromise-response path.
+It was unconditionally broken and nothing said so.
+
+Two mistakes, not one, and the second is the subtler: the VALUE of `path_regex`
+is itself a regex, so an anchor whose `\.` means "a literal dot" matches
+nothing at all against a rule that spells the dots `\.`. That is a second
+silent way to find no rule, and it fails identically to the first. The anchor is
+now built from the same `$PROJECT_SLUG/$ENV_NAME` every other script addressing
+that repo uses, tolerant of the escaping, and the three outcomes are three
+sentences — no rule matches this file, the rule is still a placeholder, the ARN
+could not be read — because collapsing them is what made a stale anchor look
+like an un-run init.
+
+Verified by running both the old and the new extraction against a fixture and
+against the real estate config: the old says unresolved-placeholder for both
+envs, the new says resolved for prod and placeholder for preview, which is that
+config's true state. Nothing was decrypted and no ARN left the machine; a
+creation-rules file is metadata.
+
+The guard is a three-script agreement: `sops-init.sh`, `secret-set.sh` and
+`key-rotate.sh` must declare the same `PROJECT_SLUG`, build the estate path from
+it rather than spelling the subdirectory out, and name the same placeholder
+token — which `key-rotate.sh` must DERIVE from the slug and the env rather than
+spell, so a third env cannot be added to one script alone. Five mutations, each
+killed.
 
 ## 952. What may reach CloudWatch: a request field, a caught error, and now the caller's own credential
 
