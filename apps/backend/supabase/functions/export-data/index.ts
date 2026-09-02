@@ -81,13 +81,10 @@ import {
 	canonicalHrUrl,
 	canonicalTrackUrl,
 	CSV_COLS,
-	csvEscape,
 	csvRow,
 	type GpxRef,
 	type RenderRunRow,
 	type RenderTrackPoint,
-	stringy,
-	xmlEscape,
 } from './render.ts';
 
 const SIGNED_URL_TTL_S = 600; // 10 minutes
