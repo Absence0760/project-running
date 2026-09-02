@@ -12358,3 +12358,43 @@ already-reviewed. They are deleted, and a third guard fails on any key the
 catalogue declares that no call site names. `formatKm` went with them — its own
 doc comment named the two km-only call sites it existed for, the notification
 and the recovery prompt, and neither is one any more.
+
+## 883. Both Wearable Data Layer contracts were pinned by a comment telling the other rail what to do
+
+The phone writes a `DataItem` at a path with a set of `DataMap` keys; the watch
+listens at a path and reads a set of keys. Two files, two apps, no shared type,
+and a mismatch that surfaces as nothing at all — a renamed path means the
+listener never fires, a renamed key reads as absent, and neither process logs a
+word. The runner sees that starring a route on the phone stopped reaching the
+wrist, or that the watch never signs in, with nothing to attribute it to.
+
+What stood in for a contract on `/saved_routes` was
+`assertTrue(src.contains("\"/saved_routes\""))` in `RoutesBridgeWiringTest`,
+under a comment reading "must match the phone-side WearRoutesBridge.kt PATH".
+That is an instruction, not an enforcement — exactly the failure
+`scripts/check_watch_wire_vectors.mjs` was written to replace on the firmware
+rails ([§ 641](#641)): rename the path on the phone and the watch suite stays
+green while the feature is dead. `/supabase_session` had no assertion of the
+kind on either side, so the six-field session wire was held together entirely
+by the two files happening to agree.
+
+`DataLayerContractTest` reads both rails and compares them: the `PATH`
+constants per bridge, and the set of keys the phone's `dataMap.put*` writes
+against the set the watch's `dm.get*` reads. The comparison is symmetric on
+purpose — a key the watch reads and the phone never writes is the same defect
+from the other end, and at runtime it is a field that is permanently absent
+rather than an error. A vacuity check comes first, because "these two sets are
+equal" is satisfied by two empty sets, which is what a regex that stopped
+matching would produce.
+
+A fifth case closes the seam between the two guards over the session's field
+list: the phone's `parseWearAuthPushArgs` validates a list of method-channel
+args and the watch (§ 879) refuses blanks in a list of DataMap fields, and a
+field added to the wire on one side alone would be validated by neither. It is
+asserted that the args the phone validates are exactly the keys the phone
+writes.
+
+The cross-tree read is the same shape `MetadataRegistryTest` (which reads
+`docs/backend/metadata.md`) and `WearRoutesFixtureTest` (a repo-root fixture)
+already use, and it runs in the `build-watch-wear` job, which is code-gated —
+so a phone-side rename, being code, runs it.
