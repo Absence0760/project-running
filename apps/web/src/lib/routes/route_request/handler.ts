@@ -335,7 +335,15 @@ export async function handleRouteRequest(
 		// Any provider failure (rate limit, timeout, 5xx, network) → 503.
 		// The NL box shows "unavailable, use the form"; the manual
 		// generator is untouched.
-		console.error('[route-request] provider call failed', e);
+		// Normalised to { message, stack } rather than handed over whole: the
+		// provider SDK's error object carries the response body, and for a
+		// 400 that body quotes the offending part of the request -- which on
+		// this endpoint is the runner's typed request and their location
+		// label. Same shape every catch in the Lambda tree uses.
+		console.error('[route-request] provider call failed', {
+			message: e instanceof Error ? e.message : String(e),
+			stack: e instanceof Error ? e.stack : undefined,
+		});
 		return json(503, { error: 'route assistant unavailable' });
 	}
 }
