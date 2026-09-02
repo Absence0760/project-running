@@ -796,6 +796,110 @@ jobs:
             exit 1
           fi
 
+  # Three checks over one subject: no production value reaches a dev build, no
+  # dev value reaches a release build, and no live value sits in a committed
+  # env file. They were a workflow of their own — env-isolation.yml, on a
+  # `pull_request` path filter — so none of them appeared in the `CI gate`
+  # aggregator's `needs:` list, which is the single required status check, and
+  # a PR that regressed the release-build env guard merged green. That is
+  # § 775's shape exactly (decisions § 862), on the guard standing between a
+  # release build and a placeholder or loopback endpoint.
+  #
+  # The path filter is deliberately NOT reproduced here. Every step is
+  # stdlib-only and install-free — no `npm ci`, no build — so running on every
+  # non-docs diff costs seconds against a run measured in tens of minutes, and
+  # the filter was already wrong in one direction: the scan below reads
+  # apps/watch_ios/WatchApp/SupabaseService.swift, which matched no path in it,
+  # so a live key pasted there was scanned by nothing. Two jobs became one, so
+  # this costs a runner slot less than what it replaces.
+  env-isolation:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    name: Env isolation (dev-env guard, release-build guard, committed env files)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # Three checks under one job name, so each says which one broke
+      # (decisions § 764): dev refuses to start against prod endpoints, release
+      # refuses to build against placeholder / loopback ones, and no committed
+      # env file carries a live value.
+      - name: env_isolation tests (dev-env guard)
+        run: |
+          if ! node --test apps/web/scripts/env_isolation.test.mjs; then
+            echo "::error::The dev-env isolation guard regressed — the check that 'npm run dev' refuses to start against a production Supabase URL. This is not the release-build guard or the committed-env-file scan; those are the other steps in this job."
+            echo "Reproduce with: node --test apps/web/scripts/env_isolation.test.mjs. The override and what it does and does not cover are in docs/testing/dev_prod_isolation.md."
+            exit 1
+          fi
+      # The guard's own CLI runs at release-web.yml tag time, where the release
+      # env it asserts about exists; CI has only placeholders, so what the gate
+      # can hold is this suite — which spawns that CLI against crafted envs.
+      # Before it was folded in here, a regression to the guard surfaced weeks
+      # later, when someone cut a release tag.
+      - name: check_production_env tests (release-build guard)
+        run: |
+          if ! node --test apps/web/scripts/check_production_env.test.mjs; then
+            echo "::error::The release-build env guard regressed — the check that a production web build refuses placeholder or loopback endpoints. This is not the dev-env guard or the committed-env-file scan; those are the other steps in this job."
+            echo "Reproduce with: node --test apps/web/scripts/check_production_env.test.mjs. The guard itself runs at tag time in release-web.yml, against the release env it asserts about."
+            exit 1
+          fi
+      - name: Committed env files carry no live values (env-example scan)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The .env.example templates AND the committed local-dev defaults
+          # (gitleaks-allowlisted in .gitleaks.toml) — both must stay free of
+          # any live key/URL. The dev defaults carry the PUBLIC Supabase local
+          # demo JWTs, which are fine; this scan catches a real one slipping in.
+          FILES=(
+            apps/web/.env.example
+            apps/backend/.env.example
+            apps/web/.env.development
+            apps/backend/.env.development
+            apps/job_worker/.env.development
+            apps/mobile_android/.env.development
+            apps/mobile_ios/.env.development
+            apps/watch_wear/android/.env.development
+            apps/watch_ios/WatchApp/SupabaseService.swift
+          )
+          errors=0
+          for f in "${FILES[@]}"; do
+            [ -f "$f" ] || continue
+            echo "Scanning $f"
+            # Live key formats — keep the regex deliberately narrow so a
+            # placeholder like 'sk_live_REPLACE_ME' (which isn't a real
+            # key) doesn't trip it. The marker is sk_live_/pk_live_
+            # followed by 24+ hex/alphanum chars.
+            if grep -E '(sk_live|pk_live)_[A-Za-z0-9]{24,}' "$f"; then
+              echo "::error file=$f::Live Stripe key pattern in committed .env.example. Replace with sk_test_/pk_test_ placeholder."
+              errors=$((errors+1))
+            fi
+            # Supabase project ref pattern is 20 lower-case letters.
+            # Match only when it's wrapped in .supabase.co (live URL).
+            if grep -E '[a-z]{20,}\.supabase\.co' "$f"; then
+              echo "::error file=$f::Live-shaped Supabase URL in committed .env.example. Replace with http://127.0.0.1:54321."
+              errors=$((errors+1))
+            fi
+            # Real Anthropic key prefix sk-ant-api03- followed by enough chars.
+            if grep -E 'sk-ant-api[0-9]+-[A-Za-z0-9_-]{64,}' "$f"; then
+              echo "::error file=$f::Anthropic API key pattern in committed .env.example. Leave the var empty."
+              errors=$((errors+1))
+            fi
+            # ALLOW_PROD_URL_IN_DEV must NEVER be set to true in a
+            # committed file — the override is for ad-hoc shell use.
+            if grep -E '^ALLOW_PROD_URL_IN_DEV\s*=\s*true' "$f"; then
+              echo "::error file=$f::ALLOW_PROD_URL_IN_DEV=true must not be committed. Remove or set to false."
+              errors=$((errors+1))
+            fi
+          done
+          if [ "$errors" -gt 0 ]; then
+            echo "::error::env-example scan found $errors live-pattern violation(s) in a committed env file. Nothing regressed in a guard — the two steps above are the guards, and they just passed; a file in this repo contains something shaped like a live key or a live Supabase URL. The annotations above name the file and what to replace it with."
+            exit 1
+          fi
+          echo "Clean."
+
   parity-matrix:
     name: Doc registry drift (parity matrix, iOS column, TS↔Dart pairs, checkboxes, watch counts)
     # Lightweight markdown audits of the registries that describe what ships
@@ -2916,6 +3020,7 @@ jobs:
       - test-graph-cycle
       - parity-types
       - build-web
+      - env-isolation
       - parity-matrix
       - watch-ble-uuids
       - watch-wire-vectors

@@ -392,7 +392,7 @@ Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, `$props`) is used throug
 
 ## CI/CD
 
-Full pipeline defined in `.github/workflows/ci.yml`. Seventeen jobs run on every PR + push to `main`:
+Full pipeline defined in `.github/workflows/ci.yml`, which is the full list. The load-bearing jobs, all of them running on every PR + push to `main`:
 
 | Job | Runner | What it does |
 |---|---|---|
@@ -401,6 +401,7 @@ Full pipeline defined in `.github/workflows/ci.yml`. Seventeen jobs run on every
 | `test-graph-cycle` | ubuntu-latest | `go vet ./...` + `go test ./...` for the `apps/graph_cycle` street-graph cycle-search sidecar |
 | `parity-types` | ubuntu-latest | migration version-key + online-safety guards, `check_pnpm_overrides.mjs` (the security pins are declared in both lockfiles and actually resolved to, [§ 730](decisions.md)), `sync_deno_lock.mjs --check` ([§ 706](decisions.md)), `check_constraint_unions.mjs`, the web TS unit suite, the four `apps/web` tsc roots + their coverage guard ([§ 749](decisions.md) / [§ 752](decisions.md)), the two repo-root tsc roots + their coverage guard (`check:script-types`, `check:cloudfront-types`, `check:tsconfig-coverage` — [§ 757](decisions.md)), then `supabase start` → `npm run gen:types:check`. Every step prints its own `::error::` — the job name covers more than type drift, so it cannot say which one broke ([decisions.md § 711](decisions.md)) |
 | `build-web` | ubuntu-latest | `npm run build --workspace=apps/web` — SvelteKit compile check, no deploy |
+| `env-isolation` | ubuntu-latest | the dev-env guard's suite (`env_isolation.test.mjs`), the release-build env guard's suite (`check_production_env.test.mjs`), and a scan of every committed `.env.example` / `.env.development` for a live Stripe / Anthropic / Supabase value. Install-free, stdlib only. Was `env-isolation.yml`, a workflow of its own on a path filter and therefore in no `needs:` of the gate ([§ 862](decisions.md)) |
 | `parity-matrix` | ubuntu-latest | `dart run scripts/check_parity_matrix.dart` (table structure + legal symbols) and `node scripts/check_parity_ios_column.mjs` (the iOS column matches the one rule the doc states for it, decisions § 739) — keeps `docs/product/parity.md` honest. Ungated: a parity.md edit is a docs-only diff, so a guard for it in a `code`-gated job would never run |
 | `build-watch-wear` | ubuntu-latest | Gradle build of `apps/watch_wear` (Compose-for-Wear smoke) |
 | `build-firmware` | ubuntu-latest | `cargo build` + clippy + host tests of `apps/custom_watch` (Rust + Embassy, `thumbv7em-none-eabihf`); build + `clippy -D warnings` run over three feature sets — default, `ble` (`--no-default-features`), and the sim set — so the off-by-default builds can't rot |
