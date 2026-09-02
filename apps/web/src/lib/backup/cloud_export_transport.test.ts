@@ -24,7 +24,7 @@ const CALLER = 'src/lib/backup/cloud_export.ts';
 const HELPERS = 'src/lib/backup/cloud_export_helpers.ts';
 
 function stripComments(s: string): string {
-	return s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+	return s.replace(/(^|[^:])\/\/[^\n]*/g, '$1').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 function read(path: string): string {

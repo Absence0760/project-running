@@ -11,7 +11,7 @@ import {
 } from '$lib/share/sitemap';
 import { listGuides } from '$lib/learn/guides';
 import { CATEGORIES } from '$lib/learn/categories';
-import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+import { siteOrigin } from '$lib/core/site_url';
 
 // Build-time sitemap. `adapter-static` runs this once during the
 // production build because of `prerender = true`; the resulting
@@ -45,7 +45,7 @@ const MAX_ENTITIES = 10_000;
 const SITEMAP_MAX_URLS = 50_000;
 
 export const GET: RequestHandler = async () => {
-	const base = env.PUBLIC_SITE_URL || DEFAULT_SITE_URL;
+	const base = siteOrigin(env.PUBLIC_SITE_URL);
 	// Tolerate a missing or unreachable Supabase instance at build
 	// time — preview / local builds shouldn't hard-fail the static
 	// build over a sitemap. Fall through to a top-level-only sitemap

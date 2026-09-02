@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+	import { siteOrigin } from '$lib/core/site_url';
 	import { onMount } from 'svelte';
 	import { fmtPace, getUnit, formatPaceNoSuffix } from '$lib/format/units.svelte';
 
@@ -86,7 +86,7 @@
 	// copy, exactly as /routes/[id], /u/[id], and /clubs/* already do. Derived
 	// from the param so it is present before any client fetch resolves.
 	let canonicalUrl = $derived(
-		buildRunShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, pageData.id)
+		buildRunShareCanonical(siteOrigin(env.PUBLIC_SITE_URL), pageData.id)
 	);
 
 	/// The OWNER's run row, with its unclipped track. Every owner-only

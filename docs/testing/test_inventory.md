@@ -2028,3 +2028,39 @@ appended ADRs.
 NOT run by this lane, and not claimed: the full Flutter workspace suite, the
 `api_client` suite (unchanged by this lane), Gradle, Playwright, and anything
 needing the local Supabase stack.
+
+## #789 round 33 — the Lambda lane (2026-09-02)
+
+Five followups closed with their pinning tests ([decisions §§ 967-971](../architecture/decisions.md)). Every test below EXECUTES the code it names; none of them is a source-text assertion except the four registers, which say so.
+
+### `apps/web/src/lib/coach/coach_lambda_handler.test.ts` — 17 tests (3 added)
+
+Two behavioural cases drive the wrapper's newly anchored dispatch. The first sends the six paths measured to be mis-routed by the old `rawPath.includes(...)` — `/api/coach/route-describe-v2`, `…/route-describeZZ`, `/api/coach/x/route-describe`, `…/route-describe/extra`, `…/route-requestX`, `…/route-request/extra` — and requires a 404 where each previously reached a sub-handler and answered its own `400`. The second pins the half the followup missed: an unknown path under the `/api/coach*` prefix no longer falls through to the coach turn, and a body past the 256 KB coach cap on such a path is refused as a missing route rather than sized against it; the three canonical paths still route, trailing slash included. The third is a **register**, not a behavioural test: it derives the expected sub-path set from the `src/routes/api/coach/` directory and compares it with the Lambda's `SUB_PATHS` table, so a fourth dev route fails the PR until the Lambda routes it. Planting `route-describe-v2` fails it by name; reverting the dispatch to `includes` fails all three.
+
+### `apps/web/src/lib/coach/coach_body.test.ts` — 13 tests (2 added)
+
+Both drive `decodeLambdaBody`. The first measures that no STRING reaches its `400 invalid body encoding` branch — six malformed base64 inputs all decode — which is the half of the followup that was right. The second measures that a non-string body does reach it and is refused 400 rather than throwing, which is why the branch was not deleted; removing the catch makes the case throw `ERR_INVALID_ARG_TYPE`. An array is pinned as the one non-string that still decodes, because `Buffer.from` reads it as a byte array.
+
+### `apps/web/src/lib/security_guards.test.ts` — 90 tests (1 added, 1 rewritten)
+
+The rewritten one is the body-cap guard, which named only `/api/coach` and now walks every `src/routes/api/**/+server.ts` and `lambda/*/src/index.ts`: a wrapper that mentions a cap must import it, must not declare it, must call `decodeLambdaBody` or `checkBodyByteLimit`, and must not spell a `… * 1024` inline. Inlining the cap in `generate-route` fails it on two counts; hand-rolling its size check fails it on the third. The added one is a guard over the guards: it walks every `.test.ts`, selects those stripping BOTH comment forms, and fails when the block strip precedes the line blank. Reverting `paged_read_guards.test.ts` to the old order fails it. Both carry population floors.
+
+### `apps/web/src/lib/share/share_lambda_handlers.test.ts` — 6 tests (1 added)
+
+Drives all five share Lambdas for the two JSON responses that declared no `cache-control`. The 404 must carry the same five-minute window as every sibling response; the 503 must be `no-store`, because caching a transient failure at the edge turns a blip into a five-minute outage. Fails in both directions — dropping the window from the 404, and giving the 503 the window.
+
+### `apps/web/src/lib/share/share_lambda_handlers.test.ts` — 8 tests (2 more added)
+
+A second pair covers what makes the five share Lambdas safe without a method gate. The first parses every `ordered_cache_behavior` block in `infra/modules/web-stack/main.tf` targeting a `lambda-share-*` origin (14 of them) and fails when one allows POST, PUT, PATCH or DELETE — the value their whole method safety rests on, which nothing had asserted. Because this lane must not edit `infra/`, that check could not be falsified by mutating its input: the check is a pure function over parsed blocks, and the second case runs it against a synthetic behaviour shaped exactly like `/api/coach*` and requires it to name that behaviour. The guard carries its own proof that it fires. See [decisions § 972](../architecture/decisions.md).
+
+### `apps/web/src/lib/core/site_url.test.ts` — 3 tests (1 added)
+
+The added one is the **register** that moved here from `lambda_site_origin.test.ts`: every `PUBLIC_SITE_URL` read under `src` and `lambda` must fold through `siteOrigin`, in either runtime's spelling. It reuses the walker the sibling default-is-spelled-once scan already had, and has a population floor of 27 reads. Reverting any one of the 22 in-app folds to `env.PUBLIC_SITE_URL || DEFAULT_SITE_URL` fails it by name — but only since the comment-stripper fix in [§ 971](../architecture/decisions.md); with the old order, reverting the fold in `runs/[id]/+page.svelte` left this file green, which is how that false pass was found.
+
+### `apps/web/src/lib/share/lambda_site_origin.test.ts` — 2 tests (1 removed)
+
+Its Lambda-only register is superseded by the wider one above; the two behavioural cases over the share head builders stay.
+
+Run by this lane and passing: the full `apps/web` unit suite via `npm run test:unit` (4684/4684), `svelte-check --tsconfig ./tsconfig.json` (0 errors), `npm run check:tsconfig-coverage`, `npm run check:script-types`, and `decisions_numbering_guard` 3/3 over the appended ADRs.
+
+NOT run by this lane, and not claimed: Playwright, any Flutter suite, and anything needing the local Supabase stack.

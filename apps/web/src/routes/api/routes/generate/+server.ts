@@ -10,14 +10,10 @@
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-import { handleGenerate } from '$lib/routes/generate/handler';
+import { GENERATE_BODY_LIMIT_BYTES, handleGenerate } from '$lib/routes/generate/handler';
+import { checkBodyByteLimit } from '$lib/coach/body';
 
 export const prerender = false;
-
-// Bound on the inbound body. The only fields are a start coordinate, a target
-// distance, and an optional seed count — a few dozen bytes. 4 KB is generous
-// and stops a malformed client from streaming a large body into JSON.parse.
-const BODY_LIMIT_BYTES = 4 * 1024;
 
 function json(status: number, body: unknown): Response {
 	return new Response(JSON.stringify(body), {
@@ -28,7 +24,7 @@ function json(status: number, body: unknown): Response {
 
 export const POST: RequestHandler = async ({ request }) => {
 	const rawArr = await request.arrayBuffer();
-	if (rawArr.byteLength > BODY_LIMIT_BYTES) {
+	if (!checkBodyByteLimit(rawArr, GENERATE_BODY_LIMIT_BYTES).ok) {
 		return json(413, { error: 'request body too large' });
 	}
 	let rawBody: unknown;

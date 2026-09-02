@@ -23,12 +23,11 @@
 // GeoJSON line, so the simple LambdaFunctionURLResult shape is enough.
 
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
-import { Buffer } from 'node:buffer';
-import { handleGenerate } from '../../../src/lib/routes/generate/handler';
-
-// Bound on the inbound body — only a coordinate + distance + optional seed
-// count, a few dozen bytes. Mirrors the dev wrapper's cap.
-const BODY_LIMIT_BYTES = 4 * 1024;
+import {
+	GENERATE_BODY_LIMIT_BYTES,
+	handleGenerate,
+} from '../../../src/lib/routes/generate/handler';
+import { decodeLambdaBody } from '../../../src/lib/coach/body';
 
 function json(statusCode: number, body: unknown): LambdaFunctionURLResult {
 	return {
@@ -57,15 +56,26 @@ export const handler = async (
 				body: JSON.stringify({ error: 'method not allowed' }),
 			};
 		}
-		const raw = event.body ?? '';
-		const decoded = event.isBase64Encoded === true ? Buffer.from(raw, 'base64') : Buffer.from(raw, 'utf-8');
-		if (decoded.byteLength > BODY_LIMIT_BYTES) {
-			return json(413, { error: 'request body too large' });
+		// `decodeLambdaBody`, not a private Buffer + byteLength pair: the coach's
+		// two wrappers once diverged on exactly that, a UTF-16 `length` check
+		// against a byte cap, and let a multi-byte payload roughly 3x the cap
+		// through. One decoder, one cap, both wrappers (decisions § 968).
+		const decoded = decodeLambdaBody(
+			event.body,
+			event.isBase64Encoded === true,
+			GENERATE_BODY_LIMIT_BYTES,
+		);
+		if (!decoded.ok) {
+			// The shared sentinel says `request too large`; this endpoint has
+			// always answered `request body too large` and its own test pins it.
+			return json(
+				decoded.status,
+				{ error: decoded.status === 413 ? 'request body too large' : decoded.error },
+			);
 		}
 		let rawBody: unknown;
 		try {
-			const text = decoded.toString('utf-8');
-			rawBody = text.length === 0 ? null : JSON.parse(text);
+			rawBody = decoded.body.length === 0 ? null : JSON.parse(decoded.body);
 		} catch {
 			return json(400, { error: 'invalid JSON' });
 		}

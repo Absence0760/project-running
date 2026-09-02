@@ -10,13 +10,9 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { handleRouteRequest } from '$lib/routes/route_request/handler';
-import { checkBodyByteLimit } from '$lib/coach/body';
+import { checkBodyByteLimit, ROUTE_REQUEST_BODY_LIMIT_BYTES } from '$lib/coach/body';
 
 export const prerender = false;
-
-// A route-request body is a short NL string + an optional location label.
-// 16 KB is generous and bounds a hostile caller well below the coach cap.
-const ROUTE_REQUEST_BODY_LIMIT_BYTES = 16 * 1024;
 
 export const POST: RequestHandler = async ({ request }) => {
 	const rawArr = await request.arrayBuffer();

@@ -15249,3 +15249,211 @@ Measured before writing it: all three rails parse to the same five keys, so the
 previous round's hand check was right and this closes a future gap rather than a
 live defect. The Dart rail is read at `apps/mobile_android/lib` — the twin's
 canonical copy per § 39 — so reading one reads both.
+## 967. The coach Lambda dispatched sub-paths by substring, so the prod path table and the dev route table disagreed about which paths exist
+
+`apps/web/lambda/coach/src/index.ts` chose its sub-handler with
+`rawPath.includes('/route-describe')` and `rawPath.includes('/route-request')`,
+against a dev route table that is exact — `src/routes/api/coach/route-describe/
++server.ts` answers `/api/coach/route-describe` and SvelteKit 404s anything
+else. Driven through the wrapper, every one of these reached a sub-handler in
+production and answered its own `400 invalid route …` where dev answers 404:
+`/api/coach/route-describe-v2`, `/api/coach/route-describeZZ`,
+`/api/coach/x/route-describe`, `/api/coach/route-describe/extra`,
+`/api/coach/route-requestX`, `/api/coach/route-request/extra`.
+
+Not exploitable with the two sub-paths shipped today, and the followup that
+filed it said so: both are Pro-gated and carry a **smaller** body cap (32 KB /
+16 KB) than the coach path's 256 KB, so a mismatch lands a caller on a stricter
+handler. It becomes a live defect the moment a third sub-path's name contains
+an existing one — the first `includes` shadows it in production while dev routes
+both, which is invisible locally because SvelteKit runs the dev table.
+
+Dispatch is now an anchored full-path match, the house shape every share Lambda
+already uses (`/^\/share\/run\/([^/]+)\/?$/`). The measurement also surfaced the
+half the filing did not: a path under the `/api/coach*` prefix that neither
+table declares used to fall THROUGH both `includes` tests to the coach core,
+spending an auth round-trip and a daily-quota increment on a path that does not
+exist — and sizing its body against the coach's 256 KB rather than the smaller
+cap a `/route-…` name implies. That is now a 404, matching dev. Every real
+caller uses one of the three canonical paths, so nothing legitimate moved.
+
+The guard that keeps it closed derives the expected sub-path set from the dev
+route DIRECTORY rather than from a second hand-written list, so adding a route
+under `src/routes/api/coach/` fails the PR until the Lambda routes it. Planting
+`route-describe-v2` — the exact name the old dispatch would have shadowed —
+fails it by name.
+
+## 968. `body.ts` ended one wrapper's copy of a body cap; the guard that pinned it named only the coach, so three of the four endpoints kept theirs
+
+`apps/web/src/lib/coach/body.ts` exists because the coach's two wrappers once
+diverged on `bodyStr.length` (UTF-16 code units) against a byte cap, letting a
+multi-byte payload roughly 3x the cap through. The fix put one constant and one
+helper there — and the guard that pinned it, `security_guards.test.ts`'s "Coach
+endpoint enforces a 256 KB body cap on both wrappers", named the coach PATH.
+The same one-copy-per-wrapper shape therefore sat untouched on three of the four
+endpoints that cap a body, for as long:
+
+| endpoint | dev wrapper | prod Lambda |
+|---|---|---|
+| `/api/coach` | imported | imported |
+| `/api/coach/route-describe` | local `= 32 * 1024` | bare `32 * 1024` |
+| `/api/coach/route-request` | local `= 16 * 1024` | bare `16 * 1024` |
+| `/api/routes/generate` | local `= 4 * 1024` | local `= 4 * 1024`, plus a private `Buffer.from` + `byteLength` pair |
+
+All four are byte-correct today; that is why this was filed rather than fixed
+in the round that found it. It is the shape, not a live bug — and the shape is
+exactly the one that produced the original drift.
+
+Each cap now has one home: the two sub-path caps beside the coach's in
+`body.ts`, the generate cap beside the core both its wrappers already import.
+Every wrapper decodes through `decodeLambdaBody` or `checkBodyByteLimit`,
+including the generate dev wrapper, which had been comparing `byteLength`
+itself. The guard is now derived from a walk of `src/routes/api/**/+server.ts`
+plus `lambda/*/src/index.ts`: a wrapper that mentions a cap must import it,
+must not declare it, must call one of the two helpers, and must not spell a
+`… * 1024` inline. A new endpoint that inlines its own fails without being
+registered.
+
+**The filing's second claim was half right and its conclusion was wrong.**
+`decodeLambdaBody`'s `400 invalid body encoding` branch is indeed unreachable
+through the declared `string | null | undefined` type — measured, every
+malformed base64 string decodes silently, `Buffer.from` ignoring the invalid
+characters. But an event body is parsed JSON and nothing at runtime enforces
+that signature, and `Buffer.from(123, 'base64')` throws a `TypeError`. Deleting
+the catch as dead code turns a client-side malformation into the wrapper's
+generic 503, logged as `unhandled_error`. It is pinned in both directions
+instead. (An ARRAY is the one non-string that still decodes — `Buffer.from`
+reads it as a byte array — which is a defined answer, not a swallowed error.)
+
+## 969. The share Lambdas' JSON 404 and 503 declared no cache-control, and the two want opposite answers
+
+Every other response on the five share behaviours carries the deliberate
+`public, max-age=300, s-maxage=300, stale-while-revalidate=60` privacy window of
+§ 797. The JSON pair — `jsonResponse(404, { error: 'not found' })` and
+`jsonResponse(503, { error: 'temporarily unavailable' })` — set only
+`content-type`, so their TTL was whatever the behaviour's cache policy decided
+rather than something this surface had chosen.
+
+The followup named the 404 and called the fix "one header". It is two, and one
+shared header would have been the wrong fix. The 404 is the misconfiguration
+branch, reached when CloudFront sends a path the handler's regexes do not claim
+— a deploy-stable condition that should take the same five-minute window as its
+siblings. The 503 is an unexpected throw, and caching a transient failure for
+five minutes at the edge turns a blip into a five-minute outage for every viewer
+behind the same cache node. It is `no-store`.
+
+The helper now takes the header rather than defaulting one, so neither call site
+can omit it and a future third response has to state which it is. The pinning
+test fails in both directions: dropping the window from the 404, and giving the
+503 the window.
+
+## 970. `siteOrigin` had five callers where it should have twenty-seven, and `||` was not the safe fold the filing believed
+
+§ 895 routed the five production Lambdas through `siteOrigin` after finding they
+folded `PUBLIC_SITE_URL` with `?? DEFAULT_SITE_URL`, which fires only on
+null/undefined and keeps an empty env var as the origin. The in-app half spelled
+it `env.PUBLIC_SITE_URL || DEFAULT_SITE_URL`.
+
+**The count was wrong.** The followup said twenty and enumerated seventeen,
+naming "six `/share/*` routes" where there are nine and missing
+`sitemap.xml/+server.ts` and `u/[id]/+page.svelte` entirely. There were
+twenty-two.
+
+**And the premise was wrong in the direction that mattered.** The filing said
+"`||` gets the blank case right, so none of them is wrong today". `||` catches
+the empty string, but there are two other shapes and it catches neither.
+Measured:
+
+| `PUBLIC_SITE_URL` | `\|\|` yields | `siteOrigin` yields |
+|---|---|---|
+| `""` | `https://threkir.com/share/run/r1` | same |
+| `"   "` | `   /share/run/r1` | `https://threkir.com/share/run/r1` |
+| `"https://threkir.com/"` | `https://threkir.com//share/run/r1` | `https://threkir.com/share/run/r1` |
+
+A whitespace-only value is truthy, so it survives the fold and the canonical
+comes out root-relative with leading spaces — the same failure § 895 fixed on
+the Lambdas, reachable through a different shape of misconfiguration. The
+trailing slash the filing did name yields a doubled slash in every canonical,
+`og:url` and `<loc>` the surface emits.
+
+All twenty-two now fold through the helper, which answers both. The register of
+callers moves beside the helper into `core/site_url.test.ts`, which already
+walked `src` and `lambda` together for the default-is-spelled-once scan — one
+walker for both halves of one contract, rather than the near-identical second
+one in `lambda_site_origin.test.ts`. That file keeps what a walker cannot state:
+what the head builders actually emit when the fold is wrong.
+
+## 971. Six source-scanning guards stripped block comments first, hiding 779 lines of code from themselves
+
+A guard that reads source as text must blank comments, or the prose above a rule
+reads as a use of it. Six did it in an order that looks equivalent and is not:
+
+```
+src.replace(/\/\*[\s\S]*?\*\//g, ' ')   // block comments FIRST
+   .split('\n').map(blank line comments)
+```
+
+`//` is a comment to the language, but a `/*` inside one is still an opening
+delimiter to that regex. A line like `// copy, exactly as /routes/[id], /u/[id],
+and /clubs/* already do` therefore opens a block comment that runs to the next
+`*/` anywhere later in the file, and every line of real code between vanishes
+before the scan sees it.
+
+Measured over this tree: **779 lines across 3 files** — 485 in
+`runs/[id]/+page.svelte`, 228 in `+layout.svelte`, 66 in
+`share_route_lookup.ts`. `runs/[id]/+page.svelte` is not an incidental victim:
+it carries a `PUBLIC_SITE_URL` fold, so `site_url.test.ts`'s
+default-is-spelled-once scan had been reading straight past it while reporting
+a pass. Demonstrated end to end — with the old order, reverting that file's fold
+to `env.PUBLIC_SITE_URL || DEFAULT_SITE_URL` leaves the register green; with the
+order fixed it fails and names the file.
+
+Two of the six (`cloud_export_transport`, `strava_zip_strictness`) hid nothing
+today and were latent. The two CSS scanners (`contrast_guard`, `rtl_css_guards`)
+were never affected — `//` is not a comment in CSS, so they strip block comments
+alone and correctly.
+
+All six now blank line comments first. The new guard walks every `.test.ts`,
+selects the ones that strip BOTH comment forms, and fails when the block strip
+comes first — so the order cannot silently come back, and a CSS scanner that
+strips only one is not swept up in it. This is the third guard in this issue
+found to be a false pass rather than a latent one; the lesson is the same each
+time: a guard that cannot see the code it guards is worse than no guard,
+because it is believed.
+
+## 972. The share Lambdas have no method gate, and the Terraform value that makes that safe was asserted nowhere
+
+The three API Lambdas each gate their own HTTP method — coach and
+generate-route on POST, osrm-proxy on GET — because their CloudFront behaviours
+must allow POST and a GET reaching `handleCoach` bills an Anthropic call and
+spends a daily-quota increment (§ 896). The five share Lambdas carry no such
+gate at all.
+
+That is correct rather than an oversight: their fourteen behaviours declare
+`allowed_methods = ["GET", "HEAD", "OPTIONS"]`, so CloudFront refuses a
+mutating method before the origin is reached. What was missing is that
+**nothing compared the two**. A share Lambda's entire method safety lived in a
+Terraform list one copy-paste from an `/api/*` block away, and the sibling
+routing test in `share_lambda_handlers.test.ts` was already reading that same
+file for `path_pattern` — it simply never looked at the methods. Two
+independent spellings of one rule with nothing comparing them is § 967 one
+layer up.
+
+The origin does real work on a method the behaviour lets through, which is what
+makes this worth a guard rather than a comment: measured, an `OPTIONS` to
+`/og/run/<id>.png` runs a full ~50 ms `resvg` render and answers `200
+image/png`. OPTIONS is allowed and forwarded, so that path is already exercised
+today; a behaviour widened to POST would be the same render on a method nothing
+about the surface expects, on paths the WAF rate-limit rules do not scope (they
+cover only `/api/coach`, `/api/routes/generate` and `/api/routes/osrm`).
+
+The guard parses every `ordered_cache_behavior` block targeting a
+`lambda-share-*` origin and fails when one allows POST, PUT, PATCH or DELETE.
+Because this lane must not edit `infra/`, the check could not be falsified by
+mutating its input, so the check is a pure function over the parsed blocks and
+a second case runs it against a synthetic behaviour shaped exactly like
+`/api/coach*` — the guard carries its own proof that it fires. The alternative
+fix, adding a method gate to all five Lambdas, was not taken: it would turn
+today's OPTIONS 200 into a 405 with no way to verify from here that no client
+sends a preflight against these paths, and the coupling is better made visible
+than papered over from the wrong side.

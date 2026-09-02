@@ -22,7 +22,7 @@ const IMPORTER = 'src/lib/integrations/strava-zip.ts';
 /// names the very shapes being refused ("an early return here would…"),
 /// so a guard reading the raw text would answer about the comment.
 function stripComments(s: string): string {
-	return s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+	return s.replace(/(^|[^:])\/\/[^\n]*/g, '$1').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 function source(): string {

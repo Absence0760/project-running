@@ -2,7 +2,7 @@ import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
 import { lookupSharedRecap, recapPeriodLabel } from '$lib/share/share_recap_lookup';
-import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+import { siteOrigin } from '$lib/core/site_url';
 
 // Canonical host for the absolute og:image URL, same source + fallback as the
 // sibling share loaders and /sitemap.xml. An og:image is fetched by a remote
@@ -32,6 +32,6 @@ export const load: PageLoad = async ({ params }) => {
 		id: params.id,
 		recap,
 		periodLabel,
-		siteUrl: env.PUBLIC_SITE_URL || DEFAULT_SITE_URL,
+		siteUrl: siteOrigin(env.PUBLIC_SITE_URL),
 	};
 };

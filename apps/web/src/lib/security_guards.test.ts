@@ -1841,55 +1841,88 @@ test('OIDC deploy roles carry default Project / Stack / ManagedBy tags', () => {
 	);
 });
 
-test('Coach endpoint enforces a 256 KB body cap on both wrappers', () => {
-	// Reason: pass-2 commit a2ea656 originally added COACH_BODY_LIMIT_BYTES
-	// at both wrappers — SvelteKit dev /api/coach/+server.ts AND the
-	// production Lambda lambda/coach/src/index.ts.
+test('every two-wrapper endpoint enforces one shared body cap, on both wrappers', () => {
+	// Reason: pass-2 commit a2ea656 added COACH_BODY_LIMIT_BYTES to both
+	// wrappers of /api/coach — the SvelteKit dev +server.ts and the production
+	// Lambda. audit/auth (May 2026) then found the Lambda checking
+	// `bodyStr.length` (UTF-16 code units) while the cap was in bytes, letting
+	// a multi-byte payload ~3x the cap through. The two wrappers had diverged
+	// because each owned its own copy of the check.
 	//
-	// audit/auth (May 2026) flagged that the Lambda was checking
-	// `bodyStr.length` (UTF-16 code units), letting multi-byte UTF-8
-	// payloads ~3x the cap sail through. The two wrappers diverged.
+	// The fix put one constant and one helper in $lib/coach/body.ts — but the
+	// guard that pinned it named only the coach PATH, so the same shape sat
+	// untouched one endpoint over for as long: /api/routes/generate spelled a
+	// 4 KB cap twice and re-implemented the decode, and the coach's own two
+	// sub-paths spelled theirs as a named constant in the dev wrapper and a
+	// bare literal in the Lambda (decisions § 968).
 	//
-	// Fix: a single $lib/coach/body.ts owns the constant + the
-	// size-check helper, and both wrappers import + call it. This
-	// guard now pins the import-and-use shape so the constant can't
-	// be re-inlined per-wrapper (which is what allowed the drift in
-	// the first place).
+	// Derived, not listed: any wrapper that caps a body must IMPORT the cap and
+	// call the shared helper, so a new endpoint inlining its own fails here
+	// without anyone remembering to register it.
 	const body = read('src/lib/coach/body.ts');
 	assert.match(
 		body,
 		/COACH_BODY_LIMIT_BYTES\s*=\s*256\s*\*\s*1024/,
 		'$lib/coach/body.ts must declare COACH_BODY_LIMIT_BYTES = 256 * 1024.',
 	);
-	for (const path of [
-		'src/routes/api/coach/+server.ts',
-		'lambda/coach/src/index.ts',
-	]) {
-		const source = read(path);
-		// SvelteKit dev path can use the $lib alias; the Lambda can't
-		// (the alias is resolved by Vite, not by the esbuild bundler
-		// used for the Lambda artifact). Accept either form.
-		assert.match(
-			source,
-			/from\s+['"](?:\$lib\/coach\/body|\.\.\/+(?:\.\.\/+)*src\/lib\/coach\/body)['"]/,
-			`${path} must import the body helper from $lib/coach/body — ` +
-				'not re-inline the constant (re-inlining is what allowed ' +
-				'the audit/auth May 2026 drift).',
-		);
-		assert.match(
-			source,
-			/COACH_BODY_LIMIT_BYTES/,
-			`${path} must reference COACH_BODY_LIMIT_BYTES so the size ` +
-				'check is wired to the shared cap.',
-		);
-		assert.match(
-			source,
-			/(decodeLambdaBody|checkBodyByteLimit)\s*\(/,
-			`${path} must call decodeLambdaBody (Lambda) or ` +
-				'checkBodyByteLimit (SvelteKit) — these are byte-counted, ' +
-				'unlike bodyStr.length which counts UTF-16 code units.',
-		);
+
+	const wrappers: string[] = [];
+	function collect(dir: string, match: (name: string) => boolean): void {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const full = resolve(dir, entry.name);
+			if (entry.isDirectory()) collect(full, match);
+			else if (match(entry.name)) wrappers.push(full);
+		}
 	}
+	collect(resolve(__dirname, '..', 'routes', 'api'), (n) => n === '+server.ts');
+	collect(resolve(__dirname, '..', '..', 'lambda'), (n) => n === 'index.ts');
+
+	// Population: a walker that found nothing would satisfy every assertion
+	// below while proving nothing (decisions § 534).
+	assert.ok(
+		wrappers.length >= 8,
+		`found only ${wrappers.length} endpoint wrappers — walker broken?`,
+	);
+
+	const offenders: string[] = [];
+	let capped = 0;
+	for (const file of wrappers) {
+		const rel = file.slice(file.indexOf('apps/web/') + 'apps/web/'.length);
+		// Line comments blanked BEFORE block comments are stripped — a `//`
+		// containing `/*` otherwise opens a block that swallows real code
+		// (decisions § 971).
+		const src = readFileSync(file, 'utf-8')
+			.split('\n')
+			.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
+			.join('\n')
+			.replace(/\/\*[\s\S]*?\*\//g, ' ');
+		if (!/BODY_LIMIT_BYTES/.test(src)) continue;
+		capped++;
+
+		if (/^\s*const\s+\w*BODY_LIMIT_BYTES\s*=/m.test(src)) {
+			offenders.push(`${rel}: declares its own cap instead of importing one`);
+		}
+		if (!/import\s*\{[^}]*BODY_LIMIT_BYTES[^}]*\}/s.test(src)) {
+			offenders.push(`${rel}: does not import the cap it enforces`);
+		}
+		if (!/(decodeLambdaBody|checkBodyByteLimit)\s*\(/.test(src)) {
+			offenders.push(
+				`${rel}: hand-rolls the size check — call decodeLambdaBody (Lambda) or ` +
+					'checkBodyByteLimit (SvelteKit), which count bytes',
+			);
+		}
+		if (/\d+\s*\*\s*1024/.test(src)) {
+			offenders.push(`${rel}: spells a byte cap inline — import it instead`);
+		}
+	}
+
+	assert.ok(capped >= 5, `only ${capped} wrappers enforce a body cap — walker broken?`);
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		'these re-decide a body cap the shared module already owns. One copy per ' +
+			'wrapper is what let the coach pair drift on UTF-16 code units vs bytes.',
+	);
 });
 
 test('Coach 401 / 503 error responses don\'t leak provider / GoTrue internals', () => {
@@ -3483,5 +3516,60 @@ test('the message thread renders a route attachment through DmRouteAttachment', 
 		source,
 		/fetchClippedRouteForViewer|fetchRouteById/,
 		'the thread page must not resolve a route itself — it goes through DmRouteAttachment, which is the surface the clip guard covers.',
+	);
+});
+
+test('a source-scanning guard blanks line comments before it strips block comments', () => {
+	// Reason: a guard that reads source as text has to blank comments, or the
+	// prose above a rule reads as a use of it. Both orders look equivalent and
+	// only one is: `//` is a comment to the language but `/*` inside one is
+	// still an opening delimiter to a regex, so stripping block comments FIRST
+	// makes `// exactly as /clubs/* already do` open a block that runs to the
+	// next `*/` in the file and swallows every line of real code between.
+	//
+	// Measured over this tree at the time of the fix: the wrong order hid 779
+	// lines across 3 files — 485 of them in `runs/[id]/+page.svelte`, which
+	// carries a `PUBLIC_SITE_URL` fold that `site_url.test.ts` was therefore
+	// scanning right past while reporting a pass. A guard that cannot see the
+	// code it guards is worse than no guard, because it is believed
+	// (decisions § 971).
+	const files: string[] = [];
+	(function walk(dir: string): void {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			if (entry.name === 'node_modules') continue;
+			const full = resolve(dir, entry.name);
+			if (entry.isDirectory()) walk(full);
+			else if (entry.name.endsWith('.test.ts')) files.push(full);
+		}
+	})(__dirname);
+
+	// Population: a walker that found nothing would satisfy the assertion below
+	// while proving nothing (decisions § 534).
+	assert.ok(files.length > 100, `found only ${files.length} test files — walker broken?`);
+
+	const blockStrip = /\.replace\(\s*\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g/;
+	const lineStrip = /\\\/\\\/(?:\[\^\\n\]\*|\.\*\$)|\/\^\\s\*\(?\\\/\\\//;
+	const offenders: string[] = [];
+	let scanning = 0;
+
+	for (const file of files) {
+		const src = readFileSync(file, 'utf-8');
+		const block = src.search(blockStrip);
+		const line = src.search(lineStrip);
+		// Only a guard that strips BOTH can get the order wrong. A CSS scanner
+		// strips block comments alone, because `//` is not a comment in CSS.
+		if (block < 0 || line < 0) continue;
+		scanning++;
+		if (block < line) {
+			offenders.push(file.slice(file.indexOf('src/')));
+		}
+	}
+
+	assert.ok(scanning >= 6, `only ${scanning} guards strip both comment forms — walker broken?`);
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		'these strip block comments before blanking line comments, so a `//` ' +
+			'containing `/*` hides every line up to the next `*/` from the scan.',
 	);
 });
