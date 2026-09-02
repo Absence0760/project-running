@@ -92,11 +92,6 @@ export const MIN_DECLARATIONS = 60;
 /** @type {readonly KnownGap[]} */
 export const KNOWN_GAPS = [
 	{
-		file: 'apps/web/src/lib/routes/tile_pack.ts',
-		counterpart: 'apps/mobile_android/lib/tile_pack.dart',
-		reason: 'both headers declare the pair; neither registry carries it',
-	},
-	{
 		file: 'apps/web/src/lib/runs/streaks.ts',
 		counterpart: 'apps/mobile_android/lib/streaks.dart',
 		reason:
