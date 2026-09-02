@@ -151,7 +151,7 @@ Deno.test('a call that did not ask for a sync performs none', () => {
   // walked the provider feed would write the shared calendar on a page load and
   // spend the 2/hour bucket, so the second probe in an hour would 429 and the
   // tile would read unavailable for the rest of it (decisions § 977).
-  const gate = SRC.indexOf('if (body.sync !== true) {');
+  const gate = SRC.indexOf('if (!isSync) {');
   const out = SRC.indexOf('await fetch(');
   const write = SRC.indexOf('.insert(');
   assert(gate !== -1, 'a sync runs without the caller asking for one');
@@ -159,11 +159,35 @@ Deno.test('a call that did not ask for a sync performs none', () => {
   assert(gate < out, 'the opt-in must precede the outbound fetch');
   assert(gate < write, 'the opt-in must precede any write');
   assert(
-    /if \(body\.sync !== true\) \{\s*return Response\.json\(\{ configured: true \}\);/.test(SRC),
+    /if \(!isSync\) \{\s*return Response\.json\(\{ configured: true \}\);/.test(SRC),
     'a probe must answer the credential verdict, not a sync result',
   );
   // And it must sit BEHIND the credential gate, or an unprovisioned deploy
   // would report itself configured.
   const cred = SRC.indexOf('if (!apiKey || !apiSecret)');
   assert(cred !== -1 && cred < gate, 'the probe answer must follow the credential gate');
+});
+
+Deno.test('a probe does not spend the sync bucket', () => {
+  // Both web probes hit this function, so charging them to the sync's 2/hour
+  // free ceiling meant ONE page load exhausted it and the next load 429'd —
+  // which `isProviderNotConfigured` fail-closes into "provider unavailable" for
+  // a provider that is configured and working. The client comment describes the
+  // symptom; this is the cause (decisions § 977).
+  assert(
+    /checkRateLimitTiered\(supabase, user\.id, 'race-listings-sync', 2, 8, 3600/.test(SRC),
+    'the sync ceiling moved',
+  );
+  assert(
+    /checkRateLimitTiered\(supabase, user\.id, 'race-listings-sync:probe', \d+, \d+, 3600/.test(SRC),
+    'the probe shares the sync bucket again',
+  );
+  const buckets = [...SRC.matchAll(/'race-listings-sync(:probe)?'/g)].length;
+  assert(buckets >= 2, 'only one bucket name is present');
+  // Both fail closed; the guard in _shared covers every call site, and this
+  // states it here too because the two arms are chosen by a condition.
+  assert(
+    (SRC.match(/failClosed: true/g) ?? []).length >= 2,
+    'one of the two arms falls open',
+  );
 });

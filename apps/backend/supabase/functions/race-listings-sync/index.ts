@@ -61,20 +61,36 @@ Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  // Fail-closed, same reason as the sibling importers: the sync walks a
-  // provider's upcoming-races feed on OUR credential, and it writes to the
-  // shared public calendar rather than to the caller's own rows — so a limiter
-  // that disappears on an RPC blip drops the only bound on how often one
-  // account can drive that (decisions § 974).
-  const denied = await checkRateLimitTiered(supabase, user.id, 'race-listings-sync', 2, 8, 3600, {
-    failClosed: true,
-  });
+  const body = (guarded.body ?? {}) as RequestBody;
+  const isSync = body.sync === true;
+
+  // Two buckets, because these are two different costs wearing one name.
+  //
+  // A SYNC walks a provider's upcoming-races feed on OUR credential and writes
+  // the shared public calendar rather than the caller's own rows, so 2/hour free
+  // is right and a limiter that disappears on an RPC blip drops the only bound
+  // on how often one account can drive it (decisions § 974).
+  //
+  // A PROBE reads two env vars and returns. Charging it to the sync's bucket was
+  // a live defect and web's own client comment describes the symptom without
+  // naming the cause: both `isRunSignUpConfigured` and `isUltraSignUpConfigured`
+  // hit this function, so ONE page load spends a free user's whole 2/hour
+  // allowance and the next load 429s — which `isProviderNotConfigured` then
+  // fail-closes into "provider unavailable" for a provider that is configured
+  // and working (decisions § 977). Its own generous bucket costs nothing and
+  // removes the false unavailability.
+  const denied = isSync
+    ? await checkRateLimitTiered(supabase, user.id, 'race-listings-sync', 2, 8, 3600, {
+      failClosed: true,
+    })
+    : await checkRateLimitTiered(supabase, user.id, 'race-listings-sync:probe', 60, 240, 3600, {
+      failClosed: true,
+    });
   if (denied) return denied;
 
   // Fail closed on the missing provider key — the chosen leg is inert until its
   // credential lands (integrations.md + decisions ADR). Defaults to RunSignUp so
   // the existing probe is unchanged; UltraSignup is gated symmetrically.
-  const body = (guarded.body ?? {}) as RequestBody;
   // An unrecognised provider is refused, not silently read as the default.
   // Coercing it to RunSignUp gated the caller's request on a credential for a
   // provider they never asked for — a 503 when RunSignUp's key is missing, and
@@ -107,7 +123,7 @@ Deno.serve(withSentry('race-listings-sync', async (req: Request) => {
   // read unavailable for the rest of it. So a sync is opt-IN, the same shape
   // `race-results-import` already uses for its own probe mode, and the default
   // answer is the credential verdict alone (decisions § 977).
-  if (body.sync !== true) {
+  if (!isSync) {
     return Response.json({ configured: true });
   }
 
