@@ -15059,3 +15059,32 @@ Rust source-parsed in a `#[cfg(test)]` module rather than a `scripts/*.mjs`
 guard: it needs no CI wiring (`cargo test --workspace` already runs in
 `build-firmware`, already in the `CI gate` list), and it lives beside the arrays
 it speaks for rather than in a file that has to remember they exist.
+
+## 961. `training_load::median` was total only by its caller's discipline, and the fold makes the empty case a real path
+
+`median(&mut [])` took `xs.len() / 2 - 1`, which is `0usize - 1`. Measured on
+this tree: `attempt to subtract with overflow` under `[profile.dev]`
+(`overflow-checks = true`), and under `[profile.release]`
+(`overflow-checks = false`) it wraps and panics on the bound instead —
+`index out of bounds: the len is 0 but the index is 18446744073709551615`. There
+is no third outcome; on a device with no operating system either is a reset
+mid-run.
+
+Nothing reached it, because `compute_calibration` returned early on
+`trimps_per_km.is_empty()`. That is a proof about one call site, and it expires
+the moment there is a second one. The filing that raised this offered two ways
+out — "a signature that cannot express the empty case, or a sentinel that
+changes what a caller reads" — and declined both without a second caller to
+design against. Neither is the answer: `Option<f64>` is the total signature
+(`slice::first`'s shape), it introduces no sentinel, and it changes what nobody
+reads, because the one caller already answers `StressMode::Distance` with no
+fallback for exactly this input.
+
+What made it worth doing now is the fold. The emptiness of the sample and the
+existence of a fallback rate are the same question, and asking it in two places
+is what left the function partial; the caller now calls `median` unconditionally
+and branches on the answer. So the empty slice is no longer unreachable — a
+runner with HR prefs configured and no HR-carrying run in the window hands
+`median` an empty slice on every recalculation. Removing the `is_empty` branch
+from `median` now fails five tests rather than none, three of which are the
+pre-existing calibration cases; before the fold it would have failed nothing.
