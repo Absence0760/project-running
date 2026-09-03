@@ -2271,6 +2271,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get historyDelete => 'Löschen';
 
   @override
+  String get historyUnsyncedRowSemantics => 'noch nicht synchronisiert';
+
+  @override
   String get historyBlockedRowSemantics => 'kann nicht hochgeladen werden';
 
   @override

@@ -3583,7 +3583,7 @@ class _BlockedPushCard extends StatelessWidget {
               children: [
                 OutlinedButton.icon(
                   onPressed: busy ? null : () => onExport(),
-                  icon: const Icon(Icons.download),
+                  icon: const Icon(Icons.download_outlined),
                   label: Text(l10n.runDetailBlockedExport),
                 ),
                 FilledButton.icon(

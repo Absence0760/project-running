@@ -618,6 +618,7 @@
   "historyDeleteConfirmBody": "Esto no se puede deshacer.",
   "historyCancel": "Cancelar",
   "historyDelete": "Eliminar",
+  "historyUnsyncedRowSemantics": "aún no sincronizada",
   "historyBlockedRowSemantics": "no se puede subir",
   "historyBlockedRowTooltip": "No se puede subir",
   "historyBlockedTooltip": "{count, plural, one{{count} carrera no se puede subir} other{{count} carreras no se pueden subir}}",

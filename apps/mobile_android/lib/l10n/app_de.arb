@@ -618,6 +618,7 @@
   "historyDeleteConfirmBody": "Dies kann nicht rückgängig gemacht werden.",
   "historyCancel": "Abbrechen",
   "historyDelete": "Löschen",
+  "historyUnsyncedRowSemantics": "noch nicht synchronisiert",
   "historyBlockedRowSemantics": "kann nicht hochgeladen werden",
   "historyBlockedRowTooltip": "Kann nicht hochgeladen werden",
   "historyBlockedTooltip": "{count, plural, one{{count} Lauf kann nicht hochgeladen werden} other{{count} Läufe können nicht hochgeladen werden}}",

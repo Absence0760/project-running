@@ -2148,6 +2148,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get historyDelete => '削除';
 
   @override
+  String get historyUnsyncedRowSemantics => '未同期';
+
+  @override
   String get historyBlockedRowSemantics => 'アップロードできません';
 
   @override

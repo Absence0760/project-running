@@ -2928,6 +2928,10 @@
   "@historyDelete": {
     "description": "Confirm action in the bulk-delete confirmation dialog"
   },
+  "historyUnsyncedRowSemantics": "not yet synced",
+  "@historyUnsyncedRowSemantics": {
+    "description": "Screen-reader fragment on a runs-list row that is queued to sync"
+  },
   "historyBlockedRowSemantics": "cannot be uploaded",
   "@historyBlockedRowSemantics": {
     "description": "Screen-reader fragment on a runs-list row whose push is parked"

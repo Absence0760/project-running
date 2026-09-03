@@ -618,6 +618,7 @@
   "historyDeleteConfirmBody": "Isso não pode ser desfeito.",
   "historyCancel": "Cancelar",
   "historyDelete": "Excluir",
+  "historyUnsyncedRowSemantics": "ainda não sincronizada",
   "historyBlockedRowSemantics": "não pode ser enviada",
   "historyBlockedRowTooltip": "Não pode ser enviada",
   "historyBlockedTooltip": "{count, plural, one{{count} corrida não pode ser enviada} other{{count} corridas não podem ser enviadas}}",

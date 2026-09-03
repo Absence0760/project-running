@@ -2265,6 +2265,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get historyDelete => 'Eliminar';
 
   @override
+  String get historyUnsyncedRowSemantics => 'ainda não sincronizada';
+
+  @override
   String get historyBlockedRowSemantics => 'não pode ser enviada';
 
   @override
@@ -16275,6 +16278,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get historyDelete => 'Excluir';
+
+  @override
+  String get historyUnsyncedRowSemantics => 'ainda não sincronizada';
 
   @override
   String get historyBlockedRowSemantics => 'não pode ser enviada';

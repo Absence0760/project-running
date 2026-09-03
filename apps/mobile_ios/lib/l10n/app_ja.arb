@@ -618,6 +618,7 @@
   "historyDeleteConfirmBody": "この操作は元に戻せません。",
   "historyCancel": "キャンセル",
   "historyDelete": "削除",
+  "historyUnsyncedRowSemantics": "未同期",
   "historyBlockedRowSemantics": "アップロードできません",
   "historyBlockedRowTooltip": "アップロードできません",
   "historyBlockedTooltip": "{count, plural, other{{count} 件のランをアップロードできません}}",

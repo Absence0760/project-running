@@ -185,7 +185,7 @@ class RunListTile extends StatelessWidget {
       if (isBlocked)
         l10n.historyBlockedRowSemantics
       else if (isUnsynced)
-        'not yet synced',
+        l10n.historyUnsyncedRowSemantics,
     ].join(', ');
 
     // The trailing metric is "{value} {unit}" — pivot on the last space so the

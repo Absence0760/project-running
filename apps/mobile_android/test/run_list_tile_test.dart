@@ -266,7 +266,10 @@ void main() {
         matching: find.byType(Semantics),
       ).first,
     );
-    expect(semantics.properties.label, contains('cannot be uploaded'));
-    expect(semantics.properties.label, isNot(contains('not yet synced')));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(semantics.properties.label,
+        contains(en.historyBlockedRowSemantics));
+    expect(semantics.properties.label,
+        isNot(contains(en.historyUnsyncedRowSemantics)));
   });
 }

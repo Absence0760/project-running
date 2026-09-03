@@ -618,6 +618,7 @@
   "historyDeleteConfirmBody": "Cette action est irréversible.",
   "historyCancel": "Annuler",
   "historyDelete": "Supprimer",
+  "historyUnsyncedRowSemantics": "pas encore synchronisée",
   "historyBlockedRowSemantics": "impossible à téléverser",
   "historyBlockedRowTooltip": "Impossible à téléverser",
   "historyBlockedTooltip": "{count, plural, one{{count} course ne peut pas être téléversée} other{{count} courses ne peuvent pas être téléversées}}",

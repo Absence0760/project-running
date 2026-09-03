@@ -2243,6 +2243,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyDelete => 'Delete';
 
   @override
+  String get historyUnsyncedRowSemantics => 'not yet synced';
+
+  @override
   String get historyBlockedRowSemantics => 'cannot be uploaded';
 
   @override

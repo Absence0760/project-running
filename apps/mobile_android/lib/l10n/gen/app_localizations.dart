@@ -3821,6 +3821,12 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get historyDelete;
 
+  /// Screen-reader fragment on a runs-list row that is queued to sync
+  ///
+  /// In en, this message translates to:
+  /// **'not yet synced'**
+  String get historyUnsyncedRowSemantics;
+
   /// Screen-reader fragment on a runs-list row whose push is parked
   ///
   /// In en, this message translates to:
