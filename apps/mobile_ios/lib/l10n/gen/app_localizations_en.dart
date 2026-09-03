@@ -6777,6 +6777,20 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String integrationsImportPartialOf(int n, int total) {
+    return 'Only part of your history could be imported: $n of $total.';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'Not all results could be read. Imported: $n.';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      'The results list was too long to read to the end, so your result could not be confirmed. Enter it manually instead.';
+
+  @override
   String get integrationsParkrunNoneNew =>
       'No new parkrun results since last import.';
 

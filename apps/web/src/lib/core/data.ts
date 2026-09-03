@@ -2270,6 +2270,10 @@ export interface ImportRaceResultOutcome {
 	imported: number;
 	skipped: number;
 	enriched: number;
+	/// Whether the function read the finisher field to its end. Optional on the
+	/// wire only because a deployment can predate it; grade it through
+	/// `parseImportCompleteness`, which reads an absent one as partial.
+	complete?: boolean;
 }
 
 /// Invoke race-results-import. Throws `RUNSIGNUP_UNAVAILABLE` /

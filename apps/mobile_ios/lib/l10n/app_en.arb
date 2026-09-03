@@ -9066,6 +9066,31 @@
       }
     }
   },
+  "integrationsImportPartialOf": "Only part of your history could be imported: {n} of {total}.",
+  "@integrationsImportPartialOf": {
+    "description": "Banner when an importer read only part of a history and knows the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportPartial": "Not all results could be read. Imported: {n}.",
+  "@integrationsImportPartial": {
+    "description": "Banner when an importer read only part of a history and does not know the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportTruncated": "The results list was too long to read to the end, so your result could not be confirmed. Enter it manually instead.",
+  "@integrationsImportTruncated": {
+    "description": "Banner when the upstream results list was truncated before the runner was found"
+  },
   "integrationsParkrunNoneNew": "No new parkrun results since last import.",
   "@integrationsParkrunNoneNew": {
     "description": "Banner shown when no new parkrun results were found"

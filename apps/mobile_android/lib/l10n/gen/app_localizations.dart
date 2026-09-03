@@ -11146,6 +11146,24 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{Imported {count} parkrun result.} other{Imported {count} parkrun results.}}'**
   String integrationsParkrunImported(int count);
 
+  /// Banner when an importer read only part of a history and knows the total
+  ///
+  /// In en, this message translates to:
+  /// **'Only part of your history could be imported: {n} of {total}.'**
+  String integrationsImportPartialOf(int n, int total);
+
+  /// Banner when an importer read only part of a history and does not know the total
+  ///
+  /// In en, this message translates to:
+  /// **'Not all results could be read. Imported: {n}.'**
+  String integrationsImportPartial(int n);
+
+  /// Banner when the upstream results list was truncated before the runner was found
+  ///
+  /// In en, this message translates to:
+  /// **'The results list was too long to read to the end, so your result could not be confirmed. Enter it manually instead.'**
+  String get integrationsImportTruncated;
+
   /// Banner shown when no new parkrun results were found
   ///
   /// In en, this message translates to:

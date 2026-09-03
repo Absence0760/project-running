@@ -16607,3 +16607,59 @@ correctly failed on their moved anchors and were re-pointed rather than
 relaxed: the `strideMetres` guard now reads the leaf, and the
 "in-progress path stays off the chain" guard now names `_clearInProgress`,
 the private body, since § 1012 made the public method a wrapper.
+
+## 1014. Both scrapers learned to say they had read only part of a history, and nothing was listening
+
+`parkrun-import` answers `{ imported, skipped, total, complete }` and
+`race-results-import` answers `complete` on every success shape (§ 976). No
+client read either field. A parkrun history bounded at `MAX_PARKRUN_ROWS` and a
+finisher field truncated at 2,000 both arrive as a positive `imported`, so the
+runner was shown "Imported 40 parkrun results" about a history with three
+hundred in it, and a truncated race import closed its modal looking exactly
+like a whole one.
+
+The direction is `parseStravaSyncResult`'s — an absent `complete` is PARTIAL —
+and it is the right one here for the reason that rule was written rather than
+by analogy. Each scraper is one transport shipped from this repo alongside its
+callers, so a body without the field is one this build does not recognise, not
+an older deployment of a second transport (which is what makes
+`cloudExportShortfall` fail the other way). A false "partial" costs a sentence
+the runner can ignore; a false "complete" tells them a history is whole.
+
+`parseImportCompleteness` grades both, and it lives BESIDE `parseStravaSyncResult`
+in the pair that already owns this rule rather than in a module of its own. A
+new module would be a parity pair, and a pair named by neither registry is a
+pair whose divergence nothing detects (§ 641) — the registries live in the root
+`CLAUDE.md` and the syncer agent, neither of which this change may touch.
+Splitting the three parsers into a registered `import_completeness` pair is
+filed rather than done half-way.
+
+Two things the parser refuses beyond the flag. A count is a non-negative
+integer or it is 0, the rule the Strava parser already applies. And a `total`
+below `imported + skipped` is discarded rather than shown: "12 of 5" is worse
+than no denominator at all, which is why `total` is nullable and the two
+sentences are separate keys rather than one with a defaulted placeholder.
+
+Copy is three shared `integrations.*` keys across seven web catalogues and
+seven ARBs — the same claim on both importers, so one vocabulary. All three are
+phrased to avoid grammatical-number agreement ("Imported: {n}" rather than
+"{n} results imported"), because the noun in the "n of total" sentence agrees
+with the TOTAL in German, Spanish, French and Portuguese, not with the count
+the plural rule would have been keyed on.
+
+The truncation refusal gets its own sentence on both platforms. `502
+upstream_results_truncated` had been falling through to the generic
+import-failed message, and it is not a failure the runner can fix by retrying:
+"we read the whole field and you are not in it" and "we read the first 2,000
+finishers and you were not among them" are different sentences, and only the
+second has the manual paste form beside it as its answer. Mobile gets a
+`RaceResultsTruncated` type so identity rather than message-matching carries
+it; web matches the code in the thrown message, which is what its transport
+gives it.
+
+One thing this change caught that had nothing to do with it: § 1013's move put
+`ActivityType` in `core_models`, and `geolocator_apple` exports an
+`ActivityType` of its own — iOS's LOCATION activity type. `run_recorder`
+imports both, so the two collide. `dart analyze` does not see it; the compiler
+does, and only when a test actually builds that package. The import there now
+says `hide ActivityType`, naming which vocabulary the file means.

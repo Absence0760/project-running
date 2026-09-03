@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' show parseImportCompleteness;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -99,10 +100,15 @@ class ImportRaceResultOutcome {
   final int skipped;
   final int enriched;
 
+  /// Whether the function read the finisher field to its end. Only an explicit
+  /// claim earns it — see `parseImportCompleteness`.
+  final bool complete;
+
   const ImportRaceResultOutcome({
     required this.imported,
     required this.skipped,
     required this.enriched,
+    this.complete = false,
   });
 }
 
@@ -120,6 +126,17 @@ class UltraSignUpUnavailable implements Exception {
 
 /// Thrown when the ChronoTrack leg is unconfigured server-side (503), so the UI
 /// can show the unavailable explainer rather than a generic failure.
+/// The upstream finisher list was truncated before the runner was found, so
+/// the function refused rather than report "you are not in these results".
+///
+/// A distinct type because "we read the whole field and you are not in it" and
+/// "we read the first 2,000 finishers and you were not among them" are
+/// different sentences, and the second is not an import failure the runner can
+/// fix by retrying — the manual paste form beside it is the answer.
+class RaceResultsTruncated implements Exception {
+  const RaceResultsTruncated();
+}
+
 class ChronoTrackUnavailable implements Exception {
   const ChronoTrackUnavailable();
 }
@@ -405,11 +422,18 @@ class RaceService extends ChangeNotifier {
         imported: (data['imported'] as num?)?.toInt() ?? 0,
         skipped: (data['skipped'] as num?)?.toInt() ?? 0,
         enriched: (data['enriched'] as num?)?.toInt() ?? 0,
+        // A field read only as far as the cap still imports the rows it found,
+        // so the success path has to carry the claim or a truncated import
+        // renders exactly like a whole one (decisions § 1014).
+        complete: parseImportCompleteness(data).complete,
       );
     } on FunctionException catch (e) {
       final spec = raceImportProviderFor(provider);
       if (spec != null && e.status == 503 && _isProviderNotConfigured(e.details)) {
         throw spec.unavailable;
+      }
+      if (e.status == 502 && _detailsSay(e.details, 'upstream_results_truncated')) {
+        throw const RaceResultsTruncated();
       }
       rethrow;
     }
@@ -438,9 +462,12 @@ class RaceService extends ChangeNotifier {
     }
   }
 
-  bool _isProviderNotConfigured(dynamic details) {
-    if (details is Map && details['error'] == 'provider_not_configured') return true;
-    return details.toString().contains('provider_not_configured');
+  bool _isProviderNotConfigured(dynamic details) =>
+      _detailsSay(details, 'provider_not_configured');
+
+  bool _detailsSay(dynamic details, String code) {
+    if (details is Map && details['error'] == code) return true;
+    return details.toString().contains(code);
   }
 
   String? _blankToNull(String? s) {

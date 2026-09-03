@@ -4047,9 +4047,14 @@ class ApiClient {
         .eq(UserProfileRow.colId, viewerId);
   }
 
-  /// Trigger the `parkrun-import` Edge Function. Returns the count of
-  /// new results inserted.
-  Future<int> importParkrunResults(String athleteNumber) async {
+  /// Trigger the `parkrun-import` Edge Function.
+  ///
+  /// Returns the graded answer rather than a bare count: the function bounds
+  /// the result set at `MAX_PARKRUN_ROWS` and says so with `complete`, and a
+  /// caller reading only `imported` presents a capped history as a whole one.
+  /// Fail-closed via [parseImportCompleteness] — a body this build cannot read
+  /// is partial.
+  Future<ImportCompleteness> importParkrunResults(String athleteNumber) async {
     final res = await _client.functions.invoke(
       'parkrun-import',
       body: {'athleteNumber': athleteNumber.trim()},
@@ -4060,11 +4065,7 @@ class ApiClient {
           : null;
       throw Exception(err ?? 'parkrun-import failed (HTTP ${res.status})');
     }
-    final data = res.data;
-    if (data is Map<String, dynamic> && data['imported'] is num) {
-      return (data['imported'] as num).toInt();
-    }
-    return 0;
+    return parseImportCompleteness(res.data);
   }
 
   // ──────────────────── Device list (user_device_settings) ─────────

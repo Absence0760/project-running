@@ -6465,6 +6465,20 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String integrationsImportPartialOf(int n, int total) {
+    return '履歴の一部のみインポートできました: $total 件中 $n 件。';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'すべての結果を読み取ることはできませんでした。インポート: $n 件。';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      '結果リストが長すぎて最後まで読み取れなかったため、記録を確認できませんでした。代わりに手動で入力してください。';
+
+  @override
   String get integrationsParkrunNoneNew => '前回のインポート以降、新しいparkrunの結果はありません。';
 
   @override

@@ -7,6 +7,7 @@ import {
 	STRAVA_LOOKBACK_OPTIONS,
 	isStravaLookbackReachable,
 	parseStravaSyncResult,
+	parseImportCompleteness
 } from './strava_sync_result';
 
 test('a finished walk is the only shape that reports complete', () => {
@@ -191,4 +192,55 @@ test('the maximum is the bound the Edge Function actually enforces', () => {
 	const bound = src.match(/requested > (\d+)/)?.[1];
 	assert.ok(bound, 'strava-import no longer bounds `lookbackDays` with `requested > <n>`');
 	assert.equal(Number(bound), STRAVA_LOOKBACK_MAX_DAYS);
+});
+
+// parseImportCompleteness — the two scraper importers. Mirrored, case for
+// case, by `packages/core_models/test/strava_sync_result_test.dart`.
+
+test('a body this build cannot read is partial, never complete', () => {
+	for (const body of [null, undefined, 'ok', 42, [], { imported: 3 }]) {
+		const r = parseImportCompleteness(body);
+		assert.equal(r.complete, false, JSON.stringify(body) ?? 'undefined');
+	}
+});
+
+test('only an explicit true claims the import was whole', () => {
+	assert.equal(parseImportCompleteness({ complete: true }).complete, true);
+	for (const v of [false, 'true', 1, null, undefined]) {
+		assert.equal(parseImportCompleteness({ complete: v }).complete, false, String(v));
+	}
+});
+
+test('an embedded error forces partial beside a complete flag', () => {
+	// The function answered about a walk it did not finish; the same rule
+	// parseStravaSyncResult applies.
+	assert.equal(parseImportCompleteness({ complete: true, error: 'upstream 502' }).complete, false);
+	// A blank error is not an error.
+	assert.equal(parseImportCompleteness({ complete: true, error: '  ' }).complete, true);
+});
+
+test('counts are non-negative integers or zero', () => {
+	const r = parseImportCompleteness({ imported: 12, skipped: 3, complete: true });
+	assert.equal(r.imported, 12);
+	assert.equal(r.skipped, 3);
+	for (const bad of [-1, 1.5, '4', null, undefined, NaN, Infinity]) {
+		assert.equal(parseImportCompleteness({ imported: bad }).imported, 0, String(bad));
+	}
+});
+
+test('total is carried when the function sent one', () => {
+	assert.equal(parseImportCompleteness({ imported: 12, skipped: 8, total: 60 }).total, 60);
+	// Absent means unknown, not zero — a caller must be able to tell
+	// "12 of 60" from "12, and there may be more".
+	assert.equal(parseImportCompleteness({ imported: 12 }).total, null);
+	for (const bad of [-1, 2.5, '60', NaN, Infinity]) {
+		assert.equal(parseImportCompleteness({ total: bad }).total, null, String(bad));
+	}
+});
+
+test('a total below what was already processed is no total at all', () => {
+	// "12 of 5" is worse than no denominator.
+	assert.equal(parseImportCompleteness({ imported: 12, skipped: 0, total: 5 }).total, null);
+	assert.equal(parseImportCompleteness({ imported: 12, skipped: 3, total: 15 }).total, 15);
+	assert.equal(parseImportCompleteness({ imported: 12, skipped: 3, total: 14 }).total, null);
 });

@@ -6848,6 +6848,20 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String integrationsImportPartialOf(int n, int total) {
+    return 'Só foi possível importar parte do seu histórico: $n de $total.';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'Não foi possível ler todos os resultados. Importados: $n.';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      'A lista de resultados era demasiado longa para ser lida até ao fim, por isso não foi possível confirmar o seu resultado. Introduza-o manualmente.';
+
+  @override
   String get integrationsParkrunNoneNew =>
       'Nenhum novo resultado do parkrun desde a última importação.';
 
@@ -20779,6 +20793,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$_temp0';
   }
+
+  @override
+  String integrationsImportPartialOf(int n, int total) {
+    return 'Só foi possível importar parte do seu histórico: $n de $total.';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'Não foi possível ler todos os resultados. Importados: $n.';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      'A lista de resultados era longa demais para ser lida até o fim, então não foi possível confirmar seu resultado. Digite-o manualmente.';
 
   @override
   String get integrationsParkrunNoneNew =>

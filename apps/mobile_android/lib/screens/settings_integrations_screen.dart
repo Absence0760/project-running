@@ -387,14 +387,22 @@ class _SettingsIntegrationsScreenState
 
     try {
       await api.setParkrunAthleteNumber(athleteNumber);
-      final imported = await api.importParkrunResults(athleteNumber);
+      final result = await api.importParkrunResults(athleteNumber);
       if (!mounted) return;
       Navigator.of(context).pop();
+      // A capped history and a whole one both arrive as a positive count, so
+      // the shortfall has to be said outright or the runner reads "Imported 40
+      // results" as "your parkrun history is here" (decisions § 1014).
+      final total = result.total;
       showTopBanner(
         context,
-        imported > 0
-            ? l10n.integrationsParkrunImported(imported)
-            : l10n.integrationsParkrunNoneNew,
+        !result.complete
+            ? (total != null
+                ? l10n.integrationsImportPartialOf(result.imported, total)
+                : l10n.integrationsImportPartial(result.imported))
+            : result.imported > 0
+                ? l10n.integrationsParkrunImported(result.imported)
+                : l10n.integrationsParkrunNoneNew,
       );
     } catch (e) {
       if (!mounted) return;

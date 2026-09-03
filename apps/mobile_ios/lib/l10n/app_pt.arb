@@ -1881,6 +1881,31 @@
   "integrationsImport": "Importar",
   "integrationsParkrunImporting": "A importar resultados do parkrun…",
   "integrationsParkrunImported": "{count, plural, one{{count} resultado do parkrun importado.} other{{count} resultados do parkrun importados.}}",
+  "integrationsImportPartialOf": "Só foi possível importar parte do seu histórico: {n} de {total}.",
+  "@integrationsImportPartialOf": {
+    "description": "Banner when an importer read only part of a history and knows the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportPartial": "Não foi possível ler todos os resultados. Importados: {n}.",
+  "@integrationsImportPartial": {
+    "description": "Banner when an importer read only part of a history and does not know the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportTruncated": "A lista de resultados era demasiado longa para ser lida até ao fim, por isso não foi possível confirmar o seu resultado. Introduza-o manualmente.",
+  "@integrationsImportTruncated": {
+    "description": "Banner when the upstream results list was truncated before the runner was found"
+  },
   "integrationsParkrunNoneNew": "Nenhum novo resultado do parkrun desde a última importação.",
   "integrationsImportFailed": "Falha na importação: {error}",
   "integrationsStravaName": "Strava",

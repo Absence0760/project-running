@@ -140,3 +140,73 @@ const List<int> kStravaLookbackOptions = [90, 180, 365];
 /// window that will come back empty.
 bool isStravaLookbackReachable(int days) =>
     days > 0 && days <= kStravaLookbackMaxDays;
+
+/// What a SCRAPER importer says about how much it read, and how much of it a
+/// client may believe.
+///
+/// `parkrun-import` answers `{ imported, skipped, total, complete }` and
+/// `race-results-import` answers `complete` on every success shape. Neither
+/// count reveals a shortfall on its own: a parkrun history capped at
+/// `MAX_PARKRUN_ROWS` and a finisher field truncated at 2,000 both present as
+/// a successful import of everything that was there.
+///
+/// Same fail-closed direction as [parseStravaSyncResult], for the same reason
+/// and not by analogy: one transport per importer, shipped from this repo
+/// alongside its callers, so an absent `complete` means a body this build does
+/// not recognise rather than an older deployment of a second transport. A
+/// false "partial" costs a sentence the runner can ignore; a false "complete"
+/// tells them a history is whole when it is not.
+///
+/// Lives beside the Strava parser rather than in a module of its own because
+/// it is the SAME rule — a new module would be a parity pair, and a pair that
+/// neither registry names is a pair whose divergence nothing detects
+/// (decisions § 641). Splitting the three parsers into a registered
+/// `import_completeness` pair is filed.
+class ImportCompleteness {
+  final int imported;
+  final int skipped;
+
+  /// How many rows the page actually carried, when the function said. Null
+  /// when it did not, so a caller can tell "12 of 60" from "12, and there may
+  /// be more" rather than printing a fabricated denominator.
+  final int? total;
+
+  /// Only an explicit `true` earns it.
+  final bool complete;
+
+  const ImportCompleteness({
+    required this.imported,
+    required this.skipped,
+    required this.total,
+    required this.complete,
+  });
+}
+
+/// Grade a scraper importer's response. Never throws.
+ImportCompleteness parseImportCompleteness(Object? data) {
+  if (data is! Map) {
+    return const ImportCompleteness(
+        imported: 0, skipped: 0, total: null, complete: false);
+  }
+  final imported = _count(data['imported']);
+  final skipped = _count(data['skipped']);
+  // An embedded error forces partial even beside a `complete: true`, matching
+  // [parseStravaSyncResult]: the function answered about a walk it did not
+  // finish.
+  final complete = _text(data['error']) == null && data['complete'] == true;
+  final rawTotal = data['total'];
+  final total = rawTotal is num &&
+          rawTotal.isFinite &&
+          rawTotal >= 0 &&
+          rawTotal == rawTotal.roundToDouble()
+      ? rawTotal.toInt()
+      : null;
+  return ImportCompleteness(
+    imported: imported,
+    skipped: skipped,
+    // A total below what was already processed is not a total — reporting
+    // "12 of 5" is worse than reporting no denominator at all.
+    total: total != null && total >= imported + skipped ? total : null,
+    complete: complete,
+  );
+}
