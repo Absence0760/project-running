@@ -7,7 +7,8 @@ import 'package:ui_kit/ui_kit.dart';
 
 import '../basemap_credits.dart' show tileEnv;
 import '../l10n/gen/app_localizations.dart';
-import '../preferences.dart' show ActivityType, activeMapStyle;
+import 'package:core_models/core_models.dart' show ActivityType;
+import '../preferences.dart' show activeMapStyle;
 import '../tile_cache.dart';
 import 'map_attribution.dart';
 import 'pace_segments.dart';

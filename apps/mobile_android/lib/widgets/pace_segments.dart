@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../preferences.dart' show ActivityType;
+import 'package:core_models/core_models.dart' show ActivityType;
 
 /// Pace colour ramp — slow → fast, 6 buckets. Designed to read clearly
 /// on top of the dark map style and to map "hotter colour = faster" in
