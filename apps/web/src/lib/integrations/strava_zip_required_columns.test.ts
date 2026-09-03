@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { stripComments } from '$lib/core/strip_comments';
+import { stripComments } from '../core/strip_comments';
 
 import { indexHeader } from './strava-zip-header';
 
