@@ -1425,11 +1425,18 @@ jobs:
     #                            environment's ARNs per role, and every Lambda
     #                            Function URL AWS_IAM-authed with BOTH
     #                            CloudFront invoke grants (issue #590).
+    #   check_infra_error_responses.mjs
+    #                            the distribution's `custom_error_response` set
+    #                            — no 404 mapping (the share Lambdas own that
+    #                            status since § 1036, and the mapping discarded
+    #                            their `noindex`), the 403 one still laundering
+    #                            to 200, and every share handler still returning
+    #                            the shell that makes the first claim safe.
     #   check_infra_coverage.mjs every Terraform directory validated and
     #                            dependency-tracked, and every Lambda in the
     #                            module carrying an error-rate and a p95 alarm
     #                            — the only signal a Lambda-origin failure has,
-    #                            since the distribution-wide 403/404 fallback
+    #                            since the distribution-wide 403 fallback
     #                            rewrites one into a 200 shell.
     #
     # Each guard's own `node --test` suite runs beside it: a parser that
@@ -1450,6 +1457,17 @@ jobs:
           fi
           if ! node --test scripts/check_infra_iam.test.mjs; then
             echo "::error::The infra IAM guard's own unit tests failed. The Terraform itself is fine — the check above just passed — so this is a defect in scripts/check_infra_iam.mjs, and a parser that stopped matching would have passed the check vacuously."
+            exit 1
+          fi
+      - name: The distribution's error responses, and the handlers that justify them
+        run: |
+          if ! node scripts/check_infra_error_responses.mjs; then
+            echo "::error::The distribution's custom_error_response set has changed, or a share Lambda has stopped answering its own 404 with the SPA shell. Nothing here is about IAM scope or alarm coverage; those are the other checks in this job."
+            echo "The failing line above names the status or the handler. decisions § 1084 is why the 404 mapping is gone and § 1022 is why the 403 one must stay at 200."
+            exit 1
+          fi
+          if ! node --test scripts/check_infra_error_responses.test.mjs; then
+            echo "::error::The error-response guard's own unit tests failed. The Terraform itself is fine — the check above just passed — so this is a defect in scripts/check_infra_error_responses.mjs, and a parser that stopped matching would have passed the check vacuously."
             exit 1
           fi
       - name: Every stack validated, every Lambda alarmed

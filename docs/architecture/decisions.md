@@ -18779,3 +18779,45 @@ registry rather than the other way round. Not taken: a PostRun caption saying wh
 the bpm line is missing. That is a second affordance on a 1.4-inch screen and a
 string in seven catalogues, and it is a display decision rather than the
 saved-data one this entry is about — filed.
+
+## 1084. The distribution's 404 mapping is gone, and the guard that keeps it gone reads the handlers that make that safe
+
+[§ 1022](#1022) added `custom_error_response { error_code = 404 }` because the
+five share Lambdas' own 404 bodies were `<p>This link isn't available.</p>` — one
+unstyled English sentence — so the SPA shell had to be substituted for them. The
+cost, stated in that entry, was that the substitution ALSO discards the `noindex`
+the Lambda body carries, which is the tag the crawler fix was about.
+[§ 1036](#1036) removed the premise: all five now return the SPA shell at 404
+themselves, through the same `injectEntityHead` that keeps a stale
+`og:*`/canonical/JSON-LD off a 200. With the handlers honest the mapping only
+replaces an honest body with an identical one, minus the tag. Dropping it is what
+puts the `noindex` on the wire.
+
+Two things fall out that were not the reason for doing it. `custom_error_response`
+is modelled per DISTRIBUTION, never per behaviour, so the block also rewrote
+`/api/coach*`'s `{"error":"not found"}` into an HTML shell for an API client; that
+stops too. And S3 was never a party to it — the site bucket grants `s3:GetObject`
+with no `s3:ListBucket`, so a missing key is 403 AccessDenied, which is why the
+403 block is the SPA deep-link path and why the two were never symmetric. **403
+stays at 200 and must**: answering a deep link honestly breaks every dynamic
+client route.
+
+**The guard is new, and it is deliberately not in `check_infra_coverage.mjs`.**
+That one asks whether any mapping launders a 4xx/5xx into a 2xx; a 404 → 404
+mapping launders nothing and passed it every time. The question here is whether
+the block exists at all, and the answer is only safe while its premise holds —
+so `scripts/check_infra_error_responses.mjs` reads BOTH sides: no 404 mapping,
+the 403 one still at 200, and every `apps/web/lambda/share-*` handler still
+answering its own 404 with `notFoundShell`, with the handler set derived from the
+directory listing so a sixth share Lambda is covered without anyone remembering.
+If a handler ever stops returning the shell, its bare sentence goes straight to a
+reader on ten paths and nothing in `infra/` could see it; now the PR fails and
+says which of the two halves moved. It joins the already-bundled `infra-guards`
+job, so no new job and no `CI gate` edit.
+
+Not verified: any of this against real state. No lane holds AWS credentials, so
+`terraform validate` on both env roots and `fmt -check` over the tree is the whole
+of what was run. This is a distribution-config change on a `prevent_destroy`-free
+resource with no `plan` behind it — apply preview first, and confirm the response
+of a `/share/run/<missing-id>` is a 404 whose body carries `<meta name="robots"
+content="noindex">`, which is the only observation that closes it.

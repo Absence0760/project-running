@@ -599,12 +599,16 @@ test('an unreadable response_code is reported, not skipped', () => {
   assert.ok(has(errors, /Both are required/), errors.join('\n'));
 });
 
-test('the committed module maps 404 to 404 and 403 to 200', () => {
+test('the committed module maps 403 to 200 and nothing else', () => {
+  // The 404 block is gone: the share Lambdas return the SPA shell at 404
+  // themselves, so the mapping only discarded the `noindex` in their body
+  // (§ 1084). `check_infra_error_responses.mjs` is what keeps it gone; this
+  // asserts the set THIS guard reads, so a returning block still shows up here.
   const dist = parseDistribution(readFileSync(MODULE_FILE, 'utf-8'));
   assert.ok(dist);
   assert.deepEqual(
     dist.errorResponses.map((e) => `${e.errorCode}->${e.responseCode}@${e.responsePage}`),
-    ['403->200@/index.html', '404->404@/index.html'],
+    ['403->200@/index.html'],
   );
 });
 
@@ -618,12 +622,16 @@ test('every declared laundering exemption carries a reason', () => {
   }
 });
 
-test('the guard exits non-zero when the 404 mapping goes back to 200', () => {
+test('the guard exits non-zero when an undeclared status is laundered to 200', () => {
+  // The mutation is on the surviving block, since it is now the only one: point
+  // the SPA deep-link mapping at 404 instead of 403 and it becomes `404->200`,
+  // which no ALLOWED_STATUS_LAUNDERING entry covers — the soft-404 shape § 1022
+  // removed, re-created against the real module.
   const dir = mkdtempSync(join(tmpdir(), 'infra-coverage-err-'));
   const src = readFileSync(MODULE_FILE, 'utf-8');
-  const block = /custom_error_response \{\n(\s*)error_code\s*=\s*404\n\s*response_code\s*=\s*404\n/;
-  assert.match(src, block, 'the 404 custom_error_response moved; re-anchor this test');
-  const cut = src.replace(block, (b) => b.replace('response_code      = 404', 'response_code      = 200'));
+  const block = /custom_error_response \{\n(\s*)error_code\s*=\s*403\n\s*response_code\s*=\s*200\n/;
+  assert.match(src, block, 'the 403 custom_error_response moved; re-anchor this test');
+  const cut = src.replace(block, (b) => b.replace('error_code         = 403', 'error_code         = 404'));
   assert.notEqual(cut, src, 'the mutation did not change anything');
   const path = join(dir, 'main.tf');
   writeFileSync(path, cut);
