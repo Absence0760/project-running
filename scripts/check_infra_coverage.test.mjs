@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
   ALARMS_FILE,
+  ALLOWED_STATUS_LAUNDERING,
   DISTRIBUTION_ALARMS,
   DEPENDABOT_FILE,
   INFRA_DIR,
@@ -64,6 +65,10 @@ function distribution(over = {}) {
       behaviour(),
     ],
     headerPolicies: new Map([['security', { csp: true, permissionsPolicy: true }]]),
+    errorResponses: [
+      { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+      { errorCode: '404', responseCode: '404', responsePage: '/index.html' },
+    ],
     ...over,
   };
 }
@@ -458,5 +463,122 @@ test('the guard exits non-zero when a behaviour loses the security headers polic
         stdio: 'pipe',
       }),
     /no response_headers_policy_id/,
+  );
+});
+
+// ───────────────── claim 4: error-response honesty ─────────────────
+
+test('the 404 mapping answering 404 with the shell body passes', () => {
+  const { errors, ok } = run();
+  assert.deepEqual(errors, []);
+  assert.ok(
+    ok.some((l) => /custom_error_response 403->200/.test(l)),
+    ok.join('\n'),
+  );
+});
+
+// The exact shape the distribution shipped until decisions § 1022: a Lambda's
+// deliberate 404 answered 200, so ten /share/* paths were soft 404s.
+test('a 404 laundered into a 200 fails', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '404', responseCode: '200', responsePage: '/index.html' },
+      ],
+    }),
+  });
+  assert.ok(has(errors, /maps 404 to 200/), errors.join('\n'));
+  assert.equal(errors.length, 1);
+});
+
+test('a 5xx laundered into a 200 fails on the same rule', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '503', responseCode: '200', responsePage: '/maintenance.html' },
+      ],
+    }),
+  });
+  assert.ok(has(errors, /maps 503 to 200/), errors.join('\n'));
+});
+
+// A 4xx answered with another 4xx is not laundering — the reader is still told
+// the request failed, which is the only property this claim is about.
+test('a 4xx answered with a 4xx is not laundering', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '404', responseCode: '410', responsePage: '/index.html' },
+      ],
+    }),
+  });
+  assert.deepEqual(errors, []);
+});
+
+test('losing the declared 403 exemption fails as loudly as an undeclared one', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [{ errorCode: '404', responseCode: '404', responsePage: '/index.html' }],
+    }),
+  });
+  assert.ok(has(errors, /ALLOWED_STATUS_LAUNDERING declares 403->200/), errors.join('\n'));
+});
+
+test('no custom_error_response at all is reported, not passed', () => {
+  const { errors } = run({ distribution: distribution({ errorResponses: [] }) });
+  assert.ok(has(errors, /no custom_error_response block was read/), errors.join('\n'));
+});
+
+test('an unreadable response_code is reported, not skipped', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '404', responseCode: null, responsePage: '/index.html' },
+      ],
+    }),
+  });
+  assert.ok(has(errors, /Both are required/), errors.join('\n'));
+});
+
+test('the committed module maps 404 to 404 and 403 to 200', () => {
+  const dist = parseDistribution(readFileSync(MODULE_FILE, 'utf-8'));
+  assert.ok(dist);
+  assert.deepEqual(
+    dist.errorResponses.map((e) => `${e.errorCode}->${e.responseCode}@${e.responsePage}`),
+    ['403->200@/index.html', '404->404@/index.html'],
+  );
+});
+
+// An exemption with no reason is a hole with a name. The map is the only place
+// a status-laundering mapping is allowed to live, so its entries must say why.
+test('every declared laundering exemption carries a reason', () => {
+  assert.ok(ALLOWED_STATUS_LAUNDERING.size > 0);
+  for (const [key, reason] of ALLOWED_STATUS_LAUNDERING) {
+    assert.match(key, /^[45]\d\d->2\d\d$/);
+    assert.ok(reason.length > 40, `${key} carries no reason`);
+  }
+});
+
+test('the guard exits non-zero when the 404 mapping goes back to 200', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'infra-coverage-err-'));
+  const src = readFileSync(MODULE_FILE, 'utf-8');
+  const block = /custom_error_response \{\n(\s*)error_code\s*=\s*404\n\s*response_code\s*=\s*404\n/;
+  assert.match(src, block, 'the 404 custom_error_response moved; re-anchor this test');
+  const cut = src.replace(block, (b) => b.replace('response_code      = 404', 'response_code      = 200'));
+  assert.notEqual(cut, src, 'the mutation did not change anything');
+  const path = join(dir, 'main.tf');
+  writeFileSync(path, cut);
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, ['scripts/check_infra_coverage.mjs'], {
+        env: { ...process.env, INFRA_COVERAGE_MODULE: path },
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }),
+    /maps 404 to 200/,
   );
 });

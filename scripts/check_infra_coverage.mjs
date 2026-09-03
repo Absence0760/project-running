@@ -44,6 +44,20 @@
 //      failures have, and osrm-proxy shipped without the p95 one its own
 //      comment claimed it mirrored from generate-route.
 //
+//   4. Error-response honesty. `custom_error_response` is the one place on this
+//      distribution where a status code can be laundered, and because it is
+//      distribution-wide it launders EVERY origin's at once. A mapping that
+//      answers a 4xx/5xx with a 2xx tells a crawler the page is fine — which is
+//      what the 404 -> 200 mapping did to ten `/share/*` paths, turning every
+//      private, deleted or never-existing entity into a soft 404 Google was
+//      invited to index, with the `noindex` that would have said otherwise
+//      sitting in a Lambda body the rewrite discards (decisions § 1022). One
+//      such mapping is legitimate and is declared here with its reason: the
+//      SPA's 403 deep-link path, where S3's GetObject-only bucket policy makes
+//      a missing key a 403 and every dynamic client route a missing key. Any
+//      other status-laundering mapping fails, and a declared exemption nothing
+//      uses fails too — the RESOURCELESS_ACTIONS shape, one file over.
+//
 // Offline by design: a directory listing and three files. No AWS credentials,
 // no `terraform init`.
 //
@@ -266,8 +280,20 @@ export const HTTPS_VIEWER_POLICIES = new Set(['redirect-to-https', 'https-only']
  *   insecureOrigins: string[],
  *   behaviours: Behaviour[],
  *   headerPolicies: Map<string, { csp: boolean, permissionsPolicy: boolean }>,
+ *   errorResponses: ErrorResponse[],
  * } | null} Distribution
+ * @typedef {{ errorCode: string | null, responseCode: string | null, responsePage: string | null }} ErrorResponse
  */
+
+/// The one status-laundering `custom_error_response` this distribution is
+/// allowed, keyed `<error_code>-><response_code>`, with the reason. An entry
+/// here that no block uses fails, so the exemption cannot outlive its grant.
+export const ALLOWED_STATUS_LAUNDERING = new Map([
+  [
+    '403->200',
+    'the SPA deep-link path: the site bucket grants s3:GetObject and no s3:ListBucket, so a missing key is 403 AccessDenied and every dynamic client route (/dashboard, /runs/<id>, /u/<id>) arrives as one',
+  ],
+]);
 
 /** @param {string} body @param {string} key */
 function attr(body, key) {
@@ -345,7 +371,24 @@ export function parseDistribution(raw) {
     });
   }
 
-  return { originIds, originsMissingOac, insecureOrigins, behaviours, headerPolicies };
+  /** @type {ErrorResponse[]} */
+  const errorResponses = [];
+  for (const { body } of nestedBlocks(dist.body, /(?:^|\n)\s*custom_error_response\s*\{/)) {
+    errorResponses.push({
+      errorCode: unquote(attr(body, 'error_code')),
+      responseCode: unquote(attr(body, 'response_code')),
+      responsePage: unquote(attr(body, 'response_page_path')),
+    });
+  }
+
+  return {
+    originIds,
+    originsMissingOac,
+    insecureOrigins,
+    behaviours,
+    headerPolicies,
+    errorResponses,
+  };
 }
 
 // ────────────────────────────── comparison ──────────────────────────────
@@ -505,7 +548,61 @@ function distributionCoverage(distribution, errors, ok) {
     );
     return;
   }
-  const { behaviours, originIds, originsMissingOac, insecureOrigins, headerPolicies } = distribution;
+  const {
+    behaviours,
+    originIds,
+    originsMissingOac,
+    insecureOrigins,
+    headerPolicies,
+    errorResponses,
+  } = distribution;
+
+  // ── 4. no custom_error_response launders a 4xx/5xx into a 2xx ──
+  if (errorResponses.length === 0) {
+    errors.push(
+      'no custom_error_response block was read from the distribution. The SPA needs the 403 one to ' +
+        'serve a deep link at all, so a count of zero means this scan stopped matching rather than ' +
+        'that the mappings are gone.',
+    );
+  }
+  /** @type {Set<string>} */
+  const launderingSeen = new Set();
+  for (const { errorCode, responseCode, responsePage } of errorResponses) {
+    if (errorCode === null || responseCode === null) {
+      errors.push(
+        `a custom_error_response was read with error_code=${JSON.stringify(errorCode)} and ` +
+          `response_code=${JSON.stringify(responseCode)}. Both are required to tell an honest ` +
+          'mapping from a laundering one, and an unreadable one is not a passing one.',
+      );
+      continue;
+    }
+    if (!/^[45]/.test(errorCode) || !/^2/.test(responseCode)) continue;
+    const key = `${errorCode}->${responseCode}`;
+    launderingSeen.add(key);
+    const reason = ALLOWED_STATUS_LAUNDERING.get(key);
+    if (reason === undefined) {
+      errors.push(
+        `custom_error_response maps ${errorCode} to ${responseCode} ` +
+          `(${responsePage ?? 'no page'}). custom_error_response is DISTRIBUTION-wide, so that ` +
+          "rewrites every Lambda origin's deliberate error into a success as well: a crawler is " +
+          'told the page is fine, and any `noindex` the origin sent lives in a body this mapping ' +
+          'discards. Answer the honest status with the shell body (response_code = error_code) ' +
+          'unless the mapping is the SPA deep-link one, which is declared in ' +
+          'ALLOWED_STATUS_LAUNDERING with its reason. decisions § 1022.',
+      );
+    } else {
+      ok.push(`custom_error_response ${key}: ${reason}`);
+    }
+  }
+  for (const [key, reason] of ALLOWED_STATUS_LAUNDERING) {
+    if (!launderingSeen.has(key)) {
+      errors.push(
+        `ALLOWED_STATUS_LAUNDERING declares ${key} (${reason}) and no custom_error_response does ` +
+          'it. A stale exemption reads as a deliberate decision long after the mapping it excused ' +
+          'is gone.',
+      );
+    }
+  }
   if (behaviours.length < 2) {
     errors.push(
       `only ${behaviours.length} cache behaviour(s) were read from the distribution. It carries a ` +
