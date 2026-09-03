@@ -17,15 +17,6 @@ data "terraform_remote_state" "dns" {
 }
 
 # Read the OIDC deploy role ARN — see envs/prod/main.tf for rationale.
-data "terraform_remote_state" "github_oidc" {
-  backend = "s3"
-  config = {
-    bucket = "threkir-tfstate"
-    key    = "github-oidc/terraform.tfstate"
-    region = "us-east-1"
-  }
-}
-
 locals {
   domain_name = "${var.preview_subdomain}.${var.apex_domain}"
   # Secrets live in the PRIVATE estate repo ../infra-secrets/running/, NOT this
@@ -72,6 +63,11 @@ module "web" {
   # it at an engine only if a preview must exercise real snapping.
   osrm_url = var.osrm_url
 
+  # Preview defaults to no graph_cycle sidecar ("" → the generate-route Lambda
+  # skips the v3 graph-cycle generator and serves round_trip). Point it at a
+  # sidecar only if a preview must exercise the v3 path.
+  graph_cycle_url = var.graph_cycle_url
+
   # Tight cap — mirrors generate-route; preview only sees smoke-test
   # route-builder traffic.
   osrm_proxy_reserved_concurrency = 5
@@ -92,7 +88,8 @@ module "web" {
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 
-  kms_decrypt_principal_arn = data.terraform_remote_state.github_oidc.outputs.deploy_role_arn_preview
+  # Left at the module's "" default — see envs/prod/main.tf for why the GitHub
+  # deploy role is not a decrypt principal on the secrets CMK. decisions § 1021.
 
   # PascalCase to match the other stacks. See envs/prod/main.tf for
   # rationale.

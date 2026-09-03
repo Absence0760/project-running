@@ -170,6 +170,22 @@ No per-entity `og:image` PNG — the OG image is the branded `og-default.png`
 so the Lambda needs no native rasteriser and runs at 256 MB. Fail-open: a private /
 missing / deleted entity returns **404 HTML with `noindex`**, never a 5xx.
 
+**What a crawler actually receives is the distribution's answer, not the
+Lambda's.** `custom_error_response` is modelled per DISTRIBUTION on CloudFront,
+so the SPA fallback in `infra/modules/web-stack/main.tf` replaces the BODY of
+every origin's 4xx with `/index.html`. Until [decisions § 1022](../architecture/decisions.md)
+it also replaced the 404 STATUS with **200**, which made all ten
+`/share/{run,route,recap,badge,event,profile,club,race,session,workout}/<id>`
+paths soft 404s for a private, deleted or never-existing entity: a generic shell
+at 200, with the `noindex` above sitting in a body that never shipped. The 404
+mapping now answers **404** and keeps the shell body, so a crawler gets the
+honest status (which is what actually de-indexes a URL — a `noindex` on a 200 is
+the weaker instrument) and a human still lands on the SPA's own localized
+not-found card rather than the Lambda's one-line fallback page. The 403 mapping
+still answers 200 and must: every dynamic client route is a missing S3 key, so
+the deep-link path arrives as a 403. `scripts/check_infra_coverage.mjs` fails a
+PR that maps any 4xx/5xx to a 2xx other than that declared 403.
+
 The matching SvelteKit routes carry `prerender = false` and run the same
 lookup + meta under `vite dev`, so every surface works locally and is
 e2e-tested without standing up the Lambda.

@@ -48,6 +48,12 @@ variable "osrm_url" {
   default     = ""
 }
 
+variable "graph_cycle_url" {
+  description = "Base URL of the self-hosted graph_cycle map sidecar for the generate-route Lambda's v3 graph-cycle loop generation (tried FIRST, ahead of GraphHopper round_trip). Non-secret; the GRAPH_CYCLE_API_KEY shared secret comes from sops. Defaults to '' on preview so the handler skips graph-cycle and serves round_trip; set it only if a preview must exercise the v3 path. Declared for the same reason graphhopper_url and osrm_url are: an env that cannot be configured the way prod can cannot rehearse a prod change, and this was the one of the three engine URLs preview could not set (decisions § 1024)."
+  type        = string
+  default     = ""
+}
+
 # Email subscribers for the preview env's CloudWatch alarms (Lambda
 # throttling + 5xx error rate). Without subscribers the alarms fire
 # into an SNS topic nobody reads — a hit Lambda concurrency cap on
