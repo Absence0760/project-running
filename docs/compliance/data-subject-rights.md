@@ -83,9 +83,26 @@ follows it in the same call never ran either. `20270703000002` sets the
 documented escape GUC transaction-locally and makes the sweep verify its
 own post-condition, so a blocked sweep fails loudly instead of reporting
 the same zero a clean night reports ([decisions § 857](../architecture/decisions.md)).
-**Open, and an owner call:** the sweep deletes `storage.objects` ROWS,
-and that trigger exists because a row delete is not an object delete —
-whether the backing bytes are reaped is not measured here.
+**Measured, and the answer is no** ([decisions § 1049](../architecture/decisions.md)):
+the sweep deletes `storage.objects` ROWS, that trigger exists because a
+row delete is not an object delete, and the backing bytes are **not**
+reaped. A probe uploaded through the real Storage API, aged past the
+window and swept by the shipped `cleanup_stale_export_blobs()` loses its
+row and stops being listable — and its bytes remain on the storage
+backend with a matching `sha256`. Migration `20260927_001`'s comment
+that "the actual blob bytes are reaped by the storage backend's
+background sweeper once the row is gone" is wrong; there is no such
+sweeper (no `pg_cron` job touches storage bytes, and the storage
+container runs one server process and nothing else). **So the sweep
+removes REACHABILITY, not the archive.** That is still strictly better
+than the state § 857 replaced, where it deleted nothing at all, but no
+document may call it an Art 17 erasure. The durable fix is a job kind in
+the Go worker, which already writes the archive through the Storage API
+and already holds the service key, leaving `expire_stale_export_jobs()`
+as the only SQL half; it is filed with an owner. The residual on the
+measurement is the backend: this was the local `file` backend, so what
+is proved is the MECHANISM, and confirming the byte residue on Cloud's
+S3 still means listing the bucket over the S3-compatible endpoint.
 **One bound is a deploy-time operator step, not code:** Supabase also
 enforces a project-level upload limit (50 MB by default) and the
 effective ceiling is the lower of the two, so until that is raised the

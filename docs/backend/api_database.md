@@ -30,10 +30,10 @@ create table runs (
                 check (activity_type in ('run','walk','hike','cycle','stroller')),
   is_dnf        boolean not null default false, -- did-not-finish; PR engine excludes these. Promoted from metadata in 20261207_001 (F3)
   elevation_gain_m numeric,                 -- total ascent (metres); null or (>= 0, finite, not NaN) (CHECK, 20270704000001). Nullable; backfilled from metadata.elevation_m in 20270302_001 (ADR §186), summed by the vert challenge metric, projected into activities.summary + public_runs. Writers populate both this + metadata.elevation_m.
-  fastest_5k_s  integer,                    -- embedded-best seconds (fastest rolling 5 km window in the track). Promoted from metadata in 20270325_001; PR-candidate read by refresh_personal_records_for_user, exposed on public_runs.
+  fastest_5k_s  integer,                    -- embedded-best seconds (fastest rolling 5 km window in the track); null or > 0 (CHECK, 20270705000004). Promoted from metadata in 20270325_001; PR-candidate read by refresh_personal_records_for_user, exposed on public_runs.
   fastest_10k_s integer,                    -- same, rolling 10 km window (20270325_001)
   fastest_half_marathon_s integer,          -- same, rolling 21.0975 km window (20270325_001)
-  fastest_marathon_s integer,               -- same, rolling 42.195 km window (20270325_001)
+  fastest_marathon_s integer,               -- same, rolling 42.195 km window (20270325_001); null or > 0 (CHECK, 20270705000004)
   external_id   text unique,                -- deduplication key
   metadata      jsonb,                      -- source-specific extra fields (avg_bpm, steps, elevation_m, provider ids, …)
   track_url     text,                       -- Storage path: {user_id}/{run_id}.json.gz
@@ -60,6 +60,10 @@ create index runs_public on runs (is_public, started_at desc) where is_public = 
 **`runs_user_started_at` is NOT redundant with `runs_user_source`** (F2f, verified by EXPLAIN). The audit hypothesised that `runs_user_source (user_id, source, started_at DESC)` (migration `20260407_001`) might subsume `runs_user_started_at (user_id, started_at DESC)`. It does not: the history / dashboard list query filters on `user_id` and orders by `started_at DESC` with **no `source` predicate**, and `started_at` is the *third* column of `runs_user_source` (behind `source`), so that index can't supply the ordering without a `source` equality. EXPLAIN over 5 000 synthetic runs picks `runs_user_started_at` for the no-source query; dropping it forces a Seq Scan + top-N Sort (cost ~222 vs ~6), and even with `enable_seqscan=off` the planner falls back to a bitmap scan on `runs_user_distance` + Sort — it never chooses `runs_user_source` for an ordered scan. Both indexes are kept: `runs_user_source` serves the source-filtered dashboard query, `runs_user_started_at` serves the unfiltered timeline.
 
 **The three physical quantities are bounded, and the bound names NaN explicitly** (`20270704000001`). `runs_distance_m_check`, `runs_duration_s_check` and `runs_elevation_gain_m_check` were added after a measurement showed an ordinary authenticated account could POST `{"distance_m":"NaN","duration_s":-60,"elevation_gain_m":"Infinity"}` through PostgREST and have it stored verbatim — the self-owned INSERT policy is the only privilege the write needs. `'NaN'::numeric >= 0` is **true**, so a bare `>= 0` would not have closed it; each numeric bound carries an explicit `<> 'NaN'` term, and `elevation_gain_m` carries `<> 'Infinity'` too because its bare `numeric` type accepts one where `distance_m`'s `numeric(10, 2)` scale rejects it with a 22003 before any CHECK runs. The two consequences that motivated it: NaN outranks every real value in numeric ordering and `challenge_leaderboard` ranks on `sum(distance_m)` descending, so one NaN run took rank 1 of every distance challenge its author had joined; and a negative `duration_s` became the account's 5k best, because the whole-run branch of `refresh_personal_records_for_user` orders on `duration_s asc` with no floor of its own where the promoted `fastest_*_s` branches already carry one. Deliberately no upper bound — a 240-mile ultra is 386 km and refusing a real measurement is worse than admitting an absurd one that no longer poisons an aggregate. Pinned by `runs_physical_quantity_bounds_test.sql`.
+
+**Every numeric column in `public` now carries a bound, or an exemption with a reason** (`20270705000001`, `20270705000002`, `20270705000004`; [decisions §§ 1046-1047](../architecture/decisions.md), [§ 1051](../architecture/decisions.md)). `20270704000002` fixed the bounds that existed and admitted NaN; re-derived from the catalogue, **79** numeric columns on base tables carried no single-column CHECK at all — **31** of them in a `numeric` / `double precision` type that can hold a NaN (the set the followup named, matching name for name) and **48** integer-family, where NaN is unreachable at the type and the exposure is a nonsense sign. All are closed except five deliberate exemptions: `deletion_audit_log.id`, `jobs.id`, `live_run_pings.id` and `race_pings.id` (sequence- or identity-backed surrogate keys no client supplies) and `segments.length_m` (`generated always as (end_distance_m - start_distance_m) stored`, both operands already finite). Two columns are not ranges on purpose — `fitness_snapshots.training_stress_bal` takes a pure finiteness term because a mid-build TSB is legitimately negative, and `checkpoint_crossings.body_weight_pct` takes -100..200 because nothing in the repo fixes its sign convention. `vdot` / `vo2_max` cap at 100 on both tables, deliberately WIDER than `vdotFromRun`'s own 90 ceiling, so no shipped writer can be handed a 23514 it cannot act on. Every add is `NOT VALID` with a separate `VALIDATE` per `migration_locks.md`, and each migration header carries the pre-flight query set to run against a populated instance. **Coverage is enforced**: rule 3 of `numeric_bounds_reject_nan_test.sql` fails the PR when a numeric column carries no single-column CHECK and is not named in its `UNBOUNDED_EXEMPT` list with a reason, so a new numeric column is bounded on the day it lands. These are range bounds, not set-shaped ones, so `check_constraint_unions.mjs` deliberately does not cover them — its coverage rule reads `check (col in (…))` only.
+
+**`plan_weeks_plan_id_week_index_key` is `deferrable initially immediate`** (`20270705000003`, [decisions § 1048](../architecture/decisions.md)). `duplicate_plan_week` shifts every later week up one, and a per-row unique check makes a single `week_index = week_index + 1` collide with the row it is about to vacate; the function used to hop the tail through negative index space and back, which is exactly what made `check (week_index >= 0)` unstatable. It now defers the constraint for the span of the renumber and sets it back to `immediate`, so a duplicate raises inside the RPC rather than at COMMIT and every other writer on the table still gets its 23505 at the statement.
 
 **Eleven managed columns discard a client write** (`20270704000003`). `user_profiles.shadow_hidden`, `clubs.shadow_hidden` / `is_verified` / `member_count`, `routes.shadow_hidden` / `is_featured` / `featured_at` / `run_count` / `geom` / `geom_public` / `start_point`, `gym_workouts.set_count` / `volume_kg` and `challenges.participant_count` are each held by a SECURITY **INVOKER** `BEFORE INSERT OR UPDATE` trigger (`freeze_*_managed_columns`) that restores the previous value — or the creation default — whenever `current_user` is `anon` or `authenticated`. Before it, a moderation-hidden account, club or route could unhide itself with one UPDATE (and `user_profiles` a second way, through DELETE + re-INSERT under its own delete-own-profile policy); a club created with `is_verified => true` kept the badge, because `clubs_protect_is_verified_trg` is BEFORE UPDATE only; `member_count` set to 999999 stayed and ranked that club first in `search_clubs`; `run_count` set by the author promoted their route into the `popular` discover lens; and `update routes set geom_public = geom` overwrote the privacy-zone clip `routes_within_box` serves to `anon`. The guard **discards rather than refuses** on purpose — a 42501 on `shadow_hidden` would tell a hidden account that it is hidden, and it would break `backup.dart`'s restore, which upserts a `select()`ed route verbatim. It is SECURITY INVOKER on purpose too: every legitimate writer of these columns is a SECURITY DEFINER function called BY an ordinary user's session, so the JWT role claim and `current_setting('role')` both read `authenticated` inside them and either signal would lock the moderator out; `current_user` follows the definer switch and does not. See [decisions.md § 941](../architecture/decisions.md) and `frozen_managed_columns_test.sql`.
 
@@ -1398,15 +1402,31 @@ create table live_run_pings (
   run_id        uuid not null references runs(id) on delete cascade,
   user_id       uuid not null references auth.users(id) on delete cascade,
   at            timestamptz not null default now(),
-  lat           double precision not null,
-  lng           double precision not null,
-  ele           double precision,
-  elapsed_s     integer,
-  distance_m    double precision,
-  bpm           integer
+  lat           double precision not null,  -- -90..90 (CHECK, 20270705000001)
+  lng           double precision not null,  -- -180..180 (CHECK, 20270705000001)
+  ele           double precision,           -- null or -500..9000 m (CHECK, 20270705000001)
+  elapsed_s     integer,                    -- null or >= 0 (CHECK, 20270705000001)
+  distance_m    double precision,           -- null or (>= 0, finite, not NaN) (CHECK, 20270705000001)
+  bpm           integer                     -- null or 0..300 (CHECK, 20270705000001)
 );
 ```
 
+- **Every column is bounded, and the bound is the reason a spectator sees a
+  map** (`20270705000001`, [decisions § 1046](../architecture/decisions.md)).
+  Until then the table carried no numeric CHECK at all, and from an ordinary
+  account's own session one INSERT landed `lat = 'NaN'`, `lng = 'Infinity'`,
+  `ele = 'NaN'`, `distance_m = 'NaN'`, `elapsed_s = -5` and `bpm = -40` on the
+  account's own public run — every value read straight back by `anon` through
+  `live_run_pings_visible_when_run_is`. Not an escalation (the runner owns the
+  row); the exposure is the READER, since a NaN coordinate draws nothing on
+  `/live/[id]` and an infinite longitude fits the viewport to the world. The
+  PostGIS derivation did raise `NOTICE: Coordinate values were coerced into
+  range …`, but it clamped only its own derived point and left these two
+  `float8` columns untouched. `lat` / `lng` / `ele` / `bpm` are two-sided so
+  they exclude NaN and both infinities for free; the one-sided `distance_m`
+  names them explicitly. `race_pings` carries the identical set on its own
+  `lat` / `lng` / `distance_m` / `elapsed_s` / `bpm`. Pinned by
+  `unbounded_numeric_column_bounds_test.sql`.
 - Added to `supabase_realtime` publication so change streams fan out to
   subscribed browsers.
 - RLS: `select` when the parent run is public or owned by the caller;
@@ -2303,7 +2323,7 @@ The exercise grouping key, and the only SQL definition of it (migration `2027062
 
 ### `gym_exercise_records()`
 
-Returns one row per exercise — `(exercise_name, heaviest_weight_kg, heaviest_weight_reps, best_volume_kg, best_est_1rm_kg, last_performed_at, session_count)` — for the `/gym/records` surface (migration `20261224_001`, perf-hunt follow-up). All-time per-exercise bests can't be served by a windowed client read, so the aggregation lives in SQL (mirroring how run PRs are SQL-maintained); the client-side `exercise_records.ts` stopgap was retired. The SQL is the mirror of `gym_prs.ts#computeExercisePrs` + `exercise_records.ts` (normalised name key, Epley e1rm with the rep clamp, bodyweight-only excluded). SECURITY INVOKER (owner-scoped via `gym_workouts`/`gym_sets` RLS + explicit `auth.uid()`). The `gym_prs.ts` badge engine stays client-side for the per-workout temporal badges. pgTAP `gym_exercise_records_test.sql` pins the metrics against the `gym_prs.test.ts` fixture shape.
+Returns one row per exercise — `(exercise_name, heaviest_weight_kg, heaviest_weight_reps, best_volume_kg, best_est_1rm_kg, last_performed_at, session_count)` — for the `/gym/records` surface (migration `20261224_001`, perf-hunt follow-up). All-time per-exercise bests can't be served by a windowed client read, so the aggregation lives in SQL (mirroring how run PRs are SQL-maintained); the client-side `exercise_records.ts` stopgap was retired. The SQL is the mirror of `gym_prs.ts#computeExercisePrs` + `exercise_records.ts` (normalised name key, Epley e1rm with the rep clamp, bodyweight-only excluded). SECURITY INVOKER (owner-scoped via `gym_workouts`/`gym_sets` RLS + explicit `auth.uid()`). The display spelling for a key is the caller's most-recent one — see `gym_exercise_names()` below for the rule, which `20270705000005` unified across the two and whose tiebreak it made collation-independent here. The `gym_prs.ts` badge engine stays client-side for the per-workout temporal badges. pgTAP `gym_exercise_records_test.sql` pins the metrics against the `gym_prs.test.ts` fixture shape, plus the display-spelling rule.
 
 ### `run_streaks_for_user(p_tz text, p_source text)`
 
@@ -2341,9 +2361,9 @@ Web `deleteNotifications` (`core/data.ts`), mobile `ApiClient.deleteNotification
 
 ### `gym_exercise_names()`
 
-Returns `(exercise_name, uses)` — one row per exercise + use count, most-used first — for the gym editor's autocomplete datalist (migration `20261226_001`, perf-hunt follow-up). Bounded to the count of distinct exercises (dozens) so the History page never pulls raw set history just to derive names. SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_names_test.sql` (6 tests).
+Returns `(exercise_name, uses)` — one row per exercise + use count, most-used first — for the gym editor's autocomplete datalist (migration `20261226_001`, perf-hunt follow-up). Bounded to the count of distinct exercises (dozens) so the History page never pulls raw set history just to derive names. SECURITY INVOKER, owner-scoped. pgTAP `gym_exercise_names_test.sql` (7 tests).
 
-**One row per exercise, not per spelling of it** (migration `20270630000004`, decisions § 831). Grouping was a bare `btrim`, which strips U+0020 and nothing else, so a name pasted with a leading tab was its own suggestion beside the clean spelling of the same lift, and a case variant was a third. It groups on `normalise_exercise_name` now, and `uses` counts the whole group. Display stays case- and spelling-preserving — this feeds a datalist, not a key — and the spelling shown is the caller's **most-used** one (ties broken most-recent, then by the spelling). That is deliberately not the rule the sibling `gym_exercise_records` applies to the same question, which picks the most **recent** spelling; unifying the two is filed.
+**One row per exercise, not per spelling of it** (migration `20270630000004`, decisions § 831). Grouping was a bare `btrim`, which strips U+0020 and nothing else, so a name pasted with a leading tab was its own suggestion beside the clean spelling of the same lift, and a case variant was a third. It groups on `normalise_exercise_name` now, and `uses` counts the whole group. Display stays case- and spelling-preserving — this feeds a datalist, not a key. **The spelling shown is the caller's most-RECENT one, the same rule the sibling `gym_exercise_records` applies to the same question** (migration `20270705000005`, decisions § 1050). It used to be the most-USED one, which is self-reinforcing on an autocomplete: it offers the old capitalisation, the lifter accepts it, and the counts never cross, so a re-capitalisation can never take effect. Ties — two of a key's spellings logged at the same instant — break on `length(display)` first, so a paste carrying a leading tab loses to its clean sibling, then on the spelling under `collate "und-x-icu"`; a bare comparison is resolved by the argument's own collation, the dependence § 830 closed for the key itself. Both RPCs' final `order by` on the returned list is pinned to the same collation. `uses` still counts the whole group and the list is still ordered most-used first.
 
 ### `gym_workout_summaries(p_limit integer default 100)`
 

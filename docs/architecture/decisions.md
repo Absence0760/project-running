@@ -17616,3 +17616,242 @@ route" while the picker took five formats, so it now names no list at all.
 The fixture is a KMZ **built in the test** rather than a committed binary, so
 the test says what is inside the archive it is asserting about.
 
+
+## 1046. Seventy-nine numeric columns carried no CHECK, and the two an anonymous spectator reads were writable as NaN from an ordinary account
+
+[§ 940](decisions.md) closed every *existing* numeric bound that admitted NaN.
+It could say nothing about a column that was never bounded, and the followup
+naming that set counted 31. Re-derived from the live catalogue rather than
+taken from the filing: **79** numeric columns on base tables in `public` carry
+no single-column CHECK. The filing's 31 is exactly right for the subset it was
+implicitly about — the `numeric` / `double precision` columns, the ones whose
+type can hold a NaN — and its list of 31 matches the query's 31 name for name.
+The other **48** are integer-family, where a NaN is unreachable at the type and
+the exposure is a nonsense sign or magnitude instead. Four of those 48 are
+sequence- or identity-backed surrogate keys and take no bound at all.
+
+The eleven closed first are the ones whose bad value is read by someone other
+than its author, and the exploit was measured rather than reasoned about. From
+an ordinary account's own session — `set local role authenticated` with its own
+`request.jwt.claims`, against `live_run_pings_insert_self` as it stands — one
+statement lands `lat = 'NaN'`, `lng = 'Infinity'`, `ele = 'NaN'`,
+`distance_m = 'NaN'`, `elapsed_s = -5` and `bpm = -40` on the account's own
+public run, and `set local role anon` then reads all six back through
+`live_run_pings_visible_when_run_is`. It is not a privilege escalation: the
+runner owns the row. The point is the READER. A NaN coordinate draws nothing on
+`/live/[id]`, an infinite longitude fits the viewport to the whole world, and
+`motionFor`'s odometer delta off a NaN distance is NaN — for every spectator,
+from one bad client build.
+
+One thing did notice and was not enough. Inserting that row raises
+`NOTICE: Coordinate values were coerced into range [-180 -90, 180 90] for
+GEOGRAPHY`: the PostGIS derivation clamped its own derived point and left the
+two `float8` columns the clients actually read untouched. A notice is not a
+constraint, and a derived column being repaired is not the source column being
+bounded.
+
+## 1047. A two-sided bound needs no NaN term, and three columns are deliberately not that shape
+
+`'NaN'::float8 >= 0` is true and `'NaN'::float8 <= 90` is false, because
+Postgres orders NaN above every real value rather than making a comparison with
+it unknown. So the shape of each bound follows from its domain rather than from
+a house style. A latitude, a longitude, an elevation, a heart rate and a
+body-weight percentage all have two real edges, so they are written as ranges
+and exclude NaN and both infinities for free — which is why
+`route_markers_lat_check` and `route_conditions_lat_check`, the same question
+already answered twice in this schema, carry no NaN term and neither do the new
+ones. A distance, a volume, a count and a position have only a floor, so each
+one-sided bound names NaN explicitly, and names Infinity too where the type can
+hold one: a `numeric(p, s)` refuses an infinity with a 22003 field overflow
+before any CHECK is consulted, so the term would be dead code on a scaled
+column and is written only on the bare `numeric` and `double precision` ones.
+
+Three columns are deliberately not a range, and saying so is the point of this
+entry. `fitness_snapshots.training_stress_bal` is chronic minus acute load and
+is legitimately negative — a runner mid-build has a negative TSB and that is the
+reading the card exists to show — so it gets a pure finiteness constraint and no
+range claim at all; `numeric(8, 2)` already bounds its magnitude and no honest
+tighter number exists. `checkpoint_crossings.body_weight_pct` admits -100..200
+because the repository does not fix its sign convention anywhere: no client
+computes it, both platforms pass the operator's typed value straight to
+`upsert_checkpoint_crossing`, and the bound therefore has to hold under both a
+percent-CHANGE and a percent-OF-baseline reading. And `segments.length_m` takes
+no bound: it is `generated always as (end_distance_m - start_distance_m)
+stored`, both operands carry `>= 0 and <> NaN and <> Infinity` since
+[§ 940](decisions.md), and a finite minus a finite is finite — so it is
+registered as an exemption with that reason rather than left silently
+uncovered.
+
+Two ceilings are deliberately WIDER than the code that writes them.
+`vdot` and `vo2_max` cap at 100 on both tables while `vdotFromRun` already
+returns null above 90, calling it physiologically impossible. A column bound
+narrower than a shipped writer's own output is a 23514 the user cannot act on,
+which is the trap [§ 792](decisions.md) recorded; the column's job here is to
+refuse garbage, not to re-litigate the client's physiology.
+
+## 1048. `plan_weeks.week_index` was not merely unbounded, it was unstatable, and the fix was deferral rather than a second coordinate space
+
+Of the 79 columns, one could not be bounded without changing a shipped surface.
+`duplicate_plan_week` copies a week and shifts every later week up one, and
+`(plan_id, week_index)` is a per-row unique check, so a single
+`set week_index = week_index + 1` collides with the row it is about to vacate.
+The function worked around that by hopping the tail through NEGATIVE index
+space and back — `-(week_index + 1)`, then `-week_index`. Correct, atomic, and
+invisible to every reader, but it means a week index is legitimately negative
+for the span of two statements, so `check (week_index >= 0)` fails a shipped
+feature rather than a bad write. Adding the CHECK alone turns the plan editor's
+"duplicate week" button into a 23514, and
+`duplicate_plan_week_test.sql` is what caught it — the constraint was written,
+the suite went red, and the column's real shape came out.
+
+A positive scratch offset would have kept the constraint statable with a
+three-line change and no schema move. It was refused. The hop exists ONLY
+because the uniqueness is checked per row, and Postgres's answer to that is a
+deferrable constraint, not a second coordinate space that every future reader
+of the function has to hold in their head — and the offset form carries its own
+question (`week_index` is a `smallint`, so `k + 1 + offset` overflows somewhere
+around 16,383 weeks) that the deferred form does not have. The constraint is
+now `deferrable initially immediate`, so every other writer on the table still
+gets its 23505 at the statement, and the function defers it for the span of the
+renumber and then sets it back to `immediate` — which forces the check inside
+the RPC rather than at COMMIT, so a duplicate still raises where the caller can
+see it.
+
+The cost is stated rather than hidden: changing a unique constraint's
+deferrability means dropping and re-adding it, which rebuilds the backing index
+under ACCESS EXCLUSIVE, and there is no `NOT VALID` form for that while
+`create index concurrently` cannot run inside a migration's transaction. That
+is acceptable on `plan_weeks` — one row per plan-week, not in
+`migration_locks.md`'s high-volume set, where the playbook's own rule is that
+ceremony on a small bounded table is not required — and it is not a precedent
+for `runs` or either ping table.
+
+## 1049. The export retention sweep deletes rows and does not erase bytes: measured, and the belief it was resting on is wrong
+
+Migration `20260927_001` recorded, in a comment, that "the actual blob bytes are
+reaped by the storage backend's background sweeper once the row is gone." That
+sentence appears nowhere else in the repository, was never measured, and
+[§ 857](decisions.md) restored the export sweep on top of it. It is wrong.
+
+Measured on the local stack, with a probe uploaded through the real Storage API
+rather than hand-written into the backend: a 4 KiB `application/zip` object
+lands at `exports/probe-user/exports/probe.zip`, `storage.objects` carries its
+row, and the byte file appears under the file backend's own path
+(`STORAGE_BACKEND=file`, `FILE_STORAGE_BACKEND_PATH=/mnt`). Ageing the row past
+the seven-day window and calling the shipped `cleanup_stale_export_blobs()`
+deletes the row — the function reports 1 and its post-condition check passes —
+and the archive is then unlisted by the Storage API. **The bytes are still
+there, and `sha256sum` matches the uploaded file exactly.** Corroborating it: the
+same volume held 74 files across every bucket against 0 rows in
+`storage.objects`, including 20 export archives stamped nine days earlier.
+Nothing has ever reaped any of them. There is no `pg_cron` job in the database
+that touches storage bytes and no second process in the storage container — one
+`node dist/start/server.js` and nothing else.
+
+The trigger the sweep has to switch off says as much in its own words. It
+raises `Direct deletion from storage tables is not allowed. Use the Storage API
+instead.` under the hint `This prevents accidental data loss from orphaned
+objects.` The escape GUC does not make a row delete into an object delete; it
+only removes the refusal. So `storage.allow_delete_query` buys reachability —
+the row is gone, no signed URL can be minted, `expire_stale_export_jobs()` can
+mark the job expired — and it does not buy erasure.
+
+The decision: **keep deleting the rows, and stop calling it retention.**
+Removing reachability is the part SQL can actually do, and it is strictly
+better than the state [§ 857](decisions.md) replaced, in which the sweep raised
+every night and deleted nothing at all. But the sweep is not an Art 17 erasure
+and no document may say it is. The durable fix is the alternative the followup
+named — a job kind in the Go worker, which already writes the archive through
+the Storage API and already holds the service key, leaving
+`expire_stale_export_jobs()` as the only SQL half — and it was not built here
+because it needs a new value in `jobs_kind_chk`, a set-shaped CHECK whose
+coverage rule lives in `check_constraint_unions.mjs`, outside this lane. It is
+filed with that owner named.
+
+Two limits on the claim, stated so it is not over-read. This is the local `file`
+backend, not Cloud's S3; what is measured is the MECHANISM — no database-side
+reaper exists, and storage-api's own delete path is the only thing that removes
+a backend object — and confirming the byte residue on a real project still
+means listing the bucket over the S3-compatible endpoint, exactly as the
+followup said. And a backlog table recording which blobs the sweep orphaned was
+considered and refused: it would hold an object name that embeds a user id
+after that user's row was deleted, so its own retention and its interaction
+with account deletion need the same owner call as the Go-worker change, and a
+queue nothing drains is worse than an honest gap.
+
+## 1050. One rule for an exercise key's display spelling, and the filing's own example could not happen
+
+`gym_exercise_names` picked the most-USED spelling for a key and
+`gym_exercise_records` the most-RECENT, so the gym autocomplete and the records
+page could name one exercise differently. [§ 831](decisions.md) filed it for a
+decision and justified leaving both with "a lifter who renamed 'DB Bench' to
+'Dumbbell Bench Press' wants the new name on a records page and, for a while,
+the old one in an autocomplete they have used a hundred times." Measured:
+`normalise_exercise_name('DB Bench')` is `db bench` and
+`normalise_exercise_name('Dumbbell Bench Press')` is `dumbbell bench press` —
+two different keys. Both surfaces already list both, under either rule, and the
+two rules cannot disagree about that case at all.
+
+The fold is case and whitespace and nothing else ([§ 830](decisions.md)), so the
+spellings competing INSIDE one key differ only in capitalisation and in
+whitespace. That narrows the question to "the capitalisation you use most"
+versus "the capitalisation you used last", and it makes most-used wrong for a
+reason stronger than consistency: **most-used is self-reinforcing on an
+autocomplete.** A lifter who re-capitalises `bench press` to `Bench Press` is
+offered the old spelling by the datalist, accepts it — that is what a datalist
+is for — and logs another set under it, so the counts never cross and the rename
+can never take effect. Most-recent converges instead. Both RPCs now pick the
+spelling from the caller's most recent session under that key.
+
+The tiebreak moved too, on both. A bare `display` comparison is resolved by the
+argument's own collation, which is precisely the dependence
+[§ 830](decisions.md) measured and closed for the key itself — the same two
+spellings order differently on an ICU-provider and a libc-provider database —
+so the pick is pinned to `collate "und-x-icu"`, and so is each RPC's final
+`order by` on the returned list, because a cosmetic reordering between two
+deployments of one product is still a divergence. `length(display)` sits ahead
+of the lexical term: the spellings that reach a genuine tie differ only in
+whitespace or case, case variants are the same length and fall through, and a
+spreadsheet paste carrying a leading tab is longer and loses to its clean
+sibling. That expresses "prefer the tidy spelling" without a fourth
+hand-written copy of the whitespace class, which is the duplication
+[§ 790](decisions.md) exists to have removed; a group whose ONLY spelling
+carries edge whitespace still shows it, exactly as § 831 recorded.
+
+The user-visible consequence is the opposite of the one the filing predicted.
+The surface that changes is the AUTOCOMPLETE, not the records page: a lifter
+whose most-used capitalisation differs from their most-recent will see the
+suggestion change to the newer spelling once. The records page's rule does not
+move at all — only its tiebreak became deterministic, which can change a
+display only where two of a key's spellings were logged at the same instant.
+`uses` still counts every spelling in the group and the list is still ordered
+most-used first.
+
+## 1051. Coverage is the third rule of the NaN guard, not a fourth guard, because a column with no bound admits NaN by omission
+
+`numeric_bounds_reject_nan_test.sql` evaluated every single-column numeric
+CHECK in `public` against NaN by pulling its own `pg_get_expr` body out of the
+catalogue and executing it — a real measurement of what each bound DOES rather
+than a reading of what it says. Its own scope note disclaimed the columns
+carrying no CHECK at all, and that was the hole: rules 1 and 2 read the
+constraints that exist, so a column with no constraint was invisible to both
+while admitting everything its type can hold.
+
+Rule 3 requires coverage. Every numeric column on a base table in `public` must
+carry a single-column CHECK or be named in `UNBOUNDED_EXEMPT` with the reason
+it needs none — the four sequence-backed surrogate keys, whose values come from
+a sequence that starts at 1 and never decreases and which no client supplies,
+and `segments.length_m` for the reason [§ 1047](decisions.md) gives. It lives
+in this file rather than in a new one because it is the same claim one step
+further back: a bound that does not bound and a bound that does not exist are
+the same defect, and splitting them across two files means the next reader has
+to find both to know the answer. The file's scope note now says which of the
+three rules asks what, and states what none of them asks — whether the RANGE is
+the right range, which is a per-column judgement each migration argues in its
+own header.
+
+Mutation-verified in both directions, because a coverage rule that cannot fail
+is worth nothing: dropping `routes_elevation_m_check` turns rule 3 red, and the
+rule's own operator validation plants one bounded and one unbounded numeric
+column in a table inside the test's transaction and requires the sweep to name
+exactly the second.
