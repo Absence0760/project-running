@@ -925,7 +925,7 @@ class ApiClient {
   /// background-sync / runs-screen "Sync all" / import screen) should
   /// mark only the runs NOT in this set as synced so the failed ones
   /// retry on the next cycle. Empty set on full success.
-  Future<Set<String>> saveRunsBatch(
+  Future<RunPushOutcome> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -933,7 +933,7 @@ class ApiClient {
   }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
-    if (runs.isEmpty) return const <String>{};
+    if (runs.isEmpty) return const RunPushOutcome();
 
     // Upload tracks in parallel groups. A failure on ANY single
     // upload used to bubble through `Future.wait` and poison the
@@ -945,6 +945,7 @@ class ApiClient {
     // the batch makes progress.
     final trackUrls = <String, String>{};
     final trackFailures = <String, Object>{};
+    final blocked = <String, RunPushBlockReason>{};
     final runsWithTracks = runs.where((r) => r.track.isNotEmpty).toList();
     for (var i = 0; i < runsWithTracks.length; i += uploadConcurrency) {
       final batch = runsWithTracks.skip(i).take(uploadConcurrency);
@@ -955,10 +956,23 @@ class ApiClient {
           trackUrls[r.id] = url;
         } catch (e) {
           trackFailures[r.id] = e;
-          debugPrint(
-            'saveRunsBatch: track upload failed for ${r.id}: $e — '
-            'leaving run unsynced for retry, continuing with batch.',
-          );
+          // A permanent refusal and a dropped connection cost the caller
+          // different things: one is retried next cycle, the other is parked.
+          // Reported as one undifferentiated failure they were the same, so
+          // the drain re-gzipped and re-sent bytes the bucket had already
+          // refused on every cycle, forever (decisions § 1009).
+          if (e is TrackTooLargeException) {
+            blocked[r.id] = RunPushBlockReason.trackTooLarge;
+            debugPrint(
+              'saveRunsBatch: track upload for ${r.id} can never succeed: $e — '
+              'parking the run, continuing with batch.',
+            );
+          } else {
+            debugPrint(
+              'saveRunsBatch: track upload failed for ${r.id}: $e — '
+              'leaving run unsynced for retry, continuing with batch.',
+            );
+          }
         }
       });
       await Future.wait(futures);
@@ -973,6 +987,11 @@ class ApiClient {
       return !trackFailures.containsKey(r.id);
     }).toList();
     if (eligibleRuns.isEmpty) {
+      // A throw here reports "nothing landed" and nothing else, which is all a
+      // caller can act on when every failure is transient. It is the wrong
+      // answer once one of them is terminal: the caller needs the id to park,
+      // and a thrown batch leaves it queued for a retry that cannot work.
+      if (blocked.isNotEmpty) return _outcome(trackFailures, blocked);
       if (trackFailures.isNotEmpty) {
         throw Exception(
           'saveRunsBatch: every run\'s track upload failed '
@@ -980,7 +999,7 @@ class ApiClient {
           '${trackFailures.values.first}',
         );
       }
-      return const <String>{};
+      return const RunPushOutcome();
     }
 
     // Build rows and upsert in chunks.
@@ -1054,8 +1073,17 @@ class ApiClient {
         }
       }
     }
-    return trackFailures.keys.toSet();
+    return _outcome(trackFailures, blocked);
   }
+
+  static RunPushOutcome _outcome(
+    Map<String, Object> trackFailures,
+    Map<String, RunPushBlockReason> blocked,
+  ) =>
+      RunPushOutcome(
+        retryable: trackFailures.keys.where((id) => !blocked.containsKey(id)).toSet(),
+        blocked: Map.unmodifiable(blocked),
+      );
 
   /// Delete a run from the backend, including its gzipped track file
   /// and every attached photo's bytes in Storage.

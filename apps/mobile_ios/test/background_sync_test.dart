@@ -13,6 +13,10 @@ class _FakeApiClient extends ApiClient {
   bool throwOnSaveBatch = false;
   final List<List<String>> savedBatchIds = [];
   Set<String> saveBatchFailedIds = const <String>{};
+
+  /// Runs the push classifies as permanently refused — parked, not queued.
+  Map<String, RunPushBlockReason> saveBatchBlockedIds =
+      const <String, RunPushBlockReason>{};
   int saveBatchCallCount = 0;
 
   final List<String> deletedIds = [];
@@ -27,7 +31,7 @@ class _FakeApiClient extends ApiClient {
   String? get userId => fakeUserId;
 
   @override
-  Future<Set<String>> saveRunsBatch(
+  Future<RunPushOutcome> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -36,7 +40,8 @@ class _FakeApiClient extends ApiClient {
     saveBatchCallCount++;
     if (throwOnSaveBatch) throw Exception('boom');
     savedBatchIds.add(runs.map((r) => r.id).toList());
-    return saveBatchFailedIds;
+    return RunPushOutcome(
+        retryable: saveBatchFailedIds, blocked: saveBatchBlockedIds);
   }
 
   @override
@@ -196,6 +201,31 @@ void main() {
       expect(store.unsyncedRuns.map((r) => r.id).toSet(), {'r-bad'},
           reason: 'r-good must be marked synced; r-bad retries next '
               'cycle when its track upload might succeed');
+    });
+  });
+
+  group('runBackgroundSyncCycle — a permanently refused push', () {
+    test('is parked, so the next background cycle does not re-send it',
+        () async {
+      // The WorkManager cycle fires on its own schedule with nobody watching,
+      // which is exactly where a forever-retry costs the most (decisions
+      // § 1070).
+      await store.save(_runForOwner('r-good', 'user-a'));
+      await store.save(_runForOwner('r-big', 'user-a'));
+
+      final api = _FakeApiClient()
+        ..fakeUserId = 'user-a'
+        ..saveBatchBlockedIds = {'r-big': RunPushBlockReason.trackTooLarge};
+
+      await runBackgroundSyncCycle(api, store, routeStore);
+
+      expect(store.blockedReason('r-big'), RunPushBlockReason.trackTooLarge);
+      expect(store.unsyncedRuns, isEmpty);
+
+      await runBackgroundSyncCycle(api, store, routeStore);
+
+      expect(api.saveBatchCallCount, 1,
+          reason: 'nothing drainable is left, so no second push happens');
     });
   });
 

@@ -832,6 +832,11 @@ void _diaryDayTests() {
       });
       await _pumpUntil(tester, () => f.store.rows.length == 2,
           describe: "the template's entries to be logged");
+      // The row list is not the write: `persist` installs the row in memory
+      // BEFORE `writeJsonAtomic`, so the predicate above returns mid-write and
+      // this file's `finally` deletes the temp dir under it. `OfflineSyncStore`
+      // ships the probe for exactly this (decisions § 723, § 1072).
+      await tester.runAsync(() => f.store.debugWritesSettled());
       await tester.pumpAndSettle();
 
       final stamps = [
@@ -883,6 +888,7 @@ void _diaryDayTests() {
       });
       await _pumpUntil(tester, () => f.store.rows.length == 2,
           describe: "the recipe's servings to be logged");
+      await tester.runAsync(() => f.store.debugWritesSettled());
       await tester.pumpAndSettle();
 
       final stamps = [

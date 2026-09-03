@@ -2148,6 +2148,65 @@ class AppLocalizationsJa extends AppLocalizations {
   String get historyDelete => '削除';
 
   @override
+  String get historyUnsyncedRowSemantics => '未同期';
+
+  @override
+  String get historyBlockedRowSemantics => 'アップロードできません';
+
+  @override
+  String get historyBlockedRowTooltip => 'アップロードできません';
+
+  @override
+  String historyBlockedTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のランをアップロードできません',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historySyncBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のランはアップロードできず、再試行もされません。それぞれを開いて対応を選んでください。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runDetailBlockedDropTrack => 'トラックなしでアップロード';
+
+  @override
+  String get runDetailBlockedExport => 'コピーを書き出す';
+
+  @override
+  String get runDetailBlockedTitle => 'このランはアップロードできません';
+
+  @override
+  String runDetailBlockedTrackTooLarge(int waypoints) {
+    return 'GPS トラック（$waypoints 点）がクラウド保存の上限を超えているため、再試行しても成功しません。距離・時間・ペース・獲得標高など、それ以外の記録は保存できます。';
+  }
+
+  @override
+  String get runDetailDropTrackBody =>
+      'トラックはこの端末から削除され、ランは地図なしでアップロードされます。距離・時間・ペース・獲得標高は変わりません。残しておきたい場合は、先にコピーを書き出してください。';
+
+  @override
+  String get runDetailDropTrackConfirm => 'トラックなしでアップロード';
+
+  @override
+  String get runDetailDropTrackDone => 'トラックを削除しました。次のサイクルで同期されます。';
+
+  @override
+  String get runDetailDropTrackFailed => 'トラックを削除できませんでした。もう一度お試しください。';
+
+  @override
+  String get runDetailDropTrackTitle => 'GPS トラックなしでアップロードしますか？';
+
+  @override
   String get historyQueuedToSync => '同期待ち';
 
   @override

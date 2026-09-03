@@ -18964,3 +18964,188 @@ question is whether the client can *prove* the credential gate was cleared, and
 it cannot. If mobile's `isProviderConfigured` keeps its fail-open residual, the
 two platforms disagree about whether the same card is live against the same
 backend, which is a divergence rather than a platform difference.
+## 1070. A permanently refused push is PARKED, and the runner is offered the one action that exists
+
+§ 986 refused to build a terminal-error taxonomy while the category had no
+reachable member. § 1009 measured the first one: a track blob past the `runs`
+bucket's 25 MiB `file_size_limit`, unreachable by recording (~266 h at 1 Hz) and
+ordinary by import (a 959,883-point GPX is 94 MiB of `trkpt`, sixty times inside
+`importFromZip`'s own archive cap). It closed the *waste* at the source — the
+uploader refuses before spending the network, with a typed
+`TrackTooLargeException` — and left the *loop* open: `saveRunsBatch` returned a
+bare `Set<String>`, five call sites marked everything else synced, and the same
+waypoints gzipped to the same refused bytes on every drain, forever, with the
+residency invariant holding the million-point track in memory to do it.
+
+**The product question the filing owed an answer to** was what a runner can
+actually DO about a run whose track is too big to store. The answer taken here
+is the one the data supports and nothing more: *stop retrying, say which run and
+why, and offer the action that already exists.* Every number on the run —
+distance, duration, elevation, pace — is a **column**; only the trace is a
+Storage object. So the run is not lost, one artefact of it is, and the offer is
+to keep a copy of that artefact and then let the run go to the cloud without it.
+`dropTrack` empties the track locally, which un-parks the run and lets the
+ordinary drain upsert it with `track_url = null`; the card that offers it sits
+beside an **Export a copy** button opening the existing GPX/TCX/FIT sheet, and
+the confirm goes through `confirmDestructive` because the trace is the only
+record of where someone went and nothing brings it back. Nothing does this
+automatically: writing a track-less row on the drain's own initiative is exactly
+what `saveRunsBatch` already refuses to do, and under a *transient* failure it
+would discard a trace nobody agreed to lose.
+
+**Two states, not a taxonomy.** `RunPushOutcome` (in `core_models`, so the store
+can read it without depending on `api_client`) carries `retryable` and `blocked`;
+`RunPushBlockReason` has exactly one member and its `name` is an on-disk value in
+the new `blocked_runs.json` sidecar, so a rename orphans every run already parked
+under the old spelling. A second member is earned by measuring a second permanent
+failure, not by anticipating one — which is § 986's rule, applied rather than
+overturned.
+
+**Parking is defined as leaving the drainable set**, and that is one rule with
+two consequences rather than two decisions. `unsyncedRuns` excludes a parked run,
+so no drain re-sends it; and the residency invariant — whose own contract is
+"the newest window ∪ everything the drain must reach" — excludes it too, so the
+track stops being hydrated on cold load for a drain that will never run. The run
+stays in `_summaries`, so it is still in the history, still rendered by the list,
+and still hydrated on demand by `runById` when the runner opens it. Three
+knock-on rules follow: the park is a verdict on the **bytes**, so `save`,
+`update`, `delete` and `deleteMany` all clear it; the sidecar merges rather than
+replaces, because `background_sync.dart` is one of the five push sites and runs
+in its own isolate over the same directory; and a reason name this build cannot
+resolve is **dropped**, not honoured — parking under a reason no surface can
+explain strands the run with no exit, whereas dropping it lets this build's own
+uploader re-derive its own verdict.
+
+**Two failure paths had to change with it.** `saveRunsBatch`'s
+"every-track-failed" branch threw, which reports "nothing landed" and nothing
+else — fine when every failure is transient, wrong the moment one is terminal,
+because the caller then needs the id to park and a thrown batch leaves it queued.
+It now returns the outcome whenever anything is blocked and throws only for the
+all-transient case the existing tests pin. And `SyncService` sets `anyFailure`
+from `retryable` alone: scheduling a backoff retry for a parked run is the same
+forever-loop one layer up.
+
+**Thinning the track to fit was considered and refused.** `simplifyToBudget`
+exists and would make the blob fit, but it silently rewrites the runner's
+recorded data and moves every track-derived number on the run, with no honest
+place to record that the trace shown is not the trace recorded. Dropping the
+trace is legible: the run says it has no map, and the runner is the one who said
+so.
+
+Surfaces: an error-coloured `cloud_off` badge in the History app bar when
+nothing is queued but something is parked (tapping it explains, since parked runs
+are absent from the sync path by construction), a per-row mark that outranks the
+queued-to-sync cloud (they are different promises and only one is true), and the
+`_BlockedPushCard` on run detail. 13 keys x 7 catalogues. Pinned by
+`blocked_push_test.dart` (13), the outcome's own contract in `core_models`, and a
+parked-not-retried case in each of `sync_service_test`, `background_sync_test`
+and `import_cloud_push_deferred_test` — the last of those being the call site
+where an over-size track actually arrives.
+
+## 1071. The `isProviderConfigured` fail-open filing was stale on mobile — § 1007 had already closed it, and here is the proof
+
+The round-36 mobile lane took the followups item asking for a decision on
+`RaceService.isProviderConfigured`: fail open (a probe failure should not hide a
+working provider) or fail closed (the house default). Read against `main`, the
+mobile half of the question was **already answered, in the fail-closed
+direction, by § 1007** — which landed on 2026-09-02, two days after the filing
+was written on 2026-08-31 (`7e1d1172d`, PR #833). Nobody ticked the box, so the
+entry outlived the work.
+
+The evidence, not an assertion. `isProviderConfigured` delegates every failure to
+the top-level `raceProbeUnavailable`, which returns `true` — unavailable — for
+anything that is not a `FunctionException` with `status > 0`, and for a 429 /
+5xx even when it is. Only a clean success or a readable non-429 4xx reports the
+provider live, because only those prove the function ran **past** its credential
+gate. The two cases the filing named by name are each pinned:
+`raceProbeUnavailable(SocketException(...))` and
+`raceProbeUnavailable(StateError('not initialized'))` are both asserted `isTrue`
+in `race_providers_test.dart`, and the end-to-end shape is pinned separately —
+`RaceService()` with no Supabase behind it answers `false` for all three import
+providers, because `_c` throws its own `StateError` inside the same `try`. Both
+call sites (`races_screen._probe`, `settings_integrations_screen`
+`._probeRaceProvider`) additionally initialise `ok = false` before their try, so
+the screen-level degrade is fail-closed even if the service ever stopped being.
+13 tests, green.
+
+The filing's remaining half — "same question on web" — is not this lane's file,
+and is worth reading against § 1007 rather than answered fresh: **web is where
+the fail-closed rule came from.** `core/data.ts`'s `isProviderNotConfigured`
+already graded a 429 as its own per-user rate limit, a 5xx as never having
+reached the gate, and a status-0 transport failure as no evidence at all; § 1007
+ported that grading to the phone precisely because the two platforms disagreed
+about a configured provider whenever the probe did not cleanly reach the gate.
+The asymmetry recorded there is the reasoning either lane should reconcile
+against: hiding a live leg for one page load is corrected by the next probe,
+while offering an action whose very next call 503s spends a runner's attention on
+a tile that cannot work.
+
+No code changed. A filing that describes shipped behaviour is itself the defect,
+and the fix is to correct the filing.
+
+## 1072. The fixed-delay residue re-measured: three of the filing's four counts were stale, and `debugWritesSettled` has a zone precondition nobody had stated
+
+§ 723 converted 44 fixed real-clock delays to `pumpUntil` predicates and § 991
+closed a third family member on `main`. The followups entry that survived them
+carries a census of what is left. Re-measured on 2026-09-03, **three of its four
+numbers are wrong, and its enumeration is short by three sites** — which matters
+because the census is what a later lane sizes the work from.
+
+- "9 bare `pumpEventQueue()` calls across 2 files" → **8 call sites across 3
+  files**. The ninth occurrence is inside a *comment* in `sync_service_test.dart`
+  describing § 991's own fix, so a grep counted the entry's evidence as more of
+  the problem. Of the 8, one is the in-loop case the entry already excuses
+  (`run_detail_screen_test.dart`), and `sync_service_test.dart` still holds two
+  bare ones — § 991 converted the lifecycle-resumed test and left the two
+  absence assertions, which is correct and which the entry reads as having
+  cleared the file.
+- "28 files pair a temp directory with widget taps and no `pumpUntil`" → **26**.
+- "86 mobile test files create a temp directory" → **88** at `ac6dc7022`.
+- The 14-item enumeration is missing `route_review_report_test.dart:74`,
+  `routine_public_library_screen_test.dart:188` and
+  `run_screen_recording_flow_test.dart:1626`.
+
+**The last of those four is the one that matters, because the entry is a
+hand-transcribed copy of a register that is already machine-checked.**
+`test_timing_guard_test.dart`'s `_documentedDelays` map lists every surviving
+real-clock wait with its reason, fails on a site that is neither listed nor
+converted, and fails on an exemption whose sites have all been converted. All
+three of the "missing" sites were in it; only the prose had drifted. The guard
+also proved that on this change: removing the two waits made their exemptions
+stale and it failed the suite naming both, which is precisely the loop the
+followups copy cannot close. A later lane should size this work from the map,
+not from the prose, and the prose should stop restating it.
+
+Two of those three were convertible and are converted. The review-report helper
+waited a flat 10 ms for `_fetchReviews`, when all three of its callers then
+assert the seeded review renders — so it now waits on that, with the comment text
+hoisted to one named constant because a literal in two places is how a wait stops
+matching the thing it is waiting for. The public-library adopt polled a fixed
+8 x 20 ms after tapping the FAB, for a store row the very next line asserts.
+The third is byte-identical to a case the entry lists as deliberate (the
+`pairedName()` read, invisible at idle) and got the stated reason it was missing
+rather than a conversion.
+
+**The entry's own open question is closed, and the answer came with a
+precondition.** It asks whether `nutrition_screen_test`'s two
+`f.store.rows.length == 2` waits should move off the before-the-write proxy, and
+says the levers are the store's `notifyListeners` or a UI state ordered after
+`persist()`. There is a third the entry does not cite:
+`OfflineSyncStore.debugWritesSettled()`, `@visibleForTesting`, whose doc comment
+describes this exact race almost verbatim. Both waits now chase the row list with
+`pumpUntil` and then settle the write with it.
+
+The precondition was found by trying it in the second file and measuring, with a
+three-way A/B: **`debugWritesSettled()` is only awaitable when the write it is
+waiting on was queued from inside `tester.runAsync`.** `serialiseStoreWrite`
+links its chain with `.then`, so a write queued from a fake-zone tap has its
+continuation scheduled as a fake-zone microtask — which only `pump` drains, and
+`runAsync` does not pump. Awaiting the chain from inside `runAsync` then waits on
+a microtask nothing will run. Measured: fake-zone tap + `debugWritesSettled` hung
+past a 240 s bound twice; the same test with the call removed passed in 1 s; the
+same test with the tap moved inside `runAsync` and the call restored passed in
+1 s. `nutrition_screen_test` was already green because its taps are inside
+`runAsync` — so the two files differed by exactly the variable the mechanism
+predicts. The rule for the next lane: after a fake-zone tap, wait on an
+observable outcome with `pumpUntil`; `debugWritesSettled` is for a real-zone
+write, and reaching for it otherwise deadlocks rather than failing.

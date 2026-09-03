@@ -2265,6 +2265,71 @@ class AppLocalizationsEs extends AppLocalizations {
   String get historyDelete => 'Eliminar';
 
   @override
+  String get historyUnsyncedRowSemantics => 'aún no sincronizada';
+
+  @override
+  String get historyBlockedRowSemantics => 'no se puede subir';
+
+  @override
+  String get historyBlockedRowTooltip => 'No se puede subir';
+
+  @override
+  String historyBlockedTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count carreras no se pueden subir',
+      one: '$count carrera no se puede subir',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historySyncBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count carreras no se pueden subir y no se reintentarán. Abre cada una para decidir qué hacer.',
+      one:
+          '$count carrera no se puede subir y no se reintentará. Ábrela para decidir qué hacer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runDetailBlockedDropTrack => 'Subir sin el trazado';
+
+  @override
+  String get runDetailBlockedExport => 'Exportar una copia';
+
+  @override
+  String get runDetailBlockedTitle => 'Esta carrera no se puede subir';
+
+  @override
+  String runDetailBlockedTrackTooLarge(int waypoints) {
+    return 'Su trazado GPS ($waypoints puntos) supera lo que admite el almacenamiento en la nube, así que reintentarlo nunca funcionará. Todo lo demás de la carrera — distancia, tiempo, ritmo, desnivel — sí se puede guardar.';
+  }
+
+  @override
+  String get runDetailDropTrackBody =>
+      'El trazado se elimina de este dispositivo y la carrera se sube sin mapa. Su distancia, tiempo, ritmo y desnivel no cambian. Exporta una copia antes si quieres conservarlo.';
+
+  @override
+  String get runDetailDropTrackConfirm => 'Subir sin él';
+
+  @override
+  String get runDetailDropTrackDone =>
+      'Trazado eliminado. La carrera se sincronizará en el próximo ciclo.';
+
+  @override
+  String get runDetailDropTrackFailed =>
+      'No se pudo eliminar el trazado. Inténtalo de nuevo.';
+
+  @override
+  String get runDetailDropTrackTitle => '¿Subir sin el trazado GPS?';
+
+  @override
   String get historyQueuedToSync => 'En cola para sincronizar';
 
   @override
