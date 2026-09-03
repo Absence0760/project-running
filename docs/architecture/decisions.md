@@ -18828,6 +18828,17 @@ because the census is what a later lane sizes the work from.
   `routine_public_library_screen_test.dart:188` and
   `run_screen_recording_flow_test.dart:1626`.
 
+**The last of those four is the one that matters, because the entry is a
+hand-transcribed copy of a register that is already machine-checked.**
+`test_timing_guard_test.dart`'s `_documentedDelays` map lists every surviving
+real-clock wait with its reason, fails on a site that is neither listed nor
+converted, and fails on an exemption whose sites have all been converted. All
+three of the "missing" sites were in it; only the prose had drifted. The guard
+also proved that on this change: removing the two waits made their exemptions
+stale and it failed the suite naming both, which is precisely the loop the
+followups copy cannot close. A later lane should size this work from the map,
+not from the prose, and the prose should stop restating it.
+
 Two of those three were convertible and are converted. The review-report helper
 waited a flat 10 ms for `_fetchReviews`, when all three of its callers then
 assert the seeded review renders — so it now waits on that, with the comment text
