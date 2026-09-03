@@ -17,6 +17,12 @@ import { decodeKey, handler } from '../../../lambda/share-entity/src/index';
 process.env.PUBLIC_SUPABASE_URL = 'http://supabase.invalid';
 process.env.PUBLIC_SUPABASE_ANON_KEY = 'anon';
 
+// The bundler substitutes this into the deployed artifact; the 404 branch reads
+// it since decisions § 1036, so a suite that leaves it unset gets a
+// ReferenceError into the outer envelope and a 503 for every case below.
+(globalThis as Record<string, unknown>).__SPA_SHELL_HTML__ =
+	'<!DOCTYPE html><html><head><title>Threkir</title></head><body></body></html>';
+
 /// A GET, because the handler gates its method since decisions § 1005 and a
 /// real Function URL event always carries one. These cases are about the path.
 function urlEvent(rawPath: string): LambdaFunctionURLEvent {

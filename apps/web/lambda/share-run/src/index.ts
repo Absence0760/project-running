@@ -31,6 +31,7 @@ import { injectShareRunMeta } from '../../../src/lib/share/share_run_spa_shell';
 import { renderRunOgPng } from '../../../src/lib/share/og_run_png';
 import { siteOrigin } from '../../../src/lib/core/site_url';
 import { shareMethodRefusal } from '../../../src/lib/share/share_method_gate';
+import { notFoundShell } from '../../../src/lib/share/entity_spa_shell';
 
 // SPA-shell HTML embedded at build time by lambda/share-run/build.mjs.
 // The bundler substitutes `__SPA_SHELL_HTML__` with the contents of
@@ -134,7 +135,7 @@ async function handleHtml(
 				'content-type': 'text/html; charset=utf-8',
 				'cache-control': CACHE_CONTROL,
 			},
-			body: notFoundHtml(),
+			body: notFoundShell(__SPA_SHELL_HTML__, 'Run not found — Threkir'),
 		};
 	}
 	const meta: ShareRunMeta = buildShareRunMeta({
@@ -195,17 +196,4 @@ function jsonResponse(
 	};
 }
 
-function notFoundHtml(): string {
-	// Minimal not-found shell. Doesn't try to load the SPA bundle —
-	// the route doesn't exist, so loading the SPA would just render
-	// its own 404. Generic title so the crawler's unfurl is honest.
-	return [
-		'<!DOCTYPE html>',
-		'<html lang="en"><head><meta charset="utf-8">',
-		'<title>Run not found — Threkir</title>',
-		'<meta name="robots" content="noindex">',
-		'</head><body><h1>Run not found</h1>',
-		'<p>This share link is no longer available.</p>',
-		'</body></html>',
-	].join('\n');
-}
+
