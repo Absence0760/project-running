@@ -3549,11 +3549,6 @@ test('every source-scanning guard blanks comments through the one shared strippe
 			count: 2,
 			why: 'the :focus/:focus-visible pairing scan and the token scan both read <style> blocks, which are CSS.',
 		},
-		{
-			file: 'src/lib/integrations/strava_zip_strictness.test.ts',
-			count: 1,
-			why: 'the last un-converted JS copy: src/lib/integrations was another lane`s in the round that did the conversion. Convert it and delete this entry.',
-		},
 	];
 
 	// Assembled, so this file does not contain the needle it searches for.
