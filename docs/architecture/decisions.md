@@ -17616,3 +17616,147 @@ route" while the picker took five formats, so it now names no list at all.
 The fixture is a KMZ **built in the test** rather than a committed binary, so
 the test says what is inside the archive it is asserting about.
 
+
+## 1033. The last hand-rolled comment stripper is gone, and it had changed nothing — measured before it was replaced
+
+[§ 1000](#1000) single-sourced eleven copies of a JS comment stripper into
+`core/strip_comments.ts` and left one behind, `src/lib/integrations/
+strava_zip_strictness.test.ts`, because that directory belonged to another lane
+in the round that did the conversion. Its spelling was the two-`replace`
+variant — blank `//` lines, then treat any surviving `/*` as a block opener —
+which is one of the two the shared module's own header names as broken from
+inside a string literal, and the module it scans (`strava-zip.ts`) is a parser
+full of quoted path fragments.
+
+The filing asked whether that blind spot changes what the guard actually sees
+today. It does not, and the reason is worth writing down rather than
+rediscovering: `strava-zip.ts` contains **no `/*` sequence at all** — zero
+block-comment delimiters anywhere, in code or in a string — so both strippers
+produce byte-identical output on it, verified by normalising whitespace and
+comparing. The conversion therefore closes a latent hole, not a live one. What
+made it worth doing anyway is that the hole opens the moment somebody adds a
+quoted `/*` to a parser, and nothing would say so.
+
+The register entry in `security_guards.test.ts` went in the same commit,
+because that guard fails on a stale entry as loudly as on a new copy.
+
+## 1034. The single-source guard keyed on one SPELLING, so three hand-rolled strippers sat beside it — one swallowing 906 lines
+
+[§ 1000](#1000)'s register detected a hand-rolled comment stripper by searching for
+the needle `/\*[\s\S]*?\*\//`, which is what all eleven copies happened to
+spell. The round-34 filing predicted the gap in the abstract: a scanner that
+blanks only `//` would slip through, and so would a differently-spelled block
+strip. It also predicted the fix was hard, because "the line-strip spellings do
+not enumerate cleanly."
+
+They do not. The **delimiters** do. There are exactly three (`//`, `/*`, `*/`),
+any regex that recognises a JavaScript comment must spell at least one, and
+inside a regex literal the slash must be escaped — so the closed needle set is
+the three escaped delimiters, with `\/\/` preceded by a colon excluded as a URL
+scheme. That is what the guard now searches for, over source already blanked
+through the shared stripper so prose naming a delimiter is not counted as one.
+It falls from 118 files that read source down to 8 that spell a delimiter, each
+registered with the reason it is not comment handling: four CSS scanners, two
+CloudFront route-glob trims, one doubled-slash URL check, one tsconfig include
+glob. The needle set itself is asserted against seven strip spellings and two
+non-comment shapes in the same test, so a set that stops recognising one fails
+rather than silently passing everything.
+
+**Keying on a spelling had cost something already.** Three scanners were
+hand-rolling, and one was actively wrong:
+
+- `track_preview_mount_guard.test.ts` blanked comment spans off the RAW
+  `.svelte` text with its own three regexes, and its block pattern was
+  `/\*[\s\S]*?(?:\*\/|$)/` — the same idea as the register's needle, spelled
+  differently, so invisible to it. A path written inside an HTML comment
+  (`<!-- every /share/* sibling already does -->`) carries a `/*`, which opened
+  a block that ran to the next close delimiter in the file. Measured: **906
+  lines blanked out across five `.svelte` files** — `routes/+layout.svelte`
+  (335), both live pages (257 + 159) and `runs/[id]/+page.svelte` (154) — while
+  the guard reported a pass. That is [§ 971](#971)'s defect, 779 lines then and 906
+  now, recurring in the one place its own guard could not look.
+- The same helper blanked by walking `[...source]` (code points) against
+  `matchAll` offsets (UTF-16). `RouteHeatmap.svelte` contains exactly one
+  astral character, a map-pin emoji in a popup template, so every span after it
+  was misaligned by one unit: each comment's opening character survived and one
+  character past its end was eaten instead. 113 of that file's comment lines
+  came back carrying a bare `/`. Not exploitable for this guard's needle, but
+  the eaten character is live code.
+- `share/share_url_source_guard.test.ts` blanked whole `//` lines only, on the
+  stated grounds that "block comments are not used for doc comments anywhere in
+  this tree" — which was never true; that file's own header is one. It also
+  missed a trailing comment after code.
+- `map_surface_basemap_guard.test.ts` skipped lines that START with a comment,
+  and `security_guards.test.ts`'s two `console.error` scans read Edge Function
+  and web-handler source raw and then line-stripped the extracted argument.
+
+Only the first changed an answer. The others were measured before and after and
+answer identically today, which is the honest thing to record: four latent
+holes and one live one. The composition in the Svelte case is ordered
+deliberately — markup comments first, then the JS pass — because the reverse
+order is exactly the defect, and the HTML blanking now replaces per UTF-16 unit
+so an emoji cannot shift it.
+
+## 1035. One 405 for all eight Lambdas, and the copies had already drifted on the header that matters
+
+[§ 1005](#1005) gave the five share handlers a single `shareMethodRefusal`;
+`coach`, `generate-route` and `osrm-proxy` each still spelled the comparison,
+the status, the `Allow` header and the body inline. The round-34 filing called
+that duplication rather than a hole, and left it as "worth doing the next time
+one of those wrappers is opened."
+
+Reading the four showed it was not only duplication. The share refusal sends
+`cache-control: no-store`; **none of the three API copies sent any cache
+directive at all**, so a 405 from `/api/coach`, `/api/routes/generate` or
+`/api/routes/osrm` was cacheable by any intermediary that chose to, and would
+have outlived its own fix. Four hand-written copies of one response, and the
+one thing they disagreed about was the one thing that has a consequence.
+
+`core/method_gate` takes the allowed-method set — the only thing that actually
+differs per caller — and returns the PARTS (`statusCode`, `headers`, `body`)
+rather than a `LambdaFunctionURLResult`, because the coach writes through
+`HttpResponseStream` and the other seven return an object. That is the "two
+response shapes" the filing named as the reason not to bother; it costs one
+eight-line `writeRefusal` in the coach and nothing anywhere else.
+`share_method_gate` keeps its own name as that gate instantiated at GET/HEAD,
+the re-export shape `auth_gates` already uses for the password floor, so the
+share surface still owns its rule while the refusal has one home.
+
+Two things were deliberately NOT changed. The three API handlers still read
+`event.requestContext.http.method` without `?.`, so a malformed event throws
+into the outer 503 envelope instead of resolving to a 405 — [§ 896](#896)'s stated
+posture, and a malformed event is not a client method error. And the population
+guard still accepts a handler that spells its own gate: a ninth Lambda written
+that way is guarded, just not folded, and refusing it would be a rule about
+style rather than about safety.
+
+## 1036. The share Lambdas' 404 body is the app's own shell, which is what makes the distribution's 404 mapping redundant
+
+Each of the five share handlers carried its own not-found page: one unstyled,
+unlocalized English paragraph, in five slightly different spellings ("This link
+isn't available.", "This share link is no longer available."), two of them with
+a title that did not even say the thing was missing. No reader has ever seen
+one. [§ 1022](#1022) records why: the distribution answers every 4xx with the body
+of `/index.html`, which is the SPA shell, so the app's designed `.notfound-card`
+renders instead — and the `noindex` these handlers send goes in the bin with the
+body it is attached to, since that tag lives nowhere else.
+
+The durable end state, which the round-34 filing named, is for the handlers to
+return the shell AT 404 themselves. `notFoundShell` does that through the
+existing `injectEntityHead`, so the same stripping that keeps a stale `og:*`,
+canonical or JSON-LD off a 200 keeps it off a 404 — nothing about the entity may
+survive onto a page whose whole message is that the entity is gone. The reader
+then gets the same designed, localized card whether the edge substitutes or not,
+and the `noindex` survives. At that point `custom_error_response` for 404 is
+redundant rather than load-bearing, and removing it would restore the tag to the
+wire. That half is `infra/`, which no lane owned this round, and is filed.
+
+`notFoundShell` falls back to a minimal noindex document when the shell is
+unusable, rather than the two alternatives: `injectEntityHead` returns a shell
+with no `</head>` unchanged, which would carry no `noindex` at all, and a throw
+would reach the outer envelope and answer 503 — a retry signal for a link that
+will never resolve, which is precisely the defect [§ 1004](#1004) closed on the
+malformed-key path. The `<title>` stays per-surface and stays English: it is the
+pre-hydration tab title, exactly like every other prerendered page's, and the
+app sets its own once running. Two of the five said something else and now
+match their siblings.
