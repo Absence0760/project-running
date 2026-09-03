@@ -14,7 +14,7 @@ When one fails, **read the `reason:` block in the test before rubber-stamping a 
 
 - `apps/mobile_android/test/architecture_guards_test.dart` — most of them (~33 tests). Includes the `thumbnail privacy-zone clipping` group, `local_run_store` newer-wins guards, sync-paths-batch guards, heavy-parser-isolate guards, lock-screen notification bridge, ErrorWidget.builder boundary, etc.
 - `packages/run_recorder/test/architecture_guards_test.dart` — recorder-side invariants (state machine, GPS filter chain).
-- `apps/web/src/lib/security_guards.test.ts` — web-side privacy-zone + LRU + fail-closed guards.
+- `apps/web/src/lib/*_guards.test.ts` — the web-side source guards, one file per concern (`privacy_guards`, `consent_guards`, `infra_guards`, `credential_guards`, `lambda_guards`, `edge_function_guards`, `rate_limit_guards`, `paywall_guards`, `a11y_guards`, `xss_guards`, `ci_workflow_guards`, `source_scanner_guards`).
 
 ## What to do
 
@@ -22,7 +22,7 @@ When one fails, **read the `reason:` block in the test before rubber-stamping a 
    ```
    cd apps/mobile_android && flutter test test/architecture_guards_test.dart
    cd ../../packages/run_recorder && flutter test test/architecture_guards_test.dart
-   cd ../../apps/web && npx tsx --test src/lib/security_guards.test.ts
+   cd ../../apps/web && npx tsx --test 'src/lib/*_guards.test.ts'
    ```
    (run_recorder's suite imports `package:flutter_test/flutter_test.dart`,
    which pulls in dart:ui types — `dart test` errors with "Offset

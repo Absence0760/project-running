@@ -142,7 +142,7 @@ Each spend vector carries at least two independent caps — one in IaC, one (whe
 - **Anthropic console spend limit** — **MUST be set manually** at https://console.anthropic.com/settings/limits — code cannot enforce a provider-side ceiling on a key that's leaked from a sops file. The recommended floor is ~2× the projected monthly Anthropic spend (~$30/mo at launch baseline, so $60–$100 cap).
 - **Supabase egress alert** — **MUST be set manually** in Supabase project settings. Code cannot enforce a daily-egress ceiling at the provider level.
 
-The full audit + arch-guard tests covering each ceiling live in [`apps/web/src/lib/security_guards.test.ts`](../../apps/web/src/lib/security_guards.test.ts) under the "audit:cost-controls" section.
+The full audit + arch-guard tests covering each ceiling live in [`apps/web/src/lib/infra_guards.test.ts`](../../apps/web/src/lib/infra_guards.test.ts) under the "audit:cost-controls" section.
 
 ---
 

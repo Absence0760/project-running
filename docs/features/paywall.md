@@ -149,7 +149,7 @@ the AI Coach so rock-bottom shows no door that only 503s:
 - the **`/compare` "AI Coach" explore link**.
 
 The human coach-athlete roster (`/coaching`) is a **separate feature** and
-is NOT gated — it has no Anthropic dependency. `security_guards.test.ts`
+is NOT gated — it has no Anthropic dependency. `paywall_guards.test.ts`
 pins the storefront gate so Pro can't be silently re-sold while the Coach
 is off.
 

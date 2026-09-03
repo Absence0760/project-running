@@ -196,7 +196,7 @@ become a flat dumping ground: `core/` (Supabase queries + client),
   `apps/backend/package.json`. Don't move either.
 - **Tests co-locate with their module** (`routes/static_map.ts` →
   `routes/route_preview_helpers.test.ts`). Cross-cutting guard tests that read
-  several source files by path (`security_guards.test.ts`,
+  several source files by path (`privacy_guards.test.ts`,
   `contrast_guard.test.ts`, …) and tests of the two root modules stay at the
   lib root.
 - **Import across folders with the `$lib/<folder>/<stem>` alias**, not deep
@@ -973,7 +973,7 @@ On the Flutter apps, an animation's duration comes from `AppMotion` (`packages/u
 
 Two animations deliberately do **not** collapse, and a new one that plays continuously should say which case it is: `run_detail_screen`'s trace replay and `undo_bar`'s countdown ring. The first is playback the user pressed play on and can stop (WCAG 2.2.2 is met by the control, and killing it would remove the feature); the second reports a real deadline, and a vestibular user needs the remaining time as much as anyone.
 
-On web the same decision is already in force and needs no mirror: `app.css` carries the global `@media (prefers-reduced-motion: reduce)` net (pinned by `security_guards.test.ts`) plus per-component blocks, and `--transition-fast` / `--transition-base` are its duration rungs. Mobile's derived `brief` landing on 200 ms — web's existing `--transition-base` — is a convergence, not a copy.
+On web the same decision is already in force and needs no mirror: `app.css` carries the global `@media (prefers-reduced-motion: reduce)` net (pinned by `a11y_guards.test.ts`) plus per-component blocks, and `--transition-fast` / `--transition-base` are its duration rungs. Mobile's derived `brief` landing on 200 ms — web's existing `--transition-base` — is a convergence, not a copy.
 
 ## Local-tz date strings
 
@@ -1748,7 +1748,7 @@ exceptions.
 
 ## A merge gate and an agent name each have exactly one definition
 
-Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/security_guards.test.ts` because both fail *green*:
+Two invariants about this repo's own tooling, both guarded in `apps/web/src/lib/ci_workflow_guards.test.ts` because both fail *green*:
 
 - **Only `ci.yml` may declare a job named `CI gate`.** That job name is the required status check on `main`. GitHub does not require every check sharing a name to pass, so a second, trivially-passing emitter can satisfy branch protection while the real jobs are still queued — observed on #457, removed by #577. If `ci.yml` ever needs to skip work on a docs-only diff, skip the heavy *jobs* and let the gate job still report from `ci.yml`.
 - **An agent's `name:` is unique across `.claude/agents/**`.** Claude resolves a subagent by that frontmatter name, never by path, so two files declaring one name are two definitions of one agent and which answers is unpredictable. Putting a copy in a different directory does not separate them.

@@ -5,7 +5,7 @@
 // a reason a future editor can read before deciding it's safe to break.
 //
 // Runs with cwd = apps/web (the `test:unit` script), so `read` resolves
-// cwd-relative paths — same convention as security_guards.test.ts.
+// cwd-relative paths — same convention as privacy_guards.test.ts.
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
