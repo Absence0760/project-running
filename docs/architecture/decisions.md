@@ -18872,3 +18872,83 @@ same test with the tap moved inside `runAsync` and the call restored passed in
 predicts. The rule for the next lane: after a fake-zone tap, wait on an
 observable outcome with `pumpUntil`; `debugWritesSettled` is for a real-zone
 write, and reaching for it otherwise deadlocks rather than failing.
+
+## 1073. Two lanes read one followup in the same round and reached opposite verdicts; the one that read the ENDPOINT was right
+
+Round 36 put the `isProviderConfigured` followup in front of two lanes at once.
+The mobile lane read the filing's wording, checked it against the code, and
+closed it as stale (§ 1071). The web lane read the probe's own **endpoint** and
+found a live defect. Both were right about what they looked at, and the
+difference between them is the lesson worth keeping.
+
+**What § 1071 measured, and still stands.** The filing named two cases —
+"offline, or Supabase not initialised" — and asserted they read as configured.
+They do not, and had not since § 1007: `raceProbeUnavailable` answered
+"unavailable" for anything that was not a `FunctionException` with `status > 0`,
+and for a 429 or any 5xx even when it was. `SocketException` and
+`StateError('not initialized')` were each pinned `isTrue`, `RaceService()` with
+no Supabase behind it answered `false` for all three providers, and both call
+sites initialise `ok = false` before their try. Every one of those claims
+re-verified on this change. § 1071 is not being rewritten, because it is
+accurate about what it examined.
+
+**What neither § 1071 nor § 1007 considered.** Both reasoned about the failure
+*shapes the filing named* and inherited web's then-rule that a readable non-429
+4xx reports a provider live — on the theory that such a status proves the
+function ran PAST its credential gate. Nobody read `race-results-import` to ask
+which 4xx it can actually answer. It answers two that refute the theory:
+
+* **401, before it reads any provider credential at all.** The auth gate is two
+  returns at the top of the handler — no `Authorization` header, then no `user`
+  — and both precede the `isProbe` branch and every `RUNSIGNUP_API_KEY` /
+  `ULTRASIGNUP_API_KEY` / `CHRONOTRACK_CLIENT_ID` read. So a signed-out or
+  expired session probed every provider, got 401, and the phone lit **every**
+  card as live.
+* **400 `unknown_provider`, for a leg it does not dispatch** — and the comment
+  introducing that line reads "An unrecognised provider is not 'configured' —
+  answering true for it is the same class of bug as the two credential-gated
+  legs above." The function wrote the 400 to mean *not configured*; the client
+  read it as *configured*. One response, two opposite readings, on the same
+  team's code.
+
+The theory failed because "ran past the credential gate" is not something a
+status can testify to. The probe branch has exactly **one** affirmative answer,
+`{configured: true}`, and every other return it can make carries an `error`.
+
+**So the rule is web's `probeSaysConfigured`: configured iff the invoke did not
+throw.** On the phone that is not an approximation — `functions_client` 2.5.0
+returns a `FunctionResponse` only for 200-299 and throws `FunctionException` for
+everything else, so "did not throw" is exactly "2xx". A probe asks one question
+and only a 200 answers it.
+
+**`raceProbeUnavailable` is deleted rather than kept.** It had exactly one
+`lib/` call site, which was this method, and no second grader is owed: the
+import path already has its own, `_isProviderNotConfigured` / `_detailsSay`,
+which asks a different question (*was this particular 503 a credential
+refusal, so the provider's own explainer can be thrown*) and is untouched. That
+separation is § 1007's and it survives — a probe is a yes/no availability
+question that fails closed, an import is an action whose failure should surface
+as itself. Keeping a second, differently-shaped grader for a path that does not
+call it would be the unused-code shim the house rules forbid.
+
+**A Dart `provider_probe.dart` was deliberately NOT created.** Web's rule is one
+expression over a nullable error because its callers hold one; Dart's
+`try { … return true; } catch { return false; }` is that same rule stated
+natively, and a one-call-site helper wrapping it would be a preemptive
+abstraction. More decisively, a Dart twin of `provider_probe.ts` would be a new
+parity pair, and a pair needs rows in **both** registries — the root `CLAUDE.md`
+table and `shared-library-syncer.md` — neither of which this lane owns. A pair
+named by only one registry is a pair whose divergence nothing detects, which is
+§ 641's mistake and § 1039's filing. Registering it is filed instead.
+
+**The generalisable finding: a filing describes a symptom, and a symptom is a
+worse specification than the interface.** § 1071's method — take the entry's
+claims and check them — is sound and produced a true result, but its reach is
+bounded by whatever the filer happened to notice. The web lane asked the
+endpoint what it can say, which is a question the filing could not bound. When
+an entry asks for a decision about a boundary, enumerate the boundary's answers
+before grading them. The pinning follows the same rule: the two endpoint facts
+are guarded by reading `race-results-import` (with re-anchor reasons, so a
+moved needle fails loudly rather than passing vacuously), and the client half by
+a guard that fails if `isProviderConfigured` inspects a status again —
+mutation-tested by reinstating the old grader, which it catches by name.
