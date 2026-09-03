@@ -116,3 +116,36 @@ export function stravaDistanceMetres(row: string[], idx: HeaderIndex): number {
 	if (idx.distance < 0) return 0;
 	return parse(row[idx.distance]) * (idx.distanceIsMiles ? MILES_TO_METRES : 1000);
 }
+
+/// The required columns this header does not name, as the labels an operator
+/// has to look for in their own `activities.csv`. Empty means importable.
+///
+/// Every column here is required for one reason: `indexHeader` answers -1 for
+/// a header it cannot find, `row[-1]` is `undefined`, and each read of it in
+/// `importOne` then FABRICATES a value for every row in the archive rather
+/// than failing. A missing `Activity Type` defaults each row to `run`, so a
+/// migrant's rides, swims and yoga import as runs (decisions § 979). A missing
+/// `Activity Date` leaves `parseStravaCsvDateToIso` with nothing and the
+/// `?? new Date()` fallback stamps every row with the moment of the import —
+/// five years of history collapsed onto today. A missing `Moving Time` gives
+/// every run a zero duration, and a header naming no distance column at all
+/// gives every run zero distance; both poison pace, PRs and training load
+/// while the summary still reads "imported".
+///
+/// Refusing at the header is the only place the difference between "this
+/// export names no such column" and "this row's cell is blank" is still
+/// visible. The blank CELL stays lenient, one row at a time — except for the
+/// date, which `importOne` refuses per row for the same reason this check
+/// exists.
+export function missingRequiredStravaColumns(idx: HeaderIndex): string[] {
+	return [
+		idx.id < 0 && 'Activity ID',
+		idx.filename < 0 && 'Filename',
+		idx.type < 0 && 'Activity Type',
+		idx.date < 0 && 'Activity Date',
+		idx.movingTime < 0 && 'Moving Time',
+		// Either distance block satisfies it — an export era carrying only the
+		// display-unit column is still importable, at the athlete's own unit.
+		idx.distance < 0 && idx.distanceMetres < 0 && 'Distance',
+	].filter((c): c is string => typeof c === 'string');
+}

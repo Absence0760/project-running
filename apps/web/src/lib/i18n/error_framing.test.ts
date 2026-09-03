@@ -26,6 +26,12 @@ const KEYS = [
 	'settingsAccount.linkFailed',
 	'settingsAccount.unlinkFailed',
 	'coachPage.consentRecordError',
+	// The two bulk importers' file-level fallbacks. A refusal this build
+	// recognises renders a whole translated sentence from `importRefusal.*`;
+	// anything else is framed here rather than surfaced bare, which is what
+	// `err.message` straight into `zipError` used to do.
+	'settingsIntegrations.stravaZipImportFailed',
+	'settingsIntegrations.garminImportFailed',
 ] as const;
 
 const RAW = 'new row violates row-level security policy for table "route_conditions"';
