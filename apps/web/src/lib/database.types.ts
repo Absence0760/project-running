@@ -2023,6 +2023,7 @@ export type Database = {
         Row: {
           duration_s: number | null
           exercise_id: string | null
+          exercise_key: string
           exercise_name: string
           id: string
           reps: number | null
@@ -2035,6 +2036,7 @@ export type Database = {
         Insert: {
           duration_s?: number | null
           exercise_id?: string | null
+          exercise_key?: string
           exercise_name: string
           id?: string
           reps?: number | null
@@ -2047,6 +2049,7 @@ export type Database = {
         Update: {
           duration_s?: number | null
           exercise_id?: string | null
+          exercise_key?: string
           exercise_name?: string
           id?: string
           reps?: number | null
