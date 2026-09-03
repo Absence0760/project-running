@@ -2876,7 +2876,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routesImportSharedFailed =>
-      'Impossible d\'importer ce fichier : ce n\'est pas un itinéraire GPX ou KML valide.';
+      'Impossible d\'importer ce fichier : ce n\'est pas un itinéraire valide.';
 
   @override
   String routesSaved(String name) {
@@ -2896,7 +2896,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML, GeoJSON ou TCX.';
+      'Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML, KMZ, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Créer';

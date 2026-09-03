@@ -2839,7 +2839,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routesImportSharedFailed =>
-      'Couldn\'t import that file — it isn\'t a valid GPX or KML route.';
+      'Couldn\'t import that file — it isn\'t a valid route.';
 
   @override
   String routesSaved(String name) {
@@ -2857,7 +2857,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.';
+      'Tap Build to draw a route on the map, or Import a GPX, KML, KMZ, GeoJSON, or TCX file.';
 
   @override
   String get routesBuild => 'Build';

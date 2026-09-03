@@ -2875,7 +2875,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routesImportSharedFailed =>
-      'Datei konnte nicht importiert werden – keine gültige GPX- oder KML-Route.';
+      'Datei konnte nicht importiert werden – keine gültige Route.';
 
   @override
   String routesSaved(String name) {
@@ -2895,7 +2895,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Tippe auf Erstellen, um eine Route auf der Karte zu zeichnen, oder importiere eine GPX-, KML-, GeoJSON- oder TCX-Datei.';
+      'Tippe auf Erstellen, um eine Route auf der Karte zu zeichnen, oder importiere eine GPX-, KML-, KMZ-, GeoJSON- oder TCX-Datei.';
 
   @override
   String get routesBuild => 'Erstellen';

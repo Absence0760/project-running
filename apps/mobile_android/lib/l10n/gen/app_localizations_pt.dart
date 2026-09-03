@@ -2864,7 +2864,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routesImportSharedFailed =>
-      'Não foi possível importar o ficheiro: não é uma rota GPX ou KML válida.';
+      'Não foi possível importar o ficheiro: não é uma rota válida.';
 
   @override
   String routesSaved(String name) {
@@ -2884,7 +2884,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML, GeoJSON ou TCX.';
+      'Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML, KMZ, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Criar';
@@ -16814,7 +16814,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routesImportSharedFailed =>
-      'Não foi possível importar o arquivo: não é uma rota GPX ou KML válida.';
+      'Não foi possível importar o arquivo: não é uma rota válida.';
 
   @override
   String routesSaved(String name) {
@@ -16834,7 +16834,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routesEmptyBody =>
-      'Toque em Criar para desenhar uma rota no mapa ou importe um arquivo GPX, KML, GeoJSON ou TCX.';
+      'Toque em Criar para desenhar uma rota no mapa ou importe um arquivo GPX, KML, KMZ, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Criar';

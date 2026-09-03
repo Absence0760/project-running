@@ -3745,7 +3745,7 @@
       }
     }
   },
-  "routesImportSharedFailed": "Couldn't import that file — it isn't a valid GPX or KML route.",
+  "routesImportSharedFailed": "Couldn't import that file — it isn't a valid route.",
   "@routesImportSharedFailed": {
     "description": "Banner shown when a GPX/KML file opened from another app (WhatsApp Open with / share) couldn't be imported as a route"
   },
@@ -3770,7 +3770,7 @@
   "@routesEmptyTitle": {
     "description": "Empty-state title shown when the route library is empty"
   },
-  "routesEmptyBody": "Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.",
+  "routesEmptyBody": "Tap Build to draw a route on the map, or Import a GPX, KML, KMZ, GeoJSON, or TCX file.",
   "@routesEmptyBody": {
     "description": "Empty-state body shown when the route library is empty"
   },

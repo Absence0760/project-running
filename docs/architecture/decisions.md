@@ -16663,3 +16663,52 @@ One thing this change caught that had nothing to do with it: § 1013's move put
 imports both, so the two collide. `dart analyze` does not see it; the compiler
 does, and only when a test actually builds that package. The import there now
 says `hide ActivityType`, naming which vocabulary the file means.
+
+## 1015. KMZ needed a bytes pipeline, and the pipeline was the reason to build it
+
+§ 988 widened mobile route import to GPX / KML / GeoJSON / TCX and deliberately
+removed every promise of KMZ rather than adding it, because the parser was the
+cheap half and the pipeline was not: `routes_screen._pickAndImport` and
+`SharedFileImportService.importPath` both `readAsString`, and a `String` then
+travels through the `compute` request to the dispatch. `readAsString` throws on
+a zip before any parser is reached.
+
+Verified first, as the filing asked: § 988's honesty holds. No mobile surface
+claimed KMZ, `routesEmptyBody` named exactly the four formats the picker
+offered in all seven ARBs, and `parity.md` carried an accurate ✗ with the
+reason. So this is a real parity gap against web — which has taken KMZ since it
+was written — rather than a documentation problem.
+
+Built, because the pipeline change is the durable fix and it is small: both
+entry points read BYTES, the two isolate requests carry `Uint8List`, and one
+new `routeTextFromImportedBytes` turns bytes into `(format, content)` before
+the existing string-typed dispatch, which is unchanged. `archive` is already a
+direct dependency of this tree (`backup.dart`, `strava_importer.dart`), so the
+unwrap needs no new package and `gpx_parser` stays dependency-free — a KMZ is a
+CONTAINER, not a route format, so unwrapping it belongs in the file pipeline
+rather than in a parser over text. The dispatch never sees `kmz`.
+
+Four decisions inside that, each of which a narrower implementation gets wrong:
+
+  * A KMZ is recognised by the **zip magic number**, not by its extension. An
+    OS share hands over a cached copy that often has no usable extension —
+    that is the whole reason `detectRouteFormat` sniffs content — and a zip's
+    payload is binary, so the existing text sniff cannot run on it at all.
+  * `doc.kml` is the OGC-specified entry name and is preferred, but the first
+    `.kml` entry wins when it is absent. Requiring the spec name would reject
+    the many real archives that name the document after the route.
+  * A zip with no KML in it is refused, rather than reported as an unparseable
+    route.
+  * Bytes that are neither a zip nor valid UTF-8 are refused outright.
+    `allowMalformed` would hand the parsers replacement characters and fail
+    further downstream with a worse message.
+
+The copy moved with the code: all seven ARBs now name KMZ in
+`routesEmptyBody`, and the guard that asserted KMZ was ABSENT from every
+catalogue is inverted to assert it is present — the same test, still pinning
+that the promise and the picker cannot drift. `routesImportSharedFailed` was
+also wrong in a way this change made worse: it said "isn't a valid GPX or KML
+route" while the picker took five formats, so it now names no list at all.
+
+The fixture is a KMZ **built in the test** rather than a committed binary, so
+the test says what is inside the archive it is asserting about.

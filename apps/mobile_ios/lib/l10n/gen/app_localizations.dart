@@ -4832,7 +4832,7 @@ abstract class AppLocalizations {
   /// Banner shown when a GPX/KML file opened from another app (WhatsApp Open with / share) couldn't be imported as a route
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t import that file — it isn\'t a valid GPX or KML route.'**
+  /// **'Couldn\'t import that file — it isn\'t a valid route.'**
   String get routesImportSharedFailed;
 
   /// Banner shown after a route built in the in-app builder is saved
@@ -4862,7 +4862,7 @@ abstract class AppLocalizations {
   /// Empty-state body shown when the route library is empty
   ///
   /// In en, this message translates to:
-  /// **'Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.'**
+  /// **'Tap Build to draw a route on the map, or Import a GPX, KML, KMZ, GeoJSON, or TCX file.'**
   String get routesEmptyBody;
 
   /// Label on the build-route FAB and the empty-state legend reminder

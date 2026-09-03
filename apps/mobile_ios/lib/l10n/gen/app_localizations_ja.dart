@@ -2725,8 +2725,7 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get routesImportSharedFailed =>
-      'このファイルをインポートできませんでした。有効な GPX または KML ルートではありません。';
+  String get routesImportSharedFailed => 'このファイルをインポートできませんでした。有効なルートではありません。';
 
   @override
   String routesSaved(String name) {
@@ -2744,7 +2743,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      '「作成」をタップして地図上にルートを描くか、GPX・KML・GeoJSON・TCX ファイルをインポートしてください。';
+      '「作成」をタップして地図上にルートを描くか、GPX・KML・KMZ・GeoJSON・TCX ファイルをインポートしてください。';
 
   @override
   String get routesBuild => '作成';
