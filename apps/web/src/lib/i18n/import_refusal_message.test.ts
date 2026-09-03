@@ -114,22 +114,23 @@ test('a reason this build does not know falls through to the framing, not to a b
 	for (const impostor of [
 		Object.assign(new Error('boom'), { reason: 'strava_zip_haunted' }),
 		Object.assign(new Error('boom'), { reason: 42 }),
-		{ reason: 'not_signed_in' as const, message: 'boom' },
 	]) {
 		const rendered = importRefusalMessage(t, impostor, FALLBACK);
-		if (typeof (impostor as { reason?: unknown }).reason === 'string' &&
-			IMPORT_REFUSAL_REASONS.includes(
-				(impostor as { reason: ImportRefusalReason }).reason,
-			)) {
-			// A plain object carrying a known reason IS a refusal — the narrowing
-			// is structural on purpose, so a value that crossed a module boundary
-			// still renders its own sentence.
-			assert.ok(!rendered.includes('boom'), 'a known reason must not fall through');
-			continue;
-		}
 		assert.ok(rendered.includes('boom'), `an unknown reason must be framed: ${rendered}`);
 		assert.ok(!rendered.includes('importRefusal.'), 'a bare key reached the reader');
 	}
+});
+
+test('a plain object carrying a known reason is a refusal, not a stranger', async () => {
+	// The narrowing is structural on purpose, so a value that crossed a module
+	// boundary still renders its own sentence rather than its own message.
+	const t = await translatorFor('en');
+	const rendered = importRefusalMessage(t, { reason: 'not_signed_in', message: 'boom' }, FALLBACK);
+	assert.ok(!rendered.includes('boom'));
+	assert.equal(
+		rendered,
+		importRefusalMessage(t, new ImportRefusedError('not_signed_in'), FALLBACK),
+	);
 });
 
 test('a non-Error thrown value still says something', async () => {
