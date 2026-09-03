@@ -704,7 +704,7 @@ Android string resources** — no custom framework, no in-app picker
 
 ## Testing convention
 
-Pure-JVM JUnit tests in `app/src/test/kotlin/com/runapp/watchwear/`. Run with `./gradlew testDebugUnitTest`. Current total: ~395 tests across ~32 files. No Robolectric, no Compose UI test instrumentation — deliberate. The pattern when a load-bearing piece of logic is bound to an Android API (foreground service, OkHttp, Health Services, SensorEventListener, Compose):
+Pure-JVM JUnit tests in `app/src/test/kotlin/com/runapp/watchwear/`. Run with `./gradlew testDebugUnitTest`. Current total: 717 tests across 70 files (measured 2026-09-03; the count is not gated and drifts fast). No Robolectric, no Compose UI test instrumentation — deliberate. The pattern when a load-bearing piece of logic is bound to an Android API (foreground service, OkHttp, Health Services, SensorEventListener, Compose):
 
 1. **Extract the pure logic** into a file-level `internal fun` (or a `companion object` static when it must live on the host class). The Android-bound wrapper method delegates one-line to the helper.
 2. **Test the helper** in isolation against a JVM target. No Robolectric runner, no `androidx.compose.ui.test.*`.
