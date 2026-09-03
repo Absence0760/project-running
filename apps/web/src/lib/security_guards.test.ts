@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from './core/strip_comments';
@@ -3609,5 +3609,49 @@ test('every source-scanning guard blanks comments through the one shared strippe
 		stale.sort(),
 		[],
 		'registered file(s) no longer spell a block-comment strip — delete the entry.',
+	);
+});
+
+test('every production Lambda gates its own HTTP method', () => {
+	// Reason: each of the eight handlers is reached by a CloudFront behaviour
+	// whose `allowed_methods` is the only other thing deciding what arrives, and
+	// the two are written in different languages in different directories. All
+	// eight gate today and each one's gate is driven behaviourally by its own
+	// suite — but by five different files, with nothing naming the class. A
+	// ninth Lambda added without a gate would be caught by none of them, which
+	// is how the five share handlers went without one until § 1005: their
+	// safety sat entirely in the Terraform list § 972 finally asserted.
+	//
+	// Source-level rather than behavioural because the shapes do not generalise:
+	// the coach wrapper writes to a response STREAM and cannot be driven through
+	// the same envelope as its siblings.
+	const dir = resolve(__dirname, '..', '..', 'lambda');
+	const handlers = readdirSync(dir, { withFileTypes: true })
+		.filter((e) => e.isDirectory())
+		.map((e) => `${e.name}/src/index.ts`)
+		.filter((rel) => existsSync(resolve(dir, rel)));
+
+	// Population: a walker that found nothing would satisfy the assertion below
+	// while proving nothing (decisions § 534).
+	assert.ok(handlers.length >= 8, `found only ${handlers.length} Lambda handlers — walker broken?`);
+
+	// Either the handler spells its own comparison and the 405 it answers with,
+	// or it delegates to the one shared refusal the five share Lambdas use.
+	const OWN_GATE = /requestContext\??\.http\??\.method\s*!==/;
+	const SHARED_GATE = /shareMethodRefusal\(/;
+
+	const ungated = handlers.filter((rel) => {
+		const src = stripComments(readFileSync(resolve(dir, rel), 'utf-8'));
+		if (SHARED_GATE.test(src)) return false;
+		return !(OWN_GATE.test(src) && /\b405\b/.test(src));
+	});
+
+	assert.deepEqual(
+		ungated.sort(),
+		[],
+		'these Lambda handlers do work on any method their CloudFront behaviour ' +
+			'lets through. Compare `event.requestContext.http.method` and answer a ' +
+			'405 with an `Allow` header (RFC 9110 15.5.6), or call ' +
+			'`shareMethodRefusal` from $lib/share/share_method_gate.',
 	);
 });

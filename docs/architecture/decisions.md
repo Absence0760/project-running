@@ -16467,3 +16467,26 @@ deleted. The two answer different questions: the gate decides what the handler
 does, and only the behaviour decides what reaches the origin at all — a POST body
 refused at the edge is never uploaded, never billed, and never reaches a handler
 that could be made to read it.
+
+## 1006. Eight method gates, five suites, and nothing that named the class
+
+Each of the eight production Lambdas gates its HTTP method, and each gate is
+driven behaviourally by its own suite: `coach_lambda_handler.test.ts`,
+`generate_lambda_handler.test.ts`, `osrm_proxy_lambda_handler.test.ts` and, since
+§ 1005, `share_lambda_handlers.test.ts` for the five share ones. What no file
+did was assert the CLASS. Eight instances covered one at a time is exactly how
+the five share handlers came to have no gate at all: nothing was looking for the
+gap, and their whole method safety sat in a Terraform list that § 972 was the
+first thing ever to read.
+
+So a ninth Lambda would arrive ungated and every existing suite would stay green,
+because none of them walks the directory. The guard added here does: it walks
+`apps/web/lambda/*/src/index.ts`, carries a population floor, and requires each
+handler either to compare `event.requestContext.http.method` and answer a 405 of
+its own, or to call the one shared `shareMethodRefusal`.
+
+Source-level rather than behavioural, deliberately. The shapes do not
+generalise — the coach wrapper writes to a response STREAM and cannot be driven
+through the same envelope as its siblings — and a source guard over a directory
+is the only form that answers "is there one of these I have not thought about",
+which is the question the per-handler suites structurally cannot ask.
