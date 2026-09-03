@@ -225,12 +225,21 @@ locals {
 #     `/aws/lambda/<prefix>-*` groups.
 #   - Account root may Encrypt/Decrypt/GenerateDataKey via IAM policies,
 #     for the local operator sops flows described above.
-#   - The Lambda execution role decrypts the sops env at cold-start, and
-#     `var.kms_decrypt_principal_arn` (the env's GitHub OIDC deploy role)
-#     decrypts at terraform-apply time. Decrypt + DescribeKey only —
-#     neither ever encrypts. NOTE: no workflow in this repo runs
-#     `terraform apply`, so the deploy-role half of that statement is
-#     currently unused; see followups.md before assuming it is load-bearing.
+#   - Decrypt + DescribeKey for the Lambda execution role. NEITHER
+#     principal in that statement has ever been shown to exercise it,
+#     and the sentence this comment used to carry — that the execution
+#     role "decrypts the sops env at cold-start" — is not what happens:
+#     data.sops_file decrypts at APPLY time and `local.lambda_env` puts
+#     the result into `environment { variables }` as plaintext, so the
+#     handler reads process.env and calls no KMS API (measured: no
+#     `kms` reference anywhere under apps/web/lambda/). The env vars are
+#     encrypted at rest by the AWS-managed `aws/lambda` key, not by this
+#     CMK — no aws_lambda_function here sets `kms_key_arn`. The deploy
+#     role was removed from the statement in decisions § 1021; the
+#     execution role's grant is unexercised for the same reason and is
+#     filed in followups.md rather than removed, because emptying the
+#     statement is a structural change and one live-configuration read
+#     settles it. scripts/check_infra_iam.mjs holds both premises.
 data "aws_iam_policy_document" "kms_secrets" {
   statement {
     sid    = "AllowKeyAdministrationByAccountRoot"
@@ -323,17 +332,21 @@ data "aws_iam_policy_document" "kms_secrets" {
         # cycle. Audit pass 3 caught a name mismatch (was `-lambda`,
         # actual role is `-coach-lambda`); keep these in lockstep.
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-coach-lambda",
-        # Deploy role(s) that need to decrypt at terraform-apply time.
-        # Optional — empty list means deploys decrypt out-of-band.
+        # An extra principal that genuinely needs apply-time decrypt.
+        # BOTH env stacks now leave this "" and `compact()` drops it: the
+        # only apply that reads data.sops_file is the operator's own, under
+        # a principal already covered by AllowOperatorSopsUseViaIamPolicies.
+        # The Sid is historic — the statement holds one identifier now, and
+        # decisions § 892 named it before § 1021 emptied the deploy half.
         var.kms_decrypt_principal_arn,
       ])
     }
-    # Decrypt path ONLY. The Lambda decrypts the sops env at cold-start and the
-    # deploy role decrypts via `data.sops_file` at terraform-apply — neither ever
-    # ENCRYPTS, so kms:GenerateDataKey is deliberately omitted (audit/infra M1,
-    # least-privilege). Encryption (sops --encrypt / --set / updatekeys, in
-    # sops-init / secret-set / key-rotate) is a LOCAL operator action run under
-    # the operator's own admin/SSO principal, not these roles.
+    # Decrypt path ONLY — kms:GenerateDataKey is deliberately omitted
+    # (audit/infra M1, least-privilege). Encryption (sops --encrypt / --set /
+    # updatekeys, in sops-init / secret-set / key-rotate) is a LOCAL operator
+    # action run under the operator's own admin/SSO principal, not this role.
+    # This comment used to say the Lambda "decrypts the sops env at cold-start";
+    # it does not — see the header above.
     actions = [
       "kms:Decrypt",
       "kms:DescribeKey",
@@ -485,10 +498,13 @@ resource "aws_iam_role_policy_attachment" "lambda_xray" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${local.resource_prefix}-coach"
   retention_in_days = 30
-  # Reuse the same CMK that already encrypts the lambda env vars.
-  # KMS rotation + access policy are managed in one place; the log
-  # group only contains coach request traces, which can carry the
-  # same secrecy class as the env vars themselves.
+  # Reuse the CMK that encrypts the sops file the env vars come OUT of.
+  # (It does not encrypt the env vars themselves — no aws_lambda_function
+  # in this module sets `kms_key_arn`, so Lambda holds them under the
+  # AWS-managed `aws/lambda` key. This comment claimed otherwise until
+  # decisions § 1021.) KMS rotation + access policy are managed in one
+  # place; the log group only contains coach request traces, which can
+  # carry the same secrecy class as the env vars themselves.
   kms_key_id = aws_kms_key.secrets.arn
   tags       = var.tags
 }

@@ -38,15 +38,6 @@ data "terraform_remote_state" "dns" {
 # the GitHub Actions runner to call kms:Decrypt at terraform-apply
 # time (sops_file data source needs it). Audit pass 3 found this
 # variable was added in pass 2 but never wired through.
-data "terraform_remote_state" "github_oidc" {
-  backend = "s3"
-  config = {
-    bucket = "threkir-tfstate"
-    key    = "github-oidc/terraform.tfstate"
-    region = "us-east-1"
-  }
-}
-
 locals {
   # Production secrets live in the PRIVATE estate repo Absence0760/infra-secrets
   # (../infra-secrets), one subdir per project — NOT in this PUBLIC repo. The
@@ -148,10 +139,17 @@ module "web" {
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 
-  # Lets the prod deploy role decrypt sops at `terraform apply` time
-  # from the GitHub Actions runner. Without this, only the AWS
-  # account root could re-apply the stack post first-deploy.
-  kms_decrypt_principal_arn = data.terraform_remote_state.github_oidc.outputs.deploy_role_arn_prod
+  # `kms_decrypt_principal_arn` is deliberately LEFT AT ITS "" DEFAULT, so the
+  # GitHub deploy role is not a decrypt principal on the secrets CMK. It used
+  # to be, justified as apply-time decryption "from the GitHub Actions runner"
+  # — but no workflow in this repo runs `terraform apply`, and the deploy role
+  # could not finish one if it tried (no tfstate bucket, no DynamoDB lock, no
+  # iam:*). The apply that reads data.sops_file is bin/deploy-env.sh under the
+  # operator's own SSO profile, which decrypts through
+  # AllowOperatorSopsUseViaIamPolicies. Restoring it is one line plus a
+  # data "terraform_remote_state" "github_oidc" block; scripts/check_infra_iam.mjs
+  # fails the PR that adds a CI apply, or a CMK-encrypted Lambda env, without
+  # restoring it. decisions § 1021.
 
   # PascalCase to match the bootstrap + github-oidc stacks; AWS treats
   # tag keys as case-sensitive so a single Cost Explorer / Resource

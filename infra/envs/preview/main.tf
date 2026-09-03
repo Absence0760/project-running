@@ -17,15 +17,6 @@ data "terraform_remote_state" "dns" {
 }
 
 # Read the OIDC deploy role ARN — see envs/prod/main.tf for rationale.
-data "terraform_remote_state" "github_oidc" {
-  backend = "s3"
-  config = {
-    bucket = "threkir-tfstate"
-    key    = "github-oidc/terraform.tfstate"
-    region = "us-east-1"
-  }
-}
-
 locals {
   domain_name = "${var.preview_subdomain}.${var.apex_domain}"
   # Secrets live in the PRIVATE estate repo ../infra-secrets/running/, NOT this
@@ -92,7 +83,8 @@ module "web" {
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 
-  kms_decrypt_principal_arn = data.terraform_remote_state.github_oidc.outputs.deploy_role_arn_preview
+  # Left at the module's "" default — see envs/prod/main.tf for why the GitHub
+  # deploy role is not a decrypt principal on the secrets CMK. decisions § 1021.
 
   # PascalCase to match the other stacks. See envs/prod/main.tf for
   # rationale.
