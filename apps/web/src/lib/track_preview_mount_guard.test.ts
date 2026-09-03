@@ -18,6 +18,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './core/strip_comments';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, '..');
 
@@ -50,39 +52,40 @@ function rel(file: string): string {
 	return relative(SRC, file).split('\\').join('/');
 }
 
-/// The half-open `[start, end)` spans a comment covers.
+/// A Svelte file is markup with `<!-- ... -->` comments wrapped around script
+/// blocks with JS comments, and only the markup half is this guard's own
+/// business: `core/strip_comments` owns the JS half for every guard in the
+/// tree.
 ///
-/// An unterminated opener runs to the end of the input, which is what a browser
+/// An unterminated `<!--` runs to the end of the input, which is what a browser
 /// does with it and what makes the set complete: the alternative -- deleting
 /// each `<!-- ... -->` from the text -- both leaves a bare `<!--` behind and
 /// can JOIN what sits either side of a removed comment into a new complete one
 /// (`<!-` + `<!-- x -->` + `- ... -->` becomes `<!-- ... -->`), which this
 /// guard would then read as live markup.
-function commentSpans(source: string): [number, number][] {
-	const spans: [number, number][] = [];
-	for (const pattern of [
-		/<!--[\s\S]*?(?:-->|$)/g,
-		/\/\*[\s\S]*?(?:\*\/|$)/g,
-		/(?<!:)\/\/[^\n]*/g,
-	]) {
-		for (const m of source.matchAll(pattern)) {
-			spans.push([m.index, m.index + m[0].length]);
-		}
+///
+/// Blanked in place rather than deleted: every offset is preserved, so no
+/// removal can splice two fragments into something that reads as markup, and
+/// the JS pass that follows sees the file's own line numbers.
+function blankHtmlComments(source: string): string {
+	let out = '';
+	let at = 0;
+	for (const m of source.matchAll(/<!--[\s\S]*?(?:-->|$)/g)) {
+		out += source.slice(at, m.index) + m[0].replace(/[^\n]/g, ' ');
+		at = m.index + m[0].length;
 	}
-	return spans;
+	return out + source.slice(at);
 }
 
 /** Source with comments blanked, so prose quoting the tag never trips the scan. */
 export function withoutComments(source: string): string {
-	// Blanked in place rather than deleted: every offset is preserved, so no
-	// removal can splice two fragments into something that reads as markup.
-	const chars = [...source];
-	for (const [start, end] of commentSpans(source)) {
-		for (let i = start; i < end && i < chars.length; i += 1) {
-			if (chars[i] !== '\n') chars[i] = ' ';
-		}
-	}
-	return chars.join('');
+	// Markup first, and the order is the whole point: a path written inside an
+	// HTML comment (`every /share/* sibling already does`) carries a `/*`, and
+	// a JS pass run first reads it as a block opener that swallows to the next
+	// `*\/` in the file. That is decisions § 971's defect, and it was live here
+	// -- 906 lines across five .svelte files, `+layout.svelte` and both live
+	// pages among them, blanked out from under a guard reporting a pass.
+	return stripComments(blankHtmlComments(source));
 }
 
 function mountsTrackPreview(file: string): boolean {
@@ -202,4 +205,28 @@ test('no comment shape leaves a mount readable, and live markup survives', () =>
 	// Offsets are preserved, so line numbers still line up with the source.
 	assert.equal(withoutComments('<!-- x -->\nlive').split('\n')[1], 'live');
 	assert.match(withoutComments('<TrackPreview />'), /TrackPreview/);
+});
+
+test('a slash-star inside markup opens nothing, and an emoji shifts nothing', () => {
+	// Both were live. A path in an HTML comment carries a `/*`, and the JS pass
+	// used to run against the raw text: `<!-- every /share/* sibling -->` opened
+	// a block that ran to the next `*` + `/` in the file, blanking 906 lines
+	// across five .svelte files -- decisions § 971's defect, recurring where its
+	// guard could not see it (§ 1000's register keyed on one exact spelling of
+	// the block strip, and this file spelled another).
+	const swallowed = '<!-- see /share/* -->\n<TrackPreview />\nconst a = 1;';
+	assert.match(withoutComments(swallowed), /<TrackPreview/);
+	assert.match(withoutComments(swallowed), /const a = 1;/);
+
+	// And the blanking walked CODE POINTS while the match offsets were UTF-16,
+	// so one emoji anywhere in a file misaligned every later span by one unit:
+	// each comment's opening character survived and one character past its end
+	// was eaten instead. RouteHeatmap.svelte has exactly one such character, a
+	// map pin in a popup template, and 113 of its comment lines came back with
+	// a bare `/` still on them.
+	const shifted = "const pin = '\u{1F4CD}';\n// <TrackPreview /> in prose\nconst b = 2;";
+	const blanked = withoutComments(shifted);
+	assert.ok(!blanked.includes('/'), 'no comment character may survive the blanking');
+	assert.match(blanked, /const b = 2;/);
+	assert.equal(blanked.length, shifted.length);
 });

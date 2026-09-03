@@ -34,6 +34,7 @@ import { strict as assert } from 'node:assert';
 import { readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
+import { stripComments } from './core/strip_comments';
 import { maptilerStyleUrl, type MaptilerSlug } from './routes/map-style-url';
 
 const libRoot = import.meta.dirname;
@@ -126,7 +127,10 @@ test('every registered surface resolves the ground the way its entry claims', ()
 const ALLOWED_OS_PREFERENCE_SINK =
 	/mapStyleUrl|basemapIsDark|'streets-v2|'satellite'|'hybrid'|'outdoor-v2/;
 
-/// Blank out a component's `<style>` block, keeping line numbering. The CSS is
+/// Blank out a component's `<style>` block, keeping line numbering. It goes
+/// FIRST and `core/strip_comments` second: the stylesheet's own `/* ... */`
+/// comments are CSS, and handing them to a JS scanner is the one thing the
+/// scanner is not for. The CSS is
 /// out of scope for the reason in the header — a map component's stylesheet
 /// also dresses list rows, which are theme surfaces — while the markup stays
 /// in, because a `class:` or `style:` binding fed by the OS preference would
@@ -161,7 +165,7 @@ function osPreferenceSymbols(key: string, lines: string[]): string[] {
 test('the OS colour preference reaches the basemap and nothing else', () => {
 	const offenders: string[] = [];
 	for (const key of Object.keys(MAP_SURFACES)) {
-		const lines = withoutStyleBlock(read(key)).split('\n');
+		const lines = stripComments(withoutStyleBlock(read(key))).split('\n');
 		const symbols = osPreferenceSymbols(key, lines);
 		assert.ok(
 			symbols.length > 0,
@@ -172,7 +176,6 @@ test('the OS colour preference reaches the basemap and nothing else', () => {
 			const use = new RegExp(`\\b${symbol}\\b`);
 			lines.forEach((line, i) => {
 				if (!use.test(line)) return;
-				if (/^\s*(\/\/|\/?\*)/.test(line)) return;
 				if (declaration.test(line)) return;
 				if (ALLOWED_OS_PREFERENCE_SINK.test(line)) return;
 				offenders.push(`${key}:${i + 1} ${line.trim()}`);
