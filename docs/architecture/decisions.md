@@ -17616,3 +17616,263 @@ route" while the picker took five formats, so it now names no list at all.
 The fixture is a KMZ **built in the test** rather than a committed binary, so
 the test says what is inside the archive it is asserting about.
 
+
+## 1052. The wrist says why there is no heart rate, in the slot the reading already occupies
+
+`RunningScreen` rendered the bpm line only when `bpm != null`, so four
+situations arrived as one blank space: the runner declined `BODY_SENSORS`, the
+watch has no optical sensor, Health Services refused the registration, and the
+first sample has not landed yet. § 1017 had already stopped all three
+acquisition failures from ending the run — failing closed, but silently.
+
+`HeartRateMonitor.stream()` was the root of it: a `Flow<Int>` can only report a
+sample, so the monitor knew which of the four it was and threw that away one
+line later. It now emits `HeartRateUpdate(availability, bpm?)`, the service
+publishes the availability on **both** exits from its collector — the stream's
+own emissions and the `.catch` that catches what the monitor could not — and
+`RecordingRepository.Metrics` carries it through to the screen.
+
+Three things the shape decides rather than the plumbing:
+
+**The slot is reused, not added.** The filed entry asked for "one more caption
+on a 46 mm screen that already carries distance, pace, bpm, steps and lap
+count". There is no extra line: the caption renders where the reading renders,
+in the same centred `caption3` row joined by `·`, so the layout is unchanged
+and the longest new string (`HR off wrist`) costs five characters against
+`146 bpm`.
+
+**Off-wrist stays separate from unavailable.** `DataTypeAvailability` gives
+`UNAVAILABLE_DEVICE_OFF_BODY` for free, and pushing the watch back up the wrist
+is the only thing a runner can do about a missing heart rate mid-run — folding
+the two would have cost the caption its only useful instruction. The other
+causes are folded into one `Unavailable`, deliberately: they differ, but none is
+actionable from a running screen, and the permission case is already covered at
+the moment the runner *can* act on it by § 1018's pre-run notice. `UNKNOWN`
+reads as acquiring, not as a failure — it is what the sensor reports before it
+has decided, and telling a runner there will be no heart rate a second before
+the first sample lands is worse than telling them to wait.
+
+**The state wins over the number.** This closed a second defect the tri-state
+made visible: nothing ever cleared `bpm` once it had been set, so a watch that
+slipped off the wrist at minute three kept rendering that figure for the rest of
+a twelve-hour run. The service now clears the live bpm on any non-`Available`
+state (never `avgBpm`, which is the run's average and not a live claim), and
+`heartRateCaption` reports the state even if a stale figure is still in hand, so
+the caption would be right even if the service did not.
+
+`Off` — `BuildConfig.ENABLE_HR` false — renders nothing, so a build that
+deliberately has no heart rate does not caption every run with its absence.
+
+Three new strings in all seven `values-*` catalogues. `HeartRateAvailabilityTest`
+pins both pure halves against the SDK's own `DataTypeAvailability.VALUES`, and
+fails when that list grows past the five the mapping was written against;
+`SensorStreamResilienceTest` gained the two wiring claims.
+
+## 1053. The active-run tile nudge is guarded — after reading AndroidX's call chain, not on the hypothesis the followup filed
+
+The filed entry said a throw from `TileService.getUpdater(context)` "on a build
+with no Tiles host" would end a run, and recorded that the previous round had
+left it alone rather than add a `try` on a hypothesis. Both halves needed
+correcting, in opposite directions.
+
+**The hypothesis is false, measured.** `getUpdater` was decompiled out of
+`tiles-1.6.2.aar`: it allocates a `SysUiTileUpdateRequester`, a
+`ViewerTileUpdateRequester` and a `CompositeTileUpdateRequester` and returns.
+The requester constructors touch nothing that can fail for a device-configuration
+reason. And the no-Tiles-host case is the one case AndroidX itself already
+handles: `buildUpdateBindIntent` logs
+`Couldn't find any services filtering on ...BIND_UPDATE_REQUESTER` and returns
+null, whereupon `requestUpdateInternal` logs `Could not build bind intent` and
+returns. No throw. A guard justified on that scenario would have been
+speculative defence, exactly as the previous round said.
+
+**The call site is a layering violation anyway, for a different reason.**
+`CompositeTileUpdateRequester.requestUpdate` iterates its delegates with no
+per-delegate catch, and the two delegates make one platform IPC call each —
+`Context.bindService` on the SysUI requester and `Context.sendBroadcast` on the
+viewer one — neither wrapped, and `bindService` is documented to raise
+`SecurityException`. So a throw is possible and would reach our call site
+unattenuated.
+
+What settles it is not the probability but the position. Three of the four
+`requestUpdate` callers run inside `onStartCommand`, where an escaping throw is
+not a degraded feature but the thread's uncaught handler and process death. The
+start-path call is the worst of the four: it sits between publishing
+`Recording` and subscribing GPS, HR, steps, the ticker and the checkpoint job,
+so a throw there loses a run that the foreground service, the wake lock and the
+open track file all say is under way. And the service already wraps every other
+auxiliary effect on this path — the vibrator, every platform call inside
+`TtsAnnouncer`, `startForeground` (§ 1016) and the three sensor streams
+(§ 1017). The tile was not a case anyone had decided to leave bare; it was the
+one that was missed.
+
+The guard lives inside `ActiveRunTileService.requestUpdate` rather than at the
+four call sites, so it is a single door that a future caller cannot walk around,
+and it logs rather than swallowing — a tile that quietly stopped updating is
+otherwise a mystery. `ActiveRunTileResilienceTest` pins the try/catch, the log
+line, and that `RunRecordingService` never resolves an updater of its own; two
+of its three claims die on the un-guarded form.
+
+## 1054. `ExerciseClient` is the right client and is deliberately not started — the scoping, and why nothing small falls out of it
+
+§ 1015 measured that `MeasureClient` — what `HeartRateMonitor` uses — is
+documented foreground-only and "not intended for background capture or workout
+tracking", which makes it the wrong client for a twelve-hour ultra. That
+measurement stands. This entry is the scoping the followup asked for, so the
+next reader inherits a decision rather than the same question.
+
+**What would move.** `ExerciseClient` (health-services-client 1.1.0-rc02, and
+`minSdk` is already 30) owns the exercise itself:
+`prepareExerciseAsync` / `startExerciseAsync` / `pauseExerciseAsync` /
+`resumeExerciseAsync` / `endExerciseAsync` / `markLapAsync`, a 20-value
+`ExerciseState`, and an `ExerciseUpdate` carrying `latestMetrics`,
+`activeDurationCheckpoint` and `startTime`. `ExerciseConfig` takes
+`isGpsEnabled` and the `DataType` set, so location, distance, pace, speed,
+steps, calories, elevation gain and heart rate all arrive on one callback. That
+subsumes, rather than sits beside, `RunRecordingService`'s own GPS subscription
+and retry loop, its haversine distance accumulator, its pace derivation, its
+`ElapsedMath` pause accounting, its manual lap list and its `Pedometer`. The
+recorder cluster it would replace or re-plumb is 1,455 lines across eight files,
+pinned by 212 host-JVM tests in 16 files (2,859 lines) — none of which can drive
+Health Services, so they would be re-derived rather than adapted.
+
+**What stays regardless.** `TrackWriter` (the on-disk track is our format, and
+`ExerciseUpdate` is a callback, not a file), the Supabase queue and drain, the
+tile, the notification and Ongoing Activity, TTS, pace alerts, the route
+off-route and remaining math, and the whole UI. `ExerciseClient` is a data
+source, not a recorder.
+
+**What breaks, and this is the part that decides it.** Three things, all
+one-way:
+
+1. **Exclusivity.** `ExerciseTrackedStatus` has `OTHER_APP_IN_PROGRESS`: one app
+   owns the active exercise per device. Today this app records whatever else is
+   running — Samsung Health, Fitbit, Google Fit. Under `ExerciseClient` a
+   runner whose watch is already tracking cannot start a run, or needs a
+   fallback path to the recorder we just deleted, which means keeping both.
+2. **Health Services can end the run.** `AUTO_ENDING` / `AUTO_ENDED` and
+   `AUTO_ENDING_PERMISSION_LOST` / `AUTO_ENDED_PERMISSION_LOST` are states the
+   platform enters on its own. Today nothing but the runner ends a run, and the
+   one thing that can (the OS killing the process) is caught by
+   `CheckpointStore`. A platform-initiated end is a new terminal path through
+   `stopRecording`, the queue write and the checkpoint contract.
+3. **Recovery inverts.** An exercise survives our process, which is *better*
+   than a checkpoint — but it is a different mechanism, so
+   `CheckpointStore` + `CheckpointRecovery` + `recoveryActionFor` and their
+   suites are not ported, they are reasoned about again from scratch.
+
+**Worth it?** Yes, eventually, and not as one change. The prize is real:
+background heart rate with no background permission, plus platform-fused
+distance. But the cost is a recorder rewrite whose three breaking edges are all
+about what happens when something *other than the runner* decides the run is
+over — and none of those three can be validated on the emulator, which
+synthesises heart rate and reproduces neither the exclusivity conflict nor an
+auto-end. It needs the bench day the sibling followup already wants, and it
+should be sequenced as: probe `getCapabilitiesAsync` and
+`getCurrentExerciseInfoAsync` on real hardware first, then take heart rate
+alone through `ExerciseClient` while GPS and distance stay ours, then decide
+whether the rest moves at all.
+
+**Nothing small falls out, and that is a finding rather than a shortfall.**
+Two candidates were considered and both rejected. A `MeasureClient`
+capability probe before registering adds little now that § 1052 reports
+`Unavailable` distinctly. And the honest consequence of the foreground-only
+limitation — that `avg_bpm` is saved as *the run's* average heart rate with no
+record of how much of the run it covered, which on a twelve-hour ultra could be
+the twenty minutes the runner spent looking at the watch — is a real defect,
+but qualifying or suppressing that claim changes saved data, needs a coverage
+notion the availability state has only just made computable, and touches
+`docs/backend/metadata.md`. Filed, not smuggled in here.
+
+## 1055. A phone-pushed session update could end a run, and the asymmetry that made it findable
+
+Found sweeping the Wear tier for the round-34 class — a declared or requested
+capability whose failure path is silent. The Wearable Data Layer is that
+capability: it is Google Play Services, not the OS, and everything it delivers
+crosses a process boundary the watch app does not control.
+
+`RunViewModel` reads both bridges twice, once as a one-shot and once as a
+stream. The **one-shots were both wrapped**, with `no paired phone, fine`
+written beside one of them. The **streams were not** — and they run the same
+handlers on the same payloads:
+
+```
+sessionBridge.events.collect { event -> ... }    // no try, inside or outside
+routesBridge.events.collect { push -> try { ... } }   // try INSIDE the lambda
+```
+
+That asymmetry is what made it findable. Someone had already established that
+this payload path can throw; only one of its two callers got the guard.
+
+Why it is fatal rather than merely silent: `RunViewModel` installs no
+`CoroutineExceptionHandler`, and `viewModelScope`'s `SupervisorJob` stops a
+failing child from cancelling its siblings but does **not** stop an unhandled
+throw in a `launch` from reaching the thread's uncaught handler — the same
+premise `SensorStreamResilienceTest` was written on. `RunRecordingService` is a
+foreground service in that same process, so it dies with it. The reachable
+throws are not exotic: the session handler runs `SessionStore.save`, whose
+`EncryptedSharedPreferences` retry is itself guarded only for the recoverable
+case (its own comment names the Keystore failure it recovers from, and the
+second `createPrefs()` is bare); `tearDownSession`'s route, run and tile wipes;
+and `drainQueue`. The routes handler's inner `try` covers its body but cannot
+see an upstream failure at all — `Flow.catch` is the only thing that can.
+
+Fixed at the boundary rather than per handler: a `.catch` on both bridge streams
+and on the DataStore-backed `store.queue`, which reports a corrupt file by
+failing the flow rather than by reading empty — and the queue is exactly what
+such a file would be, the runner's unsynced runs. Plus a body guard on the
+session handler.
+
+Two catches in the same file said nothing at all — no log, no state, not even a
+reason. One was sign-out's tile-cache wipe, and the cache that survives it is a
+map of where the signed-out user runs; the other was the route LRU bump. Both
+now log. `ViewModelStreamResilienceTest` derives the bridge set from the source
+(`\w+Bridge\.events`), so a third bridge is covered without anyone remembering,
+and fails on any empty catch body in the file.
+
+`RoutesBridgeWiringTest`'s assertion was a literal `routesBridge.events.collect`
+and had to be relaxed to tolerate an operator between the two — the test
+asserted a shape this change corrects, not the behaviour it exists to protect.
+
+## 1056. The round-35 Wear sweep: the population, and the six results that were negative
+
+Recorded so the next sweep of this tier starts where this one finished rather
+than re-deriving it. The class is the round-34 one: a capability the app
+declares or requests whose failure path is silent or fatal. The population is
+the manifest's 13 `uses-permission` entries, its one `uses-feature`, its two
+declared services and one activity, and the two Google-Play-Services and one
+Health Services clients the code constructs. One real defect came out of it
+(§ 1055). These six did not, and the reason matters in each case:
+
+1. **`WAKE_LOCK` / `acquireWakeLock`** is unguarded and sits on the L1 path
+   right after `startForegroundCompat`, but `WAKE_LOCK` is a normal-protection
+   permission, granted at install and not revocable, so the `SecurityException`
+   `acquire()` documents cannot be reached on a build that declares it.
+2. **`POST_NOTIFICATIONS`** denied on API 33+ makes `NotificationManager.notify`
+   a no-op rather than a throw, and the denial is already priced by
+   `PermissionCost.OngoingNotification` in the pre-run notice.
+3. **`ACTIVITY_RECOGNITION` / `Pedometer`** fails the same way heart rate did —
+   the steps caption renders on `steps > 0`, so a denial and a watch with no
+   `TYPE_STEP_COUNTER` are one blank. Deliberately **not** given § 1052's
+   treatment: the permission case is covered by the pre-run notice, and a "no
+   pedometer" caption on a 46 mm screen, for a metric nobody is running for,
+   spends the layout budget § 1052 was careful with on noise.
+4. **`android.hardware.type.watch`** is declared without `required="false"`, so
+   installation is gated on it and no code path can assume it wrongly.
+5. **`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`** and
+   `ACTION_APPLICATION_DETAILS_SETTINGS` are both fully graded already —
+   `BatteryOptimization.requestExemption` returns a four-value `PromptResult`
+   including the Samsung One UI case where the intent resolves and does nothing,
+   and `AppSettings` asks `canOpen` before offering the affordance.
+6. **No `WearableListenerService` and no complication provider are declared**, so
+   the Data Layer has exactly one consumer — the two `DataClient.addListener`
+   calls § 1055 fixed. The component surface really is that small.
+
+Separately, the round-31 filing that `npm run check:script-types` was red with
+14 errors across `check_toolchain_pins.mjs`, `check_toolchain_pins.test.mjs` and
+`check_twin_claims.test.mjs` was **verified against today's `main` and is
+closed**: the guard exits 0, `git diff --stat main -- scripts/` is empty from
+this branch, and round 33's `9bb122d64` fixed it in exactly the shape the
+filing prescribed — 43 JSDoc `@param` annotations in `check_toolchain_pins.mjs`
+alone, no tsconfig loosened. Verifying a filed premise before acting on it
+remains the cheapest step in the round.
