@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/race_service.dart';
 
@@ -37,59 +36,107 @@ void main() {
     expect(await RaceService().isProviderConfigured('parkrun'), isFalse);
   });
 
-  group('raceProbeUnavailable is fail-closed, as web already was', () {
-    // Web's `isProviderNotConfigured` (core/data.ts) is the reference: only a
-    // clean success or a readable non-429 4xx reports a provider live. The
-    // phone answered "configured" for every one of these before, so a probe
-    // that never reached the credential gate lit up a tile whose next call
-    // 503s.
-    test('the gate itself reads as unavailable whatever the body says', () {
-      expect(
-        raceProbeUnavailable(const FunctionException(
-          status: 503,
-          details: {'error': 'provider_not_configured'},
-        )),
-        isTrue,
-      );
-      // UltraSignup's attribution refusal is a 503 that names no credential.
-      expect(
-        raceProbeUnavailable(const FunctionException(
-          status: 503,
-          details: {
-            'error': 'provider_not_configured',
-            'reason': 'results_unattributable',
-          },
-        )),
-        isTrue,
-      );
-      // An unreadable / unexpected 503 body is still the gate.
-      expect(
-        raceProbeUnavailable(const FunctionException(status: 503, details: '')),
-        isTrue,
-      );
-    });
+  group('a probe reports configured only on a 200', () {
+    // decisions § 1073. The grader this replaced reported a readable non-429
+    // 4xx as CONFIGURED, on the theory that such a status proved the function
+    // ran PAST its credential gate. The theory is refuted by the endpoint
+    // itself, twice, so these read the function rather than restating it.
+    final fn =
+        File('../backend/supabase/functions/race-results-import/index.ts')
+            .readAsStringSync();
 
-    test('a rate-limited or failing probe confirms nothing', () {
-      for (final status in [429, 500, 502, 503, 504]) {
-        expect(raceProbeUnavailable(FunctionException(status: status)), isTrue,
-            reason: '$status');
+    int at(String needle) {
+      final i = fn.indexOf(needle);
+      expect(i, greaterThan(-1),
+          reason: 'race-results-import no longer contains `$needle` — reread '
+              'it and re-anchor this guard');
+      return i;
+    }
+
+    test('401 is answered before any provider credential is read', () {
+      // So a signed-out or expired session probes every provider and is told
+      // nothing about any of them. Under the old grader a 401 was a readable
+      // non-429 4xx, so it lit EVERY card as live.
+      final probeBranch = at('if (isProbe) {');
+      final firstUnauthorized =
+          at("return Response.json({ error: 'unauthorized' }, { status: 401 })");
+      expect(firstUnauthorized, lessThan(probeBranch),
+          reason: 'the auth gate must precede the probe branch, or a probe '
+              'could answer about a provider for an unauthenticated caller');
+
+      // And before any PROVIDER credential — SUPABASE_URL is infrastructure the
+      // client needs to check the caller at all, not an answer about a leg.
+      for (final key in const [
+        'RUNSIGNUP_API_KEY',
+        'ULTRASIGNUP_API_KEY',
+        'CHRONOTRACK_CLIENT_ID',
+      ]) {
+        expect(firstUnauthorized, lessThan(at(key)),
+            reason: '$key is read before the caller is authenticated');
       }
     });
 
-    test('a readable non-429 4xx means the function ran past the gate', () {
-      for (final status in [400, 401, 403, 404, 422]) {
-        expect(raceProbeUnavailable(FunctionException(status: status)), isFalse,
-            reason: '$status');
-      }
+    test('an undispatched leg is answered 400, which the function itself '
+        'introduces as "not configured"', () {
+      final probeBranch = at('if (isProbe) {');
+      final unknown =
+          at("return Response.json({ error: 'unknown_provider' }, { status: 400 })");
+      final configured = at("return Response.json({ configured: true })");
+      expect(unknown, greaterThan(probeBranch));
+      expect(unknown, lessThan(configured),
+          reason: 'the unknown-provider refusal must be inside the probe '
+              'branch, ahead of its single affirmative answer');
+      // The client used to read this 400 as "configured" while the function
+      // wrote it to mean the opposite — one response, two readings.
+      expect(fn.contains('An unrecognised provider is not "configured"'), isTrue,
+          reason: "the function's own statement of what its 400 means moved — "
+              'reread it; if it now means something else, this whole grading '
+              'decision needs revisiting');
     });
 
-    test('no readable status at all is unavailable, not available', () {
-      // A transport failure, Supabase not yet initialised, and a status-0
-      // FunctionsFetchException on a later package version all land here.
-      expect(raceProbeUnavailable(const SocketException('no route to host')),
-          isTrue);
-      expect(raceProbeUnavailable(StateError('not initialized')), isTrue);
-      expect(raceProbeUnavailable(const FunctionException(status: 0)), isTrue);
+    test('the probe branch has exactly one affirmative answer', () {
+      // Which is why "configured iff the invoke did not throw" is not a
+      // simplification: `functions_client` throws for every status outside
+      // 200-299, so "did not throw" IS "2xx", and the branch has one 2xx.
+      final probeBranch = at('if (isProbe) {');
+      final afterBranch = at("const listingId =");
+      final body = fn.substring(probeBranch, afterBranch);
+      expect('Response.json('.allMatches(body).length, greaterThan(1),
+          reason: 're-anchor: the probe branch no longer returns responses');
+      final affirmatives = RegExp(r'Response\.json\(\{ configured: true \}\)')
+          .allMatches(body)
+          .length;
+      expect(affirmatives, 1);
+      // Every other return in the branch carries an `error`.
+      final errors = RegExp(r"error: '").allMatches(body).length;
+      expect(errors, greaterThan(2));
+    });
+
+    test('the client grades no status at all — every throw is unavailable', () {
+      // The guard that would have failed against the old code. A grader that
+      // maps a status to "available" is the § 1007 defect returning; there is
+      // no status this endpoint can answer that means "configured".
+      final src = File('../../apps/mobile_android/lib/race_service.dart')
+          .readAsStringSync();
+      final sig = src.indexOf('Future<bool> isProviderConfigured(');
+      expect(sig, greaterThan(-1), reason: 'isProviderConfigured moved');
+      var depth = 0;
+      var i = src.indexOf('{', sig);
+      final open = i;
+      while (i < src.length) {
+        if (src[i] == '{') depth++;
+        if (src[i] == '}') {
+          depth--;
+          if (depth == 0) break;
+        }
+        i++;
+      }
+      final body = src.substring(open, i);
+      expect(body.contains('return false;'), isTrue);
+      expect(body.contains('status'), isFalse,
+          reason: 'isProviderConfigured inspects a status again. Only a 200 '
+              'answers a probe (§ 1073) — a status-reading grader is how the '
+              'phone came to report 401 and 400 as configured.');
     });
   });
 
@@ -179,9 +226,9 @@ void main() {
     // restated: a probe reads env vars and returns, an import spends a shared
     // per-application credential and writes rows. If the two are ever collapsed
     // back onto one bucket the client change becomes the § 1008 defect again —
-    // and since § 1007 an exhausted bucket answers 429, which
-    // `raceProbeUnavailable` grades as "provider unavailable", so the failure
-    // would be silent and total rather than a limit the runner can see.
+    // and an exhausted bucket answers 429, which is not a 200 and so reports
+    // the provider unavailable (§ 1007, § 1073), making the failure silent and
+    // total rather than a limit the runner can see.
     final src =
         File('../backend/supabase/functions/race-results-import/index.ts')
             .readAsStringSync();
