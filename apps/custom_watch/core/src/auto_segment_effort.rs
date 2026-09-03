@@ -27,7 +27,7 @@
 
 use heapless::Vec;
 
-use crate::segments::{compute_effort_from_track, SegmentSlice, TrackPoint};
+use crate::segments::{compute_efforts_from_track, SegmentSlice, TrackPoint};
 
 /// The endpoint-offset tolerance web defaults `toleranceM` to. Half a route's
 /// combined start+end offset must fall inside this for a strong match.
@@ -109,36 +109,42 @@ pub struct SegmentEffortInsert<'a> {
 }
 
 /// Compute the effort rows a run earned over a set of route segments — the
-/// matchable subset (segments the track actually covered) in one walk. Mirrors
-/// web `buildSegmentEffortRows`; drops any segment past `MAX_AUTO_EFFORT_SEGMENTS`.
+/// matchable subset (segments the track actually covered) in ONE walk of the
+/// track. Mirrors web `buildSegmentEffortRows`; drops any segment past
+/// [`MAX_AUTO_EFFORT_SEGMENTS`].
+///
+/// "One walk" is the batch call, not a loop over the single-slice form: the
+/// cumulative-distance array and the median sample step are properties of the
+/// track, so timing each slice on its own rebuilt and re-sorted both per
+/// segment. Web's caller batches for the same reason.
 pub fn build_segment_effort_rows<'a>(
     segments: &[SegmentForEffort<'a>],
     track: &[TrackPoint],
     ids: EffortIds<'a>,
 ) -> Vec<SegmentEffortInsert<'a>, MAX_AUTO_EFFORT_SEGMENTS> {
+    let n = segments.len().min(MAX_AUTO_EFFORT_SEGMENTS);
+    let mut slices: Vec<SegmentSlice, MAX_AUTO_EFFORT_SEGMENTS> = Vec::new();
+    for seg in &segments[..n] {
+        let _ = slices.push(SegmentSlice {
+            start_distance_m: seg.start_distance_m,
+            end_distance_m: seg.end_distance_m,
+        });
+    }
+    let mut efforts = [None; MAX_AUTO_EFFORT_SEGMENTS];
+    compute_efforts_from_track(track, &slices, &mut efforts);
+
     let mut rows: Vec<SegmentEffortInsert<'a>, MAX_AUTO_EFFORT_SEGMENTS> = Vec::new();
-    for seg in segments {
-        let Some(eff) = compute_effort_from_track(
-            track,
-            SegmentSlice {
-                start_distance_m: seg.start_distance_m,
-                end_distance_m: seg.end_distance_m,
-            },
-        ) else {
+    for (seg, eff) in segments[..n].iter().zip(efforts.iter()) {
+        let Some(eff) = eff else {
             continue;
         };
-        if rows
-            .push(SegmentEffortInsert {
-                segment_id: seg.id,
-                run_id: ids.run_id,
-                user_id: ids.user_id,
-                time_seconds: eff.time_seconds,
-                started_at_ms: eff.started_at_ms,
-            })
-            .is_err()
-        {
-            break;
-        }
+        let _ = rows.push(SegmentEffortInsert {
+            segment_id: seg.id,
+            run_id: ids.run_id,
+            user_id: ids.user_id,
+            time_seconds: eff.time_seconds,
+            started_at_ms: eff.started_at_ms,
+        });
     }
     rows
 }
