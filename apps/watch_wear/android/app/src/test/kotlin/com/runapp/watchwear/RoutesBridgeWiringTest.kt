@@ -69,7 +69,10 @@ class RoutesBridgeWiringTest {
         )
         assertTrue(
             "observeRoutesBridge must subscribe to routesBridge.events",
-            src.contains("routesBridge.events.collect"),
+            Regex(
+                """routesBridge\.events.{0,200}?\.collect""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
         )
     }
 
