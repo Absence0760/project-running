@@ -2398,6 +2398,7 @@ class GymSetRow {
   static const String colDurationS = 'duration_s';
   static const String colExerciseId = 'exercise_id';
   static const String colSetType = 'set_type';
+  static const String colExerciseKey = 'exercise_key';
 
   final String id;
   final String workoutId;
@@ -2409,6 +2410,7 @@ class GymSetRow {
   final int? durationS;
   final String? exerciseId;
   final String setType;
+  final String exerciseKey;
 
   const GymSetRow({
     required this.id,
@@ -2421,6 +2423,7 @@ class GymSetRow {
     this.durationS,
     this.exerciseId,
     required this.setType,
+    required this.exerciseKey,
   });
 
   factory GymSetRow.fromJson(Map<String, dynamic> json) => GymSetRow(
@@ -2434,6 +2437,7 @@ class GymSetRow {
     durationS: (json['duration_s'] as num?)?.toInt(),
     exerciseId: json['exercise_id'] as String?,
     setType: json['set_type'] as String,
+    exerciseKey: json['exercise_key'] as String,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2447,6 +2451,7 @@ class GymSetRow {
     colDurationS: durationS,
     colExerciseId: exerciseId,
     colSetType: setType,
+    colExerciseKey: exerciseKey,
   };
 }
 

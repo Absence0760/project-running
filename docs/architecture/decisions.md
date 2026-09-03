@@ -19149,3 +19149,176 @@ same test with the tap moved inside `runAsync` and the call restored passed in
 predicts. The rule for the next lane: after a fake-zone tap, wait on an
 observable outcome with `pumpUntil`; `debugWritesSettled` is for a real-zone
 write, and reaching for it otherwise deadlocks rather than failing.
+## 1076. `gym_sets.exercise_key` is trigger-maintained, not a generated column — measured, the generated form is a full-table rewrite twice over
+
+Persisting the exercise grouping key on `gym_sets` was the prerequisite [§ 830](#830)
+filed for closing the key's remaining runtime-version dependence: the frozen
+1,488-entry case table the three rails need costs 60 µs a call against 0.34 µs
+for `lower()`, and five RPCs re-derived the key once per `gym_sets` row, so a
+15,000-set history would have paid ~0.9 s of pure folding per
+`gym_workout_summaries()` call. Persisted, the fold is paid once per WRITE and
+its cost stops being a function of how much history a lifter has.
+
+`generated always as (public.normalise_exercise_name(exercise_name)) stored` is
+the form that says exactly what is meant, and it was rejected on two
+measurements taken on PG 17.6 against a 500,000-row copy of the table.
+
+**It rewrites the table.** 2,756 ms holding `ACCESS EXCLUSIVE` *and* `ShareLock`,
+with `pg_relation_filenode` moving 28885 → 28895. The plain
+`add column exercise_key text default ''` took **5 ms** and left the filenode
+alone. The rewrite is ~5.5 µs/row and linear, so a 5,000,000-row `gym_sets` is
+~28 s during which no session can read or write a set — downtime, on the
+highest-volume gym table, which is the case `migration_locks.md` exists for.
+
+**And it would make the next change a second rewrite.** A generated column
+freezes its expression into the catalogue and Postgres never recomputes stored
+values when the function underneath is replaced. The entire point of persisting
+the key is to make the *next* edit to `normalise_exercise_name` affordable; with
+a generated column that edit is a `drop expression` plus another full rewrite,
+where the trigger makes it a `create or replace function` plus the batched
+backfill this change already establishes.
+
+The trigger's cost was measured rather than waved at: 50,000 inserts took 146 ms
+without it and 462 ms with it, **+6.3 µs a row**. A logged gym session is 10-40
+sets, so it is a quarter of a millisecond on a save. `CREATE TRIGGER` takes
+`SHARE ROW EXCLUSIVE` — catalogue-only, readers unaffected — the same call
+[§ 737](#737)'s `direct_messages` throttle made.
+
+It is `before insert or update`, unqualified, not `update of exercise_name`. The
+narrower form is cheaper and leaves a hole: an UPDATE naming only `exercise_key`
+would not fire it and the canonical CHECK would answer with a 23514 the client
+cannot act on. Stamping unconditionally makes the column derived in fact, which
+is a strict improvement on the `gym_routine_exercises.exercise_key` precedent
+where the CLIENT stamps the key under a CHECK — that is exactly the shape whose
+mobile-vs-server case-table disagreement § 830 measured as a 23514 on a
+legitimate save. `gym_sets` — the PR-bearing table — is now out of that blast
+radius entirely.
+
+The `default ''` is not a value any row keeps; the trigger overwrites it on the
+same statement. It is there because a NOT NULL column with no default is
+REQUIRED in the `Insert` type both row-type generators emit, and a client must
+not have to compute a key the server derives. Every trigger-maintained column in
+this schema already carries a constant default for the same reason
+(`gym_workouts.set_count`, `clubs.member_count`,
+`challenges.participant_count`), and a constant default is still the no-rewrite
+fast path.
+
+Three constraints, not one. The canonical CHECK alone does not reject a NULL
+key — `null = <text>` is NULL and a CHECK evaluating to NULL passes — and a NULL
+key would be silently dropped from every aggregate rather than mis-bucketed,
+which is worse because nothing surfaces it. So a `not null` CHECK goes on
+`not valid`, is validated (41.8 ms), and lets `alter column ... set not null`
+skip its own scan: **0.83 ms**, the PG12+ route `migration_locks.md` names,
+after which the redundant CHECK is dropped. The third is the length cap
+`free_text_caps_test.sql` demands of every user-writable free-text column;
+120 is the name's own ceiling, and the fold cannot exceed it — `translate` is
+1:1 both times, the whitespace collapse and the trim only shorten, and `lower()`
+under `und-x-icu` was measured 1:1 in length over all 1,112,064 assignable code
+points in five contexts each (5,560,320 strings, none longer than its input).
+
+Read-path effect, measured: the same aggregate over a 15,000-set history went
+from 66-74 ms to 4.9-5.4 ms, and from 2,241 ms to 196 ms at 500,000 sets.
+
+## 1077. The batched-backfill idiom two shipped migrations use is O(n²/batch), and on `gym_sets` it would have shown
+
+`20270623000001` and `20270630000003` both backfill a key by looping
+`select id … where <predicate> order by id limit N` until it matches nothing.
+Every chunk restarts at the low end of the primary key and steps over every row
+the previous chunks already fixed, so the walk is quadratic in the table.
+
+Measured on the same 500,000 rows: **129.5 s** for that shape against **6.94 s**
+for keyset pagination, which carries the last id forward so each chunk starts
+where the previous one stopped — a 19x difference. It did not bite in either
+shipped migration because both walk bounded tables (one row per exercise per
+routine, one per catalogue entry). On `gym_sets` it would have, and copying the
+idiom because it was there is exactly how a pattern outlives the table it was
+right for.
+
+The predicate stays on the UPDATE rather than on the chunk selection: a chunk is
+a contiguous id range, and a row already carrying its key is skipped without
+leaving a hole the next chunk has to re-find. The two shipped migrations are not
+edited — the schema only moves forward — but `migration_locks.md`'s manual-rebuild
+guidance now names the keyset form.
+
+## 1078. A zero-second run could not be saved at all, and the filing named the branch that was not the problem
+
+The filed defect was that `refresh_personal_records_for_user`'s four
+embedded-best branches read `and fastest_5k_s >= 0`, which `20270705000004`'s
+`> 0` column CHECKs had made equivalent rather than load-bearing — the filter
+written in the shape that admits the bad value, four times, where a reader could
+take it for the guard. That is true and the four are tightened.
+
+It is not the reachable half. The WHOLE-RUN branch filters `duration_s is not
+null` and nothing else, and `runs_duration_s_check` is `duration_s >= 0`
+deliberately — a run imported or logged with a distance and no time is a row we
+store rather than refuse, and `20270705000004` left it that way on purpose. So a
+zero-second run in a PR bracket is storable, becomes the FASTEST candidate for
+that bracket (`order by duration_s asc`), and reaches `personal_records`, whose
+own `best_time_s > 0` CHECK refuses it.
+
+Refusing it there is the wrong place, and the consequence is not a missing PR.
+The refresher is called from `trigger_refresh_personal_records`, an AFTER
+trigger on `runs`, so the 23514 propagates out of the trigger and fails the
+INSERT of the run. Measured on the local stack: an ordinary `authenticated`
+session inserting `(duration_s => 0, distance_m => 5000, source => 'app')` —
+every `runs` CHECK satisfied — gets
+
+    new row for relation "personal_records" violates check constraint
+    "personal_records_best_time_s_check"
+
+and the activity is not saved. The runner cannot record it, and the error names
+a table they have never heard of.
+
+The bound belongs in the refresher, not on `runs.duration_s`: "you did not run
+5 km in zero seconds" is a PR-ELIGIBILITY rule, and moving it onto the column
+would reject rows the app legitimately stores. A zero-duration run now
+contributes no candidate — it saves, and it sets no record.
+
+## 1079. The positive-path Edge Function tests the followups called blocked on real credentials have existed and pass
+
+`docs/product/followups.md`'s "Testing gaps" carried *"Positive-path Edge
+Function tests — the envelope suite covers auth-rejection only; 200-on-valid-HMAC
+/ replay-dedupe / freshness-window tests need real secret values in the CI
+config."* Both halves are wrong.
+
+`_shared/handler_envelope.test.ts` holds 23 cases and **10 of them are positive
+paths**, including every class the filing named: `revenuecat-webhook: 200 on
+valid HMAC + fresh anonymous event`, `revenuecat-webhook: 400
+event_outside_freshness_window on stale event`, `revenuecat-webhook: writes
+user_profiles — pro → dedupe → free → lifetime → lifetime-protected
+PRODUCT_CHANGE`, two `stripe-events-webhook` cases that each dedupe a replay and
+assert the written row, `stripe-events-webhook: event-order
+checkout.session.expired CAS pending->canceled`, and the two `strava-webhook`
+handshake / non-create cases. Verified by booting `supabase functions serve
+--env-file .env.local` exactly as `ci.yml` does and running the file: 23 passed,
+0 failed.
+
+And none of it needs a real third-party credential, because for an HMAC webhook
+the secret is *ours*: `ci.yml` writes `REVENUECAT_WEBHOOK_SECRET=ci-revenuecat-secret`
+and friends into `.env.local`, exports the same values to the test process, and
+the test signs with them. A credential a third party issues is only needed where
+the success branch CALLS the third party.
+
+Two functions genuinely have no positive path, for different reasons, and only
+one of them is what the filing described. `refresh-tokens`' success branch POSTs
+to strava.com, so it needs a real Strava credential and refresh token, or a
+mocked upstream — that one is credential-blocked. `auth-email`'s is not: the
+Standard Webhooks secret is ours and Mailpit is already in the local stack, so a
+correctly-signed request would deliver. What blocks it is that the SMTP env has
+to be added to `.env.local` in `.github/workflows/ci.yml`, a file no backend
+change owns. Filed as that, rather than left standing as a credential problem it
+is not.
+
+## 1080. The type generator was writing a CLI diagnostic into the schema file
+
+Supabase CLI 2.109.1 writes a PostHog shutdown error to **stdout** after the
+generated schema, so `npm run gen:types` appended
+`{"_tag":"Error","error":{...}}` to `database.types.ts` and left it invalid
+TypeScript — the same class as the `Connecting to db 5432` line the script
+already filters, from a different emitter.
+
+The pinned CI CLI (2.84.2) does not emit it, so the added `grep -v` is provably
+a no-op there and `gen:types:check`, which runs the identical pipeline, is
+unaffected. Filtering it is worth doing anyway: the failure mode is a generated
+file that no longer parses, produced by the documented command, on the
+workstation the docs tell you to run it on.
