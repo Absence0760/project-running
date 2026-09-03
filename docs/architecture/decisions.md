@@ -16341,6 +16341,11 @@ The Garmin rail is **source-level only** — there is no Connect IQ SDK on this
 machine, so its tests were edited and read, never executed;
 `check_garmin_source.sh` passes and says so itself.
 
+This supersedes the 5 m figure in [§ 114](#114-grade-adjusted-pace-lands-on-webmobile-first-as-a-shared-minetti-parity-helper-computed-over-5-m-segments-and-shown-only-when-it-diverges-from-raw-pace)'s title and body, and weakens half of
+the `PUBLISH_STEP_M` argument in [§ 328](#328) — a metre-coarse altitude now
+puts ~5 % onto a segment's grade rather than ~20 %. Neither entry is rewritten;
+`quality_standards.md`, which restates the second as live guidance, is.
+
 ## 993. One elevation-gain rule on the wrist, after web stopped having two
 
 [§ 981](#981) collapsed web's two elevation-gain rules into the gated one and
