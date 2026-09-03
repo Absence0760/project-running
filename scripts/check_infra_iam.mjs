@@ -73,6 +73,14 @@
 //      empty wire once either premise breaks is a release that fails with
 //      AccessDenied against production, mid-deploy. decisions § 1021.
 //
+//      The workflow scan reads `.github/workflows/*.yml` and nothing else,
+//      because a composite action's `runs.steps` is a different shape and
+//      needs a second parser. Rather than leave that as a silent blind spot,
+//      the claim asserts what makes it safe: no composite action under
+//      .github/actions/ assumes an AWS role. The day one does, this fails and
+//      says to widen the scan — which is the only outcome that cannot be a
+//      false negative about a credentialed terraform run nobody read.
+//
 // Offline by design: no AWS credentials, no `terraform init`. Nothing here is
 // transcribed — every name, every environment, every function suffix and every
 // workflow job is read out of one of the sources, which are the github-oidc
@@ -124,6 +132,8 @@ export const ENV_FILES =
   ['prod', 'preview'].map((e) => join(REPO_ROOT, `infra/envs/${e}/main.tf`));
 export const WORKFLOW_DIR =
   process.env.INFRA_IAM_WORKFLOWS ?? join(REPO_ROOT, '.github/workflows');
+export const ACTION_DIR =
+  process.env.INFRA_IAM_ACTIONS ?? join(REPO_ROOT, '.github/actions');
 
 /// The action every credentialed job in this repo assumes a role through. A
 /// job without it holds no AWS identity at all, so its `terraform` — which is
@@ -669,14 +679,45 @@ export function readWorkflowFiles(dir) {
     .map((name) => ({ name, text: readFileSync(join(dir, name), 'utf-8') }));
 }
 
+/// Composite actions, one `action.yml` per directory. Read only to prove none
+/// of them assumes an AWS role — see the note in claim 9's header.
+/**
+ * @param {string} dir
+ * @returns {string[]} the names of the actions that assume an AWS role
+ */
+export function credentialedActions(dir) {
+  /** @type {string[]} */
+  const found = [];
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isDirectory()) continue;
+    for (const file of ['action.yml', 'action.yaml']) {
+      let text;
+      try {
+        text = readFileSync(join(dir, entry.name, file), 'utf-8');
+      } catch {
+        continue;
+      }
+      if (text.includes(CREDENTIALS_ACTION)) found.push(entry.name);
+    }
+  }
+  return found;
+}
+
 /// Claim 9. See the header.
 /**
  * @param {KmsDecryptGrant} grant
  * @param {{ path: string, hasModuleCall: boolean, wire: string | null }[]} envs
  * @param {readonly WorkflowJob[]} jobs
+ * @param {readonly string[]} credentialedCompositeActions
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function checkDecryptGrant(grant, envs, jobs) {
+export function checkDecryptGrant(grant, envs, jobs, credentialedCompositeActions = []) {
   /** @type {string[]} */
   const errors = [];
   /** @type {string[]} */
@@ -751,6 +792,14 @@ export function checkDecryptGrant(grant, envs, jobs) {
         : `${env.path}: no CI decrypt principal on the secrets CMK, and nothing in the pipeline needs one`,
     );
   }
+
+  if (credentialedCompositeActions.length > 0)
+    errors.push(
+      `composite action(s) ${credentialedCompositeActions.join(', ')} assume an AWS role. This ` +
+        "claim's terraform scan reads .github/workflows/*.yml only — a composite action's " +
+        '`runs.steps` is a different shape — so a credentialed action running terraform would go ' +
+        'unread. Widen the scan before letting one hold AWS credentials.',
+    );
 
   if (jobs.length === 0)
     errors.push(
@@ -1257,6 +1306,7 @@ export function main() {
       ...parseEnvWire(readFileSync(path, 'utf-8')),
     })),
     parseWorkflowJobs(readWorkflowFiles(WORKFLOW_DIR)),
+    credentialedActions(ACTION_DIR),
   );
   errors.push(...grant.errors);
   ok.push(...grant.ok);

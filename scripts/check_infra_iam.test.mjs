@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -18,8 +19,10 @@ import {
   stringsFor,
   CLAIM_PREFIX,
   CLAIM_PREFIX_PATTERN,
+  ACTION_DIR,
   CREDENTIALS_ACTION,
   ENV_FILES,
+  credentialedActions,
   WORKFLOW_DIR,
   checkDecryptGrant,
   parseEnvWire,
@@ -815,4 +818,27 @@ test('the committed infra leaves no CI decrypt principal on either secrets CMK',
   // DOES run terraform, or the scan proves nothing about the combination.
   assert.ok(jobs.some((j) => j.credentialed));
   assert.ok(jobs.some((j) => j.terraform));
+});
+
+// The workflow scan reads .github/workflows/*.yml only, so the claim rests on
+// no composite action holding AWS credentials. That premise is asserted rather
+// than assumed, and asserting it is what turns a blind spot into a failure.
+test('a composite action assuming an AWS role fails the claim', () => {
+  const { errors } = grantRun();
+  assert.deepEqual(errors, []);
+  const withAction = checkDecryptGrant(
+    parseKmsDecryptGrant(keyPolicy() + lambdaFn()),
+    [{ path: 'envs/prod/main.tf', ...parseEnvWire(envRoot(null)) }],
+    parseWorkflowJobs([{ name: 'w.yml', text: workflow({ credentialed: true }) }]),
+    ['deploy-infra'],
+  );
+  assert.ok(has(withAction.errors, /composite action\(s\) deploy-infra/), withAction.errors.join('\n'));
+});
+
+test('neither committed composite action assumes an AWS role', () => {
+  assert.deepEqual(credentialedActions(ACTION_DIR), []);
+});
+
+test('credentialedActions on a missing directory is empty, not a throw', () => {
+  assert.deepEqual(credentialedActions(join(ACTION_DIR, 'does-not-exist')), []);
 });
