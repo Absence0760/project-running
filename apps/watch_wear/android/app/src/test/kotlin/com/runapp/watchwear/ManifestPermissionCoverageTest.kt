@@ -61,12 +61,6 @@ class ManifestPermissionCoverageTest {
                 "requested; asking for both separately offers the runner an " +
                 "approximate-location choice that would silently degrade the " +
                 "GPS trace",
-        "BODY_SENSORS_BACKGROUND" to
-            "a background permission cannot ride the same request as its " +
-                "foreground half — Android requires a SECOND request made only " +
-                "after BODY_SENSORS is granted, so wiring it needs a two-step " +
-                "flow and a real watch to verify. Tracked in " +
-                "docs/product/followups.md.",
     )
 
     private fun declaredPermissions(): Set<String> =
