@@ -43,7 +43,23 @@ pub struct RunStreaks {
 /// Compute `{ current, best }` from a list of run day indices. Order does not
 /// matter — the helper dedupes and sorts internally. Days after `today_day`
 /// are ignored so a phone clock running ahead can't add a phantom future day.
-pub fn compute_run_streaks(run_days: &[i32], today_day: i32) -> RunStreaks {
+///
+/// `best_since_day` is the lower bound for `best`, for a caller reporting a
+/// bounded PERIOD rather than all of history: only a streak reaching that day
+/// or later counts. A qualifying streak still counts at its **full** length,
+/// days before the bound included, so one running 28 Dec to 3 Jan is seven days
+/// long on the January card. `None` is the all-time best.
+///
+/// Web's third parameter is optional and this one is not, deliberately: the
+/// bound exists because a caller that forgets it reports a streak from two
+/// years ago as this year's headline, which is exactly what
+/// [`crate::recap::build_year_in_running_recap`] did here. A parameter that
+/// must be answered cannot be forgotten.
+pub fn compute_run_streaks(
+    run_days: &[i32],
+    today_day: i32,
+    best_since_day: Option<i32>,
+) -> RunStreaks {
     let mut days: Vec<i32, MAX_STREAK_DAYS> = Vec::new();
     for &d in run_days {
         if d <= today_day && !days.contains(&d) && days.push(d).is_err() {
@@ -58,16 +74,22 @@ pub fn compute_run_streaks(run_days: &[i32], today_day: i32) -> RunStreaks {
     }
     days.sort_unstable();
 
-    let mut best: u32 = 1;
-    let mut run: u32 = 1;
-    for i in 1..days.len() {
-        if days[i] == days[i - 1] + 1 {
-            run += 1;
-            if run > best {
-                best = run;
-            }
+    // `run` is the length of the streak ENDING at the day being visited, so
+    // testing that day against the bound admits a streak the moment it reaches
+    // the period and, because `run` keeps growing to the streak's end, records
+    // its full length. `best` starts at 0 rather than 1: with a bound, a run
+    // set that never reaches the period has no best streak in it, and seeding 1
+    // would report a one-day streak nobody ran inside the window.
+    let mut best: u32 = 0;
+    let mut run: u32 = 0;
+    for i in 0..days.len() {
+        run = if i > 0 && days[i] == days[i - 1] + 1 {
+            run + 1
         } else {
-            run = 1;
+            1
+        };
+        if best_since_day.is_none_or(|since| days[i] >= since) && run > best {
+            best = run;
         }
     }
 
@@ -100,7 +122,7 @@ mod tests {
     #[test]
     fn empty_input_yields_zero() {
         assert_eq!(
-            compute_run_streaks(&[], T),
+            compute_run_streaks(&[], T, None),
             RunStreaks {
                 current: 0,
                 best: 0,
@@ -111,7 +133,7 @@ mod tests {
     #[test]
     fn single_run_today_is_current_one_best_one() {
         assert_eq!(
-            compute_run_streaks(&[T], T),
+            compute_run_streaks(&[T], T, None),
             RunStreaks {
                 current: 1,
                 best: 1,
@@ -122,7 +144,7 @@ mod tests {
     #[test]
     fn multiple_runs_same_day_count_once() {
         assert_eq!(
-            compute_run_streaks(&[T, T, T], T),
+            compute_run_streaks(&[T, T, T], T, None),
             RunStreaks {
                 current: 1,
                 best: 1,
@@ -133,7 +155,7 @@ mod tests {
     #[test]
     fn three_day_streak_ending_today() {
         assert_eq!(
-            compute_run_streaks(&[T - 2, T - 1, T], T),
+            compute_run_streaks(&[T - 2, T - 1, T], T, None),
             RunStreaks {
                 current: 3,
                 best: 3,
@@ -144,7 +166,7 @@ mod tests {
     #[test]
     fn strava_grace_missing_today_but_yesterday_present() {
         assert_eq!(
-            compute_run_streaks(&[T - 2, T - 1], T),
+            compute_run_streaks(&[T - 2, T - 1], T, None),
             RunStreaks {
                 current: 2,
                 best: 2,
@@ -155,7 +177,7 @@ mod tests {
     #[test]
     fn two_consecutive_days_missing_breaks_the_streak() {
         assert_eq!(
-            compute_run_streaks(&[T - 4, T - 3], T),
+            compute_run_streaks(&[T - 4, T - 3], T, None),
             RunStreaks {
                 current: 0,
                 best: 2,
@@ -166,7 +188,7 @@ mod tests {
     #[test]
     fn best_preserves_a_historical_longer_run() {
         assert_eq!(
-            compute_run_streaks(&[T - 42, T - 41, T - 40, T - 39, T - 38, T - 1, T], T),
+            compute_run_streaks(&[T - 42, T - 41, T - 40, T - 39, T - 38, T - 1, T], T, None),
             RunStreaks {
                 current: 2,
                 best: 5,
@@ -177,7 +199,7 @@ mod tests {
     #[test]
     fn future_dated_runs_are_clamped_to_today() {
         assert_eq!(
-            compute_run_streaks(&[T, T + 1, T + 2], T),
+            compute_run_streaks(&[T, T + 1, T + 2], T, None),
             RunStreaks {
                 current: 1,
                 best: 1,
@@ -188,15 +210,15 @@ mod tests {
     #[test]
     fn long_single_streak_current_equals_best() {
         let days: [i32; 30] = core::array::from_fn(|i| T - 29 + i as i32);
-        let out = compute_run_streaks(&days, T);
+        let out = compute_run_streaks(&days, T, None);
         assert_eq!(out.current, 30);
         assert_eq!(out.best, 30);
     }
 
     #[test]
     fn input_order_does_not_matter() {
-        let ordered = compute_run_streaks(&[T - 2, T - 1, T], T);
-        let shuffled = compute_run_streaks(&[T, T - 2, T - 1], T);
+        let ordered = compute_run_streaks(&[T - 2, T - 1, T], T, None);
+        let shuffled = compute_run_streaks(&[T, T - 2, T - 1], T, None);
         assert_eq!(ordered, shuffled);
     }
 
@@ -204,7 +226,7 @@ mod tests {
     fn month_boundary_is_consecutive() {
         // Apr 30 / May 1 / May 13 → offsets -13, -12, 0.
         assert_eq!(
-            compute_run_streaks(&[T - 13, T - 12, T], T),
+            compute_run_streaks(&[T - 13, T - 12, T], T, None),
             RunStreaks {
                 current: 1,
                 best: 2,
@@ -216,7 +238,7 @@ mod tests {
     fn year_boundary_is_consecutive() {
         // Dec 31 / Jan 1, today Jan 1 → offsets -1, 0.
         assert_eq!(
-            compute_run_streaks(&[T - 1, T], T),
+            compute_run_streaks(&[T - 1, T], T, None),
             RunStreaks {
                 current: 2,
                 best: 2,
@@ -227,7 +249,7 @@ mod tests {
     #[test]
     fn gap_of_exactly_one_day_breaks_the_streak() {
         assert_eq!(
-            compute_run_streaks(&[T - 2, T], T),
+            compute_run_streaks(&[T - 2, T], T, None),
             RunStreaks {
                 current: 1,
                 best: 1,
@@ -240,7 +262,7 @@ mod tests {
         // The web guards a 23-hour DST spring-forward day. Day indices are
         // integer local calendar days, so the pair is exactly one apart.
         assert_eq!(
-            compute_run_streaks(&[T - 1, T], T),
+            compute_run_streaks(&[T - 1, T], T, None),
             RunStreaks {
                 current: 2,
                 best: 2,
@@ -252,7 +274,7 @@ mod tests {
     fn fall_back_day_plus_next_day_register_as_consecutive() {
         // Likewise the 25-hour DST fall-back day.
         assert_eq!(
-            compute_run_streaks(&[T - 1, T], T),
+            compute_run_streaks(&[T - 1, T], T, None),
             RunStreaks {
                 current: 2,
                 best: 2,
@@ -268,7 +290,7 @@ mod tests {
         // arithmetic to guard: the grace step and walk-back are `anchor - 1`
         // over integer day indices, so a five-day streak walked back across
         // any would-be DST boundary counts exactly five, never four or six.
-        let out = compute_run_streaks(&[T - 4, T - 3, T - 2, T - 1, T], T);
+        let out = compute_run_streaks(&[T - 4, T - 3, T - 2, T - 1, T], T, None);
         assert_eq!(out.current, 5);
         assert_eq!(out.best, 5);
     }
