@@ -247,6 +247,18 @@ e2e-tested without standing up the Lambda.
   lets a client rewrite a POST into a bodiless GET
   ([decisions § 894](../architecture/decisions.md)). Behaviour is pinned by
   `www_redirect.test.mjs` beside the function, in the `parity-types` job.
+- **The five share Lambdas answer GET and HEAD only.** Anything else is a
+  `405` carrying `Allow: GET, HEAD`, from the one shared
+  `$lib/share/share_method_gate`. Their CloudFront behaviours declare
+  `allowed_methods = ["GET", "HEAD", "OPTIONS"]` and `cached_methods =
+  ["GET", "HEAD"]`, so OPTIONS was the one method that reached the origin
+  uncached — and on an `/og/*` path it ran a full resvg render before answering
+  `200 image/png`, on paths no WAF rate-limit rule scopes. Nothing could rely on
+  that: no handler and no response-headers policy emits any `access-control-*`
+  header, so a browser preflight against these paths already failed
+  ([decisions § 1005](../architecture/decisions.md)). The Terraform half is
+  still asserted separately ([§ 972](../architecture/decisions.md)) — only the
+  behaviour can stop a POST body being uploaded before a handler runs.
 - **The absolute origin every `<head>` resolves against** is
   `PUBLIC_SITE_URL`, folded through `siteOrigin` (`$lib/core/site_url`) by
   **every** caller — the five share Lambdas and all twenty-two in-app reads

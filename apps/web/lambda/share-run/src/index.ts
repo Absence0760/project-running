@@ -30,6 +30,7 @@ import {
 import { injectShareRunMeta } from '../../../src/lib/share/share_run_spa_shell';
 import { renderRunOgPng } from '../../../src/lib/share/og_run_png';
 import { siteOrigin } from '../../../src/lib/core/site_url';
+import { shareMethodRefusal } from '../../../src/lib/share/share_method_gate';
 
 // SPA-shell HTML embedded at build time by lambda/share-run/build.mjs.
 // The bundler substitutes `__SPA_SHELL_HTML__` with the contents of
@@ -65,6 +66,9 @@ export const handler = async (
 	event: LambdaFunctionURLEvent,
 ): Promise<LambdaFunctionURLResult> => {
 	try {
+		const refused = shareMethodRefusal(event.requestContext?.http?.method);
+		if (refused) return refused;
+
 		const supabaseUrl = process.env.PUBLIC_SUPABASE_URL ?? '';
 		const supabaseAnonKey = process.env.PUBLIC_SUPABASE_ANON_KEY ?? '';
 		// `siteOrigin`, not `?? DEFAULT_SITE_URL`: `??` fires only on

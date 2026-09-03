@@ -54,6 +54,7 @@ import {
 } from '../../../src/lib/share/share_workout_meta';
 import { injectEntityHead } from '../../../src/lib/share/entity_spa_shell';
 import { siteOrigin } from '../../../src/lib/core/site_url';
+import { shareMethodRefusal } from '../../../src/lib/share/share_method_gate';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -135,6 +136,9 @@ export const handler = async (
 	event: LambdaFunctionURLEvent,
 ): Promise<LambdaFunctionURLResult> => {
 	try {
+		const refused = shareMethodRefusal(event.requestContext?.http?.method);
+		if (refused) return refused;
+
 		const config: Config = {
 			supabaseUrl: process.env.PUBLIC_SUPABASE_URL ?? '',
 			supabaseAnonKey: process.env.PUBLIC_SUPABASE_ANON_KEY ?? '',

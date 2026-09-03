@@ -58,13 +58,19 @@ const BY_ORIGIN: Record<string, { dir: string; handler: Handler }> = {
 	'lambda-share-entity': { dir: 'share-entity', handler: shareEntity as Handler },
 };
 
-async function invoke(handler: Handler, rawPath: unknown): Promise<FunctionUrlResponse> {
+async function invoke(
+	handler: Handler,
+	rawPath: unknown,
+	method: string | null = 'GET',
+): Promise<FunctionUrlResponse> {
 	const realError = console.error;
 	console.error = () => {};
 	try {
 		return (await handler({
 			rawPath,
-			requestContext: { http: { method: 'GET' } },
+			// `null` stands for an event carrying no method at all, which is the
+			// fail-closed case the gate must refuse rather than wave through.
+			requestContext: method === null ? {} : { http: { method } },
 			headers: {},
 		})) as FunctionUrlResponse;
 	} finally {
@@ -225,6 +231,45 @@ test('the JSON 404 carries the shared window and the JSON 503 is never cached', 
 	}
 });
 
+// OPTIONS is the one method the behaviours let through that the origin used to
+// do real work on: `cached_methods` is GET/HEAD only, so every OPTIONS misses
+// the edge cache, reaches the Lambda, and on an `/og/*` path rendered a PNG
+// before answering 200 — on paths no WAF rate-limit rule scopes (decisions
+// § 972 measured ~50 ms). Nothing could have been relying on that answer: a
+// preflight only succeeds if the 200 carries `Access-Control-Allow-Origin`, and
+// no handler here and no CloudFront response-headers policy emits one
+// (decisions § 1005).
+test('a non-GET is refused before any share Lambda renders anything', async () => {
+	for (const [origin, { dir, handler }] of Object.entries(BY_ORIGIN)) {
+		for (const method of ['OPTIONS', 'POST', 'DELETE', null]) {
+			const out = await invoke(handler, '/og/run/5f1c7e2a.png', method);
+			assert.equal(out.statusCode, 405, `${dir} ${origin} ${method}`);
+			assert.equal(out.headers?.allow, 'GET, HEAD', `${dir} ${method}`);
+			assert.equal(out.headers?.['content-type'], 'application/json', `${dir} ${method}`);
+			assert.equal(
+				out.headers?.['cache-control'],
+				'no-store',
+				`${dir}: a refusal must not be cached at the edge`,
+			);
+			assert.deepEqual(JSON.parse(String(out.body)), { error: 'method not allowed' }, dir);
+		}
+	}
+});
+
+// The gate must not narrow the surface it protects. HEAD is what a link
+// checker and several unfurl fetchers send, and it is in the behaviours'
+// `allowed_methods` AND their `cached_methods`, so refusing it would break a
+// path the edge actively caches.
+test('HEAD still reaches every share Lambda and renders', async () => {
+	for (const { dir, handler, html, png } of SIBLINGS) {
+		for (const path of [html, png]) {
+			const out = await invoke(handler, path, 'HEAD');
+			assert.notEqual(out.statusCode, 405, `${dir} ${path} must answer HEAD`);
+			assert.equal(out.headers?.['cache-control'], CACHE_CONTROL, `${dir} ${path}`);
+		}
+	}
+});
+
 /// The methods a behaviour declares, for every `ordered_cache_behavior` block
 /// in the given Terraform whose target origin is a share Lambda.
 function shareBehaviourMethods(
@@ -257,19 +302,14 @@ function overPermissive(
 		.sort();
 }
 
-// The three API Lambdas each gate their own method — the coach and
-// generate-route on POST, osrm-proxy on GET — because their behaviours must
-// allow POST and a GET reaching `handleCoach` bills an Anthropic call
-// (decisions § 896). The five share Lambdas have NO method gate, and that is
-// correct rather than an oversight: their behaviours allow only GET, HEAD and
-// OPTIONS, so CloudFront refuses a mutating method before the origin sees it.
-//
-// But nothing asserted that list, so the whole of their method safety sat in a
-// Terraform value one copy-paste from a `/api/*` block away — two independent
-// spellings of one rule with nothing comparing them, the shape § 967 is about
-// one layer up. Measured while filing it: an OPTIONS to `/og/run/<id>.png`
-// already runs a full ~50 ms resvg render and answers 200, so the origin does
-// do real work on a non-GET the behaviour lets through.
+// Defence in depth, not the only defence: the five share Lambdas gate their own
+// method since § 1005, and this pins the edge half. The whole of their method
+// safety used to sit in a Terraform value one copy-paste from a `/api/*` block
+// away — two independent spellings of one rule with nothing comparing them, the
+// shape § 967 is about one layer up. It stays worth asserting because the gate
+// and the behaviour answer different questions: the behaviour decides what
+// reaches the origin at all, and only it can stop a POST body from being
+// uploaded and paid for before any handler runs.
 test('no share behaviour lets a mutating method reach a Lambda that does not gate one', () => {
 	const tf = readFileSync(
 		resolve(import.meta.dirname, '../../../../../infra/modules/web-stack/main.tf'),

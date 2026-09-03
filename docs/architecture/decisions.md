@@ -16428,3 +16428,42 @@ which is what that case was really about: the derivation must call
 rather than through a re-export, and the adapter's name must not reappear.
 Reintroducing a local `reduce` over positive deltas fails it, and so does
 importing the rule from a different path.
+
+## 1005. The share Lambdas gate their method, because OPTIONS was the one that missed the cache
+
+§ 972 measured that an `OPTIONS /og/run/<id>.png` runs a full ~50 ms `resvg`
+render and answers `200 image/png`, and left the gate unbuilt: it could not
+verify from the wrong side of the deploy that no client sends a preflight against
+those paths, and the filing asked for one `curl -X OPTIONS` against preview
+before changing five handlers.
+
+The curl is not needed, because the question it would answer is settled in the
+repository. A CORS preflight only succeeds if the response carries
+`Access-Control-Allow-Origin`. Neither the five handlers nor
+`aws_cloudfront_response_headers_policy.security` emits any `access-control-*`
+header at all — checked both — so a browser preflight against `/share/*` or
+`/og/*` already fails today and the real request is never sent. Nothing can be
+depending on the 200, because as a preflight answer it does not work. Everything
+that legitimately fetches these surfaces (an unfurl crawler, an `<img>`, a link
+checker) uses GET or HEAD.
+
+The measurement also understates the cost, and the understated part is what makes
+this worth doing rather than merely tidy. The behaviours declare
+`cached_methods = ["GET", "HEAD"]`. OPTIONS is therefore the one allowed method
+that **cannot** be absorbed by the edge cache: a GET storm on one URL costs one
+render per five-minute window, and an OPTIONS storm on the same URL costs a
+render every request — on paths the WAF rate-limit rules do not scope, since they
+cover `/api/coach`, `/api/routes/generate` and `/api/routes/osrm` only.
+
+One `shareMethodRefusal` in `$lib/share`, called by all five, rather than five
+copies of the `!== 'POST'` shape the API Lambdas each spell — the same reason
+§ 1000 gave for the comment stripper. It fails closed: an event with no method is
+refused, matching those wrappers, and the two share tests that built an event
+without a `requestContext` were corrected rather than the gate loosened, because
+a real Function URL event always carries one.
+
+§ 972's Terraform guard stays and its premise comment is rewritten rather than
+deleted. The two answer different questions: the gate decides what the handler
+does, and only the behaviour decides what reaches the origin at all — a POST body
+refused at the edge is never uploaded, never billed, and never reaches a handler
+that could be made to read it.
