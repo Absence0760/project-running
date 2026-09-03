@@ -378,7 +378,7 @@ export const CONSTANT_ROWS = [
     why: "the stride both rails walk the checkpoint series with, at the version the phone emits. A one-sided change reads every field after the first checkpoint from the wrong offset — the CRC still matches, the counts still agree, and the schedule decodes as a plausible different race. Only the CURRENT version's stride is a pair: the firmware also knows v1's, but the phone has no decoder and never emits v1, so restating it there would be a constant nothing reads",
     rails: [
       rustRail(RS_ROADBOOK, rustConst('ROADBOOK_CHECKPOINT_LEN')),
-      dartRail(DL_ROADBOOK, dartConst('_roadbookCheckpointLen')),
+      dartRail(DL_ROADBOOK, dartConst('kRoadbookCheckpointLen')),
     ],
   },
   {

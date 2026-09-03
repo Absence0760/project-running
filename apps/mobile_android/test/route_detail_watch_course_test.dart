@@ -18,6 +18,11 @@ import '../lib/screens/roadbook_screen.dart'
 import '../lib/screens/route_detail_screen.dart';
 import '../lib/sim_watch_sync.dart' show WatchBleTransport;
 import '../lib/watch_course.dart' show kMaxCoursePoints;
+import '../lib/watch_roadbook.dart'
+    show
+        kRoadbookCheckpointLen,
+        kRoadbookCutoffLen,
+        kRoadbookHeaderLen;
 
 const _localBackend = 'http://127.0.0.1:54321';
 const _prodBackend = 'https://abcdefgh.supabase.co';
@@ -109,7 +114,7 @@ class _FakeCourseTransport implements WatchBleTransport {
 
   ({int distM, int elapsedS}) checkpointAt(int i) {
     final view = ByteData.sublistView(roadbookFrame);
-    final off = 8 + i * 14;
+    final off = kRoadbookHeaderLen + i * kRoadbookCheckpointLen;
     return (
       distM: view.getUint32(off, Endian.little),
       elapsedS: view.getUint32(off + 8, Endian.little),
@@ -118,7 +123,9 @@ class _FakeCourseTransport implements WatchBleTransport {
 
   ({int distM, int limitS}) cutoffAt(int i) {
     final view = ByteData.sublistView(roadbookFrame);
-    final off = 8 + checkpointCount * 14 + i * 8;
+    final off = kRoadbookHeaderLen +
+        checkpointCount * kRoadbookCheckpointLen +
+        i * kRoadbookCutoffLen;
     return (
       distM: view.getUint32(off, Endian.little),
       limitS: view.getUint32(off + 4, Endian.little),

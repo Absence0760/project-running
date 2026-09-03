@@ -11,6 +11,7 @@ import '../lib/preferences.dart';
 import '../lib/screens/settings_screen.dart';
 import '../lib/screens/sim_watch_screen.dart';
 import '../lib/sim_watch_link.dart';
+import '../lib/watch_roadbook.dart';
 import '../lib/sim_watch_sync.dart';
 import 'pump_until.dart';
 
@@ -482,23 +483,29 @@ void main() {
       await pumpUntil(tester, () => transport.roadbookWrites.isNotEmpty,
           describe: 'the roadbook frame to be written to the transport');
 
-      // The canned three-checkpoint / two-cut-off sim schedule is
-      // 8 + 3*14 + 2*8 + 4 = 70 B, so it fits one chunk. The frame bytes are
-      // the RBK1 golden fixture watch_roadbook_test.dart pins byte-exact
-      // against the Rust vectors; this pins the plumbing.
+      // The canned three-checkpoint / two-cut-off sim schedule fits one chunk.
+      // Sized from the encoder's own layout rather than restated, or a wire
+      // revision moves the frame and this reads a stale number as a pass.
+      // The frame bytes are the RBK1 golden fixture watch_roadbook_test.dart
+      // pins byte-exact against the Rust vectors; this pins the plumbing.
+      const expectedFrameLen = kRoadbookHeaderLen +
+          3 * kRoadbookCheckpointLen +
+          2 * kRoadbookCutoffLen +
+          kRoadbookCrcLen;
       expect(transport.roadbookWrites, hasLength(1));
       final chunk = transport.roadbookWrites.single;
       expect(chunk.sublist(0, 2), [0x00, 0x00]);
       final frame = chunk.sublist(2);
-      expect(frame, hasLength(70));
+      expect(frame, hasLength(expectedFrameLen));
       expect(frame.sublist(0, 4), [0x52, 0x42, 0x4b, 0x31]); // RBK1
       expect(frame[5], 3, reason: 'three demo checkpoints');
       expect(frame[6], 2, reason: 'two demo cut-offs');
-      final trailer = frame[66] |
-          (frame[67] << 8) |
-          (frame[68] << 16) |
-          (frame[69] << 24);
-      expect(trailer, crc32(frame.sublist(0, 66)));
+      const bodyLen = expectedFrameLen - kRoadbookCrcLen;
+      final trailer = frame[bodyLen] |
+          (frame[bodyLen + 1] << 8) |
+          (frame[bodyLen + 2] << 16) |
+          (frame[bodyLen + 3] << 24);
+      expect(trailer, crc32(frame.sublist(0, bodyLen)));
       expect(
         find.text('Roadbook pushed to the watch (3 checkpoints, 2 cut-offs)'),
         findsOneWidget,

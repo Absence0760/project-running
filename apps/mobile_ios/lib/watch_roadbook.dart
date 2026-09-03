@@ -83,10 +83,10 @@ const int kCheckpointFlagRefill = 1 << 0;
 const int kMaxRoadbookCheckpoints = 16;
 const int kMaxRoadbookCutoffs = 16;
 
-const int _roadbookHeaderLen = 8;
-const int _roadbookCheckpointLen = 19;
-const int _roadbookCutoffLen = 8;
-const int _roadbookCrcLen = 4;
+const int kRoadbookHeaderLen = 8;
+const int kRoadbookCheckpointLen = 19;
+const int kRoadbookCutoffLen = 8;
+const int kRoadbookCrcLen = 4;
 
 /// Max payload per chunk = the watch's `ROADBOOK_CHUNK_CAP` (244) minus the
 /// 2-byte offset header each chunk carries.
@@ -213,10 +213,10 @@ Uint8List encodeRoadbook(
     );
   }
   final len =
-      _roadbookHeaderLen +
-      checkpoints.length * _roadbookCheckpointLen +
-      cutoffs.length * _roadbookCutoffLen +
-      _roadbookCrcLen;
+      kRoadbookHeaderLen +
+      checkpoints.length * kRoadbookCheckpointLen +
+      cutoffs.length * kRoadbookCutoffLen +
+      kRoadbookCrcLen;
   final out = ByteData(len);
   out.setUint8(0, 0x52); // R
   out.setUint8(1, 0x42); // B
@@ -227,7 +227,7 @@ Uint8List encodeRoadbook(
   out.setUint8(6, cutoffs.length);
   out.setUint8(7, 0);
 
-  var off = _roadbookHeaderLen;
+  var off = kRoadbookHeaderLen;
   for (final cp in checkpoints) {
     out.setUint32(
       off,
@@ -257,7 +257,7 @@ Uint8List encodeRoadbook(
       Endian.little,
     );
     out.setUint8(off + 18, hasTarget ? _targetCode(target.status) : 0);
-    off += _roadbookCheckpointLen;
+    off += kRoadbookCheckpointLen;
   }
   for (final leg in cutoffs) {
     out.setUint32(
@@ -270,7 +270,7 @@ Uint8List encodeRoadbook(
       _seconds(leg.limitElapsedSec, 'cut-off limit'),
       Endian.little,
     );
-    off += _roadbookCutoffLen;
+    off += kRoadbookCutoffLen;
   }
 
   final frame = out.buffer.asUint8List();
