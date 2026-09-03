@@ -1326,3 +1326,26 @@ artefact lives outside the paths it owned.
 - [ ] **The export sweep's archives need a Storage-API reaper, and it is a Go-worker job kind.** [§ 1049](../architecture/decisions.md) measured what `cleanup_stale_export_blobs()` actually does: the `storage.objects` row goes, the archive stops being listable, and **the bytes stay on the storage backend with a matching `sha256`**. The sweep buys reachability, not erasure, and the SQL tier cannot buy more than that — a row delete is not an object delete, which is exactly why `protect_objects_delete` exists and why its hint reads "This prevents accidental data loss from orphaned objects." The durable shape is the one the closed entry named: a job kind drained by `apps/job_worker/`, which already writes the archive through the Storage API and already holds the service key, leaving `expire_stale_export_jobs()` as the only SQL half. It was not built in the backend lane because the enqueue needs a new value in `jobs_kind_chk` — a **set-shaped** CHECK, so `apps/web/scripts/check_constraint_unions.mjs`'s coverage rule demands a `PAIRS` edit naming every client rail, and that script was outside the lane. So this needs a change owning `apps/job_worker/` **and** `apps/web/scripts/`. Two design notes for whoever takes it, both from § 1049. First, the sweep currently destroys the only record of which blobs need erasing: once the row is gone nothing in the database knows the object exists, so an API-based reaper has to either run BEFORE the row delete or list the bucket. Enqueue-then-delete in one transaction is the cheap ordering. Second, a backlog table was considered and refused rather than half-built — an object name embeds a user id, so a table holding it after that user's row is deleted needs its own retention answer and its own interaction with `delete-account`, which is the same owner call as the payout-style gates. A queue nothing drains is worse than an honest gap.
 - [ ] **`docs/compliance/data-subject-rights.md` was corrected by a lane that does not own `docs/compliance/`.** [§ 1049](../architecture/decisions.md)'s measurement falsified the paragraph that said whether the bytes are reaped "is not measured here", and leaving a retention claim standing on a belief now known to be wrong was worse than editing outside the owned tree — so the backend lane rewrote that one paragraph. It is flagged here rather than hidden: if a compliance owner re-reads the file, that hunk is the one to check, and the surrounding `Status: scaffold` framing was not touched.
 - [ ] **`refresh_personal_records`' embedded-best filter is `>= 0`, and only a CHECK now stops it awarding a zero-second PR.** `20270705000004` bounds `runs.fastest_5k_s` / `_10k_s` / `_half_marathon_s` / `_marathon_s` at `> 0`, which makes the RPC's own `and fastest_5k_s >= 0` filter equivalent rather than load-bearing — but the filter is still written in the shape that admits the bad value, four times, and a reader could reasonably conclude it is the guard. Tightening the four filters to `> 0` is a one-line-each change inside a SECURITY DEFINER body with a shipped pgtap suite over it; it was not taken in-round because the constraint is the root fix and re-emitting the whole function to change a comparison operator is a bigger diff than the defect justifies. Do it the next time that function is open for another reason. The same reading applies to `personal_records.best_time_s`, now `> 0` at the column.
+
+## Surfaced by the #789 round 35 integration pass (2026-09-03)
+
+Both entries below are closed; they are recorded because the class recurs every
+round that fans out across lanes ([decisions § 1057](../architecture/decisions.md)).
+
+- [x] **Two failures existed only in the merged tree.** The `RBK1` v2 stride
+  moved fields in two suites the firmware lane had no reason to open, and a
+  `$lib` import in a new web unit test resolved only in the worktree that
+  happened to carry a generated `.svelte-kit/tsconfig.json`. Closed
+  2026-09-03 — the roadbook layout constants are public and both suites derive
+  from them, and an anchored guard now refuses an aliased import under
+  `src/**/*.test.ts`.
+- [x] **Two lane filings contradicted each other after the merge.** The mobile
+  lane appended a ticked copy of the `run_recorder` entry instead of ticking it
+  in place, leaving an open and a closed copy (`check_doc_checkboxes` caught
+  it), and its filing that `strava_zip_strictness.test.ts` is "the last
+  hand-rolled comment-stripper" went stale the moment the web lane converted
+  that file in the same round. Closed 2026-09-03 — the duplicate is gone and
+  the filing is rewritten to keep only the half that survives. Worth carrying
+  forward: a lane cannot see what a sibling lane closed, so any filing that
+  counts remaining instances of a class needs re-reading at integration.
+

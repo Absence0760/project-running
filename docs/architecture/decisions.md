@@ -18646,3 +18646,43 @@ this branch, and round 33's `9bb122d64` fixed it in exactly the shape the
 filing prescribed — 43 JSDoc `@param` annotations in `check_toolchain_pins.mjs`
 alone, no tsconfig loosened. Verifying a filed premise before acting on it
 remains the cheapest step in the round.
+
+## 1057. Two round-35 failures existed only in the merged tree, and both were a layout restated somewhere a lane could not see
+
+Round 35 ran five lanes in isolated worktrees with disjoint file ownership.
+Every lane was green on its own branch and the merge was clean; CI on the
+integration branch was not. Both failures are the same shape — a fact owned by
+one file, restated in another that the owning lane had no reason to open.
+
+**The `RBK1` stride.** § 1027's v2 checkpoint is 19 bytes where v1 was 14. The
+firmware lane moved the encoder, moved the golden vectors on both rails, and
+ran `watch_roadbook_test.dart`, which owns those vectors. Two other mobile
+suites decode the same frame to assert plumbing rather than bytes —
+`route_detail_watch_course_test.dart` with `off = 8 + i * 14`, and
+`sim_watch_screen_test.dart` with a frame length of 70 and a CRC trailer read
+at byte 66 — and both read every field from the wrong offset once the record
+grew. Neither is a roadbook test by name, which is why a targeted run missed
+them. Fixed by publishing the four layout constants `watch_roadbook.dart`
+already had (`kRoadbookHeaderLen` / `kRoadbookCheckpointLen` /
+`kRoadbookCutoffLen` / `kRoadbookCrcLen`, formerly private) and deriving every
+offset and length in both suites from them. `check_watch_wire_vectors.mjs`'s
+stride rail follows the rename. The lesson is not "run more tests": a stride
+that only one file may name cannot be restated by a second, and the fix is to
+make the restatement impossible rather than to catch it later.
+
+**The aliased unit-test import.** § 1039's new suite imported
+`$lib/core/strip_comments`. `npm run test:unit` is raw `tsx --test`, and tsx
+resolves `$lib` only from `.svelte-kit/tsconfig.json`, which `svelte-kit sync`
+generates and which CI never runs before that job. The mobile lane's worktree
+had one, left by an earlier `svelte-check`; the fresh integration worktree did
+not, and neither does a CI runner. The apparent precedent — the single other
+`$lib` occurrence under `src/**/*.test.ts` — is a quoted fixture line inside
+`map_surface_basemap_guard.test.ts`, data that test asserts about rather than a
+specifier node resolves, so there was no precedent at all. Switched to a
+relative import and added `unit_suite_resolvable_imports.test.ts`, anchored at
+column 0 precisely so that fixture is not a false positive; the first spelling
+of its needle flagged it, which is the § 1034 mistake in miniature.
+
+Both were found by verifying the merged tree rather than the branches, which is
+the standing round discipline and earned its cost again here.
+
