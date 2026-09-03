@@ -109,3 +109,45 @@ test('every credential-gated leg the Edge Function ships has a row here', () => 
 			'(or offers one the function does not have).'
 	);
 });
+
+test('the leg with a refusal beyond its credential is probed on its own leg', () => {
+	// `race-listings-sync` gates UltraSignup on ULTRASIGNUP_API_KEY alone.
+	// `race-results-import` refuses the same provider unconditionally (decisions
+	// § 975): an athlete feed carries no race identifier, so nothing it returns
+	// can be attributed to the listing a caller names. The two legs no longer
+	// agree, and the card is about the results one — probing the sync
+	// advertises an import whose very next call 503s once the key is
+	// provisioned.
+	const index = readFileSync(
+		join(REPO_ROOT, 'apps/backend/supabase/functions/race-results-import/index.ts'),
+		'utf8'
+	);
+	const probeAt = index.indexOf('body.probe === true');
+	assert.ok(
+		probeAt > -1,
+		'race-results-import no longer has a probe branch — reread it and re-anchor this guard'
+	);
+	const branch = index.slice(probeAt, index.indexOf('listingId required', probeAt));
+	assert.ok(
+		branch.includes('ultraSignUpAttributionGate()'),
+		'the probe branch no longer refuses UltraSignup independently of its credential. ' +
+			'If § 975 was lifted, this guard has lost its premise — re-decide which function ' +
+			'the card should probe rather than deleting the assertion below'
+	);
+
+	const data = readFileSync(join(REPO_ROOT, 'apps/web/src/lib/core/data.ts'), 'utf8');
+	const fn = data.slice(
+		data.indexOf('export async function isUltraSignUpConfigured'),
+		data.indexOf('export async function isChronoTrackConfigured')
+	);
+	assert.ok(fn.length > 0, 'isUltraSignUpConfigured moved — re-anchor this guard');
+	assert.ok(
+		fn.includes("invoke('race-results-import'"),
+		'the UltraSignup card must ask the leg that would actually run'
+	);
+	assert.ok(
+		fn.includes('probe: true'),
+		'race-results-import only reports configuration in probe mode; without the flag ' +
+			'this becomes a real import with no listing'
+	);
+});

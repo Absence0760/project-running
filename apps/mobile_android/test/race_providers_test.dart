@@ -102,6 +102,43 @@ void main() {
     expect(await RaceService().isProviderConfigured('chronotrack'), isFalse);
   });
 
+  test('the leg with a refusal beyond its credential is probed on its own leg', () {
+    // `race-listings-sync` gates UltraSignup on ULTRASIGNUP_API_KEY alone.
+    // `race-results-import` refuses the same provider unconditionally (§ 975):
+    // an athlete feed carries no race identifier, so nothing it returns can be
+    // attributed to the listing a caller names. The two legs no longer agree,
+    // and the tile is about the results one — probing the sync advertises an
+    // import whose very next call 503s once the key is provisioned.
+    final src =
+        File('../backend/supabase/functions/race-results-import/index.ts')
+            .readAsStringSync();
+    final probeBranch = src.indexOf('body.probe === true');
+    expect(probeBranch, greaterThan(-1),
+        reason: 'race-results-import no longer has a probe branch — reread it '
+            'and re-anchor this guard');
+    final listingId = src.indexOf('listingId required', probeBranch);
+    final branch = src.substring(probeBranch, listingId);
+    expect(
+      branch.contains('ultraSignUpAttributionGate()'),
+      isTrue,
+      reason: 'the probe branch no longer refuses UltraSignup independently of '
+          'its credential. If § 975 was lifted, this guard has lost its '
+          'premise — re-decide which function the tile should probe rather '
+          'than deleting the assertion below',
+    );
+    expect(
+      raceImportProviderFor('ultrasignup')!.probeFunction,
+      'race-results-import',
+      reason: 'the UltraSignup tile must ask the leg that would actually run',
+    );
+    expect(
+      raceImportProviderFor('ultrasignup')!.probeBody['probe'],
+      isTrue,
+      reason: 'race-results-import only reports configuration in probe mode; '
+          'without the flag this becomes a real import with no listing',
+    );
+  });
+
   test('the catalogue names exactly the tokens the Edge Function accepts', () {
     final src =
         File('../backend/supabase/functions/race-results-import/index.ts')

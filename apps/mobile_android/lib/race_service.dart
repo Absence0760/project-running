@@ -180,8 +180,14 @@ const List<RaceImportProvider> raceImportProviders = [
     provider: 'ultrasignup',
     scope: RaceImportScope.athleteId,
     unavailable: UltraSignUpUnavailable(),
-    probeFunction: 'race-listings-sync',
-    probeBody: <String, dynamic>{'provider': 'ultrasignup'},
+    // The RESULTS leg, not the listings sync. The two are separately gated:
+    // `race-listings-sync` answers on ULTRASIGNUP_API_KEY alone, while the
+    // results leg refuses unconditionally since § 975 — the athlete feed
+    // carries no race identifier, so nothing it returns can be attributed to
+    // the listing a caller names. Probing the sync would advertise an import
+    // whose very next call 503s the moment the key is provisioned.
+    probeFunction: 'race-results-import',
+    probeBody: <String, dynamic>{'provider': 'ultrasignup', 'probe': true},
   ),
   RaceImportProvider(
     provider: 'chronotrack',

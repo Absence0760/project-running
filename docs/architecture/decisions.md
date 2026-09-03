@@ -16313,3 +16313,44 @@ the identical `try { … } catch { available = false }`. Deleting it on the phon
 alone would create a divergence in the file this change exists to bring into
 parity, and would put a future caller one refactor away from failing open
 again. The service method's doc says why the backstop stays.
+
+## 1008. The UltraSignup results tile was asking a different function whether it could import
+
+Both clients decided whether to offer the UltraSignup **results** import by
+probing `race-listings-sync`. That function answers for the *listings* leg,
+which is real and legitimately gated on `ULTRASIGNUP_API_KEY`. The results leg
+lives in `race-results-import`, and since § 975 it refuses unconditionally: an
+athlete feed carries no race identifier, so every row it returns would be
+stamped with the target listing's name, date and distance, and a road marathon
+would be recorded as a 100-miler.
+
+While both legs were gated on the same two env vars the two questions had the
+same answer, so nothing showed. They no longer do. Provisioning the key would
+light up a tile — web's card says "Import trail and ultra results from
+UltraSignup", mobile's sheet offers the athlete-id form — whose very next call
+503s with a reason that names no missing credential. The probe was asking
+whether the key exists; the tile is a claim about whether an import will work.
+
+Both clients now probe `race-results-import` with `{ provider: 'ultrasignup',
+probe: true }`, which is the shape ChronoTrack already used. `race-listings-sync`
+was deliberately not made to answer for a leg it does not own.
+
+The guard on each platform derives its premise rather than restating the fix:
+it reads the function's probe branch, asserts that branch still refuses
+UltraSignup independently of its credential, and only then requires the client
+to name that function. If § 975 is ever lifted the premise disappears and the
+test says to re-decide rather than to delete an assertion.
+
+**RunSignUp was left probing the sync, and that is a compromise, not a
+judgement that it is right.** The server-side comment in the probe branch says
+every credential-gated leg has to be probed there, and by that rule RunSignUp
+should move too. It cannot yet: `race-listings-sync` gives probes their own
+60/hour bucket (§ 977) while `race-results-import` has no probe/import split at
+all — a probe is charged to the import bucket at 8/hour free, 32/hour Pro,
+*shared with real imports*. Moving UltraSignup already takes the settings
+screen from one to two of that bucket per load; moving RunSignUp would make it
+three, so roughly two settings visits an hour would exhaust a free runner's
+ability to actually import a result. With § 1007 in place an exhausted bucket
+also reads as "provider unavailable", so the failure would be silent and
+total. The durable close is § 977's split applied to `race-results-import`,
+which is a backend change; it is filed, and RunSignUp's probe moves behind it.
