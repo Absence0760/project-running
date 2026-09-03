@@ -132,11 +132,10 @@ pub fn project_track(
 
 /// Bounding-box diagonal a track must exceed before it is worth drawing at
 /// panel scale. A THIRD rail: web's `isTrackRenderable` and the Dart twin
-/// inside `track_preview.dart` both gate on the same number, and on both of
-/// them it is still a bare literal at the comparison — so the value cannot be
-/// registered in `scripts/check_watch_wire_vectors.mjs`, which reads a rail by
-/// the NAME of its constant. Naming it here is the wrist's half of that;
-/// closing it needs the same on the other two (followups.md, round 33).
+/// inside `track_preview.dart` gate on the same number, and all three are held
+/// together by the `renderable-track span gate (m)` row in
+/// `scripts/check_watch_wire_vectors.mjs`, which reads each rail by the NAME of
+/// its constant.
 pub const MIN_RENDERABLE_SPAN_M: f64 = 5.0;
 
 /// True iff the track's bounding-box diagonal exceeds
@@ -336,10 +335,9 @@ mod tests {
     #[test]
     fn the_gate_sits_exactly_at_the_named_span() {
         // Two claims, and they fail to different mutations. The VALUE is
-        // asserted flat, because the other two rails (web `isTrackRenderable`,
-        // the Dart twin in `track_preview.dart`) still spell it as a bare
-        // literal at their own comparison, so no cross-rail registry can hold
-        // the three together yet and this is the only pin the number has here.
+        // asserted flat because the cross-rail registry compares the three
+        // rails against each other, not against a number: moving all three
+        // together would satisfy it, and this is what says which number.
         assert_eq!(MIN_RENDERABLE_SPAN_M, 5.0);
         // And the constant is the number actually COMPARED, not one declared
         // beside a literal that has drifted from it. A degree of latitude is

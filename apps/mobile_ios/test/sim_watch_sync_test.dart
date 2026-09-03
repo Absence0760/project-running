@@ -43,10 +43,10 @@ const _goldenLapHex =
     '74d1d917000341c10200000000800000'
     '454e4431d2040000580200006c0200008d2b643c';
 
-/// The same 3-point run as today's v4 firmware writes it — byte-identical
-/// to the firmware's `golden_blob_is_stable`, so a wire-format drift on
-/// either side is caught here. Only the version byte and the CRC differ
-/// from [_goldenHex].
+/// The frozen v4 golden — the same 3-point run as pre-§1026 (v4) firmware
+/// wrote it, altitudes still in decimetres. Kept decodable for the same
+/// reason [_goldenHex] is: a bench board's flash may still hold one. Only the
+/// version byte and the CRC differ from [_goldenHex].
 const _goldenV4Hex =
     '54524b31040100000700000029000000'
     'b8ced91718ff40c100000000703f7800'
@@ -54,8 +54,7 @@ const _goldenV4Hex =
     '74d1d917000341c10200000000800000'
     '454e4431d2040000580200006c02000001f8ef8c';
 
-/// The v4 lap golden — byte-identical to the firmware's
-/// `golden_blob_with_a_lap_is_stable`.
+/// The frozen v4 lap golden, kept decodable like [_goldenV4Hex].
 const _goldenV4LapHex =
     '54524b31040100000700000029000000'
     'b8ced91718ff40c100000000703f7800'
@@ -64,12 +63,12 @@ const _goldenV4LapHex =
     '74d1d917000341c10200000000800000'
     '454e4431d2040000580200006c0200001ac2224c';
 
-/// The v4 workout golden — byte-identical to the firmware's
-/// `golden_blob_with_workout_records_is_stable`: two settled step records
-/// interleaved in stream order (step 0 completed — 400 m / 95 s / 238 s/km;
-/// step 1 skipped — 51.2 m / 30 s / no pace) and the finalize-time summary
-/// (3 planned steps, partial, WKT1 frame CRC 0x0BADF00D).
-const _goldenWorkoutHex =
+/// The frozen v4 workout golden, kept decodable like [_goldenV4Hex]: two
+/// settled step records interleaved in stream order (step 0 completed —
+/// 400 m / 95 s / 238 s/km; step 1 skipped — 51.2 m / 30 s / no pace) and the
+/// finalize-time summary (3 planned steps, partial, WKT1 frame CRC
+/// 0x0BADF00D).
+const _goldenV4WorkoutHex =
     '54524b31040100000700000029000000'
     'b8ced91718ff40c100000000703f7800'
     '0000a00f00005f000000ee0000000002'
@@ -78,6 +77,41 @@ const _goldenWorkoutHex =
     '74d1d917000341c10200000000800000'
     '03010df0ad0b00000000000000000003'
     '454e4431d2040000580200006c0200000895c50c';
+
+/// The same 3-point run as today's v5 firmware writes it — byte-identical
+/// to the firmware's `golden_blob_is_stable`, so a wire-format drift on
+/// either side is caught here. v5 stores each point's altitude in whole
+/// METRES rather than decimetres (decisions §1026), so the two elevation
+/// bytes read `5806` / `5a06` (1624 m / 1626 m) where [_goldenV4Hex] read
+/// `703f` / `723f` (16240 dm / 16242 dm).
+const _goldenV5Hex =
+    '54524b31050100000700000029000000'
+    'b8ced91718ff40c10000000058067800'
+    'e4cfd9170c0141c1010000005a067a00'
+    '74d1d917000341c10200000000800000'
+    '454e4431d2040000580200006c0200007b613b01';
+
+/// The v5 lap golden — byte-identical to the firmware's
+/// `golden_blob_with_a_lap_is_stable`.
+const _goldenV5LapHex =
+    '54524b31050100000700000029000000'
+    'b8ced91718ff40c10000000058067800'
+    'e4cfd9170c0141c1010000005a067a00'
+    '0100102700002c010000220100000001'
+    '74d1d917000341c10200000000800000'
+    '454e4431d2040000580200006c020000b95df241';
+
+/// The v5 workout golden — byte-identical to the firmware's
+/// `golden_blob_with_workout_records_is_stable`.
+const _goldenV5WorkoutHex =
+    '54524b31050100000700000029000000'
+    'b8ced91718ff40c10000000058067800'
+    '0000a00f00005f000000ee0000000002'
+    'e4cfd9170c0141c1010000005a067a00'
+    '0101000200001e000000000000000002'
+    '74d1d917000341c10200000000800000'
+    '03010df0ad0b00000000000000000003'
+    '454e4431d2040000580200006c02000023450760';
 
 /// The v1 and v2 goldens as prior firmware wrote them. v3 widened the CRC
 /// window to take in the footer totals, so their checksums no longer
@@ -289,25 +323,25 @@ void main() {
     });
 
     test('three points decode exactly', () {
-      final p0 = decodePoint(blob, 16);
+      final p0 = decodePoint(blob, 16, 3);
       expect(p0.latE7, 400150200);
       expect(p0.lonE7, -1052705000);
       expect(p0.tOffsetS, 0);
-      expect(p0.eleDm, 16240);
+      expect(p0.eleMetres, closeTo(1624.0, 1e-9));
       expect(p0.bpm, 120);
 
-      final p1 = decodePoint(blob, 32);
+      final p1 = decodePoint(blob, 32, 3);
       expect(p1.latE7, 400150500);
       expect(p1.lonE7, -1052704500);
       expect(p1.tOffsetS, 1);
-      expect(p1.eleDm, 16242);
+      expect(p1.eleMetres, closeTo(1624.2, 1e-9));
       expect(p1.bpm, 122);
 
-      final p2 = decodePoint(blob, 48);
+      final p2 = decodePoint(blob, 48, 3);
       expect(p2.latE7, 400150900);
       expect(p2.lonE7, -1052704000);
       expect(p2.tOffsetS, 2);
-      expect(p2.eleDm, isNull); // -32768 sentinel
+      expect(p2.eleMetres, isNull); // -32768 sentinel
       expect(p2.bpm, isNull); // 0 sentinel
     });
 
@@ -553,7 +587,11 @@ void main() {
     test('a blob newer than the supported format is rejected, never misread',
         () {
       final blob = Uint8List.fromList(_goldenLapBlob());
-      blob[4] = 5; // future version
+      // One past the ceiling. `_maxSupportedVersion` is held equal to the
+      // firmware's own `FORMAT_VERSION` by
+      // scripts/check_watch_wire_vectors.mjs, so this stays one past whatever
+      // the watch currently writes.
+      blob[4] = 6;
       // Re-stamp the CRC so ONLY the version gate can reject it.
       final d = ByteData.sublistView(blob);
       d.setUint32(blob.length - 4, crc32(blob.sublist(0, blob.length - 4)),
@@ -590,8 +628,71 @@ void main() {
       }
     });
 
+    test('the v5 goldens decode with their altitudes in metres', () {
+      // The bytes are the firmware's current output, so this is the pair the
+      // wire guard compares. Everything but the altitude is identical to the
+      // v4 golden's payload: the version moved one field's UNIT, not the
+      // layout, so the run is the same run.
+      final m = decodeManifest(_goldenManifest());
+      final phoneNow = DateTime.utc(2026, 7, 8, 12, 0, 0);
+      for (final (v4, v5) in [
+        (_goldenV4Hex, _goldenV5Hex),
+        (_goldenV4LapHex, _goldenV5LapHex),
+      ]) {
+        expect(verifyBlob(_hex(v5)), isTrue);
+        final a =
+            payloadFromBlob(_hex(v4), m.entries.single, m.header, phoneNow);
+        final b =
+            payloadFromBlob(_hex(v5), m.entries.single, m.header, phoneNow);
+        for (final key in ['duration_s', 'distance_m', 'finished']) {
+          expect(b[key], a[key]);
+        }
+        expect(b['laps'], a['laps']);
+        final track = b['track'] as List<dynamic>;
+        final was = a['track'] as List<dynamic>;
+        expect(track.length, was.length);
+        for (var i = 0; i < track.length; i++) {
+          final p = track[i] as Map<String, dynamic>;
+          final q = was[i] as Map<String, dynamic>;
+          for (final key in ['lat', 'lng', 'ts', 'bpm']) {
+            expect(p[key], q[key], reason: 'point $i $key');
+          }
+        }
+        expect((track[0] as Map)['ele'], closeTo(1624.0, 1e-9));
+        expect((track[1] as Map)['ele'], closeTo(1626.0, 1e-9));
+        expect((track[2] as Map)['ele'], isNull);
+      }
+    });
+
+    test('the same altitude bytes mean ten times more under v5', () {
+      // The whole reason the unit resolves against the header version rather
+      // than being assumed. Nothing about these bytes is wrong — the CRC
+      // matches, every field decodes — so reading a v3/v4 blob as metres, or a
+      // v5 one as decimetres, is a silent tenfold error in the one metric this
+      // watch exists for.
+      final m = decodeManifest(_goldenManifest());
+      final phoneNow = DateTime.utc(2026, 7, 8, 12, 0, 0);
+      final relabelled = _hex(_goldenV4Hex);
+      relabelled[4] = 5;
+      final crc = crc32(relabelled.sublist(0, relabelled.length - 4));
+      ByteData.sublistView(relabelled)
+          .setUint32(relabelled.length - 4, crc, Endian.little);
+      expect(verifyBlob(relabelled), isTrue);
+      final payload =
+          payloadFromBlob(relabelled, m.entries.single, m.header, phoneNow);
+      final track = payload['track'] as List<dynamic>;
+      expect((track[0] as Map)['ele'], closeTo(16240.0, 1e-9));
+      expect(eleMetresFromStored(16240, kEleMetresVersion - 1),
+          closeTo(1624.0, 1e-9));
+      expect(eleMetresFromStored(16240, kEleMetresVersion), 16240.0);
+      // The sentinel is unit-independent — no version ever meant it as a
+      // height, so it must not resolve to a depth on either side.
+      expect(eleMetresFromStored(-32768, 3), isNull);
+      expect(eleMetresFromStored(-32768, kEleMetresVersion), isNull);
+    });
+
     test('the workout golden yields the attributable workout section', () {
-      final blob = _hex(_goldenWorkoutHex);
+      final blob = _hex(_goldenV5WorkoutHex);
       expect(verifyBlob(blob), isTrue, reason: 'workout golden must verify');
       final m = decodeManifest(_goldenManifest());
       final payload = payloadFromBlob(
@@ -599,6 +700,13 @@ void main() {
 
       // Points decode exactly as before — the workout records are not points.
       expect((payload['track'] as List), hasLength(3));
+
+      // The v4 form of the same run still decodes to the same workout
+      // section: v5 moved the altitude unit, which the workout tags do not
+      // carry, so a board still holding a v4 blob loses nothing here.
+      final v4 = payloadFromBlob(_hex(_goldenV4WorkoutHex), m.entries.single,
+          m.header, DateTime.utc(2026, 7, 8, 12));
+      expect(v4['workout'], payload['workout']);
 
       final workout = payload['workout'] as Map<String, dynamic>;
       expect(workout['step_total'], 3);
@@ -656,7 +764,7 @@ void main() {
     });
 
     test('an unknown step status byte throws like an unknown tag', () {
-      final blob = Uint8List.fromList(_hex(_goldenWorkoutHex));
+      final blob = Uint8List.fromList(_hex(_goldenV4WorkoutHex));
       // Byte 1 of the first step record (the second 16-byte cell).
       blob[16 + 16 + 1] = 2;
       final d = ByteData.sublistView(blob);
@@ -973,7 +1081,7 @@ void main() {
           isRefill: i.isEven,
         );
 
-    /// The worst case at the caps: 16 checkpoints + 16 cut-offs = 364 B, which
+    /// The worst case at the caps: 16 checkpoints + 16 cut-offs = 444 B, which
     /// is past the 242-byte chunk payload, so a full schedule takes exactly two
     /// writes. This is the boundary the firmware's assembler exists for.
     test('a full-cap schedule takes two writes at the real payload cap',
@@ -991,7 +1099,7 @@ void main() {
             WatchCutoffLeg(cumDistanceM: i * 5000.0, limitElapsedSec: i * 2400),
         ],
       );
-      expect(frame.length, 364);
+      expect(frame.length, 444);
       final chunks = chunkRoadbook(frame);
       expect(chunks, hasLength(2));
 

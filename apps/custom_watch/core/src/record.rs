@@ -46,7 +46,7 @@ use crate::race_phases::{
 };
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::readiness::ReadinessBand;
-use crate::roadbook::CutoffStatus;
+use crate::roadbook::{CutoffStatus, TargetStatus};
 use crate::sleep_station::{sleep_budget, SleepBudget};
 use crate::storm::StormView;
 use crate::timers::TimerView;
@@ -207,8 +207,26 @@ pub struct RoadbookCheckpoint {
     pub projected_elapsed_s: u32,
     /// Safe/tight/miss cutoff verdict, if this checkpoint carries a cutoff.
     pub cutoff: Option<CutoffStatus>,
+    /// The runner's own target time for this checkpoint and how the phone's
+    /// projection sits against it, if the marker carries one (`RBK1` v2).
+    pub target: Option<CheckpointTarget>,
     /// Whether this checkpoint offers water/food — a fuel refill point.
     pub is_refill: bool,
+}
+
+/// A checkpoint's authored target time plus the phone's verdict against it.
+///
+/// The two travel together and are only ever both present or both absent — a
+/// verdict with no time behind it is an unauditable opinion, and a time with no
+/// verdict is a number the watch cannot grade (it has neither the band nor the
+/// marker meta). `RBK1`'s decoder refuses a frame carrying one without the
+/// other rather than dropping the half it cannot pair.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct CheckpointTarget {
+    /// Target arrival, elapsed seconds from the race start.
+    pub elapsed_s: u32,
+    pub status: TargetStatus,
 }
 
 /// One upcoming checkpoint in the [`RoadbookView`] window.
@@ -217,6 +235,7 @@ pub struct RoadbookLegView {
     pub cum_dist_m: f32,
     pub projected_elapsed_s: u32,
     pub cutoff: Option<CutoffStatus>,
+    pub target: Option<CheckpointTarget>,
 }
 
 /// The Roadbook page view: total checkpoints + the next few ahead of the
@@ -399,6 +418,7 @@ impl PlanAdaptiveView {
             AdaptiveReason::OnTrack => 0,
             AdaptiveReason::TrendUnderfitness => 1,
             AdaptiveReason::TrendOvertraining => 2,
+            AdaptiveReason::DeloadFatigue => 3,
         }
     }
 
@@ -409,6 +429,7 @@ impl PlanAdaptiveView {
             0 => Some(AdaptiveReason::OnTrack),
             1 => Some(AdaptiveReason::TrendUnderfitness),
             2 => Some(AdaptiveReason::TrendOvertraining),
+            3 => Some(AdaptiveReason::DeloadFatigue),
             _ => None,
         }
     }
@@ -2859,6 +2880,7 @@ impl Recorder {
                 cum_dist_m: leg.cum_dist_m as f32,
                 projected_elapsed_s: leg.projected_elapsed_s,
                 cutoff: leg.cutoff,
+                target: leg.target,
             };
             len += 1;
         }
@@ -4900,6 +4922,7 @@ mod tests {
                 leg_dist_m: 0.0,
                 projected_elapsed_s: 0,
                 cutoff: None,
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -4907,6 +4930,7 @@ mod tests {
                 leg_dist_m: 5000.0,
                 projected_elapsed_s: 1800,
                 cutoff: Some(CutoffStatus::Safe),
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -4914,6 +4938,7 @@ mod tests {
                 leg_dist_m: 5000.0,
                 projected_elapsed_s: 3600,
                 cutoff: Some(CutoffStatus::Tight),
+                target: None,
                 is_refill: false,
             },
         ]);
@@ -5051,6 +5076,7 @@ mod tests {
                 leg_dist_m: 0.0,
                 projected_elapsed_s: 0,
                 cutoff: None,
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -5058,6 +5084,7 @@ mod tests {
                 leg_dist_m: 5_000.0,
                 projected_elapsed_s: 2_400,
                 cutoff: None,
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -5065,6 +5092,7 @@ mod tests {
                 leg_dist_m: 5_000.0,
                 projected_elapsed_s: 3_600,
                 cutoff: None,
+                target: None,
                 is_refill: false,
             },
         ]);
@@ -5698,6 +5726,39 @@ mod tests {
     /// decode is fail-closed, because the byte spaces are deliberately not the
     /// enums' declaration order and an unknown byte resolving to a variant would
     /// put the wrong verdict on the wrist.
+    /// The pin `trend_code`'s own doc comment names, and which did not exist:
+    /// the enum's explicit discriminants must equal the wire codes, so a
+    /// `reason as u8` slipped in later is the same byte the codec would have
+    /// sent. Without it the doc's whole argument — "the enum carries explicit
+    /// discriminants matching these codes" — rested on nothing, and the cast it
+    /// warns about would send a runner who needs to do more as on-track.
+    #[test]
+    fn trend_code_matches_discriminant() {
+        for reason in [
+            AdaptiveReason::OnTrack,
+            AdaptiveReason::TrendUnderfitness,
+            AdaptiveReason::TrendOvertraining,
+            AdaptiveReason::DeloadFatigue,
+        ] {
+            assert_eq!(
+                reason as u8,
+                PlanAdaptiveView::trend_code(reason),
+                "{reason:?}"
+            );
+        }
+        for confidence in [
+            AdaptiveConfidence::Low,
+            AdaptiveConfidence::Medium,
+            AdaptiveConfidence::High,
+        ] {
+            assert_eq!(
+                confidence as u8,
+                PlanAdaptiveView::confidence_code(confidence),
+                "{confidence:?}"
+            );
+        }
+    }
+
     #[test]
     fn the_view_verdicts_survive_the_wire_round_trip_and_refuse_unknown_bytes() {
         for verdict in [
@@ -5731,6 +5792,7 @@ mod tests {
             AdaptiveReason::OnTrack,
             AdaptiveReason::TrendUnderfitness,
             AdaptiveReason::TrendOvertraining,
+            AdaptiveReason::DeloadFatigue,
         ] {
             let byte = PlanAdaptiveView::trend_code(reason);
             assert_eq!(PlanAdaptiveView::trend_from_byte(byte), Some(reason));
@@ -5747,12 +5809,16 @@ mod tests {
             );
         }
         for b in 3..=u8::MAX {
-            assert_eq!(PlanAdaptiveView::trend_from_byte(b), None, "trend {b}");
             assert_eq!(
                 PlanAdaptiveView::confidence_from_byte(b),
                 None,
                 "confidence {b}"
             );
+        }
+        // The trend code space is one wider than the confidence one since the
+        // deload override joined it (decisions §1029).
+        for b in 4..=u8::MAX {
+            assert_eq!(PlanAdaptiveView::trend_from_byte(b), None, "trend {b}");
         }
 
         // The bytes are pinned individually too, so a renumber cannot pass by
@@ -5770,6 +5836,10 @@ mod tests {
         assert_eq!(
             PlanAdaptiveView::trend_code(AdaptiveReason::TrendUnderfitness),
             1
+        );
+        assert_eq!(
+            PlanAdaptiveView::trend_code(AdaptiveReason::DeloadFatigue),
+            3
         );
         assert_eq!(
             PlanAdaptiveView::trend_code(AdaptiveReason::TrendOvertraining),

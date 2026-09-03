@@ -62,7 +62,7 @@ fn a_slot() -> impl Strategy<Value = (u32, u32, usize, Vec<u8>)> {
                     lat_e7: lat_e7.wrapping_add(t as i32),
                     lon_e7: 0,
                     t_offset_s: t,
-                    ele_dm: None,
+                    ele_m: None,
                     bpm: None,
                 })
                 .expect("push");

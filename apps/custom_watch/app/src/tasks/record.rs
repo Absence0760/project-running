@@ -353,6 +353,7 @@ static SIM_ROADBOOK: [watch_core::record::RoadbookCheckpoint; 3] = [
         leg_dist_m: 0.0,
         projected_elapsed_s: 0,
         cutoff: None,
+        target: None,
         is_refill: true,
     },
     watch_core::record::RoadbookCheckpoint {
@@ -360,6 +361,7 @@ static SIM_ROADBOOK: [watch_core::record::RoadbookCheckpoint; 3] = [
         leg_dist_m: 90.0,
         projected_elapsed_s: 30,
         cutoff: Some(watch_core::roadbook::CutoffStatus::Safe),
+        target: None,
         is_refill: true,
     },
     watch_core::record::RoadbookCheckpoint {
@@ -367,6 +369,7 @@ static SIM_ROADBOOK: [watch_core::record::RoadbookCheckpoint; 3] = [
         leg_dist_m: 90.0,
         projected_elapsed_s: 60,
         cutoff: Some(watch_core::roadbook::CutoffStatus::Tight),
+        target: None,
         is_refill: false,
     },
 ];

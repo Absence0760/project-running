@@ -17617,6 +17617,190 @@ The fixture is a KMZ **built in the test** rather than a committed binary, so
 the test says what is inside the archive it is asserting about.
 
 
+## 1026. `TRK1` v5 stores a track point's altitude in whole metres, and the unit resolves per header version rather than being assumed
+
+The run blob's altitude field was an `i16` of **decimetres**, so it capped at
+3276.7 m while `elevation::plausible_alt` admits to 9000 m. Every reading in
+between was one the watch trusted, published to the live altitude and vert
+pages, and then could not write to the track it was recording — and because
+`compute_elevation_gain` carries the last reading across a dropout, the climb
+above the ceiling did not merely go missing, it netted to **zero vert**. On a
+Silverton-Handies-Silverton profile that is 69 % of the course carrying no
+elevation and a summit push worth nothing, on the metric this device exists for.
+`CRS1` had already made exactly this choice for the course frame in § 334, with
+the reason written down ("a decimetre `i16` caps at 3276.7 m, below Mont Blanc,
+and this is a mountain-ultra device"); the run track never followed, so the same
+watch could be handed a course it could not record itself running.
+
+v5 stores whole metres in the **same two bytes**. `i16` metres spans
++/-32,767 m — past Everest with 2x margin — and 1 m resolution sits below both
+the sensor noise floor and the 3 m gain gate, so nothing measurable is lost.
+Half-metres were considered and rejected: metres match `CRS1`, and nothing
+consumes sub-metre altitude. `plausible_alt`'s window now nests entirely inside
+the field's, which is pinned as the NESTING rather than as a list of summits —
+the hole re-opens from either side, a later narrowing of the field or a widening
+of what the device is willing to believe.
+
+Neither the layout nor the CRC window moved, so `MIN_FORMAT_VERSION` stays 3 and
+a v3/v4 blob still in a bench board's flash still decodes. **The unit therefore
+resolves against the blob's own header version**, through a named function on
+each rail (`run_store::ele_metres` / `eleMetresFromStored`) rather than at a
+division spelled inline. Reading a v3 blob as metres reports every altitude ten
+times too high and reading a v5 one as decimetres ten times too low, and both
+are silent: the magic matches, the CRC matches, every field decodes. `ELE_NONE`
+stays `i16::MIN` and is unit-independent — no version has ever meant it as a
+height — which both suites pin across the whole supported range.
+
+**The phone's ceiling had to move with it, and that is the part nothing could
+see.** `sim_watch_sync.dart`'s `_maxSupportedVersion` was 4, so a firmware-only
+bump would have shipped a watch whose runs the phone refuses outright — a runner
+losing a race to a version byte. Unlike the four push formats, this one flows
+watch→phone, so the two halves are not encoder-and-decoder but writer-and-
+ceiling: the firmware's golden pins what it emits, the phone's pins what it
+reads, and neither suite knows the other's bound. All three bounds
+(`FORMAT_VERSION`, `MIN_FORMAT_VERSION`, `ELE_METRES_VERSION`) are now
+`CONSTANT_ROWS` in `check_watch_wire_vectors.mjs`, and the three run-blob golden
+pairs are re-pinned at v5 with the v4 forms kept as `DART_ONLY` decode-compat
+vectors beside the v3 ones. The metre is **rounded** rather than truncated (the
+range test applied to the rounded value, or a reading half a metre below the
+floor would round onto the sentinel), matching the `.round()` `CRS1` already
+applies to a coordinate.
+
+## 1027. `RBK1` v2 carries a per-checkpoint target time and its verdict, and the wrist states the number behind the glyph
+
+§ 997 recorded why web's `RoadbookTarget` / `TARGET_BAND_FRACTION` were not
+ported to `roadbook.rs` and gave three reasons. The third — "the wire does not
+carry it" — is the one this closes, and it was the load-bearing one: v1's
+checkpoint was `cum_dist_m | leg_dist_m | projected_elapsed_s | cutoff | flags`
+with the flags byte holding only `CHECKPOINT_FLAG_REFILL`, so the Roadbook
+glance could show the cut-off verdict web has and **not** the target one, on a
+device whose purpose is telling a runner whether they are on their own plan.
+
+A v2 checkpoint appends `target_elapsed_s(4, u32 LE) | target(1, u8)` — the same
+shape the cutoff byte already had, 0 meaning none. The verdict stays **phone-
+side** for the same reason the cut-off one is: a target is a per-marker
+`target_clock` / `target_elapsed_s` meta the watch never sees, and the band it is
+graded on (1 % of the target, floored at 60 s) lives on the two rails that
+compute it. So `route_markers::parse_target` is **not** needed on the wrist, and
+`TARGET_BAND_FRACTION` deliberately does not travel there — a verdict this
+module never grades must not carry a threshold it never applies. That also means
+**no `CONSTANT_ROWS` row is owed for the band fraction**, which the filing had
+expected: it is held by the existing web↔Dart `roadbook` parity pair, and a
+third rail never acquires it.
+
+**The pair is both-or-neither.** A time with no verdict, a verdict with no time,
+and a status byte naming nothing each refuse the whole frame rather than being
+half-read — a verdict with no number behind it cannot be audited and a time with
+no verdict cannot be graded on the wrist. In Rust the invariant is a
+`CheckpointTarget` struct, so the half-present case is unrepresentable rather
+than merely rejected; the phone's `_watchTarget` drops a non-positive target
+instead of pushing one the firmware would refuse the frame over.
+
+**And the wrist renders both halves.** A signed glyph rides each checkpoint row
+beside the cut-off flag (`+` ahead / `=` on / `-` behind / `.` none — signed
+rather than worded because the two flags share a row and a cut-off is the race's
+rule where a target is the runner's plan), and the row below the four-checkpoint
+window states the next target's **time**. Carrying a number no page shows would
+be the § 24 mistake this ADR exists to avoid; a glyph with no number is a claim
+a runner at hour twenty cannot check.
+
+`MIN_ROADBOOK_FORMAT_VERSION` is 1, so a phone that has not been updated
+alongside the firmware still pushes a schedule the watch loads — with no
+targets, which is exactly what it knows. Unlike the run blob's pre-v3 window
+there is no integrity reason to refuse it: v1's CRC covers the same bytes v2's
+does and the layout is a strict prefix, so refusing would only cost a runner a
+blank Roadbook page over a version byte. The floor is deliberately **not** a
+`CONSTANT_ROWS` row — the phone has no decoder and never emits v1, so restating
+it there would be a constant nothing reads.
+
+## 1028. The renderable-track span gate is named on all three rails, so the registry can finally hold it
+
+`isTrackRenderable`'s 5 m bounding-box-diagonal gate — below which a track is
+GPS jitter from someone who pressed Start and Stop indoors, and is drawn as
+nothing rather than as a meaningless dot on one pixel — was a bare literal at
+the comparison on web and on the Dart twin. `check_watch_wire_vectors.mjs` reads
+a rail by the **name** of its constant, so an unnamed one cannot be registered
+and the three rails were held together by nothing: the same shape the live-pace
+ceiling was in before round 33. It is a threshold rather than a wire field, so no
+version moves when it drifts and no decode fails — the rails simply disagree
+about whether a run has a picture at all.
+
+Named on both (`MIN_RENDERABLE_SPAN_M` / `kMinRenderableSpanM`, matching the
+existing `ELEVATION_GAIN_MIN_DELTA_M` / `kElevationGainMinDeltaM` pair) and
+registered as a three-rail row. Each rail's own test makes **two** claims that
+fail to different mutations: the value asserted flat, and two tracks bracketing
+the threshold by 1 cm through the constant — so a rail that declares the
+constant beside a literal that has drifted from it goes red. The value is pinned
+flat on every rail because the registry compares the rails against **each
+other**: moving all three together would satisfy it, and the flat assertion is
+what says which number.
+
+## 1029. The adaptive deload override was missing, and `easeOffNextWeek`'s absence was the symptom rather than the defect
+
+The round-34 sweep filed `plan_replan.rs` as missing web's `easeOffNextWeek`.
+Read against the web source, that premise is only half right: the ease-off rules
+were all present, **inlined** in `replan_remaining`, and produced the same
+changes. What was missing is the reason web exports the function at all — its
+second caller.
+
+Web's `adaptiveReplanRemaining` has three P2 arms. The firmware port
+implemented arms 1 and 3 (the direction gate: an "you've under-run, do more"
+trend suppressed for a fatigued runner) and **omitted arm 2**, the deep-fatigue
+deload override, along with `ADAPTIVE_DEEP_FATIGUE_TSB`, `ADAPTIVE_HIGH_ACWR`,
+`AdaptiveReason::DeloadFatigue` and `isDeeplyFatigued` — while the module header
+called its P2 gate "a faithful port". That is a live divergence, not a port gap,
+and it dropped the only arm where the runner is at genuine risk: a fatigued
+runner whose adherence trend said "do more" was correctly suppressed, but one
+whose load said "bleed it off whatever the plan says" got nothing at all.
+
+`ease_off_next_week` is now extracted and public for web's own stated reason —
+two callers must deload identically and a second copy of the skip rules would
+drift — and both use it. The override is checked **before** both adherence arms
+(it is the only branch where the load outranks the plan), never adds volume (the
+make-up pass is skipped entirely, so it is a strict tightening of arm 1 rather
+than a competing rule), and fails closed on a runner with no chronic base or a
+non-finite read: dividing by an absent base manufactures a deload out of someone
+who has barely trained. `PlanAdaptiveView`'s trend code space gains 3, and the
+ADAPT glance renders `DELOAD` — worded apart from `EASE OFF` because "the plan
+says you over-ran" and "your load says stop whatever the plan says" are
+different claims.
+
+One thing found on the way: `trend_code`'s doc comment has named a pinning test
+`trend_code_matches_discriminant` since it landed, and **that test existed
+nowhere**. The doc's whole argument — that the enum carries explicit
+discriminants matching the wire codes, so a `reason as u8` slipped in later is
+the byte the codec would have sent — therefore rested on nothing. It is written
+now, over both enums, and the confidence ladder (which runs opposite to its
+declaration order) is covered by the same test.
+
+## 1030. The segment-effort batch is ported because the watch has its caller; the catalogue matcher is not, because no frame carries a catalogue
+
+`segments.rs` exported three functions against web's six. Read against the web
+source, the three split two ways rather than being one backlog.
+
+`computeEffortsFromTrack` is ported, and `build_segment_effort_rows` now uses it
+exactly as web's `buildSegmentEffortRows` does. Everything expensive about
+timing a segment is a property of the **track** — the cumulative-distance array
+and the median sample step the sparsity guard reads — so timing each slice
+through the single-slice form rebuilt and re-sorted both per segment. At this
+crate's caps that is 64 x (512 haversines plus a 512-element sort) on a 64 MHz
+core, for an answer that does not depend on the slice. The results are
+identical, which is why no existing test moved and why nothing could have
+noticed: the new cases pin the per-slice equivalence with the single-slice form,
+the caller-slice bounds, and that the buffer is cleared before the track is read
+so a caller reusing one cannot read a previous run's efforts back as this run's.
+The batch writes into a caller-provided slice, the shape `assign_competition_
+ranks` already documents, so it needs no segment-count budget of its own.
+
+`computeGlobalSegmentEffort` / `computeGlobalSegmentEfforts` are recorded as
+**excluded** in the module header with the reason. They score a run against a
+free-standing catalogue geometry that carries its own polyline, matching off the
+run passing the segment's start then its end. The watch holds no such catalogue
+and no wire delivers one — `CRS1` pushes one course, not a library of 500
+geometries — so porting them would add a matcher over data no frame carries for
+a surface no page shows. Bringing the catalogue to the wrist is a new feature
+with its own frame and its own flash budget, not a sync obligation (§ 24).
+
 ## 1033. The last hand-rolled comment stripper is gone, and it had changed nothing — measured before it was replaced
 
 [§ 1000](#1000) single-sourced eleven copies of a JS comment stripper into

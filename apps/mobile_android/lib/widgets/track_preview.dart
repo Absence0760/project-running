@@ -463,7 +463,17 @@ List<Offset> projectTrack(List<Waypoint> points, double vbW, double vbH,
   ];
 }
 
-/// True iff the track's bounding-box diagonal is large enough to be
+/// Bounding-box diagonal a track must exceed before it is worth drawing
+/// at thumbnail scale. Named rather than spelled at the comparison
+/// because two other rails hold the same number — web's
+/// `MIN_RENDERABLE_SPAN_M` and the firmware's — and
+/// `scripts/check_watch_wire_vectors.mjs` reads a rail by the NAME of
+/// its constant, so an unnamed one cannot be registered and the three
+/// drift unwatched.
+const double kMinRenderableSpanM = 5.0;
+
+/// True iff the track's bounding-box diagonal exceeds
+/// [kMinRenderableSpanM] — large enough to be
 /// worth drawing at thumbnail scale — catches GPS jitter from a runner
 /// standing still without throwing away genuinely tiny laps.
 /// Longitudes are unwrapped onto the first fix's side of the
@@ -485,7 +495,7 @@ bool isTrackRenderable(List<Waypoint> track) {
   }
   final dLatM = (maxLat - minLat) * 111320;
   final dLngM = (maxLng - minLng) * 111320 * cos(minLat * pi / 180);
-  return sqrt(dLatM * dLatM + dLngM * dLngM) > 5;
+  return sqrt(dLatM * dLatM + dLngM * dLngM) > kMinRenderableSpanM;
 }
 
 /// A positive, finite span for the projection scale. Mirrors `spanOrEpsilon`

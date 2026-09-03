@@ -201,41 +201,75 @@ pub fn replan_remaining<'a>(input: &ReplanInput<'a>) -> ReplanResult<'a> {
             PLAN_DRIFT_THRESHOLD,
         );
         if drift.direction == DriftDirection::Over {
-            let next_week = weeks.iter().find(|w| {
-                w.week_index > last_complete.week_index
-                    && !is_taper(w.phase)
-                    && w.workouts.iter().any(|wo| !wo.is_past)
-            });
-            if let Some(next_week) = next_week {
-                for wo in next_week.workouts {
-                    if wo.is_past || wo.kind == "rest" || wo.kind == "long" {
-                        continue;
-                    }
-                    let td = match wo.target_distance_m {
-                        None => continue,
-                        Some(t) => t,
-                    };
-                    if td <= 0.0 {
-                        continue;
-                    }
-                    if changes.iter().any(|c| c.workout_id == wo.id) {
-                        continue;
-                    }
-                    let _ = changes.push(ReplanChange {
-                        workout_id: wo.id,
-                        scheduled_date: wo.scheduled_date,
-                        reason: ReplanReason::EaseOverRunning,
-                        field: ReplanField::TargetDistanceM,
-                        from_metres: td,
-                        to_metres: libm::round(td * EASE_OFF_SCALE),
-                    });
-                }
+            // The skip list keeps the ease pass from double-touching a workout
+            // the make-up pass already changed.
+            let mut touched: Vec<&str, MAX_REPLAN_CHANGES> = Vec::new();
+            for c in changes.iter() {
+                let _ = touched.push(c.workout_id);
+            }
+            for change in ease_off_next_week(&weeks, last_complete.week_index, &touched) {
+                let _ = changes.push(change);
             }
         }
     }
 
     let on_track = changes.is_empty();
     ReplanResult { changes, on_track }
+}
+
+/// Bleed a week's worth of load: scale every non-long, non-rest FUTURE workout
+/// of the first non-taper week after `after_week_index` by [`EASE_OFF_SCALE`].
+/// `weeks` must already be sorted by `week_index`; pass `-1` to ease the
+/// earliest eligible week.
+///
+/// Public because two callers must deload IDENTICALLY — the over-running rule
+/// in [`replan_remaining`] above, and the adaptive layer's deep-fatigue
+/// override ([`crate::plan_adaptive_replan`]) — and a second copy of these skip
+/// rules would drift. That is web's own reason for exporting it; the firmware
+/// carried the rules inlined here and had no second caller at all, which is why
+/// the override was missing rather than merely unshared (decisions §1029).
+pub fn ease_off_next_week<'a>(
+    weeks: &[ReplanWeek<'a>],
+    after_week_index: i32,
+    skip_workout_ids: &[&str],
+) -> Vec<ReplanChange<'a>, MAX_REPLAN_CHANGES> {
+    let mut changes: Vec<ReplanChange<'a>, MAX_REPLAN_CHANGES> = Vec::new();
+    let Some(next_week) = weeks.iter().find(|w| {
+        w.week_index > after_week_index
+            && !is_taper(w.phase)
+            && w.workouts.iter().any(|wo| !wo.is_past)
+    }) else {
+        return changes;
+    };
+    for wo in next_week.workouts {
+        if wo.is_past || wo.kind == "rest" || wo.kind == "long" {
+            continue;
+        }
+        let td = match wo.target_distance_m {
+            None => continue,
+            Some(t) => t,
+        };
+        if td <= 0.0 {
+            continue;
+        }
+        if skip_workout_ids.contains(&wo.id) {
+            continue;
+        }
+        if changes
+            .push(ReplanChange {
+                workout_id: wo.id,
+                scheduled_date: wo.scheduled_date,
+                reason: ReplanReason::EaseOverRunning,
+                field: ReplanField::TargetDistanceM,
+                from_metres: td,
+                to_metres: libm::round(td * EASE_OFF_SCALE),
+            })
+            .is_err()
+        {
+            break;
+        }
+    }
+    changes
 }
 
 #[cfg(test)]
@@ -286,6 +320,139 @@ mod tests {
         r.changes.iter().find(|c| c.workout_id == id)
     }
 
+    /// The extracted helper's own contract, on the paths `replan_remaining`
+    /// cannot reach: the `-1` sentinel the deload override passes, the taper
+    /// skip, and the skip list.
+    #[test]
+    fn ease_off_next_week_eases_the_earliest_eligible_week() {
+        let w0 = [
+            wo(
+                "easy",
+                "2026-06-02",
+                "easy",
+                Some(10_000.0),
+                false,
+                false,
+                false,
+            ),
+            wo(
+                "long",
+                "2026-06-07",
+                "long",
+                Some(24_000.0),
+                false,
+                false,
+                false,
+            ),
+            wo("rest", "2026-06-03", "rest", Some(0.0), false, false, false),
+            wo(
+                "past",
+                "2026-06-01",
+                "easy",
+                Some(9_000.0),
+                false,
+                false,
+                true,
+            ),
+            wo("no_target", "2026-06-04", "easy", None, false, false, false),
+        ];
+        let w1 = [wo(
+            "later",
+            "2026-06-09",
+            "easy",
+            Some(11_000.0),
+            false,
+            false,
+            false,
+        )];
+        let weeks = [
+            week(0, "build", 40_000.0, 0.0, false, &w0),
+            week(1, "build", 42_000.0, 0.0, false, &w1),
+        ];
+
+        // `-1` eases the earliest eligible week, which is what a caller with no
+        // completed week to anchor on passes.
+        let changes = ease_off_next_week(&weeks, -1, &[]);
+        assert_eq!(changes.len(), 1, "only the easy run is eligible");
+        let c = &changes[0];
+        assert_eq!(c.workout_id, "easy");
+        assert_eq!(c.reason, ReplanReason::EaseOverRunning);
+        assert_eq!(c.from_metres, 10_000.0);
+        assert_eq!(c.to_metres, libm::round(10_000.0 * EASE_OFF_SCALE));
+
+        // A long run, a rest day, a past workout and one with no target are
+        // each left alone — the long run because a deload must not touch the
+        // week's key session.
+        for id in ["long", "rest", "past", "no_target"] {
+            assert!(changes.iter().all(|c| c.workout_id != id), "{id}");
+        }
+
+        // The skip list is honoured, so an ease pass cannot double-touch a
+        // workout a make-up already changed.
+        assert!(ease_off_next_week(&weeks, -1, &["easy"]).is_empty());
+
+        // And it moves on to the next week when asked to ease past week 0.
+        let later = ease_off_next_week(&weeks, 0, &[]);
+        assert_eq!(later.len(), 1);
+        assert_eq!(later[0].workout_id, "later");
+    }
+
+    /// A taper or race week is never eased — the sacred-taper rule, on the
+    /// helper rather than only on its caller.
+    #[test]
+    fn ease_off_next_week_never_touches_a_taper_or_race_week() {
+        let taper = [wo(
+            "t",
+            "2026-06-02",
+            "easy",
+            Some(10_000.0),
+            false,
+            false,
+            false,
+        )];
+        let race = [wo(
+            "r",
+            "2026-06-09",
+            "easy",
+            Some(10_000.0),
+            false,
+            false,
+            false,
+        )];
+        let weeks = [
+            week(0, "taper", 20_000.0, 0.0, false, &taper),
+            week(1, "race", 10_000.0, 0.0, false, &race),
+        ];
+        assert!(ease_off_next_week(&weeks, -1, &[]).is_empty());
+
+        // And a week whose every workout is already past is skipped rather than
+        // stopping the search: there is nothing left in it to ease.
+        let done = [wo(
+            "d",
+            "2026-06-02",
+            "easy",
+            Some(10_000.0),
+            false,
+            false,
+            true,
+        )];
+        let future = [wo(
+            "f",
+            "2026-06-09",
+            "easy",
+            Some(10_000.0),
+            false,
+            false,
+            false,
+        )];
+        let weeks = [
+            week(0, "build", 20_000.0, 0.0, true, &done),
+            week(1, "build", 20_000.0, 0.0, false, &future),
+        ];
+        let changes = ease_off_next_week(&weeks, -1, &[]);
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].workout_id, "f");
+    }
     #[test]
     fn an_on_track_plan_proposes_no_changes() {
         let w0 = [wo(

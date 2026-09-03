@@ -9,7 +9,15 @@
 //! P2 gate (a faithful port; the web source lives on a CISO-gated branch): an
 //! optional `fitness` input adds a DIRECTION GATE — an "you've under-run, do
 //! more" trend is suppressed for a fatigued runner (`tsb < 0`), because piling
-//! volume onto a fatigue hole is wrong. Only the sign of `tsb` is read.
+//! volume onto a fatigue hole is wrong. Only the sign of `tsb` is read there.
+//!
+//! **The same input also arms a DELOAD OVERRIDE**, gated on both
+//! [`ADAPTIVE_DEEP_FATIGUE_TSB`] and [`ADAPTIVE_HIGH_ACWR`] (decisions §1029).
+//! This arm was missing from the port until 2026-09-03 while the header above
+//! claimed the P2 gate was faithful: the gate is one of web's three arms, and
+//! the one it left out is the only branch where the runner is at genuine risk.
+//! It is checked BEFORE the adherence arms and never adds volume, so it is a
+//! strict tightening of them rather than a competing rule.
 //!
 //! Parity port of web `training/plan_adaptive_replan.ts` `adaptiveReplanRemaining`
 //! (twin of `apps/mobile_android/lib/plan_adaptive_replan.dart`) — keep the
@@ -22,7 +30,8 @@ use heapless::Vec;
 
 use crate::plan_adherence::{weekly_drift, DriftDirection, PLAN_DRIFT_THRESHOLD};
 use crate::plan_replan::{
-    replan_remaining, ReplanChange, ReplanInput, ReplanWeek, MAX_REPLAN_CHANGES, MAX_REPLAN_WEEKS,
+    ease_off_next_week, replan_remaining, ReplanChange, ReplanInput, ReplanWeek,
+    MAX_REPLAN_CHANGES, MAX_REPLAN_WEEKS,
 };
 
 /// How many trailing COMPLETED weeks define the trend.
@@ -31,6 +40,19 @@ pub const ADAPTIVE_TREND_WINDOW: usize = 3;
 /// At least this many flagged weeks (in one direction) within the window make
 /// a trend. Two-of-three is the "sustained, not noise" bar.
 pub const ADAPTIVE_TREND_MIN: usize = 2;
+
+/// TSB at or below this counts as DEEPLY negative — form is in the hole, not
+/// merely down after one hard week. The conventional reading of the CTL/ATL/TSB
+/// model puts -10..-25 in the productive-training band and past -25 into
+/// overreaching, so that is where "stop adding, start bleeding" sits.
+pub const ADAPTIVE_DEEP_FATIGUE_TSB: f64 = -25.0;
+
+/// Acute:chronic workload ratio at or above which acute load counts as HIGH
+/// against the base the runner has actually absorbed. 1.3 is the conventional
+/// injury-risk threshold. Required alongside the TSB floor so a runner whose
+/// whole load is simply large (high ATL and high CTL together) isn't told to
+/// deload — only one carrying acute load their chronic base doesn't support.
+pub const ADAPTIVE_HIGH_ACWR: f64 = 1.3;
 
 /// Discriminants are pinned to the `PlanAdaptiveView` wire codes (see
 /// [`crate::record::PlanAdaptiveView::trend_code`]) so a cast and the codec
@@ -41,6 +63,8 @@ pub const ADAPTIVE_TREND_MIN: usize = 2;
 pub enum AdaptiveReason {
     TrendUnderfitness = 1,
     TrendOvertraining = 2,
+    /// The fitness signal overrode the adherence direction to a deload.
+    DeloadFatigue = 3,
     OnTrack = 0,
 }
 
@@ -85,8 +109,26 @@ pub struct AdaptiveReplanResult<'a> {
     pub on_track: bool,
     pub trailing_directions: Vec<DriftDirection, ADAPTIVE_TREND_WINDOW>,
     /// True when a would-be add-volume suggestion was withheld because the
-    /// fitness signal contradicts the adherence trend (fatigued runner).
+    /// fitness signal contradicts the adherence trend (fatigued runner) and
+    /// nothing is proposed in its place. A deload override reports its outcome
+    /// through `reason` instead.
     pub fitness_gated: bool,
+}
+
+/// Deeply fatigued: form in the hole AND acute load high against a real chronic
+/// base. A non-finite or absent chronic base fails closed — a runner with no
+/// chronic base has nothing for acute load to be "high" against, and dividing
+/// by it would manufacture a deload out of someone who has barely trained.
+fn is_deeply_fatigued(f: &AdaptiveFitness) -> bool {
+    if !f.tsb.is_finite() || !f.atl.is_finite() || !f.ctl.is_finite() {
+        return false;
+    }
+    // Finiteness is settled above, so this is web's `!(ctl > 0)` without the
+    // negated partial comparison clippy refuses: a NaN cannot reach here.
+    if f.ctl <= 0.0 {
+        return false;
+    }
+    f.tsb <= ADAPTIVE_DEEP_FATIGUE_TSB && f.atl >= f.ctl * ADAPTIVE_HIGH_ACWR
 }
 
 /// Classify the trailing completed weeks' adherence trend and, when a sustained
@@ -130,6 +172,31 @@ pub fn adaptive_replan_remaining<'a>(input: &AdaptiveReplanInput<'a>) -> Adaptiv
         reason = AdaptiveReason::TrendUnderfitness;
     } else if over >= ADAPTIVE_TREND_MIN && over > under {
         reason = AdaptiveReason::TrendOvertraining;
+    }
+
+    // P2 arm 2 — the deep-fatigue DELOAD OVERRIDE. Checked before the
+    // adherence arms because it is the only branch where the runner is at
+    // genuine risk: whatever the plan says they ran, the load says bleed it
+    // off. It never adds volume (the make-up pass is skipped entirely), so it
+    // is a strict tightening of arm 1 rather than a competing rule.
+    if input.fitness.is_some_and(|f| is_deeply_fatigued(&f)) {
+        let after = sorted
+            .iter()
+            .rev()
+            .find(|w| w.is_complete)
+            .map_or(-1, |w| w.week_index);
+        let changes = ease_off_next_week(&sorted, after, &[]);
+        let on_track = changes.is_empty();
+        return AdaptiveReplanResult {
+            changes,
+            reason: AdaptiveReason::DeloadFatigue,
+            // The load signal crossed both thresholds — nothing about the week
+            // window makes it more or less certain.
+            confidence: AdaptiveConfidence::High,
+            on_track,
+            trailing_directions,
+            fitness_gated: false,
+        };
     }
 
     if reason == AdaptiveReason::TrendUnderfitness {
@@ -191,7 +258,7 @@ mod tests {
 
     /// Mirror of `apps/web/src/lib/training/plan_adaptive_replan.test.ts` — same
     /// scenarios, same expected values, so the ports can't drift.
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     enum Drift {
         Under,
         Over,
@@ -355,6 +422,169 @@ mod tests {
         });
         assert_eq!(r.reason, AdaptiveReason::TrendOvertraining);
         assert!(has_change(&r, "easy", ReplanReason::EaseOverRunning));
+    }
+
+    /// Arm 2 — the deload override the port was missing. The adherence trend
+    /// says the runner has UNDER-run (do more), and the load signal overrides
+    /// it to a deload: form in the hole and acute load high against the base
+    /// they have absorbed. The arm that used to be missing is the only one
+    /// where the runner is at genuine risk.
+    #[test]
+    fn deep_fatigue_overrides_an_under_trend_to_a_deload() {
+        let w3 = [
+            wo("easy", "2026-07-07", "easy", Some(8_000.0), false),
+            wo("long", "2026-07-11", "long", Some(24_000.0), false),
+        ];
+        let weeks = [
+            week(0, Drift::Under, "build", &[]),
+            week(1, Drift::Under, "build", &[]),
+            week(2, Drift::Under, "build", &[]),
+            ReplanWeek {
+                week_index: 3,
+                phase: "build",
+                planned_metres: 42_000.0,
+                actual_metres: 0.0,
+                is_complete: false,
+                workouts: &w3,
+            },
+        ];
+        let r = adaptive_replan_remaining(&AdaptiveReplanInput {
+            weeks: &weeks,
+            today: "2026-07-01",
+            fitness: Some(AdaptiveFitness {
+                tsb: ADAPTIVE_DEEP_FATIGUE_TSB,
+                atl: 100.0,
+                ctl: 100.0 / ADAPTIVE_HIGH_ACWR,
+            }),
+        });
+        assert_eq!(r.reason, AdaptiveReason::DeloadFatigue);
+        assert_eq!(r.confidence, AdaptiveConfidence::High);
+        assert!(
+            !r.fitness_gated,
+            "a deload reports through `reason`; `fitness_gated` is for a \
+             suggestion withheld with nothing proposed in its place"
+        );
+        // It eases, and it never ADDS: the long run is left alone even though
+        // an under-trend would otherwise want more of it.
+        assert!(has_change(&r, "easy", ReplanReason::EaseOverRunning));
+        assert!(r.changes.iter().all(|c| c.workout_id != "long"));
+        assert!(r
+            .changes
+            .iter()
+            .all(|c| c.reason == ReplanReason::EaseOverRunning));
+        assert!(!r.on_track);
+    }
+
+    /// It overrides an OVER-trend too — the direction is irrelevant, which is
+    /// why the arm is checked before both adherence arms rather than beside
+    /// them.
+    #[test]
+    fn deep_fatigue_outranks_the_adherence_direction_either_way() {
+        let w3 = [wo("easy", "2026-07-07", "easy", Some(8_000.0), false)];
+        let fatigued = Some(AdaptiveFitness {
+            tsb: -40.0,
+            atl: 90.0,
+            ctl: 50.0,
+        });
+        for drift in [Drift::Under, Drift::Over, Drift::OnTrack] {
+            let weeks = [
+                week(0, drift, "build", &[]),
+                week(1, drift, "build", &[]),
+                week(2, drift, "build", &[]),
+                ReplanWeek {
+                    week_index: 3,
+                    phase: "build",
+                    planned_metres: 42_000.0,
+                    actual_metres: 0.0,
+                    is_complete: false,
+                    workouts: &w3,
+                },
+            ];
+            let r = adaptive_replan_remaining(&AdaptiveReplanInput {
+                weeks: &weeks,
+                today: "2026-07-01",
+                fitness: fatigued,
+            });
+            assert_eq!(r.reason, AdaptiveReason::DeloadFatigue, "{drift:?}");
+        }
+    }
+
+    /// Both thresholds are required, and a runner with no chronic base fails
+    /// closed. A big negative TSB alone is a hard week; acute load alone is a
+    /// runner whose whole load is simply large. Neither is a deload.
+    #[test]
+    fn one_threshold_alone_is_not_deep_fatigue() {
+        let w3 = [wo("easy", "2026-07-07", "easy", Some(8_000.0), false)];
+        let weeks = [
+            week(0, Drift::Under, "build", &[]),
+            week(1, Drift::Under, "build", &[]),
+            week(2, Drift::Under, "build", &[]),
+            ReplanWeek {
+                week_index: 3,
+                phase: "build",
+                planned_metres: 42_000.0,
+                actual_metres: 0.0,
+                is_complete: false,
+                workouts: &w3,
+            },
+        ];
+        let not_fatigued = [
+            // Form in the hole, but acute load is not high against the base.
+            AdaptiveFitness {
+                tsb: -40.0,
+                atl: 50.0,
+                ctl: 100.0,
+            },
+            // Acute load high, but form is only mildly down.
+            AdaptiveFitness {
+                tsb: -5.0,
+                atl: 200.0,
+                ctl: 100.0,
+            },
+            // Just inside both thresholds.
+            AdaptiveFitness {
+                tsb: ADAPTIVE_DEEP_FATIGUE_TSB + 0.1,
+                atl: 100.0,
+                ctl: 100.0 / ADAPTIVE_HIGH_ACWR,
+            },
+            // No chronic base: nothing for acute load to be "high" against.
+            AdaptiveFitness {
+                tsb: -40.0,
+                atl: 90.0,
+                ctl: 0.0,
+            },
+            // Non-finite reads fail closed rather than comparing their way in.
+            AdaptiveFitness {
+                tsb: f64::NAN,
+                atl: 90.0,
+                ctl: 50.0,
+            },
+            AdaptiveFitness {
+                tsb: -40.0,
+                atl: f64::INFINITY,
+                ctl: 50.0,
+            },
+            AdaptiveFitness {
+                tsb: -40.0,
+                atl: 90.0,
+                ctl: f64::NAN,
+            },
+        ];
+        for f in not_fatigued {
+            let r = adaptive_replan_remaining(&AdaptiveReplanInput {
+                weeks: &weeks,
+                today: "2026-07-01",
+                fitness: Some(f),
+            });
+            assert_ne!(
+                r.reason,
+                AdaptiveReason::DeloadFatigue,
+                "tsb {} atl {} ctl {}",
+                f.tsb,
+                f.atl,
+                f.ctl
+            );
+        }
     }
 
     #[test]

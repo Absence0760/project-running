@@ -25,7 +25,12 @@ import 'watch_settings.dart';
 /// it would re-open exactly that hole, and an unknown newer record layout
 /// decoded as GPS points would corrupt a track (decisions §321). Version 4
 /// added the two workout tags without touching v3's CRC window, so both
-/// decode here (decisions §356).
+/// decode here (decisions §356). Version 5 widened a track point's altitude
+/// from decimetres to whole METRES in the same two bytes (decisions §1026),
+/// which is why the unit resolves against the header version through
+/// [eleMetresFromStored] rather than being assumed: a v3 blob read as metres
+/// reports every altitude ten times too high, silently, because nothing about
+/// the bytes is wrong.
 ///
 /// The watch exposes the set of runs over BLE as a manifest (a header +
 /// one entry per stored run). The phone pulls each blob in chunks,
@@ -50,9 +55,30 @@ const int _recordTagWorkout = 3;
 /// The `run_store` formats this decoder understands. The floor is by
 /// design: v3 redefined the CRC window, so v1/v2 blobs are not merely old,
 /// they carry a checksum that leaves their totals unprotected. v4 only
-/// added record tags on the same window, so both v3 and v4 decode.
+/// added record tags on the same window and v5 only moved one field's unit,
+/// so v3, v4 and v5 all decode.
+///
+/// The ceiling must move with the firmware's own `FORMAT_VERSION`: a
+/// firmware-only bump ships a watch whose runs this side refuses outright,
+/// which is a runner losing a race to a version byte. The two are held
+/// together by `scripts/check_watch_wire_vectors.mjs`, along with the floor
+/// and `kEleMetresVersion`.
 const int _minSupportedVersion = 3;
-const int _maxSupportedVersion = 4;
+const int _maxSupportedVersion = 5;
+
+/// The first blob version whose track points store whole METRES in the
+/// altitude field. v3 and v4 stored decimetres in the same two bytes, so a
+/// blob left in a bench board's flash by older firmware still decodes — with
+/// its original meaning. Mirrors `run_store::ELE_METRES_VERSION`.
+const int kEleMetresVersion = 5;
+
+/// A stored altitude field → metres, resolved against the blob's header
+/// [version]. Null for the no-altitude sentinel, which is unit-independent:
+/// no version has ever meant it as a height. Mirrors `run_store::ele_metres`.
+double? eleMetresFromStored(int stored, int version) {
+  if (stored == _eleNoneSentinel) return null;
+  return version >= kEleMetresVersion ? stored.toDouble() : stored / 10.0;
+}
 
 /// Bytes of the footer the CRC does not cover — the CRC field itself, which
 /// sits last. Everything before it is inside the window.
@@ -114,9 +140,10 @@ class TrackPoint {
   final int lonE7;
   final int tOffsetS;
 
-  /// Elevation in decimetres, or null when the watch wrote the
-  /// no-fix sentinel.
-  final int? eleDm;
+  /// Elevation in METRES, already resolved against the blob version the
+  /// point was decoded under ([eleMetresFromStored]) — null when the watch
+  /// wrote the no-fix sentinel.
+  final double? eleMetres;
 
   /// Heart rate in BPM, or null when the watch wrote 0 (no sample).
   final int? bpm;
@@ -125,7 +152,7 @@ class TrackPoint {
     required this.latE7,
     required this.lonE7,
     required this.tOffsetS,
-    required this.eleDm,
+    required this.eleMetres,
     required this.bpm,
   });
 }
@@ -202,8 +229,10 @@ TrackHeader decodeHeader(List<int> blob) {
   );
 }
 
-/// Decode the point that starts at byte [offset].
-TrackPoint decodePoint(List<int> blob, int offset) {
+/// Decode the point that starts at byte [offset] of a blob of [version].
+/// The version is required rather than defaulted because the altitude field's
+/// unit depends on it and a wrong default is a tenfold error nothing reports.
+TrackPoint decodePoint(List<int> blob, int offset, int version) {
   if (offset + _pointLen > blob.length) {
     throw const FormatException('point out of range');
   }
@@ -214,7 +243,7 @@ TrackPoint decodePoint(List<int> blob, int offset) {
     latE7: d.getInt32(offset, Endian.little),
     lonE7: d.getInt32(offset + 4, Endian.little),
     tOffsetS: d.getUint32(offset + 8, Endian.little),
-    eleDm: ele == _eleNoneSentinel ? null : ele,
+    eleMetres: eleMetresFromStored(ele, version),
     bpm: bpm == 0 ? null : bpm,
   );
 }
@@ -473,11 +502,11 @@ Map<String, dynamic> payloadFromBlob(
     final at = _headerLen + i * _pointLen;
     switch (blob[at + 15]) {
       case _recordTagPoint:
-        final p = decodePoint(blob, at);
+        final p = decodePoint(blob, at, header.version);
         track.add(<String, dynamic>{
           'lat': p.latE7 / 1e7,
           'lng': p.lonE7 / 1e7,
-          'ele': p.eleDm == null ? null : p.eleDm! / 10.0,
+          'ele': p.eleMetres,
           'ts': startedAt.add(Duration(seconds: p.tOffsetS)).toIso8601String(),
           'bpm': p.bpm,
         });
@@ -582,7 +611,7 @@ abstract class WatchBleTransport {
   /// (`chunkRoadbook` in watch_roadbook.dart) to the watch's roadbook
   /// characteristic — the same in-order, offset-0-first contract the
   /// firmware's `RoadbookAssembler` enforces. Chunked rather than single-
-  /// write like [writeScreens] because a full 16+16 schedule is 364 bytes,
+  /// write like [writeScreens] because a full 16+16 schedule is 444 bytes,
   /// past one ATT write.
   Future<void> writeRoadbook(List<int> chunk);
 

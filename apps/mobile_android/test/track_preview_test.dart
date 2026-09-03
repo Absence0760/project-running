@@ -25,6 +25,30 @@ void main() {
       );
     });
 
+    test('the gate sits exactly at the named span', () {
+      // Two claims, failing to different mutations. The VALUE is pinned flat
+      // because the number is one of three rails — web's
+      // `MIN_RENDERABLE_SPAN_M` and the firmware's — held together by
+      // check_watch_wire_vectors.mjs, which can only read a rail whose
+      // constant is named.
+      expect(kMinRenderableSpanM, 5.0);
+      // And the constant is the number actually COMPARED, not one declared
+      // beside a literal that has drifted from it. A degree of latitude is
+      // 111,320 m under the same flat approximation the gate uses, so these
+      // two tracks bracket the threshold from either side by 1 cm.
+      double deg(double m) => m / 111320.0;
+      expect(
+        isTrackRenderable(
+            [_w(0, 0), _w(deg(kMinRenderableSpanM - 0.01), 0)]),
+        isFalse,
+      );
+      expect(
+        isTrackRenderable(
+            [_w(0, 0), _w(deg(kMinRenderableSpanM + 0.01), 0)]),
+        isTrue,
+      );
+    });
+
     test('accepts a tiny but genuine lap (>5 m diagonal)', () {
       // ~14 m diagonal — small but real.
       expect(

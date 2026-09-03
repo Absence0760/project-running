@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { isTrackRenderable, projectTrack } from './track_projection';
+import {
+	isTrackRenderable,
+	MIN_RENDERABLE_SPAN_M,
+	projectTrack,
+} from './track_projection';
 import type { TrackPoint } from '../types';
 
 /// Mirror of `apps/mobile_android/test/track_preview_test.dart`'s
@@ -110,6 +114,34 @@ test('isTrackRenderable rejects empty, single-point, and sub-5 m jitter tracks',
 			{ lat: 51.5074009, lng: -0.1278009 },
 		]),
 		false,
+	);
+});
+
+test('the renderable gate sits exactly at the named span', () => {
+	// Two claims, failing to different mutations. The VALUE is pinned flat
+	// because the number is one of three rails — the Dart twin's
+	// `kMinRenderableSpanM` and the firmware's `MIN_RENDERABLE_SPAN_M` —
+	// held together by check_watch_wire_vectors.mjs, which can only read a
+	// rail whose constant is named.
+	assert.equal(MIN_RENDERABLE_SPAN_M, 5);
+	// And the constant is the number actually COMPARED, not one declared
+	// beside a literal that has drifted from it. A degree of latitude is
+	// 111,320 m under the same flat approximation the gate uses, so these
+	// two tracks bracket the threshold from either side by 1 cm.
+	const deg = (m: number) => m / 111_320;
+	assert.equal(
+		isTrackRenderable([
+			{ lat: 0, lng: 0 },
+			{ lat: deg(MIN_RENDERABLE_SPAN_M - 0.01), lng: 0 },
+		]),
+		false,
+	);
+	assert.equal(
+		isTrackRenderable([
+			{ lat: 0, lng: 0 },
+			{ lat: deg(MIN_RENDERABLE_SPAN_M + 0.01), lng: 0 },
+		]),
+		true,
 	);
 });
 

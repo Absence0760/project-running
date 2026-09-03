@@ -387,7 +387,7 @@ mod tests {
             lat_e7: 400_150_200 + t as i32,
             lon_e7: -1_052_705_000,
             t_offset_s: t,
-            ele_dm: Some(16_240),
+            ele_m: Some(1_624),
             bpm: Some(120),
         }
     }

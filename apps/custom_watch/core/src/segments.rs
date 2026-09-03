@@ -6,15 +6,30 @@
 //! - `apps/mobile_android/lib/segments.dart` (Dart twin).
 //!
 //! v1 segments are slices of a *saved route* — `(start_distance_m,
-//! end_distance_m)`. [`compute_effort_from_track`] walks a run's track once,
+//! end_distance_m)`. [`compute_efforts_from_track`] walks a run's track once,
 //! accumulating cumulative distance via haversine, and interpolates the
-//! timestamps at the moments cumulative distance crosses the window bounds.
+//! timestamps at the moments cumulative distance crosses each window's bounds;
+//! [`compute_effort_from_track`] is the one-slice form and delegates to it.
 //! [`assign_competition_ranks`] is the 1224 standard-competition-rank pass the
 //! leaderboard fetcher uses; [`SEGMENT_AGE_BANDS`] / [`SegmentAgeBand`] /
 //! [`SegmentGenderFilter`] / [`crown_label`] are the KOM/QOM leaderboard-filter
 //! vocabulary.
 //!
-//! Two ports-only shape choices, both because this is `no_std`:
+//! **Web's `computeGlobalSegmentEffort` / `computeGlobalSegmentEfforts` — the
+//! catalogue-segment matcher of decisions §232 — are deliberately not ported.**
+//! They score a run against a FREE-STANDING geometry: a segment carries its own
+//! polyline, and matching keys off the run passing its start then its end
+//! rather than off a distance window into a route the runner already has. The
+//! watch holds no such catalogue and no wire carries one — `CRS1` pushes one
+//! course, not a library of 500 geometries — so porting them would add a
+//! matcher over data no frame delivers, for a surface no page shows. Bringing
+//! the catalogue to the wrist is a new feature with its own frame and its own
+//! flash budget, not a sync obligation (decisions.md § 24). If it is ever
+//! built, `bounds_admit`'s conservative-degree window is the half that makes it
+//! affordable here: it rejects a segment on another continent without walking
+//! the track at all.
+//!
+//! Three ports-only shape choices, all because this is `no_std`:
 //! - web timestamps are ISO strings parsed with `Date.parse`; the watch carries
 //!   epoch-**milliseconds** directly ([`TrackPoint::ts`]) and returns the start
 //!   crossing as [`EffortResult::started_at_ms`] rather than an ISO string,
@@ -23,6 +38,9 @@
 //!   parallel to `rows` rather than returning an owned list. The web `{ row,
 //!   rank }[]` payload preservation is inherent — the caller keeps `rows` — and
 //!   a caller slice sidesteps a multi-KB owned `Vec` on the leaderboard path.
+//! - [`compute_efforts_from_track`] writes into a caller-provided slice for the
+//!   same reason, so the batch needs no segment-count budget of its own beside
+//!   the one its caller already keeps.
 //!
 //! Pure logic, no peripherals, no allocator.
 
@@ -63,24 +81,23 @@ pub struct TrackPoint {
     pub ts: Option<f64>,
 }
 
-/// Elapsed time over the `(start, end)` window of a run track. Returns `None`
-/// when the track is too short to cover the segment, has no timestamps, or is
-/// too sparsely sampled to resolve the crossings (median sample step > segment
-/// length / 5, per §37 trade-off 2).
-pub fn compute_effort_from_track(
-    track: &[TrackPoint],
-    segment: SegmentSlice,
-) -> Option<EffortResult> {
-    if track.len() < 2 {
-        return None;
-    }
-    let seg_len = segment.end_distance_m - segment.start_distance_m;
-    if seg_len <= 0.0 {
-        return None;
-    }
+/// A run track's cumulative-distance array plus the median non-zero sample
+/// step the sparsity guard compares against — everything expensive about timing
+/// a segment that is a property of the TRACK rather than of the slice.
+///
+/// Built once per track by [`distance_index`]. `median_step` is `None` when the
+/// track never moved, which is a refusal rather than a zero: a stationary track
+/// resolves no crossing at any segment length.
+pub struct TrackDistanceIndex {
+    cum: Vec<f64, MAX_EFFORT_TRACK_POINTS>,
+    median_step: Option<f64>,
+}
 
+/// Walk a track once, accumulating haversine distance and taking the median of
+/// the non-zero steps. The track is trusted only up to
+/// [`MAX_EFFORT_TRACK_POINTS`] points, so `cum` is one entry per trusted point.
+pub fn distance_index(track: &[TrackPoint]) -> TrackDistanceIndex {
     let track = &track[..track.len().min(MAX_EFFORT_TRACK_POINTS)];
-
     let mut cum: Vec<f64, MAX_EFFORT_TRACK_POINTS> = Vec::new();
     let _ = cum.push(0.0);
     let mut steps: Vec<f64, MAX_EFFORT_TRACK_POINTS> = Vec::new();
@@ -92,23 +109,82 @@ pub fn compute_effort_from_track(
             let _ = steps.push(d);
         }
     }
-    if *cum.last().unwrap() < segment.end_distance_m {
-        return None;
-    }
-    if steps.is_empty() {
-        return None;
-    }
+    let median_step = if steps.is_empty() {
+        None
+    } else {
+        steps.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
+        Some(steps[steps.len() / 2])
+    };
+    TrackDistanceIndex { cum, median_step }
+}
 
+/// Elapsed time over the `(start, end)` window of a run track. Returns `None`
+/// when the track is too short to cover the segment, has no timestamps, or is
+/// too sparsely sampled to resolve the crossings (median sample step > segment
+/// length / 5, per §37 trade-off 2).
+pub fn compute_effort_from_track(
+    track: &[TrackPoint],
+    segment: SegmentSlice,
+) -> Option<EffortResult> {
+    if track.len() < 2 {
+        return None;
+    }
+    effort_from_index(track, &distance_index(track), segment)
+}
+
+/// Time a run track over many segment slices at once, writing one result per
+/// input slice into `out` and returning how many were written
+/// (`min(segments.len(), out.len())`). Identical per-slice semantics to
+/// [`compute_effort_from_track`], which delegates here.
+///
+/// Everything expensive is a property of the TRACK, not of the slice — the
+/// cumulative array and the median step the sparsity guard reads. Calling the
+/// single-slice form in a loop rebuilt and re-sorted both per slice, so a run
+/// over a segmented route cost `O(segments x points log points)`: at this
+/// crate's caps that is 64 x (512 haversines + a 512-element sort) on a 64 MHz
+/// core, for an answer that does not depend on the slice. Measured once here,
+/// the per-slice work is two walks of `cum`.
+pub fn compute_efforts_from_track(
+    track: &[TrackPoint],
+    segments: &[SegmentSlice],
+    out: &mut [Option<EffortResult>],
+) -> usize {
+    let n = segments.len().min(out.len());
+    for slot in out[..n].iter_mut() {
+        *slot = None;
+    }
+    if track.len() < 2 || n == 0 {
+        return n;
+    }
+    let index = distance_index(track);
+    for (slot, segment) in out[..n].iter_mut().zip(segments.iter()) {
+        *slot = effort_from_index(track, &index, *segment);
+    }
+    n
+}
+
+fn effort_from_index(
+    track: &[TrackPoint],
+    index: &TrackDistanceIndex,
+    segment: SegmentSlice,
+) -> Option<EffortResult> {
+    let seg_len = segment.end_distance_m - segment.start_distance_m;
+    if seg_len <= 0.0 {
+        return None;
+    }
+    let track = &track[..track.len().min(MAX_EFFORT_TRACK_POINTS)];
+    let cum = &index.cum;
+    if *cum.last()? < segment.end_distance_m {
+        return None;
+    }
     // Sparsity guard: the median sample step must be at least 5x smaller than
     // the segment so the start / end crossings are well-resolved.
-    steps.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
-    let median = steps[steps.len() / 2];
-    if median > seg_len / 5.0 {
+    if index.median_step? > seg_len / 5.0 {
         return None;
     }
 
-    let start_ts = timestamp_at_distance(track, &cum, segment.start_distance_m)?;
-    let end_ts = timestamp_at_distance(track, &cum, segment.end_distance_m)?;
+    let start_ts = timestamp_at_distance(track, cum, segment.start_distance_m)?;
+    let end_ts = timestamp_at_distance(track, cum, segment.end_distance_m)?;
 
     let elapsed = (end_ts - start_ts) / 1000.0;
     if elapsed.is_nan() || elapsed <= 0.0 {
@@ -300,6 +376,140 @@ mod tests {
             });
         }
         out
+    }
+
+    /// The batch and the single-slice form must agree slice for slice — the
+    /// mirror of web's "each entry equals the single-slice result", over the
+    /// same five shapes: clean, zero-length, reversed, past the track's end,
+    /// and too sparse for the guard.
+    #[test]
+    fn the_slice_sweep_agrees_with_the_single_slice_form() {
+        let track = straight_track(200, 5.0, 1.0);
+        let slices = [
+            SegmentSlice {
+                start_distance_m: 100.0,
+                end_distance_m: 600.0,
+            },
+            SegmentSlice {
+                start_distance_m: 100.0,
+                end_distance_m: 100.0,
+            },
+            SegmentSlice {
+                start_distance_m: 200.0,
+                end_distance_m: 100.0,
+            },
+            SegmentSlice {
+                start_distance_m: 0.0,
+                end_distance_m: 100_000.0,
+            },
+            SegmentSlice {
+                start_distance_m: 0.0,
+                end_distance_m: 20.0,
+            },
+        ];
+        let mut out = [None; 5];
+        assert_eq!(compute_efforts_from_track(&track, &slices, &mut out), 5);
+        for (i, slice) in slices.iter().enumerate() {
+            assert_eq!(
+                out[i],
+                compute_effort_from_track(&track, *slice),
+                "slice {i}"
+            );
+        }
+        // The first is the only one that can be timed; the four refusals are
+        // independent, not a poisoned batch.
+        assert!(out[0].is_some());
+        assert!(out[1..].iter().all(|e| e.is_none()));
+    }
+
+    /// A caller slice shorter than the segment list writes only what fits and
+    /// says so, rather than writing past its end or silently timing segments
+    /// nobody can read the answer for.
+    #[test]
+    fn the_slice_sweep_writes_only_what_the_caller_slice_holds() {
+        let track = straight_track(200, 5.0, 1.0);
+        let slices = [
+            SegmentSlice {
+                start_distance_m: 0.0,
+                end_distance_m: 500.0,
+            },
+            SegmentSlice {
+                start_distance_m: 100.0,
+                end_distance_m: 600.0,
+            },
+            SegmentSlice {
+                start_distance_m: 200.0,
+                end_distance_m: 700.0,
+            },
+        ];
+        let mut out = [None; 2];
+        assert_eq!(compute_efforts_from_track(&track, &slices, &mut out), 2);
+        assert!(out.iter().all(|e| e.is_some()));
+
+        // And the reverse: more room than segments leaves the tail untouched
+        // rather than filled with a neighbour's answer.
+        let mut roomy = [Some(EffortResult {
+            time_seconds: 1.0,
+            started_at_ms: 1.0,
+        }); 5];
+        assert_eq!(
+            compute_efforts_from_track(&track, &slices[..1], &mut roomy),
+            1
+        );
+        assert!(roomy[0].is_some());
+        assert_eq!(roomy[1].map(|e| e.time_seconds), Some(1.0));
+    }
+
+    /// Every slot is cleared before the track is even looked at, so a caller
+    /// reusing a buffer cannot read a previous run's efforts back as this run's.
+    #[test]
+    fn an_untimeable_track_clears_every_slot_it_claims() {
+        let stale = Some(EffortResult {
+            time_seconds: 99.0,
+            started_at_ms: 99.0,
+        });
+        let slices = [SegmentSlice {
+            start_distance_m: 0.0,
+            end_distance_m: 500.0,
+        }; 3];
+        for track_len in [0usize, 1] {
+            let track = straight_track(track_len, 5.0, 1.0);
+            let mut out = [stale; 3];
+            assert_eq!(compute_efforts_from_track(&track, &slices, &mut out), 3);
+            assert!(
+                out.iter().all(|e| e.is_none()),
+                "a {track_len}-point track must clear the buffer"
+            );
+        }
+        // An empty segment list claims nothing and touches nothing.
+        let track = straight_track(200, 5.0, 1.0);
+        let mut untouched = [stale; 3];
+        assert_eq!(compute_efforts_from_track(&track, &[], &mut untouched), 0);
+        assert!(untouched.iter().all(|e| e.is_some()));
+    }
+
+    /// The index is built once for the whole batch. Pinned as the property that
+    /// makes it worth building once — the cumulative array and the median step
+    /// depend only on the track — because a per-slice rebuild would give the
+    /// same answers and only cost time, so no output assertion can see it.
+    #[test]
+    fn the_track_index_does_not_depend_on_any_slice() {
+        let track = straight_track(200, 5.0, 1.0);
+        let a = distance_index(&track);
+        let b = distance_index(&track);
+        assert_eq!(a.cum.as_slice(), b.cum.as_slice());
+        assert_eq!(a.median_step, b.median_step);
+        assert_eq!(a.cum.len(), track.len());
+        // A track that never moved resolves no crossing at any length, and says
+        // so with `None` rather than a zero median that would pass the guard.
+        let still: Vec<TrackPoint, MAX_EFFORT_TRACK_POINTS> = (0..10)
+            .map(|i| TrackPoint {
+                lat: 37.0,
+                lng: -122.0,
+                ts: Some(T0_MS + i as f64 * 1000.0),
+            })
+            .collect();
+        assert_eq!(distance_index(&still).median_step, None);
     }
 
     #[derive(Clone, Copy)]
