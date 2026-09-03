@@ -12,6 +12,24 @@
 //! skew and clamps to 0, exactly as web's `Math.max(0, nowMs - sentAtMs)` does.
 //! The display bucket is returned as an enum (no language) so each platform
 //! localizes it identically. Pure integer logic, no floats, no allocator.
+//!
+//! **Web's `raceClockS` and `liveElapsedS` are deliberately not ported**, and
+//! the reason is that this device is the runner's own, not a spectator's. Both
+//! exist to reconstruct a clock a SPECTATOR cannot see directly: `raceClockS`
+//! takes wall-clock seconds since `started_at`, and `liveElapsedS` is the
+//! fallback lower bound for a viewer who has only the last ping and must credit
+//! nothing for time the recorder was paused. The wrist holds the real thing —
+//! [`crate::record::Recorder`] owns the elapsed clock — so the distinction the
+//! two draw does not arise here, and the surface that most depends on it makes
+//! it already: [`crate::cutoff_eta::next_cutoff_eta`] takes `elapsed_s`, the
+//! race clock, and `record.rs`'s
+//! `the_cutoff_eta_projects_from_race_pace_not_moving_pace` pins that it is not
+//! the moving one. Porting a reconstruction of a fact the device measures
+//! directly would give a second answer to a question that already has one, and
+//! a second answer is how they come to disagree.
+//!
+//! `freshness_for` is ported because it is about a ping's AGE, which this
+//! device does have an analogue for: a fix it received and has not refreshed.
 
 /// A ping older than this is treated as stale. 90 s ~= 18 missed 5 s
 /// broadcaster pings: long enough to ride out ordinary cellular flakiness,

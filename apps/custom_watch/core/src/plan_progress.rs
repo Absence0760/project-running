@@ -5,6 +5,23 @@
 //! A parity port of web `training/plan_progress.ts` (twin of
 //! `plan_progress.dart`). Pure logic — no peripherals, no allocator; the
 //! caller formats + localizes the results.
+//!
+//! **Two of web's four exports are deliberately not ported**, which is why the
+//! suites do not match one for one. `planWorkoutProgress` (completed / skipped
+//! / remaining, excluding rest days from BOTH the numerator and the denominator
+//! so a plan cannot report over 100 %) and `planDistanceBanked` (km run against
+//! km planned) each need the plan's whole WORKOUT list. Nothing pushes one: the
+//! two plan glance pages this device has, `PlanReplan` and `PlanAdaptive`,
+//! render pre-computed views the phone sends over `SET1`, and a workout list is
+//! a per-week table with no wire and no room on a 168x96 panel to show it.
+//! Porting them would add two functions no page can reach, over data no frame
+//! carries — a port made for the count rather than for the wrist (decisions.md
+//! § 24). The two that ARE here are ported because the phone sends their
+//! INPUTS: a phase list and a long-run distance are single values.
+//!
+//! The trigger that changes it is a wire carrying the plan's workouts, at which
+//! point both come across together — they are the same shape and the same
+//! decision.
 
 use heapless::Vec;
 

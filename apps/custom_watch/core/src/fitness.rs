@@ -73,9 +73,20 @@ const BASELINE_DAYS: i32 = 42;
 /// realistic on-watch fitness history.
 const MAX_RUNS: usize = 256;
 
-/// Where a run's `source` came from — the recognised recording / import origins
-/// qualify for fitness math; anything else ([`RunSource::Other`], e.g. a manual
-/// entry) is excluded because its distance isn't measured.
+/// Where a run's `source` came from. The eight variants below `Other` are web's
+/// `RunSource` union one for one; [`RunSource::Other`] has no web counterpart
+/// and is this port's bucket for a source string the phone sent that this build
+/// does not recognise.
+///
+/// `Parkrun` and `Race` were missing until now, which is not a cosmetic gap: a
+/// caller mapping a pushed source had no variant for them and would have had to
+/// choose `Other`, and `Other` does not qualify — so a certified weekly 5K and
+/// a chip-timed official result, the two most authoritative distances a runner
+/// has, would have been silently dropped from the fitness math. That is exactly
+/// the defect web fixed when it replaced its own `||` chain with a total map
+/// (and that migration `20270424_001_pr_achievements_include_parkrun_race`
+/// fixed on the SQL side); the port inherited the shape that makes it possible
+/// rather than the fix.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum RunSource {
@@ -85,12 +96,36 @@ pub enum RunSource {
     Garmin,
     HealthKit,
     HealthConnect,
+    Parkrun,
+    Race,
+    /// A source string this build does not recognise. Excluded: an unmeasured
+    /// distance is not VDOT-worthy, and a firmware that cannot name where a
+    /// number came from should not derive a fitness ceiling from it.
     Other,
 }
 
 impl RunSource {
-    fn is_qualifying(self) -> bool {
-        !matches!(self, RunSource::Other)
+    /// Which sources carry a distance + duration trustworthy enough for fitness
+    /// math.
+    ///
+    /// An exhaustive match rather than `!matches!(self, Other)`, mirroring web's
+    /// total `Record<RunSource, boolean>` and for web's stated reason: a variant
+    /// added to the enum is then a compile error here until it is consciously
+    /// classified. The negated-match form silently qualifies every new variant,
+    /// which is the same failure in the opposite direction to the `||` chain
+    /// web replaced.
+    const fn is_qualifying(self) -> bool {
+        match self {
+            RunSource::App
+            | RunSource::Watch
+            | RunSource::Strava
+            | RunSource::Garmin
+            | RunSource::HealthKit
+            | RunSource::HealthConnect
+            | RunSource::Parkrun
+            | RunSource::Race => true,
+            RunSource::Other => false,
+        }
     }
 }
 
@@ -165,6 +200,19 @@ pub enum RecoveryAdvice {
 
 /// Whether a run qualifies for fitness math: measured source, far/long enough,
 /// not indoor.
+///
+/// **Web's fourth filter, `activity_type !== 'cycle'`, is deliberately not
+/// ported.** Its reason is real — `current_vdot` takes the MAX over runs, so a
+/// single bike commute rides straight to the top and takes the threshold pace,
+/// TSS and race predictions with it — but the filter needs an activity type,
+/// and [`RunForFitness`] has none because this device has no sport selector:
+/// the recorder records a run and there is no path by which a ride becomes one
+/// of these. A field nothing can populate, filtering a case nothing can
+/// produce, is a port made for the count rather than for the wrist
+/// (decisions.md § 24). The trigger that changes it is a phone push of run
+/// HISTORY (nothing pushes one today — [`RunForFitness`] has no non-test
+/// constructor at all), at which point the field arrives WITH the wiring that
+/// fills it and this filter comes with it.
 pub fn is_qualifying_run(run: &RunForFitness) -> bool {
     run.distance_m >= MIN_QUALIFYING_DISTANCE_M
         && run.duration_s >= MIN_QUALIFYING_DURATION_S
@@ -535,18 +583,24 @@ mod tests {
         );
     }
 
+    /// Every value web's `RunSource` union can hold, in its order. A variant
+    /// added to the enum without a row here leaves it untested, which is the
+    /// half `is_qualifying`'s exhaustive match cannot enforce on its own.
+    const WEB_SOURCES: [RunSource; 8] = [
+        RunSource::App,
+        RunSource::Watch,
+        RunSource::HealthKit,
+        RunSource::HealthConnect,
+        RunSource::Strava,
+        RunSource::Garmin,
+        RunSource::Parkrun,
+        RunSource::Race,
+    ];
+
     #[test]
     fn qualifying_runs_accepts_recognised_sources_drops_others() {
-        let sources = [
-            RunSource::App,
-            RunSource::Watch,
-            RunSource::Strava,
-            RunSource::Garmin,
-            RunSource::HealthKit,
-            RunSource::HealthConnect,
-        ];
-        let mut runs: heapless::Vec<RunForFitness, 8> = heapless::Vec::new();
-        for s in sources {
+        let mut runs: heapless::Vec<RunForFitness, 16> = heapless::Vec::new();
+        for s in WEB_SOURCES {
             runs.push(RunForFitness {
                 source: s,
                 ..run(REF - 29, 5000.0, 1500)
@@ -558,7 +612,46 @@ mod tests {
             ..run(REF - 29, 5000.0, 1500)
         })
         .unwrap();
-        assert_eq!(qualifying_runs(&runs).len(), sources.len());
+        assert_eq!(qualifying_runs(&runs).len(), WEB_SOURCES.len());
+    }
+
+    #[test]
+    fn a_parkrun_and_a_chip_timed_race_are_the_most_authoritative_sources_there_are() {
+        // The gap this enum had: neither value existed, so a caller mapping a
+        // pushed source had to choose `Other` — which is excluded. A certified
+        // weekly 5K and an official result would have been the two distances
+        // silently kept out of the runner's fitness ceiling. Web's own `||`
+        // chain omitted exactly these two, and migration
+        // `20270424_001_pr_achievements_include_parkrun_race` fixed the same
+        // omission in SQL.
+        for s in [RunSource::Parkrun, RunSource::Race] {
+            let r = RunForFitness {
+                source: s,
+                ..run(REF - 29, 5000.0, 1500)
+            };
+            assert!(is_qualifying_run(&r), "{s:?} must qualify");
+        }
+    }
+
+    #[test]
+    fn the_enum_holds_every_web_source_and_qualifies_all_of_them() {
+        // Web's `SOURCE_QUALIFIES` is a total map that is `true` for all eight,
+        // so this port's answer for each must be `true` too. The register above
+        // is the enum minus `Other`, which has no web counterpart; a variant
+        // added to one and not the other is what this pins.
+        for s in WEB_SOURCES {
+            let r = RunForFitness {
+                source: s,
+                ..run(REF - 29, 5000.0, 1500)
+            };
+            assert!(is_qualifying_run(&r), "{s:?}");
+            assert_ne!(s, RunSource::Other);
+        }
+        let unknown = RunForFitness {
+            source: RunSource::Other,
+            ..run(REF - 29, 5000.0, 1500)
+        };
+        assert!(!is_qualifying_run(&unknown));
     }
 
     // ─────────────── vdot_from_run ───────────────

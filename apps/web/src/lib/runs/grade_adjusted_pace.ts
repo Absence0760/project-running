@@ -30,11 +30,39 @@ export const MINETTI_FLAT_COST = 3.6;
 export const MAX_GRADE = 0.45;
 
 /**
- * Minimum horizontal travel before a grade sample is trusted. GPS altitude is
- * jittery point-to-point, so grade is measured over a segment, mirroring the
- * watch field. 5 m matches `GradeAdjustedPaceView.mc`.
+ * Minimum horizontal travel before a grade sample is trusted. Altitude is
+ * jittery point-to-point, so grade is measured over a segment rather than over
+ * a point pair.
+ *
+ * The window has a floor, and the 5 m it shipped with was below it:
+ * `ELEVATION_GAIN_MIN_DELTA_M / MAX_GRADE` = 6.67 m. Under that, the smallest
+ * altitude change this codebase is willing to call climb rather than noise is,
+ * on its own, past the steepest grade Minetti's fit is defined at — 3 m over
+ * 5 m is a 60% grade, which clamps and yields a factor of 5.396. A rise the
+ * elevation-gain path discards outright therefore reported a pace 5.4x faster
+ * than raw, and a single 1 m step did it at 2.50.
+ *
+ * Only the horizontal leg is gated, and a gate on the RISE cannot replace it:
+ * the rise a real grade produces over the window scales with the window
+ * exactly as the noise does, so a threshold large enough to suppress the noise
+ * suppresses every real grade below `threshold / window` with it. Measured, a
+ * 3 m rise gate at this window zeroes every real grade under 15% — on a clean,
+ * noise-free 3.3% climb it read 19.5% slow — while the GPS-altitude noise it
+ * aims at has a 3.8 m sigma and walks straight through it.
+ *
+ * 20 m is where the noise floor stops being able to more than double the
+ * reported effort (3 m over 20 m is a 15% grade, factor 2.06), and it is the
+ * largest window whose cost on real oscillating terrain stays under 3%.
+ * Measured over an AR(1) altitude-error model on 30-minute runs (decisions
+ * §992): a flat track under GPS-altitude error reported GAP 47.9% faster than
+ * truth at 5 m against 26.8% at 20 m, and under barometric error 2.1% -> 0.5%
+ * at running pace and 9.0% -> 2.1% at power-hike pace. The cost is 2.5% on the
+ * most oscillatory profile measured, against 5.2% at 30 m and 13.1% at 50 m.
+ *
+ * Matches `GradeAdjustedPaceView.mc`, the Dart twin and the firmware port; the
+ * four are held equal by `scripts/check_watch_wire_vectors.mjs`.
  */
-export const MIN_SEGMENT_M = 5.0;
+export const MIN_SEGMENT_M = 20.0;
 
 /** Minetti 2002 5th-order fit: C(i) in J/kg/m, i fractional gradient. */
 export function minettiCostAtGrade(i: number): number {

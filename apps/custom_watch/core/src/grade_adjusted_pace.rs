@@ -32,10 +32,41 @@ pub const MINETTI_FLAT_COST: f64 = 3.6;
 /// that so a momentary altitude spike can't manufacture an absurd factor.
 pub const MAX_GRADE: f64 = 0.45;
 
-/// Minimum horizontal travel before a grade sample is trusted. GPS altitude is
-/// jittery point-to-point, so grade is measured over a segment, mirroring the
-/// watch field. 5 m matches `GradeAdjustedPaceView.mc`.
-pub const MIN_SEGMENT_M: f64 = 5.0;
+/// Minimum horizontal travel before a grade sample is trusted. Altitude is
+/// jittery point-to-point, so grade is measured over a segment rather than over
+/// a point pair.
+///
+/// The window has a floor, and the 5 m it shipped with was below it:
+/// [`ELEVATION_GAIN_MIN_DELTA_M`](crate::route_simplify::ELEVATION_GAIN_MIN_DELTA_M)
+/// / [`MAX_GRADE`] = 6.67 m. Under that, the smallest altitude change this
+/// codebase is willing to call climb rather than noise is, on its own, past the
+/// steepest grade Minetti's fit is defined at — 3 m over 5 m is a 60% grade,
+/// which clamps and yields a factor of 5.396. A rise the elevation-gain path
+/// discards outright therefore reported a pace 5.4x faster than raw, and a
+/// single 1 m step did it at 2.50. This device is the worst place for it: on a
+/// power-hike the same window spans a longer interval, so the correlated part
+/// of the altitude error has longer to grow across it.
+///
+/// Only the horizontal leg is gated, and a gate on the RISE cannot replace it:
+/// the rise a real grade produces over the window scales with the window
+/// exactly as the noise does, so a threshold large enough to suppress the noise
+/// suppresses every real grade below `threshold / window` with it. Measured, a
+/// 3 m rise gate at this window zeroes every real grade under 15% — on a clean,
+/// noise-free 3.3% climb it read 19.5% slow — while the GPS-altitude noise it
+/// aims at has a 3.8 m sigma and walks straight through it.
+///
+/// 20 m is where the noise floor stops being able to more than double the
+/// reported effort (3 m over 20 m is a 15% grade, factor 2.06), and it is the
+/// largest window whose cost on real oscillating terrain stays under 3%.
+/// Measured over an AR(1) altitude-error model on 30-minute runs (decisions.md
+/// § 992): a flat track under GPS-altitude error reported GAP 47.9% faster than
+/// truth at 5 m against 26.8% at 20 m, and under barometric error 2.1% -> 0.5%
+/// at running pace and 9.0% -> 2.1% at power-hike pace. The cost is 2.5% on the
+/// most oscillatory profile measured, against 5.2% at 30 m and 13.1% at 50 m.
+///
+/// Matches `GradeAdjustedPaceView.mc`, the web canonical and the Dart twin; the
+/// four are held equal by `scripts/check_watch_wire_vectors.mjs`.
+pub const MIN_SEGMENT_M: f64 = 20.0;
 
 /// Below this speed the runner is walking / stopped and a live GAP is noise —
 /// `MIN_SPEED_MPS` in `GradeAdjustedPaceView.mc`. Streaming-only gate; the
@@ -509,11 +540,16 @@ mod tests {
 
     #[test]
     fn estimator_needs_a_real_segment_before_trusting_a_grade() {
+        // Distances are stated as fractions of the window rather than as
+        // literals, so widening it cannot leave a stale sub-gate sample
+        // reading as an above-gate one. What the window may BE is pinned
+        // against the noise floor by
+        // `the_window_is_longer_than_the_noise_floor_the_gain_path_discards`.
         let mut e = GapEstimator::new();
         e.on_sample(0.0, 100.0); // seeds
-        e.on_sample(3.0, 103.0); // 3 m run < MIN_SEGMENT_M: jitter, no grade
+        e.on_sample(MIN_SEGMENT_M * 0.6, 103.0); // sub-gate: jitter, no grade
         assert_eq!(e.grade(), 0.0);
-        e.on_sample(10.0, 101.0); // 10 m run from the seed, +1 m rise
+        e.on_sample(MIN_SEGMENT_M * 2.0, MIN_SEGMENT_M * 0.2 + 100.0);
         assert!((e.grade() - 0.1).abs() < 1e-9);
     }
 
@@ -521,9 +557,54 @@ mod tests {
     fn estimator_clamps_the_grade_like_the_pure_factor() {
         let mut e = GapEstimator::new();
         e.on_sample(0.0, 100.0);
-        e.on_sample(10.0, 200.0); // a 1000% "grade" from an altitude spike
+        // A 1000% "grade" from an altitude spike, over a full window.
+        e.on_sample(MIN_SEGMENT_M, 100.0 + MIN_SEGMENT_M * 10.0);
         assert_eq!(e.grade(), MAX_GRADE);
         assert_eq!(e.gap_s_per_km(5.0), gap_pace_s_per_km(5.0, MAX_GRADE));
+    }
+
+    /// The finding this window's value exists to answer, stated as the
+    /// relationship rather than as the number: the largest altitude change the
+    /// elevation-gain path throws away as noise, taken over the shortest run a
+    /// grade is measured across, must not read as a wall.
+    ///
+    /// At the 5 m this shipped with, 3 m of noise was a 0.60 grade — past
+    /// `MAX_GRADE`, so it clamped, and the factor was 5.396. A rise nothing
+    /// else on the device is willing to call climb reported an effort-pace
+    /// 5.4x faster than raw. Nothing gates the rise and nothing can: a
+    /// threshold big enough to suppress that noise suppresses every real grade
+    /// below `threshold / window` with it.
+    #[test]
+    fn the_window_is_longer_than_the_noise_floor_the_gain_path_discards() {
+        let noise_floor_grade = crate::route_simplify::ELEVATION_GAIN_MIN_DELTA_M / MIN_SEGMENT_M;
+        assert!(
+            noise_floor_grade < MAX_GRADE,
+            "a window of {MIN_SEGMENT_M} m makes the {} m noise floor a {noise_floor_grade} grade,              past the steepest the Minetti fit is defined at",
+            crate::route_simplify::ELEVATION_GAIN_MIN_DELTA_M
+        );
+        assert!(
+            grade_factor(noise_floor_grade) < 2.1,
+            "the noise floor alone must not more than double the reported effort; it multiplies              it by {}",
+            grade_factor(noise_floor_grade)
+        );
+    }
+
+    #[test]
+    fn a_track_shorter_than_one_window_yields_no_grade_adjusted_pace() {
+        // Proof that the walk reads the constant rather than a literal: three
+        // quarter-window steps carry elevation and a duration, and still never
+        // complete a segment, so there is no grade anyone can vouch for and the
+        // helper says so instead of grading the jitter.
+        let step = MIN_SEGMENT_M / 4.0;
+        let track: heapless::Vec<GapPoint, 4> = (0..4)
+            .map(|i| GapPoint {
+                lat_deg: 0.0,
+                lon_deg: (i as f64 * step) / 111_320.0,
+                ele_m: Some(100.0 + i as f64),
+                t_ms: Some(i as i64 * 1000),
+            })
+            .collect();
+        assert_eq!(grade_adjusted_pace_s_per_km(&track), None);
     }
 
     #[test]

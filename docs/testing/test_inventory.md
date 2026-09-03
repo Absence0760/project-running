@@ -2094,3 +2094,35 @@ The § 982 refusal-vocabulary pair now runs off a register covering BOTH checkou
 ### `apps/web/src/lib/security_guards.test.ts` — 91 tests (1 more added)
 
 A population guard over the eight production Lambdas: each must gate its own HTTP method, by comparing `event.requestContext.http.method` and answering a 405, or by calling the shared `shareMethodRefusal`. Every one of the eight gates was already driven behaviourally, but by five different suites, none of which walks the directory — so a ninth Lambda would have arrived ungated with everything green, which is how the five share handlers went without a gate at all. Falsified twice: deleting `osrm-proxy`'s gate names it, and adding an empty ninth handler directory names that. See [decisions § 1006](../architecture/decisions.md).
+
+## #789 round 34 — the firmware lane (2026-09-02)
+
+Every case below is *host-tested* per [`docs/custom_watch/quality_standards.md`](../custom_watch/quality_standards.md) — the `cargo test` host lane, no silicon and no simulator. The Monkey C rail is weaker still and is labelled where it appears: there is no Connect IQ SDK on this machine, so its tests were **edited and read, never executed**.
+
+### `apps/custom_watch/core/src/grade_adjusted_pace.rs` — 32 tests (2 added, 2 rewritten)
+
+`MIN_SEGMENT_M` was 5 m, which is below `ELEVATION_GAIN_MIN_DELTA_M / MAX_GRADE` — so the smallest altitude change the codebase calls climb was, over the shortest run it measures a grade across, a 0.60 grade that clamped to a factor of 5.396 ([decisions § 992](../architecture/decisions.md)). `the_window_is_longer_than_the_noise_floor_the_gain_path_discards` states that relationship rather than the number and fails at 5 m naming the grade; `a_track_shorter_than_one_window_yields_no_grade_adjusted_pace` proves the walk reads the constant rather than a literal. The two rewritten estimator cases state their distances as fractions of the window, so widening it again cannot leave a stale sub-gate sample reading as an above-gate one — which is what both were.
+
+### `apps/web/src/lib/runs/grade_adjusted_pace.test.ts` — 12 tests (2 added), `apps/mobile_android/test/grade_adjusted_pace_test.dart` — 12 (2 added), `apps/watch_garmin/source-test/GradeAdjustedPaceTest.mc` — 1 added, 6 rewritten (**not executed**)
+
+The same two cases on the other three rails. **Nothing pinned this constant's value on any rail before**: measured, every suite on every rail passed at 5, 20, 30 and 50 m. The Monkey C rewrites are the six `GradeTracker` cases whose literal distances were sized for a 5 m gate; they now read `$.MIN_SEGMENT_M`, including the flat-ground loop, which stepped 7 m and would otherwise have passed by never measuring anything at all.
+
+### `apps/custom_watch/core/src/run_stats.rs` — 23 tests (2 added)
+
+The watch carried both elevation-gain rules after web collapsed its two into one ([§ 993](../architecture/decisions.md)). `elevation_gain_is_the_route_summarys_own_gated_rule_and_not_a_second_one` drives a +/-1 m sawtooth over 30 samples of dead-flat road: **15 m** of phantom climb under the rule this replaced, 0 under the gated one, and it asserts the two entry points agree over the same altitudes. The second case is the control — a 300 m staircase reads 300 m either way, so the gate is shown to cost nothing where there is signal.
+
+### `apps/custom_watch/core/src/record_cadence.rs` — 32 tests (2 added, 1 rewritten)
+
+`ele_dm_from_m` accepted -3276.8 m and returned `Some(i16::MIN)`, which IS `ELE_NONE`, so the reading encoded to the sentinel and decoded back as `None` ([§ 994](../architecture/decisions.md)). The rewritten edge case pinned the wrong claim; `every_altitude_this_stores_survives_the_round_trip` states the invariant as a property over encode/decode instead. `the_altitude_ceiling_is_far_below_what_the_device_believes` is **characterisation, not approval**: it pins that `plausible_alt` admits five summits the field cannot store and that 69 % of a Silverton-Handies-Silverton profile carries no elevation, so the day the field widens to `CRS1`'s `i16` metres the test goes red rather than the limit going quiet.
+
+### `apps/custom_watch/core/src/recap.rs` — 34 tests (3 added)
+
+`build_year_in_running_recap` reported the **all-time** best streak on a card titled with one year, and fed it to the badge grid ([§ 995](../architecture/decisions.md)). Measured: twelve consecutive days in March 2024 gave a 2026 card a 12-day best and a `streak-7` badge. `a_month_recap_bounds_its_best_streak_at_the_first` is the same rule one window down (8 against 2). The third case is the guard against over-correcting: a streak crossing New Year counts at its **full** seven days, and it passes with and without the bound, which is why it is there.
+
+### `apps/custom_watch/core/src/fitness.rs` — 61 tests (2 added, 1 widened)
+
+`RunSource` could name neither `parkrun` nor `race`, and the only variant left — `Other` — does not qualify ([§ 996](../architecture/decisions.md)). The widened case walks a `WEB_SOURCES` register of all eight web values rather than a hand-listed six; the register is the half `is_qualifying`'s new exhaustive match cannot enforce, since the compiler makes a new variant answer the match but cannot make anyone test it.
+
+Run by this lane and passing: `cargo test --target x86_64-unknown-linux-gnu --workspace --exclude app --exclude nrf52840_dk` (2840/2840), `cargo build --release --target thumbv7em-none-eabihf`, all three CI `cargo clippy … -D warnings` invocations, `cargo fmt --check`, `check_watch_wire_vectors.mjs` (and its 31 unit tests), `check_shared_constants.mjs`, `check_parity_pair_registry.mjs`, `check_watch_doc_counts.mjs`, `check_watch_page_ring.mjs`, `check_watch_ble_uuids.mjs`, `check_watch_ios_source.mjs`, `check_doc_checkboxes.mjs`, `check_garmin_source.sh` (and its 22 unit tests), the `apps/web` `runs` + `routes` + `training` suites (1456/1456), `svelte-check` (0 errors), `dart analyze` on the two changed Dart files (3 infos, 0 warnings), and the Flutter files `grade_adjusted_pace_test.dart`, `roadbook_test.dart`, `pace_analysis_test.dart`, `run_detail_screen_test.dart`, `fuel_plan_test.dart`, `architecture_guards_test.dart`.
+
+NOT run by this lane, and not claimed: any Monkey C compilation or execution, the Renode sim, Playwright, the full Flutter suite, and anything needing the local Supabase stack. Nothing here is sim-verified or bench-verified.

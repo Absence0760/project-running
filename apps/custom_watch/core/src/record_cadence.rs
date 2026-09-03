@@ -119,18 +119,43 @@ impl CheckpointMark {
     }
 }
 
-/// Altitude in metres → wire-format decimetres, dropping values outside the
-/// `i16` decimetre range (-3276.8 m..=3276.7 m — a frozen
-/// [`crate::run_store::TrackPoint`] limit; tier-2 widens it) so an out-of-range
-/// reading stores `None`, never a wrong value.
+/// Altitude in metres → wire-format decimetres, dropping anything the field
+/// cannot carry so an out-of-range reading stores `None`, never a wrong value.
 ///
-/// The range is inclusive at BOTH ends: every `i16` decimetre value is
-/// representable, so there is no reason for the bottom of the field to store
-/// nothing while the top stores fine. A NaN or infinite metre value compares
-/// false against both ends and so is dropped, never saturated.
+/// The window is **-3276.7 m..=3276.7 m**, one decimetre narrower at the bottom
+/// than the `i16` it is stored in. `i16::MIN` is
+/// [`ELE_NONE`](crate::run_store::ELE_NONE), the format's "this point carries no
+/// altitude" sentinel, so a reading that lands on it is not stored low — it is
+/// not stored at all. `TrackPoint::encode` writes the sentinel and `decode`
+/// reads it back as `None`, which made -3276.8 m the one altitude in the field's
+/// own range that round-tripped to nothing while the value beside it stored
+/// fine. Excluding it here is what makes the doc above true: an altitude either
+/// survives the round trip or is refused at the door, and there is no third
+/// outcome. A NaN or infinite metre value compares false against both ends and
+/// so is dropped, never saturated.
+///
+/// **The ceiling is far below what the device believes.**
+/// [`crate::elevation::plausible_alt`] admits -500 m..=9000 m, so every reading
+/// between 3276.7 m and 9000 m is one the watch trusts, publishes to the live
+/// altitude and vert surfaces, and then cannot write to the track. That band is
+/// where this device's races are: Hardrock's Handies Peak is 4285 m and its low
+/// point 2830 m, so **69 % of a Silverton-Handies-Silverton profile stores no
+/// elevation at all** — and because
+/// [`compute_elevation_gain`](crate::route_simplify::compute_elevation_gain)
+/// carries the last reading across a dropout, the climb above the ceiling is not
+/// merely missing, it nets to nothing: the summit push contributes zero vert to
+/// a synced run, on the metric this watch exists for. Leadville's Hope Pass
+/// (3840 m), the Alps and the Rockies are all inside the same band.
+///
+/// Widening it is a wire-format change on two rails at once — the phone's
+/// `sim_watch_sync.dart` reads this field as `eleDm / 10.0` and rejects any
+/// version past 4 — so it is not something the firmware can do alone. The
+/// design is recorded in `docs/product/followups.md`; `the_altitude_ceiling_is_
+/// far_below_what_the_device_believes` below pins the consequence so the day it
+/// is widened the test goes red rather than the limit going quiet.
 pub fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
     let dm = alt_m * 10.0;
-    (i16::MIN as f32..=i16::MAX as f32)
+    ((i16::MIN as f32 + 1.0)..=i16::MAX as f32)
         .contains(&dm)
         .then_some(dm as i16)
 }
@@ -367,12 +392,48 @@ mod tests {
     }
 
     #[test]
-    fn altitude_range_edges_are_inclusive_at_both_ends() {
-        // Both extremes are representable decimetre values, so both store. The
-        // bounds used to be asymmetric (`>` at the bottom, `<=` at the top), which
-        // silently dropped exactly -3276.8 m while +3276.7 m stored fine.
+    fn the_bottom_of_the_field_is_the_no_reading_sentinel_and_is_never_handed_out() {
+        // `ELE_NONE` IS `i16::MIN`, so -3276.8 m is not an altitude the format
+        // can hold — it is the format's way of saying there is no altitude. An
+        // earlier round widened the bottom bound to include it on the stated
+        // grounds that "every i16 decimetre value is representable", which is
+        // the one thing that is not true of this one: `Some(i16::MIN)` encodes
+        // to the sentinel and decodes back as `None`, so the reading was
+        // silently lost while the value one decimetre above it stored fine.
+        assert_eq!(ele_dm_from_m(i16::MIN as f32 / 10.0), None);
+        assert_eq!(
+            ele_dm_from_m((i16::MIN as f32 + 1.0) / 10.0),
+            Some(i16::MIN + 1)
+        );
         assert_eq!(ele_dm_from_m(i16::MAX as f32 / 10.0), Some(i16::MAX));
-        assert_eq!(ele_dm_from_m(i16::MIN as f32 / 10.0), Some(i16::MIN));
+    }
+
+    #[test]
+    fn every_altitude_this_stores_survives_the_round_trip() {
+        // The invariant the sentinel exclusion exists for, stated as a property
+        // rather than as two edge cases: a reading either survives encode →
+        // decode intact or is refused at the door. There is no third outcome,
+        // and a value that decodes to `None` after being accepted is the worst
+        // of the three because nothing anywhere reports it.
+        for dm in [i16::MIN, i16::MIN + 1, -32_000, -5_000, 0, 5_000, i16::MAX] {
+            let Some(stored) = ele_dm_from_m(dm as f32 / 10.0) else {
+                continue;
+            };
+            let p = crate::run_store::TrackPoint {
+                lat_e7: 0,
+                lon_e7: 0,
+                t_offset_s: 0,
+                ele_dm: Some(stored),
+                bpm: None,
+            };
+            assert_eq!(
+                crate::run_store::TrackPoint::decode(&p.encode())
+                    .expect("a point record decodes as a point")
+                    .ele_dm,
+                Some(stored),
+                "{dm} dm was accepted and then lost"
+            );
+        }
     }
 
     #[test]
@@ -381,6 +442,46 @@ mod tests {
         // altitude the runner never reached.
         assert_eq!(ele_dm_from_m((i16::MAX as f32 + 1.0) / 10.0), None);
         assert_eq!(ele_dm_from_m((i16::MIN as f32 - 1.0) / 10.0), None);
+    }
+
+    /// Characterisation, not approval: this pins what the shipped decimetre
+    /// field COSTS so the number is written down somewhere a reader meets it,
+    /// and so the day the field is widened to `CRS1`'s `i16` metres the test
+    /// goes red rather than the limit going quiet. See `ele_dm_from_m`'s doc
+    /// comment and the followups entry for the two-rail change.
+    #[test]
+    fn the_altitude_ceiling_is_far_below_what_the_device_believes() {
+        use crate::elevation::{plausible_alt, ALT_MAX_M};
+
+        // The whole band between the two windows is a reading the watch trusts
+        // enough to publish to the live altitude page and then cannot write to
+        // the track it is recording.
+        assert!(ALT_MAX_M > i16::MAX as f32 / 10.0);
+        for summit_m in [3_276.75_f32, 3_840.0, 4_285.0, 5_895.0, 8_849.0] {
+            assert!(plausible_alt(summit_m).is_some(), "{summit_m}");
+            assert_eq!(ele_dm_from_m(summit_m), None, "{summit_m}");
+        }
+
+        // Hardrock: Silverton at 2830 m, Handies Peak at 4285 m. Sampling that
+        // climb-and-return evenly, this is the share of the course whose points
+        // carry no elevation at all — and because the gain rule carries the
+        // last reading across a dropout, the summit push nets to zero vert.
+        let n = 10_000;
+        let dropped = (0..n)
+            .filter(|i| {
+                let f = if *i < n / 2 {
+                    *i as f32 / (n / 2) as f32
+                } else {
+                    2.0 - *i as f32 / (n / 2) as f32
+                };
+                let alt = 2_830.0 + f * (4_285.0 - 2_830.0);
+                plausible_alt(alt).and_then(ele_dm_from_m).is_none()
+            })
+            .count();
+        assert!(
+            (6_800..7_100).contains(&dropped),
+            "69 % of a Silverton-Handies-Silverton profile stores no elevation; got {dropped}/{n}"
+        );
     }
 
     #[test]

@@ -267,10 +267,24 @@ pub const ELEVATION_GAIN_MIN_DELTA_M: f64 = 3.0;
 /// only, so a straight road over a summit collapses to its endpoints and the
 /// climb between them disappears.
 pub fn compute_elevation_gain(track: &[LatLng]) -> f64 {
+    elevation_gain_from_samples(track.iter().map(|p| p.ele))
+}
+
+/// The rule above, over bare altitude samples rather than over [`LatLng`].
+///
+/// Web states the rule once and reaches it from both callers because
+/// `computeElevationGain` is typed structurally — a run's `TrackPoint` and a
+/// route's waypoint both satisfy `{ ele }`. Rust has no such subtyping, and the
+/// watch has no allocator to build one shape out of the other, so the seam is
+/// this iterator: [`crate::run_stats::elevation_gain_metres`] feeds it a run's
+/// track and [`compute_elevation_gain`] a route's polyline, and neither
+/// restates the gate. Restating it is exactly how the two came to answer
+/// differently for the same terrain.
+pub fn elevation_gain_from_samples(samples: impl Iterator<Item = Option<f64>>) -> f64 {
     let mut gain = 0.0;
     let mut reference: Option<f64> = None;
-    for p in track {
-        let Some(ele) = p.ele else { continue };
+    for sample in samples {
+        let Some(ele) = sample else { continue };
         let Some(reference_m) = reference else {
             reference = Some(ele);
             continue;
