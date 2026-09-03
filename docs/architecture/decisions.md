@@ -18764,3 +18764,44 @@ queued-to-sync cloud (they are different promises and only one is true), and the
 parked-not-retried case in each of `sync_service_test`, `background_sync_test`
 and `import_cloud_push_deferred_test` — the last of those being the call site
 where an over-size track actually arrives.
+
+## 1071. The `isProviderConfigured` fail-open filing was stale on mobile — § 1007 had already closed it, and here is the proof
+
+The round-36 mobile lane took the followups item asking for a decision on
+`RaceService.isProviderConfigured`: fail open (a probe failure should not hide a
+working provider) or fail closed (the house default). Read against `main`, the
+mobile half of the question was **already answered, in the fail-closed
+direction, by § 1007** — which landed on 2026-09-02, two days after the filing
+was written on 2026-08-31 (`7e1d1172d`, PR #833). Nobody ticked the box, so the
+entry outlived the work.
+
+The evidence, not an assertion. `isProviderConfigured` delegates every failure to
+the top-level `raceProbeUnavailable`, which returns `true` — unavailable — for
+anything that is not a `FunctionException` with `status > 0`, and for a 429 /
+5xx even when it is. Only a clean success or a readable non-429 4xx reports the
+provider live, because only those prove the function ran **past** its credential
+gate. The two cases the filing named by name are each pinned:
+`raceProbeUnavailable(SocketException(...))` and
+`raceProbeUnavailable(StateError('not initialized'))` are both asserted `isTrue`
+in `race_providers_test.dart`, and the end-to-end shape is pinned separately —
+`RaceService()` with no Supabase behind it answers `false` for all three import
+providers, because `_c` throws its own `StateError` inside the same `try`. Both
+call sites (`races_screen._probe`, `settings_integrations_screen`
+`._probeRaceProvider`) additionally initialise `ok = false` before their try, so
+the screen-level degrade is fail-closed even if the service ever stopped being.
+13 tests, green.
+
+The filing's remaining half — "same question on web" — is not this lane's file,
+and is worth reading against § 1007 rather than answered fresh: **web is where
+the fail-closed rule came from.** `core/data.ts`'s `isProviderNotConfigured`
+already graded a 429 as its own per-user rate limit, a 5xx as never having
+reached the gate, and a status-0 transport failure as no evidence at all; § 1007
+ported that grading to the phone precisely because the two platforms disagreed
+about a configured provider whenever the probe did not cleanly reach the gate.
+The asymmetry recorded there is the reasoning either lane should reconcile
+against: hiding a live leg for one page load is corrected by the next probe,
+while offering an action whose very next call 503s spends a runner's attention on
+a tile that cannot work.
+
+No code changed. A filing that describes shipped behaviour is itself the defect,
+and the fix is to correct the filing.
