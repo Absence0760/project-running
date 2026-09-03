@@ -23,14 +23,19 @@
 
 	let { open, targetKind, targetId, targetLabel, onclose }: Props = $props();
 
-	const NOUNS: Record<ReportTargetKind, MessageKey> = {
-		user: 'reportDialog.nounProfile',
-		club: 'reportDialog.nounClub',
-		route: 'reportDialog.nounRoute',
-		comment: 'reportDialog.nounComment',
-		club_post: 'reportDialog.nounPost',
-		run: 'reportDialog.nounRun',
-		route_review: 'reportDialog.nounReview',
+	/// A whole title per kind, not one title with a `{noun}` slot: the four
+	/// feminine nouns and the three masculine ones cannot share a determiner,
+	/// so a slot rendered "Denunciar este rota" in Portuguese and Spanish,
+	/// "Signaler ce course" in French, and put a feminine "Diese" on four
+	/// masculine German nouns (decisions § 1060).
+	const TITLES: Record<ReportTargetKind, MessageKey> = {
+		user: 'reportDialog.titleProfile',
+		club: 'reportDialog.titleClub',
+		route: 'reportDialog.titleRoute',
+		comment: 'reportDialog.titleComment',
+		club_post: 'reportDialog.titlePost',
+		run: 'reportDialog.titleRun',
+		route_review: 'reportDialog.titleReview',
 	};
 
 	const REASONS: { value: ReportReason; label: MessageKey; hint: MessageKey }[] = [
@@ -66,7 +71,7 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
-	const targetNoun = $derived(NOUNS[targetKind]);
+	const targetTitle = $derived(TITLES[targetKind]);
 
 	function reset() {
 		reason = 'spam';
@@ -101,7 +106,7 @@
 	}
 </script>
 
-<Modal {open} title={m('reportDialog.title', { noun: m(targetNoun) })} narrow onclose={handleClose} bodyClass="report-body">
+<Modal {open} title={m(targetTitle)} narrow onclose={handleClose} bodyClass="report-body">
 	{#if targetLabel}
 		<p class="target">
 			{m('reportDialog.reportingPrefix')} <strong>{targetLabel}</strong>. {m('reportDialog.reviewedNotice')}

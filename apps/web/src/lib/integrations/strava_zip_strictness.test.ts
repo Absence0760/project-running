@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { stripComments } from '../core/strip_comments';
+import { indexHeader, missingRequiredStravaColumns } from './strava-zip-header';
 
 const IMPORTER = 'src/lib/integrations/strava-zip.ts';
 
@@ -108,18 +109,22 @@ test('a refused row is counted and reported, not merely logged', () => {
 });
 
 test('a header naming no activity type is refused, not imported as runs', () => {
-	const s = source();
-	const guard = s.slice(s.indexOf('const idx = indexHeader(header)'), s.indexOf('const seen = await'));
-	assert.ok(guard.length > 0, 'the required-column check not found');
-	assert.match(
-		guard,
-		/idx\.type < 0/,
+	// Executed, not read: the refusal lives in `strava-zip-header.ts` beside
+	// `indexHeader`, which is what that module exists for. It was inline in the
+	// unexecutable importer only because this guard used to read the importer's
+	// text, and the guard's own shape is what kept it there.
+	const header = ['Activity ID', 'Activity Date', 'Distance', 'Moving Time', 'Filename'];
+	assert.deepEqual(indexHeader(header).type, -1, 'the premise: an absent column resolves to -1');
+	assert.deepEqual(
+		missingRequiredStravaColumns(indexHeader(header)),
+		['Activity Type'],
 		'a missing activity-type column must be as fatal as a missing Activity ID: ' +
-			'`row[-1]` is undefined, so importOne would default every row to `run`',
+			'`row[-1]` is undefined, so importOne would default every row to `run`, ' +
+			'and the refusal must name the column the operator has to look for',
 	);
-	assert.match(
-		guard,
-		/Activity Type/,
-		'the refusal must name the column the operator has to look for',
+	assert.deepEqual(
+		missingRequiredStravaColumns(indexHeader([...header, 'Activity Type'])),
+		[],
+		'a complete header must not be refused',
 	);
 });

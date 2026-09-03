@@ -22,7 +22,12 @@ import { collectStravaDedupeSet, type StravaDedupeRow } from './strava-zip-dedup
 import { gunzipBlob } from '../util/gunzip';
 import { resolveStravaTrackMember } from './strava_track_member';
 import { classifyStravaRow } from './strava-zip-disposition';
-import { indexHeader, stravaDistanceMetres, type HeaderIndex } from './strava-zip-header';
+import {
+	indexHeader,
+	missingRequiredStravaColumns,
+	stravaDistanceMetres,
+	type HeaderIndex,
+} from './strava-zip-header';
 import { parseStravaCsvDateToIso } from './strava-zip-date';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
@@ -31,6 +36,7 @@ import {
 	recordImportFailure,
 	type ImportFailureLog,
 } from './import_failures';
+import { ImportRefusedError } from './import_refusal';
 
 export interface StravaZipProgress {
 	total: number;
@@ -63,7 +69,7 @@ export async function importStravaZip(
 	onProgress?: ProgressHandler,
 ): Promise<StravaZipProgress> {
 	const uid = auth.user?.id;
-	if (!uid) throw new Error('Not signed in');
+	if (!uid) throw new ImportRefusedError('not_signed_in');
 
 	// audit/strava May 2026 Medium #1 — bound the archive size so a
 	// decade-of-multi-sport-activity 5 GB export doesn't OOM the tab.
@@ -71,60 +77,34 @@ export async function importStravaZip(
 	// (10+ years of dense GPS data) while catching the obvious DoS.
 	// User-facing copy points the heaviest cohort at the per-year
 	// export tool in Strava's settings.
-	const MAX_STRAVA_ZIP_BYTES = 500 * 1024 * 1024;
-	if (file.size > MAX_STRAVA_ZIP_BYTES) {
-		throw new Error(
-			`Strava ZIP too large (${Math.round(file.size / (1024 * 1024))} MB). ` +
-				'The 500 MB cap defends against browser-OOM on the parser. ' +
-				'Split into yearly exports from Strava → Settings → My Account → Download or Delete Your Account.',
-		);
+	const MAX_STRAVA_ZIP_MB = 500;
+	if (file.size > MAX_STRAVA_ZIP_MB * 1024 * 1024) {
+		throw new ImportRefusedError('strava_zip_too_large', {
+			megabytes: Math.round(file.size / (1024 * 1024)),
+			limitMegabytes: MAX_STRAVA_ZIP_MB,
+		});
 	}
 
 	const zip = await JSZip.loadAsync(file);
 	const csvFile = zip.file('activities.csv');
 	if (!csvFile) {
-		throw new Error('Not a Strava export zip (missing activities.csv).');
+		throw new ImportRefusedError('strava_zip_not_an_export');
 	}
 
 	const csvText = await csvFile.async('text');
 	const rows = parseCsv(csvText);
 	if (rows.length === 0) {
-		throw new Error('activities.csv contained no rows.');
+		throw new ImportRefusedError('strava_zip_no_rows');
 	}
 
 	// Column names shift across Strava export eras; look them up case-
-	// insensitively and by alias. If we can't find the essentials, bail.
+	// insensitively and by alias. If we can't find the essentials, bail —
+	// `missingRequiredStravaColumns` holds which ones and why.
 	const header = rows[0];
 	const idx = indexHeader(header);
-	// Every column here is required for one reason: `indexHeader` answers -1 for
-	// a header it cannot find, `row[-1]` is `undefined`, and each read of it in
-	// `importOne` then FABRICATES a value for every row in the archive rather
-	// than failing. A missing `Activity Type` defaults each row to `run`, so a
-	// migrant's rides, swims and yoga import as runs (decisions § 979). A
-	// missing `Activity Date` leaves `parseStravaCsvDateToIso` with nothing and
-	// the `?? new Date()` fallback stamps every row with the moment of the
-	// import — five years of history collapsed onto today. A missing
-	// `Moving Time` gives every run a zero duration, and a header naming no
-	// distance column at all gives every run zero distance; both poison pace,
-	// PRs and training load while the summary still reads "imported".
-	//
-	// Refusing at the header is the only place the difference between "this
-	// export names no such column" and "this row's cell is blank" is still
-	// visible. The blank CELL stays lenient, one row at a time — except for the
-	// date, which `importOne` refuses per row for the same reason the header
-	// check exists.
-	const missing = [
-		idx.id < 0 && 'Activity ID',
-		idx.filename < 0 && 'Filename',
-		idx.type < 0 && 'Activity Type',
-		idx.date < 0 && 'Activity Date',
-		idx.movingTime < 0 && 'Moving Time',
-		// Either distance block satisfies it — an export era carrying only the
-		// display-unit column is still importable, at the athlete's own unit.
-		idx.distance < 0 && idx.distanceMetres < 0 && 'Distance',
-	].filter((c): c is string => typeof c === 'string');
+	const missing = missingRequiredStravaColumns(idx);
 	if (missing.length > 0) {
-		throw new Error(`activities.csv is missing required columns (${missing.join(' / ')}).`);
+		throw new ImportRefusedError('strava_zip_missing_columns', { columns: missing });
 	}
 
 	// Page the dedupe read: an unbounded PostgREST SELECT caps at 1000 rows, so

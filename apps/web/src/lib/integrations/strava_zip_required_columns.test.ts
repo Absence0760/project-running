@@ -4,11 +4,11 @@
 // "imported". decisions § 979 closed that for `Activity Type`; the same chain
 // was live for the date, the duration and the distance.
 //
-// Two halves, because only one of them can be executed here. `indexHeader` is
-// pure, so the PREMISE — that an omitted column resolves to -1 — is measured.
-// `strava-zip.ts` imports supabase-js and is unexecutable under raw tsx (the
-// reason `strava_zip_strictness.test.ts` reads it as text too), so the guard's
-// own shape is read off the source.
+// Both halves are EXECUTED now. `missingRequiredStravaColumns` lives beside
+// `indexHeader` in the header module — which exists precisely so header logic
+// can be unit-tested for real — so the refusal's own answer is measured rather
+// than read off `strava-zip.ts` as text. The one thing left as source is that
+// the importer still asks it, and asks before it reads anything.
 //
 // Invocation:
 //   npx tsx --test src/lib/integrations/strava_zip_required_columns.test.ts
@@ -20,7 +20,7 @@ import { resolve } from 'node:path';
 
 import { stripComments } from '../core/strip_comments';
 
-import { indexHeader } from './strava-zip-header';
+import { indexHeader, missingRequiredStravaColumns } from './strava-zip-header';
 
 const IMPORTER = 'src/lib/integrations/strava-zip.ts';
 
@@ -29,15 +29,6 @@ const IMPORTER = 'src/lib/integrations/strava-zip.ts';
 /// (decisions § 971 + § 1000; `security_guards.test.ts` enforces it).
 function source(): string {
 	return stripComments(readFileSync(resolve(IMPORTER), 'utf-8'));
-}
-
-function headerGuard(s: string): string {
-	const from = s.indexOf('const idx = indexHeader(header)');
-	const to = s.indexOf('const seen = await');
-	assert.notEqual(from, -1, 'the header index no longer resolved here');
-	assert.notEqual(to, -1, 'the required-column check no longer precedes the dedupe read');
-	assert.ok(to > from, 'the guard region is inverted — re-anchor this');
-	return s.slice(from, to);
 }
 
 const FULL_HEADER = [
@@ -89,36 +80,70 @@ test('one Distance column is enough — the raw metric block is optional', () =>
 	assert.equal(single.distanceMetres, -1);
 	const both = indexHeader([...FULL_HEADER, 'Distance']);
 	assert.ok(both.distance >= 0 && both.distanceMetres >= 0);
+	assert.deepEqual(missingRequiredStravaColumns(both), []);
 });
 
-test('the header guard tests every column whose absence fabricates a value', () => {
-	const guard = headerGuard(source());
-	for (const field of ['id', 'filename', 'type', 'date', 'movingTime'] as const) {
-		assert.match(
-			guard,
-			new RegExp(`idx\\.${field} < 0`),
-			`a missing ${field} column is not refused — every row would carry a ` +
-				`fabricated value with nothing reporting a failure`,
+test('a complete header is importable', () => {
+	assert.deepEqual(missingRequiredStravaColumns(indexHeader(FULL_HEADER)), []);
+});
+
+test('every column whose absence fabricates a value is refused, by name', () => {
+	for (const { drop, label } of REQUIRED) {
+		assert.deepEqual(
+			missingRequiredStravaColumns(indexHeader(FULL_HEADER.filter((h) => !drop.includes(h)))),
+			[label],
+			`a missing ${label} column is not refused — every row would carry a ` +
+				'fabricated value with nothing reporting a failure',
 		);
 	}
-	assert.match(
-		guard,
-		/idx\.distance < 0 && idx\.distanceMetres < 0/,
-		'the distance requirement must be satisfied by EITHER block, and must ' +
-			'exist: with neither resolved every run imports at zero distance',
+});
+
+test('a header with no distance column at all is refused naming Distance', () => {
+	assert.deepEqual(
+		missingRequiredStravaColumns(indexHeader(FULL_HEADER.filter((h) => h !== 'Distance'))),
+		['Distance'],
+		'with neither block resolved every run imports at zero distance',
 	);
 });
 
-test('the refusal names each column the operator has to look for', () => {
-	const guard = headerGuard(source());
-	for (const { label } of REQUIRED) {
-		assert.ok(
-			guard.includes(`'${label}'`),
-			`the refusal does not name ${label}, so the operator cannot act on it`,
-		);
-	}
-	assert.ok(guard.includes("'Distance'"));
-	assert.match(guard, /missing required columns/, 'the message no longer says what is wrong');
+test('a header naming none of them lists every one the operator has to look for', () => {
+	assert.deepEqual(missingRequiredStravaColumns(indexHeader([])), [
+		'Activity ID',
+		'Filename',
+		'Activity Type',
+		'Activity Date',
+		'Moving Time',
+		'Distance',
+	]);
+});
+
+test('a Sport-Type-only export still satisfies the activity-type requirement', () => {
+	// § 979: `type` falls back to Sport Type, so an era that drops the coarse
+	// column is importable and must not be refused.
+	const header = FULL_HEADER.map((h) => (h === 'Activity Type' ? 'Sport Type' : h));
+	assert.deepEqual(missingRequiredStravaColumns(indexHeader(header)), []);
+});
+
+test('the importer refuses on the shared answer, before it reads anything', () => {
+	const s = source();
+	const from = s.indexOf('const idx = indexHeader(header)');
+	const to = s.indexOf('const seen = await');
+	assert.notEqual(from, -1, 'the header index no longer resolved here');
+	assert.notEqual(to, -1, 'the required-column check no longer precedes the dedupe read');
+	assert.ok(to > from, 'the guard region is inverted — re-anchor this');
+	const guard = s.slice(from, to);
+	assert.match(
+		guard,
+		/missingRequiredStravaColumns\(idx\)/,
+		'the importer must ask the header module, not re-derive the list inline — ' +
+			'an inline copy is the shape that kept this guard unexecutable',
+	);
+	assert.match(
+		guard,
+		/throw new ImportRefusedError\('strava_zip_missing_columns', \{ columns: missing \}\)/,
+		'the refusal must carry the column list as DATA so the page can say it in ' +
+			"the reader's own language",
+	);
 });
 
 test('a row whose date cannot be read is refused, not stamped with the import moment', () => {

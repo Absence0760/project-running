@@ -18686,3 +18686,136 @@ of its needle flagged it, which is the § 1034 mistake in miniature.
 Both were found by verifying the merged tree rather than the branches, which is
 the standing round discipline and earned its cost again here.
 
+
+## 1058. A bulk import that refuses the whole file now says so in the reader's language, and the reason travels as data
+
+`strava-zip.ts` threw four English `Error`s — the 500 MB archive cap, "Not a
+Strava export zip (missing activities.csv)", "activities.csv contained no
+rows", and the missing-required-columns list — and
+`settings/integrations/+page.svelte` assigned `err.message` straight into
+`zipError`. Every other string on that page resolves through `m()`. So the
+most informative message in the whole migration flow was the only one on the
+page that never translated, and it is the one a non-English operator most
+needs: nothing imported, and this sentence is all they get.
+
+The fix is the split `util/rate_limit_errors.ts` already keeps from
+`i18n/rate_limit_message.ts`. `integrations/import_refusal.ts` carries the
+refusal as a reason IDENTIFIER plus its specifics as data — the archive's own
+size and the cap it passed, the list of column labels the export does not name
+— and stops there. `i18n/import_refusal_message.ts` maps the reason to a whole
+translated sentence and drops only the figures into slots. Six reasons, keyed
+in all seven catalogues: `not_signed_in`, `strava_zip_too_large`,
+`strava_zip_not_an_export`, `strava_zip_no_rows`,
+`strava_zip_missing_columns`, `garmin_unsupported_file`. The Garmin importer
+was in scope for the same reason it always is — it threw the same shape from
+the same page, and closing one importer would have left the page half
+translated.
+
+Three things were decided rather than fallen into.
+
+**A whole sentence per reason, not a sentence with a `{reason}` slot.** The
+same argument § 744 made for the rate-limit buckets: the refusal is a clause
+whose verb inflects and whose object is a file, and German puts the verb
+second. The only slots are figures and a list of literal `activities.csv`
+header cells — which are deliberately NOT translated and NOT list-formatted
+with a locale's conjunction, because the operator has to find those exact
+words in a file we did not write.
+
+**The narrowing is structural, and fails closed.** `asImportRefusal` reads a
+`reason` field and checks it against the shipped set rather than using
+`instanceof`, so a value that crossed a module boundary still renders its own
+sentence, and a reason this build has no key for falls through to the framed
+generic rather than rendering a bare identifier at a reader. `ImportRefusedError.message`
+is the identifier itself, the shape `exchangeStravaCode` already rethrows
+`strava_not_configured` in, so anything that logs it gets something
+machine-readable.
+
+**The per-row `detail` stays raw English, and that is not the same defect.**
+`import_failures.ts` classifies a per-row throw into a keyed `reason` and
+keeps a log-safe `detail` beside it; the detail is a diagnostic pasted into a
+spreadsheet or a support thread, and `importFailureReportCsv` already argues
+for English column headers on the same ground. Only the file-level region is
+in scope, which is why the guard that neither importer throws a bare `Error`
+is anchored to that region and not to the file.
+
+The guards are two: the render half is executed against all seven catalogues,
+asserting no placeholder is left unfilled and that a non-refusal is framed
+rather than shown bare; the throw half is executed for the narrowing and reads
+source for the two claims that cannot be — that every shipped reason is raised
+by the importer it belongs to (so a key nothing can show, or a reason with no
+sentence, fails), and that the page assigns both error slots from
+`importRefusalMessage` and never from `err`. Both were proved to trip by
+reverting the page's assignment and by deleting a slot from the German string.
+
+## 1059. A source-level guard had decided where production code lives, and moving the code was the fix
+
+`strava_zip_strictness.test.ts` read the slice of `strava-zip.ts` between
+`const idx = indexHeader(header)` and `const seen = await` looking for the
+literals `idx.type < 0` and `Activity Type`. `strava-zip.ts` imports
+supabase-js and cannot be executed under raw `tsx`, which is why that guard
+was written as a text scan in the first place — and the consequence was that
+§ 1042's six-column refusal was left INLINE in the unexecutable module
+instead of moving to `strava-zip-header.ts`, which exists for exactly this:
+pure header logic, unit-testable for real. The guard's own shape was deciding
+where the code lived, and the code that mattered was the least tested.
+
+`missingRequiredStravaColumns(idx)` now lives beside `indexHeader` and returns
+the labels an operator has to look for. Both guards execute it: the strictness
+suite's activity-type case is a real call with a real header, and the
+required-columns suite measures every column's absence, the either-block
+distance rule, the Sport-Type-only era § 979 added, and the complete-header
+case that would otherwise let a guard pass while refusing every export. What
+is left as source is the one claim executing the function cannot make — that
+the importer still asks it, before it reads anything, and refuses with the
+column list as data.
+
+The generalisation is worth stating because this tree has several of these
+scans: a source-level guard is a last resort for a module that cannot be
+loaded, and when it starts constraining where logic may live, the answer is to
+move the logic to a module that loads — not to widen the scan.
+
+## 1060. The report dialog's title is one string per target kind, because a determiner cannot agree with a slot
+
+`reportDialog.title` was one string with a `{noun}` slot and seven nouns to
+fill it with, and the nouns are not one gender. pt-PT and pt-BR say
+"Denunciar este {noun}" against `rota`, `corrida`, `avaliação` and
+`publicação`, which are feminine, so four of the seven rendered "Denunciar
+**este** rota". Spanish had the same four. French "Signaler ce {noun}" hit
+`publication` and `course`. German "Diese {noun} melden" had the mirror
+problem on four masculine nouns and one neuter — `Club`, `Kommentar`,
+`Beitrag`, `Lauf`, `Profil`. Only `en` and `ja` are gender-free.
+
+A per-noun determiner param was the other candidate and is the worse one: it
+is a second vocabulary to keep in lockstep with the noun set, it needs a
+different vocabulary per locale (French elides before a vowel — `cet
+itinéraire` against `ce club` — and German inflects for case as well as
+gender), and nothing can check it. Seven title keys instead, six non-English
+catalogues each writing the determiner into the same string as the noun it
+governs. That is a **net reduction** of one key per catalogue, since it
+replaces the title plus the seven bare nouns, which had no other caller.
+
+The point of the shape is that a catalogue can then be read for agreement,
+and § 872's `GENDER_FLIPPED_NOUNS` is the guard that reads it. It was
+pt-PT-only, holding `ecrã` and `partilha`; it is now keyed by locale and
+carries the seven report nouns in es, fr, both Portuguese catalogues and de.
+Two things were measured rather than assumed before widening it. French
+plural determiners carry no gender at all, and `les` / `ces` / `aux` in the
+first draft reported **31 correct strings** — dropped, so the French rows are
+singular-only. German has three genders and four cases, so only the
+demonstratives no case licenses are listed (`Diese`/`Dieses` before a
+masculine noun, `Diesen`/`Dieses` before a feminine one), the nouns are
+matched as exact singulars because the genitive takes an `-s` on the noun and
+`dieses Clubs` is correct, and `dieser Lauf` / `diesem Lauf` are left alone.
+With that, the scan reports **zero** across all five catalogues, and it was
+proved to trip by writing "Denunciar este ruta", "Signaler ce course" and
+"Diese Club melden".
+
+A second guard holds the shape itself: every target kind has its own title in
+every catalogue, none of them contains a `{noun}` slot, and `ReportDialog.svelte`
+names all seven — so a new report target kind cannot ship a title the
+agreement guard has never seen, and no kind can quietly go back to a slot.
+
+The English rendering is byte-identical to what the slot produced, so the six
+Playwright specs that assert "Report this profile" / "club" / "post" / "run" /
+"comment" needed no change; every locale that was wrong is a locale no e2e
+spec reads.
