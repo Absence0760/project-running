@@ -18773,3 +18773,49 @@ The generalisation is worth stating because this tree has several of these
 scans: a source-level guard is a last resort for a module that cannot be
 loaded, and when it starts constraining where logic may live, the answer is to
 move the logic to a module that loads — not to widen the scan.
+
+## 1060. The report dialog's title is one string per target kind, because a determiner cannot agree with a slot
+
+`reportDialog.title` was one string with a `{noun}` slot and seven nouns to
+fill it with, and the nouns are not one gender. pt-PT and pt-BR say
+"Denunciar este {noun}" against `rota`, `corrida`, `avaliação` and
+`publicação`, which are feminine, so four of the seven rendered "Denunciar
+**este** rota". Spanish had the same four. French "Signaler ce {noun}" hit
+`publication` and `course`. German "Diese {noun} melden" had the mirror
+problem on four masculine nouns and one neuter — `Club`, `Kommentar`,
+`Beitrag`, `Lauf`, `Profil`. Only `en` and `ja` are gender-free.
+
+A per-noun determiner param was the other candidate and is the worse one: it
+is a second vocabulary to keep in lockstep with the noun set, it needs a
+different vocabulary per locale (French elides before a vowel — `cet
+itinéraire` against `ce club` — and German inflects for case as well as
+gender), and nothing can check it. Seven title keys instead, six non-English
+catalogues each writing the determiner into the same string as the noun it
+governs. That is a **net reduction** of one key per catalogue, since it
+replaces the title plus the seven bare nouns, which had no other caller.
+
+The point of the shape is that a catalogue can then be read for agreement,
+and § 872's `GENDER_FLIPPED_NOUNS` is the guard that reads it. It was
+pt-PT-only, holding `ecrã` and `partilha`; it is now keyed by locale and
+carries the seven report nouns in es, fr, both Portuguese catalogues and de.
+Two things were measured rather than assumed before widening it. French
+plural determiners carry no gender at all, and `les` / `ces` / `aux` in the
+first draft reported **31 correct strings** — dropped, so the French rows are
+singular-only. German has three genders and four cases, so only the
+demonstratives no case licenses are listed (`Diese`/`Dieses` before a
+masculine noun, `Diesen`/`Dieses` before a feminine one), the nouns are
+matched as exact singulars because the genitive takes an `-s` on the noun and
+`dieses Clubs` is correct, and `dieser Lauf` / `diesem Lauf` are left alone.
+With that, the scan reports **zero** across all five catalogues, and it was
+proved to trip by writing "Denunciar este ruta", "Signaler ce course" and
+"Diese Club melden".
+
+A second guard holds the shape itself: every target kind has its own title in
+every catalogue, none of them contains a `{noun}` slot, and `ReportDialog.svelte`
+names all seven — so a new report target kind cannot ship a title the
+agreement guard has never seen, and no kind can quietly go back to a slot.
+
+The English rendering is byte-identical to what the slot produced, so the six
+Playwright specs that assert "Report this profile" / "club" / "post" / "run" /
+"comment" needed no change; every locale that was wrong is a locale no e2e
+spec reads.
