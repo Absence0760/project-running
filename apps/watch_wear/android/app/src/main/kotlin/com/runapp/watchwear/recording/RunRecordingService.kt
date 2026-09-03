@@ -34,6 +34,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.cos
@@ -286,13 +287,15 @@ class RunRecordingService : Service() {
         }
         if (BuildConfig.ENABLE_HR) {
             hrJob = scope.launch {
-                hr.stream().collect { bpm ->
-                    if (isPaused()) return@collect
-                    bpmSum += bpm
-                    bpmCount++
-                    val avg = bpmSum.toDouble() / bpmCount
-                    RecordingRepository.update { it.copy(bpm = bpm, avgBpm = avg) }
-                }
+                hr.stream()
+                    .catch { e -> android.util.Log.w(TAG, "heart rate stream failed", e) }
+                    .collect { bpm ->
+                        if (isPaused()) return@collect
+                        bpmSum += bpm
+                        bpmCount++
+                        val avg = bpmSum.toDouble() / bpmCount
+                        RecordingRepository.update { it.copy(bpm = bpm, avgBpm = avg) }
+                    }
             }
         }
         // Pedometer — subscribed regardless of HR flag because it has
@@ -300,10 +303,12 @@ class RunRecordingService : Service() {
         // silently on devices without `TYPE_STEP_COUNTER`, so this is
         // a no-op on hardware that doesn't support it.
         stepsJob = scope.launch {
-            pedometer.stream().collect { stepsThisRun ->
-                if (isPaused()) return@collect
-                RecordingRepository.update { it.copy(steps = stepsThisRun) }
-            }
+            pedometer.stream()
+                .catch { e -> android.util.Log.w(TAG, "step stream failed", e) }
+                .collect { stepsThisRun ->
+                    if (isPaused()) return@collect
+                    RecordingRepository.update { it.copy(steps = stepsThisRun) }
+                }
         }
         tickerJob = scope.launch {
             while (true) {
@@ -426,14 +431,25 @@ class RunRecordingService : Service() {
     private fun subscribeToGps() {
         gpsJob?.cancel()
         gpsJob = scope.launch {
-            gps.stream().collect { event ->
-                when (event) {
-                    is GpsEvent.Point -> if (!isPaused()) onGps(event.point)
-                    is GpsEvent.Availability -> RecordingRepository.update {
-                        it.copy(locationAvailable = event.available)
+            gps.stream()
+                // A stream that throws — a location permission revoked
+                // mid-run is the realistic one — used to escape this
+                // `launch` and kill the process, taking the recording with
+                // it. Report it as lost signal instead: the runner sees
+                // "GPS lost", the retry loop above re-subscribes within
+                // GPS_RETRY_INTERVAL_MS, and the elapsed clock keeps running.
+                .catch { e ->
+                    android.util.Log.w(TAG, "location stream failed", e)
+                    RecordingRepository.update { it.copy(locationAvailable = false) }
+                }
+                .collect { event ->
+                    when (event) {
+                        is GpsEvent.Point -> if (!isPaused()) onGps(event.point)
+                        is GpsEvent.Availability -> RecordingRepository.update {
+                            it.copy(locationAvailable = event.available)
+                        }
                     }
                 }
-            }
         }
     }
 

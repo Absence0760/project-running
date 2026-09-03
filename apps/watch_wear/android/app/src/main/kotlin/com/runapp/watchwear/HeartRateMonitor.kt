@@ -18,12 +18,26 @@ import kotlinx.coroutines.flow.callbackFlow
 /// sensor is reporting `AVAILABLE` — ACQUIRING / unreliable wrist-off
 /// / out-of-range samples are dropped so stale or obviously-bad values
 /// don't pollute `avg_bpm`.
+///
+/// Acquisition can fail three ways and all three end the same: the flow
+/// closes and the run records without heart rate. `MeasureCallback`
+/// gives `onRegistrationFailed` an empty default body, so leaving it
+/// unimplemented — as this did — turns "Health Services refused" into
+/// total silence: no samples, no error, an `avg_bpm` of null and
+/// nothing anywhere that says why. The synchronous throw is worse than
+/// silent: `registerMeasureCallback` raises `SecurityException` when
+/// BODY_SENSORS was declined, which escaped the collector's `launch`
+/// and took the whole process down mid-run, GPS trace included.
 class HeartRateMonitor(context: Context) {
     private val client = HealthServices.getClient(context).measureClient
 
     fun stream(): Flow<Int> = callbackFlow {
         var isAvailable = false
         val callback = object : MeasureCallback {
+            override fun onRegistrationFailed(throwable: Throwable) {
+                close()
+            }
+
             override fun onAvailabilityChanged(
                 dataType: DeltaDataType<*, *>,
                 availability: Availability,
@@ -48,9 +62,15 @@ class HeartRateMonitor(context: Context) {
             }
         }
 
-        client.registerMeasureCallback(DataType.HEART_RATE_BPM, callback)
+        try {
+            client.registerMeasureCallback(DataType.HEART_RATE_BPM, callback)
+        } catch (_: Throwable) {
+            close()
+        }
         awaitClose {
-            client.unregisterMeasureCallbackAsync(DataType.HEART_RATE_BPM, callback)
+            runCatching {
+                client.unregisterMeasureCallbackAsync(DataType.HEART_RATE_BPM, callback)
+            }
         }
     }
 
