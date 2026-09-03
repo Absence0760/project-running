@@ -3829,6 +3829,10 @@ fn plan_adaptive_glance(
                 AdaptiveReason::OnTrack => "ON TRACK",
                 AdaptiveReason::TrendUnderfitness => "DO MORE",
                 AdaptiveReason::TrendOvertraining => "EASE OFF",
+                // Distinct wording from `TrendOvertraining` on purpose: that
+                // one is "the plan says you over-ran", this one is "your load
+                // says stop whatever the plan says".
+                AdaptiveReason::DeloadFatigue => "DELOAD",
             };
             let _ = write!(rows[2], "{:<8}{}", "ADAPT", trend);
             let _ = write!(

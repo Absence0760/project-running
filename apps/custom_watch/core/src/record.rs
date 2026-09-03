@@ -418,6 +418,7 @@ impl PlanAdaptiveView {
             AdaptiveReason::OnTrack => 0,
             AdaptiveReason::TrendUnderfitness => 1,
             AdaptiveReason::TrendOvertraining => 2,
+            AdaptiveReason::DeloadFatigue => 3,
         }
     }
 
@@ -428,6 +429,7 @@ impl PlanAdaptiveView {
             0 => Some(AdaptiveReason::OnTrack),
             1 => Some(AdaptiveReason::TrendUnderfitness),
             2 => Some(AdaptiveReason::TrendOvertraining),
+            3 => Some(AdaptiveReason::DeloadFatigue),
             _ => None,
         }
     }
@@ -5724,6 +5726,39 @@ mod tests {
     /// decode is fail-closed, because the byte spaces are deliberately not the
     /// enums' declaration order and an unknown byte resolving to a variant would
     /// put the wrong verdict on the wrist.
+    /// The pin `trend_code`'s own doc comment names, and which did not exist:
+    /// the enum's explicit discriminants must equal the wire codes, so a
+    /// `reason as u8` slipped in later is the same byte the codec would have
+    /// sent. Without it the doc's whole argument — "the enum carries explicit
+    /// discriminants matching these codes" — rested on nothing, and the cast it
+    /// warns about would send a runner who needs to do more as on-track.
+    #[test]
+    fn trend_code_matches_discriminant() {
+        for reason in [
+            AdaptiveReason::OnTrack,
+            AdaptiveReason::TrendUnderfitness,
+            AdaptiveReason::TrendOvertraining,
+            AdaptiveReason::DeloadFatigue,
+        ] {
+            assert_eq!(
+                reason as u8,
+                PlanAdaptiveView::trend_code(reason),
+                "{reason:?}"
+            );
+        }
+        for confidence in [
+            AdaptiveConfidence::Low,
+            AdaptiveConfidence::Medium,
+            AdaptiveConfidence::High,
+        ] {
+            assert_eq!(
+                confidence as u8,
+                PlanAdaptiveView::confidence_code(confidence),
+                "{confidence:?}"
+            );
+        }
+    }
+
     #[test]
     fn the_view_verdicts_survive_the_wire_round_trip_and_refuse_unknown_bytes() {
         for verdict in [
@@ -5757,6 +5792,7 @@ mod tests {
             AdaptiveReason::OnTrack,
             AdaptiveReason::TrendUnderfitness,
             AdaptiveReason::TrendOvertraining,
+            AdaptiveReason::DeloadFatigue,
         ] {
             let byte = PlanAdaptiveView::trend_code(reason);
             assert_eq!(PlanAdaptiveView::trend_from_byte(byte), Some(reason));
@@ -5773,12 +5809,16 @@ mod tests {
             );
         }
         for b in 3..=u8::MAX {
-            assert_eq!(PlanAdaptiveView::trend_from_byte(b), None, "trend {b}");
             assert_eq!(
                 PlanAdaptiveView::confidence_from_byte(b),
                 None,
                 "confidence {b}"
             );
+        }
+        // The trend code space is one wider than the confidence one since the
+        // deload override joined it (decisions §1029).
+        for b in 4..=u8::MAX {
+            assert_eq!(PlanAdaptiveView::trend_from_byte(b), None, "trend {b}");
         }
 
         // The bytes are pinned individually too, so a renumber cannot pass by
@@ -5796,6 +5836,10 @@ mod tests {
         assert_eq!(
             PlanAdaptiveView::trend_code(AdaptiveReason::TrendUnderfitness),
             1
+        );
+        assert_eq!(
+            PlanAdaptiveView::trend_code(AdaptiveReason::DeloadFatigue),
+            3
         );
         assert_eq!(
             PlanAdaptiveView::trend_code(AdaptiveReason::TrendOvertraining),
