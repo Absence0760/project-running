@@ -622,7 +622,7 @@ mod tests {
                     lat_e7: t as i32,
                     lon_e7: 5,
                     t_offset_s: t,
-                    ele_dm: None,
+                    ele_m: None,
                     bpm: None,
                 })
                 .expect("push");

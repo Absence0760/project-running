@@ -119,45 +119,45 @@ impl CheckpointMark {
     }
 }
 
-/// Altitude in metres → wire-format decimetres, dropping anything the field
-/// cannot carry so an out-of-range reading stores `None`, never a wrong value.
+/// Altitude in metres → the wire format's whole-metre `i16`, dropping anything
+/// the field cannot carry so an out-of-range reading stores `None`, never a
+/// wrong value.
 ///
-/// The window is **-3276.7 m..=3276.7 m**, one decimetre narrower at the bottom
-/// than the `i16` it is stored in. `i16::MIN` is
+/// The window is **-32,767 m..=32,767 m**, one metre narrower at the bottom than
+/// the `i16` it is stored in. `i16::MIN` is
 /// [`ELE_NONE`](crate::run_store::ELE_NONE), the format's "this point carries no
 /// altitude" sentinel, so a reading that lands on it is not stored low — it is
 /// not stored at all. `TrackPoint::encode` writes the sentinel and `decode`
-/// reads it back as `None`, which made -3276.8 m the one altitude in the field's
-/// own range that round-tripped to nothing while the value beside it stored
-/// fine. Excluding it here is what makes the doc above true: an altitude either
-/// survives the round trip or is refused at the door, and there is no third
-/// outcome. A NaN or infinite metre value compares false against both ends and
-/// so is dropped, never saturated.
+/// reads it back as `None`, which would make -32,768 m the one altitude in the
+/// field's own range that round-tripped to nothing while the value beside it
+/// stored fine. Excluding it here is what makes the doc above true: an altitude
+/// either survives the round trip or is refused at the door, and there is no
+/// third outcome. A NaN or infinite metre value rounds to itself, compares
+/// false against both ends and so is dropped, never saturated.
 ///
-/// **The ceiling is far below what the device believes.**
-/// [`crate::elevation::plausible_alt`] admits -500 m..=9000 m, so every reading
-/// between 3276.7 m and 9000 m is one the watch trusts, publishes to the live
-/// altitude and vert surfaces, and then cannot write to the track. That band is
-/// where this device's races are: Hardrock's Handies Peak is 4285 m and its low
-/// point 2830 m, so **69 % of a Silverton-Handies-Silverton profile stores no
-/// elevation at all** — and because
+/// **The window now contains everything the device believes.**
+/// [`crate::elevation::plausible_alt`] admits -500 m..=9000 m, which nests
+/// entirely inside this one, so every altitude the watch trusts enough to
+/// publish to the live altitude and vert surfaces is also one it can write to
+/// the track. Until [`run_store::FORMAT_VERSION`](crate::run_store::FORMAT_VERSION)
+/// 5 the field held decimetres and capped at 3276.7 m — below Mont Blanc, on a
+/// mountain-ultra device — so 69 % of a Silverton-Handies-Silverton profile
+/// stored no elevation at all, and because
 /// [`compute_elevation_gain`](crate::route_simplify::compute_elevation_gain)
-/// carries the last reading across a dropout, the climb above the ceiling is not
-/// merely missing, it nets to nothing: the summit push contributes zero vert to
-/// a synced run, on the metric this watch exists for. Leadville's Hope Pass
-/// (3840 m), the Alps and the Rockies are all inside the same band.
+/// carries the last reading across a dropout the summit push contributed zero
+/// vert to a synced run. `every_plausible_altitude_now_reaches_the_track` below
+/// pins the nesting, so a later narrowing of the field or a widening of
+/// `plausible_alt` goes red rather than quietly re-opening the hole.
 ///
-/// Widening it is a wire-format change on two rails at once — the phone's
-/// `sim_watch_sync.dart` reads this field as `eleDm / 10.0` and rejects any
-/// version past 4 — so it is not something the firmware can do alone. The
-/// design is recorded in `docs/product/followups.md`; `the_altitude_ceiling_is_
-/// far_below_what_the_device_believes` below pins the consequence so the day it
-/// is widened the test goes red rather than the limit going quiet.
-pub fn ele_dm_from_m(alt_m: f32) -> Option<i16> {
-    let dm = alt_m * 10.0;
+/// The metre is ROUNDED rather than truncated — the same choice `CRS1` makes for
+/// a course point's coordinates — so the stored value is never more than half a
+/// metre from the reading. The range test is applied to the rounded value, or a
+/// reading half a metre below the floor would round onto the sentinel.
+pub fn ele_m_from_m(alt_m: f32) -> Option<i16> {
+    let m = libm::roundf(alt_m);
     ((i16::MIN as f32 + 1.0)..=i16::MAX as f32)
-        .contains(&dm)
-        .then_some(dm as i16)
+        .contains(&m)
+        .then_some(m as i16)
 }
 
 /// A held HR estimate ([`crate::hr_duty::shown_bpm`]) → a track point's `bpm`,
@@ -179,7 +179,7 @@ pub fn bpm_u8(bpm: Option<u16>) -> Option<u8> {
 /// does the point carry no elevation.
 ///
 /// Both candidates narrow through [`crate::elevation::plausible_alt`] before
-/// [`ele_dm_from_m`]. Representability is not plausibility: the decimetre field
+/// [`ele_m_from_m`]. Representability is not plausibility: the decimetre field
 /// spans -3276.8..=3276.7 m, so on its own it stores a receiver altitude 3 km
 /// below the sea floor and — since the barometer is preferred — every stuck
 /// sensor read the wire format happens to fit.
@@ -193,10 +193,10 @@ pub fn track_point(
         lat_e7: (fix.lat_deg * 1e7) as i32,
         lon_e7: (fix.lon_deg * 1e7) as i32,
         t_offset_s: fix.uptime_s.saturating_sub(start_uptime_s),
-        ele_dm: baro_alt_m
+        ele_m: baro_alt_m
             .and_then(crate::elevation::plausible_alt)
-            .and_then(ele_dm_from_m)
-            .or_else(|| crate::elevation::plausible_gps(fix.alt_m).and_then(ele_dm_from_m)),
+            .and_then(ele_m_from_m)
+            .or_else(|| crate::elevation::plausible_gps(fix.alt_m).and_then(ele_m_from_m)),
         bpm: bpm_u8(bpm),
     }
 }
@@ -373,39 +373,43 @@ mod tests {
     }
 
     #[test]
-    fn altitude_narrows_to_decimetres() {
-        assert_eq!(ele_dm_from_m(0.0), Some(0));
-        assert_eq!(ele_dm_from_m(1610.5), Some(16105));
-        assert_eq!(ele_dm_from_m(-100.0), Some(-1000));
+    fn altitude_narrows_to_whole_metres() {
+        assert_eq!(ele_m_from_m(0.0), Some(0));
+        assert_eq!(ele_m_from_m(1610.5), Some(1611));
+        assert_eq!(ele_m_from_m(1610.4), Some(1610));
+        assert_eq!(ele_m_from_m(-100.0), Some(-100));
+        // Rounded, not truncated: truncation is biased toward zero and doubles
+        // the worst-case error on a reading that is already half a metre from
+        // the nearest stored value.
+        assert_eq!(ele_m_from_m(-100.6), Some(-101));
     }
 
     #[test]
     fn out_of_range_altitude_stores_nothing_rather_than_a_wrong_value() {
-        // The i16 decimetre field is a frozen wire width; a Himalayan or
-        // garbage reading must degrade to "no elevation", never to a wrapped
-        // one.
-        assert_eq!(ele_dm_from_m(4000.0), None);
-        assert_eq!(ele_dm_from_m(-4000.0), None);
-        assert_eq!(ele_dm_from_m(f32::NAN), None);
-        assert_eq!(ele_dm_from_m(f32::INFINITY), None);
-        assert_eq!(ele_dm_from_m(f32::NEG_INFINITY), None);
+        // The i16 metre field is a frozen wire width; a garbage reading must
+        // degrade to "no elevation", never to a wrapped one.
+        assert_eq!(ele_m_from_m(40_000.0), None);
+        assert_eq!(ele_m_from_m(-40_000.0), None);
+        assert_eq!(ele_m_from_m(f32::NAN), None);
+        assert_eq!(ele_m_from_m(f32::INFINITY), None);
+        assert_eq!(ele_m_from_m(f32::NEG_INFINITY), None);
     }
 
     #[test]
     fn the_bottom_of_the_field_is_the_no_reading_sentinel_and_is_never_handed_out() {
-        // `ELE_NONE` IS `i16::MIN`, so -3276.8 m is not an altitude the format
+        // `ELE_NONE` IS `i16::MIN`, so -32,768 m is not an altitude the format
         // can hold — it is the format's way of saying there is no altitude. An
         // earlier round widened the bottom bound to include it on the stated
-        // grounds that "every i16 decimetre value is representable", which is
-        // the one thing that is not true of this one: `Some(i16::MIN)` encodes
-        // to the sentinel and decodes back as `None`, so the reading was
-        // silently lost while the value one decimetre above it stored fine.
-        assert_eq!(ele_dm_from_m(i16::MIN as f32 / 10.0), None);
-        assert_eq!(
-            ele_dm_from_m((i16::MIN as f32 + 1.0) / 10.0),
-            Some(i16::MIN + 1)
-        );
-        assert_eq!(ele_dm_from_m(i16::MAX as f32 / 10.0), Some(i16::MAX));
+        // grounds that "every i16 value is representable", which is the one
+        // thing that is not true of this one: `Some(i16::MIN)` encodes to the
+        // sentinel and decodes back as `None`, so the reading was silently lost
+        // while the value one unit above it stored fine.
+        assert_eq!(ele_m_from_m(i16::MIN as f32), None);
+        // Rounding is applied BEFORE the range test, or half a metre below the
+        // floor would round onto the sentinel and be handed out as no reading.
+        assert_eq!(ele_m_from_m(i16::MIN as f32 + 0.4), None);
+        assert_eq!(ele_m_from_m(i16::MIN as f32 + 1.0), Some(i16::MIN + 1));
+        assert_eq!(ele_m_from_m(i16::MAX as f32), Some(i16::MAX));
     }
 
     #[test]
@@ -415,57 +419,57 @@ mod tests {
         // decode intact or is refused at the door. There is no third outcome,
         // and a value that decodes to `None` after being accepted is the worst
         // of the three because nothing anywhere reports it.
-        for dm in [i16::MIN, i16::MIN + 1, -32_000, -5_000, 0, 5_000, i16::MAX] {
-            let Some(stored) = ele_dm_from_m(dm as f32 / 10.0) else {
+        for m in [i16::MIN, i16::MIN + 1, -32_000, -5_000, 0, 5_000, i16::MAX] {
+            let Some(stored) = ele_m_from_m(m as f32) else {
                 continue;
             };
             let p = crate::run_store::TrackPoint {
                 lat_e7: 0,
                 lon_e7: 0,
                 t_offset_s: 0,
-                ele_dm: Some(stored),
+                ele_m: Some(stored),
                 bpm: None,
             };
             assert_eq!(
                 crate::run_store::TrackPoint::decode(&p.encode())
                     .expect("a point record decodes as a point")
-                    .ele_dm,
+                    .ele_m,
                 Some(stored),
-                "{dm} dm was accepted and then lost"
+                "{m} m was accepted and then lost"
             );
         }
     }
 
     #[test]
-    fn one_decimetre_past_either_edge_stores_nothing_rather_than_saturating() {
+    fn one_metre_past_either_edge_stores_nothing_rather_than_saturating() {
         // `as i16` would clamp to the same edge value, which reads back as a real
         // altitude the runner never reached.
-        assert_eq!(ele_dm_from_m((i16::MAX as f32 + 1.0) / 10.0), None);
-        assert_eq!(ele_dm_from_m((i16::MIN as f32 - 1.0) / 10.0), None);
+        assert_eq!(ele_m_from_m(i16::MAX as f32 + 1.0), None);
+        assert_eq!(ele_m_from_m(i16::MIN as f32 - 1.0), None);
     }
 
-    /// Characterisation, not approval: this pins what the shipped decimetre
-    /// field COSTS so the number is written down somewhere a reader meets it,
-    /// and so the day the field is widened to `CRS1`'s `i16` metres the test
-    /// goes red rather than the limit going quiet. See `ele_dm_from_m`'s doc
-    /// comment and the followups entry for the two-rail change.
+    /// The inverse of what this test used to pin. Through `FORMAT_VERSION` 4 the
+    /// altitude field held decimetres and capped at 3276.7 m, so the band
+    /// between that and `ALT_MAX_M` was a reading the watch trusted, published,
+    /// and then could not write to the track it was recording. v5 stores whole
+    /// metres, so `plausible_alt`'s window nests entirely inside the field's.
+    /// Pinned as the NESTING rather than as five summits, because the hole
+    /// re-opens from either side: a later narrowing of the field, or a widening
+    /// of what the device is willing to believe.
     #[test]
-    fn the_altitude_ceiling_is_far_below_what_the_device_believes() {
-        use crate::elevation::{plausible_alt, ALT_MAX_M};
+    fn every_plausible_altitude_now_reaches_the_track() {
+        use crate::elevation::{plausible_alt, ALT_MAX_M, ALT_MIN_M};
 
-        // The whole band between the two windows is a reading the watch trusts
-        // enough to publish to the live altitude page and then cannot write to
-        // the track it is recording.
-        assert!(ALT_MAX_M > i16::MAX as f32 / 10.0);
+        assert!(ALT_MAX_M < i16::MAX as f32);
+        assert!(ALT_MIN_M > i16::MIN as f32 + 1.0);
         for summit_m in [3_276.75_f32, 3_840.0, 4_285.0, 5_895.0, 8_849.0] {
             assert!(plausible_alt(summit_m).is_some(), "{summit_m}");
-            assert_eq!(ele_dm_from_m(summit_m), None, "{summit_m}");
+            assert!(ele_m_from_m(summit_m).is_some(), "{summit_m}");
         }
 
         // Hardrock: Silverton at 2830 m, Handies Peak at 4285 m. Sampling that
-        // climb-and-return evenly, this is the share of the course whose points
-        // carry no elevation at all — and because the gain rule carries the
-        // last reading across a dropout, the summit push nets to zero vert.
+        // climb-and-return evenly, every point of the profile now carries an
+        // elevation — where 69 % of them carried none.
         let n = 10_000;
         let dropped = (0..n)
             .filter(|i| {
@@ -475,13 +479,24 @@ mod tests {
                     2.0 - *i as f32 / (n / 2) as f32
                 };
                 let alt = 2_830.0 + f * (4_285.0 - 2_830.0);
-                plausible_alt(alt).and_then(ele_dm_from_m).is_none()
+                plausible_alt(alt).and_then(ele_m_from_m).is_none()
             })
             .count();
-        assert!(
-            (6_800..7_100).contains(&dropped),
-            "69 % of a Silverton-Handies-Silverton profile stores no elevation; got {dropped}/{n}"
+        assert_eq!(
+            dropped, 0,
+            "every point of a Silverton-Handies-Silverton profile stores its elevation"
         );
+
+        // The whole plausible window, swept: nothing the device believes is
+        // refused by the field, and nothing it refuses is silently kept.
+        for i in 0..=9_500 {
+            let alt = ALT_MIN_M + i as f32;
+            assert_eq!(
+                plausible_alt(alt).is_some(),
+                plausible_alt(alt).and_then(ele_m_from_m).is_some(),
+                "{alt}"
+            );
+        }
     }
 
     #[test]
@@ -535,12 +550,12 @@ mod tests {
         // both are present, and the GPS altitude is the fallback when it is not.
         let fix = fix_at(40.0, -105.0, Some(1_500.0), 1_000);
         assert_eq!(
-            track_point(&fix, 1_000, None, Some(1_610.0)).ele_dm,
-            Some(16_100)
+            track_point(&fix, 1_000, None, Some(1_610.0)).ele_m,
+            Some(1_610)
         );
-        assert_eq!(track_point(&fix, 1_000, None, None).ele_dm, Some(15_000));
+        assert_eq!(track_point(&fix, 1_000, None, None).ele_m, Some(1_500));
         let no_alt = fix_at(40.0, -105.0, None, 1_000);
-        assert_eq!(track_point(&no_alt, 1_000, None, None).ele_dm, None);
+        assert_eq!(track_point(&no_alt, 1_000, None, None).ele_m, None);
     }
 
     #[test]
@@ -551,41 +566,45 @@ mod tests {
         // the narrowing, which stored no elevation at all.
         let fix = fix_at(40.0, -105.0, Some(1_500.0), 1_000);
         assert_eq!(
-            track_point(&fix, 1_000, None, Some(9_000.0)).ele_dm,
-            Some(15_000)
+            track_point(&fix, 1_000, None, Some(9_500.0)).ele_m,
+            Some(1_500)
         );
         assert_eq!(
-            track_point(&fix, 1_000, None, Some(f32::NAN)).ele_dm,
-            Some(15_000)
+            track_point(&fix, 1_000, None, Some(f32::NAN)).ele_m,
+            Some(1_500)
         );
     }
 
     #[test]
     fn a_storable_but_implausible_altitude_is_still_refused() {
-        // Representability is not plausibility. -3,000 m fits the decimetre
+        // Representability is not plausibility. -3,000 m fits the altitude
         // field exactly, so the wire format alone stored it — and since the
         // barometer is PREFERRED, a stuck sensor read outranked the receiver's
         // real altitude and went to flash as the point's elevation.
         let fix = fix_at(40.0, -105.0, Some(1_500.0), 1_000);
         assert_eq!(
-            track_point(&fix, 1_000, None, Some(-3_000.0)).ele_dm,
-            Some(15_000)
+            track_point(&fix, 1_000, None, Some(-3_000.0)).ele_m,
+            Some(1_500)
         );
         // Same window on the receiver's own altitude, from the other side.
         let deep = fix_at(40.0, -105.0, Some(-3_000.0), 1_000);
-        assert_eq!(track_point(&deep, 1_000, None, None).ele_dm, None);
+        assert_eq!(track_point(&deep, 1_000, None, None).ele_m, None);
     }
 
     #[test]
     fn a_point_stores_no_elevation_only_when_neither_candidate_is_storable() {
-        let out_of_range = fix_at(40.0, -105.0, Some(9_000.0), 1_000);
+        // 9500 m is past `ALT_MAX_M`, so neither candidate survives the
+        // plausibility gate. It IS representable in the v5 metre field — which
+        // is the point of the pair of gates: the field no longer refuses
+        // anything, so the plausibility window is the only thing left saying no.
+        let out_of_range = fix_at(40.0, -105.0, Some(9_500.0), 1_000);
         assert_eq!(
-            track_point(&out_of_range, 1_000, None, Some(9_000.0)).ele_dm,
+            track_point(&out_of_range, 1_000, None, Some(9_500.0)).ele_m,
             None
         );
         let no_gps_alt = fix_at(40.0, -105.0, None, 1_000);
         assert_eq!(
-            track_point(&no_gps_alt, 1_000, None, Some(9_000.0)).ele_dm,
+            track_point(&no_gps_alt, 1_000, None, Some(9_500.0)).ele_m,
             None
         );
     }

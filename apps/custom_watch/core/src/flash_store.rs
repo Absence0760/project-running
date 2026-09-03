@@ -993,7 +993,7 @@ mod tests {
             lat_e7: 400_150_200 + t as i32,
             lon_e7: -1_052_705_000,
             t_offset_s: t,
-            ele_dm: Some(16_240),
+            ele_m: Some(1_624),
             bpm: Some(120),
         }
     }
@@ -1357,7 +1357,7 @@ mod tests {
             lat_e7: magic_lat,
             lon_e7: 5,
             t_offset_s: 0,
-            ele_dm: None,
+            ele_m: None,
             bpm: None,
         };
         let pts = [sneaky, a_point(1), a_point(2)];
@@ -1640,7 +1640,7 @@ mod tests {
             lat_e7: i32::from_le_bytes(*b"END1"),
             lon_e7: 5,
             t_offset_s: 2,
-            ele_dm: None,
+            ele_m: None,
             bpm: None,
         };
         let pts = [a_point(0), a_point(1), sneaky, a_point(3), a_point(4)];
@@ -1664,7 +1664,7 @@ mod tests {
             lat_e7: i32::from_le_bytes(*b"END1"),
             lon_e7: 9,
             t_offset_s: 2,
-            ele_dm: None,
+            ele_m: None,
             bpm: None,
         };
         let pts = [a_point(0), a_point(1), sneaky];

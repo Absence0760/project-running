@@ -22,7 +22,7 @@ use watch_core::run_store::{
 /// Big enough for every blob these suites build, and the real slot size.
 const SLOT: usize = 4096;
 
-/// A track point in the legal domain: `ele_dm` never carries the [`ELE_NONE`]
+/// A track point in the legal domain: `ele_m` never carries the [`ELE_NONE`]
 /// sentinel and `bpm` never carries the 0 = absent sentinel, since both encode
 /// as "absent" by design.
 fn a_point() -> impl Strategy<Value = TrackPoint> {
@@ -33,11 +33,11 @@ fn a_point() -> impl Strategy<Value = TrackPoint> {
         prop::option::of((ELE_NONE + 1)..=i16::MAX),
         prop::option::of(1u8..=u8::MAX),
     )
-        .prop_map(|(lat_e7, lon_e7, t_offset_s, ele_dm, bpm)| TrackPoint {
+        .prop_map(|(lat_e7, lon_e7, t_offset_s, ele_m, bpm)| TrackPoint {
             lat_e7,
             lon_e7,
             t_offset_s,
-            ele_dm,
+            ele_m,
             bpm,
         })
 }
