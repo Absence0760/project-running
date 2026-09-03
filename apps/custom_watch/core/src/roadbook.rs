@@ -22,6 +22,32 @@
 //! verdict locally, so this port does the same rather than borrow the
 //! semantically-distinct `cutoff_eta::CutoffEtaStatus` (on/tight/behind).
 //!
+//! **Web's `RoadbookTarget` / `TARGET_BAND_FRACTION` — the per-checkpoint
+//! target-time verdict beside the cutoff one, graded on a proportional band
+//! because two minutes down at hour twenty of a 200-miler is noise where the
+//! same two minutes at a 30-minute checkpoint is not — are deliberately not
+//! ported. Three things have to arrive before they can be, and none is here:**
+//!
+//! 1. The INPUT does not exist. A target lives in a course marker's
+//!    `target_clock` / `target_elapsed_s` meta, and
+//!    [`crate::route_markers`] carries `parse_cutoff` and no `parse_target`.
+//! 2. The WIRE does not carry it. `RBK1` v1's checkpoint is
+//!    `cum_dist_m | leg_dist_m | projected_elapsed_s | cutoff | flags`, with the
+//!    flags byte holding only `CHECKPOINT_FLAG_REFILL`
+//!    ([`crate::roadbook_store`]). Adding a target means a v2 frame and a
+//!    matching change to the phone's `watch_roadbook.dart` encoder plus the
+//!    golden vector both rails pin — one change across two rails, not a port.
+//! 3. **[`build_roadbook`] is not the wired path.** It has no non-test caller.
+//!    The Roadbook glance page renders the checkpoints the phone PUSHES, so a
+//!    field added to this function's output is a field nothing on the device
+//!    can read.
+//!
+//! So the target belongs on the wire rather than in this builder, and until the
+//! frame carries one, porting it would add a verdict no page can show over data
+//! no frame carries — a port made for the count rather than for the wrist
+//! (decisions.md § 24). The cross-rail change is filed in
+//! `docs/product/followups.md`.
+//!
 //! Pure logic, no peripherals, no allocator — like the rest of `core`.
 
 use heapless::Vec;
