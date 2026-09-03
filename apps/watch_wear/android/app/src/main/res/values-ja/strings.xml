@@ -105,6 +105,7 @@
 
     <string name="route_none">なし</string>
     <string name="route_picker_empty">保存済みのルートがありません。まずスマートフォンまたはウェブでルートを作成してください。</string>
+    <string name="route_picker_unavailable">ルートを読み込めませんでした。ウォッチがサインイン済みでオンラインか確認してください。</string>
 
     <string name="synced">同期済み</string>
     <string name="sync">同期</string>

@@ -106,6 +106,7 @@
 
     <string name="route_none">Ninguna</string>
     <string name="route_picker_empty">No hay rutas guardadas. Crea primero una ruta en el teléfono o en la web.</string>
+    <string name="route_picker_unavailable">No se pudieron cargar tus rutas. Comprueba que el reloj tenga sesión iniciada y conexión.</string>
 
     <string name="synced">Sincronizado</string>
     <string name="sync">Sinc.</string>

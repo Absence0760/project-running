@@ -106,6 +106,7 @@
 
     <string name="route_none">Keine</string>
     <string name="route_picker_empty">Keine gespeicherten Routen. Erstelle zuerst eine Route auf dem Handy oder im Web.</string>
+    <string name="route_picker_unavailable">Routen konnten nicht geladen werden. Prüfe, ob die Uhr angemeldet und online ist.</string>
 
     <string name="synced">Synchronisiert</string>
     <string name="sync">Sync</string>

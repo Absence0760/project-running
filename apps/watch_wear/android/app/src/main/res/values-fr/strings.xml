@@ -106,6 +106,7 @@
 
     <string name="route_none">Aucun</string>
     <string name="route_picker_empty">Aucun itinéraire enregistré. Créez d\'abord un itinéraire sur le téléphone ou le web.</string>
+    <string name="route_picker_unavailable">Impossible de charger vos parcours. Vérifiez que la montre est connectée et en ligne.</string>
 
     <string name="synced">Synchronisé</string>
     <string name="sync">Sync</string>

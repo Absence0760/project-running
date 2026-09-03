@@ -125,6 +125,12 @@ data class UiState(
     /// banner + "X to go" badge have a polyline to work against.
     val selectedRoute: SavedRoute? = null,
     val routesLoading: Boolean = false,
+    /// The last attempt to load the route list did not produce one — no
+    /// session yet, or the fetch threw. Distinct from "this runner has
+    /// saved no routes", which is what the picker used to say either way:
+    /// a signed-out or offline watch told a runner with fifty saved routes
+    /// to go and build one.
+    val routesUnavailable: Boolean = false,
     /// Live off-route distance in metres (perpendicular distance to the
     /// nearest segment). Null when no route is loaded. Published by the
     /// recording service per GPS sample via `RouteMath.offRouteDistanceM`.
@@ -902,7 +908,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// "starred + recently-tapped-here" is a stronger signal than
     /// either dimension alone.
     fun refreshRoutes() {
-        if (!authReady.value) return
+        if (!authReady.value) {
+            _state.value = _state.value.copy(routesUnavailable = true)
+            return
+        }
         _state.value = _state.value.copy(routesLoading = true)
         viewModelScope.launch {
             try {
@@ -911,9 +920,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = _state.value.copy(
                     routes = sortByRecency(fresh, routeStore.recentIds.first()),
                     routesLoading = false,
+                    routesUnavailable = false,
                 )
             } catch (_: Throwable) {
-                _state.value = _state.value.copy(routesLoading = false)
+                _state.value = _state.value.copy(
+                    routesLoading = false,
+                    routesUnavailable = true,
+                )
             }
         }
     }

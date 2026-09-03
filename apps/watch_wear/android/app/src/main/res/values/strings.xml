@@ -136,6 +136,7 @@
     <!-- ───────────── Route picker ───────────── -->
     <string name="route_none">None</string>
     <string name="route_picker_empty">No saved routes. Build a route on the phone or web first.</string>
+    <string name="route_picker_unavailable">Couldn\'t load your routes. Check the watch is signed in and online.</string>
 
     <!-- ───────────── Post-run screen ───────────── -->
     <string name="synced">Synced</string>

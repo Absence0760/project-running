@@ -157,6 +157,39 @@ class ScreenWiringTest {
         }
     }
 
+    @Test fun `the route picker distinguishes unreachable from none saved`() {
+        // `refreshRoutes` had one empty failure branch and one silent early
+        // return: a fetch that threw set only `routesLoading = false`, and a
+        // watch with no session yet returned before fetching at all. Both
+        // left the picker rendering `route_picker_empty` — "Build a route on
+        // the phone or web first" — at a runner who may have fifty saved
+        // routes and a watch that simply could not reach them.
+        val vm = readSrc("RunViewModel.kt")
+        val body = Regex("""fun refreshRoutes\(\)[\s\S]*?\n    \}\n""")
+            .find(vm)?.value
+            ?: error("could not locate refreshRoutes in RunViewModel.kt")
+        assertTrue(
+            "refreshRoutes must flag BOTH failure paths — no session yet, " +
+                "and a fetch that threw — not just one",
+            Regex("""routesUnavailable = true""").findAll(body).count() == 2,
+        )
+        assertTrue(
+            "a successful load must clear the flag, or the picker keeps " +
+                "apologising after it has recovered",
+            body.contains("routesUnavailable = false"),
+        )
+        val src = readRunWatchApp()
+        assertTrue(
+            "the picker's empty state must choose between the two messages",
+            Regex("""R\.string\.route_picker_unavailable[\s\S]{0,120}R\.string\.route_picker_empty""")
+                .containsMatchIn(src),
+        )
+        assertTrue(
+            "values/strings.xml must declare route_picker_unavailable",
+            readDefaultStrings().contains("name=\"route_picker_unavailable\""),
+        )
+    }
+
     @Test fun `PreRunScreen surfaces battery-saver remediation chip`() {
         // Without the "Fix battery saver" chip, runners not on the
         // ignore-battery-optimizations whitelist get throttled

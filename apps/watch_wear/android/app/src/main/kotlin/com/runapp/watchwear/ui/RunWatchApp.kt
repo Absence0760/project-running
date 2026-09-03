@@ -301,6 +301,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     routes = state.routes,
                     selectedId = state.selectedRoute?.id,
                     loading = state.routesLoading,
+                    unavailable = state.routesUnavailable,
                     preferredUnit = state.preferredUnit,
                     onPick = vm::selectRoute,
                     onClear = vm::clearSelectedRoute,
@@ -1648,6 +1649,7 @@ private fun RoutePickerScreen(
     routes: List<com.runapp.watchwear.SavedRoute>,
     selectedId: String?,
     loading: Boolean,
+    unavailable: Boolean,
     preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     onPick: (com.runapp.watchwear.SavedRoute) -> Unit,
     onClear: () -> Unit,
@@ -1726,7 +1728,18 @@ private fun RoutePickerScreen(
         if (routes.isEmpty() && !loading) {
             item {
                 Text(
-                    stringResource(R.string.route_picker_empty),
+                    // An empty list has two causes and they need different
+                    // sentences. "Build a route on the phone or web first"
+                    // is advice for a runner who has none; it is wrong, and
+                    // unactionable, for one whose watch simply could not
+                    // reach the list.
+                    stringResource(
+                        if (unavailable) {
+                            R.string.route_picker_unavailable
+                        } else {
+                            R.string.route_picker_empty
+                        }
+                    ),
                     style = MaterialTheme.typography.caption3,
                     color = DuskPalette.haze,
                     textAlign = TextAlign.Center,
