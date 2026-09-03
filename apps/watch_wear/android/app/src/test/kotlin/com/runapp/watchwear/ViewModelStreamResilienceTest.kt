@@ -7,12 +7,18 @@ import org.junit.Test
 
 /// The sibling of `SensorStreamResilienceTest`, one layer up.
 ///
-/// `RunViewModel` installs no `CoroutineExceptionHandler`, and
 /// `viewModelScope` is a `SupervisorJob` — which stops a failing child
 /// from cancelling its siblings but does NOT stop an unhandled throw in
 /// a `launch` reaching the thread's uncaught handler, which on Android
 /// is the process. The recording service lives in that same process, so
 /// a phone-pushed session update that throws ends the run.
+///
+/// Two rungs answer that, and the tests below hold both. The per-site
+/// guards are the first: a failure the runner should hear about is
+/// caught where it happens and reported. `launchGuarded` is the second —
+/// a `CoroutineExceptionHandler` under every `launch` in the class, so
+/// the sites nobody has reached yet log instead of ending the run
+/// (decisions § 1082).
 ///
 /// Three flows cross a boundary the view model does not control: the two
 /// Wearable Data Layer bridges (the paired phone's session and starred
@@ -85,6 +91,79 @@ class ViewModelStreamResilienceTest {
                 """sessionBridge\.events.{0,400}?\.collect\s*\{[^{}]*try\s*\{""",
                 RegexOption.DOT_MATCHES_ALL,
             ).containsMatchIn(src),
+        )
+    }
+
+    /// Derived, not listed: the helper's own definition is the one place
+    /// `viewModelScope.launch` may appear.
+    @Test
+    fun `every coroutine this view model starts carries the crash handler`() {
+        val bare = Regex("""viewModelScope\.launch\s*\{""").findAll(src).count()
+        assertEquals(
+            "a `viewModelScope.launch { … }` outside `launchGuarded` — a handler " +
+                "on every site but one is the same defect with better odds; use " +
+                "`launchGuarded { … }`",
+            0,
+            bare,
+        )
+        assertTrue(
+            "`launchGuarded` must pass the handler into the launch it delegates to",
+            Regex("""fun launchGuarded[^=]*=\s*viewModelScope\.launch\(crashGuard""")
+                .containsMatchIn(src),
+        )
+        assertTrue(
+            "the handler must report — a `CoroutineExceptionHandler` that swallows " +
+                "silently trades a crash for an invisible one",
+            Regex(
+                """crashGuard\s*=\s*CoroutineExceptionHandler\s*\{[^}]*Log\.""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
+        )
+    }
+
+    @Test
+    fun `the guard is reading a view model that still launches coroutines`() {
+        // Without this the count-zero assertion above passes on an empty read.
+        assertTrue(
+            "no `launchGuarded {` found in RunViewModel — the check above would " +
+                "pass on a file that had stopped launching anything",
+            Regex("""launchGuarded\s*\{""").findAll(src).count() >= 20,
+        )
+    }
+
+    @Test
+    fun `an unreadable run queue is not drained as an empty one`() {
+        // `.first()` on the same DataStore-backed flow the stream `.catch`
+        // covers. The three available answers are not equivalent: an empty
+        // list drains nothing and reports success, so the sync banner clears
+        // on the one condition that guarantees nothing can ever sync.
+        val guarded = Regex(
+            """try\s*\{\s*store\.queue\.first\(\)\s*\}\s*catch\s*\([^)]*\)\s*\{(.*?)\n        \}""",
+            RegexOption.DOT_MATCHES_ALL,
+        ).find(src)
+        assertTrue(
+            "`store.queue.first()` in the drain is unguarded — a corrupt queue " +
+                "file reaches the crash handler and the drain is skipped with no " +
+                "record of why",
+            guarded != null,
+        )
+        val branch = guarded!!.groupValues[1]
+        assertTrue(
+            "the failure branch must arm backoff — the condition persists, so " +
+                "every network flap would otherwise retry a read that cannot " +
+                "succeed: $branch",
+            branch.contains("drainBackoff.onFailure()"),
+        )
+        assertTrue(
+            "the failure branch must surface it as syncError — a queue that " +
+                "cannot be read is the one state in which 'Synced' is a lie: " +
+                "$branch",
+            branch.contains("syncError ="),
+        )
+        assertTrue(
+            "the failure branch must return rather than fall through into the " +
+                "drain loop with no snapshot: $branch",
+            branch.contains("return"),
         )
     }
 

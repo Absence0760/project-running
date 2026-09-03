@@ -2561,8 +2561,8 @@ resource "aws_cloudfront_distribution" "this" {
   # the only signal these failures have; `scripts/check_infra_coverage.mjs`
   # fails the PR when a function is added without it.
   #
-  # Both 403 AND 404 serve the shell BODY (they differ only in the status
-  # they answer with — see the 404 block below): the S3 bucket policy grants
+  # 403 is the one status mapped to the shell, and it is mapped because the
+  # S3 bucket policy grants
   # s3:GetObject only (no s3:ListBucket), so S3 answers a missing key
   # with 403 AccessDenied, not 404 — a deep-link / hard-refresh / crawl
   # of a dynamic client route (/dashboard, /runs/<id>, /u/<id>, …) hits
@@ -2577,33 +2577,26 @@ resource "aws_cloudfront_distribution" "this" {
     response_page_path = "/index.html"
   }
 
-  # 404 keeps the shell BODY and answers with the honest STATUS. It used to
-  # answer 200, which made every `/share/{run,route,recap,badge,event,profile,
-  # club,race,session,workout}/<id>` for a private, deleted or never-existing
-  # entity a soft 404: a generic SPA shell served at 200, with no `noindex` —
-  # that tag lives only in the Lambda body this mapping discards — so those
-  # URLs were an invitation to index. Google drops a 404 whatever the body
-  # says, so the status is the whole fix.
+  # There is deliberately NO `custom_error_response` for 404, and
+  # `scripts/check_infra_error_responses.mjs` fails the PR if one comes back.
   #
-  # Dropping the mapping outright was the filed proposal and is a WORSE fix,
-  # not a smaller one: S3 genuinely never 404s here (GetObject-only bucket
-  # policy, REST origin, so a missing key is 403), which means the only
-  # responses this block ever sees are the Lambda origins' own — and their 404
-  # bodies are a single unstyled English sentence. Serving that would replace
-  # the SPA's designed, localized not-found card (share/run/[id]'s
-  # `.notfound-card`, reached today ONLY because of this rewrite) with
-  # `<p>This link isn't available.</p>` on ten paths. Keeping the shell and
-  # correcting the code fixes the crawler defect and costs the reader nothing:
-  # the bytes a viewer receives are byte-for-byte what they receive today.
+  # § 1022 added one because the five share Lambdas' own 404 bodies were a
+  # single unstyled English sentence, so the shell had to be substituted for
+  # them; the cost was that the substitution also discarded the `noindex` those
+  # bodies carried, which is the tag the whole crawler fix was about. § 1036
+  # made all five return the SPA shell AT 404 themselves — through the same
+  # `injectEntityHead` that strips a stale `og:*`/canonical/JSON-LD — so the
+  # premise is gone and the mapping now only replaces an honest body with an
+  # identical one, minus the tag. Dropping it is what puts the `noindex` on the
+  # wire. It also stops `/api/coach*` answering a JSON 404 as an HTML shell.
+  #
+  # S3 never reaches this path anyway: the bucket policy grants s3:GetObject
+  # with no s3:ListBucket, so a missing key is 403 AccessDenied and lands on
+  # the block above. decisions § 1084.
   #
   # 403 stays at 200 and MUST: that is the deep-link path (every dynamic
   # client route is a missing S3 key), and answering it 403 would break the
   # whole SPA. decisions § 1022.
-  custom_error_response {
-    error_code         = 404
-    response_code      = 404
-    response_page_path = "/index.html"
-  }
 
   restrictions {
     geo_restriction {

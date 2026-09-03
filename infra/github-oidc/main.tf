@@ -135,12 +135,24 @@ resource "aws_iam_role_policy" "deploy_prod" {
       {
         Sid    = "LambdaUpdate"
         Effect = "Allow"
+        # Exactly the two API operations release-web.yml calls, and
+        # `check_infra_iam.mjs` claim 10 derives that set from the workflow
+        # rather than trusting this list.
+        #
+        # Three verbs were removed as unexercised (§ 1085). `GetFunction` and
+        # `GetAlias` are called by nothing in CI — `bin/lambda-alias-sync.sh` is
+        # the one caller of `get-alias` and runs under the operator's own SSO
+        # profile. `PublishVersion` is the one that needed settling rather than
+        # measuring: `aws lambda update-function-code --publish` is NOT a second
+        # call. `Publish` is a boolean member of the single UpdateFunctionCode
+        # request shape (visible in `aws lambda update-function-code
+        # --generate-cli-skeleton`), and `PublishVersion` is a separate
+        # operation the release never issues. IAM models one action per
+        # operation, so UpdateFunctionCode alone authorises the publish and
+        # returns the new version the next step points the alias at.
         Action = [
           "lambda:UpdateFunctionCode",
-          "lambda:PublishVersion",
           "lambda:UpdateAlias",
-          "lambda:GetFunction",
-          "lambda:GetAlias",
         ]
         Resource = [
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-prod-coach*",
@@ -211,12 +223,24 @@ resource "aws_iam_role_policy" "deploy_preview" {
       {
         Sid    = "LambdaUpdate"
         Effect = "Allow"
+        # Exactly the two API operations release-web.yml calls, and
+        # `check_infra_iam.mjs` claim 10 derives that set from the workflow
+        # rather than trusting this list.
+        #
+        # Three verbs were removed as unexercised (§ 1085). `GetFunction` and
+        # `GetAlias` are called by nothing in CI — `bin/lambda-alias-sync.sh` is
+        # the one caller of `get-alias` and runs under the operator's own SSO
+        # profile. `PublishVersion` is the one that needed settling rather than
+        # measuring: `aws lambda update-function-code --publish` is NOT a second
+        # call. `Publish` is a boolean member of the single UpdateFunctionCode
+        # request shape (visible in `aws lambda update-function-code
+        # --generate-cli-skeleton`), and `PublishVersion` is a separate
+        # operation the release never issues. IAM models one action per
+        # operation, so UpdateFunctionCode alone authorises the publish and
+        # returns the new version the next step points the alias at.
         Action = [
           "lambda:UpdateFunctionCode",
-          "lambda:PublishVersion",
           "lambda:UpdateAlias",
-          "lambda:GetFunction",
-          "lambda:GetAlias",
         ]
         Resource = [
           "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:threkir-web-preview-coach*",

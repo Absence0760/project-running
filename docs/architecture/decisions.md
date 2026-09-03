@@ -19322,3 +19322,178 @@ a no-op there and `gen:types:check`, which runs the identical pipeline, is
 unaffected. Filtering it is worth doing anyway: the failure mode is a generated
 file that no longer parses, produced by the documented command, on the
 workstation the docs tell you to run it on.
+## 1082. The watch view model gets a crash handler, and the drain says an unreadable queue is unreadable rather than empty
+
+Two rungs of one defect, filed together after [§ 1055](#1055-a-phone-pushed-session-update-could-end-a-run-and-the-asymmetry-that-made-it-findable)
+closed the instance that had already cost a run.
+
+**The net.** `viewModelScope` carries a `SupervisorJob`, which is often read as
+"a failing child cannot take anything down". It stops a child from cancelling
+its SIBLINGS; it does nothing about the child's own exception, which
+`handleCoroutineException` hands to the context's `CoroutineExceptionHandler`
+and, with none installed, to the thread's uncaught handler — the process. The
+recording service lives in that process. `RunViewModel` had 23 `launch` sites
+and no handler, so a route-cache write, a tile prefetch or a session read that
+threw ended a run in progress. Every `launch` now goes through `launchGuarded`,
+which supplies one handler that logs; `ViewModelStreamResilienceTest` fails the
+build on a bare `viewModelScope.launch`, because a handler on 22 of 23 sites is
+the same defect with better odds. It is deliberately a NET, not a replacement:
+the per-site guards stay, because a failure the runner should hear about is
+still caught where it happens and reported. What the handler decides is only
+what becomes of the sites nobody has reached yet.
+
+**The drain's own decision.** `drainQueueLocked` read `store.queue.first()` on
+the same DataStore-backed flow § 1055 put a `.catch` on. DataStore reports a
+corrupt or unreadable file by FAILING the read, so the three answers available
+are not interchangeable and the cheapest one is the worst:
+
+- *Treat it as empty.* The loop drains nothing, `anyTransientFailure` is false,
+  so `DrainBackoff.onSuccess()` fires and `syncError` is CLEARED — the runner is
+  told their runs are synced by the same pass that could not open the file
+  holding them. That is the one state in which "Synced" is a lie, and a blanket
+  `catch` picks it by default.
+- *Let it throw.* Before `launchGuarded` that ended the process; after it, the
+  drain is skipped with nothing on screen saying so.
+- *Report and back off.* What it does. The failure is logged, `syncError` takes
+  a localized `sync_queue_unreadable`, and `DrainBackoff.onFailure()` is armed
+  because the condition PERSISTS — a network flap would otherwise retry a read
+  that cannot succeed. A `force` drain (the Sync chip, a fresh sign-in) is
+  deliberately still let through, which is what makes a retry after a reboot
+  possible at all.
+
+`syncError` renders on `PostRunScreen`, which is where the drain's failures are
+already reported and where it matters most — the run that just finished is the
+one entering the queue that cannot be read. The pre-run "Sync N runs" chip is
+derived from `queuedCount`, which the stream `.catch` freezes at its last value,
+so a corrupt queue leaves no chip to tap; surfacing it there is a second
+affordance on a 1.4-inch screen and is filed rather than smuggled in here.
+
+## 1083. The wrist records how much of the run its heart rate covered, and refuses to call a minority sample the run's average
+
+[§ 1054](#1054-exerciseclient-is-the-right-client-and-is-deliberately-not-started--the-scoping-and-why-nothing-small-falls-out-of-it)
+filed this as the honest consequence of `MeasureClient` being foreground-only:
+`avg_bpm` was saved as **the run's** average heart rate with nothing anywhere
+recording what share of the run produced it, and on a twelve-hour ultra that
+share can be the twenty minutes the runner spent looking at the watch. It became
+computable only with [§ 1052](#1052-the-wrist-says-why-there-is-no-heart-rate-in-the-slot-the-reading-already-occupies)'s
+availability state.
+
+**Both halves, because they answer different questions.** `hr_coverage` is
+written whenever heart rate was enabled for the run — the fraction of ACTIVE
+elapsed time the sensor was delivering, two decimals. It is a record, and the
+data is unrecoverable after the fact, so it is kept whether or not any reader
+exists yet (none does; the phone and web trees belong to other lanes). Separately
+`avg_bpm` is **suppressed below 0.5**. That number is the sentence rather than a
+tuning knob: a mean taken over less of the run than not is not the run's average,
+and every reader — run detail, the coach context, the export CSV — treats
+`avg_bpm` as though it were. The threshold is applied to the ROUNDED figure that
+gets stored, because a run persisting `hr_coverage: 0.5` beside a suppressed
+average is a record that contradicts itself.
+
+**Measured on the ticker, against the age of the last sample.** The obvious
+implementation — open an interval when availability becomes `Available`, close it
+when it leaves — over-reports exactly the runs this exists for: a foreground-only
+client the platform stops feeding can go quiet without ever emitting
+`UNAVAILABLE`, and the open interval then credits the whole silence as covered.
+`advanceHrCoverage` runs on the existing 500 ms recording tick and adds the
+tick's ACTIVE milliseconds only while the last usable sample is younger than
+`HR_SAMPLE_FRESH_MS` (30 s) — loose enough not to punish a batching sensor, tight
+enough that a suspension measured in minutes is not counted. Active elapsed, so a
+paused stretch advances neither numerator nor denominator.
+
+**Null is unmeasured, not zero.** `Checkpoint.hrAvailableMs` is nullable and
+`heartRateClaim` passes the mean through unqualified when it is absent. A
+checkpoint written by a build predating the field would otherwise recover as zero
+coverage and silently drop an average that build would have saved — the absence of
+a measurement being read as evidence of absent coverage.
+
+**Scope.** Everything is inside `apps/watch_wear/` plus the registry row: the
+watch posts straight to Supabase, so no phone-side parser is involved, and the
+web / mobile / iOS metadata guards each scan their own sources against the
+registry rather than the other way round. Not taken: a PostRun caption saying why
+the bpm line is missing. That is a second affordance on a 1.4-inch screen and a
+string in seven catalogues, and it is a display decision rather than the
+saved-data one this entry is about — filed.
+
+## 1084. The distribution's 404 mapping is gone, and the guard that keeps it gone reads the handlers that make that safe
+
+[§ 1022](#1022) added `custom_error_response { error_code = 404 }` because the
+five share Lambdas' own 404 bodies were `<p>This link isn't available.</p>` — one
+unstyled English sentence — so the SPA shell had to be substituted for them. The
+cost, stated in that entry, was that the substitution ALSO discards the `noindex`
+the Lambda body carries, which is the tag the crawler fix was about.
+[§ 1036](#1036) removed the premise: all five now return the SPA shell at 404
+themselves, through the same `injectEntityHead` that keeps a stale
+`og:*`/canonical/JSON-LD off a 200. With the handlers honest the mapping only
+replaces an honest body with an identical one, minus the tag. Dropping it is what
+puts the `noindex` on the wire.
+
+Two things fall out that were not the reason for doing it. `custom_error_response`
+is modelled per DISTRIBUTION, never per behaviour, so the block also rewrote
+`/api/coach*`'s `{"error":"not found"}` into an HTML shell for an API client; that
+stops too. And S3 was never a party to it — the site bucket grants `s3:GetObject`
+with no `s3:ListBucket`, so a missing key is 403 AccessDenied, which is why the
+403 block is the SPA deep-link path and why the two were never symmetric. **403
+stays at 200 and must**: answering a deep link honestly breaks every dynamic
+client route.
+
+**The guard is new, and it is deliberately not in `check_infra_coverage.mjs`.**
+That one asks whether any mapping launders a 4xx/5xx into a 2xx; a 404 → 404
+mapping launders nothing and passed it every time. The question here is whether
+the block exists at all, and the answer is only safe while its premise holds —
+so `scripts/check_infra_error_responses.mjs` reads BOTH sides: no 404 mapping,
+the 403 one still at 200, and every `apps/web/lambda/share-*` handler still
+answering its own 404 with `notFoundShell`, with the handler set derived from the
+directory listing so a sixth share Lambda is covered without anyone remembering.
+If a handler ever stops returning the shell, its bare sentence goes straight to a
+reader on ten paths and nothing in `infra/` could see it; now the PR fails and
+says which of the two halves moved. It joins the already-bundled `infra-guards`
+job, so no new job and no `CI gate` edit.
+
+Not verified: any of this against real state. No lane holds AWS credentials, so
+`terraform validate` on both env roots and `fmt -check` over the tree is the whole
+of what was run. This is a distribution-config change on a `prevent_destroy`-free
+resource with no `plan` behind it — apply preview first, and confirm the response
+of a `/share/run/<missing-id>` is a 404 whose body carries `<meta name="robots"
+content="noindex">`, which is the only observation that closes it.
+
+## 1085. Three unexercised Lambda verbs off both deploy roles, and `PublishVersion` settled from the request shape rather than from the repo
+
+Same shape as the KMS grant [§ 1021](#1021) removed, and the same way it
+accumulated: a verb is added when someone is unsure whether the CLI needs it, and
+nothing ever asks again. The `LambdaUpdate` statement on both deploy roles
+granted five actions. Two were measured unused directly — the only `aws lambda`
+verbs any workflow runs are `update-function-code` and `update-alias`, and no
+workflow executes any `bin/` script, so `bin/lambda-alias-sync.sh`'s `get-alias`
+runs under the operator's own SSO profile and not this role.
+
+**`lambda:PublishVersion` is the one the filing could not settle from the repo,
+and it is a third unused verb.** `aws lambda update-function-code --publish` is
+not two calls: `Publish` is a boolean member of the single `UpdateFunctionCode`
+request shape — visible without an account in `aws lambda update-function-code
+--generate-cli-skeleton`, which renders that operation's own input model and
+lists `Publish` beside `FunctionName` and `ZipFile`. `PublishVersion` is a
+separate operation (`POST /2015-03-31/functions/{FunctionName}/versions`) the
+release never issues, and IAM models one action per operation, so
+`lambda:UpdateFunctionCode` alone authorises the publish and returns the version
+the following `update-alias` points at. The privilege it granted was in any case
+strictly weaker than what the role can already do — publishing a version from
+code it can already replace — which is why removing it costs nothing and why it
+survived unnoticed.
+
+**The durable half is claim 10, not the deletion.** `check_infra_iam.mjs` now
+derives the `aws lambda` verbs out of the workflows' `run:` bodies (skipping
+comment lines, so a verb cannot justify itself by being discussed) and requires
+each role's `lambda:` action set to equal it. It fails in both directions: an
+extra verb is standing privilege, and a missing one is a release that
+`AccessDenied`s mid-deploy against that environment. A verb that genuinely needs
+to be held without being invoked goes in `UNEXERCISED_LAMBDA_ACTIONS` with its
+reason, and a declared exemption nothing grants fails as loudly — the shape
+claim 3 already uses for `RESOURCELESS_ACTIONS`.
+
+Claim 9's own prose named `lambda:GetFunction` as one of the calls that would
+transit the secrets CMK if a function ever set `kms_key_arn`; with the verb gone
+it names `UpdateFunctionCode` alone, which is the one that would. Not verified
+against live IAM: no lane holds AWS credentials, so this is `terraform validate`
+on both env roots and nothing more. `infra/github-oidc` is applied by an
+operator, and the next release after that apply is what confirms it.

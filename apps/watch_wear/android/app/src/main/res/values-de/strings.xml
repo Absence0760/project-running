@@ -96,6 +96,7 @@
     <string name="submit">Absenden</string>
     <string name="cancel">Abbrechen</string>
     <string name="token_refresh_failed">Token-Aktualisierung fehlgeschlagen: %1$s</string>
+    <string name="sync_queue_unreadable">Gespeicherte Läufe nicht lesbar</string>
 
     <string name="no_gps_time_only">Kein GPS — nur Zeit</string>
     <string name="gps_lost">GPS verloren</string>

@@ -96,6 +96,7 @@
     <string name="submit">Valider</string>
     <string name="cancel">Annuler</string>
     <string name="token_refresh_failed">Échec de l\'actualisation du jeton : %1$s</string>
+    <string name="sync_queue_unreadable">Courses enregistrées illisibles</string>
 
     <string name="no_gps_time_only">Pas de GPS — durée seulement</string>
     <string name="gps_lost">GPS perdu</string>

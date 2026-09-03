@@ -37,6 +37,11 @@ object RecordingRepository {
         val paceSecPerKm: Double? = null,
         val bpm: Int? = null,
         val avgBpm: Double? = null,
+        /// Share of the run's ACTIVE elapsed time the heart-rate sensor was
+        /// delivering, 0..1. Stamped once at stop beside [avgBpm], which the
+        /// same grading may have suppressed (decisions § 1083). Null while a
+        /// run is in flight and on a build with heart rate off.
+        val hrCoverage: Double? = null,
         /// Why there is (or is not) a live [bpm]. A null bpm is four
         /// different situations and the running screen rendered them as
         /// one blank space; this is what lets it say which

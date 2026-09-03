@@ -37,7 +37,7 @@
 //
 //   3. Lambda alarm coverage. A failing Lambda origin on this distribution is
 //      invisible. CloudFront models custom error responses per distribution
-//      rather than per behaviour, so the SPA `403/404 → /index.html at 200`
+//      rather than per behaviour, so the SPA `403 → /index.html at 200`
 //      fallback rewrites a Lambda-origin error too — issue #590 measured
 //      exactly that, a Function URL 403ing before invocation while the page
 //      still rendered. The CloudWatch alarms are the only signal those

@@ -36,11 +36,57 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,
         )
         assertFalse("avg_bpm must be absent when null", md.containsKey("avg_bpm"))
+    }
+
+    @Test
+    fun `null hrCoverage omits the key rather than claiming zero`() {
+        // A run recorded before the field existed, or on a build with heart
+        // rate off. Absent and zero are different claims: zero says the sensor
+        // was on and delivered nothing (decisions § 1083).
+        val md = buildRunMetadata(
+            activityType = "run",
+            avgBpm = 145.7,
+            hrCoverage = null,
+            steps = null,
+            laps = emptyList(),
+            lastModifiedAtIso = isoStamp,
+        )
+        assertFalse("hr_coverage must be absent when null", md.containsKey("hr_coverage"))
+    }
+
+    @Test
+    fun `a zero coverage is written, and is not confused with absence`() {
+        val md = buildRunMetadata(
+            activityType = "run",
+            avgBpm = null,
+            hrCoverage = 0.0,
+            steps = null,
+            laps = emptyList(),
+            lastModifiedAtIso = isoStamp,
+        )
+        assertTrue("hr_coverage 0 is a measurement", md.containsKey("hr_coverage"))
+        assertEquals(0.0, md["hr_coverage"]!!.jsonPrimitive.double, 0.0001)
+        assertFalse("no samples means no average", md.containsKey("avg_bpm"))
+    }
+
+    @Test
+    fun `coverage rides beside the average it qualifies`() {
+        val md = buildRunMetadata(
+            activityType = "run",
+            avgBpm = 145.7,
+            hrCoverage = 0.82,
+            steps = null,
+            laps = emptyList(),
+            lastModifiedAtIso = isoStamp,
+        )
+        assertEquals(145.7, md["avg_bpm"]!!.jsonPrimitive.double, 0.0001)
+        assertEquals(0.82, md["hr_coverage"]!!.jsonPrimitive.double, 0.0001)
     }
 
     @Test
@@ -51,6 +97,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = 145.7,
+            hrCoverage = null,
             steps = null,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,
@@ -66,6 +113,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,
@@ -83,6 +131,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = 0,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,
@@ -95,6 +144,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = 4_521,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,
@@ -112,6 +162,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,
@@ -131,6 +182,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = laps,
             lastModifiedAtIso = isoStamp,
@@ -160,6 +212,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = laps,
             lastModifiedAtIso = isoStamp,
@@ -201,6 +254,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = laps,
             lastModifiedAtIso = isoStamp,
@@ -229,6 +283,7 @@ class WatchRunMetadataTest {
             val md = buildRunMetadata(
                 activityType = kind,
                 avgBpm = null,
+                hrCoverage = null,
                 steps = null,
                 laps = emptyList(),
                 lastModifiedAtIso = isoStamp,
@@ -252,6 +307,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,
@@ -272,6 +328,7 @@ class WatchRunMetadataTest {
         val md = buildRunMetadata(
             activityType = "run",
             avgBpm = null,
+            hrCoverage = null,
             steps = null,
             laps = emptyList(),
             lastModifiedAtIso = isoStamp,

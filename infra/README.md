@@ -60,6 +60,12 @@ Three jobs read `infra/`, none of which needs AWS credentials:
   loss is unrecoverable, and an empty wire once either premise breaks is a
   release that `AccessDenied`s mid-deploy ([§ 1021](../docs/architecture/decisions.md)).
   The knob is `kms_decrypt_principal_arn`, which both env roots leave at `""`.
+- the `lambda:` actions on each deploy role equal the set of `aws lambda`
+  operations the workflows actually invoke, derived from their `run:` bodies
+  (comment lines excluded, so a verb cannot justify itself by being mentioned).
+  `GetFunction`, `GetAlias` and `PublishVersion` were granted and exercised by
+  nothing ([§ 1085](../docs/architecture/decisions.md)). A verb a role needs but
+  lacks fails too — that direction is a release that `AccessDenied`s mid-deploy.
 
 **`check_infra_coverage.mjs`** reads the directory listing, `terraform.yml`,
 `.github/dependabot.yml`, the module + its `variables.tf`, `waf.tf` and both
@@ -76,6 +82,24 @@ env roots:
   mapping (403 → 200, the SPA deep-link path) is declared in
   `ALLOWED_STATUS_LAUNDERING` with its reason, and a declared exemption nothing
   uses fails too ([§ 1022](../docs/architecture/decisions.md));
+
+**`check_infra_error_responses.mjs`** reads the module's distribution and the
+`apps/web/lambda/share-*` handlers together, because the second is the premise
+under the first:
+
+- there is no `custom_error_response` for **404**. The five share Lambdas return
+  the SPA shell at 404 themselves since [§ 1036](../docs/architecture/decisions.md),
+  so the mapping replaced their body with an identical one from S3 minus the
+  `noindex` that lives only in the Lambda body — dropping it is what puts the tag
+  on the wire, and it also stops `/api/coach*`'s JSON 404 being answered as HTML
+  ([§ 1084](../docs/architecture/decisions.md));
+- the **403** mapping is still there and still answers 200. Answering it honestly
+  is the opposite failure: every dynamic client route is a missing S3 key, so a
+  403 the SPA does not absorb breaks the whole app;
+- every share handler still answers its own 404 with `notFoundShell`, derived
+  from the directory listing rather than a list. With the mapping gone, whatever
+  the handler returns is what the reader gets.
+
 - every WAF rate-limit scope-down matching `uri_path` carries a `URL_DECODE`
   text transformation and no `LOWERCASE`, and no rate-based rule is left with no
   readable scope-down at all ([§ 1023](../docs/architecture/decisions.md));

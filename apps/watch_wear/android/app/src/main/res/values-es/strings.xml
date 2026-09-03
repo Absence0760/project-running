@@ -96,6 +96,7 @@
     <string name="submit">Enviar</string>
     <string name="cancel">Cancelar</string>
     <string name="token_refresh_failed">Error al renovar el token: %1$s</string>
+    <string name="sync_queue_unreadable">Carreras guardadas ilegibles</string>
 
     <string name="no_gps_time_only">Sin GPS — solo tiempo</string>
     <string name="gps_lost">GPS perdido</string>

@@ -193,10 +193,26 @@ same drain path with a `syncing` UI flag for the spinner).
 `HeartRateMonitor` registers a `MeasureCallback` on
 `HealthServices.getClient(context).measureClient` for
 `DataType.HEART_RATE_BPM` and exposes a `Flow<Int>` of live samples.
-`RunViewModel` collects into a list during recording, averages on stop,
-writes `avg_bpm` into `run.metadata` before upload. Behaviour matches
-`watch_ios`'s HealthKit integration — [docs/backend/metadata.md](../../docs/backend/metadata.md)
-registers the key.
+`RunRecordingService` folds the samples into a rolling `bpmSum`/`bpmCount`
+pair, grades it on stop, and writes `avg_bpm` into `run.metadata` before
+upload. Behaviour matches `watch_ios`'s HealthKit integration —
+[docs/backend/metadata.md](../../docs/backend/metadata.md) registers the key.
+
+**The mean is graded against how much of the run produced it.**
+`MeasureClient` is documented foreground-only ([decisions § 1015](../../docs/architecture/decisions.md)),
+so the samples reaching the pair on a twelve-hour ultra can be the minutes the
+runner spent looking at the watch — and `avg_bpm` was saved as *the run's*
+average either way. `recording/HeartRateCoverage.kt` is the pure grader both
+producers of an average go through (the normal stop and `recoverCheckpoint`):
+it writes `metadata.hr_coverage`, the share of ACTIVE elapsed time the sensor
+was delivering, and suppresses `avg_bpm` below `MIN_AVG_BPM_COVERAGE` (0.5),
+because a mean over less of the run than not is not the run's average. Coverage
+is accumulated on the recording ticker against the AGE of the last usable
+sample, not by closing an interval on an availability event — a foreground-only
+client the platform stops feeding can go quiet without ever reporting
+`UNAVAILABLE`. A null coverage is *unmeasured*, not zero: a checkpoint written
+by a build predating the field recovers its average unqualified.
+[decisions § 1083](../../docs/architecture/decisions.md).
 
 ## Running it locally
 
@@ -688,7 +704,7 @@ Android string resources** — no custom framework, no in-app picker
 
 ## Testing convention
 
-Pure-JVM JUnit tests in `app/src/test/kotlin/com/runapp/watchwear/`. Run with `./gradlew testDebugUnitTest`. Current total: ~395 tests across ~32 files. No Robolectric, no Compose UI test instrumentation — deliberate. The pattern when a load-bearing piece of logic is bound to an Android API (foreground service, OkHttp, Health Services, SensorEventListener, Compose):
+Pure-JVM JUnit tests in `app/src/test/kotlin/com/runapp/watchwear/`. Run with `./gradlew testDebugUnitTest`. Current total: 717 tests across 70 files (measured 2026-09-03; the count is not gated and drifts fast). No Robolectric, no Compose UI test instrumentation — deliberate. The pattern when a load-bearing piece of logic is bound to an Android API (foreground service, OkHttp, Health Services, SensorEventListener, Compose):
 
 1. **Extract the pure logic** into a file-level `internal fun` (or a `companion object` static when it must live on the host class). The Android-bound wrapper method delegates one-line to the helper.
 2. **Test the helper** in isolation against a JVM target. No Robolectric runner, no `androidx.compose.ui.test.*`.
