@@ -16271,3 +16271,260 @@ widget taps and no `pumpUntil` at all; identifying which of those actually
 outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
+
+## 992. The GAP grade window was shorter than the noise floor divided by the clamp, on all four rails
+
+`grade_adjusted_pace` measures grade as `rise / run` and gates only the run:
+`MIN_SEGMENT_M` was 5 m on web, mobile, the firmware and the Connect IQ field,
+and nothing gated the rise. The repo's own barometric/GNSS noise floor is
+`ELEVATION_GAIN_MIN_DELTA_M` = 3 m — below that, a change is not treated as
+climb at all — so **the smallest altitude change the codebase is willing to
+believe was, over the shortest run it measures a grade across, a 0.60 grade**:
+past `MAX_GRADE`, clamped, factor **5.396**. The field reported a pace 5.4x
+faster than raw off a rise the gain path throws away, and a single 1 m step did
+it at 2.50. Stated as a floor: a window must exceed
+`ELEVATION_GAIN_MIN_DELTA_M / MAX_GRADE` = 6.67 m or the noise floor alone
+saturates the model, and 5 m is under it.
+
+**The filing framed the choice as "a longer window or a rise threshold". A rise
+threshold cannot work, at any window.** The rise a real grade produces over the
+window scales with the window exactly as the noise does, so a threshold big
+enough to suppress the noise suppresses every real grade below
+`threshold / window` with it. Measured: a 3 m rise gate zeroes every real grade
+under 60 % at a 5 m window, 15 % at 20 m, 10 % at 30 m — while the GPS-altitude
+noise it aims at has a rise sigma of 1.95 / 3.82 / 4.61 m at those same windows
+and walks straight through. On a **clean, noise-free** 3.3 % climb a 1 m gate
+read 19.5 % slow, because the entire real climb fell under it. It buys 1-2
+percentage points against noise and costs a fifth of the signal.
+
+Measured over the AR(1) altitude-error model § 981 chose (rho 0.98 — altitude
+error drifts, it does not resample), 30-minute runs, twelve seeds, reported GAP
+against truth (positive = reported FASTER than the runner ran):
+
+| track | 5 m | 10 m | 20 m | 30 m | 50 m |
+|---|---|---|---|---|---|
+| flat, GPS altitude (sigma 8 m) | **+47.9 %** | +37.1 % | +26.8 % | +20.7 % | +13.8 % |
+| flat, GPS altitude, power-hike pace | **+60.7 %** | +55.5 % | +48.8 % | +42.5 % | +29.1 % |
+| flat, barometer (sigma 1 m) | +2.1 % | +1.1 % | +0.5 % | +0.3 % | +0.2 % |
+| flat, barometer, power-hike pace | **+9.0 %** | +4.3 % | +2.1 % | +1.4 % | +0.6 % |
+| 6 % climb switchbacking +/-8 m / 150 m, clean | +0.1 % | -0.5 % | **-2.5 %** | -5.2 % | -13.1 % |
+| steady 10 % climb, clean | 0.0 % | 0.0 % | 0.0 % | 0.0 % | 0.0 % |
+
+A flat half-hour reading 48 % faster than it was run is not a rounding
+preference, and the power-hike row is the case this device exists for: the same
+window spans a longer interval at 0.9 m/s, so the correlated part of the error
+has longer to grow across it, and even a barometer misreports by 9 %.
+
+**20 m**, because two bounds meet there. It is where the noise floor stops being
+able to more than double the reported effort (3 m over 20 m is a 0.15 grade,
+factor 2.06), and it is the largest window whose cost on the most oscillating
+realistic profile measured stays under 3 %. A steady climb is exact at every
+window — the cost is entirely to terrain that oscillates faster than the window,
+and a switchback staircase is the binding case, not a hill.
+
+The value moves on all four rails at once and `check_watch_wire_vectors.mjs`'s
+`minimum segment before a grade sample is trusted (m)` row already binds them,
+so **no new `CONSTANT_ROWS` entry is needed** — a one-sided change fails the
+`watch-wire-vectors` job today. `roadbook` shares the constant on three rails
+and moves with it, which is the same correction for the same reason; its own
+suites and web's `pace_analysis` / `fuel_plan` pass unchanged.
+
+Every behavioural case on every rail now states its distances as fractions of
+the window rather than as literals, so widening it again cannot leave a stale
+sub-gate sample reading as an above-gate one — six Monkey C tests and two Rust
+ones were exactly that. What the window may BE is pinned separately, by one new
+test per rail asserting the relationship to the noise floor rather than the
+number; each fails at 5 m naming the 0.60 grade. Nothing had pinned the value
+before: every suite on every rail passed at 5, 20, 30 and 50 m.
+
+The Garmin rail is **source-level only** — there is no Connect IQ SDK on this
+machine, so its tests were edited and read, never executed;
+`check_garmin_source.sh` passes and says so itself.
+
+## 993. One elevation-gain rule on the wrist, after web stopped having two
+
+[§ 981](#981) collapsed web's two elevation-gain rules into the gated one and
+filed the consequence for the watch, which carried both: `run_stats.rs`'s
+ungated positive-delta sum ([§ 902](#902)) and `route_simplify.rs`'s 3 m-gated
+one ([§ 925](#925)). Both were faithful ports when taken; after § 981 the first
+was a faithful port of something no rail still does — mobile never had it, and
+web now delegates.
+
+Measured on the wrist before deciding: a +/-1 m sawtooth over 30 samples of
+dead-flat road banked **15 m** of climb under the ungated rule and 0 under the
+gated one, on the device whose headline ultra metric is cumulative climb. On
+deltas past the gate the two agree exactly (a 300 m staircase reads 300 m
+either way), so the gate costs nothing where there is signal — which is the
+second new test.
+
+The rule now has one home. Web states it once and reaches it from both callers
+because `computeElevationGain` is typed structurally; Rust has no such
+subtyping and this device no allocator to build one point shape out of the
+other, so the seam is `route_simplify::elevation_gain_from_samples`, an
+iterator over the altitude samples both shapes can yield.
+`run_stats::elevation_gain_metres` is now a guard, that call, and a round.
+
+The live vert path is untouched and is a third mechanism, not a third rule:
+`elevation::VertAccumulator` consumes a sensor stream with its own deadband and
+drift filter rather than replaying a stored track.
+
+## 994. The bottom of the watch's altitude field is the "no reading" sentinel, and the top is below Handies Peak
+
+Two findings in one field. `run_store::TrackPoint::ele_dm` is an `i16` of
+decimetres and `ELE_NONE` is `i16::MIN`.
+
+**The one this lane could fix.** `record_cadence::ele_dm_from_m` accepted
+-3276.8 m and returned `Some(i16::MIN)` — which `encode` writes as the sentinel
+and `decode` reads back as `None`. The reading was accepted and then silently
+lost, while the value one decimetre above it stored fine. The function's own doc
+asserted the opposite ("every `i16` decimetre value is representable, so there
+is no reason for the bottom of the field to store nothing while the top stores
+fine") and its test pinned the wrong claim; an earlier round had widened the
+bound to include `i16::MIN` on exactly that reasoning, correcting an asymmetry
+that was right. The window is now -3276.7..=3276.7 m and a property test walks
+encode/decode over the edges, so a value that is accepted and then lost fails
+loudly. Unreachable in production today — `plausible_alt` floors at -500 m — so
+this is a latent shape like § 986's `RunRow.toJson`, closed at the source.
+
+**The one it could not.** `plausible_alt` admits -500 m..9000 m, so every
+reading between 3276.7 m and 9000 m is one the watch trusts, publishes to its
+live altitude and vert pages, and then cannot write to the track. Measured:
+Handies Peak is 4285 m against Silverton's 2830 m, so **69 % of a
+Silverton-Handies-Silverton profile stores no elevation at all** — and because
+the gain rule carries the last reading across a dropout, the summit push does
+not merely go missing, it nets to **zero vert** on the synced run. Hope Pass
+(3840 m), the Alps and the Rockies are all inside the same band.
+
+**The repo already made this decision once and the run track never followed.**
+[§ 334](#334) chose `i16` **metres** for `CRS1`'s per-point elevation with the
+reason spelled out — "a decimetre `i16` caps at 3276.7 m, below Mont Blanc, and
+this is a mountain-ultra device" — so the same watch can be handed a course it
+cannot record itself running.
+
+Widening it is a two-rail change and not something the firmware can do alone:
+the phone's `sim_watch_sync.dart` is the production decode side, reads this
+field as `eleDm / 10.0`, and rejects any version past 4, so a firmware-only
+version bump ships a watch whose runs the phone refuses — and the golden vector
+both rails pin would go red. The design is `i16` metres at `FORMAT_VERSION` 5
+with `MIN_FORMAT_VERSION` left at 3 and the unit resolved per header version, so
+**existing v3/v4 blobs stay readable with their original decimetre meaning**;
+it is filed with those details. Meanwhile the cost is written down where a
+reader meets it — the bench checklist now says an empty ALT column over the high
+half of a mountain run is this format and not a dead barometer — and
+`the_altitude_ceiling_is_far_below_what_the_device_believes` pins the 69 %
+figure as characterisation, so the day the field widens the test goes red rather
+than the limit going quiet.
+
+## 995. A year recap that headlined a streak from another year, and the second copy of the streak walk that hid it
+
+`streaks::compute_run_streaks` never gained the `bestSince` bound web added in
+#747, and the reason web added it is what the wrist was doing: a 40-day streak
+from two years ago as the headline number on a card titled with one year.
+`recap::build_year_in_running_recap` reported the **all-time** best as the
+year's best, the month builder had the same hole, and both feed
+`compute_recap_badges`, so the streak trophies were awarded off it too —
+measured, twelve consecutive days in March 2024 gave a 2026 card a 12-day best
+and a `streak-7` badge.
+
+**Underneath it: `recap.rs` carried its own private copy of the entire streak
+algorithm**, plus its own 512-day cap beside `streaks.rs`'s. One crate, two
+implementations of one rule, only one of them registered as a parity port — so
+a divergence between them was undetectable by construction, which is the
+[§ 641](#641) shape inside a single module. They happened to agree; the bound
+went into one of them and would have reached neither. The copy is deleted and
+`recap` imports the walk and the cap.
+
+The bound is a **required** parameter rather than web's optional one. It exists
+because a caller that forgets it reports another year's streak as this year's,
+which is precisely what happened here; a parameter that must be answered cannot
+be forgotten. Porting it also required restructuring the walk to web's shape —
+the wrist seeded `best = 1` before the loop, which with a bound would claim a
+one-day streak nobody ran inside the window.
+
+The subtlety is pinned in both directions: a qualifying streak counts at its
+**full** length, days before the bound included, so 28 Dec to 3 Jan is seven
+days long on the January card. Dropping either bound makes the first two cases
+fail (12 against 3, 8 against 2); the crossing-the-boundary case passes with and
+without, which is the point of having it.
+
+## 996. `RunSource` could not name a parkrun or a chip-timed race
+
+The firmware's `fitness::RunSource` held six of web's eight source values plus a
+watch-local `Other`, and `is_qualifying` was `!matches!(self, Other)`. So a
+caller mapping a pushed source had no variant for `parkrun` or `race` and would
+have had to choose `Other` — which does not qualify. A certified weekly 5K and
+an official chip-timed result, the two most authoritative distances a runner
+has, would have been the ones silently kept out of the fitness ceiling.
+
+That is the same defect twice over. Web's own `||` chain omitted exactly those
+two until #749 replaced it with a total `Record<RunSource, boolean>`, and
+migration `20270424_001_pr_achievements_include_parkrun_race` fixed the same
+omission in SQL. The port inherited the shape that makes it possible rather than
+the fix, and inherited it in a worse form: web could at least express the values.
+
+Both variants are added and `is_qualifying` is an exhaustive match for web's
+stated reason — a variant added to the enum is now a compile error until it is
+consciously classified, where the negated form silently qualified every new one
+(the same failure as the `||` chain, in the other direction). A `WEB_SOURCES`
+register in the tests covers the half the compiler cannot: a variant added
+without a row there is one nothing exercises.
+
+**Web's fourth filter, `activity_type !== 'cycle'`, is deliberately not
+ported**, and the module says so. Its reason is real — `current_vdot` takes the
+MAX over runs, so one bike commute takes the threshold pace, TSS and race
+predictions with it — but the filter needs an activity type `RunForFitness` has
+no producer for on a device with no sport selector. A field nothing can
+populate, filtering a case nothing can produce, is a port made for the count
+rather than for the wrist ([§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)).
+The trigger is a phone push of run history, at which point the field arrives
+with the wiring that fills it.
+
+## 997. Three ported modules whose gaps are answers, not debts
+
+The round-30 sweep found sixteen watch ports whose web source had moved. Five of
+the remainder are one shape — a helper web grew and the port did not — and
+[§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+says a wrist with no surface for a capability may legitimately not want it. Two
+turned out to be defects and are [§ 995](#995) and [§ 996](#996). These three are
+not, and each module now says so where a reader meets the count, the way § 989
+and the `markerPointAtDistance` precedent do.
+
+**`roadbook`'s `RoadbookTarget` / `TARGET_BAND_FRACTION`.** The filing called
+this "the one entry here with a real wrist surface waiting for it" on two
+premises, and **both are false**. `route_markers` carries `parse_cutoff` and no
+`parse_target`, so the input does not exist; and `build_roadbook` has **no
+non-test caller** — the wired Roadbook glance renders the checkpoints the phone
+pushes over `RBK1`, so a field added to that function's output is one nothing on
+the device can read. `RBK1` v1's checkpoint is
+`cum_dist_m | leg_dist_m | projected_elapsed_s | cutoff | flags` with the flags
+byte holding only `CHECKPOINT_FLAG_REFILL`, so the target belongs on the wire,
+in a v2 frame with a matching phone encoder and golden vector. Filed as the
+two-rail change it is.
+
+**`plan_progress`'s `planWorkoutProgress`.** The filing named one missing
+function; there are **two** — `planDistanceBanked` is also absent, and it is
+part of the registered parity pair. Both need the plan's whole workout list, and
+nothing pushes one: `PlanReplan` and `PlanAdaptive` render pre-computed views,
+and a per-week workout table has no wire and no room on a 168x96 panel. The two
+that ARE ported are ported because the phone sends their inputs — a phase list
+and a long-run distance are single values.
+
+**`live_freshness`'s `raceClockS` and `liveElapsedS`.** Both exist to
+reconstruct a clock a *spectator* cannot see: one off `started_at`, one as the
+lower bound a viewer with only a ping may claim. This device is the runner's
+own and `record::Recorder` owns the elapsed clock, so the distinction does not
+arise — and the surface that most depends on it already makes it, since
+`cutoff_eta::next_cutoff_eta` takes `elapsed_s` and `record.rs`'s
+`the_cutoff_eta_projects_from_race_pace_not_moving_pace` pins that it is not the
+moving one. A reconstruction of a fact the device measures directly would be a
+second answer to a settled question, and a second answer is how they disagree.
+`freshness_for` stays ported because a ping's AGE does have a wrist analogue.
+
+Two more results from re-running the § 899 date comparison, recorded so a later
+sweep starts from a measurement. `readiness` moved on web today and was
+**checked and is clean**: the tie in `dominantAdvice` that round 33 found
+diverging between web and Dart cannot occur here, because `dominant_advice` is a
+strict-`>` linear scan that keeps the first contributor, which is what web's
+stable sort does. And `route_markers`' other gap, `isOfficialMarker`, compares a
+marker's `user_id` to the route owner's — the watch has no user ids on any wire
+and the phone owns identity, so there is nothing to port.
