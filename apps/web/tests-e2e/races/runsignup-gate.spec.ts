@@ -6,7 +6,7 @@ import { USER_A } from '../fixtures/users';
 
 /**
  * RunSignUp fail-closed gate (race_calendar.md). With RUNSIGNUP_API_KEY unset
- * (the dev/CI default), the race-listings-sync probe returns 503
+ * (the dev/CI default), the race-results-import probe returns 503
  * provider_not_configured, so the Settings → Integrations RunSignUp card shows
  * the unavailable explainer instead of an open-the-calendar action — and the
  * page does not crash. parkrun + manual paste stay available.

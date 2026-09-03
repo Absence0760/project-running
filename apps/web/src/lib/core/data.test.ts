@@ -12,6 +12,8 @@ import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { stripComments } from './strip_comments';
+
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
 }
@@ -1148,4 +1150,57 @@ test('the contact-of section reads the OTHER half deliberately, and withdraws by
 		/removeSafetyContact/,
 		'removeSafetyContact is owner-scoped — it silently matches nothing on a contact-of row.'
 	);
+});
+
+test('every race-import availability probe asks the results leg, not the listings sync', () => {
+	// Reason: a card that offers an IMPORT has to ask the leg that would run.
+	// The two Edge Functions read different credentials — the sync walks an
+	// upcoming-races feed, the import fetches a finisher list — so a sync
+	// verdict is not binding on the import, and RunSignUp's probe asking the
+	// sync advertised an import whose very next call could 503 (decisions
+	// § 1041 moved every mobile probe; this closes the web half).
+	//
+	// Derived from RACE_IMPORT_PROBES rather than naming the three functions,
+	// so a fourth leg added to the map is read here the moment it exists.
+	// Blanked, or the next function's doc comment naming the sync it does NOT
+	// use is read as a use of it.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const map = source.slice(
+		source.indexOf('const RACE_IMPORT_PROBES'),
+		source.indexOf('export function isRaceImportProviderConfigured')
+	);
+	assert.ok(map.length > 0, 'RACE_IMPORT_PROBES moved — re-anchor this guard');
+	const entries = [...map.matchAll(/^\t(\w+):\s*(\w+)/gm)].map((m) => ({
+		leg: m[1],
+		fn: m[2]
+	}));
+
+	// Population: an empty parse would satisfy every assertion below.
+	assert.ok(entries.length >= 3, `parsed only ${entries.length} probes — map reshaped?`);
+
+	for (const { leg, fn } of entries) {
+		const start = source.indexOf(`export async function ${fn}(`);
+		assert.ok(start >= 0, `${fn} is not an exported function in data.ts`);
+		const next = source.indexOf('\nexport ', start + 1);
+		const body = source.slice(start, next > start ? next : undefined);
+		assert.match(
+			body,
+			/invoke\('race-results-import'/,
+			`${fn} must probe race-results-import — the listings sync gates a different credential`
+		);
+		assert.match(
+			body,
+			/probe:\s*true/,
+			`${fn} must pass probe: true — without it the call performs a real import`
+		);
+		assert.match(
+			body,
+			new RegExp(`provider:\\s*'${leg}'`),
+			`${fn} is registered under '${leg}' but does not name that provider`
+		);
+		assert.ok(
+			!body.includes('race-listings-sync'),
+			`${fn} still invokes race-listings-sync`
+		);
+	}
 });

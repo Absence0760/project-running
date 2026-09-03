@@ -2315,11 +2315,19 @@ export const RACE_IMPORT_UNAVAILABLE: Record<RaceImportLeg, string> = {
 	chronotrack: 'CHRONOTRACK_UNAVAILABLE'
 };
 
-/// Probe whether the RunSignUp leg is configured server-side. Returns false
-/// (unavailable) on a 503 provider_not_configured, true otherwise. Used to
-/// disable the RunSignUp card with an explainer.
+/// Probe whether the RunSignUp RESULTS leg is configured server-side. Returns
+/// false (unavailable) on a 503 provider_not_configured, true otherwise. Used
+/// to disable the RunSignUp card with an explainer.
+///
+/// Probes `race-results-import`, not `race-listings-sync`, for the reason its
+/// UltraSignup sibling below gives: the card gates an IMPORT, so it has to ask
+/// the leg that would run. The two legs read different credentials — the sync
+/// walks an upcoming-races feed, the import fetches a finisher list — and
+/// nothing makes one leg's verdict binding on the other (decisions § 1041).
 export async function isRunSignUpConfigured(): Promise<boolean> {
-	const { error } = await supabase.functions.invoke('race-listings-sync', { body: {} });
+	const { error } = await supabase.functions.invoke('race-results-import', {
+		body: { provider: 'runsignup', probe: true }
+	});
 	if (!error) return true;
 	return !(await isProviderNotConfigured(error));
 }
