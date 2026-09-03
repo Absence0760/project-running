@@ -7,6 +7,13 @@
 //
 // Web-only: app.css has no mobile/Dart twin (Flutter themes its own
 // colours), so there is no parity counterpart to keep in lockstep.
+//
+// Every scan below strips `/* … */` and deliberately NOT `//`, which the JS
+// guards in this tree all blank through `core/strip_comments`. `//` is not a
+// comment in CSS: blanking it would delete a protocol-relative
+// `url(//host/x.woff2)` and the tail of any `content: '…//…'`. The register in
+// `security_guards.test.ts` records the exemption so it reads as chosen rather
+// than overlooked (decisions § 1001).
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';

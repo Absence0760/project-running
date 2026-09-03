@@ -16,6 +16,13 @@ import { resolve, relative } from 'node:path';
  *
  * Behavioural proof that the shell actually mirrors lives in
  * tests-e2e/cross-cutting/rtl-layout.spec.ts.
+ *
+ * `cssOf` strips `/* … *\/` and deliberately NOT `//`, which the JS guards in
+ * this tree all blank through `core/strip_comments`. `//` is not a comment in
+ * CSS: blanking it would delete a protocol-relative `url(//host/x.woff2)` and
+ * the tail of any `content: '…//…'`. The register in `security_guards.test.ts`
+ * records the exemption so it reads as chosen rather than overlooked
+ * (decisions § 1001).
  */
 
 const srcRoot = resolve(import.meta.dirname, '..');

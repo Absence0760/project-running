@@ -17,8 +17,13 @@ import { decodeKey, handler } from '../../../lambda/share-entity/src/index';
 process.env.PUBLIC_SUPABASE_URL = 'http://supabase.invalid';
 process.env.PUBLIC_SUPABASE_ANON_KEY = 'anon';
 
+/// A GET, because the handler gates its method since decisions § 1005 and a
+/// real Function URL event always carries one. These cases are about the path.
 function urlEvent(rawPath: string): LambdaFunctionURLEvent {
-	return { rawPath } as unknown as LambdaFunctionURLEvent;
+	return {
+		rawPath,
+		requestContext: { http: { method: 'GET' } },
+	} as unknown as LambdaFunctionURLEvent;
 }
 
 test('decodeKey returns null on a malformed percent-escape, decodes otherwise', () => {

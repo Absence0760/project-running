@@ -121,6 +121,17 @@ test('computeElevationGain — a dropout carries the last reading across the gap
 		]),
 		35,
 	);
+	// An ABSENT `ele` is the same dropout as an explicit null: the track type
+	// makes the field optional, and the run-detail page feeds this raw
+	// waypoints where a lost fix simply omits it.
+	assert.equal(
+		computeElevationGain([
+			{ lat: 0, lng: 0, ele: 100 },
+			{ lat: 0, lng: 0.001 },
+			{ lat: 0, lng: 0.002, ele: 110 },
+		]),
+		10,
+	);
 });
 
 test('computeElevationGain — jitter inside the noise band is not climb', () => {

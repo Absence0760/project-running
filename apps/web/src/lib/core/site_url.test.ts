@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 
 import { DEFAULT_SITE_URL, siteOrigin } from './site_url.js';
 
+import { stripComments } from './strip_comments';
+
 /**
  * The site origin's default used to be spelled 28 times — 15 as a named
  * `DEFAULT_SITE_URL` per module and 13 inline as `env.PUBLIC_SITE_URL || '…'`.
@@ -34,15 +36,6 @@ function sourceFiles(dir: string): string[] {
 	return out;
 }
 
-/** Comment bodies blanked, so prose naming the host is not a use of it. */
-function code(src: string): string {
-	return src
-		.split('\n')
-		.map((l) => (/^\s*(\/\/|\/\/\/)/.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n')
-		.replace(/\/\*[\s\S]*?\*\//g, ' ');
-}
-
 test('the site origin default is spelled in exactly one place', () => {
 	const offenders: string[] = [];
 	let scanned = 0;
@@ -52,7 +45,7 @@ test('the site origin default is spelled in exactly one place', () => {
 			const rel = file.slice(webRoot.length + 1);
 			if (rel === join('src', 'lib', 'core', 'site_url.ts')) continue;
 			scanned++;
-			const src = code(readFileSync(file, 'utf-8'));
+			const src = stripComments(readFileSync(file, 'utf-8'));
 			for (const line of src.split('\n')) {
 				if (!line.includes(host)) continue;
 				// An address or an iCal identity domain, not the origin. Keyed on
@@ -114,7 +107,7 @@ test('every read of PUBLIC_SITE_URL folds through siteOrigin', () => {
 		for (const file of sourceFiles(join(webRoot, root))) {
 			const rel = file.slice(webRoot.length + 1);
 			if (rel === join('src', 'lib', 'core', 'site_url.ts')) continue;
-			for (const line of code(readFileSync(file, 'utf-8')).split('\n')) {
+			for (const line of stripComments(readFileSync(file, 'utf-8')).split('\n')) {
 				if (!line.includes('PUBLIC_SITE_URL')) continue;
 				reads++;
 				// `env.PUBLIC_SITE_URL` in a route, `process.env.PUBLIC_SITE_URL`

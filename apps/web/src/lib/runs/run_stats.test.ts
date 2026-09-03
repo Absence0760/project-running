@@ -1,12 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-	movingTimeSeconds,
-	elevationGainMetres,
-	computeRealSplits,
-	haversineMetres
-} from './run_stats';
-import { computeElevationGain } from '../routes/route_simplify';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { movingTimeSeconds, computeRealSplits, haversineMetres } from './run_stats';
+import { stripComments } from '../core/strip_comments';
 import type { TrackPoint } from '../types';
 
 // Synthetic track helper: emits a meridian-aligned sequence at a chosen
@@ -98,73 +95,37 @@ test('movingTimeSeconds — points without ts are skipped', () => {
 	assert.equal(movingTimeSeconds(pts), 0);
 });
 
-test('elevationGainMetres — sums positive deltas only', () => {
-	const pts: TrackPoint[] = [
-		{ lat: 0, lng: 0, ele: 100 },
-		{ lat: 0, lng: 0.001, ele: 110 }, // +10
-		{ lat: 0, lng: 0.002, ele: 105 }, // -5 ignored
-		{ lat: 0, lng: 0.003, ele: 130 }, // +25
-	];
-	assert.equal(elevationGainMetres(pts), 35);
-});
-
-test('elevationGainMetres — climb across a missing-elevation gap is carried forward', () => {
-	const pts: TrackPoint[] = [
-		{ lat: 0, lng: 0, ele: 100 },
-		{ lat: 0, lng: 0.001 }, // missing ele
-		{ lat: 0, lng: 0.002, ele: 110 },
-	];
-	// The runner climbed 10 m across the dropout; skipping the gap entirely
-	// (the old adjacent-pair behaviour) wrongly reported 0.
-	assert.equal(elevationGainMetres(pts), 10);
-});
-
-test('elevationGainMetres — carries the last valid elevation across a multi-point gap', () => {
-	const pts: TrackPoint[] = [
-		{ lat: 0, lng: 0, ele: 100 },
-		{ lat: 0, lng: 0.001 }, // missing ele
-		{ lat: 0, lng: 0.002 }, // missing ele
-		{ lat: 0, lng: 0.003, ele: 130 },
-		{ lat: 0, lng: 0.004, ele: 120 }, // descent, ignored
-		{ lat: 0, lng: 0.005, ele: 125 },
-	];
-	// +30 across the gap, then +5 after the descent = 35.
-	assert.equal(elevationGainMetres(pts), 35);
-});
-
-test('elevationGainMetres — one rule, the gated one, shared with the route summary', () => {
-	// The app used to answer this question twice. `run_stats` summed every
-	// upward delta; `computeElevationGain` gated at 3 m — so a run's vert
-	// changed the moment the runner tapped "save as route", and the phone
-	// (which has only ever had the gated rule) disagreed with the web on
-	// the same track. Altitude error is autocorrelated, so an ungated sum
-	// integrates the drift: 40 samples of +/-1 m jitter on a dead-flat
-	// course is 40 m of imaginary climb under the old rule and 0 under this.
-	const jitter: TrackPoint[] = [];
-	for (let i = 0; i < 80; i++) {
-		jitter.push({ lat: 0, lng: i * 0.0001, ele: 40 + (i % 2 === 0 ? 0 : 1) });
-	}
-	assert.equal(elevationGainMetres(jitter), 0);
-	// The two functions must agree exactly, not merely closely — the
-	// delegation is the point, a second implementation that happens to
-	// round the same way is what this is here to prevent.
-	assert.equal(elevationGainMetres(jitter), Math.round(computeElevationGain(jitter)));
-
-	// A real climb is untouched: the gate suppresses noise, not signal.
-	const climb: TrackPoint[] = [
-		{ lat: 0, lng: 0, ele: 100 },
-		{ lat: 0, lng: 0.001, ele: 101 }, // +1, below the gate
-		{ lat: 0, lng: 0.002, ele: 140 }, // still +40 from the 100 m reference
-	];
-	assert.equal(elevationGainMetres(climb), 40);
-	assert.equal(elevationGainMetres(climb), Math.round(computeElevationGain(climb)));
-});
-
-test('elevationGainMetres — empty / single-point input returns 0', () => {
-	assert.equal(elevationGainMetres([]), 0);
-	assert.equal(elevationGainMetres(null), 0);
-	assert.equal(elevationGainMetres(undefined), 0);
-	assert.equal(elevationGainMetres([{ lat: 0, lng: 0, ele: 100 }]), 0);
+test('the run-detail page reads its vert through the one elevation rule', () => {
+	// Source-level, because the page is a `.svelte` file and cannot be executed
+	// here. `run_stats` used to export a rounded adapter over
+	// `computeElevationGain`, and before that its own ungated sum — which
+	// reported 143 m of climb on a flat half-hour and made a run's vert change
+	// the moment the runner tapped "save as route" (decisions § 981). With the
+	// adapter gone the page holds the only remaining place a second rule could
+	// reappear (decisions § 1004).
+	const page = stripComments(
+		readFileSync(resolve(import.meta.dirname, '../../routes/runs/[id]/+page.svelte'), 'utf-8'),
+	);
+	const derived = page
+		.split('\n')
+		.find((l) => l.includes('realElevationGain') && l.includes('$derived'));
+	assert.ok(derived, 'the run-detail page no longer derives realElevationGain');
+	assert.match(
+		derived,
+		/computeElevationGain\(/,
+		'the run-detail page must take its elevation gain from computeElevationGain, ' +
+			'which is the same rule the route summary and the Dart twin use.',
+	);
+	assert.match(
+		page,
+		/import \{[^}]*\bcomputeElevationGain\b[^}]*\} from '\$lib\/routes\/route_simplify'/,
+		'imported from the module that owns the rule, not re-exported through another',
+	);
+	assert.doesNotMatch(
+		page,
+		/elevationGainMetres/,
+		'the rounded adapter was deleted — the page calls the rule directly',
+	);
 });
 
 test('computeRealSplits — short track returns no splits', () => {

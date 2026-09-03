@@ -16272,6 +16272,228 @@ outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
 
+## 1000. Thirteen copies of a comment stripper, and the one case none of them handled
+
+Every source-level guard in `apps/web` reads a file as text and has to blank its
+comments first, or the prose above a rule reads as a use of it. Counted at the
+start of this change: **thirteen spellings across twelve files**, each its own
+chain of `.replace` calls — the filing said eight because it inherited the
+ordering guard's own walker, which reached `src/lib/**/*.test.ts` only. § 971 had
+already
+found that a chain gets the ORDER wrong in a way that hides code: `//` is a
+comment to the language but `/*` inside one is still an opening delimiter to a
+regex, so stripping block comments first makes `// exactly as /clubs/* already
+do` open a block that runs to the next `*/` in the file. § 971 fixed the order in
+the six copies it could reach and pinned it with an ordering guard.
+
+Two things were left. The duplication itself, and a case no copy handled in
+either order: a `/*` inside a STRING literal opens the same phantom block. So does
+one inside a regex literal — and a regex literal spelling both delimiters is
+exactly what these files are full of.
+
+A chain of `.replace` calls cannot close that, because the fix is not another
+substitution: it is knowing which delimiter you are inside. `src/lib/core/
+strip_comments.ts` makes one forward pass over code / string / template / regex,
+with a previous-significant-token test to tell a regex literal from division, and
+blanks comment characters to spaces while keeping newlines, so an offset or a
+line number taken from the result is still the file's own.
+
+Strings and regex literals are emitted VERBATIM, which fixes the failure
+direction as well as the failure. A misread of either can only leave a comment
+standing — never delete code. An unstripped comment makes a guard report a
+violation someone can argue with; a swallowed region makes a guard pass while
+seeing nothing, which is what § 971 measured at 779 hidden lines. Single- and
+double-quoted strings and regex literals cannot cross a newline in JavaScript,
+so an unterminated one is treated as an ordinary character and a misread on a
+Svelte markup line (`don't`, `</div>`) cannot escape that line.
+
+The ordering guard is replaced rather than kept. Once the rule has one home,
+"which order does this copy use" is the wrong question; "does this file spell its
+own copy at all" is the right one. The new guard registers every file still
+allowed to strip a block comment together with the count it may spell and why,
+and fails both when an unregistered file appears and when a registered entry goes
+stale — the `allowExtra`/`allowMissing` shape `check_constraint_unions.mjs`
+already uses.
+
+Widening the walk found what the old guard's scope had hidden: it walked
+`src/lib/**/*.test.ts` only, and four more copies lived under `tests-e2e/`,
+three of them in the wrong order. None was hiding anything today — measured, the
+two orders give byte-identical output over every file those three scan — but the
+guard that existed to catch exactly that had never looked at them. A guard naming
+one instance of a class it should name all of is the § 968 defect, one directory
+over.
+
+One copy is deliberately left: `src/lib/integrations/strava_zip_strictness.
+test.ts` belonged to another lane in the round that did this work. It is a
+register entry with that reason, so it is visible and its removal is one line.
+
+## 1001. The two CSS scanners are right to strip only block comments, and now say so
+
+`contrast_guard.test.ts` and `rtl_css_guards.test.ts` strip `/* … */` and not
+`//`, sitting beside a family of guards where stripping only block comments was
+the defect § 971 fixed. They are correct: `//` is not a comment in CSS, and
+blanking it deletes a protocol-relative `url(//host/x.woff2)` and the tail of any
+`content` string that contains one. § 971's ordering guard skipped them, but only
+INCIDENTALLY — it detected that they strip a single form and moved on, which is
+indistinguishable from a copy that had simply forgotten the other half.
+
+Both files now say why in their header, and § 1000's register turns the
+incidental skip into a declared one: each CSS scanner is listed with the number
+of block-comment strips it may spell and the reason, and a count that moves fails
+the guard. That is the difference between a rule nobody has broken yet and a rule
+that is written down — the same reason a `shape: 'union'` rail in
+`check_constraint_unions.mjs` states its `allowExtra` rather than passing quietly.
+
+## 1002. A test file named for the caller it was about, not the code it drives
+
+`share/lambda_site_origin.test.ts` carried two things: a register of every
+`PUBLIC_SITE_URL` caller under `lambda/`, and two behavioural cases over the
+share head builders. § 970 moved the register to `core/site_url.test.ts`, which
+already walked `src` and `lambda` together for the sibling scan, and left the
+behavioural half where it was.
+
+What was left reads no Lambda source. It calls `buildShareRunMeta`,
+`renderShareRunHeadTags`, `buildShareEventHead` and `renderShareEventHeadTags` —
+all in `$lib/share` — and asserts what they emit when the origin is blank,
+whitespace, or carries a trailing slash. The Lambdas are why it matters, because
+nothing else renders those surfaces in production, but the name promised a scope
+the file no longer has, which is the § 968 defect: a reader looking for coverage
+of the shared builders would not find it under `lambda_`, and a reader adding a
+sixth Lambda would expect this file to notice.
+
+Renamed `share_head_origin.test.ts`, with the header saying why the `lambda_`
+prefix was ever right. Naming a test for what it drives rather than for who
+happens to call it is the rule; § 968 arrived at the same one from the other
+direction, where a guard named for `/api/coach` was widened to every wrapper.
+
+## 1003. A refusal-vocabulary guard that named one of the two pairs it should have named
+
+§ 982 added a cross-language check that every refusal code the fundraiser page
+compares is one `donations-checkout` can actually send. It was written because
+the followup asking for the work named `host_cannot_take_payment`, a code that
+function has never returned — it answers `owner_cannot_take_payment` — and a map
+written from that filing would have compiled, typechecked, and silently never
+matched.
+
+The guard was added for one caller. `startEventCheckout` has had the same shape
+since § 904: it unwraps the envelope, rethrows the function's own code, and
+`clubs/[slug]/events/[id]/+page.svelte` maps seven of them to copy. Nothing
+compared those seven against `events-checkout`'s source. A guard that names one
+instance of a class it should name all of is the § 968 defect, and here it was
+one directory over from the ADR that named it.
+
+Measured before extending: all seven are real (`event_full`, `sales_closed`,
+`instance_cancelled`, `host_cannot_take_payment`, `event_has_no_host`,
+`event_not_priced`, `stripe_not_configured`), so this closes a hole rather than a
+live defect. The hole is not hypothetical: the two vocabularies differ on exactly
+the word that produced the wrong filing — donations refuse with `owner_`, events
+with `host_` — and nothing but a reader's memory kept them apart.
+
+Both pairs now run off one register of `{fn, page, handler bounds, generic key,
+distinct codes, key window}`, so the rule is stated once. Two data differ per
+pair rather than being assumed: `events-checkout` templates none of its codes
+(the donations guard's `prefixes.size >= 2` floor would have failed it), and the
+event page groups four codes into one branch so its code-to-copy window is wider.
+Writing them as per-pair data rather than as a widened shared constant keeps the
+donations half's tighter window, which is what stops a code that is NOT mapped
+from picking up a later branch's copy key and reading as mapped.
+
+## 1004. Deleting the adapter, because an indirection with one caller is a place for a second rule to grow
+
+§ 981 made `runs/run_stats.ts`'s `elevationGainMetres` delegate to
+`routes/route_simplify.ts`'s `computeElevationGain`, so the app stopped
+answering "how much did this run climb" twice with different numbers. It left the
+adapter in place because its single call site was outside the lane's paths.
+
+Both things the adapter added past the delegation turn out to be dead. Its
+`!track` guard is redundant — the one caller already reads
+`run?.track ? … : 0` — and so is its `track.length < 2` guard, because
+`computeElevationGain` returns 0 for an empty track and for a single point
+(the first reading only sets the reference). What was left was `Math.round`.
+
+An indirection with one caller is not neutral. It is a second name for the rule,
+in the module that used to hold the second RULE, which is where a future edit
+would put an ungated sum back. `run_detail_screen.dart` has always called the
+Dart `computeElevationGain` directly; the web page now does the same.
+
+The five test cases the adapter carried were checked against
+`route_simplify.test.ts` before being dropped rather than moved: the positive-only
+sum, the single- and multi-point dropout carry-forward, the jitter band, the real
+climb through jitter and the empty/single-point input are each already pinned
+there. One case was NOT — an ABSENT `ele` rather than an explicit `null`, which
+is what the run-detail page's raw waypoints carry — and that assertion was added
+to the dropout case rather than lost.
+
+§ 981's "one rule" case does not survive the deletion, because with one function
+there is nothing to compare. What replaces it is a source guard over the page,
+which is what that case was really about: the derivation must call
+`computeElevationGain`, the import must come from the module that owns the rule
+rather than through a re-export, and the adapter's name must not reappear.
+Reintroducing a local `reduce` over positive deltas fails it, and so does
+importing the rule from a different path.
+
+## 1005. The share Lambdas gate their method, because OPTIONS was the one that missed the cache
+
+§ 972 measured that an `OPTIONS /og/run/<id>.png` runs a full ~50 ms `resvg`
+render and answers `200 image/png`, and left the gate unbuilt: it could not
+verify from the wrong side of the deploy that no client sends a preflight against
+those paths, and the filing asked for one `curl -X OPTIONS` against preview
+before changing five handlers.
+
+The curl is not needed, because the question it would answer is settled in the
+repository. A CORS preflight only succeeds if the response carries
+`Access-Control-Allow-Origin`. Neither the five handlers nor
+`aws_cloudfront_response_headers_policy.security` emits any `access-control-*`
+header at all — checked both — so a browser preflight against `/share/*` or
+`/og/*` already fails today and the real request is never sent. Nothing can be
+depending on the 200, because as a preflight answer it does not work. Everything
+that legitimately fetches these surfaces (an unfurl crawler, an `<img>`, a link
+checker) uses GET or HEAD.
+
+The measurement also understates the cost, and the understated part is what makes
+this worth doing rather than merely tidy. The behaviours declare
+`cached_methods = ["GET", "HEAD"]`. OPTIONS is therefore the one allowed method
+that **cannot** be absorbed by the edge cache: a GET storm on one URL costs one
+render per five-minute window, and an OPTIONS storm on the same URL costs a
+render every request — on paths the WAF rate-limit rules do not scope, since they
+cover `/api/coach`, `/api/routes/generate` and `/api/routes/osrm` only.
+
+One `shareMethodRefusal` in `$lib/share`, called by all five, rather than five
+copies of the `!== 'POST'` shape the API Lambdas each spell — the same reason
+§ 1000 gave for the comment stripper. It fails closed: an event with no method is
+refused, matching those wrappers, and the two share tests that built an event
+without a `requestContext` were corrected rather than the gate loosened, because
+a real Function URL event always carries one.
+
+§ 972's Terraform guard stays and its premise comment is rewritten rather than
+deleted. The two answer different questions: the gate decides what the handler
+does, and only the behaviour decides what reaches the origin at all — a POST body
+refused at the edge is never uploaded, never billed, and never reaches a handler
+that could be made to read it.
+
+## 1006. Eight method gates, five suites, and nothing that named the class
+
+Each of the eight production Lambdas gates its HTTP method, and each gate is
+driven behaviourally by its own suite: `coach_lambda_handler.test.ts`,
+`generate_lambda_handler.test.ts`, `osrm_proxy_lambda_handler.test.ts` and, since
+§ 1005, `share_lambda_handlers.test.ts` for the five share ones. What no file
+did was assert the CLASS. Eight instances covered one at a time is exactly how
+the five share handlers came to have no gate at all: nothing was looking for the
+gap, and their whole method safety sat in a Terraform list that § 972 was the
+first thing ever to read.
+
+So a ninth Lambda would arrive ungated and every existing suite would stay green,
+because none of them walks the directory. The guard added here does: it walks
+`apps/web/lambda/*/src/index.ts`, carries a population floor, and requires each
+handler either to compare `event.requestContext.http.method` and answer a 405 of
+its own, or to call the one shared `shareMethodRefusal`.
+
+Source-level rather than behavioural, deliberately. The shapes do not
+generalise — the coach wrapper writes to a response STREAM and cannot be driven
+through the same envelope as its siblings — and a source guard over a directory
+is the only form that answers "is there one of these I have not thought about",
+which is the question the per-handler suites structurally cannot ask.
+
 ## 1015. `BODY_SENSORS_BACKGROUND` was declared for a capability the permission does not grant, on a client it does not apply to
 
 `AndroidManifest.xml` declared `android.permission.BODY_SENSORS_BACKGROUND`
@@ -16515,3 +16737,4 @@ its failure as the wrong thing rather than not at all (§ 1019).
 explained a real crash with a gate that does not exist (§ 1017). An app-store
 permission list is a disclosure, and one that names permissions the binary does
 not hold is wrong in the direction that costs a review.
+

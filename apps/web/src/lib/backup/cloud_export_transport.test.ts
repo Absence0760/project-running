@@ -19,13 +19,10 @@ import {
 	buildCloudExportJobStatusUrl,
 	buildCloudExportJobsUrl,
 } from './cloud_export_helpers';
+import { stripComments } from '../core/strip_comments';
 
 const CALLER = 'src/lib/backup/cloud_export.ts';
 const HELPERS = 'src/lib/backup/cloud_export_helpers.ts';
-
-function stripComments(s: string): string {
-	return s.replace(/(^|[^:])\/\/[^\n]*/g, '$1').replace(/\/\*[\s\S]*?\*\//g, ' ');
-}
 
 function read(path: string): string {
 	return stripComments(readFileSync(resolve(path), 'utf-8'));
