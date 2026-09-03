@@ -407,6 +407,50 @@ void main() {
       expect(File('${tempDir.path}/in_progress.json').existsSync(), isTrue);
     });
 
+    test('a seeded track carrying a non-finite point still saves', () async {
+      // `resumeSession` takes a caller-supplied track and the two watch
+      // bridges hand one in unscreened, so a point that is not a location can
+      // reach the store. `jsonEncode` refuses a non-finite double, so before
+      // the filter this threw a `JsonUnsupportedObjectError` and the live
+      // recording could not be checkpointed at all.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      final seeded = makeRun(
+        id: 'live',
+        track: const [
+          Waypoint(lat: 47.37, lng: 8.54),
+          Waypoint(lat: double.nan, lng: 8.54),
+          Waypoint(lat: 47.38, lng: 8.55),
+        ],
+      );
+      await store.saveInProgress(seeded);
+
+      final loaded = await store.loadInProgress();
+      expect(loaded, isNotNull);
+      expect(loaded!.track.length, 2);
+      expect(loaded.track.first.lat, 47.37);
+      expect(loaded.track.last.lat, 47.38);
+    });
+
+    test('a completed run carrying a non-finite point still saves', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(
+        id: 'R',
+        track: const [
+          Waypoint(lat: 47.37, lng: 8.54),
+          Waypoint(lat: 47.38, lng: double.infinity),
+        ],
+      ));
+
+      final second = LocalRunStore();
+      await second.init(overrideDirectory: tempDir);
+      final back = await second.runById('R');
+      expect(back, isNotNull);
+      expect(back!.track.length, 1);
+      expect(back.track.single.lat, 47.37);
+    });
+
     test('loadInProgress round-trip', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);

@@ -715,7 +715,10 @@ class LocalRunStore extends ChangeNotifier {
       final header = Map<String, dynamic>.from(run.toJson())..remove('track');
       final record = {
         'h': header,
-        'w': [for (final wp in newSlice) wp.toJson()],
+        // The cursor still advances by the caller's full slice length, so
+        // dropping an unencodable point here cannot desync the next append —
+        // the file simply holds fewer points than the live track does.
+        'w': [for (final wp in finiteWaypoints(newSlice)) wp.toJson()],
         't': DateTime.now().toIso8601String(),
         if (isFreshRun) 'snap': true,
       };

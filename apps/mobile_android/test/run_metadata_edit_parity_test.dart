@@ -5,7 +5,7 @@ import '../lib/screens/run_detail_screen.dart'
 
 /// Parity tests for `applyRunMetadataEdit` — mobile's run-detail edit
 /// dialog metadata normalisation. The matching web implementation
-/// lives in `apps/web/src/lib/data_normalise.ts:applyRunMetadataPatch`;
+/// lives in `apps/web/src/lib/core/data_normalise.ts:applyRunMetadataPatch`;
 /// the shared contract is:
 ///   - Trim the user's input.
 ///   - If empty-after-trim, REMOVE the key from the bag (so a cleared

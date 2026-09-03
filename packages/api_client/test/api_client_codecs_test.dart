@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:test/test.dart';
@@ -320,6 +322,33 @@ void main() {
     test('waypoint without elevation produces null on the domain object', () {
       final route = ApiClient.debugRouteFromRow(minimalRouteRow());
       expect(route.waypoints.first.elevationMetres, isNull);
+    });
+  });
+
+  group('debugTrackBlobJson', () {
+    test('a point that is not a location is dropped, not thrown on', () {
+      // Before the filter this was a `JsonUnsupportedObjectError` — an
+      // `Error`, indistinguishable to the sync drain from a lost network, so
+      // the run retried its upload forever and never left the phone.
+      final blob = ApiClient.debugTrackBlobJson(const [
+        Waypoint(lat: 47.37, lng: 8.54),
+        Waypoint(lat: double.nan, lng: 8.54),
+        Waypoint(lat: 47.38, lng: double.infinity),
+        Waypoint(lat: 47.39, lng: 8.55, elevationMetres: double.nan),
+      ]);
+      final decoded = jsonDecode(blob) as List<dynamic>;
+      expect(decoded.length, 2);
+      expect((decoded[0] as Map<String, dynamic>)['lat'], 47.37);
+      expect((decoded[1] as Map<String, dynamic>)['lat'], 47.39);
+      expect((decoded[1] as Map<String, dynamic>)['ele'], isNull);
+    });
+
+    test('a clean track encodes every point', () {
+      final blob = ApiClient.debugTrackBlobJson(const [
+        Waypoint(lat: 47.37, lng: 8.54, elevationMetres: 408.5),
+        Waypoint(lat: 47.38, lng: 8.55),
+      ]);
+      expect((jsonDecode(blob) as List<dynamic>).length, 2);
     });
   });
 }

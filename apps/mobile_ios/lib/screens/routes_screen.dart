@@ -15,7 +15,11 @@ import '../fab_clearance.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
-import '../shared_file_import.dart' show routesFromImportedFile;
+import '../shared_file_import.dart'
+    show
+        detectRouteFormat,
+        kRouteImportPickerExtensions,
+        routesFromImportedFile;
 import '../social_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
@@ -677,7 +681,7 @@ class RoutesScreenState extends State<RoutesScreen> {
   Future<void> _pickAndImport() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['gpx', 'kml'],
+      allowedExtensions: kRouteImportPickerExtensions,
     );
     if (result == null || result.files.isEmpty) return;
 
@@ -809,7 +813,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                     Text(
                       // Mention BOTH affordances. The Build FAB is the
                       // canonical "create from scratch" path; Import
-                      // covers GPX / KML / KMZ / GeoJSON / TCX files.
+                      // covers GPX / KML / GeoJSON / TCX files.
                       // The old copy only mentioned Import — users
                       // missed the in-app builder.
                       l10n.routesEmptyBody,
@@ -1312,11 +1316,14 @@ class _RouteParseRequest {
   const _RouteParseRequest(this.ext, this.content);
 }
 
-List<cm.Route> _parseRouteFile(_RouteParseRequest req) =>
-    routesFromImportedFile(
-      format: req.ext == 'kml' ? 'kml' : 'gpx',
-      content: req.content,
-    );
+List<cm.Route> _parseRouteFile(_RouteParseRequest req) {
+  // Resolved rather than inferred from the extension alone: this path used to
+  // read `ext == 'kml' ? 'kml' : 'gpx'`, a third dispatch that could name only
+  // two of the four formats and parsed everything else as GPX.
+  final format = detectRouteFormat(extension: req.ext, content: req.content);
+  if (format == null) return const <cm.Route>[];
+  return routesFromImportedFile(format: format, content: req.content);
+}
 
 /// Filter toolbar for the routes list. Stateless — every change goes
 /// through callbacks back to the screen so persistence + paging reset

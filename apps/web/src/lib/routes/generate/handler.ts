@@ -55,6 +55,14 @@ import { isValidTargetDistance } from '../route_loop';
 import { checkRouteRateLimit } from '../rate_limit';
 import { supabaseErrorFields } from '../../core/supabase_error';
 
+// Bound on the inbound body, enforced by BOTH wrappers. The only fields are a
+// start coordinate, a target distance and an optional seed count — a few dozen
+// bytes — so 4 KB is generous and stops a malformed client streaming a large
+// body into JSON.parse. Declared here rather than once per wrapper: the coach
+// pair drifted on exactly that shape, a UTF-16 `length` check against a byte
+// cap, and let a multi-byte payload roughly 3x the cap through (decisions §969).
+export const GENERATE_BODY_LIMIT_BYTES = 4 * 1024;
+
 export interface GenerateRequest {
 	start: { lat: number; lng: number };
 	targetDistanceM: number;

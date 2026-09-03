@@ -55,6 +55,13 @@
 #      the SDK would catch; an ORPHANED entry is not, and it makes the string
 #      table a lie about the app's surface.
 #
+#   6. The unit this field renders its PACE in comes from the runner's pace
+#      preference, not their distance one. `DeviceSettings` exposes the two
+#      separately and a watch can hold different answers for them, so reading
+#      `distanceUnits` shows min/mi to a runner whose watch is set to min/km
+#      everywhere else. Both members exist and are the same type, so the wrong
+#      one compiles, runs, and is wrong only for the runners who set them apart.
+#
 # WHAT THIS DOES NOT PROVE. It parses text. It does not compile Monkey C, does
 # not run it, and is not evidence that the app builds or that the GAP numbers
 # are right — `source-test/GradeAdjustedPaceTest.mc` makes that claim and has
@@ -123,10 +130,16 @@ def body_of(src, signature):
 
     Brace counting rather than a lazy regex: these bodies contain braces of
     their own and `.*?\\}` stops at the first one.
+
+    The name must END where the signature does. A plain substring search reads
+    `function onTimerResetX` as `function onTimerReset` and reports the override
+    present when the recorder would call nothing -- which is the same silent
+    failure the claim exists to catch, one level up.
     """
-    at = src.find(signature)
-    if at < 0:
+    m = re.search(re.escape(signature) + r"(?![A-Za-z0-9_])", src)
+    if m is None:
         return None
+    at = m.start()
     open_at = src.find("{", at)
     if open_at < 0:
         return None
@@ -373,6 +386,38 @@ for name in sorted(defined - referenced):
         "resources/strings/strings.xml defines `%s` and nothing references it — "
         "a string the app cannot show" % name
     )
+
+# --------------------------------------------------------------------------
+# 6. The pace unit follows the runner's PACE preference.
+# --------------------------------------------------------------------------
+# `System.DeviceSettings` carries `paceUnits` and `distanceUnits` as separate
+# `UnitsSystem` members (both since API 1.0.0; this app's minApiLevel is 3.1.0,
+# so every targeted device has them). They are the same type, so reading the
+# wrong one compiles and runs — it is wrong only on a watch where the two
+# disagree, which is a real configuration and not one the developer's own watch
+# is likely to be in.
+if view is not None:
+    init = body_of(view, "function initialize")
+    if init is None:
+        fail(
+            "GradeAdjustedPaceView declares no `initialize` — the unit is "
+            "resolved once at construction, so there is nowhere else for this "
+            "claim to read"
+        )
+    elif not re.search(r"getDeviceSettings\(\)\s*\.\s*paceUnits", init):
+        fail(
+            "GradeAdjustedPaceView.initialize does not read "
+            "`System.getDeviceSettings().paceUnits`. This cell renders a PACE, "
+            "and Garmin exposes the pace and distance unit preferences "
+            "separately; a runner who logs distance in miles and reads pace in "
+            "min/km gets the wrong unit, with the right-looking number in it."
+        )
+    if re.search(r"\bdistanceUnits\b", gap):
+        fail(
+            "source/GradeAdjustedPaceView.mc reads `distanceUnits`. Nothing in "
+            "this field is a distance; the label and the divisor are both about "
+            "pace, so the pace preference is the one to follow."
+        )
 
 if failures:
     for f in failures:

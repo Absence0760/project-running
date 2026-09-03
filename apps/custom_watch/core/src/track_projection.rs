@@ -130,10 +130,20 @@ pub fn project_track(
     out
 }
 
-/// True iff the track's bounding-box diagonal exceeds ~5 m — i.e. it is worth
-/// drawing at panel scale. A runner who hits Start + Stop indoors records a
-/// non-empty run of near-identical fixes; without this gate the preview
-/// projects them all onto one pixel and renders a meaningless dot.
+/// Bounding-box diagonal a track must exceed before it is worth drawing at
+/// panel scale. A THIRD rail: web's `isTrackRenderable` and the Dart twin
+/// inside `track_preview.dart` both gate on the same number, and on both of
+/// them it is still a bare literal at the comparison — so the value cannot be
+/// registered in `scripts/check_watch_wire_vectors.mjs`, which reads a rail by
+/// the NAME of its constant. Naming it here is the wrist's half of that;
+/// closing it needs the same on the other two (followups.md, round 33).
+pub const MIN_RENDERABLE_SPAN_M: f64 = 5.0;
+
+/// True iff the track's bounding-box diagonal exceeds
+/// [`MIN_RENDERABLE_SPAN_M`] — i.e. it is worth drawing at panel scale. A
+/// runner who hits Start + Stop indoors records a non-empty run of
+/// near-identical fixes; without this gate the preview projects them all onto
+/// one pixel and renders a meaningless dot.
 ///
 /// Longitudes are unwrapped onto the first fix's side of the antimeridian
 /// first: a raw min/max reads a jitter cluster AT the line as a 359.99 deg span,
@@ -167,7 +177,7 @@ pub fn is_track_renderable(track: &[TrackPoint]) -> bool {
     }
     let d_lat_m = (max_lat - min_lat) * 111_320.0;
     let d_lng_m = (max_lng - min_lng) * 111_320.0 * libm::cos(min_lat * PI / 180.0);
-    libm::sqrt(d_lat_m * d_lat_m + d_lng_m * d_lng_m) > 5.0
+    libm::sqrt(d_lat_m * d_lat_m + d_lng_m * d_lng_m) > MIN_RENDERABLE_SPAN_M
 }
 
 #[cfg(test)]
@@ -320,6 +330,29 @@ mod tests {
         assert!(!is_track_renderable(&[
             pt(51.5074, -0.1278),
             pt(51.507_400_9, -0.127_800_9),
+        ]));
+    }
+
+    #[test]
+    fn the_gate_sits_exactly_at_the_named_span() {
+        // Two claims, and they fail to different mutations. The VALUE is
+        // asserted flat, because the other two rails (web `isTrackRenderable`,
+        // the Dart twin in `track_preview.dart`) still spell it as a bare
+        // literal at their own comparison, so no cross-rail registry can hold
+        // the three together yet and this is the only pin the number has here.
+        assert_eq!(MIN_RENDERABLE_SPAN_M, 5.0);
+        // And the constant is the number actually COMPARED, not one declared
+        // beside a literal that has drifted from it. A degree of latitude is
+        // 111,320 m under the same flat approximation the gate uses, so these
+        // two tracks bracket the threshold from either side by 1 cm.
+        let deg = |m: f64| m / 111_320.0;
+        assert!(!is_track_renderable(&[
+            pt(0.0, 0.0),
+            pt(deg(MIN_RENDERABLE_SPAN_M - 0.01), 0.0),
+        ]));
+        assert!(is_track_renderable(&[
+            pt(0.0, 0.0),
+            pt(deg(MIN_RENDERABLE_SPAN_M + 0.01), 0.0),
         ]));
     }
 

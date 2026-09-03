@@ -258,3 +258,148 @@ const _: () = {
         i += 1;
     }
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// This module's own source, so the two hand-written `ALL` arrays can be
+    /// held against the enums they claim to enumerate. `class()`, `reason()`
+    /// and `slot_token()` are exhaustive matches, so a new variant forces those
+    /// to be updated; `ALL` is a plain array and forces nothing, while the
+    /// `const` block asserting every reason fits the panel walks it. A variant
+    /// added and not registered is therefore one whose width nothing measures,
+    /// on the module whose entire purpose is that every empty page speaks one
+    /// vocabulary.
+    const SRC: &str = include_str!("unfed.rs");
+
+    /// The variant names inside `<decl> { … }`, as spelled in the source.
+    /// Doc comments, attributes and blank lines are dropped; anything left that
+    /// is not a bare identifier is a shape this parse cannot speak for, and is
+    /// returned as-is so the caller's own assertion fails loudly rather than
+    /// the parse silently reporting fewer variants than there are.
+    fn variant_names(decl: &str) -> Vec<&'static str> {
+        let at = SRC
+            .find(decl)
+            .expect("enum declaration not found in source");
+        let open = at + SRC[at..].find('{').expect("no brace after the declaration");
+        let mut depth = 0usize;
+        let mut end = None;
+        for (i, c) in SRC[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(open + i);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        SRC[open + 1..end.expect("unbalanced enum body")]
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with("//") && !l.starts_with('#'))
+            .map(|l| l.trim_end_matches(','))
+            .collect()
+    }
+
+    /// The `Enum::Variant` names listed inside the body of an `ALL` array.
+    fn registered_names(decl: &str, prefix: &str) -> Vec<&'static str> {
+        let at = SRC.find(decl).expect("ALL declaration not found in source");
+        let end = at + SRC[at..].find("];").expect("unterminated ALL array");
+        SRC[at..end]
+            .lines()
+            .map(str::trim)
+            .filter_map(|l| l.strip_prefix(prefix))
+            .map(|l| l.trim_end_matches(','))
+            .collect()
+    }
+
+    fn is_identifier(s: &str) -> bool {
+        !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric())
+    }
+
+    #[test]
+    fn every_unfed_variant_is_registered_in_all() {
+        let declared = variant_names("pub enum Unfed {");
+        let registered = registered_names("pub const ALL: [Unfed;", "Unfed::");
+        assert!(
+            declared.len() >= 17 && declared.iter().all(|n| is_identifier(n)),
+            "the enum body no longer parses as a list of bare variants ({declared:?}) — \
+             this check would report agreement it cannot see"
+        );
+        assert_eq!(
+            declared, registered,
+            "`Unfed::ALL` does not list every variant of `enum Unfed`, in order. \
+             The width assertion in the const block walks ALL, so an unregistered \
+             variant ships a reason of any width and draws off the panel."
+        );
+        assert_eq!(declared.len(), Unfed::ALL.len());
+    }
+
+    #[test]
+    fn every_unfed_class_variant_is_registered_in_all() {
+        let declared = variant_names("pub enum UnfedClass {");
+        let registered = registered_names("pub const ALL: [UnfedClass;", "UnfedClass::");
+        assert!(
+            declared.len() >= 5 && declared.iter().all(|n| is_identifier(n)),
+            "the enum body no longer parses as a list of bare variants ({declared:?})"
+        );
+        assert_eq!(declared, registered);
+        assert_eq!(declared.len(), UnfedClass::ALL.len());
+    }
+
+    #[test]
+    fn no_two_reasons_read_the_same() {
+        // The module exists so one situation has one wording. Two variants
+        // sharing a line defeats that from the other direction: the runner
+        // reads the same sentence for two different causes and cannot act on
+        // either.
+        for (i, a) in Unfed::ALL.iter().enumerate() {
+            for b in &Unfed::ALL[i + 1..] {
+                assert_ne!(
+                    a.reason(),
+                    b.reason(),
+                    "{a:?} and {b:?} share a reason line"
+                );
+                assert_ne!(a, b, "{a:?} is listed twice in Unfed::ALL");
+            }
+            assert!(!a.reason().is_empty(), "{a:?} has no reason line");
+        }
+    }
+
+    #[test]
+    fn no_two_classes_share_a_slot_token() {
+        for (i, a) in UnfedClass::ALL.iter().enumerate() {
+            for b in &UnfedClass::ALL[i + 1..] {
+                assert_ne!(
+                    a.slot_token(),
+                    b.slot_token(),
+                    "{a:?} and {b:?} share a slot token"
+                );
+                assert_ne!(a, b, "{a:?} is listed twice in UnfedClass::ALL");
+            }
+        }
+    }
+
+    #[test]
+    fn a_hint_is_offered_exactly_where_the_runner_has_something_to_do() {
+        for r in Unfed::ALL {
+            match r.class() {
+                UnfedClass::PhoneFed => assert_eq!(r.hint(), Some(PHONE_SYNC_HINT)),
+                UnfedClass::WatchAction => assert!(
+                    r.hint().is_some_and(|h| h != PHONE_SYNC_HINT),
+                    "{r:?} is a watch action, so its hint must name the gesture"
+                ),
+                UnfedClass::Sensor | UnfedClass::RunGate | UnfedClass::Settled => assert_eq!(
+                    r.hint(),
+                    None,
+                    "{r:?} resolves itself, so telling the runner to act is a lie"
+                ),
+            }
+        }
+    }
+}

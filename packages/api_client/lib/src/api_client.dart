@@ -200,7 +200,7 @@ class ApiClient {
   /// callers route through `rateLimitErrorMessage` for the friendly
   /// wording.
   ///
-  /// Mirrors `apps/web/src/lib/data.ts:submitReport`.
+  /// Mirrors `apps/web/src/lib/core/data.ts:submitReport`.
   Future<String> submitReport({
     required String targetKind,
     required String targetId,
@@ -228,7 +228,7 @@ class ApiClient {
   /// pan, just spread thinner. Returns an empty list on RPC error
   /// so the caller's map layer renders blank rather than throwing.
   ///
-  /// Mirrors `apps/web/src/lib/data.ts:fetchHeatmapPoints`.
+  /// Mirrors `apps/web/src/lib/core/data.ts:fetchHeatmapPoints`.
   Future<List<HeatmapPoint>> fetchHeatmapPoints({
     required double minLng,
     required double minLat,
@@ -1113,7 +1113,7 @@ class ApiClient {
     return _runFromRow(data);
   }
 
-  /// Delete a route from the backend. Mirrors `apps/web/src/lib/data.ts:
+  /// Delete a route from the backend. Mirrors `apps/web/src/lib/core/data.ts:
   /// deleteRoute`. RLS gates the delete to the owner; foreign-key
   /// cascades clean up `saved_routes`, `segments`, and `route_reviews`
   /// rows automatically. Throws on RLS rejection or network failure
@@ -1461,7 +1461,7 @@ class ApiClient {
   /// `42501` which surfaces as a PostgrestException here. Idempotent
   /// against in-flight jobs (the `jobs_dedupe_map_match` unique index
   /// coalesces a second call while a previous re-match is queued).
-  /// Mirrors `enqueueRunRematch` in `apps/web/src/lib/data.ts`.
+  /// Mirrors `enqueueRunRematch` in `apps/web/src/lib/core/data.ts`.
   Future<void> enqueueRunRematch(String runId) async {
     await _client.rpc('enqueue_run_rematch', params: {'p_run_id': runId});
   }
@@ -1571,7 +1571,14 @@ class ApiClient {
     required String runId,
     required List<Waypoint> track,
   }) async {
-    final json = jsonEncode(track.map(_waypointToJson).toList());
+    final usable = finiteWaypoints(track);
+    if (usable.length != track.length) {
+      debugPrint(
+        'ApiClient: dropped ${track.length - usable.length} non-finite '
+        'waypoint(s) from run $runId before upload',
+      );
+    }
+    final json = _trackBlobJson(usable);
     final bytes = Uint8List.fromList(gzip.encode(utf8.encode(json)));
     final path = '$userId/$runId.json.gz';
     await _client.storage.from(StorageBuckets.runs).uploadBinary(
@@ -1589,6 +1596,23 @@ class ApiClient {
         );
     return path;
   }
+
+  /// The exact bytes the `runs` bucket holds for a track, before gzip.
+  ///
+  /// Filters through [finiteWaypoints] because `jsonEncode` REFUSES a
+  /// non-finite double, and a refusal here is permanent: the run fails its
+  /// track upload on every sync cycle forever, with nothing in the failure to
+  /// distinguish it from a lost network. Only one of this method's producers
+  /// screened for one — the recorder (decisions § 956) — leaving the Wear OS
+  /// and watchOS bridges, the Strava API importer, the backup-restore path
+  /// and `resumeSession`'s seeded track able to strand a run.
+  static String _trackBlobJson(List<Waypoint> track) =>
+      jsonEncode(finiteWaypoints(track).map(_waypointToJson).toList());
+
+  /// Test-only: the blob [_uploadTrack] gzips and stores.
+  @visibleForTesting
+  static String debugTrackBlobJson(List<Waypoint> track) =>
+      _trackBlobJson(track);
 
   Future<List<Waypoint>> _downloadTrack(String path) async {
     final bytes = await _client.storage.from(StorageBuckets.runs).download(path);
@@ -1681,7 +1705,7 @@ class ApiClient {
   }
 
   /// Saves a [Route] to the backend.
-  /// Persist a new route. Mirrors `apps/web/src/lib/data.ts:saveRoute`:
+  /// Persist a new route. Mirrors `apps/web/src/lib/core/data.ts:saveRoute`:
   /// same column set, same description normalisation (trim → empty
   /// becomes null), same `club_id` handling.
   ///
@@ -2020,7 +2044,7 @@ class ApiClient {
 
   // ────────────────── Following + public profiles ──────────────────
   //
-  // Mirror of `apps/web/src/lib/data.ts` — the social engagement loop
+  // Mirror of `apps/web/src/lib/core/data.ts` — the social engagement loop
   // is web-canonical (decisions §31), and the android app needs the
   // same primitives to build feed / profile / notifications screens.
   // Methods are intentionally narrow wrappers over the row classes;
@@ -2050,7 +2074,7 @@ class ApiClient {
   }
 
   /// Block `targetUserId` via the `block_user` SECURITY DEFINER RPC.
-  /// Mirrors `apps/web/src/lib/data.ts#blockUser`. The RPC also drains
+  /// Mirrors `apps/web/src/lib/core/data.ts#blockUser`. The RPC also drains
   /// existing follow rows in either direction so a viewer-initiated
   /// block subsumes unfollow on both sides — see migration
   /// `20261012_001_user_blocks.sql`.
@@ -2159,8 +2183,8 @@ class ApiClient {
   ///
   /// Display-name search ranked for web parity: public-runs count
   /// desc, then shared-clubs count desc, then display name asc.
-  /// Mirrors `apps/web/src/lib/data.ts:searchPeople` +
-  /// `apps/web/src/lib/search_ranking.ts:comparePeopleRank`.
+  /// Mirrors `apps/web/src/lib/core/data.ts:searchPeople` +
+  /// `apps/web/src/lib/social/search_ranking.ts:comparePeopleRank`.
   Future<List<PeopleSuggestion>> searchPeople(
     String query, {
     int limit = 20,
@@ -2216,7 +2240,7 @@ class ApiClient {
   }
 
   /// Pure comparator mirroring `comparePeopleRank` in
-  /// `apps/web/src/lib/search_ranking.ts`. Sorts by:
+  /// `apps/web/src/lib/social/search_ranking.ts`. Sorts by:
   ///   1. `publicRunsCount` desc — active users surface above bots
   ///   2. `sharedClubs` desc — co-members tied on activity surface higher
   ///   3. `displayName` asc — stable alphabetical tie-break
@@ -2239,7 +2263,7 @@ class ApiClient {
   /// Suggested people for the social People surface: members of the
   /// viewer's clubs they don't already follow. Ordered by shared-club
   /// count desc, then by display_name. Mirrors `fetchSuggestedPeople`
-  /// in `apps/web/src/lib/data.ts`.
+  /// in `apps/web/src/lib/core/data.ts`.
   Future<List<PeopleSuggestion>> fetchSuggestedPeople({int limit = 12}) async {
     final viewerId = _client.auth.currentUser?.id;
     if (viewerId == null) return const [];
@@ -3944,7 +3968,7 @@ class ApiClient {
 
   /// Define a new segment on a route. The DB computes `length_m` as
   /// a generated column, so we don't pass it.
-  /// Create a route segment. Mirrors `apps/web/src/lib/data.ts:createSegment`:
+  /// Create a route segment. Mirrors `apps/web/src/lib/core/data.ts:createSegment`:
   /// `name` is trimmed at the API layer so any future non-UI caller
   /// (bulk import, automation) can't write whitespace into the DB.
   Future<SegmentRow> createSegment({
@@ -5470,7 +5494,7 @@ class ApiClient {
       if (body == null || body.isEmpty) return null;
       // Cap at 120 visible characters (117 + the ellipsis) to match
       // web's notification-row excerpt
-      // (apps/web/src/lib/data.ts:fetchNotifications). Mobile
+      // (apps/web/src/lib/core/data.ts:fetchNotifications). Mobile
       // previously capped at 141 — close-enough but visibly longer
       // bubbles in the inbox compared to the same notification
       // viewed on web.

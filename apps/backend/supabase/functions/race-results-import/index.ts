@@ -17,8 +17,10 @@ import {
   mapUltraSignUpResult,
   matchResultGate,
   parseRaceResultRow,
+  resultsPossiblyTruncated,
   runSignUpResultsUrl,
   runSignUpScopeGate,
+  ultraSignUpAttributionGate,
   ultraSignUpScopeGate,
   ultraSignUpResultsUrl,
   type MappedRaceRun,
@@ -54,7 +56,14 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const denied = await checkRateLimitTiered(supabase, user.id, 'race-results-import', 8, 32, 3600);
+  // Fail-closed: every provider leg past this point makes an outbound call
+  // carrying OUR RunSignUp / ChronoTrack / UltraSignup credential, whose budget
+  // is per-application and shared by the whole deployment. Falling open on an
+  // RPC error would spend that budget on a request whose `runs` insert is
+  // headed for the same database that just failed (decisions § 974).
+  const denied = await checkRateLimitTiered(supabase, user.id, 'race-results-import', 8, 32, 3600, {
+    failClosed: true,
+  });
   if (denied) return denied;
 
   const body = (guarded.body ?? {}) as RequestBody;
@@ -76,11 +85,13 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     ) {
       return Response.json({ error: 'provider_not_configured' }, { status: 503 });
     }
-    if (
-      provider === 'ultrasignup' &&
-      !(Deno.env.get('ULTRASIGNUP_API_KEY') && Deno.env.get('ULTRASIGNUP_API_SECRET'))
-    ) {
-      return Response.json({ error: 'provider_not_configured' }, { status: 503 });
+    // UltraSignup answers unavailable whether or not its keys are set: the
+    // athlete feed carries no race identifier, so nothing it returns can be
+    // attributed to the listing a caller names (decisions § 975). Reporting it
+    // available would light up a tile whose very next call refuses.
+    if (provider === 'ultrasignup') {
+      const gate = ultraSignUpAttributionGate();
+      return Response.json({ error: gate.error, reason: gate.reason }, { status: gate.status });
     }
     if (!['runsignup', 'ultrasignup', 'chronotrack', 'paste'].includes(provider)) {
       // An unrecognised provider is not "configured" — answering true for it is
@@ -136,6 +147,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   };
 
   let mapped: MappedRaceRun[] = [];
+  // Whether the provider fetch may have been cut short of the whole field. A
+  // paste carries one row and can never be, so it stays false.
+  let complete = true;
 
   if (provider === 'runsignup') {
     // Fail closed when the provider key is unconfigured. The whole RunSignUp
@@ -174,13 +188,28 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     } catch (_) {
       return Response.json({ error: 'runsignup upstream not JSON' }, { status: 502 });
     }
-    mapped = extractRunSignUpResults(payload)
+    const rows = extractRunSignUpResults(payload);
+    complete = !resultsPossiblyTruncated(rows.length);
+    mapped = rows
       .map((r) => mapRunSignUpResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
     // A bib-scoped request narrows here: the API filters only by user id, so
     // without this a bib-only request would still map the whole field.
     if (runSignUpBib) mapped = filterResultsByBib(mapped, runSignUpBib);
   } else if (provider === 'ultrasignup') {
+    // Before the credential is read and before anything is fetched: the feed
+    // this leg reads is one ATHLETE'S whole history and carries no race
+    // identifier, so every row it returns would be stamped with the target
+    // listing's name, date and distance. The gate's own doc says what lifting
+    // it costs — an observed payload plus a filter on the race id, not just
+    // deleting these three lines (decisions § 975).
+    const attribution = ultraSignUpAttributionGate();
+    if (!attribution.ok) {
+      return Response.json(
+        { error: attribution.error, reason: attribution.reason },
+        { status: attribution.status },
+      );
+    }
     // Fail closed when the provider key is unconfigured — the UltraSignup leg
     // mirrors RunSignUp's missing-credential gate (integrations.md + the race
     // calendar ADR). Until the key is provisioned the EF is inert and the UI
@@ -211,7 +240,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     } catch (_) {
       return Response.json({ error: 'ultrasignup upstream not JSON' }, { status: 502 });
     }
-    mapped = extractUltraSignUpResults(payload)
+    const rows = extractUltraSignUpResults(payload);
+    complete = !resultsPossiblyTruncated(rows.length);
+    mapped = rows
       .map((r) => mapUltraSignUpResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
   } else if (provider === 'chronotrack') {
@@ -257,7 +288,9 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     } catch (_) {
       return Response.json({ error: 'chronotrack upstream not JSON' }, { status: 502 });
     }
-    mapped = extractChronoTrackResults(payload)
+    const rows = extractChronoTrackResults(payload);
+    complete = !resultsPossiblyTruncated(rows.length);
+    mapped = rows
       .map((r) => mapChronoTrackResult(r, mapOpts))
       .filter((r): r is MappedRaceRun => r !== null);
     // Narrow client-side too, exactly as the RunSignUp leg does: the gate only
@@ -280,7 +313,18 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   }
 
   if (mapped.length === 0) {
-    return Response.json({ imported: 0, skipped: 0, enriched: 0 });
+    // "We read the whole field and you are not in it" and "we read the first
+    // 2,000 finishers and you were not among them" are different sentences, and
+    // reporting the second as the first tells a runner they did not finish a
+    // race they finished. Refuse rather than answer a successful import of
+    // nothing (decisions § 976).
+    if (!complete) {
+      return Response.json(
+        { error: 'upstream_results_truncated', complete: false },
+        { status: 502 },
+      );
+    }
+    return Response.json({ imported: 0, skipped: 0, enriched: 0, complete: true });
   }
 
   // Enrich an existing recorded run rather than inserting a duplicate when the
@@ -325,7 +369,7 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     if (error) {
       return Response.json({ error: 'failed to enrich run' }, { status: 500 });
     }
-    return Response.json({ imported: 0, skipped: 0, enriched: 1 });
+    return Response.json({ imported: 0, skipped: 0, enriched: 1, complete });
   }
 
   // Plain-insert path (no recorded counterpart). Dedupe per-user against
@@ -360,5 +404,5 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
     imported = fresh.length;
   }
 
-  return Response.json({ imported, skipped, enriched: 0 });
+  return Response.json({ imported, skipped, enriched: 0, complete });
 }));

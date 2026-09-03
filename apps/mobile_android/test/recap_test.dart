@@ -1,5 +1,5 @@
 // Dart port of the parity test suite at
-// `apps/web/src/lib/recap.test.ts`. The recap aggregator emits the
+// `apps/web/src/lib/runs/recap.test.ts`. The recap aggregator emits the
 // hero numbers for the year-in-running surface — total distance,
 // longest run, top week, monthly breakdown, etc. Test cases cover:
 // - empty-year (returns zero-shaped record)

@@ -3770,7 +3770,7 @@
   "@routesEmptyTitle": {
     "description": "Empty-state title shown when the route library is empty"
   },
-  "routesEmptyBody": "Tap Build to draw a route on the map, or Import a GPX, KML, or TCX file.",
+  "routesEmptyBody": "Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.",
   "@routesEmptyBody": {
     "description": "Empty-state body shown when the route library is empty"
   },

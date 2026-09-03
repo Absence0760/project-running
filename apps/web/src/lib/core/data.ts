@@ -11814,7 +11814,16 @@ export async function startDonationCheckout(
 			is_anonymous: opts.isAnonymous ?? false
 		}
 	});
-	if (error) throw error;
+	if (error) {
+		// Same unwrap as startEventCheckout. Rethrowing the raw error lost
+		// the refusal, not just its wording: the function distinguishes a
+		// fundraiser that has ENDED from one whose owner cannot take money
+		// from a transient outage, and a donor shown one generic line
+		// cannot tell "this is over" from "try again in a minute" — so they
+		// retry a checkout that can never open.
+		const code = await edgeFunctionErrorCode(error);
+		throw new Error(code ?? (error instanceof Error ? error.message : 'donation_failed'));
+	}
 	const url = (data as { checkout_url?: string } | null)?.checkout_url;
 	if (!url) throw new Error('No checkout URL returned');
 	return { url };

@@ -473,7 +473,7 @@ class SettingsService {
   /// **Concurrency note:** the server push re-fetches the current row
   /// before merging so a concurrent write from another device isn't
   /// silently overwritten. Mirrors the read-merge-write pattern in
-  /// `apps/web/src/lib/settings.ts: updateUniversal`.
+  /// `apps/web/src/lib/settings/settings.ts: updateUniversal`.
   Future<void> updateUniversal(Map<String, dynamic> changes) async {
     final userId = _requireUser();
     _universal = applyPrefsChanges(_universal, changes);
@@ -581,7 +581,7 @@ class SettingsService {
   /// concurrency fix — can be unit-tested without standing up
   /// Supabase.
   ///
-  /// Mirrors the merge loop in `apps/web/src/lib/settings.ts:
+  /// Mirrors the merge loop in `apps/web/src/lib/settings/settings.ts:
   /// updateUniversal` / `updateDevice`. Subtle difference vs the
   /// JS version: Dart maps don't have a JS-style `undefined`, so the
   /// "delete key" trigger is purely `value == null`. JS treats both

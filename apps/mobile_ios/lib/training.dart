@@ -1,4 +1,4 @@
-// Training engine — Dart port of apps/web/src/lib/training.ts.
+// Training engine — Dart port of apps/web/src/lib/training/training.ts.
 //
 // Must produce byte-identical paces + phase labels for the same inputs. If
 // you change a number here, change it in training.ts and re-run both test
@@ -238,7 +238,7 @@ double _genderPaceMultiplier(TrainingGender gender) =>
     gender == 'female' ? _kFemalePaceCalibration : 1.0;
 
 // Masters (50+) recovery calibration. Mirrors MASTERS_AGE +
-// isMastersAge in apps/web/src/lib/training.ts — see the full rationale
+// isMastersAge in apps/web/src/lib/training/training.ts — see the full rationale
 // comment there. At or above this age the plan widens the first hard
 // day to 72h after the long run (Wed not Tue, second hard day Fri not
 // Thu) and steps volume back every 3rd week instead of every 4th. Pace
@@ -599,7 +599,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
 
 // ─────────────────────── Beginner walk-run (C25K) ───────────────────────
 // Mirror of WALK_RUN_PROGRESSION / generateWalkRunPlan in
-// apps/web/src/lib/training.ts — keep in lockstep.
+// apps/web/src/lib/training/training.ts — keep in lockstep.
 const kWalkRunProgression = <({int runSec, int walkSec, int count})>[
   (runSec: 60, walkSec: 90, count: 8),
   (runSec: 90, walkSec: 120, count: 7),

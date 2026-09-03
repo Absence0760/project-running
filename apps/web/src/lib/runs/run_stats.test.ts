@@ -6,6 +6,7 @@ import {
 	computeRealSplits,
 	haversineMetres
 } from './run_stats';
+import { computeElevationGain } from '../routes/route_simplify';
 import type { TrackPoint } from '../types';
 
 // Synthetic track helper: emits a meridian-aligned sequence at a chosen
@@ -129,6 +130,34 @@ test('elevationGainMetres — carries the last valid elevation across a multi-po
 	];
 	// +30 across the gap, then +5 after the descent = 35.
 	assert.equal(elevationGainMetres(pts), 35);
+});
+
+test('elevationGainMetres — one rule, the gated one, shared with the route summary', () => {
+	// The app used to answer this question twice. `run_stats` summed every
+	// upward delta; `computeElevationGain` gated at 3 m — so a run's vert
+	// changed the moment the runner tapped "save as route", and the phone
+	// (which has only ever had the gated rule) disagreed with the web on
+	// the same track. Altitude error is autocorrelated, so an ungated sum
+	// integrates the drift: 40 samples of +/-1 m jitter on a dead-flat
+	// course is 40 m of imaginary climb under the old rule and 0 under this.
+	const jitter: TrackPoint[] = [];
+	for (let i = 0; i < 80; i++) {
+		jitter.push({ lat: 0, lng: i * 0.0001, ele: 40 + (i % 2 === 0 ? 0 : 1) });
+	}
+	assert.equal(elevationGainMetres(jitter), 0);
+	// The two functions must agree exactly, not merely closely — the
+	// delegation is the point, a second implementation that happens to
+	// round the same way is what this is here to prevent.
+	assert.equal(elevationGainMetres(jitter), Math.round(computeElevationGain(jitter)));
+
+	// A real climb is untouched: the gate suppresses noise, not signal.
+	const climb: TrackPoint[] = [
+		{ lat: 0, lng: 0, ele: 100 },
+		{ lat: 0, lng: 0.001, ele: 101 }, // +1, below the gate
+		{ lat: 0, lng: 0.002, ele: 140 }, // still +40 from the 100 m reference
+	];
+	assert.equal(elevationGainMetres(climb), 40);
+	assert.equal(elevationGainMetres(climb), Math.round(computeElevationGain(climb)));
 });
 
 test('elevationGainMetres — empty / single-point input returns 0', () => {

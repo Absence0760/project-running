@@ -233,7 +233,7 @@ infra/               → Terraform stacks for AWS web hosting (decisions §53)
 scripts/
   gen_dart_models.dart  → Dart row-class generator
 .github/workflows/
-  ci.yml             → the same ~19 CI jobs run on every PR and push to main
+  ci.yml             → the same 33 CI jobs run on every PR and push to main
                        (no PR-only/push-only split); the single required status
                        check is the "CI gate" aggregator that needs: all of them
                        Release: per-app deploy workflows run on `<app>@<version>` tags

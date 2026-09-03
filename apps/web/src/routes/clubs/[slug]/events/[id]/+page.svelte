@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { DEFAULT_SITE_URL } from '$lib/core/site_url';
+	import { siteOrigin } from '$lib/core/site_url';
 	import { lengthLimit } from '$lib/core/column_limits';
 	import { onMount, onDestroy } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -108,7 +108,7 @@
 	// /share/event/[id] twin so search engines consolidate ranking signal
 	// there rather than splitting it across two URLs.
 	let canonicalUrl = $derived(
-		buildEventShareCanonical(env.PUBLIC_SITE_URL || DEFAULT_SITE_URL, eventId)
+		buildEventShareCanonical(siteOrigin(env.PUBLIC_SITE_URL), eventId)
 	);
 
 	let club = $state<ClubWithMeta | null>(null);

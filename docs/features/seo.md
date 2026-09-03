@@ -248,13 +248,28 @@ e2e-tested without standing up the Lambda.
   ([decisions § 894](../architecture/decisions.md)). Behaviour is pinned by
   `www_redirect.test.mjs` beside the function, in the `parity-types` job.
 - **The absolute origin every `<head>` resolves against** is
-  `PUBLIC_SITE_URL`, folded through `siteOrigin` (`$lib/core/site_url`) in
-  each of the five share Lambdas. The fold has to be `siteOrigin`, not
-  `?? DEFAULT_SITE_URL`: `??` fires only on null/undefined, so an empty env
-  var survives as the origin and every `og:url` / `og:image` the function
-  emits comes out root-relative — the same shape
-  `share_url_source_guard.test.ts` bans in the sources
-  ([decisions § 895](../architecture/decisions.md)).
+  `PUBLIC_SITE_URL`, folded through `siteOrigin` (`$lib/core/site_url`) by
+  **every** caller — the five share Lambdas and all twenty-two in-app reads
+  under `src/routes/` (the `+page.ts` loaders for `/learn*`, `/recap/share/*`
+  and the nine `/share/*` routes, the canonical `<svelte:head>` blocks, the
+  root loader and `sitemap.xml`). Neither hand-rolled fold was safe.
+  `?? DEFAULT_SITE_URL` fires only on null/undefined, so an empty env var
+  survives as the origin and every `og:url` / `og:image` comes out
+  root-relative ([decisions § 895](../architecture/decisions.md)).
+  `|| DEFAULT_SITE_URL` catches the empty string but not a whitespace-only
+  value, which is truthy and yields a canonical of `   /share/run/<id>`, and
+  neither trims a trailing slash — `PUBLIC_SITE_URL=https://threkir.com/`
+  produced `https://threkir.com//share/run/<id>` in every canonical, `og:url`
+  and `<loc>` ([decisions § 970](../architecture/decisions.md)). The register
+  that keeps all twenty-seven folded lives in `core/site_url.test.ts`.
+- **The share Lambdas' two JSON responses declare their own caching.** The
+  catch-all 404 — reached only when CloudFront sends a path the handler's
+  regexes do not claim — carries the same
+  `public, max-age=300, s-maxage=300, stale-while-revalidate=60` window as
+  every other response on those behaviours. The 503 from the outer envelope is
+  `no-store`: caching a transient failure for five minutes at the edge turns a
+  blip into a five-minute outage for every viewer behind the same cache node
+  ([decisions § 969](../architecture/decisions.md)).
 
 ## Deploy gate
 

@@ -39,6 +39,36 @@ void main() {
     expect(short.total, 7412);
   });
 
+  test('exportJobFromResponse — a format this build does not know is dropped, not carried', () {
+    // The web twin types this field as one of three tokens and used to
+    // reach it through a cast, so the type asserted a vocabulary the
+    // value had never been checked against. Both halves now grade it.
+    // An unreadable label is no reason to refuse an archive that built,
+    // so the status survives and only the name goes.
+    final job = exportJobFromResponse(<String, dynamic>{
+      'status': 'ready',
+      'format': 'zip',
+      'url': 'https://signed.example/x',
+    });
+    expect(job.status, ExportJobStatus.ready);
+    expect(job.format, isNull);
+    for (final known in <String>['csv', 'gpx', 'backup']) {
+      final ok = exportJobFromResponse(<String, dynamic>{
+        'status': 'ready',
+        'format': known,
+        'url': 'https://signed.example/x',
+      });
+      expect(ok.format, known);
+    }
+    expect(
+      exportJobFromResponse(<String, dynamic>{
+        'status': 'queued',
+        'format': 7,
+      }).format,
+      isNull,
+    );
+  });
+
   test('exportJobFromResponse — a status this build does not know is terminal, not a poll forever', () {
     // A client that keeps asking about a status it cannot interpret
     // polls until the battery dies; one that guesses `ready` offers a

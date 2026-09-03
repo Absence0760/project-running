@@ -10,13 +10,9 @@ import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { handleRouteDescribe } from '$lib/routes/route_describe/handler';
-import { checkBodyByteLimit } from '$lib/coach/body';
+import { checkBodyByteLimit, ROUTE_DESCRIBE_BODY_LIMIT_BYTES } from '$lib/coach/body';
 
 export const prerender = false;
-
-// A route-describe body is tiny (a few numbers + a name). 32 KB is
-// generous and bounds a hostile caller well below the coach cap.
-const ROUTE_DESCRIBE_BODY_LIMIT_BYTES = 32 * 1024;
 
 export const POST: RequestHandler = async ({ request }) => {
 	const rawArr = await request.arrayBuffer();

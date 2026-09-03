@@ -79,13 +79,17 @@ class ExportShortfall {
 
 /// Normalise a status- or enqueue-endpoint body into an [ExportJob].
 ///
-/// Fail-closed in two directions, and both matter on a phone. A status
-/// this build does not recognise becomes `failed` carrying the raw
-/// token: a client that keeps polling a status it cannot interpret
+/// Fail-closed in three directions, and each matters on a phone. A
+/// status this build does not recognise becomes `failed` carrying the
+/// raw token: a client that keeps polling a status it cannot interpret
 /// polls until the battery dies, and one that guesses `ready` offers a
-/// download it has no URL for. And a `ready` job that arrived without a
-/// URL is not offerable either, so it is reported as a failure rather
-/// than rendered as a dead button.
+/// download it has no URL for. A `ready` job that arrived without a URL
+/// is not offerable either, so it is reported as a failure rather than
+/// rendered as a dead button. And a `format` this build does not know is
+/// dropped rather than carried: the field names the archive the caller
+/// asked for, and a token neither client can interpret is not a name —
+/// the status is unaffected, because an unreadable label is no reason to
+/// refuse an archive that built.
 ExportJob exportJobFromResponse(Object? raw) {
   if (raw is! Map) {
     return const ExportJob(
@@ -112,7 +116,7 @@ ExportJob exportJobFromResponse(Object? raw) {
   return ExportJob(
     status: status,
     jobId: _str(raw['job_id']),
-    format: _str(raw['format']),
+    format: _knownFormat(raw['format']),
     requestedAt: _str(raw['requested_at']),
     url: url,
     expiresInS: _int(raw['expires_in']),
@@ -179,6 +183,13 @@ String _trimEnd(String base) {
     end--;
   }
   return base.substring(0, end);
+}
+
+const List<String> _knownFormats = <String>['csv', 'gpx', 'backup'];
+
+String? _knownFormat(Object? value) {
+  final token = _str(value);
+  return token != null && _knownFormats.contains(token) ? token : null;
 }
 
 String? _str(Object? value) =>

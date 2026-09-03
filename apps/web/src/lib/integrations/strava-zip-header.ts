@@ -77,7 +77,14 @@ export function indexHeader(header: string[]): HeaderIndex {
 	return {
 		id: find('Activity ID'),
 		name: find('Activity Name'),
-		type: find('Activity Type'),
+		// Falls back to "Sport Type" so an export era that drops the coarse
+		// column still classifies: every foot-sport Sport Type value spells
+		// its family out ("TrailRun", "VirtualRun", "Walk", "Hike"), so the
+		// substring test below reads it unchanged. -1 here means the export
+		// names NO activity type at all, which `importStravaZip` refuses —
+		// `row[-1]` is `undefined`, so a silent fall-through would import a
+		// migrant's rides, swims and yoga as runs.
+		type: find('Activity Type', 'Sport Type'),
 		// Prefer Strava's finer-grained "Sport Type" (TrailRun, VirtualRun,
 		// etc.) for provenance, falling back to the coarse "Activity Type"
 		// on legacy exports that predate the Sport Type column. `type` above

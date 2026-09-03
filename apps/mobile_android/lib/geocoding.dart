@@ -198,7 +198,7 @@ Future<PlaceSearchOutcome> _searchViaNominatim(
 
 /// A geocoded place — the centroid the query resolved to, plus a
 /// radius in metres derived from the bounding box. Mirrors web's
-/// `GeocodedPlace` in `apps/web/src/lib/geocoding.ts`. Used by the
+/// `GeocodedPlace` in `apps/web/src/lib/routes/geocoding.ts`. Used by the
 /// region-aware club search so "Virginia" expands to a centroid +
 /// ~470 km radius rather than just an ILIKE on the location label.
 class GeocodedPlace {

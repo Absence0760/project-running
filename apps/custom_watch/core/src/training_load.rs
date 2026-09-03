@@ -183,19 +183,31 @@ fn banister_trimp(duration_s: u32, avg_bpm: f64, rest: f64, max: f64) -> f64 {
     duration_min * hrr * 0.64 * libm::exp(k * hrr)
 }
 
-/// Median of a NON-EMPTY slice. `total_cmp` rather than `partial_cmp().unwrap()`:
-/// on a device with no operating system a comparator that panics on a NaN is a
-/// reset mid-run, and `partial_cmp` returns `None` for exactly that. The caller
-/// below already refuses a non-finite rate, so this is the second rail, not the
-/// first.
-fn median(xs: &mut [f64]) -> f64 {
+/// Median of `xs`, or `None` when there is nothing to take a median of.
+///
+/// Total by signature rather than by a caller's discipline. An empty slice used
+/// to reach `xs[xs.len() / 2 - 1]`, which is `xs[0 - 1]`: a subtract-with-
+/// overflow panic in debug and, under the release profile's
+/// `overflow-checks = false`, a wrap to `usize::MAX` that panics on the bound
+/// instead. On a device with no operating system either one is a reset mid-run,
+/// and the only thing standing between the two was one `is_empty()` branch in
+/// the single caller — a proof that expires the moment a second caller exists.
+///
+/// `total_cmp` rather than `partial_cmp().unwrap()` for the same reason: a
+/// comparator that panics on a NaN is the same reset, and `partial_cmp` returns
+/// `None` for exactly that. The caller already refuses a non-finite rate, so
+/// that is the second rail, not the first.
+fn median(xs: &mut [f64]) -> Option<f64> {
+    if xs.is_empty() {
+        return None;
+    }
     xs.sort_unstable_by(f64::total_cmp);
     let mid = xs.len() / 2;
-    if xs.len().is_multiple_of(2) {
+    Some(if xs.len().is_multiple_of(2) {
         (xs[mid - 1] + xs[mid]) / 2.0
     } else {
         xs[mid]
-    }
+    })
 }
 
 fn round2(n: f64) -> f64 {
@@ -238,15 +250,17 @@ pub fn compute_calibration(runs: &[RunForLoad], prefs: &HrPrefs) -> StressCalibr
         }
     }
 
-    if trimps_per_km.is_empty() {
-        return StressCalibration {
+    // One branch, not two. The emptiness of the sample and the fallback rate
+    // are the same question, and asking it twice is what left `median` partial.
+    match median(&mut trimps_per_km) {
+        Some(rate) => StressCalibration {
+            mode: StressMode::Trimp,
+            trimp_per_km_fallback: Some(rate),
+        },
+        None => StressCalibration {
             mode: StressMode::Distance,
             trimp_per_km_fallback: None,
-        };
-    }
-    StressCalibration {
-        mode: StressMode::Trimp,
-        trimp_per_km_fallback: Some(median(&mut trimps_per_km)),
+        },
     }
 }
 
@@ -498,6 +512,40 @@ mod tests {
             weight_kg: Some(62.5),
             rpe: Some(8.0),
         }; 16]
+    }
+
+    #[test]
+    fn median_of_nothing_is_none_rather_than_a_panic() {
+        // The whole reason the signature is `Option`. Before it was, this call
+        // indexed `xs[0 - 1]`: a subtract-with-overflow panic in debug, and a
+        // `usize::MAX` bounds panic under the release profile's
+        // `overflow-checks = false`. Neither is recoverable on the wrist.
+        let mut empty: [f64; 0] = [];
+        assert_eq!(median(&mut empty), None);
+    }
+
+    #[test]
+    fn median_averages_the_middle_pair_on_an_even_sample() {
+        assert_eq!(median(&mut [4.0, 1.0, 3.0, 2.0]), Some(2.5));
+        assert_eq!(median(&mut [7.0]), Some(7.0));
+        assert_eq!(median(&mut [3.0, 1.0, 2.0]), Some(2.0));
+    }
+
+    #[test]
+    fn a_window_whose_every_hr_run_fails_the_rate_filter_falls_back_to_distance() {
+        // The path that used to be the only proof `median` was never handed an
+        // empty slice: HR prefs configured, a run carrying `avg_bpm`, and no
+        // usable rate to take a median of. It must still answer Distance/None
+        // now that the emptiness branch and the median are one expression.
+        let runs = [RunForLoad {
+            day: REF,
+            duration_s: 1800,
+            distance_m: 0.0,
+            avg_bpm: Some(150.0),
+        }];
+        let cal = compute_calibration(&runs, &hr_prefs(50.0, 190.0));
+        assert_eq!(cal.mode, StressMode::Distance);
+        assert_eq!(cal.trimp_per_km_fallback, None);
     }
 
     #[test]

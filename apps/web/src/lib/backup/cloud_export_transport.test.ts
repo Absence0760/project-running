@@ -24,7 +24,7 @@ const CALLER = 'src/lib/backup/cloud_export.ts';
 const HELPERS = 'src/lib/backup/cloud_export_helpers.ts';
 
 function stripComments(s: string): string {
-	return s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+	return s.replace(/(^|[^:])\/\/[^\n]*/g, '$1').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 function read(path: string): string {
@@ -73,7 +73,7 @@ test('both hub calls require a session before they are made', () => {
 	const caller = read(CALLER);
 	assert.match(
 		caller,
-		/if \(!token\) throw new Error\('Not signed in'\)/,
+		/if \(!token\) throw new CloudExportError\('unauthorized'\)/,
 		'hubSession must refuse rather than send an anonymous request',
 	);
 	// Both hub-rail entry points have to go through it — the endpoint's
@@ -127,5 +127,44 @@ test('the enqueue answer is normalised, never cast', () => {
 		caller,
 		/as CloudExportJob\b/,
 		'a cast would let an unrecognised status poll for ever',
+	);
+});
+
+test('nothing a server said reaches the caller as a message', () => {
+	// The failure toast interpolates whatever `.message` carries. Both rails
+	// used to put a server's own words there: the hub's was
+	// `Export failed (${status}): ${body}` and the Edge Function rail
+	// rethrew supabase-js's fixed "Edge Function returned a non-2xx status
+	// code" — a sentence about our transport, in English, shown to a subject
+	// asking for their own data (decisions § 983). Every throw out of this
+	// module is now a code the surface maps to translated copy.
+	const caller = read(CALLER);
+	const throws = [...caller.matchAll(/\bthrow\s+([^;]+);/g)].map((m) => m[1].trim());
+	assert.ok(throws.length >= 5, `expected the throw sites to be found; got ${throws.length}`);
+	assert.deepEqual(
+		throws.filter((t) => !t.startsWith('new CloudExportError(')),
+		[],
+		'every refusal out of this module must be a CloudExportError carrying a code, ' +
+			'never a sentence assembled from a status line or a server body',
+	);
+	// The failure vocabulary is closed: a fourth code would reach the
+	// surface's `else` branch and read as a generic server failure.
+	const codes = [...caller.matchAll(/new CloudExportError\(\s*'([a-z_]+)'/g)].map((m) => m[1]);
+	assert.deepEqual(
+		[...new Set(codes)].sort(),
+		['export_failed', 'rate_limited', 'unauthorized'],
+		'the codes thrown must match the CloudExportFailure union the surface maps',
+	);
+});
+
+test('the export-data envelope is unwrapped, never rethrown', () => {
+	const caller = read(CALLER);
+	const fn = caller.slice(caller.indexOf('async function edgeFunctionExport'));
+	assert.ok(fn.length > 0, 'edgeFunctionExport not found — did it move?');
+	assert.doesNotMatch(fn, /\bthrow\s+error\s*;/, 'the FunctionsHttpError must not be rethrown');
+	assert.match(
+		fn,
+		/await edgeFunctionErrorCode\(error\)/,
+		"the function's own error code must be read off the envelope",
 	);
 });

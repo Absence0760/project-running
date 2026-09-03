@@ -37,10 +37,10 @@ function sourceFiles(dir: string): string[] {
 /** Comment bodies blanked, so prose naming the host is not a use of it. */
 function code(src: string): string {
 	return src
-		.replace(/\/\*[\s\S]*?\*\//g, ' ')
 		.split('\n')
 		.map((l) => (/^\s*(\/\/|\/\/\/)/.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n');
+		.join('\n')
+		.replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 test('the site origin default is spelled in exactly one place', () => {
@@ -88,4 +88,54 @@ test('siteOrigin folds a blank env to the default and trims a trailing slash', (
 	assert.equal(siteOrigin('https://preview.example.com/'), 'https://preview.example.com');
 	assert.equal(siteOrigin('https://preview.example.com///'), 'https://preview.example.com');
 	assert.equal(siteOrigin('  https://x.test  '), 'https://x.test');
+});
+
+/**
+ * The second half of the same contract: not only is the default spelled once,
+ * every read of `PUBLIC_SITE_URL` folds it through `siteOrigin`.
+ *
+ * The two folds this replaces are not equivalent and neither was safe. The
+ * Lambdas used `?? DEFAULT_SITE_URL`, which fires only on null/undefined, so a
+ * `PUBLIC_SITE_URL=""` survived as the origin and every og:url came out
+ * root-relative (decisions § 895). The twenty-two callers under `src/routes/`
+ * used `|| DEFAULT_SITE_URL`, which does catch the empty string — but not a
+ * whitespace-only value, which is truthy and produced a canonical of
+ * `   /share/run/<id>`, and not a trailing slash, which produced
+ * `https://threkir.com//share/run/<id>` (both measured, § 970).
+ *
+ * `siteOrigin` is the one place either question is answered. This registers
+ * every caller so a twenty-eighth cannot re-decide it.
+ */
+test('every read of PUBLIC_SITE_URL folds through siteOrigin', () => {
+	const offenders: string[] = [];
+	let reads = 0;
+
+	for (const root of scanRoots) {
+		for (const file of sourceFiles(join(webRoot, root))) {
+			const rel = file.slice(webRoot.length + 1);
+			if (rel === join('src', 'lib', 'core', 'site_url.ts')) continue;
+			for (const line of code(readFileSync(file, 'utf-8')).split('\n')) {
+				if (!line.includes('PUBLIC_SITE_URL')) continue;
+				reads++;
+				// `env.PUBLIC_SITE_URL` in a route, `process.env.PUBLIC_SITE_URL`
+				// in a Lambda — the two runtimes expose it differently, which is
+				// why the helper takes the value rather than reading it itself.
+				if (!/siteOrigin\(\s*(?:process\.)?env\.PUBLIC_SITE_URL\s*\)/.test(line)) {
+					offenders.push(`${rel}: ${line.trim().slice(0, 90)}`);
+				}
+			}
+		}
+	}
+
+	// Population: a walker that found nothing would satisfy the assertion below
+	// while proving nothing (decisions §534).
+	assert.ok(reads >= 27, `found only ${reads} PUBLIC_SITE_URL reads — walker broken?`);
+
+	assert.deepEqual(
+		offenders.sort(),
+		[],
+		'these resolve the site origin by hand. `??` keeps an empty env var as the ' +
+			'origin and `||` keeps a whitespace-only one; neither trims a trailing ' +
+			'slash. Fold through siteOrigin from $lib/core/site_url.',
+	);
 });

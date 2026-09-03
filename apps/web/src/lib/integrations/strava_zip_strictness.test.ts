@@ -22,7 +22,7 @@ const IMPORTER = 'src/lib/integrations/strava-zip.ts';
 /// names the very shapes being refused ("an early return here would…"),
 /// so a guard reading the raw text would answer about the comment.
 function stripComments(s: string): string {
-	return s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+	return s.replace(/(^|[^:])\/\/[^\n]*/g, '$1').replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 function source(): string {
@@ -105,5 +105,22 @@ test('a refused row is counted and reported, not merely logged', () => {
 		loop,
 		/progress\.imported\+\+[\s\S]*?catch \(err\)[\s\S]*?progress\.imported\+\+/,
 		'a refused row must never increment the imported count',
+	);
+});
+
+test('a header naming no activity type is refused, not imported as runs', () => {
+	const s = source();
+	const guard = s.slice(s.indexOf('const idx = indexHeader(header)'), s.indexOf('const seen = await'));
+	assert.ok(guard.length > 0, 'the required-column check not found');
+	assert.match(
+		guard,
+		/idx\.type < 0/,
+		'a missing activity-type column must be as fatal as a missing Activity ID: ' +
+			'`row[-1]` is undefined, so importOne would default every row to `run`',
+	);
+	assert.match(
+		guard,
+		/Activity Type/,
+		'the refusal must name the column the operator has to look for',
 	);
 });

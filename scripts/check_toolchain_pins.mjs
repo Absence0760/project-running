@@ -52,6 +52,17 @@
 //     with no `node-version` at all is the `channel: stable` shape one more
 //     time — it takes whatever the runner image ships that week.
 //
+//   Deno — every `denoland/setup-deno` step names a `deno-version`, all of them
+//     agree, and the version is an EXACT `MAJOR.MINOR.PATCH` rather than a
+//     channel. Both steps took `v2.x`, which is the same shape as `channel:
+//     stable` and the Rust `stable` § 705 closed: a Deno release lands, `deno
+//     check` or `deno test` gains a diagnostic, and CI fails on code nobody
+//     touched with the blame landing on whichever PR ran next. Those two steps
+//     are the whole Deno rail — the `parity-types` deno.lock guard and the
+//     `edge-functions` job — and there is no in-repo file that resolves the
+//     runtime, so as with Flutter and Node the workflows ARE the source of
+//     truth and `.tool-versions` is checked against them.
+//
 //   The developer toolchain — `.tool-versions`, the file a contributor points
 //     `asdf install` / `mise install` at. Every line in it, ACTIVE OR
 //     COMMENTED, is compared against the pin the repo enforces for that
@@ -209,6 +220,7 @@ export function parseUsesStepVersions(text, usesRe, versionKey) {
 
 export const FLUTTER_USES = /^(\s*)(-\s+)?uses:\s*\S*subosito\/flutter-action@\S+/;
 export const SETUP_NODE_USES = /^(\s*)(-\s+)?uses:\s*\S*actions\/setup-node@\S+/;
+export const SETUP_DENO_USES = /^(\s*)(-\s+)?uses:\s*\S*denoland\/setup-deno@\S+/;
 
 /**
  * @param {string} text
@@ -811,6 +823,80 @@ export function checkNode(files) {
 	return { errors, ok, versions };
 }
 
+/// Every `denoland/setup-deno` step, with the `deno-version:` it carries.
+/**
+ * @param {string} text
+ * @returns {VersionedLine[]}
+ */
+export function parseDenoSteps(text) {
+	return parseUsesStepVersions(text, SETUP_DENO_USES, 'deno-version');
+}
+
+/// An exact Deno version, with or without the `v` the action's own examples
+/// use. `v2.x`, `2`, `canary` and `vx.y.z` are all channels, and a channel is
+/// the thing this rule exists to refuse.
+export const EXACT_DENO = /^v?(\d+\.\d+\.\d+)$/;
+
+/// Rule: every setup-deno step names an EXACT version, and every one names the
+/// same. Unlike Node, where a major is enough because the runner image resolves
+/// the rest, a Deno minor carries new `deno check` diagnostics — which is the
+/// whole failure mode.
+/**
+ * @param {WorkflowFile[]} files
+ * @returns {{ errors: string[], ok: string[], versions: Map<string, string[]> }}
+ */
+export function checkDeno(files) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	/** @type {Map<string, string[]>} */
+	const versions = new Map();
+
+	for (const { name, text } of files) {
+		for (const step of parseDenoSteps(text)) {
+			const where = `${name}:${step.line}`;
+			const exact = step.version === null ? null : EXACT_DENO.exec(step.version);
+			if (exact === null) {
+				errors.push(
+					`${where} — this \`denoland/setup-deno\` step takes ` +
+						`${step.version === null ? 'no `deno-version` at all' : `\`${step.version}\``}` +
+						`, which is a channel rather than a version. A Deno release lands, ` +
+						`\`deno check\` or \`deno test\` gains a diagnostic, and CI fails on code ` +
+						`nobody touched — the § 595 / § 705 shape. Name an exact ` +
+						`MAJOR.MINOR.PATCH and move it deliberately.`,
+				);
+				continue;
+			}
+			ok.push(`${where} -> deno ${exact[1]}`);
+			const sites = versions.get(exact[1]) ?? [];
+			sites.push(where);
+			versions.set(exact[1], sites);
+		}
+	}
+
+	if (ok.length === 0 && errors.length === 0) {
+		errors.push(
+			`no \`denoland/setup-deno\` steps found in any workflow. Either every Deno job ` +
+				`was removed, or the action was renamed and this rule now checks nothing.`,
+		);
+	}
+
+	if (versions.size > 1) {
+		const detail = [...versions.entries()]
+			.sort((a, b) => a[0].localeCompare(b[0]))
+			.map(([version, sites]) => `    ${version} — ${sites.join(', ')}`)
+			.join('\n');
+		errors.push(
+			`workflows pin ${versions.size} different Deno versions:\n${detail}\n` +
+				`  The deno.lock workspace-section guard and the Edge Function suite must run ` +
+				`the same toolchain, or one job rewrites what the other refuses.`,
+		);
+	}
+
+	return { errors, ok, versions };
+}
+
 /// Every `<plugin> <version>` line of `.tool-versions`, commented or not.
 /// A commented line is kept rather than skipped: uncommenting it is one
 /// keystroke and the version it then installs is the claim being checked.
@@ -834,7 +920,7 @@ export function parseToolVersions(text) {
 /// Only these can be checked; a plugin the repo does not pin is reported as
 /// unbacked rather than compared against nothing.
 /**
- * @param {{ flutter?: string | null, rust?: string | null, node?: string | null, go?: string | null, terraform?: string | null }} pins
+ * @param {{ flutter?: string | null, rust?: string | null, node?: string | null, go?: string | null, terraform?: string | null, deno?: string | null }} pins
  * @returns {Map<string, { version: string, source: string }>}
  */
 export function repoPins(pins) {
@@ -845,6 +931,7 @@ export function repoPins(pins) {
 	if (pins.go) out.set('golang', { version: pins.go, source: GO_MODS.join(' + ') });
 	if (pins.flutter) out.set('flutter', { version: pins.flutter, source: "each workflow's top-level env.FLUTTER_VERSION" });
 	if (pins.terraform) out.set('terraform', { version: pins.terraform, source: `.github/workflows/${TERRAFORM_WORKFLOW}` });
+	if (pins.deno) out.set('deno', { version: pins.deno, source: "each workflow's `denoland/setup-deno` step" });
 	return out;
 }
 
@@ -975,6 +1062,7 @@ export function checkAll(
 	const actions = checkActionPins([...files, ...compositeFiles]);
 	const rust = checkRustToolchain(rustToolchainText);
 	const node = checkNode(files);
+	const deno = checkDeno(files);
 	const go = parseGoDirective(goMods);
 	const terraform = (() => {
 		const f = files.find((x) => x.name === TERRAFORM_WORKFLOW);
@@ -988,6 +1076,7 @@ export function checkAll(
 			go: go.version,
 			flutter: flutter.versions.size === 1 ? [...flutter.versions.keys()][0] : null,
 			terraform,
+			deno: deno.versions.size === 1 ? [...deno.versions.keys()][0] : null,
 		}),
 	);
 	return {
@@ -998,16 +1087,27 @@ export function checkAll(
 			...actions.errors,
 			...rust.errors,
 			...node.errors,
+			...deno.errors,
 			...go.errors,
 			...tools.errors,
 		],
-		ok: [...flutter.ok, ...melos.ok, ...defmt.ok, ...actions.ok, ...rust.ok, ...node.ok, ...tools.ok],
+		ok: [
+			...flutter.ok,
+			...melos.ok,
+			...defmt.ok,
+			...actions.ok,
+			...rust.ok,
+			...node.ok,
+			...deno.ok,
+			...tools.ok,
+		],
 		flutter,
 		melos,
 		defmt,
 		actions,
 		rust,
 		node,
+		deno,
 		tools,
 	};
 }
@@ -1035,7 +1135,7 @@ export function readCompositeActions(dir) {
 }
 
 function main() {
-	const { errors, ok, flutter, melos, defmt, actions, rust, node, tools } = checkAll(
+	const { errors, ok, flutter, melos, defmt, actions, rust, node, deno, tools } = checkAll(
 		readWorkflows(WORKFLOW_DIR),
 		readFileSync(LOCKFILE, 'utf-8'),
 		readCompositeActions(ACTION_DIR),
@@ -1063,6 +1163,7 @@ function main() {
 			`${actions.ok.length} third-party action reference(s) pinned by commit SHA; ` +
 			`the firmware's Rust channel pinned to ${rust.channel}; ` +
 			`${node.ok.length} setup-node step(s) on Node ${[...node.versions.keys()][0]}; ` +
+			`${deno.ok.length} setup-deno step(s) on Deno ${[...deno.versions.keys()][0]}; ` +
 			`${tools.ok.length} of .tool-versions' line(s) match the pin this repo enforces, ` +
 			`with ${tools.unbacked.length} carrying no in-repo pin to check.`,
 	);

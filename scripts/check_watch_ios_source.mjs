@@ -48,6 +48,17 @@
 //       `activity_type`. Nothing fails when a key is dropped — the run syncs,
 //       one column short.
 //
+//   (7) The same, for the envelope going the OTHER way on the same session:
+//       the route the phone arms on the wrist. Three hand-written key lists in
+//       three languages and three apps — `apple_watch_route_bridge.dart` names
+//       them as method-channel arguments, `WatchIngestBridge.routeUserInfo`
+//       lifts those out and repacks them for `transferUserInfo`, and
+//       `ArmedRoute.decode` reads them back on the watch. Every rejection in
+//       that chain drops the WHOLE push (a partly-decoded polyline is worse
+//       than none), so a key renamed on one rail is a route the runner arms on
+//       the phone that silently never reaches the wrist — with a success
+//       reported at the point they armed it.
+//
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
 // matches a catalog key on the SHAPE of its interpolation, not on the type of
@@ -227,6 +238,22 @@ export const SYNC_SITE = join('WatchApp', 'ContentView.swift');
  * cannot see the drift.
  */
 export const INGEST = join('apps', 'mobile_ios', 'ios', 'Runner', 'WatchIngestBridge.swift');
+
+/// The watch end of the route-push envelope.
+export const ARMED_ROUTE = join('WatchApp', 'ArmedRoute.swift');
+
+/**
+ * The Dart end of it — the third rail, and the one that starts the chain. Under
+ * `apps/mobile_android/lib` because that tree is the byte-identical twin's
+ * canonical copy (decisions § 39); the iOS twin is a mirror of it, so reading
+ * one reads both.
+ */
+export const ROUTE_BRIDGE = join(
+	'apps',
+	'mobile_android',
+	'lib',
+	'apple_watch_route_bridge.dart',
+);
 
 // --- text utilities ---------------------------------------------------------
 
@@ -445,6 +472,80 @@ export function phoneEnvelopeKeys(src) {
 }
 
 /**
+ * The brace-matched body of `func <name>(`, wherever it sits — a method inside
+ * a type, with any access modifiers in front. `functionBody` below anchors at
+ * column zero, which the three route-envelope functions are not.
+ * @param {string} src @param {string} name @returns {string | null}
+ */
+export function methodBody(src, name) {
+	const at = src.search(new RegExp(`\\bfunc\\s+${name}\\s*\\(`));
+	if (at === -1) return null;
+	const open = src.indexOf('{', at);
+	if (open === -1) return null;
+	let depth = 0;
+	for (let i = open; i < src.length; i += 1) {
+		if (src[i] === '{') depth += 1;
+		else if (src[i] === '}') {
+			depth -= 1;
+			if (depth === 0) return src.slice(open, i + 1);
+		}
+	}
+	return null;
+}
+
+/**
+ * Every `<receiver>["…"]` key in a chunk of Swift, plus the keys of any
+ * dictionary literal in it. Both halves matter on the phone rail: it READS the
+ * method-channel arguments and REPACKS them, and a key read but not repacked is
+ * a field dropped between two lines of one function.
+ * @param {string} body @param {string} receiver
+ * @returns {Set<string> | null} null when the receiver is not subscripted at
+ *   all, which is a shape change rather than an empty envelope
+ */
+export function swiftPayloadKeys(body, receiver) {
+	/** @type {Set<string>} */
+	const keys = new Set();
+	const sub = new RegExp(`\\b${receiver}\\s*\\[\\s*"([^"\\\\\\n]+)"\\s*\\]`, 'g');
+	for (const m of body.matchAll(sub)) keys.add(m[1]);
+	if (keys.size === 0) return null;
+	for (const m of body.matchAll(/"([^"\\\n]+)"\s*:/g)) keys.add(m[1]);
+	return keys;
+}
+
+/**
+ * The keys of the map literal handed to `invokeMethod…('<method>', { … })` in
+ * Dart. Returns null when the call is not there to read, for the same reason
+ * `watchEnvelopeKeys` does: an empty set would report that the two Swift ends
+ * agree on five keys nobody sends.
+ * @param {string} src comment-stripped Dart @param {string} method
+ * @returns {Set<string> | null}
+ */
+export function dartInvokeKeys(src, method) {
+	const call = new RegExp(`invokeMethod\\s*(?:<[^>]*>)?\\s*\\(\\s*'${method}'`);
+	const at = src.search(call);
+	if (at === -1) return null;
+	const open = src.indexOf('{', at);
+	if (open === -1) return null;
+	let depth = 0;
+	let end = -1;
+	for (let i = open; i < src.length; i += 1) {
+		if (src[i] === '{' || src[i] === '[') depth += 1;
+		else if (src[i] === '}' || src[i] === ']') {
+			depth -= 1;
+			if (depth === 0) {
+				end = i;
+				break;
+			}
+		}
+	}
+	if (end === -1) return null;
+	/** @type {Set<string>} */
+	const keys = new Set();
+	for (const m of src.slice(open, end).matchAll(/'([^'\\\n]+)'\s*:/g)) keys.add(m[1]);
+	return keys.size === 0 ? null : keys;
+}
+
+/**
  * The text of a top-level `func <name>(` through its matching close brace,
  * signature line included. Returns null when the function is not in this
  * source.
@@ -472,11 +573,13 @@ export function functionBody(src, name) {
 /**
  * @param {string} watchRoot absolute path to an `apps/watch_ios` tree
  * @param {string | null} [ingestPath] absolute path to the phone's
- *   `WatchIngestBridge.swift`; null skips claim (6), which is only for a
- *   caller that has no phone half staged.
+ *   `WatchIngestBridge.swift`; null skips claims (6) and (7), which are only
+ *   for a caller that has no phone half staged.
+ * @param {string | null} [routeBridgePath] absolute path to the phone's
+ *   `apple_watch_route_bridge.dart`; null skips claim (7) alone.
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function check(watchRoot, ingestPath = null) {
+export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 	/** @type {string[]} */ const errors = [];
 	/** @type {string[]} */ const ok = [];
 	/** @param {string} rel */
@@ -698,12 +801,67 @@ export function check(watchRoot, ingestPath = null) {
 		}
 	}
 
+	// (7) The route-push envelope, read from all three of its ends.
+	if (ingestPath !== null && routeBridgePath !== null) {
+		const phone = swiftPayloadKeys(
+			methodBody(stripSwiftComments(readFileSync(ingestPath, 'utf8')), 'routeUserInfo') ?? '',
+			'args',
+		);
+		const watch = swiftPayloadKeys(
+			methodBody(stripSwiftComments(read(ARMED_ROUTE)), 'decode') ?? '',
+			'payload',
+		);
+		const dart = dartInvokeKeys(readFileSync(routeBridgePath, 'utf8'), 'push');
+		/** @type {{ label: string, keys: Set<string> | null }[]} */
+		const rails = [
+			{ label: `${ROUTE_BRIDGE} (invokeMethod 'push')`, keys: dart },
+			{ label: `${INGEST} (routeUserInfo)`, keys: phone },
+			{ label: `${ARMED_ROUTE} (ArmedRoute.decode)`, keys: watch },
+		];
+		const unread = rails.filter((r) => r.keys === null);
+		if (unread.length > 0) {
+			errors.push(
+				`Parsed no route-push keys out of ${unread.map((r) => r.label).join(' and ')} — ` +
+					'claim (7) would pass vacuously, or report that the other rails agree on keys ' +
+					'nobody sends. One of the three call sites changed shape.',
+			);
+		} else {
+			/** @type {string[]} */
+			const mismatches = [];
+			for (const rail of rails) {
+				for (const other of rails) {
+					if (rail === other) continue;
+					for (const key of /** @type {Set<string>} */ (rail.keys)) {
+						if (!(/** @type {Set<string>} */ (other.keys)).has(key)) {
+							mismatches.push(
+								`\`${key}\` is on ${rail.label} and not on ${other.label}. Every rejection ` +
+									'in the route chain drops the WHOLE push, so this is a route the runner ' +
+									'arms on the phone — and is told was armed — that never reaches the wrist.',
+							);
+						}
+					}
+				}
+			}
+			for (const m of [...new Set(mismatches)].sort()) errors.push(m);
+			if (mismatches.length === 0) {
+				ok.push(
+					`all ${(/** @type {Set<string>} */ (dart)).size} route-push keys agree across the ` +
+						'Dart channel, the phone repack and the watch decode',
+				);
+			}
+		}
+	}
+
 	return { errors, ok };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	const root = process.argv[2] ?? join(REPO_ROOT, 'apps', 'watch_ios');
-	const { errors, ok } = check(root, process.argv[3] ?? join(REPO_ROOT, INGEST));
+	const { errors, ok } = check(
+		root,
+		process.argv[3] ?? join(REPO_ROOT, INGEST),
+		process.argv[4] ?? join(REPO_ROOT, ROUTE_BRIDGE),
+	);
 	for (const line of ok) console.log(`  ok: ${line}`);
 	if (errors.length > 0) {
 		console.error(`\nFAIL: ${errors.length} problem(s) in apps/watch_ios:`);

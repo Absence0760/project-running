@@ -29,23 +29,10 @@ import { resolve, relative } from 'node:path';
 /// Keyed by `<file basename>::<edge function name>`.
 const REDTHROW_EXEMPT = new Map<string, string>([
 	[
-		'cloud_export.ts::export-data',
-		'The legacy synchronous export transport. Its caller renders a generic ' +
-			'failure either way, so nothing surfaces the message; filed for the ' +
-			'unwrap in followups.md rather than changed blind.',
-	],
-	[
 		'data.ts::clip-public-track',
 		'Internal read used by the spectator track path; the throw is caught by ' +
 			'callers that fall back to the unclipped-refused state rather than ' +
 			'showing the message.',
-	],
-	[
-		'data.ts::donations-checkout',
-		'The fundraiser page catches and shows the fixed fundraiser.donateFailed, ' +
-			'so no internal sentence reaches a donor. What is lost is the refusal ' +
-			'code itself (fundraiser_closed, host_cannot_take_payment) — filed in ' +
-			'followups.md, and it needs its own copy decisions.',
 	],
 	[
 		'data.ts::race-results-import',

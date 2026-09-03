@@ -136,7 +136,24 @@
 			});
 			window.location.href = url;
 		} catch (e) {
-			showToast(m('fundraiser.donateFailed'), 'error');
+			// The refusals only the server can know, arriving after the press.
+			// A donor told only "couldn't start the donation" cannot tell a
+			// fundraiser that has ENDED from a blip, and retries something
+			// that can never open. Same shape as the event-register map.
+			const code = e instanceof Error ? e.message : '';
+			const key =
+				code === 'fundraiser_closed'
+					? 'fundraiser.donateClosed'
+					: code === 'fundraiser_not_found'
+						? 'fundraiser.donateNotAvailable'
+						: code === 'owner_cannot_take_payment' || code === 'stripe_not_configured'
+							? 'fundraiser.donateHostUnavailable'
+							: code.startsWith('amount_')
+								? 'fundraiser.donateAmountRejected'
+								: code.startsWith('idempotency_')
+									? 'fundraiser.donateInProgress'
+									: 'fundraiser.donateFailed';
+			showToast(m(key), 'error');
 			console.error('donation checkout failed', e);
 			donating = false;
 		}

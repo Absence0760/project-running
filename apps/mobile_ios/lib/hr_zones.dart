@@ -67,7 +67,7 @@ List<HrZoneBucket> hrZoneBreakdown(
 /// More accurate for masters runners than the classic 220 − age, which
 /// systematically overestimates HR-max past ~40 and pushed older
 /// runners into falsely-low zones (persona-hunt Older #8). Kept in
-/// lockstep with `apps/web/src/lib/hr_zones.ts` (`tanakaMaxHr`).
+/// lockstep with `apps/web/src/lib/training/hr_zones.ts` (`tanakaMaxHr`).
 int tanakaMaxHr(int ageYears) => (208 - 0.7 * ageYears).round();
 
 /// Zone upper bounds (Z1..Z5) at 60/70/80/90/100 % of a max HR.

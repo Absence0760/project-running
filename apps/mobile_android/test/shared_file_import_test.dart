@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,19 @@ const _kml = '''<?xml version="1.0"?>
     </coordinates></LineString></Placemark>
   </Document>
 </kml>''';
+
+const _tcx = '''<?xml version="1.0"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">
+  <Courses><Course><Name>Shared TCX</Name><Track>
+    <Trackpoint><Position><LatitudeDegrees>0.0</LatitudeDegrees><LongitudeDegrees>0.0</LongitudeDegrees></Position></Trackpoint>
+    <Trackpoint><Position><LatitudeDegrees>0.0</LatitudeDegrees><LongitudeDegrees>0.001</LongitudeDegrees></Position></Trackpoint>
+    <Trackpoint><Position><LatitudeDegrees>0.0</LatitudeDegrees><LongitudeDegrees>0.002</LongitudeDegrees></Position></Trackpoint>
+  </Track></Course></Courses>
+</TrainingCenterDatabase>''';
+
+const _geojson = '''{"type":"FeatureCollection","features":[{"type":"Feature",
+  "properties":{"name":"Shared GeoJSON"},
+  "geometry":{"type":"LineString","coordinates":[[0.0,0.0],[0.001,0.0],[0.002,0.0]]}}]}''';
 
 // Build the service with an inert plugin surface so a test never opens the
 // receive_sharing_intent MethodChannel — importPath is exercised directly.
@@ -56,6 +70,80 @@ void main() {
     test('returns null for a non-route file', () {
       expect(detectRouteFormat(extension: 'txt', content: 'hello world'), isNull);
       expect(detectRouteFormat(extension: null, content: '{"a":1}'), isNull);
+    });
+  });
+
+  group('every promised format is actually offered and parsed', () {
+    test('the picker allowlist is exactly the formats plus their aliases', () {
+      // The screen used to hand FilePicker a hardcoded `['gpx', 'kml']` while
+      // the empty-state copy promised more, so a `.geojson` or `.tcx` chosen
+      // through the OS share sheet was parsed as GPX and failed.
+      expect(kSupportedRouteImportExtensions,
+          {'gpx', 'kml', 'geojson', 'tcx'});
+      expect(kRouteImportPickerExtensions,
+          containsAll(<String>['gpx', 'kml', 'geojson', 'json', 'tcx']));
+      expect(kSupportedRouteImportExtensions.contains('kmz'), isFalse,
+          reason: 'a KMZ is a zip and this pipeline is string-typed');
+    });
+
+    test('a .geojson extension resolves and parses', () {
+      expect(detectRouteFormat(extension: 'geojson', content: _geojson),
+          'geojson');
+      final r = routeFromImportedFile(format: 'geojson', content: _geojson);
+      expect(r.name, 'Shared GeoJSON');
+      expect(r.waypoints, hasLength(3));
+    });
+
+    test('a GeoJSON saved as .json resolves through the alias', () {
+      expect(detectRouteFormat(extension: 'json', content: _geojson),
+          'geojson');
+    });
+
+    test('a .tcx extension resolves and parses', () {
+      expect(detectRouteFormat(extension: 'tcx', content: _tcx), 'tcx');
+      final r = routeFromImportedFile(format: 'tcx', content: _tcx);
+      expect(r.name, 'Shared TCX');
+      expect(r.waypoints, hasLength(3));
+    });
+
+    test('content is sniffed when the extension is missing', () {
+      expect(detectRouteFormat(extension: null, content: _tcx), 'tcx');
+      expect(detectRouteFormat(extension: null, content: _geojson), 'geojson');
+      expect(detectRouteFormat(extension: 'bin', content: _geojson), 'geojson');
+    });
+
+    test('every locale names exactly the formats the picker offers', () {
+      // The promise and the picker drifted apart once already: the screen
+      // comment said five formats, the copy said three, and the picker took
+      // two. Format names are not translated, so the same assertion holds in
+      // every catalogue.
+      const labels = <String, String>{
+        'gpx': 'GPX',
+        'kml': 'KML',
+        'geojson': 'GeoJSON',
+        'tcx': 'TCX',
+      };
+      expect(labels.keys.toSet(), kSupportedRouteImportExtensions,
+          reason: 'a format added to the picker needs a label here');
+      for (final arb in Directory('lib/l10n')
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.arb'))) {
+        final body = (jsonDecode(arb.readAsStringSync())
+            as Map<String, dynamic>)['routesEmptyBody'] as String;
+        for (final label in labels.values) {
+          expect(body, contains(label), reason: '${arb.path} omits $label');
+        }
+        expect(body.contains('KMZ'), isFalse,
+            reason: '${arb.path} promises a format nothing can open');
+      }
+    });
+
+    test('routesFromImportedFile returns every line of each format', () {
+      expect(routesFromImportedFile(format: 'geojson', content: _geojson),
+          hasLength(1));
+      expect(routesFromImportedFile(format: 'tcx', content: _tcx),
+          hasLength(1));
     });
   });
 

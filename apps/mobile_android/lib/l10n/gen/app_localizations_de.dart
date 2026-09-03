@@ -2895,7 +2895,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Tippe auf Erstellen, um eine Route auf der Karte zu zeichnen, oder importiere eine GPX-, KML- oder TCX-Datei.';
+      'Tippe auf Erstellen, um eine Route auf der Karte zu zeichnen, oder importiere eine GPX-, KML-, GeoJSON- oder TCX-Datei.';
 
   @override
   String get routesBuild => 'Erstellen';
