@@ -97,6 +97,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
+import com.runapp.watchwear.HeartRateAvailability
+import com.runapp.watchwear.HeartRateCaptionKind
+import com.runapp.watchwear.heartRateCaption
 import com.runapp.watchwear.PermissionCost
 import com.runapp.watchwear.PermissionOutcome
 import com.runapp.watchwear.permissionOutcome
@@ -262,6 +265,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     paceSecPerKm = state.paceSecPerKm,
                     preferredUnit = state.preferredUnit,
                     bpm = state.bpm,
+                    hrAvailability = state.hrAvailability,
                     hrZoneCutoffs = state.hrZoneCutoffs,
                     steps = state.steps,
                     lapCount = state.lapCount,
@@ -1317,6 +1321,7 @@ private fun RunningScreen(
     paceSecPerKm: Double?,
     preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     bpm: Int?,
+    hrAvailability: HeartRateAvailability,
     hrZoneCutoffs: List<Int>?,
     steps: Int?,
     lapCount: Int,
@@ -1521,16 +1526,29 @@ private fun RunningScreen(
                     color = DuskPalette.lilac,
                 )
             }
-            val secondary = listOfNotNull(
+            // The heart-rate slot reports its own absence rather than
+            // collapsing: a blank space read the same for a declined
+            // permission, a watch with no sensor, a refused registration
+            // and a sample that simply had not landed yet. It reuses the
+            // slot the reading occupies, so the 46 mm layout carries no
+            // extra line (decisions § 1052).
+            val hrLabel = when (heartRateCaption(hrAvailability, bpm)) {
                 // Zone badge sits adjacent to the BPM reading so the
                 // runner can read both in a single glance. Falls back
                 // to bare "146 bpm" when the cutoffs haven't been
                 // resolved (no hr_zones / max_hr_bpm / DOB set, or the
                 // session-restore prefs fetch hasn't returned yet).
-                bpm?.let { b ->
+                HeartRateCaptionKind.Reading -> bpm?.let { b ->
                     val z = hrZoneOf(b, hrZoneCutoffs)
                     if (z != null) stringResource(R.string.bpm_zone, b, z) else stringResource(R.string.bpm, b)
-                },
+                }
+                HeartRateCaptionKind.Acquiring -> stringResource(R.string.hr_acquiring)
+                HeartRateCaptionKind.OffWrist -> stringResource(R.string.hr_off_wrist)
+                HeartRateCaptionKind.Unavailable -> stringResource(R.string.hr_none)
+                HeartRateCaptionKind.None -> null
+            }
+            val secondary = listOfNotNull(
+                hrLabel,
                 steps?.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.steps, it, it) },
                 lapCount.takeIf { it > 0 }?.let { stringResource(R.string.lap_number, it) },
             )

@@ -100,6 +100,10 @@ data class UiState(
     val distanceM: Double = 0.0,
     val paceSecPerKm: Double? = null,
     val bpm: Int? = null,
+    /// Why [bpm] is what it is. Threaded through so `RunningScreen` can
+    /// tell "waiting for the first sample" from "there will be none"
+    /// (decisions § 1052).
+    val hrAvailability: HeartRateAvailability = HeartRateAvailability.Off,
     val locationAvailable: Boolean = true,
     val online: Boolean = true,
     val queuedCount: Int = 0,
@@ -428,6 +432,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             distanceM = m.distanceM,
                             paceSecPerKm = m.paceSecPerKm,
                             bpm = m.bpm,
+                            hrAvailability = m.hrAvailability,
                             locationAvailable = m.locationAvailable,
                             activityType = m.activityType,
                             lapCount = m.laps.size,
@@ -842,6 +847,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             distanceM = 0.0,
             paceSecPerKm = null,
             bpm = null,
+            hrAvailability = HeartRateAvailability.Off,
             lapCount = 0,
             syncError = null,
             thisRunId = runId,

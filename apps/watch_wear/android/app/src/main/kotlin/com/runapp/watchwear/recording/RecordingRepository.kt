@@ -1,6 +1,7 @@
 package com.runapp.watchwear.recording
 
 import com.runapp.watchwear.GpsPoint
+import com.runapp.watchwear.HeartRateAvailability
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +37,13 @@ object RecordingRepository {
         val paceSecPerKm: Double? = null,
         val bpm: Int? = null,
         val avgBpm: Double? = null,
+        /// Why there is (or is not) a live [bpm]. A null bpm is four
+        /// different situations and the running screen rendered them as
+        /// one blank space; this is what lets it say which
+        /// (decisions § 1052). `Off` on a build with `ENABLE_HR` false,
+        /// so a build that deliberately has no heart rate does not
+        /// caption every run with its absence.
+        val hrAvailability: HeartRateAvailability = HeartRateAvailability.Off,
         val trackPointCount: Int = 0,
         val latestPoint: GpsPoint? = null,
         val trackFilePath: String? = null,
