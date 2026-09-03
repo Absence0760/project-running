@@ -145,12 +145,18 @@ Deno.test('the response says what it could not read, so a wrong shape is visible
 });
 
 Deno.test('a call that did not ask for a sync performs none', () => {
-  // Every caller in the tree is a credential probe — web's two
-  // `isRunSignUpConfigured` / `isUltraSignUpConfigured` invocations and mobile's
-  // two `probeFunction` entries — and nothing reads `synced`. A probe that
-  // walked the provider feed would write the shared calendar on a page load and
-  // spend the 2/hour bucket, so the second probe in an hour would 429 and the
-  // tile would read unavailable for the rest of it (decisions § 977).
+  // Every caller in the tree is a credential probe, and nothing reads `synced`.
+  // There is exactly ONE such caller left — web's `isRunSignUpConfigured` — and
+  // it is on its way out: § 1008 moved mobile's two `probeFunction` entries and
+  // web's `isUltraSignUpConfigured` onto the results leg, § 1041 finished the
+  // mobile half, and the RunSignUp web probe is filed to follow. When it does,
+  // this function's probe branch has no caller and the
+  // `race-listings-sync:probe` bucket below charges nothing. The assertions
+  // stand either way: they are about `index.ts` refusing to walk the provider
+  // feed for a caller that did not ask for a sync, which would write the shared
+  // calendar on a page load and spend the 2/hour bucket, so the second probe in
+  // an hour would 429 and the tile would read unavailable for the rest of it
+  // (decisions § 977).
   const gate = SRC.indexOf('if (!isSync) {');
   const out = SRC.indexOf('await fetch(');
   const write = SRC.indexOf('.insert(');
@@ -169,11 +175,13 @@ Deno.test('a call that did not ask for a sync performs none', () => {
 });
 
 Deno.test('a probe does not spend the sync bucket', () => {
-  // Both web probes hit this function, so charging them to the sync's 2/hour
-  // free ceiling meant ONE page load exhausted it and the next load 429'd —
-  // which `isProviderNotConfigured` fail-closes into "provider unavailable" for
-  // a provider that is configured and working. The client comment describes the
-  // symptom; this is the cause (decisions § 977).
+  // Both web probes hit this function when the split was written, so charging
+  // them to the sync's 2/hour free ceiling meant ONE page load exhausted it and
+  // the next load 429'd — which `isProviderNotConfigured` fail-closes into
+  // "provider unavailable" for a provider that is configured and working. Only
+  // the RunSignUp probe reaches here now (§ 1008), which halves the pressure
+  // without removing the cause; the separate bucket is what fixed it (decisions
+  // § 977).
   assert(
     /checkRateLimitTiered\(supabase, user\.id, 'race-listings-sync', 2, 8, 3600/.test(SRC),
     'the sync ceiling moved',
