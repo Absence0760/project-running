@@ -171,11 +171,14 @@ test('/cookie-notice carries a Manage-cookie-preferences button wired to consent
 	// rendered copy only — the comment in the script intentionally
 	// references the old phrasing for history. Loop the replace + case-
 	// insensitive flag so nested or upper-case <SCRIPT> tags can't slip
-	// rendered copy past the guard (CodeQL js/bad-tag-filter +
-	// js/incomplete-multi-character-sanitization).
+	// rendered copy past the guard (js/incomplete-multi-character-
+	// sanitization). The end tag is matched the way a parser closes one —
+	// `</script` followed by whitespace, `/` or `>`, then junk up to the
+	// first `>` — because `</script\t\n bar>` closes the block in a browser
+	// and `</script\s*>` does not see it (js/bad-tag-filter).
 	let renderedOnly = source;
 	let prev;
-	const scriptRe = /<script\b[\s\S]*?<\/script\s*>/gi;
+	const scriptRe = /<script\b[\s\S]*?<\/script(?=[\s/>])[^>]*>/gi;
 	do {
 		prev = renderedOnly;
 		renderedOnly = prev.replace(scriptRe, '');
