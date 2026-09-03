@@ -31,6 +31,8 @@ import { strict as assert } from 'node:assert';
 import { readFileSync, readdirSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
+import { stripComments } from '../core/strip_comments';
+
 const __dirname = resolve(new URL('.', import.meta.url).pathname);
 const webRoot = resolve(__dirname, '../../..');
 const srcRoot = resolve(webRoot, 'src');
@@ -80,16 +82,12 @@ const REGISTER: Record<string, [number, string]> = {
 	'src/lib/share/share_workout_meta.ts': [1, 'defines the workout share path'],
 };
 
-/// Strip `//`-style comments so a path written in prose inside a doc comment
-/// is not counted as a construction site. Block comments are not used for doc
-/// comments anywhere in this tree.
-function stripComments(source: string): string {
-	return source
-		.split('\n')
-		.map((line) => (/^\s*\/\//.test(line) ? '' : line))
-		.join('\n');
-}
-
+/// Comments are blanked before the scan so a path written in prose is not
+/// counted as a construction site. This used to blank whole `//` lines only,
+/// on the stated grounds that "block comments are not used for doc comments
+/// anywhere in this tree" -- which was never true (this file's own header is
+/// one) and left a trailing `// see ${base}/share/run/${id}` counted as a site.
+///
 function sourceFiles(dir: string, out: string[] = []): string[] {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
 		const full = resolve(dir, entry.name);

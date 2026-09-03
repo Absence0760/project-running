@@ -17,8 +17,9 @@
 // image is the branded card (or, for profiles/clubs, the avatar URL) — so
 // this Lambda serves HTML only and needs no native rasteriser.
 //
-// Fail-open posture: a private / missing entity yields a 404 HTML with a
-// noindex robots tag (a clean crawler signal), never a 5xx.
+// Fail-open posture: a private / missing entity yields the SPA shell at 404
+// with a noindex robots tag (a clean crawler signal), never a 5xx -- the same
+// designed, localized not-found card a reader reaches by any other route.
 
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
 
@@ -55,6 +56,7 @@ import {
 import { injectEntityHead } from '../../../src/lib/share/entity_spa_shell';
 import { siteOrigin } from '../../../src/lib/core/site_url';
 import { shareMethodRefusal } from '../../../src/lib/share/share_method_gate';
+import { notFoundShell } from '../../../src/lib/share/entity_spa_shell';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -163,7 +165,7 @@ export const handler = async (
 				key !== null && config.supabaseUrl && config.supabaseAnonKey
 					? await route.render(key, config)
 					: null;
-			if (!headTags) return html(404, notFoundHtml());
+			if (!headTags) return html(404, notFoundShell(__SPA_SHELL_HTML__, 'Not found — Threkir'));
 			return html(200, injectEntityHead(__SPA_SHELL_HTML__, headTags));
 		}
 		return json(404, { error: 'not found' }, CACHE_CONTROL);
@@ -193,10 +195,6 @@ function html(statusCode: number, body: string): LambdaFunctionURLResult {
 		headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': CACHE_CONTROL },
 		body,
 	};
-}
-
-function notFoundHtml(): string {
-	return '<!doctype html><html><head><meta charset="utf-8"><title>Threkir</title><meta name="robots" content="noindex"></head><body><p>This link isn’t available.</p></body></html>';
 }
 
 function json(

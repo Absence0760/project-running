@@ -27,6 +27,7 @@ import { injectShareRecapMeta } from '../../../src/lib/share/share_recap_spa_she
 import { renderRecapOgPng } from '../../../src/lib/share/og_recap_png';
 import { siteOrigin } from '../../../src/lib/core/site_url';
 import { shareMethodRefusal } from '../../../src/lib/share/share_method_gate';
+import { notFoundShell } from '../../../src/lib/share/entity_spa_shell';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -94,7 +95,7 @@ async function handleHtml(
 		return {
 			statusCode: 404,
 			headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': CACHE_CONTROL },
-			body: notFoundHtml(),
+			body: notFoundShell(__SPA_SHELL_HTML__, 'Recap not found — Threkir'),
 		};
 	}
 	const meta: ShareRecapMeta = buildShareRecapMeta({ id, recap, siteUrl: config.siteUrl });
@@ -139,14 +140,4 @@ function jsonResponse(
 	};
 }
 
-function notFoundHtml(): string {
-	return [
-		'<!DOCTYPE html>',
-		'<html lang="en"><head><meta charset="utf-8">',
-		'<title>Recap not found — Threkir</title>',
-		'<meta name="robots" content="noindex">',
-		'</head><body><h1>Recap not found</h1>',
-		'<p>This share link is no longer available.</p>',
-		'</body></html>',
-	].join('\n');
-}
+
