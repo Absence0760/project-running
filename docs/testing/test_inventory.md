@@ -2171,9 +2171,11 @@ A geocoder answer that is not a coordinate is dropped on BOTH providers — Nomi
 
 [§ 1010](../architecture/decisions.md): `runRowFromRun` is total. A non-finite distance resolves to zero and agrees with `Run.toJson` over the same inputs (one shared rule, not two copies); a non-finite embedded best is dropped rather than thrown on (`toInt()` raises out of the row BUILDER); a non-finite anywhere in the bag is dropped, including inside nested lists and maps; a finite bag survives untouched; and an explicit `null` is preserved rather than read as a dropped non-finite.
 
-### `packages/core_models/test/strava_sync_result_test.dart` — 22 tests (6 added) ↔ `apps/web/src/lib/integrations/strava_sync_result.test.ts` — 23 tests (6 added)
+### `packages/core_models/test/import_completeness_test.dart` — 7 tests ↔ `apps/web/src/lib/integrations/import_completeness.test.ts` — 7 tests
 
-`parseImportCompleteness`, mirrored case for case: an unreadable body is partial, only an explicit `true` claims whole, an embedded error forces partial beside a `complete` flag (a blank one is not an error), counts are non-negative integers or zero, `total` is carried only when sent, and a `total` below `imported + skipped` is no total at all.
+`parseImportCompleteness`, mirrored case for case over six of the seven: an unreadable body is partial, only an explicit `true` claims whole, an embedded error forces partial beside a `complete` flag (a blank one is not an error), counts are non-negative integers or zero, `total` is carried only when sent, and a `total` below `imported + skipped` is no total at all. The seventh is per-platform and is not a mirror — a source guard that `strava_sync_result` still IMPORTS this module's `importResponseCount` / `importResponseText` rather than having grown a private copy, which nothing else on either platform would catch ([§ 1039](../architecture/decisions.md)).
+
+These six cases lived in `strava_sync_result_test.dart` / `.test.ts` until the pair was split out on 2026-09-03; both of those files now hold **16 Dart / 17 web**, which is what their registry rows had claimed all along.
 
 ### `packages/core_models/test/metadata_keys_test.dart` — 4 tests (1 added)
 

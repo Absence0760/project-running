@@ -1,4 +1,5 @@
-import 'package:core_models/core_models.dart' show ActivityType;
+import 'package:core_models/core_models.dart'
+    show ActivityType, DistanceUnit, kMetresPerMile;
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/preferences.dart';
 

@@ -2,7 +2,6 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../lib/screens/period_summary_screen.dart';
-import '../lib/preferences.dart';
 
 Run _makeRun({
   required DateTime startedAt,

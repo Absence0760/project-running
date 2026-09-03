@@ -96,17 +96,35 @@ export async function importStravaZip(
 	// insensitively and by alias. If we can't find the essentials, bail.
 	const header = rows[0];
 	const idx = indexHeader(header);
-	// The activity-type column is as required as the other two. `indexHeader`
-	// answers -1 for a header it cannot find and `row[-1]` is `undefined`, so
-	// without this every row would classify as an untyped one and `importOne`
-	// would default it to `run`: a migrant's whole history — rides, swims,
-	// yoga — imported as runs, counted as imported, with nothing said.
+	// Every column here is required for one reason: `indexHeader` answers -1 for
+	// a header it cannot find, `row[-1]` is `undefined`, and each read of it in
+	// `importOne` then FABRICATES a value for every row in the archive rather
+	// than failing. A missing `Activity Type` defaults each row to `run`, so a
+	// migrant's rides, swims and yoga import as runs (decisions § 979). A
+	// missing `Activity Date` leaves `parseStravaCsvDateToIso` with nothing and
+	// the `?? new Date()` fallback stamps every row with the moment of the
+	// import — five years of history collapsed onto today. A missing
+	// `Moving Time` gives every run a zero duration, and a header naming no
+	// distance column at all gives every run zero distance; both poison pace,
+	// PRs and training load while the summary still reads "imported".
+	//
 	// Refusing at the header is the only place the difference between "this
-	// export names no type" and "this row's cell is blank" is still visible.
-	if (idx.id < 0 || idx.filename < 0 || idx.type < 0) {
-		throw new Error(
-			'activities.csv is missing required columns (Activity ID / Filename / Activity Type).',
-		);
+	// export names no such column" and "this row's cell is blank" is still
+	// visible. The blank CELL stays lenient, one row at a time — except for the
+	// date, which `importOne` refuses per row for the same reason the header
+	// check exists.
+	const missing = [
+		idx.id < 0 && 'Activity ID',
+		idx.filename < 0 && 'Filename',
+		idx.type < 0 && 'Activity Type',
+		idx.date < 0 && 'Activity Date',
+		idx.movingTime < 0 && 'Moving Time',
+		// Either distance block satisfies it — an export era carrying only the
+		// display-unit column is still importable, at the athlete's own unit.
+		idx.distance < 0 && idx.distanceMetres < 0 && 'Distance',
+	].filter((c): c is string => typeof c === 'string');
+	if (missing.length > 0) {
+		throw new Error(`activities.csv is missing required columns (${missing.join(' / ')}).`);
 	}
 
 	// Page the dedupe read: an unbounded PostgREST SELECT caps at 1000 rows, so
@@ -191,7 +209,17 @@ async function importOne(
 	stravaId: string,
 	filename: string,
 ): Promise<{ droppedPhotos: number }> {
-	const startedAt = row[idx.date];
+	// A run whose start we cannot read is not importable as "today". The header
+	// check proved the COLUMN exists, so this is one row's unreadable cell, and
+	// the caller's per-row catch reports it in the ImportFailureReport under the
+	// activity's own name. The `?? new Date().toISOString()` this replaced filed
+	// a 2019 run under this morning and corrupted every window that reads
+	// `started_at` — streaks, PR brackets, the calendar, training load — with
+	// nothing anywhere reporting a failure.
+	const startedAt = parseStravaCsvDateToIso(row[idx.date]);
+	if (startedAt === null) {
+		throw new Error(`Could not parse the Activity Date "${row[idx.date] ?? ''}".`);
+	}
 	const distanceM = stravaDistanceMetres(row, idx);
 	const durationS = parseCsvNumber(row[idx.movingTime]);
 	const elevationM = idx.elevation >= 0 ? parseCsvNumber(row[idx.elevation]) : 0;
@@ -258,7 +286,7 @@ async function importOne(
 		metadata[METADATA_KEYS.strava_activity_type] = row[idx.stravaType];
 
 	const { id: runId } = await saveRun({
-		started_at: parseStravaCsvDateToIso(startedAt) ?? new Date().toISOString(),
+		started_at: startedAt,
 		distance_m: Math.max(0, Math.round(distanceM)),
 		duration_s: Math.max(0, Math.round(durationS)),
 		elevation_m: elevationM > 0 ? Math.round(elevationM) : null,

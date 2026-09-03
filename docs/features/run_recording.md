@@ -264,7 +264,7 @@ Every incoming `Position` goes through:
 
 ### Per-activity tuning
 
-`ActivityType` (`preferences.dart`) declares the per-activity knobs:
+`ActivityType` (`packages/core_models/lib/src/activity_type.dart`) declares the per-activity knobs:
 
 | Activity | `gpsDistanceFilter` (m) | `minMovementMetres` (m) | `maxSpeedMps` (m/s) | Split (m) |
 |---|---|---|---|---|
@@ -485,7 +485,7 @@ All in `apps/mobile_android/lib/screens/run_screen.dart` unless noted.
 | `_offRouteThresholdMetres` | 40 m | Distance from selected route that triggers off-route warning |
 | `_positionTweenDuration` (in `live_run_map.dart`) | 900 ms | Dot interpolation tween length |
 | `movingTimeOf`'s `minSpeedMps` (in `run_stats.dart`) | 0.5 m/s | Minimum speed to count toward derived moving time |
-| `ActivityType.maxSpeedMps` (per-activity, in `preferences.dart`) | run 10 / walk 5 / cycle 25 / hike 6 | Speed clamp for dropping bad GPS fixes |
+| `ActivityType.maxSpeedMps` (per-activity, in `core_models`' `activity_type.dart`) | run 10 / walk 5 / cycle 25 / hike 6 | Speed clamp for dropping bad GPS fixes |
 | `ActivityType.gpsDistanceFilter` (m) | run 3 / cycle 5 | Software track-append threshold |
 | `ActivityType.minMovementMetres` (m) | run 2 / cycle 4 | Minimum delta to count as real motion |
 

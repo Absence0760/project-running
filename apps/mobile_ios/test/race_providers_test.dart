@@ -112,7 +112,7 @@ void main() {
     final src =
         File('../backend/supabase/functions/race-results-import/index.ts')
             .readAsStringSync();
-    final probeBranch = src.indexOf('body.probe === true');
+    final probeBranch = src.indexOf('if (isProbe) {');
     expect(probeBranch, greaterThan(-1),
         reason: 'race-results-import no longer has a probe branch — reread it '
             'and re-anchor this guard');
@@ -158,5 +158,50 @@ void main() {
           'unreachable from the phone; a token the catalogue names that the '
           'function refuses is a 400 the runner reads as a failed import',
     );
+  });
+
+  test('every leg is probed on the function that would run it', () {
+    // § 1008 moved UltraSignup and left RunSignUp probing `race-listings-sync`
+    // as an explicit compromise: while `race-results-import` charged a probe to
+    // its 8/hour import bucket, a third probe per settings load would have cost
+    // a free runner the ability to import at all. The bucket split removed the
+    // reason, so no client asks the sync about a leg it does not own.
+    for (final p in raceImportProviders) {
+      expect(p.probeFunction, 'race-results-import', reason: p.provider);
+      expect(p.probeBody['probe'], isTrue, reason: p.provider);
+      expect(p.probeBody['provider'], p.provider, reason: p.provider);
+    }
+  });
+
+  test('a credential probe is charged to its own bucket, not the import allowance',
+      () {
+    // The premise the move above rests on, read off the function rather than
+    // restated: a probe reads env vars and returns, an import spends a shared
+    // per-application credential and writes rows. If the two are ever collapsed
+    // back onto one bucket the client change becomes the § 1008 defect again —
+    // and since § 1007 an exhausted bucket answers 429, which
+    // `raceProbeUnavailable` grades as "provider unavailable", so the failure
+    // would be silent and total rather than a limit the runner can see.
+    final src =
+        File('../backend/supabase/functions/race-results-import/index.ts')
+            .readAsStringSync();
+    expect(src.contains('const denied = isProbe'), isTrue,
+        reason: 'race-results-import no longer selects its bucket on the probe '
+            'flag — reread it and re-anchor this guard');
+    List<int> limitsFor(String bucket) {
+      final m = RegExp(
+        "'${RegExp.escape(bucket)}',\\s*(\\d+),\\s*(\\d+),",
+      ).firstMatch(src);
+      expect(m, isNotNull, reason: 'no checkRateLimitTiered call for $bucket');
+      return [int.parse(m!.group(1)!), int.parse(m.group(2)!)];
+    }
+
+    final probe = limitsFor('race-results-import:probe');
+    final import = limitsFor('race-results-import');
+    expect(probe[0], greaterThan(import[0]),
+        reason: 'the probe bucket is no more generous than the import one, so '
+            'opening Settings still spends imports');
+    expect(probe[1], greaterThan(import[1]),
+        reason: 'the Pro probe bucket is no more generous than the import one');
   });
 }

@@ -4,6 +4,7 @@
 // miles runner who set 8:00 got a 8:00/km target (a 4:58/mi pace the off-pace
 // cue then held them to) and a row that immediately read 12:52 /mi.
 
+import 'package:core_models/core_models.dart' show DistanceUnit;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { parseImportCompleteness } from '$lib/integrations/strava_sync_result';
+	import { parseImportCompleteness } from '$lib/integrations/import_completeness';
 	import { activeFormatLocale } from '$lib/format/time';
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';

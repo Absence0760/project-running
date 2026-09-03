@@ -1,3 +1,5 @@
+import 'package:core_models/core_models.dart' show DistanceUnit, kMetresPerMile;
+
 import 'preferences.dart';
 
 /// Pure challenge-goal entry helpers, shared with the web twin
