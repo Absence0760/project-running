@@ -54,6 +54,17 @@ class RoutineDetailScreen extends StatefulWidget {
   State<RoutineDetailScreen> createState() => _RoutineDetailScreenState();
 }
 
+/// A typed decimal that is actually a number, or null.
+///
+/// `double.tryParse` answers NaN for "NaN" and Infinity for "1e400" — both
+/// non-null, so an emptiness or null check does not see them. Mirrors the
+/// `_numericOrNull` guard `gym_routine.dart` already applies on the way in.
+double? _finiteOrNull(String raw) {
+  if (raw.isEmpty) return null;
+  final v = double.tryParse(raw);
+  return (v != null && v.isFinite) ? v : null;
+}
+
 class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   static const int _recentSessionLimit = 5;
 
@@ -279,7 +290,11 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
           reps: s.reps.isEmpty ? null : int.tryParse(s.reps),
           // prefillFromRoutine carries canonical kg in weightKg.
           weightKg: s.weightKg?.toDouble(),
-          rpe: s.rpe.isEmpty ? null : double.tryParse(s.rpe),
+          // A non-finite RPE is not a rating. `double.tryParse` returns NaN
+          // for the literal "NaN" and Infinity for "1e400", both non-null, so
+          // the emptiness check above does not see them — and the prefill this
+          // reads back renders whatever the routine carried.
+          rpe: _finiteOrNull(s.rpe),
           setType: 'working',
           durationS: null,
           exerciseId: null,

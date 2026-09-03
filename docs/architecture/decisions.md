@@ -16450,3 +16450,58 @@ heart rate nobody recorded.
 
 An explicit `null` in the bag is preserved and distinguished from a dropped
 non-finite, because a caller writing `null` is saying something.
+
+## 1011. The settings-bag class the filing named has no population; the class beside it had a live defect
+
+The filing said every mobile deploy gate reading a value out of the settings
+bag inherits `cycle_plan`'s shape — web's `parseInt` yielding NaN where Dart's
+`int.parse` throws — and asked for a source-level guard, filed rather than
+written because "the guard needs an allowlist for the many legitimate in-repo
+parses and that list is the real work".
+
+Surveyed, 2026-09-02. **The strict settings-bag class has exactly two call
+sites in the whole tree, and both are already handled**: the DOB read in
+`settings_preferences_screen.dart` (non-throwing, null-checked) and
+`cycle_plan.dart` itself (regex-gated since § 931). Nothing else parses a jsonb
+bag key at all — `settings_service.dart`, the typed bag accessor, contains no
+parse call. There is no population, so there is nothing to sweep and no
+allowlist to write; that half of the filing is closed as measured-empty.
+
+The class NEXT to it is real and is the one that keeps producing defects. The
+non-throwing family has the mirror-image exposure the filing itself names:
+`double.tryParse('NaN')` returns NaN and `double.tryParse('1e400')` returns
+Infinity, both NON-NULL, so the `?? 0` and `!= null` guards these calls already
+carry cannot see them. `int.tryParse` answers null to both (measured), so the
+exposure is confined to `double.tryParse` and `num.tryParse` — **26 call sites
+across the mobile tree and the packages, of which 23 already conform**. The
+allowlist the filing feared is empty: no site legitimately wants an unchecked
+double.
+
+`finite_parse_guard_test.dart` now enforces it, in the shape
+`calendar_day_arithmetic_guard_test.dart` established — a local
+`// unchecked-parse:` opt-out rather than a file allowlist, plus a
+self-test that the matcher still fires (§ 510). Two things it had to learn: a
+parse guarded by CALLING a named predicate is guarded, so the scan resolves
+one level of helper (`isUsableLatitude`, the GPX importer's `_isUsableLat`),
+including the expression-bodied declarations those predicates actually are;
+and the unit of search is the enclosing FUNCTION body, not the innermost brace
+block (which would miss a sibling guard outside an `if`) and not the class body
+(which would let one method's `isFinite` vouch for another's).
+
+The three sites it named were real, and one is a live defect on a shipped path.
+`geocoding.dart` builds a `PlaceResult` from a geocoder's answer with no
+finiteness and no range test. Nominatim serialises coordinates as STRINGS, so
+`"lat":"NaN"` survives the null check intact — and that provider is not an edge
+case, it is the fallback every build without a MapTiler key uses. The MapTiler
+branch reads `as num` and looked safe; it is not, because `jsonDecode('1e400')`
+is `Infinity` (measured), so both branches needed the guard. Downstream,
+`LatLng` carries no assertion of its own and the map camera silently stops
+rendering, while the nearby-area path reaches `jsonEncode`, which refuses the
+value, and the runner is told the save failed. Both branches now apply
+`isUsableLatitude` / `isUsableLongitude`, the same finite-AND-in-range contract
+the GPX importer already applies to a coordinate out of a file — a latitude is
+±90 by definition, so out-of-range is a malformed answer rather than a place,
+and the bound is inclusive because the poles and the antimeridian are places.
+
+The third site, `routine_detail_screen.dart`'s RPE prefill, is reachable only
+from a corrupted local routine file and is closed the same way.
