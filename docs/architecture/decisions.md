@@ -17616,3 +17616,206 @@ route" while the picker took five formats, so it now names no list at all.
 The fixture is a KMZ **built in the test** rather than a committed binary, so
 the test says what is inside the archive it is asserting about.
 
+
+## 1039. `parseImportCompleteness` got the registered pair it was filed for, and the module that owns the general rule is not the one named after a provider
+
+§ 1014 put the scraper-importer completeness parser beside
+`parseStravaSyncResult` because a new module would have been a parity pair, and
+a pair named by neither registry is a pair whose divergence nothing detects
+(§ 641). The registries live in the root `CLAUDE.md` and the syncer agent, which
+that change could not touch. This one could, so the split is done: web
+`integrations/import_completeness.ts` ↔
+`packages/core_models/lib/src/import_completeness.dart`, with rows in both
+registries and a mirror suite on each side.
+
+The Dart half is in the shared `core_models` package rather than under
+`apps/mobile_android/lib/` because `api_client` consumes it — the third pair
+after `profile_query` and `strava_sync_result` in that position, so it owes no
+iOS-twin mirror.
+
+**The direction of the dependency is the decision.** Both parsers grade counts
+by one rule ("a count is a non-negative integer or it is 0") and both read a
+trimmed-or-null `error`, and nothing in this repo compares two modules on the
+SAME platform — the parity guard compares web against Dart. So a copy in each
+would drift in silence. The primitives therefore live in
+`import_completeness` as `importResponseCount` / `importResponseText` and
+`strava_sync_result` imports them, on all four rails. The reverse would have
+left parkrun and race-results grading depending on a module named after Strava,
+which is the naming defect the split exists to remove, one level down. Each
+suite carries a source guard: the sync module must still import the two names
+and must not have grown a private `count` / `text` of its own.
+
+One correction to the registries while they were open. Both claimed the
+`strava_sync_result` pair ran "17 web / 16 Dart"; measured, it was 23 and 22 —
+the counts predated § 1014 adding six completeness cases to each suite and were
+never updated. After the split the files hold exactly 17 and 16, so the claim is
+now true rather than merely restored, and the new pair is 7 each (six mirrored
+cases plus the per-platform source guard).
+
+## 1040. `DistanceUnit` followed `ActivityType` into a leaf, and the member that could not travel with it came home
+
+§ 1013 moved `ActivityType` out of `preferences.dart` because a pure parser had
+to import `package:flutter/material.dart` to reach a CHECK-constrained
+vocabulary. `DistanceUnit` was the same kind of thing — the rail for
+`user_profiles.preferred_unit`, registered in `check_constraint_unions.mjs`
+against that exact file — and it was also the REASON § 1013 had to leave
+`splitIntervalMetresFor` behind as an extension: the method takes a unit, and a
+leaf importing `preferences.dart` to reach one would have inverted the
+dependency the move existed to remove.
+
+Both are now `packages/core_models/lib/src/distance_unit.dart`, and
+`splitIntervalMetresFor` is a member of the enum again. `kMetresPerMile`
+travelled with the enum rather than staying behind: it is what `DistanceUnit.mi`
+MEANS, and a leaf that can name the unit but not convert it is half a
+vocabulary.
+
+The cost was 34 files under `apps/mobile_android` (mirrored to the iOS twin),
+and the shape of that cost is worth recording because Dart imports are **not
+transitive**: every one of the 50 files that reached `DistanceUnit` or
+`kMetresPerMile` through `import 'preferences.dart'` had to name `core_models`
+itself. 21 already imported the barrel (20 unprefixed, 1 with `hide Route`) and
+needed nothing; 6 extended an existing `show`; 7 sat behind `as cm` and took a
+second `show` line beside the prefixed import; 16 had no core_models import at
+all. The `show` form was used rather than a plain import throughout, because
+adding an unqualified barrel import to a file that also imports
+`package:flutter/material.dart` reintroduces the § 1014 collision on `Route`.
+Twelve files were then left carrying an import that had become unused, or a
+`show` naming a member `preferences.dart` no longer exports — both WARNINGS, and
+`dart analyze` exits 2 on a warning, so the sweep is not optional.
+
+`check_constraint_unions.mjs`'s rail moved with the declaration, and
+`user_profiles.preferred_unit → DistanceUnit: km, mi` still resolves. A local
+half was added beside it in `core_models`' own suite: the enum is read against
+`user_profiles_preferred_unit_check` in the migration that declares it, so a
+Dart-only change fails in the package that owns the vocabulary rather than only
+in a web script it never runs.
+
+## 1041. A credential probe stopped being charged to the import allowance, and RunSignUp's probe moved onto the leg it asks about
+
+`race-listings-sync` gives probes their own 60/hour bucket (§ 977) because a
+probe reads two env vars and returns while a sync spends a shared credential.
+`race-results-import` had no such split: `checkRateLimitTiered(…,
+'race-results-import', 8, 32, 3600)` covered probes and real imports alike. The
+settings screen probes once per credential-gated leg it offers, so § 1008's
+move of UltraSignup took it from one of that bucket per load to two, and a
+runner who opened Settings a few times in an hour had spent an import
+allowance on nothing.
+
+The filing's warning is verified rather than repeated: `raceProbeUnavailable`
+grades a 429 as unavailable (§ 1007), and `checkRateLimitTiered` answers 429 on
+denial, so an exhausted bucket presents as "provider unavailable" for a provider
+that is configured and working. The failure is silent and total — not a limit
+the runner can see and wait out.
+
+So the same split, with the same numbers, and RunSignUp's probe moves behind it:
+every entry in mobile's `raceImportProviders` now names `race-results-import`
+with `{ provider, probe: true }`, which § 1008 called the durable close and
+deferred only because a third probe on the import bucket would have been worse
+than the wrong function. No mobile client asks `race-listings-sync` a question
+about a leg it does not own.
+
+**Web's `isRunSignUpConfigured` was NOT moved, and that is a scope boundary
+rather than a judgement.** It lives in `apps/web/src/lib/core/data.ts`, which
+this change does not own. The interim state is not a user-visible divergence:
+both functions gate RunSignUp on `RUNSIGNUP_API_KEY` + `RUNSIGNUP_API_SECRET`,
+so the two probes answer identically today; what differs is which bucket is
+charged and which leg the tile's claim is about. It is filed.
+
+Two guards, one per side, both deriving their premise rather than restating the
+fix. The Deno suite reads the function's own bucket selection and PARSES the two
+limits, failing if the probe bucket is ever no more generous than the import
+one — so collapsing them back fails rather than silently re-creating § 1008's
+problem. The Flutter suite reads the same source and additionally requires every
+catalogue entry to name the results leg in probe mode. Both were mutation-tested
+by tightening the probe bucket to the import one's numbers.
+
+## 1042. The `row[-1]` chain was closed for one column and live for three others, and the entry filed about it was stale
+
+Followups line 1146 said the `classifyStravaRow` / `indexHeader` entry above it
+"stands untouched and unticked". It does not: § 979 closed it on 2026-09-02 —
+`idx.type < 0` is refused at the header and `type` falls back to `Sport Type`.
+The filing was right about ownership (the chain is web-only; mobile's CSV
+importer resolves to a nullable index with an explicit missing-required-columns
+failure) and wrong about state.
+
+What was still live is the same chain on three more columns, and § 979's own
+reasoning applies to each unchanged. `indexHeader` answers -1 for a header it
+cannot find, `row[-1]` is `undefined`, and every read of it in `importOne`
+FABRICATES a value rather than failing:
+
+- `Activity Date` — `parseStravaCsvDateToIso(undefined)` is null and the
+  `?? new Date().toISOString()` fallback stamped **every row** with the moment
+  of the import. A five-year migration lands entirely on today, corrupting every
+  window that reads `started_at`: streaks, PR brackets, the calendar, training
+  load.
+- `Moving Time` — `parseCsvNumber(undefined)` is 0, so every run has a zero
+  duration.
+- `Distance` — with neither the display-unit nor the raw-metric column resolved,
+  `stravaDistanceMetres` returns 0 for every row.
+
+None of the three failed anywhere, and the summary still read "imported".
+Refusing at the header is the only place the difference between "this export
+names no such column" and "this row's cell is blank" is still visible, so the
+required-column check now covers all six, and the message names whichever are
+missing rather than a fixed list. The distance requirement is satisfied by
+EITHER block — an era carrying only the display-unit column is importable at the
+athlete's own unit, and refusing it would reject a legitimate export.
+
+The date gets a second refusal the other two do not, at the ROW: a run whose
+start cannot be read is not importable as "today", so `importOne` throws and the
+existing per-row catch reports it in the `ImportFailureReport` under the
+activity's own name. The message is phrased to classify as `unparseable`, which
+is what an unreadable cell in a file is. The blank CELL stays lenient for type,
+distance and duration, per § 979 — a zero distance is visible to its owner where
+a wrong DATE is not.
+
+Two constraints shaped the diff rather than the fix. `strava_zip_strictness
+.test.ts` — another lane's file this round — reads the guard region for the
+literal `idx.type < 0` and the string `Activity Type`, so the decision stays
+inline in `strava-zip.ts` as a list of `idx.<field> < 0 && '<Label>'` terms
+rather than moving to the pure `strava-zip-header.ts` where it could have been
+executed. And every source-scanning guard in the web tree must blank comments
+through `core/strip_comments.ts` (§ 971 + § 1000) rather than a `.replace` chain
+of its own; the new suite's first draft hand-rolled one and
+`security_guards.test.ts` refused it, which is the register working as intended.
+
+## 1043. The `core_models` barrel collision guard was measured and refused, and the note it needed was written instead
+
+§ 1014 recorded the hazard: a name added to the `core_models` barrel can collide
+in a consumer, as `ActivityType` did with `geolocator_apple`'s, and the filing
+asked whether a guard resolving the barrel's exports against every direct
+dependency's exports was worth writing.
+
+Measured, on 2026-09-03: **no**, in both directions.
+
+It is already caught, by a better instrument. The collision is an
+`ambiguous_import` ERROR at the use site — reproduced by removing
+`run_recorder`'s `hide ActivityType`, which makes `dart analyze` in that package
+report it twice and exit 3 — and CI's `Test Flutter packages` job runs
+`melos exec -- dart analyze` across `apps/mobile_ios`, `apps/mobile_android` and
+`packages/**`. § 1014's premise that "`dart analyze` on either package reports
+nothing" was measured in the wrong place: the analyzer diagnoses only the files
+it is pointed at, so analysing `core_models` (which grew the name) or
+`mobile_android` (which does not contain `run_recorder`'s sources) reports
+nothing, while analysing the package that actually collides reports it plainly.
+
+And the guard as specified would be wrong twice over. Over the 115 public
+type-level names the barrel exports and the 48 direct dependencies of the six
+packages that import it, exactly ONE collision exists: `Route`, against
+`package:flutter` — harmless, already handled with `hide Route` in two files,
+and a finding nobody should act on. Meanwhile `ActivityType` does **not** appear
+in that set at all, because `geolocator_apple` is a TRANSITIVE dependency
+re-exported by `geolocator`: the guard would have missed the one case that
+motivated it. Reproducing what the analyzer does — the real import graph,
+transitive re-exports, per-file `hide` / `show` / `as` — is the only way to fix
+that, and the analyzer already does it on every PR.
+
+What was genuinely missing was a note saying WHERE a collision surfaces, since
+the author of the barrel line is the one person who will not see it. That is now
+in the barrel's own doc comment, with the instruction to analyse the consumers.
+Two properties that nothing else fails on got guards in the same suite: every
+library under `src/` is exported from the barrel (a forgotten line is invisible
+until a consumer imports the name, and reads as "that name does not exist"), and
+the package still has no Flutter dependency — the property BOTH leaf moves rest
+on, which a `dart pub add` would compile straight through while leaving § 1013's
+and § 1040's reasoning standing in the doc comments. Both were mutation-tested.
