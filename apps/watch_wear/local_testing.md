@@ -66,7 +66,7 @@ Point a **release** build at staging / prod (release ignores `.env.local`):
 ### Standalone run recording
 
 1. Tap **Start** on the watch.
-2. The app requests `ACCESS_FINE_LOCATION` + `BODY_SENSORS` on first launch — grant both.
+2. The app requests `ACCESS_FINE_LOCATION`, `BODY_SENSORS`, `ACTIVITY_RECOGNITION` and (API 33+) `POST_NOTIFICATIONS` on the first GO tap. Only the location one blocks the run; decline any of the others and the pre-run notice names what you gave up before it lets you start (`decisions.md § 1018`). Decline location and the same notice says so instead of the tap doing nothing.
 3. GPS recording begins using the emulator's simulated location.
 4. Tap **Stop** to end the workout.
 5. The app saves the run to its local DataStore queue and immediately tries to push to Supabase. Check the **Runs** screen in the web app (`:7777/runs`) or the Android phone app to confirm it landed.
@@ -172,7 +172,7 @@ Check `adb devices` — the emulator should appear as `online`. If it's `offline
 
 ### App crashes on first launch with `SecurityException: BODY_SENSORS`
 
-You granted `ACCESS_FINE_LOCATION` but not `BODY_SENSORS`. The permission launcher in `RunWatchApp.kt` only `start()`s the run after *all* requested permissions are granted; if `start` never fires, re-tap Start and approve both.
+**Fixed — if you see this on a current build, it is a new defect.** The old explanation here was wrong: the permission launcher gates the countdown on `ACCESS_FINE_LOCATION` alone, never on all of them, so granting location and declining body sensors did start a run — whose `registerMeasureCallback` then threw out of an unhandled `launch` and killed the process. Heart rate now fails closed and the run records without it (`decisions.md § 1017`), and the pre-run notice tells you that is what happened.
 
 ### APK install fails with `INSTALL_FAILED_OLDER_SDK`
 

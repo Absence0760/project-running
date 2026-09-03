@@ -114,12 +114,12 @@ Same shape as the phone app: `dev` and `production`. The dev flavour reads from 
 `apps/watch_wear/android/app/src/main/AndroidManifest.xml`:
 
 - `<uses-feature android:name="android.hardware.type.watch" />` — REQUIRED, makes the app eligible for Wear listing
-- `android.permission.ACCESS_FINE_LOCATION` + `BACKGROUND_LOCATION`
+- `android.permission.ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` — the coarse one is granted alongside the fine one and is never requested separately. `ACCESS_BACKGROUND_LOCATION` is **not** declared and never has been; this list used to claim it (`decisions.md § 1020`). Do not disclose it.
 - `android.permission.ACTIVITY_RECOGNITION`
-- `android.permission.BODY_SENSORS` — Health Services HR
-- `android.permission.BODY_SENSORS_BACKGROUND` — keeps HR samples flowing once the display goes ambient (Wear OS 3.5+ / API 34+); declare it in the Data Safety form too
+- `android.permission.BODY_SENSORS` — Health Services HR via `MeasureClient`
+- `android.permission.BODY_SENSORS_BACKGROUND` — **removed, do not re-add without changing the client.** It gates `PassiveMonitoringClient`; `HeartRateMonitor` uses `MeasureClient`, whose documented background access is no. It was declared and never requested, so it was inert as well as inapplicable (`decisions.md § 1015`). `ManifestGuardsTest` fails if it comes back.
 - `android.permission.FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION`
-- `android.permission.FOREGROUND_SERVICE_HEALTH` — `RunRecordingService` reads HR via Health Services while recording (`foregroundServiceType="location|health"`); required on targetSdk 34+ or the service start throws `SecurityException`
+- `android.permission.FOREGROUND_SERVICE_HEALTH` — `RunRecordingService` reads HR via Health Services while recording. Both the manifest (`foregroundServiceType="location|health"`) and the runtime `startForeground` mask must carry `health`, and it is the runtime mask the platform enforces from API 34 (`decisions.md § 1016`); the type is passed only once `BODY_SENSORS` or `ACTIVITY_RECOGNITION` has been granted, which is the platform's prerequisite for it.
 - `android.permission.POST_NOTIFICATIONS`
 - `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` — for the long-run battery whitelist UX
 - `android.permission.WAKE_LOCK` — partial wake-lock during recording

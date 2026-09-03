@@ -16271,3 +16271,247 @@ widget taps and no `pumpUntil` at all; identifying which of those actually
 outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
+
+## 1015. `BODY_SENSORS_BACKGROUND` was declared for a capability the permission does not grant, on a client it does not apply to
+
+`AndroidManifest.xml` declared `android.permission.BODY_SENSORS_BACKGROUND`
+under a comment stating that "BODY_SENSORS alone is not enough on Wear OS 3.5+
+(API 34+): the platform stops delivering HR samples once the display goes
+ambient unless BODY_SENSORS_BACKGROUND is also granted", and that the Play Data
+Safety form listed it. `ManifestGuardsTest` pinned the declaration in place with
+the same rationale, and `ManifestPermissionCoverageTest` carried it as a
+registered exemption from the request obligation.
+
+Two measurements, and the second is the one that decides it.
+
+**It was never requested, so no watch has ever granted it.** The only runtime
+request the app makes is `permissionLauncher.launch(...)` in `RunWatchApp.kt`,
+whose array is `ACCESS_FINE_LOCATION`, `BODY_SENSORS`, `ACTIVITY_RECOGNITION`
+and — since [§ 881](decisions.md) — `POST_NOTIFICATIONS`. `grep -rn
+'BODY_SENSORS_BACKGROUND' apps/watch_wear/**/*.kt` returns nothing. A declared
+runtime permission that is never asked for is inert.
+
+**And granting it would not have delivered the capability the comment
+described.** Google's Health Services permission table gives background access
+per client: `PassiveMonitoringClient` yes, with `BODY_SENSORS_BACKGROUND` (API
+33-35) or `READ_HEALTH_DATA_IN_BACKGROUND` (36+); `ExerciseClient` yes, with no
+background permission at all; **`MeasureClient` no — foreground only**, and the
+API is documented as "not intended for background capture or workout tracking".
+`HeartRateMonitor` uses `MeasureClient`. So the permission the manifest carried
+is one this app's heart-rate path is not gated on, and the ambient-HR behaviour
+it promised is not something any permission grant changes.
+
+The filed followup proposed the two-step request flow a background permission
+needs (Android requires the second request only after the foreground half is
+granted; bundling them gets the background one denied). That work would have
+been correct in mechanism and pointless in effect. The declaration is removed
+instead: it bought no capability and cost a sensor permission on the install
+prompt and a line on the Play Data Safety form the binary could not justify.
+`ManifestGuardsTest` now asserts the permission is **absent**, carrying the
+measurement, so re-adding it fails until someone changes the client too.
+
+What the app actually loses when the display dims is unchanged by any of this
+and is a code change, not a permission: continuous workout heart rate on Wear
+OS is `ExerciseClient`'s job, and migrating to it is filed. The related and
+separately real defect — that the recording service never started as a `health`
+foreground service at all — is [§ 1016](decisions.md).
+
+## 1016. The recording service declared two foreground-service types and started with one
+
+`AndroidManifest.xml` declares
+`<service android:name=".recording.RunRecordingService"
+android:foregroundServiceType="location|health" />` plus both
+`FOREGROUND_SERVICE_LOCATION` and `FOREGROUND_SERVICE_HEALTH`, with a comment
+saying the health half is required "otherwise Android 14+ throws
+SecurityException when the service starts". `startForegroundCompat` passed
+`ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION` and nothing else.
+
+The comment therefore described an exception that could not fire: the platform
+raises it when a type is **passed** without its permission, and this code never
+passed the health type. The manifest half of the 2026-05-30 store-privacy audit
+finding (archived in `followups_archive.md` as "Wear OS recording-service
+foreground type may need `health`") had landed; the code half never did, and
+nothing could see the gap because `ManifestPermissionCoverageTest`'s existing
+FGS guard compares the manifest's `foregroundServiceType` against the manifest's
+own permission list — both inputs in the same file, neither of them the running
+code.
+
+This is not cosmetic. From API 34 the mask passed to `startForeground` is what
+the platform reads when deciding whether a service may go on using a
+while-in-use permission while the app itself is not visible, and body sensors is
+one of those — the same documentation that scopes `BODY_SENSORS_BACKGROUND`
+(§ 1015) states it against the `health` foreground service type. A service that
+reads heart rate for the length of a run and declares itself location-only is
+the likelier explanation for HR thinning out once the runner swipes back to the
+watch face than the permission § 1015 removes.
+
+`startForegroundCompat` now computes the mask. `location` is unconditional — it
+is what the run itself cannot proceed without. `health` is added on API 34+ and
+only when the platform's own documented prerequisite for that type holds: at
+least one of `BODY_SENSORS` / `ACTIVITY_RECOGNITION` granted, checked with
+`checkSelfPermission`, because a runner may decline both and is still entitled
+to a GPS run, and passing the type without the prerequisite is refused rather
+than ignored. The call is additionally wrapped: a refusal retries with
+location alone rather than taking the recording down with it.
+
+`foregroundServiceTypeMask(sdkInt, healthPrerequisiteGranted)` is pure and
+host-tested. Beside it, a source guard derives the obligation from the manifest
+rather than listing it: every token in `foregroundServiceType` must appear in
+`RunRecordingService.kt` as `FOREGROUND_SERVICE_TYPE_<TOKEN>`, so a third type
+added tomorrow is covered without anyone remembering to extend the test.
+Removing the health bit from the mask fails both.
+
+Not bench-verified: no watch was available, and the archived followup's caution
+was that an unvalidated FGS-type edit can crash `startForeground`. The
+prerequisite gate and the fallback are what answer that caution; the residual —
+that HR now genuinely survives the ambient transition — needs a real watch and a
+run long enough to dim.
+
+## 1017. A sensor the runner declined took the whole recording with it
+
+`RunRecordingService` collects three device streams inside
+`scope.launch { ... }` on a `CoroutineScope(SupervisorJob() + Dispatchers.Default)`.
+A `SupervisorJob` stops a failing child from cancelling its siblings. It does
+**not** stop an unhandled exception in a `launch` from reaching the thread's
+uncaught handler, which on Android is the process. So a throw from any of the
+three ended the run — GPS trace, elapsed clock, checkpoint and all — from
+inside an auxiliary layer, the exact inversion `conventions.md § Layered
+resilience` forbids.
+
+It was reachable with no device fault at all, and was already written down as a
+known symptom. `permissionLauncher` gates the countdown on
+`ACCESS_FINE_LOCATION` alone, so a runner who grants location and declines
+`BODY_SENSORS` starts a run whose `registerMeasureCallback` raises
+`SecurityException` immediately. `apps/watch_wear/local_testing.md` documented
+the resulting crash as "App crashes on first launch with `SecurityException:
+BODY_SENSORS`" and explained it with a gate that does not exist — "the
+permission launcher only `start()`s the run after *all* requested permissions
+are granted". It does not; it reads one key.
+
+The asynchronous half was worse than a crash. `MeasureCallback` gives
+`onRegistrationFailed` an empty default body, and `HeartRateMonitor` did not
+override it — so every failure Health Services reports through that callback
+(sensor unsupported, service unavailable, permission refused after the fact)
+produced no samples, no error and a null `avg_bpm`, with nothing anywhere
+saying why.
+
+Three changes, one rule: acquiring a sensor is an auxiliary layer and its
+failure costs that sensor only.
+
+- `HeartRateMonitor` overrides `onRegistrationFailed` and closes the flow, and
+  wraps `registerMeasureCallback` in a `try` whose `catch` closes it too. The
+  unregister in `awaitClose` is `runCatching`-guarded for the same reason.
+- All three collectors — heart rate, location, steps — carry a `.catch`. The
+  location one additionally publishes `locationAvailable = false`, so the
+  runner reads "GPS lost" and the existing self-heal loop re-subscribes within
+  `GPS_RETRY_INTERVAL_MS` instead of the process dying.
+
+`SensorStreamResilienceTest` derives the collector obligation from the source —
+every `<x>.stream()` in the service must be followed by `.catch`, so a fourth
+sensor is covered without anyone extending the test — and pins both halves of
+the heart-rate guard. `NetworkWatcher` had this shape already, with a comment
+saying exactly why; the module knew the pattern and had applied it to the
+permission whose absence would crash on launch but not to the one whose absence
+crashed at the start of a run.
+
+## 1018. A denied permission dialog said nothing, on a device with nowhere to ask
+
+`RunWatchApp`'s permission callback was two lines: set `showCountdown` when
+`ACCESS_FINE_LOCATION` came back granted, and nothing at all otherwise. A
+runner who tapped GO and declined — or who had declined twice before, after
+which Android stops prompting and the callback returns instantly — landed back
+on an unchanged pre-run screen. No countdown, no message, no state change. On a
+watch with no keyboard there is nowhere to ask what happened, which makes a
+control that does nothing the worst affordance available.
+
+The gate was correct and stays: without location a run records the clock and
+nothing else, so it must not start. What was missing was the report, and the
+report is worth more than the location line alone, because the same callback
+silently absorbed three other denials whose cost the runner never learns:
+`BODY_SENSORS` (no heart rate), `ACTIVITY_RECOGNITION` (no step count) and
+`POST_NOTIFICATIONS` (no ongoing-run chip on the watch face — the loss
+[§ 881](decisions.md) exists about).
+
+`permissionOutcome(granted)` grades the result map into `canStart` plus the
+ordered list of what was actually lost, and `PermissionNotice` renders one
+sentence per entry with the routes back: ask again, the app's own permission
+screen where the watch has one (`AppSettings.canOpen` gates the chip, because
+`ACTION_APPLICATION_DETAILS_SETTINGS` is not universal on Wear OS — the same
+reason and the same shape as `BatteryOptimization.requestExemption`), and the
+written path that works everywhere. `Start anyway` appears only when location
+survived; offering it otherwise would be the dead GO button wearing a label.
+
+Two rules the tests pin because both are easy to get wrong. **An absent key is
+not a denial** — `POST_NOTIFICATIONS` is only requested from API 33, so on a
+Wear OS 3 watch it never appears in the result map, and reading absence as
+refusal would tell every such runner they had switched off something they were
+never asked about. Only an explicit `false` costs anything. And **a run that
+cannot start always stops at the notice**, including the degenerate case of a
+result map that named nothing, whereas a runnable-but-degraded set stops once
+per session: a runner who has permanently declined step counting should not
+dismiss the same card before every run.
+
+## 1019. An empty route list has two causes and the picker only knew one
+
+`refreshRoutes` had an empty failure branch and a silent early return. A fetch
+that threw set `routesLoading = false` and nothing else; a watch with no session
+yet returned before fetching at all. Either way the picker fell through to
+`route_picker_empty` — "No saved routes. Build a route on the phone or web
+first" — which is advice for a runner who has none, and is both wrong and
+unactionable for one who has fifty and a watch that could not reach them. The
+signed-out case is the common one: the wrist is signed in by a Data Layer push
+from the phone, so any watch that has not yet received one renders that
+sentence.
+
+`RunState.routesUnavailable` is set on both paths and cleared by a successful
+load, and the picker chooses between the two sentences. The new one names what
+to check rather than what to build; the pre-run screen's existing Offline and
+Not-signed-in chips carry which of the two it is. The guard reads the
+`refreshRoutes` body and requires **both** failure paths to flag, because
+fixing one of the two would have left the more common case saying the wrong
+thing.
+
+## 1020. The Wear permission-and-capability sweep, and what it found clean
+
+[§§ 1015-1019](decisions.md) came out of a sweep of one class across
+`apps/watch_wear/`: **a platform capability the app declares or requests whose
+failure path is silent.** The population and the negative results are recorded
+here so a later round starts from a measurement rather than re-deriving the
+list.
+
+**Permissions — 13 declared, all accounted for.** Seven are install-time
+(`INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, the three
+`FOREGROUND_SERVICE*`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) and have no
+denial path. `ACCESS_COARSE_LOCATION` rides the fine grant and is a registered
+exemption. Of the five that remain, `BODY_SENSORS_BACKGROUND` was unrequestable
+(§ 1015), `BODY_SENSORS`' denial crashed the app (§ 1017), and the denial of
+each of `ACCESS_FINE_LOCATION`, `ACTIVITY_RECOGNITION` and `POST_NOTIFICATIONS`
+was unreported (§ 1018). The module contained **no `checkSelfPermission` call
+anywhere** before this round; it now has one, in the mask computation of
+§ 1016.
+
+**Services — 2.** `RunRecordingService`'s runtime type did not match its
+declaration (§ 1016). `ActiveRunTileService` is bound only by the platform
+Tiles host under `BIND_TILE_PROVIDER` and has no failure path of its own; its
+`requestUpdate` is called unguarded from the recording path, which was examined
+and left alone — the updater is documented as best-effort and no failure of it
+has been observed, so guarding it would be speculative.
+
+**Capabilities — 8 examined.** Health Services `MeasureClient` and the
+`FusedLocationProviderClient` stream were the two unguarded ones (§ 1017). Five
+were already correct and are worth naming because they are the pattern: the
+`Pedometer` closes its flow cleanly on a device with no step counter,
+`NetworkWatcher` catches the `SecurityException` a stripped
+`ACCESS_NETWORK_STATE` would raise and says so in a comment, `TtsAnnouncer` and
+the `Vibrator` call are `try`-wrapped per-effect, `BatteryOptimization` returns
+a four-value `PromptResult` rather than launching an intent that may be a no-op,
+and `SessionBridge` refuses a half-formed Data Layer push instead of
+overwriting a working session with it. The eighth, the route fetch, reported
+its failure as the wrong thing rather than not at all (§ 1019).
+
+**Docs measured against the binary.** `deployment.md`'s launch checklist listed
+`BACKGROUND_LOCATION`, which the manifest has never declared, and
+`BODY_SENSORS_BACKGROUND`, which it no longer does; `local_testing.md`
+explained a real crash with a gate that does not exist (§ 1017). An app-store
+permission list is a disclosure, and one that names permissions the binary does
+not hold is wrong in the direction that costs a review.

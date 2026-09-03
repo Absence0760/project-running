@@ -388,9 +388,38 @@ in `ui/RunWatchApp.kt`. `POST_NOTIFICATIONS` was declared and never requested,
 so on API 33+ the ongoing-activity notification never reached the shade
 (`decisions.md § 881`). `ManifestPermissionCoverageTest` derives the obligation
 from the manifest: every declared permission is requested, install-time, or a
-registered exemption with its reason. `BODY_SENSORS_BACKGROUND` is the one open
-exemption — a background permission needs its own second request after the
-foreground half is granted, tracked in `docs/product/followups.md`.
+registered exemption with its reason. `ACCESS_COARSE_LOCATION` is the only
+exemption left — the platform grants it alongside the fine one.
+`BODY_SENSORS_BACKGROUND` used to be the second, and was removed rather than
+wired: it gates `PassiveMonitoringClient`, and this app reads heart rate through
+`MeasureClient`, whose background access is documented as no
+(`decisions.md § 1015`).
+
+**Declaring a foreground-service TYPE is half of it too, and the halves live in
+different files.** The manifest's `foregroundServiceType="location|health"` and
+the mask passed to `startForeground` are two separate declarations of the same
+fact; from API 34 it is the runtime mask the platform reads when deciding
+whether the service may keep using a while-in-use permission. The service
+declared both types and started with one for as long as the declaration existed
+(`decisions.md § 1016`). `foregroundServiceTypeMask` computes it now — location
+unconditionally, health on API 34+ once `BODY_SENSORS` or `ACTIVITY_RECOGNITION`
+is granted, which is the platform's own prerequisite for that type — and the
+guard derives the obligation from the manifest so a third type needs no new
+test.
+
+**A sensor that fails must cost that sensor.** All three device streams the
+recording service collects carry a `.catch`, and `HeartRateMonitor` closes its
+flow on both the synchronous throw and the `onRegistrationFailed` callback. A
+`SupervisorJob` does not stop an unhandled exception in a `launch` from reaching
+the process, so before this a declined `BODY_SENSORS` ended the whole recording
+(`decisions.md § 1017`). `SensorStreamResilienceTest` derives the rule from the
+source: every `<x>.stream()` in the service is followed by `.catch`.
+
+**A denied permission dialog reports what it cost.** `permissionOutcome` grades
+the launcher's result map into `canStart` plus the ordered list of losses, and
+`PermissionNotice` renders one sentence each plus the routes back. An absent key
+is not a denial — `POST_NOTIFICATIONS` is only requested from API 33
+(`decisions.md § 1018`).
 
 ## What's still deferred
 
