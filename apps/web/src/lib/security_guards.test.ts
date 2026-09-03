@@ -3515,10 +3515,10 @@ test('the message thread renders a route attachment through DmRouteAttachment', 
 
 test('every source-scanning guard blanks comments through the one shared stripper', () => {
 	// Reason: a guard that reads source as text has to blank comments, or the
-	// prose above a rule reads as a use of it. Nine guards each spelled their
-	// own chain of `.replace` calls to do it, and a chain cannot: `//` is a
-	// comment to the language but `/*` inside one is still an opening delimiter
-	// to a regex, so stripping block comments FIRST makes
+	// prose above a rule reads as a use of it. Thirteen spellings across twelve
+	// files each did it with their own chain of `.replace` calls, and a chain
+	// cannot: `//` is a comment to the language but `/*` inside one is still an
+	// opening delimiter to a regex, so stripping block comments FIRST makes
 	// `// exactly as /clubs/* already do` open a block that runs to the next
 	// `*/` in the file. Measured when that was found: 779 lines hidden across 3
 	// files, 485 of them in `runs/[id]/+page.svelte`, which carries a

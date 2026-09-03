@@ -16272,11 +16272,14 @@ outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
 
-## 1000. Nine copies of a comment stripper, and the one case none of them handled
+## 1000. Thirteen copies of a comment stripper, and the one case none of them handled
 
 Every source-level guard in `apps/web` reads a file as text and has to blank its
-comments first, or the prose above a rule reads as a use of it. Eleven of them
-each spelled their own chain of `.replace` calls to do it, and § 971 had already
+comments first, or the prose above a rule reads as a use of it. Counted at the
+start of this change: **thirteen spellings across twelve files**, each its own
+chain of `.replace` calls — the filing said eight because it inherited the
+ordering guard's own walker, which reached `src/lib/**/*.test.ts` only. § 971 had
+already
 found that a chain gets the ORDER wrong in a way that hides code: `//` is a
 comment to the language but `/*` inside one is still an opening delimiter to a
 regex, so stripping block comments first makes `// exactly as /clubs/* already
