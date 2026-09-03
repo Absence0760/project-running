@@ -8,6 +8,10 @@ import test from 'node:test';
 import {
   ALARMS_FILE,
   ALLOWED_STATUS_LAUNDERING,
+  FORBIDDEN_URI_TRANSFORM,
+  REQUIRED_URI_TRANSFORM,
+  WAF_FILE,
+  parseWafScopeDowns,
   DISTRIBUTION_ALARMS,
   DEPENDABOT_FILE,
   INFRA_DIR,
@@ -73,10 +77,25 @@ function distribution(over = {}) {
   };
 }
 
+/** @param {Partial<import('./check_infra_coverage.mjs').WafScopeDown>} [over] */
+function scopeDown(over = {}) {
+  return {
+    rule: 'rate-limit-coach',
+    searchString: '/api/coach',
+    field: 'uri_path',
+    positional: 'STARTS_WITH',
+    transforms: ['NONE', 'URL_DECODE'],
+    ...over,
+  };
+}
+
+const WAF = [scopeDown()];
+
 /**
  * @param {Partial<{ dirs: string[], matrix: string[], dependabot: string[],
  *                   functions: string[], alarms: import('./check_infra_coverage.mjs').Alarm[],
- *                   distribution: import('./check_infra_coverage.mjs').Distribution }>} [over]
+ *                   distribution: import('./check_infra_coverage.mjs').Distribution,
+ *                   waf: import('./check_infra_coverage.mjs').WafScopeDown[] }>} [over]
  */
 function run(over = {}) {
   return compareSources(
@@ -86,6 +105,7 @@ function run(over = {}) {
     over.functions ?? FUNCTIONS,
     over.alarms ?? ALARMS,
     over.distribution === undefined ? distribution() : over.distribution,
+    over.waf ?? WAF,
   );
 }
 
@@ -264,6 +284,7 @@ test('the committed infra/ tree is fully covered', () => {
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
     parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
+    parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8')),
   );
   assert.deepEqual(errors, []);
   assert.ok(ok.length >= 12, 'a passing run that checked almost nothing is not a pass');
@@ -580,5 +601,78 @@ test('the guard exits non-zero when the 404 mapping goes back to 200', () => {
         stdio: 'pipe',
       }),
     /maps 404 to 200/,
+  );
+});
+
+// ───────────── claim 5: WAF scope-down normalisation ─────────────
+
+test('a uri_path scope-down carrying URL_DECODE passes', () => {
+  const { errors, ok } = run();
+  assert.deepEqual(errors, []);
+  assert.ok(ok.some((l) => /WAF rate-limit-coach: uri_path/.test(l)), ok.join('\n'));
+});
+
+test('a uri_path scope-down with only NONE fails', () => {
+  const { errors } = run({ waf: [scopeDown({ transforms: ['NONE'] })] });
+  assert.ok(has(errors, /with only \[NONE\]/), errors.join('\n'));
+});
+
+test('LOWERCASE on uri_path fails on its own', () => {
+  const { errors } = run({ waf: [scopeDown({ transforms: ['NONE', 'URL_DECODE', 'LOWERCASE'] })] });
+  assert.ok(has(errors, /applies LOWERCASE to uri_path/), errors.join('\n'));
+  assert.equal(errors.length, 1, errors.join('\n'));
+});
+
+// A rate-based rule with NO scope-down counts every request on the
+// distribution, static assets included — an outage, not a backstop.
+test('a rate-based rule with no readable scope-down fails', () => {
+  const { errors } = run({ waf: [scopeDown({ searchString: null, field: null })] });
+  assert.ok(has(errors, /no readable byte_match scope-down/), errors.join('\n'));
+});
+
+test('a scope-down on some other field is out of scope, not a failure', () => {
+  const { errors, ok } = run({
+    waf: [scopeDown({ field: 'single_header', transforms: ['NONE'] })],
+  });
+  assert.deepEqual(errors, []);
+  assert.ok(has(ok, /claim 5 does not apply/), ok.join('\n'));
+});
+
+test('reading no WAF rule at all is reported, not passed', () => {
+  const { errors } = run({ waf: [] });
+  assert.ok(has(errors, /no rate-based rule with a scope-down was read/), errors.join('\n'));
+});
+
+test('the committed waf.tf decodes all three scope-downs and folds no case', () => {
+  const rules = parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8'));
+  assert.equal(rules.length, 3, JSON.stringify(rules));
+  for (const rule of rules) {
+    assert.equal(rule.field, 'uri_path');
+    assert.equal(rule.positional, 'STARTS_WITH');
+    assert.ok(rule.transforms.includes(REQUIRED_URI_TRANSFORM), rule.rule);
+    assert.ok(!rule.transforms.includes(FORBIDDEN_URI_TRANSFORM), rule.rule);
+    // The property the whole claim rests on: decoding cannot move a prefix
+    // that contains no percent escape, so URL_DECODE only ever widens.
+    assert.ok(!rule.searchString?.includes('%'), rule.rule);
+  }
+});
+
+test('the guard exits non-zero when a scope-down loses URL_DECODE', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'infra-coverage-waf-'));
+  const src = readFileSync(WAF_FILE, 'utf-8');
+  const block = /\n\s*# See "Encoded spellings" in the file header\.\n\s*text_transformation \{\n\s*priority = 1\n\s*type\s*=\s*"URL_DECODE"\n\s*\}\n/;
+  assert.match(src, block, 'the URL_DECODE transformation moved; re-anchor this test');
+  const cut = src.replace(block, '\n');
+  assert.notEqual(cut, src, 'the mutation did not change anything');
+  const path = join(dir, 'waf.tf');
+  writeFileSync(path, cut);
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, ['scripts/check_infra_coverage.mjs'], {
+        env: { ...process.env, INFRA_COVERAGE_WAF: path },
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }),
+    /with only \[NONE\]/,
   );
 });

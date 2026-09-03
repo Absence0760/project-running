@@ -58,7 +58,17 @@
 //      other status-laundering mapping fails, and a declared exemption nothing
 //      uses fails too — the RESOURCELESS_ACTIONS shape, one file over.
 //
-// Offline by design: a directory listing and three files. No AWS credentials,
+//   5. WAF scope-down normalisation. The three rate-based rules are the only
+//      thing bounding spend on the only three paths that cost money or engine
+//      CPU to serve, and each is scoped down by a STARTS_WITH match on
+//      `uri_path` — a field WAF does not decode, while CloudFront's behaviour
+//      matching normalises independently. A scope-down with no URL_DECODE
+//      transformation lets an encoded spelling reach the Lambda with the
+//      per-IP cap unapplied, and looks identical in the console to one that
+//      does not (decisions § 1023). A fourth rule copy-pasted from the first
+//      three inherits the gap silently, which is what this claim is for.
+//
+// Offline by design: a directory listing and four files. No AWS credentials,
 // no `terraform init`.
 //
 // Run: `node scripts/check_infra_coverage.mjs`
@@ -87,6 +97,14 @@ export const MODULE_FILE =
 export const ALARMS_FILE =
   process.env.INFRA_COVERAGE_ALARMS ??
   join(REPO_ROOT, 'infra/modules/web-stack/alarms.tf');
+export const WAF_FILE =
+  process.env.INFRA_COVERAGE_WAF ??
+  join(REPO_ROOT, 'infra/modules/web-stack/waf.tf');
+
+/// The transformation every `uri_path` scope-down must carry, and the one it
+/// must not. See claim 5 in the header.
+export const REQUIRED_URI_TRANSFORM = 'URL_DECODE';
+export const FORBIDDEN_URI_TRANSFORM = 'LOWERCASE';
 
 /// Directories `terraform validate` cannot be run against on their own, and
 /// why. An entry that stops being needed fails as loudly as a missing one.
@@ -391,6 +409,50 @@ export function parseDistribution(raw) {
   };
 }
 
+/**
+ * @typedef {{ rule: string, searchString: string | null, field: string | null,
+ *             positional: string | null, transforms: string[] }} WafScopeDown
+ */
+
+/// Every rate-based rule's scope-down byte match, with the text transformations
+/// it applies. A rule whose scope-down could not be read is returned with a
+/// null search string rather than dropped — an unreadable rule is not a
+/// passing one.
+/**
+ * @param {string} raw the waf.tf source
+ * @returns {WafScopeDown[]}
+ */
+export function parseWafScopeDowns(raw) {
+  const src = stripComments(raw);
+  /** @type {WafScopeDown[]} */
+  const out = [];
+  for (const acl of hclResources(src, 'aws_wafv2_web_acl')) {
+    for (const { body } of nestedBlocks(acl.body, /(?:^|\n)\s*rule\s*\{/)) {
+      const rule = unquote(attr(body, 'name')) ?? '(unnamed)';
+      const rateBased = nestedBlock(body, /rate_based_statement\s*\{/);
+      if (rateBased === null) continue;
+      const scopeDown = nestedBlock(rateBased, /scope_down_statement\s*\{/);
+      const byteMatch =
+        scopeDown === null ? null : nestedBlock(scopeDown, /byte_match_statement\s*\{/);
+      if (byteMatch === null) {
+        out.push({ rule, searchString: null, field: null, positional: null, transforms: [] });
+        continue;
+      }
+      const fieldBlock = nestedBlock(byteMatch, /field_to_match\s*\{/) ?? '';
+      const field = fieldBlock.match(/(\w+)\s*\{\s*\}/)?.[1] ?? null;
+      out.push({
+        rule,
+        searchString: unquote(attr(byteMatch, 'search_string')),
+        field,
+        positional: unquote(attr(byteMatch, 'positional_constraint')),
+        transforms: nestedBlocks(byteMatch, /text_transformation\s*\{/)
+          .map(({ body: t }) => unquote(attr(t, 'type')) ?? '(unreadable)'),
+      });
+    }
+  }
+  return out;
+}
+
 // ────────────────────────────── comparison ──────────────────────────────
 
 /**
@@ -400,9 +462,18 @@ export function parseDistribution(raw) {
  * @param {string[]} functions
  * @param {Alarm[]} alarms
  * @param {Distribution} distribution
+ * @param {WafScopeDown[]} wafScopeDowns
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function compareSources(dirs, matrix, dependabot, functions, alarms, distribution) {
+export function compareSources(
+  dirs,
+  matrix,
+  dependabot,
+  functions,
+  alarms,
+  distribution,
+  wafScopeDowns,
+) {
   /** @type {string[]} */
   const errors = [];
   /** @type {string[]} */
@@ -522,12 +593,14 @@ export function compareSources(dirs, matrix, dependabot, functions, alarms, dist
     }
     errors.push(
       `aws_lambda_function.${fn} has no ${missing.join(' and no ')} alarm. A Lambda-origin failure ` +
-        "on this distribution is invisible — CloudFront's per-distribution 403/404 → /index.html " +
-        'fallback rewrites it to a 200 shell — so the alarm is the only signal it has.',
+        "on this distribution is invisible — CloudFront's per-distribution 4xx → /index.html " +
+        'fallback replaces the body with the shell (and, for a 403, the status with a 200) — so ' +
+        'the alarm is the only signal it has.',
     );
   }
 
   distributionCoverage(distribution, errors, ok);
+  wafCoverage(wafScopeDowns, errors, ok);
 
   return { errors, ok };
 }
@@ -726,6 +799,57 @@ function distributionCoverage(distribution, errors, ok) {
   }
 }
 
+/// The fifth: WAF does not decode `uri_path` and CloudFront's behaviour
+/// matching normalises independently, so a scope-down without a URL_DECODE
+/// transformation lets an encoded spelling reach the Lambda uncapped.
+/**
+ * @param {WafScopeDown[]} wafScopeDowns
+ * @param {string[]} errors
+ * @param {string[]} ok
+ */
+function wafCoverage(wafScopeDowns, errors, ok) {
+  if (wafScopeDowns.length === 0) {
+    errors.push(
+      'no rate-based rule with a scope-down was read from waf.tf. The three of them are the only ' +
+        'thing bounding spend on /api/coach, /api/routes/generate and /api/routes/osrm, so a count ' +
+        'of zero means this scan stopped matching rather than that the rules are gone.',
+    );
+  }
+  for (const { rule, searchString, field, positional, transforms } of wafScopeDowns) {
+    if (searchString === null || field === null) {
+      errors.push(
+        `rate-based rule ${rule} has no readable byte_match scope-down. Without one the rate ` +
+          'counter applies to EVERY request on the distribution, static assets included — the rule ' +
+          'stops being a backstop and becomes an outage.',
+      );
+      continue;
+    }
+    if (field !== 'uri_path') {
+      ok.push(`WAF ${rule}: scoped on ${field}, not uri_path — claim 5 does not apply`);
+      continue;
+    }
+    if (transforms.includes(FORBIDDEN_URI_TRANSFORM)) {
+      errors.push(
+        `WAF ${rule} applies ${FORBIDDEN_URI_TRANSFORM} to uri_path. CloudFront path patterns are ` +
+          'case-sensitive, so a differently-cased spelling does not reach the Lambda at all and ' +
+          'folding case only rate-limits requests the edge already 404s.',
+      );
+    }
+    if (!transforms.includes(REQUIRED_URI_TRANSFORM)) {
+      errors.push(
+        `WAF ${rule} matches uri_path ${positional} ${JSON.stringify(searchString)} with only ` +
+          `[${transforms.join(', ')}]. WAF does not decode uri_path and CloudFront's behaviour ` +
+          'matching normalises independently, so an encoded spelling that CloudFront resolves to ' +
+          `the behaviour reaches the Lambda with the per-IP cap unapplied. Add a ` +
+          `${REQUIRED_URI_TRANSFORM} transformation beside the NONE — on a search string with no ` +
+          '`%` in it that can only widen the match, never narrow it. decisions § 1023.',
+      );
+      continue;
+    }
+    ok.push(`WAF ${rule}: uri_path ${positional} ${JSON.stringify(searchString)}, URL-decoded`);
+  }
+}
+
 export function main() {
   const { errors, ok } = compareSources(
     terraformDirs(INFRA_DIR),
@@ -734,6 +858,7 @@ export function main() {
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
     parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
+    parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8')),
   );
 
   for (const line of ok) console.log(`[OK] ${line}`);
