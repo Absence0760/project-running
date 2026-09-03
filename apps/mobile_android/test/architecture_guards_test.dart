@@ -856,7 +856,10 @@ void main() {
     test('the in-progress recording path stays off the chain', () {
       for (final signature in [
         r'Future<void> saveInProgress\(Run run\)\s*async\s*\{',
-        r'Future<void> clearInProgress\(\)\s*async\s*\{',
+        // The public `clearInProgress` is now a thin wrapper that publishes
+        // its own future for `debugInProgressSettled` (decisions § 1012); the
+        // body that could reach the chain is the private one.
+        r'Future<void> _clearInProgress\(\)\s*async\s*\{',
         r'Future<Run\?> loadInProgress\(\)\s*async\s*\{',
       ]) {
         expect(_extractMethodBody(runStore, signature), isNot(contains('_serialised')),
@@ -1746,7 +1749,12 @@ void main() {
     test('ActivityType.strideMetres exists for the pedometer fallback', () {
       // Reason: indoor runs display steps × stride instead of 0 km.
       // Removing the getter would quietly zero indoor distances.
-      final source = File('lib/preferences.dart').readAsStringSync();
+      // The enum moved to `core_models` so a pure parser could reach the
+      // vocabulary without a widget toolkit (decisions § 1013); the getter
+      // travelled with it, being physics rather than presentation.
+      final source =
+          File('../../packages/core_models/lib/src/activity_type.dart')
+              .readAsStringSync();
       expect(
         source,
         contains('double get strideMetres'),

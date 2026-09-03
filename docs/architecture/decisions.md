@@ -16756,6 +16756,398 @@ through the same envelope as its siblings — and a source guard over a director
 is the only form that answers "is there one of these I have not thought about",
 which is the question the per-handler suites structurally cannot ask.
 
+## 1007. The phone reported every unreachable provider as configured, and web had already decided otherwise
+
+`RaceService.isProviderConfigured` graded exactly one failure as "not
+configured": a 503 whose body says `provider_not_configured`. Every other
+outcome answered `true` — a 429, any 5xx, a dropped connection, and Supabase
+not yet initialised (the `_c` getter's own `StateError`, thrown inside the same
+`try`). The doc comment defended it: a probe that could not reach the server
+has not shown the provider to be unconfigured.
+
+Web decided the opposite question the other way, in `core/data.ts`'s
+`isProviderNotConfigured`, and its comment names the rule: only a readable
+non-429 4xx proves the function ran PAST its credential gate. A 429 is the
+function's own per-user rate limit, which several probes on one screen reach; a
+5xx did not reach the gate or did not get past it; a status-0 transport failure
+carries no evidence at all. Each of those reports unavailable there.
+
+The two platforms therefore disagreed about a configured provider whenever the
+probe did not cleanly reach the gate, and the disagreement is not symmetric in
+cost. Hiding a live leg for one page load is corrected by the next probe.
+Offering an action whose very next call 503s spends a runner's attention on a
+tile that cannot work — and, since § 975, UltraSignup's results leg refuses
+unconditionally with a 503 that names no missing credential, so "the server was
+unreachable" and "this leg will never work" arrived at the phone looking the
+same.
+
+Ported web's grading to `raceProbeUnavailable`, a top-level pure function so
+the decision is testable without a client, and `isProviderConfigured` now
+delegates every failure to it. `_isProviderNotConfigured` is deliberately left
+alone on the import path: a probe is a yes/no availability question that should
+fail closed, while an import is an action whose failure should surface as
+itself rather than as a claim about credentials.
+
+The filing's other half — that `races_screen._probe()`'s catch can never fire —
+is true and was NOT removed. The method is total by construction, so the catch
+is unreachable; but a probe is the layering contract's named example of an
+auxiliary network effect, the sibling `_run()` in the same file wraps the
+equally-total `searchRaceListings`, and web's own callers of these probes carry
+the identical `try { … } catch { available = false }`. Deleting it on the phone
+alone would create a divergence in the file this change exists to bring into
+parity, and would put a future caller one refactor away from failing open
+again. The service method's doc says why the backstop stays.
+
+## 1008. The UltraSignup results tile was asking a different function whether it could import
+
+Both clients decided whether to offer the UltraSignup **results** import by
+probing `race-listings-sync`. That function answers for the *listings* leg,
+which is real and legitimately gated on `ULTRASIGNUP_API_KEY`. The results leg
+lives in `race-results-import`, and since § 975 it refuses unconditionally: an
+athlete feed carries no race identifier, so every row it returns would be
+stamped with the target listing's name, date and distance, and a road marathon
+would be recorded as a 100-miler.
+
+While both legs were gated on the same two env vars the two questions had the
+same answer, so nothing showed. They no longer do. Provisioning the key would
+light up a tile — web's card says "Import trail and ultra results from
+UltraSignup", mobile's sheet offers the athlete-id form — whose very next call
+503s with a reason that names no missing credential. The probe was asking
+whether the key exists; the tile is a claim about whether an import will work.
+
+Both clients now probe `race-results-import` with `{ provider: 'ultrasignup',
+probe: true }`, which is the shape ChronoTrack already used. `race-listings-sync`
+was deliberately not made to answer for a leg it does not own.
+
+The guard on each platform derives its premise rather than restating the fix:
+it reads the function's probe branch, asserts that branch still refuses
+UltraSignup independently of its credential, and only then requires the client
+to name that function. If § 975 is ever lifted the premise disappears and the
+test says to re-decide rather than to delete an assertion.
+
+**RunSignUp was left probing the sync, and that is a compromise, not a
+judgement that it is right.** The server-side comment in the probe branch says
+every credential-gated leg has to be probed there, and by that rule RunSignUp
+should move too. It cannot yet: `race-listings-sync` gives probes their own
+60/hour bucket (§ 977) while `race-results-import` has no probe/import split at
+all — a probe is charged to the import bucket at 8/hour free, 32/hour Pro,
+*shared with real imports*. Moving UltraSignup already takes the settings
+screen from one to two of that bucket per load; moving RunSignUp would make it
+three, so roughly two settings visits an hour would exhaust a free runner's
+ability to actually import a result. With § 1007 in place an exhausted bucket
+also reads as "provider unavailable", so the failure would be silent and
+total. The durable close is § 977's split applied to `race-results-import`,
+which is a backend change; it is filed, and RunSignUp's probe moves behind it.
+
+## 1009. The over-size track blob is reachable, so the terminal-failure category now has a member
+
+§ 986 removed the one known permanent per-run upload failure (`jsonEncode`
+refusing a non-finite double) and deliberately did NOT build a terminal-error
+taxonomy, on the grounds that a category with no reachable member is a
+preemptive abstraction. It named one candidate it had not measured: a track
+blob past the `runs` bucket's object-size limit. Measured, 2026-09-02.
+
+The bucket's `file_size_limit` is 26,214,400 bytes (25 MiB), set by migration
+`20260620_001` whose own comment estimates "a 5h run at 1Hz is ~18k points;
+gzipped ~1MB". A realistic 1 Hz trace — drifting full-precision coordinates,
+wobbling elevation, per-second timestamps, per-point HR, encoded through the
+uploader's own `_trackBlobJson` — gzips to **27.3 bytes per waypoint**, flat
+from 3,600 to 500,000 points. So the limit is **959,883 waypoints**.
+
+By live recording that is **266.6 hours** of continuous 1 Hz sampling, and
+points are appended only on ≥3 m of movement, so the real figure is longer
+still. The longest event the product models is a 112-hour cutoff. The recorder
+cannot get there, which is why nobody had seen this.
+
+By import it is ordinary. The same 959,883 points as GPX `trkpt` elements are a
+**94.3 MiB** file that deflates to **8.3 MiB** — sixty times inside the 500 MiB
+cap `importFromZip` puts on a Strava archive, so the archive cap does not bound
+it. A single merged multi-year GPX, or a 1 Hz FIT from a 240-mile race, reaches
+it without anyone trying.
+
+So the class has a member, and the failure is permanent: the same waypoints
+gzip to the same bytes on every retry. `saveRunsBatch` catches per-run and
+leaves the run unsynced, the drain re-gzips and re-sends the identical refused
+payload on the next cycle, and the residency invariant keeps that run — and its
+million-point track — permanently in memory besides.
+
+Closed at the source, which is the half that needs no product decision: the
+uploader carries the bucket's limit as `StorageBuckets.runsBucketMaxBytes` (a
+client rail on a server bound, in the shape `text_limits` and `column_limits`
+already use, with a test that reads the migration) and refuses an over-size
+blob with a typed `TrackTooLargeException` **before** spending the network on a
+call that cannot succeed. Its message deliberately contains "maximum allowed
+size" so `classifyImportFailure` buckets it as `tooLarge` rather than
+`unknown`, which the existing import-failure report already explains; a test
+pins that, because it is a property of the sentence and not of the type.
+
+What is NOT done here, and is filed rather than half-built: the drain does not
+yet PARK a terminal failure. That needs per-run blocked state in the local
+store, the five `saveRunsBatch` call sites reading a classification rather than
+a bare id set, a surface, and its i18n — and, before any of it, a product
+answer to what a runner can actually DO about a run whose track is too big to
+store. Guessing at that answer is how a taxonomy becomes an abstraction nobody
+wanted. The measurement above is what the next lane should start from.
+
+## 1010. The domain object stopped carrying a value the encoder refuses; the row it becomes did not
+
+§ 986 made `Run.toJson` total, and the filing that followed called the same
+hole on `RunRow` "a latent shape rather than a live defect" on the grounds that
+the domain object can no longer carry a non-finite distance past `toJson`.
+Measured, 2026-09-02: it is live, and it is four holes rather than one.
+
+§ 986 screened the domain serializer's OUTPUT — `if (!distanceMetres.isFinite)
+json['distanceMetres'] = 0.0`. The FIELD is untouched, and the object a sync
+drain uploads is the resident one: `LocalRunStore` writes `stamped.toJson()` to
+disk and then does `_runs.insert(0, stamped)`, so the screened copy goes to the
+file and the unscreened object stays in memory. `saveRunsBatch(unsyncedRuns)`
+hands that object to `runRowFromRun`, which reads the fields.
+
+Measured, with a `Run` carrying each value:
+
+  * `distanceM: run.distanceMetres` — passes NaN and both infinities straight
+    through; `jsonEncode(row.toJson())` raises `JsonUnsupportedObjectError`.
+  * `runEmbeddedBestSeconds` — `v.toInt()` raises `UnsupportedError: Infinity
+    or NaN toInt`. That one does not even reach the encoder: it throws out of
+    the row BUILDER, which runs in the `.map()` that builds the whole chunk,
+    outside the per-run try/catch that only wraps the track upload.
+  * `runMetadataForRow` — the bag is passed through verbatim, so a non-finite
+    anywhere in it reaches the encoder. The mirrored `elevation_m` key is in
+    this class: the COLUMN is screened by `runPromotedDouble`, the bag copy
+    beside it was not.
+  * the bag nests. `workout_step_results` and `gym_step_results` are lists of
+    maps and `jsonEncode` walks all of it.
+
+The upsert encodes a whole chunk at once, so one such run does not merely fail
+itself — it takes every run in the chunk down with it, which is the failure
+mode § 986 fixed for track uploads and left in place one layer up.
+
+Fixed in `runRowFromRun`, the one place a `Run` becomes a row, rather than in
+`gen_dart_models.dart`. A blanket "coerce every double" in a generated
+serializer would be the wrong instrument: what a non-finite value MEANS is a
+per-column question. `distance_m` has a column and a `>= 0` CHECK, so zero is
+the answer the schema already gives and it now comes from one shared
+`storableDistanceMetres` that `Run.toJson` calls too — two copies of a coercion
+rule are how these two drifted apart in the first place. A bag key has neither,
+so a non-finite there is DROPPED: inventing a zero for `avg_bpm` would state a
+heart rate nobody recorded.
+
+An explicit `null` in the bag is preserved and distinguished from a dropped
+non-finite, because a caller writing `null` is saying something.
+
+## 1011. The settings-bag class the filing named has no population; the class beside it had a live defect
+
+The filing said every mobile deploy gate reading a value out of the settings
+bag inherits `cycle_plan`'s shape — web's `parseInt` yielding NaN where Dart's
+`int.parse` throws — and asked for a source-level guard, filed rather than
+written because "the guard needs an allowlist for the many legitimate in-repo
+parses and that list is the real work".
+
+Surveyed, 2026-09-02. **The strict settings-bag class has exactly two call
+sites in the whole tree, and both are already handled**: the DOB read in
+`settings_preferences_screen.dart` (non-throwing, null-checked) and
+`cycle_plan.dart` itself (regex-gated since § 931). Nothing else parses a jsonb
+bag key at all — `settings_service.dart`, the typed bag accessor, contains no
+parse call. There is no population, so there is nothing to sweep and no
+allowlist to write; that half of the filing is closed as measured-empty.
+
+The class NEXT to it is real and is the one that keeps producing defects. The
+non-throwing family has the mirror-image exposure the filing itself names:
+`double.tryParse('NaN')` returns NaN and `double.tryParse('1e400')` returns
+Infinity, both NON-NULL, so the `?? 0` and `!= null` guards these calls already
+carry cannot see them. `int.tryParse` answers null to both (measured), so the
+exposure is confined to `double.tryParse` and `num.tryParse` — **26 call sites
+across the mobile tree and the packages, of which 23 already conform**. The
+allowlist the filing feared is empty: no site legitimately wants an unchecked
+double.
+
+`finite_parse_guard_test.dart` now enforces it, in the shape
+`calendar_day_arithmetic_guard_test.dart` established — a local
+`// unchecked-parse:` opt-out rather than a file allowlist, plus a
+self-test that the matcher still fires (§ 510). Two things it had to learn: a
+parse guarded by CALLING a named predicate is guarded, so the scan resolves
+one level of helper (`isUsableLatitude`, the GPX importer's `_isUsableLat`),
+including the expression-bodied declarations those predicates actually are;
+and the unit of search is the enclosing FUNCTION body, not the innermost brace
+block (which would miss a sibling guard outside an `if`) and not the class body
+(which would let one method's `isFinite` vouch for another's).
+
+The three sites it named were real, and one is a live defect on a shipped path.
+`geocoding.dart` builds a `PlaceResult` from a geocoder's answer with no
+finiteness and no range test. Nominatim serialises coordinates as STRINGS, so
+`"lat":"NaN"` survives the null check intact — and that provider is not an edge
+case, it is the fallback every build without a MapTiler key uses. The MapTiler
+branch reads `as num` and looked safe; it is not, because `jsonDecode('1e400')`
+is `Infinity` (measured), so both branches needed the guard. Downstream,
+`LatLng` carries no assertion of its own and the map camera silently stops
+rendering, while the nearby-area path reaches `jsonEncode`, which refuses the
+value, and the runner is told the save failed. Both branches now apply
+`isUsableLatitude` / `isUsableLongitude`, the same finite-AND-in-range contract
+the GPX importer already applies to a coordinate out of a file — a latitude is
+±90 by definition, so out-of-range is a malformed answer rather than a place,
+and the bound is inclusive because the poles and the antimeridian are places.
+
+The third site, `routine_detail_screen.dart`'s RPE prefill, is reachable only
+from a corrupted local routine file and is closed the same way.
+
+## 1012. The one store write path with no completion signal was the one deliberately kept off the chain
+
+The § 991 filing left a population of 28 mobile test files that pair a temp
+directory with widget taps and no wait on a store's own completion signal, and
+said separating the real races from the safe ones needed an instrumented
+full-suite run this environment cannot afford. It also recorded what § 991's
+root cause actually WAS — a `void` method discarding a future, so nothing could
+observe completion — which is a property of the PRODUCTION code and can be
+searched for directly.
+
+Searched, from the production side, 2026-09-02. Every store write in the mobile
+tree reaches `serialiseStoreWrite`, and three stores publish
+`debugWritesSettled()` over it — so a test that waits has a signal to wait on,
+whether or not it does. Exactly one path is excluded, and its own comment says
+so: "The in-progress recording path is deliberately NOT on this chain — see
+`saveInProgress`. Nothing here may delay an L1 write during a recording."
+
+That exclusion is right, and it is also where both remaining instances of
+§ 991's shape live:
+
+  * `saveInProgress` is driven by `Timer.periodic(_incrementalSaveInterval, (_)
+    => _saveInProgress())`, armed inside the `void`
+    `_attachRecordingSideEffects`. The tick's future is discarded, and the only
+    handle — `_inFlightSave` — is private with no accessor.
+  * `clearInProgress()` is called as a BARE STATEMENT from the `void`
+    `_discard`, with a comment that says "fire-and-forget". Every one of its
+    other six call sites is awaited. It is the only un-awaited, non-`unawaited`
+    store write anywhere in `apps/mobile_android/lib` or `packages/*/lib`.
+
+So the path that writes a real NDJSON file into the store's own directory,
+every ten seconds, throughout a recording, was the single path with no
+observable completion anywhere — and a widget test's `tearDown` deletes that
+directory.
+
+Closed by giving the path its OWN signal rather than by joining it to the
+chain: `debugInProgressSettled()` follows the in-flight append and the
+in-flight clear, looping because a clear awaits the append and a tick may arm a
+new append while the last is being waited on. `clearInProgress` now publishes
+its future so a caller that discards it is still visible. Joining the two
+signals would put the recording path on the serialised chain by the back door,
+which is the one thing the chain forbids, so a source-level assertion pins that
+neither `saveInProgress` nor `_clearInProgress` reaches `_serialised` and that
+the new signal does not reach `storeWritesSettled`.
+
+The clear-tracking half is asserted in SOURCE rather than by timing, and that
+is a measurement rather than a preference: a behavioural version of it passed
+under the mutation that removes the tracking, because the delete lands within a
+turn or two on a fast disk either way. A test that passes under its own
+mutation is worse than no test, so it was replaced rather than kept alongside.
+
+The two named members — `run_screen_expected_return_test` and
+`run_screen_conclude_retry_test`, the two that mount a live recording against a
+real `LocalRunStore` on a temp directory without stubbing `saveInProgress` —
+now wait on the signal before deleting. The rest of the 28 population stands as
+§ 991 left it: a population, not a membership. What this round changes is that
+the two ROOT CAUSES are gone, so a member that is still racing is racing
+against a write it can now wait for.
+
+## 1013. The activity vocabulary is a leaf now, because a pure parser had to import a widget toolkit to reach it
+
+`csv_run_importer.dart` is a pure parser and it imported
+`preferences.dart show ActivityType` — a file that also holds a
+`SharedPreferences` cache, a map-style vocabulary and, until this change, an
+`IconData` getter, so it imports `package:flutter/material.dart`. The
+alternative at the time was worse: retyping the five values in the importer
+would have created a second rail against `runs_activity_type_check` that
+`check_constraint_unions.mjs` does not know to read, which is precisely the
+drift the constraint-union guard exists to prevent.
+
+The move was blocked on one registry line rather than on any code. The guard
+registers the rail as `{ file: 'apps/mobile_android/lib/preferences.dart',
+decl: 'ActivityType', shape: 'enum' }` for both `runs.activity_type` and
+`challenges.activity_type`, and it parses the enum out of that exact file — a
+re-export does not satisfy a `shape: 'enum'` rail — so the declaration and the
+registry had to move in one change, across two trees a single lane rarely owns.
+
+`ActivityType` now lives at `packages/core_models/lib/src/activity_type.dart`,
+a leaf mirroring web's own `apps/web/src/lib/runs/activity_type.ts`. Two
+members could not travel with it, for opposite reasons:
+
+  * `IconData get icon` needs Flutter, which `core_models` deliberately does
+    not depend on. It is an extension in `activity_type_labels.dart`, beside
+    the localised label the enum already did not carry — so both halves of
+    "how this value is presented" now sit in one file.
+  * `splitIntervalMetresFor(DistanceUnit)` reads a SECOND vocabulary, and
+    `DistanceUnit` is still in `preferences.dart` as its own registered rail
+    for `user_profiles.preferred_unit`. A leaf importing `preferences.dart` to
+    reach it would have inverted the dependency this move exists to remove, so
+    the method is an extension there instead. Moving `DistanceUnit` to its own
+    leaf is the consistent next step and is filed; nothing drags a widget
+    toolkit in to reach it today, so it is not urgent the way this was.
+
+Everything else on the enum — stride, GPS speed ceiling, calorie factor,
+`fromName` — is physics and travelled unchanged.
+
+Three `lib/` files and five test files needed an import; the other 28
+references already had `core_models`. Two pre-existing architecture guards
+correctly failed on their moved anchors and were re-pointed rather than
+relaxed: the `strideMetres` guard now reads the leaf, and the
+"in-progress path stays off the chain" guard now names `_clearInProgress`,
+the private body, since § 1012 made the public method a wrapper.
+
+## 1014. Both scrapers learned to say they had read only part of a history, and nothing was listening
+
+`parkrun-import` answers `{ imported, skipped, total, complete }` and
+`race-results-import` answers `complete` on every success shape (§ 976). No
+client read either field. A parkrun history bounded at `MAX_PARKRUN_ROWS` and a
+finisher field truncated at 2,000 both arrive as a positive `imported`, so the
+runner was shown "Imported 40 parkrun results" about a history with three
+hundred in it, and a truncated race import closed its modal looking exactly
+like a whole one.
+
+The direction is `parseStravaSyncResult`'s — an absent `complete` is PARTIAL —
+and it is the right one here for the reason that rule was written rather than
+by analogy. Each scraper is one transport shipped from this repo alongside its
+callers, so a body without the field is one this build does not recognise, not
+an older deployment of a second transport (which is what makes
+`cloudExportShortfall` fail the other way). A false "partial" costs a sentence
+the runner can ignore; a false "complete" tells them a history is whole.
+
+`parseImportCompleteness` grades both, and it lives BESIDE `parseStravaSyncResult`
+in the pair that already owns this rule rather than in a module of its own. A
+new module would be a parity pair, and a pair named by neither registry is a
+pair whose divergence nothing detects (§ 641) — the registries live in the root
+`CLAUDE.md` and the syncer agent, neither of which this change may touch.
+Splitting the three parsers into a registered `import_completeness` pair is
+filed rather than done half-way.
+
+Two things the parser refuses beyond the flag. A count is a non-negative
+integer or it is 0, the rule the Strava parser already applies. And a `total`
+below `imported + skipped` is discarded rather than shown: "12 of 5" is worse
+than no denominator at all, which is why `total` is nullable and the two
+sentences are separate keys rather than one with a defaulted placeholder.
+
+Copy is three shared `integrations.*` keys across seven web catalogues and
+seven ARBs — the same claim on both importers, so one vocabulary. All three are
+phrased to avoid grammatical-number agreement ("Imported: {n}" rather than
+"{n} results imported"), because the noun in the "n of total" sentence agrees
+with the TOTAL in German, Spanish, French and Portuguese, not with the count
+the plural rule would have been keyed on.
+
+The truncation refusal gets its own sentence on both platforms. `502
+upstream_results_truncated` had been falling through to the generic
+import-failed message, and it is not a failure the runner can fix by retrying:
+"we read the whole field and you are not in it" and "we read the first 2,000
+finishers and you were not among them" are different sentences, and only the
+second has the manual paste form beside it as its answer. Mobile gets a
+`RaceResultsTruncated` type so identity rather than message-matching carries
+it; web matches the code in the thrown message, which is what its transport
+gives it.
+
+One thing this change caught that had nothing to do with it: § 1013's move put
+`ActivityType` in `core_models`, and `geolocator_apple` exports an
+`ActivityType` of its own — iOS's LOCATION activity type. `run_recorder`
+imports both, so the two collide. `dart analyze` does not see it; the compiler
+does, and only when a test actually builds that package. The import there now
+says `hide ActivityType`, naming which vocabulary the file means.
+
 ## 1015. `BODY_SENSORS_BACKGROUND` was declared for a capability the permission does not grant, on a client it does not apply to
 
 `AndroidManifest.xml` declared `android.permission.BODY_SENSORS_BACKGROUND`
@@ -17174,4 +17566,53 @@ default *is* the semantics — no engine, degrade gracefully — and it separate
 three engines exactly from `public_supabase_url` (no default, required) and
 `public_site_url` (a real default, env identity rather than a knob). A fourth
 engine is covered the day it is added, with no registry to remember.
+
+## 1025. KMZ needed a bytes pipeline, and the pipeline was the reason to build it
+
+§ 988 widened mobile route import to GPX / KML / GeoJSON / TCX and deliberately
+removed every promise of KMZ rather than adding it, because the parser was the
+cheap half and the pipeline was not: `routes_screen._pickAndImport` and
+`SharedFileImportService.importPath` both `readAsString`, and a `String` then
+travels through the `compute` request to the dispatch. `readAsString` throws on
+a zip before any parser is reached.
+
+Verified first, as the filing asked: § 988's honesty holds. No mobile surface
+claimed KMZ, `routesEmptyBody` named exactly the four formats the picker
+offered in all seven ARBs, and `parity.md` carried an accurate not-supported
+cell with the reason. So this is a real parity gap against web — which has taken KMZ since it
+was written — rather than a documentation problem.
+
+Built, because the pipeline change is the durable fix and it is small: both
+entry points read BYTES, the two isolate requests carry `Uint8List`, and one
+new `routeTextFromImportedBytes` turns bytes into `(format, content)` before
+the existing string-typed dispatch, which is unchanged. `archive` is already a
+direct dependency of this tree (`backup.dart`, `strava_importer.dart`), so the
+unwrap needs no new package and `gpx_parser` stays dependency-free — a KMZ is a
+CONTAINER, not a route format, so unwrapping it belongs in the file pipeline
+rather than in a parser over text. The dispatch never sees `kmz`.
+
+Four decisions inside that, each of which a narrower implementation gets wrong:
+
+  * A KMZ is recognised by the **zip magic number**, not by its extension. An
+    OS share hands over a cached copy that often has no usable extension —
+    that is the whole reason `detectRouteFormat` sniffs content — and a zip's
+    payload is binary, so the existing text sniff cannot run on it at all.
+  * `doc.kml` is the OGC-specified entry name and is preferred, but the first
+    `.kml` entry wins when it is absent. Requiring the spec name would reject
+    the many real archives that name the document after the route.
+  * A zip with no KML in it is refused, rather than reported as an unparseable
+    route.
+  * Bytes that are neither a zip nor valid UTF-8 are refused outright.
+    `allowMalformed` would hand the parsers replacement characters and fail
+    further downstream with a worse message.
+
+The copy moved with the code: all seven ARBs now name KMZ in
+`routesEmptyBody`, and the guard that asserted KMZ was ABSENT from every
+catalogue is inverted to assert it is present — the same test, still pinning
+that the promise and the picker cannot drift. `routesImportSharedFailed` was
+also wrong in a way this change made worse: it said "isn't a valid GPX or KML
+route" while the picker took five formats, so it now names no list at all.
+
+The fixture is a KMZ **built in the test** rather than a committed binary, so
+the test says what is inside the archive it is asserting about.
 

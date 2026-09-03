@@ -3373,6 +3373,12 @@ export const messages = {
 	"integrations.chronotrackConnect": "Rennergebnisse von ChronoTrack-gemessenen Veranstaltungen importieren.",
 	"integrations.chronotrackOpen": "Rennkalender öffnen",
 	"integrations.chronotrackUnavailable": "Der ChronoTrack-Import ist noch nicht verfügbar. parkrun und manuelles Einfügen funktionieren weiterhin.",
+	"integrations.importPartialOf":
+		"Es konnte nur ein Teil deines Verlaufs importiert werden: {n} von {total}.",
+	"integrations.importPartial":
+		"Es konnten nicht alle Ergebnisse gelesen werden. Importiert: {n}.",
+	"integrations.importTruncated":
+		"Die Ergebnisliste war zu lang, um sie bis zum Ende zu lesen, daher konnte dein Ergebnis nicht bestätigt werden. Gib es stattdessen manuell ein.",
 	"socialHub.panelLabel": "Bereich {section}",
 	"socialPeople.searchFailed": "Suche fehlgeschlagen: {error}",
 	"socialPeople.followFailed": "Folgen konnte nicht aktualisiert werden: {error}",

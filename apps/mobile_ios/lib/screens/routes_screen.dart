@@ -17,8 +17,8 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../shared_file_import.dart'
     show
-        detectRouteFormat,
         kRouteImportPickerExtensions,
+        routeTextFromImportedBytes,
         routesFromImportedFile;
 import '../social_service.dart';
 import '../backend_timeout.dart';
@@ -701,9 +701,11 @@ class RoutesScreenState extends State<RoutesScreen> {
         return;
       }
       final ext = result.files.first.extension?.toLowerCase();
-      final content = await File(path).readAsString();
+      // BYTES, not text: a KMZ is a zip and `readAsString` throws on one
+      // before any dispatch is reached (decisions § 1025).
+      final bytes = await File(path).readAsBytes();
       final routes =
-          await compute(_parseRouteFile, _RouteParseRequest(ext, content));
+          await compute(_parseRouteFile, _RouteParseRequest(ext, bytes));
       // A route needs two points to have a line, a distance, or a map. Saving
       // a degenerate one and reporting success is how a silently-dropped
       // track became "Route imported!".
@@ -1312,17 +1314,20 @@ class RoutesScreenState extends State<RoutesScreen> {
 
 class _RouteParseRequest {
   final String? ext;
-  final String content;
-  const _RouteParseRequest(this.ext, this.content);
+  final Uint8List bytes;
+  const _RouteParseRequest(this.ext, this.bytes);
 }
 
 List<cm.Route> _parseRouteFile(_RouteParseRequest req) {
   // Resolved rather than inferred from the extension alone: this path used to
   // read `ext == 'kml' ? 'kml' : 'gpx'`, a third dispatch that could name only
-  // two of the four formats and parsed everything else as GPX.
-  final format = detectRouteFormat(extension: req.ext, content: req.content);
-  if (format == null) return const <cm.Route>[];
-  return routesFromImportedFile(format: format, content: req.content);
+  // two of the four formats and parsed everything else as GPX. The KMZ unwrap
+  // runs here too, in the isolate, for the same reason the parse does.
+  final decoded =
+      routeTextFromImportedBytes(extension: req.ext, bytes: req.bytes);
+  if (decoded == null) return const <cm.Route>[];
+  return routesFromImportedFile(
+      format: decoded.format, content: decoded.content);
 }
 
 /// Filter toolbar for the routes list. Stateless — every change goes

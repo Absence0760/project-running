@@ -786,12 +786,12 @@
   "routesImported": "「{name}」をインポートしました",
   "routesImportedMany": "{count} 件のルートをインポートしました",
   "routesImportFailed": "インポートに失敗しました: {error}",
-  "routesImportSharedFailed": "このファイルをインポートできませんでした。有効な GPX または KML ルートではありません。",
+  "routesImportSharedFailed": "このファイルをインポートできませんでした。有効なルートではありません。",
   "routesSaved": "「{name}」を保存しました",
   "historySelectionHint": "ランを長押しすると複数選択できます",
   "routesSelectionHint": "ルートを長押しすると複数選択できます",
   "routesEmptyTitle": "まだルートがありません",
-  "routesEmptyBody": "「作成」をタップして地図上にルートを描くか、GPX・KML・GeoJSON・TCX ファイルをインポートしてください。",
+  "routesEmptyBody": "「作成」をタップして地図上にルートを描くか、GPX・KML・KMZ・GeoJSON・TCX ファイルをインポートしてください。",
   "routesBuild": "作成",
   "routesImport": "インポート",
   "routesNoMatch": "これらのフィルターに一致するルートはありません",
@@ -1881,6 +1881,31 @@
   "integrationsImport": "インポート",
   "integrationsParkrunImporting": "parkrunの結果をインポートしています…",
   "integrationsParkrunImported": "{count, plural, other{parkrunの結果を{count}件インポートしました。}}",
+  "integrationsImportPartialOf": "履歴の一部のみインポートできました: {total} 件中 {n} 件。",
+  "@integrationsImportPartialOf": {
+    "description": "Banner when an importer read only part of a history and knows the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportPartial": "すべての結果を読み取ることはできませんでした。インポート: {n} 件。",
+  "@integrationsImportPartial": {
+    "description": "Banner when an importer read only part of a history and does not know the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportTruncated": "結果リストが長すぎて最後まで読み取れなかったため、記録を確認できませんでした。代わりに手動で入力してください。",
+  "@integrationsImportTruncated": {
+    "description": "Banner when the upstream results list was truncated before the runner was found"
+  },
   "integrationsParkrunNoneNew": "前回のインポート以降、新しいparkrunの結果はありません。",
   "integrationsImportFailed": "インポートに失敗しました：{error}",
   "integrationsStravaName": "Strava",

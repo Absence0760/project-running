@@ -786,12 +786,12 @@
   "routesImported": "« {name} » importé",
   "routesImportedMany": "{count} itinéraires importés",
   "routesImportFailed": "Échec de l'import : {error}",
-  "routesImportSharedFailed": "Impossible d'importer ce fichier : ce n'est pas un itinéraire GPX ou KML valide.",
+  "routesImportSharedFailed": "Impossible d'importer ce fichier : ce n'est pas un itinéraire valide.",
   "routesSaved": "« {name} » enregistré",
   "historySelectionHint": "Appuyez longuement sur une course pour en sélectionner plusieurs",
   "routesSelectionHint": "Appuyez longuement sur un itinéraire pour en sélectionner plusieurs",
   "routesEmptyTitle": "Aucun itinéraire pour l'instant",
-  "routesEmptyBody": "Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML, GeoJSON ou TCX.",
+  "routesEmptyBody": "Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML, KMZ, GeoJSON ou TCX.",
   "routesBuild": "Créer",
   "routesImport": "Importer",
   "routesNoMatch": "Aucun itinéraire ne correspond à ces filtres",
@@ -1881,6 +1881,31 @@
   "integrationsImport": "Importer",
   "integrationsParkrunImporting": "Import des résultats parkrun…",
   "integrationsParkrunImported": "{count, plural, one{{count} résultat parkrun importé.} other{{count} résultats parkrun importés.}}",
+  "integrationsImportPartialOf": "Seule une partie de votre historique a pu être importée : {n} sur {total}.",
+  "@integrationsImportPartialOf": {
+    "description": "Banner when an importer read only part of a history and knows the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportPartial": "Tous les résultats n'ont pas pu être lus. Importés : {n}.",
+  "@integrationsImportPartial": {
+    "description": "Banner when an importer read only part of a history and does not know the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportTruncated": "La liste des résultats était trop longue pour être lue jusqu'au bout, votre résultat n'a donc pas pu être confirmé. Saisissez-le manuellement.",
+  "@integrationsImportTruncated": {
+    "description": "Banner when the upstream results list was truncated before the runner was found"
+  },
   "integrationsParkrunNoneNew": "Aucun nouveau résultat parkrun depuis le dernier import.",
   "integrationsImportFailed": "Échec de l'import : {error}",
   "integrationsStravaName": "Strava",

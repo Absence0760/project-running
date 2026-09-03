@@ -3387,6 +3387,12 @@ export const en = {
 	"integrations.chronotrackOpen": "Open the race calendar",
 	"integrations.chronotrackUnavailable":
 		"ChronoTrack import isn't available yet. parkrun and manual paste still work.",
+	"integrations.importPartialOf":
+		"Only part of your history could be imported: {n} of {total}.",
+	"integrations.importPartial":
+		"Not all results could be read. Imported: {n}.",
+	"integrations.importTruncated":
+		"The results list was too long to read to the end, so your result could not be confirmed. Enter it manually instead.",
 	"socialHub.panelLabel": "{section} panel",
 	"socialPeople.searchFailed": "Search failed: {error}",
 	"socialPeople.followFailed": "Could not update follow: {error}",

@@ -3745,7 +3745,7 @@
       }
     }
   },
-  "routesImportSharedFailed": "Couldn't import that file — it isn't a valid GPX or KML route.",
+  "routesImportSharedFailed": "Couldn't import that file — it isn't a valid route.",
   "@routesImportSharedFailed": {
     "description": "Banner shown when a GPX/KML file opened from another app (WhatsApp Open with / share) couldn't be imported as a route"
   },
@@ -3770,7 +3770,7 @@
   "@routesEmptyTitle": {
     "description": "Empty-state title shown when the route library is empty"
   },
-  "routesEmptyBody": "Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.",
+  "routesEmptyBody": "Tap Build to draw a route on the map, or Import a GPX, KML, KMZ, GeoJSON, or TCX file.",
   "@routesEmptyBody": {
     "description": "Empty-state body shown when the route library is empty"
   },
@@ -9065,6 +9065,31 @@
         "type": "int"
       }
     }
+  },
+  "integrationsImportPartialOf": "Only part of your history could be imported: {n} of {total}.",
+  "@integrationsImportPartialOf": {
+    "description": "Banner when an importer read only part of a history and knows the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportPartial": "Not all results could be read. Imported: {n}.",
+  "@integrationsImportPartial": {
+    "description": "Banner when an importer read only part of a history and does not know the total",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "integrationsImportTruncated": "The results list was too long to read to the end, so your result could not be confirmed. Enter it manually instead.",
+  "@integrationsImportTruncated": {
+    "description": "Banner when the upstream results list was truncated before the runner was found"
   },
   "integrationsParkrunNoneNew": "No new parkrun results since last import.",
   "@integrationsParkrunNoneNew": {

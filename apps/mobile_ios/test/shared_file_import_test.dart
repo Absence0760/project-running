@@ -1,11 +1,25 @@
+import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import '../lib/local_route_store.dart';
 import '../lib/shared_file_import.dart';
+
+String _kmlNamed(String name) => _kml.replaceFirst('Shared KML', name);
+
+/// A KMZ carrying [entries], built rather than committed as a binary fixture
+/// so the test says what is inside it.
+Uint8List _kmz(Map<String, String> entries) {
+  final archive = Archive();
+  entries.forEach((name, body) {
+    archive.addFile(ArchiveFile.bytes(name, utf8.encode(body)));
+  });
+  return Uint8List.fromList(ZipEncoder().encode(archive));
+}
 
 const _gpx = '''<?xml version="1.0"?>
 <gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
@@ -79,11 +93,9 @@ void main() {
       // the empty-state copy promised more, so a `.geojson` or `.tcx` chosen
       // through the OS share sheet was parsed as GPX and failed.
       expect(kSupportedRouteImportExtensions,
-          {'gpx', 'kml', 'geojson', 'tcx'});
+          {'gpx', 'kml', 'kmz', 'geojson', 'tcx'});
       expect(kRouteImportPickerExtensions,
-          containsAll(<String>['gpx', 'kml', 'geojson', 'json', 'tcx']));
-      expect(kSupportedRouteImportExtensions.contains('kmz'), isFalse,
-          reason: 'a KMZ is a zip and this pipeline is string-typed');
+          containsAll(<String>['gpx', 'kml', 'kmz', 'geojson', 'json', 'tcx']));
     });
 
     test('a .geojson extension resolves and parses', () {
@@ -120,6 +132,7 @@ void main() {
       const labels = <String, String>{
         'gpx': 'GPX',
         'kml': 'KML',
+        'kmz': 'KMZ',
         'geojson': 'GeoJSON',
         'tcx': 'TCX',
       };
@@ -134,8 +147,77 @@ void main() {
         for (final label in labels.values) {
           expect(body, contains(label), reason: '${arb.path} omits $label');
         }
-        expect(body.contains('KMZ'), isFalse,
-            reason: '${arb.path} promises a format nothing can open');
+      }
+    });
+
+    test('a KMZ unwraps to the KML inside it', () {
+      // A KMZ is a zip, not a route format, so the pipeline unwraps it and
+      // the dispatch never sees `kmz` (decisions § 1025).
+      final decoded = routeTextFromImportedBytes(
+          extension: 'kmz', bytes: _kmz({'doc.kml': _kml}));
+      expect(decoded, isNotNull);
+      expect(decoded!.format, 'kml');
+      final r = routeFromImportedFile(
+          format: decoded.format, content: decoded.content);
+      expect(r.name, 'Shared KML');
+      expect(r.waypoints, hasLength(3));
+    });
+
+    test('a KMZ is recognised by its bytes, not by its extension', () {
+      // An OS share hands the cached copy over without a usable extension,
+      // and a zip's payload is binary so the text sniff cannot run on it at
+      // all — the magic number is the only signal left.
+      final decoded = routeTextFromImportedBytes(
+          extension: null, bytes: _kmz({'doc.kml': _kml}));
+      expect(decoded?.format, 'kml');
+    });
+
+    test('the spec-named entry wins, and any .kml is taken when it is absent',
+        () {
+      // `doc.kml` is the OGC name, but exporters name the document after the
+      // route often enough that requiring it would reject real files.
+      final both = routeTextFromImportedBytes(
+        extension: 'kmz',
+        bytes: _kmz({'route.kml': _kmlNamed('Wrong'), 'doc.kml': _kml}),
+      );
+      expect(routeFromImportedFile(format: 'kml', content: both!.content).name,
+          'Shared KML');
+
+      final onlyOther = routeTextFromImportedBytes(
+        extension: 'kmz',
+        bytes: _kmz({'My Route.kml': _kmlNamed('Only One')}),
+      );
+      expect(
+          routeFromImportedFile(format: 'kml', content: onlyOther!.content).name,
+          'Only One');
+    });
+
+    test('a zip with no KML in it is not a route', () {
+      expect(
+        routeTextFromImportedBytes(
+            extension: 'kmz', bytes: _kmz({'readme.txt': 'nothing here'})),
+        isNull,
+      );
+    });
+
+    test('bytes that are neither a zip nor text are refused', () {
+      // A JPEG shared by mistake. Decoding with `allowMalformed` would hand
+      // the parsers replacement characters and fail further downstream.
+      expect(
+        routeTextFromImportedBytes(
+          extension: null,
+          bytes: Uint8List.fromList([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]),
+        ),
+        isNull,
+      );
+    });
+
+    test('every other format still decodes as text', () {
+      for (final entry in {'gpx': _gpx, 'kml': _kml, 'tcx': _tcx}.entries) {
+        final decoded = routeTextFromImportedBytes(
+            extension: entry.key,
+            bytes: Uint8List.fromList(utf8.encode(entry.value)));
+        expect(decoded?.format, entry.key, reason: entry.key);
       }
     });
 
@@ -191,6 +273,20 @@ void main() {
         final outcome = await _service(store).importPath(f.path);
         expect(outcome.ok, isTrue);
         expect(outcome.route!.name, 'Shared KML');
+      });
+    });
+
+    testWidgets('imports a .kmz file', (tester) async {
+      await tester.runAsync(() async {
+        await store.init(overrideDirectory: tmp);
+        // The case that could not work before: `readAsString` throws on a zip
+        // before any dispatch is reached, so the whole read path is bytes now.
+        final f = File('${tmp.path}/shared.kmz')
+          ..writeAsBytesSync(_kmz({'doc.kml': _kml}));
+        final outcome = await _service(store).importPath(f.path);
+        expect(outcome.ok, isTrue);
+        expect(outcome.route!.name, 'Shared KML');
+        expect(store.routes.any((r) => r.id == outcome.route!.id), isTrue);
       });
     });
 

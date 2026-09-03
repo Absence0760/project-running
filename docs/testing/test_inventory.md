@@ -2126,3 +2126,57 @@ The watch carried both elevation-gain rules after web collapsed its two into one
 Run by this lane and passing: `cargo test --target x86_64-unknown-linux-gnu --workspace --exclude app --exclude nrf52840_dk` (2840/2840), `cargo build --release --target thumbv7em-none-eabihf`, all three CI `cargo clippy … -D warnings` invocations, `cargo fmt --check`, `check_watch_wire_vectors.mjs` (and its 31 unit tests), `check_shared_constants.mjs`, `check_parity_pair_registry.mjs`, `check_watch_doc_counts.mjs`, `check_watch_page_ring.mjs`, `check_watch_ble_uuids.mjs`, `check_watch_ios_source.mjs`, `check_doc_checkboxes.mjs`, `check_garmin_source.sh` (and its 22 unit tests), the `apps/web` `runs` + `routes` + `training` suites (1456/1456), `svelte-check` (0 errors), `dart analyze` on the two changed Dart files (3 infos, 0 warnings), and the Flutter files `grade_adjusted_pace_test.dart`, `roadbook_test.dart`, `pace_analysis_test.dart`, `run_detail_screen_test.dart`, `fuel_plan_test.dart`, `architecture_guards_test.dart`.
 
 NOT run by this lane, and not claimed: any Monkey C compilation or execution, the Renode sim, Playwright, the full Flutter suite, and anything needing the local Supabase stack. Nothing here is sim-verified or bench-verified.
+
+## Round 34 — the #789 mobile lane (2026-09-02)
+
+### `apps/mobile_android/test/race_providers_test.dart` — 11 tests (6 added)
+
+Five pin `raceProbeUnavailable`, the port of web's fail-closed probe grading ([§ 1007](../architecture/decisions.md)): the 503 gate whatever the body says, a 429 / 5xx confirming nothing, a readable non-429 4xx meaning the function ran PAST the gate, no readable status at all, and a `RaceService` with no Supabase behind it answering unconfigured rather than configured. The sixth derives its own premise before asserting ([§ 1008](../architecture/decisions.md)): it reads `race-results-import`'s probe branch, requires that branch still to refuse UltraSignup independently of its credential, and only then requires the client to name that function. Lifting § 975 makes the guard say to re-decide rather than to delete an assertion.
+
+### `apps/mobile_android/test/track_blob_size_test.dart` — 4 tests (new)
+
+The reachability arithmetic behind [§ 1009](../architecture/decisions.md), re-derivable rather than asserted: a realistic 1 Hz trace through the uploader's own `debugTrackBlobJson` gzips to ~27 bytes per waypoint, so the `runs` bucket's 25 MiB limit is ~960k points — 266 h of recording (unreachable) against a 94 MiB GPX (ordinary). Plus: a `TrackTooLargeException` must classify as `tooLarge` through `classifyImportFailure`, which is a property of its SENTENCE and not of its type; and the size check must sit before `uploadBinary` in `_uploadTrack`, or it saves nothing over the 413 it exists to pre-empt.
+
+### `apps/mobile_android/test/finite_parse_guard_test.dart` — 3 tests (new)
+
+The source-level guard of [§ 1011](../architecture/decisions.md): every `double.tryParse` / `num.tryParse` under `lib/` must have a finiteness test in its enclosing FUNCTION body, or call a predicate that does, or carry an `// unchecked-parse:` marker. Allowlist is empty — no site legitimately wants an unchecked double. `int.tryParse` is not scanned: it answers null to both "NaN" and "Infinity". The two support tests are § 510's self-check (the matcher still fires) and a pin that the body finder stops at the function — not at the innermost block, which would miss a sibling guard outside an `if`, and not at the class body, which would let one method's `isFinite` vouch for another's.
+
+### `apps/mobile_android/test/in_progress_settled_test.dart` — 4 tests (new)
+
+[§ 1012](../architecture/decisions.md)'s completion signal for the one store write path deliberately off the serialised chain. Two behavioural: an append the caller discarded, and a clear the caller discarded, are both settled by `debugInProgressSettled()`. Two structural: the recording path must still not reach `_serialised`, and `clearInProgress` must publish its future. The clear-tracking half is structural on purpose — a behavioural version PASSED under the mutation that removes the tracking, because the delete lands within a turn or two on a fast disk either way, and a test that passes under its own mutation is worse than no test.
+
+### `apps/mobile_android/test/settings_integrations_parkrun_partial_test.dart` — 4 tests (new)
+
+The parkrun half of [§ 1014](../architecture/decisions.md): a capped history names the gap (`n of total`), a shortfall with no total still says a shortfall happened with no fabricated denominator, and the two complete shapes still read as a plain success and as "nothing new". Mirrors `settings_integrations_strava_partial_test.dart`, one importer over.
+
+### `apps/mobile_android/test/races_screen_test.dart` — 22 tests (2 added)
+
+The race-results half of § 1014: a 502 truncation is said in its own words and leaves the sheet open so the manual paste form stays reachable, and a `complete: false` success is not presented as a whole import. The screen's fake now carries `complete` and `throwTruncated` so both shapes are drivable.
+
+### `apps/mobile_android/test/shared_file_import_test.dart` — 27 tests (6 added, 1 inverted)
+
+[§ 1025](../architecture/decisions.md)'s KMZ support. A KMZ unwraps to the KML inside it; it is recognised by the zip magic number rather than by an extension an OS share drops; `doc.kml` wins when present and any `.kml` is taken when it is not; a zip with no KML is not a route; bytes that are neither a zip nor UTF-8 are refused; and every other format still decodes as text. The end-to-end `importPath` case writes a real `.kmz` — the file `readAsString` used to throw on. The fixture archive is BUILT in the test rather than committed as a binary, so the test says what is inside it. The pre-existing "KMZ is absent from every catalogue" assertion is inverted rather than deleted: same guard, still pinning that the promise and the picker cannot drift.
+
+### `apps/mobile_android/test/geocoding_test.dart` — 26 tests (2 added)
+
+A geocoder answer that is not a coordinate is dropped on BOTH providers — Nominatim's strings (`"NaN"`, `"1e400"`) and MapTiler's JSON numbers (`1e400` decodes to `Infinity`) — and out-of-range with them. The second pins the bound as INCLUSIVE: the poles and the antimeridian are places. The MapTiler fixture is a literal wire body rather than `jsonEncode` output, because `jsonEncode` refuses the very value under test.
+
+### `apps/mobile_android/test/activity_type_vocabulary_test.dart` — 8 tests (2 added)
+
+[§ 1013](../architecture/decisions.md): the enum lives in `core_models`, which takes no Flutter dependency (asserted on the IMPORT, not on a mention — the file's own header names `package:flutter/material.dart` to explain why the icon getter could not travel), and the CSV importer reaches the vocabulary without a widget toolkit.
+
+### `packages/core_models/test/run_row_shape_test.dart` — 24 tests (7 added)
+
+[§ 1010](../architecture/decisions.md): `runRowFromRun` is total. A non-finite distance resolves to zero and agrees with `Run.toJson` over the same inputs (one shared rule, not two copies); a non-finite embedded best is dropped rather than thrown on (`toInt()` raises out of the row BUILDER); a non-finite anywhere in the bag is dropped, including inside nested lists and maps; a finite bag survives untouched; and an explicit `null` is preserved rather than read as a dropped non-finite.
+
+### `packages/core_models/test/strava_sync_result_test.dart` — 22 tests (6 added) ↔ `apps/web/src/lib/integrations/strava_sync_result.test.ts` — 23 tests (6 added)
+
+`parseImportCompleteness`, mirrored case for case: an unreadable body is partial, only an explicit `true` claims whole, an embedded error forces partial beside a `complete` flag (a blank one is not an error), counts are non-negative integers or zero, `total` is carried only when sent, and a `total` below `imported + skipped` is no total at all.
+
+### `packages/core_models/test/metadata_keys_test.dart` — 4 tests (1 added)
+
+`StorageBuckets.runsBucketMaxBytes` is read against the migration that sets the `runs` bucket's `file_size_limit` — a client rail on a server bound, in the shape `text_limits` and `column_limits` already use.
+
+Run by this lane and passing: every Dart file named above, individually, under a 4 GB cgroup; `packages/core_models` in full (143); `packages/run_recorder` architecture + geolocator-fake suites; `apps/mobile_android` `architecture_guards_test` (272), `l10n_parity_test`, `routes_screen_test`, `csv_run_importer_test`, `preferences*`; `apps/web` `strava_sync_result.test.ts`, `race_import_providers.test.ts`, `catalogues.test.ts`, `messages_parity.test.ts`, `svelte-check` (0 errors), and `check_constraint_unions.mjs`.
+
+NOT run by this lane, and not claimed: Playwright, the full `apps/mobile_android` suite (the box cannot finish it), pgTAP, and anything needing a working local edge runtime.

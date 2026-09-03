@@ -1,3 +1,4 @@
+import 'package:core_models/core_models.dart' show ActivityType;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 

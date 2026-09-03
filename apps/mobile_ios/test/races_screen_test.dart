@@ -19,7 +19,17 @@ class _FakeRaceService extends RaceService {
   String? lastImportBib;
   String? lastImportAthleteId;
 
-  _FakeRaceService({this.results = const [], this.configured = const {}});
+  /// What the import leg answers. `complete: false` is the truncated-field
+  /// case; `throwTruncated` is the 502 refusal.
+  bool complete;
+  bool throwTruncated;
+
+  _FakeRaceService({
+    this.results = const [],
+    this.configured = const {},
+    this.complete = true,
+    this.throwTruncated = false,
+  });
 
   @override
   Future<ImportRaceResultOutcome> importRaceResult({
@@ -34,7 +44,9 @@ class _FakeRaceService extends RaceService {
     lastImportProvider = provider;
     lastImportBib = bib;
     lastImportAthleteId = ultraSignUpAthleteId;
-    return const ImportRaceResultOutcome(imported: 1, skipped: 0, enriched: 0);
+    if (throwTruncated) throw const RaceResultsTruncated();
+    return ImportRaceResultOutcome(
+        imported: 1, skipped: 0, enriched: 0, complete: complete);
   }
 
   @override
@@ -191,6 +203,60 @@ void main() {
     expect(service.lastImportBib, '1234');
 
     // Drain the success top-banner's pending timer (mobile-test gotcha).
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  Future<void> _driveImport(WidgetTester tester, _FakeRaceService service) async {
+    await tester.pumpWidget(_app(service));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Import my result'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find
+          .descendant(of: find.byType(AlertDialog), matching: find.byType(TextField))
+          .first,
+      '1234',
+    );
+    await tester.pump();
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(FilledButton, 'Import my result'),
+    ));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a truncated finisher field is said, not reported as a failure',
+      (tester) async {
+    // "We read the whole field and you are not in it" and "we read the first
+    // 2,000 finishers and you were not among them" are different sentences,
+    // and only the second has the paste form beside it as its answer. Before
+    // this the 502 fell through to the generic import-failed message.
+    final service = _FakeRaceService(
+      results: [_listing('r3t', 'RSU Race', provider: 'runsignup')],
+      configured: const {'runsignup'},
+      throwTruncated: true,
+    );
+    await _driveImport(tester, service);
+
+    expect(find.textContaining('too long to read to the end'), findsOneWidget);
+    expect(find.text('Import failed'), findsNothing);
+    // The sheet stays open, so the manual paste form is still reachable.
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('a partial import is not presented as a whole one', (tester) async {
+    // A field read only as far as the cap still imports the rows it found, so
+    // a truncated import closed the sheet looking exactly like a whole one.
+    final service = _FakeRaceService(
+      results: [_listing('r3p', 'RSU Race', provider: 'runsignup')],
+      configured: const {'runsignup'},
+      complete: false,
+    );
+    await _driveImport(tester, service);
+
+    expect(service.importCalled, isTrue);
+    expect(find.textContaining('Not all results could be read'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
   });
 

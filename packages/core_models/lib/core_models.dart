@@ -1,6 +1,7 @@
 /// Shared data types for the Run app.
 library core_models;
 
+export 'src/activity_type.dart';
 export 'src/atomic_io.dart';
 export 'src/store_write_chain.dart';
 export 'src/food.dart';

@@ -609,7 +609,7 @@ class _RaceImportFormState extends State<_RaceImportForm> {
     setState(() => _busy = true);
     final l = AppLocalizations.of(context);
     try {
-      await widget.service.importRaceResult(
+      final outcome = await widget.service.importRaceResult(
         provider: spec.provider,
         listingId: widget.race.id,
         bib: spec.scope == RaceImportScope.bib ? scope : null,
@@ -617,7 +617,17 @@ class _RaceImportFormState extends State<_RaceImportForm> {
             spec.scope == RaceImportScope.athleteId ? scope : null,
         matchRunId: widget.matchRunId,
       );
-      if (mounted) Navigator.of(context).pop(true);
+      if (!mounted) return;
+      // A field read only as far as the cap still imports what it found, so a
+      // truncated import used to close the sheet looking like a whole one.
+      if (!outcome.complete) {
+        showTopBanner(context, l.integrationsImportPartial(outcome.imported));
+      }
+      Navigator.of(context).pop(true);
+    } on RaceResultsTruncated {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showTopBanner(context, l.integrationsImportTruncated);
     } catch (e) {
       if (!mounted) return;
       // The service throws the catalogue's own const instance, so identity is

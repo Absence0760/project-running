@@ -53,7 +53,17 @@ class Run {
         for (final w in usable) w.toJson(),
       ];
     }
-    if (!distanceMetres.isFinite) json['distanceMetres'] = 0.0;
+    json['distanceMetres'] = storableDistanceMetres(distanceMetres);
     return json;
   }
 }
+
+/// The distance a writer may store for [d].
+///
+/// A non-finite distance resolves to zero: `jsonEncode` refuses one outright,
+/// and zero is what `runs_distance_m_check` would demand anyway (decisions
+/// § 986). One home, because the domain serializer and the row builder both
+/// need the answer and two copies of a coercion rule drift — which is exactly
+/// how `RunRow` came to carry a NaN the local store could no longer hold
+/// (decisions § 1010).
+double storableDistanceMetres(double d) => d.isFinite ? d : 0.0;

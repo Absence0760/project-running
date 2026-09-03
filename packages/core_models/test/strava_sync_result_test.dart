@@ -3,6 +3,8 @@ import 'package:test/test.dart';
 
 /// Mirror of `apps/web/src/lib/integrations/strava_sync_result.test.ts`.
 void main() {
+  _importCompletenessTests();
+
   test('a finished walk is the only shape that reports complete', () {
     final r = stravaSyncResultFromResponse({
       'imported': 12,
@@ -205,5 +207,76 @@ void main() {
     expect(kStravaLookbackOptions.every(isStravaLookbackReachable), isTrue);
     expect(isStravaLookbackReachable(kStravaLookbackMaxDays + 1), isFalse);
     expect(isStravaLookbackReachable(0), isFalse);
+  });
+}
+
+// parseImportCompleteness — the two scraper importers. Mirrors
+// `apps/web/src/lib/integrations/strava_sync_result.test.ts`, case for case.
+void _importCompletenessTests() {
+  test('a body this build cannot read is partial, never complete', () {
+    for (final body in <Object?>[null, 'ok', 42, <Object?>[], {'imported': 3}]) {
+      expect(parseImportCompleteness(body).complete, isFalse,
+          reason: '$body');
+    }
+  });
+
+  test('only an explicit true claims the import was whole', () {
+    expect(parseImportCompleteness({'complete': true}).complete, isTrue);
+    for (final v in <Object?>[false, 'true', 1, null]) {
+      expect(parseImportCompleteness({'complete': v}).complete, isFalse,
+          reason: '$v');
+    }
+  });
+
+  test('an embedded error forces partial beside a complete flag', () {
+    expect(
+      parseImportCompleteness({'complete': true, 'error': 'upstream 502'})
+          .complete,
+      isFalse,
+    );
+    // A blank error is not an error.
+    expect(
+      parseImportCompleteness({'complete': true, 'error': '  '}).complete,
+      isTrue,
+    );
+  });
+
+  test('counts are non-negative integers or zero', () {
+    final r =
+        parseImportCompleteness({'imported': 12, 'skipped': 3, 'complete': true});
+    expect(r.imported, 12);
+    expect(r.skipped, 3);
+    for (final bad in <Object?>[-1, 1.5, '4', null, double.nan, double.infinity]) {
+      expect(parseImportCompleteness({'imported': bad}).imported, 0,
+          reason: '$bad');
+    }
+  });
+
+  test('total is carried when the function sent one', () {
+    expect(
+      parseImportCompleteness({'imported': 12, 'skipped': 8, 'total': 60}).total,
+      60,
+    );
+    // Absent means unknown, not zero.
+    expect(parseImportCompleteness({'imported': 12}).total, isNull);
+    for (final bad in <Object?>[-1, 2.5, '60', double.nan, double.infinity]) {
+      expect(parseImportCompleteness({'total': bad}).total, isNull,
+          reason: '$bad');
+    }
+  });
+
+  test('a total below what was already processed is no total at all', () {
+    expect(
+      parseImportCompleteness({'imported': 12, 'skipped': 0, 'total': 5}).total,
+      isNull,
+    );
+    expect(
+      parseImportCompleteness({'imported': 12, 'skipped': 3, 'total': 15}).total,
+      15,
+    );
+    expect(
+      parseImportCompleteness({'imported': 12, 'skipped': 3, 'total': 14}).total,
+      isNull,
+    );
   });
 }

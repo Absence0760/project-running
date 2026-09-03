@@ -20,9 +20,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:core_models/core_models.dart' show ActivityType;
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/preferences.dart';
 
 const _localeTags = ['en', 'de', 'fr', 'es', 'ja', 'pt', 'pt_BR'];
 
@@ -64,6 +64,8 @@ String _keyFor(String value) =>
     'activityType${value[0].toUpperCase()}${value.substring(1)}';
 
 void main() {
+  _leafVocabularyTests();
+
   test('the ActivityType enum is exactly the CHECK-constraint value set', () {
     final sql = _checkValues();
     expect(sql, isNotEmpty,
@@ -261,5 +263,52 @@ void main() {
       expect(hits.containsKey(path), isTrue,
           reason: 'allowed entry $path ($reason) no longer matches — drop it');
     });
+  });
+}
+
+/// The vocabulary is a LEAF, so a pure parser can reach it without dragging a
+/// widget toolkit in behind it. decisions § 1013.
+void _leafVocabularyTests() {
+  test('the enum lives in core_models, which has no Flutter dependency', () {
+    final leaf =
+        File('../../packages/core_models/lib/src/activity_type.dart');
+    expect(leaf.existsSync(), isTrue,
+        reason: 'the ActivityType leaf moved — check_constraint_unions.mjs '
+            'names this exact path as the rail for runs.activity_type, so a '
+            'move needs the registry edited in the same change');
+    // An IMPORT, not a mention — the file's own header explains why the icon
+    // getter could not travel with it, and names the library to do so.
+    expect(
+      RegExp(r"^import 'package:flutter/", multiLine: true)
+          .hasMatch(leaf.readAsStringSync()),
+      isFalse,
+      reason: 'core_models has no Flutter dependency at all; the icon getter '
+          'is an extension in activity_type_labels.dart for this reason',
+    );
+
+    final pubspec =
+        File('../../packages/core_models/pubspec.yaml').readAsStringSync();
+    final deps = pubspec.substring(
+      pubspec.indexOf('dependencies:'),
+      pubspec.contains('dev_dependencies:')
+          ? pubspec.indexOf('dev_dependencies:')
+          : pubspec.length,
+    );
+    expect(deps.contains('flutter:'), isFalse,
+        reason: 'core_models took a Flutter dependency, which is what kept the '
+            'vocabulary out of it');
+  });
+
+  test('the CSV importer reaches the vocabulary without a widget toolkit', () {
+    // It used to `import 'preferences.dart' show ActivityType`, and
+    // preferences.dart imports package:flutter/material.dart for a SharedPrefs
+    // cache and an IconData getter. Retyping the five values instead would
+    // have made a second rail against `runs_activity_type_check` that the
+    // constraint-union guard does not know to read.
+    final src = File('lib/csv_run_importer.dart').readAsStringSync();
+    expect(src.contains('ActivityType'), isTrue,
+        reason: 'the importer no longer names the vocabulary — re-anchor');
+    expect(src.contains("preferences.dart"), isFalse);
+    expect(src.contains('package:flutter/material.dart'), isFalse);
   });
 }

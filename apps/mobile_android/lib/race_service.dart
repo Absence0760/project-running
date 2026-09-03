@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart' show parseImportCompleteness;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -99,10 +100,15 @@ class ImportRaceResultOutcome {
   final int skipped;
   final int enriched;
 
+  /// Whether the function read the finisher field to its end. Only an explicit
+  /// claim earns it — see `parseImportCompleteness`.
+  final bool complete;
+
   const ImportRaceResultOutcome({
     required this.imported,
     required this.skipped,
     required this.enriched,
+    this.complete = false,
   });
 }
 
@@ -120,6 +126,17 @@ class UltraSignUpUnavailable implements Exception {
 
 /// Thrown when the ChronoTrack leg is unconfigured server-side (503), so the UI
 /// can show the unavailable explainer rather than a generic failure.
+/// The upstream finisher list was truncated before the runner was found, so
+/// the function refused rather than report "you are not in these results".
+///
+/// A distinct type because "we read the whole field and you are not in it" and
+/// "we read the first 2,000 finishers and you were not among them" are
+/// different sentences, and the second is not an import failure the runner can
+/// fix by retrying — the manual paste form beside it is the answer.
+class RaceResultsTruncated implements Exception {
+  const RaceResultsTruncated();
+}
+
 class ChronoTrackUnavailable implements Exception {
   const ChronoTrackUnavailable();
 }
@@ -180,8 +197,14 @@ const List<RaceImportProvider> raceImportProviders = [
     provider: 'ultrasignup',
     scope: RaceImportScope.athleteId,
     unavailable: UltraSignUpUnavailable(),
-    probeFunction: 'race-listings-sync',
-    probeBody: <String, dynamic>{'provider': 'ultrasignup'},
+    // The RESULTS leg, not the listings sync. The two are separately gated:
+    // `race-listings-sync` answers on ULTRASIGNUP_API_KEY alone, while the
+    // results leg refuses unconditionally since § 975 — the athlete feed
+    // carries no race identifier, so nothing it returns can be attributed to
+    // the listing a caller names. Probing the sync would advertise an import
+    // whose very next call 503s the moment the key is provisioned.
+    probeFunction: 'race-results-import',
+    probeBody: <String, dynamic>{'provider': 'ultrasignup', 'probe': true},
   ),
   RaceImportProvider(
     provider: 'chronotrack',
@@ -200,6 +223,38 @@ final Map<String, RaceImportProvider> _providerByToken = {
 /// leg. A null is not a gap: manual paste still applies to every listing.
 RaceImportProvider? raceImportProviderFor(String provider) =>
     _providerByToken[provider];
+
+/// Whether a thrown probe failure leaves the provider UNCONFIRMED, so the
+/// surface must treat it as unavailable.
+///
+/// A port of web's `isProviderNotConfigured` (`core/data.ts`), which is the
+/// reference implementation for this decision and was already fail-closed while
+/// the phone was not. Only two answers report a provider live: a clean success,
+/// and a readable non-429 4xx — which means the function ran PAST its
+/// credential gate and refused for its own reasons. Everything else is a probe
+/// that never reached the gate, or never got past it:
+///
+///  * 503 — the gate itself, whatever the body says. `race-results-import`
+///    answers 503 for UltraSignup's unliftable attribution refusal too, with a
+///    `reason` rather than a missing credential, and both are "do not offer".
+///  * 429 — the function's own per-user rate limit. Several probes on one
+///    screen exceed it, and a rate-limited probe confirms nothing.
+///  * any other 5xx — did not reach, or did not get past, the credential gate.
+///  * no readable status at all — a transport failure (the `http` client's own
+///    exception on this package version, a status-0 `FunctionsFetchException`
+///    on a later one), Supabase not yet initialised, or any unexpected throw.
+///
+/// Offering an action that 503s on its very next call is worse than hiding a
+/// live leg for one page load, which a later probe corrects.
+bool raceProbeUnavailable(Object error) {
+  if (error is FunctionException && error.status > 0) {
+    if (error.status == 503 || error.status == 429 || error.status >= 500) {
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
 
 /// All Supabase calls for the race calendar + results import (race_calendar.md).
 /// Mirrors the web `data.ts` race helpers; wire-level methods are exercisable
@@ -367,42 +422,52 @@ class RaceService extends ChangeNotifier {
         imported: (data['imported'] as num?)?.toInt() ?? 0,
         skipped: (data['skipped'] as num?)?.toInt() ?? 0,
         enriched: (data['enriched'] as num?)?.toInt() ?? 0,
+        // A field read only as far as the cap still imports the rows it found,
+        // so the success path has to carry the claim or a truncated import
+        // renders exactly like a whole one (decisions § 1014).
+        complete: parseImportCompleteness(data).complete,
       );
     } on FunctionException catch (e) {
       final spec = raceImportProviderFor(provider);
       if (spec != null && e.status == 503 && _isProviderNotConfigured(e.details)) {
         throw spec.unavailable;
       }
+      if (e.status == 502 && _detailsSay(e.details, 'upstream_results_truncated')) {
+        throw const RaceResultsTruncated();
+      }
       rethrow;
     }
   }
 
   /// Probe whether [provider]'s import leg is configured server-side, over the
-  /// probe that provider's [RaceImportProvider] names. Returns false on a 503
-  /// `provider_not_configured` — and false without a call for a listing
-  /// provider that has no import leg at all, so a caller can ask about any
-  /// listing and get an honest answer rather than a peer provider's.
+  /// probe that provider's [RaceImportProvider] names. Answers false without a
+  /// call for a listing provider that has no import leg at all, so a caller can
+  /// ask about any listing and get an honest answer rather than a peer's.
   ///
-  /// Anything else answers true: a probe that could not reach the server has
-  /// not shown the provider to be unconfigured, and disabling a live leg on a
-  /// dropped connection would be its own dishonesty.
+  /// Every other answer is [raceProbeUnavailable]'s, which is fail-closed: only
+  /// a clean success, or a readable non-429 4xx, reports the provider live.
+  ///
+  /// Total by construction, so a caller cannot lose the fail-closed answer by
+  /// forgetting to catch. The two screens keep their own L4 try/catch anyway —
+  /// a probe is the layering contract's named example of an auxiliary network
+  /// effect, and web's callers of the same probes carry the same backstop.
   Future<bool> isProviderConfigured(String provider) async {
     final spec = raceImportProviderFor(provider);
     if (spec == null) return false;
     try {
       await _c.functions.invoke(spec.probeFunction, body: spec.probeBody);
       return true;
-    } on FunctionException catch (e) {
-      if (e.status == 503 && _isProviderNotConfigured(e.details)) return false;
-      return true;
-    } catch (_) {
-      return true;
+    } catch (e) {
+      return !raceProbeUnavailable(e);
     }
   }
 
-  bool _isProviderNotConfigured(dynamic details) {
-    if (details is Map && details['error'] == 'provider_not_configured') return true;
-    return details.toString().contains('provider_not_configured');
+  bool _isProviderNotConfigured(dynamic details) =>
+      _detailsSay(details, 'provider_not_configured');
+
+  bool _detailsSay(dynamic details, String code) {
+    if (details is Map && details['error'] == code) return true;
+    return details.toString().contains(code);
   }
 
   String? _blankToNull(String? s) {
