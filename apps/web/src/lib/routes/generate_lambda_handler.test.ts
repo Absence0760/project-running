@@ -53,6 +53,9 @@ test('a non-POST is refused before the Pro gate or any engine call', async () =>
 		const out = await invoke({ body: REQUEST, requestContext: { http: { method } } });
 		assert.equal(out.statusCode, 405, `${method} must not reach the generate core`);
 		assert.equal(out.headers?.allow, 'POST');
+		// A refusal is not a document, and this one had no cache directive at all
+		// until it went through the shared gate (decisions § 1035).
+		assert.equal(out.headers?.['cache-control'], 'no-store');
 		assert.deepEqual(JSON.parse(String(out.body)), { error: 'method not allowed' });
 	}
 });

@@ -21,33 +21,18 @@
  * already fails, and a crawler never sends one. Replacing the render with a
  * 405 therefore removes no working behaviour (decisions § 1005).
  *
- * `Allow` is required on a 405 (RFC 9110 15.5.6), as the three API Lambdas
- * already send. `no-store` because a refusal is not a document: the behaviours
- * do not cache the method anyway, and a cached 405 would outlive a fix.
+ * The refusal itself is `core/method_gate`'s, which every Lambda in the tree
+ * now answers through; `no-store` matters here because these behaviours are
+ * the cached ones, and a cached 405 would outlive a fix.
  */
+
+import { methodRefusal, type MethodRefusal } from '../core/method_gate';
 
 export const SHARE_ALLOWED_METHODS = ['GET', 'HEAD'] as const;
 
-export interface ShareMethodRefusal {
-	statusCode: number;
-	headers: Record<string, string>;
-	body: string;
-}
+export type ShareMethodRefusal = MethodRefusal;
 
-/**
- * The 405 to answer with, or null when the method may proceed. Fail-closed:
- * an absent method is refused rather than waved through, matching the
- * `!== 'POST'` shape of the coach and generate-route wrappers.
- */
-export function shareMethodRefusal(method: string | undefined): ShareMethodRefusal | null {
-	if (method === 'GET' || method === 'HEAD') return null;
-	return {
-		statusCode: 405,
-		headers: {
-			'content-type': 'application/json',
-			allow: SHARE_ALLOWED_METHODS.join(', '),
-			'cache-control': 'no-store',
-		},
-		body: JSON.stringify({ error: 'method not allowed' }),
-	};
+/** This surface's instantiation of the shared refusal: GET and HEAD, nothing else. */
+export function shareMethodRefusal(method: string | undefined): MethodRefusal | null {
+	return methodRefusal(method, SHARE_ALLOWED_METHODS);
 }

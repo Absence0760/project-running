@@ -87,6 +87,7 @@ test('a non-GET is refused before the auth gate or any engine call', async () =>
 		// CloudFront allowed_methods include POST/PUT/PATCH/DELETE — so a
 		// non-GET really does arrive here rather than being refused at the edge.
 		assert.equal(out.headers?.allow, 'GET');
+		assert.equal(out.headers?.['cache-control'], 'no-store');
 	}
 });
 

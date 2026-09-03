@@ -21,8 +21,10 @@
 
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
 import { handleOsrmProxy } from '../../../src/lib/routes/osrm_proxy/handler';
+import { methodRefusal } from '../../../src/lib/core/method_gate';
 
 const PATH_PREFIX = '/api/routes/osrm';
+const ALLOWED_METHODS = ['GET'] as const;
 
 function json(statusCode: number, body: unknown): LambdaFunctionURLResult {
 	return {
@@ -39,17 +41,12 @@ export const handler = async (
 	// unexpected throw becomes a generic 503 to the wire and a tagged operator
 	// log line, never the runtime's default error envelope.
 	try {
-		// `Allow` is required on a 405 (RFC 9110 15.5.6), and the coach and
-		// generate-route wrappers both send it. This behaviour's CloudFront
-		// allowed_methods include POST/PUT/PATCH/DELETE, so a non-GET really
-		// does reach this Lambda rather than being refused at the edge.
-		if (event.requestContext.http.method !== 'GET') {
-			return {
-				statusCode: 405,
-				headers: { 'content-type': 'application/json', allow: 'GET' },
-				body: JSON.stringify({ error: 'method not allowed' }),
-			};
-		}
+		// This behaviour's CloudFront allowed_methods include POST/PUT/PATCH/
+		// DELETE, so a non-GET really does reach this Lambda rather than being
+		// refused at the edge. Read without `?.` so a malformed event throws
+		// into the outer envelope rather than resolving to a 405.
+		const refused = methodRefusal(event.requestContext.http.method, ALLOWED_METHODS);
+		if (refused) return refused;
 		const rawPath = event.rawPath ?? '';
 		if (!rawPath.startsWith(PATH_PREFIX)) {
 			return json(400, { error: 'unsupported OSRM path' });

@@ -3691,7 +3691,10 @@ test('every production Lambda gates its own HTTP method', () => {
 	//
 	// Source-level rather than behavioural because the shapes do not generalise:
 	// the coach wrapper writes to a response STREAM and cannot be driven through
-	// the same envelope as its siblings.
+	// the same envelope as its siblings. All eight now share the REFUSAL itself
+	// (`core/method_gate`, decisions § 1035) — the stream caller passes its
+	// parts to `HttpResponseStream.from` — but a ninth handler could still
+	// spell its own, so both shapes stay accepted here.
 	const dir = resolve(__dirname, '..', '..', 'lambda');
 	const handlers = readdirSync(dir, { withFileTypes: true })
 		.filter((e) => e.isDirectory())
@@ -3703,9 +3706,10 @@ test('every production Lambda gates its own HTTP method', () => {
 	assert.ok(handlers.length >= 8, `found only ${handlers.length} Lambda handlers — walker broken?`);
 
 	// Either the handler spells its own comparison and the 405 it answers with,
-	// or it delegates to the one shared refusal the five share Lambdas use.
+	// or it delegates to the shared refusal (directly, or through the share
+	// surface's own instantiation of it).
 	const OWN_GATE = /requestContext\??\.http\??\.method\s*!==/;
-	const SHARED_GATE = /shareMethodRefusal\(/;
+	const SHARED_GATE = /\b(share)?[Mm]ethodRefusal\(/;
 
 	const ungated = handlers.filter((rel) => {
 		const src = stripComments(readFileSync(resolve(dir, rel), 'utf-8'));
@@ -3717,8 +3721,8 @@ test('every production Lambda gates its own HTTP method', () => {
 		ungated.sort(),
 		[],
 		'these Lambda handlers do work on any method their CloudFront behaviour ' +
-			'lets through. Compare `event.requestContext.http.method` and answer a ' +
-			'405 with an `Allow` header (RFC 9110 15.5.6), or call ' +
-			'`shareMethodRefusal` from $lib/share/share_method_gate.',
+			'lets through. Call `methodRefusal` from $lib/core/method_gate with the ' +
+			'set this handler allows — it carries the `Allow` header RFC 9110 15.5.6 ' +
+			'requires and the `no-store` a refusal needs.',
 	);
 });
