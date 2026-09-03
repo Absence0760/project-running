@@ -1,9 +1,9 @@
 import 'package:core_models/core_models.dart' as cm;
+import 'package:core_models/core_models.dart' show DistanceUnit;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
-import '../lib/preferences.dart';
 import '../lib/screens/route_picker_screen.dart';
 
 cm.Route _route(

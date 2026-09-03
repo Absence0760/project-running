@@ -146,17 +146,17 @@ export const VECTOR_PAIRS = [
   {
     name: 'TRK1 run blob',
     rust: { file: RS_RUN, fn: 'golden_blob_is_stable' },
-    dart: { file: DT_RUN, const: '_goldenV4Hex' },
+    dart: { file: DT_RUN, const: '_goldenV5Hex' },
   },
   {
     name: 'TRK1 run blob carrying a lap record',
     rust: { file: RS_RUN, fn: 'golden_blob_with_a_lap_is_stable' },
-    dart: { file: DT_RUN, const: '_goldenV4LapHex' },
+    dart: { file: DT_RUN, const: '_goldenV5LapHex' },
   },
   {
     name: 'TRK1 run blob carrying the workout records',
     rust: { file: RS_RUN, fn: 'golden_blob_with_workout_records_is_stable' },
-    dart: { file: DT_RUN, const: '_goldenWorkoutHex' },
+    dart: { file: DT_RUN, const: '_goldenV5WorkoutHex' },
   },
   {
     name: 'TRK1 v1 run blob (rejected on both rails)',
@@ -213,6 +213,17 @@ export const DART_ONLY = [
     why: 'the v3 run blob a pre-§356 board still has in flash — the phone must keep DECODING it, and the firmware no longer writes it, so there is no live Rust encoder to mirror',
   },
   { file: DT_RUN, const: '_goldenLapHex', why: 'the v3 lap blob, as _goldenHex' },
+  {
+    file: DT_RUN,
+    const: '_goldenV4Hex',
+    why: 'the v4 run blob a pre-§1026 board still has in flash — its altitudes are decimetres and the phone must keep reading them that way, while the firmware now writes v5 metres, so there is no live Rust encoder to mirror',
+  },
+  { file: DT_RUN, const: '_goldenV4LapHex', why: 'the v4 lap blob, as _goldenV4Hex' },
+  {
+    file: DT_RUN,
+    const: '_goldenV4WorkoutHex',
+    why: 'the v4 workout blob, as _goldenV4Hex',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -305,12 +316,14 @@ const RS_GAP = 'apps/custom_watch/core/src/grade_adjusted_pace.rs';
 const RS_WORKOUT_CORE = 'apps/custom_watch/core/src/workout.rs';
 const RS_RECORD = 'apps/custom_watch/core/src/record.rs';
 const RS_ROUTE_SIMPLIFY = 'apps/custom_watch/core/src/route_simplify.rs';
+const RS_TRACK_PROJECTION = 'apps/custom_watch/core/src/track_projection.rs';
 const DL_COURSE = 'apps/mobile_android/lib/watch_course.dart';
 const DL_WORKOUT = 'apps/mobile_android/lib/watch_workout.dart';
 const DL_ROADBOOK = 'apps/mobile_android/lib/watch_roadbook.dart';
 const DL_SCREENS = 'apps/mobile_android/lib/watch_screens.dart';
 const DL_SETTINGS = 'apps/mobile_android/lib/watch_settings.dart';
 const DL_GAP = 'apps/mobile_android/lib/grade_adjusted_pace.dart';
+const DL_RUN_SYNC = 'apps/mobile_android/lib/sim_watch_sync.dart';
 const DL_RUN_SCREEN = 'apps/mobile_android/lib/screens/run_screen.dart';
 const DL_APPLE_ROUTE = 'apps/mobile_android/lib/apple_watch_route_bridge.dart';
 const SW_ARMED_ROUTE = 'apps/watch_ios/WatchApp/ArmedRoute.swift';
@@ -361,6 +374,14 @@ export const CONSTANT_ROWS = [
     ],
   },
   {
+    name: 'RBK1 checkpoint length (bytes)',
+    why: "the stride both rails walk the checkpoint series with, at the version the phone emits. A one-sided change reads every field after the first checkpoint from the wrong offset — the CRC still matches, the counts still agree, and the schedule decodes as a plausible different race. Only the CURRENT version's stride is a pair: the firmware also knows v1's, but the phone has no decoder and never emits v1, so restating it there would be a constant nothing reads",
+    rails: [
+      rustRail(RS_ROADBOOK, rustConst('ROADBOOK_CHECKPOINT_LEN')),
+      dartRail(DL_ROADBOOK, dartConst('kRoadbookCheckpointLen')),
+    ],
+  },
+  {
     name: 'SCR1 format version',
     why: 'as CRS1',
     rails: [
@@ -374,6 +395,30 @@ export const CONSTANT_ROWS = [
     rails: [
       rustRail(RS_SETTINGS, rustConst('SETTINGS_VERSION')),
       dartRail(DL_SETTINGS, dartConst('_settingsVersion')),
+    ],
+  },
+  {
+    name: 'TRK1 current format version',
+    why: "the version the watch STAMPS against the newest the phone will read. Unlike the four push formats this one flows watch->phone, so the two halves are not encoder-and-decoder but writer-and-ceiling: a firmware-only bump ships a watch whose runs the phone refuses outright, which is a runner losing a race to a version byte, and nothing in either suite could see it — the firmware's golden pins what it emits, the phone's pins what it reads, and neither knows the other's bound",
+    rails: [
+      rustRail(RS_RUN, rustConst('FORMAT_VERSION')),
+      dartRail(DL_RUN_SYNC, dartConst('_maxSupportedVersion')),
+    ],
+  },
+  {
+    name: 'TRK1 oldest readable format version',
+    why: 'the compat floor, the other end of the same window. A phone floor ABOVE the firmware\'s would refuse a blob the firmware still considers current; one below would decode a pre-v3 blob whose CRC never covered its totals',
+    rails: [
+      rustRail(RS_RUN, rustConst('MIN_FORMAT_VERSION')),
+      dartRail(DL_RUN_SYNC, dartConst('_minSupportedVersion')),
+    ],
+  },
+  {
+    name: 'TRK1 first whole-metre altitude version',
+    why: 'the version at which a track point\'s altitude stopped meaning decimetres and started meaning metres. A rail holding a different switch point reports every altitude in one whole format version ten times too high or too low — silently, since the bytes verify and the CRC matches',
+    rails: [
+      rustRail(RS_RUN, rustConst('ELE_METRES_VERSION')),
+      dartRail(DL_RUN_SYNC, dartConst('kEleMetresVersion')),
     ],
   },
   {
@@ -544,6 +589,21 @@ export const CONSTANT_ROWS = [
     rails: [
       rustRail(RS_GAP, rustConst('MIN_SPEED_MPS')),
       otherRail(MC_GAP, mcConst('MIN_SPEED_MPS')),
+    ],
+  },
+  {
+    name: 'renderable-track span gate (m)',
+    why: "the bounding-box diagonal below which a track is jitter rather than a run, and is drawn as nothing rather than as a dot on one pixel. A THRESHOLD, not a wire field, so no version moves when it drifts and no decode fails — the three rails simply disagree about whether a run has a picture. It was a bare literal on the phone and the web until this round, which is why it could not be registered: this guard reads a rail by the NAME of its constant",
+    rails: [
+      rustRail(RS_TRACK_PROJECTION, rustConst('MIN_RENDERABLE_SPAN_M')),
+      dartRail(
+        'apps/mobile_android/lib/widgets/track_preview.dart',
+        dartConst('kMinRenderableSpanM'),
+      ),
+      otherRail(
+        'apps/web/src/lib/routes/track_projection.ts',
+        tsConst('MIN_RENDERABLE_SPAN_M'),
+      ),
     ],
   },
   {

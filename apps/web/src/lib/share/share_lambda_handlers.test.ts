@@ -24,8 +24,12 @@ import { resolve } from 'node:path';
 
 // The SPA shell is substituted into each bundle by its build.mjs. Set before
 // the handlers are imported so the HTML 200 path has something to inject into.
+// `#svelte` and the bundle script are the markers the 404 test looks for: the
+// real shell carries both, so a body containing them is the app rather than a
+// hand-written sentence.
 (globalThis as Record<string, unknown>).__SPA_SHELL_HTML__ =
-	'<!DOCTYPE html><html><head><title>Threkir</title></head><body></body></html>';
+	'<!DOCTYPE html><html><head><title>Threkir</title></head><body><div id="svelte"></div>' +
+	'<script type="module" src="/_app/immutable/entry/start.abc.js"></script></body></html>';
 
 // Deliberately absent, not pointed at a fake: an unset pair is the state a
 // first apply leaves behind, every lookup then misses, and no case here can
@@ -157,15 +161,28 @@ test('all four share Lambdas send the same 5-minute Cache-Control on both paths'
 });
 
 // A crawler must be told the entity is gone rather than shown the site's
-// generic card. The HTML branch answers a branded noindex page; the PNG branch
-// deliberately does NOT 404, because a social unfurl whose image 404s renders
-// as a broken card (round-5 very-social).
+// generic card. The HTML branch answers the app's own shell at 404 with a
+// noindex; the PNG branch deliberately does NOT 404, because a social unfurl
+// whose image 404s renders as a broken card (round-5 very-social).
 test('an entity that cannot be loaded is a noindex HTML 404 and a 200 PNG', async () => {
 	for (const { dir, handler, html, png } of SIBLINGS) {
 		const page = await invoke(handler, html);
 		assert.equal(page.statusCode, 404, `${dir} HTML`);
 		assert.match(String(page.headers?.['content-type']), /^text\/html/, `${dir} HTML`);
 		assert.match(String(page.body), /name="robots" content="noindex"/, `${dir} HTML`);
+		// The body is the SPA shell, not a bespoke English paragraph. Each of the
+		// five wrote its own, and none was ever read: the distribution replaces
+		// every 4xx body with the shell (decisions § 1022), so the reader saw the
+		// designed not-found card and the noindex above went in the bin with the
+		// body it was attached to. Now the handler and the edge agree, which is
+		// what lets that mapping go (decisions § 1036).
+		assert.ok(String(page.body).includes('<div id="svelte">'), `${dir} must hydrate`);
+		assert.ok(String(page.body).includes('start.abc.js'), `${dir} must load the bundle`);
+		assert.equal(
+			/no longer available|isn.t available/.test(String(page.body)),
+			false,
+			`${dir} still ships its own not-found sentence`,
+		);
 
 		const image = await invoke(handler, png);
 		assert.equal(image.statusCode, 200, `${dir} PNG must never 404 — an unfurl would break`);

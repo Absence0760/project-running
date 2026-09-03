@@ -4,6 +4,8 @@ import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
+import { stripComments } from '../../src/lib/core/strip_comments';
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 const E2E_ROOT = join(HERE, '..');
 const WEB_ROOT = join(E2E_ROOT, '..');
@@ -21,9 +23,11 @@ const COMPILABLE = new Set(['.ts', '.mts', '.cts', '.tsx', '.js', '.mjs', '.cjs'
 
 /** `include` entries, which must all be of the form `tests-e2e/**\/*.<ext>`. */
 function includedExtensions(): Set<string> {
-	// Comments are legal in a tsconfig and this one carries them, so strip the
-	// line comments before parsing rather than reaching for a JSON5 dependency.
-	const raw = readFileSync(join(WEB_ROOT, CONFIG), 'utf8').replace(/^\s*\/\/.*$/gm, '');
+	// Comments are legal in a tsconfig and this one carries them, so blank them
+	// before parsing rather than reaching for a JSON5 dependency. Through the
+	// shared stripper: JSONC takes block comments and trailing ones too, which
+	// the line-only strip this replaced would have handed to `JSON.parse`.
+	const raw = stripComments(readFileSync(join(WEB_ROOT, CONFIG), 'utf8'));
 	const parsed = JSON.parse(raw) as { extends?: string; include?: string[] };
 	assert.equal(
 		parsed.extends,

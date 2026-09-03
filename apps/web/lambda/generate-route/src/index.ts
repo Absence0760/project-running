@@ -28,6 +28,9 @@ import {
 	handleGenerate,
 } from '../../../src/lib/routes/generate/handler';
 import { decodeLambdaBody } from '../../../src/lib/coach/body';
+import { methodRefusal } from '../../../src/lib/core/method_gate';
+
+const ALLOWED_METHODS = ['POST'] as const;
 
 function json(statusCode: number, body: unknown): LambdaFunctionURLResult {
 	return {
@@ -48,14 +51,10 @@ export const handler = async (
 		// wrapper (`src/routes/api/routes/generate/+server.ts`) exports `POST`
 		// alone, so SvelteKit answers 405 to anything else while this — the
 		// surface that runs in production — ran the full Pro-gated engine call
-		// on any method (decisions § 896).
-		if (event.requestContext.http.method !== 'POST') {
-			return {
-				statusCode: 405,
-				headers: { 'content-type': 'application/json', allow: 'POST' },
-				body: JSON.stringify({ error: 'method not allowed' }),
-			};
-		}
+		// on any method (decisions § 896). Read without `?.` so a malformed
+		// event throws into the outer envelope rather than resolving to a 405.
+		const refused = methodRefusal(event.requestContext.http.method, ALLOWED_METHODS);
+		if (refused) return refused;
 		// `decodeLambdaBody`, not a private Buffer + byteLength pair: the coach's
 		// two wrappers once diverged on exactly that, a UTF-16 `length` check
 		// against a byte cap, and let a multi-byte payload roughly 3x the cap

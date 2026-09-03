@@ -17,6 +17,9 @@
 /// could not travel with it; it is an extension in
 /// `apps/mobile_android/lib/activity_type_labels.dart`, beside the label the
 /// enum deliberately does not carry either.
+library;
+
+import 'distance_unit.dart';
 
 enum ActivityType {
   run,
@@ -113,6 +116,29 @@ enum ActivityType {
         return 6; // slow running overlap for scrambling / downhill
       case ActivityType.stroller:
         return 9; // running with a pram — a touch under open-run peak
+    }
+  }
+
+  /// Distance interval (metres) for split notifications, in the runner's own
+  /// unit. Larger for cycling so a 30 km ride doesn't fire 30 announcements.
+  ///
+  /// Unit-aware because a split is a landmark, not a raw distance: an
+  /// imperial runner expects to be told when they pass a MILE. Defaulting
+  /// everyone to a kilometre gave them splits at 0.6 mi, 1.2 mi, 1.9 mi — the
+  /// settings screen has always offered a "1 mi" option, the default just
+  /// didn't follow the preference. The values match the presets that screen
+  /// lists, so the default is one of the choices rather than a fourth number.
+  ///
+  /// This was an extension in `preferences.dart` for as long as [DistanceUnit]
+  /// was declared there; it is a member again now that both vocabularies are
+  /// leaves.
+  double splitIntervalMetresFor(DistanceUnit unit) {
+    final imperial = unit == DistanceUnit.mi;
+    switch (this) {
+      case ActivityType.cycle:
+        return imperial ? 5 * kMetresPerMile : 5000;
+      default:
+        return imperial ? kMetresPerMile : 1000;
     }
   }
 

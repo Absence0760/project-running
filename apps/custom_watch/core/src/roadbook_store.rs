@@ -11,11 +11,33 @@
 //!   cutoff_count(1, u8) | flags(1) | checkpoint[N] | cutoff[M] |
 //!   crc32(4, u32 LE)
 //!
-//! where each checkpoint is `cum_dist_m(4, u32 LE) | leg_dist_m(4, u32 LE) |
-//! projected_elapsed_s(4, u32 LE) | cutoff(1, u8) | flags(1, u8)` — the cutoff
-//! byte naming [`CutoffStatus`] (0 none / 1 safe / 2 tight / 3 miss) and the
-//! flags byte carrying [`CHECKPOINT_FLAG_REFILL`] — and each cut-off leg is
+//! where each **v2** checkpoint is `cum_dist_m(4, u32 LE) |
+//! leg_dist_m(4, u32 LE) | projected_elapsed_s(4, u32 LE) | cutoff(1, u8) |
+//! flags(1, u8) | target_elapsed_s(4, u32 LE) | target(1, u8)` — the cutoff
+//! byte naming [`CutoffStatus`] (0 none / 1 safe / 2 tight / 3 miss), the flags
+//! byte carrying [`CHECKPOINT_FLAG_REFILL`], and the target pair naming the
+//! runner's own time for this checkpoint plus the phone's
+//! [`TargetStatus`](crate::roadbook::TargetStatus) verdict against it (0 none /
+//! 1 ahead / 2 on / 3 behind) — and each cut-off leg is
 //! `cum_dist_m(4, u32 LE) | limit_elapsed_s(4, u32 LE)`.
+//!
+//! **Version 2 (2026-09-03, decisions §1027) added the target pair.** v1's
+//! checkpoint stopped at the flags byte, so the Roadbook page could show the
+//! cutoff verdict web has and not the target one, on a device whose whole
+//! purpose is telling a runner whether they are on their own plan. The two
+//! travel TOGETHER — `target_elapsed_s` 0 with a status, or a status of 0 with
+//! a time, is a malformed frame and is refused rather than half-read: a verdict
+//! with no time behind it cannot be audited and a time with no verdict cannot
+//! be graded here, because the band is 1 % of the target floored at 60 s and
+//! lives on the two phone rails that hold the marker meta. The verdict is the
+//! phone's for the same reason the cutoff one is.
+//!
+//! [`MIN_ROADBOOK_FORMAT_VERSION`] is 1, so a phone that has not been updated
+//! alongside the firmware still pushes a schedule the watch loads — with no
+//! targets, which is exactly what it knows. Refusing it instead would leave a
+//! runner with an armed course and a blank Roadbook page because of a version
+//! byte, and unlike the run blob's pre-v3 window there is no integrity reason
+//! to: v1's CRC covers the same bytes v2's does, and the layout is a prefix.
 //!
 //! Distances travel as whole metres, not the `f64` the structs hold: a metre is
 //! four orders below the GPS noise the along-course projection carries, and a
@@ -60,16 +82,22 @@
 use heapless::Vec;
 
 use crate::cutoff_eta::CutoffLeg;
-use crate::record::{RoadbookCheckpoint, MAX_CUTOFF_LEGS, MAX_PUSHED_LEGS};
-use crate::roadbook::CutoffStatus;
+use crate::record::{CheckpointTarget, RoadbookCheckpoint, MAX_CUTOFF_LEGS, MAX_PUSHED_LEGS};
+use crate::roadbook::{CutoffStatus, TargetStatus};
 use crate::run_store::crc32;
 
 /// Roadbook frame magic — "RBK1".
 pub const ROADBOOK_MAGIC: [u8; 4] = *b"RBK1";
 
-/// Version 1. There is no pre-checksum version and there never was — see the
-/// module docs for why one would make the CRC decorative.
-pub const ROADBOOK_FORMAT_VERSION: u8 = 1;
+/// What the phone stamps and this module encodes. There is no pre-checksum
+/// version and there never was — see the module docs for why one would make the
+/// CRC decorative.
+pub const ROADBOOK_FORMAT_VERSION: u8 = 2;
+
+/// The oldest version [`decode`] still reads. v2 appended two fields to the
+/// checkpoint without touching the header, the cut-off legs or the CRC window,
+/// so a v1 frame is a strict prefix shape and loads with no targets.
+pub const MIN_ROADBOOK_FORMAT_VERSION: u8 = 1;
 
 /// Per-checkpoint flag: this checkpoint offers water/food, so the Fuel page
 /// treats it as a refill point.
@@ -86,27 +114,41 @@ const KNOWN_ROADBOOK_FLAGS: u8 = 0;
 /// Header: magic(4) + version(1) + checkpoint_count(1) + cutoff_count(1) +
 /// flags(1).
 pub const ROADBOOK_HEADER_LEN: usize = 8;
-/// One checkpoint: cum_dist(4) + leg_dist(4) + projected_elapsed(4) +
-/// cutoff(1) + flags(1).
-pub const ROADBOOK_CHECKPOINT_LEN: usize = 14;
+/// One v2 checkpoint: cum_dist(4) + leg_dist(4) + projected_elapsed(4) +
+/// cutoff(1) + flags(1) + target_elapsed(4) + target(1).
+pub const ROADBOOK_CHECKPOINT_LEN: usize = 19;
+/// One v1 checkpoint — the same layout up to the flags byte, and nothing after
+/// it. Kept so a v1 push from a phone that has not been updated still decodes.
+pub const ROADBOOK_CHECKPOINT_LEN_V1: usize = 14;
+
+/// Bytes one checkpoint occupies in a frame of `version`.
+pub const fn checkpoint_len(version: u8) -> usize {
+    if version >= 2 {
+        ROADBOOK_CHECKPOINT_LEN
+    } else {
+        ROADBOOK_CHECKPOINT_LEN_V1
+    }
+}
 /// One cut-off leg: cum_dist(4) + limit_elapsed(4).
 pub const ROADBOOK_CUTOFF_LEN: usize = 8;
 const ROADBOOK_CRC_LEN: usize = 4;
 
 /// Largest a full frame can be — the header plus both series at their caps and
-/// the CRC trailer. 364 B, which is why the push is chunked: one ATT write at
-/// the `ble` task's 256-byte MTU carries at most `MTU - 3` = 253 bytes.
-pub const MAX_ROADBOOK_FRAME_LEN: usize = roadbook_frame_len(MAX_PUSHED_LEGS, MAX_CUTOFF_LEGS);
+/// the CRC trailer, at the widest version this build knows. 444 B, which is why
+/// the push is chunked: one ATT write at the `ble` task's 256-byte MTU carries
+/// at most `MTU - 3` = 253 bytes.
+pub const MAX_ROADBOOK_FRAME_LEN: usize =
+    roadbook_frame_len(ROADBOOK_FORMAT_VERSION, MAX_PUSHED_LEGS, MAX_CUTOFF_LEGS);
 
 /// The BLE `roadbook` write characteristic's chunk cap, mirroring
 /// [`crate::course_store::COURSE_CHUNK_CAP`].
 pub const ROADBOOK_CHUNK_CAP: usize = 244;
 
-/// Frame length for a schedule of `checkpoints` checkpoints and `cutoffs`
-/// cut-off legs.
-pub const fn roadbook_frame_len(checkpoints: usize, cutoffs: usize) -> usize {
+/// Frame length for a `version` schedule of `checkpoints` checkpoints and
+/// `cutoffs` cut-off legs.
+pub const fn roadbook_frame_len(version: u8, checkpoints: usize, cutoffs: usize) -> usize {
     ROADBOOK_HEADER_LEN
-        + checkpoints * ROADBOOK_CHECKPOINT_LEN
+        + checkpoints * checkpoint_len(version)
         + cutoffs * ROADBOOK_CUTOFF_LEN
         + ROADBOOK_CRC_LEN
 }
@@ -162,6 +204,29 @@ fn status_from_code(code: u8) -> Option<Option<CutoffStatus>> {
     }
 }
 
+fn target_code(status: Option<TargetStatus>) -> u8 {
+    match status {
+        None => 0,
+        Some(TargetStatus::Ahead) => 1,
+        Some(TargetStatus::On) => 2,
+        Some(TargetStatus::Behind) => 3,
+    }
+}
+
+/// `None` for a byte that names no target verdict — the [`status_from_code`]
+/// rule: an unknown code rejects the whole frame rather than reading as "no
+/// target", which would silently turn a runner who is an hour behind their own
+/// plan into a blank cell.
+fn target_from_code(code: u8) -> Option<Option<TargetStatus>> {
+    match code {
+        0 => Some(None),
+        1 => Some(Some(TargetStatus::Ahead)),
+        2 => Some(Some(TargetStatus::On)),
+        3 => Some(Some(TargetStatus::Behind)),
+        _ => None,
+    }
+}
+
 /// A metre distance as the wire's `u32`, or `None` when it cannot be
 /// represented — non-finite, negative, or past `u32::MAX` metres. Fail-closed
 /// at the sender: a clamp would push a plausible wrong distance.
@@ -176,11 +241,12 @@ fn metres(m: f64) -> Option<u32> {
     Some(rounded as u32)
 }
 
-/// Encode a roadbook + cut-off schedule into `out` as an `RBK1` v1 frame,
-/// returning the byte length written. `None` when either series is over its cap
-/// ([`MAX_PUSHED_LEGS`] / [`MAX_CUTOFF_LEGS`] — refused, not trimmed), when a
-/// distance can't be represented in whole metres, or when `out` is smaller than
-/// the frame needs. The CRC32 trailer seals everything before it.
+/// Encode a roadbook + cut-off schedule into `out` as an `RBK1`
+/// [`ROADBOOK_FORMAT_VERSION`] frame, returning the byte length written. `None`
+/// when either series is over its cap ([`MAX_PUSHED_LEGS`] /
+/// [`MAX_CUTOFF_LEGS`] — refused, not trimmed), when a distance can't be
+/// represented in whole metres, or when `out` is smaller than the frame needs.
+/// The CRC32 trailer seals everything before it.
 pub fn encode(
     checkpoints: &[RoadbookCheckpoint],
     cutoffs: &[CutoffLeg],
@@ -189,7 +255,7 @@ pub fn encode(
     if checkpoints.len() > MAX_PUSHED_LEGS || cutoffs.len() > MAX_CUTOFF_LEGS {
         return None;
     }
-    let len = roadbook_frame_len(checkpoints.len(), cutoffs.len());
+    let len = roadbook_frame_len(ROADBOOK_FORMAT_VERSION, checkpoints.len(), cutoffs.len());
     if out.len() < len {
         return None;
     }
@@ -209,6 +275,15 @@ pub fn encode(
         } else {
             0
         };
+        // Both halves of the target or neither: a verdict with no time is an
+        // opinion the wrist cannot audit, and 0 is the format's "no target"
+        // in both bytes.
+        let (target_s, target) = match cp.target {
+            Some(t) if t.elapsed_s > 0 => (t.elapsed_s, target_code(Some(t.status))),
+            _ => (0, 0),
+        };
+        out[off + 14..off + 18].copy_from_slice(&target_s.to_le_bytes());
+        out[off + 18] = target;
         off += ROADBOOK_CHECKPOINT_LEN;
     }
     for leg in cutoffs {
@@ -240,10 +315,11 @@ fn crc_matches(frame: &[u8]) -> bool {
 /// [`RoadbookAssembler::push`] so the reassembler's early rejection and the
 /// decoder's cannot disagree about what a legal header is.
 fn header_frame_len(head: &[u8]) -> Option<usize> {
-    if head.len() < ROADBOOK_HEADER_LEN
-        || head[0..4] != ROADBOOK_MAGIC
-        || head[4] != ROADBOOK_FORMAT_VERSION
-    {
+    if head.len() < ROADBOOK_HEADER_LEN || head[0..4] != ROADBOOK_MAGIC {
+        return None;
+    }
+    let version = head[4];
+    if !(MIN_ROADBOOK_FORMAT_VERSION..=ROADBOOK_FORMAT_VERSION).contains(&version) {
         return None;
     }
     let checkpoints = head[5] as usize;
@@ -254,14 +330,16 @@ fn header_frame_len(head: &[u8]) -> Option<usize> {
     if head[7] & !KNOWN_ROADBOOK_FLAGS != 0 {
         return None;
     }
-    Some(roadbook_frame_len(checkpoints, cutoffs))
+    Some(roadbook_frame_len(version, checkpoints, cutoffs))
 }
 
-/// Decode an `RBK1` v1 frame. `None` on a bad magic, any version but the
-/// current one, a count over either cap (checked *before* any indexed read), an
-/// unknown frame or checkpoint flag bit, a length that disagrees with the
-/// declared counts, a cut-off byte naming no status, or a CRC that doesn't
-/// match — never a partially-applied schedule.
+/// Decode an `RBK1` frame at any version in
+/// [`MIN_ROADBOOK_FORMAT_VERSION`]..=[`ROADBOOK_FORMAT_VERSION`]. `None` on a
+/// bad magic, a version outside that window, a count over either cap (checked
+/// *before* any indexed read), an unknown frame or checkpoint flag bit, a
+/// length that disagrees with the declared counts and version, a cut-off or
+/// target byte naming no status, a half-present target pair, or a CRC that
+/// doesn't match — never a partially-applied schedule.
 pub fn decode(frame: &[u8]) -> Option<PushedRoadbook> {
     if frame.len() != header_frame_len(frame)? {
         return None;
@@ -269,6 +347,8 @@ pub fn decode(frame: &[u8]) -> Option<PushedRoadbook> {
     if !crc_matches(frame) {
         return None;
     }
+    let version = frame[4];
+    let cp_len = checkpoint_len(version);
     let checkpoint_count = frame[5] as usize;
     let cutoff_count = frame[6] as usize;
     let mut out = PushedRoadbook::new();
@@ -278,6 +358,26 @@ pub fn decode(frame: &[u8]) -> Option<PushedRoadbook> {
         if flags & !KNOWN_CHECKPOINT_FLAGS != 0 {
             return None;
         }
+        let target = if version >= 2 {
+            let elapsed_s = u32::from_le_bytes([
+                frame[off + 14],
+                frame[off + 15],
+                frame[off + 16],
+                frame[off + 17],
+            ]);
+            match (elapsed_s, target_from_code(frame[off + 18])?) {
+                (0, None) => None,
+                (elapsed_s, Some(status)) if elapsed_s > 0 => {
+                    Some(CheckpointTarget { elapsed_s, status })
+                }
+                // One half without the other: a target time nothing graded, or
+                // a verdict about nothing. Refuse the frame rather than drop
+                // the half that cannot be paired.
+                _ => return None,
+            }
+        } else {
+            None
+        };
         let cp = RoadbookCheckpoint {
             cum_dist_m: f64::from(u32::from_le_bytes([
                 frame[off],
@@ -298,10 +398,11 @@ pub fn decode(frame: &[u8]) -> Option<PushedRoadbook> {
                 frame[off + 11],
             ]),
             cutoff: status_from_code(frame[off + 12])?,
+            target,
             is_refill: flags & CHECKPOINT_FLAG_REFILL != 0,
         };
         out.checkpoints.push(cp).ok()?;
-        off += ROADBOOK_CHECKPOINT_LEN;
+        off += cp_len;
     }
     for _ in 0..cutoff_count {
         let leg = CutoffLeg {
@@ -417,6 +518,7 @@ mod tests {
                 leg_dist_m: 0.0,
                 projected_elapsed_s: 0,
                 cutoff: None,
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -424,6 +526,7 @@ mod tests {
                 leg_dist_m: 90.0,
                 projected_elapsed_s: 30,
                 cutoff: Some(CutoffStatus::Safe),
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -431,6 +534,7 @@ mod tests {
                 leg_dist_m: 90.0,
                 projected_elapsed_s: 60,
                 cutoff: Some(CutoffStatus::Tight),
+                target: None,
                 is_refill: false,
             },
         ]
@@ -482,18 +586,23 @@ mod tests {
     /// to either struct should be a deliberate decision rather than a surprise.
     #[test]
     fn the_pushed_schedules_ram_cost_is_pinned() {
-        assert_eq!(core::mem::size_of::<PushedRoadbook>(), 656);
-        // 16 checkpoints at 24 B + 16 cut-off legs at 16 B, plus each `Vec`'s
+        assert_eq!(core::mem::size_of::<PushedRoadbook>(), 784);
+        // 16 checkpoints at 32 B + 16 cut-off legs at 16 B, plus each `Vec`'s
         // length word — under 1 KiB of the 256 KiB budget, against the ~4.5 KiB
-        // the course polyline it describes already costs.
-        assert_eq!(core::mem::size_of::<RoadbookCheckpoint>(), 24);
+        // the course polyline it describes already costs. The checkpoint grew
+        // 24 -> 32 with the v2 target pair (a `u32` and a niche-packed enum,
+        // padded to the struct's 8-byte alignment).
+        assert_eq!(core::mem::size_of::<RoadbookCheckpoint>(), 32);
         assert_eq!(core::mem::size_of::<CutoffLeg>(), 16);
     }
 
     #[test]
     fn round_trips_the_sim_schedule() {
         let frame = encode_vec(&sim_checkpoints(), &sim_cutoffs());
-        assert_eq!(frame.len(), roadbook_frame_len(3, 2));
+        assert_eq!(
+            frame.len(),
+            roadbook_frame_len(ROADBOOK_FORMAT_VERSION, 3, 2)
+        );
         let got = decode(&frame).expect("decodes");
         assert_eq!(got.checkpoints.as_slice(), &sim_checkpoints()[..]);
         assert_eq!(got.cutoffs.as_slice(), &sim_cutoffs()[..]);
@@ -507,6 +616,7 @@ mod tests {
                 leg_dist_m: 5_000.0,
                 projected_elapsed_s: (i as u32 + 1) * 1_800,
                 cutoff: Some(CutoffStatus::Miss),
+                target: None,
                 is_refill: i % 2 == 0,
             })
             .collect();
@@ -528,7 +638,10 @@ mod tests {
     #[test]
     fn an_empty_schedule_round_trips_as_the_clear() {
         let frame = encode_vec(&[], &[]);
-        assert_eq!(frame.len(), roadbook_frame_len(0, 0));
+        assert_eq!(
+            frame.len(),
+            roadbook_frame_len(ROADBOOK_FORMAT_VERSION, 0, 0)
+        );
         let got = decode(&frame).expect("decodes");
         assert!(got.is_empty());
         assert_eq!(got, PushedRoadbook::new());
@@ -558,13 +671,13 @@ mod tests {
         let frame = encode_vec(&sim_checkpoints(), &sim_cutoffs());
         assert_eq!(
             hex_of(&frame).as_str(),
-            "52424b3101030200\
-             0000000000000000000000000001\
-             5a0000005a0000001e0000000101\
-             b40000005a0000003c0000000200\
+            "52424b3102030200\
+             00000000000000000000000000010000000000\
+             5a0000005a0000001e00000001010000000000\
+             b40000005a0000003c00000002000000000000\
              5a00000078000000\
              aa000000f0000000\
-             79e5afab",
+             4aaabc56",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/lib/watch_roadbook.dart"
         );
@@ -591,6 +704,7 @@ mod tests {
                 leg_dist_m: 100.0,
                 projected_elapsed_s: i as u32 * 60,
                 cutoff: None,
+                target: None,
                 is_refill: false,
             })
             .collect();
@@ -613,6 +727,7 @@ mod tests {
                 leg_dist_m: 0.0,
                 projected_elapsed_s: 0,
                 cutoff: None,
+                target: None,
                 is_refill: false,
             };
             assert!(encode(&[cp], &[], &mut buf).is_none(), "cum {bad} encoded");
@@ -621,6 +736,7 @@ mod tests {
                 leg_dist_m: bad,
                 projected_elapsed_s: 0,
                 cutoff: None,
+                target: None,
                 is_refill: false,
             };
             assert!(encode(&[cp], &[], &mut buf).is_none(), "leg {bad} encoded");
@@ -637,9 +753,9 @@ mod tests {
 
     #[test]
     fn encode_refuses_a_buffer_too_small() {
-        let mut exact = [0u8; roadbook_frame_len(3, 2)];
+        let mut exact = [0u8; roadbook_frame_len(ROADBOOK_FORMAT_VERSION, 3, 2)];
         assert!(encode(&sim_checkpoints(), &sim_cutoffs(), &mut exact).is_some());
-        let mut one_short = [0u8; roadbook_frame_len(3, 2) - 1];
+        let mut one_short = [0u8; roadbook_frame_len(ROADBOOK_FORMAT_VERSION, 3, 2) - 1];
         assert!(encode(&sim_checkpoints(), &sim_cutoffs(), &mut one_short).is_none());
     }
 
@@ -661,10 +777,160 @@ mod tests {
         let mut future = body_of(&frame).to_vec();
         future[4] = ROADBOOK_FORMAT_VERSION + 1;
         assert!(decode(&sealed(&future)).is_none());
-        // And a version below the current one, which has never existed.
+        // And a version below the compat floor, which has never existed.
         let mut past = body_of(&frame).to_vec();
-        past[4] = 0;
+        past[4] = MIN_ROADBOOK_FORMAT_VERSION - 1;
         assert!(decode(&sealed(&past)).is_none());
+    }
+
+    /// The v2 target pair, round-tripped through the frame the phone pushes.
+    #[test]
+    fn a_checkpoint_target_round_trips() {
+        let cps = [
+            RoadbookCheckpoint {
+                cum_dist_m: 90.0,
+                leg_dist_m: 90.0,
+                projected_elapsed_s: 30,
+                cutoff: Some(CutoffStatus::Safe),
+                target: Some(CheckpointTarget {
+                    elapsed_s: 28,
+                    status: TargetStatus::Behind,
+                }),
+                is_refill: true,
+            },
+            RoadbookCheckpoint {
+                cum_dist_m: 180.0,
+                leg_dist_m: 90.0,
+                projected_elapsed_s: 60,
+                cutoff: None,
+                target: None,
+                is_refill: false,
+            },
+        ];
+        let frame = encode_vec(&cps, &[]);
+        let got = decode(&frame).expect("decodes");
+        assert_eq!(got.checkpoints.as_slice(), &cps[..]);
+        // Every verdict, so a reordered enum fails here rather than silently
+        // re-pointing every pushed schedule.
+        for (status, code) in [
+            (TargetStatus::Ahead, 1u8),
+            (TargetStatus::On, 2),
+            (TargetStatus::Behind, 3),
+        ] {
+            let one = [RoadbookCheckpoint {
+                target: Some(CheckpointTarget {
+                    elapsed_s: 100,
+                    status,
+                }),
+                ..cps[0]
+            }];
+            let frame = encode_vec(&one, &[]);
+            assert_eq!(frame[ROADBOOK_HEADER_LEN + 18], code, "{status:?}");
+            assert_eq!(
+                decode(&frame).expect("decodes").checkpoints[0].target,
+                one[0].target
+            );
+        }
+    }
+
+    /// A v1 push — a phone that has not been updated alongside the firmware —
+    /// still loads, with no targets. Refusing it would leave a runner with an
+    /// armed course and a blank Roadbook page over a version byte, and v1's CRC
+    /// covers the same bytes v2's does.
+    #[test]
+    fn a_v1_frame_still_decodes_with_no_targets() {
+        let cps = sim_checkpoints();
+        let mut body = std::vec::Vec::new();
+        body.extend_from_slice(&ROADBOOK_MAGIC);
+        body.push(1);
+        body.push(cps.len() as u8);
+        body.push(0);
+        body.push(0);
+        for cp in cps.iter() {
+            body.extend_from_slice(&(cp.cum_dist_m as u32).to_le_bytes());
+            body.extend_from_slice(&(cp.leg_dist_m as u32).to_le_bytes());
+            body.extend_from_slice(&cp.projected_elapsed_s.to_le_bytes());
+            body.push(status_code(cp.cutoff));
+            body.push(if cp.is_refill {
+                CHECKPOINT_FLAG_REFILL
+            } else {
+                0
+            });
+        }
+        let frame = sealed(&body);
+        assert_eq!(
+            frame.len(),
+            roadbook_frame_len(1, cps.len(), 0),
+            "a v1 frame is 5 bytes per checkpoint shorter than a v2 one"
+        );
+        let got = decode(&frame).expect("a v1 frame decodes");
+        assert_eq!(got.checkpoints.as_slice(), &cps[..]);
+        assert!(got.checkpoints.iter().all(|cp| cp.target.is_none()));
+        // And the assembler agrees about its length, so a v1 push is not held
+        // open waiting for bytes that will never arrive.
+        let mut asm = RoadbookAssembler::new();
+        assert_eq!(asm.push(0, &frame), RoadbookPush::Complete);
+    }
+
+    /// Half a target pair is a malformed frame, not a field to drop. A time
+    /// nothing graded and a verdict about nothing are each meaningless, and
+    /// reading one as "no target" would hide a runner an hour off their plan.
+    #[test]
+    fn decode_refuses_half_a_target_pair() {
+        let one = [RoadbookCheckpoint {
+            cum_dist_m: 90.0,
+            leg_dist_m: 90.0,
+            projected_elapsed_s: 30,
+            cutoff: None,
+            target: Some(CheckpointTarget {
+                elapsed_s: 28,
+                status: TargetStatus::On,
+            }),
+            is_refill: false,
+        }];
+        let frame = encode_vec(&one, &[]);
+        let at = ROADBOOK_HEADER_LEN;
+
+        // A verdict with no time.
+        let mut no_time = body_of(&frame).to_vec();
+        no_time[at + 14..at + 18].copy_from_slice(&0u32.to_le_bytes());
+        assert!(decode(&sealed(&no_time)).is_none());
+
+        // A time with no verdict.
+        let mut no_verdict = body_of(&frame).to_vec();
+        no_verdict[at + 18] = 0;
+        assert!(decode(&sealed(&no_verdict)).is_none());
+
+        // A verdict byte naming nothing rejects like an unknown cut-off code,
+        // rather than reading as "no target".
+        for code in [4u8, 0x80, 0xff] {
+            let mut unknown = body_of(&frame).to_vec();
+            unknown[at + 18] = code;
+            assert!(decode(&sealed(&unknown)).is_none(), "code {code}");
+        }
+    }
+
+    /// A target at elapsed 0 is the format's "no target", and the encoder must
+    /// not emit a verdict for one: the collapse rule the phone applies means no
+    /// pushed checkpoint sits at second 0 anyway (the synthetic start is
+    /// dropped), so this is the sentinel being honoured rather than a value
+    /// being lost.
+    #[test]
+    fn a_target_at_second_zero_encodes_as_no_target() {
+        let one = [RoadbookCheckpoint {
+            cum_dist_m: 90.0,
+            leg_dist_m: 90.0,
+            projected_elapsed_s: 30,
+            cutoff: None,
+            target: Some(CheckpointTarget {
+                elapsed_s: 0,
+                status: TargetStatus::On,
+            }),
+            is_refill: false,
+        }];
+        let frame = encode_vec(&one, &[]);
+        assert_eq!(frame[ROADBOOK_HEADER_LEN + 18], 0);
+        assert_eq!(decode(&frame).expect("decodes").checkpoints[0].target, None);
     }
 
     #[test]
@@ -800,7 +1066,7 @@ mod tests {
     /// which is the whole reason this push is chunked rather than whole.
     #[test]
     fn the_worst_case_frame_needs_more_than_one_write() {
-        assert_eq!(MAX_ROADBOOK_FRAME_LEN, 364);
+        assert_eq!(MAX_ROADBOOK_FRAME_LEN, 444);
         // One ATT_WRITE_REQ carries MTU - 3 bytes of value.
         assert!(MAX_ROADBOOK_FRAME_LEN > 256 - 3);
         let parts = chunks(&[0u8; MAX_ROADBOOK_FRAME_LEN], ROADBOOK_CHUNK_CAP - 2);

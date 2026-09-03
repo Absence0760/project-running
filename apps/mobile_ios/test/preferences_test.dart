@@ -8,7 +8,8 @@
 // scope to the enum's pure methods so they run in <100ms with no
 // platform bindings.
 
-import 'package:core_models/core_models.dart' show ActivityType;
+import 'package:core_models/core_models.dart'
+    show ActivityType, DistanceUnit;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

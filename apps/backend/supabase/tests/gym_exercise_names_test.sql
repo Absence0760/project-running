@@ -1,4 +1,5 @@
--- pgtap suite for `gym_exercise_names` (migrations 20261226_001, 20270630000004).
+-- pgtap suite for `gym_exercise_names` (migrations 20261226_001, 20270630000004,
+-- 20270705000005).
 --
 -- Returns the caller's distinct logged exercises + use counts, most-used
 -- first, for the gym editor autocomplete — so a caller that only needs the
@@ -10,13 +11,19 @@
 --      a stray-whitespace paste are one suggestion rather than three
 --      (decisions § 831). Before 20270630000004 the grouping was a bare
 --      `btrim`, which strips U+0020 alone.
---   3. The display spelling is the caller's MOST-USED one, which is not the
---      most-recent one the sibling `gym_exercise_records` picks.
---   4. Owner-scoped (a stranger sees none of the caller's names).
+--   3. The display spelling is the caller's MOST-RECENT one — the same rule
+--      the sibling `gym_exercise_records` applies, unified in 20270705000005
+--      (decisions § 1050). Most-used was the previous rule and is
+--      self-reinforcing on an autocomplete: it offers the old capitalisation,
+--      the lifter accepts it, and the counts never cross, so a rename can
+--      never take effect.
+--   4. Among a key's spellings logged at the same instant, a paste artefact
+--      loses to its clean sibling on `length(display)`.
+--   5. Owner-scoped (a stranger sees none of the caller's names).
 
 begin;
 
-select plan(6);
+select plan(7);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -44,10 +51,12 @@ values
   ('cccccccc-cccc-cccc-cccc-cccccccccc02',
    '00000000-0000-0000-0000-0000000c0001', 'newer', now() - interval '1 day');
 
--- One lift under three spellings across two sessions. `Bench Press` is the
--- most-USED (2 sets) and the older one; `bench press` and the tab-prefixed
--- paste are each the most-RECENT, which is the spelling the sibling RPC's
--- ordering would pick. Squat leads the list on count alone.
+-- One lift under three spellings across two sessions, built so the old rule
+-- and the new one disagree AND so the new one's tiebreak is exercised.
+-- `Bench Press` is the most-USED (2 sets) and sits in the OLDER session;
+-- `bench press` and the tab-prefixed paste are both in the newer one, so they
+-- are equally recent and only `length(display)` separates them. Squat leads
+-- the list on count alone.
 insert into gym_sets (workout_id, set_index, exercise_name, reps, weight_kg)
 values
   ('cccccccc-cccc-cccc-cccc-cccccccccc01', 0, 'Squat', 5, 100),
@@ -92,19 +101,30 @@ select is(
   'uses counts every spelling in the group'
 );
 
--- 5. The spelling shown is the most-USED one. Ordering by started_at desc --
---    what `gym_exercise_records` does, and what the filing believed this fix
---    would be reusing -- picks a spelling from the newer session instead, so
---    this assertion fails under that rule rather than merely passing under
---    both. The tab-prefixed paste never surfaces.
+-- 5. The spelling shown is the caller's MOST-RECENT one, which is the rule
+--    `gym_exercise_records` already applied. `Bench Press` is the most-used
+--    spelling and sits in the older session, so this assertion fails under the
+--    superseded rule rather than merely passing under both.
 select is(
   (select exercise_name from gym_exercise_names()
    where public.normalise_exercise_name(exercise_name) = 'bench press'),
-  'Bench Press',
-  'the display spelling is the most-used one, not the most-recent'
+  'bench press',
+  'the display spelling is the most-recent one, matching gym_exercise_records'
 );
 
--- 6. Owner-scoped: a stranger sees none of the lifter's names.
+-- 6. And the tab-prefixed paste, which is exactly as recent as `bench press`,
+--    never surfaces: `length(display)` breaks the tie toward the spelling
+--    without the paste artefact. Removing that term makes the pick depend on
+--    the argument's own collation, which is the dependence § 830 closed for
+--    the key itself.
+select is(
+  (select count(*)::int from gym_exercise_names()
+   where exercise_name like chr(9) || '%'),
+  0,
+  'a same-instant paste artefact loses to its clean sibling'
+);
+
+-- 7. Owner-scoped: a stranger sees none of the lifter's names.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000c0099"}';
 select is(
   (select count(*)::int from gym_exercise_names()),

@@ -86,6 +86,9 @@ test('a non-POST is refused before any work, with an Allow header', async () => 
 		});
 		assert.equal(out.status, 405, `${method} must not reach the coach core`);
 		assert.equal(out.headers?.allow, 'POST');
+		// The stream path carries the shared gate's headers too — that it does
+		// is the whole reason the gate returns parts rather than a result.
+		assert.equal(out.headers?.['cache-control'], 'no-store');
 		assert.deepEqual(JSON.parse(out.body), { error: 'method not allowed' });
 	}
 });

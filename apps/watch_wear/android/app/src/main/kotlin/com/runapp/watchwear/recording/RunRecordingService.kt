@@ -23,6 +23,7 @@ import com.runapp.watchwear.BuildConfig
 import com.runapp.watchwear.GpsEvent
 import com.runapp.watchwear.GpsPoint
 import com.runapp.watchwear.GpsRecorder
+import com.runapp.watchwear.HeartRateAvailability
 import com.runapp.watchwear.HeartRateMonitor
 import com.runapp.watchwear.MainActivity
 import com.runapp.watchwear.Pedometer
@@ -236,6 +237,11 @@ class RunRecordingService : Service() {
                 trackFilePath = file.absolutePath,
                 routeWaypoints = routeWaypoints,
                 preferredUnit = preferredUnit,
+                hrAvailability = if (BuildConfig.ENABLE_HR) {
+                    HeartRateAvailability.Acquiring
+                } else {
+                    HeartRateAvailability.Off
+                },
             )
         }
         com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
@@ -288,13 +294,45 @@ class RunRecordingService : Service() {
         if (BuildConfig.ENABLE_HR) {
             hrJob = scope.launch {
                 hr.stream()
-                    .catch { e -> android.util.Log.w(TAG, "heart rate stream failed", e) }
-                    .collect { bpm ->
-                        if (isPaused()) return@collect
-                        bpmSum += bpm
-                        bpmCount++
-                        val avg = bpmSum.toDouble() / bpmCount
-                        RecordingRepository.update { it.copy(bpm = bpm, avgBpm = avg) }
+                    .catch { e ->
+                        // The asynchronous half of "there will be no heart
+                        // rate this run". `HeartRateMonitor` reports the
+                        // refusal it can see and closes; a throw that gets
+                        // past it lands here, and leaving the state at
+                        // Acquiring would spin a caption forever.
+                        android.util.Log.w(TAG, "heart rate stream failed", e)
+                        RecordingRepository.update {
+                            it.copy(
+                                hrAvailability = HeartRateAvailability.Unavailable,
+                                bpm = null,
+                            )
+                        }
+                    }
+                    .collect { update ->
+                        val live = update.availability == HeartRateAvailability.Available
+                        val sample = update.bpm
+                        val paused = isPaused()
+                        if (live && sample != null && !paused) {
+                            bpmSum += sample
+                            bpmCount++
+                        }
+                        val avg = if (bpmCount == 0L) null else bpmSum.toDouble() / bpmCount
+                        RecordingRepository.update {
+                            it.copy(
+                                hrAvailability = update.availability,
+                                // A sensor that is no longer reporting must
+                                // not leave its last figure on screen: a watch
+                                // that slipped off the wrist at minute three
+                                // used to render that reading for the rest of
+                                // the run.
+                                bpm = when {
+                                    !live -> null
+                                    paused -> it.bpm
+                                    else -> sample ?: it.bpm
+                                },
+                                avgBpm = avg ?: it.avgBpm,
+                            )
+                        }
                     }
             }
         }

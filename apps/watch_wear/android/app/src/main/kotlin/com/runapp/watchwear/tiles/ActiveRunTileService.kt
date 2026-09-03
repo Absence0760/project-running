@@ -101,13 +101,29 @@ class ActiveRunTileService : TileService() {
 
     companion object {
         private const val RESOURCES_VERSION = "1"
+        private const val TAG = "ActiveRunTile"
 
         /// Tell the platform to re-fetch the tile because the underlying
         /// state changed. Called from `RunRecordingService` whenever
         /// `Stage` transitions or distance ticks past a meaningful
         /// threshold — the platform debounces multiple rapid calls.
+        ///
+        /// Guarded because all four callers are on the recording path and
+        /// three of them run inside `onStartCommand`, where an escaping
+        /// throw is process death mid-run. `getUpdater` itself only
+        /// allocates and a watch with no Tiles host is the case AndroidX
+        /// already handles (`buildUpdateBindIntent` returns null, logged,
+        /// no throw) — but the composite it returns then makes two IPC
+        /// calls it does not isolate from each other or from us,
+        /// `Context.bindService` and `Context.sendBroadcast`, the first
+        /// of which is documented to raise `SecurityException`. A
+        /// glanceable tile is an L4 effect and may not cost L1.
         fun requestUpdate(context: Context) {
-            getUpdater(context).requestUpdate(ActiveRunTileService::class.java)
+            try {
+                getUpdater(context).requestUpdate(ActiveRunTileService::class.java)
+            } catch (e: Throwable) {
+                android.util.Log.w(TAG, "active-run tile update refused", e)
+            }
         }
     }
 }

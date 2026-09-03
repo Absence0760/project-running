@@ -20,6 +20,9 @@ import { handleCoach } from '../../../src/lib/coach/handler';
 import type { CoachConfig } from '../../../src/lib/coach/types';
 import { handleRouteDescribe } from '../../../src/lib/routes/route_describe/handler';
 import { handleRouteRequest } from '../../../src/lib/routes/route_request/handler';
+import { methodRefusal, type MethodRefusal } from '../../../src/lib/core/method_gate';
+
+const ALLOWED_METHODS = ['POST'] as const;
 
 // Provided by the Node.js managed Lambda runtime; declared inline
 // because @types/aws-lambda doesn't ship a definition for it (the API
@@ -94,8 +97,9 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		// A missing `requestContext` throws into the outer envelope rather
 		// than defaulting to POST, which is the same fail-closed shape
 		// osrm-proxy has (decisions § 896).
-		if (event.requestContext.http.method !== 'POST') {
-			writeJson(responseStream, 405, { error: 'method not allowed' }, { allow: 'POST' });
+		const refused = methodRefusal(event.requestContext.http.method, ALLOWED_METHODS);
+		if (refused) {
+			writeRefusal(responseStream, refused);
 			return;
 		}
 
@@ -328,6 +332,19 @@ async function dispatchRouteRequest(
 		bypassPaywallEnabled: false,
 	});
 	writeResult(responseStream, result);
+}
+
+// The stream half of `core/method_gate`: the same status, headers and body the
+// six object-returning handlers send, written through `HttpResponseStream`
+// instead of returned. This is the second response shape the gate exists to
+// serve, and it is why the gate returns the parts rather than a result object.
+function writeRefusal(responseStream: ResponseStream, refusal: MethodRefusal): void {
+	const stream = awslambda.HttpResponseStream.from(responseStream, {
+		statusCode: refusal.statusCode,
+		headers: refusal.headers,
+	});
+	stream.write(refusal.body);
+	stream.end();
 }
 
 function writeJson(

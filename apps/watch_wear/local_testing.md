@@ -80,7 +80,9 @@ In Android Studio's emulator controls (`...` button on the emulator toolbar):
 
 ### Heart rate simulation
 
-The Wear OS emulator does **not** synthesise heart-rate samples — `HealthServices.getClient(...).measureClient` produces nothing in the emulator. Test HR end-to-end on a physical Wear OS 3+ watch. In the emulator, the "HR" field stays at `— bpm`; the rest of the run records normally.
+The Wear OS emulator does **not** synthesise heart-rate samples — `HealthServices.getClient(...).measureClient` produces nothing in the emulator. Test HR end-to-end on a physical Wear OS 3+ watch.
+
+In the emulator the running screen's HR slot now reads **`HR…`** and stays there: the registration succeeds, so the sensor state is `Acquiring` and no sample ever follows. The rest of the run records normally. What this paragraph used to claim — that the field "stays at `— bpm`" — was never true: before `decisions.md § 1052` the slot rendered *nothing at all* when `bpm` was null, which is exactly the defect that entry closed. The four states you can now tell apart on the wrist are `HR…` (registered, no sample yet), a reading such as `146 bpm · Z3`, `HR off wrist` (Health Services reports `UNAVAILABLE_DEVICE_OFF_BODY` — take the watch off a real wrist mid-run to see it), and `No HR` (registration refused, the stream threw, or the sensor reports `UNAVAILABLE`; declining `BODY_SENSORS` is the easy way to reproduce this one). A build with `DISABLE_HR` set renders no HR text at all, deliberately — a build with no heart rate should not caption every run with its absence.
 
 ### Distance-unit preference (km / mi)
 

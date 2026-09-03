@@ -32,7 +32,13 @@
 /// Lives in the SHARED core_models package rather than under
 /// `apps/mobile_android/lib/` because `api_client` consumes it, so it needs
 /// no iOS-twin mirror — same placement as `profile_query.dart`.
+///
+/// The count/text primitives come from `import_completeness.dart` rather
+/// than living here: a sync IS an import, and one home for that rule is what
+/// stops the two parsers reading the same malformed body differently.
 library;
+
+import 'import_completeness.dart';
 
 class StravaSyncResult {
   const StravaSyncResult({
@@ -71,26 +77,6 @@ class StravaSyncResult {
   final String? error;
 }
 
-/// A count the function sent. Only a non-negative integer is a count;
-/// anything else (a fraction, a negative, a string, null, absent) is a
-/// malformed payload and reads as 0 rather than as a number the banner
-/// would then state as fact.
-///
-/// A whole `double` counts, because JSON has one number type and the web
-/// twin's `Number.isInteger` cannot tell `12` from `12.0` — rejecting it
-/// here would be a divergence rather than a stricter contract.
-int _count(Object? value) {
-  if (value is! num || !value.isFinite || value < 0) return 0;
-  if (value != value.roundToDouble()) return 0;
-  return value.toInt();
-}
-
-String? _text(Object? value) {
-  if (value is! String) return null;
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? null : trimmed;
-}
-
 /// Grade the function's response. Never throws: an unrecognised shape — null,
 /// a list, a string, a body from a deployment that predates `complete` —
 /// yields zeroed counts and `complete: false`, which every caller renders as
@@ -106,16 +92,16 @@ StravaSyncResult stravaSyncResultFromResponse(Object? data) {
       resumable: false,
     );
   }
-  final error = _text(data['error']);
+  final error = importResponseText(data['error']);
   final complete = error == null && data['complete'] == true;
   return StravaSyncResult(
-    imported: _count(data['imported']),
-    skipped: _count(data['skipped']),
-    failed: _count(data['failed']),
+    imported: importResponseCount(data['imported']),
+    skipped: importResponseCount(data['skipped']),
+    failed: importResponseCount(data['failed']),
     rateLimited: data['rate_limited'] == true,
     complete: complete,
     resumable: !complete && data['resumable'] == true,
-    athleteId: _text(data['athlete_id']),
+    athleteId: importResponseText(data['athlete_id']),
     error: error,
   );
 }
@@ -140,73 +126,3 @@ const List<int> kStravaLookbackOptions = [90, 180, 365];
 /// window that will come back empty.
 bool isStravaLookbackReachable(int days) =>
     days > 0 && days <= kStravaLookbackMaxDays;
-
-/// What a SCRAPER importer says about how much it read, and how much of it a
-/// client may believe.
-///
-/// `parkrun-import` answers `{ imported, skipped, total, complete }` and
-/// `race-results-import` answers `complete` on every success shape. Neither
-/// count reveals a shortfall on its own: a parkrun history capped at
-/// `MAX_PARKRUN_ROWS` and a finisher field truncated at 2,000 both present as
-/// a successful import of everything that was there.
-///
-/// Same fail-closed direction as [parseStravaSyncResult], for the same reason
-/// and not by analogy: one transport per importer, shipped from this repo
-/// alongside its callers, so an absent `complete` means a body this build does
-/// not recognise rather than an older deployment of a second transport. A
-/// false "partial" costs a sentence the runner can ignore; a false "complete"
-/// tells them a history is whole when it is not.
-///
-/// Lives beside the Strava parser rather than in a module of its own because
-/// it is the SAME rule — a new module would be a parity pair, and a pair that
-/// neither registry names is a pair whose divergence nothing detects
-/// (decisions § 641). Splitting the three parsers into a registered
-/// `import_completeness` pair is filed.
-class ImportCompleteness {
-  final int imported;
-  final int skipped;
-
-  /// How many rows the page actually carried, when the function said. Null
-  /// when it did not, so a caller can tell "12 of 60" from "12, and there may
-  /// be more" rather than printing a fabricated denominator.
-  final int? total;
-
-  /// Only an explicit `true` earns it.
-  final bool complete;
-
-  const ImportCompleteness({
-    required this.imported,
-    required this.skipped,
-    required this.total,
-    required this.complete,
-  });
-}
-
-/// Grade a scraper importer's response. Never throws.
-ImportCompleteness parseImportCompleteness(Object? data) {
-  if (data is! Map) {
-    return const ImportCompleteness(
-        imported: 0, skipped: 0, total: null, complete: false);
-  }
-  final imported = _count(data['imported']);
-  final skipped = _count(data['skipped']);
-  // An embedded error forces partial even beside a `complete: true`, matching
-  // [parseStravaSyncResult]: the function answered about a walk it did not
-  // finish.
-  final complete = _text(data['error']) == null && data['complete'] == true;
-  final rawTotal = data['total'];
-  final total = rawTotal is num &&
-          rawTotal.isFinite &&
-          rawTotal >= 0 &&
-          rawTotal == rawTotal.roundToDouble()
-      ? rawTotal.toInt()
-      : null;
-  return ImportCompleteness(
-    imported: imported,
-    skipped: skipped,
-    // A total below what was already processed is not a total — reporting
-    // "12 of 5" is worse than reporting no denominator at all.
-    total: total != null && total >= imported + skipped ? total : null,
-    complete: complete,
-  );
-}

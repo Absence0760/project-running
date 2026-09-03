@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { parseImportCompleteness } from '$lib/integrations/strava_sync_result';
+	import { parseImportCompleteness } from '$lib/integrations/import_completeness';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import {

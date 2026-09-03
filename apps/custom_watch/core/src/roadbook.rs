@@ -22,31 +22,30 @@
 //! verdict locally, so this port does the same rather than borrow the
 //! semantically-distinct `cutoff_eta::CutoffEtaStatus` (on/tight/behind).
 //!
-//! **Web's `RoadbookTarget` / `TARGET_BAND_FRACTION` — the per-checkpoint
-//! target-time verdict beside the cutoff one, graded on a proportional band
-//! because two minutes down at hour twenty of a 200-miler is noise where the
-//! same two minutes at a 30-minute checkpoint is not — are deliberately not
-//! ported. Three things have to arrive before they can be, and none is here:**
+//! **The wire now carries a per-checkpoint target time and its verdict
+//! ([`TargetStatus`], `RBK1` v2, decisions §1027) — but [`build_roadbook`]
+//! still does not compute one, and web's `RoadbookTarget` /
+//! `TARGET_BAND_FRACTION` are still deliberately not ported.** Two of the three
+//! reasons recorded when this was first declined still hold:
 //!
-//! 1. The INPUT does not exist. A target lives in a course marker's
+//! 1. The INPUT does not exist here. A target lives in a course marker's
 //!    `target_clock` / `target_elapsed_s` meta, and
 //!    [`crate::route_markers`] carries `parse_cutoff` and no `parse_target`.
-//! 2. The WIRE does not carry it. `RBK1` v1's checkpoint is
-//!    `cum_dist_m | leg_dist_m | projected_elapsed_s | cutoff | flags`, with the
-//!    flags byte holding only `CHECKPOINT_FLAG_REFILL`
-//!    ([`crate::roadbook_store`]). Adding a target means a v2 frame and a
-//!    matching change to the phone's `watch_roadbook.dart` encoder plus the
-//!    golden vector both rails pin — one change across two rails, not a port.
-//! 3. **[`build_roadbook`] is not the wired path.** It has no non-test caller.
+//!    The meta stays phone-side, so the marker parse belongs there too.
+//! 2. **[`build_roadbook`] is not the wired path.** It has no non-test caller.
 //!    The Roadbook glance page renders the checkpoints the phone PUSHES, so a
 //!    field added to this function's output is a field nothing on the device
 //!    can read.
 //!
-//! So the target belongs on the wire rather than in this builder, and until the
-//! frame carries one, porting it would add a verdict no page can show over data
-//! no frame carries — a port made for the count rather than for the wrist
-//! (decisions.md § 24). The cross-rail change is filed in
-//! `docs/product/followups.md`.
+//! The third — the wire not carrying it — is closed: a v2 checkpoint carries
+//! `target_elapsed_s` plus a status byte, exactly as it already carried the
+//! cutoff verdict, and the phone grades the band it alone can see. The band is
+//! proportional (1 % of the target, floored at 60 s) because two minutes down
+//! at hour twenty of a 200-miler is noise where the same two minutes at a
+//! 30-minute checkpoint is not; that constant lives on the two rails that
+//! compute it — web's `routes/roadbook.ts` and the Dart twin `roadbook.dart` —
+//! and NOT here, because a verdict this module never grades must not carry a
+//! threshold it never applies (decisions.md § 24).
 //!
 //! Pure logic, no peripherals, no allocator — like the rest of `core`.
 
@@ -107,6 +106,26 @@ pub enum CutoffStatus {
     Safe,
     Tight,
     Miss,
+}
+
+/// A checkpoint's target-time verdict — how the phone's projected arrival sits
+/// against a target the runner authored on the marker, graded on the
+/// proportional band described in this module's header.
+///
+/// Computed PHONE-SIDE and pushed, like [`CutoffStatus`] on a
+/// [`crate::record::RoadbookCheckpoint`]: the target is a per-marker meta the
+/// watch never sees. Declared here beside its sibling so the two verdicts read
+/// as one vocabulary; **declaration order is the `RBK1` wire contract** — the
+/// byte is `index + 1`, and 0 means the checkpoint carries no target at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum TargetStatus {
+    /// Projected to arrive earlier than the target by more than the band.
+    Ahead,
+    /// Within the band either way — on plan.
+    On,
+    /// Projected to arrive later than the target by more than the band.
+    Behind,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

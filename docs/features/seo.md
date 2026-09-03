@@ -181,10 +181,20 @@ at 200, with the `noindex` above sitting in a body that never shipped. The 404
 mapping now answers **404** and keeps the shell body, so a crawler gets the
 honest status (which is what actually de-indexes a URL — a `noindex` on a 200 is
 the weaker instrument) and a human still lands on the SPA's own localized
-not-found card rather than the Lambda's one-line fallback page. The 403 mapping
-still answers 200 and must: every dynamic client route is a missing S3 key, so
-the deep-link path arrives as a 403. `scripts/check_infra_coverage.mjs` fails a
-PR that maps any 4xx/5xx to a 2xx other than that declared 403.
+not-found card. The 403 mapping still answers 200 and must: every dynamic client
+route is a missing S3 key, so the deep-link path arrives as a 403.
+`scripts/check_infra_coverage.mjs` fails a PR that maps any 4xx/5xx to a 2xx
+other than that declared 403.
+
+**Since [decisions § 1036](../architecture/decisions.md) the handlers return
+that same shell themselves.** Each of the five used to carry its own unstyled
+English not-found paragraph, unreachable behind the mapping and carrying the
+only copy of the `noindex`; all five now answer `notFoundShell()` — the SPA
+shell through `injectEntityHead`, so the stale `og:*` / canonical / JSON-LD are
+stripped from a 404 exactly as they are from a 200. The reader gets the designed
+card whether the edge substitutes or not, and the `noindex` survives. That makes
+the 404 mapping redundant rather than load-bearing: dropping it (`infra/`, still
+owed — see `followups.md`) is what finally puts the tag on the wire.
 
 The matching SvelteKit routes carry `prerender = false` and run the same
 lookup + meta under `vite dev`, so every surface works locally and is
@@ -264,8 +274,11 @@ e2e-tested without standing up the Lambda.
   ([decisions § 894](../architecture/decisions.md)). Behaviour is pinned by
   `www_redirect.test.mjs` beside the function, in the `parity-types` job.
 - **The five share Lambdas answer GET and HEAD only.** Anything else is a
-  `405` carrying `Allow: GET, HEAD`, from the one shared
-  `$lib/share/share_method_gate`. Their CloudFront behaviours declare
+  `405` carrying `Allow: GET, HEAD` and `Cache-Control: no-store`, from
+  `$lib/share/share_method_gate` — which since
+  [decisions § 1035](../architecture/decisions.md) is `$lib/core/method_gate`
+  instantiated at GET/HEAD, the same refusal the coach, generate-route and
+  osrm-proxy Lambdas now answer with at their own allowed sets. Their CloudFront behaviours declare
   `allowed_methods = ["GET", "HEAD", "OPTIONS"]` and `cached_methods =
   ["GET", "HEAD"]`, so OPTIONS was the one method that reached the origin
   uncached — and on an `/og/*` path it ran a full resvg render before answering

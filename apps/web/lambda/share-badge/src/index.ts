@@ -18,6 +18,7 @@ import { injectShareRunMeta } from '../../../src/lib/share/share_run_spa_shell';
 import { renderBadgeOgPng } from '../../../src/lib/share/og_badge_png';
 import { siteOrigin } from '../../../src/lib/core/site_url';
 import { shareMethodRefusal } from '../../../src/lib/share/share_method_gate';
+import { notFoundShell } from '../../../src/lib/share/entity_spa_shell';
 
 declare const __SPA_SHELL_HTML__: string;
 
@@ -82,7 +83,7 @@ async function handleHtml(id: string, config: HtmlConfig): Promise<LambdaFunctio
 		return {
 			statusCode: 404,
 			headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': CACHE_CONTROL },
-			body: notFoundHtml(),
+			body: notFoundShell(__SPA_SHELL_HTML__, 'Badge not found — Threkir'),
 		};
 	}
 	const meta = buildShareBadgeMeta({
@@ -115,10 +116,6 @@ async function handlePng(
 		headers: { 'content-type': 'image/png', 'cache-control': CACHE_CONTROL },
 		body: png.toString('base64'),
 	};
-}
-
-function notFoundHtml(): string {
-	return '<!doctype html><html><head><meta charset="utf-8"><title>Achievements — Threkir</title><meta name="robots" content="noindex"></head><body><p>This badge isn’t available.</p></body></html>';
 }
 
 function jsonResponse(

@@ -44,6 +44,22 @@
 //! blobs, while a v3-only reader rejects v4 by version instead of throwing on
 //! a tag it has never seen. Like laps, neither tag is ever decimated.
 //!
+//! **Version 5 (2026-09-03) widens a track point's altitude to whole metres**
+//! ([`ELE_METRES_VERSION`], decisions §1026). The field is the same two bytes;
+//! only its UNIT moved. A decimetre `i16` caps at 3276.7 m while
+//! [`crate::elevation::plausible_alt`] admits to 9000 m, so every reading in
+//! between was published to the live altitude and vert pages and then dropped
+//! from the track — 69 % of a Silverton-Handies-Silverton profile, with the
+//! summit push netting to zero vert because the gain rule carries the last
+//! reading across a dropout. `CRS1` had already made this exact choice for the
+//! course frame (`COURSE_ELEV_LEN`); the run track had not followed, so the
+//! same watch could be handed a course it could not record itself running.
+//! `i16` metres spans +/-32,767 m — past Everest with 2x margin — and 1 m
+//! resolution sits below both the sensor noise floor and the 3 m gain gate.
+//! Neither the layout nor the CRC window moved, so [`MIN_FORMAT_VERSION`] stays
+//! 3 and a v3/v4 blob still in a bench board's flash still decodes — with its
+//! altitudes still meaning decimetres, which is what [`ele_metres`] resolves.
+//!
 //! Manifest + chunk-request wire formats live here too so both ends agree.
 
 /// Track blob magic — "TRK1".
@@ -54,13 +70,13 @@ pub const FOOTER_MAGIC: [u8; 4] = *b"END1";
 pub const MANIFEST_MAGIC: [u8; 4] = *b"MAN1";
 
 /// What the writer emits today.
-pub const FORMAT_VERSION: u8 = 4;
-/// The oldest version a reader still decodes. v4 added record tags without
-/// touching v3's CRC window, so a v3 blob stays decodable; v1/v2 checksums are
-/// over a narrower window and cannot be re-checked without also re-admitting
-/// the unprotected-totals hole v3 closed. Keeping the range explicit means an
-/// old blob left on a bench board is rejected by version rather than reported
-/// as corrupt bytes.
+pub const FORMAT_VERSION: u8 = 5;
+/// The oldest version a reader still decodes. v4 added record tags and v5 moved
+/// one field's unit, neither touching v3's CRC window or the layout, so a v3
+/// blob stays decodable; v1/v2 checksums are over a narrower window and cannot
+/// be re-checked without also re-admitting the unprotected-totals hole v3
+/// closed. Keeping the range explicit means an old blob left on a bench board
+/// is rejected by version rather than reported as corrupt bytes.
 pub const MIN_FORMAT_VERSION: u8 = 3;
 
 pub const HEADER_LEN: usize = 16;
@@ -95,7 +111,32 @@ pub const RECORD_TAG_WORKOUT: u8 = 3;
 pub const FLAG_FINISHED: u8 = 0x01;
 
 /// Altitude sentinel meaning "no barometric/GPS altitude for this point".
+/// Unit-independent: it is the same two bytes either side of
+/// [`ELE_METRES_VERSION`].
 pub const ELE_NONE: i16 = i16::MIN;
+
+/// The first [`FORMAT_VERSION`] whose track points store whole METRES in the
+/// altitude field. v3 and v4 stored decimetres in the same two bytes, so the
+/// unit resolves against the blob's own header version rather than being
+/// assumed — reading a v3 blob as metres would report every altitude ten times
+/// too high, which is worse than refusing it.
+pub const ELE_METRES_VERSION: u8 = 5;
+
+/// A stored altitude field -> metres, resolved against the blob's header
+/// version. `None` for [`ELE_NONE`], which no version has ever meant as a
+/// height. This is the ONLY place the decimetre-vs-metre rule is written on
+/// this rail; the phone's `sim_watch_sync.dart` carries the mirror of it, and
+/// the two are held together by `scripts/check_watch_wire_vectors.mjs`.
+pub fn ele_metres(stored: i16, version: u8) -> Option<f32> {
+    if stored == ELE_NONE {
+        return None;
+    }
+    Some(if version >= ELE_METRES_VERSION {
+        stored as f32
+    } else {
+        stored as f32 / 10.0
+    })
+}
 
 /// The most closed laps a run persists — beyond it new lap records are
 /// dropped from STORAGE (the RAM display state is unaffected). 64 records =
@@ -176,14 +217,16 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 // ---- Track points ---------------------------------------------------------
 
 /// One recorded fix in the wire format's fixed-point units: lat/lon in 1e-7
-/// degrees (standard GPS integer scaling), altitude in decimetres, time as
+/// degrees (standard GPS integer scaling), altitude in whole metres
+/// ([`ELE_METRES_VERSION`] — decimetres in a v3/v4 blob, which is why a reader
+/// resolves the field through [`ele_metres`] rather than assuming), time as
 /// whole seconds since the run started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TrackPoint {
     pub lat_e7: i32,
     pub lon_e7: i32,
     pub t_offset_s: u32,
-    pub ele_dm: Option<i16>,
+    pub ele_m: Option<i16>,
     pub bpm: Option<u8>,
 }
 
@@ -193,7 +236,7 @@ impl TrackPoint {
         b[0..4].copy_from_slice(&self.lat_e7.to_le_bytes());
         b[4..8].copy_from_slice(&self.lon_e7.to_le_bytes());
         b[8..12].copy_from_slice(&self.t_offset_s.to_le_bytes());
-        b[12..14].copy_from_slice(&self.ele_dm.unwrap_or(ELE_NONE).to_le_bytes());
+        b[12..14].copy_from_slice(&self.ele_m.unwrap_or(ELE_NONE).to_le_bytes());
         b[14] = self.bpm.unwrap_or(0);
         b[15] = RECORD_TAG_POINT;
         b
@@ -212,7 +255,7 @@ impl TrackPoint {
             lat_e7: i32::from_le_bytes([b[0], b[1], b[2], b[3]]),
             lon_e7: i32::from_le_bytes([b[4], b[5], b[6], b[7]]),
             t_offset_s: u32::from_le_bytes([b[8], b[9], b[10], b[11]]),
-            ele_dm: (ele != ELE_NONE).then_some(ele),
+            ele_m: (ele != ELE_NONE).then_some(ele),
             bpm: (bpm != 0).then_some(bpm),
         })
     }
@@ -928,21 +971,21 @@ mod tests {
                 lat_e7: 400_150_200,
                 lon_e7: -1_052_705_000,
                 t_offset_s: 0,
-                ele_dm: Some(16_240),
+                ele_m: Some(1_624),
                 bpm: Some(120),
             },
             TrackPoint {
                 lat_e7: 400_150_500,
                 lon_e7: -1_052_704_500,
                 t_offset_s: 1,
-                ele_dm: Some(16_242),
+                ele_m: Some(1_626),
                 bpm: Some(122),
             },
             TrackPoint {
                 lat_e7: 400_150_900,
                 lon_e7: -1_052_704_000,
                 t_offset_s: 2,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             },
         ]
@@ -1064,7 +1107,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             })
             .expect("push");
@@ -1078,7 +1121,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             })
             .expect("push");
@@ -1127,11 +1170,11 @@ mod tests {
             lat_e7: 1,
             lon_e7: 2,
             t_offset_s: 3,
-            ele_dm: None,
+            ele_m: None,
             bpm: None,
         };
         let decoded = TrackPoint::decode(&p.encode()).unwrap();
-        assert_eq!(decoded.ele_dm, None);
+        assert_eq!(decoded.ele_m, None);
         assert_eq!(decoded.bpm, None);
     }
 
@@ -1173,9 +1216,9 @@ mod tests {
     }
 
     /// Golden vector: the exact bytes a fixed run produces. Byte 4 is the
-    /// format version, byte 5 is [`FLAG_FINISHED`] — set, because this is a
-    /// committed run — and the trailing CRC covers both, every record, and the
-    /// footer's totals.
+    /// format version (5 — the points' altitudes are whole metres), byte 5 is
+    /// [`FLAG_FINISHED`] — set, because this is a committed run — and the
+    /// trailing CRC covers both, every record, and the footer's totals.
     #[test]
     fn golden_blob_is_stable() {
         let blob = build();
@@ -1187,7 +1230,7 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31040100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a0074d1d917000341c10200000000800000454e4431d2040000580200006c02000001f8ef8c",
+            "54524b31050100000700000029000000b8ced91718ff40c10000000058067800e4cfd9170c0141c1010000005a067a0074d1d917000341c10200000000800000454e4431d2040000580200006c0200007b613b01",
             "wire format changed — update this vector, and the Dart mirror in \
              apps/mobile_android/test/sim_watch_sync_test.dart if the layout moved"
         );
@@ -1220,7 +1263,7 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31040100000700000029000000b8ced91718ff40c100000000703f7800e4cfd9170c0141c101000000723f7a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c0200001ac2224c",
+            "54524b31050100000700000029000000b8ced91718ff40c10000000058067800e4cfd9170c0141c1010000005a067a000100102700002c01000022010000000174d1d917000341c10200000000800000454e4431d2040000580200006c020000b95df241",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/test/sim_watch_sync_test.dart"
         );
@@ -1269,7 +1312,7 @@ mod tests {
             });
         assert_eq!(
             hex.as_str(),
-            "54524b31040100000700000029000000b8ced91718ff40c100000000703f78000000a00f00005f000000ee0000000002e4cfd9170c0141c101000000723f7a000101000200001e00000000000000000274d1d917000341c1020000000080000003010df0ad0b00000000000000000003454e4431d2040000580200006c0200000895c50c",
+            "54524b31050100000700000029000000b8ced91718ff40c100000000580678000000a00f00005f000000ee0000000002e4cfd9170c0141c1010000005a067a000101000200001e00000000000000000274d1d917000341c1020000000080000003010df0ad0b00000000000000000003454e4431d2040000580200006c02000023450760",
             "wire format changed — update BOTH this vector and the Dart mirror \
              in apps/mobile_android/test/sim_watch_sync_test.dart"
         );
@@ -1306,6 +1349,32 @@ mod tests {
                 header.version < MIN_FORMAT_VERSION,
                 "{label}: below the decodable range"
             );
+        }
+    }
+
+    /// The unit of the altitude field is resolved against the blob's header
+    /// version, not assumed. A v3/v4 blob's 16,240 is 1624.0 m; the SAME two
+    /// bytes in a v5 blob are 16,240 m. Reading one as the other is a tenfold
+    /// error in either direction, and it is silent — the bytes verify, the CRC
+    /// matches, and the run syncs carrying an altitude nobody reached.
+    #[test]
+    fn the_altitude_unit_resolves_against_the_blob_version() {
+        assert_eq!(ele_metres(16_240, 3), Some(1_624.0));
+        assert_eq!(ele_metres(16_240, 4), Some(1_624.0));
+        assert_eq!(ele_metres(16_240, 5), Some(16_240.0));
+        assert_eq!(ele_metres(1_624, FORMAT_VERSION), Some(1_624.0));
+        // The boundary is the constant, not a literal beside it.
+        assert_eq!(
+            ele_metres(100, ELE_METRES_VERSION - 1),
+            Some(10.0),
+            "the version below the switch still means decimetres"
+        );
+        assert_eq!(ele_metres(100, ELE_METRES_VERSION), Some(100.0));
+        // The sentinel is unit-independent: no version has ever meant it as a
+        // height, so it must not resolve to -3276.8 m on one side of the switch
+        // and -32,768 m on the other.
+        for v in MIN_FORMAT_VERSION..=FORMAT_VERSION {
+            assert_eq!(ele_metres(ELE_NONE, v), None, "v{v}");
         }
     }
 
@@ -1498,7 +1567,7 @@ mod tests {
             lat_e7: 0,
             lon_e7: 0,
             t_offset_s: 0,
-            ele_dm: None,
+            ele_m: None,
             bpm: None,
         });
         assert_eq!(w.push_step(&step), Ok(RecordPush::Stored));
@@ -1513,7 +1582,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             });
         }
@@ -1553,7 +1622,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             });
             if let PushOutcome::Thinned(_) = outcome {
@@ -1597,7 +1666,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             });
         }
@@ -1610,7 +1679,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             });
         }
@@ -1628,7 +1697,7 @@ mod tests {
             lat_e7: 0,
             lon_e7: 0,
             t_offset_s: 0,
-            ele_dm: None,
+            ele_m: None,
             bpm: None,
         });
         for i in 1..=2u16 {
@@ -1647,7 +1716,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             });
         }
@@ -1679,7 +1748,7 @@ mod tests {
                     lat_e7: i as i32,
                     lon_e7: 0,
                     t_offset_s: i,
-                    ele_dm: None,
+                    ele_m: None,
                     bpm: None,
                 }),
                 PushOutcome::Stored
@@ -1796,7 +1865,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             }) {
                 PushOutcome::Exhausted => {
@@ -1849,7 +1918,7 @@ mod tests {
                 lat_e7: i as i32,
                 lon_e7: 0,
                 t_offset_s: i,
-                ele_dm: None,
+                ele_m: None,
                 bpm: None,
             })?;
         }

@@ -56,23 +56,46 @@ Deno.serve(withSentry('race-results-import', async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  // Fail-closed: every provider leg past this point makes an outbound call
-  // carrying OUR RunSignUp / ChronoTrack / UltraSignup credential, whose budget
-  // is per-application and shared by the whole deployment. Falling open on an
-  // RPC error would spend that budget on a request whose `runs` insert is
-  // headed for the same database that just failed (decisions § 974).
-  const denied = await checkRateLimitTiered(supabase, user.id, 'race-results-import', 8, 32, 3600, {
-    failClosed: true,
-  });
-  if (denied) return denied;
-
   const body = (guarded.body ?? {}) as RequestBody;
   const provider = typeof body.provider === 'string' ? body.provider : '';
+  const isProbe = body.probe === true;
+
+  // Two buckets, because these are two different costs wearing one name — the
+  // split `race-listings-sync` already carries (decisions § 977).
+  //
+  // An IMPORT makes an outbound call carrying OUR RunSignUp / ChronoTrack /
+  // UltraSignup credential, whose budget is per-application and shared by the
+  // whole deployment, and then writes the caller's `runs`. 8/hour free is right
+  // for that, and falling open on an RPC error would spend the credential on a
+  // request whose insert is headed for the same database that just failed
+  // (decisions § 974).
+  //
+  // A PROBE reads env vars and returns. Charging it to the import bucket meant
+  // every settings-screen load spent an import: one probe per credential-gated
+  // leg the screen offers, so a runner who opened Settings a few times in an
+  // hour lost the ability to import a result at all — and since § 1007 an
+  // exhausted bucket answers 429, which every client grades as "provider
+  // unavailable", so the failure is silent and total rather than a limit the
+  // runner can see. Its own generous bucket costs nothing.
+  const denied = isProbe
+    ? await checkRateLimitTiered(
+      supabase,
+      user.id,
+      'race-results-import:probe',
+      60,
+      240,
+      3600,
+      { failClosed: true },
+    )
+    : await checkRateLimitTiered(supabase, user.id, 'race-results-import', 8, 32, 3600, {
+      failClosed: true,
+    });
+  if (denied) return denied;
 
   // Provider-availability probe: report fail-closed (503 provider_not_configured)
   // when the named provider's credentials are unset, without needing a listing.
   // The ChronoTrack Settings card uses this to disable itself with an explainer.
-  if (body.probe === true) {
+  if (isProbe) {
     // Every credential-gated provider has to be probed, not just ChronoTrack:
     // reporting `configured: true` for runsignup / ultrasignup while their keys
     // are unset made the UI enable a card that 503s on the very next call.

@@ -97,9 +97,13 @@ Deno.test('the probe reports it unavailable too, whatever the keys say', () => {
   // Reporting `configured: true` here lights up a tile whose very next call
   // refuses. The old branch answered on key PRESENCE, so a provisioned deploy
   // would have advertised the leg.
-  const probe = SRC.indexOf("if (body.probe === true) {");
+  const probe = SRC.indexOf("if (isProbe) {");
   const end = SRC.indexOf("return Response.json({ configured: true });", probe);
-  assert(probe !== -1 && end !== -1, 'the probe block is gone');
+  assert(
+    probe !== -1 && end !== -1,
+    'the probe block is gone, or its guard was renamed — re-anchor this rather ' +
+      'than deleting the assertions below',
+  );
   const block = SRC.slice(probe, end);
   assert(
     /provider === 'ultrasignup'[\s\S]{0,400}?ultraSignUpAttributionGate\(\)/.test(block),

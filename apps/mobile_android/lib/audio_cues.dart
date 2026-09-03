@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:core_models/core_models.dart' show DistanceUnit;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:run_recorder/run_recorder.dart' show

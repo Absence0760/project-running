@@ -28,14 +28,23 @@
 --      for a NaN end against a real start, so the pair constraints did not
 --      stand in for a bound of its own.
 --
--- Scope, stated so it is not over-read: this asks whether a bound that EXISTS
--- actually bounds. It says nothing about the numeric columns in the schema
--- that carry no CHECK at all — that is a separate, per-column question about
--- what each one's honest range is, filed in followups.md.
+--   3. Every numeric column on a base table in `public` must CARRY a
+--      single-column CHECK, or be named in UNBOUNDED_EXEMPT below with the
+--      reason it needs none. Rules 1 and 2 grade the bounds that exist; a
+--      column with no bound at all admits NaN by omission and they cannot see
+--      it. Seventy-nine columns were in that state when this rule was written
+--      — thirty-one of them NaN-capable, and the two live-ping tables an
+--      anonymous spectator reads among them (migrations 20270705000001
+--      through 20270705000003).
+--
+-- Scope, stated so it is not over-read: rules 1 and 2 ask whether a bound that
+-- EXISTS actually bounds, and rule 3 asks whether one exists. None of the
+-- three asks whether the RANGE is the right range — that is a per-column
+-- judgement, and each migration argues its own in its header.
 
 begin;
 
-select plan(6);
+select plan(8);
 
 -- ── the sweep, as a function so the operator can be validated with it ───────
 -- `pg_temp` keeps it out of the catalogue every other suite reads.
@@ -173,6 +182,66 @@ select is(
      ) q),
   '',
   'every numeric column in a multi-column CHECK also carries a single-column one'
+);
+
+-- ── rule 3: every numeric column carries a bound at all ─────────────────────
+-- Rules 1 and 2 read the constraints that exist. A column with no constraint
+-- is invisible to both and admits everything its type can hold, which for a
+-- `numeric` or a `float8` includes NaN. This rule closes that by requiring
+-- coverage, so a new numeric column fails here on the day it lands rather than
+-- joining a catalogue nobody re-derives.
+create function pg_temp.unbounded_numeric_columns()
+returns table (tbl text, attname text, typ text)
+language sql as $fn$
+  select c.relname::text, a.attname::text, format_type(a.atttypid, a.atttypmod)
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+  join pg_attribute a
+    on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped
+  where c.relkind = 'r'
+    and a.atttypid in ('smallint'::regtype, 'integer'::regtype, 'bigint'::regtype,
+                       'numeric'::regtype, 'float4'::regtype, 'float8'::regtype)
+    and not exists (
+      select 1 from pg_constraint k
+      where k.conrelid = c.oid and k.contype = 'c' and a.attnum = any (k.conkey)
+    )
+    -- UNBOUNDED_EXEMPT. Four sequence- or identity-backed surrogate keys, whose
+    -- values come from a sequence that starts at 1 and never decreases and
+    -- which no client supplies; and one generated column. `segments.length_m`
+    -- is `generated always as (end_distance_m - start_distance_m) stored` and
+    -- both operands carry `>= 0 and <> NaN and <> Infinity` since
+    -- 20270704000002, so a non-finite value is unreachable there by
+    -- construction rather than by a bound of its own.
+    and (c.relname::text, a.attname::text) not in (
+      ('deletion_audit_log', 'id'),
+      ('jobs', 'id'),
+      ('live_run_pings', 'id'),
+      ('race_pings', 'id'),
+      ('segments', 'length_m')
+    )
+  order by 1, 2;
+$fn$;
+
+-- The same operator validation rule 1 gets: plant one bounded and one
+-- unbounded numeric column and require the sweep to name exactly the second.
+create table public.unbounded_numeric_probe (v numeric, w integer check (w >= 0));
+
+select is(
+  (select coalesce(string_agg(tbl || '.' || attname, ',' order by attname), '')
+     from pg_temp.unbounded_numeric_columns()
+    where tbl = 'unbounded_numeric_probe'),
+  'unbounded_numeric_probe.v',
+  'the sweep names an unbounded numeric column and passes over a bounded one'
+);
+
+drop table public.unbounded_numeric_probe;
+
+select is(
+  (select coalesce(string_agg(tbl || '.' || attname || ' :: ' || typ, ', '
+                              order by tbl, attname), '')
+     from pg_temp.unbounded_numeric_columns()),
+  '',
+  'every numeric column on a public base table carries a single-column CHECK'
 );
 
 select * from finish();

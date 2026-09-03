@@ -69,7 +69,17 @@ export function projectTrack(
 	return out;
 }
 
-/// True iff the track's bounding-box diagonal exceeds ~5 m — i.e. it is
+/// Bounding-box diagonal a track must exceed before it is worth drawing at
+/// thumbnail scale. Named rather than spelled at the comparison because two
+/// other rails hold the same number — the Dart twin's `kMinRenderableSpanM`
+/// and the firmware's `MIN_RENDERABLE_SPAN_M` — and
+/// `scripts/check_watch_wire_vectors.mjs` reads a rail by the NAME of its
+/// constant, so an unnamed one cannot be registered and the three drift
+/// unwatched.
+export const MIN_RENDERABLE_SPAN_M = 5;
+
+/// True iff the track's bounding-box diagonal exceeds
+/// [MIN_RENDERABLE_SPAN_M] — i.e. it is
 /// worth drawing at thumbnail scale. A runner who hits Start + Stop
 /// indoors uploads a non-empty array of near-identical fixes; without
 /// this gate the thumbnail projects them all onto a single pixel and
@@ -97,7 +107,7 @@ export function isTrackRenderable(track: TrackPoint[]): boolean {
 	}
 	const dLatM = (maxLat - minLat) * 111_320;
 	const dLngM = (maxLng - minLng) * 111_320 * Math.cos((minLat * Math.PI) / 180);
-	return Math.hypot(dLatM, dLngM) > 5;
+	return Math.hypot(dLatM, dLngM) > MIN_RENDERABLE_SPAN_M;
 }
 
 /// A positive, finite span for the projection scale. Mirrors `_spanOrEpsilon`

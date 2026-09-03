@@ -1,6 +1,7 @@
 import '../activity_type_labels.dart';
 import 'package:api_client/api_client.dart';
-import 'package:core_models/core_models.dart' show ActivityType;
+import 'package:core_models/core_models.dart'
+    show ActivityType, DistanceUnit;
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show SectionHeader;
 

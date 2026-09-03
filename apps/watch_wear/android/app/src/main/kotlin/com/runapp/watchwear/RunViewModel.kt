@@ -1,6 +1,7 @@
 package com.runapp.watchwear
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -25,6 +26,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -100,6 +102,10 @@ data class UiState(
     val distanceM: Double = 0.0,
     val paceSecPerKm: Double? = null,
     val bpm: Int? = null,
+    /// Why [bpm] is what it is. Threaded through so `RunningScreen` can
+    /// tell "waiting for the first sample" from "there will be none"
+    /// (decisions § 1052).
+    val hrAvailability: HeartRateAvailability = HeartRateAvailability.Off,
     val locationAvailable: Boolean = true,
     val online: Boolean = true,
     val queuedCount: Int = 0,
@@ -397,21 +403,25 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             } catch (_: Throwable) { /* best-effort cold-start hydrate */ }
         }
         viewModelScope.launch {
-            routesBridge.events.collect { push ->
-                try {
-                    if (!shouldApplyRoutesPush(lastAppliedRoutesPushMs, push.updatedAtMs)) {
-                        // Stale or out-of-order delivery — keep the
-                        // current state, don't roll back.
-                        return@collect
+            routesBridge.events
+                .catch { e -> Log.w(TAG, "routes bridge stream failed", e) }
+                .collect { push ->
+                    try {
+                        if (!shouldApplyRoutesPush(lastAppliedRoutesPushMs, push.updatedAtMs)) {
+                            // Stale or out-of-order delivery — keep the
+                            // current state, don't roll back.
+                            return@collect
+                        }
+                        routeStore.save(push.routes)
+                        val recents = routeStore.recentIds.first()
+                        _state.value = _state.value.copy(
+                            routes = sortByRecency(push.routes, recents),
+                        )
+                        lastAppliedRoutesPushMs = push.updatedAtMs
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "routes bridge event failed", e)
                     }
-                    routeStore.save(push.routes)
-                    val recents = routeStore.recentIds.first()
-                    _state.value = _state.value.copy(
-                        routes = sortByRecency(push.routes, recents),
-                    )
-                    lastAppliedRoutesPushMs = push.updatedAtMs
-                } catch (_: Throwable) { /* swallow — picker keeps prior list */ }
-            }
+                }
         }
     }
 
@@ -428,6 +438,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                             distanceM = m.distanceM,
                             paceSecPerKm = m.paceSecPerKm,
                             bpm = m.bpm,
+                            hrAvailability = m.hrAvailability,
                             locationAvailable = m.locationAvailable,
                             activityType = m.activityType,
                             lapCount = m.laps.size,
@@ -477,7 +488,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun observeQueue() {
         queueWatchJob = viewModelScope.launch {
-            store.queue.collect { list ->
+            store.queue
+                .catch { e -> Log.w(TAG, "run queue stream failed", e) }
+                .collect { list ->
                 _state.value = _state.value.copy(
                     queuedCount = list.size,
                     thisRunSynced = _state.value.thisRunId?.let { id ->
@@ -565,17 +578,30 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             } catch (_: Throwable) { /* no paired phone, fine */ }
         }
         viewModelScope.launch {
-            sessionBridge.events.collect { event ->
-                when (event) {
-                    is SessionEvent.Updated -> {
-                        val stored = StoredSession.fromPayload(event.payload)
-                        sessionStore.save(stored)
-                        applySession(stored)
-                        drainQueue()
+            sessionBridge.events
+                .catch { e -> Log.w(TAG, "session bridge stream failed", e) }
+                .collect { event ->
+                    try {
+                        when (event) {
+                            is SessionEvent.Updated -> {
+                                val stored = StoredSession.fromPayload(event.payload)
+                                sessionStore.save(stored)
+                                applySession(stored)
+                                drainQueue()
+                            }
+                            SessionEvent.Cleared -> tearDownSession()
+                        }
+                    } catch (e: Throwable) {
+                        // Encrypted-store I/O, the route + run + tile wipes and
+                        // the drain all run from here. The sibling one-shot
+                        // read of the same payload was already guarded; this
+                        // one was not, and viewModelScope installs no
+                        // CoroutineExceptionHandler, so a throw reached the
+                        // thread's uncaught handler and took the recording
+                        // service down with the process.
+                        Log.w(TAG, "session bridge event failed", e)
                     }
-                    SessionEvent.Cleared -> tearDownSession()
                 }
-            }
         }
     }
 
@@ -605,7 +631,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // user on this watch.
         try {
             com.runapp.watchwear.ui.TileSource.get(getApplication()).clear()
-        } catch (_: Throwable) {
+        } catch (e: Throwable) {
+            // Not cosmetic: the cache that survives is a map of where the
+            // signed-out user runs. Nothing here can force it, but a
+            // silent failure left no trace that it had happened.
+            Log.w(TAG, "tile cache not cleared on sign-out", e)
         }
         authReady.value = false
         _state.value = _state.value.copy(
@@ -842,6 +872,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             distanceM = 0.0,
             paceSecPerKm = null,
             bpm = null,
+            hrAvailability = HeartRateAvailability.Off,
             lapCount = 0,
             syncError = null,
             thisRunId = runId,
@@ -985,7 +1016,11 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             // Bump LRU so the next picker open puts this route at
             // the top regardless of `updated_at` on the server.
-            try { routeStore.pushRecent(route.id) } catch (_: Throwable) { }
+            try {
+                routeStore.pushRecent(route.id)
+            } catch (e: Throwable) {
+                Log.w(TAG, "route LRU not updated", e)
+            }
             // Eagerly download street-zoom tiles along the route
             // while we still have connectivity (paired phone, wifi).
             try {
@@ -1377,6 +1412,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val AUTH_WAIT_MS = 3_000L
+        private const val TAG = "RunViewModel"
     }
 
     class Factory(private val application: Application) : ViewModelProvider.Factory {

@@ -16,14 +16,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { stripComments } from '../core/strip_comments';
+
 const IMPORTER = 'src/lib/integrations/strava-zip.ts';
 
 /// Comments are stripped before every scan below: the prose in this file
 /// names the very shapes being refused ("an early return here would…"),
 /// so a guard reading the raw text would answer about the comment.
-function stripComments(s: string): string {
-	return s.replace(/(^|[^:])\/\/[^\n]*/g, '$1').replace(/\/\*[\s\S]*?\*\//g, ' ');
-}
 
 function source(): string {
 	return stripComments(readFileSync(resolve(IMPORTER), 'utf-8'));
