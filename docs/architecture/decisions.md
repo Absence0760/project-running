@@ -18805,3 +18805,59 @@ a tile that cannot work.
 
 No code changed. A filing that describes shipped behaviour is itself the defect,
 and the fix is to correct the filing.
+
+## 1072. The fixed-delay residue re-measured: three of the filing's four counts were stale, and `debugWritesSettled` has a zone precondition nobody had stated
+
+§ 723 converted 44 fixed real-clock delays to `pumpUntil` predicates and § 991
+closed a third family member on `main`. The followups entry that survived them
+carries a census of what is left. Re-measured on 2026-09-03, **three of its four
+numbers are wrong, and its enumeration is short by three sites** — which matters
+because the census is what a later lane sizes the work from.
+
+- "9 bare `pumpEventQueue()` calls across 2 files" → **8 call sites across 3
+  files**. The ninth occurrence is inside a *comment* in `sync_service_test.dart`
+  describing § 991's own fix, so a grep counted the entry's evidence as more of
+  the problem. Of the 8, one is the in-loop case the entry already excuses
+  (`run_detail_screen_test.dart`), and `sync_service_test.dart` still holds two
+  bare ones — § 991 converted the lifecycle-resumed test and left the two
+  absence assertions, which is correct and which the entry reads as having
+  cleared the file.
+- "28 files pair a temp directory with widget taps and no `pumpUntil`" → **26**.
+- "86 mobile test files create a temp directory" → **88** at `ac6dc7022`.
+- The 14-item enumeration is missing `route_review_report_test.dart:74`,
+  `routine_public_library_screen_test.dart:188` and
+  `run_screen_recording_flow_test.dart:1626`.
+
+Two of those three were convertible and are converted. The review-report helper
+waited a flat 10 ms for `_fetchReviews`, when all three of its callers then
+assert the seeded review renders — so it now waits on that, with the comment text
+hoisted to one named constant because a literal in two places is how a wait stops
+matching the thing it is waiting for. The public-library adopt polled a fixed
+8 x 20 ms after tapping the FAB, for a store row the very next line asserts.
+The third is byte-identical to a case the entry lists as deliberate (the
+`pairedName()` read, invisible at idle) and got the stated reason it was missing
+rather than a conversion.
+
+**The entry's own open question is closed, and the answer came with a
+precondition.** It asks whether `nutrition_screen_test`'s two
+`f.store.rows.length == 2` waits should move off the before-the-write proxy, and
+says the levers are the store's `notifyListeners` or a UI state ordered after
+`persist()`. There is a third the entry does not cite:
+`OfflineSyncStore.debugWritesSettled()`, `@visibleForTesting`, whose doc comment
+describes this exact race almost verbatim. Both waits now chase the row list with
+`pumpUntil` and then settle the write with it.
+
+The precondition was found by trying it in the second file and measuring, with a
+three-way A/B: **`debugWritesSettled()` is only awaitable when the write it is
+waiting on was queued from inside `tester.runAsync`.** `serialiseStoreWrite`
+links its chain with `.then`, so a write queued from a fake-zone tap has its
+continuation scheduled as a fake-zone microtask — which only `pump` drains, and
+`runAsync` does not pump. Awaiting the chain from inside `runAsync` then waits on
+a microtask nothing will run. Measured: fake-zone tap + `debugWritesSettled` hung
+past a 240 s bound twice; the same test with the call removed passed in 1 s; the
+same test with the tap moved inside `runAsync` and the call restored passed in
+1 s. `nutrition_screen_test` was already green because its taps are inside
+`runAsync` — so the two files differed by exactly the variable the mechanism
+predicts. The rule for the next lane: after a fake-zone tap, wait on an
+observable outcome with `pumpUntil`; `debugWritesSettled` is for a real-zone
+write, and reaching for it otherwise deadlocks rather than failing.

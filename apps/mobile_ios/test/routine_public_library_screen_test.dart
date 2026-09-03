@@ -9,6 +9,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/local_routine_store.dart';
 import '../lib/screens/routine_public_library_screen.dart';
+import 'pump_until.dart';
 
 GymRoutineRow _routine(String id, String title) => GymRoutineRow(
       id: id,
@@ -163,38 +164,49 @@ void main() {
       (tester) async {
     final f = await _fixture('adopt');
     try {
+      // The seed is real store I/O, so it needs the real zone; the adopt below
+      // must NOT stay inside it, because `pumpUntil` runs its own `runAsync`
+      // and nesting is denied (decisions § 723).
+      late final StoredRoutine pending;
       await tester.runAsync(() async {
         await f.store.replaceFromServer(
             [_stored('r-1'), _stored('r-2'), _stored('r-3')]);
-        final pending =
+        pending =
             await f.store.createLocal(title: 'Offline', exercises: const []);
-        await tester.pumpWidget(MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: RoutinePublicPreviewScreen(
-            api: _AdoptApi('r-adopted'),
-            store: f.store,
-            gymStore: f.gym,
-            entry: (routine: _routine('r-pub', 'Wendler'), authorHandle: null),
-          ),
-        ));
-        await tester.pump();
-        await Future<void>.delayed(Duration.zero);
-        await tester.pump();
-        // The extended FAB animates in; tap only once it is hit-testable.
-        await tester.pump(const Duration(milliseconds: 500));
-        await tester.tap(find.byType(FloatingActionButton));
-        for (var i = 0; i < 8; i++) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-          await tester.pump(const Duration(milliseconds: 20));
-        }
-        expect(
-          f.store.routines.map((r) => r.id),
-          unorderedEquals(['r-1', 'r-2', 'r-3', pending.id, 'r-adopted']),
-        );
-        expect(f.store.byId(pending.id)!.syncState,
-            RoutineSyncState.pendingCreate);
       });
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RoutinePublicPreviewScreen(
+          api: _AdoptApi('r-adopted'),
+          store: f.store,
+          gymStore: f.gym,
+          entry: (routine: _routine('r-pub', 'Wendler'), authorHandle: null),
+        ),
+      ));
+      // The extended FAB animates in; tap only once it is hit-testable. The
+      // fake clock drives that, which is why it is a pump and not a wait.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      // The tap goes inside `runAsync` so the adopt's writes are queued from
+      // the REAL zone. `serialiseStoreWrite` links its chain with `.then`, so a
+      // write queued from a fake-zone tap has its continuation scheduled as a
+      // fake-zone microtask — which only `pump` drains, and `runAsync` does not
+      // pump. `debugWritesSettled()` on such a chain never returns
+      // (decisions § 1072).
+      await tester.runAsync(() => tester.tap(find.byType(FloatingActionButton)));
+      await pumpUntil(
+          tester, () => f.store.routines.any((r) => r.id == 'r-adopted'),
+          describe: 'the adopted routine to reach the store');
+      // The row list is not the write — `persist` installs the row before
+      // `writeJsonAtomic` — and this test's `finally` deletes the temp dir.
+      await tester.runAsync(() => f.store.debugWritesSettled());
+      expect(
+        f.store.routines.map((r) => r.id),
+        unorderedEquals(['r-1', 'r-2', 'r-3', pending.id, 'r-adopted']),
+      );
+      expect(f.store.byId(pending.id)!.syncState,
+          RoutineSyncState.pendingCreate);
     } finally {
       f.dir.deleteSync(recursive: true);
     }

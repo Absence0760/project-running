@@ -9,6 +9,12 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/route_detail_screen.dart';
+import 'pump_until.dart';
+
+/// The one seeded review's comment. Named because it is both what the stub
+/// serves and the condition the pump waits on — a literal in two places is how
+/// a wait stops matching the thing it is waiting for.
+const _seededReview = 'e2e report-target review';
 
 /// ApiClient stub: a settable [userId] (the viewer) + one seeded review
 /// authored by [reviewAuthorId]. Drives the report-flag gating on
@@ -29,7 +35,7 @@ class _ReviewsApi extends ApiClient {
           routeId: routeId,
           userId: reviewAuthorId,
           rating: 3,
-          comment: 'e2e report-target review',
+          comment: _seededReview,
         ),
       ];
 }
@@ -70,16 +76,12 @@ Future<void> _pump(WidgetTester tester, ApiClient api) async {
         ),
       ),
     );
-    // Let _fetchReviews resolve.
-    await Future<void>.delayed(const Duration(milliseconds: 10));
   });
-  await tester.pump();
-  await tester.pump(Duration.zero);
-  // The reviews section sits below the map + stats. Drag until it is built
-  // rather than by a fixed offset: the hero map is a share of the viewport
-  // (#666 C9), so a constant drag stops reaching the moment the surface
-  // changes size. `pumpAndSettle` is not available here — LiveRunMap runs a
-  // repeating pulse — so each drag is settled with a bounded pump.
+  // Wait on the review itself, not on a guess at how long the fetch takes.
+  // `pumpAndSettle` cannot stand in — LiveRunMap runs a repeating pulse, so it
+  // never settles — and `pumpUntil` cannot go inside the `runAsync` above.
+  await pumpUntil(tester, () => tester.any(find.text(_seededReview)),
+      describe: 'the seeded review to render');
 }
 
 void main() {
@@ -93,7 +95,7 @@ void main() {
         tester,
         _ReviewsApi(viewerId: 'viewer', reviewAuthorId: 'author'),
       );
-      expect(find.text('e2e report-target review'), findsOneWidget);
+      expect(find.text(_seededReview), findsOneWidget);
       expect(find.byTooltip('Report review'), findsOneWidget);
     });
 
@@ -102,7 +104,7 @@ void main() {
         tester,
         _ReviewsApi(viewerId: 'author', reviewAuthorId: 'author'),
       );
-      expect(find.text('e2e report-target review'), findsOneWidget);
+      expect(find.text(_seededReview), findsOneWidget);
       expect(find.byTooltip('Report review'), findsNothing);
     });
 
@@ -111,7 +113,7 @@ void main() {
         tester,
         _ReviewsApi(viewerId: null, reviewAuthorId: 'author'),
       );
-      expect(find.text('e2e report-target review'), findsOneWidget);
+      expect(find.text(_seededReview), findsOneWidget);
       expect(find.byTooltip('Report review'), findsNothing);
     });
   });
