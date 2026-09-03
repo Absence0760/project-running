@@ -36,8 +36,8 @@ Three jobs read `infra/`, none of which needs AWS credentials:
 | `infra-guards` (`ci.yml`) | `scripts/check_infra_iam.mjs` + `scripts/check_infra_coverage.mjs` — see below. In the required `CI gate` aggregator's `needs:` list. |
 
 **`check_infra_iam.mjs`** reads `github-oidc/main.tf` + its `variables.tf`,
-`modules/web-stack/main.tf`, both `envs/<env>/main.tf` and every workflow under
-`.github/workflows/`:
+`modules/web-stack/main.tf`, both `envs/<env>/main.tf`, every workflow under
+`.github/workflows/` and every composite action under `.github/actions/`:
 
 - each deploy role's trust policy uses `StringEquals` (never `StringLike`) on a
   wildcard-free `repo:<owner/repo>:environment:<name>` sub, with `:aud` pinned;
