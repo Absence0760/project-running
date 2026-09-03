@@ -1,4 +1,3 @@
-import { computeElevationGain } from '../routes/route_simplify';
 import type { TrackPoint } from '../types';
 
 /**
@@ -34,29 +33,6 @@ export function movingTimeSeconds(
 	return Math.round(movingMs / 1000);
 }
 
-/**
- * Total positive elevation gain in metres, rounded.
- *
- * The rule itself lives in `computeElevationGain` and is deliberately not
- * restated here. This used to sum every upward delta with no noise gate,
- * which made the app answer the same question twice with different numbers:
- * a run's vert changed the moment the runner tapped "save as route", because
- * the route summary has always gated at `ELEVATION_GAIN_MIN_DELTA_M`. Mobile
- * never had the second rule — `run_detail_screen.dart` reads the run's climb
- * through `computeElevationGain` too — so the same run also read differently
- * on the phone and on the web.
- *
- * The gate is not a rounding preference: altitude error is autocorrelated, so
- * an ungated sum integrates the drift. Measured over a 30-minute flat run with
- * barometer-grade error (sigma 1 m, rho 0.98) the ungated rule reported 143 m
- * of climb where the gated one reported 3; on a real 200 m climb it reported
- * 267 against the gated 197. On a clean, noise-free track the two are
- * identical, so the gate costs nothing where there is signal.
- */
-export function elevationGainMetres(track: TrackPoint[] | null | undefined): number {
-	if (!track || track.length < 2) return 0;
-	return Math.round(computeElevationGain(track));
-}
 
 export interface Split {
 	km: number;

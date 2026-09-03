@@ -16394,3 +16394,37 @@ event page groups four codes into one branch so its code-to-copy window is wider
 Writing them as per-pair data rather than as a widened shared constant keeps the
 donations half's tighter window, which is what stops a code that is NOT mapped
 from picking up a later branch's copy key and reading as mapped.
+
+## 1004. Deleting the adapter, because an indirection with one caller is a place for a second rule to grow
+
+§ 981 made `runs/run_stats.ts`'s `elevationGainMetres` delegate to
+`routes/route_simplify.ts`'s `computeElevationGain`, so the app stopped
+answering "how much did this run climb" twice with different numbers. It left the
+adapter in place because its single call site was outside the lane's paths.
+
+Both things the adapter added past the delegation turn out to be dead. Its
+`!track` guard is redundant — the one caller already reads
+`run?.track ? … : 0` — and so is its `track.length < 2` guard, because
+`computeElevationGain` returns 0 for an empty track and for a single point
+(the first reading only sets the reference). What was left was `Math.round`.
+
+An indirection with one caller is not neutral. It is a second name for the rule,
+in the module that used to hold the second RULE, which is where a future edit
+would put an ungated sum back. `run_detail_screen.dart` has always called the
+Dart `computeElevationGain` directly; the web page now does the same.
+
+The five test cases the adapter carried were checked against
+`route_simplify.test.ts` before being dropped rather than moved: the positive-only
+sum, the single- and multi-point dropout carry-forward, the jitter band, the real
+climb through jitter and the empty/single-point input are each already pinned
+there. One case was NOT — an ABSENT `ele` rather than an explicit `null`, which
+is what the run-detail page's raw waypoints carry — and that assertion was added
+to the dropout case rather than lost.
+
+§ 981's "one rule" case does not survive the deletion, because with one function
+there is nothing to compare. What replaces it is a source guard over the page,
+which is what that case was really about: the derivation must call
+`computeElevationGain`, the import must come from the module that owns the rule
+rather than through a re-export, and the adapter's name must not reappear.
+Reintroducing a local `reduce` over positive deltas fails it, and so does
+importing the rule from a different path.
