@@ -16505,3 +16505,61 @@ and the bound is inclusive because the poles and the antimeridian are places.
 
 The third site, `routine_detail_screen.dart`'s RPE prefill, is reachable only
 from a corrupted local routine file and is closed the same way.
+
+## 1012. The one store write path with no completion signal was the one deliberately kept off the chain
+
+The § 991 filing left a population of 28 mobile test files that pair a temp
+directory with widget taps and no wait on a store's own completion signal, and
+said separating the real races from the safe ones needed an instrumented
+full-suite run this environment cannot afford. It also recorded what § 991's
+root cause actually WAS — a `void` method discarding a future, so nothing could
+observe completion — which is a property of the PRODUCTION code and can be
+searched for directly.
+
+Searched, from the production side, 2026-09-02. Every store write in the mobile
+tree reaches `serialiseStoreWrite`, and three stores publish
+`debugWritesSettled()` over it — so a test that waits has a signal to wait on,
+whether or not it does. Exactly one path is excluded, and its own comment says
+so: "The in-progress recording path is deliberately NOT on this chain — see
+`saveInProgress`. Nothing here may delay an L1 write during a recording."
+
+That exclusion is right, and it is also where both remaining instances of
+§ 991's shape live:
+
+  * `saveInProgress` is driven by `Timer.periodic(_incrementalSaveInterval, (_)
+    => _saveInProgress())`, armed inside the `void`
+    `_attachRecordingSideEffects`. The tick's future is discarded, and the only
+    handle — `_inFlightSave` — is private with no accessor.
+  * `clearInProgress()` is called as a BARE STATEMENT from the `void`
+    `_discard`, with a comment that says "fire-and-forget". Every one of its
+    other six call sites is awaited. It is the only un-awaited, non-`unawaited`
+    store write anywhere in `apps/mobile_android/lib` or `packages/*/lib`.
+
+So the path that writes a real NDJSON file into the store's own directory,
+every ten seconds, throughout a recording, was the single path with no
+observable completion anywhere — and a widget test's `tearDown` deletes that
+directory.
+
+Closed by giving the path its OWN signal rather than by joining it to the
+chain: `debugInProgressSettled()` follows the in-flight append and the
+in-flight clear, looping because a clear awaits the append and a tick may arm a
+new append while the last is being waited on. `clearInProgress` now publishes
+its future so a caller that discards it is still visible. Joining the two
+signals would put the recording path on the serialised chain by the back door,
+which is the one thing the chain forbids, so a source-level assertion pins that
+neither `saveInProgress` nor `_clearInProgress` reaches `_serialised` and that
+the new signal does not reach `storeWritesSettled`.
+
+The clear-tracking half is asserted in SOURCE rather than by timing, and that
+is a measurement rather than a preference: a behavioural version of it passed
+under the mutation that removes the tracking, because the delete lands within a
+turn or two on a fast disk either way. A test that passes under its own
+mutation is worse than no test, so it was replaced rather than kept alongside.
+
+The two named members — `run_screen_expected_return_test` and
+`run_screen_conclude_retry_test`, the two that mount a live recording against a
+real `LocalRunStore` on a temp directory without stubbing `saveInProgress` —
+now wait on the signal before deleting. The rest of the 28 population stands as
+§ 991 left it: a population, not a membership. What this round changes is that
+the two ROOT CAUSES are gone, so a member that is still racing is racing
+against a write it can now wait for.

@@ -126,6 +126,44 @@ class LocalRunStore extends ChangeNotifier {
   /// the file as a phantom partial for a run that has already been saved.
   Future<void>? _inFlightSave;
 
+  /// The in-flight [clearInProgress], or null. Exists only so
+  /// [debugInProgressSettled] can see it: the discard path calls
+  /// `clearInProgress()` as a bare statement from a `void` method, so the
+  /// future is dropped at the call site and nothing else could observe it.
+  Future<void>? _inFlightClear;
+
+  /// Test-only: completes once the in-progress recording path is quiet.
+  ///
+  /// [saveInProgress] and [clearInProgress] are deliberately OFF the write
+  /// chain — nothing there may delay an L1 write during a recording — so
+  /// [debugWritesSettled] does not cover them. Both of their drivers then
+  /// DISCARD the future: a `Timer.periodic` tick in `run_screen`'s
+  /// `_attachRecordingSideEffects`, and a bare `clearInProgress()` in
+  /// `_discard`. That left a real file write under the store's own directory
+  /// with no observable completion anywhere, which is exactly the shape
+  /// decisions § 991 closed one layer up — a widget test's `tearDown` deletes
+  /// the directory while the append is still in the air.
+  ///
+  /// Deliberately NOT the same signal as [debugWritesSettled]: joining the two
+  /// would put the recording path on the serialised chain, which is the one
+  /// thing the chain's own comment forbids.
+  @visibleForTesting
+  Future<void> debugInProgressSettled() async {
+    // Loop rather than await once: a clear awaits the in-flight save, and a
+    // tick may have armed a new save while we were waiting on the last one.
+    for (var i = 0; i < 8; i++) {
+      final save = _inFlightSave;
+      final clear = _inFlightClear;
+      if (save == null && clear == null) return;
+      try {
+        await Future.wait([if (save != null) save, if (clear != null) clear]);
+      } catch (_) {/* each path reports its own failure to its own caller */}
+      if (identical(_inFlightSave, save) && identical(_inFlightClear, clear)) {
+        return;
+      }
+    }
+  }
+
   /// Display-side half of the §67 owner tag (issue #230): every public read
   /// seam filters to the active account's rows ∪ untagged rows, so user A's
   /// runs (with their GPS tracks + home start points) stop rendering for
@@ -780,7 +818,15 @@ class LocalRunStore extends ChangeNotifier {
 
   /// Remove the in-progress save file. Called on successful [stop] and on
   /// successful recovery (after promoting the partial run into the list).
-  Future<void> clearInProgress() async {
+  Future<void> clearInProgress() {
+    final done = _clearInProgress();
+    _inFlightClear = done;
+    return done.whenComplete(() {
+      if (identical(_inFlightClear, done)) _inFlightClear = null;
+    });
+  }
+
+  Future<void> _clearInProgress() async {
     // Drain an append already past its guard before deleting — see
     // [_inFlightSave]. The bare catch is right: the save path logs its own
     // failures, and a failed append is exactly the case where the delete

@@ -260,6 +260,10 @@ void main() {
     runsDir = Directory.systemTemp.createTempSync('run_screen_live_vis_');
   });
 
+  /// The store the last `pumpLiveRunScreen` built, so the teardown can wait on
+  /// the in-progress recording write before deleting the directory under it.
+  _CapturingRunStore? lastRunStore;
+
   tearDown(() async {
     for (final name in mockedMethodChannels) {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -275,6 +279,13 @@ void main() {
     mockedMethodChannels.clear();
     mockedEventChannels.clear();
     await geolocator.dispose();
+    // The incremental-save Timer.periodic drives `saveInProgress` fire-and-
+    // forget, and that path is deliberately off the store's write chain, so
+    // `debugWritesSettled()` does not answer for it. Deleting `runsDir` with
+    // an append still in the air is the § 723 race — wait on the path's own
+    // signal first (decisions § 1012).
+    await lastRunStore?.debugInProgressSettled();
+    lastRunStore = null;
     if (runsDir.existsSync()) runsDir.deleteSync(recursive: true);
   });
 
@@ -288,6 +299,7 @@ void main() {
 
     final api = _LiveApi();
     final runStore = _CapturingRunStore();
+    lastRunStore = runStore;
     await runStore.init(overrideDirectory: runsDir);
     final social = SocialService();
 
