@@ -2270,6 +2270,10 @@ export interface ImportRaceResultOutcome {
 	imported: number;
 	skipped: number;
 	enriched: number;
+	/// Whether the function read the finisher field to its end. Optional on the
+	/// wire only because a deployment can predate it; grade it through
+	/// `parseImportCompleteness`, which reads an absent one as partial.
+	complete?: boolean;
 }
 
 /// Invoke race-results-import. Throws `RUNSIGNUP_UNAVAILABLE` /
@@ -2320,11 +2324,20 @@ export async function isRunSignUpConfigured(): Promise<boolean> {
 	return !(await isProviderNotConfigured(error));
 }
 
-/// Probe whether the UltraSignup leg is configured server-side. Same fail-closed
-/// shape as isRunSignUpConfigured, gating the independent UltraSignup key.
+/// Probe whether the UltraSignup RESULTS leg is configured server-side. Same
+/// fail-closed shape as isRunSignUpConfigured.
+///
+/// Probes `race-results-import`, not `race-listings-sync`. The two legs are
+/// separately gated and no longer agree: the sync answers on
+/// ULTRASIGNUP_API_KEY alone, while the results leg refuses unconditionally
+/// since decisions § 975 — an athlete feed carries no race identifier, so
+/// nothing it returns can be attributed to the listing a caller names. The card
+/// this gates says "Import trail and ultra results", so it has to ask the leg
+/// that would run; asking the sync advertises an import whose very next call
+/// 503s the moment the key is provisioned.
 export async function isUltraSignUpConfigured(): Promise<boolean> {
-	const { error } = await supabase.functions.invoke('race-listings-sync', {
-		body: { provider: 'ultrasignup' }
+	const { error } = await supabase.functions.invoke('race-results-import', {
+		body: { provider: 'ultrasignup', probe: true }
 	});
 	if (!error) return true;
 	return !(await isProviderNotConfigured(error));

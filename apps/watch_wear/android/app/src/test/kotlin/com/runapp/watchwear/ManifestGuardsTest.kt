@@ -7,8 +7,8 @@ import java.io.File
 
 /// Source-level guards for the Wear OS AndroidManifest. The audit pass
 /// flagged two manifest issues Play reviewers regress on: a redundant
-/// application-level cleartext-traffic flag, and missing background
-/// HR access on Wear OS 3.5+ (API 34+). These tests pin both in place.
+/// application-level cleartext-traffic flag, and a body-sensor
+/// permission the app can neither obtain nor use. These tests pin both.
 ///
 /// Pure-JVM JUnit, no Robolectric — matches the rest of the test
 /// module's "read the source, assert a pattern" pattern (see
@@ -20,19 +20,39 @@ class ManifestGuardsTest {
     }
 
     @Test
-    fun `BODY_SENSORS_BACKGROUND is declared`() {
-        // Why: BODY_SENSORS alone covers foreground HR access only.
-        // On Wear OS 3.5+ (API 34+) the platform stops delivering
-        // Health Services samples once the display goes ambient.
-        // Long runs silently drop avg_bpm without this permission.
-        // Play Data Safety must list the same set the binary actually
-        // requests; mismatches trigger reviewer flags.
-        assertTrue(
-            "AndroidManifest.xml must declare BODY_SENSORS_BACKGROUND " +
-                "so HR keeps streaming when the watch dims.",
+    fun `BODY_SENSORS_BACKGROUND is not declared`() {
+        // Why, and this reverses what this guard used to assert: the
+        // permission was declared for two years on the claim that HR
+        // "stops streaming once the display goes ambient" without it.
+        // Two facts kill that claim. It was never passed to
+        // `permissionLauncher.launch`, so no watch has ever granted it
+        // — a declared-and-unrequested runtime permission is inert.
+        // And it is not the permission this app's heart rate depends
+        // on: Health Services documents BODY_SENSORS_BACKGROUND against
+        // PassiveMonitoringClient, while `HeartRateMonitor` uses
+        // MeasureClient, whose background access is documented as "no"
+        // and is not something a permission grant changes. What DOES
+        // govern sensor access from the recording service is the
+        // foreground-service type it starts with, guarded separately in
+        // `ManifestPermissionCoverageTest`.
+        //
+        // So the declaration bought no capability and cost a sensor
+        // permission on the install prompt and the Play Data Safety
+        // form. Re-adding it needs a MeasureClient -> ExerciseClient
+        // migration to be worth anything, and that is a code change
+        // this guard should see first.
+        assertFalse(
+            "AndroidManifest.xml must not declare BODY_SENSORS_BACKGROUND — " +
+                "it gates PassiveMonitoringClient, and this app reads heart " +
+                "rate through MeasureClient.",
             manifest.contains(
                 "android.permission.BODY_SENSORS_BACKGROUND"
             ),
+        )
+        assertTrue(
+            "BODY_SENSORS itself must stay declared — MeasureClient needs it",
+            Regex("""<uses-permission\s+android:name="android\.permission\.BODY_SENSORS"\s*/>""")
+                .containsMatchIn(manifest),
         )
     }
 

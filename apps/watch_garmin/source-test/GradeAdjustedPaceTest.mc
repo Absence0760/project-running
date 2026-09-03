@@ -289,12 +289,17 @@ module GradeAdjustedPaceTest {
     // reads as a 100% wall.
     (:test)
     function trackerHoldsGradeUntilASegmentIsCovered(logger as Test.Logger) as Boolean {
+        // Distances are stated as fractions of the window rather than as
+        // literals, so widening it cannot leave a stale sub-gate sample
+        // reading as an above-gate one. What the window may BE is a separate
+        // question, pinned by theWindowIsLongerThanTheNoiseFloor below.
+        var seg = $.MIN_SEGMENT_M;
         var t = new GradeTracker();
         t.onSample(0.0, 100.0);       // seeds the anchor, no grade yet
         Test.assertEqualMessage(t.grade(), 0.0, "seed sample must not set a grade");
-        t.onSample(3.0, 103.0);       // 3 m run: under the gate, ignored
-        Test.assertEqualMessage(t.grade(), 0.0, "a 3 m run is jitter, not a 100% wall");
-        t.onSample(10.0, 101.0);      // 10 m run, +1 m rise -> 10% grade
+        t.onSample(seg * 0.15, 103.0);  // under the gate, ignored
+        Test.assertEqualMessage(t.grade(), 0.0, "a sub-window run is jitter, not a wall");
+        t.onSample(seg, 100.0 + seg * 0.10);   // one window, +10% grade
         return approx(logger, "grade after a real segment", t.grade(), 0.10);
     }
 
@@ -307,13 +312,15 @@ module GradeAdjustedPaceTest {
         // GradeAdjustedPaceView.mc live in; reading the constant rather than
         // restating 0.45 keeps this test honest if the clamp ever moves.
         var maxG = $.MAX_GRADE;
+        var seg = $.MIN_SEGMENT_M;
         var t = new GradeTracker();
         t.onSample(0.0, 100.0);
-        t.onSample(6.0, 130.0);       // 30 m rise over 6 m = 500% grade
+        // A rise of five windows' worth over one window: a 500% grade.
+        t.onSample(seg, 100.0 + seg * 5.0);
         Test.assertEqualMessage(t.grade(), maxG, "a measured spike must clamp to MAX_GRADE");
         var t2 = new GradeTracker();
         t2.onSample(0.0, 100.0);
-        t2.onSample(6.0, 70.0);
+        t2.onSample(seg, 100.0 - seg * 5.0);
         Test.assertEqualMessage(t2.grade(), 0.0 - maxG, "a downward spike must clamp to -MAX_GRADE");
         return true;
     }
@@ -326,9 +333,10 @@ module GradeAdjustedPaceTest {
     // run -- silently, as a confident number.
     (:test)
     function trackerRecoversFromADistanceRewind(logger as Test.Logger) as Boolean {
+        var seg = $.MIN_SEGMENT_M;
         var t = new GradeTracker();
         t.onSample(0.0, 100.0);
-        t.onSample(20.0, 106.0);      // 30% climb
+        t.onSample(seg, 100.0 + seg * 0.30);   // 30% climb
         if (!approx(logger, "grade before the reset", t.grade(), 0.30)) { return false; }
 
         t.onSample(0.0, 106.0);       // the reset: distance rewinds
@@ -338,7 +346,7 @@ module GradeAdjustedPaceTest {
 
         // and the tracker must be able to measure again immediately, not
         // after re-covering the whole discarded distance.
-        t.onSample(10.0, 105.0);      // 10 m run, -1 m -> -10%
+        t.onSample(seg, 106.0 - seg * 0.10);   // one window, -10%
         return approx(logger, "grade measured after the rewind", t.grade(), -0.10);
     }
 
@@ -347,20 +355,21 @@ module GradeAdjustedPaceTest {
     // anchor at the old total and reproduce the rewind bug exactly.
     (:test)
     function trackerResetClearsAnchorsNotJustTheGrade(logger as Test.Logger) as Boolean {
+        var seg = $.MIN_SEGMENT_M;
         var t = new GradeTracker();
         t.onSample(1000.0, 100.0);
-        t.onSample(1020.0, 106.0);    // 30% climb, anchor now at 1020 m
+        t.onSample(1000.0 + seg, 100.0 + seg * 0.30);  // 30% climb, anchor moves
         Test.assert(t.grade() > 0.2);
 
         t.reset();
         Test.assertEqualMessage(t.grade(), 0.0, "reset must clear the grade");
 
         // A fresh activity starts at 0 again. If reset had left the anchor at
-        // 1020 the first sample below would measure -1020 and the second
-        // would still be under the gate; with the anchors cleared the first
-        // seeds and the second measures.
+        // the old total the first sample below would measure a large negative
+        // run and the second would still be under the gate; with the anchors
+        // cleared the first seeds and the second measures.
         t.onSample(0.0, 200.0);
-        t.onSample(10.0, 201.0);
+        t.onSample(seg, 200.0 + seg * 0.10);
         return approx(logger, "grade after reset then a fresh segment", t.grade(), 0.10);
     }
 
@@ -371,9 +380,13 @@ module GradeAdjustedPaceTest {
     function trackerStaysFlatOnLevelGround(logger as Test.Logger) as Boolean {
         var t = new GradeTracker();
         var d = 0.0;
+        // Step a whole window at a time, so the gate opens on every sample and
+        // the loop actually exercises twenty accepted segments rather than
+        // twenty rejected ones -- a step under the window would pass this test
+        // by never measuring anything at all.
         for (var i = 0; i < 20; i += 1) {
             t.onSample(d, 42.0);
-            d += 7.0;
+            d += $.MIN_SEGMENT_M;
         }
         Test.assertEqualMessage(t.grade(), 0.0, "level ground must measure exactly 0.0");
         return true;
@@ -384,17 +397,53 @@ module GradeAdjustedPaceTest {
     // new point, not from the original one.
     (:test)
     function trackerAnchorAdvancesOnEachAcceptedSegment(logger as Test.Logger) as Boolean {
+        var seg = $.MIN_SEGMENT_M;
         var t = new GradeTracker();
         t.onSample(0.0, 0.0);
-        t.onSample(5.0, 1.0);         // exactly at the gate -> 20%
+        t.onSample(seg, seg * 0.20);  // exactly at the gate -> 20%
         if (!approx(logger, "grade at exactly MIN_SEGMENT_M", t.grade(), 0.20)) { return false; }
-        // If the anchor had NOT advanced, this next sample would measure
-        // (2-0)/10 = 20% again; with it advanced it measures (2-1)/5 = 20%.
         // Use an asymmetric second leg so the two answers differ: from the
-        // advanced anchor (5, 1) a sample at (10, 1) is a flat 0%, while from
-        // a stuck anchor at (0, 0) it would read 10%.
-        t.onSample(10.0, 1.0);
+        // advanced anchor at (seg, seg*0.2) a sample at (2*seg, seg*0.2) is a
+        // flat 0%, while from a stuck anchor at (0, 0) it would read 10%.
+        t.onSample(seg * 2.0, seg * 0.20);
         return approx(logger, "grade from the advanced anchor", t.grade(), 0.0);
+    }
+
+    // The finding this window's value exists to answer, stated as the
+    // relationship rather than as the number. The other three rails gate
+    // elevation GAIN at 3 m -- a smaller change is not treated as climb at all
+    // -- so the largest altitude change the app throws away as noise, taken
+    // over the shortest run a grade is measured across, must not read as a
+    // wall.
+    //
+    // At the 5 m this field shipped with, 3 m of noise was a 0.60 grade -- past
+    // MAX_GRADE, so it clamped, and the factor was 5.396: a pace 5.4x faster
+    // than raw off a rise nothing else is willing to call climb. That is worst
+    // on a Forerunner with no barometric altimeter, where Activity.Info's
+    // altitude is GPS altitude and the noise is metres. Nothing gates the rise
+    // and nothing can -- a threshold big enough to suppress that noise
+    // suppresses every real grade below threshold/window with it.
+    //
+    // The 3.0 here is a literal because Monkey C has no route_simplify to read
+    // it from; the value it mirrors is registered across the other three rails
+    // in scripts/check_watch_wire_vectors.mjs as the elevation-gain noise gate,
+    // and MIN_SEGMENT_M itself is held equal across all four by the same file.
+    (:test)
+    function theWindowIsLongerThanTheNoiseFloor(logger as Test.Logger) as Boolean {
+        var noiseFloorM = 3.0;
+        var noiseFloorGrade = noiseFloorM / $.MIN_SEGMENT_M;
+        Test.assertMessage(
+            noiseFloorGrade < $.MAX_GRADE,
+            "a window of " + $.MIN_SEGMENT_M.toString() + " m makes the " +
+                noiseFloorM.toString() + " m noise floor a " +
+                noiseFloorGrade.toString() +
+                " grade, past the steepest the Minetti fit is defined at");
+        var f = GradeAdjustedPaceView.gradeFactor(noiseFloorGrade);
+        Test.assertMessage(
+            f < 2.1,
+            "the noise floor alone must not more than double the reported " +
+                "effort; it multiplies it by " + f.toString());
+        return true;
     }
 
     // ---- Sanity: factor sign relative to flat across the whole range -----

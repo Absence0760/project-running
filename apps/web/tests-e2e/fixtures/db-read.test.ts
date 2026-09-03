@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import { readCount, readMaybeRow, readRow, readRows } from './db-read';
+import { stripComments } from '../../src/lib/core/strip_comments';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const E2E_ROOT = join(HERE, '..');
@@ -97,15 +98,6 @@ test('a null payload with no error is still refused rather than coalesced', asyn
  * it has no cross-check to corrupt, and it fails loudly on its own.
  */
 
-/** Source with comments removed, so prose describing the bug never trips it. */
-function withoutComments(source: string): string {
-	return source
-		.replace(/\/\*[\s\S]*?\*\//g, (m) => '\n'.repeat((m.match(/\n/g) ?? []).length))
-		.split('\n')
-		.map((line) => (line.includes('://') ? line : line.replace(/\/\/.*$/, '')))
-		.join('\n');
-}
-
 /**
  * String CONTENTS replaced by spaces, offsets preserved. Two things need it:
  * a table name is not a reference to a like-named binding (`'routine-history'`
@@ -147,7 +139,7 @@ const DECLARATION = /\b(?:const|let)\s+(\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*await\
  * errs towards reporting rather than missing.
  */
 function swallowedReadLines(file: string): number[] {
-	const source = blankStringContents(withoutComments(readFileSync(file, 'utf8')));
+	const source = blankStringContents(stripComments(readFileSync(file, 'utf8')));
 	const lineOf = (index: number) => source.slice(0, index).split('\n').length;
 	const asserts = expectArguments(source);
 	const hits = new Set<number>();

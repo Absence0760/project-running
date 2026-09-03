@@ -225,12 +225,21 @@ locals {
 #     `/aws/lambda/<prefix>-*` groups.
 #   - Account root may Encrypt/Decrypt/GenerateDataKey via IAM policies,
 #     for the local operator sops flows described above.
-#   - The Lambda execution role decrypts the sops env at cold-start, and
-#     `var.kms_decrypt_principal_arn` (the env's GitHub OIDC deploy role)
-#     decrypts at terraform-apply time. Decrypt + DescribeKey only —
-#     neither ever encrypts. NOTE: no workflow in this repo runs
-#     `terraform apply`, so the deploy-role half of that statement is
-#     currently unused; see followups.md before assuming it is load-bearing.
+#   - Decrypt + DescribeKey for the Lambda execution role. NEITHER
+#     principal in that statement has ever been shown to exercise it,
+#     and the sentence this comment used to carry — that the execution
+#     role "decrypts the sops env at cold-start" — is not what happens:
+#     data.sops_file decrypts at APPLY time and `local.lambda_env` puts
+#     the result into `environment { variables }` as plaintext, so the
+#     handler reads process.env and calls no KMS API (measured: no
+#     `kms` reference anywhere under apps/web/lambda/). The env vars are
+#     encrypted at rest by the AWS-managed `aws/lambda` key, not by this
+#     CMK — no aws_lambda_function here sets `kms_key_arn`. The deploy
+#     role was removed from the statement in decisions § 1021; the
+#     execution role's grant is unexercised for the same reason and is
+#     filed in followups.md rather than removed, because emptying the
+#     statement is a structural change and one live-configuration read
+#     settles it. scripts/check_infra_iam.mjs holds both premises.
 data "aws_iam_policy_document" "kms_secrets" {
   statement {
     sid    = "AllowKeyAdministrationByAccountRoot"
@@ -323,17 +332,21 @@ data "aws_iam_policy_document" "kms_secrets" {
         # cycle. Audit pass 3 caught a name mismatch (was `-lambda`,
         # actual role is `-coach-lambda`); keep these in lockstep.
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-coach-lambda",
-        # Deploy role(s) that need to decrypt at terraform-apply time.
-        # Optional — empty list means deploys decrypt out-of-band.
+        # An extra principal that genuinely needs apply-time decrypt.
+        # BOTH env stacks now leave this "" and `compact()` drops it: the
+        # only apply that reads data.sops_file is the operator's own, under
+        # a principal already covered by AllowOperatorSopsUseViaIamPolicies.
+        # The Sid is historic — the statement holds one identifier now, and
+        # decisions § 892 named it before § 1021 emptied the deploy half.
         var.kms_decrypt_principal_arn,
       ])
     }
-    # Decrypt path ONLY. The Lambda decrypts the sops env at cold-start and the
-    # deploy role decrypts via `data.sops_file` at terraform-apply — neither ever
-    # ENCRYPTS, so kms:GenerateDataKey is deliberately omitted (audit/infra M1,
-    # least-privilege). Encryption (sops --encrypt / --set / updatekeys, in
-    # sops-init / secret-set / key-rotate) is a LOCAL operator action run under
-    # the operator's own admin/SSO principal, not these roles.
+    # Decrypt path ONLY — kms:GenerateDataKey is deliberately omitted
+    # (audit/infra M1, least-privilege). Encryption (sops --encrypt / --set /
+    # updatekeys, in sops-init / secret-set / key-rotate) is a LOCAL operator
+    # action run under the operator's own admin/SSO principal, not this role.
+    # This comment used to say the Lambda "decrypts the sops env at cold-start";
+    # it does not — see the header above.
     actions = [
       "kms:Decrypt",
       "kms:DescribeKey",
@@ -485,10 +498,13 @@ resource "aws_iam_role_policy_attachment" "lambda_xray" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${local.resource_prefix}-coach"
   retention_in_days = 30
-  # Reuse the same CMK that already encrypts the lambda env vars.
-  # KMS rotation + access policy are managed in one place; the log
-  # group only contains coach request traces, which can carry the
-  # same secrecy class as the env vars themselves.
+  # Reuse the CMK that encrypts the sops file the env vars come OUT of.
+  # (It does not encrypt the env vars themselves — no aws_lambda_function
+  # in this module sets `kms_key_arn`, so Lambda holds them under the
+  # AWS-managed `aws/lambda` key. This comment claimed otherwise until
+  # decisions § 1021.) KMS rotation + access policy are managed in one
+  # place; the log group only contains coach request traces, which can
+  # carry the same secrecy class as the env vars themselves.
   kms_key_id = aws_kms_key.secrets.arn
   tags       = var.tags
 }
@@ -2526,8 +2542,9 @@ resource "aws_cloudfront_distribution" "this" {
   #
   # These apply to EVERY origin on the distribution, not just S3.
   # CloudFront models custom error responses per DISTRIBUTION; there is no
-  # per-cache-behaviour form, so a 403 or a 404 returned by any of the eight
-  # Lambda origins above is rewritten to the shell at 200 as well. The comment
+  # per-cache-behaviour form, so a 403 returned by any of the eight Lambda
+  # origins above is rewritten to the shell at 200 as well, and a 404 to the
+  # shell at 404 (the status half of that was 200 too until § 1022). The comment
   # here used to claim the opposite — that a Lambda's own 404 surfaced as a real
   # 404 because its behaviour ran first — and the `cloudfront_invoke_function`
   # block above records the measurement that disproves it: with only one of the
@@ -2544,7 +2561,8 @@ resource "aws_cloudfront_distribution" "this" {
   # the only signal these failures have; `scripts/check_infra_coverage.mjs`
   # fails the PR when a function is added without it.
   #
-  # Both 403 AND 404 map to the shell: the S3 bucket policy grants
+  # Both 403 AND 404 serve the shell BODY (they differ only in the status
+  # they answer with — see the 404 block below): the S3 bucket policy grants
   # s3:GetObject only (no s3:ListBucket), so S3 answers a missing key
   # with 403 AccessDenied, not 404 — a deep-link / hard-refresh / crawl
   # of a dynamic client route (/dashboard, /runs/<id>, /u/<id>, …) hits
@@ -2559,9 +2577,31 @@ resource "aws_cloudfront_distribution" "this" {
     response_page_path = "/index.html"
   }
 
+  # 404 keeps the shell BODY and answers with the honest STATUS. It used to
+  # answer 200, which made every `/share/{run,route,recap,badge,event,profile,
+  # club,race,session,workout}/<id>` for a private, deleted or never-existing
+  # entity a soft 404: a generic SPA shell served at 200, with no `noindex` —
+  # that tag lives only in the Lambda body this mapping discards — so those
+  # URLs were an invitation to index. Google drops a 404 whatever the body
+  # says, so the status is the whole fix.
+  #
+  # Dropping the mapping outright was the filed proposal and is a WORSE fix,
+  # not a smaller one: S3 genuinely never 404s here (GetObject-only bucket
+  # policy, REST origin, so a missing key is 403), which means the only
+  # responses this block ever sees are the Lambda origins' own — and their 404
+  # bodies are a single unstyled English sentence. Serving that would replace
+  # the SPA's designed, localized not-found card (share/run/[id]'s
+  # `.notfound-card`, reached today ONLY because of this rewrite) with
+  # `<p>This link isn't available.</p>` on ten paths. Keeping the shell and
+  # correcting the code fixes the crawler defect and costs the reader nothing:
+  # the bytes a viewer receives are byte-for-byte what they receive today.
+  #
+  # 403 stays at 200 and MUST: that is the deep-link path (every dynamic
+  # client route is a missing S3 key), and answering it 403 would break the
+  # whole SPA. decisions § 1022.
   custom_error_response {
     error_code         = 404
-    response_code      = 200
+    response_code      = 404
     response_page_path = "/index.html"
   }
 

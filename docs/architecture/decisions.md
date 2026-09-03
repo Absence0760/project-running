@@ -16271,3 +16271,1348 @@ widget taps and no `pumpUntil` at all; identifying which of those actually
 outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
+
+## 992. The GAP grade window was shorter than the noise floor divided by the clamp, on all four rails
+
+`grade_adjusted_pace` measures grade as `rise / run` and gates only the run:
+`MIN_SEGMENT_M` was 5 m on web, mobile, the firmware and the Connect IQ field,
+and nothing gated the rise. The repo's own barometric/GNSS noise floor is
+`ELEVATION_GAIN_MIN_DELTA_M` = 3 m — below that, a change is not treated as
+climb at all — so **the smallest altitude change the codebase is willing to
+believe was, over the shortest run it measures a grade across, a 0.60 grade**:
+past `MAX_GRADE`, clamped, factor **5.396**. The field reported a pace 5.4x
+faster than raw off a rise the gain path throws away, and a single 1 m step did
+it at 2.50. Stated as a floor: a window must exceed
+`ELEVATION_GAIN_MIN_DELTA_M / MAX_GRADE` = 6.67 m or the noise floor alone
+saturates the model, and 5 m is under it.
+
+**The filing framed the choice as "a longer window or a rise threshold". A rise
+threshold cannot work, at any window.** The rise a real grade produces over the
+window scales with the window exactly as the noise does, so a threshold big
+enough to suppress the noise suppresses every real grade below
+`threshold / window` with it. Measured: a 3 m rise gate zeroes every real grade
+under 60 % at a 5 m window, 15 % at 20 m, 10 % at 30 m — while the GPS-altitude
+noise it aims at has a rise sigma of 1.95 / 3.82 / 4.61 m at those same windows
+and walks straight through. On a **clean, noise-free** 3.3 % climb a 1 m gate
+read 19.5 % slow, because the entire real climb fell under it. It buys 1-2
+percentage points against noise and costs a fifth of the signal.
+
+Measured over the AR(1) altitude-error model § 981 chose (rho 0.98 — altitude
+error drifts, it does not resample), 30-minute runs, twelve seeds, reported GAP
+against truth (positive = reported FASTER than the runner ran):
+
+| track | 5 m | 10 m | 20 m | 30 m | 50 m |
+|---|---|---|---|---|---|
+| flat, GPS altitude (sigma 8 m) | **+47.9 %** | +37.1 % | +26.8 % | +20.7 % | +13.8 % |
+| flat, GPS altitude, power-hike pace | **+60.7 %** | +55.5 % | +48.8 % | +42.5 % | +29.1 % |
+| flat, barometer (sigma 1 m) | +2.1 % | +1.1 % | +0.5 % | +0.3 % | +0.2 % |
+| flat, barometer, power-hike pace | **+9.0 %** | +4.3 % | +2.1 % | +1.4 % | +0.6 % |
+| 6 % climb switchbacking +/-8 m / 150 m, clean | +0.1 % | -0.5 % | **-2.5 %** | -5.2 % | -13.1 % |
+| steady 10 % climb, clean | 0.0 % | 0.0 % | 0.0 % | 0.0 % | 0.0 % |
+
+A flat half-hour reading 48 % faster than it was run is not a rounding
+preference, and the power-hike row is the case this device exists for: the same
+window spans a longer interval at 0.9 m/s, so the correlated part of the error
+has longer to grow across it, and even a barometer misreports by 9 %.
+
+**20 m**, because two bounds meet there. It is where the noise floor stops being
+able to more than double the reported effort (3 m over 20 m is a 0.15 grade,
+factor 2.06), and it is the largest window whose cost on the most oscillating
+realistic profile measured stays under 3 %. A steady climb is exact at every
+window — the cost is entirely to terrain that oscillates faster than the window,
+and a switchback staircase is the binding case, not a hill.
+
+The value moves on all four rails at once and `check_watch_wire_vectors.mjs`'s
+`minimum segment before a grade sample is trusted (m)` row already binds them,
+so **no new `CONSTANT_ROWS` entry is needed** — a one-sided change fails the
+`watch-wire-vectors` job today. `roadbook` shares the constant on three rails
+and moves with it, which is the same correction for the same reason; its own
+suites and web's `pace_analysis` / `fuel_plan` pass unchanged.
+
+Every behavioural case on every rail now states its distances as fractions of
+the window rather than as literals, so widening it again cannot leave a stale
+sub-gate sample reading as an above-gate one — six Monkey C tests and two Rust
+ones were exactly that. What the window may BE is pinned separately, by one new
+test per rail asserting the relationship to the noise floor rather than the
+number; each fails at 5 m naming the 0.60 grade. Nothing had pinned the value
+before: every suite on every rail passed at 5, 20, 30 and 50 m.
+
+The Garmin rail is **source-level only** — there is no Connect IQ SDK on this
+machine, so its tests were edited and read, never executed;
+`check_garmin_source.sh` passes and says so itself.
+
+This supersedes the 5 m figure in [§ 114](#114-grade-adjusted-pace-lands-on-webmobile-first-as-a-shared-minetti-parity-helper-computed-over-5-m-segments-and-shown-only-when-it-diverges-from-raw-pace)'s title and body, and weakens half of
+the `PUBLISH_STEP_M` argument in [§ 328](#328) — a metre-coarse altitude now
+puts ~5 % onto a segment's grade rather than ~20 %. Neither entry is rewritten;
+`quality_standards.md`, which restates the second as live guidance, is.
+
+## 993. One elevation-gain rule on the wrist, after web stopped having two
+
+[§ 981](#981) collapsed web's two elevation-gain rules into the gated one and
+filed the consequence for the watch, which carried both: `run_stats.rs`'s
+ungated positive-delta sum ([§ 902](#902)) and `route_simplify.rs`'s 3 m-gated
+one ([§ 925](#925)). Both were faithful ports when taken; after § 981 the first
+was a faithful port of something no rail still does — mobile never had it, and
+web now delegates.
+
+Measured on the wrist before deciding: a +/-1 m sawtooth over 30 samples of
+dead-flat road banked **15 m** of climb under the ungated rule and 0 under the
+gated one, on the device whose headline ultra metric is cumulative climb. On
+deltas past the gate the two agree exactly (a 300 m staircase reads 300 m
+either way), so the gate costs nothing where there is signal — which is the
+second new test.
+
+The rule now has one home. Web states it once and reaches it from both callers
+because `computeElevationGain` is typed structurally; Rust has no such
+subtyping and this device no allocator to build one point shape out of the
+other, so the seam is `route_simplify::elevation_gain_from_samples`, an
+iterator over the altitude samples both shapes can yield.
+`run_stats::elevation_gain_metres` is now a guard, that call, and a round.
+
+The live vert path is untouched and is a third mechanism, not a third rule:
+`elevation::VertAccumulator` consumes a sensor stream with its own deadband and
+drift filter rather than replaying a stored track.
+
+## 994. The bottom of the watch's altitude field is the "no reading" sentinel, and the top is below Handies Peak
+
+Two findings in one field. `run_store::TrackPoint::ele_dm` is an `i16` of
+decimetres and `ELE_NONE` is `i16::MIN`.
+
+**The one this lane could fix.** `record_cadence::ele_dm_from_m` accepted
+-3276.8 m and returned `Some(i16::MIN)` — which `encode` writes as the sentinel
+and `decode` reads back as `None`. The reading was accepted and then silently
+lost, while the value one decimetre above it stored fine. The function's own doc
+asserted the opposite ("every `i16` decimetre value is representable, so there
+is no reason for the bottom of the field to store nothing while the top stores
+fine") and its test pinned the wrong claim; an earlier round had widened the
+bound to include `i16::MIN` on exactly that reasoning, correcting an asymmetry
+that was right. The window is now -3276.7..=3276.7 m and a property test walks
+encode/decode over the edges, so a value that is accepted and then lost fails
+loudly. Unreachable in production today — `plausible_alt` floors at -500 m — so
+this is a latent shape like § 986's `RunRow.toJson`, closed at the source.
+
+**The one it could not.** `plausible_alt` admits -500 m..9000 m, so every
+reading between 3276.7 m and 9000 m is one the watch trusts, publishes to its
+live altitude and vert pages, and then cannot write to the track. Measured:
+Handies Peak is 4285 m against Silverton's 2830 m, so **69 % of a
+Silverton-Handies-Silverton profile stores no elevation at all** — and because
+the gain rule carries the last reading across a dropout, the summit push does
+not merely go missing, it nets to **zero vert** on the synced run. Hope Pass
+(3840 m), the Alps and the Rockies are all inside the same band.
+
+**The repo already made this decision once and the run track never followed.**
+[§ 334](#334) chose `i16` **metres** for `CRS1`'s per-point elevation with the
+reason spelled out — "a decimetre `i16` caps at 3276.7 m, below Mont Blanc, and
+this is a mountain-ultra device" — so the same watch can be handed a course it
+cannot record itself running.
+
+Widening it is a two-rail change and not something the firmware can do alone:
+the phone's `sim_watch_sync.dart` is the production decode side, reads this
+field as `eleDm / 10.0`, and rejects any version past 4, so a firmware-only
+version bump ships a watch whose runs the phone refuses — and the golden vector
+both rails pin would go red. The design is `i16` metres at `FORMAT_VERSION` 5
+with `MIN_FORMAT_VERSION` left at 3 and the unit resolved per header version, so
+**existing v3/v4 blobs stay readable with their original decimetre meaning**;
+it is filed with those details. Meanwhile the cost is written down where a
+reader meets it — the bench checklist now says an empty ALT column over the high
+half of a mountain run is this format and not a dead barometer — and
+`the_altitude_ceiling_is_far_below_what_the_device_believes` pins the 69 %
+figure as characterisation, so the day the field widens the test goes red rather
+than the limit going quiet.
+
+## 995. A year recap that headlined a streak from another year, and the second copy of the streak walk that hid it
+
+`streaks::compute_run_streaks` never gained the `bestSince` bound web added in
+#747, and the reason web added it is what the wrist was doing: a 40-day streak
+from two years ago as the headline number on a card titled with one year.
+`recap::build_year_in_running_recap` reported the **all-time** best as the
+year's best, the month builder had the same hole, and both feed
+`compute_recap_badges`, so the streak trophies were awarded off it too —
+measured, twelve consecutive days in March 2024 gave a 2026 card a 12-day best
+and a `streak-7` badge.
+
+**Underneath it: `recap.rs` carried its own private copy of the entire streak
+algorithm**, plus its own 512-day cap beside `streaks.rs`'s. One crate, two
+implementations of one rule, only one of them registered as a parity port — so
+a divergence between them was undetectable by construction, which is the
+[§ 641](#641) shape inside a single module. They happened to agree; the bound
+went into one of them and would have reached neither. The copy is deleted and
+`recap` imports the walk and the cap.
+
+The bound is a **required** parameter rather than web's optional one. It exists
+because a caller that forgets it reports another year's streak as this year's,
+which is precisely what happened here; a parameter that must be answered cannot
+be forgotten. Porting it also required restructuring the walk to web's shape —
+the wrist seeded `best = 1` before the loop, which with a bound would claim a
+one-day streak nobody ran inside the window.
+
+The subtlety is pinned in both directions: a qualifying streak counts at its
+**full** length, days before the bound included, so 28 Dec to 3 Jan is seven
+days long on the January card. Dropping either bound makes the first two cases
+fail (12 against 3, 8 against 2); the crossing-the-boundary case passes with and
+without, which is the point of having it.
+
+## 996. `RunSource` could not name a parkrun or a chip-timed race
+
+The firmware's `fitness::RunSource` held six of web's eight source values plus a
+watch-local `Other`, and `is_qualifying` was `!matches!(self, Other)`. So a
+caller mapping a pushed source had no variant for `parkrun` or `race` and would
+have had to choose `Other` — which does not qualify. A certified weekly 5K and
+an official chip-timed result, the two most authoritative distances a runner
+has, would have been the ones silently kept out of the fitness ceiling.
+
+That is the same defect twice over. Web's own `||` chain omitted exactly those
+two until #749 replaced it with a total `Record<RunSource, boolean>`, and
+migration `20270424_001_pr_achievements_include_parkrun_race` fixed the same
+omission in SQL. The port inherited the shape that makes it possible rather than
+the fix, and inherited it in a worse form: web could at least express the values.
+
+Both variants are added and `is_qualifying` is an exhaustive match for web's
+stated reason — a variant added to the enum is now a compile error until it is
+consciously classified, where the negated form silently qualified every new one
+(the same failure as the `||` chain, in the other direction). A `WEB_SOURCES`
+register in the tests covers the half the compiler cannot: a variant added
+without a row there is one nothing exercises.
+
+**Web's fourth filter, `activity_type !== 'cycle'`, is deliberately not
+ported**, and the module says so. Its reason is real — `current_vdot` takes the
+MAX over runs, so one bike commute takes the threshold pace, TSS and race
+predictions with it — but the filter needs an activity type `RunForFitness` has
+no producer for on a device with no sport selector. A field nothing can
+populate, filtering a case nothing can produce, is a port made for the count
+rather than for the wrist ([§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)).
+The trigger is a phone push of run history, at which point the field arrives
+with the wiring that fills it.
+
+## 997. Three ported modules whose gaps are answers, not debts
+
+The round-30 sweep found sixteen watch ports whose web source had moved. Five of
+the remainder are one shape — a helper web grew and the port did not — and
+[§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+says a wrist with no surface for a capability may legitimately not want it. Two
+turned out to be defects and are [§ 995](#995) and [§ 996](#996). These three are
+not, and each module now says so where a reader meets the count, the way § 989
+and the `markerPointAtDistance` precedent do.
+
+**`roadbook`'s `RoadbookTarget` / `TARGET_BAND_FRACTION`.** The filing called
+this "the one entry here with a real wrist surface waiting for it" on two
+premises, and **both are false**. `route_markers` carries `parse_cutoff` and no
+`parse_target`, so the input does not exist; and `build_roadbook` has **no
+non-test caller** — the wired Roadbook glance renders the checkpoints the phone
+pushes over `RBK1`, so a field added to that function's output is one nothing on
+the device can read. `RBK1` v1's checkpoint is
+`cum_dist_m | leg_dist_m | projected_elapsed_s | cutoff | flags` with the flags
+byte holding only `CHECKPOINT_FLAG_REFILL`, so the target belongs on the wire,
+in a v2 frame with a matching phone encoder and golden vector. Filed as the
+two-rail change it is.
+
+**`plan_progress`'s `planWorkoutProgress`.** The filing named one missing
+function; there are **two** — `planDistanceBanked` is also absent, and it is
+part of the registered parity pair. Both need the plan's whole workout list, and
+nothing pushes one: `PlanReplan` and `PlanAdaptive` render pre-computed views,
+and a per-week workout table has no wire and no room on a 168x96 panel. The two
+that ARE ported are ported because the phone sends their inputs — a phase list
+and a long-run distance are single values.
+
+**`live_freshness`'s `raceClockS` and `liveElapsedS`.** Both exist to
+reconstruct a clock a *spectator* cannot see: one off `started_at`, one as the
+lower bound a viewer with only a ping may claim. This device is the runner's
+own and `record::Recorder` owns the elapsed clock, so the distinction does not
+arise — and the surface that most depends on it already makes it, since
+`cutoff_eta::next_cutoff_eta` takes `elapsed_s` and `record.rs`'s
+`the_cutoff_eta_projects_from_race_pace_not_moving_pace` pins that it is not the
+moving one. A reconstruction of a fact the device measures directly would be a
+second answer to a settled question, and a second answer is how they disagree.
+`freshness_for` stays ported because a ping's AGE does have a wrist analogue.
+
+Two more results from re-running the § 899 date comparison, recorded so a later
+sweep starts from a measurement. `readiness` moved on web today and was
+**checked and is clean**: the tie in `dominantAdvice` that round 33 found
+diverging between web and Dart cannot occur here, because `dominant_advice` is a
+strict-`>` linear scan that keeps the first contributor, which is what web's
+stable sort does. And `route_markers`' other gap, `isOfficialMarker`, compares a
+marker's `user_id` to the route owner's — the watch has no user ids on any wire
+and the phone owns identity, so there is nothing to port.
+
+## 1000. Thirteen copies of a comment stripper, and the one case none of them handled
+
+Every source-level guard in `apps/web` reads a file as text and has to blank its
+comments first, or the prose above a rule reads as a use of it. Counted at the
+start of this change: **thirteen spellings across twelve files**, each its own
+chain of `.replace` calls — the filing said eight because it inherited the
+ordering guard's own walker, which reached `src/lib/**/*.test.ts` only. § 971 had
+already
+found that a chain gets the ORDER wrong in a way that hides code: `//` is a
+comment to the language but `/*` inside one is still an opening delimiter to a
+regex, so stripping block comments first makes `// exactly as /clubs/* already
+do` open a block that runs to the next `*/` in the file. § 971 fixed the order in
+the six copies it could reach and pinned it with an ordering guard.
+
+Two things were left. The duplication itself, and a case no copy handled in
+either order: a `/*` inside a STRING literal opens the same phantom block. So does
+one inside a regex literal — and a regex literal spelling both delimiters is
+exactly what these files are full of.
+
+A chain of `.replace` calls cannot close that, because the fix is not another
+substitution: it is knowing which delimiter you are inside. `src/lib/core/
+strip_comments.ts` makes one forward pass over code / string / template / regex,
+with a previous-significant-token test to tell a regex literal from division, and
+blanks comment characters to spaces while keeping newlines, so an offset or a
+line number taken from the result is still the file's own.
+
+Strings and regex literals are emitted VERBATIM, which fixes the failure
+direction as well as the failure. A misread of either can only leave a comment
+standing — never delete code. An unstripped comment makes a guard report a
+violation someone can argue with; a swallowed region makes a guard pass while
+seeing nothing, which is what § 971 measured at 779 hidden lines. Single- and
+double-quoted strings and regex literals cannot cross a newline in JavaScript,
+so an unterminated one is treated as an ordinary character and a misread on a
+Svelte markup line (`don't`, `</div>`) cannot escape that line.
+
+The ordering guard is replaced rather than kept. Once the rule has one home,
+"which order does this copy use" is the wrong question; "does this file spell its
+own copy at all" is the right one. The new guard registers every file still
+allowed to strip a block comment together with the count it may spell and why,
+and fails both when an unregistered file appears and when a registered entry goes
+stale — the `allowExtra`/`allowMissing` shape `check_constraint_unions.mjs`
+already uses.
+
+Widening the walk found what the old guard's scope had hidden: it walked
+`src/lib/**/*.test.ts` only, and four more copies lived under `tests-e2e/`,
+three of them in the wrong order. None was hiding anything today — measured, the
+two orders give byte-identical output over every file those three scan — but the
+guard that existed to catch exactly that had never looked at them. A guard naming
+one instance of a class it should name all of is the § 968 defect, one directory
+over.
+
+One copy is deliberately left: `src/lib/integrations/strava_zip_strictness.
+test.ts` belonged to another lane in the round that did this work. It is a
+register entry with that reason, so it is visible and its removal is one line.
+
+## 1001. The two CSS scanners are right to strip only block comments, and now say so
+
+`contrast_guard.test.ts` and `rtl_css_guards.test.ts` strip `/* … */` and not
+`//`, sitting beside a family of guards where stripping only block comments was
+the defect § 971 fixed. They are correct: `//` is not a comment in CSS, and
+blanking it deletes a protocol-relative `url(//host/x.woff2)` and the tail of any
+`content` string that contains one. § 971's ordering guard skipped them, but only
+INCIDENTALLY — it detected that they strip a single form and moved on, which is
+indistinguishable from a copy that had simply forgotten the other half.
+
+Both files now say why in their header, and § 1000's register turns the
+incidental skip into a declared one: each CSS scanner is listed with the number
+of block-comment strips it may spell and the reason, and a count that moves fails
+the guard. That is the difference between a rule nobody has broken yet and a rule
+that is written down — the same reason a `shape: 'union'` rail in
+`check_constraint_unions.mjs` states its `allowExtra` rather than passing quietly.
+
+## 1002. A test file named for the caller it was about, not the code it drives
+
+`share/lambda_site_origin.test.ts` carried two things: a register of every
+`PUBLIC_SITE_URL` caller under `lambda/`, and two behavioural cases over the
+share head builders. § 970 moved the register to `core/site_url.test.ts`, which
+already walked `src` and `lambda` together for the sibling scan, and left the
+behavioural half where it was.
+
+What was left reads no Lambda source. It calls `buildShareRunMeta`,
+`renderShareRunHeadTags`, `buildShareEventHead` and `renderShareEventHeadTags` —
+all in `$lib/share` — and asserts what they emit when the origin is blank,
+whitespace, or carries a trailing slash. The Lambdas are why it matters, because
+nothing else renders those surfaces in production, but the name promised a scope
+the file no longer has, which is the § 968 defect: a reader looking for coverage
+of the shared builders would not find it under `lambda_`, and a reader adding a
+sixth Lambda would expect this file to notice.
+
+Renamed `share_head_origin.test.ts`, with the header saying why the `lambda_`
+prefix was ever right. Naming a test for what it drives rather than for who
+happens to call it is the rule; § 968 arrived at the same one from the other
+direction, where a guard named for `/api/coach` was widened to every wrapper.
+
+## 1003. A refusal-vocabulary guard that named one of the two pairs it should have named
+
+§ 982 added a cross-language check that every refusal code the fundraiser page
+compares is one `donations-checkout` can actually send. It was written because
+the followup asking for the work named `host_cannot_take_payment`, a code that
+function has never returned — it answers `owner_cannot_take_payment` — and a map
+written from that filing would have compiled, typechecked, and silently never
+matched.
+
+The guard was added for one caller. `startEventCheckout` has had the same shape
+since § 904: it unwraps the envelope, rethrows the function's own code, and
+`clubs/[slug]/events/[id]/+page.svelte` maps seven of them to copy. Nothing
+compared those seven against `events-checkout`'s source. A guard that names one
+instance of a class it should name all of is the § 968 defect, and here it was
+one directory over from the ADR that named it.
+
+Measured before extending: all seven are real (`event_full`, `sales_closed`,
+`instance_cancelled`, `host_cannot_take_payment`, `event_has_no_host`,
+`event_not_priced`, `stripe_not_configured`), so this closes a hole rather than a
+live defect. The hole is not hypothetical: the two vocabularies differ on exactly
+the word that produced the wrong filing — donations refuse with `owner_`, events
+with `host_` — and nothing but a reader's memory kept them apart.
+
+Both pairs now run off one register of `{fn, page, handler bounds, generic key,
+distinct codes, key window}`, so the rule is stated once. Two data differ per
+pair rather than being assumed: `events-checkout` templates none of its codes
+(the donations guard's `prefixes.size >= 2` floor would have failed it), and the
+event page groups four codes into one branch so its code-to-copy window is wider.
+Writing them as per-pair data rather than as a widened shared constant keeps the
+donations half's tighter window, which is what stops a code that is NOT mapped
+from picking up a later branch's copy key and reading as mapped.
+
+## 1004. Deleting the adapter, because an indirection with one caller is a place for a second rule to grow
+
+§ 981 made `runs/run_stats.ts`'s `elevationGainMetres` delegate to
+`routes/route_simplify.ts`'s `computeElevationGain`, so the app stopped
+answering "how much did this run climb" twice with different numbers. It left the
+adapter in place because its single call site was outside the lane's paths.
+
+Both things the adapter added past the delegation turn out to be dead. Its
+`!track` guard is redundant — the one caller already reads
+`run?.track ? … : 0` — and so is its `track.length < 2` guard, because
+`computeElevationGain` returns 0 for an empty track and for a single point
+(the first reading only sets the reference). What was left was `Math.round`.
+
+An indirection with one caller is not neutral. It is a second name for the rule,
+in the module that used to hold the second RULE, which is where a future edit
+would put an ungated sum back. `run_detail_screen.dart` has always called the
+Dart `computeElevationGain` directly; the web page now does the same.
+
+The five test cases the adapter carried were checked against
+`route_simplify.test.ts` before being dropped rather than moved: the positive-only
+sum, the single- and multi-point dropout carry-forward, the jitter band, the real
+climb through jitter and the empty/single-point input are each already pinned
+there. One case was NOT — an ABSENT `ele` rather than an explicit `null`, which
+is what the run-detail page's raw waypoints carry — and that assertion was added
+to the dropout case rather than lost.
+
+§ 981's "one rule" case does not survive the deletion, because with one function
+there is nothing to compare. What replaces it is a source guard over the page,
+which is what that case was really about: the derivation must call
+`computeElevationGain`, the import must come from the module that owns the rule
+rather than through a re-export, and the adapter's name must not reappear.
+Reintroducing a local `reduce` over positive deltas fails it, and so does
+importing the rule from a different path.
+
+## 1005. The share Lambdas gate their method, because OPTIONS was the one that missed the cache
+
+§ 972 measured that an `OPTIONS /og/run/<id>.png` runs a full ~50 ms `resvg`
+render and answers `200 image/png`, and left the gate unbuilt: it could not
+verify from the wrong side of the deploy that no client sends a preflight against
+those paths, and the filing asked for one `curl -X OPTIONS` against preview
+before changing five handlers.
+
+The curl is not needed, because the question it would answer is settled in the
+repository. A CORS preflight only succeeds if the response carries
+`Access-Control-Allow-Origin`. Neither the five handlers nor
+`aws_cloudfront_response_headers_policy.security` emits any `access-control-*`
+header at all — checked both — so a browser preflight against `/share/*` or
+`/og/*` already fails today and the real request is never sent. Nothing can be
+depending on the 200, because as a preflight answer it does not work. Everything
+that legitimately fetches these surfaces (an unfurl crawler, an `<img>`, a link
+checker) uses GET or HEAD.
+
+The measurement also understates the cost, and the understated part is what makes
+this worth doing rather than merely tidy. The behaviours declare
+`cached_methods = ["GET", "HEAD"]`. OPTIONS is therefore the one allowed method
+that **cannot** be absorbed by the edge cache: a GET storm on one URL costs one
+render per five-minute window, and an OPTIONS storm on the same URL costs a
+render every request — on paths the WAF rate-limit rules do not scope, since they
+cover `/api/coach`, `/api/routes/generate` and `/api/routes/osrm` only.
+
+One `shareMethodRefusal` in `$lib/share`, called by all five, rather than five
+copies of the `!== 'POST'` shape the API Lambdas each spell — the same reason
+§ 1000 gave for the comment stripper. It fails closed: an event with no method is
+refused, matching those wrappers, and the two share tests that built an event
+without a `requestContext` were corrected rather than the gate loosened, because
+a real Function URL event always carries one.
+
+§ 972's Terraform guard stays and its premise comment is rewritten rather than
+deleted. The two answer different questions: the gate decides what the handler
+does, and only the behaviour decides what reaches the origin at all — a POST body
+refused at the edge is never uploaded, never billed, and never reaches a handler
+that could be made to read it.
+
+## 1006. Eight method gates, five suites, and nothing that named the class
+
+Each of the eight production Lambdas gates its HTTP method, and each gate is
+driven behaviourally by its own suite: `coach_lambda_handler.test.ts`,
+`generate_lambda_handler.test.ts`, `osrm_proxy_lambda_handler.test.ts` and, since
+§ 1005, `share_lambda_handlers.test.ts` for the five share ones. What no file
+did was assert the CLASS. Eight instances covered one at a time is exactly how
+the five share handlers came to have no gate at all: nothing was looking for the
+gap, and their whole method safety sat in a Terraform list that § 972 was the
+first thing ever to read.
+
+So a ninth Lambda would arrive ungated and every existing suite would stay green,
+because none of them walks the directory. The guard added here does: it walks
+`apps/web/lambda/*/src/index.ts`, carries a population floor, and requires each
+handler either to compare `event.requestContext.http.method` and answer a 405 of
+its own, or to call the one shared `shareMethodRefusal`.
+
+Source-level rather than behavioural, deliberately. The shapes do not
+generalise — the coach wrapper writes to a response STREAM and cannot be driven
+through the same envelope as its siblings — and a source guard over a directory
+is the only form that answers "is there one of these I have not thought about",
+which is the question the per-handler suites structurally cannot ask.
+
+## 1007. The phone reported every unreachable provider as configured, and web had already decided otherwise
+
+`RaceService.isProviderConfigured` graded exactly one failure as "not
+configured": a 503 whose body says `provider_not_configured`. Every other
+outcome answered `true` — a 429, any 5xx, a dropped connection, and Supabase
+not yet initialised (the `_c` getter's own `StateError`, thrown inside the same
+`try`). The doc comment defended it: a probe that could not reach the server
+has not shown the provider to be unconfigured.
+
+Web decided the opposite question the other way, in `core/data.ts`'s
+`isProviderNotConfigured`, and its comment names the rule: only a readable
+non-429 4xx proves the function ran PAST its credential gate. A 429 is the
+function's own per-user rate limit, which several probes on one screen reach; a
+5xx did not reach the gate or did not get past it; a status-0 transport failure
+carries no evidence at all. Each of those reports unavailable there.
+
+The two platforms therefore disagreed about a configured provider whenever the
+probe did not cleanly reach the gate, and the disagreement is not symmetric in
+cost. Hiding a live leg for one page load is corrected by the next probe.
+Offering an action whose very next call 503s spends a runner's attention on a
+tile that cannot work — and, since § 975, UltraSignup's results leg refuses
+unconditionally with a 503 that names no missing credential, so "the server was
+unreachable" and "this leg will never work" arrived at the phone looking the
+same.
+
+Ported web's grading to `raceProbeUnavailable`, a top-level pure function so
+the decision is testable without a client, and `isProviderConfigured` now
+delegates every failure to it. `_isProviderNotConfigured` is deliberately left
+alone on the import path: a probe is a yes/no availability question that should
+fail closed, while an import is an action whose failure should surface as
+itself rather than as a claim about credentials.
+
+The filing's other half — that `races_screen._probe()`'s catch can never fire —
+is true and was NOT removed. The method is total by construction, so the catch
+is unreachable; but a probe is the layering contract's named example of an
+auxiliary network effect, the sibling `_run()` in the same file wraps the
+equally-total `searchRaceListings`, and web's own callers of these probes carry
+the identical `try { … } catch { available = false }`. Deleting it on the phone
+alone would create a divergence in the file this change exists to bring into
+parity, and would put a future caller one refactor away from failing open
+again. The service method's doc says why the backstop stays.
+
+## 1008. The UltraSignup results tile was asking a different function whether it could import
+
+Both clients decided whether to offer the UltraSignup **results** import by
+probing `race-listings-sync`. That function answers for the *listings* leg,
+which is real and legitimately gated on `ULTRASIGNUP_API_KEY`. The results leg
+lives in `race-results-import`, and since § 975 it refuses unconditionally: an
+athlete feed carries no race identifier, so every row it returns would be
+stamped with the target listing's name, date and distance, and a road marathon
+would be recorded as a 100-miler.
+
+While both legs were gated on the same two env vars the two questions had the
+same answer, so nothing showed. They no longer do. Provisioning the key would
+light up a tile — web's card says "Import trail and ultra results from
+UltraSignup", mobile's sheet offers the athlete-id form — whose very next call
+503s with a reason that names no missing credential. The probe was asking
+whether the key exists; the tile is a claim about whether an import will work.
+
+Both clients now probe `race-results-import` with `{ provider: 'ultrasignup',
+probe: true }`, which is the shape ChronoTrack already used. `race-listings-sync`
+was deliberately not made to answer for a leg it does not own.
+
+The guard on each platform derives its premise rather than restating the fix:
+it reads the function's probe branch, asserts that branch still refuses
+UltraSignup independently of its credential, and only then requires the client
+to name that function. If § 975 is ever lifted the premise disappears and the
+test says to re-decide rather than to delete an assertion.
+
+**RunSignUp was left probing the sync, and that is a compromise, not a
+judgement that it is right.** The server-side comment in the probe branch says
+every credential-gated leg has to be probed there, and by that rule RunSignUp
+should move too. It cannot yet: `race-listings-sync` gives probes their own
+60/hour bucket (§ 977) while `race-results-import` has no probe/import split at
+all — a probe is charged to the import bucket at 8/hour free, 32/hour Pro,
+*shared with real imports*. Moving UltraSignup already takes the settings
+screen from one to two of that bucket per load; moving RunSignUp would make it
+three, so roughly two settings visits an hour would exhaust a free runner's
+ability to actually import a result. With § 1007 in place an exhausted bucket
+also reads as "provider unavailable", so the failure would be silent and
+total. The durable close is § 977's split applied to `race-results-import`,
+which is a backend change; it is filed, and RunSignUp's probe moves behind it.
+
+## 1009. The over-size track blob is reachable, so the terminal-failure category now has a member
+
+§ 986 removed the one known permanent per-run upload failure (`jsonEncode`
+refusing a non-finite double) and deliberately did NOT build a terminal-error
+taxonomy, on the grounds that a category with no reachable member is a
+preemptive abstraction. It named one candidate it had not measured: a track
+blob past the `runs` bucket's object-size limit. Measured, 2026-09-02.
+
+The bucket's `file_size_limit` is 26,214,400 bytes (25 MiB), set by migration
+`20260620_001` whose own comment estimates "a 5h run at 1Hz is ~18k points;
+gzipped ~1MB". A realistic 1 Hz trace — drifting full-precision coordinates,
+wobbling elevation, per-second timestamps, per-point HR, encoded through the
+uploader's own `_trackBlobJson` — gzips to **27.3 bytes per waypoint**, flat
+from 3,600 to 500,000 points. So the limit is **959,883 waypoints**.
+
+By live recording that is **266.6 hours** of continuous 1 Hz sampling, and
+points are appended only on ≥3 m of movement, so the real figure is longer
+still. The longest event the product models is a 112-hour cutoff. The recorder
+cannot get there, which is why nobody had seen this.
+
+By import it is ordinary. The same 959,883 points as GPX `trkpt` elements are a
+**94.3 MiB** file that deflates to **8.3 MiB** — sixty times inside the 500 MiB
+cap `importFromZip` puts on a Strava archive, so the archive cap does not bound
+it. A single merged multi-year GPX, or a 1 Hz FIT from a 240-mile race, reaches
+it without anyone trying.
+
+So the class has a member, and the failure is permanent: the same waypoints
+gzip to the same bytes on every retry. `saveRunsBatch` catches per-run and
+leaves the run unsynced, the drain re-gzips and re-sends the identical refused
+payload on the next cycle, and the residency invariant keeps that run — and its
+million-point track — permanently in memory besides.
+
+Closed at the source, which is the half that needs no product decision: the
+uploader carries the bucket's limit as `StorageBuckets.runsBucketMaxBytes` (a
+client rail on a server bound, in the shape `text_limits` and `column_limits`
+already use, with a test that reads the migration) and refuses an over-size
+blob with a typed `TrackTooLargeException` **before** spending the network on a
+call that cannot succeed. Its message deliberately contains "maximum allowed
+size" so `classifyImportFailure` buckets it as `tooLarge` rather than
+`unknown`, which the existing import-failure report already explains; a test
+pins that, because it is a property of the sentence and not of the type.
+
+What is NOT done here, and is filed rather than half-built: the drain does not
+yet PARK a terminal failure. That needs per-run blocked state in the local
+store, the five `saveRunsBatch` call sites reading a classification rather than
+a bare id set, a surface, and its i18n — and, before any of it, a product
+answer to what a runner can actually DO about a run whose track is too big to
+store. Guessing at that answer is how a taxonomy becomes an abstraction nobody
+wanted. The measurement above is what the next lane should start from.
+
+## 1010. The domain object stopped carrying a value the encoder refuses; the row it becomes did not
+
+§ 986 made `Run.toJson` total, and the filing that followed called the same
+hole on `RunRow` "a latent shape rather than a live defect" on the grounds that
+the domain object can no longer carry a non-finite distance past `toJson`.
+Measured, 2026-09-02: it is live, and it is four holes rather than one.
+
+§ 986 screened the domain serializer's OUTPUT — `if (!distanceMetres.isFinite)
+json['distanceMetres'] = 0.0`. The FIELD is untouched, and the object a sync
+drain uploads is the resident one: `LocalRunStore` writes `stamped.toJson()` to
+disk and then does `_runs.insert(0, stamped)`, so the screened copy goes to the
+file and the unscreened object stays in memory. `saveRunsBatch(unsyncedRuns)`
+hands that object to `runRowFromRun`, which reads the fields.
+
+Measured, with a `Run` carrying each value:
+
+  * `distanceM: run.distanceMetres` — passes NaN and both infinities straight
+    through; `jsonEncode(row.toJson())` raises `JsonUnsupportedObjectError`.
+  * `runEmbeddedBestSeconds` — `v.toInt()` raises `UnsupportedError: Infinity
+    or NaN toInt`. That one does not even reach the encoder: it throws out of
+    the row BUILDER, which runs in the `.map()` that builds the whole chunk,
+    outside the per-run try/catch that only wraps the track upload.
+  * `runMetadataForRow` — the bag is passed through verbatim, so a non-finite
+    anywhere in it reaches the encoder. The mirrored `elevation_m` key is in
+    this class: the COLUMN is screened by `runPromotedDouble`, the bag copy
+    beside it was not.
+  * the bag nests. `workout_step_results` and `gym_step_results` are lists of
+    maps and `jsonEncode` walks all of it.
+
+The upsert encodes a whole chunk at once, so one such run does not merely fail
+itself — it takes every run in the chunk down with it, which is the failure
+mode § 986 fixed for track uploads and left in place one layer up.
+
+Fixed in `runRowFromRun`, the one place a `Run` becomes a row, rather than in
+`gen_dart_models.dart`. A blanket "coerce every double" in a generated
+serializer would be the wrong instrument: what a non-finite value MEANS is a
+per-column question. `distance_m` has a column and a `>= 0` CHECK, so zero is
+the answer the schema already gives and it now comes from one shared
+`storableDistanceMetres` that `Run.toJson` calls too — two copies of a coercion
+rule are how these two drifted apart in the first place. A bag key has neither,
+so a non-finite there is DROPPED: inventing a zero for `avg_bpm` would state a
+heart rate nobody recorded.
+
+An explicit `null` in the bag is preserved and distinguished from a dropped
+non-finite, because a caller writing `null` is saying something.
+
+## 1011. The settings-bag class the filing named has no population; the class beside it had a live defect
+
+The filing said every mobile deploy gate reading a value out of the settings
+bag inherits `cycle_plan`'s shape — web's `parseInt` yielding NaN where Dart's
+`int.parse` throws — and asked for a source-level guard, filed rather than
+written because "the guard needs an allowlist for the many legitimate in-repo
+parses and that list is the real work".
+
+Surveyed, 2026-09-02. **The strict settings-bag class has exactly two call
+sites in the whole tree, and both are already handled**: the DOB read in
+`settings_preferences_screen.dart` (non-throwing, null-checked) and
+`cycle_plan.dart` itself (regex-gated since § 931). Nothing else parses a jsonb
+bag key at all — `settings_service.dart`, the typed bag accessor, contains no
+parse call. There is no population, so there is nothing to sweep and no
+allowlist to write; that half of the filing is closed as measured-empty.
+
+The class NEXT to it is real and is the one that keeps producing defects. The
+non-throwing family has the mirror-image exposure the filing itself names:
+`double.tryParse('NaN')` returns NaN and `double.tryParse('1e400')` returns
+Infinity, both NON-NULL, so the `?? 0` and `!= null` guards these calls already
+carry cannot see them. `int.tryParse` answers null to both (measured), so the
+exposure is confined to `double.tryParse` and `num.tryParse` — **26 call sites
+across the mobile tree and the packages, of which 23 already conform**. The
+allowlist the filing feared is empty: no site legitimately wants an unchecked
+double.
+
+`finite_parse_guard_test.dart` now enforces it, in the shape
+`calendar_day_arithmetic_guard_test.dart` established — a local
+`// unchecked-parse:` opt-out rather than a file allowlist, plus a
+self-test that the matcher still fires (§ 510). Two things it had to learn: a
+parse guarded by CALLING a named predicate is guarded, so the scan resolves
+one level of helper (`isUsableLatitude`, the GPX importer's `_isUsableLat`),
+including the expression-bodied declarations those predicates actually are;
+and the unit of search is the enclosing FUNCTION body, not the innermost brace
+block (which would miss a sibling guard outside an `if`) and not the class body
+(which would let one method's `isFinite` vouch for another's).
+
+The three sites it named were real, and one is a live defect on a shipped path.
+`geocoding.dart` builds a `PlaceResult` from a geocoder's answer with no
+finiteness and no range test. Nominatim serialises coordinates as STRINGS, so
+`"lat":"NaN"` survives the null check intact — and that provider is not an edge
+case, it is the fallback every build without a MapTiler key uses. The MapTiler
+branch reads `as num` and looked safe; it is not, because `jsonDecode('1e400')`
+is `Infinity` (measured), so both branches needed the guard. Downstream,
+`LatLng` carries no assertion of its own and the map camera silently stops
+rendering, while the nearby-area path reaches `jsonEncode`, which refuses the
+value, and the runner is told the save failed. Both branches now apply
+`isUsableLatitude` / `isUsableLongitude`, the same finite-AND-in-range contract
+the GPX importer already applies to a coordinate out of a file — a latitude is
+±90 by definition, so out-of-range is a malformed answer rather than a place,
+and the bound is inclusive because the poles and the antimeridian are places.
+
+The third site, `routine_detail_screen.dart`'s RPE prefill, is reachable only
+from a corrupted local routine file and is closed the same way.
+
+## 1012. The one store write path with no completion signal was the one deliberately kept off the chain
+
+The § 991 filing left a population of 28 mobile test files that pair a temp
+directory with widget taps and no wait on a store's own completion signal, and
+said separating the real races from the safe ones needed an instrumented
+full-suite run this environment cannot afford. It also recorded what § 991's
+root cause actually WAS — a `void` method discarding a future, so nothing could
+observe completion — which is a property of the PRODUCTION code and can be
+searched for directly.
+
+Searched, from the production side, 2026-09-02. Every store write in the mobile
+tree reaches `serialiseStoreWrite`, and three stores publish
+`debugWritesSettled()` over it — so a test that waits has a signal to wait on,
+whether or not it does. Exactly one path is excluded, and its own comment says
+so: "The in-progress recording path is deliberately NOT on this chain — see
+`saveInProgress`. Nothing here may delay an L1 write during a recording."
+
+That exclusion is right, and it is also where both remaining instances of
+§ 991's shape live:
+
+  * `saveInProgress` is driven by `Timer.periodic(_incrementalSaveInterval, (_)
+    => _saveInProgress())`, armed inside the `void`
+    `_attachRecordingSideEffects`. The tick's future is discarded, and the only
+    handle — `_inFlightSave` — is private with no accessor.
+  * `clearInProgress()` is called as a BARE STATEMENT from the `void`
+    `_discard`, with a comment that says "fire-and-forget". Every one of its
+    other six call sites is awaited. It is the only un-awaited, non-`unawaited`
+    store write anywhere in `apps/mobile_android/lib` or `packages/*/lib`.
+
+So the path that writes a real NDJSON file into the store's own directory,
+every ten seconds, throughout a recording, was the single path with no
+observable completion anywhere — and a widget test's `tearDown` deletes that
+directory.
+
+Closed by giving the path its OWN signal rather than by joining it to the
+chain: `debugInProgressSettled()` follows the in-flight append and the
+in-flight clear, looping because a clear awaits the append and a tick may arm a
+new append while the last is being waited on. `clearInProgress` now publishes
+its future so a caller that discards it is still visible. Joining the two
+signals would put the recording path on the serialised chain by the back door,
+which is the one thing the chain forbids, so a source-level assertion pins that
+neither `saveInProgress` nor `_clearInProgress` reaches `_serialised` and that
+the new signal does not reach `storeWritesSettled`.
+
+The clear-tracking half is asserted in SOURCE rather than by timing, and that
+is a measurement rather than a preference: a behavioural version of it passed
+under the mutation that removes the tracking, because the delete lands within a
+turn or two on a fast disk either way. A test that passes under its own
+mutation is worse than no test, so it was replaced rather than kept alongside.
+
+The two named members — `run_screen_expected_return_test` and
+`run_screen_conclude_retry_test`, the two that mount a live recording against a
+real `LocalRunStore` on a temp directory without stubbing `saveInProgress` —
+now wait on the signal before deleting. The rest of the 28 population stands as
+§ 991 left it: a population, not a membership. What this round changes is that
+the two ROOT CAUSES are gone, so a member that is still racing is racing
+against a write it can now wait for.
+
+## 1013. The activity vocabulary is a leaf now, because a pure parser had to import a widget toolkit to reach it
+
+`csv_run_importer.dart` is a pure parser and it imported
+`preferences.dart show ActivityType` — a file that also holds a
+`SharedPreferences` cache, a map-style vocabulary and, until this change, an
+`IconData` getter, so it imports `package:flutter/material.dart`. The
+alternative at the time was worse: retyping the five values in the importer
+would have created a second rail against `runs_activity_type_check` that
+`check_constraint_unions.mjs` does not know to read, which is precisely the
+drift the constraint-union guard exists to prevent.
+
+The move was blocked on one registry line rather than on any code. The guard
+registers the rail as `{ file: 'apps/mobile_android/lib/preferences.dart',
+decl: 'ActivityType', shape: 'enum' }` for both `runs.activity_type` and
+`challenges.activity_type`, and it parses the enum out of that exact file — a
+re-export does not satisfy a `shape: 'enum'` rail — so the declaration and the
+registry had to move in one change, across two trees a single lane rarely owns.
+
+`ActivityType` now lives at `packages/core_models/lib/src/activity_type.dart`,
+a leaf mirroring web's own `apps/web/src/lib/runs/activity_type.ts`. Two
+members could not travel with it, for opposite reasons:
+
+  * `IconData get icon` needs Flutter, which `core_models` deliberately does
+    not depend on. It is an extension in `activity_type_labels.dart`, beside
+    the localised label the enum already did not carry — so both halves of
+    "how this value is presented" now sit in one file.
+  * `splitIntervalMetresFor(DistanceUnit)` reads a SECOND vocabulary, and
+    `DistanceUnit` is still in `preferences.dart` as its own registered rail
+    for `user_profiles.preferred_unit`. A leaf importing `preferences.dart` to
+    reach it would have inverted the dependency this move exists to remove, so
+    the method is an extension there instead. Moving `DistanceUnit` to its own
+    leaf is the consistent next step and is filed; nothing drags a widget
+    toolkit in to reach it today, so it is not urgent the way this was.
+
+Everything else on the enum — stride, GPS speed ceiling, calorie factor,
+`fromName` — is physics and travelled unchanged.
+
+Three `lib/` files and five test files needed an import; the other 28
+references already had `core_models`. Two pre-existing architecture guards
+correctly failed on their moved anchors and were re-pointed rather than
+relaxed: the `strideMetres` guard now reads the leaf, and the
+"in-progress path stays off the chain" guard now names `_clearInProgress`,
+the private body, since § 1012 made the public method a wrapper.
+
+## 1014. Both scrapers learned to say they had read only part of a history, and nothing was listening
+
+`parkrun-import` answers `{ imported, skipped, total, complete }` and
+`race-results-import` answers `complete` on every success shape (§ 976). No
+client read either field. A parkrun history bounded at `MAX_PARKRUN_ROWS` and a
+finisher field truncated at 2,000 both arrive as a positive `imported`, so the
+runner was shown "Imported 40 parkrun results" about a history with three
+hundred in it, and a truncated race import closed its modal looking exactly
+like a whole one.
+
+The direction is `parseStravaSyncResult`'s — an absent `complete` is PARTIAL —
+and it is the right one here for the reason that rule was written rather than
+by analogy. Each scraper is one transport shipped from this repo alongside its
+callers, so a body without the field is one this build does not recognise, not
+an older deployment of a second transport (which is what makes
+`cloudExportShortfall` fail the other way). A false "partial" costs a sentence
+the runner can ignore; a false "complete" tells them a history is whole.
+
+`parseImportCompleteness` grades both, and it lives BESIDE `parseStravaSyncResult`
+in the pair that already owns this rule rather than in a module of its own. A
+new module would be a parity pair, and a pair named by neither registry is a
+pair whose divergence nothing detects (§ 641) — the registries live in the root
+`CLAUDE.md` and the syncer agent, neither of which this change may touch.
+Splitting the three parsers into a registered `import_completeness` pair is
+filed rather than done half-way.
+
+Two things the parser refuses beyond the flag. A count is a non-negative
+integer or it is 0, the rule the Strava parser already applies. And a `total`
+below `imported + skipped` is discarded rather than shown: "12 of 5" is worse
+than no denominator at all, which is why `total` is nullable and the two
+sentences are separate keys rather than one with a defaulted placeholder.
+
+Copy is three shared `integrations.*` keys across seven web catalogues and
+seven ARBs — the same claim on both importers, so one vocabulary. All three are
+phrased to avoid grammatical-number agreement ("Imported: {n}" rather than
+"{n} results imported"), because the noun in the "n of total" sentence agrees
+with the TOTAL in German, Spanish, French and Portuguese, not with the count
+the plural rule would have been keyed on.
+
+The truncation refusal gets its own sentence on both platforms. `502
+upstream_results_truncated` had been falling through to the generic
+import-failed message, and it is not a failure the runner can fix by retrying:
+"we read the whole field and you are not in it" and "we read the first 2,000
+finishers and you were not among them" are different sentences, and only the
+second has the manual paste form beside it as its answer. Mobile gets a
+`RaceResultsTruncated` type so identity rather than message-matching carries
+it; web matches the code in the thrown message, which is what its transport
+gives it.
+
+One thing this change caught that had nothing to do with it: § 1013's move put
+`ActivityType` in `core_models`, and `geolocator_apple` exports an
+`ActivityType` of its own — iOS's LOCATION activity type. `run_recorder`
+imports both, so the two collide. `dart analyze` does not see it; the compiler
+does, and only when a test actually builds that package. The import there now
+says `hide ActivityType`, naming which vocabulary the file means.
+
+## 1015. `BODY_SENSORS_BACKGROUND` was declared for a capability the permission does not grant, on a client it does not apply to
+
+`AndroidManifest.xml` declared `android.permission.BODY_SENSORS_BACKGROUND`
+under a comment stating that "BODY_SENSORS alone is not enough on Wear OS 3.5+
+(API 34+): the platform stops delivering HR samples once the display goes
+ambient unless BODY_SENSORS_BACKGROUND is also granted", and that the Play Data
+Safety form listed it. `ManifestGuardsTest` pinned the declaration in place with
+the same rationale, and `ManifestPermissionCoverageTest` carried it as a
+registered exemption from the request obligation.
+
+Two measurements, and the second is the one that decides it.
+
+**It was never requested, so no watch has ever granted it.** The only runtime
+request the app makes is `permissionLauncher.launch(...)` in `RunWatchApp.kt`,
+whose array is `ACCESS_FINE_LOCATION`, `BODY_SENSORS`, `ACTIVITY_RECOGNITION`
+and — since [§ 881](decisions.md) — `POST_NOTIFICATIONS`. `grep -rn
+'BODY_SENSORS_BACKGROUND' apps/watch_wear/**/*.kt` returns nothing. A declared
+runtime permission that is never asked for is inert.
+
+**And granting it would not have delivered the capability the comment
+described.** Google's Health Services permission table gives background access
+per client: `PassiveMonitoringClient` yes, with `BODY_SENSORS_BACKGROUND` (API
+33-35) or `READ_HEALTH_DATA_IN_BACKGROUND` (36+); `ExerciseClient` yes, with no
+background permission at all; **`MeasureClient` no — foreground only**, and the
+API is documented as "not intended for background capture or workout tracking".
+`HeartRateMonitor` uses `MeasureClient`. So the permission the manifest carried
+is one this app's heart-rate path is not gated on, and the ambient-HR behaviour
+it promised is not something any permission grant changes.
+
+The filed followup proposed the two-step request flow a background permission
+needs (Android requires the second request only after the foreground half is
+granted; bundling them gets the background one denied). That work would have
+been correct in mechanism and pointless in effect. The declaration is removed
+instead: it bought no capability and cost a sensor permission on the install
+prompt and a line on the Play Data Safety form the binary could not justify.
+`ManifestGuardsTest` now asserts the permission is **absent**, carrying the
+measurement, so re-adding it fails until someone changes the client too.
+
+What the app actually loses when the display dims is unchanged by any of this
+and is a code change, not a permission: continuous workout heart rate on Wear
+OS is `ExerciseClient`'s job, and migrating to it is filed. The related and
+separately real defect — that the recording service never started as a `health`
+foreground service at all — is [§ 1016](decisions.md).
+
+## 1016. The recording service declared two foreground-service types and started with one
+
+`AndroidManifest.xml` declares
+`<service android:name=".recording.RunRecordingService"
+android:foregroundServiceType="location|health" />` plus both
+`FOREGROUND_SERVICE_LOCATION` and `FOREGROUND_SERVICE_HEALTH`, with a comment
+saying the health half is required "otherwise Android 14+ throws
+SecurityException when the service starts". `startForegroundCompat` passed
+`ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION` and nothing else.
+
+The comment therefore described an exception that could not fire: the platform
+raises it when a type is **passed** without its permission, and this code never
+passed the health type. The manifest half of the 2026-05-30 store-privacy audit
+finding (archived in `followups_archive.md` as "Wear OS recording-service
+foreground type may need `health`") had landed; the code half never did, and
+nothing could see the gap because `ManifestPermissionCoverageTest`'s existing
+FGS guard compares the manifest's `foregroundServiceType` against the manifest's
+own permission list — both inputs in the same file, neither of them the running
+code.
+
+This is not cosmetic. From API 34 the mask passed to `startForeground` is what
+the platform reads when deciding whether a service may go on using a
+while-in-use permission while the app itself is not visible, and body sensors is
+one of those — the same documentation that scopes `BODY_SENSORS_BACKGROUND`
+(§ 1015) states it against the `health` foreground service type. A service that
+reads heart rate for the length of a run and declares itself location-only is
+the likelier explanation for HR thinning out once the runner swipes back to the
+watch face than the permission § 1015 removes.
+
+`startForegroundCompat` now computes the mask. `location` is unconditional — it
+is what the run itself cannot proceed without. `health` is added on API 34+ and
+only when the platform's own documented prerequisite for that type holds: at
+least one of `BODY_SENSORS` / `ACTIVITY_RECOGNITION` granted, checked with
+`checkSelfPermission`, because a runner may decline both and is still entitled
+to a GPS run, and passing the type without the prerequisite is refused rather
+than ignored. The call is additionally wrapped: a refusal retries with
+location alone rather than taking the recording down with it.
+
+`foregroundServiceTypeMask(sdkInt, healthPrerequisiteGranted)` is pure and
+host-tested. Beside it, a source guard derives the obligation from the manifest
+rather than listing it: every token in `foregroundServiceType` must appear in
+`RunRecordingService.kt` as `FOREGROUND_SERVICE_TYPE_<TOKEN>`, so a third type
+added tomorrow is covered without anyone remembering to extend the test.
+Removing the health bit from the mask fails both.
+
+Not bench-verified: no watch was available, and the archived followup's caution
+was that an unvalidated FGS-type edit can crash `startForeground`. The
+prerequisite gate and the fallback are what answer that caution; the residual —
+that HR now genuinely survives the ambient transition — needs a real watch and a
+run long enough to dim.
+
+## 1017. A sensor the runner declined took the whole recording with it
+
+`RunRecordingService` collects three device streams inside
+`scope.launch { ... }` on a `CoroutineScope(SupervisorJob() + Dispatchers.Default)`.
+A `SupervisorJob` stops a failing child from cancelling its siblings. It does
+**not** stop an unhandled exception in a `launch` from reaching the thread's
+uncaught handler, which on Android is the process. So a throw from any of the
+three ended the run — GPS trace, elapsed clock, checkpoint and all — from
+inside an auxiliary layer, the exact inversion `conventions.md § Layered
+resilience` forbids.
+
+It was reachable with no device fault at all, and was already written down as a
+known symptom. `permissionLauncher` gates the countdown on
+`ACCESS_FINE_LOCATION` alone, so a runner who grants location and declines
+`BODY_SENSORS` starts a run whose `registerMeasureCallback` raises
+`SecurityException` immediately. `apps/watch_wear/local_testing.md` documented
+the resulting crash as "App crashes on first launch with `SecurityException:
+BODY_SENSORS`" and explained it with a gate that does not exist — "the
+permission launcher only `start()`s the run after *all* requested permissions
+are granted". It does not; it reads one key.
+
+The asynchronous half was worse than a crash. `MeasureCallback` gives
+`onRegistrationFailed` an empty default body, and `HeartRateMonitor` did not
+override it — so every failure Health Services reports through that callback
+(sensor unsupported, service unavailable, permission refused after the fact)
+produced no samples, no error and a null `avg_bpm`, with nothing anywhere
+saying why.
+
+Three changes, one rule: acquiring a sensor is an auxiliary layer and its
+failure costs that sensor only.
+
+- `HeartRateMonitor` overrides `onRegistrationFailed` and closes the flow, and
+  wraps `registerMeasureCallback` in a `try` whose `catch` closes it too. The
+  unregister in `awaitClose` is `runCatching`-guarded for the same reason.
+- All three collectors — heart rate, location, steps — carry a `.catch`. The
+  location one additionally publishes `locationAvailable = false`, so the
+  runner reads "GPS lost" and the existing self-heal loop re-subscribes within
+  `GPS_RETRY_INTERVAL_MS` instead of the process dying.
+
+`SensorStreamResilienceTest` derives the collector obligation from the source —
+every `<x>.stream()` in the service must be followed by `.catch`, so a fourth
+sensor is covered without anyone extending the test — and pins both halves of
+the heart-rate guard. `NetworkWatcher` had this shape already, with a comment
+saying exactly why; the module knew the pattern and had applied it to the
+permission whose absence would crash on launch but not to the one whose absence
+crashed at the start of a run.
+
+## 1018. A denied permission dialog said nothing, on a device with nowhere to ask
+
+`RunWatchApp`'s permission callback was two lines: set `showCountdown` when
+`ACCESS_FINE_LOCATION` came back granted, and nothing at all otherwise. A
+runner who tapped GO and declined — or who had declined twice before, after
+which Android stops prompting and the callback returns instantly — landed back
+on an unchanged pre-run screen. No countdown, no message, no state change. On a
+watch with no keyboard there is nowhere to ask what happened, which makes a
+control that does nothing the worst affordance available.
+
+The gate was correct and stays: without location a run records the clock and
+nothing else, so it must not start. What was missing was the report, and the
+report is worth more than the location line alone, because the same callback
+silently absorbed three other denials whose cost the runner never learns:
+`BODY_SENSORS` (no heart rate), `ACTIVITY_RECOGNITION` (no step count) and
+`POST_NOTIFICATIONS` (no ongoing-run chip on the watch face — the loss
+[§ 881](decisions.md) exists about).
+
+`permissionOutcome(granted)` grades the result map into `canStart` plus the
+ordered list of what was actually lost, and `PermissionNotice` renders one
+sentence per entry with the routes back: ask again, the app's own permission
+screen where the watch has one (`AppSettings.canOpen` gates the chip, because
+`ACTION_APPLICATION_DETAILS_SETTINGS` is not universal on Wear OS — the same
+reason and the same shape as `BatteryOptimization.requestExemption`), and the
+written path that works everywhere. `Start anyway` appears only when location
+survived; offering it otherwise would be the dead GO button wearing a label.
+
+Two rules the tests pin because both are easy to get wrong. **An absent key is
+not a denial** — `POST_NOTIFICATIONS` is only requested from API 33, so on a
+Wear OS 3 watch it never appears in the result map, and reading absence as
+refusal would tell every such runner they had switched off something they were
+never asked about. Only an explicit `false` costs anything. And **a run that
+cannot start always stops at the notice**, including the degenerate case of a
+result map that named nothing, whereas a runnable-but-degraded set stops once
+per session: a runner who has permanently declined step counting should not
+dismiss the same card before every run.
+
+## 1019. An empty route list has two causes and the picker only knew one
+
+`refreshRoutes` had an empty failure branch and a silent early return. A fetch
+that threw set `routesLoading = false` and nothing else; a watch with no session
+yet returned before fetching at all. Either way the picker fell through to
+`route_picker_empty` — "No saved routes. Build a route on the phone or web
+first" — which is advice for a runner who has none, and is both wrong and
+unactionable for one who has fifty and a watch that could not reach them. The
+signed-out case is the common one: the wrist is signed in by a Data Layer push
+from the phone, so any watch that has not yet received one renders that
+sentence.
+
+`RunState.routesUnavailable` is set on both paths and cleared by a successful
+load, and the picker chooses between the two sentences. The new one names what
+to check rather than what to build; the pre-run screen's existing Offline and
+Not-signed-in chips carry which of the two it is. The guard reads the
+`refreshRoutes` body and requires **both** failure paths to flag, because
+fixing one of the two would have left the more common case saying the wrong
+thing.
+
+## 1020. The Wear permission-and-capability sweep, and what it found clean
+
+[§§ 1015-1019](decisions.md) came out of a sweep of one class across
+`apps/watch_wear/`: **a platform capability the app declares or requests whose
+failure path is silent.** The population and the negative results are recorded
+here so a later round starts from a measurement rather than re-deriving the
+list.
+
+**Permissions — 13 declared, all accounted for.** Seven are install-time
+(`INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, the three
+`FOREGROUND_SERVICE*`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) and have no
+denial path. `ACCESS_COARSE_LOCATION` rides the fine grant and is a registered
+exemption. Of the five that remain, `BODY_SENSORS_BACKGROUND` was unrequestable
+(§ 1015), `BODY_SENSORS`' denial crashed the app (§ 1017), and the denial of
+each of `ACCESS_FINE_LOCATION`, `ACTIVITY_RECOGNITION` and `POST_NOTIFICATIONS`
+was unreported (§ 1018). The module contained **no `checkSelfPermission` call
+anywhere** before this round; it now has one, in the mask computation of
+§ 1016.
+
+**Services — 2.** `RunRecordingService`'s runtime type did not match its
+declaration (§ 1016). `ActiveRunTileService` is bound only by the platform
+Tiles host under `BIND_TILE_PROVIDER` and has no failure path of its own; its
+`requestUpdate` is called unguarded from the recording path, which was examined
+and left alone — the updater is documented as best-effort and no failure of it
+has been observed, so guarding it would be speculative.
+
+**Capabilities — 8 examined.** Health Services `MeasureClient` and the
+`FusedLocationProviderClient` stream were the two unguarded ones (§ 1017). Five
+were already correct and are worth naming because they are the pattern: the
+`Pedometer` closes its flow cleanly on a device with no step counter,
+`NetworkWatcher` catches the `SecurityException` a stripped
+`ACCESS_NETWORK_STATE` would raise and says so in a comment, `TtsAnnouncer` and
+the `Vibrator` call are `try`-wrapped per-effect, `BatteryOptimization` returns
+a four-value `PromptResult` rather than launching an intent that may be a no-op,
+and `SessionBridge` refuses a half-formed Data Layer push instead of
+overwriting a working session with it. The eighth, the route fetch, reported
+its failure as the wrong thing rather than not at all (§ 1019).
+
+**Docs measured against the binary.** `deployment.md`'s launch checklist listed
+`BACKGROUND_LOCATION`, which the manifest has never declared, and
+`BODY_SENSORS_BACKGROUND`, which it no longer does; `local_testing.md`
+explained a real crash with a gate that does not exist (§ 1017). An app-store
+permission list is a disclosure, and one that names permissions the binary does
+not hold is wrong in the direction that costs a review.
+
+## 1021. The secrets CMK grants `kms:Decrypt` to no principal CI can assume, and the two premises that makes safe are read by a guard rather than asserted in a comment
+
+Both env stacks passed their GitHub OIDC deploy role into the web-stack module
+as `kms_decrypt_principal_arn`, putting it in the
+`AllowLambdaAndDeployRolesToDecrypt` statement of the env's secrets CMK — the
+key protecting `ANTHROPIC_API_KEY` and `SUPABASE_SECRET_KEY`, and the one key in
+the account whose loss is unrecoverable (`prevent_destroy`, 30-day window). The
+justification written beside it was apply-time decryption "from the GitHub
+Actions runner". **Measured on this tree: no workflow runs `terraform apply`.**
+`parseSteps` over all 21 workflows finds 59 jobs, exactly one of which assumes
+an AWS role (`release-web.yml:release`) and exactly one of which runs
+`terraform` (`terraform.yml`, which runs `fmt` / `init -backend=false` /
+`validate` with no credentials at all, by design) — and they are not the same
+job. The four `terraform apply` strings in `ci.yml` and `terraform.yml` are
+prose in their own comments.
+
+The premise the removal really rests on is narrower than "no CI apply", and it
+is the half the filing did not state: **no `aws_lambda_function` in the module
+sets `kms_key_arn`.** Without that the deploy role's `lambda:GetFunction` and
+`lambda:UpdateFunctionCode` — which it does hold, and which the release workflow
+does call eight times — would transit this key, and dropping the grant would
+break the release rather than harden it. All eight functions were read; none
+sets it, so Lambda holds their environment variables under the AWS-managed
+`aws/lambda` key and this CMK is out of that path entirely.
+
+Two comments in the module said things that are not true and are corrected in
+the same change. The key policy's own header claimed the execution role
+"decrypts the sops env at cold-start": it does not — `data.sops_file` decrypts
+at apply time and `local.lambda_env` puts the result into
+`environment { variables }` as plaintext, so the handler reads `process.env` and
+calls no KMS API (grep: no `kms` reference anywhere under `apps/web/lambda/`).
+And the coach log group's comment called this "the same CMK that already
+encrypts the lambda env vars", which for the same reason it does not — it
+encrypts the sops file the env vars come *out of*, and the log group.
+
+That leaves the execution role's own grant unexercised by the same argument.
+It is **filed rather than removed**: emptying the statement's `identifiers`
+leaves a principal-less statement KMS rejects, so closing it is a structural
+change, and one live read (`aws lambda get-function-configuration
+--query KMSKeyArn` returning `None`) settles it in a way this lane cannot.
+
+`scripts/check_infra_iam.mjs` claim 9 holds both premises and runs **both
+ways**, which is what stops this from being a comment that rots: a wire
+restored while nothing exercises it fails as standing privilege, and an empty
+wire once a credentialed job runs `terraform` — or a Lambda takes the CMK for
+its environment — fails as a release that would `AccessDenied` mid-deploy. The
+`github_oidc` remote-state read in both env roots went with the wire, being its
+only consumer.
+
+**What this does NOT do, stated so the ADR cannot be misread as more than it
+is: the deploy role can still read the production secrets.** Because the sops
+values are decrypted at apply time into plaintext `environment { variables }`,
+anything that returns a `FunctionConfiguration` returns `ANTHROPIC_API_KEY` and
+`SUPABASE_SECRET_KEY` in the clear — and `lambda:UpdateFunctionCode`, which the
+release genuinely needs and calls eight times, is one of those. Removing a KMS
+grant nothing used narrows the key policy; it does not narrow that. Closing it
+means not putting plaintext secrets in a Lambda environment at all (a fetch at
+cold start, or a ciphertext env var the handler decrypts — at which point the
+execution role's `kms:Decrypt` becomes load-bearing for the first time), which
+is a design change well outside this round and is filed.
+
+`lambda:GetFunction` and `lambda:GetAlias` are granted to both deploy roles and
+called by no workflow — the release calls only `update-function-code` and
+`update-alias`, and no workflow runs any `bin/` script. That is the same shape
+as the KMS grant, and it is filed rather than taken for the reason above: it
+removes an unexercised verb without removing any access, since the role reads
+the same configuration out of the update it must be able to perform.
+
+## 1022. An origin's 404 is answered 404 with the shell body, which is a better fix than dropping the mapping
+
+`custom_error_response` is modelled per DISTRIBUTION on CloudFront, so the SPA
+fallback rewrote **every** origin's 404 — including all ten
+`/share/{run,route,recap,badge,event,profile,club,race,session,workout}/<id>`
+paths — into `/index.html` at **200**. A private, deleted or never-existing
+entity therefore served a crawler a generic shell at 200, with the `noindex`
+that would have said otherwise sitting in a Lambda body the rewrite discards:
+soft 404s, invited to be indexed.
+
+The filed fix was to delete the `error_code = 404` block, resting on "S3 never
+404s here". **That premise holds and was proved from this repo**: the site
+bucket policy is one statement granting `s3:GetObject` on `${bucket}/*` to
+`cloudfront.amazonaws.com` and nothing else — `s3:ListBucket` appears nowhere
+in `infra/` outside the two *deploy-role* policies — and the origin is
+`bucket_regional_domain_name` + OAC, the REST endpoint, not the
+`s3-website-` one that does 404. So a missing key is 403 AccessDenied, which is
+exactly why the 403 mapping exists and why the 404 one buys the SPA nothing.
+
+**The fix it implies is nevertheless the wrong one.** Precisely because S3 never
+404s, the only responses that block ever sees are the Lambda origins' own — and
+their 404 bodies are `<p>This link isn't available.</p>`, unstyled, English-only,
+with no navigation. Serving that would replace the SPA's designed, localized
+not-found card (`share/run/[id]`'s `.notfound-card`, with its kicker, title and
+actions — reached today **only** because of this rewrite) on ten paths. The
+filing traded a crawler defect for a reader-facing regression it did not price.
+`share-run/src/index.ts`'s own comment, "the browser will fall back to the SPA's
+404 surface if a human follows the link", is true today and true only because of
+the mapping it was written to describe as absent.
+
+Keeping the body and correcting the status gets both: a crawler receives a 404,
+which de-indexes a URL far more decisively than a `noindex` on a 200 ever did,
+and a reader still lands on the app. The bytes a viewer receives do not change
+at all — only the status line does. 403 stays at 200 and must: every dynamic
+client route is a missing S3 key, so the deep-link path arrives as a 403.
+
+`scripts/check_infra_coverage.mjs` claim 4 fails any `custom_error_response`
+mapping a 4xx/5xx to a 2xx. The one legitimate mapping is declared in
+`ALLOWED_STATUS_LAUNDERING` with its reason, and a declared exemption no block
+uses fails as loudly as an undeclared mapping — the `RESOURCELESS_ACTIONS`
+shape, one file over.
+
+## 1023. The WAF scope-downs decode the path, added deliberately without a live measurement because the failure direction is one-way
+
+The three rate-based rules are the only thing bounding spend on the only three
+paths on this distribution that cost money or engine CPU to serve, and each is
+scoped down by `STARTS_WITH` on `uri_path` with a single `NONE` transformation.
+WAF does not decode that field; CloudFront's own behaviour matching normalises
+independently. Two matchers, two normalisations — so an encoded spelling that
+CloudFront resolves to the behaviour but WAF does not resolve to the prefix
+reaches the Lambda with the per-IP cap **not applied**.
+
+Whether CloudFront decodes before behaviour matching is a fact about the live
+edge, and this repo holds no AWS credentials by design, so it was not measured
+and is not claimed here. The `URL_DECODE` transformation was added anyway,
+because being wrong about the edge cannot cost anything: on a search string
+containing no `%`, decoding can only **add** matches. `%XX` becomes one byte and
+the string never lengthens, so a raw path whose first ten characters are already
+`/api/coach` still has them after decoding — under either reading of how WAF
+chains transformations (cumulative, or one inspection per transform) the match
+is a strict superset. It is a widening of a RATE LIMIT, never of an allow/deny.
+If CloudFront turns out not to decode either, the cost is that WAF counts a
+request the edge was going to 404; if it does, the gap closes.
+
+`LOWERCASE` is deliberately not added, and the guard fails if anyone adds it:
+CloudFront path patterns are case-sensitive, so `/API/coach` genuinely does not
+route to the Lambda and matching it would only cap a 404. Double encoding
+(`%2563oach`) survives one decode and is out of scope for the same reason —
+CloudFront does not double-decode either.
+
+`scripts/check_infra_coverage.mjs` claim 5 fails a `uri_path` scope-down without
+`URL_DECODE`, one that folds case, and — the vacuity case that matters most — a
+rate-based rule with no readable scope-down at all, which would apply the
+counter to every static asset on the distribution and turn a backstop into an
+outage.
+
+## 1024. A preview environment that cannot set what prod can cannot rehearse a prod change
+
+`graph_cycle_url` — the v3 graph-cycle sidecar the generate-route Lambda tries
+first, ahead of GraphHopper `round_trip` — was declared as a root variable and
+wired into the module in `envs/prod` and declared nowhere in `envs/preview`. Its
+two siblings, `graphhopper_url` and `osrm_url`, were both declared in preview
+with exactly the "point it at an engine only if a preview must exercise the
+server-side path" rationale. The asymmetry was recorded nowhere.
+
+The filing called closing it "scaffolding for an engine that does not exist".
+That reading is wrong about what the change costs: the module input already
+exists and already defaults to `""`, so preview receives the same `""` before
+and after and the plan is byte-identical. Nothing is scaffolded. The only thing
+that changes is that an operator *can* set it — which is the whole function of a
+preview environment, and the reason the other two are there.
+
+Measured while confirming it, the asymmetry is wider than filed: **five** module
+inputs are settable from prod and not from preview. Four are deliberate and say
+so in preview's own comments — `domain_name` is composed from
+`preview_subdomain` + `apex_domain`, and the three reserved-concurrency caps are
+literals with a stated "preview only ever drives a few generations" reason.
+`graph_cycle_url` was the only one with no reason anywhere, which is why it is
+the only one closed.
+
+`scripts/check_infra_coverage.mjs` claim 6 **derives** the engine set from the
+module rather than listing it: a `_url` string input whose default is `""`. That
+default *is* the semantics — no engine, degrade gracefully — and it separates the
+three engines exactly from `public_supabase_url` (no default, required) and
+`public_site_url` (a real default, env identity rather than a knob). A fourth
+engine is covered the day it is added, with no registry to remember.
+
+## 1025. KMZ needed a bytes pipeline, and the pipeline was the reason to build it
+
+§ 988 widened mobile route import to GPX / KML / GeoJSON / TCX and deliberately
+removed every promise of KMZ rather than adding it, because the parser was the
+cheap half and the pipeline was not: `routes_screen._pickAndImport` and
+`SharedFileImportService.importPath` both `readAsString`, and a `String` then
+travels through the `compute` request to the dispatch. `readAsString` throws on
+a zip before any parser is reached.
+
+Verified first, as the filing asked: § 988's honesty holds. No mobile surface
+claimed KMZ, `routesEmptyBody` named exactly the four formats the picker
+offered in all seven ARBs, and `parity.md` carried an accurate not-supported
+cell with the reason. So this is a real parity gap against web — which has taken KMZ since it
+was written — rather than a documentation problem.
+
+Built, because the pipeline change is the durable fix and it is small: both
+entry points read BYTES, the two isolate requests carry `Uint8List`, and one
+new `routeTextFromImportedBytes` turns bytes into `(format, content)` before
+the existing string-typed dispatch, which is unchanged. `archive` is already a
+direct dependency of this tree (`backup.dart`, `strava_importer.dart`), so the
+unwrap needs no new package and `gpx_parser` stays dependency-free — a KMZ is a
+CONTAINER, not a route format, so unwrapping it belongs in the file pipeline
+rather than in a parser over text. The dispatch never sees `kmz`.
+
+Four decisions inside that, each of which a narrower implementation gets wrong:
+
+  * A KMZ is recognised by the **zip magic number**, not by its extension. An
+    OS share hands over a cached copy that often has no usable extension —
+    that is the whole reason `detectRouteFormat` sniffs content — and a zip's
+    payload is binary, so the existing text sniff cannot run on it at all.
+  * `doc.kml` is the OGC-specified entry name and is preferred, but the first
+    `.kml` entry wins when it is absent. Requiring the spec name would reject
+    the many real archives that name the document after the route.
+  * A zip with no KML in it is refused, rather than reported as an unparseable
+    route.
+  * Bytes that are neither a zip nor valid UTF-8 are refused outright.
+    `allowMalformed` would hand the parsers replacement characters and fail
+    further downstream with a worse message.
+
+The copy moved with the code: all seven ARBs now name KMZ in
+`routesEmptyBody`, and the guard that asserted KMZ was ABSENT from every
+catalogue is inverted to assert it is present — the same test, still pinning
+that the promise and the picker cannot drift. `routesImportSharedFailed` was
+also wrong in a way this change made worse: it said "isn't a valid GPX or KML
+route" while the picker took five formats, so it now names no list at all.
+
+The fixture is a KMZ **built in the test** rather than a committed binary, so
+the test says what is inside the archive it is asserting about.
+

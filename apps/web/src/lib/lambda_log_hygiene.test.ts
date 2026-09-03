@@ -28,6 +28,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
+import { stripComments } from './core/strip_comments';
+
 const lambdaRoot = resolve(import.meta.dirname, '..', '..', 'lambda');
 const libRoot = resolve(import.meta.dirname);
 
@@ -118,15 +120,6 @@ function lambdaReachableLibSources(): Array<{ rel: string; src: string }> {
 	return out;
 }
 
-/** Comment bodies blanked, so prose about a log line is not read as one. */
-function code(src: string): string {
-	return src
-		.split('\n')
-		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n')
-		.replace(/\/\*[\s\S]*?\*\//g, ' ');
-}
-
 /**
  * The top-level arguments of every `console.<level>(…)` call in `src`, as raw
  * text. Tracks bracket depth and string/template state so a `)` inside a
@@ -182,7 +175,7 @@ test('no Lambda log line names a request field its handler has not declared', ()
 	for (const { lambda, rel, src } of handlerSources()) {
 		const allowed = ALLOWED_EVENT_FIELDS[lambda];
 		assert.ok(allowed, `${lambda} has no entry in ALLOWED_EVENT_FIELDS — declare what it may log.`);
-		for (const args of consoleCallArgs(code(src))) {
+		for (const args of consoleCallArgs(stripComments(src))) {
 			calls++;
 			for (const arg of args) {
 				for (const field of arg.matchAll(/\bevent\.(\w+)/g)) {
@@ -217,7 +210,7 @@ test('every Lambda log line is a fixed message plus an object literal, never a r
 	let calls = 0;
 
 	for (const { rel, src } of handlerSources()) {
-		for (const args of consoleCallArgs(code(src))) {
+		for (const args of consoleCallArgs(stripComments(src))) {
 			calls++;
 			const [first, ...rest] = args;
 			if (!first || !/^['"`]/.test(first)) {
@@ -253,7 +246,7 @@ test('no lambda-reachable core hands a caught value straight to CloudWatch', () 
 	const modules = lambdaReachableLibSources();
 
 	for (const { rel, src } of modules) {
-		for (const args of consoleCallArgs(code(src))) {
+		for (const args of consoleCallArgs(stripComments(src))) {
 			calls++;
 			const [first, ...rest] = args;
 			if (!first || !/^['"`]/.test(first)) {
@@ -354,7 +347,7 @@ test('no Lambda-reachable log line names the caller\'s bearer token', () => {
 		...lambdaReachableLibSources(),
 	];
 	for (const { rel, src } of modules) {
-		for (const args of consoleCallArgs(code(src))) {
+		for (const args of consoleCallArgs(stripComments(src))) {
 			calls++;
 			for (const arg of args) {
 				const named = arg.match(CREDENTIAL);

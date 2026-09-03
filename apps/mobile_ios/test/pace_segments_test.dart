@@ -1,7 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
-import '../lib/preferences.dart';
+import 'package:core_models/core_models.dart' show ActivityType;
 import '../lib/widgets/pace_segments.dart';
 
 void main() {

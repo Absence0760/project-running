@@ -3368,6 +3368,12 @@ export const messages = {
 	"integrations.chronotrackConnect": "ChronoTrackで計測されたイベントのレース結果をインポートします。",
 	"integrations.chronotrackOpen": "レースカレンダーを開く",
 	"integrations.chronotrackUnavailable": "ChronoTrackのインポートはまだ利用できません。parkrunと手動貼り付けは引き続き使えます。",
+	"integrations.importPartialOf":
+		"履歴の一部のみインポートできました: {total} 件中 {n} 件。",
+	"integrations.importPartial":
+		"すべての結果を読み取ることはできませんでした。インポート: {n} 件。",
+	"integrations.importTruncated":
+		"結果リストが長すぎて最後まで読み取れなかったため、記録を確認できませんでした。代わりに手動で入力してください。",
 	"socialHub.panelLabel": "{section}パネル",
 	"socialPeople.searchFailed": "検索に失敗しました: {error}",
 	"socialPeople.followFailed": "フォローを更新できませんでした: {error}",

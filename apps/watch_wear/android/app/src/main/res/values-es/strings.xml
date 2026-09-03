@@ -76,6 +76,17 @@
     <string name="battery_try_auto_open">Abrir automáticamente</string>
     <string name="done">Listo</string>
 
+    <string name="perm_title_blocked">Se necesita la ubicación</string>
+    <string name="perm_title_degraded">Algunas funciones desactivadas</string>
+    <string name="perm_cost_location">Sin ubicación esta carrera solo registra el tiempo — sin ruta, distancia ni ritmo.</string>
+    <string name="perm_cost_heart_rate">No se registrará la frecuencia cardíaca.</string>
+    <string name="perm_cost_steps">No se registrarán los pasos.</string>
+    <string name="perm_cost_notification">Sin indicador de carrera en la esfera mientras se graba.</string>
+    <string name="perm_watch_steps">En el reloj: Ajustes → Aplicaciones → Threkir → Permisos.</string>
+    <string name="perm_try_again">Preguntar de nuevo</string>
+    <string name="perm_open_settings">Abrir ajustes</string>
+    <string name="perm_start_anyway">Empezar igualmente</string>
+
     <string name="email">Correo electrónico</string>
     <string name="password">Contraseña</string>
     <string name="tap_here">Toca aquí</string>
@@ -95,6 +106,7 @@
 
     <string name="route_none">Ninguna</string>
     <string name="route_picker_empty">No hay rutas guardadas. Crea primero una ruta en el teléfono o en la web.</string>
+    <string name="route_picker_unavailable">No se pudieron cargar tus rutas. Comprueba que el reloj tenga sesión iniciada y conexión.</string>
 
     <string name="synced">Sincronizado</string>
     <string name="sync">Sinc.</string>

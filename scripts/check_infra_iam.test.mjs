@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -18,6 +19,16 @@ import {
   stringsFor,
   CLAIM_PREFIX,
   CLAIM_PREFIX_PATTERN,
+  ACTION_DIR,
+  CREDENTIALS_ACTION,
+  ENV_FILES,
+  credentialedActions,
+  WORKFLOW_DIR,
+  checkDecryptGrant,
+  parseEnvWire,
+  parseKmsDecryptGrant,
+  parseWorkflowJobs,
+  readWorkflowFiles,
 } from './check_infra_iam.mjs';
 
 // ─────────────────────────────── fixtures ───────────────────────────────
@@ -596,4 +607,238 @@ test('the committed module takes only named keys into every Lambda env', () => {
   for (const merge of web.secretMerges) {
     assert.ok(merge.filter, `local.${merge.local} takes the sops file whole`);
   }
+});
+
+// ───────────────────── claim 9: the decrypt grant ─────────────────────
+
+/// A key-policy document shaped like the real one: the root ADMIN statement
+/// (no data-plane action), the root SOPS statement (which DOES carry
+/// kms:Decrypt and must not be mistaken for the pipeline grant), and the
+/// Lambda/deploy statement the claim is about.
+/** @param {{ principal?: string, decryptStatement?: boolean }} [over] */
+function keyPolicy(over = {}) {
+  const principal = over.principal ?? '        var.kms_decrypt_principal_arn,\n';
+  const decrypt =
+    over.decryptStatement === false
+      ? ''
+      : '  statement {\n' +
+        '    sid    = "AllowLambdaAndDeployRolesToDecrypt"\n' +
+        '    principals {\n' +
+        '      type = "AWS"\n' +
+        '      identifiers = compact([\n' +
+        '        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.resource_prefix}-coach-lambda",\n' +
+        principal +
+        '      ])\n' +
+        '    }\n' +
+        '    actions = [\n      "kms:Decrypt",\n      "kms:DescribeKey",\n    ]\n' +
+        '    resources = ["*"]\n' +
+        '  }\n';
+  return (
+    'data "aws_iam_policy_document" "kms_secrets" {\n' +
+    '  statement {\n' +
+    '    sid    = "AllowKeyAdministrationByAccountRoot"\n' +
+    '    principals {\n      type        = "AWS"\n' +
+    '      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]\n    }\n' +
+    '    actions = ["kms:Describe*"]\n  }\n' +
+    '  statement {\n' +
+    '    sid    = "AllowOperatorSopsUseViaIamPolicies"\n' +
+    '    principals {\n      type        = "AWS"\n' +
+    '      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]\n    }\n' +
+    '    actions = ["kms:Encrypt", "kms:Decrypt"]\n  }\n' +
+    decrypt +
+    '}\n'
+  );
+}
+
+/** @param {{ kms?: boolean }} [over] */
+function lambdaFn(over = {}) {
+  return (
+    'resource "aws_lambda_function" "coach" {\n' +
+    '  function_name = "${local.resource_prefix}-coach"\n' +
+    (over.kms ? '  kms_key_arn   = aws_kms_key.secrets.arn\n' : '') +
+    '}\n'
+  );
+}
+
+/** @param {string | null} wire */
+function envRoot(wire) {
+  return (
+    'module "web" {\n  source = "../../modules/web-stack"\n' +
+    (wire === null ? '' : `  kms_decrypt_principal_arn = ${wire}\n`) +
+    '  env = "prod"\n}\n'
+  );
+}
+
+/** @param {{ credentialed?: boolean, terraform?: string | null }} [over] */
+function workflow(over = {}) {
+  const cred = over.credentialed ?? false;
+  const tf = over.terraform === undefined ? null : over.terraform;
+  return (
+    'jobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n' +
+    '      - uses: actions/checkout@v7\n' +
+    (cred ? `      - uses: ${CREDENTIALS_ACTION}\n` : '') +
+    (tf === null ? '' : `      - name: infra\n        run: |\n          ${tf}\n`)
+  );
+}
+
+/**
+ * @param {{ policy?: string, fn?: string, envs?: (string | null)[], wf?: string }} [over]
+ */
+function grantRun(over = {}) {
+  const module = (over.policy ?? keyPolicy()) + (over.fn ?? lambdaFn());
+  const envs = (over.envs ?? [null, null]).map((wire, i) => ({
+    path: `envs/${i}/main.tf`,
+    ...parseEnvWire(envRoot(wire)),
+  }));
+  const jobs = parseWorkflowJobs([
+    { name: 'w.yml', text: over.wf ?? workflow({ credentialed: true }) },
+  ]);
+  return checkDecryptGrant(parseKmsDecryptGrant(module), envs, jobs);
+}
+
+test('an unwired decrypt principal passes while neither premise is broken', () => {
+  const { errors, ok } = grantRun();
+  assert.deepEqual(errors, []);
+  assert.ok(ok.some((l) => /no CI decrypt principal/.test(l)), ok.join('\n'));
+});
+
+test('wiring a deploy role in while nothing exercises it is standing privilege', () => {
+  const { errors } = grantRun({
+    envs: ['data.terraform_remote_state.github_oidc.outputs.deploy_role_arn_prod', null],
+  });
+  assert.ok(has(errors, /standing privilege/), errors.join('\n'));
+  assert.equal(errors.length, 1);
+});
+
+// The module default is `""`, so an explicit empty string is the same posture
+// as omitting the argument and must not read as a grant.
+test('an explicitly empty wire is not read as a grant', () => {
+  const { errors } = grantRun({ envs: ['""', '""'] });
+  assert.deepEqual(errors, []);
+});
+
+test('a Lambda holding its env under the CMK demands the wire back', () => {
+  const { errors } = grantRun({ fn: lambdaFn({ kms: true }) });
+  assert.equal(errors.length, 2, errors.join('\n'));
+  assert.ok(has(errors, /set\(s\) kms_key_arn/), errors.join('\n'));
+});
+
+test('a credentialed job running terraform demands the wire back', () => {
+  const { errors } = grantRun({
+    wf: workflow({ credentialed: true, terraform: 'terraform apply -auto-approve' }),
+  });
+  assert.ok(has(errors, /assume\(s\) an AWS role AND run\(s\) terraform/), errors.join('\n'));
+});
+
+// terraform.yml is exactly this shape — it runs fmt/init/validate on every PR
+// with no credentials at all, so its terraform can never reach KMS.
+test('an UNcredentialed job running terraform demands nothing', () => {
+  const { errors } = grantRun({
+    wf: workflow({ credentialed: false, terraform: 'terraform validate -no-color' }),
+  });
+  assert.deepEqual(errors, []);
+});
+
+// The four `terraform apply` mentions in ci.yml's and terraform.yml's own
+// comments are prose. A reader that counted them would demand a grant for a
+// pipeline step that does not exist.
+test('terraform named only in a comment is not a run', () => {
+  const jobs = parseWorkflowJobs([
+    {
+      name: 'ci.yml',
+      text:
+        'jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n' +
+        `      - uses: ${CREDENTIALS_ACTION}\n` +
+        '      # decisions.md § 433 — an env-only `terraform apply` publishes a fresh\n' +
+        '      - name: build\n        run: |\n' +
+        '          # would be nice to discover this before `terraform apply`\n' +
+        '          echo hi\n',
+    },
+  ]);
+  assert.deepEqual(
+    jobs.map((j) => [j.job, j.credentialed, j.terraform]),
+    [['build', true, false]],
+  );
+});
+
+test('a chained terraform after && is still a run', () => {
+  const jobs = parseWorkflowJobs([
+    {
+      name: 'w.yml',
+      text:
+        'jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n' +
+        '      - name: x\n        run: cd infra/envs/prod && terraform apply -auto-approve\n',
+    },
+  ]);
+  assert.equal(jobs[0].terraform, true);
+});
+
+test('deleting the decrypt statement fails rather than passing vacuously', () => {
+  const { errors } = grantRun({ policy: keyPolicy({ decryptStatement: false }) });
+  assert.ok(has(errors, /no kms:Decrypt statement with an AWS principal/), errors.join('\n'));
+});
+
+test('dropping the restore knob from the statement fails', () => {
+  const { errors } = grantRun({ policy: keyPolicy({ principal: '' }) });
+  assert.ok(has(errors, /no longer takes `var\.kms_decrypt_principal_arn`/), errors.join('\n'));
+});
+
+test('an unreadable env root is reported, not skipped', () => {
+  const { errors } = checkDecryptGrant(
+    parseKmsDecryptGrant(keyPolicy() + lambdaFn()),
+    [{ path: 'envs/prod/main.tf', ...parseEnvWire('# the module call moved\n') }],
+    parseWorkflowJobs([{ name: 'w.yml', text: workflow({ credentialed: true }) }]),
+  );
+  assert.ok(has(errors, /holds no `module "web"` block/), errors.join('\n'));
+});
+
+test('an empty workflow scan is reported, not treated as "nothing applies"', () => {
+  const { errors } = grantRun({ wf: 'name: nothing\n' });
+  assert.ok(has(errors, /rests on an empty scan/), errors.join('\n'));
+});
+
+// The committed sources, not a fixture: this is the claim the repo makes.
+test('the committed infra leaves no CI decrypt principal on either secrets CMK', () => {
+  const grant = parseKmsDecryptGrant(readFileSync(MODULE_FILE, 'utf-8'));
+  assert.equal(grant.found, true);
+  assert.deepEqual(grant.cmkEnvFunctions, []);
+  assert.ok(grant.identifiers.includes('var.kms_decrypt_principal_arn'));
+  for (const path of ENV_FILES) {
+    const { hasModuleCall, wire } = parseEnvWire(readFileSync(path, 'utf-8'));
+    assert.ok(hasModuleCall, path);
+    assert.ok(wire === null || wire === '""', `${path} wires ${wire}`);
+  }
+  const jobs = parseWorkflowJobs(readWorkflowFiles(WORKFLOW_DIR));
+  assert.ok(jobs.length > 20, `only ${jobs.length} workflow jobs read`);
+  assert.deepEqual(
+    jobs.filter((j) => j.credentialed && j.terraform).map((j) => `${j.file}:${j.job}`),
+    [],
+  );
+  // Both halves must be non-vacuous: something IS credentialed and something
+  // DOES run terraform, or the scan proves nothing about the combination.
+  assert.ok(jobs.some((j) => j.credentialed));
+  assert.ok(jobs.some((j) => j.terraform));
+});
+
+// The workflow scan reads .github/workflows/*.yml only, so the claim rests on
+// no composite action holding AWS credentials. That premise is asserted rather
+// than assumed, and asserting it is what turns a blind spot into a failure.
+test('a composite action assuming an AWS role fails the claim', () => {
+  const { errors } = grantRun();
+  assert.deepEqual(errors, []);
+  const withAction = checkDecryptGrant(
+    parseKmsDecryptGrant(keyPolicy() + lambdaFn()),
+    [{ path: 'envs/prod/main.tf', ...parseEnvWire(envRoot(null)) }],
+    parseWorkflowJobs([{ name: 'w.yml', text: workflow({ credentialed: true }) }]),
+    ['deploy-infra'],
+  );
+  assert.ok(has(withAction.errors, /composite action\(s\) deploy-infra/), withAction.errors.join('\n'));
+});
+
+test('neither committed composite action assumes an AWS role', () => {
+  assert.deepEqual(credentialedActions(ACTION_DIR), []);
+});
+
+test('credentialedActions on a missing directory is empty, not a throw', () => {
+  assert.deepEqual(credentialedActions(join(ACTION_DIR, 'does-not-exist')), []);
 });

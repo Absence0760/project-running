@@ -126,7 +126,7 @@ export const PAIRS = [
 		clients: [
 			{ file: TS_TYPES, decl: 'ActivityType', shape: 'union' },
 			{ file: 'apps/web/src/lib/runs/activity_type.ts', decl: 'ACTIVITY_TYPES', shape: 'strings' },
-			{ file: 'apps/mobile_android/lib/preferences.dart', decl: 'ActivityType', shape: 'enum' },
+			{ file: 'packages/core_models/lib/src/activity_type.dart', decl: 'ActivityType', shape: 'enum' },
 		],
 	},
 	{
@@ -886,7 +886,7 @@ export const PAIRS = [
 		clients: [
 			{ file: TS_TYPES, decl: 'ActivityType', shape: 'union' },
 			{ file: 'apps/web/src/lib/runs/activity_type.ts', decl: 'ACTIVITY_TYPES', shape: 'strings' },
-			{ file: 'apps/mobile_android/lib/preferences.dart', decl: 'ActivityType', shape: 'enum' },
+			{ file: 'packages/core_models/lib/src/activity_type.dart', decl: 'ActivityType', shape: 'enum' },
 			{
 				file: 'apps/mobile_android/lib/health_connect_exporter.dart',
 				decl: 'healthWorkoutTypeForActivity',

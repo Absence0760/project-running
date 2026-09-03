@@ -2866,7 +2866,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get routesImportSharedFailed =>
-      'No se pudo importar el archivo: no es una ruta GPX o KML válida.';
+      'No se pudo importar el archivo: no es una ruta válida.';
 
   @override
   String routesSaved(String name) {
@@ -2886,7 +2886,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Toca Crear para dibujar una ruta en el mapa, o importa un archivo GPX, KML, GeoJSON o TCX.';
+      'Toca Crear para dibujar una ruta en el mapa, o importa un archivo GPX, KML, KMZ, GeoJSON o TCX.';
 
   @override
   String get routesBuild => 'Crear';
@@ -6847,6 +6847,20 @@ class AppLocalizationsEs extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String integrationsImportPartialOf(int n, int total) {
+    return 'Solo se pudo importar parte de tu historial: $n de $total.';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'No se pudieron leer todos los resultados. Importados: $n.';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      'La lista de resultados era demasiado larga para leerla hasta el final, así que no se pudo confirmar tu resultado. Introdúcelo manualmente.';
 
   @override
   String get integrationsParkrunNoneNew =>

@@ -11,11 +11,12 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.BODY_SENSORS" />
-    <!-- BODY_SENSORS alone is not enough on Wear OS 3.5+ (API 34+):
-         the platform stops delivering HR samples once the display
-         goes ambient unless BODY_SENSORS_BACKGROUND is also granted.
-         We declare this in the Wear OS Play Data Safety form too. -->
-    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+    <!-- BODY_SENSORS_BACKGROUND is deliberately NOT declared. It gates
+         PassiveMonitoringClient's background body-sensor access; heart
+         rate here comes from MeasureClient, whose documented background
+         access is "no" and which no permission changes. Declaring an
+         unobtainable sensor permission only widens the install prompt
+         and the Play Data Safety form. See ManifestGuardsTest. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Foreground service for long-running GPS recording. Without this
          the OS kills the recording the moment the watch goes ambient. -->

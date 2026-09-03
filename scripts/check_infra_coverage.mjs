@@ -44,7 +44,45 @@
 //      failures have, and osrm-proxy shipped without the p95 one its own
 //      comment claimed it mirrored from generate-route.
 //
-// Offline by design: a directory listing and three files. No AWS credentials,
+//   4. Error-response honesty. `custom_error_response` is the one place on this
+//      distribution where a status code can be laundered, and because it is
+//      distribution-wide it launders EVERY origin's at once. A mapping that
+//      answers a 4xx/5xx with a 2xx tells a crawler the page is fine — which is
+//      what the 404 -> 200 mapping did to ten `/share/*` paths, turning every
+//      private, deleted or never-existing entity into a soft 404 Google was
+//      invited to index, with the `noindex` that would have said otherwise
+//      sitting in a Lambda body the rewrite discards (decisions § 1022). One
+//      such mapping is legitimate and is declared here with its reason: the
+//      SPA's 403 deep-link path, where S3's GetObject-only bucket policy makes
+//      a missing key a 403 and every dynamic client route a missing key. Any
+//      other status-laundering mapping fails, and a declared exemption nothing
+//      uses fails too — the RESOURCELESS_ACTIONS shape, one file over.
+//
+//   5. WAF scope-down normalisation. The three rate-based rules are the only
+//      thing bounding spend on the only three paths that cost money or engine
+//      CPU to serve, and each is scoped down by a STARTS_WITH match on
+//      `uri_path` — a field WAF does not decode, while CloudFront's behaviour
+//      matching normalises independently. A scope-down with no URL_DECODE
+//      transformation lets an encoded spelling reach the Lambda with the
+//      per-IP cap unapplied, and looks identical in the console to one that
+//      does not (decisions § 1023). A fourth rule copy-pasted from the first
+//      three inherits the gap silently, which is what this claim is for.
+//
+//   6. Engine-URL symmetry. The module takes three routing-engine URLs, each a
+//      string input defaulting to "" (the value that means "no engine, degrade
+//      gracefully"). An env root that cannot SET one cannot rehearse a prod
+//      change that involves it — which is what a preview environment is for —
+//      and the omission is invisible: the module receives "" either way, the
+//      plan is identical, and nothing reads as missing. `graph_cycle_url` was
+//      in exactly that state (decisions § 1024): declared and wired in
+//      envs/prod, declared nowhere in envs/preview, with no recorded reason
+//      while its two siblings carried one. The engine set is DERIVED from the
+//      module (a `_url` string input whose default is "") rather than listed,
+//      so a fourth engine is covered the day it is added. The three deliberate
+//      prod-only knobs measured alongside it — the reserved-concurrency caps —
+//      are literals in preview WITH a stated reason and are not this shape.
+//
+// Offline by design: a directory listing and six files. No AWS credentials,
 // no `terraform init`.
 //
 // Run: `node scripts/check_infra_coverage.mjs`
@@ -56,7 +94,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { hclResources, nestedBlock, nestedBlocks, stripComments } from './hcl_lex.mjs';
+import {
+  blockEnd,
+  hclResources,
+  nestedBlock,
+  nestedBlocks,
+  stripComments,
+} from './hcl_lex.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -73,6 +117,23 @@ export const MODULE_FILE =
 export const ALARMS_FILE =
   process.env.INFRA_COVERAGE_ALARMS ??
   join(REPO_ROOT, 'infra/modules/web-stack/alarms.tf');
+export const WAF_FILE =
+  process.env.INFRA_COVERAGE_WAF ??
+  join(REPO_ROOT, 'infra/modules/web-stack/waf.tf');
+export const MODULE_VARS_FILE =
+  process.env.INFRA_COVERAGE_MODULE_VARS ??
+  join(REPO_ROOT, 'infra/modules/web-stack/variables.tf');
+/// Each env root, as `{ env, main, variables }` source text. Overridable as a
+/// comma-separated list of env NAMES rooted under a directory, so the whole
+/// script can be pointed at mutated copies.
+export const ENV_ROOT_DIR =
+  process.env.INFRA_COVERAGE_ENV_DIR ?? join(REPO_ROOT, 'infra/envs');
+export const ENV_NAMES = (process.env.INFRA_COVERAGE_ENVS ?? 'prod,preview').split(',');
+
+/// The transformation every `uri_path` scope-down must carry, and the one it
+/// must not. See claim 5 in the header.
+export const REQUIRED_URI_TRANSFORM = 'URL_DECODE';
+export const FORBIDDEN_URI_TRANSFORM = 'LOWERCASE';
 
 /// Directories `terraform validate` cannot be run against on their own, and
 /// why. An entry that stops being needed fails as loudly as a missing one.
@@ -266,8 +327,20 @@ export const HTTPS_VIEWER_POLICIES = new Set(['redirect-to-https', 'https-only']
  *   insecureOrigins: string[],
  *   behaviours: Behaviour[],
  *   headerPolicies: Map<string, { csp: boolean, permissionsPolicy: boolean }>,
+ *   errorResponses: ErrorResponse[],
  * } | null} Distribution
+ * @typedef {{ errorCode: string | null, responseCode: string | null, responsePage: string | null }} ErrorResponse
  */
+
+/// The one status-laundering `custom_error_response` this distribution is
+/// allowed, keyed `<error_code>-><response_code>`, with the reason. An entry
+/// here that no block uses fails, so the exemption cannot outlive its grant.
+export const ALLOWED_STATUS_LAUNDERING = new Map([
+  [
+    '403->200',
+    'the SPA deep-link path: the site bucket grants s3:GetObject and no s3:ListBucket, so a missing key is 403 AccessDenied and every dynamic client route (/dashboard, /runs/<id>, /u/<id>) arrives as one',
+  ],
+]);
 
 /** @param {string} body @param {string} key */
 function attr(body, key) {
@@ -345,7 +418,142 @@ export function parseDistribution(raw) {
     });
   }
 
-  return { originIds, originsMissingOac, insecureOrigins, behaviours, headerPolicies };
+  /** @type {ErrorResponse[]} */
+  const errorResponses = [];
+  for (const { body } of nestedBlocks(dist.body, /(?:^|\n)\s*custom_error_response\s*\{/)) {
+    errorResponses.push({
+      errorCode: unquote(attr(body, 'error_code')),
+      responseCode: unquote(attr(body, 'response_code')),
+      responsePage: unquote(attr(body, 'response_page_path')),
+    });
+  }
+
+  return {
+    originIds,
+    originsMissingOac,
+    insecureOrigins,
+    behaviours,
+    headerPolicies,
+    errorResponses,
+  };
+}
+
+/**
+ * @typedef {{ rule: string, searchString: string | null, field: string | null,
+ *             positional: string | null, transforms: string[] }} WafScopeDown
+ */
+
+/// Every rate-based rule's scope-down byte match, with the text transformations
+/// it applies. A rule whose scope-down could not be read is returned with a
+/// null search string rather than dropped — an unreadable rule is not a
+/// passing one.
+/**
+ * @param {string} raw the waf.tf source
+ * @returns {WafScopeDown[]}
+ */
+export function parseWafScopeDowns(raw) {
+  const src = stripComments(raw);
+  /** @type {WafScopeDown[]} */
+  const out = [];
+  for (const acl of hclResources(src, 'aws_wafv2_web_acl')) {
+    for (const { body } of nestedBlocks(acl.body, /(?:^|\n)\s*rule\s*\{/)) {
+      const rule = unquote(attr(body, 'name')) ?? '(unnamed)';
+      const rateBased = nestedBlock(body, /rate_based_statement\s*\{/);
+      if (rateBased === null) continue;
+      const scopeDown = nestedBlock(rateBased, /scope_down_statement\s*\{/);
+      const byteMatch =
+        scopeDown === null ? null : nestedBlock(scopeDown, /byte_match_statement\s*\{/);
+      if (byteMatch === null) {
+        out.push({ rule, searchString: null, field: null, positional: null, transforms: [] });
+        continue;
+      }
+      const fieldBlock = nestedBlock(byteMatch, /field_to_match\s*\{/) ?? '';
+      const field = fieldBlock.match(/(\w+)\s*\{\s*\}/)?.[1] ?? null;
+      out.push({
+        rule,
+        searchString: unquote(attr(byteMatch, 'search_string')),
+        field,
+        positional: unquote(attr(byteMatch, 'positional_constraint')),
+        transforms: nestedBlocks(byteMatch, /text_transformation\s*\{/)
+          .map(({ body: t }) => unquote(attr(t, 'type')) ?? '(unreadable)'),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * @typedef {{ name: string, type: string | null, dflt: string | null }} ModuleVar
+ * @typedef {{ env: string, declared: Set<string>, wired: Map<string, string> }} EnvRoot
+ */
+
+/// Every `variable "…" { … }` in a Terraform variables file, with its declared
+/// type and default as written.
+/**
+ * @param {string} raw
+ * @returns {ModuleVar[]}
+ */
+export function parseVariables(raw) {
+  const src = stripComments(raw);
+  /** @type {ModuleVar[]} */
+  const out = [];
+  const re = /(?:^|\n)\s*variable\s+"([A-Za-z0-9_-]+)"\s*\{/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = blockEnd(src, open);
+    if (close < 0) continue;
+    const body = src.slice(open + 1, close);
+    out.push({ name: m[1], type: attr(body, 'type'), dflt: attr(body, 'default') });
+    re.lastIndex = close;
+  }
+  return out;
+}
+
+/// The routing-engine URL inputs, derived rather than listed: a `_url` string
+/// input whose default is the empty string. That default IS the semantics —
+/// "" means no engine and a graceful degrade — which is what separates the
+/// three engines from `public_supabase_url` (no default, required) and
+/// `public_site_url` (a real default, and env identity rather than a knob).
+/**
+ * @param {ModuleVar[] } vars
+ * @returns {string[]}
+ */
+export function engineUrlInputs(vars) {
+  return vars
+    .filter((v) => v.name.endsWith('_url') && v.type === 'string' && v.dflt === '""')
+    .map((v) => v.name);
+}
+
+/// One env root: the variables it declares, and what its `module "web"` block
+/// wires each module input from.
+/**
+ * @param {string} env
+ * @param {string} mainSrc
+ * @param {string} variablesSrc
+ * @returns {EnvRoot}
+ */
+export function parseEnvRoot(env, mainSrc, variablesSrc) {
+  const src = stripComments(mainSrc);
+  /** @type {Map<string, string>} */
+  const wired = new Map();
+  const re = /(?:^|\n)\s*module\s+"[A-Za-z0-9_-]+"\s*\{/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = blockEnd(src, open);
+    if (close < 0) continue;
+    for (const a of src
+      .slice(open + 1, close)
+      .matchAll(/^\s*([a-z0-9_]+)\s*=\s*(.+?)\s*$/gm))
+      if (!wired.has(a[1])) wired.set(a[1], a[2]);
+    re.lastIndex = close;
+  }
+  return {
+    env,
+    declared: new Set(parseVariables(variablesSrc).map((v) => v.name)),
+    wired,
+  };
 }
 
 // ────────────────────────────── comparison ──────────────────────────────
@@ -357,9 +565,22 @@ export function parseDistribution(raw) {
  * @param {string[]} functions
  * @param {Alarm[]} alarms
  * @param {Distribution} distribution
+ * @param {WafScopeDown[]} wafScopeDowns
+ * @param {ModuleVar[]} moduleVars
+ * @param {EnvRoot[]} envRoots
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function compareSources(dirs, matrix, dependabot, functions, alarms, distribution) {
+export function compareSources(
+  dirs,
+  matrix,
+  dependabot,
+  functions,
+  alarms,
+  distribution,
+  wafScopeDowns,
+  moduleVars,
+  envRoots,
+) {
   /** @type {string[]} */
   const errors = [];
   /** @type {string[]} */
@@ -479,12 +700,15 @@ export function compareSources(dirs, matrix, dependabot, functions, alarms, dist
     }
     errors.push(
       `aws_lambda_function.${fn} has no ${missing.join(' and no ')} alarm. A Lambda-origin failure ` +
-        "on this distribution is invisible — CloudFront's per-distribution 403/404 → /index.html " +
-        'fallback rewrites it to a 200 shell — so the alarm is the only signal it has.',
+        "on this distribution is invisible — CloudFront's per-distribution 4xx → /index.html " +
+        'fallback replaces the body with the shell (and, for a 403, the status with a 200) — so ' +
+        'the alarm is the only signal it has.',
     );
   }
 
   distributionCoverage(distribution, errors, ok);
+  wafCoverage(wafScopeDowns, errors, ok);
+  engineUrlCoverage(engineUrlInputs(moduleVars), envRoots, errors, ok);
 
   return { errors, ok };
 }
@@ -505,7 +729,61 @@ function distributionCoverage(distribution, errors, ok) {
     );
     return;
   }
-  const { behaviours, originIds, originsMissingOac, insecureOrigins, headerPolicies } = distribution;
+  const {
+    behaviours,
+    originIds,
+    originsMissingOac,
+    insecureOrigins,
+    headerPolicies,
+    errorResponses,
+  } = distribution;
+
+  // ── 4. no custom_error_response launders a 4xx/5xx into a 2xx ──
+  if (errorResponses.length === 0) {
+    errors.push(
+      'no custom_error_response block was read from the distribution. The SPA needs the 403 one to ' +
+        'serve a deep link at all, so a count of zero means this scan stopped matching rather than ' +
+        'that the mappings are gone.',
+    );
+  }
+  /** @type {Set<string>} */
+  const launderingSeen = new Set();
+  for (const { errorCode, responseCode, responsePage } of errorResponses) {
+    if (errorCode === null || responseCode === null) {
+      errors.push(
+        `a custom_error_response was read with error_code=${JSON.stringify(errorCode)} and ` +
+          `response_code=${JSON.stringify(responseCode)}. Both are required to tell an honest ` +
+          'mapping from a laundering one, and an unreadable one is not a passing one.',
+      );
+      continue;
+    }
+    if (!/^[45]/.test(errorCode) || !/^2/.test(responseCode)) continue;
+    const key = `${errorCode}->${responseCode}`;
+    launderingSeen.add(key);
+    const reason = ALLOWED_STATUS_LAUNDERING.get(key);
+    if (reason === undefined) {
+      errors.push(
+        `custom_error_response maps ${errorCode} to ${responseCode} ` +
+          `(${responsePage ?? 'no page'}). custom_error_response is DISTRIBUTION-wide, so that ` +
+          "rewrites every Lambda origin's deliberate error into a success as well: a crawler is " +
+          'told the page is fine, and any `noindex` the origin sent lives in a body this mapping ' +
+          'discards. Answer the honest status with the shell body (response_code = error_code) ' +
+          'unless the mapping is the SPA deep-link one, which is declared in ' +
+          'ALLOWED_STATUS_LAUNDERING with its reason. decisions § 1022.',
+      );
+    } else {
+      ok.push(`custom_error_response ${key}: ${reason}`);
+    }
+  }
+  for (const [key, reason] of ALLOWED_STATUS_LAUNDERING) {
+    if (!launderingSeen.has(key)) {
+      errors.push(
+        `ALLOWED_STATUS_LAUNDERING declares ${key} (${reason}) and no custom_error_response does ` +
+          'it. A stale exemption reads as a deliberate decision long after the mapping it excused ' +
+          'is gone.',
+      );
+    }
+  }
   if (behaviours.length < 2) {
     errors.push(
       `only ${behaviours.length} cache behaviour(s) were read from the distribution. It carries a ` +
@@ -629,6 +907,113 @@ function distributionCoverage(distribution, errors, ok) {
   }
 }
 
+/// The fifth: WAF does not decode `uri_path` and CloudFront's behaviour
+/// matching normalises independently, so a scope-down without a URL_DECODE
+/// transformation lets an encoded spelling reach the Lambda uncapped.
+/**
+ * @param {WafScopeDown[]} wafScopeDowns
+ * @param {string[]} errors
+ * @param {string[]} ok
+ */
+function wafCoverage(wafScopeDowns, errors, ok) {
+  if (wafScopeDowns.length === 0) {
+    errors.push(
+      'no rate-based rule with a scope-down was read from waf.tf. The three of them are the only ' +
+        'thing bounding spend on /api/coach, /api/routes/generate and /api/routes/osrm, so a count ' +
+        'of zero means this scan stopped matching rather than that the rules are gone.',
+    );
+  }
+  for (const { rule, searchString, field, positional, transforms } of wafScopeDowns) {
+    if (searchString === null || field === null) {
+      errors.push(
+        `rate-based rule ${rule} has no readable byte_match scope-down. Without one the rate ` +
+          'counter applies to EVERY request on the distribution, static assets included — the rule ' +
+          'stops being a backstop and becomes an outage.',
+      );
+      continue;
+    }
+    if (field !== 'uri_path') {
+      ok.push(`WAF ${rule}: scoped on ${field}, not uri_path — claim 5 does not apply`);
+      continue;
+    }
+    if (transforms.includes(FORBIDDEN_URI_TRANSFORM)) {
+      errors.push(
+        `WAF ${rule} applies ${FORBIDDEN_URI_TRANSFORM} to uri_path. CloudFront path patterns are ` +
+          'case-sensitive, so a differently-cased spelling does not reach the Lambda at all and ' +
+          'folding case only rate-limits requests the edge already 404s.',
+      );
+    }
+    if (!transforms.includes(REQUIRED_URI_TRANSFORM)) {
+      errors.push(
+        `WAF ${rule} matches uri_path ${positional} ${JSON.stringify(searchString)} with only ` +
+          `[${transforms.join(', ')}]. WAF does not decode uri_path and CloudFront's behaviour ` +
+          'matching normalises independently, so an encoded spelling that CloudFront resolves to ' +
+          `the behaviour reaches the Lambda with the per-IP cap unapplied. Add a ` +
+          `${REQUIRED_URI_TRANSFORM} transformation beside the NONE — on a search string with no ` +
+          '`%` in it that can only widen the match, never narrow it. decisions § 1023.',
+      );
+      continue;
+    }
+    ok.push(`WAF ${rule}: uri_path ${positional} ${JSON.stringify(searchString)}, URL-decoded`);
+  }
+}
+
+/// The sixth: every routing-engine URL the module takes is settable from every
+/// env root. An env that cannot set one cannot rehearse a prod change
+/// involving it, and the omission is invisible — the module receives "" either
+/// way and the plan is identical.
+/**
+ * @param {string[]} engines
+ * @param {EnvRoot[]} roots
+ * @param {string[]} errors
+ * @param {string[]} ok
+ */
+function engineUrlCoverage(engines, roots, errors, ok) {
+  if (engines.length === 0) {
+    errors.push(
+      'no engine URL input was read from the web-stack variables file. The module takes three ' +
+        '(osrm, graphhopper, graph_cycle); a count of zero means this reader stopped matching ' +
+        'rather than that the engines are gone.',
+    );
+    return;
+  }
+  if (roots.length < 2) {
+    errors.push(
+      `only ${roots.length} env root(s) were read. Symmetry between them is the whole claim, and ` +
+        'one root is symmetric with itself.',
+    );
+    return;
+  }
+  for (const root of roots) {
+    if (root.wired.size === 0) {
+      errors.push(
+        `envs/${root.env}: no \`module "web"\` argument was read, so nothing about its engine URLs ` +
+          'was checked.',
+      );
+    }
+  }
+  for (const engine of engines) {
+    /** @type {string[]} */
+    const gaps = [];
+    for (const root of roots) {
+      if (!root.declared.has(engine)) gaps.push(`envs/${root.env} declares no var.${engine}`);
+      else if (!root.wired.has(engine))
+        gaps.push(`envs/${root.env} declares var.${engine} and does not pass it to the module`);
+    }
+    if (gaps.length === 0) {
+      ok.push(`${engine}: settable from all ${roots.length} env roots`);
+      continue;
+    }
+    errors.push(
+      `${engine} is a routing-engine URL the module takes, and ${gaps.join('; ')}. An environment ` +
+        'that cannot be configured the way prod can cannot rehearse a prod change, and the gap is ' +
+        'invisible: the module gets the same "" it would have got, so the plan is identical and ' +
+        'nothing reads as missing. Three lines — a variable, a wire, a description. ' +
+        'decisions § 1024.',
+    );
+  }
+}
+
 export function main() {
   const { errors, ok } = compareSources(
     terraformDirs(INFRA_DIR),
@@ -637,6 +1022,15 @@ export function main() {
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
     parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
+    parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8')),
+    parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8')),
+    ENV_NAMES.map((env) =>
+      parseEnvRoot(
+        env,
+        readFileSync(join(ENV_ROOT_DIR, env, 'main.tf'), 'utf-8'),
+        readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
+      ),
+    ),
   );
 
   for (const line of ok) console.log(`[OK] ${line}`);

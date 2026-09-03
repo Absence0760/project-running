@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { parseImportCompleteness } from '$lib/integrations/strava_sync_result';
 	import { activeFormatLocale } from '$lib/format/time';
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -233,13 +234,26 @@
 				throw new Error(body.error ?? `HTTP ${resp.status}`);
 			}
 			const body = await resp.json().catch(() => ({}));
-			const imported = (body.imported as number) ?? 0;
-			showToast(
-				imported > 0
-					? m('settingsAccount.parkrunImported', { n: imported })
-					: m('settingsAccount.parkrunNoneNew'),
-				'success',
-			);
+			// A capped history and a whole one both arrive as a positive count,
+			// so the shortfall has to be said outright or the runner reads
+			// "Imported 40 results" as "your parkrun history is here"
+			// (decisions § 1014).
+			const result = parseImportCompleteness(body);
+			if (!result.complete) {
+				showToast(
+					result.total !== null
+						? m('integrations.importPartialOf', { n: result.imported, total: result.total })
+						: m('integrations.importPartial', { n: result.imported }),
+					'error',
+				);
+			} else {
+				showToast(
+					result.imported > 0
+						? m('settingsAccount.parkrunImported', { n: result.imported })
+						: m('settingsAccount.parkrunNoneNew'),
+					'success',
+				);
+			}
 		} catch (err) {
 			showToast(m('settingsAccount.parkrunImportFailed', { error: (err as Error).message }), 'error');
 		} finally {

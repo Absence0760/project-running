@@ -2864,7 +2864,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routesImportSharedFailed =>
-      'Não foi possível importar o ficheiro: não é uma rota GPX ou KML válida.';
+      'Não foi possível importar o ficheiro: não é uma rota válida.';
 
   @override
   String routesSaved(String name) {
@@ -2884,7 +2884,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML, GeoJSON ou TCX.';
+      'Toque em Criar para desenhar uma rota no mapa ou importe um ficheiro GPX, KML, KMZ, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Criar';
@@ -6846,6 +6846,20 @@ class AppLocalizationsPt extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String integrationsImportPartialOf(int n, int total) {
+    return 'Só foi possível importar parte do seu histórico: $n de $total.';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'Não foi possível ler todos os resultados. Importados: $n.';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      'A lista de resultados era demasiado longa para ser lida até ao fim, por isso não foi possível confirmar o seu resultado. Introduza-o manualmente.';
 
   @override
   String get integrationsParkrunNoneNew =>
@@ -16800,7 +16814,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routesImportSharedFailed =>
-      'Não foi possível importar o arquivo: não é uma rota GPX ou KML válida.';
+      'Não foi possível importar o arquivo: não é uma rota válida.';
 
   @override
   String routesSaved(String name) {
@@ -16820,7 +16834,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get routesEmptyBody =>
-      'Toque em Criar para desenhar uma rota no mapa ou importe um arquivo GPX, KML, GeoJSON ou TCX.';
+      'Toque em Criar para desenhar uma rota no mapa ou importe um arquivo GPX, KML, KMZ, GeoJSON ou TCX.';
 
   @override
   String get routesBuild => 'Criar';
@@ -20779,6 +20793,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$_temp0';
   }
+
+  @override
+  String integrationsImportPartialOf(int n, int total) {
+    return 'Só foi possível importar parte do seu histórico: $n de $total.';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'Não foi possível ler todos os resultados. Importados: $n.';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      'A lista de resultados era longa demais para ser lida até o fim, então não foi possível confirmar seu resultado. Digite-o manualmente.';
 
   @override
   String get integrationsParkrunNoneNew =>

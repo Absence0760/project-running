@@ -9,9 +9,10 @@
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { resolve, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripComments } from './core/strip_comments';
 
 function readFileSyncDeps(): { readdirSync: typeof readdirSync } {
 	return { readdirSync };
@@ -1888,14 +1889,7 @@ test('every two-wrapper endpoint enforces one shared body cap, on both wrappers'
 	let capped = 0;
 	for (const file of wrappers) {
 		const rel = file.slice(file.indexOf('apps/web/') + 'apps/web/'.length);
-		// Line comments blanked BEFORE block comments are stripped — a `//`
-		// containing `/*` otherwise opens a block that swallows real code
-		// (decisions § 971).
-		const src = readFileSync(file, 'utf-8')
-			.split('\n')
-			.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-			.join('\n')
-			.replace(/\/\*[\s\S]*?\*\//g, ' ');
+		const src = stripComments(readFileSync(file, 'utf-8'));
 		if (!/BODY_LIMIT_BYTES/.test(src)) continue;
 		capped++;
 
@@ -3519,57 +3513,145 @@ test('the message thread renders a route attachment through DmRouteAttachment', 
 	);
 });
 
-test('a source-scanning guard blanks line comments before it strips block comments', () => {
+test('every source-scanning guard blanks comments through the one shared stripper', () => {
 	// Reason: a guard that reads source as text has to blank comments, or the
-	// prose above a rule reads as a use of it. Both orders look equivalent and
-	// only one is: `//` is a comment to the language but `/*` inside one is
-	// still an opening delimiter to a regex, so stripping block comments FIRST
-	// makes `// exactly as /clubs/* already do` open a block that runs to the
-	// next `*/` in the file and swallows every line of real code between.
+	// prose above a rule reads as a use of it. Thirteen spellings across twelve
+	// files each did it with their own chain of `.replace` calls, and a chain
+	// cannot: `//` is a comment to the language but `/*` inside one is still an
+	// opening delimiter to a regex, so stripping block comments FIRST makes
+	// `// exactly as /clubs/* already do` open a block that runs to the next
+	// `*/` in the file. Measured when that was found: 779 lines hidden across 3
+	// files, 485 of them in `runs/[id]/+page.svelte`, which carries a
+	// `PUBLIC_SITE_URL` fold that `site_url.test.ts` was scanning right past
+	// while reporting a pass (decisions § 971). Blanking `//` first still
+	// leaves the same hole open from inside a string literal, which no copy
+	// handled (decisions § 1000).
 	//
-	// Measured over this tree at the time of the fix: the wrong order hid 779
-	// lines across 3 files — 485 of them in `runs/[id]/+page.svelte`, which
-	// carries a `PUBLIC_SITE_URL` fold that `site_url.test.ts` was therefore
-	// scanning right past while reporting a pass. A guard that cannot see the
-	// code it guards is worse than no guard, because it is believed
-	// (decisions § 971).
+	// So the rule is now single-sourced, not merely ordered: `core/
+	// strip_comments.ts` scans instead of substituting, and a guard that wants
+	// comments blanked imports it. The register below is every file still
+	// allowed to spell a block-comment strip of its own, with the count it may
+	// spell and why — a count that moves fails here, so a tenth hand-rolled
+	// copy cannot arrive quietly.
+	const REGISTER: Array<{ file: string; count: number; why: string }> = [
+		{
+			file: 'src/lib/contrast_guard.test.ts',
+			count: 5,
+			why: 'scans CSS, where `//` is not a comment: blanking it would delete a protocol-relative url() or a content: string.',
+		},
+		{
+			file: 'src/lib/rtl_css_guards.test.ts',
+			count: 1,
+			why: 'scans CSS, same reason.',
+		},
+		{
+			file: 'src/lib/security_guards.test.ts',
+			count: 2,
+			why: 'the :focus/:focus-visible pairing scan and the token scan both read <style> blocks, which are CSS.',
+		},
+		{
+			file: 'src/lib/integrations/strava_zip_strictness.test.ts',
+			count: 1,
+			why: 'the last un-converted JS copy: src/lib/integrations was another lane`s in the round that did the conversion. Convert it and delete this entry.',
+		},
+	];
+
+	// Assembled, so this file does not contain the needle it searches for.
+	const BLOCK_STRIP = '/\\*[' + '\\s\\S]*?\\*\\/';
+
 	const files: string[] = [];
-	(function walk(dir: string): void {
-		for (const entry of readdirSync(dir, { withFileTypes: true })) {
-			if (entry.name === 'node_modules') continue;
-			const full = resolve(dir, entry.name);
-			if (entry.isDirectory()) walk(full);
-			else if (entry.name.endsWith('.test.ts')) files.push(full);
-		}
-	})(__dirname);
-
-	// Population: a walker that found nothing would satisfy the assertion below
-	// while proving nothing (decisions § 534).
-	assert.ok(files.length > 100, `found only ${files.length} test files — walker broken?`);
-
-	const blockStrip = /\.replace\(\s*\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g/;
-	const lineStrip = /\\\/\\\/(?:\[\^\\n\]\*|\.\*\$)|\/\^\\s\*\(?\\\/\\\//;
-	const offenders: string[] = [];
-	let scanning = 0;
-
-	for (const file of files) {
-		const src = readFileSync(file, 'utf-8');
-		const block = src.search(blockStrip);
-		const line = src.search(lineStrip);
-		// Only a guard that strips BOTH can get the order wrong. A CSS scanner
-		// strips block comments alone, because `//` is not a comment in CSS.
-		if (block < 0 || line < 0) continue;
-		scanning++;
-		if (block < line) {
-			offenders.push(file.slice(file.indexOf('src/')));
-		}
+	const webRoot = resolve(__dirname, '..', '..');
+	for (const root of ['src', 'tests-e2e', 'lambda']) {
+		(function walk(dir: string): void {
+			for (const entry of readdirSync(dir, { withFileTypes: true })) {
+				if (entry.name === 'node_modules') continue;
+				const full = resolve(dir, entry.name);
+				if (entry.isDirectory()) walk(full);
+				else if (/\.(ts|svelte)$/.test(entry.name)) files.push(full);
+			}
+		})(resolve(webRoot, root));
 	}
 
-	assert.ok(scanning >= 6, `only ${scanning} guards strip both comment forms — walker broken?`);
+	// Population: a walker that found nothing would satisfy the assertions
+	// below while proving nothing (decisions § 534).
+	assert.ok(files.length > 500, `found only ${files.length} sources — walker broken?`);
+
+	const found = new Map<string, number>();
+	let importers = 0;
+	for (const file of files) {
+		const src = readFileSync(file, 'utf-8');
+		const rel = file.slice(webRoot.length + 1).split(sep).join('/');
+		const n = src.split(BLOCK_STRIP).length - 1;
+		if (n > 0) found.set(rel, n);
+		if (/from '[^']*strip_comments'/.test(src)) importers++;
+	}
+
+	assert.ok(
+		importers >= 11,
+		`only ${importers} guards import the shared stripper — a copy has been reintroduced?`,
+	);
+
+	const registered = new Map(REGISTER.map((r) => [r.file, r.count]));
+	const offenders = [...found]
+		.filter(([f, n]) => registered.get(f) !== n)
+		.map(([f, n]) => `${f} (${n}, registered ${registered.get(f) ?? 'not at all'})`);
 	assert.deepEqual(
 		offenders.sort(),
 		[],
-		'these strip block comments before blanking line comments, so a `//` ' +
-			'containing `/*` hides every line up to the next `*/` from the scan.',
+		'a block-comment strip outside the register. Import `stripComments` from ' +
+			'$lib/core/strip_comments instead — it is the only copy that survives a ' +
+			'`/*` inside a line comment, a string or a regex literal. A CSS scanner ' +
+			'that legitimately strips only block comments goes in the register.',
+	);
+
+	const stale = REGISTER.filter((r) => !found.has(r.file)).map((r) => r.file);
+	assert.deepEqual(
+		stale.sort(),
+		[],
+		'registered file(s) no longer spell a block-comment strip — delete the entry.',
+	);
+});
+
+test('every production Lambda gates its own HTTP method', () => {
+	// Reason: each of the eight handlers is reached by a CloudFront behaviour
+	// whose `allowed_methods` is the only other thing deciding what arrives, and
+	// the two are written in different languages in different directories. All
+	// eight gate today and each one's gate is driven behaviourally by its own
+	// suite — but by five different files, with nothing naming the class. A
+	// ninth Lambda added without a gate would be caught by none of them, which
+	// is how the five share handlers went without one until § 1005: their
+	// safety sat entirely in the Terraform list § 972 finally asserted.
+	//
+	// Source-level rather than behavioural because the shapes do not generalise:
+	// the coach wrapper writes to a response STREAM and cannot be driven through
+	// the same envelope as its siblings.
+	const dir = resolve(__dirname, '..', '..', 'lambda');
+	const handlers = readdirSync(dir, { withFileTypes: true })
+		.filter((e) => e.isDirectory())
+		.map((e) => `${e.name}/src/index.ts`)
+		.filter((rel) => existsSync(resolve(dir, rel)));
+
+	// Population: a walker that found nothing would satisfy the assertion below
+	// while proving nothing (decisions § 534).
+	assert.ok(handlers.length >= 8, `found only ${handlers.length} Lambda handlers — walker broken?`);
+
+	// Either the handler spells its own comparison and the 405 it answers with,
+	// or it delegates to the one shared refusal the five share Lambdas use.
+	const OWN_GATE = /requestContext\??\.http\??\.method\s*!==/;
+	const SHARED_GATE = /shareMethodRefusal\(/;
+
+	const ungated = handlers.filter((rel) => {
+		const src = stripComments(readFileSync(resolve(dir, rel), 'utf-8'));
+		if (SHARED_GATE.test(src)) return false;
+		return !(OWN_GATE.test(src) && /\b405\b/.test(src));
+	});
+
+	assert.deepEqual(
+		ungated.sort(),
+		[],
+		'these Lambda handlers do work on any method their CloudFront behaviour ' +
+			'lets through. Compare `event.requestContext.http.method` and answer a ' +
+			'405 with an `Allow` header (RFC 9110 15.5.6), or call ' +
+			'`shareMethodRefusal` from $lib/share/share_method_gate.',
 	);
 });

@@ -7,6 +7,17 @@ import test from 'node:test';
 
 import {
   ALARMS_FILE,
+  ALLOWED_STATUS_LAUNDERING,
+  ENV_NAMES,
+  ENV_ROOT_DIR,
+  FORBIDDEN_URI_TRANSFORM,
+  MODULE_VARS_FILE,
+  engineUrlInputs,
+  parseEnvRoot,
+  parseVariables,
+  REQUIRED_URI_TRANSFORM,
+  WAF_FILE,
+  parseWafScopeDowns,
   DISTRIBUTION_ALARMS,
   DEPENDABOT_FILE,
   INFRA_DIR,
@@ -64,14 +75,51 @@ function distribution(over = {}) {
       behaviour(),
     ],
     headerPolicies: new Map([['security', { csp: true, permissionsPolicy: true }]]),
+    errorResponses: [
+      { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+      { errorCode: '404', responseCode: '404', responsePage: '/index.html' },
+    ],
     ...over,
   };
 }
 
+/** @param {Partial<import('./check_infra_coverage.mjs').WafScopeDown>} [over] */
+function scopeDown(over = {}) {
+  return {
+    rule: 'rate-limit-coach',
+    searchString: '/api/coach',
+    field: 'uri_path',
+    positional: 'STARTS_WITH',
+    transforms: ['NONE', 'URL_DECODE'],
+    ...over,
+  };
+}
+
+const WAF = [scopeDown()];
+
+const MODULE_VARS = [
+  { name: 'osrm_url', type: 'string', dflt: '""' },
+  { name: 'public_site_url', type: 'string', dflt: '"https://threkir.com"' },
+];
+
+/** @param {string} env @param {Partial<{ declared: string[], wired: string[] }>} [over] */
+function envRoot(env, over = {}) {
+  return {
+    env,
+    declared: new Set(over.declared ?? ['osrm_url']),
+    wired: new Map((over.wired ?? ['osrm_url']).map((k) => [k, `var.${k}`])),
+  };
+}
+
+const ENV_ROOTS = [envRoot('prod'), envRoot('preview')];
+
 /**
  * @param {Partial<{ dirs: string[], matrix: string[], dependabot: string[],
  *                   functions: string[], alarms: import('./check_infra_coverage.mjs').Alarm[],
- *                   distribution: import('./check_infra_coverage.mjs').Distribution }>} [over]
+ *                   distribution: import('./check_infra_coverage.mjs').Distribution,
+ *                   waf: import('./check_infra_coverage.mjs').WafScopeDown[],
+ *                   moduleVars: import('./check_infra_coverage.mjs').ModuleVar[],
+ *                   envRoots: import('./check_infra_coverage.mjs').EnvRoot[] }>} [over]
  */
 function run(over = {}) {
   return compareSources(
@@ -81,6 +129,9 @@ function run(over = {}) {
     over.functions ?? FUNCTIONS,
     over.alarms ?? ALARMS,
     over.distribution === undefined ? distribution() : over.distribution,
+    over.waf ?? WAF,
+    over.moduleVars ?? MODULE_VARS,
+    over.envRoots ?? ENV_ROOTS,
   );
 }
 
@@ -259,6 +310,15 @@ test('the committed infra/ tree is fully covered', () => {
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
     parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
+    parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8')),
+    parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8')),
+    ENV_NAMES.map((env) =>
+      parseEnvRoot(
+        env,
+        readFileSync(join(ENV_ROOT_DIR, env, 'main.tf'), 'utf-8'),
+        readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
+      ),
+    ),
   );
   assert.deepEqual(errors, []);
   assert.ok(ok.length >= 12, 'a passing run that checked almost nothing is not a pass');
@@ -459,4 +519,266 @@ test('the guard exits non-zero when a behaviour loses the security headers polic
       }),
     /no response_headers_policy_id/,
   );
+});
+
+// ───────────────── claim 4: error-response honesty ─────────────────
+
+test('the 404 mapping answering 404 with the shell body passes', () => {
+  const { errors, ok } = run();
+  assert.deepEqual(errors, []);
+  assert.ok(
+    ok.some((l) => /custom_error_response 403->200/.test(l)),
+    ok.join('\n'),
+  );
+});
+
+// The exact shape the distribution shipped until decisions § 1022: a Lambda's
+// deliberate 404 answered 200, so ten /share/* paths were soft 404s.
+test('a 404 laundered into a 200 fails', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '404', responseCode: '200', responsePage: '/index.html' },
+      ],
+    }),
+  });
+  assert.ok(has(errors, /maps 404 to 200/), errors.join('\n'));
+  assert.equal(errors.length, 1);
+});
+
+test('a 5xx laundered into a 200 fails on the same rule', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '503', responseCode: '200', responsePage: '/maintenance.html' },
+      ],
+    }),
+  });
+  assert.ok(has(errors, /maps 503 to 200/), errors.join('\n'));
+});
+
+// A 4xx answered with another 4xx is not laundering — the reader is still told
+// the request failed, which is the only property this claim is about.
+test('a 4xx answered with a 4xx is not laundering', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '404', responseCode: '410', responsePage: '/index.html' },
+      ],
+    }),
+  });
+  assert.deepEqual(errors, []);
+});
+
+test('losing the declared 403 exemption fails as loudly as an undeclared one', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [{ errorCode: '404', responseCode: '404', responsePage: '/index.html' }],
+    }),
+  });
+  assert.ok(has(errors, /ALLOWED_STATUS_LAUNDERING declares 403->200/), errors.join('\n'));
+});
+
+test('no custom_error_response at all is reported, not passed', () => {
+  const { errors } = run({ distribution: distribution({ errorResponses: [] }) });
+  assert.ok(has(errors, /no custom_error_response block was read/), errors.join('\n'));
+});
+
+test('an unreadable response_code is reported, not skipped', () => {
+  const { errors } = run({
+    distribution: distribution({
+      errorResponses: [
+        { errorCode: '403', responseCode: '200', responsePage: '/index.html' },
+        { errorCode: '404', responseCode: null, responsePage: '/index.html' },
+      ],
+    }),
+  });
+  assert.ok(has(errors, /Both are required/), errors.join('\n'));
+});
+
+test('the committed module maps 404 to 404 and 403 to 200', () => {
+  const dist = parseDistribution(readFileSync(MODULE_FILE, 'utf-8'));
+  assert.ok(dist);
+  assert.deepEqual(
+    dist.errorResponses.map((e) => `${e.errorCode}->${e.responseCode}@${e.responsePage}`),
+    ['403->200@/index.html', '404->404@/index.html'],
+  );
+});
+
+// An exemption with no reason is a hole with a name. The map is the only place
+// a status-laundering mapping is allowed to live, so its entries must say why.
+test('every declared laundering exemption carries a reason', () => {
+  assert.ok(ALLOWED_STATUS_LAUNDERING.size > 0);
+  for (const [key, reason] of ALLOWED_STATUS_LAUNDERING) {
+    assert.match(key, /^[45]\d\d->2\d\d$/);
+    assert.ok(reason.length > 40, `${key} carries no reason`);
+  }
+});
+
+test('the guard exits non-zero when the 404 mapping goes back to 200', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'infra-coverage-err-'));
+  const src = readFileSync(MODULE_FILE, 'utf-8');
+  const block = /custom_error_response \{\n(\s*)error_code\s*=\s*404\n\s*response_code\s*=\s*404\n/;
+  assert.match(src, block, 'the 404 custom_error_response moved; re-anchor this test');
+  const cut = src.replace(block, (b) => b.replace('response_code      = 404', 'response_code      = 200'));
+  assert.notEqual(cut, src, 'the mutation did not change anything');
+  const path = join(dir, 'main.tf');
+  writeFileSync(path, cut);
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, ['scripts/check_infra_coverage.mjs'], {
+        env: { ...process.env, INFRA_COVERAGE_MODULE: path },
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }),
+    /maps 404 to 200/,
+  );
+});
+
+// ───────────── claim 5: WAF scope-down normalisation ─────────────
+
+test('a uri_path scope-down carrying URL_DECODE passes', () => {
+  const { errors, ok } = run();
+  assert.deepEqual(errors, []);
+  assert.ok(ok.some((l) => /WAF rate-limit-coach: uri_path/.test(l)), ok.join('\n'));
+});
+
+test('a uri_path scope-down with only NONE fails', () => {
+  const { errors } = run({ waf: [scopeDown({ transforms: ['NONE'] })] });
+  assert.ok(has(errors, /with only \[NONE\]/), errors.join('\n'));
+});
+
+test('LOWERCASE on uri_path fails on its own', () => {
+  const { errors } = run({ waf: [scopeDown({ transforms: ['NONE', 'URL_DECODE', 'LOWERCASE'] })] });
+  assert.ok(has(errors, /applies LOWERCASE to uri_path/), errors.join('\n'));
+  assert.equal(errors.length, 1, errors.join('\n'));
+});
+
+// A rate-based rule with NO scope-down counts every request on the
+// distribution, static assets included — an outage, not a backstop.
+test('a rate-based rule with no readable scope-down fails', () => {
+  const { errors } = run({ waf: [scopeDown({ searchString: null, field: null })] });
+  assert.ok(has(errors, /no readable byte_match scope-down/), errors.join('\n'));
+});
+
+test('a scope-down on some other field is out of scope, not a failure', () => {
+  const { errors, ok } = run({
+    waf: [scopeDown({ field: 'single_header', transforms: ['NONE'] })],
+  });
+  assert.deepEqual(errors, []);
+  assert.ok(has(ok, /claim 5 does not apply/), ok.join('\n'));
+});
+
+test('reading no WAF rule at all is reported, not passed', () => {
+  const { errors } = run({ waf: [] });
+  assert.ok(has(errors, /no rate-based rule with a scope-down was read/), errors.join('\n'));
+});
+
+test('the committed waf.tf decodes all three scope-downs and folds no case', () => {
+  const rules = parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8'));
+  assert.equal(rules.length, 3, JSON.stringify(rules));
+  for (const rule of rules) {
+    assert.equal(rule.field, 'uri_path');
+    assert.equal(rule.positional, 'STARTS_WITH');
+    assert.ok(rule.transforms.includes(REQUIRED_URI_TRANSFORM), rule.rule);
+    assert.ok(!rule.transforms.includes(FORBIDDEN_URI_TRANSFORM), rule.rule);
+    // The property the whole claim rests on: decoding cannot move a prefix
+    // that contains no percent escape, so URL_DECODE only ever widens.
+    assert.ok(!rule.searchString?.includes('%'), rule.rule);
+  }
+});
+
+test('the guard exits non-zero when a scope-down loses URL_DECODE', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'infra-coverage-waf-'));
+  const src = readFileSync(WAF_FILE, 'utf-8');
+  const block = /\n\s*# See "Encoded spellings" in the file header\.\n\s*text_transformation \{\n\s*priority = 1\n\s*type\s*=\s*"URL_DECODE"\n\s*\}\n/;
+  assert.match(src, block, 'the URL_DECODE transformation moved; re-anchor this test');
+  const cut = src.replace(block, '\n');
+  assert.notEqual(cut, src, 'the mutation did not change anything');
+  const path = join(dir, 'waf.tf');
+  writeFileSync(path, cut);
+  assert.throws(
+    () =>
+      execFileSync(process.execPath, ['scripts/check_infra_coverage.mjs'], {
+        env: { ...process.env, INFRA_COVERAGE_WAF: path },
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }),
+    /with only \[NONE\]/,
+  );
+});
+
+// ───────────── claim 6: engine-URL symmetry across env roots ─────────────
+
+test('an engine URL settable from every root passes', () => {
+  const { errors, ok } = run();
+  assert.deepEqual(errors, []);
+  assert.ok(has(ok, /osrm_url: settable from all 2 env roots/), ok.join('\n'));
+});
+
+// The exact state graph_cycle_url was in before decisions § 1024: wired in
+// prod, declared nowhere in preview, and the plan identical either way.
+test('an engine URL one root cannot declare fails', () => {
+  const { errors } = run({
+    envRoots: [envRoot('prod'), envRoot('preview', { declared: [], wired: [] })],
+  });
+  assert.ok(has(errors, /envs\/preview declares no var\.osrm_url/), errors.join('\n'));
+});
+
+test('an engine URL declared but never passed to the module fails', () => {
+  const { errors } = run({
+    envRoots: [envRoot('prod'), envRoot('preview', { wired: [] })],
+  });
+  assert.ok(has(errors, /does not pass it to the module/), errors.join('\n'));
+});
+
+test('a root whose module block could not be read is reported', () => {
+  const { errors } = run({
+    envRoots: [envRoot('prod'), { env: 'preview', declared: new Set(), wired: new Map() }],
+  });
+  assert.ok(has(errors, /no `module "web"` argument was read/), errors.join('\n'));
+});
+
+test('one env root alone is reported, not called symmetric', () => {
+  const { errors } = run({ envRoots: [envRoot('prod')] });
+  assert.ok(has(errors, /one root is symmetric with itself/), errors.join('\n'));
+});
+
+test('deriving no engine at all is reported, not passed', () => {
+  const { errors } = run({ moduleVars: [{ name: 'public_site_url', type: 'string', dflt: '"x"' }] });
+  assert.ok(has(errors, /no engine URL input was read/), errors.join('\n'));
+});
+
+// The derivation is the claim's load-bearing half: "" as a default IS the
+// "no engine, degrade gracefully" semantics, and it is what separates the
+// three engines from the two public_* URLs, which are env identity.
+test('engineUrlInputs derives exactly the three engines from the committed module', () => {
+  const vars = parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8'));
+  assert.deepEqual(engineUrlInputs(vars).sort(), [
+    'graph_cycle_url',
+    'graphhopper_url',
+    'osrm_url',
+  ]);
+  const urls = vars.filter((v) => v.name.endsWith('_url')).map((v) => v.name);
+  assert.ok(urls.includes('public_supabase_url') && urls.includes('public_site_url'));
+});
+
+test('every committed env root can set every engine URL', () => {
+  const engines = engineUrlInputs(parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8')));
+  assert.ok(ENV_NAMES.length >= 2, ENV_NAMES.join(','));
+  for (const env of ENV_NAMES) {
+    const root = parseEnvRoot(
+      env,
+      readFileSync(join(ENV_ROOT_DIR, env, 'main.tf'), 'utf-8'),
+      readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
+    );
+    assert.ok(root.wired.size > 5, `envs/${env} module block read as ${root.wired.size} args`);
+    for (const engine of engines) {
+      assert.ok(root.declared.has(engine), `envs/${env} declares no var.${engine}`);
+      assert.equal(root.wired.get(engine), `var.${engine}`, `envs/${env} wires ${engine}`);
+    }
+  }
 });

@@ -2,7 +2,12 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:math';
 
-import 'package:core_models/core_models.dart';
+// `hide ActivityType`: geolocator's `ActivityType` is iOS's LOCATION activity
+// type (`AppleSettings.activityType`), a different vocabulary from the
+// `runs.activity_type` enum core_models now carries (decisions § 1013). This
+// file means Apple's. Nothing here needs ours, so hiding it is narrower than
+// prefixing the whole domain import.
+import 'package:core_models/core_models.dart' hide ActivityType;
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';

@@ -2839,7 +2839,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routesImportSharedFailed =>
-      'Couldn\'t import that file — it isn\'t a valid GPX or KML route.';
+      'Couldn\'t import that file — it isn\'t a valid route.';
 
   @override
   String routesSaved(String name) {
@@ -2857,7 +2857,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      'Tap Build to draw a route on the map, or Import a GPX, KML, GeoJSON, or TCX file.';
+      'Tap Build to draw a route on the map, or Import a GPX, KML, KMZ, GeoJSON, or TCX file.';
 
   @override
   String get routesBuild => 'Build';
@@ -6775,6 +6775,20 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String integrationsImportPartialOf(int n, int total) {
+    return 'Only part of your history could be imported: $n of $total.';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'Not all results could be read. Imported: $n.';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      'The results list was too long to read to the end, so your result could not be confirmed. Enter it manually instead.';
 
   @override
   String get integrationsParkrunNoneNew =>

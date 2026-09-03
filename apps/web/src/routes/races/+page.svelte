@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { parseImportCompleteness } from '$lib/integrations/strava_sync_result';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import {
@@ -195,21 +196,36 @@
 		const scoped = scopeValue.trim() || undefined;
 		importBusy = true;
 		try {
-			await importRaceResult({
+			const outcome = await importRaceResult({
 				provider: importLeg,
 				listingId: importing.id,
 				bib: importSpec.scopeField === 'bib' ? scoped : undefined,
 				ultraSignUpAthleteId:
 					importSpec.scopeField === 'ultraSignUpAthleteId' ? scoped : undefined
 			});
-			showToast(m('races.imported'), 'success');
+			// A field read only as far as the cap still imports what it found,
+			// so a truncated import used to close the modal looking like a whole
+			// one (decisions § 1014).
+			const graded = parseImportCompleteness(outcome);
+			showToast(
+				graded.complete
+					? m('races.imported')
+					: m('integrations.importPartial', { n: graded.imported }),
+				graded.complete ? 'success' : 'error'
+			);
 			importing = null;
 		} catch (e) {
-			if ((e as Error).message === RACE_IMPORT_UNAVAILABLE[importLeg]) {
+			const message = (e as Error).message ?? '';
+			if (message === RACE_IMPORT_UNAVAILABLE[importLeg]) {
 				// The leg went unavailable between the probe and the call; correct
 				// the modal as well as saying so, or it keeps offering the form.
 				legAvailable = { ...legAvailable, [importLeg]: false };
 				showToast(m(importSpec.unavailableKey), 'error');
+			} else if (message.includes('upstream_results_truncated')) {
+				// "We read the whole field and you are not in it" and "we read the
+				// first 2,000 finishers and you were not among them" are different
+				// sentences, and only the second has the paste form as its answer.
+				showToast(m('integrations.importTruncated'), 'error');
 			} else {
 				showToast(m('races.importFailed'), 'error');
 			}

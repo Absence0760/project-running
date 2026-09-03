@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import { DEFAULT_BASE_URL, DEFAULT_E2E_PORT, originOf, resolveBaseUrl } from './base-url';
+import { stripComments } from '../../src/lib/core/strip_comments';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const E2E_ROOT = join(HERE, '..');
@@ -118,24 +119,8 @@ function scannedSources(dir: string, out: string[] = []): string[] {
 	return out;
 }
 
-/**
- * Source with comments removed, so prose naming a port never trips the scan.
- * The `//` of a scheme is preceded by its colon, which is what separates it
- * from the `//` that opens a comment — `dates.test.ts` keeps any line holding
- * `://` whole for the opposite reason, and that rule would keep every comment
- * this scan is about.
- */
-function withoutComments(source: string): string {
-	return source
-		// Blanked, not deleted, so a reported line number is the file's own.
-		.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
-		.split('\n')
-		.map((line) => line.replace(/(?<!:)\/\/.*$/, ''))
-		.join('\n');
-}
-
 function hitLines(file: string, pattern: RegExp): number[] {
-	const lines = withoutComments(readFileSync(file, 'utf8')).split('\n');
+	const lines = stripComments(readFileSync(file, 'utf8')).split('\n');
 	const hits: number[] = [];
 	lines.forEach((line, i) => {
 		if (pattern.test(line)) hits.push(i + 1);

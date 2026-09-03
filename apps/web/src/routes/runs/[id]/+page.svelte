@@ -47,7 +47,8 @@
 	import { ageFromDob } from '$lib/nutrition/nutrition_targets';
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
-	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/runs/run_stats';
+	import { movingTimeSeconds, computeRealSplits } from '$lib/runs/run_stats';
+	import { computeElevationGain } from '$lib/routes/route_simplify';
 	import { gradeAdjustedPaceSecPerKm } from '$lib/runs/grade_adjusted_pace';
 	import {
 		analysePacing,
@@ -796,9 +797,10 @@
 	/** Derived from the GPS track rather than stored, matching mobile. */
 	let movingSeconds = $derived(run?.track ? movingTimeSeconds(run.track) : 0);
 
-	/** Prefer a real track-based elevation gain over the randomly-generated
-	 *  mock value. Falls back to 0 for runs without elevation data. */
-	let realElevationGain = $derived(run?.track ? elevationGainMetres(run.track) : 0);
+	/** The route summary's rule, not a second one: an ungated sum integrates
+	 *  autocorrelated altitude error and reported 143 m of climb on a flat
+	 *  half-hour (decisions § 981). 0 for runs without elevation data. */
+	let realElevationGain = $derived(run?.track ? Math.round(computeElevationGain(run.track)) : 0);
 
 	/** Grade-adjusted pace (sec/km) — effort-equivalent flat pace over hilly
 	 *  terrain (Minetti 2002). Null on flat runs / tracks without elevation. */

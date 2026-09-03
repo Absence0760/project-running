@@ -31,6 +31,26 @@ class PlaceResult {
   });
 }
 
+/// Whether a geocoder's answer is a latitude at all.
+///
+/// The same contract the GPX importer applies to a coordinate out of a file
+/// (`RouteParser._isUsableLat`), for the same two reasons. A non-finite
+/// coordinate is not a place: `jsonEncode` refuses it outright, so it reaches
+/// `set_discoverable_area` as an unreadable failure, and `LatLng` carries no
+/// assertion of its own, so it reaches a map camera as a view that silently
+/// stops rendering. And the range is not a heuristic — a latitude is ±90 by
+/// definition, so a value outside it is a malformed answer, not a place.
+///
+/// BOTH providers need it. Nominatim serialises coordinates as STRINGS and
+/// `double.tryParse('NaN')` returns NaN rather than null, so a null check does
+/// not see it. MapTiler sends JSON numbers, which cannot spell NaN — but
+/// `jsonDecode('1e400')` is `Infinity`, measured, so `as num` does not save
+/// that branch either.
+bool isUsableLatitude(double? v) => v != null && v.isFinite && v.abs() <= 90;
+
+/// Longitude half of [isUsableLatitude]. Separate bound, same contract.
+bool isUsableLongitude(double? v) => v != null && v.isFinite && v.abs() <= 180;
+
 /// Why a search reports an outcome rather than a bare list: a provider
 /// that is down, rate-limited, or timing out used to collapse into an
 /// empty list, which every call site renders identically to "this place
@@ -135,7 +155,11 @@ Future<PlaceSearchOutcome> _searchViaMapTiler(
       for (final f in features)
         if (f is Map &&
             f['center'] is List &&
-            (f['center'] as List).length >= 2)
+            (f['center'] as List).length >= 2 &&
+            (f['center'] as List)[0] is num &&
+            (f['center'] as List)[1] is num &&
+            isUsableLongitude(((f['center'] as List)[0] as num).toDouble()) &&
+            isUsableLatitude(((f['center'] as List)[1] as num).toDouble()))
           PlaceResult(
             name: (f['place_name'] ?? f['text'] ?? '').toString(),
             lng: ((f['center'] as List)[0] as num).toDouble(),
@@ -177,7 +201,12 @@ Future<PlaceSearchOutcome> _searchViaNominatim(
       final lngRaw = f['lon'];
       final lat = latRaw is String ? double.tryParse(latRaw) : null;
       final lng = lngRaw is String ? double.tryParse(lngRaw) : null;
-      if (lat == null || lng == null) continue;
+      if (lat == null ||
+          lng == null ||
+          !isUsableLatitude(lat) ||
+          !isUsableLongitude(lng)) {
+        continue;
+      }
       out.add(PlaceResult(
         name: (f['display_name'] ??
                 '${lat.toStringAsFixed(3)}, ${lng.toStringAsFixed(3)}')

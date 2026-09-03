@@ -6,6 +6,8 @@ import { test } from 'node:test';
 
 import { waterDayKey } from '../../src/lib/nutrition/diary_day';
 
+import { stripComments } from '../../src/lib/core/strip_comments';
+
 import {
 	BROWSER_TIMEZONE,
 	browserDate,
@@ -197,17 +199,8 @@ function scannedSources(dir: string, out: string[] = []): string[] {
 	return out;
 }
 
-/** Source with comments removed, so prose describing the bug never trips it. */
-function withoutComments(source: string): string {
-	return source
-		.replace(/\/\*[\s\S]*?\*\//g, '')
-		.split('\n')
-		.map((line) => (line.includes('://') ? line : line.replace(/\/\/.*$/, '')))
-		.join('\n');
-}
-
 function localZoneDayLines(file: string): number[] {
-	const lines = withoutComments(readFileSync(file, 'utf8')).split('\n');
+	const lines = stripComments(readFileSync(file, 'utf8')).split('\n');
 	const hits: number[] = [];
 	lines.forEach((line, i) => {
 		if (
@@ -297,7 +290,7 @@ test('a spec that captures the whole diary day clears the day first', () => {
 	for (const file of scannedSources(E2E_ROOT)) {
 		const rel = relative(E2E_ROOT, file);
 		if (rel === 'fixtures/dates.ts' || rel === 'fixtures/dates.test.ts') continue;
-		const source = withoutComments(readFileSync(file, 'utf8'));
+		const source = stripComments(readFileSync(file, 'utf8'));
 		if (!WHOLE_DAY_CAPTURE.test(source)) continue;
 		drivers.push(rel);
 		if (!CLEARS_THE_DAY.test(source)) offenders.push(rel);

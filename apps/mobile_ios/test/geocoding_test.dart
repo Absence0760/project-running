@@ -86,6 +86,61 @@ void main() {
       expect(out.status, PlaceSearchStatus.unavailable);
     });
 
+    test('a coordinate that is not a coordinate is dropped, both providers',
+        () async {
+      // `double.tryParse('NaN')` is NaN and `jsonDecode('1e400')` is Infinity
+      // (both measured), so a null check saw neither. A non-finite coordinate
+      // reaches `LatLng`, which carries no assertion of its own, and the map
+      // camera silently stops rendering; on the nearby-area path it reaches
+      // `jsonEncode`, which refuses it, and the runner is told the save
+      // failed. Out of range is the same class — a latitude is +/-90 by
+      // definition. decisions § 1011.
+      // Written as a literal body rather than through `jsonEncode`, which
+      // refuses the very value under test — that refusal is the downstream
+      // failure this guards against, and it is the wire that carries it here.
+      final maptiler = await searchPlaces(
+        'London',
+        apiKey: 'k',
+        fetcher: (_) async => '{"features":['
+            '{"place_name":"Infinite","center":[1e400,-1e400]},'
+            '{"place_name":"Off the globe","center":[200.0,95.0]},'
+            '{"place_name":"Real","center":[-0.1276,51.5072]}]}',
+      );
+      expect(maptiler.status, PlaceSearchStatus.ok);
+      expect(maptiler.results.map((r) => r.name), ['Real']);
+
+      // Nominatim serialises coordinates as STRINGS, which is the only path
+      // that can spell NaN at all.
+      final nominatim = await searchPlaces(
+        'London',
+        apiKey: '',
+        fetcher: (_) async => jsonEncode([
+          {'display_name': 'Not a number', 'lat': 'NaN', 'lon': '0'},
+          {'display_name': 'Overflowed', 'lat': '1e400', 'lon': '0'},
+          {'display_name': 'Off the globe', 'lat': '95', 'lon': '0'},
+          {'display_name': 'Real', 'lat': '51.5072', 'lon': '-0.1276'},
+        ]),
+        // The strings above are strings on the wire too, so jsonEncode is
+        // safe here — it is the PARSE that manufactures the non-finite.
+      );
+      expect(nominatim.status, PlaceSearchStatus.ok);
+      expect(nominatim.results.map((r) => r.name), ['Real']);
+    });
+
+    test('the poles and the antimeridian are places, not overflow', () async {
+      // The bound is inclusive: +/-90 and +/-180 are real coordinates and a
+      // guard that rejected them would drop legitimate answers.
+      final out = await searchPlaces(
+        'edge',
+        apiKey: '',
+        fetcher: (_) async => jsonEncode([
+          {'display_name': 'South Pole', 'lat': '-90', 'lon': '180'},
+          {'display_name': 'North Pole', 'lat': '90', 'lon': '-180'},
+        ]),
+      );
+      expect(out.results.length, 2);
+    });
+
     test('ok-empty outcome when the provider genuinely matched nothing',
         () async {
       // The one case the dropdown is entitled to call "no places found".

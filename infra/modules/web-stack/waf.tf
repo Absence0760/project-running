@@ -13,6 +13,34 @@
 # where the rest of the stack runs. The module's required_providers
 # block already declares the aws.us_east_1 alias for exactly this.
 
+# ── Encoded spellings ──
+#
+# Every scope-down below matches `uri_path` with STARTS_WITH, and WAF does
+# NOT decode that field, while CloudFront's own behaviour matching normalises
+# independently. Two matchers, two normalisations — so any encoded spelling
+# CloudFront resolves to the behaviour but WAF does not resolve to the prefix
+# reaches the Lambda with the per-IP cap NOT applied, on the only three paths
+# on this distribution that cost money or engine CPU to serve. Each scope-down
+# therefore carries a URL_DECODE transformation at priority 1 beside the NONE
+# at 0.
+#
+# That was added WITHOUT a live measurement, deliberately: whether CloudFront
+# decodes before behaviour matching is a fact about the edge and this repo
+# holds no AWS credentials by design. It is safe anyway because the failure
+# direction is one-way. On a search string containing no `%`, URL_DECODE can
+# only ADD matches — decoding replaces `%XX` with a single byte and never
+# lengthens, so a raw path whose first ten characters are already `/api/coach`
+# still has them afterwards. The transformation is a strict widening of a RATE
+# LIMIT, never of an allow/deny. If CloudFront turns out not to decode either,
+# the cost is that WAF counts a request the edge was going to 404 anyway; if
+# it does decode, the gap closes. Being wrong here cannot let anything through.
+#
+# LOWERCASE is deliberately NOT added: CloudFront path patterns are
+# case-sensitive, so `/API/coach` genuinely does not route to the Lambda and
+# matching it would only rate-limit a 404. Double encoding (`%2563oach`)
+# survives one decode and is out of scope for the same reason — CloudFront
+# does not double-decode either. decisions § 1023.
+
 resource "aws_wafv2_web_acl" "coach" {
   count    = var.waf_enabled ? 1 : 0
   provider = aws.us_east_1
@@ -52,6 +80,12 @@ resource "aws_wafv2_web_acl" "coach" {
             text_transformation {
               priority = 0
               type     = "NONE"
+            }
+
+            # See "Encoded spellings" in the file header.
+            text_transformation {
+              priority = 1
+              type     = "URL_DECODE"
             }
           }
         }
@@ -98,6 +132,12 @@ resource "aws_wafv2_web_acl" "coach" {
               priority = 0
               type     = "NONE"
             }
+
+            # See "Encoded spellings" in the file header.
+            text_transformation {
+              priority = 1
+              type     = "URL_DECODE"
+            }
           }
         }
       }
@@ -142,6 +182,12 @@ resource "aws_wafv2_web_acl" "coach" {
             text_transformation {
               priority = 0
               type     = "NONE"
+            }
+
+            # See "Encoded spellings" in the file header.
+            text_transformation {
+              priority = 1
+              type     = "URL_DECODE"
             }
           }
         }

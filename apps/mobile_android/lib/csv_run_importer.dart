@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 
 import 'import_failures.dart';
 import 'imported_run_id.dart';
-import 'preferences.dart' show ActivityType;
 
 /// One-shot bulk-import path for CSV exports. Accepts both shapes the
 /// app produces today:

@@ -1,5 +1,8 @@
 package com.runapp.watchwear
 
+import android.content.pm.ServiceInfo
+import android.os.Build
+import com.runapp.watchwear.recording.RunRecordingService
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -38,6 +41,12 @@ class ManifestPermissionCoverageTest {
         File("src/main/kotlin/com/runapp/watchwear/ui/RunWatchApp.kt").readText()
     }
 
+    private val serviceSource: String by lazy {
+        File(
+            "src/main/kotlin/com/runapp/watchwear/recording/RunRecordingService.kt",
+        ).readText()
+    }
+
     /// Granted at install with no dialog, so "did we request it" is not a
     /// question that can be asked of them.
     private val installTime = setOf(
@@ -61,12 +70,6 @@ class ManifestPermissionCoverageTest {
                 "requested; asking for both separately offers the runner an " +
                 "approximate-location choice that would silently degrade the " +
                 "GPS trace",
-        "BODY_SENSORS_BACKGROUND" to
-            "a background permission cannot ride the same request as its " +
-                "foreground half — Android requires a SECOND request made only " +
-                "after BODY_SENSORS is granted, so wiring it needs a two-step " +
-                "flow and a real watch to verify. Tracked in " +
-                "docs/product/followups.md.",
     )
 
     private fun declaredPermissions(): Set<String> =
@@ -149,6 +152,18 @@ class ManifestPermissionCoverageTest {
         )
     }
 
+    private fun declaredServiceTypes(): Set<String> {
+        val serviceTag = Regex(
+            """<service\b[^>]*RunRecordingService[^>]*/>""",
+            RegexOption.DOT_MATCHES_ALL,
+        ).find(manifest)?.value
+            ?: error("Could not find the RunRecordingService <service> element")
+        return Regex("""foregroundServiceType="([^"]+)"""")
+            .find(serviceTag)?.groupValues?.get(1)
+            ?.split('|')?.map { it.trim() }?.toSet()
+            ?: error("RunRecordingService declares no foregroundServiceType")
+    }
+
     @Test
     fun `the foreground service enumerates every type its permissions claim`() {
         // FOREGROUND_SERVICE_HEALTH without "health" in foregroundServiceType
@@ -156,15 +171,7 @@ class ManifestPermissionCoverageTest {
         // and the service reads heart rate on every run. The two halves live
         // in different elements of the same file and neither implies the
         // other.
-        val serviceTag = Regex(
-            """<service\b[^>]*RunRecordingService[^>]*/>""",
-            RegexOption.DOT_MATCHES_ALL,
-        ).find(manifest)?.value
-            ?: error("Could not find the RunRecordingService <service> element")
-        val types = Regex("""foregroundServiceType="([^"]+)"""")
-            .find(serviceTag)?.groupValues?.get(1)
-            ?.split('|')?.map { it.trim() }?.toSet()
-            ?: error("RunRecordingService declares no foregroundServiceType")
+        val types = declaredServiceTypes()
         val declared = declaredPermissions()
         val expected = buildSet {
             if ("FOREGROUND_SERVICE_LOCATION" in declared) add("location")
@@ -176,6 +183,79 @@ class ManifestPermissionCoverageTest {
                 "vice versa",
             expected,
             types,
+        )
+    }
+
+    @Test
+    fun `the service starts with every foreground-service type the manifest declares`() {
+        // The manifest and `startForeground` are two separate declarations
+        // of the same fact and neither implies the other. From API 34 it is
+        // the RUNTIME mask that decides whether a service may keep using a
+        // while-in-use permission while the app is not visible — so a
+        // manifest that says `location|health` while the code passes
+        // LOCATION alone buys the app a sensor permission, a
+        // FOREGROUND_SERVICE_HEALTH declaration and a Play Data Safety line
+        // for a service type it never actually starts as. That was the
+        // state here: the manifest half of the 2026-05-30 store-privacy
+        // audit landed and the code half did not.
+        //
+        // Derived from the manifest, not listed: adding a third type
+        // tomorrow is covered by this without anyone remembering to.
+        val missing = declaredServiceTypes()
+            .map { "FOREGROUND_SERVICE_TYPE_" + it.uppercase() }
+            .filterNot { serviceSource.contains(it) }
+            .sorted()
+        assertEquals(
+            "declared in the manifest's foregroundServiceType but never " +
+                "passed to startForeground in RunRecordingService.kt: " +
+                "$missing. Either pass the type or stop declaring it.",
+            emptyList<String>(),
+            missing,
+        )
+    }
+
+    @Test
+    fun `the health service type is withheld until its prerequisite is granted`() {
+        // Passing FOREGROUND_SERVICE_TYPE_HEALTH before BODY_SENSORS or
+        // ACTIVITY_RECOGNITION has been granted is refused by the platform,
+        // not ignored — and a runner is entitled to decline both and still
+        // record a GPS run. So the mask is computed, and the health bit is
+        // the conditional half.
+        val location = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        val health = ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH
+        val api34 = Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+        // Two distinct non-zero bits, or every equality below holds for
+        // any mask at all and the test asserts nothing.
+        assertTrue(
+            "the platform type constants must be distinct non-zero bits, " +
+                "got location=$location health=$health",
+            location != 0 && health != 0 && (location and health) == 0,
+        )
+
+        assertEquals(
+            "both granted-prerequisite and API 34+ must yield location|health",
+            location or health,
+            RunRecordingService.foregroundServiceTypeMask(api34, true),
+        )
+        assertEquals(
+            "no body-sensor or activity permission means location alone",
+            location,
+            RunRecordingService.foregroundServiceTypeMask(api34, false),
+        )
+        assertEquals(
+            "the health type does not exist before API 34",
+            location,
+            RunRecordingService.foregroundServiceTypeMask(api34 - 1, true),
+        )
+        assertTrue(
+            "location is unconditional — it is what the run itself needs",
+            (0..2).all { i ->
+                val m = RunRecordingService.foregroundServiceTypeMask(
+                    api34 - 1 + i,
+                    i % 2 == 0,
+                )
+                m and location == location
+            },
         )
     }
 }

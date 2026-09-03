@@ -2725,8 +2725,7 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get routesImportSharedFailed =>
-      'このファイルをインポートできませんでした。有効な GPX または KML ルートではありません。';
+  String get routesImportSharedFailed => 'このファイルをインポートできませんでした。有効なルートではありません。';
 
   @override
   String routesSaved(String name) {
@@ -2744,7 +2743,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routesEmptyBody =>
-      '「作成」をタップして地図上にルートを描くか、GPX・KML・GeoJSON・TCX ファイルをインポートしてください。';
+      '「作成」をタップして地図上にルートを描くか、GPX・KML・KMZ・GeoJSON・TCX ファイルをインポートしてください。';
 
   @override
   String get routesBuild => '作成';
@@ -6463,6 +6462,20 @@ class AppLocalizationsJa extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String integrationsImportPartialOf(int n, int total) {
+    return '履歴の一部のみインポートできました: $total 件中 $n 件。';
+  }
+
+  @override
+  String integrationsImportPartial(int n) {
+    return 'すべての結果を読み取ることはできませんでした。インポート: $n 件。';
+  }
+
+  @override
+  String get integrationsImportTruncated =>
+      '結果リストが長すぎて最後まで読み取れなかったため、記録を確認できませんでした。代わりに手動で入力してください。';
 
   @override
   String get integrationsParkrunNoneNew => '前回のインポート以降、新しいparkrunの結果はありません。';

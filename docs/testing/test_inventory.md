@@ -707,7 +707,7 @@ Source guard over the undo queue's one adopter ([§ 984](../architecture/decisio
 
 ### `apps/web/src/lib/runs/run_stats.test.ts` — 24 tests
 
-Pure tests for `lib/run_stats.ts` (web-only — Android computes splits inline in `run_detail_screen.dart`). `movingTimeSeconds` covers empty / single-point input = 0, threshold-passing segments counted, sub-threshold (stopped) segments dropped, mixed running + 60 s stop counts only running, the custom `minSpeedMps` override, same-timestamp pairs (`dt == 0`) skipped, and points without `ts` skipped. `elevationGainMetres` covers positive-only sum, null elevation chain break, empty / single-point input, and — since [§ 981](../architecture/decisions.md) — that it is one rule with the route summary's: 80 samples of +/-1 m jitter on a dead-flat course read 0 rather than 40, a +1 m step followed by a +40 m climb still reports the whole 40 from the original reference, and both cases are asserted EQUAL to `computeElevationGain` rather than merely close, because a second implementation that happens to round the same way is the thing this prevents. `computeRealSplits` covers short-track + no-timestamp early returns, the even-paced 3 km run producing three full splits at the right pace and distance (with one-sample overshoot tolerance — see source comment), the final partial split being emitted when remainder > 50 m, the final partial < 50 m being dropped, per-split elevation gain carrying through, and tracks without elevation leaving every split's `elevation_m` null.
+Pure tests for `lib/run_stats.ts` (web-only — Android computes splits inline in `run_detail_screen.dart`). `movingTimeSeconds` covers empty / single-point input = 0, threshold-passing segments counted, sub-threshold (stopped) segments dropped, mixed running + 60 s stop counts only running, the custom `minSpeedMps` override, same-timestamp pairs (`dt == 0`) skipped, and points without `ts` skipped. `elevationGainMetres` was deleted in round 34 ([§ 1004](../architecture/decisions.md)): the run-detail page calls `computeElevationGain` directly, as `run_detail_screen.dart` already did, and every one of its behavioural cases was already covered in `routes/route_simplify.test.ts`. What replaced them here is a source guard over the page — it must derive `realElevationGain` from a `computeElevationGain(` call, import it from the module that owns the rule rather than a re-export, and no longer name the adapter. `computeRealSplits` covers short-track + no-timestamp early returns, the even-paced 3 km run producing three full splits at the right pace and distance (with one-sample overshoot tolerance — see source comment), the final partial split being emitted when remainder > 50 m, the final partial < 50 m being dropped, per-split elevation gain carrying through, and tracks without elevation leaving every split's `elevation_m` null.
 
 ### `apps/web/src/lib/recurrence.test.ts` — 14 tests
 
@@ -1929,7 +1929,9 @@ The routing case reads every share `path_pattern` out of
 a path its own Lambda actually routes: a behaviour's pattern and the Lambda's
 regex are two independent spellings of one route, and a mismatch answers the
 Lambda's JSON 404, which the distribution's 404-to-`/index.html` fallback then
-renders as the SPA shell at 200. The remaining four pin what the siblings must
+renders as the SPA shell (at 200 until [decisions § 1022](../architecture/decisions.md)
+made it answer 404 — the body is still the shell, so the mismatch is still
+invisible to a reader and this is still the only thing that catches it). The remaining four pin what the siblings must
 agree on and no single file can show — the same five-minute plus
 stale-while-revalidate `Cache-Control` on both paths, the asymmetric not-found
 contract (a `noindex` HTML 404 for the page, a 200 PNG for the image so a social
@@ -2063,8 +2065,118 @@ The added one is the **register** that moved here from `lambda_site_origin.test.
 
 ### `apps/web/src/lib/share/lambda_site_origin.test.ts` — 2 tests (1 removed)
 
-Its Lambda-only register is superseded by the wider one above; the two behavioural cases over the share head builders stay.
+Its Lambda-only register is superseded by the wider one above; the two behavioural cases over the share head builders stay. **Renamed `share_head_origin.test.ts` in round 34** ([decisions § 1002](../architecture/decisions.md)) — with the register gone the file reads no Lambda source, and the `lambda_` prefix named a scope it no longer had.
 
 Run by this lane and passing: the full `apps/web` unit suite via `npm run test:unit` (4684/4684), `svelte-check --tsconfig ./tsconfig.json` (0 errors), `npm run check:tsconfig-coverage`, `npm run check:script-types`, and `decisions_numbering_guard` 3/3 over the appended ADRs.
 
 NOT run by this lane, and not claimed: Playwright, any Flutter suite, and anything needing the local Supabase stack.
+
+## #789 round 34 — web lane (2026-09-02)
+
+### `apps/web/src/lib/core/strip_comments.test.ts` — 16 tests (new file)
+
+Drives the single-sourced comment stripper directly ([decisions § 1000](../architecture/decisions.md)). Fifteen unit cases cover what the thirteen hand-rolled copies could not: a `//` carrying `/*` opening nothing, the same inside a single-quoted string and inside a template literal, a `://` in a string surviving, a regex literal spelling both delimiters surviving byte for byte, division not read as a regex, a regex after `return` read as one, a comment inside a `${}` expression, a nested template not closing the outer one early, an unterminated quote bounded to its own line, an unterminated block blanked to EOF, and offsets plus line count preserved. The sixteenth runs the scanner over every `.ts`/`.svelte` under `apps/web/src` (2,500+ files) and requires the output to be the same length as the input and idempotent — a shape check that catches a mis-synchronisation anywhere in the real corpus. Falsified twice: deleting the string branch fails the string case and the URL case; disabling the regex branch fails both regex cases.
+
+### `apps/web/src/lib/security_guards.test.ts` — 90 tests (1 rewritten)
+
+The § 971 ordering guard is replaced by a single-source one. It walks `src`, `tests-e2e` and `lambda`, counts block-comment strips per file, and requires every file spelling one to appear in a register with the exact count and a reason; it also fails when a registered file stops spelling one, and carries a floor of 11 importers of the shared stripper. The register holds the three CSS scanners (where `//` is not a comment) and the one JS copy under `src/lib/integrations`, which this lane did not own. Falsified twice: appending a hand-rolled stripper to `format/avatar.test.ts` fails it as `(1, registered not at all)`; doubling `rtl_css_guards.test.ts`'s own strip fails it as `(2, registered 1)`.
+
+Also converted to import the shared stripper, so the rule has one home: `core/site_url.test.ts`, `core/gear_undo_scope.test.ts`, `lambda_log_hygiene.test.ts`, `paged_read_guards.test.ts`, `backup/cloud_export_transport.test.ts`, `coach/coach_lambda_handler.test.ts` (two copies), `tests-e2e/fixtures/dates.test.ts`, `tests-e2e/fixtures/db-read.test.ts`, `tests-e2e/fixtures/base-url.test.ts` and `tests-e2e/cross-cutting/architecture-guards.spec.ts`. Their assertions are unchanged and all still pass. The last of those is a Playwright spec this lane could not execute: its five banned patterns were run against `src/lib/core/data.ts` through the old chain and the new scanner outside Playwright and answer identically (all five `false`).
+
+### `apps/web/src/lib/share/share_lambda_handlers.test.ts` — 10 tests (2 added, 1 comment rewritten)
+
+Both added cases drive all five share Lambdas for real. The first sends `OPTIONS`, `POST`, `DELETE` and an event carrying no method at all at `/og/run/<id>.png` and requires a `405` with `Allow: GET, HEAD`, `content-type: application/json` and `cache-control: no-store` from each — the refusal returns in 0.4 ms against ~200 ms for the render tests beside it, which is the short-circuit being visible rather than asserted. The second pins that `HEAD` still renders on both paths of all four siblings with the shared five-minute window, since HEAD is in the behaviours' `cached_methods` and refusing it would break a path the edge actively caches. Falsified three ways: deleting the gate from `share-recap`, adding `OPTIONS` to the allowed set, and dropping `HEAD` from it. The § 972 Terraform guard is unchanged; only its premise comment is, because the five now do carry a gate. See [decisions § 1005](../architecture/decisions.md).
+
+### `apps/web/src/lib/core/edge_function_contract.test.ts` — 7 tests (2 added, 2 generalised)
+
+The § 982 refusal-vocabulary pair now runs off a register covering BOTH checkout pairs rather than the donations one alone. Every code `clubs/[slug]/events/[id]/+page.svelte` compares must be one `events-checkout` can send, and `event_full` / `sales_closed` / `host_cannot_take_payment` must each map to copy of their own rather than the generic line. Two data are per-pair because the halves differ: `events-checkout` templates none of its codes, and the event page groups four codes into one ternary branch so its code-to-copy window is wider. Falsified by spelling the event page's `host_cannot_take_payment` as `owner_cannot_take_payment` — the exact confusion the original filing made — and by collapsing `event_full` onto the generic line; the reverse swap on the fundraiser page still fails the donations half. See [decisions § 1003](../architecture/decisions.md).
+
+### `apps/web/src/lib/security_guards.test.ts` — 91 tests (1 more added)
+
+A population guard over the eight production Lambdas: each must gate its own HTTP method, by comparing `event.requestContext.http.method` and answering a 405, or by calling the shared `shareMethodRefusal`. Every one of the eight gates was already driven behaviourally, but by five different suites, none of which walks the directory — so a ninth Lambda would have arrived ungated with everything green, which is how the five share handlers went without a gate at all. Falsified twice: deleting `osrm-proxy`'s gate names it, and adding an empty ninth handler directory names that. See [decisions § 1006](../architecture/decisions.md).
+
+## #789 round 34 — the firmware lane (2026-09-02)
+
+Every case below is *host-tested* per [`docs/custom_watch/quality_standards.md`](../custom_watch/quality_standards.md) — the `cargo test` host lane, no silicon and no simulator. The Monkey C rail is weaker still and is labelled where it appears: there is no Connect IQ SDK on this machine, so its tests were **edited and read, never executed**.
+
+### `apps/custom_watch/core/src/grade_adjusted_pace.rs` — 32 tests (2 added, 2 rewritten)
+
+`MIN_SEGMENT_M` was 5 m, which is below `ELEVATION_GAIN_MIN_DELTA_M / MAX_GRADE` — so the smallest altitude change the codebase calls climb was, over the shortest run it measures a grade across, a 0.60 grade that clamped to a factor of 5.396 ([decisions § 992](../architecture/decisions.md)). `the_window_is_longer_than_the_noise_floor_the_gain_path_discards` states that relationship rather than the number and fails at 5 m naming the grade; `a_track_shorter_than_one_window_yields_no_grade_adjusted_pace` proves the walk reads the constant rather than a literal. The two rewritten estimator cases state their distances as fractions of the window, so widening it again cannot leave a stale sub-gate sample reading as an above-gate one — which is what both were.
+
+### `apps/web/src/lib/runs/grade_adjusted_pace.test.ts` — 12 tests (2 added), `apps/mobile_android/test/grade_adjusted_pace_test.dart` — 12 (2 added), `apps/watch_garmin/source-test/GradeAdjustedPaceTest.mc` — 1 added, 6 rewritten (**not executed**)
+
+The same two cases on the other three rails. **Nothing pinned this constant's value on any rail before**: measured, every suite on every rail passed at 5, 20, 30 and 50 m. The Monkey C rewrites are the six `GradeTracker` cases whose literal distances were sized for a 5 m gate; they now read `$.MIN_SEGMENT_M`, including the flat-ground loop, which stepped 7 m and would otherwise have passed by never measuring anything at all.
+
+### `apps/custom_watch/core/src/run_stats.rs` — 23 tests (2 added)
+
+The watch carried both elevation-gain rules after web collapsed its two into one ([§ 993](../architecture/decisions.md)). `elevation_gain_is_the_route_summarys_own_gated_rule_and_not_a_second_one` drives a +/-1 m sawtooth over 30 samples of dead-flat road: **15 m** of phantom climb under the rule this replaced, 0 under the gated one, and it asserts the two entry points agree over the same altitudes. The second case is the control — a 300 m staircase reads 300 m either way, so the gate is shown to cost nothing where there is signal.
+
+### `apps/custom_watch/core/src/record_cadence.rs` — 32 tests (2 added, 1 rewritten)
+
+`ele_dm_from_m` accepted -3276.8 m and returned `Some(i16::MIN)`, which IS `ELE_NONE`, so the reading encoded to the sentinel and decoded back as `None` ([§ 994](../architecture/decisions.md)). The rewritten edge case pinned the wrong claim; `every_altitude_this_stores_survives_the_round_trip` states the invariant as a property over encode/decode instead. `the_altitude_ceiling_is_far_below_what_the_device_believes` is **characterisation, not approval**: it pins that `plausible_alt` admits five summits the field cannot store and that 69 % of a Silverton-Handies-Silverton profile carries no elevation, so the day the field widens to `CRS1`'s `i16` metres the test goes red rather than the limit going quiet.
+
+### `apps/custom_watch/core/src/recap.rs` — 34 tests (3 added)
+
+`build_year_in_running_recap` reported the **all-time** best streak on a card titled with one year, and fed it to the badge grid ([§ 995](../architecture/decisions.md)). Measured: twelve consecutive days in March 2024 gave a 2026 card a 12-day best and a `streak-7` badge. `a_month_recap_bounds_its_best_streak_at_the_first` is the same rule one window down (8 against 2). The third case is the guard against over-correcting: a streak crossing New Year counts at its **full** seven days, and it passes with and without the bound, which is why it is there.
+
+### `apps/custom_watch/core/src/fitness.rs` — 61 tests (2 added, 1 widened)
+
+`RunSource` could name neither `parkrun` nor `race`, and the only variant left — `Other` — does not qualify ([§ 996](../architecture/decisions.md)). The widened case walks a `WEB_SOURCES` register of all eight web values rather than a hand-listed six; the register is the half `is_qualifying`'s new exhaustive match cannot enforce, since the compiler makes a new variant answer the match but cannot make anyone test it.
+
+Run by this lane and passing: `cargo test --target x86_64-unknown-linux-gnu --workspace --exclude app --exclude nrf52840_dk` (2840/2840), `cargo build --release --target thumbv7em-none-eabihf`, all three CI `cargo clippy … -D warnings` invocations, `cargo fmt --check`, `check_watch_wire_vectors.mjs` (and its 31 unit tests), `check_shared_constants.mjs`, `check_parity_pair_registry.mjs`, `check_watch_doc_counts.mjs`, `check_watch_page_ring.mjs`, `check_watch_ble_uuids.mjs`, `check_watch_ios_source.mjs`, `check_doc_checkboxes.mjs`, `check_garmin_source.sh` (and its 22 unit tests), the `apps/web` `runs` + `routes` + `training` suites (1456/1456), `svelte-check` (0 errors), `dart analyze` on the two changed Dart files (3 infos, 0 warnings), and the Flutter files `grade_adjusted_pace_test.dart`, `roadbook_test.dart`, `pace_analysis_test.dart`, `run_detail_screen_test.dart`, `fuel_plan_test.dart`, `architecture_guards_test.dart`.
+
+NOT run by this lane, and not claimed: any Monkey C compilation or execution, the Renode sim, Playwright, the full Flutter suite, and anything needing the local Supabase stack. Nothing here is sim-verified or bench-verified.
+
+## Round 34 — the #789 mobile lane (2026-09-02)
+
+### `apps/mobile_android/test/race_providers_test.dart` — 11 tests (6 added)
+
+Five pin `raceProbeUnavailable`, the port of web's fail-closed probe grading ([§ 1007](../architecture/decisions.md)): the 503 gate whatever the body says, a 429 / 5xx confirming nothing, a readable non-429 4xx meaning the function ran PAST the gate, no readable status at all, and a `RaceService` with no Supabase behind it answering unconfigured rather than configured. The sixth derives its own premise before asserting ([§ 1008](../architecture/decisions.md)): it reads `race-results-import`'s probe branch, requires that branch still to refuse UltraSignup independently of its credential, and only then requires the client to name that function. Lifting § 975 makes the guard say to re-decide rather than to delete an assertion.
+
+### `apps/mobile_android/test/track_blob_size_test.dart` — 4 tests (new)
+
+The reachability arithmetic behind [§ 1009](../architecture/decisions.md), re-derivable rather than asserted: a realistic 1 Hz trace through the uploader's own `debugTrackBlobJson` gzips to ~27 bytes per waypoint, so the `runs` bucket's 25 MiB limit is ~960k points — 266 h of recording (unreachable) against a 94 MiB GPX (ordinary). Plus: a `TrackTooLargeException` must classify as `tooLarge` through `classifyImportFailure`, which is a property of its SENTENCE and not of its type; and the size check must sit before `uploadBinary` in `_uploadTrack`, or it saves nothing over the 413 it exists to pre-empt.
+
+### `apps/mobile_android/test/finite_parse_guard_test.dart` — 3 tests (new)
+
+The source-level guard of [§ 1011](../architecture/decisions.md): every `double.tryParse` / `num.tryParse` under `lib/` must have a finiteness test in its enclosing FUNCTION body, or call a predicate that does, or carry an `// unchecked-parse:` marker. Allowlist is empty — no site legitimately wants an unchecked double. `int.tryParse` is not scanned: it answers null to both "NaN" and "Infinity". The two support tests are § 510's self-check (the matcher still fires) and a pin that the body finder stops at the function — not at the innermost block, which would miss a sibling guard outside an `if`, and not at the class body, which would let one method's `isFinite` vouch for another's.
+
+### `apps/mobile_android/test/in_progress_settled_test.dart` — 4 tests (new)
+
+[§ 1012](../architecture/decisions.md)'s completion signal for the one store write path deliberately off the serialised chain. Two behavioural: an append the caller discarded, and a clear the caller discarded, are both settled by `debugInProgressSettled()`. Two structural: the recording path must still not reach `_serialised`, and `clearInProgress` must publish its future. The clear-tracking half is structural on purpose — a behavioural version PASSED under the mutation that removes the tracking, because the delete lands within a turn or two on a fast disk either way, and a test that passes under its own mutation is worse than no test.
+
+### `apps/mobile_android/test/settings_integrations_parkrun_partial_test.dart` — 4 tests (new)
+
+The parkrun half of [§ 1014](../architecture/decisions.md): a capped history names the gap (`n of total`), a shortfall with no total still says a shortfall happened with no fabricated denominator, and the two complete shapes still read as a plain success and as "nothing new". Mirrors `settings_integrations_strava_partial_test.dart`, one importer over.
+
+### `apps/mobile_android/test/races_screen_test.dart` — 22 tests (2 added)
+
+The race-results half of § 1014: a 502 truncation is said in its own words and leaves the sheet open so the manual paste form stays reachable, and a `complete: false` success is not presented as a whole import. The screen's fake now carries `complete` and `throwTruncated` so both shapes are drivable.
+
+### `apps/mobile_android/test/shared_file_import_test.dart` — 27 tests (6 added, 1 inverted)
+
+[§ 1025](../architecture/decisions.md)'s KMZ support. A KMZ unwraps to the KML inside it; it is recognised by the zip magic number rather than by an extension an OS share drops; `doc.kml` wins when present and any `.kml` is taken when it is not; a zip with no KML is not a route; bytes that are neither a zip nor UTF-8 are refused; and every other format still decodes as text. The end-to-end `importPath` case writes a real `.kmz` — the file `readAsString` used to throw on. The fixture archive is BUILT in the test rather than committed as a binary, so the test says what is inside it. The pre-existing "KMZ is absent from every catalogue" assertion is inverted rather than deleted: same guard, still pinning that the promise and the picker cannot drift.
+
+### `apps/mobile_android/test/geocoding_test.dart` — 26 tests (2 added)
+
+A geocoder answer that is not a coordinate is dropped on BOTH providers — Nominatim's strings (`"NaN"`, `"1e400"`) and MapTiler's JSON numbers (`1e400` decodes to `Infinity`) — and out-of-range with them. The second pins the bound as INCLUSIVE: the poles and the antimeridian are places. The MapTiler fixture is a literal wire body rather than `jsonEncode` output, because `jsonEncode` refuses the very value under test.
+
+### `apps/mobile_android/test/activity_type_vocabulary_test.dart` — 8 tests (2 added)
+
+[§ 1013](../architecture/decisions.md): the enum lives in `core_models`, which takes no Flutter dependency (asserted on the IMPORT, not on a mention — the file's own header names `package:flutter/material.dart` to explain why the icon getter could not travel), and the CSV importer reaches the vocabulary without a widget toolkit.
+
+### `packages/core_models/test/run_row_shape_test.dart` — 24 tests (7 added)
+
+[§ 1010](../architecture/decisions.md): `runRowFromRun` is total. A non-finite distance resolves to zero and agrees with `Run.toJson` over the same inputs (one shared rule, not two copies); a non-finite embedded best is dropped rather than thrown on (`toInt()` raises out of the row BUILDER); a non-finite anywhere in the bag is dropped, including inside nested lists and maps; a finite bag survives untouched; and an explicit `null` is preserved rather than read as a dropped non-finite.
+
+### `packages/core_models/test/strava_sync_result_test.dart` — 22 tests (6 added) ↔ `apps/web/src/lib/integrations/strava_sync_result.test.ts` — 23 tests (6 added)
+
+`parseImportCompleteness`, mirrored case for case: an unreadable body is partial, only an explicit `true` claims whole, an embedded error forces partial beside a `complete` flag (a blank one is not an error), counts are non-negative integers or zero, `total` is carried only when sent, and a `total` below `imported + skipped` is no total at all.
+
+### `packages/core_models/test/metadata_keys_test.dart` — 4 tests (1 added)
+
+`StorageBuckets.runsBucketMaxBytes` is read against the migration that sets the `runs` bucket's `file_size_limit` — a client rail on a server bound, in the shape `text_limits` and `column_limits` already use.
+
+Run by this lane and passing: every Dart file named above, individually, under a 4 GB cgroup; `packages/core_models` in full (143); `packages/run_recorder` architecture + geolocator-fake suites; `apps/mobile_android` `architecture_guards_test` (272), `l10n_parity_test`, `routes_screen_test`, `csv_run_importer_test`, `preferences*`; `apps/web` `strava_sync_result.test.ts`, `race_import_providers.test.ts`, `catalogues.test.ts`, `messages_parity.test.ts`, `svelte-check` (0 errors), and `check_constraint_unions.mjs`.
+
+NOT run by this lane, and not claimed: Playwright, the full `apps/mobile_android` suite (the box cannot finish it), pgTAP, and anything needing a working local edge runtime.

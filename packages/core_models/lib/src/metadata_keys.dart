@@ -88,4 +88,17 @@ class StorageBuckets {
   static const String routePhotos = 'route-photos';
   static const String clubPhotos = 'club-photos';
   static const String avatars = 'avatars';
+
+  /// The `runs` bucket's own `file_size_limit`, in bytes (migration
+  /// `20260620_001_storage_bucket_limits.sql`).
+  ///
+  /// A client rail on a server bound, like `text_limits` and `column_limits`:
+  /// Storage refuses a larger object with a 413 whose only stable identity is
+  /// an English message, and the uploader can know the answer before it spends
+  /// the network. Measured 2026-09-02: a track blob gzips to 27.3 bytes per
+  /// waypoint, so this is ~960,000 waypoints — 266 hours of 1 Hz recording,
+  /// which the recorder cannot reach, but well inside what a single imported
+  /// GPX can carry (a 94 MiB GPX deflates to 8.3 MiB, 60x under the 500 MiB
+  /// Strava-archive cap). See decisions § 1009.
+  static const int runsBucketMaxBytes = 26214400;
 }

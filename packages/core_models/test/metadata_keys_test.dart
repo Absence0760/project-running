@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:core_models/core_models.dart';
 import 'package:test/test.dart';
 
 void main() {
+  _runsBucketLimitTests();
+
   group('MetadataKeys', () {
     test('constants carry the snake_case wire value', () {
       expect(MetadataKeys.activityType, 'activity_type');
@@ -88,6 +92,32 @@ void main() {
       expect(StorageBuckets.runs, 'runs');
       expect(StorageBuckets.runPhotos, 'run-photos');
       expect(StorageBuckets.routePhotos, 'route-photos');
+    });
+  });
+}
+
+void _runsBucketLimitTests() {
+  group('StorageBuckets.runsBucketMaxBytes', () {
+    test('matches the runs bucket file_size_limit the migration sets', () {
+      // A client rail on a server bound. Storage refuses a larger object with a
+      // 413 whose only stable identity is an English message, so the uploader
+      // carries the number — and it has to be THE number, or it either refuses
+      // a blob Storage would take or sends one it will not.
+      final sql = File(
+        '../../apps/backend/supabase/migrations/'
+        '20260620_001_storage_bucket_limits.sql',
+      ).readAsStringSync();
+      final m = RegExp(
+        r"set file_size_limit = (\d+)[^;]*?where id = 'runs'",
+        dotAll: true,
+      ).firstMatch(sql);
+      expect(m, isNotNull,
+          reason: 'the runs bucket no longer sets file_size_limit in '
+              '20260620_001 — find the migration that does and re-anchor this');
+      expect(
+        StorageBuckets.runsBucketMaxBytes,
+        int.parse(m!.group(1)!),
+      );
     });
   });
 }

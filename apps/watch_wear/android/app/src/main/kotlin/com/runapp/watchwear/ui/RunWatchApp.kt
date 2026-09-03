@@ -97,6 +97,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedVisibility
+import com.runapp.watchwear.PermissionCost
+import com.runapp.watchwear.PermissionOutcome
+import com.runapp.watchwear.permissionOutcome
+import com.runapp.watchwear.shouldInterruptForCosts
+import com.runapp.watchwear.system.AppSettings
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -113,10 +118,38 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
     // `start()` call. UI-only — the recording service isn't live during
     // the countdown. Mirrors the user-visible behaviour on Android.
     var showCountdown by remember { mutableStateOf(false) }
+    // Non-null while the notice is up. A denial used to set nothing at
+    // all, so tapping GO and declining returned the runner to an
+    // unchanged pre-run screen — a dead button on a device with no
+    // keyboard to ask questions with.
+    var permissionNotice by remember { mutableStateOf<PermissionOutcome?>(null) }
+    var degradedNoticeShown by rememberSaveable { mutableStateOf(false) }
+    val requestedPermissions = remember {
+        buildList {
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.BODY_SENSORS)
+            // Needed for `TYPE_STEP_COUNTER` on API 29+. Granting is not
+            // blocking — the step flow is silent if the user denies.
+            add(Manifest.permission.ACTIVITY_RECOGNITION)
+            // The recording service's ongoing notification IS the
+            // runner's way back into a live run from the watch face. On
+            // API 33+ it is withheld from the shade until this is
+            // granted — declaring it in the manifest is not enough, and
+            // the service posts one either way, so the failure is
+            // invisible from inside the app.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.toTypedArray()
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
-        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+        val outcome = permissionOutcome(granted)
+        if (shouldInterruptForCosts(outcome, degradedNoticeShown)) {
+            if (outcome.canStart) degradedNoticeShown = true
+            permissionNotice = outcome
+        } else if (outcome.canStart) {
             showCountdown = true
         }
     }
@@ -143,7 +176,35 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     LaunchedEffect(state.batteryOptimised) {
                         if (!state.batteryOptimised) batteryHelp = false
                     }
-                    if (batteryHelp) {
+                    val notice = permissionNotice
+                    var settingsUnavailable by remember { mutableStateOf(false) }
+                    val canOpenSettings = remember(settingsUnavailable) {
+                        !settingsUnavailable && AppSettings.canOpen(activity)
+                    }
+                    if (notice != null) {
+                        PermissionNotice(
+                            outcome = notice,
+                            canOpenSettings = canOpenSettings,
+                            onOpenSettings = {
+                                // A chip that resolved but then failed to
+                                // launch disappears rather than staying as a
+                                // second dead affordance; the written steps
+                                // below it are the path that always works.
+                                if (!AppSettings.open(activity)) {
+                                    settingsUnavailable = true
+                                }
+                            },
+                            onAskAgain = {
+                                permissionNotice = null
+                                permissionLauncher.launch(requestedPermissions)
+                            },
+                            onStartAnyway = {
+                                permissionNotice = null
+                                showCountdown = true
+                            },
+                            onClose = { permissionNotice = null },
+                        )
+                    } else if (batteryHelp) {
                         BatteryInstructions(
                             // Samsung One UI Watch: the auto-open intent is a
                             // no-op, so lead with the Galaxy Wearable manual
@@ -178,32 +239,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                             onCyclePace = vm::cycleTargetPace,
                             onOpenRoutePicker = vm::openRoutePicker,
                             onStart = {
-                                permissionLauncher.launch(
-                                    buildList {
-                                        add(Manifest.permission.ACCESS_FINE_LOCATION)
-                                        add(Manifest.permission.BODY_SENSORS)
-                                        // Needed for `TYPE_STEP_COUNTER` on
-                                        // API 29+. Granting is not blocking
-                                        // — the step flow is silent if the
-                                        // user denies.
-                                        add(Manifest.permission.ACTIVITY_RECOGNITION)
-                                        // The recording service's ongoing
-                                        // notification IS the runner's way
-                                        // back into a live run from the
-                                        // watch face. On API 33+ it is
-                                        // withheld from the shade until this
-                                        // is granted — declaring it in the
-                                        // manifest is not enough, and the
-                                        // service posts one either way, so
-                                        // the failure is invisible from
-                                        // inside the app.
-                                        if (Build.VERSION.SDK_INT >=
-                                            Build.VERSION_CODES.TIRAMISU
-                                        ) {
-                                            add(Manifest.permission.POST_NOTIFICATIONS)
-                                        }
-                                    }.toTypedArray()
-                                )
+                                permissionLauncher.launch(requestedPermissions)
                             },
                             onSignIn = vm::openSignIn,
                             onSignOut = vm::signOut,
@@ -265,6 +301,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     routes = state.routes,
                     selectedId = state.selectedRoute?.id,
                     loading = state.routesLoading,
+                    unavailable = state.routesUnavailable,
                     preferredUnit = state.preferredUnit,
                     onPick = vm::selectRoute,
                     onClear = vm::clearSelectedRoute,
@@ -467,6 +504,131 @@ private fun BatteryInstructions(
             )
         }
     }
+}
+
+/// Full-screen card shown when the GO tap's permission dialog came back
+/// with something declined. One line per capability actually lost, then
+/// the routes back: ask again (the system still prompts until a second
+/// refusal), the app's own permission screen where the watch has one, and
+/// the written path that works on every build.
+///
+/// `Start anyway` appears only when location survived — a run without it
+/// records the clock and nothing else, so offering to start one would be
+/// the dead GO button again wearing a different label.
+@Composable
+private fun PermissionNotice(
+    outcome: PermissionOutcome,
+    canOpenSettings: Boolean,
+    onOpenSettings: () -> Unit,
+    onAskAgain: () -> Unit,
+    onStartAnyway: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val listState = rememberScalingLazyListState()
+    val rotaryFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { rotaryFocus.requestFocus() }
+    ScalingLazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .rotaryScrollable(
+                RotaryScrollableDefaults.behavior(scrollableState = listState),
+                focusRequester = rotaryFocus,
+            ),
+        state = listState,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        autoCentering = AutoCenteringParams(itemIndex = 0),
+        contentPadding = PaddingValues(horizontal = 14.dp),
+    ) {
+        item {
+            Text(
+                stringResource(
+                    if (outcome.canStart) {
+                        R.string.perm_title_degraded
+                    } else {
+                        R.string.perm_title_blocked
+                    }
+                ),
+                style = MaterialTheme.typography.title3,
+                textAlign = TextAlign.Center,
+            )
+        }
+        items(outcome.costs.size) { i ->
+            Text(
+                stringResource(permissionCostLabel(outcome.costs[i])),
+                style = MaterialTheme.typography.caption2,
+                color = DuskPalette.parchment,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            )
+        }
+        item {
+            Text(
+                stringResource(R.string.perm_watch_steps),
+                style = MaterialTheme.typography.caption3,
+                color = DuskPalette.haze,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+        }
+        item {
+            Chip(
+                onClick = onAskAgain,
+                label = {
+                    Text(
+                        stringResource(R.string.perm_try_again),
+                        style = MaterialTheme.typography.caption2,
+                    )
+                },
+                colors = ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (canOpenSettings) {
+            item {
+                Chip(
+                    onClick = onOpenSettings,
+                    label = {
+                        Text(
+                            stringResource(R.string.perm_open_settings),
+                            style = MaterialTheme.typography.caption2,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        if (outcome.canStart) {
+            item {
+                Chip(
+                    onClick = onStartAnyway,
+                    label = {
+                        Text(
+                            stringResource(R.string.perm_start_anyway),
+                            style = MaterialTheme.typography.caption2,
+                        )
+                    },
+                    colors = ChipDefaults.primaryChipColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        item {
+            Chip(
+                onClick = onClose,
+                label = { Text(stringResource(R.string.done)) },
+                colors = ChipDefaults.secondaryChipColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+private fun permissionCostLabel(cost: PermissionCost): Int = when (cost) {
+    PermissionCost.Location -> R.string.perm_cost_location
+    PermissionCost.HeartRate -> R.string.perm_cost_heart_rate
+    PermissionCost.Steps -> R.string.perm_cost_steps
+    PermissionCost.OngoingNotification -> R.string.perm_cost_notification
 }
 
 @Composable
@@ -1487,6 +1649,7 @@ private fun RoutePickerScreen(
     routes: List<com.runapp.watchwear.SavedRoute>,
     selectedId: String?,
     loading: Boolean,
+    unavailable: Boolean,
     preferredUnit: com.runapp.watchwear.recording.DistanceUnit,
     onPick: (com.runapp.watchwear.SavedRoute) -> Unit,
     onClear: () -> Unit,
@@ -1565,7 +1728,18 @@ private fun RoutePickerScreen(
         if (routes.isEmpty() && !loading) {
             item {
                 Text(
-                    stringResource(R.string.route_picker_empty),
+                    // An empty list has two causes and they need different
+                    // sentences. "Build a route on the phone or web first"
+                    // is advice for a runner who has none; it is wrong, and
+                    // unactionable, for one whose watch simply could not
+                    // reach the list.
+                    stringResource(
+                        if (unavailable) {
+                            R.string.route_picker_unavailable
+                        } else {
+                            R.string.route_picker_empty
+                        }
+                    ),
                     style = MaterialTheme.typography.caption3,
                     color = DuskPalette.haze,
                     textAlign = TextAlign.Center,

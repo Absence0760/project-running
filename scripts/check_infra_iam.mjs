@@ -59,9 +59,33 @@
 //      wildcard Action and is invisible in exactly the same way — the
 //      Terraform reads as one tidy `merge(...)` line either way.
 //
-// Offline by design: three files, no AWS credentials, no `terraform init`.
-// Nothing here is transcribed — every name, every environment and every
-// function suffix is read out of one of the three sources.
+//   9. Decrypt-grant justification. The env's secrets CMK is the one key in the
+//      account whose loss is unrecoverable, and its decrypt statement is where
+//      a principal quietly accumulates. Both env roots now leave
+//      `kms_decrypt_principal_arn` at "" — the GitHub deploy role is NOT a
+//      decrypt principal — and that is only correct while two premises hold,
+//      neither of which is stated anywhere a change would trip over:
+//      no CREDENTIALED workflow job runs `terraform` (so nothing in CI ever
+//      reaches `data.sops_file`), and no `aws_lambda_function` sets
+//      `kms_key_arn` (so `lambda:GetFunction` / `UpdateFunctionCode` from the
+//      deploy role never transits this key). The check runs BOTH ways: a
+//      non-empty wire while both premises hold is standing privilege, and an
+//      empty wire once either premise breaks is a release that fails with
+//      AccessDenied against production, mid-deploy. decisions § 1021.
+//
+//      The workflow scan reads `.github/workflows/*.yml` and nothing else,
+//      because a composite action's `runs.steps` is a different shape and
+//      needs a second parser. Rather than leave that as a silent blind spot,
+//      the claim asserts what makes it safe: no composite action under
+//      .github/actions/ assumes an AWS role. The day one does, this fails and
+//      says to widen the scan — which is the only outcome that cannot be a
+//      false negative about a credentialed terraform run nobody read.
+//
+// Offline by design: no AWS credentials, no `terraform init`. Nothing here is
+// transcribed — every name, every environment, every function suffix and every
+// workflow job is read out of one of the sources, which are the github-oidc
+// stack and its variables, the web-stack module, the two env roots, and every
+// workflow under .github/workflows/.
 //
 // Run: `node scripts/check_infra_iam.mjs`
 // CI:  the `infra-guards` job in .github/workflows/ci.yml, which is in the
@@ -69,11 +93,19 @@
 //      nothing.
 // Unit tests: `node --test scripts/check_infra_iam.test.mjs`
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { hclResources, nestedBlock, stripComments } from './hcl_lex.mjs';
+import { parseSteps, runBody } from './check_ci_diagnostics.mjs';
+import {
+  blockEnd,
+  hclBlocks,
+  hclResources,
+  nestedBlock,
+  nestedBlocks,
+  stripComments,
+} from './hcl_lex.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -90,6 +122,23 @@ export const MODULE_FILE =
 export const RELEASE_FILE =
   process.env.INFRA_IAM_RELEASE ??
   join(REPO_ROOT, '.github/workflows/release-web.yml');
+
+/// The two env roots that call the web-stack module, and the workflow
+/// directory. Claim 9 reads the wire on one side and the pipeline on the
+/// other; both have to be sources rather than assumptions, or the guard is
+/// just the sentence it replaced.
+export const ENV_FILES =
+  process.env.INFRA_IAM_ENVS?.split(',') ??
+  ['prod', 'preview'].map((e) => join(REPO_ROOT, `infra/envs/${e}/main.tf`));
+export const WORKFLOW_DIR =
+  process.env.INFRA_IAM_WORKFLOWS ?? join(REPO_ROOT, '.github/workflows');
+export const ACTION_DIR =
+  process.env.INFRA_IAM_ACTIONS ?? join(REPO_ROOT, '.github/actions');
+
+/// The action every credentialed job in this repo assumes a role through. A
+/// job without it holds no AWS identity at all, so its `terraform` — which is
+/// what terraform.yml runs on every PR — cannot reach KMS whatever it says.
+export const CREDENTIALS_ACTION = 'aws-actions/configure-aws-credentials';
 
 /// The GitHub OIDC issuer and the audience AWS's STS expects. Both are fixed
 /// by the two providers, not by us — a stack naming anything else is not
@@ -133,6 +182,8 @@ export const RESOURCELESS_ACTIONS = new Map([
  *             sourceArn: string | null, qualifier: string | null }} InvokeGrant
  * @typedef {{ label: string, name: string | null, fn: string | null }} FunctionAlias
  * @typedef {{ local: string, filter: string | null }} SecretMerge
+ * @typedef {{ found: boolean, identifiers: string[], cmkEnvFunctions: string[], statements: number }} KmsDecryptGrant
+ * @typedef {{ file: string, job: string, credentialed: boolean, terraform: boolean, steps: number }} WorkflowJob
  * @typedef {{ prefix: string | null, functions: Map<string, string>, urls: Map<string, FunctionUrl>,
  *             aliases: Map<string, FunctionAlias>, permissions: InvokeGrant[],
  *             secretMerges: SecretMerge[],
@@ -509,6 +560,260 @@ export function parseSecretMerges(src) {
 }
 
 // ────────────────────────────── comparison ──────────────────────────────
+
+/// The secrets CMK's decrypt statement, and whether any Lambda holds its
+/// environment under that same key.
+///
+/// The statement is located by what it GRANTS (an AWS-principal statement whose
+/// actions include `kms:Decrypt`) rather than by its Sid, because a Sid is a
+/// label and renaming one must not turn this claim off silently.
+/**
+ * @param {string} raw the web-stack module source
+ * @returns {KmsDecryptGrant}
+ */
+export function parseKmsDecryptGrant(raw) {
+  const src = stripComments(raw);
+  /** @type {string[]} */
+  const identifiers = [];
+  let statements = 0;
+  let found = false;
+  for (const doc of hclBlocks(src, 'data', 'aws_iam_policy_document')) {
+    for (const st of nestedBlocks(doc.body, /(?:^|\n)\s*statement\s*\{/)) {
+      statements++;
+      const actions = stringsFor(st.body, 'actions') ?? [];
+      if (!actions.includes('kms:Decrypt')) continue;
+      const principals = nestedBlock(st.body, /(?:^|\n)\s*principals\s*\{/);
+      if (principals === null) continue;
+      if (!/^\s*type\s*=\s*"AWS"/m.test(principals)) continue;
+      // The env's own root principal is the operator's sops path, not a
+      // pipeline grant, and is out of scope for this claim.
+      if (/identifiers\s*=\s*\[\s*"arn:aws:iam::\$\{[^"]*\}:root"\s*\]/.test(principals))
+        continue;
+      found = true;
+      const list = principals.slice(principals.indexOf('['), principals.lastIndexOf(']') + 1);
+      for (const m of list.matchAll(/"([^"]*)"|(var\.[A-Za-z0-9_]+)/g))
+        identifiers.push(m[1] ?? m[2]);
+    }
+  }
+
+  /** @type {string[]} */
+  const cmkEnvFunctions = [];
+  for (const { label, body } of hclResources(src, 'aws_lambda_function'))
+    if (/^\s*kms_key_arn\s*=/m.test(body)) cmkEnvFunctions.push(label);
+
+  return { found, identifiers, cmkEnvFunctions, statements };
+}
+
+/// The `kms_decrypt_principal_arn` an env root passes into the module, as the
+/// literal right-hand side. `null` when the argument is absent — which is the
+/// state that leaves the module default `""` in force, and is what both roots
+/// do since decisions § 1021.
+/**
+ * @param {string} raw an `infra/envs/<env>/main.tf`
+ * @returns {{ hasModuleCall: boolean, wire: string | null }}
+ */
+export function parseEnvWire(raw) {
+  const src = stripComments(raw);
+  // `module "web" {` carries ONE label, not the two hclBlocks expects.
+  const re = /(?:^|\n)\s*module\s+"[A-Za-z0-9_-]+"\s*\{/g;
+  let found = false;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = blockEnd(src, open);
+    if (close < 0) continue;
+    found = true;
+    const body = src.slice(open + 1, close);
+    const wire = body.match(/^\s*kms_decrypt_principal_arn\s*=\s*(.+?)\s*$/m);
+    if (wire) return { hasModuleCall: true, wire: wire[1] };
+    re.lastIndex = close;
+  }
+  return { hasModuleCall: found, wire: null };
+}
+
+/// Every workflow job, tagged with whether it assumes an AWS role and whether
+/// any of its `run:` steps invokes `terraform`.
+///
+/// A command is a terraform invocation when `terraform` is the FIRST word of a
+/// `&&` / `;` / `|`-separated segment of a run line. Prose cannot satisfy that:
+/// a YAML comment's first word is `#`, which is why the four `terraform apply`
+/// mentions in ci.yml's and terraform.yml's own comments are not read as runs.
+/**
+ * @param {readonly {name: string, text: string}[]} files
+ * @returns {WorkflowJob[]}
+ */
+export function parseWorkflowJobs(files) {
+  /** @type {Map<string, WorkflowJob>} */
+  const jobs = new Map();
+  for (const { name, text } of files) {
+    for (const step of parseSteps(text)) {
+      const key = `${name}:${step.job}`;
+      const job = jobs.get(key) ?? {
+        file: name,
+        job: step.job,
+        credentialed: false,
+        terraform: false,
+        steps: 0,
+      };
+      job.steps++;
+      if (step.body.includes(CREDENTIALS_ACTION)) job.credentialed = true;
+      if (step.hasRun)
+        for (const line of runBody(step).split('\n'))
+          for (const segment of line.split(/&&|\|\||;|\|/))
+            if (/^\s*(?:-\s+)?(?:run:\s*)?terraform(?:\s|$)/.test(segment))
+              job.terraform = true;
+      jobs.set(key, job);
+    }
+  }
+  return [...jobs.values()];
+}
+
+/**
+ * @param {string} dir
+ * @returns {{ name: string, text: string }[]}
+ */
+export function readWorkflowFiles(dir) {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
+    .sort()
+    .map((name) => ({ name, text: readFileSync(join(dir, name), 'utf-8') }));
+}
+
+/// Composite actions, one `action.yml` per directory. Read only to prove none
+/// of them assumes an AWS role — see the note in claim 9's header.
+/**
+ * @param {string} dir
+ * @returns {string[]} the names of the actions that assume an AWS role
+ */
+export function credentialedActions(dir) {
+  /** @type {string[]} */
+  const found = [];
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return found;
+  }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isDirectory()) continue;
+    for (const file of ['action.yml', 'action.yaml']) {
+      let text;
+      try {
+        text = readFileSync(join(dir, entry.name, file), 'utf-8');
+      } catch {
+        continue;
+      }
+      if (text.includes(CREDENTIALS_ACTION)) found.push(entry.name);
+    }
+  }
+  return found;
+}
+
+/// Claim 9. See the header.
+/**
+ * @param {KmsDecryptGrant} grant
+ * @param {{ path: string, hasModuleCall: boolean, wire: string | null }[]} envs
+ * @param {readonly WorkflowJob[]} jobs
+ * @param {readonly string[]} credentialedCompositeActions
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkDecryptGrant(grant, envs, jobs, credentialedCompositeActions = []) {
+  /** @type {string[]} */
+  const errors = [];
+  /** @type {string[]} */
+  const ok = [];
+
+  if (grant.statements === 0 || !grant.found) {
+    errors.push(
+      'no kms:Decrypt statement with an AWS principal found in the web-stack module ' +
+        `(${grant.statements} statement(s) read). Either the secrets key policy moved or this ` +
+        'reader stopped matching — and a decrypt grant nothing reads is exactly what claim 9 exists ' +
+        'to stop accumulating.',
+    );
+    return { errors, ok };
+  }
+  if (!grant.identifiers.includes('var.kms_decrypt_principal_arn')) {
+    errors.push(
+      'the module\'s kms:Decrypt statement no longer takes `var.kms_decrypt_principal_arn` in its ' +
+        `identifiers (read: ${JSON.stringify(grant.identifiers)}). That variable is the one knob ` +
+        'for restoring the grant the day CI needs it; without it the two halves below are comparing ' +
+        'a wire against nothing.',
+    );
+  }
+  if (envs.length === 0) {
+    errors.push('no env root was read, so nothing about the decrypt wire was checked.');
+    return { errors, ok };
+  }
+  for (const env of envs) {
+    if (!env.hasModuleCall)
+      errors.push(
+        `${env.path} holds no \`module "web"\` block — the env root moved or this reader stopped ` +
+          'matching, and its decrypt wire was not read.',
+      );
+  }
+
+  const credentialedTerraform = jobs.filter((j) => j.credentialed && j.terraform);
+  const needed = credentialedTerraform.length > 0 || grant.cmkEnvFunctions.length > 0;
+  /** @type {string[]} */
+  const because = [];
+  if (credentialedTerraform.length > 0)
+    because.push(
+      `${credentialedTerraform.map((j) => `${j.file}:${j.job}`).join(', ')} assume(s) an AWS role AND run(s) terraform`,
+    );
+  if (grant.cmkEnvFunctions.length > 0)
+    because.push(
+      `aws_lambda_function.${grant.cmkEnvFunctions.join(', aws_lambda_function.')} set(s) kms_key_arn, so the deploy role's lambda:GetFunction / UpdateFunctionCode transits this key`,
+    );
+
+  for (const env of envs) {
+    if (!env.hasModuleCall) continue;
+    const wired = env.wire !== null && env.wire !== '""';
+    if (needed && !wired) {
+      errors.push(
+        `${env.path} leaves \`kms_decrypt_principal_arn\` empty, but ${because.join(' and ')}. ` +
+          'That deploy will fail with AccessDenied against the secrets CMK, mid-release. Wire the ' +
+          "env's deploy role back in (decisions § 1021 removed it precisely because neither was true).",
+      );
+      continue;
+    }
+    if (!needed && wired) {
+      errors.push(
+        `${env.path} wires \`kms_decrypt_principal_arn = ${env.wire}\`, granting that principal ` +
+          'kms:Decrypt on the key protecting ANTHROPIC_API_KEY and SUPABASE_SECRET_KEY — while no ' +
+          'credentialed workflow job runs terraform and no Lambda holds its environment under this ' +
+          'key. Nothing in the pipeline can exercise the grant, so it is standing privilege on the ' +
+          'one key in the account whose loss is unrecoverable (decisions § 1021).',
+      );
+      continue;
+    }
+    ok.push(
+      needed
+        ? `${env.path}: decrypt principal wired, and the pipeline needs it (${because.join('; ')})`
+        : `${env.path}: no CI decrypt principal on the secrets CMK, and nothing in the pipeline needs one`,
+    );
+  }
+
+  if (credentialedCompositeActions.length > 0)
+    errors.push(
+      `composite action(s) ${credentialedCompositeActions.join(', ')} assume an AWS role. This ` +
+        "claim's terraform scan reads .github/workflows/*.yml only — a composite action's " +
+        '`runs.steps` is a different shape — so a credentialed action running terraform would go ' +
+        'unread. Widen the scan before letting one hold AWS credentials.',
+    );
+
+  if (jobs.length === 0)
+    errors.push(
+      'no workflow job was read, so "no credentialed job runs terraform" rests on an empty scan ' +
+        'rather than on the workflows.',
+    );
+  else if (!needed)
+    ok.push(
+      `${jobs.length} workflow job(s) read; ${jobs.filter((j) => j.credentialed).length} assume an ` +
+        `AWS role, ${jobs.filter((j) => j.terraform).length} run terraform, none does both`,
+    );
+
+  return { errors, ok };
+}
 
 /**
  * @param {OidcStack} oidc
@@ -986,12 +1291,25 @@ export function compareSources(oidc, release, web, oidcVars) {
 }
 
 export function main() {
+  const moduleSrc = readFileSync(MODULE_FILE, 'utf-8');
   const { errors, ok } = compareSources(
     parseOidcStack(readFileSync(OIDC_FILE, 'utf-8')),
     parseReleaseWorkflow(readFileSync(RELEASE_FILE, 'utf-8')),
-    parseWebStack(readFileSync(MODULE_FILE, 'utf-8')),
+    parseWebStack(moduleSrc),
     readFileSync(OIDC_VARS_FILE, 'utf-8'),
   );
+
+  const grant = checkDecryptGrant(
+    parseKmsDecryptGrant(moduleSrc),
+    ENV_FILES.map((path) => ({
+      path,
+      ...parseEnvWire(readFileSync(path, 'utf-8')),
+    })),
+    parseWorkflowJobs(readWorkflowFiles(WORKFLOW_DIR)),
+    credentialedActions(ACTION_DIR),
+  );
+  errors.push(...grant.errors);
+  ok.push(...grant.ok);
 
   for (const line of ok) console.log(`[OK] ${line}`);
   for (const line of errors) console.error(`[FAIL] ${line}`);
@@ -999,9 +1317,11 @@ export function main() {
   if (errors.length > 0) {
     console.error(
       `\n${errors.length} IAM finding(s) under infra/.\n` +
-        `  oidc:    ${OIDC_FILE}\n` +
-        `  module:  ${MODULE_FILE}\n` +
-        `  release: ${RELEASE_FILE}\n`,
+        `  oidc:      ${OIDC_FILE}\n` +
+        `  module:    ${MODULE_FILE}\n` +
+        `  release:   ${RELEASE_FILE}\n` +
+        `  envs:      ${ENV_FILES.join(', ')}\n` +
+        `  workflows: ${WORKFLOW_DIR}\n`,
     );
     return 1;
   }

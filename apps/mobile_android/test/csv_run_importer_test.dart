@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/csv_run_importer.dart';
 import '../lib/import_failures.dart';
-import '../lib/preferences.dart' show ActivityType;
+import 'package:core_models/core_models.dart' show ActivityType;
 
 void main() {
   // Helper — build the 5-column CSV the mobile + web Settings screens

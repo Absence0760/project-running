@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/grade_adjusted_pace.dart';
+import '../lib/route_simplify.dart' show kElevationGainMinDeltaM;
 
 /// Mirror of `apps/web/src/lib/runs/grade_adjusted_pace.test.ts`. Keep in
 /// lockstep — the GAP figure shown on mobile run detail and on web run detail
@@ -107,6 +108,43 @@ void main() {
       final gap = gradeAdjustedPaceSecPerKm(track);
       expect(gap, isNotNull);
       expect(gap!, lessThan(200));
+    });
+
+    test('the grade window is longer than the noise floor the gain path discards', () {
+      // The finding this window's value exists to answer, stated as the
+      // relationship rather than as the number: the largest altitude change
+      // `computeElevationGain` throws away as noise, taken over the shortest
+      // run a grade is measured across, must not read as a wall.
+      //
+      // At the 5 m this shipped with, 3 m of noise was a 0.60 grade — past
+      // maxGrade, so it clamped, and the factor was 5.396. A rise nothing else
+      // in the app is willing to call climb reported an effort-pace 5.4x
+      // faster than raw. Nothing gates the rise and nothing can: a threshold
+      // big enough to suppress that noise suppresses every real grade below
+      // `threshold / window` with it.
+      final noiseFloorGrade = kElevationGainMinDeltaM / minSegmentM;
+      expect(
+        noiseFloorGrade,
+        lessThan(maxGrade),
+        reason: 'a window of $minSegmentM m makes the $kElevationGainMinDeltaM m '
+            'noise floor a $noiseFloorGrade grade, past the steepest the Minetti '
+            'fit is defined at',
+      );
+      expect(
+        gradeFactor(noiseFloorGrade),
+        lessThan(2.1),
+        reason: 'the noise floor alone must not more than double the reported effort',
+      );
+    });
+
+    test('a track shorter than one window yields no grade-adjusted pace', () {
+      // Proof that the walk reads the constant rather than a literal: four
+      // quarter-window steps carry elevation and a duration, and still never
+      // complete a segment, so there is no grade anyone can vouch for and the
+      // helper says so instead of grading the jitter.
+      final track =
+          gradedTrack(points: 4, stepM: minSegmentM / 4, stepS: 1, gradePct: 10);
+      expect(gradeAdjustedPaceSecPerKm(track), isNull);
     });
   });
 }

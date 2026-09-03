@@ -24,6 +24,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { COACH_BODY_LIMIT_BYTES } from './body.js';
+import { stripComments } from '../core/strip_comments';
 
 interface Written {
 	status: number | undefined;
@@ -260,14 +261,12 @@ test('a sub-path refusal forwards the core\'s own status, headers and body', asy
 
 	// Comment bodies blanked, or the prose above `writeResult` explaining what
 	// the old shape was would read as the old shape.
-	const src = readFileSync(
-		resolve(import.meta.dirname, '..', '..', '..', 'lambda', 'coach', 'src', 'index.ts'),
-		'utf-8',
-	)
-		.split('\n')
-		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n')
-		.replace(/\/\*[\s\S]*?\*\//g, ' ');
+	const src = stripComments(
+		readFileSync(
+			resolve(import.meta.dirname, '..', '..', '..', 'lambda', 'coach', 'src', 'index.ts'),
+			'utf-8',
+		),
+	);
 	assert.doesNotMatch(
 		src,
 		/JSON\.parse\(result\.body\)/,
@@ -381,11 +380,7 @@ test('the Lambda routes exactly the sub-paths the dev route table declares', () 
 
 	// No survivor of the substring dispatch: a bare `includes` on the path is
 	// what let one sub-path shadow another.
-	const code = src
-		.split('\n')
-		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n')
-		.replace(/\/\*[\s\S]*?\*\//g, ' ');
+	const code = stripComments(src);
 	assert.doesNotMatch(
 		code,
 		/rawPath\.includes\(/,
