@@ -190,8 +190,15 @@ const List<RaceImportProvider> raceImportProviders = [
     provider: 'runsignup',
     scope: RaceImportScope.bib,
     unavailable: RunSignUpUnavailable(),
-    probeFunction: 'race-listings-sync',
-    probeBody: <String, dynamic>{},
+    // The RESULTS leg, as for the other two. It probed `race-listings-sync`
+    // until § 1041, on the reasoning that both legs read the same two env vars
+    // so either would answer — but the tile is a claim about whether an IMPORT
+    // will work, and the sync owns a different leg. The move waited on
+    // `race-results-import` gaining its own probe bucket: while a probe was
+    // charged to the 8/hour import allowance, a third probe per settings load
+    // would have cost a free runner the ability to import at all (§ 1008).
+    probeFunction: 'race-results-import',
+    probeBody: <String, dynamic>{'provider': 'runsignup', 'probe': true},
   ),
   RaceImportProvider(
     provider: 'ultrasignup',
