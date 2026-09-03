@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { stripComments } from './strip_comments';
+
 /**
  * The one adopter of the deferred-undo queue must not restore into a list
  * that has moved on (decisions § 984).
@@ -24,18 +26,6 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PAGE = resolve(__dirname, '../../routes/settings/gear/+page.svelte');
-
-function stripComments(s: string): string {
-	// Reason: line comments are blanked BEFORE block comments are stripped. A
-	// `//` containing `/*` is prose to the language but an opening delimiter to
-	// the regex, so the other order swallows every line up to the next `*/`
-	// (decisions § 971).
-	return s
-		.split('\n')
-		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n')
-		.replace(/\/\*[\s\S]*?\*\//g, ' ');
-}
 
 function page(): string {
 	return stripComments(readFileSync(PAGE, 'utf-8'));

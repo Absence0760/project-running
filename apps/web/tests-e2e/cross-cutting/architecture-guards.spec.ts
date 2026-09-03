@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { stripComments } from '../../src/lib/core/strip_comments';
 
 /**
  * Static source-level guards — same shape as
@@ -217,11 +218,9 @@ test.describe('architecture guards', () => {
 		// `CLUB_SELECT_COLS` / `EVENT_SELECT_COLS` from data.ts", or
 		// for nested embeds use `clubs(${CLUB_SELECT_COLS})`.
 		const data = readFileSync('src/lib/core/data.ts', 'utf-8');
-		// Strip block + line comments so doc strings can mention the
-		// pattern without false-positive.
-		const stripped = data
-			.replace(/\/\*[\s\S]*?\*\//g, '')
-			.replace(/\/\/.*$/gm, '');
+		// Comments blanked so a doc string naming the pattern is not read as
+		// an instance of it.
+		const stripped = stripComments(data);
 		const banned = [
 			/\.from\(['"]clubs['"]\)\.select\(['"]\*['"]\)/,
 			/\.from\(['"]events['"]\)\.select\(['"]\*['"]\)/,

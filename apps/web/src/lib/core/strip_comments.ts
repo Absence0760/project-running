@@ -11,7 +11,7 @@
  *    779 lines across 3 files when it was found (decisions § 971).
  *  - Blanking `//` first still leaves a `/*` inside a STRING literal opening
  *    the same phantom block.
- *  - Neither survives a regex literal: `/\/\*[\s\S]*?\*\//g` carries both
+ *  - Neither survives a regex literal: `/\/\*…\*\//g` carries both
  *    delimiters, escaped.
  *
  * One forward pass instead, over code / string / template / regex, with a

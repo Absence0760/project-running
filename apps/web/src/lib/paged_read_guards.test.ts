@@ -25,6 +25,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { stripComments } from './core/strip_comments';
+
 const srcRoot = resolve(import.meta.dirname, '..');
 
 /**
@@ -50,15 +52,6 @@ function sources(dir: string): string[] {
 		out.push(full);
 	}
 	return out;
-}
-
-/** Comment bodies blanked, so prose about a paged read is not read as one. */
-function code(src: string): string {
-	return src
-		.split('\n')
-		.map((l) => (/^\s*\/\//.test(l) ? '' : l.replace(/\s\/\/.*$/, '')))
-		.join('\n')
-		.replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 
 /**
@@ -118,7 +111,7 @@ test('every paged read ends its ordering on a column unique per row', () => {
 	let ranges = 0;
 
 	for (const file of sources(srcRoot)) {
-		const src = code(readFileSync(file, 'utf-8'));
+		const src = stripComments(readFileSync(file, 'utf-8'));
 		if (!src.includes('.range(')) continue;
 		for (const { line, chain } of chainsEndingInRange(src)) {
 			ranges++;
