@@ -75,6 +75,17 @@
     <string name="battery_try_auto_open">自動で開く</string>
     <string name="done">完了</string>
 
+    <string name="perm_title_blocked">位置情報が必要です</string>
+    <string name="perm_title_degraded">一部の機能がオフです</string>
+    <string name="perm_cost_location">位置情報なしでは時間のみ記録され、ルート・距離・ペースは記録されません。</string>
+    <string name="perm_cost_heart_rate">心拍数は記録されません。</string>
+    <string name="perm_cost_steps">歩数は記録されません。</string>
+    <string name="perm_cost_notification">記録中も文字盤にラン表示は出ません。</string>
+    <string name="perm_watch_steps">ウォッチ：設定 → アプリ → Threkir → 権限。</string>
+    <string name="perm_try_again">もう一度許可を求める</string>
+    <string name="perm_open_settings">設定を開く</string>
+    <string name="perm_start_anyway">このまま開始</string>
+
     <string name="email">メール</string>
     <string name="password">パスワード</string>
     <string name="tap_here">ここをタップ</string>

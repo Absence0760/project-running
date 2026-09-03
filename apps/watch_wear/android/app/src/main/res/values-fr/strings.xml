@@ -76,6 +76,17 @@
     <string name="battery_try_auto_open">Ouverture auto</string>
     <string name="done">Terminé</string>
 
+    <string name="perm_title_blocked">Position requise</string>
+    <string name="perm_title_degraded">Certaines fonctions désactivées</string>
+    <string name="perm_cost_location">Sans la position, cette course n\'enregistre que le temps — ni tracé, ni distance, ni allure.</string>
+    <string name="perm_cost_heart_rate">La fréquence cardiaque ne sera pas enregistrée.</string>
+    <string name="perm_cost_steps">Les pas ne seront pas enregistrés.</string>
+    <string name="perm_cost_notification">Pas d\'indicateur de course sur le cadran pendant l\'enregistrement.</string>
+    <string name="perm_watch_steps">Sur la montre : Paramètres → Applications → Threkir → Autorisations.</string>
+    <string name="perm_try_again">Redemander</string>
+    <string name="perm_open_settings">Ouvrir les paramètres</string>
+    <string name="perm_start_anyway">Démarrer quand même</string>
+
     <string name="email">E-mail</string>
     <string name="password">Mot de passe</string>
     <string name="tap_here">Touchez ici</string>

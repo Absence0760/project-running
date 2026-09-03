@@ -100,6 +100,20 @@
     <string name="battery_try_auto_open">Try auto-open</string>
     <string name="done">Done</string>
 
+    <!-- Permission notice card. Shown when the GO tap's permission dialog
+         came back with something declined: a location denial blocks the run,
+         anything else degrades it. One line per thing actually lost. -->
+    <string name="perm_title_blocked">Location needed</string>
+    <string name="perm_title_degraded">Some features off</string>
+    <string name="perm_cost_location">Without location this run records time only — no route, distance or pace.</string>
+    <string name="perm_cost_heart_rate">Heart rate won\'t be recorded.</string>
+    <string name="perm_cost_steps">Step count won\'t be recorded.</string>
+    <string name="perm_cost_notification">No run chip on the watch face while recording.</string>
+    <string name="perm_watch_steps">On watch: Settings → Apps → Threkir → Permissions.</string>
+    <string name="perm_try_again">Ask again</string>
+    <string name="perm_open_settings">Open settings</string>
+    <string name="perm_start_anyway">Start anyway</string>
+
     <!-- ───────────── Sign-in screen ───────────── -->
     <string name="email">Email</string>
     <string name="password">Password</string>

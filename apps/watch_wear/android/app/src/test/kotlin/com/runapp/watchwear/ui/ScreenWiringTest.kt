@@ -110,6 +110,53 @@ class ScreenWiringTest {
         )
     }
 
+    @Test fun `a denied permission dialog reports what it cost`() {
+        // The callback was two lines: set showCountdown when
+        // ACCESS_FINE_LOCATION came back granted, and nothing at all
+        // otherwise. So a runner who tapped GO and declined — or who had
+        // declined once before, after which the system stops prompting —
+        // landed back on an unchanged pre-run screen with no countdown, no
+        // message and no way to ask why. The gate was right and stays; what
+        // was missing was the report.
+        val src = readRunWatchApp()
+        assertTrue(
+            "the launcher result must be graded through permissionOutcome, " +
+                "not read as a single boolean",
+            src.contains("permissionOutcome(granted)"),
+        )
+        assertTrue(
+            "a graded result must be able to raise the notice — otherwise " +
+                "the else branch is still empty",
+            Regex("""shouldInterruptForCosts\([^)]*\)\s*\)?\s*\{[^}]*permissionNotice\s*=""")
+                .containsMatchIn(src),
+        )
+        assertTrue(
+            "PermissionNotice must exist as the surface that renders it",
+            Regex("""@Composable[^@]*private\s+fun\s+PermissionNotice\s*\(""")
+                .containsMatchIn(src),
+        )
+        // Each cost carries its own sentence, and the card offers a route
+        // back rather than only bad news.
+        val strings = readDefaultStrings()
+        for (key in listOf(
+            "perm_cost_location",
+            "perm_cost_heart_rate",
+            "perm_cost_steps",
+            "perm_cost_notification",
+            "perm_watch_steps",
+            "perm_try_again",
+        )) {
+            assertTrue(
+                "values/strings.xml must declare $key",
+                strings.contains("name=\"$key\""),
+            )
+            assertTrue(
+                "RunWatchApp must reference R.string.$key",
+                src.contains("R.string.$key"),
+            )
+        }
+    }
+
     @Test fun `PreRunScreen surfaces battery-saver remediation chip`() {
         // Without the "Fix battery saver" chip, runners not on the
         // ignore-battery-optimizations whitelist get throttled

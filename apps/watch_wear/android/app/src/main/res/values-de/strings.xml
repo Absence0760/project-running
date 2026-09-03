@@ -76,6 +76,17 @@
     <string name="battery_try_auto_open">Automatisch öffnen</string>
     <string name="done">Fertig</string>
 
+    <string name="perm_title_blocked">Standort erforderlich</string>
+    <string name="perm_title_degraded">Einige Funktionen aus</string>
+    <string name="perm_cost_location">Ohne Standort zeichnet dieser Lauf nur die Zeit auf — keine Route, Distanz oder Pace.</string>
+    <string name="perm_cost_heart_rate">Herzfrequenz wird nicht aufgezeichnet.</string>
+    <string name="perm_cost_steps">Schritte werden nicht aufgezeichnet.</string>
+    <string name="perm_cost_notification">Kein Lauf-Chip auf dem Zifferblatt während der Aufzeichnung.</string>
+    <string name="perm_watch_steps">Auf der Uhr: Einstellungen → Apps → Threkir → Berechtigungen.</string>
+    <string name="perm_try_again">Erneut fragen</string>
+    <string name="perm_open_settings">Einstellungen öffnen</string>
+    <string name="perm_start_anyway">Trotzdem starten</string>
+
     <string name="email">E-Mail</string>
     <string name="password">Passwort</string>
     <string name="tap_here">Hier tippen</string>

@@ -76,6 +76,17 @@
     <string name="battery_try_auto_open">Abrir automaticamente</string>
     <string name="done">Concluído</string>
 
+    <string name="perm_title_blocked">Localização necessária</string>
+    <string name="perm_title_degraded">Algumas funcionalidades desligadas</string>
+    <string name="perm_cost_location">Sem localização esta corrida regista apenas o tempo — sem percurso, distância ou ritmo.</string>
+    <string name="perm_cost_heart_rate">A frequência cardíaca não será registada.</string>
+    <string name="perm_cost_steps">Os passos não serão registados.</string>
+    <string name="perm_cost_notification">Sem indicador de corrida no mostrador durante a gravação.</string>
+    <string name="perm_watch_steps">No relógio: Definições → Aplicações → Threkir → Permissões.</string>
+    <string name="perm_try_again">Pedir novamente</string>
+    <string name="perm_open_settings">Abrir definições</string>
+    <string name="perm_start_anyway">Começar mesmo assim</string>
+
     <string name="email">E-mail</string>
     <string name="password">Palavra-passe</string>
     <string name="tap_here">Toque aqui</string>
