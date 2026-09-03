@@ -18686,3 +18686,49 @@ of its needle flagged it, which is the § 1034 mistake in miniature.
 Both were found by verifying the merged tree rather than the branches, which is
 the standing round discipline and earned its cost again here.
 
+
+## 1082. The watch view model gets a crash handler, and the drain says an unreadable queue is unreadable rather than empty
+
+Two rungs of one defect, filed together after [§ 1055](#1055-a-phone-pushed-session-update-could-end-a-run-and-the-asymmetry-that-made-it-findable)
+closed the instance that had already cost a run.
+
+**The net.** `viewModelScope` carries a `SupervisorJob`, which is often read as
+"a failing child cannot take anything down". It stops a child from cancelling
+its SIBLINGS; it does nothing about the child's own exception, which
+`handleCoroutineException` hands to the context's `CoroutineExceptionHandler`
+and, with none installed, to the thread's uncaught handler — the process. The
+recording service lives in that process. `RunViewModel` had 23 `launch` sites
+and no handler, so a route-cache write, a tile prefetch or a session read that
+threw ended a run in progress. Every `launch` now goes through `launchGuarded`,
+which supplies one handler that logs; `ViewModelStreamResilienceTest` fails the
+build on a bare `viewModelScope.launch`, because a handler on 22 of 23 sites is
+the same defect with better odds. It is deliberately a NET, not a replacement:
+the per-site guards stay, because a failure the runner should hear about is
+still caught where it happens and reported. What the handler decides is only
+what becomes of the sites nobody has reached yet.
+
+**The drain's own decision.** `drainQueueLocked` read `store.queue.first()` on
+the same DataStore-backed flow § 1055 put a `.catch` on. DataStore reports a
+corrupt or unreadable file by FAILING the read, so the three answers available
+are not interchangeable and the cheapest one is the worst:
+
+- *Treat it as empty.* The loop drains nothing, `anyTransientFailure` is false,
+  so `DrainBackoff.onSuccess()` fires and `syncError` is CLEARED — the runner is
+  told their runs are synced by the same pass that could not open the file
+  holding them. That is the one state in which "Synced" is a lie, and a blanket
+  `catch` picks it by default.
+- *Let it throw.* Before `launchGuarded` that ended the process; after it, the
+  drain is skipped with nothing on screen saying so.
+- *Report and back off.* What it does. The failure is logged, `syncError` takes
+  a localized `sync_queue_unreadable`, and `DrainBackoff.onFailure()` is armed
+  because the condition PERSISTS — a network flap would otherwise retry a read
+  that cannot succeed. A `force` drain (the Sync chip, a fresh sign-in) is
+  deliberately still let through, which is what makes a retry after a reboot
+  possible at all.
+
+`syncError` renders on `PostRunScreen`, which is where the drain's failures are
+already reported and where it matters most — the run that just finished is the
+one entering the queue that cannot be read. The pre-run "Sync N runs" chip is
+derived from `queuedCount`, which the stream `.catch` freezes at its last value,
+so a corrupt queue leaves no chip to tap; surfacing it there is a second
+affordance on a 1.4-inch screen and is filed rather than smuggled in here.
