@@ -1,19 +1,133 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:core_models/core_models.dart';
 import 'package:test/test.dart';
 
-Run _run({Map<String, dynamic>? metadata, DateTime? createdAt}) => Run(
+Run _run({
+  Map<String, dynamic>? metadata,
+  DateTime? createdAt,
+  double distanceMetres = 10000,
+}) =>
+    Run(
       id: 'run-1',
       startedAt: DateTime.utc(2026, 5, 1, 7, 30),
       duration: const Duration(minutes: 42),
-      distanceMetres: 10000,
+      distanceMetres: distanceMetres,
       source: RunSource.app,
       metadata: metadata,
       createdAt: createdAt,
     );
 
 void main() {
+  group('runRowFromRun is total, as Run.toJson already was', () {
+    // decisions § 986 made the DOMAIN serializer total by screening its
+    // OUTPUT. `runRowFromRun` reads the FIELDS, and the resident run object a
+    // sync drain uploads is the one that was handed to the store — not the
+    // screened copy that was written to disk. So every hole § 986 closed on
+    // one path was still open on the other. decisions § 1010.
+    void expectEncodable(RunRow row) {
+      expect(() => jsonEncode(row.toJson()), returnsNormally);
+    }
+
+    test('a non-finite distance resolves to zero, not to a refused encode', () {
+      for (final d in [double.nan, double.infinity, double.negativeInfinity]) {
+        final row = runRowFromRun(_run(distanceMetres: d), userId: 'u');
+        expect(row.distanceM, 0.0, reason: '$d');
+        expectEncodable(row);
+      }
+    });
+
+    test('the row and the domain object agree on that answer', () {
+      // Two copies of a coercion rule drift. `storableDistanceMetres` is the
+      // one home both go through.
+      for (final d in [double.nan, double.infinity, -1.0, 0.0, 4213.7]) {
+        expect(
+          runRowFromRun(_run(distanceMetres: d), userId: 'u').distanceM,
+          _run(distanceMetres: d).toJson()['distanceMetres'],
+          reason: '$d',
+        );
+      }
+    });
+
+    test('a non-finite embedded best is dropped, not thrown on', () {
+      // `toInt()` raises "Infinity or NaN toInt" — an UnsupportedError out of
+      // the row BUILDER, before any writer could catch it per-run.
+      for (final v in [double.nan, double.infinity]) {
+        late RunRow row;
+        expect(
+          () => row = runRowFromRun(
+              _run(metadata: {MetadataKeys.fastest5kS: v}), userId: 'u'),
+          returnsNormally,
+          reason: '$v',
+        );
+        expect(row.fastest5kS, isNull);
+        expectEncodable(row);
+      }
+    });
+
+    test('a non-finite value anywhere in the bag is dropped', () {
+      final row = runRowFromRun(
+        _run(metadata: {
+          MetadataKeys.avgBpm: double.nan,
+          MetadataKeys.elevationM: double.infinity,
+          'ok': 12,
+        }),
+        userId: 'u',
+      );
+      expectEncodable(row);
+      expect(row.metadata, {'ok': 12});
+      // Dropping, not coercing: a bag key has no column and no CHECK saying
+      // what a missing value means, so a zero would state a heart rate nobody
+      // recorded.
+      expect(row.metadata!.containsKey(MetadataKeys.avgBpm), isFalse);
+    });
+
+    test('the bag scrub reaches nested lists and maps', () {
+      // `workout_step_results` is a list of maps and `jsonEncode` walks all of
+      // it, so a top-level-only scrub would leave the encoder what it refuses.
+      final row = runRowFromRun(
+        _run(metadata: {
+          'workout_step_results': [
+            {'stepIndex': 0, 'paceSecPerKm': double.nan, 'ok': 1},
+            {'stepIndex': 1, 'paceSecPerKm': 300.0},
+          ],
+          'nested': {
+            'deeper': {'bad': double.infinity, 'good': 2}
+          },
+        }),
+        userId: 'u',
+      );
+      expectEncodable(row);
+      final steps = (row.metadata!['workout_step_results'] as List)
+          .cast<Map<String, dynamic>>();
+      expect(steps[0].containsKey('paceSecPerKm'), isFalse);
+      expect(steps[0]['ok'], 1);
+      expect(steps[1]['paceSecPerKm'], 300.0);
+      expect(
+          ((row.metadata!['nested'] as Map)['deeper'] as Map)['good'], 2);
+      expect(
+          ((row.metadata!['nested'] as Map)['deeper'] as Map)
+              .containsKey('bad'),
+          isFalse);
+    });
+
+    test('a finite bag survives untouched', () {
+      final row = runRowFromRun(
+        _run(metadata: {'avg_bpm': 148, 'steps': 9001, 'note': 'x'}),
+        userId: 'u',
+      );
+      expect(row.metadata, {'avg_bpm': 148, 'steps': 9001, 'note': 'x'});
+    });
+
+    test('an explicit null in the bag is preserved, not read as non-finite', () {
+      final row = runRowFromRun(_run(metadata: {'note': null, 'ok': 1}),
+          userId: 'u');
+      expect(row.metadata!.containsKey('note'), isTrue);
+      expect(row.metadata!['note'], isNull);
+    });
+  });
+
   group('runMetadataForRow (write-side bag strip)', () {
     test('strips activity_type + is_dnf from the persisted bag', () {
       expect(

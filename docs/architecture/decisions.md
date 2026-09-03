@@ -16404,3 +16404,49 @@ a bare id set, a surface, and its i18n — and, before any of it, a product
 answer to what a runner can actually DO about a run whose track is too big to
 store. Guessing at that answer is how a taxonomy becomes an abstraction nobody
 wanted. The measurement above is what the next lane should start from.
+
+## 1010. The domain object stopped carrying a value the encoder refuses; the row it becomes did not
+
+§ 986 made `Run.toJson` total, and the filing that followed called the same
+hole on `RunRow` "a latent shape rather than a live defect" on the grounds that
+the domain object can no longer carry a non-finite distance past `toJson`.
+Measured, 2026-09-02: it is live, and it is four holes rather than one.
+
+§ 986 screened the domain serializer's OUTPUT — `if (!distanceMetres.isFinite)
+json['distanceMetres'] = 0.0`. The FIELD is untouched, and the object a sync
+drain uploads is the resident one: `LocalRunStore` writes `stamped.toJson()` to
+disk and then does `_runs.insert(0, stamped)`, so the screened copy goes to the
+file and the unscreened object stays in memory. `saveRunsBatch(unsyncedRuns)`
+hands that object to `runRowFromRun`, which reads the fields.
+
+Measured, with a `Run` carrying each value:
+
+  * `distanceM: run.distanceMetres` — passes NaN and both infinities straight
+    through; `jsonEncode(row.toJson())` raises `JsonUnsupportedObjectError`.
+  * `runEmbeddedBestSeconds` — `v.toInt()` raises `UnsupportedError: Infinity
+    or NaN toInt`. That one does not even reach the encoder: it throws out of
+    the row BUILDER, which runs in the `.map()` that builds the whole chunk,
+    outside the per-run try/catch that only wraps the track upload.
+  * `runMetadataForRow` — the bag is passed through verbatim, so a non-finite
+    anywhere in it reaches the encoder. The mirrored `elevation_m` key is in
+    this class: the COLUMN is screened by `runPromotedDouble`, the bag copy
+    beside it was not.
+  * the bag nests. `workout_step_results` and `gym_step_results` are lists of
+    maps and `jsonEncode` walks all of it.
+
+The upsert encodes a whole chunk at once, so one such run does not merely fail
+itself — it takes every run in the chunk down with it, which is the failure
+mode § 986 fixed for track uploads and left in place one layer up.
+
+Fixed in `runRowFromRun`, the one place a `Run` becomes a row, rather than in
+`gen_dart_models.dart`. A blanket "coerce every double" in a generated
+serializer would be the wrong instrument: what a non-finite value MEANS is a
+per-column question. `distance_m` has a column and a `>= 0` CHECK, so zero is
+the answer the schema already gives and it now comes from one shared
+`storableDistanceMetres` that `Run.toJson` calls too — two copies of a coercion
+rule are how these two drifted apart in the first place. A bag key has neither,
+so a non-finite there is DROPPED: inventing a zero for `avg_bpm` would state a
+heart rate nobody recorded.
+
+An explicit `null` in the bag is preserved and distinguished from a dropped
+non-finite, because a caller writing `null` is saying something.
