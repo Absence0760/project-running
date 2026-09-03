@@ -1202,5 +1202,14 @@ test('every race-import availability probe asks the results leg, not the listing
 			!body.includes('race-listings-sync'),
 			`${fn} still invokes race-listings-sync`
 		);
+		// A probe asks one question and one answer says yes. Grading the status
+		// instead read a 401 (raised before the function touches a credential)
+		// and a 400 unknown_provider (a leg that does not exist) as proof the
+		// card was live — decisions § 1067.
+		assert.match(
+			body,
+			/return probeSaysConfigured\(error\);/,
+			`${fn} must report through probeSaysConfigured — any failure at all leaves the question unanswered`
+		);
 	}
 });
