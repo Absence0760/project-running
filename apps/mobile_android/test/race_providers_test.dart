@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/race_service.dart';
 
@@ -34,6 +35,71 @@ void main() {
     // RaceService has no Supabase behind it here, so reaching the client would
     // throw rather than answer — the null spec has to short-circuit first.
     expect(await RaceService().isProviderConfigured('parkrun'), isFalse);
+  });
+
+  group('raceProbeUnavailable is fail-closed, as web already was', () {
+    // Web's `isProviderNotConfigured` (core/data.ts) is the reference: only a
+    // clean success or a readable non-429 4xx reports a provider live. The
+    // phone answered "configured" for every one of these before, so a probe
+    // that never reached the credential gate lit up a tile whose next call
+    // 503s.
+    test('the gate itself reads as unavailable whatever the body says', () {
+      expect(
+        raceProbeUnavailable(const FunctionException(
+          status: 503,
+          details: {'error': 'provider_not_configured'},
+        )),
+        isTrue,
+      );
+      // UltraSignup's attribution refusal is a 503 that names no credential.
+      expect(
+        raceProbeUnavailable(const FunctionException(
+          status: 503,
+          details: {
+            'error': 'provider_not_configured',
+            'reason': 'results_unattributable',
+          },
+        )),
+        isTrue,
+      );
+      // An unreadable / unexpected 503 body is still the gate.
+      expect(
+        raceProbeUnavailable(const FunctionException(status: 503, details: '')),
+        isTrue,
+      );
+    });
+
+    test('a rate-limited or failing probe confirms nothing', () {
+      for (final status in [429, 500, 502, 503, 504]) {
+        expect(raceProbeUnavailable(FunctionException(status: status)), isTrue,
+            reason: '$status');
+      }
+    });
+
+    test('a readable non-429 4xx means the function ran past the gate', () {
+      for (final status in [400, 401, 403, 404, 422]) {
+        expect(raceProbeUnavailable(FunctionException(status: status)), isFalse,
+            reason: '$status');
+      }
+    });
+
+    test('no readable status at all is unavailable, not available', () {
+      // A transport failure, Supabase not yet initialised, and a status-0
+      // FunctionsFetchException on a later package version all land here.
+      expect(raceProbeUnavailable(const SocketException('no route to host')),
+          isTrue);
+      expect(raceProbeUnavailable(StateError('not initialized')), isTrue);
+      expect(raceProbeUnavailable(const FunctionException(status: 0)), isTrue);
+    });
+  });
+
+  test('a probe that cannot reach Supabase answers unconfigured', () async {
+    // RaceService has no Supabase behind it here, so `_c` throws a StateError
+    // before any call is made. That used to answer `true` — the phone offered
+    // an import leg it had never confirmed exists.
+    expect(await RaceService().isProviderConfigured('runsignup'), isFalse);
+    expect(await RaceService().isProviderConfigured('ultrasignup'), isFalse);
+    expect(await RaceService().isProviderConfigured('chronotrack'), isFalse);
   });
 
   test('the catalogue names exactly the tokens the Edge Function accepts', () {

@@ -16271,3 +16271,45 @@ widget taps and no `pumpUntil` at all; identifying which of those actually
 outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
+
+## 1007. The phone reported every unreachable provider as configured, and web had already decided otherwise
+
+`RaceService.isProviderConfigured` graded exactly one failure as "not
+configured": a 503 whose body says `provider_not_configured`. Every other
+outcome answered `true` — a 429, any 5xx, a dropped connection, and Supabase
+not yet initialised (the `_c` getter's own `StateError`, thrown inside the same
+`try`). The doc comment defended it: a probe that could not reach the server
+has not shown the provider to be unconfigured.
+
+Web decided the opposite question the other way, in `core/data.ts`'s
+`isProviderNotConfigured`, and its comment names the rule: only a readable
+non-429 4xx proves the function ran PAST its credential gate. A 429 is the
+function's own per-user rate limit, which several probes on one screen reach; a
+5xx did not reach the gate or did not get past it; a status-0 transport failure
+carries no evidence at all. Each of those reports unavailable there.
+
+The two platforms therefore disagreed about a configured provider whenever the
+probe did not cleanly reach the gate, and the disagreement is not symmetric in
+cost. Hiding a live leg for one page load is corrected by the next probe.
+Offering an action whose very next call 503s spends a runner's attention on a
+tile that cannot work — and, since § 975, UltraSignup's results leg refuses
+unconditionally with a 503 that names no missing credential, so "the server was
+unreachable" and "this leg will never work" arrived at the phone looking the
+same.
+
+Ported web's grading to `raceProbeUnavailable`, a top-level pure function so
+the decision is testable without a client, and `isProviderConfigured` now
+delegates every failure to it. `_isProviderNotConfigured` is deliberately left
+alone on the import path: a probe is a yes/no availability question that should
+fail closed, while an import is an action whose failure should surface as
+itself rather than as a claim about credentials.
+
+The filing's other half — that `races_screen._probe()`'s catch can never fire —
+is true and was NOT removed. The method is total by construction, so the catch
+is unreachable; but a probe is the layering contract's named example of an
+auxiliary network effect, the sibling `_run()` in the same file wraps the
+equally-total `searchRaceListings`, and web's own callers of these probes carry
+the identical `try { … } catch { available = false }`. Deleting it on the phone
+alone would create a divergence in the file this change exists to bring into
+parity, and would put a future caller one refactor away from failing open
+again. The service method's doc says why the backstop stays.
