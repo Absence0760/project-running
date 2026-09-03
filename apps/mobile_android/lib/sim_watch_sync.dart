@@ -611,7 +611,7 @@ abstract class WatchBleTransport {
   /// (`chunkRoadbook` in watch_roadbook.dart) to the watch's roadbook
   /// characteristic — the same in-order, offset-0-first contract the
   /// firmware's `RoadbookAssembler` enforces. Chunked rather than single-
-  /// write like [writeScreens] because a full 16+16 schedule is 364 bytes,
+  /// write like [writeScreens] because a full 16+16 schedule is 444 bytes,
   /// past one ATT write.
   Future<void> writeRoadbook(List<int> chunk);
 

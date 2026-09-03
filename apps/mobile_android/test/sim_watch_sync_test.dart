@@ -1081,7 +1081,7 @@ void main() {
           isRefill: i.isEven,
         );
 
-    /// The worst case at the caps: 16 checkpoints + 16 cut-offs = 364 B, which
+    /// The worst case at the caps: 16 checkpoints + 16 cut-offs = 444 B, which
     /// is past the 242-byte chunk payload, so a full schedule takes exactly two
     /// writes. This is the boundary the firmware's assembler exists for.
     test('a full-cap schedule takes two writes at the real payload cap',
@@ -1099,7 +1099,7 @@ void main() {
             WatchCutoffLeg(cumDistanceM: i * 5000.0, limitElapsedSec: i * 2400),
         ],
       );
-      expect(frame.length, 364);
+      expect(frame.length, 444);
       final chunks = chunkRoadbook(frame);
       expect(chunks, hasLength(2));
 
