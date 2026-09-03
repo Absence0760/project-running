@@ -2068,3 +2068,15 @@ Its Lambda-only register is superseded by the wider one above; the two behaviour
 Run by this lane and passing: the full `apps/web` unit suite via `npm run test:unit` (4684/4684), `svelte-check --tsconfig ./tsconfig.json` (0 errors), `npm run check:tsconfig-coverage`, `npm run check:script-types`, and `decisions_numbering_guard` 3/3 over the appended ADRs.
 
 NOT run by this lane, and not claimed: Playwright, any Flutter suite, and anything needing the local Supabase stack.
+
+## #789 round 34 — web lane (2026-09-02)
+
+### `apps/web/src/lib/core/strip_comments.test.ts` — 16 tests (new file)
+
+Drives the single-sourced comment stripper directly ([decisions § 1000](../architecture/decisions.md)). Fifteen unit cases cover what the eleven hand-rolled copies could not: a `//` carrying `/*` opening nothing, the same inside a single-quoted string and inside a template literal, a `://` in a string surviving, a regex literal spelling both delimiters surviving byte for byte, division not read as a regex, a regex after `return` read as one, a comment inside a `${}` expression, a nested template not closing the outer one early, an unterminated quote bounded to its own line, an unterminated block blanked to EOF, and offsets plus line count preserved. The sixteenth runs the scanner over every `.ts`/`.svelte` under `apps/web/src` (2,500+ files) and requires the output to be the same length as the input and idempotent — a shape check that catches a mis-synchronisation anywhere in the real corpus. Falsified twice: deleting the string branch fails the string case and the URL case; disabling the regex branch fails both regex cases.
+
+### `apps/web/src/lib/security_guards.test.ts` — 90 tests (1 rewritten)
+
+The § 971 ordering guard is replaced by a single-source one. It walks `src`, `tests-e2e` and `lambda`, counts block-comment strips per file, and requires every file spelling one to appear in a register with the exact count and a reason; it also fails when a registered file stops spelling one, and carries a floor of 11 importers of the shared stripper. The register holds the three CSS scanners (where `//` is not a comment) and the one JS copy under `src/lib/integrations`, which this lane did not own. Falsified twice: appending a hand-rolled stripper to `format/avatar.test.ts` fails it as `(1, registered not at all)`; doubling `rtl_css_guards.test.ts`'s own strip fails it as `(2, registered 1)`.
+
+Also converted to import the shared stripper, so the rule has one home: `core/site_url.test.ts`, `core/gear_undo_scope.test.ts`, `lambda_log_hygiene.test.ts`, `paged_read_guards.test.ts`, `backup/cloud_export_transport.test.ts`, `coach/coach_lambda_handler.test.ts` (two copies), `tests-e2e/fixtures/dates.test.ts`, `tests-e2e/fixtures/db-read.test.ts`, `tests-e2e/fixtures/base-url.test.ts` and `tests-e2e/cross-cutting/architecture-guards.spec.ts`. Their assertions are unchanged and all still pass. The last of those is a Playwright spec this lane could not execute: its five banned patterns were run against `src/lib/core/data.ts` through the old chain and the new scanner outside Playwright and answer identically (all five `false`).

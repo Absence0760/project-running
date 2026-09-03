@@ -16271,3 +16271,72 @@ widget taps and no `pumpUntil` at all; identifying which of those actually
 outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
+
+## 1000. Nine copies of a comment stripper, and the one case none of them handled
+
+Every source-level guard in `apps/web` reads a file as text and has to blank its
+comments first, or the prose above a rule reads as a use of it. Eleven of them
+each spelled their own chain of `.replace` calls to do it, and § 971 had already
+found that a chain gets the ORDER wrong in a way that hides code: `//` is a
+comment to the language but `/*` inside one is still an opening delimiter to a
+regex, so stripping block comments first makes `// exactly as /clubs/* already
+do` open a block that runs to the next `*/` in the file. § 971 fixed the order in
+the six copies it could reach and pinned it with an ordering guard.
+
+Two things were left. The duplication itself, and a case no copy handled in
+either order: a `/*` inside a STRING literal opens the same phantom block. So does
+one inside a regex literal — and a regex literal spelling both delimiters is
+exactly what these files are full of.
+
+A chain of `.replace` calls cannot close that, because the fix is not another
+substitution: it is knowing which delimiter you are inside. `src/lib/core/
+strip_comments.ts` makes one forward pass over code / string / template / regex,
+with a previous-significant-token test to tell a regex literal from division, and
+blanks comment characters to spaces while keeping newlines, so an offset or a
+line number taken from the result is still the file's own.
+
+Strings and regex literals are emitted VERBATIM, which fixes the failure
+direction as well as the failure. A misread of either can only leave a comment
+standing — never delete code. An unstripped comment makes a guard report a
+violation someone can argue with; a swallowed region makes a guard pass while
+seeing nothing, which is what § 971 measured at 779 hidden lines. Single- and
+double-quoted strings and regex literals cannot cross a newline in JavaScript,
+so an unterminated one is treated as an ordinary character and a misread on a
+Svelte markup line (`don't`, `</div>`) cannot escape that line.
+
+The ordering guard is replaced rather than kept. Once the rule has one home,
+"which order does this copy use" is the wrong question; "does this file spell its
+own copy at all" is the right one. The new guard registers every file still
+allowed to strip a block comment together with the count it may spell and why,
+and fails both when an unregistered file appears and when a registered entry goes
+stale — the `allowExtra`/`allowMissing` shape `check_constraint_unions.mjs`
+already uses.
+
+Widening the walk found what the old guard's scope had hidden: it walked
+`src/lib/**/*.test.ts` only, and four more copies lived under `tests-e2e/`,
+three of them in the wrong order. None was hiding anything today — measured, the
+two orders give byte-identical output over every file those three scan — but the
+guard that existed to catch exactly that had never looked at them. A guard naming
+one instance of a class it should name all of is the § 968 defect, one directory
+over.
+
+One copy is deliberately left: `src/lib/integrations/strava_zip_strictness.
+test.ts` belonged to another lane in the round that did this work. It is a
+register entry with that reason, so it is visible and its removal is one line.
+
+## 1001. The two CSS scanners are right to strip only block comments, and now say so
+
+`contrast_guard.test.ts` and `rtl_css_guards.test.ts` strip `/* … */` and not
+`//`, sitting beside a family of guards where stripping only block comments was
+the defect § 971 fixed. They are correct: `//` is not a comment in CSS, and
+blanking it deletes a protocol-relative `url(//host/x.woff2)` and the tail of any
+`content` string that contains one. § 971's ordering guard skipped them, but only
+INCIDENTALLY — it detected that they strip a single form and moved on, which is
+indistinguishable from a copy that had simply forgotten the other half.
+
+Both files now say why in their header, and § 1000's register turns the
+incidental skip into a declared one: each CSS scanner is listed with the number
+of block-comment strips it may spell and the reason, and a count that moves fails
+the guard. That is the difference between a rule nobody has broken yet and a rule
+that is written down — the same reason a `shape: 'union'` rail in
+`check_constraint_unions.mjs` states its `allowExtra` rather than passing quietly.
