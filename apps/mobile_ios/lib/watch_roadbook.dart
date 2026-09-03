@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'roadbook.dart'
-    show CutoffStatus, Roadbook, RoadbookLeg;
+    show CutoffStatus, Roadbook, RoadbookLeg, RoadbookTarget, TargetStatus;
 import 'sim_watch_sync.dart' show crc32;
 
 /// Pure Dart mirror of the custom watch's `watch_core::roadbook_store` RBK1
@@ -16,11 +16,26 @@ import 'sim_watch_sync.dart' show crc32;
 ///   cutoff_count(1, u8) | flags(1) | checkpoint[N] | cutoff[M] |
 ///   crc32(4, u32 LE)
 ///
-/// where each checkpoint is `cum_dist_m(4, u32 LE) | leg_dist_m(4, u32 LE) |
-/// projected_elapsed_s(4, u32 LE) | cutoff(1, u8) | flags(1, u8)` — the cutoff
-/// byte naming [WatchCutoffStatus] (0 none / 1 safe / 2 tight / 3 miss) and the
-/// flags byte carrying [kCheckpointFlagRefill] — and each cut-off leg is
+/// where each v2 checkpoint is `cum_dist_m(4, u32 LE) | leg_dist_m(4, u32 LE) |
+/// projected_elapsed_s(4, u32 LE) | cutoff(1, u8) | flags(1, u8) |
+/// target_elapsed_s(4, u32 LE) | target(1, u8)` — the cutoff byte naming
+/// [WatchCutoffStatus] (0 none / 1 safe / 2 tight / 3 miss), the flags byte
+/// carrying [kCheckpointFlagRefill], and the target pair naming the runner's own
+/// time for that checkpoint plus this side's [WatchTargetStatus] verdict against
+/// it (0 none / 1 ahead / 2 on / 3 behind) — and each cut-off leg is
 /// `cum_dist_m(4, u32 LE) | limit_elapsed_s(4, u32 LE)`.
+///
+/// **Version 2 (2026-09-03, decisions §1027) added the target pair.** v1's
+/// checkpoint stopped at the flags byte, so the watch's Roadbook page could show
+/// the cut-off verdict this side computes and not the target one — on a device
+/// whose whole purpose is telling a runner whether they are on their own plan.
+/// The verdict is computed HERE for the same reason the cut-off one is: a target
+/// is a per-marker `target_clock` / `target_elapsed_s` meta the watch never
+/// sees, and the band it is graded on (`targetBandFraction` — 1 % of the target,
+/// floored at 60 s) lives in `roadbook.dart` beside the builder that applies it.
+/// The two halves travel together or not at all: the firmware refuses a frame
+/// carrying a time with no verdict or a verdict with no time rather than
+/// half-reading it.
 ///
 /// Distances travel as whole metres: a metre is four orders below the GPS noise
 /// the watch's along-course projection carries, and a `u32` covers 4,294 km of
@@ -56,7 +71,7 @@ import 'sim_watch_sync.dart' show crc32;
 /// unit-testable against the frozen golden vector shared with the Rust tests,
 /// reusing the run-sync module's [crc32] like `watch_course.dart` /
 /// `watch_workout.dart` / `watch_settings.dart`.
-const int _roadbookVersion = 0x01;
+const int _roadbookVersion = 0x02;
 
 /// Per-checkpoint flag: this checkpoint offers water/food, so the watch's Fuel
 /// page treats it as a refill point. Mirrors the firmware's
@@ -69,7 +84,7 @@ const int kMaxRoadbookCheckpoints = 16;
 const int kMaxRoadbookCutoffs = 16;
 
 const int _roadbookHeaderLen = 8;
-const int _roadbookCheckpointLen = 14;
+const int _roadbookCheckpointLen = 19;
 const int _roadbookCutoffLen = 8;
 const int _roadbookCrcLen = 4;
 
@@ -85,6 +100,32 @@ const int _maxWireMetres = 0xFFFFFFFF;
 /// is `index + 1`, and 0 means the checkpoint carries no cut-off at all.
 enum WatchCutoffStatus { safe, tight, miss }
 
+/// A checkpoint's target-time verdict, as this side graded the projection
+/// against the target the runner authored on the marker. **Declaration order is
+/// the wire contract** — the byte is `index + 1`, and 0 means the checkpoint
+/// carries no target at all.
+enum WatchTargetStatus { ahead, on, behind }
+
+/// A checkpoint's authored target time plus this side's verdict against it.
+///
+/// The two are only ever both present or both absent — a verdict with no time
+/// behind it cannot be audited on the wrist, and a time with no verdict cannot
+/// be graded there (the watch holds neither the band nor the marker meta). The
+/// firmware refuses a frame carrying one without the other, so this class exists
+/// to make the half-present case unrepresentable on the way in.
+class WatchCheckpointTarget {
+  /// Target arrival, elapsed seconds from the race start. Must be positive:
+  /// second 0 is the wire's "no target", and the synthetic start (the one
+  /// checkpoint that could sit there) is always dropped before encoding.
+  final int elapsedSec;
+  final WatchTargetStatus status;
+
+  const WatchCheckpointTarget({
+    required this.elapsedSec,
+    required this.status,
+  });
+}
+
 /// One roadbook checkpoint: where it is along the course, the leg that arrives
 /// there, when the phone's schedule projects the runner reaching it, its cut-off
 /// verdict if it has one, and whether it is a refill point.
@@ -93,6 +134,10 @@ class WatchRoadbookCheckpoint {
   final double legDistanceM;
   final int projectedElapsedSec;
   final WatchCutoffStatus? cutoff;
+
+  /// The runner's own target for this checkpoint and how the projection sits
+  /// against it, when the marker carries one (`RBK1` v2).
+  final WatchCheckpointTarget? target;
   final bool isRefill;
 
   const WatchRoadbookCheckpoint({
@@ -100,6 +145,7 @@ class WatchRoadbookCheckpoint {
     required this.legDistanceM,
     required this.projectedElapsedSec,
     this.cutoff,
+    this.target,
     this.isRefill = false,
   });
 }
@@ -118,6 +164,9 @@ class WatchCutoffLeg {
 }
 
 int _statusCode(WatchCutoffStatus? status) =>
+    status == null ? 0 : status.index + 1;
+
+int _targetCode(WatchTargetStatus? status) =>
     status == null ? 0 : status.index + 1;
 
 /// A metre distance as the wire's `u32`. Throws when it cannot be represented —
@@ -141,7 +190,7 @@ int _seconds(int s, String what) {
   return s;
 }
 
-/// Encode a roadbook + cut-off schedule into an RBK1 v1 frame, sealed with the
+/// Encode a roadbook + cut-off schedule into an RBK1 v2 frame, sealed with the
 /// CRC32 trailer the watch checks before it will load the schedule. Throws when
 /// either series is over its cap ([kMaxRoadbookCheckpoints] /
 /// [kMaxRoadbookCutoffs] — refused, not trimmed, matching the firmware's own
@@ -197,6 +246,17 @@ Uint8List encodeRoadbook(
     );
     out.setUint8(off + 12, _statusCode(cp.cutoff));
     out.setUint8(off + 13, cp.isRefill ? kCheckpointFlagRefill : 0);
+    // Both halves of the target or neither: second 0 is the wire's "no
+    // target", so a target stamped there is encoded as absent rather than as a
+    // verdict the firmware would refuse the whole frame over.
+    final target = cp.target;
+    final hasTarget = target != null && target.elapsedSec > 0;
+    out.setUint32(
+      off + 14,
+      hasTarget ? _seconds(target.elapsedSec, 'target arrival') : 0,
+      Endian.little,
+    );
+    out.setUint8(off + 18, hasTarget ? _targetCode(target.status) : 0);
     off += _roadbookCheckpointLen;
   }
   for (final leg in cutoffs) {
@@ -463,6 +523,7 @@ WatchRoadbookResult watchRoadbookFromRoadbook(Roadbook rb) {
       legDistanceM: (s.distM - prevKeptDist).toDouble(),
       projectedElapsedSec: s.elapsedS,
       cutoff: _watchStatus(s.leg.cutoff?.status),
+      target: _watchTarget(s.leg.target),
       isRefill: s.isRefill,
     ));
     prevKeptDist = s.distM;
@@ -496,5 +557,30 @@ WatchCutoffStatus? _watchStatus(CutoffStatus? status) {
       return WatchCutoffStatus.tight;
     case CutoffStatus.miss:
       return WatchCutoffStatus.miss;
+  }
+}
+
+/// Map the phone roadbook's target verdict onto the wire's, written out for the
+/// same reason [_watchStatus] is: a reordering of either enum must be a compile
+/// error here, not a silently shifted verdict on the watch.
+///
+/// A non-positive or non-finite target second is dropped rather than pushed:
+/// second 0 IS the wire's "no target", and the runner is better served by a
+/// checkpoint that admits it has no target than by one claiming a verdict
+/// against a time that is not one.
+WatchCheckpointTarget? _watchTarget(RoadbookTarget? target) {
+  if (target == null) return null;
+  final elapsed = target.targetElapsedS;
+  if (elapsed <= 0) return null;
+  switch (target.status) {
+    case TargetStatus.ahead:
+      return WatchCheckpointTarget(
+          elapsedSec: elapsed, status: WatchTargetStatus.ahead);
+    case TargetStatus.on:
+      return WatchCheckpointTarget(
+          elapsedSec: elapsed, status: WatchTargetStatus.on);
+    case TargetStatus.behind:
+      return WatchCheckpointTarget(
+          elapsedSec: elapsed, status: WatchTargetStatus.behind);
   }
 }

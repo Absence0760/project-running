@@ -46,7 +46,7 @@ use crate::race_phases::{
 };
 use crate::race_predictor::{predict_race_ladder, Effort, RacePrediction};
 use crate::readiness::ReadinessBand;
-use crate::roadbook::CutoffStatus;
+use crate::roadbook::{CutoffStatus, TargetStatus};
 use crate::sleep_station::{sleep_budget, SleepBudget};
 use crate::storm::StormView;
 use crate::timers::TimerView;
@@ -207,8 +207,26 @@ pub struct RoadbookCheckpoint {
     pub projected_elapsed_s: u32,
     /// Safe/tight/miss cutoff verdict, if this checkpoint carries a cutoff.
     pub cutoff: Option<CutoffStatus>,
+    /// The runner's own target time for this checkpoint and how the phone's
+    /// projection sits against it, if the marker carries one (`RBK1` v2).
+    pub target: Option<CheckpointTarget>,
     /// Whether this checkpoint offers water/food — a fuel refill point.
     pub is_refill: bool,
+}
+
+/// A checkpoint's authored target time plus the phone's verdict against it.
+///
+/// The two travel together and are only ever both present or both absent — a
+/// verdict with no time behind it is an unauditable opinion, and a time with no
+/// verdict is a number the watch cannot grade (it has neither the band nor the
+/// marker meta). `RBK1`'s decoder refuses a frame carrying one without the
+/// other rather than dropping the half it cannot pair.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct CheckpointTarget {
+    /// Target arrival, elapsed seconds from the race start.
+    pub elapsed_s: u32,
+    pub status: TargetStatus,
 }
 
 /// One upcoming checkpoint in the [`RoadbookView`] window.
@@ -217,6 +235,7 @@ pub struct RoadbookLegView {
     pub cum_dist_m: f32,
     pub projected_elapsed_s: u32,
     pub cutoff: Option<CutoffStatus>,
+    pub target: Option<CheckpointTarget>,
 }
 
 /// The Roadbook page view: total checkpoints + the next few ahead of the
@@ -2859,6 +2878,7 @@ impl Recorder {
                 cum_dist_m: leg.cum_dist_m as f32,
                 projected_elapsed_s: leg.projected_elapsed_s,
                 cutoff: leg.cutoff,
+                target: leg.target,
             };
             len += 1;
         }
@@ -4900,6 +4920,7 @@ mod tests {
                 leg_dist_m: 0.0,
                 projected_elapsed_s: 0,
                 cutoff: None,
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -4907,6 +4928,7 @@ mod tests {
                 leg_dist_m: 5000.0,
                 projected_elapsed_s: 1800,
                 cutoff: Some(CutoffStatus::Safe),
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -4914,6 +4936,7 @@ mod tests {
                 leg_dist_m: 5000.0,
                 projected_elapsed_s: 3600,
                 cutoff: Some(CutoffStatus::Tight),
+                target: None,
                 is_refill: false,
             },
         ]);
@@ -5051,6 +5074,7 @@ mod tests {
                 leg_dist_m: 0.0,
                 projected_elapsed_s: 0,
                 cutoff: None,
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -5058,6 +5082,7 @@ mod tests {
                 leg_dist_m: 5_000.0,
                 projected_elapsed_s: 2_400,
                 cutoff: None,
+                target: None,
                 is_refill: true,
             },
             RoadbookCheckpoint {
@@ -5065,6 +5090,7 @@ mod tests {
                 leg_dist_m: 5_000.0,
                 projected_elapsed_s: 3_600,
                 cutoff: None,
+                target: None,
                 is_refill: false,
             },
         ]);

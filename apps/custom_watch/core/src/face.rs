@@ -44,8 +44,10 @@ use crate::race_day::GoalFeasibilityVerdict;
 use crate::race_phases::RacePhaseIntent;
 use crate::race_predictor::{LadderRung, PredictionConfidence};
 use crate::readiness::ReadinessBand;
-use crate::record::{FuelBasis, RacePhaseView, RecordState, Snapshot, TurnCueView};
-use crate::roadbook::CutoffStatus;
+use crate::record::{
+    CheckpointTarget, FuelBasis, RacePhaseView, RecordState, Snapshot, TurnCueView,
+};
+use crate::roadbook::{CutoffStatus, TargetStatus};
 use crate::sleep_station::{SleepStatus, NO_WAKE_NOTICE};
 use crate::storm::StormTrend;
 use crate::trackback::{self, TrackbackView};
@@ -3184,12 +3186,36 @@ fn cutoff_flag(status: Option<CutoffStatus>) -> char {
     }
 }
 
+/// The roadbook glance's target-time row: immediately below the
+/// [`crate::record::ROADBOOK_WINDOW`] checkpoint rows (3..6) and above
+/// [`GPS_ROW`], the one row that page leaves empty.
+const TARGET_ROW: usize = 7;
+
+/// A one-glyph target flag for a roadbook row: `+` ahead of the runner's own
+/// target for that checkpoint, `=` on it, `-` behind it, `.` no target on that
+/// checkpoint. Signed rather than worded because it rides a column beside the
+/// cutoff flag: the two are different claims — a cutoff is the race's rule and
+/// a target is the runner's plan — so they must not share a vocabulary.
+fn target_flag(target: Option<CheckpointTarget>) -> char {
+    match target.map(|t| t.status) {
+        Some(TargetStatus::Ahead) => '+',
+        Some(TargetStatus::On) => '=',
+        Some(TargetStatus::Behind) => '-',
+        None => '.',
+    }
+}
+
 /// The roadbook glance: the total checkpoint count beside the label, then the
 /// next few checkpoints ahead of the current position — each its distance,
-/// projected arrival clock, and safe/tight/miss cutoff flag. The next
-/// checkpoint's distance rides the hero. Unfed until a roadbook is pushed, and
-/// again until a position is projected onto the course — two absences with
-/// different remedies, the split the cut-off page draws (§ 449).
+/// projected arrival clock, safe/tight/miss cutoff flag and, since `RBK1` v2,
+/// an ahead/on/behind flag against the runner's own target for that checkpoint
+/// ([`target_flag`]). The row below the window states the next TARGET TIME
+/// itself, because a verdict glyph with no number behind it is a claim a tired
+/// runner cannot check; it names the first checkpoint ahead that carries one,
+/// and stays blank when none does. The next checkpoint's distance rides the
+/// hero. Unfed until a roadbook is pushed, and again until a position is
+/// projected onto the course — two absences with different remedies, the split
+/// the cut-off page draws (§ 449).
 #[allow(clippy::too_many_arguments)]
 fn roadbook_glance(
     fix: Option<&Fix>,
@@ -3224,12 +3250,28 @@ fn roadbook_glance(
                 let (h, m, s) = hms(leg.projected_elapsed_s);
                 let _ = write!(
                     rows[3 + i],
-                    "{:>6.2}K {}:{:02}:{:02} {}",
+                    "{:>6.2}K {}:{:02}:{:02} {}{}",
                     km,
                     h.min(999),
                     m,
                     s,
-                    cutoff_flag(leg.cutoff)
+                    cutoff_flag(leg.cutoff),
+                    target_flag(leg.target)
+                );
+            }
+            if let Some(t) = rb.upcoming[..(rb.upcoming_len as usize).min(rb.upcoming.len())]
+                .iter()
+                .find_map(|leg| leg.target)
+            {
+                let (h, m, s) = hms(t.elapsed_s);
+                let _ = write!(
+                    rows[TARGET_ROW],
+                    "{:<7}{}:{:02}:{:02} {}",
+                    "TARGET",
+                    h.min(999),
+                    m,
+                    s,
+                    target_flag(Some(t))
                 );
             }
         }
@@ -5723,6 +5765,7 @@ mod tests {
                 cum_dist_m: 999_990.0,
                 projected_elapsed_s: 99 * 3600 + 59 * 60 + 59,
                 cutoff: Some(CutoffStatus::Miss),
+                target: None,
             }; crate::record::ROADBOOK_WINDOW],
             upcoming_len: crate::record::ROADBOOK_WINDOW as u8,
         });
@@ -6888,6 +6931,7 @@ mod tests {
                 cum_dist_m: 195_000.0,
                 projected_elapsed_s: 105 * 3600 + 12 * 60 + 34,
                 cutoff: Some(CutoffStatus::Safe),
+                target: None,
             }; crate::record::ROADBOOK_WINDOW],
             upcoming_len: 1,
         });
@@ -10277,6 +10321,7 @@ mod tests {
             cum_dist_m,
             projected_elapsed_s,
             cutoff,
+            target: None,
         };
         let mut upcoming = [RoadbookLegView::default(); ROADBOOK_WINDOW];
         upcoming[0] = leg(5_000.0, 1_800, Some(CutoffStatus::Safe));
@@ -10293,12 +10338,19 @@ mod tests {
         let rows = roadbook_rows(&rec);
         assert_eq!(rows[0], header("", "REC"));
         assert_eq!(rows[2].as_str(), "ROADBOOK   12 CP");
-        // Distance, projected arrival clock, then the one-glyph cut-off flag:
-        // blank safe, `!` tight, `.` for a checkpoint carrying no cut-off.
-        assert_eq!(rows[3].as_str(), "  5.00K 0:30:00  ");
-        assert_eq!(rows[4].as_str(), " 42.20K 3:30:05 !");
-        assert_eq!(rows[5].as_str(), "160.93K 40:00:00 .");
+        // Distance, projected arrival clock, then the one-glyph cut-off flag —
+        // blank safe, `!` tight, `.` for a checkpoint carrying no cut-off —
+        // then the target flag, `.` here because a v1 push carries none.
+        assert_eq!(rows[3].as_str(), "  5.00K 0:30:00  .");
+        assert_eq!(rows[4].as_str(), " 42.20K 3:30:05 !.");
+        assert_eq!(rows[5].as_str(), "160.93K 40:00:00 ..");
         assert_eq!(rows[6].as_str(), "", "only the fed legs are drawn");
+        assert_eq!(
+            rows[7].as_str(),
+            "",
+            "no checkpoint carries a target, so the target row stays empty \
+             rather than claiming one"
+        );
         assert_eq!(rows[8].as_str(), "     8 SATS PERF");
         // The next checkpoint's distance rides the hero.
         assert_eq!(
@@ -10308,6 +10360,82 @@ mod tests {
             "5.00"
         );
         only_the_gps_icon(Page::Roadbook, &rec, 42);
+    }
+
+    /// The `RBK1` v2 half: the runner's own target for a checkpoint, and how
+    /// the phone's projection sits against it. The glyph rides the row beside
+    /// the cut-off flag; the TIME rides the row below the window, because a
+    /// verdict with no number behind it is a claim a runner at hour twenty
+    /// cannot check.
+    #[test]
+    fn roadbook_glance_states_the_next_target_time_beside_its_verdict() {
+        use crate::record::{CheckpointTarget, RoadbookLegView, RoadbookView, ROADBOOK_WINDOW};
+        let leg = |cum_dist_m: f32, projected_elapsed_s: u32, cutoff, target| RoadbookLegView {
+            cum_dist_m,
+            projected_elapsed_s,
+            cutoff,
+            target,
+        };
+        let target = |elapsed_s, status| Some(CheckpointTarget { elapsed_s, status });
+        let mut upcoming = [RoadbookLegView::default(); ROADBOOK_WINDOW];
+        // The first checkpoint ahead carries NO target, so the row below must
+        // state the next one that does — not the first leg in the window.
+        upcoming[0] = leg(5_000.0, 1_800, Some(CutoffStatus::Safe), None);
+        upcoming[1] = leg(
+            42_195.0,
+            3 * 3600 + 30 * 60 + 5,
+            Some(CutoffStatus::Tight),
+            target(3 * 3600 + 15 * 60, TargetStatus::Behind),
+        );
+        upcoming[2] = leg(
+            160_934.0,
+            40 * 3600,
+            None,
+            target(41 * 3600 + 30 * 60, TargetStatus::Ahead),
+        );
+        let mut rec = snapshot(RecordState::Recording, 15_000.0);
+        rec.roadbook_loaded = true;
+        rec.roadbook = Some(RoadbookView {
+            total: 12,
+            upcoming,
+            upcoming_len: 3,
+        });
+
+        let rows = roadbook_rows(&rec);
+        assert_eq!(rows[3].as_str(), "  5.00K 0:30:00  .");
+        assert_eq!(rows[4].as_str(), " 42.20K 3:30:05 !-");
+        assert_eq!(rows[5].as_str(), "160.93K 40:00:00 .+");
+        assert_eq!(rows[7].as_str(), "TARGET 3:15:00 -");
+        for row in rows.iter() {
+            assert!(row.len() <= COLS, "{row} is wider than the panel");
+        }
+    }
+
+    #[test]
+    fn an_on_plan_target_reads_as_on_plan_not_as_an_absence() {
+        // `=` and `.` are one glyph apart and mean opposite things: on plan,
+        // versus no plan for this checkpoint at all.
+        use crate::record::{CheckpointTarget, RoadbookLegView, RoadbookView, ROADBOOK_WINDOW};
+        let mut upcoming = [RoadbookLegView::default(); ROADBOOK_WINDOW];
+        upcoming[0] = RoadbookLegView {
+            cum_dist_m: 5_000.0,
+            projected_elapsed_s: 1_800,
+            cutoff: None,
+            target: Some(CheckpointTarget {
+                elapsed_s: 1_805,
+                status: TargetStatus::On,
+            }),
+        };
+        let mut rec = snapshot(RecordState::Recording, 1_000.0);
+        rec.roadbook_loaded = true;
+        rec.roadbook = Some(RoadbookView {
+            total: 1,
+            upcoming,
+            upcoming_len: 1,
+        });
+        let rows = roadbook_rows(&rec);
+        assert_eq!(rows[3].as_str(), "  5.00K 0:30:00 .=");
+        assert_eq!(rows[7].as_str(), "TARGET 0:30:05 =");
     }
 
     /// A pushed roadbook with no position projected onto the course is the

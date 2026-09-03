@@ -10,16 +10,18 @@ import '../lib/watch_roadbook.dart';
 /// The frozen golden vector — kept byte-identical to the firmware's
 /// `watch_core::roadbook_store::golden_frame_is_stable` (the canned sim
 /// schedule: start, an aid at 90 m, the 180 m finish, plus the two sim cut-offs,
-/// sealed with the v1 CRC32 trailer), so a wire-format drift on either side is
-/// caught here rather than on a wrist mid-race.
+/// sealed with the CRC32 trailer), so a wire-format drift on either side is
+/// caught here rather than on a wrist mid-race. v2: each checkpoint ends with a
+/// `target_elapsed_s(4) | target(1)` pair, all zero here because the sim
+/// schedule carries no targets.
 const _goldenHex =
-    '52424b3101030200'
-    '0000000000000000000000000001'
-    '5a0000005a0000001e0000000101'
-    'b40000005a0000003c0000000200'
+    '52424b3102030200'
+    '00000000000000000000000000010000000000'
+    '5a0000005a0000001e00000001010000000000'
+    'b40000005a0000003c00000002000000000000'
     '5a00000078000000'
     'aa000000f0000000'
-    '79e5afab';
+    '4aaabc56';
 
 const _crcLen = 4;
 
@@ -82,7 +84,7 @@ void main() {
     test('the header names the frame and both counts', () {
       final frame = encodeRoadbook(_simCheckpoints, _simCutoffs);
       expect(frame.sublist(0, 4), equals(_hex('52424b31')));
-      expect(frame[4], equals(1), reason: 'v1 is the only version');
+      expect(frame[4], equals(2), reason: 'v2 carries the target pair');
       expect(frame[5], equals(3));
       expect(frame[6], equals(2));
       expect(frame[7], equals(0), reason: 'no frame-level flag bits yet');
@@ -104,7 +106,7 @@ void main() {
       final onlyCheckpoints = encodeRoadbook(_simCheckpoints, const []);
       expect(onlyCheckpoints[5], equals(3));
       expect(onlyCheckpoints[6], equals(0));
-      expect(onlyCheckpoints.length, equals(8 + 3 * 14 + 4));
+      expect(onlyCheckpoints.length, equals(8 + 3 * 19 + 4));
 
       final onlyCutoffs = encodeRoadbook(const [], _simCutoffs);
       expect(onlyCutoffs[5], equals(0));
@@ -115,8 +117,8 @@ void main() {
     test('a refill checkpoint sets the flag bit and a dry one clears it', () {
       final frame = encodeRoadbook(_simCheckpoints, const []);
       expect(frame[8 + 13], equals(kCheckpointFlagRefill));
-      expect(frame[8 + 14 + 13], equals(kCheckpointFlagRefill));
-      expect(frame[8 + 28 + 13], equals(0));
+      expect(frame[8 + 19 + 13], equals(kCheckpointFlagRefill));
+      expect(frame[8 + 38 + 13], equals(0));
     });
 
     test('the cut-off status byte is the declaration order plus one', () {
@@ -144,6 +146,63 @@ void main() {
         ], const []);
         expect(frame[8 + 12], equals(entry.value), reason: '${entry.key}');
       }
+    });
+
+    test('the target status byte is the declaration order plus one', () {
+      // Declaration order is the wire contract, so pin it: 0 means the
+      // checkpoint carries no target, and a reorder here would turn every
+      // runner who is ahead of their own plan into one who is behind it.
+      expect(WatchTargetStatus.values, equals(const [
+        WatchTargetStatus.ahead,
+        WatchTargetStatus.on,
+        WatchTargetStatus.behind,
+      ]));
+      for (final entry in {
+        WatchTargetStatus.ahead: 1,
+        WatchTargetStatus.on: 2,
+        WatchTargetStatus.behind: 3,
+      }.entries) {
+        final frame = encodeRoadbook([
+          WatchRoadbookCheckpoint(
+            cumDistanceM: 100,
+            legDistanceM: 100,
+            projectedElapsedSec: 60,
+            target: WatchCheckpointTarget(
+                elapsedSec: 55, status: entry.key),
+          ),
+        ], const []);
+        expect(_u32(frame, 8 + 14), equals(55), reason: '${entry.key}');
+        expect(frame[8 + 18], equals(entry.value), reason: '${entry.key}');
+      }
+      // And no target at all is the zero pair the firmware reads back as none.
+      final none = encodeRoadbook([
+        const WatchRoadbookCheckpoint(
+          cumDistanceM: 100,
+          legDistanceM: 100,
+          projectedElapsedSec: 60,
+        ),
+      ], const []);
+      expect(_u32(none, 8 + 14), equals(0));
+      expect(none[8 + 18], equals(0));
+    });
+
+    test('a target at second zero encodes as no target, not as a verdict', () {
+      // Second 0 IS the wire's "no target", and the firmware refuses a frame
+      // carrying a verdict against it. The synthetic start — the one checkpoint
+      // that could sit there — is dropped before encoding anyway, so this is
+      // the sentinel being honoured rather than a value being lost.
+      final frame = encodeRoadbook([
+        const WatchRoadbookCheckpoint(
+          cumDistanceM: 100,
+          legDistanceM: 100,
+          projectedElapsedSec: 60,
+          target: WatchCheckpointTarget(
+              elapsedSec: 0, status: WatchTargetStatus.on),
+        ),
+      ], const []);
+      expect(_u32(frame, 8 + 14), equals(0));
+      expect(frame[8 + 18], equals(0),
+          reason: 'a verdict with no time would be refused whole');
     });
 
     test('distances round to whole metres the way the firmware does', () {
@@ -177,8 +236,8 @@ void main() {
       ]);
       expect(
         frame.length,
-        equals(8 + 16 * 14 + 16 * 8 + 4),
-        reason: 'the 364-byte worst case the chunking exists for',
+        equals(8 + 16 * 19 + 16 * 8 + 4),
+        reason: 'the 444-byte worst case the chunking exists for',
       );
     });
 
@@ -351,6 +410,37 @@ void main() {
       expect(out.reduced, isFalse);
     });
 
+    test("a marker's target time and verdict reach the pushed checkpoint", () {
+      // The whole point of `RBK1` v2: the target lives in a marker's
+      // `target_elapsed_s` meta, this side grades it against its own
+      // projection, and the verdict + the time both travel so the wrist can
+      // state the number it is judging.
+      final marker = RoadbookMarker(
+        positionM: 10000,
+        kind: 'aid_station',
+        label: 'target stop',
+        meta: const {'services': ['water'], 'target_elapsed_s': 60},
+      );
+      final rb = build([marker]);
+      final leg = rb.legs.firstWhere((l) => l.label == 'target stop');
+      expect(leg.target, isNotNull,
+          reason: 'the builder graded the marker meta');
+
+      final out = watchRoadbookFromRoadbook(rb);
+      final pushed = out.checkpoints!
+          .firstWhere((c) => c.cumDistanceM.round() == leg.cumDistM.round());
+      expect(pushed.target, isNotNull);
+      expect(pushed.target!.elapsedSec, equals(leg.target!.targetElapsedS));
+      // A 60 s target against a projection measured in hours is unambiguously
+      // behind, so the verdict is checked rather than merely present.
+      expect(leg.target!.status, TargetStatus.behind);
+      expect(pushed.target!.status, WatchTargetStatus.behind);
+      // A marker with no target meta pushes none, rather than a default.
+      final plain = build([aid(20000)]);
+      final plainOut = watchRoadbookFromRoadbook(plain);
+      expect(plainOut.checkpoints!.every((c) => c.target == null), isTrue);
+    });
+
     test('a route with no distance is refused, not pushed empty', () {
       final out = watchRoadbookFromRoadbook(build(const [], count: 0));
       expect(out.refusal, WatchRoadbookRefusal.noSchedule);
@@ -373,7 +463,7 @@ void main() {
           reason: 'a schedule that ends mid-race is the worst answer');
       // The frame must still encode — the cap is what the firmware refuses past.
       expect(encodeRoadbook(out.checkpoints!, out.cutoffs!).length,
-          lessThanOrEqualTo(364));
+          lessThanOrEqualTo(444));
     });
 
     test('every cut-off survives a reduction, even a late-clumped one', () {

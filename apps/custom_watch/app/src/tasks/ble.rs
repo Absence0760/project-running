@@ -244,7 +244,7 @@ mod imp {
         /// Fuel / SleepStation pages read live data on hardware instead of only
         /// under `sim-course`.
         ///
-        /// Chunked, unlike `screens`: a full schedule is 364 B, and one ATT
+        /// Chunked, unlike `screens`: a full schedule is 444 B, and one ATT
         /// write at the 256-byte MTU carries `MTU - 3` = 253.
         ///
         /// **Take the next free suffix; never renumber a row above.** § 410 was
