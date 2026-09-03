@@ -1,7 +1,7 @@
+import 'package:core_models/core_models.dart' show DistanceUnit;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/challenge_goal.dart';
-import '../lib/preferences.dart';
 
 const int _day = 86400000;
 const List<String> _metrics = [

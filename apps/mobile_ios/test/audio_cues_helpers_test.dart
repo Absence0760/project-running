@@ -1,7 +1,7 @@
+import 'package:core_models/core_models.dart' show DistanceUnit;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:run_recorder/run_recorder.dart' show WorkoutStep, WorkoutStepKind;
 import '../lib/audio_cues.dart';
-import '../lib/preferences.dart';
 
 WorkoutStep _step({
   WorkoutStepKind kind = WorkoutStepKind.rep,

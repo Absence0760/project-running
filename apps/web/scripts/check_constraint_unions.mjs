@@ -967,7 +967,7 @@ export const PAIRS = [
 		tableColumn: 'user_profiles.preferred_unit',
 		clients: [
 			{ file: TS_TYPES, decl: 'PreferredUnit', shape: 'union' },
-			{ file: 'apps/mobile_android/lib/preferences.dart', decl: 'DistanceUnit', shape: 'enum' },
+			{ file: 'packages/core_models/lib/src/distance_unit.dart', decl: 'DistanceUnit', shape: 'enum' },
 		],
 	},
 	{

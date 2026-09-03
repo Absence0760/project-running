@@ -1,4 +1,5 @@
 import 'package:api_client/api_client.dart' show ActivityRow;
+import 'package:core_models/core_models.dart' show DistanceUnit;
 import 'package:flutter/material.dart';
 import 'package:ui_kit/ui_kit.dart' show SectionAccents;
 
@@ -6,8 +7,7 @@ import '../activity_timeline.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
-import '../preferences.dart'
-    show DistanceUnit, UnitFormat, WeightFormat, activeWeightUnit;
+import '../preferences.dart' show UnitFormat, WeightFormat, activeWeightUnit;
 
 /// Unified reverse-chronological History timeline over the `activities` view
 /// (runs + lifts + meals). Mirrors the web `/history` timeline (multi_modal.md

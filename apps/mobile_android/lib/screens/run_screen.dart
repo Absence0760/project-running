@@ -6,7 +6,7 @@ import 'dart:ui';
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:core_models/core_models.dart'
-    show ActivityType, PlanWorkoutRow, TrainingPlanRow;
+    show ActivityType, DistanceUnit, PlanWorkoutRow, TrainingPlanRow;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';

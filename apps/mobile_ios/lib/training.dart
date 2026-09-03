@@ -5,10 +5,11 @@
 // suites. See docs/features/training.md.
 
 import 'dart:math';
+import 'package:core_models/core_models.dart' show DistanceUnit;
 
 import 'l10n/locale_support.dart' show activeLocaleTag;
 import 'l10n/number_format.dart' show formatFixed;
-import 'preferences.dart' show DistanceUnit, activeDistanceUnit;
+import 'preferences.dart' show activeDistanceUnit;
 
 enum GoalEvent { distance5k, distance10k, distanceHalf, distanceFull, custom }
 
