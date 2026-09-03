@@ -85,23 +85,53 @@ test('the two checkout functions agree on one URL key name', () => {
 
 /// ── the refusal vocabulary, not just the success key (decisions § 982) ──
 ///
-/// `startDonationCheckout` now unwraps the envelope and the fundraiser page
-/// maps the codes to copy, which puts a second cross-language contract in the
-/// same position as the one above: the page compares string literals written
-/// in TypeScript against codes written in Deno, with nothing between them. A
-/// mapped code the function cannot send is dead copy that reads as coverage —
-/// the followup that asked for this work named `host_cannot_take_payment`,
-/// which the function has never returned (it is `owner_cannot_take_payment`),
-/// and a map written from that filing would have silently never matched.
+/// Both checkout callers now unwrap the envelope and rethrow the function's own
+/// code, and both pages map those codes to copy. That puts a second
+/// cross-language contract in the same position as the one above: a page
+/// compares string literals written in TypeScript against codes written in
+/// Deno, with nothing between them. A mapped code the function cannot send is
+/// dead copy that reads as coverage.
+///
+/// The two vocabularies are close enough to swap by accident and are NOT the
+/// same: donations refuse with `owner_cannot_take_payment`, events with
+/// `host_cannot_take_payment`. The followup that asked for the donations guard
+/// named the events spelling, and a map written from that filing would have
+/// compiled and silently never matched. Which is why both pairs are covered
+/// here rather than one (decisions § 1003).
 
-const donatePageSource = () =>
-	readFileSync(
-		resolve(repoRoot, 'apps/web/src/routes/fundraisers/[id]/+page.svelte'),
-		'utf8',
-	);
+const REFUSAL_PAIRS = [
+	{
+		fn: 'donations-checkout',
+		page: 'apps/web/src/routes/fundraisers/[id]/+page.svelte',
+		handlerStart: 'async function submitDonation()',
+		handlerEnd: 'function onEdited(',
+		minCodes: 8,
+		minPrefixes: 2,
+		generic: 'fundraiser.donateFailed',
+		// One refusal a donor can act on from each class: ended, unpayable,
+		// gone. Collapsing them into the generic line makes a donor retry a
+		// checkout that can never open.
+		distinct: ['fundraiser_closed', 'fundraiser_not_found', 'owner_cannot_take_payment'],
+		// How far past a compared code its copy key may sit. The event page
+		// groups several codes into one branch, so its chain is longer.
+		keyWindow: 120,
+	},
+	{
+		fn: 'events-checkout',
+		page: 'apps/web/src/routes/clubs/[slug]/events/[id]/+page.svelte',
+		handlerStart: 'async function register()',
+		handlerEnd: 'async function pollForPaidOrder(',
+		minCodes: 12,
+		// This function templates none of its codes.
+		minPrefixes: 0,
+		generic: 'clubEvent.registerFailed',
+		distinct: ['event_full', 'sales_closed', 'host_cannot_take_payment'],
+		keyWindow: 240,
+	},
+];
 
-/// Every `error:` code the function can answer with — plain literals, plus
-/// the prefixes of the two it builds by template.
+/// Every `error:` code a function can answer with — plain literals, plus the
+/// prefixes of any it builds by template.
 function refusalVocabulary(source: string): { codes: Set<string>; prefixes: Set<string> } {
 	const codes = new Set([...source.matchAll(/\berror:\s*'([a-z0-9_]+)'/g)].map((m) => m[1]));
 	const prefixes = new Set(
@@ -110,62 +140,76 @@ function refusalVocabulary(source: string): { codes: Set<string>; prefixes: Set<
 	return { codes, prefixes };
 }
 
-/// The donate handler's catch block — where the code→copy map lives.
-function donateCatchBlock(source: string): string {
-	const from = source.indexOf('async function submitDonation()');
-	assert.notEqual(from, -1, 'submitDonation not found — did it move?');
-	const to = source.indexOf('function onEdited(', from);
-	assert.notEqual(to, -1, 'the handler no longer ends where this guard expects');
-	return source.slice(from, to);
+/// The handler whose catch block holds the code→copy map.
+function handlerBlock(source: string, from: string, to: string): string {
+	const start = source.indexOf(from);
+	assert.notEqual(start, -1, `${from} not found — did it move?`);
+	const end = source.indexOf(to, start);
+	assert.notEqual(end, -1, `the handler no longer ends where this guard expects (${to})`);
+	return source.slice(start, end);
 }
 
-test('every donation refusal the page maps is one donations-checkout can send', () => {
-	const ef = readFileSync(
-		resolve(repoRoot, 'apps/backend/supabase/functions/donations-checkout/index.ts'),
-		'utf8',
-	);
-	const { codes, prefixes } = refusalVocabulary(ef);
-	assert.ok(codes.size >= 8, `expected the EF refusal codes to be found; got ${codes.size}`);
-	assert.ok(prefixes.size >= 2, `expected the templated prefixes to be found; got ${prefixes.size}`);
+for (const pair of REFUSAL_PAIRS) {
+	const efSource = () =>
+		readFileSync(
+			resolve(repoRoot, 'apps/backend/supabase/functions', pair.fn, 'index.ts'),
+			'utf8',
+		);
+	const block = () =>
+		handlerBlock(
+			readFileSync(resolve(repoRoot, pair.page), 'utf8'),
+			pair.handlerStart,
+			pair.handlerEnd,
+		);
 
-	const block = donateCatchBlock(donatePageSource());
-	const mapped = [...block.matchAll(/code === '([a-z0-9_]+)'/g)].map((m) => m[1]);
-	const mappedPrefixes = [...block.matchAll(/code\.startsWith\('([a-z0-9_]+)'\)/g)].map((m) => m[1]);
-	assert.ok(mapped.length > 0, 'the donate handler maps no codes at all');
+	test(`every refusal the ${pair.fn} caller's page maps is one that function can send`, () => {
+		const { codes, prefixes } = refusalVocabulary(efSource());
+		assert.ok(
+			codes.size >= pair.minCodes,
+			`expected the EF refusal codes to be found; got ${codes.size}`,
+		);
+		assert.ok(
+			prefixes.size >= pair.minPrefixes,
+			`expected the templated prefixes to be found; got ${prefixes.size}`,
+		);
 
-	assert.deepEqual(
-		mapped.filter((c) => !codes.has(c)),
-		[],
-		'These codes are compared on the fundraiser page but donations-checkout never sends them, ' +
-			'so the copy behind them is unreachable',
-	);
-	assert.deepEqual(
-		mappedPrefixes.filter((c) => !prefixes.has(c)),
-		[],
-		'These prefixes are compared on the fundraiser page but no templated code uses them',
-	);
-});
+		const source = block();
+		const mapped = [...source.matchAll(/code === '([a-z0-9_]+)'/g)].map((m) => m[1]);
+		const mappedPrefixes = [...source.matchAll(/code\.startsWith\('([a-z0-9_]+)'\)/g)].map(
+			(m) => m[1],
+		);
+		assert.ok(mapped.length > 0, `the ${pair.fn} handler maps no codes at all`);
 
-test('the refusals a donor can act on do not collapse into one line', () => {
-	// A fundraiser that has ENDED, one whose owner cannot take money, and a
-	// transient failure are three different things to do next. Collapsing
-	// them into the generic line makes a donor retry a checkout that can
-	// never open, which is what this map exists to stop.
-	const block = donateCatchBlock(donatePageSource());
-	const keyFor = (code: string): string | null => {
-		const m = new RegExp(`code === '${code}'[\\s\\S]{0,120}?\\?\\s*'([a-zA-Z.]+)'`).exec(block);
-		return m ? m[1] : null;
-	};
-	const closed = keyFor('fundraiser_closed');
-	const missing = keyFor('fundraiser_not_found');
-	const hostless = keyFor('owner_cannot_take_payment');
-	for (const [code, key] of [
-		['fundraiser_closed', closed],
-		['fundraiser_not_found', missing],
-		['owner_cannot_take_payment', hostless],
-	] as const) {
-		assert.ok(key, `${code} is not mapped to copy of its own`);
-		assert.notEqual(key, 'fundraiser.donateFailed', `${code} still shows the generic line`);
-	}
-	assert.equal(new Set([closed, missing, hostless]).size, 3, 'two refusals share one sentence');
-});
+		assert.deepEqual(
+			mapped.filter((c) => !codes.has(c)),
+			[],
+			`These codes are compared on ${pair.page} but ${pair.fn} never sends them, ` +
+				'so the copy behind them is unreachable',
+		);
+		assert.deepEqual(
+			mappedPrefixes.filter((c) => !prefixes.has(c)),
+			[],
+			`These prefixes are compared on ${pair.page} but no templated code uses them`,
+		);
+	});
+
+	test(`the ${pair.fn} refusals a buyer can act on do not collapse into one line`, () => {
+		const source = block();
+		const keyFor = (code: string): string | null => {
+			const m = new RegExp(
+				`code === '${code}'[\\s\\S]{0,${pair.keyWindow}}?\\?\\s*'([a-zA-Z.]+)'`,
+			).exec(source);
+			return m ? m[1] : null;
+		};
+		const keys = pair.distinct.map((code) => [code, keyFor(code)] as const);
+		for (const [code, key] of keys) {
+			assert.ok(key, `${code} is not mapped to copy of its own`);
+			assert.notEqual(key, pair.generic, `${code} still shows the generic line`);
+		}
+		assert.equal(
+			new Set(keys.map(([, key]) => key)).size,
+			pair.distinct.length,
+			'two refusals share one sentence',
+		);
+	});
+}

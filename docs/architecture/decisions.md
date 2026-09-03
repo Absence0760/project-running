@@ -16362,3 +16362,35 @@ Renamed `share_head_origin.test.ts`, with the header saying why the `lambda_`
 prefix was ever right. Naming a test for what it drives rather than for who
 happens to call it is the rule; § 968 arrived at the same one from the other
 direction, where a guard named for `/api/coach` was widened to every wrapper.
+
+## 1003. A refusal-vocabulary guard that named one of the two pairs it should have named
+
+§ 982 added a cross-language check that every refusal code the fundraiser page
+compares is one `donations-checkout` can actually send. It was written because
+the followup asking for the work named `host_cannot_take_payment`, a code that
+function has never returned — it answers `owner_cannot_take_payment` — and a map
+written from that filing would have compiled, typechecked, and silently never
+matched.
+
+The guard was added for one caller. `startEventCheckout` has had the same shape
+since § 904: it unwraps the envelope, rethrows the function's own code, and
+`clubs/[slug]/events/[id]/+page.svelte` maps seven of them to copy. Nothing
+compared those seven against `events-checkout`'s source. A guard that names one
+instance of a class it should name all of is the § 968 defect, and here it was
+one directory over from the ADR that named it.
+
+Measured before extending: all seven are real (`event_full`, `sales_closed`,
+`instance_cancelled`, `host_cannot_take_payment`, `event_has_no_host`,
+`event_not_priced`, `stripe_not_configured`), so this closes a hole rather than a
+live defect. The hole is not hypothetical: the two vocabularies differ on exactly
+the word that produced the wrong filing — donations refuse with `owner_`, events
+with `host_` — and nothing but a reader's memory kept them apart.
+
+Both pairs now run off one register of `{fn, page, handler bounds, generic key,
+distinct codes, key window}`, so the rule is stated once. Two data differ per
+pair rather than being assumed: `events-checkout` templates none of its codes
+(the donations guard's `prefixes.size >= 2` floor would have failed it), and the
+event page groups four codes into one branch so its code-to-copy window is wider.
+Writing them as per-pair data rather than as a widened shared constant keeps the
+donations half's tighter window, which is what stops a code that is NOT mapped
+from picking up a later branch's copy key and reading as mapped.
