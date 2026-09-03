@@ -16340,3 +16340,25 @@ of block-comment strips it may spell and the reason, and a count that moves fail
 the guard. That is the difference between a rule nobody has broken yet and a rule
 that is written down — the same reason a `shape: 'union'` rail in
 `check_constraint_unions.mjs` states its `allowExtra` rather than passing quietly.
+
+## 1002. A test file named for the caller it was about, not the code it drives
+
+`share/lambda_site_origin.test.ts` carried two things: a register of every
+`PUBLIC_SITE_URL` caller under `lambda/`, and two behavioural cases over the
+share head builders. § 970 moved the register to `core/site_url.test.ts`, which
+already walked `src` and `lambda` together for the sibling scan, and left the
+behavioural half where it was.
+
+What was left reads no Lambda source. It calls `buildShareRunMeta`,
+`renderShareRunHeadTags`, `buildShareEventHead` and `renderShareEventHeadTags` —
+all in `$lib/share` — and asserts what they emit when the origin is blank,
+whitespace, or carries a trailing slash. The Lambdas are why it matters, because
+nothing else renders those surfaces in production, but the name promised a scope
+the file no longer has, which is the § 968 defect: a reader looking for coverage
+of the shared builders would not find it under `lambda_`, and a reader adding a
+sixth Lambda would expect this file to notice.
+
+Renamed `share_head_origin.test.ts`, with the header saying why the `lambda_`
+prefix was ever right. Naming a test for what it drives rather than for who
+happens to call it is the rule; § 968 arrived at the same one from the other
+direction, where a guard named for `/api/coach` was widened to every wrapper.

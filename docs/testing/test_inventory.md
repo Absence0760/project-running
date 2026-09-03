@@ -2063,7 +2063,7 @@ The added one is the **register** that moved here from `lambda_site_origin.test.
 
 ### `apps/web/src/lib/share/lambda_site_origin.test.ts` — 2 tests (1 removed)
 
-Its Lambda-only register is superseded by the wider one above; the two behavioural cases over the share head builders stay.
+Its Lambda-only register is superseded by the wider one above; the two behavioural cases over the share head builders stay. **Renamed `share_head_origin.test.ts` in round 34** ([decisions § 1002](../architecture/decisions.md)) — with the register gone the file reads no Lambda source, and the `lambda_` prefix named a scope it no longer had.
 
 Run by this lane and passing: the full `apps/web` unit suite via `npm run test:unit` (4684/4684), `svelte-check --tsconfig ./tsconfig.json` (0 errors), `npm run check:tsconfig-coverage`, `npm run check:script-types`, and `decisions_numbering_guard` 3/3 over the appended ADRs.
 
