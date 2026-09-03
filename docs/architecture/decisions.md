@@ -16675,8 +16675,8 @@ a zip before any parser is reached.
 
 Verified first, as the filing asked: § 988's honesty holds. No mobile surface
 claimed KMZ, `routesEmptyBody` named exactly the four formats the picker
-offered in all seven ARBs, and `parity.md` carried an accurate ✗ with the
-reason. So this is a real parity gap against web — which has taken KMZ since it
+offered in all seven ARBs, and `parity.md` carried an accurate not-supported
+cell with the reason. So this is a real parity gap against web — which has taken KMZ since it
 was written — rather than a documentation problem.
 
 Built, because the pipeline change is the durable fix and it is small: both
