@@ -17,6 +17,31 @@ export interface GeocodedPlace {
 	placeType: string | null;
 }
 
+/// Whether a provider's answer is a latitude at all.
+///
+/// The same contract `RouteParser._isUsableLat` applies to a coordinate out of
+/// a file, and the one `geocoding.dart`'s `isUsableLatitude` applies on the
+/// phone (decisions § 1011). A non-finite coordinate is not a place: it reaches
+/// a MapLibre camera as a view that silently stops rendering and `JSON.
+/// stringify` writes it as `null`, so a route saved around it carries a hole
+/// rather than an error. And the range is not a heuristic — a latitude is +/-90
+/// by definition, so a value outside it is a malformed answer, not a place.
+///
+/// BOTH providers need it. Nominatim serialises coordinates as STRINGS and
+/// `parseFloat('NaN')` is NaN rather than a parse failure, so a null check does
+/// not see it. MapTiler sends JSON numbers, which cannot spell NaN — but
+/// `JSON.parse('1e400')` is `Infinity`, so a declared `[number, number]` does
+/// not save that branch either: the type is a claim about the wire that the
+/// wire never made.
+export function isUsableLatitude(v: unknown): v is number {
+	return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 90;
+}
+
+/// Longitude half of `isUsableLatitude`. Separate bound, same contract.
+export function isUsableLongitude(v: unknown): v is number {
+	return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 180;
+}
+
 export function haversineM(
 	a: { lng: number; lat: number },
 	b: { lng: number; lat: number },
@@ -132,11 +157,14 @@ async function searchViaMapTiler(
 	const features = body.features ?? [];
 	const out: PlaceSearchResult[] = [];
 	for (const f of features) {
-		if (!f.center) continue;
+		const center = f.center;
+		if (!Array.isArray(center)) continue;
+		const [lng, lat] = center;
+		if (!isUsableLongitude(lng) || !isUsableLatitude(lat)) continue;
 		out.push({
 			name: f.place_name ?? f.text ?? '',
-			lng: f.center[0],
-			lat: f.center[1],
+			lng,
+			lat,
 		});
 	}
 	return { status: 'ok', results: out };
@@ -172,7 +200,7 @@ async function geocodeViaMapTiler(
 		return null;
 	}
 	if (!res.ok) return null;
-	const body = (await res.json()) as {
+	let body: {
 		features?: Array<{
 			place_name?: string;
 			text?: string;
@@ -181,13 +209,36 @@ async function geocodeViaMapTiler(
 			place_type?: string[];
 		}>;
 	};
+	try {
+		// A 200 carrying a truncated or non-JSON body is a failed geocode, and
+		// this function's contract is to return null on one — not to throw out
+		// of a call site whose only handling is the null branch.
+		body = await res.json();
+	} catch (_) {
+		return null;
+	}
 	const top = body.features?.[0];
-	if (!top?.center) return null;
-	const center = { lng: top.center[0], lat: top.center[1] };
-	const placeType = top.place_type?.[0] ?? null;
-	const radiusM = top.bbox ? bboxRadius(top.bbox, center) : 5000;
+	const raw = top?.center;
+	if (!Array.isArray(raw)) return null;
+	const [lng, lat] = raw;
+	if (!isUsableLongitude(lng) || !isUsableLatitude(lat)) return null;
+	const center = { lng, lat };
+	const placeType = top?.place_type?.[0] ?? null;
+	// A bbox with one unusable corner yields a NaN radius, and NaN compares
+	// false against every bound a caller might check it with — so the whole
+	// bbox is either usable or it is the default, exactly as the Nominatim
+	// branch already treats its own.
+	const bbox = top?.bbox;
+	const usableBbox =
+		Array.isArray(bbox) &&
+		bbox.length === 4 &&
+		isUsableLongitude(bbox[0]) &&
+		isUsableLatitude(bbox[1]) &&
+		isUsableLongitude(bbox[2]) &&
+		isUsableLatitude(bbox[3]);
+	const radiusM = usableBbox ? bboxRadius(bbox, center) : 5000;
 	return {
-		name: top.place_name ?? top.text ?? trimmed,
+		name: top?.place_name ?? top?.text ?? trimmed,
 		center,
 		radiusM,
 		placeType,
@@ -230,12 +281,17 @@ async function geocodeViaNominatim(
 	if (!top?.lat || !top.lon) return null;
 	const lat = parseFloat(top.lat);
 	const lng = parseFloat(top.lon);
-	if (!isFinite(lat) || !isFinite(lng)) return null;
+	if (!isUsableLatitude(lat) || !isUsableLongitude(lng)) return null;
 	const center = { lng, lat };
 	let radiusM = 5000;
 	if (top.boundingbox && top.boundingbox.length === 4) {
 		const [s, n, w, e] = top.boundingbox.map(parseFloat);
-		if (isFinite(s) && isFinite(n) && isFinite(w) && isFinite(e)) {
+		if (
+			isUsableLatitude(s) &&
+			isUsableLatitude(n) &&
+			isUsableLongitude(w) &&
+			isUsableLongitude(e)
+		) {
 			radiusM = bboxRadius([w, s, e, n], center);
 		}
 	}
@@ -317,7 +373,7 @@ async function searchViaNominatim(
 	for (const f of body) {
 		const lat = f.lat ? parseFloat(f.lat) : NaN;
 		const lng = f.lon ? parseFloat(f.lon) : NaN;
-		if (!isFinite(lat) || !isFinite(lng)) continue;
+		if (!isUsableLatitude(lat) || !isUsableLongitude(lng)) continue;
 		out.push({
 			name: f.display_name ?? `${lat.toFixed(3)}, ${lng.toFixed(3)}`,
 			lng,
