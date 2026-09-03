@@ -8,7 +8,13 @@ import test from 'node:test';
 import {
   ALARMS_FILE,
   ALLOWED_STATUS_LAUNDERING,
+  ENV_NAMES,
+  ENV_ROOT_DIR,
   FORBIDDEN_URI_TRANSFORM,
+  MODULE_VARS_FILE,
+  engineUrlInputs,
+  parseEnvRoot,
+  parseVariables,
   REQUIRED_URI_TRANSFORM,
   WAF_FILE,
   parseWafScopeDowns,
@@ -91,11 +97,29 @@ function scopeDown(over = {}) {
 
 const WAF = [scopeDown()];
 
+const MODULE_VARS = [
+  { name: 'osrm_url', type: 'string', dflt: '""' },
+  { name: 'public_site_url', type: 'string', dflt: '"https://threkir.com"' },
+];
+
+/** @param {string} env @param {Partial<{ declared: string[], wired: string[] }>} [over] */
+function envRoot(env, over = {}) {
+  return {
+    env,
+    declared: new Set(over.declared ?? ['osrm_url']),
+    wired: new Map((over.wired ?? ['osrm_url']).map((k) => [k, `var.${k}`])),
+  };
+}
+
+const ENV_ROOTS = [envRoot('prod'), envRoot('preview')];
+
 /**
  * @param {Partial<{ dirs: string[], matrix: string[], dependabot: string[],
  *                   functions: string[], alarms: import('./check_infra_coverage.mjs').Alarm[],
  *                   distribution: import('./check_infra_coverage.mjs').Distribution,
- *                   waf: import('./check_infra_coverage.mjs').WafScopeDown[] }>} [over]
+ *                   waf: import('./check_infra_coverage.mjs').WafScopeDown[],
+ *                   moduleVars: import('./check_infra_coverage.mjs').ModuleVar[],
+ *                   envRoots: import('./check_infra_coverage.mjs').EnvRoot[] }>} [over]
  */
 function run(over = {}) {
   return compareSources(
@@ -106,6 +130,8 @@ function run(over = {}) {
     over.alarms ?? ALARMS,
     over.distribution === undefined ? distribution() : over.distribution,
     over.waf ?? WAF,
+    over.moduleVars ?? MODULE_VARS,
+    over.envRoots ?? ENV_ROOTS,
   );
 }
 
@@ -285,6 +311,14 @@ test('the committed infra/ tree is fully covered', () => {
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
     parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
     parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8')),
+    parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8')),
+    ENV_NAMES.map((env) =>
+      parseEnvRoot(
+        env,
+        readFileSync(join(ENV_ROOT_DIR, env, 'main.tf'), 'utf-8'),
+        readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
+      ),
+    ),
   );
   assert.deepEqual(errors, []);
   assert.ok(ok.length >= 12, 'a passing run that checked almost nothing is not a pass');
@@ -675,4 +709,76 @@ test('the guard exits non-zero when a scope-down loses URL_DECODE', () => {
       }),
     /with only \[NONE\]/,
   );
+});
+
+// ───────────── claim 6: engine-URL symmetry across env roots ─────────────
+
+test('an engine URL settable from every root passes', () => {
+  const { errors, ok } = run();
+  assert.deepEqual(errors, []);
+  assert.ok(has(ok, /osrm_url: settable from all 2 env roots/), ok.join('\n'));
+});
+
+// The exact state graph_cycle_url was in before decisions § 1024: wired in
+// prod, declared nowhere in preview, and the plan identical either way.
+test('an engine URL one root cannot declare fails', () => {
+  const { errors } = run({
+    envRoots: [envRoot('prod'), envRoot('preview', { declared: [], wired: [] })],
+  });
+  assert.ok(has(errors, /envs\/preview declares no var\.osrm_url/), errors.join('\n'));
+});
+
+test('an engine URL declared but never passed to the module fails', () => {
+  const { errors } = run({
+    envRoots: [envRoot('prod'), envRoot('preview', { wired: [] })],
+  });
+  assert.ok(has(errors, /does not pass it to the module/), errors.join('\n'));
+});
+
+test('a root whose module block could not be read is reported', () => {
+  const { errors } = run({
+    envRoots: [envRoot('prod'), { env: 'preview', declared: new Set(), wired: new Map() }],
+  });
+  assert.ok(has(errors, /no `module "web"` argument was read/), errors.join('\n'));
+});
+
+test('one env root alone is reported, not called symmetric', () => {
+  const { errors } = run({ envRoots: [envRoot('prod')] });
+  assert.ok(has(errors, /one root is symmetric with itself/), errors.join('\n'));
+});
+
+test('deriving no engine at all is reported, not passed', () => {
+  const { errors } = run({ moduleVars: [{ name: 'public_site_url', type: 'string', dflt: '"x"' }] });
+  assert.ok(has(errors, /no engine URL input was read/), errors.join('\n'));
+});
+
+// The derivation is the claim's load-bearing half: "" as a default IS the
+// "no engine, degrade gracefully" semantics, and it is what separates the
+// three engines from the two public_* URLs, which are env identity.
+test('engineUrlInputs derives exactly the three engines from the committed module', () => {
+  const vars = parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8'));
+  assert.deepEqual(engineUrlInputs(vars).sort(), [
+    'graph_cycle_url',
+    'graphhopper_url',
+    'osrm_url',
+  ]);
+  const urls = vars.filter((v) => v.name.endsWith('_url')).map((v) => v.name);
+  assert.ok(urls.includes('public_supabase_url') && urls.includes('public_site_url'));
+});
+
+test('every committed env root can set every engine URL', () => {
+  const engines = engineUrlInputs(parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8')));
+  assert.ok(ENV_NAMES.length >= 2, ENV_NAMES.join(','));
+  for (const env of ENV_NAMES) {
+    const root = parseEnvRoot(
+      env,
+      readFileSync(join(ENV_ROOT_DIR, env, 'main.tf'), 'utf-8'),
+      readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
+    );
+    assert.ok(root.wired.size > 5, `envs/${env} module block read as ${root.wired.size} args`);
+    for (const engine of engines) {
+      assert.ok(root.declared.has(engine), `envs/${env} declares no var.${engine}`);
+      assert.equal(root.wired.get(engine), `var.${engine}`, `envs/${env} wires ${engine}`);
+    }
+  }
 });

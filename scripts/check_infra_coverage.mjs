@@ -68,7 +68,21 @@
 //      does not (decisions § 1023). A fourth rule copy-pasted from the first
 //      three inherits the gap silently, which is what this claim is for.
 //
-// Offline by design: a directory listing and four files. No AWS credentials,
+//   6. Engine-URL symmetry. The module takes three routing-engine URLs, each a
+//      string input defaulting to "" (the value that means "no engine, degrade
+//      gracefully"). An env root that cannot SET one cannot rehearse a prod
+//      change that involves it — which is what a preview environment is for —
+//      and the omission is invisible: the module receives "" either way, the
+//      plan is identical, and nothing reads as missing. `graph_cycle_url` was
+//      in exactly that state (decisions § 1024): declared and wired in
+//      envs/prod, declared nowhere in envs/preview, with no recorded reason
+//      while its two siblings carried one. The engine set is DERIVED from the
+//      module (a `_url` string input whose default is "") rather than listed,
+//      so a fourth engine is covered the day it is added. The three deliberate
+//      prod-only knobs measured alongside it — the reserved-concurrency caps —
+//      are literals in preview WITH a stated reason and are not this shape.
+//
+// Offline by design: a directory listing and six files. No AWS credentials,
 // no `terraform init`.
 //
 // Run: `node scripts/check_infra_coverage.mjs`
@@ -80,7 +94,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { hclResources, nestedBlock, nestedBlocks, stripComments } from './hcl_lex.mjs';
+import {
+  blockEnd,
+  hclResources,
+  nestedBlock,
+  nestedBlocks,
+  stripComments,
+} from './hcl_lex.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -100,6 +120,15 @@ export const ALARMS_FILE =
 export const WAF_FILE =
   process.env.INFRA_COVERAGE_WAF ??
   join(REPO_ROOT, 'infra/modules/web-stack/waf.tf');
+export const MODULE_VARS_FILE =
+  process.env.INFRA_COVERAGE_MODULE_VARS ??
+  join(REPO_ROOT, 'infra/modules/web-stack/variables.tf');
+/// Each env root, as `{ env, main, variables }` source text. Overridable as a
+/// comma-separated list of env NAMES rooted under a directory, so the whole
+/// script can be pointed at mutated copies.
+export const ENV_ROOT_DIR =
+  process.env.INFRA_COVERAGE_ENV_DIR ?? join(REPO_ROOT, 'infra/envs');
+export const ENV_NAMES = (process.env.INFRA_COVERAGE_ENVS ?? 'prod,preview').split(',');
 
 /// The transformation every `uri_path` scope-down must carry, and the one it
 /// must not. See claim 5 in the header.
@@ -453,6 +482,80 @@ export function parseWafScopeDowns(raw) {
   return out;
 }
 
+/**
+ * @typedef {{ name: string, type: string | null, dflt: string | null }} ModuleVar
+ * @typedef {{ env: string, declared: Set<string>, wired: Map<string, string> }} EnvRoot
+ */
+
+/// Every `variable "…" { … }` in a Terraform variables file, with its declared
+/// type and default as written.
+/**
+ * @param {string} raw
+ * @returns {ModuleVar[]}
+ */
+export function parseVariables(raw) {
+  const src = stripComments(raw);
+  /** @type {ModuleVar[]} */
+  const out = [];
+  const re = /(?:^|\n)\s*variable\s+"([A-Za-z0-9_-]+)"\s*\{/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = blockEnd(src, open);
+    if (close < 0) continue;
+    const body = src.slice(open + 1, close);
+    out.push({ name: m[1], type: attr(body, 'type'), dflt: attr(body, 'default') });
+    re.lastIndex = close;
+  }
+  return out;
+}
+
+/// The routing-engine URL inputs, derived rather than listed: a `_url` string
+/// input whose default is the empty string. That default IS the semantics —
+/// "" means no engine and a graceful degrade — which is what separates the
+/// three engines from `public_supabase_url` (no default, required) and
+/// `public_site_url` (a real default, and env identity rather than a knob).
+/**
+ * @param {ModuleVar[] } vars
+ * @returns {string[]}
+ */
+export function engineUrlInputs(vars) {
+  return vars
+    .filter((v) => v.name.endsWith('_url') && v.type === 'string' && v.dflt === '""')
+    .map((v) => v.name);
+}
+
+/// One env root: the variables it declares, and what its `module "web"` block
+/// wires each module input from.
+/**
+ * @param {string} env
+ * @param {string} mainSrc
+ * @param {string} variablesSrc
+ * @returns {EnvRoot}
+ */
+export function parseEnvRoot(env, mainSrc, variablesSrc) {
+  const src = stripComments(mainSrc);
+  /** @type {Map<string, string>} */
+  const wired = new Map();
+  const re = /(?:^|\n)\s*module\s+"[A-Za-z0-9_-]+"\s*\{/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const open = m.index + m[0].length - 1;
+    const close = blockEnd(src, open);
+    if (close < 0) continue;
+    for (const a of src
+      .slice(open + 1, close)
+      .matchAll(/^\s*([a-z0-9_]+)\s*=\s*(.+?)\s*$/gm))
+      if (!wired.has(a[1])) wired.set(a[1], a[2]);
+    re.lastIndex = close;
+  }
+  return {
+    env,
+    declared: new Set(parseVariables(variablesSrc).map((v) => v.name)),
+    wired,
+  };
+}
+
 // ────────────────────────────── comparison ──────────────────────────────
 
 /**
@@ -463,6 +566,8 @@ export function parseWafScopeDowns(raw) {
  * @param {Alarm[]} alarms
  * @param {Distribution} distribution
  * @param {WafScopeDown[]} wafScopeDowns
+ * @param {ModuleVar[]} moduleVars
+ * @param {EnvRoot[]} envRoots
  * @returns {{ errors: string[], ok: string[] }}
  */
 export function compareSources(
@@ -473,6 +578,8 @@ export function compareSources(
   alarms,
   distribution,
   wafScopeDowns,
+  moduleVars,
+  envRoots,
 ) {
   /** @type {string[]} */
   const errors = [];
@@ -601,6 +708,7 @@ export function compareSources(
 
   distributionCoverage(distribution, errors, ok);
   wafCoverage(wafScopeDowns, errors, ok);
+  engineUrlCoverage(engineUrlInputs(moduleVars), envRoots, errors, ok);
 
   return { errors, ok };
 }
@@ -850,6 +958,62 @@ function wafCoverage(wafScopeDowns, errors, ok) {
   }
 }
 
+/// The sixth: every routing-engine URL the module takes is settable from every
+/// env root. An env that cannot set one cannot rehearse a prod change
+/// involving it, and the omission is invisible — the module receives "" either
+/// way and the plan is identical.
+/**
+ * @param {string[]} engines
+ * @param {EnvRoot[]} roots
+ * @param {string[]} errors
+ * @param {string[]} ok
+ */
+function engineUrlCoverage(engines, roots, errors, ok) {
+  if (engines.length === 0) {
+    errors.push(
+      'no engine URL input was read from the web-stack variables file. The module takes three ' +
+        '(osrm, graphhopper, graph_cycle); a count of zero means this reader stopped matching ' +
+        'rather than that the engines are gone.',
+    );
+    return;
+  }
+  if (roots.length < 2) {
+    errors.push(
+      `only ${roots.length} env root(s) were read. Symmetry between them is the whole claim, and ` +
+        'one root is symmetric with itself.',
+    );
+    return;
+  }
+  for (const root of roots) {
+    if (root.wired.size === 0) {
+      errors.push(
+        `envs/${root.env}: no \`module "web"\` argument was read, so nothing about its engine URLs ` +
+          'was checked.',
+      );
+    }
+  }
+  for (const engine of engines) {
+    /** @type {string[]} */
+    const gaps = [];
+    for (const root of roots) {
+      if (!root.declared.has(engine)) gaps.push(`envs/${root.env} declares no var.${engine}`);
+      else if (!root.wired.has(engine))
+        gaps.push(`envs/${root.env} declares var.${engine} and does not pass it to the module`);
+    }
+    if (gaps.length === 0) {
+      ok.push(`${engine}: settable from all ${roots.length} env roots`);
+      continue;
+    }
+    errors.push(
+      `${engine} is a routing-engine URL the module takes, and ${gaps.join('; ')}. An environment ` +
+        'that cannot be configured the way prod can cannot rehearse a prod change, and the gap is ' +
+        'invisible: the module gets the same "" it would have got, so the plan is identical and ' +
+        'nothing reads as missing. Three lines — a variable, a wire, a description. ' +
+        'decisions § 1024.',
+    );
+  }
+}
+
 export function main() {
   const { errors, ok } = compareSources(
     terraformDirs(INFRA_DIR),
@@ -859,6 +1023,14 @@ export function main() {
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
     parseDistribution(readFileSync(MODULE_FILE, 'utf-8')),
     parseWafScopeDowns(readFileSync(WAF_FILE, 'utf-8')),
+    parseVariables(readFileSync(MODULE_VARS_FILE, 'utf-8')),
+    ENV_NAMES.map((env) =>
+      parseEnvRoot(
+        env,
+        readFileSync(join(ENV_ROOT_DIR, env, 'main.tf'), 'utf-8'),
+        readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
+      ),
+    ),
   );
 
   for (const line of ok) console.log(`[OK] ${line}`);

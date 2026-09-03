@@ -63,6 +63,11 @@ module "web" {
   # it at an engine only if a preview must exercise real snapping.
   osrm_url = var.osrm_url
 
+  # Preview defaults to no graph_cycle sidecar ("" → the generate-route Lambda
+  # skips the v3 graph-cycle generator and serves round_trip). Point it at a
+  # sidecar only if a preview must exercise the v3 path.
+  graph_cycle_url = var.graph_cycle_url
+
   # Tight cap — mirrors generate-route; preview only sees smoke-test
   # route-builder traffic.
   osrm_proxy_reserved_concurrency = 5
