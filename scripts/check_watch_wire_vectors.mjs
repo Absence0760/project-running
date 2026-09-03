@@ -305,6 +305,7 @@ const RS_GAP = 'apps/custom_watch/core/src/grade_adjusted_pace.rs';
 const RS_WORKOUT_CORE = 'apps/custom_watch/core/src/workout.rs';
 const RS_RECORD = 'apps/custom_watch/core/src/record.rs';
 const RS_ROUTE_SIMPLIFY = 'apps/custom_watch/core/src/route_simplify.rs';
+const RS_TRACK_PROJECTION = 'apps/custom_watch/core/src/track_projection.rs';
 const DL_COURSE = 'apps/mobile_android/lib/watch_course.dart';
 const DL_WORKOUT = 'apps/mobile_android/lib/watch_workout.dart';
 const DL_ROADBOOK = 'apps/mobile_android/lib/watch_roadbook.dart';
@@ -544,6 +545,21 @@ export const CONSTANT_ROWS = [
     rails: [
       rustRail(RS_GAP, rustConst('MIN_SPEED_MPS')),
       otherRail(MC_GAP, mcConst('MIN_SPEED_MPS')),
+    ],
+  },
+  {
+    name: 'renderable-track span gate (m)',
+    why: "the bounding-box diagonal below which a track is jitter rather than a run, and is drawn as nothing rather than as a dot on one pixel. A THRESHOLD, not a wire field, so no version moves when it drifts and no decode fails — the three rails simply disagree about whether a run has a picture. It was a bare literal on the phone and the web until this round, which is why it could not be registered: this guard reads a rail by the NAME of its constant",
+    rails: [
+      rustRail(RS_TRACK_PROJECTION, rustConst('MIN_RENDERABLE_SPAN_M')),
+      dartRail(
+        'apps/mobile_android/lib/widgets/track_preview.dart',
+        dartConst('kMinRenderableSpanM'),
+      ),
+      otherRail(
+        'apps/web/src/lib/routes/track_projection.ts',
+        tsConst('MIN_RENDERABLE_SPAN_M'),
+      ),
     ],
   },
   {
