@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:core_models/core_models.dart' as cm;
+import 'package:core_models/core_models.dart' show ActivityType;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';

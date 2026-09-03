@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:core_models/core_models.dart' show ActivityType;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -12,6 +13,32 @@ import 'typed_decimal.dart';
 import 'undo_queue.dart';
 
 enum DistanceUnit { km, mi }
+
+/// The one member of [ActivityType] that reads a SECOND vocabulary, so it
+/// lives where both are visible rather than in the leaf. `core_models` holds
+/// the activity vocabulary (decisions § 1013); `DistanceUnit` is still here,
+/// and a leaf that imported this file to reach it would have inverted the
+/// dependency the move exists to remove.
+extension ActivitySplitInterval on ActivityType {
+  /// Distance interval (metres) for split notifications, in the runner's own
+  /// unit. Larger for cycling so a 30 km ride doesn't fire 30 announcements.
+  ///
+  /// Unit-aware because a split is a landmark, not a raw distance: an
+  /// imperial runner expects to be told when they pass a MILE. Defaulting
+  /// everyone to a kilometre gave them splits at 0.6 mi, 1.2 mi, 1.9 mi — the
+  /// settings screen has always offered a "1 mi" option, the default just
+  /// didn't follow the preference. The values match the presets that screen
+  /// lists, so the default is one of the choices rather than a fourth number.
+  double splitIntervalMetresFor(DistanceUnit unit) {
+    final imperial = unit == DistanceUnit.mi;
+    switch (this) {
+      case ActivityType.cycle:
+        return imperial ? 5 * kMetresPerMile : 5000;
+      default:
+        return imperial ? kMetresPerMile : 1000;
+    }
+  }
+}
 
 enum WeightUnit { kg, lbs }
 
@@ -35,145 +62,6 @@ const String kDefaultMapStyle = 'streets';
 String normaliseMapStyle(String? raw) =>
     kMapStyles.contains(raw) ? raw! : kDefaultMapStyle;
 
-enum ActivityType {
-  run,
-  walk,
-  cycle,
-  hike,
-  stroller;
-
-  /// The user-facing name is NOT here: it needs an [AppLocalizations], and
-  /// keeping it as a hardcoded getter printed five English words in all six
-  /// non-English locales. Resolve it through
-  /// `activity_type_labels.dart#activityTypeLabel`.
-
-  IconData get icon {
-    switch (this) {
-      case ActivityType.run:
-        return Icons.directions_run;
-      case ActivityType.walk:
-        return Icons.directions_walk;
-      case ActivityType.cycle:
-        return Icons.directions_bike;
-      case ActivityType.hike:
-        return Icons.terrain;
-      case ActivityType.stroller:
-        return Icons.child_friendly;
-    }
-  }
-
-  /// Cycling shows speed (km/h, mph) instead of pace (min/km, min/mi).
-  bool get usesSpeed => this == ActivityType.cycle;
-
-  /// Calories burned per kilogram of body weight per kilometre travelled.
-  /// Approximate metabolic equivalents.
-  double get kcalPerKgPerKm {
-    switch (this) {
-      case ActivityType.run:
-        return 1.0;
-      case ActivityType.walk:
-        return 0.5;
-      case ActivityType.cycle:
-        return 0.4;
-      case ActivityType.hike:
-        return 0.7;
-      case ActivityType.stroller:
-        // Running while pushing a stroller — a touch above open running.
-        return 1.1;
-    }
-  }
-
-  /// Distance interval (metres) for split notifications, in the runner's own
-  /// unit. Larger for cycling so a 30 km ride doesn't fire 30 announcements.
-  ///
-  /// Unit-aware because a split is a landmark, not a raw distance: an
-  /// imperial runner expects to be told when they pass a MILE. Defaulting
-  /// everyone to a kilometre gave them splits at 0.6 mi, 1.2 mi, 1.9 mi — the
-  /// settings screen has always offered a "1 mi" option, the default just
-  /// didn't follow the preference. The values match the presets that screen
-  /// lists, so the default is one of the choices rather than a fourth number.
-  double splitIntervalMetresFor(DistanceUnit unit) {
-    final imperial = unit == DistanceUnit.mi;
-    switch (this) {
-      case ActivityType.cycle:
-        return imperial ? 5 * kMetresPerMile : 5000;
-      default:
-        return imperial ? kMetresPerMile : 1000;
-    }
-  }
-
-  /// GPS distance filter in metres — how far the runner must move before
-  /// the next position update is fired. Larger for cycling.
-  int get gpsDistanceFilter {
-    switch (this) {
-      case ActivityType.cycle:
-        return 5;
-      default:
-        return 3;
-    }
-  }
-
-  /// Minimum movement (metres) between GPS samples that counts as real
-  /// motion. Anything below this is treated as GPS jitter.
-  double get minMovementMetres {
-    switch (this) {
-      case ActivityType.cycle:
-        return 4;
-      default:
-        return 2;
-    }
-  }
-
-  /// Average stride / step length in metres. Used as a fallback distance
-  /// estimate for indoor / treadmill runs where GPS never produces a fix —
-  /// the pedometer still counts steps, so `steps × strideMetres` gives a
-  /// rough distance that's better than the `0.00 km` we'd otherwise show.
-  /// Values are average-adult estimates; individual stride varies with
-  /// height, cadence, and fatigue. Cycling has no pedometer so its value
-  /// is unused.
-  double get strideMetres {
-    switch (this) {
-      case ActivityType.run:
-        return 1.1; // ~2000 steps/km at a moderate pace
-      case ActivityType.walk:
-        return 0.73; // ~1370 steps/km
-      case ActivityType.cycle:
-        return 0.0; // pedometer not meaningful for cycling
-      case ActivityType.hike:
-        return 0.85; // shorter than running, longer than walking
-      case ActivityType.stroller:
-        return 1.1; // running stride
-    }
-  }
-
-  /// Maximum plausible speed (metres/second). Position deltas implying
-  /// anything faster than this are discarded as GPS corruption — the line
-  /// shouldn't teleport across town because of one bad fix.
-  ///
-  /// Values are deliberately generous (faster than realistic peak) to avoid
-  /// dropping genuine fast segments, while still catching outright glitches.
-  double get maxSpeedMps {
-    switch (this) {
-      case ActivityType.run:
-        return 10; // ~2:45/km, faster than world records — pure corruption above this
-      case ActivityType.walk:
-        return 5; // brisk walk ~1.7 m/s; 5 gives headroom
-      case ActivityType.cycle:
-        return 25; // 90 km/h — higher than any sane cyclist
-      case ActivityType.hike:
-        return 6; // slow running overlap for scrambling / downhill
-      case ActivityType.stroller:
-        return 9; // running with a pram — a touch under open-run peak
-    }
-  }
-
-  static ActivityType fromName(String? name) {
-    return ActivityType.values.firstWhere(
-      (a) => a.name == name,
-      orElse: () => ActivityType.run,
-    );
-  }
-}
 
 /// Wire ids for the per-cue voice toggles — the `voice_cue_types` map in
 /// both the local mirror and the device settings bag. A cue id absent from

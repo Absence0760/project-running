@@ -16563,3 +16563,47 @@ now wait on the signal before deleting. The rest of the 28 population stands as
 § 991 left it: a population, not a membership. What this round changes is that
 the two ROOT CAUSES are gone, so a member that is still racing is racing
 against a write it can now wait for.
+
+## 1013. The activity vocabulary is a leaf now, because a pure parser had to import a widget toolkit to reach it
+
+`csv_run_importer.dart` is a pure parser and it imported
+`preferences.dart show ActivityType` — a file that also holds a
+`SharedPreferences` cache, a map-style vocabulary and, until this change, an
+`IconData` getter, so it imports `package:flutter/material.dart`. The
+alternative at the time was worse: retyping the five values in the importer
+would have created a second rail against `runs_activity_type_check` that
+`check_constraint_unions.mjs` does not know to read, which is precisely the
+drift the constraint-union guard exists to prevent.
+
+The move was blocked on one registry line rather than on any code. The guard
+registers the rail as `{ file: 'apps/mobile_android/lib/preferences.dart',
+decl: 'ActivityType', shape: 'enum' }` for both `runs.activity_type` and
+`challenges.activity_type`, and it parses the enum out of that exact file — a
+re-export does not satisfy a `shape: 'enum'` rail — so the declaration and the
+registry had to move in one change, across two trees a single lane rarely owns.
+
+`ActivityType` now lives at `packages/core_models/lib/src/activity_type.dart`,
+a leaf mirroring web's own `apps/web/src/lib/runs/activity_type.ts`. Two
+members could not travel with it, for opposite reasons:
+
+  * `IconData get icon` needs Flutter, which `core_models` deliberately does
+    not depend on. It is an extension in `activity_type_labels.dart`, beside
+    the localised label the enum already did not carry — so both halves of
+    "how this value is presented" now sit in one file.
+  * `splitIntervalMetresFor(DistanceUnit)` reads a SECOND vocabulary, and
+    `DistanceUnit` is still in `preferences.dart` as its own registered rail
+    for `user_profiles.preferred_unit`. A leaf importing `preferences.dart` to
+    reach it would have inverted the dependency this move exists to remove, so
+    the method is an extension there instead. Moving `DistanceUnit` to its own
+    leaf is the consistent next step and is filed; nothing drags a widget
+    toolkit in to reach it today, so it is not urgent the way this was.
+
+Everything else on the enum — stride, GPS speed ceiling, calorie factor,
+`fromName` — is physics and travelled unchanged.
+
+Three `lib/` files and five test files needed an import; the other 28
+references already had `core_models`. Two pre-existing architecture guards
+correctly failed on their moved anchors and were re-pointed rather than
+relaxed: the `strideMetres` guard now reads the leaf, and the
+"in-progress path stays off the chain" guard now names `_clearInProgress`,
+the private body, since § 1012 made the public method a wrapper.
