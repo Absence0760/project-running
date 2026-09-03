@@ -71,7 +71,7 @@ class _CapturingApiClient extends ApiClient {
   String? get userId => fakeUserId;
 
   @override
-  Future<Set<String>> saveRunsBatch(
+  Future<cm.RunPushOutcome> saveRunsBatch(
     List<cm.Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -81,7 +81,7 @@ class _CapturingApiClient extends ApiClient {
     savedBatchIds.add(runs.map((r) => r.id).toList());
     // Full-success default for this capture fake; the partial-failure
     // path is exercised in sync_service_test.dart.
-    return const <String>{};
+    return const cm.RunPushOutcome();
   }
 }
 

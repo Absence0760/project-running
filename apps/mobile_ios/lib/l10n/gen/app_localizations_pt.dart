@@ -2265,6 +2265,68 @@ class AppLocalizationsPt extends AppLocalizations {
   String get historyDelete => 'Eliminar';
 
   @override
+  String get historyBlockedRowSemantics => 'não pode ser enviada';
+
+  @override
+  String get historyBlockedRowTooltip => 'Não pode ser enviada';
+
+  @override
+  String historyBlockedTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas não podem ser enviadas',
+      one: '$count corrida não pode ser enviada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historySyncBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count corridas não podem ser enviadas e não serão tentadas novamente. Abra cada uma para escolher o que fazer.',
+      one:
+          '$count corrida não pode ser enviada e não será tentada novamente. Abra-a para escolher o que fazer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runDetailBlockedDropTrack => 'Enviar sem o trajeto';
+
+  @override
+  String get runDetailBlockedExport => 'Exportar uma cópia';
+
+  @override
+  String get runDetailBlockedTitle => 'Esta corrida não pode ser enviada';
+
+  @override
+  String runDetailBlockedTrackTooLarge(int waypoints) {
+    return 'O seu trajeto de GPS ($waypoints pontos) é maior do que o armazenamento na nuvem permite, por isso tentar de novo nunca vai resultar. Todo o resto da corrida — distância, tempo, ritmo, desnível — continua a poder ser guardado.';
+  }
+
+  @override
+  String get runDetailDropTrackBody =>
+      'O trajeto é removido deste dispositivo e a corrida é enviada sem mapa. A distância, o tempo, o ritmo e o desnível não mudam. Exporte primeiro uma cópia se quiser guardá-lo.';
+
+  @override
+  String get runDetailDropTrackConfirm => 'Enviar sem ele';
+
+  @override
+  String get runDetailDropTrackDone =>
+      'Trajeto removido. A corrida será sincronizada no próximo ciclo.';
+
+  @override
+  String get runDetailDropTrackFailed =>
+      'Não foi possível remover o trajeto. Tente novamente.';
+
+  @override
+  String get runDetailDropTrackTitle => 'Enviar sem o trajeto de GPS?';
+
+  @override
   String get historyQueuedToSync => 'Na fila para sincronizar';
 
   @override
@@ -16213,6 +16275,68 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get historyDelete => 'Excluir';
+
+  @override
+  String get historyBlockedRowSemantics => 'não pode ser enviada';
+
+  @override
+  String get historyBlockedRowTooltip => 'Não pode ser enviada';
+
+  @override
+  String historyBlockedTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas não podem ser enviadas',
+      one: '$count corrida não pode ser enviada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historySyncBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count corridas não podem ser enviadas e não serão tentadas novamente. Abra cada uma para escolher o que fazer.',
+      one:
+          '$count corrida não pode ser enviada e não será tentada novamente. Abra-a para escolher o que fazer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runDetailBlockedDropTrack => 'Enviar sem o trajeto';
+
+  @override
+  String get runDetailBlockedExport => 'Exportar uma cópia';
+
+  @override
+  String get runDetailBlockedTitle => 'Esta corrida não pode ser enviada';
+
+  @override
+  String runDetailBlockedTrackTooLarge(int waypoints) {
+    return 'Seu trajeto de GPS ($waypoints pontos) é maior do que o armazenamento na nuvem permite, então tentar de novo nunca vai funcionar. Todo o resto da corrida — distância, tempo, ritmo, ganho de elevação — ainda pode ser salvo.';
+  }
+
+  @override
+  String get runDetailDropTrackBody =>
+      'O trajeto é removido deste dispositivo e a corrida é enviada sem mapa. A distância, o tempo, o ritmo e o ganho de elevação não mudam. Exporte uma cópia antes se quiser guardá-lo.';
+
+  @override
+  String get runDetailDropTrackConfirm => 'Enviar sem ele';
+
+  @override
+  String get runDetailDropTrackDone =>
+      'Trajeto removido. A corrida será sincronizada no próximo ciclo.';
+
+  @override
+  String get runDetailDropTrackFailed =>
+      'Não foi possível remover o trajeto. Tente novamente.';
+
+  @override
+  String get runDetailDropTrackTitle => 'Enviar sem o trajeto de GPS?';
 
   @override
   String get historyQueuedToSync => 'Na fila para sincronizar';

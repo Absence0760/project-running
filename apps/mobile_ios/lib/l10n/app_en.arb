@@ -2928,6 +2928,73 @@
   "@historyDelete": {
     "description": "Confirm action in the bulk-delete confirmation dialog"
   },
+  "historyBlockedRowSemantics": "cannot be uploaded",
+  "@historyBlockedRowSemantics": {
+    "description": "Screen-reader fragment on a runs-list row whose push is parked"
+  },
+  "historyBlockedRowTooltip": "Can't be uploaded",
+  "@historyBlockedRowTooltip": {
+    "description": "Tooltip on the per-row icon marking a run whose push is parked"
+  },
+  "historyBlockedTooltip": "{count, plural, one{{count} run can't be uploaded} other{{count} runs can't be uploaded}}",
+  "@historyBlockedTooltip": {
+    "description": "Tooltip on the History AppBar badge counting runs whose push is parked",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "historySyncBlocked": "{count, plural, one{{count} run can't be uploaded and won't be retried. Open it to choose what to do.} other{{count} runs can't be uploaded and won't be retried. Open each one to choose what to do.}}",
+  "@historySyncBlocked": {
+    "description": "Banner on History when one or more runs are parked and will not be retried",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runDetailBlockedDropTrack": "Upload without the trace",
+  "@runDetailBlockedDropTrack": {
+    "description": "Button on the parked-push card that uploads the run without its GPS trace"
+  },
+  "runDetailBlockedExport": "Export a copy",
+  "@runDetailBlockedExport": {
+    "description": "Button on the parked-push card that opens the file-export sheet"
+  },
+  "runDetailBlockedTitle": "This run can't be uploaded",
+  "@runDetailBlockedTitle": {
+    "description": "Title of the run-detail card shown when the run's push is parked"
+  },
+  "runDetailBlockedTrackTooLarge": "Its GPS trace ({waypoints} points) is larger than the cloud store will hold, so trying again will never work. Everything else about the run — distance, time, pace, elevation — can still be saved.",
+  "@runDetailBlockedTrackTooLarge": {
+    "description": "Body of the parked-push card when the run's GPS trace is larger than the cloud store allows",
+    "placeholders": {
+      "waypoints": {
+        "type": "int"
+      }
+    }
+  },
+  "runDetailDropTrackBody": "The trace is removed from this device and the run uploads without a map. Its distance, time, pace and elevation are unchanged. Export a copy first if you want to keep it.",
+  "@runDetailDropTrackBody": {
+    "description": "Body of the confirmation dialog for uploading a run without its GPS trace"
+  },
+  "runDetailDropTrackConfirm": "Upload without it",
+  "@runDetailDropTrackConfirm": {
+    "description": "Confirm action in the drop-GPS-trace dialog"
+  },
+  "runDetailDropTrackDone": "Trace removed. The run syncs on the next cycle.",
+  "@runDetailDropTrackDone": {
+    "description": "Banner after the GPS trace was dropped so the run can sync"
+  },
+  "runDetailDropTrackFailed": "The trace could not be removed. Try again.",
+  "@runDetailDropTrackFailed": {
+    "description": "Banner when dropping the GPS trace failed"
+  },
+  "runDetailDropTrackTitle": "Upload without the GPS trace?",
+  "@runDetailDropTrackTitle": {
+    "description": "Title of the confirmation dialog for uploading a run without its GPS trace"
+  },
   "historyQueuedToSync": "Queued to sync",
   "@historyQueuedToSync": {
     "description": "Tooltip on the per-row unsynced icon in the runs list"

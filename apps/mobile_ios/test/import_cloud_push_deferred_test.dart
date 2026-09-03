@@ -28,6 +28,11 @@ class _FakeApi extends ApiClient {
   /// Ids to report as failed, per `saveRunsBatch` call. A call past the end of
   /// the list succeeds outright.
   List<Set<String>> failedByCall = const [];
+
+  /// Runs the push classifies as permanently refused, per call. Import is the
+  /// reachable producer of an over-size track (decisions § 1009), so this fake
+  /// has to be able to answer with one.
+  List<Map<String, RunPushBlockReason>> blockedByCall = const [];
   Object? throwOnBatch;
   final List<List<String>> batches = [];
 
@@ -35,7 +40,7 @@ class _FakeApi extends ApiClient {
   String? get userId => fakeUserId;
 
   @override
-  Future<Set<String>> saveRunsBatch(
+  Future<RunPushOutcome> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -44,7 +49,10 @@ class _FakeApi extends ApiClient {
     final call = batches.length;
     batches.add(runs.map((r) => r.id).toList());
     if (throwOnBatch != null) throw throwOnBatch!;
-    return call < failedByCall.length ? failedByCall[call] : const <String>{};
+    return RunPushOutcome(
+      retryable: call < failedByCall.length ? failedByCall[call] : const {},
+      blocked: call < blockedByCall.length ? blockedByCall[call] : const {},
+    );
   }
 }
 
@@ -225,6 +233,32 @@ void main() {
       await _tapAndDrain(tester, _importButton);
 
       expect(find.text(l10n.importStatusCloudPushDeferred(3)), findsOneWidget);
+    });
+
+    testWidgets('a permanently refused run is parked, not left queued',
+        (tester) async {
+      // Import is where an over-size track actually arrives (decisions
+      // § 1009), so this is the call site that most needs to hand the drain a
+      // verdict rather than an id set.
+      final store = await _makeStore();
+      final api = _FakeApi()
+        ..blockedByCall = [
+          {'run-b': RunPushBlockReason.trackTooLarge}
+        ];
+      await _pump(
+        tester,
+        store,
+        api,
+        workouts: _import([_hcRun('a', 0), _hcRun('b', 1)]),
+      );
+
+      await _tapAndDrain(tester, _importButton);
+
+      expect(store.blockedRuns.keys, ['run-b']);
+      expect(store.unsyncedRuns, isEmpty,
+          reason: 'run-a landed and run-b left the drainable set');
+      // Still counted as not-reaching-the-server: the row was never upserted.
+      expect(find.text(l10n.importStatusCloudPushDeferred(1)), findsOneWidget);
     });
   });
 

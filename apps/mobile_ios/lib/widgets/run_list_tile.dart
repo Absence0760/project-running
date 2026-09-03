@@ -48,6 +48,7 @@ class RunListTile extends StatelessWidget {
     required this.onTap,
     this.onLongPress,
     this.isUnsynced = false,
+    this.isBlocked = false,
     this.selecting = false,
     this.selected = false,
   })  : _run = run,
@@ -68,6 +69,7 @@ class RunListTile extends StatelessWidget {
         _run = null,
         onLongPress = null,
         isUnsynced = false,
+        isBlocked = false,
         selecting = false,
         selected = false;
 
@@ -79,6 +81,11 @@ class RunListTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final bool isUnsynced;
+
+  /// The run's push is parked: it will not sync on its own and needs a decision
+  /// from the runner. Outranks [isUnsynced] on the row, because "waiting" and
+  /// "stuck" are different promises and only one of them is true.
+  final bool isBlocked;
   final bool selecting;
   final bool selected;
 
@@ -175,7 +182,10 @@ class RunListTile extends StatelessWidget {
       trailingMetric,
       if (vertMetres > 0)
         '${UnitFormat.elevation(vertMetres, unit)} elevation gain',
-      if (isUnsynced) 'not yet synced',
+      if (isBlocked)
+        l10n.historyBlockedRowSemantics
+      else if (isUnsynced)
+        'not yet synced',
     ].join(', ');
 
     // The trailing metric is "{value} {unit}" — pivot on the last space so the
@@ -229,7 +239,17 @@ class RunListTile extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (isUnsynced) ...[
+                  if (isBlocked) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: l10n.historyBlockedRowTooltip,
+                      child: Icon(
+                        Icons.cloud_off,
+                        size: 16,
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ] else if (isUnsynced) ...[
                     const SizedBox(width: 6),
                     Tooltip(
                       message: l10n.historyQueuedToSync,

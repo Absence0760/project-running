@@ -238,4 +238,35 @@ void main() {
         reason: 'sync state is the owner\'s own concern; a profile row has no '
             'field for it, which is why the constructors are separate');
   });
+
+  testWidgets('a parked run reads as stuck, not as queued', (tester) async {
+    // "Waiting" and "stuck" are different promises and only one of them is
+    // true. Before decisions § 1070 both rendered as the queued-to-sync cloud,
+    // so a run that would never sync advertised that it was about to.
+    await _pump(
+      tester,
+      RunListTile.owned(
+        run: _run(),
+        unit: DistanceUnit.km,
+        api: null,
+        onTap: () {},
+        isUnsynced: true,
+        isBlocked: true,
+      ),
+    );
+
+    expect(find.byIcon(Icons.cloud_off), findsOneWidget);
+    expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing,
+        reason: 'the blocked mark outranks the queued one; showing both, or '
+            'showing the queued one, promises a sync that cannot happen');
+
+    final semantics = tester.widget<Semantics>(
+      find.ancestor(
+        of: find.byType(Card),
+        matching: find.byType(Semantics),
+      ).first,
+    );
+    expect(semantics.properties.label, contains('cannot be uploaded'));
+    expect(semantics.properties.label, isNot(contains('not yet synced')));
+  });
 }

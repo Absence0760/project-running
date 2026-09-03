@@ -39,6 +39,7 @@ import '../social_service.dart';
 import '../typed_decimal.dart';
 import 'guided_runs_screen.dart';
 import 'settings_preferences_screen.dart';
+import '../widgets/confirm_destructive.dart';
 import '../widgets/fundraiser_section.dart';
 import '../widgets/live_run_map.dart';
 import '../widgets/track_segment.dart';
@@ -1108,7 +1109,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
   List<Widget> _buildSections(
       ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
+    final blockedReason = widget.runStore.blockedReason(run.id);
     return [
+      if (blockedReason != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: _BlockedPushCard(
+            reason: blockedReason,
+            waypoints: run.track.length,
+            busy: _droppingTrack,
+            onExport: _exportBeforeDrop,
+            onDropTrack: _confirmDropTrack,
+          ),
+        ),
+
       // Auto-link suggestion: only renders when run.routeId is null
       // AND the track confidently overlaps a saved route. Same
       // policy as web: dismissable, one-tap link.
@@ -2562,6 +2576,52 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     }
   }
 
+  bool _droppingTrack = false;
+
+  /// Open the file-export sheet without the make-public step [_shareRun] runs
+  /// first: this entry exists so a runner can keep a copy of a trace they are
+  /// about to lose, which is a local file, not a published link.
+  Future<void> _exportBeforeDrop() async {
+    await showRunShareSheet(
+      context,
+      run: run,
+      preferences: widget.preferences,
+      title: _title,
+    );
+  }
+
+  Future<void> _confirmDropTrack() async {
+    final l10n = AppLocalizations.of(context);
+    // Destructive: the trace is the only copy of where the runner went, and
+    // nothing brings it back.
+    final ok = await confirmDestructive(
+      context,
+      title: l10n.runDetailDropTrackTitle,
+      body: l10n.runDetailDropTrackBody,
+      confirmLabel: l10n.runDetailDropTrackConfirm,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _droppingTrack = true);
+    try {
+      final stripped = await widget.runStore.dropTrack(run.id);
+      if (!mounted) return;
+      if (stripped == null) {
+        showTopBanner(context, l10n.runDetailDropTrackFailed);
+        return;
+      }
+      setState(() {
+        run = stripped;
+        _droppingTrack = false;
+      });
+      showTopBanner(context, l10n.runDetailDropTrackDone);
+    } catch (e) {
+      debugPrint('dropTrack failed: $e');
+      if (!mounted) return;
+      setState(() => _droppingTrack = false);
+      showTopBanner(context, l10n.runDetailDropTrackFailed);
+    }
+  }
+
   /// Flip the run back to private. The undo for any public flip — a
   /// Share here, a `public` privacy default, or an explicit "Keep
   /// public" at the end of a live-shared run (run_screen's post-stop
@@ -3457,5 +3517,85 @@ class _KeepAliveMapState extends State<_KeepAliveMap>
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
+  }
+}
+
+/// The run's push is parked: nothing will retry it, and the runner has to
+/// decide. Names the reason, states what survives the one action offered, and
+/// puts the export beside it — the trace is the only copy of something that
+/// happened, so "free the run" must not be the only way out.
+class _BlockedPushCard extends StatelessWidget {
+  final RunPushBlockReason reason;
+  final int waypoints;
+  final bool busy;
+  final Future<void> Function() onExport;
+  final Future<void> Function() onDropTrack;
+
+  const _BlockedPushCard({
+    required this.reason,
+    required this.waypoints,
+    required this.busy,
+    required this.onExport,
+    required this.onDropTrack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final body = switch (reason) {
+      RunPushBlockReason.trackTooLarge =>
+        l10n.runDetailBlockedTrackTooLarge(waypoints),
+    };
+    return Card(
+      color: theme.colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.cloud_off,
+                    size: 20, color: theme.colorScheme.onErrorContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.runDetailBlockedTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.onErrorContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              body,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onErrorContainer),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => onExport(),
+                  icon: const Icon(Icons.download),
+                  label: Text(l10n.runDetailBlockedExport),
+                ),
+                FilledButton.icon(
+                  onPressed: busy ? null : () => onDropTrack(),
+                  icon: const Icon(Icons.cloud_upload),
+                  label: Text(l10n.runDetailBlockedDropTrack),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

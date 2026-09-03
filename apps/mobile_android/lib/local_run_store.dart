@@ -28,6 +28,14 @@ class LocalRunStore extends ChangeNotifier {
   // sole source of truth (a missing / drifted index self-heals from the files).
   List<RunSummary> _summaries = [];
   final Set<String> _syncedIds = {};
+  // Run ids whose push cannot succeed as they stand, mapped to why. A blocked
+  // run is PARKED, not failed-and-queued: it is absent from `unsyncedRuns`, so
+  // no drain re-sends bytes the server has already refused, and absent from the
+  // residency invariant, whose whole purpose is to keep the drainable set in
+  // memory. Any local mutation of the run clears the entry — the verdict is
+  // about the exact bytes that were refused, and an edited run is different
+  // bytes (decisions § 1070).
+  final Map<String, RunPushBlockReason> _blocked = {};
   // Run ids whose cloud-side delete failed on the first attempt, mapped
   // to the user_id who queued the delete. The local copy was kept so the
   // UI stays consistent with the cloud; the SyncService drains this queue
@@ -97,6 +105,11 @@ class LocalRunStore extends ChangeNotifier {
   // written once per markSynced call (or once per batch).
   static const _syncedIdsFilename = 'synced_ids.json';
   static const _pendingRemoteDeletesFilename = 'pending_remote_deletes.json';
+  // Sidecar listing the runs whose push is parked, and why. Beside
+  // `synced_ids.json` rather than inside it: that file answers "did this land",
+  // this one answers "will trying again help", and folding the second into the
+  // first would make an unparked run indistinguishable from a synced one.
+  static const _blockedRunsFilename = 'blocked_runs.json';
   // Compact on-disk projection of every run (one RunSummary each). Read first
   // on cold-load so a large history doesn't pay N file decodes up front.
   static const _indexFilename = 'index.json';
@@ -105,6 +118,7 @@ class LocalRunStore extends ChangeNotifier {
   File get _syncedIdsFile => File('${_dir.path}/$_syncedIdsFilename');
   File get _pendingRemoteDeletesFile =>
       File('${_dir.path}/$_pendingRemoteDeletesFilename');
+  File get _blockedRunsFile => File('${_dir.path}/$_blockedRunsFilename');
   File get _indexFile => File('${_dir.path}/$_indexFilename');
 
   // Per-active-run waypoint cursor — how many waypoints of the
@@ -209,10 +223,28 @@ class LocalRunStore extends ChangeNotifier {
   // drain's filterRunsForCurrentUser applies the same rule, so this is
   // defence in depth plus an honest unsyncedCount badge.
   List<Run> get unsyncedRuns => _runs
-      .where((r) => !_syncedIds.contains(r.id) && _runVisible(r))
+      .where((r) =>
+          !_syncedIds.contains(r.id) &&
+          !_blocked.containsKey(r.id) &&
+          _runVisible(r))
       .toList();
 
   int get unsyncedCount => unsyncedRuns.length;
+
+  /// Runs whose push is parked, mapped to why. Keyed by id because a parked
+  /// run is deliberately NOT resident — see [_blocked].
+  Map<String, RunPushBlockReason> get blockedRuns => Map.unmodifiable(_blocked);
+
+  RunPushBlockReason? blockedReason(String runId) => _blocked[runId];
+
+  /// The parked runs this account can see, newest-first. Read from
+  /// `_summaries` (every local row) rather than `_runs` (the drainable window),
+  /// because a parked run is evicted from residency by construction.
+  List<RunSummary> get blockedSummaries => _summaries
+      .where((s) => _blocked.containsKey(s.id) && _summaryVisible(s))
+      .toList();
+
+  int get blockedCount => blockedSummaries.length;
 
   /// Default count of newest full [Run]s held resident once the store windows.
   /// The resident set is this newest slice UNION all unsynced runs (which must
@@ -418,8 +450,10 @@ class LocalRunStore extends ChangeNotifier {
     // and the rewritten file never drains. Skipped for a brand-new id, which
     // was never in the set: the terminal run save stays one write.
     final wasSynced = _syncedIds.remove(stamped.id);
+    final wasBlocked = _clearBlockedInMemory([stamped.id]);
     _upsertSummary(stamped, synced: false);
     if (wasSynced) await _persistSyncedIds();
+    if (wasBlocked) await _persistBlockedRuns();
     await _persistIndex();
     notifyListeners();
     return stamped;
@@ -629,11 +663,15 @@ class LocalRunStore extends ChangeNotifier {
       _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
     }
     _syncedIds.remove(stamped.id);
+    final wasBlocked = _clearBlockedInMemory([stamped.id]);
     _upsertSummary(stamped, synced: false);
     // `synced_ids.json` is authoritative on cold load and OVERRIDES the index's
     // flag, so the un-sync has to be durable here: otherwise the next launch
     // silently re-marks the run synced and the edit can never leave the phone.
     await _persistSyncedIds();
+    // Same durability argument for the park: a run whose track the user just
+    // dropped must not still be parked on the next launch.
+    if (wasBlocked) await _persistBlockedRuns();
     await _persistIndex();
     notifyListeners();
   }
@@ -683,6 +721,7 @@ class LocalRunStore extends ChangeNotifier {
     _runs.removeWhere((r) => r.id == runId);
     _summaries.removeWhere((s) => s.id == runId);
     _syncedIds.remove(runId);
+    if (_clearBlockedInMemory([runId])) await _persistBlockedRuns();
     await _persistIndex();
     notifyListeners();
   }
@@ -708,6 +747,7 @@ class LocalRunStore extends ChangeNotifier {
     _runs.removeWhere((r) => ids.contains(r.id));
     _summaries.removeWhere((s) => ids.contains(s.id));
     _syncedIds.removeAll(ids);
+    if (_clearBlockedInMemory(ids)) await _persistBlockedRuns();
     await _persistIndex();
     notifyListeners();
   }
@@ -945,6 +985,163 @@ class LocalRunStore extends ChangeNotifier {
         debugPrint('Failed to persist synced ids sidecar: $e');
       }
     });
+  }
+
+  /// Park the runs a push classified as permanently refused, and persist once.
+  ///
+  /// Parking is what separates this from leaving a run unsynced: the drain
+  /// stops sending it, and the residency invariant stops holding its track. The
+  /// runner is told and offered [dropTrack]; nothing here decides for them.
+  Future<void> markBlocked(Map<String, RunPushBlockReason> reasons) =>
+      _serialised(() => _markBlocked(reasons));
+
+  Future<void> _markBlocked(Map<String, RunPushBlockReason> reasons) async {
+    var changed = false;
+    for (final entry in reasons.entries) {
+      if (_blocked[entry.key] == entry.value) continue;
+      _blocked[entry.key] = entry.value;
+      _clearedBlocked.remove(entry.key);
+      changed = true;
+    }
+    if (!changed) return;
+    await _persistBlockedRuns();
+    notifyListeners();
+  }
+
+  /// Un-park runs so the next drain tries them again. Called by every path that
+  /// changes a run's bytes — the verdict is about the payload, not the row.
+  Future<void> clearBlocked(Iterable<String> runIds) =>
+      _serialised(() => _clearBlocked(runIds));
+
+  Future<void> _clearBlocked(Iterable<String> runIds) async {
+    if (!_clearBlockedInMemory(runIds)) return;
+    await _persistBlockedRuns();
+    notifyListeners();
+  }
+
+  /// The in-memory half, for the mutation paths that persist and notify on
+  /// their own. Returns whether anything was parked.
+  bool _clearBlockedInMemory(Iterable<String> runIds) {
+    var changed = false;
+    for (final id in runIds) {
+      if (!_blocked.containsKey(id)) continue;
+      _blocked.remove(id);
+      _clearedBlocked.add(id);
+      changed = true;
+    }
+    return changed;
+  }
+
+  /// Drop a run's GPS trace locally so the rest of the run can reach the cloud.
+  ///
+  /// The runner's explicit answer to a track the bucket will not hold: every
+  /// number on the run — distance, duration, elevation, pace — is a column and
+  /// survives; only the trace is lost, and only from this device, after the
+  /// screen has offered to export it. Deliberately not automatic: writing a
+  /// `track_url = null` row on the drain's own initiative is exactly what
+  /// `saveRunsBatch` refuses to do, because a transient failure would then
+  /// discard a trace nobody agreed to lose.
+  ///
+  /// Returns the stored run, or null if the id is unknown locally.
+  Future<Run?> dropTrack(String runId) => _serialised(() => _dropTrack(runId));
+
+  Future<Run?> _dropTrack(String runId) async {
+    final existing = await _runByIdRaw(runId);
+    if (existing == null) return null;
+    if (existing.track.isEmpty) {
+      await _clearBlocked([runId]);
+      return existing;
+    }
+    final stripped = Run(
+      id: existing.id,
+      startedAt: existing.startedAt,
+      duration: existing.duration,
+      distanceMetres: existing.distanceMetres,
+      track: const [],
+      routeId: existing.routeId,
+      source: existing.source,
+      externalId: existing.externalId,
+      metadata: existing.metadata,
+      createdAt: existing.createdAt,
+    );
+    await _update(stripped);
+    return stripped;
+  }
+
+  /// Ids this process has un-parked since its last successful sidecar write.
+  /// Absence cannot carry a removal across two processes — see
+  /// [_persistPendingRemoteDeletes], which has the same shape for the same
+  /// reason.
+  final Set<String> _clearedBlocked = <String>{};
+
+  Future<void> _persistBlockedRuns() async {
+    // Prune against `_summaries` (every local row) exactly as
+    // `_persistSyncedIds` does: a run deleted server-side never gets a local
+    // delete() call, so its id would linger in the sidecar forever.
+    final liveIds = _summaries.map((s) => s.id).toSet();
+    _blocked.removeWhere((id, _) => !liveIds.contains(id));
+    await _serialised(() async {
+      // Merge, never replace — `background_sync.dart` builds its own store over
+      // this directory in the WorkManager isolate and is one of the five push
+      // sites, so a whole-file write from either snapshot would drop the
+      // other's parking and hand the drain back a run it cannot send.
+      final disk = await _readBlockedRuns() ?? const <String, RunPushBlockReason>{};
+      final merged = <String, RunPushBlockReason>{
+        for (final e in disk.entries)
+          if (!_clearedBlocked.contains(e.key) && File('${_dir.path}/${e.key}.json').existsSync())
+            e.key: e.value,
+      }..addAll(_blocked);
+      try {
+        if (merged.isEmpty) {
+          if (_blockedRunsFile.existsSync()) await _blockedRunsFile.delete();
+          _clearedBlocked.clear();
+          return;
+        }
+        await writeJsonAtomic(_blockedRunsFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+          'blocked': {for (final e in merged.entries) e.key: e.value.name},
+        });
+        _clearedBlocked.clear();
+      } catch (e) {
+        debugPrint('Failed to persist blocked_runs sidecar: $e');
+      }
+    });
+  }
+
+  Future<Map<String, RunPushBlockReason>?> _readBlockedRuns() async {
+    final file = _blockedRunsFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final raw = data['blocked'];
+      if (raw is! Map) {
+        debugPrint('blocked_runs sidecar has an unexpected shape');
+        return null;
+      }
+      final out = <String, RunPushBlockReason>{};
+      for (final entry in raw.entries) {
+        final name = entry.value;
+        // A reason this build cannot name is a reason it cannot explain or
+        // resolve, so parking under it would strand the run with no exit. Drop
+        // it and let this build's own uploader re-derive its own verdict.
+        RunPushBlockReason? reason;
+        for (final r in RunPushBlockReason.values) {
+          if (r.name == name) {
+            reason = r;
+            break;
+          }
+        }
+        if (reason == null) {
+          debugPrint('blocked_runs: dropping unknown reason "$name"');
+          continue;
+        }
+        out[entry.key as String] = reason;
+      }
+      return out;
+    } catch (e) {
+      debugPrint('Failed to read blocked_runs sidecar: $e');
+      return null;
+    }
   }
 
   /// Insert or replace [run]'s summary, keeping `_summaries` in lockstep with
@@ -1215,11 +1412,18 @@ class LocalRunStore extends ChangeNotifier {
     _runs = [];
     _summaries = [];
     _syncedIds.clear();
+    _blocked.clear();
+    _clearedBlocked.clear();
     _pendingRemoteDeletes.clear();
     _clearedRemoteDeletes.clear();
 
     final pendingDeletes = await _readPendingRemoteDeletes();
     if (pendingDeletes != null) _pendingRemoteDeletes.addAll(pendingDeletes);
+    // Read BEFORE the residency decision below — a parked run is excluded from
+    // the resident set, and a sidecar read after that decision would hydrate
+    // the very track the parking exists to stop holding.
+    final blocked = await _readBlockedRuns();
+    if (blocked != null) _blocked.addAll(blocked);
 
     sweepStoreScratchFiles(_dir,
         onError: (m) => debugPrint('local_run_store: $m'));
@@ -1238,6 +1442,7 @@ class LocalRunStore extends ChangeNotifier {
         .where((f) => !f.path.endsWith(_inProgressFilename))
         .where((f) => !f.path.endsWith(_syncedIdsFilename))
         .where((f) => !f.path.endsWith(_pendingRemoteDeletesFilename))
+        .where((f) => !f.path.endsWith(_blockedRunsFilename))
         .where((f) => !f.path.endsWith(_indexFilename))
         .toList();
     final fileById = {for (final f in files) _runIdFromPath(f.path): f};
@@ -1283,7 +1488,9 @@ class LocalRunStore extends ChangeNotifier {
         residentIds.add(s.id);
       }
       for (final s in _summaries) {
-        if (!_syncedIds.contains(s.id)) residentIds.add(s.id);
+        if (!_syncedIds.contains(s.id) && !_blocked.containsKey(s.id)) {
+          residentIds.add(s.id);
+        }
       }
       final loaded = await Future.wait(
         residentIds.map((id) => _readRunFile(fileById[id]!)),

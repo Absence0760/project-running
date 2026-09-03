@@ -18686,3 +18686,81 @@ of its needle flagged it, which is the § 1034 mistake in miniature.
 Both were found by verifying the merged tree rather than the branches, which is
 the standing round discipline and earned its cost again here.
 
+
+## 1070. A permanently refused push is PARKED, and the runner is offered the one action that exists
+
+§ 986 refused to build a terminal-error taxonomy while the category had no
+reachable member. § 1009 measured the first one: a track blob past the `runs`
+bucket's 25 MiB `file_size_limit`, unreachable by recording (~266 h at 1 Hz) and
+ordinary by import (a 959,883-point GPX is 94 MiB of `trkpt`, sixty times inside
+`importFromZip`'s own archive cap). It closed the *waste* at the source — the
+uploader refuses before spending the network, with a typed
+`TrackTooLargeException` — and left the *loop* open: `saveRunsBatch` returned a
+bare `Set<String>`, five call sites marked everything else synced, and the same
+waypoints gzipped to the same refused bytes on every drain, forever, with the
+residency invariant holding the million-point track in memory to do it.
+
+**The product question the filing owed an answer to** was what a runner can
+actually DO about a run whose track is too big to store. The answer taken here
+is the one the data supports and nothing more: *stop retrying, say which run and
+why, and offer the action that already exists.* Every number on the run —
+distance, duration, elevation, pace — is a **column**; only the trace is a
+Storage object. So the run is not lost, one artefact of it is, and the offer is
+to keep a copy of that artefact and then let the run go to the cloud without it.
+`dropTrack` empties the track locally, which un-parks the run and lets the
+ordinary drain upsert it with `track_url = null`; the card that offers it sits
+beside an **Export a copy** button opening the existing GPX/TCX/FIT sheet, and
+the confirm goes through `confirmDestructive` because the trace is the only
+record of where someone went and nothing brings it back. Nothing does this
+automatically: writing a track-less row on the drain's own initiative is exactly
+what `saveRunsBatch` already refuses to do, and under a *transient* failure it
+would discard a trace nobody agreed to lose.
+
+**Two states, not a taxonomy.** `RunPushOutcome` (in `core_models`, so the store
+can read it without depending on `api_client`) carries `retryable` and `blocked`;
+`RunPushBlockReason` has exactly one member and its `name` is an on-disk value in
+the new `blocked_runs.json` sidecar, so a rename orphans every run already parked
+under the old spelling. A second member is earned by measuring a second permanent
+failure, not by anticipating one — which is § 986's rule, applied rather than
+overturned.
+
+**Parking is defined as leaving the drainable set**, and that is one rule with
+two consequences rather than two decisions. `unsyncedRuns` excludes a parked run,
+so no drain re-sends it; and the residency invariant — whose own contract is
+"the newest window ∪ everything the drain must reach" — excludes it too, so the
+track stops being hydrated on cold load for a drain that will never run. The run
+stays in `_summaries`, so it is still in the history, still rendered by the list,
+and still hydrated on demand by `runById` when the runner opens it. Three
+knock-on rules follow: the park is a verdict on the **bytes**, so `save`,
+`update`, `delete` and `deleteMany` all clear it; the sidecar merges rather than
+replaces, because `background_sync.dart` is one of the five push sites and runs
+in its own isolate over the same directory; and a reason name this build cannot
+resolve is **dropped**, not honoured — parking under a reason no surface can
+explain strands the run with no exit, whereas dropping it lets this build's own
+uploader re-derive its own verdict.
+
+**Two failure paths had to change with it.** `saveRunsBatch`'s
+"every-track-failed" branch threw, which reports "nothing landed" and nothing
+else — fine when every failure is transient, wrong the moment one is terminal,
+because the caller then needs the id to park and a thrown batch leaves it queued.
+It now returns the outcome whenever anything is blocked and throws only for the
+all-transient case the existing tests pin. And `SyncService` sets `anyFailure`
+from `retryable` alone: scheduling a backoff retry for a parked run is the same
+forever-loop one layer up.
+
+**Thinning the track to fit was considered and refused.** `simplifyToBudget`
+exists and would make the blob fit, but it silently rewrites the runner's
+recorded data and moves every track-derived number on the run, with no honest
+place to record that the trace shown is not the trace recorded. Dropping the
+trace is legible: the run says it has no map, and the runner is the one who said
+so.
+
+Surfaces: an error-coloured `cloud_off` badge in the History app bar when
+nothing is queued but something is parked (tapping it explains, since parked runs
+are absent from the sync path by construction), a per-row mark that outranks the
+queued-to-sync cloud (they are different promises and only one is true), and the
+`_BlockedPushCard` on run detail. 13 keys x 7 catalogues. Pinned by
+`blocked_push_test.dart` (13), the outcome's own contract in `core_models`, and a
+parked-not-retried case in each of `sync_service_test`, `background_sync_test`
+and `import_cloud_push_deferred_test` — the last of those being the call site
+where an over-size track actually arrives.

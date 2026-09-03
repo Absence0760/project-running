@@ -2274,6 +2274,69 @@ class AppLocalizationsFr extends AppLocalizations {
   String get historyDelete => 'Supprimer';
 
   @override
+  String get historyBlockedRowSemantics => 'impossible à téléverser';
+
+  @override
+  String get historyBlockedRowTooltip => 'Impossible à téléverser';
+
+  @override
+  String historyBlockedTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count courses ne peuvent pas être téléversées',
+      one: '$count course ne peut pas être téléversée',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historySyncBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count courses ne peuvent pas être téléversées et ne seront pas réessayées. Ouvrez chacune d\'elles pour choisir la suite.',
+      one:
+          '$count course ne peut pas être téléversée et ne sera pas réessayée. Ouvrez-la pour choisir la suite.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runDetailBlockedDropTrack => 'Téléverser sans la trace';
+
+  @override
+  String get runDetailBlockedExport => 'Exporter une copie';
+
+  @override
+  String get runDetailBlockedTitle =>
+      'Cette course ne peut pas être téléversée';
+
+  @override
+  String runDetailBlockedTrackTooLarge(int waypoints) {
+    return 'Sa trace GPS ($waypoints points) dépasse ce que le stockage cloud peut contenir : réessayer ne fonctionnera jamais. Tout le reste de la course — distance, temps, allure, dénivelé — peut encore être enregistré.';
+  }
+
+  @override
+  String get runDetailDropTrackBody =>
+      'La trace est supprimée de cet appareil et la course est téléversée sans carte. Sa distance, son temps, son allure et son dénivelé restent inchangés. Exportez-en une copie d\'abord si vous souhaitez la conserver.';
+
+  @override
+  String get runDetailDropTrackConfirm => 'Téléverser sans elle';
+
+  @override
+  String get runDetailDropTrackDone =>
+      'Trace supprimée. La course sera synchronisée au prochain cycle.';
+
+  @override
+  String get runDetailDropTrackFailed =>
+      'Impossible de supprimer la trace. Veuillez réessayer.';
+
+  @override
+  String get runDetailDropTrackTitle => 'Téléverser sans la trace GPS ?';
+
+  @override
   String get historyQueuedToSync => 'En attente de synchronisation';
 
   @override

@@ -39,8 +39,13 @@ class _FakeApiClient extends ApiClient {
   /// empty; tests that want the partial-failure path populate it.
   Set<String> saveBatchFailedIds = const <String>{};
 
+  /// Runs the push classifies as permanently refused. Distinct from
+  /// [saveBatchFailedIds]: those come back next cycle, these are parked.
+  Map<String, RunPushBlockReason> saveBatchBlockedIds =
+      const <String, RunPushBlockReason>{};
+
   @override
-  Future<Set<String>> saveRunsBatch(
+  Future<RunPushOutcome> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -51,7 +56,8 @@ class _FakeApiClient extends ApiClient {
       throw saveBatchError ?? Exception('boom');
     }
     savedBatchIds.add(runs.map((r) => r.id).toList());
-    return saveBatchFailedIds;
+    return RunPushOutcome(
+        retryable: saveBatchFailedIds, blocked: saveBatchBlockedIds);
   }
 
   @override
@@ -242,6 +248,48 @@ void main() {
       expect(api.saveBatchCallCount, 1);
       expect(store.unsyncedCount, 1,
           reason: 'failure must not flip the unsynced flag');
+    });
+
+    test(
+        'a blocked run is parked, so the next cycle does not re-send it',
+        () async {
+      // decisions § 1070. The refusal is permanent — the same waypoints gzip
+      // to the same bytes every time — so leaving it merely unsynced spends a
+      // runner's data plan proving that again on every trigger, forever.
+      await store.save(makeRun('r-ok'));
+      await store.save(makeRun('r-big'));
+      final api = _FakeApiClient()
+        ..saveBatchBlockedIds = {'r-big': RunPushBlockReason.trackTooLarge};
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(store.blockedReason('r-big'), RunPushBlockReason.trackTooLarge);
+      expect(store.unsyncedCount, 0,
+          reason: 'r-ok landed and r-big left the drainable set');
+
+      await svc.debugTrySync('second cycle');
+
+      expect(api.saveBatchCallCount, 1,
+          reason: 'a second push with nothing drainable must not happen at all');
+      expect(api.savedBatchIds.single.toSet(), {'r-ok', 'r-big'},
+          reason: 'the first push is unchanged — parking is a verdict on the '
+              'result, not a filter on the attempt');
+    });
+
+    test('a blocked run alongside a retryable one parks only the blocked one',
+        () async {
+      await store.save(makeRun('r-retry'));
+      await store.save(makeRun('r-big'));
+      final api = _FakeApiClient()
+        ..saveBatchFailedIds = {'r-retry'}
+        ..saveBatchBlockedIds = {'r-big': RunPushBlockReason.trackTooLarge};
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(store.unsyncedRuns.map((r) => r.id), ['r-retry']);
+      expect(store.blockedRuns.keys, ['r-big']);
     });
 
     test(

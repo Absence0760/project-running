@@ -55,7 +55,7 @@ class _SyncFailApi extends ApiClient {
       const [];
 
   @override
-  Future<Set<String>> saveRunsBatch(
+  Future<RunPushOutcome> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,

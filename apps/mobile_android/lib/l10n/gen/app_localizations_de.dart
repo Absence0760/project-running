@@ -2271,6 +2271,69 @@ class AppLocalizationsDe extends AppLocalizations {
   String get historyDelete => 'Löschen';
 
   @override
+  String get historyBlockedRowSemantics => 'kann nicht hochgeladen werden';
+
+  @override
+  String get historyBlockedRowTooltip => 'Kann nicht hochgeladen werden';
+
+  @override
+  String historyBlockedTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Läufe können nicht hochgeladen werden',
+      one: '$count Lauf kann nicht hochgeladen werden',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historySyncBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count Läufe können nicht hochgeladen werden und werden nicht erneut versucht. Öffne jeden davon, um zu entscheiden, wie es weitergeht.',
+      one:
+          '$count Lauf kann nicht hochgeladen werden und wird nicht erneut versucht. Öffne ihn, um zu entscheiden, wie es weitergeht.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runDetailBlockedDropTrack => 'Ohne Aufzeichnung hochladen';
+
+  @override
+  String get runDetailBlockedExport => 'Kopie exportieren';
+
+  @override
+  String get runDetailBlockedTitle =>
+      'Dieser Lauf kann nicht hochgeladen werden';
+
+  @override
+  String runDetailBlockedTrackTooLarge(int waypoints) {
+    return 'Seine GPS-Aufzeichnung ($waypoints Punkte) ist größer, als der Cloud-Speicher zulässt — ein erneuter Versuch kann daher nie gelingen. Alles andere zu diesem Lauf — Distanz, Zeit, Tempo, Höhenmeter — lässt sich weiterhin speichern.';
+  }
+
+  @override
+  String get runDetailDropTrackBody =>
+      'Die Aufzeichnung wird von diesem Gerät entfernt und der Lauf wird ohne Karte hochgeladen. Distanz, Zeit, Tempo und Höhenmeter bleiben unverändert. Exportiere vorher eine Kopie, wenn du sie behalten möchtest.';
+
+  @override
+  String get runDetailDropTrackConfirm => 'Ohne sie hochladen';
+
+  @override
+  String get runDetailDropTrackDone =>
+      'Aufzeichnung entfernt. Der Lauf wird im nächsten Zyklus synchronisiert.';
+
+  @override
+  String get runDetailDropTrackFailed =>
+      'Die Aufzeichnung konnte nicht entfernt werden. Bitte versuche es erneut.';
+
+  @override
+  String get runDetailDropTrackTitle => 'Ohne GPS-Aufzeichnung hochladen?';
+
+  @override
   String get historyQueuedToSync => 'Zur Synchronisierung eingereiht';
 
   @override
