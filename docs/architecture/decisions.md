@@ -18819,3 +18819,148 @@ The English rendering is byte-identical to what the slot produced, so the six
 Playwright specs that assert "Report this profile" / "club" / "post" / "run" /
 "comment" needed no change; every locale that was wrong is a locale no e2e
 spec reads.
+## 1064. Web's last RunSignUp probe moved to the results leg, and the listings sync's no-sync branch is not dead code
+
+**Decided 2026-09-03.** [§ 1041](#1041-a-credential-probe-stopped-being-charged-to-the-import-allowance-and-runsignups-probe-moved-onto-the-leg-it-asks-about)
+moved every mobile probe onto `race-results-import` and left the web half
+behind because it sat in a tree that change did not own. It is now moved:
+`isRunSignUpConfigured` invokes `race-results-import` with
+`{ provider: 'runsignup', probe: true }`, the shape its two siblings already
+used. The reason is the one § 975 gave for UltraSignup and it is not
+RunSignUp-specific: the Settings card gates an **import**, the two Edge
+Functions read different credentials for different work — the sync walks an
+upcoming-races feed, the import fetches a finisher list — and nothing makes one
+leg's verdict binding on the other. That the two happen to gate on the same
+`RUNSIGNUP_API_KEY` + `_SECRET` pair today is a coincidence of provisioning, not
+a contract.
+
+**The half the filing asked to decide: the now caller-less probe branch in
+`race-listings-sync` stays, and so does its bucket.** The filing described the
+branch as dead once web moved off it. Reading the function says otherwise. The
+credential gate sits *above* the `if (!isSync) return { configured: true }`
+early return, and that early return is what makes a sync **opt-in** — it is the
+fail-safe default § 977 installed precisely so a page load cannot walk a
+provider feed and spend the 2/hour allowance. Delete it and a call that did not
+ask for a sync performs one; that is the opposite of the invariant, and
+`wiring.test.ts` pins it by name. The `race-listings-sync:probe` bucket is what
+prices that same default: without it a no-sync call charges the 2/hour sync
+bucket, which is the exact defect § 977 split the buckets to remove. What
+actually became caller-less is the probe as an advertised **capability**, not
+the code implementing it — so `api_database.md`'s claim that "the web + mobile
+UIs probe it" is what needed correcting, and it has been.
+
+## 1065. `security_guards.test.ts` is twelve files, split by concern, with every assertion moved verbatim
+
+**Decided 2026-09-03.** The file had reached 3,728 lines and 91 tests covering
+privacy clipping, Terraform, CloudFront headers, Deno import pins, WCAG, the
+paywall, rate limits, CI workflow shape and the comment-stripper register. Any
+lane touching any cross-cutting guard collided with any other lane touching a
+different one, twice in one round.
+
+It is now one file per concern: `privacy_guards` (21), `infra_guards` (12),
+`consent_guards` (11), `lambda_guards` (9), `a11y_guards` (8),
+`credential_guards` (6), `rate_limit_guards` (6), `edge_function_guards` (5),
+`paywall_guards` (5), `ci_workflow_guards` (4), `xss_guards` (3),
+`source_scanner_guards` (1). The three-test and one-test files are deliberate,
+not leftovers: the stripper **register** is the single thing every lane adding a
+source scanner must edit, so isolating it is the whole point rather than an
+accident of arithmetic.
+
+**It is a move, not a rewrite, and that is mechanically checked.** All 91 test
+bodies appear byte-identical in exactly one of the twelve files — verified by
+substring containment before the original was deleted — and the sorted set of
+test names is identical to the original's. The suite reports the same 4,742
+tests before and after. The one segment that is not verbatim is the register
+itself, whose `src/lib/security_guards.test.ts` entry (count 4) became two
+entries of 2, because the two CSS-reading scans it covered went to different
+files.
+
+**Choosing the axis.** Grouping by the tree a guard *reads* was the tempting
+alternative, since lanes own trees — but a single guard routinely reads three
+(the sigv4 pair reads web source, mobile Dart and Terraform), so that axis
+cannot assign them. Concern can, and the residual judgement calls are recorded
+where they land: the mobile coach header guard sits with its web twin in
+`lambda_guards` because the contract is the Lambda's, and the mobile markdown
+scheme allowlist sits in `xss_guards` because the contract is the sanitiser's.
+
+**The cost is ~50 prose pointers naming the old path**, of which 17 are in this
+file. Those are **not** rewritten: an ADR records what was true when it was
+written, and the same goes for `test_inventory.md`'s per-round entries. The
+pointers that describe *current* behaviour were repointed at the guard they
+actually mean. Six live in trees no web lane owns and are filed.
+
+## 1066. A geocoder's coordinate is not a coordinate because its type says so
+
+**Decided 2026-09-03.** [§ 1011](#1011-the-settings-bag-class-the-filing-named-has-no-population-the-class-beside-it-had-a-live-defect)
+added `isUsableLatitude` / `isUsableLongitude` to the mobile geocoder. The
+filing for the web side said there was nothing to mirror, because web "has no
+Nominatim string-parse path". It has two, and it had four defects. Measured
+against the pre-change module rather than reasoned about:
+
+- a MapTiler feature whose centre is `1e400` came out of the search dropdown
+  with an **infinite longitude** — `JSON.parse` yields `Infinity`, so the
+  declared `center?: [number, number]` is a claim about the wire the wire never
+  made;
+- a latitude of `91` survived **both** providers — the Nominatim path checked
+  `isFinite` and nothing checked range, and a latitude is ±90 by definition, so
+  a value outside it is a malformed answer rather than a place;
+- one unusable bbox corner made the geocoded radius **NaN**, which compares
+  false against every bound a caller might check it with;
+- a 200 carrying an unparseable body **threw a SyntaxError** out of
+  `geocodePlaceWithKey`, whose documented contract is to return null on failure
+  and whose call sites handle only the null.
+
+Every coordinate out of a provider response now goes through the two
+predicates, and an unusable bbox falls back to the 5 km default exactly as the
+Nominatim branch already did with its own.
+
+**Is it a registerable TS↔Dart pair? The predicates, yes; the modules, no.**
+`geocoding_math.ts` and `geocoding.dart` are not in lockstep and never have
+been: web's outcome type carries a third `aborted` state mobile does not have,
+web takes an `AbortSignal` where mobile injects a `GeocodingFetcher`, and web's
+geocode half falls back to Nominatim where mobile's returns null on an empty
+key. Registering the modules would assert a lockstep that does not exist, which
+is a worse failure than not registering — the registry's value is that a row
+means something. Registering the two predicates alone has no precedent in the
+registry, which is keyed on module paths. So: not registered, the contract is
+stated in both doc comments, and the honest recommendation is filed rather than
+acted on, since neither registry is a web lane's to edit
+(§ 641, and § 604 for the guard that compares the two registries).
+Filed alongside it: mobile's own `geocodePlace` — the geocode half § 1011 did
+not reach — still reads `center[0]` / `center[1]` through a bare `as num` with
+no usability check, so the exposure § 1011 closed on the two search paths is
+still open one function below them.
+
+## 1067. A credential probe reports available only on a clean answer
+
+**Decided 2026-09-03.** The followup asked for a decision — fail open, or fail
+closed — for `isProviderConfigured`. **Fail closed**, and on web that is a real
+change rather than a restatement: the grader read *any readable 4xx other than
+429* as proof the Edge Function "ran past the credential gate", which is not
+something a status can carry. `race-results-import` answers **401 before it
+reads a single environment variable**, and **400 `unknown_provider`** for a leg
+it does not dispatch at all — so a signed-out session and a provider that does
+not exist both reported the Settings card as live, and the card's next call
+refuses after the runner has typed their bib.
+
+A probe asks one question and exactly one answer says yes: the 200, which is
+not an error and never reaches the grader. So the rule is `probeSaysConfigured`
+in `core/provider_probe.ts` — available iff there was no error — and every
+other shape reads as unavailable. It is also what the Settings page's own
+`catch` already did for a *thrown* failure, so the returned-error path had been
+disagreeing with the thrown one on the same page.
+
+**The import path keeps a grader, under a name that says which of the two rules
+it is.** `isProviderGateRefusal` still decides whether an *import*'s failure was
+the credential gate, because an import can fail for reasons that say nothing
+about a credential — a listing that does not exist, a bib with no match — and
+those must reach the caller as themselves rather than as "this provider is
+unavailable". Two callers, two questions, two functions; conflating them is how
+one fail-open default ended up serving both.
+
+**For the mobile lane to check against.** The reasoning above is not web-specific
+and none of it turns on `FunctionException` versus a returned error object: the
+question is whether the client can *prove* the credential gate was cleared, and
+it cannot. If mobile's `isProviderConfigured` keeps its fail-open residual, the
+two platforms disagree about whether the same card is live against the same
+backend, which is a divergence rather than a platform difference.

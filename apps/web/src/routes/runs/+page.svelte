@@ -756,7 +756,7 @@
 								 props keeps the safe shape if the page is ever widened
 								 to show another user's runs — without them, the clip
 								 gate silently falls open. See audit:privacy-zones
-								 2026-05-25 + the corresponding security_guards.test
+								 2026-05-25 + the corresponding privacy_guards.test
 								 case below. -->
 							<RunTrackPreview
 								trackUrl={run.track_url}

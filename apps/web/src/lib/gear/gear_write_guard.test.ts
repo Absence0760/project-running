@@ -4,7 +4,7 @@
 // with the reason a future editor can read before deciding it's safe to change.
 //
 // Runs with cwd = apps/web (the `test:unit` script), matching the convention in
-// src/lib/core/data.test.ts and src/lib/security_guards.test.ts.
+// src/lib/core/data.test.ts and src/lib/privacy_guards.test.ts.
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';

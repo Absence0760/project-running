@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function_error';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { isEntityId } from './entity_id';
+import { probeSaysConfigured } from './provider_probe';
 import { loadSettings, effective } from '../settings/settings';
 import { privacyDefaultToIsPublic } from '../social/run_visibility';
 import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
@@ -2298,7 +2299,7 @@ export async function importRaceResult(
 		// `paste` carries no credential, so it can never be the provider a 503
 		// provider_not_configured is about — reporting one as RunSignUp's outage
 		// also swallowed a plain network failure on the paste path.
-		if (input.provider !== 'paste' && (await isProviderNotConfigured(error))) {
+		if (input.provider !== 'paste' && (await isProviderGateRefusal(error))) {
 			throw new Error(RACE_IMPORT_UNAVAILABLE[input.provider]);
 		}
 		throw error;
@@ -2315,13 +2316,20 @@ export const RACE_IMPORT_UNAVAILABLE: Record<RaceImportLeg, string> = {
 	chronotrack: 'CHRONOTRACK_UNAVAILABLE'
 };
 
-/// Probe whether the RunSignUp leg is configured server-side. Returns false
-/// (unavailable) on a 503 provider_not_configured, true otherwise. Used to
-/// disable the RunSignUp card with an explainer.
+/// Probe whether the RunSignUp RESULTS leg is configured server-side. Reports
+/// available only on a clean answer — see `probeSaysConfigured` for why any
+/// failure at all reads as unavailable. Drives the RunSignUp card + explainer.
+///
+/// Probes `race-results-import`, not `race-listings-sync`, for the reason its
+/// UltraSignup sibling below gives: the card gates an IMPORT, so it has to ask
+/// the leg that would run. The two legs read different credentials — the sync
+/// walks an upcoming-races feed, the import fetches a finisher list — and
+/// nothing makes one leg's verdict binding on the other (decisions § 1041).
 export async function isRunSignUpConfigured(): Promise<boolean> {
-	const { error } = await supabase.functions.invoke('race-listings-sync', { body: {} });
-	if (!error) return true;
-	return !(await isProviderNotConfigured(error));
+	const { error } = await supabase.functions.invoke('race-results-import', {
+		body: { provider: 'runsignup', probe: true }
+	});
+	return probeSaysConfigured(error);
 }
 
 /// Probe whether the UltraSignup RESULTS leg is configured server-side. Same
@@ -2339,20 +2347,18 @@ export async function isUltraSignUpConfigured(): Promise<boolean> {
 	const { error } = await supabase.functions.invoke('race-results-import', {
 		body: { provider: 'ultrasignup', probe: true }
 	});
-	if (!error) return true;
-	return !(await isProviderNotConfigured(error));
+	return probeSaysConfigured(error);
 }
 
-/// Probe whether the ChronoTrack leg is configured server-side. Returns false
-/// on a 503 provider_not_configured, true otherwise — drives the disabled
-/// ChronoTrack card + explainer. Uses the race-results-import probe mode (no
-/// listing needed), mirroring the RunSignUp probe shape.
+/// Probe whether the ChronoTrack leg is configured server-side. Same
+/// fail-closed shape as its two siblings — drives the disabled ChronoTrack
+/// card + explainer. Uses the race-results-import probe mode (no listing
+/// needed).
 export async function isChronoTrackConfigured(): Promise<boolean> {
 	const { error } = await supabase.functions.invoke('race-results-import', {
 		body: { provider: 'chronotrack', probe: true }
 	});
-	if (!error) return true;
-	return !(await isProviderNotConfigured(error));
+	return probeSaysConfigured(error);
 }
 
 const RACE_IMPORT_PROBES: Record<RaceImportLeg, () => Promise<boolean>> = {
@@ -2368,7 +2374,12 @@ export function isRaceImportProviderConfigured(leg: RaceImportLeg): Promise<bool
 	return RACE_IMPORT_PROBES[leg]();
 }
 
-async function isProviderNotConfigured(error: unknown): Promise<boolean> {
+/// Whether an IMPORT's failure is the credential gate refusing, and not the
+/// import itself failing. Distinct from `probeSaysConfigured`, which grades a
+/// probe: an import can fail for reasons that say nothing about the credential
+/// (a listing that does not exist, a bib with no match), and those must reach
+/// the caller as themselves rather than as "this provider is unavailable".
+async function isProviderGateRefusal(error: unknown): Promise<boolean> {
 	const ctx = (error as { context?: Response })?.context;
 	if (ctx && typeof ctx.status === 'number' && ctx.status > 0) {
 		if (ctx.status === 503) {

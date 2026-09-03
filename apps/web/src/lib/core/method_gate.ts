@@ -1,7 +1,7 @@
 /**
  * The 405 every Lambda in this tree answers with, in one place.
  *
- * Eight handlers gate their own method (`security_guards.test.ts` derives that
+ * Eight handlers gate their own method (`lambda_guards.test.ts` derives that
  * from the directory rather than listing them). The five share ones went
  * through `shareMethodRefusal` from § 1005; the three API ones each spelled the
  * comparison, the status, the `Allow` header and the body inline, and the four

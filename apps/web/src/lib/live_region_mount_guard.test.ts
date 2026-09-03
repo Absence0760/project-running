@@ -3,7 +3,7 @@
 // mutation is not a change made inside the region — it is the region's own
 // arrival — and assistive technology announces nothing.
 //
-// § 736 fixed `ToastContainer` and `security_guards.test.ts` pins that one
+// § 736 fixed `ToastContainer` and `a11y_guards.test.ts` pins that one
 // component. § 797 then shipped the identical shape on `/routes/new`'s
 // "preference not applied" note and had to correct it before merge: the one
 // message on that page whose entire job is disclosure was announced to

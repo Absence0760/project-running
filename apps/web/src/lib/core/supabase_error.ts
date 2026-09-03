@@ -8,7 +8,7 @@
 /// can scrub a log line without importing the coach handler (and the
 /// Anthropic SDK behind it). Mirrors the `.code`/`.message` pattern used
 /// in rate_limit_errors.ts + the Edge Functions, and is the shape the
-/// security_guards.test.ts raw-object ban enforces. /audit/pii-in-logs.
+/// edge_function_guards.test.ts raw-object ban enforces. /audit/pii-in-logs.
 export function supabaseErrorFields(
 	err: { code?: string; message?: string } | null | undefined,
 ): { code: string | undefined; message: string | undefined } {

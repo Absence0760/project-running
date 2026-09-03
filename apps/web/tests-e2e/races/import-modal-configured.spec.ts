@@ -51,13 +51,6 @@ const raceNameFor = (provider: string) => `E2E ${provider} Configured ${stamp}`;
 
 /// Report every leg as provisioned, and record the import the modal builds.
 async function stubProviders(page: Page, imports: Record<string, unknown>[]) {
-	await page.route('**/functions/v1/race-listings-sync', (route) =>
-		route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ synced: 0 })
-		})
-	);
 	await page.route('**/functions/v1/race-results-import', (route) => {
 		const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
 		if (body.probe === true) {

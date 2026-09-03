@@ -720,7 +720,7 @@ body, .sidebar, .login-card {
  * Material Symbols Outlined, Apache 2.0, self-hosted so the font is served
  * from our own origin (CloudFront) and never from a third-party CDN —
  * audit/cookie-consent (May 2026) Critical fix, and the reason this file
- * must not grow a fonts.googleapis.com URL (pinned in security_guards).
+ * must not grow a fonts.googleapis.com URL (pinned in consent_guards.test.ts).
  *
  * The face is SUBSET to the 347 icons this app names, built from the
  * `material-symbols` package by scripts/gen_web_icon_font.mjs. Importing the
