@@ -61,6 +61,7 @@ class WatchRunPayloadFixtureTest {
         val metadata = buildRunMetadata(
             activityType = expected["activity_type"]!!.jsonPrimitive.content,
             avgBpm = expected["avg_bpm"]!!.jsonPrimitive.double,
+            hrCoverage = null,
             steps = null,
             laps = laps,
             lastModifiedAtIso = expected["last_modified_at"]!!.jsonPrimitive.content,

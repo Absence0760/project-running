@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
 import com.runapp.watchwear.recording.checkpointActiveDurationS
+import com.runapp.watchwear.recording.heartRateClaim
 import com.runapp.watchwear.recording.RecordingRepository
 import com.runapp.watchwear.recording.RecoveryAction
 import com.runapp.watchwear.recording.recoveryActionFor
@@ -729,8 +730,16 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 return@launchGuarded
             }
             val durationS = checkpointActiveDurationS(cp)
-            val avgBpm = if (cp.bpmCount == 0L) null
-                else cp.bpmSum.toDouble() / cp.bpmCount
+            // A recovered run is graded the same way the normal stop path
+            // grades one; a checkpoint carrying no coverage measurement claims
+            // none and keeps its average (decisions § 1083).
+            val hr = heartRateClaim(
+                bpmSum = cp.bpmSum,
+                bpmCount = cp.bpmCount,
+                hrAvailableMs = cp.hrAvailableMs,
+                activeElapsedMs = durationS * 1000L,
+            )
+            val avgBpm = hr.avgBpm
             val sealed = sealTrackFile(cp.trackFilePath) ?: run {
                 checkpoints.clear()
                 _state.value = _state.value.copy(pendingRecovery = null)
@@ -744,6 +753,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     distanceM = cp.distanceM,
                     trackFilePath = sealed.absolutePath,
                     avgBpm = avgBpm,
+                    hrCoverage = hr.coverage,
                     activityType = cp.activityType,
                     laps = cp.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                     steps = cp.steps,
@@ -1128,6 +1138,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     distanceM = m.distanceM,
                     trackFilePath = trackPath,
                     avgBpm = m.avgBpm,
+                    hrCoverage = m.hrCoverage,
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                     steps = m.steps,
@@ -1362,6 +1373,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val metadata: JsonObject = buildRunMetadata(
             activityType = run.activityType,
             avgBpm = run.avgBpm,
+            hrCoverage = run.hrCoverage,
             steps = run.steps,
             laps = run.laps,
             lastModifiedAtIso = Instant.now().toString(),

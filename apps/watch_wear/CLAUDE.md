@@ -193,10 +193,26 @@ same drain path with a `syncing` UI flag for the spinner).
 `HeartRateMonitor` registers a `MeasureCallback` on
 `HealthServices.getClient(context).measureClient` for
 `DataType.HEART_RATE_BPM` and exposes a `Flow<Int>` of live samples.
-`RunViewModel` collects into a list during recording, averages on stop,
-writes `avg_bpm` into `run.metadata` before upload. Behaviour matches
-`watch_ios`'s HealthKit integration — [docs/backend/metadata.md](../../docs/backend/metadata.md)
-registers the key.
+`RunRecordingService` folds the samples into a rolling `bpmSum`/`bpmCount`
+pair, grades it on stop, and writes `avg_bpm` into `run.metadata` before
+upload. Behaviour matches `watch_ios`'s HealthKit integration —
+[docs/backend/metadata.md](../../docs/backend/metadata.md) registers the key.
+
+**The mean is graded against how much of the run produced it.**
+`MeasureClient` is documented foreground-only ([decisions § 1015](../../docs/architecture/decisions.md)),
+so the samples reaching the pair on a twelve-hour ultra can be the minutes the
+runner spent looking at the watch — and `avg_bpm` was saved as *the run's*
+average either way. `recording/HeartRateCoverage.kt` is the pure grader both
+producers of an average go through (the normal stop and `recoverCheckpoint`):
+it writes `metadata.hr_coverage`, the share of ACTIVE elapsed time the sensor
+was delivering, and suppresses `avg_bpm` below `MIN_AVG_BPM_COVERAGE` (0.5),
+because a mean over less of the run than not is not the run's average. Coverage
+is accumulated on the recording ticker against the AGE of the last usable
+sample, not by closing an interval on an availability event — a foreground-only
+client the platform stops feeding can go quiet without ever reporting
+`UNAVAILABLE`. A null coverage is *unmeasured*, not zero: a checkpoint written
+by a build predating the field recovers its average unqualified.
+[decisions § 1083](../../docs/architecture/decisions.md).
 
 ## Running it locally
 

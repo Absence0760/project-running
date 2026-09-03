@@ -23,12 +23,19 @@ import kotlinx.serialization.json.put
 fun buildRunMetadata(
     activityType: String,
     avgBpm: Double?,
+    hrCoverage: Double?,
     steps: Int?,
     laps: List<QueuedLap>,
     lastModifiedAtIso: String,
 ): JsonObject = buildJsonObject {
     put("activity_type", activityType)
     if (avgBpm != null) put("avg_bpm", avgBpm)
+    // Written independently of `avg_bpm`, and its most useful reading is when
+    // the average is absent: `MeasureClient` is foreground-only, so a mean over
+    // a fraction of a twelve-hour run used to be saved as the run's average
+    // with nothing recording that it was. See docs/backend/metadata.md and
+    // decisions § 1083.
+    if (hrCoverage != null) put("hr_coverage", hrCoverage)
     if (steps != null && steps > 0) put("steps", steps)
     // Mobile's delta-fetch path (`runs_screen._fetchRemote`) filters
     // on `metadata->>'last_modified_at' > since`. Without this stamp

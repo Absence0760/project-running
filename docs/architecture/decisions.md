@@ -18732,3 +18732,50 @@ one entering the queue that cannot be read. The pre-run "Sync N runs" chip is
 derived from `queuedCount`, which the stream `.catch` freezes at its last value,
 so a corrupt queue leaves no chip to tap; surfacing it there is a second
 affordance on a 1.4-inch screen and is filed rather than smuggled in here.
+
+## 1083. The wrist records how much of the run its heart rate covered, and refuses to call a minority sample the run's average
+
+[§ 1054](#1054-exerciseclient-is-the-right-client-and-is-deliberately-not-started--the-scoping-and-why-nothing-small-falls-out-of-it)
+filed this as the honest consequence of `MeasureClient` being foreground-only:
+`avg_bpm` was saved as **the run's** average heart rate with nothing anywhere
+recording what share of the run produced it, and on a twelve-hour ultra that
+share can be the twenty minutes the runner spent looking at the watch. It became
+computable only with [§ 1052](#1052-the-wrist-says-why-there-is-no-heart-rate-in-the-slot-the-reading-already-occupies)'s
+availability state.
+
+**Both halves, because they answer different questions.** `hr_coverage` is
+written whenever heart rate was enabled for the run — the fraction of ACTIVE
+elapsed time the sensor was delivering, two decimals. It is a record, and the
+data is unrecoverable after the fact, so it is kept whether or not any reader
+exists yet (none does; the phone and web trees belong to other lanes). Separately
+`avg_bpm` is **suppressed below 0.5**. That number is the sentence rather than a
+tuning knob: a mean taken over less of the run than not is not the run's average,
+and every reader — run detail, the coach context, the export CSV — treats
+`avg_bpm` as though it were. The threshold is applied to the ROUNDED figure that
+gets stored, because a run persisting `hr_coverage: 0.5` beside a suppressed
+average is a record that contradicts itself.
+
+**Measured on the ticker, against the age of the last sample.** The obvious
+implementation — open an interval when availability becomes `Available`, close it
+when it leaves — over-reports exactly the runs this exists for: a foreground-only
+client the platform stops feeding can go quiet without ever emitting
+`UNAVAILABLE`, and the open interval then credits the whole silence as covered.
+`advanceHrCoverage` runs on the existing 500 ms recording tick and adds the
+tick's ACTIVE milliseconds only while the last usable sample is younger than
+`HR_SAMPLE_FRESH_MS` (30 s) — loose enough not to punish a batching sensor, tight
+enough that a suspension measured in minutes is not counted. Active elapsed, so a
+paused stretch advances neither numerator nor denominator.
+
+**Null is unmeasured, not zero.** `Checkpoint.hrAvailableMs` is nullable and
+`heartRateClaim` passes the mean through unqualified when it is absent. A
+checkpoint written by a build predating the field would otherwise recover as zero
+coverage and silently drop an average that build would have saved — the absence of
+a measurement being read as evidence of absent coverage.
+
+**Scope.** Everything is inside `apps/watch_wear/` plus the registry row: the
+watch posts straight to Supabase, so no phone-side parser is involved, and the
+web / mobile / iOS metadata guards each scan their own sources against the
+registry rather than the other way round. Not taken: a PostRun caption saying why
+the bpm line is missing. That is a second affordance on a 1.4-inch screen and a
+string in seven catalogues, and it is a display decision rather than the
+saved-data one this entry is about — filed.
