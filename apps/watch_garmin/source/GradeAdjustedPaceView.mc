@@ -28,9 +28,30 @@ const MAX_GRADE = 0.45;
 const MIN_SPEED_MPS = 0.4;
 
 // Need at least this much horizontal travel before trusting a new grade
-// sample -- GPS altitude is jittery, so we measure grade over a segment,
-// not point-to-point.
-const MIN_SEGMENT_M = 5.0;
+// sample -- altitude is jittery, so we measure grade over a segment, not
+// point to point. Worst on a Forerunner with no barometric altimeter, where
+// `Activity.Info.altitude` is GPS altitude and the noise is metres.
+//
+// The window has a floor, and the 5 m this shipped with was below it. The
+// other three rails gate elevation GAIN at 3 m -- a smaller change is not
+// treated as climb at all -- and 3 m over 5 m is a 0.60 grade, past MAX_GRADE,
+// so it clamps and yields a factor of 5.396: the field reported a pace 5.4x
+// faster than raw off a rise the gain path discards as noise. A single 1 m
+// step did it at 2.50.
+//
+// A gate on the RISE cannot replace a longer window: the rise a real grade
+// produces over the window scales with the window exactly as the noise does,
+// so a threshold big enough to suppress the noise suppresses every real grade
+// below threshold/window with it -- measured, a 3 m rise gate at this window
+// zeroes every real grade under 15% while the GPS-altitude noise it aims at
+// has a 3.8 m sigma and walks straight through.
+//
+// 20 m is where 3 m stops being able to more than double the reported effort
+// (a 0.15 grade, factor 2.06) and is the largest window whose cost on real
+// oscillating terrain stays under 3%. See decisions.md § 992 for the
+// measurement. Held equal to the other three rails by
+// scripts/check_watch_wire_vectors.mjs.
+const MIN_SEGMENT_M = 20.0;
 
 // Live-pace ceiling, 99:00 per unit. Past this the value is a runaway from a
 // near-zero adjusted speed, not a pace, and the native cell cannot render a

@@ -6,7 +6,9 @@ import {
 	minettiCostAtGrade,
 	gradeFactor,
 	gradeAdjustedPaceSecPerKm,
+	MIN_SEGMENT_M,
 } from './grade_adjusted_pace';
+import { ELEVATION_GAIN_MIN_DELTA_M } from '../routes/route_simplify';
 import type { TrackPoint } from '../types';
 
 /// Mirror of `apps/mobile_android/test/grade_adjusted_pace_test.dart`. Keep in
@@ -107,4 +109,36 @@ test('mixed track with some missing elevation still computes from graded segment
 	const gap = gradeAdjustedPaceSecPerKm(track);
 	assert.ok(gap != null);
 	assert.ok(gap < 200, 'still adjusted for the climb on the graded segments');
+});
+
+test('the grade window is longer than the noise floor the gain path discards', () => {
+	// The finding this window's value exists to answer, stated as the
+	// relationship rather than as the number: the largest altitude change
+	// `computeElevationGain` throws away as noise, taken over the shortest run
+	// a grade is measured across, must not read as a wall.
+	//
+	// At the 5 m this shipped with, 3 m of noise was a 0.60 grade — past
+	// MAX_GRADE, so it clamped, and the factor was 5.396. A rise nothing else
+	// in the app is willing to call climb reported an effort-pace 5.4x faster
+	// than raw. Nothing gates the rise and nothing can: a threshold big enough
+	// to suppress that noise suppresses every real grade below
+	// `threshold / window` with it.
+	const noiseFloorGrade = ELEVATION_GAIN_MIN_DELTA_M / MIN_SEGMENT_M;
+	assert.ok(
+		noiseFloorGrade < MAX_GRADE,
+		`a window of ${MIN_SEGMENT_M} m makes the ${ELEVATION_GAIN_MIN_DELTA_M} m noise floor a ${noiseFloorGrade} grade, past the steepest the Minetti fit is defined at`,
+	);
+	assert.ok(
+		gradeFactor(noiseFloorGrade) < 2.1,
+		`the noise floor alone must not more than double the reported effort; it multiplies it by ${gradeFactor(noiseFloorGrade)}`,
+	);
+});
+
+test('a track shorter than one window yields no grade-adjusted pace', () => {
+	// Proof that the walk reads the constant rather than a literal: four
+	// quarter-window steps carry elevation and a duration, and still never
+	// complete a segment, so there is no grade anyone can vouch for and the
+	// helper says so instead of grading the jitter.
+	const track = gradedTrack({ points: 4, stepM: MIN_SEGMENT_M / 4, stepS: 1, gradePct: 10 });
+	assert.equal(gradeAdjustedPaceSecPerKm(track), null);
 });
