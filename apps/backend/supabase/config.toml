@@ -113,7 +113,7 @@ url = "env(SSO_MOCK_OIDC_URL)"
 # The function body is the trust boundary (same posture as
 # donations-checkout): RLS-gated read via the anon-key client,
 # fail-closed empty result on error, per-IP rate limit on the anon
-# branch (pinned by apps/web/src/lib/security_guards.test.ts).
+# branch (pinned by apps/web/src/lib/rate_limit_guards.test.ts).
 
 [functions.strava-webhook]
 verify_jwt = false

@@ -12,7 +12,7 @@
 # are still queued (#457: mergeStateStatus=UNSTABLE, 40 checks pending). ci.yml
 # now always runs and its heavy jobs skip on a docs-only diff instead, so
 # nothing is left pending for a companion workflow to rescue. Re-proposed by the
-# sync in #794; guarded by `apps/web/src/lib/security_guards.test.ts` and
+# sync in #794; guarded by `apps/web/src/lib/ci_workflow_guards.test.ts` and
 # decisions.md § 700.
 .github/workflows/ci-gate-docs.yml
 

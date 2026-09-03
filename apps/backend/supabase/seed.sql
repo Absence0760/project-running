@@ -1453,7 +1453,7 @@ UPDATE user_profiles
 -- test runs. Real users have to click the disclosure (migration
 -- 20260921_001 + the /coach + /settings/preferences UI); the seed
 -- short-circuits that for e2e + manual dev convenience. The dedicated
--- consent-gate tests (web src/lib/security_guards.test.ts, mobile
+-- consent-gate tests (web src/lib/consent_guards.test.ts, mobile
 -- coach_screen_test.dart) are source-grep guards over the handler
 -- code, so pre-seeded consent doesn't bypass them. Seeded at the CURRENT
 -- disclosure version so the AI route surfaces are reachable too — a real

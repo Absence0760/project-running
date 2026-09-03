@@ -26,7 +26,7 @@ const IMPORTER = 'src/lib/integrations/strava-zip.ts';
 
 /// Comments name the very shapes being refused, so they are blanked before any
 /// scan — through the one shared stripper, never a `.replace` chain of our own
-/// (decisions § 971 + § 1000; `security_guards.test.ts` enforces it).
+/// (decisions § 971 + § 1000; `source_scanner_guards.test.ts` enforces it).
 function source(): string {
 	return stripComments(readFileSync(resolve(IMPORTER), 'utf-8'));
 }
