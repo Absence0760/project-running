@@ -52,6 +52,33 @@ String safeErrorLabel(Object e) {
 /// `Supabase.instance.client`. Tests can use [ApiClient.withClient]
 /// to inject a fake `SupabaseClient` so the wire-level methods can
 /// be driven without booting a real Supabase backend.
+/// A run whose gzipped track exceeds the `runs` bucket's own file_size_limit.
+///
+/// Terminal, not transient: the same waypoints gzip to the same bytes on every
+/// retry, so a drain that treats this like a dropped connection re-sends a
+/// refused payload forever. Reachable only through import — a live recording
+/// would need ~266 hours at 1 Hz to get here, while a single GPX inside a
+/// Strava archive reaches it 60x under that archive's own cap (decisions
+/// § 1009).
+class TrackTooLargeException implements Exception {
+  final String runId;
+  final int bytes;
+  final int limitBytes;
+  final int waypoints;
+
+  const TrackTooLargeException({
+    required this.runId,
+    required this.bytes,
+    required this.limitBytes,
+    required this.waypoints,
+  });
+
+  @override
+  String toString() =>
+      'TrackTooLargeException(run $runId: $waypoints waypoints gzip to $bytes '
+      'bytes, over the maximum allowed size of $limitBytes)';
+}
+
 class ApiClient {
   /// Custom-scheme deep link GoTrue redirects the signup-confirmation /
   /// magic-link auth mail to on mobile. supabase_flutter's app_links
@@ -1580,6 +1607,19 @@ class ApiClient {
     }
     final json = _trackBlobJson(usable);
     final bytes = Uint8List.fromList(gzip.encode(utf8.encode(json)));
+    // Storage refuses a blob past the bucket's own file_size_limit with a 413
+    // whose only stable identity is an English message, and the drain retries
+    // a failed upload forever — so an over-size track re-gzipped and re-sent
+    // the same bytes on every cycle, spending a runner's data plan on a call
+    // that cannot succeed. The limit is knowable here, so ask before sending.
+    if (bytes.length > StorageBuckets.runsBucketMaxBytes) {
+      throw TrackTooLargeException(
+        runId: runId,
+        bytes: bytes.length,
+        limitBytes: StorageBuckets.runsBucketMaxBytes,
+        waypoints: usable.length,
+      );
+    }
     final path = '$userId/$runId.json.gz';
     await _client.storage.from(StorageBuckets.runs).uploadBinary(
           path,

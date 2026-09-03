@@ -16354,3 +16354,53 @@ ability to actually import a result. With § 1007 in place an exhausted bucket
 also reads as "provider unavailable", so the failure would be silent and
 total. The durable close is § 977's split applied to `race-results-import`,
 which is a backend change; it is filed, and RunSignUp's probe moves behind it.
+
+## 1009. The over-size track blob is reachable, so the terminal-failure category now has a member
+
+§ 986 removed the one known permanent per-run upload failure (`jsonEncode`
+refusing a non-finite double) and deliberately did NOT build a terminal-error
+taxonomy, on the grounds that a category with no reachable member is a
+preemptive abstraction. It named one candidate it had not measured: a track
+blob past the `runs` bucket's object-size limit. Measured, 2026-09-02.
+
+The bucket's `file_size_limit` is 26,214,400 bytes (25 MiB), set by migration
+`20260620_001` whose own comment estimates "a 5h run at 1Hz is ~18k points;
+gzipped ~1MB". A realistic 1 Hz trace — drifting full-precision coordinates,
+wobbling elevation, per-second timestamps, per-point HR, encoded through the
+uploader's own `_trackBlobJson` — gzips to **27.3 bytes per waypoint**, flat
+from 3,600 to 500,000 points. So the limit is **959,883 waypoints**.
+
+By live recording that is **266.6 hours** of continuous 1 Hz sampling, and
+points are appended only on ≥3 m of movement, so the real figure is longer
+still. The longest event the product models is a 112-hour cutoff. The recorder
+cannot get there, which is why nobody had seen this.
+
+By import it is ordinary. The same 959,883 points as GPX `trkpt` elements are a
+**94.3 MiB** file that deflates to **8.3 MiB** — sixty times inside the 500 MiB
+cap `importFromZip` puts on a Strava archive, so the archive cap does not bound
+it. A single merged multi-year GPX, or a 1 Hz FIT from a 240-mile race, reaches
+it without anyone trying.
+
+So the class has a member, and the failure is permanent: the same waypoints
+gzip to the same bytes on every retry. `saveRunsBatch` catches per-run and
+leaves the run unsynced, the drain re-gzips and re-sends the identical refused
+payload on the next cycle, and the residency invariant keeps that run — and its
+million-point track — permanently in memory besides.
+
+Closed at the source, which is the half that needs no product decision: the
+uploader carries the bucket's limit as `StorageBuckets.runsBucketMaxBytes` (a
+client rail on a server bound, in the shape `text_limits` and `column_limits`
+already use, with a test that reads the migration) and refuses an over-size
+blob with a typed `TrackTooLargeException` **before** spending the network on a
+call that cannot succeed. Its message deliberately contains "maximum allowed
+size" so `classifyImportFailure` buckets it as `tooLarge` rather than
+`unknown`, which the existing import-failure report already explains; a test
+pins that, because it is a property of the sentence and not of the type.
+
+What is NOT done here, and is filed rather than half-built: the drain does not
+yet PARK a terminal failure. That needs per-run blocked state in the local
+store, the five `saveRunsBatch` call sites reading a classification rather than
+a bare id set, a surface, and its i18n — and, before any of it, a product
+answer to what a runner can actually DO about a run whose track is too big to
+store. Guessing at that answer is how a taxonomy becomes an abstraction nobody
+wanted. The measurement above is what the next lane should start from.
