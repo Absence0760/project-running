@@ -67,7 +67,7 @@
 //      neither of which is stated anywhere a change would trip over:
 //      no CREDENTIALED workflow job runs `terraform` (so nothing in CI ever
 //      reaches `data.sops_file`), and no `aws_lambda_function` sets
-//      `kms_key_arn` (so `lambda:GetFunction` / `UpdateFunctionCode` from the
+//      `kms_key_arn` (so `lambda:UpdateFunctionCode` from the
 //      deploy role never transits this key). The check runs BOTH ways: a
 //      non-empty wire while both premises hold is standing privilege, and an
 //      empty wire once either premise breaks is a release that fails with
@@ -80,6 +80,16 @@
 //      .github/actions/ assumes an AWS role. The day one does, this fails and
 //      says to widen the scan — which is the only outcome that cannot be a
 //      false negative about a credentialed terraform run nobody read.
+//
+//  10. Lambda verb scope. The `lambda:` actions on each deploy role equal the
+//      set of `aws lambda` operations the workflows actually invoke, derived
+//      from their `run:` bodies. `GetFunction`, `GetAlias` and `PublishVersion`
+//      were granted and exercised by nothing (§ 1085) — the same shape as the
+//      KMS grant § 1021 removed, and the same way it accumulated: a verb is
+//      added when someone is unsure, and nothing ever asks again. The
+//      derivation's premise is that a workflow is the only thing holding these
+//      roles' credentials, which claim 9's scan already establishes; the
+//      operator's own SSO profile is what runs `bin/lambda-alias-sync.sh`.
 //
 // Offline by design: no AWS credentials, no `terraform init`. Nothing here is
 // transcribed — every name, every environment, every function suffix and every
@@ -213,6 +223,123 @@ export function stringsFor(body, key) {
   const close = matchingBracket(rest, 0);
   if (close < 0) return [];
   return [...rest.slice(1, close).matchAll(/"([^"]*)"/g)].map((x) => x[1]);
+}
+
+/// Lambda verbs a deploy role may hold that no workflow invokes, each with the
+/// reason it is still needed. Empty, and it staying empty is the point: an
+/// entry here is standing privilege, and a declared exemption nothing uses
+/// fails as loudly as an undeclared verb.
+/** @type {Map<string, string>} */
+export const UNEXERCISED_LAMBDA_ACTIONS = new Map();
+
+/// `aws lambda <kebab-verb>` -> the IAM action it authorises. IAM models one
+/// action per API operation, so the mapping is the operation name and nothing
+/// else — notably `update-function-code --publish` is ONE operation whose
+/// request carries a `Publish` boolean, not an UpdateFunctionCode followed by a
+/// PublishVersion.
+/** @param {string} verb @returns {string} */
+export function iamActionForCliVerb(verb) {
+  return verb
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('');
+}
+
+/// Every `lambda:` action the workflows' own shell reaches for. Comment lines
+/// are skipped: ci.yml's run bodies discuss `aws lambda update-function-code`
+/// in prose, and reading that as an invocation would let a verb justify itself
+/// by being mentioned.
+/**
+ * @param {readonly {name: string, text: string}[]} files
+ * @returns {Set<string>}
+ */
+export function parseWorkflowLambdaActions(files) {
+  /** @type {Set<string>} */
+  const actions = new Set();
+  for (const { text } of files) {
+    for (const step of parseSteps(text)) {
+      if (!step.hasRun) continue;
+      for (const line of runBody(step).split('\n')) {
+        if (/^\s*#/.test(line)) continue;
+        for (const m of line.matchAll(/\baws\s+lambda\s+([a-z][a-z0-9-]*)/g)) {
+          actions.add(`lambda:${iamActionForCliVerb(m[1])}`);
+        }
+      }
+    }
+  }
+  return actions;
+}
+
+/**
+ * Claim 10: no deploy role holds a `lambda:` action the pipeline never uses,
+ * and none is missing one it does.
+ *
+ * @param {OidcStack} oidc
+ * @param {Set<string>} invoked
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkLambdaActionScope(oidc, invoked) {
+  /** @type {string[]} */
+  const errors = [];
+  /** @type {string[]} */
+  const ok = [];
+
+  if (invoked.size === 0) {
+    errors.push(
+      'no `aws lambda <verb>` invocation was read out of any workflow, so the granted set below ' +
+        'would have been compared against nothing. Either the release stopped deploying Lambdas ' +
+        'or this reader stopped matching.',
+    );
+    return { errors, ok };
+  }
+
+  let statements = 0;
+  for (const policy of oidc.policies) {
+    for (const statement of policy.statements) {
+      const granted = statement.actions.filter((a) => a.startsWith('lambda:'));
+      if (granted.length === 0) continue;
+      statements++;
+      const where = `${policy.roleLabel ?? '?'} / ${statement.sid ?? 'unnamed statement'}`;
+      const extra = granted.filter((a) => !invoked.has(a) && !UNEXERCISED_LAMBDA_ACTIONS.has(a));
+      const missing = [...invoked].filter((a) => !granted.includes(a));
+      if (extra.length > 0) {
+        errors.push(
+          `${where} grants ${extra.join(', ')}, which no workflow invokes. The only ` +
+            `\`aws lambda\` verbs any workflow runs are ${[...invoked].sort().join(', ')}; ` +
+            `the operator's own SSO ` +
+            'profile is what runs bin/lambda-alias-sync.sh. Remove them, or declare each in ' +
+            'UNEXERCISED_LAMBDA_ACTIONS with the reason it is still needed. decisions § 1085.',
+        );
+      }
+      if (missing.length > 0) {
+        errors.push(
+          `${where} is missing ${missing.join(', ')}, which a workflow invokes — the release fails ` +
+            'with AccessDenied mid-deploy, against that environment.',
+        );
+      }
+      if (extra.length === 0 && missing.length === 0) {
+        ok.push(`${where}: lambda actions equal the ${granted.length} the pipeline invokes`);
+      }
+    }
+  }
+  for (const [action, reason] of UNEXERCISED_LAMBDA_ACTIONS) {
+    const held = oidc.policies.some((p) => p.statements.some((st) => st.actions.includes(action)));
+    if (!held) {
+      errors.push(
+        `UNEXERCISED_LAMBDA_ACTIONS declares ${action} ("${reason}") but no role grants it. A ` +
+          'stale exemption is a rule nobody is following.',
+      );
+    }
+  }
+  if (statements === 0) {
+    errors.push(
+      'no statement granting any `lambda:` action was found on either deploy role. The release ' +
+        'calls `aws lambda update-function-code` eight times, so this is either a broken parse or ' +
+        'a release that can no longer deploy.',
+    );
+  }
+
+  return { errors, ok };
 }
 
 /// Index of the `]` closing the `[` at `open`, or -1. Brackets inside strings
@@ -762,7 +889,7 @@ export function checkDecryptGrant(grant, envs, jobs, credentialedCompositeAction
     );
   if (grant.cmkEnvFunctions.length > 0)
     because.push(
-      `aws_lambda_function.${grant.cmkEnvFunctions.join(', aws_lambda_function.')} set(s) kms_key_arn, so the deploy role's lambda:GetFunction / UpdateFunctionCode transits this key`,
+      `aws_lambda_function.${grant.cmkEnvFunctions.join(', aws_lambda_function.')} set(s) kms_key_arn, so the deploy role's lambda:UpdateFunctionCode transits this key`,
     );
 
   for (const env of envs) {
@@ -1310,6 +1437,14 @@ export function main() {
   );
   errors.push(...grant.errors);
   ok.push(...grant.ok);
+
+  const workflowFiles = readWorkflowFiles(WORKFLOW_DIR);
+  const scope = checkLambdaActionScope(
+    parseOidcStack(readFileSync(OIDC_FILE, 'utf-8')),
+    parseWorkflowLambdaActions(workflowFiles),
+  );
+  errors.push(...scope.errors);
+  ok.push(...scope.ok);
 
   for (const line of ok) console.log(`[OK] ${line}`);
   for (const line of errors) console.error(`[FAIL] ${line}`);

@@ -60,6 +60,12 @@ Three jobs read `infra/`, none of which needs AWS credentials:
   loss is unrecoverable, and an empty wire once either premise breaks is a
   release that `AccessDenied`s mid-deploy ([§ 1021](../docs/architecture/decisions.md)).
   The knob is `kms_decrypt_principal_arn`, which both env roots leave at `""`.
+- the `lambda:` actions on each deploy role equal the set of `aws lambda`
+  operations the workflows actually invoke, derived from their `run:` bodies
+  (comment lines excluded, so a verb cannot justify itself by being mentioned).
+  `GetFunction`, `GetAlias` and `PublishVersion` were granted and exercised by
+  nothing ([§ 1085](../docs/architecture/decisions.md)). A verb a role needs but
+  lacks fails too — that direction is a release that `AccessDenied`s mid-deploy.
 
 **`check_infra_coverage.mjs`** reads the directory listing, `terraform.yml`,
 `.github/dependabot.yml`, the module + its `variables.tf`, `waf.tf` and both

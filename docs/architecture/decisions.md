@@ -18821,3 +18821,44 @@ of what was run. This is a distribution-config change on a `prevent_destroy`-fre
 resource with no `plan` behind it — apply preview first, and confirm the response
 of a `/share/run/<missing-id>` is a 404 whose body carries `<meta name="robots"
 content="noindex">`, which is the only observation that closes it.
+
+## 1085. Three unexercised Lambda verbs off both deploy roles, and `PublishVersion` settled from the request shape rather than from the repo
+
+Same shape as the KMS grant [§ 1021](#1021) removed, and the same way it
+accumulated: a verb is added when someone is unsure whether the CLI needs it, and
+nothing ever asks again. The `LambdaUpdate` statement on both deploy roles
+granted five actions. Two were measured unused directly — the only `aws lambda`
+verbs any workflow runs are `update-function-code` and `update-alias`, and no
+workflow executes any `bin/` script, so `bin/lambda-alias-sync.sh`'s `get-alias`
+runs under the operator's own SSO profile and not this role.
+
+**`lambda:PublishVersion` is the one the filing could not settle from the repo,
+and it is a third unused verb.** `aws lambda update-function-code --publish` is
+not two calls: `Publish` is a boolean member of the single `UpdateFunctionCode`
+request shape — visible without an account in `aws lambda update-function-code
+--generate-cli-skeleton`, which renders that operation's own input model and
+lists `Publish` beside `FunctionName` and `ZipFile`. `PublishVersion` is a
+separate operation (`POST /2015-03-31/functions/{FunctionName}/versions`) the
+release never issues, and IAM models one action per operation, so
+`lambda:UpdateFunctionCode` alone authorises the publish and returns the version
+the following `update-alias` points at. The privilege it granted was in any case
+strictly weaker than what the role can already do — publishing a version from
+code it can already replace — which is why removing it costs nothing and why it
+survived unnoticed.
+
+**The durable half is claim 10, not the deletion.** `check_infra_iam.mjs` now
+derives the `aws lambda` verbs out of the workflows' `run:` bodies (skipping
+comment lines, so a verb cannot justify itself by being discussed) and requires
+each role's `lambda:` action set to equal it. It fails in both directions: an
+extra verb is standing privilege, and a missing one is a release that
+`AccessDenied`s mid-deploy against that environment. A verb that genuinely needs
+to be held without being invoked goes in `UNEXERCISED_LAMBDA_ACTIONS` with its
+reason, and a declared exemption nothing grants fails as loudly — the shape
+claim 3 already uses for `RESOURCELESS_ACTIONS`.
+
+Claim 9's own prose named `lambda:GetFunction` as one of the calls that would
+transit the secrets CMK if a function ever set `kms_key_arn`; with the verb gone
+it names `UpdateFunctionCode` alone, which is the one that would. Not verified
+against live IAM: no lane holds AWS credentials, so this is `terraform validate`
+on both env roots and nothing more. `infra/github-oidc` is applied by an
+operator, and the next release after that apply is what confirms it.
