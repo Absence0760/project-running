@@ -16271,3 +16271,178 @@ widget taps and no `pumpUntil` at all; identifying which of those actually
 outlive their writes needs the instrumented run this round could not afford,
 and is filed rather than guessed at.
 
+
+## 1021. The secrets CMK grants `kms:Decrypt` to no principal CI can assume, and the two premises that makes safe are read by a guard rather than asserted in a comment
+
+Both env stacks passed their GitHub OIDC deploy role into the web-stack module
+as `kms_decrypt_principal_arn`, putting it in the
+`AllowLambdaAndDeployRolesToDecrypt` statement of the env's secrets CMK — the
+key protecting `ANTHROPIC_API_KEY` and `SUPABASE_SECRET_KEY`, and the one key in
+the account whose loss is unrecoverable (`prevent_destroy`, 30-day window). The
+justification written beside it was apply-time decryption "from the GitHub
+Actions runner". **Measured on this tree: no workflow runs `terraform apply`.**
+`parseSteps` over all 21 workflows finds 59 jobs, exactly one of which assumes
+an AWS role (`release-web.yml:release`) and exactly one of which runs
+`terraform` (`terraform.yml`, which runs `fmt` / `init -backend=false` /
+`validate` with no credentials at all, by design) — and they are not the same
+job. The four `terraform apply` strings in `ci.yml` and `terraform.yml` are
+prose in their own comments.
+
+The premise the removal really rests on is narrower than "no CI apply", and it
+is the half the filing did not state: **no `aws_lambda_function` in the module
+sets `kms_key_arn`.** Without that the deploy role's `lambda:GetFunction` and
+`lambda:UpdateFunctionCode` — which it does hold, and which the release workflow
+does call eight times — would transit this key, and dropping the grant would
+break the release rather than harden it. All eight functions were read; none
+sets it, so Lambda holds their environment variables under the AWS-managed
+`aws/lambda` key and this CMK is out of that path entirely.
+
+Two comments in the module said things that are not true and are corrected in
+the same change. The key policy's own header claimed the execution role
+"decrypts the sops env at cold-start": it does not — `data.sops_file` decrypts
+at apply time and `local.lambda_env` puts the result into
+`environment { variables }` as plaintext, so the handler reads `process.env` and
+calls no KMS API (grep: no `kms` reference anywhere under `apps/web/lambda/`).
+And the coach log group's comment called this "the same CMK that already
+encrypts the lambda env vars", which for the same reason it does not — it
+encrypts the sops file the env vars come *out of*, and the log group.
+
+That leaves the execution role's own grant unexercised by the same argument.
+It is **filed rather than removed**: emptying the statement's `identifiers`
+leaves a principal-less statement KMS rejects, so closing it is a structural
+change, and one live read (`aws lambda get-function-configuration
+--query KMSKeyArn` returning `None`) settles it in a way this lane cannot.
+
+`scripts/check_infra_iam.mjs` claim 9 holds both premises and runs **both
+ways**, which is what stops this from being a comment that rots: a wire
+restored while nothing exercises it fails as standing privilege, and an empty
+wire once a credentialed job runs `terraform` — or a Lambda takes the CMK for
+its environment — fails as a release that would `AccessDenied` mid-deploy. The
+`github_oidc` remote-state read in both env roots went with the wire, being its
+only consumer.
+
+**What this does NOT do, stated so the ADR cannot be misread as more than it
+is: the deploy role can still read the production secrets.** Because the sops
+values are decrypted at apply time into plaintext `environment { variables }`,
+anything that returns a `FunctionConfiguration` returns `ANTHROPIC_API_KEY` and
+`SUPABASE_SECRET_KEY` in the clear — and `lambda:UpdateFunctionCode`, which the
+release genuinely needs and calls eight times, is one of those. Removing a KMS
+grant nothing used narrows the key policy; it does not narrow that. Closing it
+means not putting plaintext secrets in a Lambda environment at all (a fetch at
+cold start, or a ciphertext env var the handler decrypts — at which point the
+execution role's `kms:Decrypt` becomes load-bearing for the first time), which
+is a design change well outside this round and is filed.
+
+`lambda:GetFunction` and `lambda:GetAlias` are granted to both deploy roles and
+called by no workflow — the release calls only `update-function-code` and
+`update-alias`, and no workflow runs any `bin/` script. That is the same shape
+as the KMS grant, and it is filed rather than taken for the reason above: it
+removes an unexercised verb without removing any access, since the role reads
+the same configuration out of the update it must be able to perform.
+
+## 1022. An origin's 404 is answered 404 with the shell body, which is a better fix than dropping the mapping
+
+`custom_error_response` is modelled per DISTRIBUTION on CloudFront, so the SPA
+fallback rewrote **every** origin's 404 — including all ten
+`/share/{run,route,recap,badge,event,profile,club,race,session,workout}/<id>`
+paths — into `/index.html` at **200**. A private, deleted or never-existing
+entity therefore served a crawler a generic shell at 200, with the `noindex`
+that would have said otherwise sitting in a Lambda body the rewrite discards:
+soft 404s, invited to be indexed.
+
+The filed fix was to delete the `error_code = 404` block, resting on "S3 never
+404s here". **That premise holds and was proved from this repo**: the site
+bucket policy is one statement granting `s3:GetObject` on `${bucket}/*` to
+`cloudfront.amazonaws.com` and nothing else — `s3:ListBucket` appears nowhere
+in `infra/` outside the two *deploy-role* policies — and the origin is
+`bucket_regional_domain_name` + OAC, the REST endpoint, not the
+`s3-website-` one that does 404. So a missing key is 403 AccessDenied, which is
+exactly why the 403 mapping exists and why the 404 one buys the SPA nothing.
+
+**The fix it implies is nevertheless the wrong one.** Precisely because S3 never
+404s, the only responses that block ever sees are the Lambda origins' own — and
+their 404 bodies are `<p>This link isn't available.</p>`, unstyled, English-only,
+with no navigation. Serving that would replace the SPA's designed, localized
+not-found card (`share/run/[id]`'s `.notfound-card`, with its kicker, title and
+actions — reached today **only** because of this rewrite) on ten paths. The
+filing traded a crawler defect for a reader-facing regression it did not price.
+`share-run/src/index.ts`'s own comment, "the browser will fall back to the SPA's
+404 surface if a human follows the link", is true today and true only because of
+the mapping it was written to describe as absent.
+
+Keeping the body and correcting the status gets both: a crawler receives a 404,
+which de-indexes a URL far more decisively than a `noindex` on a 200 ever did,
+and a reader still lands on the app. The bytes a viewer receives do not change
+at all — only the status line does. 403 stays at 200 and must: every dynamic
+client route is a missing S3 key, so the deep-link path arrives as a 403.
+
+`scripts/check_infra_coverage.mjs` claim 4 fails any `custom_error_response`
+mapping a 4xx/5xx to a 2xx. The one legitimate mapping is declared in
+`ALLOWED_STATUS_LAUNDERING` with its reason, and a declared exemption no block
+uses fails as loudly as an undeclared mapping — the `RESOURCELESS_ACTIONS`
+shape, one file over.
+
+## 1023. The WAF scope-downs decode the path, added deliberately without a live measurement because the failure direction is one-way
+
+The three rate-based rules are the only thing bounding spend on the only three
+paths on this distribution that cost money or engine CPU to serve, and each is
+scoped down by `STARTS_WITH` on `uri_path` with a single `NONE` transformation.
+WAF does not decode that field; CloudFront's own behaviour matching normalises
+independently. Two matchers, two normalisations — so an encoded spelling that
+CloudFront resolves to the behaviour but WAF does not resolve to the prefix
+reaches the Lambda with the per-IP cap **not applied**.
+
+Whether CloudFront decodes before behaviour matching is a fact about the live
+edge, and this repo holds no AWS credentials by design, so it was not measured
+and is not claimed here. The `URL_DECODE` transformation was added anyway,
+because being wrong about the edge cannot cost anything: on a search string
+containing no `%`, decoding can only **add** matches. `%XX` becomes one byte and
+the string never lengthens, so a raw path whose first ten characters are already
+`/api/coach` still has them after decoding — under either reading of how WAF
+chains transformations (cumulative, or one inspection per transform) the match
+is a strict superset. It is a widening of a RATE LIMIT, never of an allow/deny.
+If CloudFront turns out not to decode either, the cost is that WAF counts a
+request the edge was going to 404; if it does, the gap closes.
+
+`LOWERCASE` is deliberately not added, and the guard fails if anyone adds it:
+CloudFront path patterns are case-sensitive, so `/API/coach` genuinely does not
+route to the Lambda and matching it would only cap a 404. Double encoding
+(`%2563oach`) survives one decode and is out of scope for the same reason —
+CloudFront does not double-decode either.
+
+`scripts/check_infra_coverage.mjs` claim 5 fails a `uri_path` scope-down without
+`URL_DECODE`, one that folds case, and — the vacuity case that matters most — a
+rate-based rule with no readable scope-down at all, which would apply the
+counter to every static asset on the distribution and turn a backstop into an
+outage.
+
+## 1024. A preview environment that cannot set what prod can cannot rehearse a prod change
+
+`graph_cycle_url` — the v3 graph-cycle sidecar the generate-route Lambda tries
+first, ahead of GraphHopper `round_trip` — was declared as a root variable and
+wired into the module in `envs/prod` and declared nowhere in `envs/preview`. Its
+two siblings, `graphhopper_url` and `osrm_url`, were both declared in preview
+with exactly the "point it at an engine only if a preview must exercise the
+server-side path" rationale. The asymmetry was recorded nowhere.
+
+The filing called closing it "scaffolding for an engine that does not exist".
+That reading is wrong about what the change costs: the module input already
+exists and already defaults to `""`, so preview receives the same `""` before
+and after and the plan is byte-identical. Nothing is scaffolded. The only thing
+that changes is that an operator *can* set it — which is the whole function of a
+preview environment, and the reason the other two are there.
+
+Measured while confirming it, the asymmetry is wider than filed: **five** module
+inputs are settable from prod and not from preview. Four are deliberate and say
+so in preview's own comments — `domain_name` is composed from
+`preview_subdomain` + `apex_domain`, and the three reserved-concurrency caps are
+literals with a stated "preview only ever drives a few generations" reason.
+`graph_cycle_url` was the only one with no reason anywhere, which is why it is
+the only one closed.
+
+`scripts/check_infra_coverage.mjs` claim 6 **derives** the engine set from the
+module rather than listing it: a `_url` string input whose default is `""`. That
+default *is* the semantics — no engine, degrade gracefully — and it separates the
+three engines exactly from `public_supabase_url` (no default, required) and
+`public_site_url` (a real default, env identity rather than a knob). A fourth
+engine is covered the day it is added, with no registry to remember.

@@ -1929,7 +1929,9 @@ The routing case reads every share `path_pattern` out of
 a path its own Lambda actually routes: a behaviour's pattern and the Lambda's
 regex are two independent spellings of one route, and a mismatch answers the
 Lambda's JSON 404, which the distribution's 404-to-`/index.html` fallback then
-renders as the SPA shell at 200. The remaining four pin what the siblings must
+renders as the SPA shell (at 200 until [decisions § 1022](../architecture/decisions.md)
+made it answer 404 — the body is still the shell, so the mismatch is still
+invisible to a reader and this is still the only thing that catches it). The remaining four pin what the siblings must
 agree on and no single file can show — the same five-minute plus
 stale-while-revalidate `Cache-Control` on both paths, the asymmetric not-found
 contract (a `noindex` HTML 404 for the page, a 200 PNG for the image so a social

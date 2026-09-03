@@ -35,8 +35,9 @@ Three jobs read `infra/`, none of which needs AWS credentials:
 | `Trivy IaC scan` (`terraform.yml`) | Known-bad IaC patterns across the whole tree. Suppressions with rationale live in `.trivyignore` at the repo root. |
 | `infra-guards` (`ci.yml`) | `scripts/check_infra_iam.mjs` + `scripts/check_infra_coverage.mjs` — see below. In the required `CI gate` aggregator's `needs:` list. |
 
-**`check_infra_iam.mjs`** reads `github-oidc/main.tf`, `modules/web-stack/main.tf`
-and `.github/workflows/release-web.yml`:
+**`check_infra_iam.mjs`** reads `github-oidc/main.tf` + its `variables.tf`,
+`modules/web-stack/main.tf`, both `envs/<env>/main.tf` and every workflow under
+`.github/workflows/`:
 
 - each deploy role's trust policy uses `StringEquals` (never `StringLike`) on a
   wildcard-free `repo:<owner/repo>:environment:<name>` sub, with `:aud` pinned;
@@ -50,21 +51,43 @@ and `.github/workflows/release-web.yml`:
   fails rather than reading as two tidy blocks;
 - the eight Lambda ARNs in each deploy policy match the module's functions;
 - every Lambda Function URL is `AWS_IAM`-authed and carries **both** CloudFront
-  grants (`lambda:InvokeFunctionUrl` and plain `lambda:InvokeFunction`).
+  grants (`lambda:InvokeFunctionUrl` and plain `lambda:InvokeFunction`);
+- no Lambda environment merges the decrypted sops map whole;
+- **no env root makes a principal CI can assume a `kms:Decrypt` principal on the
+  secrets CMK**, while no credentialed workflow job runs `terraform` and no
+  `aws_lambda_function` sets `kms_key_arn`. Both directions fail: a wire
+  restored while nothing exercises it is standing privilege on the one key whose
+  loss is unrecoverable, and an empty wire once either premise breaks is a
+  release that `AccessDenied`s mid-deploy ([§ 1021](../docs/architecture/decisions.md)).
+  The knob is `kms_decrypt_principal_arn`, which both env roots leave at `""`.
 
 **`check_infra_coverage.mjs`** reads the directory listing, `terraform.yml`,
-`.github/dependabot.yml` and the module:
+`.github/dependabot.yml`, the module + its `variables.tf`, `waf.tf` and both
+env roots:
 
 - every directory holding `.tf` is in the terraform workflow's `stack:` matrix
   (or exempt with the measured reason `validate` cannot run against it) **and**
   has a `terraform` ecosystem entry in `dependabot.yml`, in both directions;
 - every `aws_lambda_function` in the module carries an error-rate alarm and a
-  p95 alarm, and the distribution carries a 4xx and a 5xx rate alarm.
+  p95 alarm, and the distribution carries a 4xx and a 5xx rate alarm;
+- no `custom_error_response` maps a 4xx/5xx to a **2xx**. `custom_error_response`
+  is distribution-wide, so one that does launders every origin's error at once —
+  which is what made ten `/share/*` paths soft 404s. The single legitimate
+  mapping (403 → 200, the SPA deep-link path) is declared in
+  `ALLOWED_STATUS_LAUNDERING` with its reason, and a declared exemption nothing
+  uses fails too ([§ 1022](../docs/architecture/decisions.md));
+- every WAF rate-limit scope-down matching `uri_path` carries a `URL_DECODE`
+  text transformation and no `LOWERCASE`, and no rate-based rule is left with no
+  readable scope-down at all ([§ 1023](../docs/architecture/decisions.md));
+- every routing-engine URL the module takes — derived as a `_url` string input
+  defaulting to `""` — is declared and wired in **every** env root, so preview
+  can be configured the way prod can ([§ 1024](../docs/architecture/decisions.md)).
 
 Each guard has its own `node --test` suite, run in the same job: a source-reading
 guard's failure mode is a parser that silently stops matching and passes
 vacuously, not a false negative. See [decisions.md §§ 889-893](../docs/architecture/decisions.md)
-for what each rule is about, and § 893 for where the guards stop — nothing here
+for what each rule is about, [§§ 1021-1024](../docs/architecture/decisions.md) for
+the four added in round 34, and § 893 for where the guards stop — nothing here
 compares the Terraform against applied state, which needs credentials and a plan.
 
 Adding a stack means: the directory, an entry in the `stack:` matrix, an entry in
