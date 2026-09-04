@@ -2257,9 +2257,10 @@ void main() {
       // polyline that leaks the same start / end / interior locations
       // a recorded run would. Same gate as public_run_screen — clip
       // unless the viewer is the route owner. Use the route-specific
-      // RPC `clipRouteForViewer`, NOT the run-bound `clipTrackForUser`
-      // (which downloads from the runs Storage bucket and skips route
-      // visibility entirely).
+      // RPC `clipRouteForViewer`, NOT the run-bound
+      // `fetchClippedTrackForRun` (which resolves a RUN id through the
+      // clip-public-track Edge Function and knows nothing about route
+      // visibility).
       final source =
           File('lib/screens/public_route_screen.dart').readAsStringSync();
       expect(
@@ -2271,10 +2272,10 @@ void main() {
       );
       expect(
         source,
-        isNot(matches(RegExp(r'\.clipTrackForUser\s*\('))),
-        reason: 'public_route_screen must not call `clipTrackForUser` — '
-            'that helper is for runs (Storage-backed) and skips route '
-            'visibility / club-member checks. Use clipRouteForViewer.',
+        isNot(matches(RegExp(r'\.fetchClippedTrackForRun\s*\('))),
+        reason: 'public_route_screen must not clip through the run path — '
+            'it takes a run id and skips route visibility / club-member '
+            'checks. Use clipRouteForViewer.',
       );
       expect(
         source,
@@ -2380,8 +2381,9 @@ void main() {
     });
 
     test('clipRouteForViewer fails closed on RPC error', () {
-      // Reason: same fail-closed contract as clipTrackForUser. Returning
-      // the unclipped row column on RPC error would defeat the helper.
+      // Reason: the same fail-closed contract fetchClippedTrackForRun
+      // keeps for runs. Returning the unclipped row column on RPC error
+      // would defeat the helper.
       final source =
           File('../../packages/api_client/lib/src/api_client.dart')
               .readAsStringSync();
@@ -2481,43 +2483,6 @@ void main() {
         reason:
             '$fn must NOT read from the bare GymWorkoutRow.table — that path '
             'is owner-only and silently yields an empty lift feed.',
-      );
-    });
-
-    test('clipTrackForUser fails closed on RPC error', () {
-      // Reason: returning the unclipped input on RPC error was the
-      // privacy leak this helper exists to prevent. Fail-closed
-      // (return []) so a transient outage renders an empty map for
-      // non-owner viewers instead of leaking the full track. The
-      // empty-input early-return is fine — `points.isEmpty ? points`
-      // is the same shape as `[]`, just no allocation.
-      final source =
-          File('../../packages/api_client/lib/src/api_client.dart')
-              .readAsStringSync();
-      final body = _extractMethodBody(
-        source,
-        r'Future<List<Map<String, dynamic>>> clipTrackForUser\([^)]*\)\s*async\s*\{',
-      );
-      // Pull just the catch block and the post-rpc shape-validation
-      // path so the assertion doesn't trip on the empty-input guard.
-      final tail = body.substring(body.indexOf('try'));
-      expect(
-        tail.contains('return const [];'),
-        isTrue,
-        reason: 'clipTrackForUser must return [] on RPC failure — see '
-            'decisions §33.',
-      );
-      // The catch / shape-fail branches must not return the unclipped
-      // input.
-      expect(RegExp(r'catch \([^)]*\) \{').hasMatch(tail), isTrue,
-          reason: 'clipTrackForUser must have an explicit catch branch.');
-      final catchBody = _extractMethodBody(tail, r'catch \([^)]*\) \{');
-      expect(
-        catchBody.contains('return points'),
-        isFalse,
-        reason: 'clipTrackForUser must not fall back to the input track '
-            'on RPC error — that is the leak this helper exists to '
-            'prevent.',
       );
     });
 
