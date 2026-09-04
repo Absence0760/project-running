@@ -106,8 +106,15 @@ test('every raw-text / head end tag in a regex states the parser rule', () => {
 	const found = scan();
 	// Assert the population first: a scan that has stopped matching anything
 	// satisfies the violation assertion below without reading a line.
+	//
+	// The floor moved 18 -> 14 when § 1114 collapsed the four SPA-shell head
+	// injectors onto one strip pipeline: three of these regexes existed in
+	// triplicate, which is exactly the duplication § 1086 had to fix the same
+	// bug in three times. A population falling because copies were removed is
+	// the intended outcome; this floor exists to catch a scan that has stopped
+	// matching, not to require the tree keep a particular number of copies.
 	assert.ok(
-		found.length >= 18,
+		found.length >= 14,
 		`expected the web tree to still carry the known raw-text end-tag regexes, found ${found.length}`,
 	);
 	const bad = found
