@@ -347,9 +347,31 @@ jobs:
       # live-hub job; this job is the only place `go test` runs, so the
       # personal-data export-completeness guard (and every other worker
       # test) finally gates a PR instead of only failing locally.
+      # Nothing in .github/ read `gofmt` until now: `go vet` and the compiler
+      # are both blind to formatting, so seven files under this module sat
+      # unformatted on main long enough for nobody to notice. The cost is not
+      # the whitespace — it is that a diff touching one of them re-aligns a
+      # struct block the author did not edit, so the review reads as a bigger
+      # change than it is. Same mechanism as the per-stack `terraform fmt`
+      # scope § 1111 closed one tree over (decisions § 1150).
+      - name: gofmt
+        working-directory: apps/job_worker
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files under apps/job_worker are not gofmt-clean. Neither go vet nor go test can see formatting, so this step is the only thing in CI that reads it. Nothing here is a vet finding or a test failure; those are the other steps in this job."
+            echo "$unformatted"
+            echo 'Reproduce and fix with: cd apps/job_worker && gofmt -l . && gofmt -w $(gofmt -l .)'
+            exit 1
+          fi
       - name: go vet
         working-directory: apps/job_worker
-        run: go vet ./...
+        run: |
+          if ! go vet ./...; then
+            echo "::error::go vet reported a suspicious construct in apps/job_worker. Nothing here is gofmt drift or a failing test; those are the other steps in this job."
+            echo "Reproduce with: cd apps/job_worker && go vet ./..."
+            exit 1
+          fi
       # `-race`, not a plain run: this binary is the most concurrent thing in
       # the repo — an in-process pub/sub hub with per-room goroutines, a GC
       # sweeper, a bridge poller, an atomic heartbeat and six HTTP servers on
@@ -359,7 +381,12 @@ jobs:
       # cost of the flag on this suite: 20 s -> 35 s.
       - name: go test
         working-directory: apps/job_worker
-        run: go test -race ./...
+        run: |
+          if ! go test -race ./...; then
+            echo "::error::The apps/job_worker suite failed, or the race detector reported a data race. Nothing here is gofmt drift or a vet finding; those are the other steps in this job."
+            echo "Reproduce with: cd apps/job_worker && go test -race ./..."
+            exit 1
+          fi
 
   test-graph-cycle:
     needs: changes
@@ -375,15 +402,38 @@ jobs:
       # The graph-cycle map sidecar is a separate Go module; this is the only
       # place its foot-graph build, Dijkstra, cycle search, guard, and HTTP
       # handlers run under `go test` in CI.
+      # The same gofmt gate the worker job carries, for the reason stated
+      # there. This module is gofmt-clean today; the step exists so it stays
+      # that way rather than because it starts red (decisions § 1150).
+      - name: gofmt
+        working-directory: apps/graph_cycle
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files under apps/graph_cycle are not gofmt-clean. Neither go vet nor go test can see formatting, so this step is the only thing in CI that reads it. Nothing here is a vet finding or a test failure; those are the other steps in this job."
+            echo "$unformatted"
+            echo 'Reproduce and fix with: cd apps/graph_cycle && gofmt -l . && gofmt -w $(gofmt -l .)'
+            exit 1
+          fi
       - name: go vet
         working-directory: apps/graph_cycle
-        run: go vet ./...
+        run: |
+          if ! go vet ./...; then
+            echo "::error::go vet reported a suspicious construct in apps/graph_cycle. Nothing here is gofmt drift or a failing test; those are the other steps in this job."
+            echo "Reproduce with: cd apps/graph_cycle && go vet ./..."
+            exit 1
+          fi
       # `-race` for the reason the worker job states: the cycle search runs
       # concurrent workers over a shared graph, and a plain run cannot see a
       # race at all. Measured cost here: 5 s -> 5.5 s.
       - name: go test
         working-directory: apps/graph_cycle
-        run: go test -race ./...
+        run: |
+          if ! go test -race ./...; then
+            echo "::error::The apps/graph_cycle suite failed, or the race detector reported a data race. Nothing here is gofmt drift or a vet finding; those are the other steps in this job."
+            echo "Reproduce with: cd apps/graph_cycle && go test -race ./..."
+            exit 1
+          fi
 
   parity-types:
     needs: changes
