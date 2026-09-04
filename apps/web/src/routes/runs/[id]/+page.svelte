@@ -49,6 +49,7 @@
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
 	import { movingTimeSeconds, computeRealSplits } from '$lib/runs/run_stats';
 	import { computeElevationGain } from '$lib/routes/route_simplify';
+	import { cadenceSpm, elevationSourceTrack, stepCount } from '$lib/runs/key_stats';
 	import { gradeAdjustedPaceSecPerKm } from '$lib/runs/grade_adjusted_pace';
 	import {
 		analysePacing,
@@ -798,10 +799,17 @@
 	/** Derived from the GPS track rather than stored, matching mobile. */
 	let movingSeconds = $derived(run?.track ? movingTimeSeconds(run.track) : 0);
 
+	/** The track the climb is measured over, or null when no point on it
+	 *  carried an altitude. A manual entry and a summary import have no track
+	 *  at all, and a track with no `ele` sums to 0 exactly as a flat run does,
+	 *  so the samples are the discriminator and not the answer (§ 1164). */
+	let elevationTrack = $derived(elevationSourceTrack(run?.track));
+
 	/** The route summary's rule, not a second one: an ungated sum integrates
 	 *  autocorrelated altitude error and reported 143 m of climb on a flat
-	 *  half-hour (decisions § 981). 0 for runs without elevation data. */
-	let realElevationGain = $derived(run?.track ? Math.round(computeElevationGain(run.track)) : 0);
+	 *  half-hour (decisions § 981). Null when nothing measured the altitude —
+	 *  a real 0 m over a track that did measure it still renders. */
+	let realElevationGain = $derived(elevationTrack ? Math.round(computeElevationGain(elevationTrack)) : null);
 
 	/** Grade-adjusted pace (sec/km) — effort-equivalent flat pace over hilly
 	 *  terrain (Minetti 2002). Null on flat runs / tracks without elevation. */
@@ -817,22 +825,18 @@
 		return Math.abs(gradeAdjustedPace - rawPaceSecPerKm) >= 2;
 	});
 
-	/** Total steps are stored on mobile save in `metadata.steps`. */
-	let totalSteps = $derived.by(() => {
-		const v = run?.metadata?.[METADATA_KEYS.steps];
-		return typeof v === 'number' ? v : null;
-	});
+	/** Total steps are stored on mobile save in `metadata.steps`. Null rather
+	 *  than 0 when the bag holds no count of steps taken — the tile states a
+	 *  measurement, and a stored `0` is the absence of one (§ 1164). */
+	let totalSteps = $derived(stepCount(run?.metadata?.[METADATA_KEYS.steps]));
 
 	/** Average cadence in steps-per-minute. Prefers a directly-reported
 	 *  value (`metadata.cadence_spm`, written by the Garmin FIT importer
 	 *  which has no pedometer step count — persona #17), then falls back
 	 *  to steps / moving_time_minutes for pedometer-recorded runs. */
-	let avgCadence = $derived.by(() => {
-		const stored = run?.metadata?.[METADATA_KEYS.cadence_spm];
-		if (typeof stored === 'number' && stored > 0) return Math.round(stored);
-		if (totalSteps == null || movingSeconds < 30) return null;
-		return Math.round((totalSteps / (movingSeconds / 60)) || 0);
-	});
+	let avgCadence = $derived(
+		cadenceSpm(run?.metadata?.[METADATA_KEYS.cadence_spm], totalSteps, movingSeconds),
+	);
 
 	/** Average heart rate. Watch apps (watch_ios, watch_wear) record this
 	 *  into `metadata.avg_bpm` during a run. See `docs/backend/metadata.md`. */
@@ -868,27 +872,64 @@
 		return computed ? formatAgeGradePercent(computed.percent) : null;
 	});
 
-	/// Visible key-stats count + parity. The grid's `auto-fit` columns
-	/// look broken when the cell count is odd (one empty trailing slot
-	/// at 2-col layouts is the most common shape). Counts the
-	/// conditionals below + flips a flag the template uses to render
-	/// an Activity-type filler when the total would otherwise be odd.
+	/// The key-stats grid, as the cells it actually renders. A stat is in this
+	/// list when its datum exists, so a measurement nobody took is absent
+	/// rather than present as a zero, and the template renders the list
+	/// instead of a fixed sequence of `{#if}`s.
 	///
-	/// Always-rendered stats: Distance, Time, Pace, Speed, Elevation,
-	/// Calories (Calories uses the body-weight fallback so it never
-	/// hides) = 6.
-	/// Conditional: Moving, Grade-adjusted pace, Steps, Cadence, AvgBpm,
-	/// AgeGrade.
-	let keyStatsCount = $derived(
-		6 +
-			(run && movingSeconds > 0 && movingSeconds !== run.duration_s ? 1 : 0) +
-			(showGradeAdjustedPace ? 1 : 0) +
-			(totalSteps != null ? 1 : 0) +
-			(avgCadence != null ? 1 : 0) +
-			(avgBpm != null ? 1 : 0) +
-			(ageGrade != null ? 1 : 0),
-	);
-	let showActivityFiller = $derived(keyStatsCount % 2 === 1 && activity !== null);
+	/// Deriving the list is what keeps the parity filler honest. The grid's
+	/// `auto-fit` columns look broken on an odd cell count (one empty trailing
+	/// slot at the 2-col layout), so an odd list gets an Activity-type cell
+	/// appended — and what decides that is this list's own length. The
+	/// hand-maintained count it replaces had already drifted from the
+	/// template: it counted Calories among six stats that "never hide" while
+	/// the template gated them, so the filler flipped the wrong way whenever
+	/// the estimate was unusable or the pref was off (decisions § 1164).
+	let keyStats = $derived.by<{ label: string; value: string }[]>(() => {
+		if (!run) return [];
+		const paceSeconds = movingSeconds > 0 ? movingSeconds : run.duration_s;
+		const cells: { label: string; value: string }[] = [
+			{ label: m('runDetail.distance'), value: formatDistance(run.distance_m) },
+			{ label: m('runDetail.time'), value: formatDuration(run.duration_s) },
+		];
+		if (movingSeconds > 0 && movingSeconds !== run.duration_s) {
+			cells.push({ label: m('runDetail.moving'), value: formatDuration(movingSeconds) });
+		}
+		cells.push({
+			label: m('runDetail.avgPace'),
+			value: formatPace(paceSeconds, run.distance_m),
+		});
+		if (showGradeAdjustedPace && gradeAdjustedPace != null) {
+			cells.push({
+				label: m('runDetail.gradeAdjustedPace'),
+				value: formatPace(gradeAdjustedPace, 1000),
+			});
+		}
+		cells.push({
+			label: m('runDetail.avgSpeed'),
+			value: formatSpeed(paceSeconds, run.distance_m),
+		});
+		if (realElevationGain != null) {
+			cells.push({ label: m('runDetail.elevation'), value: `${realElevationGain} m` });
+		}
+		if (showCalories && estimatedCalories > 0) {
+			cells.push({ label: calorieLabel, value: String(estimatedCalories) });
+		}
+		if (totalSteps != null) {
+			cells.push({ label: m('runDetail.steps'), value: totalSteps.toLocaleString() });
+		}
+		if (avgCadence != null) {
+			cells.push({ label: m('runDetail.cadenceSpm'), value: String(avgCadence) });
+		}
+		if (avgBpm != null) {
+			cells.push({ label: m('runDetail.avgHrBpm'), value: String(avgBpm) });
+		}
+		if (ageGrade != null) {
+			cells.push({ label: m('runDetail.ageGrade'), value: ageGrade });
+		}
+		return cells;
+	});
+	let showActivityFiller = $derived(keyStats.length % 2 === 1 && activity !== null);
 
 	/// Real HR zone breakdown. Requires per-point `bpm` on the track —
 	/// which watch and phone recorders will start writing alongside GPS
@@ -1637,76 +1678,12 @@
 
 		<!-- Key stats -->
 		<div class="key-stats">
-			<div class="key-stat">
-				<span class="key-stat-value">{formatDistance(run.distance_m)}</span>
-				<span class="key-stat-label">{m('runDetail.distance')}</span>
-			</div>
-			<div class="key-stat">
-				<span class="key-stat-value">{formatDuration(run.duration_s)}</span>
-				<span class="key-stat-label">{m('runDetail.time')}</span>
-			</div>
-			{#if movingSeconds > 0 && movingSeconds !== run.duration_s}
+			{#each keyStats as stat}
 				<div class="key-stat">
-					<span class="key-stat-value">{formatDuration(movingSeconds)}</span>
-					<span class="key-stat-label">{m('runDetail.moving')}</span>
+					<span class="key-stat-value">{stat.value}</span>
+					<span class="key-stat-label">{stat.label}</span>
 				</div>
-			{/if}
-			<div class="key-stat">
-				<span class="key-stat-value"
-					>{formatPace(
-						movingSeconds > 0 ? movingSeconds : run.duration_s,
-						run.distance_m
-					)}</span
-				>
-				<span class="key-stat-label">{m('runDetail.avgPace')}</span>
-			</div>
-			{#if showGradeAdjustedPace && gradeAdjustedPace != null}
-				<div class="key-stat">
-					<span class="key-stat-value">{formatPace(gradeAdjustedPace, 1000)}</span>
-					<span class="key-stat-label">{m('runDetail.gradeAdjustedPace')}</span>
-				</div>
-			{/if}
-			<div class="key-stat">
-				<span class="key-stat-value">{formatSpeed(
-					movingSeconds > 0 ? movingSeconds : run.duration_s,
-					run.distance_m,
-				)}</span>
-				<span class="key-stat-label">{m('runDetail.avgSpeed')}</span>
-			</div>
-			<div class="key-stat">
-				<span class="key-stat-value">{realElevationGain} m</span>
-				<span class="key-stat-label">{m('runDetail.elevation')}</span>
-			</div>
-			{#if showCalories && estimatedCalories > 0}
-				<div class="key-stat">
-					<span class="key-stat-value">{estimatedCalories}</span>
-					<span class="key-stat-label">{calorieLabel}</span>
-				</div>
-			{/if}
-			{#if totalSteps != null}
-				<div class="key-stat">
-					<span class="key-stat-value">{totalSteps.toLocaleString()}</span>
-					<span class="key-stat-label">{m('runDetail.steps')}</span>
-				</div>
-			{/if}
-			{#if avgCadence != null}
-				<div class="key-stat">
-					<span class="key-stat-value">{avgCadence}</span>
-					<span class="key-stat-label">{m('runDetail.cadenceSpm')}</span>
-				</div>
-			{/if}
-			{#if avgBpm != null}
-				<div class="key-stat">
-					<span class="key-stat-value">{avgBpm}</span>
-					<span class="key-stat-label">{m('runDetail.avgHrBpm')}</span>
-				</div>
-			{/if}
-			{#if ageGrade != null}
-				<div class="key-stat">
-					<span class="key-stat-value">{ageGrade}</span>
-					<span class="key-stat-label">{m('runDetail.ageGrade')}</span>
-				</div>
-			{/if}
+			{/each}
 			<!-- Parity filler. The auto-fit key-stats grid looks broken
 				 with an odd cell count (one empty slot trailing at the
 				 most common 2-col layout). When the conditional stats
