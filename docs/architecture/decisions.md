@@ -19608,3 +19608,67 @@ Six tests pin it, and each was run against the pre-fix file first: all six fail
 there — three on the centre (non-finite, out of range, non-numeric) and three on
 the bbox (non-numeric corner keeps the centroid, non-finite corner does not
 produce a NaN radius, out-of-range corner defaults).
+
+## 1093. `Zone.current` cannot discriminate the `debugWritesSettled` deadlock — measured — so the wait is bounded and reports itself instead
+
+[§ 1072](#1072) measured that `OfflineSyncStore.debugWritesSettled()` is only
+awaitable when the write it waits on was queued from inside `tester.runAsync`,
+and left the durable fix filed with one precondition attached: check whether
+`Zone.current` is a usable discriminator before building a detector on it. It
+is not, and the measurement is the reason this entry exists.
+
+**Five configurations, each run in its own process** (a timed-out widget test
+poisons the fake-async state for every test after it in the file, which is how
+a first attempt produced five identical hangs and one misleading conclusion).
+Each queues one real file write through `serialiseStoreWrite`, then awaits
+`storeWritesSettled`, and records whether the queueing zone and the awaiting
+zone are `identical`:
+
+| # | write queued from | awaited from | `identical` | outcome |
+|---|---|---|---|---|
+| 1 | fake zone | `runAsync` | false | **hangs** |
+| 2 | `runAsync` #1, then `pump` | `runAsync` #2 | false | settles |
+| 3 | `runAsync` #1, no pump | `runAsync` #2 | false | settles |
+| 4 | fake zone, then `pump` | `runAsync` | false | **hangs** |
+| 5 | fake zone | fake zone | — | **hangs** |
+
+`identical` is false in all four cases where it is defined, two of which settle
+and two of which hang, so zone identity carries no signal at all. It is worse
+than uninformative: every `tester.runAsync` call **forks a fresh zone**
+(`AutomatedTestWidgetsFlutterBinding.runAsync` builds one with a
+`ZoneSpecification` delegating microtasks and timers to the root), so the
+working pattern in `nutrition_screen_test` — tap inside one `runAsync`, settle
+inside a second — is precisely a case where the two zones differ. A detector
+keyed on identity would have fired on the file that proves the helper works.
+
+A behavioural probe was tried before the identity one and is also out: a
+microtask scheduled directly into the fake zone *does* run while a `runAsync`
+await is pending (measured three ways), so "can I drain the queueing zone" says
+yes in the configuration that then deadlocks.
+
+**Two things § 1072's rule understates**, both from the table. Row 4: an
+intervening `pump` does not rescue a fake-zone write, because the pump advances
+fake time and flushes fake microtasks while the real file I/O it is waiting on
+completes on an event loop the fake clock never turns. Row 5: awaiting from the
+fake zone hangs too — the failure is not specific to `runAsync`, it is that the
+write and the await sit on either side of the boundary.
+
+**So the probe is bounded rather than diagnosed.** `storeWritesSettled` now
+races the chain against a timer armed on `Zone.root` — deliberately the root,
+because a caller inside the fake zone would otherwise arm a fake timer, which is
+the same queue the wait is already stuck on — and on expiry completes with a
+`StateError` naming the precondition, the remedy (`pumpUntil` on an observable
+outcome) and, as the error's stack trace, the call site that asked. This is not
+the timeout-as-band-aid the house rules forbid: nothing that would otherwise
+fail now passes, and nothing waits longer. A hang that produced no message in
+240 s produces a named diagnosis in 20, and `kStoreWritesSettledBound` sits four
+orders of magnitude above the JSON writes this helper serialises.
+
+**What it does not cover, stated rather than discovered later.** The report is
+delivered through the awaiting zone, so row 5 — a fake-zone await with no pump —
+still hangs; the root timer fires but its completion is a fake-zone
+continuation. That case is unchanged rather than improved, and it is the one
+where the test is wedged for a second reason anyway. The three
+`debugWritesSettled` wrappers now also state the precondition in their own doc
+comments, which is § 1072's cheaper option kept alongside the durable one rather
+than instead of it.

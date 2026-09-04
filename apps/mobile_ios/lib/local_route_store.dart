@@ -111,6 +111,11 @@ class LocalRouteStore extends ChangeNotifier {
       serialiseStoreWrite(_chainKey, body);
 
   /// Test-only: completes once every operation queued so far has finished.
+  ///
+  /// Only awaitable when the write it waits on was queued from inside
+  /// `tester.runAsync`; after a fake-zone tap, wait on an observable
+  /// outcome with `pumpUntil` instead. The wait is bounded and reports
+  /// itself rather than hanging when it is not (decisions § 1093).
   @visibleForTesting
   Future<void> debugWritesSettled() => storeWritesSettled(_chainKey);
 
