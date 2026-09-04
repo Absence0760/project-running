@@ -19577,3 +19577,34 @@ it names `UpdateFunctionCode` alone, which is the one that would. Not verified
 against live IAM: no lane holds AWS credentials, so this is `terraform validate`
 on both env roots and nothing more. `infra/github-oidc` is applied by an
 operator, and the next release after that apply is what confirms it.
+
+## 1092. The mobile geocode lost a usable centroid to its own bbox cast, and the coordinate check stopped one function short
+
+[§ 1011](#1011) added `isUsableLatitude` / `isUsableLongitude` to
+`geocoding.dart` and applied them to the two SEARCH paths. `geocodePlace` — the
+MapTiler-only geocode forty lines below — kept a shape check (`centerRaw is!
+List || centerRaw.length < 2`) followed by a bare `as num`, which is a different
+question: `is num` asks whether a value has a numeric TYPE, and both exposures
+[§ 1066](#1066) closed on web live in the gap between that and whether it is a
+coordinate.
+
+Both re-measured here rather than inherited. `jsonDecode('1e400')` is
+`Infinity`, and `Infinity is num` is true — so the centre reached a `LatLng`,
+which carries no assertion of its own, and a map camera built from it silently
+stops rendering. A bbox corner of the same shape made `bboxRadius` a NaN, which
+compares false against every bound a caller might check the radius with.
+
+**The bbox cast was the worse of the two, and in the opposite direction.**
+`(bboxRaw[0] as num)` on a JSON string throws a `TypeError` — measured, not
+inferred — and it threw *inside* the `try` whose catch returns null. So a
+feature carrying a perfectly good centroid and one malformed corner reported the
+whole geocode as a miss, and the caller fell back to the text-only path. The
+documented 5 km default was already sitting one branch away, unreachable for
+exactly the input it was written for. A bbox is now usable whole or not at all
+(web's rule, `_usableBbox`), and an unusable one degrades to that default with
+the centroid intact.
+
+Six tests pin it, and each was run against the pre-fix file first: all six fail
+there — three on the centre (non-finite, out of range, non-numeric) and three on
+the bbox (non-numeric corner keeps the centroid, non-finite corner does not
+produce a NaN radius, out-of-range corner defaults).

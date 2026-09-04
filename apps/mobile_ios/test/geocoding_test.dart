@@ -445,6 +445,117 @@ void main() {
       expect(out, isNull);
     });
 
+    test('returns null when the centre longitude decodes non-finite',
+        () async {
+      // jsonDecode('1e400') is Infinity, measured — it is a `num`, so the
+      // old `as num` cast let it through to a LatLng that silently stops a
+      // map camera rendering.
+      final stub = _StubFetcher(
+        '{"features":[{"place_name":"Overflow","center":[1e400,37.0]}]}',
+      );
+      final out = await geocodePlace(
+        'Overflow',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNull);
+    });
+
+    test('returns null when the centre latitude is out of range', () async {
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {
+            'place_name': 'Past the pole',
+            'center': [-78.0, 91.0],
+          },
+        ],
+      }));
+      final out = await geocodePlace(
+        'Past the pole',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNull);
+    });
+
+    test('returns null when a centre member is not a number', () async {
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {
+            'place_name': 'Stringly typed',
+            'center': ['-78.0', 37.0],
+          },
+        ],
+      }));
+      final out = await geocodePlace(
+        'Stringly typed',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNull);
+    });
+
+    test(
+        'keeps the centroid and defaults the radius on a non-numeric bbox '
+        'corner', () async {
+      // The regression this pins: reading the corner through `as num` threw
+      // a TypeError into the catch-all, so a malformed bbox lost the whole
+      // geocode instead of degrading to the 5 km default.
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {
+            'place_name': 'Bad corner',
+            'center': [-78.0, 37.0],
+            'bbox': ['-83.6754', 36.5407, -75.2422, 39.4660],
+          },
+        ],
+      }));
+      final out = await geocodePlace(
+        'Bad corner',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNotNull);
+      expect(out!.lng, closeTo(-78.0, 1e-9));
+      expect(out.lat, closeTo(37.0, 1e-9));
+      expect(out.radiusM, closeTo(5000, 1e-9));
+    });
+
+    test('defaults the radius when a bbox corner decodes non-finite',
+        () async {
+      final stub = _StubFetcher(
+        '{"features":[{"place_name":"Overflow bbox",'
+        '"center":[-78.0,37.0],"bbox":[1e400,36.5,-75.2,39.4]}]}',
+      );
+      final out = await geocodePlace(
+        'Overflow bbox',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNotNull);
+      expect(out!.radiusM, closeTo(5000, 1e-9));
+      expect(out.radiusM.isNaN, isFalse);
+    });
+
+    test('defaults the radius when a bbox corner is out of range', () async {
+      final stub = _StubFetcher(jsonEncode({
+        'features': [
+          {
+            'place_name': 'Wide bbox',
+            'center': [-78.0, 37.0],
+            'bbox': [-83.6754, 36.5407, -75.2422, 95.0],
+          },
+        ],
+      }));
+      final out = await geocodePlace(
+        'Wide bbox',
+        apiKey: 'k',
+        fetcher: stub.call,
+      );
+      expect(out, isNotNull);
+      expect(out!.radiusM, closeTo(5000, 1e-9));
+    });
+
     test('falls back to "text" when "place_name" is absent', () async {
       final stub = _StubFetcher(jsonEncode({
         'features': [
