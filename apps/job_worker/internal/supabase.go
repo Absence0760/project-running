@@ -386,6 +386,14 @@ func (c *SupabaseClient) ListStorageObjectsWithMeta(ctx context.Context, bucket,
 	var out []StorageObject
 	var walk func(folder string) error
 	walk = func(folder string) error {
+		// The bucket root is "", and a caller may write a prefix with a
+		// trailing separator. `storage.objects.name` carries neither a
+		// leading nor a doubled "/", so joining blindly named no object at
+		// all: a whole-bucket walk yielded "/u1/a.zip" and a "u1/exports/"
+		// prefix yielded "u1/exports//a.zip". Both are accepted by the
+		// multi-delete endpoint and match nothing, so the reap reported
+		// success and erased nothing.
+		folder = strings.TrimSuffix(folder, "/")
 		for offset := 0; ; offset += pageSize {
 			payload, err := json.Marshal(map[string]any{
 				"prefix": folder,
@@ -418,7 +426,10 @@ func (c *SupabaseClient) ListStorageObjectsWithMeta(ctx context.Context, bucket,
 				if e.Name == "" {
 					continue
 				}
-				full := folder + "/" + e.Name
+				full := e.Name
+				if folder != "" {
+					full = folder + "/" + e.Name
+				}
 				if e.ID == nil {
 					if err := walk(full); err != nil {
 						return err
