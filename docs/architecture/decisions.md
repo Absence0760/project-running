@@ -20720,3 +20720,42 @@ kinds — a non-empty `ItemList` whose count matches its own contents and whose
 entries all point at a guide. Proved non-vacuous against three mutations of the
 built pages: a dropped block, a category declaring itself an `Article`, and a
 self-linking final rung.
+
+## 1169. Naming `%sveltekit.head%` in an `app.html` comment substitutes the head into the comment, and every head-shape assertion still passes
+
+Self-inflicted while landing § 1167 and worth recording, because the failure is
+invisible to every check the tree has except one, and the surviving artifact
+looks right. The replacement comment left in `app.html` explained that a title
+literal "is emitted before `%sveltekit.head%`" — and SvelteKit substitutes that
+placeholder at its **first** occurrence in the template, which was now the
+mention inside the comment. So the entire injected head went into a comment,
+the comment terminated early on the first `-->` it contained (a Svelte hydration
+marker), and the built page came out with the hash-CSP `<meta>` and half the
+modulepreload links inert inside a truncated comment, the comment's own
+remaining prose as raw text inside `<head>`, and the literal string
+`%sveltekit.head%` standing at the position the head was supposed to occupy. A
+browser hoists stray text out of `<head>`, so `<head>` effectively ended early
+and the CSP declaration was gone.
+
+The reason this is an ADR rather than a footnote is what the guards did.
+Because the truncation point fell between the modulepreloads and the rest, the
+`<title>`, the canonical, the social meta and the JSON-LD all landed **outside**
+the comment as live markup — so a measurement of the artifact's head shape read
+exactly the intended values on all fifteen pages: one title each, one JSON-LD
+block each, one canonical each. `npm run check` was clean, the build exited 0,
+the bundle budget passed, and every assertion in both new guards passed against
+a document whose head was structurally destroyed. It was found by reading the
+built `<head>` byte by byte for an unrelated reason (confirming what
+`%sveltekit.head%` contributes to the SPA fallback), not by anything that could
+have failed.
+
+Three consequences taken. The comment no longer spells the placeholder and says
+why not, which is the fix. Both artifact guards now strip HTML comments before
+counting, because a title or a JSON-LD block inside a comment is not one the
+page emits and a counter that cannot tell the difference is measuring the wrong
+document — that hardening would not have caught **this** instance (the real
+tags fell outside the truncated comment) but it closes the near neighbour where
+they do not. And `document_title.test.ts` gained the assertion that would have
+caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
+That is a whole-artifact claim rather than a head-shape one, which is the level
+this class of damage is visible at.
