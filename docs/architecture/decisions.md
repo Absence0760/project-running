@@ -19577,3 +19577,154 @@ it names `UpdateFunctionCode` alone, which is the one that would. Not verified
 against live IAM: no lane holds AWS credentials, so this is `terraform validate`
 on both env roots and nothing more. `infra/github-oidc` is applied by an
 operator, and the next release after that apply is what confirms it.
+
+## 1086. The share sanitisers close a script tag the way a parser does, and the cost of the old spelling was the whole page, not a duplicate node
+
+[§ 1065](#1065) moved one `js/bad-tag-filter` regex into `consent_guards.test.ts`
+and CodeQL flagged it, because it reports an alert per changed FILE — so a
+byte-identical shape that had sat on `main` since it was written surfaced only
+because the code got a new path. The filing that followed named four siblings and
+called the worst case "a stale default JSON-LD served beside the real one". That
+understated it, and the correction is the point of this entry.
+
+**The lazy body does not stop at a close tag it cannot see; it runs to the next
+one.** The three served SPA-shell injectors stripped an existing JSON-LD block
+with `<script\s+type="application\/ld\+json">[\s\S]*?<\/script>`. Against a shell
+spelling that block `</script >` — which every browser closes, since `</script`
+followed by whitespace, `/` or `>` ends the element and everything to the first
+`>` is junk — the `[\s\S]*?` continues to the SPA bundle's own `</script>` near
+the end of the document. Measured on the shells the tests already use: the match
+consumes the stale JSON-LD, `</head>`, `<body>`, the `#svelte` mount div and the
+bundle `<script>` tag. `injectEntityHead` then searches the wreckage for
+`</head>`, finds none, takes its malformed-shell branch and returns the string
+**without the per-entity head tags at all**. So the failure is not a duplicate
+signal: it is a share page with no meta, no mount point and no application.
+
+The same parser rule governs the two other end tags these files match. `</title >`
+is a legal close, so the non-global `<\/title>` replace leaves the shell's generic
+title standing beside the entity's and a crawler picks the first. `</head >` is a
+legal close, so the splice search returns `-1` and the injection is dropped
+whole. All three now spell `<\/name(?=[\s/>])[^>]*>`.
+
+**The JSON-LD open tag was matched to one attribute spelling, and that is the
+smaller half of the same mistake.** `<script\s+type="application/ld+json">`
+misses a block carrying a CSP nonce, a `data-` attribute, or the same two
+attributes in the other order — none of which would be a new feature so much as a
+build-tool change, and each of which leaves a second `WebPage` node standing
+beside the real one. The strip now matches any `<script>` carrying that type.
+
+**`raw_text_end_tag_guard.test.ts` is the durable half.** It scans `src/` and
+`lambda/`, comment-stripped, for the escaped-slash spelling a regex literal must
+use, and requires the parser rule after it. Scope is the raw-text and RCDATA
+elements plus `head` — 20 occurrences today (7 `title`, 6 `script`, 5 `head`, 2
+`style`), of which **19 were intolerant before this change** and only
+§ 1065's own was right. XML end tags are deliberately out of scope: XML's grammar
+allows optional whitespace and nothing else there, which `<\/name\s*>` states
+exactly, and those regexes assert against documents this repo generates. Test
+files are in scope, because two of the five instances were in guards — where an
+unseen `</script >` makes the guard read a `.svelte` file's markup as TypeScript
+and under-enforce without saying so.
+
+## 1087. A body parse outside a `try` is a class, it had two more members, and the contract that decides is the doc comment rather than the return type
+
+[§ 1066](#1066) guarded `geocodeViaMapTiler` after measuring that a 200 carrying
+an unparseable body threw a `SyntaxError` out of a function documented to return
+null, and filed the class as unsearched. Searching it found two more, and the
+first is the same file.
+
+**`geocodeViaNominatim` is the other branch of the same exported function.**
+`geocodePlaceWithKey` dispatches to MapTiler with a key and to Nominatim without
+one; § 1066 fixed the branch it was looking at, a hundred lines above the branch
+it was not, while that branch's own *search* sibling forty lines further down had
+carried the guard all along. A dev stack with no MapTiler key takes the
+unguarded road exclusively. **`snapToRoad` is the sharper one:** it returns the
+unsnapped input point on a non-2xx and has no throwing branch anywhere, so a
+caller has no reason to wrap it — and an unparseable 200 threw out of a function
+whose entire contract is that it cannot fail.
+
+**The rule is not that every parse must be guarded, and the register is why.**
+Ten of the tree's 36 body-parse sites are outside a `try` on purpose:
+`food_search`'s three document `THROWS on a network / non-2xx / parse failure` so
+the merge caller can tell a failed source from an empty one, `parseRouteFile`'s
+four throw on an unsupported extension in the same breath as on a bad parse, and
+`requestAiDescription` throws on every non-200 already. A rule keyed on the
+declared return type would have got `lookupBarcode` wrong in the dangerous
+direction: it returns `Promise<FoodSearchResult | null>` and throws on a parse
+failure deliberately, the null being reserved for a genuine no-match. The
+contract lives in the doc comment, so `response_body_parse_guard.test.ts` takes a
+hand-written register of counts and reasons and fails in both directions — an
+unguarded parse in an unregistered file, and a registered file whose count has
+moved. That count is also the only pin `snapToRoad` can have: `routing.ts`
+imports `core/supabase`, which imports `$env/static/public`, so the raw
+`tsx --test` suite cannot load it at all.
+
+## 1088. `hr_coverage` gets a reader, because a suppressed average and no heart-rate monitor were rendering the same sentence
+
+[§ 1083](#1083) had the wrist record the share of active elapsed time its sensor
+actually delivered, and suppress `avg_bpm` below 0.5 on the grounds that a mean
+over less of the run than not is not the run's average. It also observed that the
+key's most useful reading is when the average is ABSENT. Nothing read it, so that
+reading did not exist: run detail rendered `No heart-rate data on this run` — the
+identical sentence a phone run recorded with no strap gets. One of those is a
+fact about our sampling, the other is a fact about the runner's equipment, and
+only the second is something they can act on.
+
+**Three states, not one.** Coverage present with no average states the share and
+that it was too little for an average. A coverage of exactly `0` — the sensor was
+enabled and delivered nothing — gets its own sentence rather than "covered 0 %",
+because that is a different diagnosis and because `0` must not be reachable by
+rounding: `hrCoveragePercent` floors a nonzero fraction at 1 %. And an average
+that IS reported now carries the share it was taken over whenever that is under
+100 %, in a line of its own outside the zone-breakdown branch, because 142 bpm
+over 62 % of a twelve-hour run is not that run's average and nothing on the page
+said so.
+
+**Absent stays unmeasured.** A run from a build predating the field, or one
+recovered from a checkpoint that never carried it, omits the key; an unusable
+value — a non-number, a non-finite one, or a fraction outside `0..1` — resolves
+to null and the page keeps its old copy rather than reporting a duty cycle nobody
+measured. The out-of-range refusal is not defensive noise: a future writer
+storing a percentage instead of a fraction would otherwise render "covered
+8500 % of this run".
+
+The pure grading is `runs/hr_coverage.ts`, web-only. The mobile half of this
+reading was built independently in the same round and neither registry names the
+two as a pair — the shaping either platform needs is a percentage and a branch,
+not an algorithm.
+
+## 1089. The web and Dart geocoders stay unregistered as a parity pair, verified against the code rather than recalled
+
+Recorded so the question is not reopened as an oversight, and re-checked against
+both files rather than against the filing. All three stated divergences hold
+today, and there is a fourth the filing did not name.
+
+`PlaceSearchOutcome` carries `aborted` on web and does not in Dart, and the Dart
+enum's own doc comment gives the reason: web's call sites pass an `AbortSignal`
+and must stay silent when they supersede their own request, while mobile's
+debounce is a cancelled `Timer`, so a superseded keystroke never reaches that
+layer and a third state would describe nothing. Web takes an `AbortSignal` and
+calls `fetch` itself; Dart injects a `GeocodingFetcher`, which is
+`Future<String> Function(Uri)` — a seam that returns a **body**, so status
+handling sits on the other side of it and there is no `res.ok` to mirror.
+`geocodePlaceWithKey` falls back to Nominatim on an empty key where Dart's
+`geocodePlace` returns null. The fourth: Nominatim rejects a stock HTTP-library
+User-Agent, so the Dart default fetcher sets one — a header a browser forbids
+scripts from setting at all, which is why the web side cannot have that line and
+why the two will never converge on one fetch layer.
+
+A row asserting lockstep over that would assert something that has never held,
+which [§ 604](#604) and [§ 641](#641) both name as worse than no row. What
+genuinely is one contract is the pair of coordinate predicates —
+`isUsableLatitude` / `isUsableLongitude`, same bounds, same reason, identical on
+both sides — and the registry is keyed on module paths with no precedent for
+registering two functions out of a module. Registering the modules to get the
+predicates would buy the predicates' safety at the price of a permanent standing
+lie about the other four differences.
+
+[§ 1087](#1087)'s fix moved the two closer rather than further apart, which is
+worth noting because it is the direction an unregistered pair usually fails in:
+Dart wraps its whole decode in one `try`, so both of web's geocode branches
+guarding their parse is web catching up to behaviour Dart already had. If a
+future change disagrees with this entry, the rows it needs live in the root
+`CLAUDE.md` table and `.claude/agents/shared-library-syncer.md`, neither of which
+a web lane owns — the same wall [§ 1014](#1014) and § 1039's filings hit.

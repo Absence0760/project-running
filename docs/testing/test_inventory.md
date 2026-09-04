@@ -685,6 +685,18 @@ Source-level guards for the in-modal half of the undo contract (decisions § 516
 
 Web half of the four-platform `runs.metadata` drift guard (Dart `metadata_registry_test.dart`, Kotlin `MetadataRegistryTest.kt`, Swift `MetadataRegistryTests.swift`). Walks `apps/web/src` (production `.ts` / `.svelte` only), strips comments, and collects every key reached via `METADATA_KEYS.<x>`, a `metadata['x']` subscript, a `run.metadata.x` dotted read, or a depth-1 `metadata: { x: … }` object literal — then fails on any key with no table row in `docs/backend/metadata.md`. Replaced the weaker `tests-e2e/cross-cutting/metadata-registry.spec.ts`, which needed the whole Playwright harness for a static source scan, missed object-literal writes and `METADATA_KEYS` indirection, and counted any backticked token anywhere in the doc as "documented".
 
+### `apps/web/src/lib/raw_text_end_tag_guard.test.ts` — 2 tests
+
+Every HTML end tag written into a regex under `apps/web/src` or `apps/web/lambda` must close the way a parser does — `</name` followed by whitespace, `/` or `>`, then junk to the first `>` (CodeQL `js/bad-tag-filter`). Scoped to the raw-text / RCDATA elements plus `head`, which is where the damage lands: a lazy body that cannot see its close runs on to the next one in the document, and `</head>` is a splice point whose loss drops a whole `<head>` injection. 20 occurrences today; 19 were intolerant before [decisions § 1086](../architecture/decisions.md). XML end tags are deliberately out of scope. The second test fails a declared exemption that no longer names an intolerant spelling.
+
+### `apps/web/src/lib/response_body_parse_guard.test.ts` — 1 test
+
+Every `await res.json()` / `.text()` in production web source must sit inside a `try`, carry a `.catch`, or be registered with a count and a reason. The rule cannot be keyed on the return type — `lookupBarcode` returns `Promise<T | null>` and throws on a parse failure deliberately — so the register is hand-written and fails in both directions: an unguarded parse in an unregistered file, and a registered file whose count moved. 36 sites, 10 registered as throw-contracted across four files. It is also the only pin `snapToRoad` can have, since `routing.ts` reaches `$env/static/public` through `core/supabase` and the raw `tsx --test` suite cannot load it. [decisions § 1087](../architecture/decisions.md).
+
+### `apps/web/src/lib/runs/hr_coverage.test.ts` — 6 tests
+
+`hrCoveragePercent`, the grading behind run detail's heart-rate-coverage copy ([decisions § 1088](../architecture/decisions.md)). Pins that `0` is a measurement (sensor enabled, nothing delivered) and absent is not, that a nonzero fraction never rounds down into that reading, that 100 is a ceiling, and that a value outside the writer's `0..1` contract is refused rather than rendered as "covered 8500% of this run".
+
 ### `apps/web/src/lib/types.test.ts` — 6 tests
 
 `parseRunSource` defensive-fallback contract — every valid `RunSource` value passes through; null, undefined, empty string, unknown string, and case-mismatched input all fall back to `'app'`.
