@@ -1110,6 +1110,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   List<Widget> _buildSections(
       ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     final blockedReason = widget.runStore.blockedReason(run.id);
+    final secondaryStats = _secondaryStatCells(l10n, unit);
     return [
       if (blockedReason != null)
         Padding(
@@ -1213,78 +1214,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ),
 
       // Secondary stats
-      if (run.track.length >= 2 || _hasElevation) ...[
+      if (secondaryStats.isNotEmpty)
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: StatGrid(
-            cells: [
-              if (_hasElevation) ...[
-                StatTile.small(
-                  icon: Icons.trending_up,
-                  label: l10n.runDetailStatElevGain,
-                  value: '${_elevationGain.round()}m',
-                ),
-                StatTile.small(
-                  icon: Icons.trending_down,
-                  label: l10n.runDetailStatElevLoss,
-                  value: '${_elevationLoss.round()}m',
-                ),
-              ],
-              if (_showGradeAdjustedPace)
-                StatTile.small(
-                  icon: Icons.terrain,
-                  label: l10n.runDetailStatGradeAdjPace,
-                  value:
-                      '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
-                ),
-              if (_showCalories)
-                StatTile.small(
-                  icon: Icons.local_fire_department,
-                  label: l10n.runStatCalories,
-                  value: '$_estimatedCalories ${l10n.runUnitKcal}',
-                ),
-              if (_steps > 0)
-                StatTile.small(
-                  icon: Icons.directions_walk,
-                  label: l10n.runStatSteps,
-                  value: '$_steps',
-                ),
-              if (_cadence > 0)
-                StatTile.small(
-                  icon: Icons.speed,
-                  label: l10n.runStatCadence,
-                  value: '$_cadence ${l10n.runUnitSpm}',
-                ),
-              if (_avgBpm > 0)
-                StatTile.small(
-                  icon: Icons.favorite,
-                  label: l10n.runDetailStatAvgHr,
-                  value: '$_avgBpm ${l10n.runUnitBpm}',
-                ),
-              if (_avgBpm > 0 &&
-                  _hrCoveragePercent != null &&
-                  _hrCoveragePercent! < 100)
-                StatTile.small(
-                  icon: Icons.monitor_heart,
-                  label: l10n.runDetailStatHrCoverage,
-                  value: l10n.runDetailHrCoveragePercent(_hrCoveragePercent!),
-                ),
-              if (_avgBpm <= 0 && _hrCoveragePercent != null)
-                StatTile.small(
-                  icon: Icons.monitor_heart,
-                  label: l10n.runDetailStatAvgHr,
-                  value: l10n.runDetailHrCoverageOnly(_hrCoveragePercent!),
-                ),
-              if (_ageGrade != null)
-                StatTile.small(
-                  icon: Icons.emoji_events,
-                  label: l10n.runDetailStatAgeGrade,
-                  value: _ageGrade!,
-                ),
-            ],
-          ),
+          child: StatGrid(cells: secondaryStats),
         ),
-      ],
 
       const Divider(),
 
@@ -1410,6 +1344,92 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ],
 
       const SizedBox(height: 32),
+    ];
+  }
+
+  /// The secondary-stat cells this run actually has a value for, in display
+  /// order. Empty when it has none, which is what lets the caller drop the
+  /// section rather than draw an empty frame.
+  ///
+  /// Built as a list rather than gated as a block because only three of these
+  /// come off the geometry: the elevation pair and the grade-adjusted pace.
+  /// Calories, steps, cadence, average heart rate, HR coverage and age grade
+  /// are read off the row and the metadata bag, and are no less true of a run
+  /// with no track — a Health Connect import writes `avg_bpm` with an empty
+  /// track, and a manual entry has no track at all. Gating the whole grid on
+  /// `run.track` hid all six of those for a reason that had nothing to do with
+  /// any of them. Web's `/runs/[id]` has always gated per cell; this mirrors it.
+  List<Widget> _secondaryStatCells(AppLocalizations l10n, DistanceUnit unit) {
+    final calories = _estimatedCalories;
+    final hrCoverage = _hrCoveragePercent;
+    final avgBpm = _avgBpm;
+    final ageGrade = _ageGrade;
+    return [
+      if (_hasElevation) ...[
+        StatTile.small(
+          icon: Icons.trending_up,
+          label: l10n.runDetailStatElevGain,
+          value: '${_elevationGain.round()}m',
+        ),
+        StatTile.small(
+          icon: Icons.trending_down,
+          label: l10n.runDetailStatElevLoss,
+          value: '${_elevationLoss.round()}m',
+        ),
+      ],
+      if (_showGradeAdjustedPace)
+        StatTile.small(
+          icon: Icons.terrain,
+          label: l10n.runDetailStatGradeAdjPace,
+          value:
+              '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
+        ),
+      // `estimateRunCalories` answers 0 for a distance it cannot use and for a
+      // product past the range both platforms share, so the pref alone is not
+      // a datum test: a run stopped before it moved would report "0 kcal" as
+      // if that were the estimate. Web gates on the same `> 0`.
+      if (_showCalories && calories > 0)
+        StatTile.small(
+          icon: Icons.local_fire_department,
+          label: l10n.runStatCalories,
+          value: '$calories ${l10n.runUnitKcal}',
+        ),
+      if (_steps > 0)
+        StatTile.small(
+          icon: Icons.directions_walk,
+          label: l10n.runStatSteps,
+          value: '$_steps',
+        ),
+      if (_cadence > 0)
+        StatTile.small(
+          icon: Icons.speed,
+          label: l10n.runStatCadence,
+          value: '$_cadence ${l10n.runUnitSpm}',
+        ),
+      if (avgBpm > 0)
+        StatTile.small(
+          icon: Icons.favorite,
+          label: l10n.runDetailStatAvgHr,
+          value: '$avgBpm ${l10n.runUnitBpm}',
+        ),
+      if (avgBpm > 0 && hrCoverage != null && hrCoverage < 100)
+        StatTile.small(
+          icon: Icons.monitor_heart,
+          label: l10n.runDetailStatHrCoverage,
+          value: l10n.runDetailHrCoveragePercent(hrCoverage),
+        ),
+      if (avgBpm <= 0 && hrCoverage != null)
+        StatTile.small(
+          icon: Icons.monitor_heart,
+          label: l10n.runDetailStatAvgHr,
+          value: l10n.runDetailHrCoverageOnly(hrCoverage),
+        ),
+      if (ageGrade != null)
+        StatTile.small(
+          icon: Icons.emoji_events,
+          label: l10n.runDetailStatAgeGrade,
+          value: ageGrade,
+        ),
     ];
   }
 
