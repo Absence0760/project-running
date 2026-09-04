@@ -94,9 +94,17 @@ that "the actual blob bytes are reaped by the storage backend's
 background sweeper once the row is gone" is wrong; there is no such
 sweeper (no `pg_cron` job touches storage bytes, and the storage
 container runs one server process and nothing else). **So the sweep
-removes REACHABILITY, not the archive.** That is still strictly better
-than the state § 857 replaced, where it deleted nothing at all, but no
-document may call it an Art 17 erasure. The durable fix is a job kind in
+removes REACHABILITY, not the archive.** The other half of that
+contrast is now measured too rather than inferred (2026-09-03): deleting
+the same object through the **Storage API** does remove the backend file
+— 1 file before, 0 after, on the same bucket in the same session — and
+that is the path `delete-account`'s drain uses. So the two legs of the
+export-artifact retention are two different guarantees: the account-
+deletion leg erases the bytes, the nightly SQL leg does not.
+[retention.md](retention.md) states them separately for that reason; it
+had been claiming only the stronger one for both. Removing reachability
+is still strictly better than the state § 857 replaced, where the sweep
+deleted nothing at all, but no document may call it an Art 17 erasure. The durable fix is a job kind in
 the Go worker, which already writes the archive through the Storage API
 and already holds the service key, leaving `expire_stale_export_jobs()`
 as the only SQL half; it is filed with an owner. The residual on the

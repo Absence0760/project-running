@@ -19577,3 +19577,89 @@ it names `UpdateFunctionCode` alone, which is the one that would. Not verified
 against live IAM: no lane holds AWS credentials, so this is `terraform validate`
 on both env roots and nothing more. `infra/github-oidc` is applied by an
 operator, and the next release after that apply is what confirms it.
+
+## 1098. One routine's EXECUTE was inherited rather than stated, and enumerating the rest is what proved it was one
+
+`donations_status_lock_test.sql` has been failing on the workstation and passing
+on CI, dying at its first `fundraiser_totals` call with `permission denied for
+function` as `service_role`. The mechanism was already written down by
+[§ 799](decisions.md)'s migration `20270625000001` and by
+`anon_execute_registry_test.sql`: Supabase Cloud and the CI-pinned image
+(2.84.2) carry an `alter default privileges` for `postgres` granting EXECUTE to
+anon, authenticated **and** service_role by name, while the workstation CLI's
+image (2.109.1) leaves a fresh function on Postgres's own owner+PUBLIC default.
+`20270213_001` wrote `revoke all on function fundraiser_totals(uuid) from
+public` and then granted anon and authenticated. On the first image that revoke
+removes nothing; on the second it removes PUBLIC, and service_role goes with it.
+
+The fix is [§ 790](decisions.md)'s form, the same one `20270702000002` applied to
+`payment_refunds` one migration family over: name the role. What made this worth
+a round rather than a one-line patch is that the filing described the work as
+"re-emitting the grants for the routines the default currently covers", and the
+size of that set was unknown. It was measured, and it is **one**.
+
+The local image is the oracle, because there `proacl` is exactly `{postgres}`
+plus what a migration stated — or NULL where nothing was stated at all. Against
+it: the 7 RPCs the Edge Functions call as service_role and the 5 the Go worker
+calls each already carry an explicit `service_role` entry; all 95 RPC names the
+web, Lambda, mobile and `api_client` trees call carry an explicit
+`authenticated` entry and none has a NULL `proacl`; every base table in `public`
+already grants service_role the four DML verbs by name, which is what
+`20270702000002` closed. The 74 functions still on a NULL `proacl` are trigger
+bodies and definer-internal helpers — every reference to one outside the
+migrations (`enforce_event_capacity`, `promote_event_waitlist`,
+`lock_subscription_columns`, `enroll_club_owner`, `notify_plan_assigned`, …) is
+a comment naming the trigger, not a call. What anon may reach on Cloud through
+that set is a real and separate question; it is not this one, and a blanket
+`grant … to public` would break the `to public` RLS policies that made
+`20270625000001` write `from public, anon` in the first place.
+
+`fundraiser_feed(uuid, integer)` is deliberately **not** granted beside its
+sibling. The two are the same page's pair and `20270630000001` replaced them in
+one statement block, but the feed has no service_role caller, and granting a
+role a privilege because its neighbour has one is the sweep this entry exists to
+avoid. The grant that was issued confers nothing new: `fundraiser_totals` is
+SECURITY DEFINER, gated on `fundraiser_anchor_visible`, `anon` already holds
+EXECUTE, and service_role holds SELECT on `fundraisers`, `donations` and
+`payment_refunds` outright.
+
+`anon_execute_registry_test.sql` gains the positive half of its registry — each
+routine a named role must call holds EXECUTE, and holds it through an ACL entry
+naming that role rather than through PUBLIC or a NULL `proacl`. Note what that
+cannot see: on an image whose default privileges hand out EXECUTE by name the
+assertion holds whether or not a migration said anything, so it is the
+workstation image that makes it bite. A guard reading the migration TEXT would
+bite on both and is filed rather than built. Before: `Files=286, Tests=2601`
+with `donations_status_lock_test` reporting a bad plan (19 planned, 0 ran).
+After: `Files=286, Tests=2622`, all pass.
+
+## 1099. The retention register was still promising an erasure the sweep does not perform
+
+[§ 1049](decisions.md) measured that `cleanup_stale_export_blobs()` deletes the
+`storage.objects` row and leaves the bytes, and the lane that measured it
+corrected the narrative paragraph in `docs/compliance/data-subject-rights.md`
+while flagging that it did not own `docs/compliance/`. Re-measured here on a
+fresh stack and it reproduces exactly: a 4 KiB probe uploaded through the real
+Storage API into `exports`, aged nine days and swept, leaves `cleanup_stale_
+export_blobs()` reporting 1, zero rows in `storage.objects`, an empty
+`object/list` response — and the backend file still present with the uploaded
+`sha256` unchanged.
+
+The paragraph that was corrected was not the document that mattered.
+`docs/compliance/retention.md` is the register a regulator would be handed, and
+its Art 20 row still read "7 days from creation, OR account deletion" with the
+nightly cron named as the trigger — the single stronger guarantee stated for
+both legs. Its cron table said the same thing again, "data-export blobs older
+than 7 days". Both now state the two legs separately.
+
+Separating them needed one measurement § 1049 had asserted rather than taken:
+that storage-api's own delete path is what removes a backend object. Measured on
+the same bucket in the same session — upload, then `DELETE
+/storage/v1/object/exports` with the object's prefix — the backend goes from one
+file to zero. That is the path `delete-account`'s drain walks, so the
+account-deletion leg **is** an Art 17 erasure and the nightly SQL leg is not,
+and the register can now say which is which instead of averaging them. The
+residual on § 1049's claim is untouched and restated in both documents: this is
+the local `file` backend, so what is proved is the mechanism, and confirming the
+byte residue on Cloud still means listing the bucket over the S3-compatible
+endpoint.
