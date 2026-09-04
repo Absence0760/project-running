@@ -19577,3 +19577,188 @@ it names `UpdateFunctionCode` alone, which is the one that would. Not verified
 against live IAM: no lane holds AWS credentials, so this is `terraform validate`
 on both env roots and nothing more. `infra/github-oidc` is applied by an
 operator, and the next release after that apply is what confirms it.
+
+## 1110. Claim 10 pairs each Lambda verb with the environment its job deploys to, and the strengthening had to be demonstrated on input no committed workflow can produce
+
+[§ 1085](#1085) derived the `lambda:` actions each deploy role may hold from the
+`aws lambda` verbs the workflows run, and compared BOTH roles against the union
+of all of them. That is correct exactly while every credentialed job deploys
+every environment. `release-web.yml` does — one job, one set of steps, the
+branch deciding only which role ARN it assumes and which resource names it
+builds — so on this tree the union and the per-environment reading are the same
+set, and the guard could not tell them apart.
+
+It would stop being correct the first time a workflow deployed one environment
+only. The union would then require, on the preview role, a verb only the
+production release issues; the guard would report the preview role as *missing*
+it, and the obvious response to a red check that says "missing" is to widen the
+role. A derivation that under-scopes reads exactly like a role that
+under-grants.
+
+**A verb is now attributed to the environments its job can assume a role for.**
+That is read from the `AWS_DEPLOY_ROLE_ARN_<ENV>` Secrets the job names, which
+is the only statement a workflow makes about which identity its AWS steps run
+as, and it is narrowed by a step's own `if:` when the condition reads an output
+of the job's env-deciding branch — `release-web.yml` already gates two steps on
+`steps.env.outputs.is_prod`, so a future `aws lambda` step gated the same way
+attributes to one environment rather than two. A condition this reader cannot
+interpret leaves the step on both, which can only over-demand a grant and never
+under-demand one. A verb run under an assumed role whose environment cannot be
+read at all **fails**: unattributed is the one outcome that would silently stop
+the guard asking for a verb, and it is the shape a hardcoded role ARN produces.
+
+**The demonstration is the point of the entry.** The filing was honest that the
+change is unfalsifiable against today's workflows, and a guard change nothing
+can distinguish from the old one is an assertion, not evidence. So the pin is a
+synthetic two-branch workflow carrying a verb only the production leg runs:
+under it the verb attributes to `prod` alone, the preview role passes without
+it, holding it on the preview role fails as standing privilege, and a
+production role lacking it fails the other way. The union derivation passes the
+second of those and fails on the third — which is the whole difference, stated
+as four tests rather than as a paragraph.
+
+Not verified against live IAM. No lane holds AWS credentials; this is
+`node scripts/check_infra_iam.mjs` plus its 77 unit tests, and the next release
+after an `infra/github-oidc` apply is what confirms anything about the roles
+themselves.
+
+## 1111. `terraform fmt` was scoped per stack, so the one directory outside the matrix was format-checked by nothing — and the transitive-validate claim that excuses the exclusion is now measured
+
+`terraform.yml`'s `fmt` step lived inside the validate matrix, with
+`working-directory: ${{ matrix.stack }}`, and `terraform fmt` without
+`-recursive` reads exactly one directory's `.tf` files. `infra/modules/web-stack`
+is deliberately not in that matrix, so it was checked by no fmt invocation at
+all. Measured: with `output   "fmt_probe"    {` appended to the module's
+`outputs.tf`, all five per-stack steps exit 0 and `terraform fmt -check
+-recursive infra` exits 3.
+
+`check_infra_coverage.mjs` had a `VALIDATE_EXEMPT` entry for that directory
+carrying a real reason, and the reason is still true — re-measured, and true
+even though the module declares `configuration_aliases = [aws.us_east_1]`,
+which is the mechanism that is supposed to make a child module validatable
+standalone: `terraform validate` in the module directory still answers
+`Provider configuration not present`. But the guard's own header said an
+unmatrixed stack "gets no `fmt`, no `validate` and no Trivy verdict of its
+own", and two of those three were wrong in opposite directions. Trivy already
+scanned it (`scan-ref: infra` walks the tree); fmt already did not, and nothing
+said so.
+
+**So the exemption is narrowed to what it can justify.** A module cannot be
+validated without a provider; it can always be formatted. `fmt` is now one
+recursive job over `infra/`, and the guard reads the workflow's `terraform fmt`
+invocations as SCOPES — a directory, plus whether `-recursive` extends it over
+the subtree — and fails when any Terraform directory falls outside all of them.
+A future module is covered without anyone remembering, which the matrix could
+never offer, and the five per-stack `fmt` runs it replaces were redundant with
+each other anyway.
+
+**The claim the exemption rests on is measured rather than asserted.** "Validated
+transitively by envs/prod + envs/preview" was a sentence in a comment. Probed:
+an undeclared-input-variable reference added to `infra/modules/web-stack/waf.tf`
+makes `terraform validate` in `infra/envs/prod` fail, naming the module file and
+line. So the module's *validate* coverage is real, and only its *fmt* coverage
+was the gap.
+
+Verification, all offline by design: `terraform init -backend=false` +
+`terraform validate` in `infra/envs/prod` and `infra/envs/preview`, both
+`Success!`; `terraform fmt -check -recursive infra` clean; the three infra
+guards and their suites green. Still no `plan` behind any of it — no lane holds
+AWS credentials — but this change touches no resource, only a workflow and a
+guard.
+
+## 1112. The export reaper lists the bucket rather than being handed a worklist, which is what removes the ordering trap — and it ships unroutable because its CHECK is a migration
+
+[§ 1049](#1049) measured that `cleanup_stale_export_blobs()` deletes
+`storage.objects` rows and leaves the bytes on the backend with a matching
+`sha256`, and named the durable fix: a job kind in the Go worker, which already
+writes these archives through the Storage API and already holds the service key.
+It also named the trap — once the row is gone nothing in the database knows the
+object exists — and proposed enqueue-then-delete in one transaction as the cheap
+ordering.
+
+**The reaper derives its own worklist instead, and the trap does not arise.**
+The Storage list API reads the same `storage.objects` rows, so a reap that lists
+and then deletes through the API removes the bytes AND the rows in one step;
+the SQL row-delete becomes redundant rather than something the Go half has to be
+sequenced against. A payload carrying paths would have made the job's
+correctness depend on a transaction in another tier, and a reap that ran after
+that transaction would be reaping a list nobody can produce. Listing costs one
+walk of a bucket that holds at most a week of archives.
+
+Two refusals in the handler, both about not erasing an Art 20 artifact by
+accident. An object the list API did not date is **skipped**, not deleted: a
+zero time compares as older than every cutoff, so reading it as an age erases an
+archive whose age was never established. And a `retention_days` of zero or
+negative falls back to the default rather than meaning "reap everything", so a
+payload that lost a field cannot empty the bucket. The default window is the
+SQL sweep's own seven days and a test fails if the two ever disagree — a reaper
+running longer than the sweep leaves the sweep deleting rows for objects nothing
+has erased, which is exactly the state § 1049 measured.
+
+**It is not in `Worker.dispatch`, deliberately.**
+`internal/worker_dispatch_coverage_test.go` fails a `case` for a kind
+`jobs_kind_chk` forbids — dead code reading as a shipped feature — and widening
+that CHECK is a migration, which this change could not land. So the handler and
+its 15 tests are on `main` and nothing enqueues them. The remaining half is one
+commit: the CHECK, the pgtap allowlist case, a `cron.schedule` that enqueues the
+job ahead of the existing sweep, and the one-line dispatch case. Its exact
+statements are in `followups.md` rather than described, because "a queue nothing
+drains is worse than an honest gap" cuts both ways: a handler nothing routes is
+only honest while the way to route it is written down precisely enough to apply.
+
+**What this does not recover**: the objects whose rows a previous sweep already
+deleted — § 1049 counted 74 files across every bucket against 0 rows, including
+20 export archives stamped nine days earlier. Those are unreachable through the
+Storage API by construction, since list reads the rows that are gone. Erasing
+them needs a bucket lifecycle rule or direct backend access, and is filed
+separately.
+
+## 1113. `rdb.Subscribe` confirms nothing, so a spectator could miss the first ping — the flake was a lost message after all, and the probe that ruled that out had subscribed differently from the code
+
+A CI flake in `TestRedisHub_SubscribeWithHistoryReplaysThenStreams` was filed
+with the natural diagnosis — `Subscribe` returning before Redis has registered
+the subscription, so the immediately-following `Publish` is dropped — recorded
+as **measured and ruled out**: a probe that built a fresh miniredis, subscribed,
+took `Channel()` and published immediately lost 0 of 300 under `-race`. The
+filing concluded the remaining explanation was goroutine starvation and said
+plainly that raising the deadline was not the fix.
+
+The rule-out was wrong, and the reason is instructive: **the probe was not the
+code.** It ran on an idle machine, and it called `Channel()` on its own
+goroutine before publishing, where `startForwarder` calls it inside a goroutine
+that may not have been scheduled. Neither difference is the mechanism, but
+together they hid it. Re-probed under the condition the flake actually occurred
+in — two cores saturated, `-race` — the same subscribe-then-publish round lost
+**8 of 400**, and every loss carried the same signature: `PUBLISH` reported
+**zero receivers**.
+
+That count is the whole diagnosis and it was already on the wire.
+`RedisHub.Publish` returns `PUBLISH`'s own receiver count and every caller
+discarded it. Zero is the server saying it had no subscriber for that channel at
+that instant — so the ping was never sent to us, and no amount of waiting finds
+it. The mechanism is in go-redis: `Client.Subscribe` calls `pubsub.Subscribe`
+and **discards its error**, and that writes the SUBSCRIBE and releases the
+connection without reading a reply. It returns when the bytes are flushed, on a
+connection that is not the one `PUBLISH` uses. go-redis's own `ExamplePubSub`
+performs a `Receive` for precisely this reason, with the comment "Wait for
+confirmation that subscription is created before publishing anything."
+
+The `SubscribeWithHistory` doc comment asserted the opposite — "go-redis's
+Subscribe confirms the SUBSCRIBE before returning, so any ping PUBLISHed after
+this point is guaranteed to be delivered" — and the dedup reasoning below it
+rests on that sentence. Both subscribe paths now block for the `*Subscription`
+reply before returning. Re-measured on the identical load: **0 of 400.** A
+`*Message` arriving before the confirmation is forwarded rather than dropped;
+Redis cannot send one first, but "cannot happen" reasoning is what left this
+open.
+
+Two consequences beyond the flake. The subscribe paths can now fail for a reason
+that is not the per-room cap, so `server.go` stops closing every subscribe error
+as `1013 Try Again Later, subscriber cap reached` — telling a lone spectator to
+back off from an empty room, and an operator to hunt an amplification attack
+that is not happening. And the test no longer fails blind: it asserts the
+receiver count, and on a missed deadline waits a grace window before failing, so
+its message says whether the ping was lost or merely late. The regression pin is
+25 subscribe-then-publish rounds down both paths asserting one receiver each; it
+fails within the first few rounds on the unfixed code under load and passes 20
+consecutive `-race` runs on the fixed code under the same load.
