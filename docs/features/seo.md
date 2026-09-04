@@ -25,8 +25,9 @@ indexed anyway).
 
 | Surface | Mode | `<head>` owner | Structured data |
 |---|---|---|---|
-| `/` landing | prerendered | `SeoHead.svelte` + `+page.ts` | `Organization` + `WebSite` |
-| `/learn`, `/learn/[slug]`, `/learn/category/[category]` | prerendered (`entries()`) | inline `<svelte:head>` | `Article` + `BreadcrumbList` |
+| `/` landing | prerendered **(intended — see the note below; the artifact is the SPA shell today)** | `SeoHead.svelte` + `+page.ts` | `Organization` + `WebSite` |
+| `/learn/[slug]` | prerendered (`entries()`) | inline `<svelte:head>` | `Article` (with an embedded `BreadcrumbList`) |
+| `/learn`, `/learn/category/[category]` | prerendered (`entries()`) | inline `<svelte:head>` | — (none emitted; measured 2026-09-04) |
 | `/sitemap.xml` | prerendered | — | — |
 | `/share/run/[id]`, `/og/run/[id].png` | Lambda-SSR (`share-run`) | `share_run_meta` | `WebPage` + breadcrumb |
 | `/share/route/[id]`, `/og/route/[id].png` | Lambda-SSR (`share-route`) | `share_route_meta` | `WebPage` + breadcrumb |
@@ -43,6 +44,21 @@ indexed anyway).
 | `/segments/[id]` | CSR (app shell) | generic shell | — (auth-gated, NOT in the sitemap) |
 | `/clubs/[slug]`, `/clubs/[slug]/events/[id]`, `/events/[id]`, `/live/[id]`, `/recap/[year]` | CSR (app shell) | generic shell + canonical | — (anon-reachable, shell-only) |
 | dashboard / feed / settings / … | CSR (app shell) | generic shell | — (auth-gated) |
+
+**The `/` row states the intent, not the artifact.** Measured on a production
+build 2026-09-04: `build/index.html` is adapter-static's SPA *fallback* — one
+`<title>`, no canonical, no `og:`/`twitter:`/`description`, no
+`Organization`/`WebSite` JSON-LD — because `src/routes/+page.ts` exports no
+`prerender` and there is no root `+layout.ts` to set one, so `/` is a
+client-rendered route. It is NOT a prerendered page being overwritten: there is
+no `index.html` in `.svelte-kit/output/prerendered/pages/` at all. Closing it is
+four coordinated changes across three trees (`+page.ts`, `svelte.config.js`, the
+five `lambda/*/build.mjs`, and the CloudFront 403 mapping) and doing fewer than
+all four either changes nothing or takes the site down — see
+[decisions § 1116](../architecture/decisions.md) and the open box in
+[followups.md](../product/followups.md). `share/spa_shell_head_signals.test.ts`
+reads the built artifact and fails the day this changes, so the flip will be a
+stated event.
 
 Two rows above are easy to misread, and both were wrong in this table before:
 
@@ -71,6 +87,26 @@ Two rows above are easy to misread, and both were wrong in this table before:
   finished them per step 2 of *Adding a new indexable surface*);
   `share_entity_dispatch_guard.test.ts` now fails if a `/share/<x>` route
   loses its CloudFront behaviour or its dispatcher branch.
+
+### What the SPA shell carries in its `<head>`
+
+The five share Lambdas each embed `apps/web/build/index.html` at bundle time and
+splice their own head into it per request, stripping whatever stale signals the
+shell carries first. Which signals those are is a fact about the artifact, so it
+is measured rather than asserted: `share/spa_shell_head_signals.test.ts` pins the
+counts (`{title: 1, social: 0, canonical: 0, jsonLd: 0}` as of 2026-09-04)
+against `src/app.html` unconditionally, and against `build/index.html` whenever a
+build is present. Three of the four strips therefore act on nothing today; they
+stay because a single `og:` default added to `app.html`, or the landing page
+above reaching this filename, makes all four load-bearing in one edit — and
+`injectEntityHead` also serves `notFoundShell`, where nothing about the entity
+may survive onto a page that says it is gone.
+
+The strip and splice steps live once, in `share/head_splice.ts`. It takes a
+signal LIST rather than doing everything, because a recap head emits neither a
+canonical nor a JSON-LD block and stripping those would delete the shell's own
+nodes and put nothing back ([decisions § 1114](../architecture/decisions.md) +
+[§ 1115](../architecture/decisions.md)).
 
 ## Canonical consolidation (in-app → share twin)
 

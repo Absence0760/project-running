@@ -20617,3 +20617,101 @@ its message says whether the ping was lost or merely late. The regression pin is
 25 subscribe-then-publish rounds down both paths asserting one receiver each; it
 fails within the first few rounds on the unfixed code under load and passes 20
 consecutive `-race` runs on the fixed code under the same load.
+
+## 1114. The four share-shell head injectors compose one strip-then-splice pipeline, and the signal LIST is what stops it becoming a do-everything function
+
+`entity_spa_shell.ts`, `share_route_spa_shell.ts` and `share_run_spa_shell.ts`
+were byte-identical in their title / social-meta / canonical / JSON-LD strips
+down to the comment wording; `share_recap_spa_shell.ts` carried the first two
+of the four. That shape charged its cost in § 1086, where the same two parser
+bugs — the `</script >` end-tag rule (js/bad-tag-filter) and the overlapping-open
+residue (js/incomplete-multi-character-sanitization) — had to be found once and
+then fixed three times in three files. It charged a second, quieter cost too:
+the recap copy having only half the pipeline was not detectable as drift,
+because there was nothing to compare it against.
+
+The two steps now live once, in `share/head_splice.ts`:
+`stripStaleHeadSignals(html, signals)` and `spliceIntoHead(html, headTags)`.
+Deliberately not one `injectHead`: a recap head emits neither a canonical nor a
+JSON-LD block, so a pipeline that always stripped those would delete the
+shell's own `WebSite` node and canonical off every recap share page and put
+nothing back in their place. Each injector names the signals its own head
+supplies, which is a statement about that head rather than a shared default,
+and the asymmetry becomes a two-word difference in one call instead of a file
+that silently lacks two paragraphs. The strips are applied in a fixed internal
+order whatever order a caller names them in, so two injectors selecting the
+same set cannot produce different bytes.
+
+`countHeadSignals` lives in the same module and reads the same pattern
+sources, because § 1115's guard measures what the strips act on: a guard
+carrying its own second spelling of these regexes would report a shell as clean
+while a strip still found work in it — the same class of mistake as three
+copies of one regex. Behaviour was held byte-identical across all four
+injectors over eleven shells (the § 1086 end-tag spellings, an overlapping
+open, an attribute-carrying block, a `</head\n>`, a headless document, the
+empty string, and the real `build/index.html`) before and after the extraction.
+
+## 1115. What the SPA shell carries in its `<head>` is measured rather than asserted, because three of the four strips act on nothing and every injector's comment said the opposite
+
+Each injector carried the sentence "adapter-static emits a default set that
+would render as duplicates of our per-run tags and confuse some crawlers". Read
+against a production build it is false: `build/index.html` carries one
+`<title>` and no `og:`/`twitter:`/`description` meta, no `<link rel="canonical">`
+and no JSON-LD block, so only the title strip has anything to remove. Three of
+the four strips in three of the four injectors are dead code today, under a
+comment claiming they are load-bearing.
+
+Deleting them would be the wrong reading. Which state holds is a property of
+another tree entirely: one `og:` default added to `src/app.html`, or the
+prerendered landing page arriving at this filename (§ 1116), makes all four
+live again in a single edit — and `injectEntityHead` is also what
+`notFoundShell` runs through, where the contract is that nothing about the
+entity survives onto a page saying it is gone, whatever the shell arrived with.
+The strips are cheap and fail safe; the comment was the defect.
+
+So the claim is stated as a test instead. `spa_shell_head_signals.test.ts`
+asserts the four counts against `src/app.html` unconditionally — a fallback
+page's `%sveltekit.head%` contributes only the hash-CSP meta and the
+modulepreload links, so the template alone decides them — and against
+`build/index.html` whenever a build is present, requiring the two to agree. It
+fails in BOTH directions: a signal appearing means a dead strip became
+load-bearing and its injector comment needs re-measuring, a signal disappearing
+means a strip lost its subject. Verified non-vacuous by adding a canonical to
+`app.html` and watching two of the three tests fail. The artifact half is
+skipped in the `test-web` job, which does not build; wiring it into `build-web`
+after the build is filed for the workflow tree.
+
+## 1116. The landing page is not overwritten by the SPA fallback — it was never prerendered at all, and acting on the filed cause would have taken the site down
+
+The filing behind this round measured `build/index.html` correctly: no
+canonical, no `og:`/`twitter:`/`description`, no `Organization`/`WebSite`
+JSON-LD, against a `build/learn.html` sibling that carries all of them. Its
+named cause was wrong. It said adapter-static writes the prerendered `/` and
+then generates the fallback to the same path, overwriting it. Measured:
+`.svelte-kit/output/prerendered/pages/` contains `learn.html`, `learn/`,
+`sitemap.xml` and `app-capabilities.json` and **no `index.html`**, and
+`build/index.html` has the empty body and bare `kit.start(app, element)` of a
+generated fallback rather than the hydration payload of a prerendered page.
+Nothing is overwritten because nothing was written: `src/routes/+page.ts`
+exports no `prerender`, and there is no root `+layout.ts` to set one, so `/` is
+a client-rendered route like `/dashboard`.
+
+The distinction changes the fix, and the wrong version of it is dangerous.
+Renaming the fallback alone — `fallback: "200.html"`, which is what the filing
+proposed — deletes `build/index.html` from the build output entirely, because
+no prerendered page would take its place. CloudFront's `default_root_object`
+would then 403 on the site root, that 403 maps back to `/index.html` (§ 1022),
+and the five share Lambdas' `build.mjs` would fail at bundle time looking for a
+file that no longer exists. The whole distribution serves nothing.
+
+The real fix is four coordinated changes in three trees, and none of them is
+optional: `export const prerender = true` on `src/routes/+page.ts` so a
+landing page exists to write; `fallback: "200.html"` in `svelte.config.js` so
+the shell stops claiming that filename; `spaShellPath` in each of the five
+`apps/web/lambda/*/build.mjs`; and `response_page_path = "/200.html"` on the
+403 mapping in `infra/modules/web-stack/main.tf`. Doing fewer than all four
+either changes nothing (prerender without the rename) or breaks the site
+(rename without the prerender). Landing the shell-signal guard of § 1115 first
+is what makes the change observable: on the day the landing page reaches
+`index.html`, that test fails naming exactly which signals arrived, and its
+expectation flips to the state `seo.md`'s render map has always claimed.
