@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRecapShareCanonical, buildShareRecapMeta } from './share_recap_meta';
+import {
+	buildRecapShareCanonical,
+	buildShareRecapMeta,
+	renderShareRecapHeadTags,
+} from './share_recap_meta';
 import { injectShareRecapMeta } from './share_recap_spa_shell';
 import type { SharedRecap } from './share_recap_lookup';
 
@@ -95,4 +99,20 @@ test('buildRecapShareCanonical — trailing slashes collapse, an absent base sta
 test('buildRecapShareCanonical is the single definition the og:url uses', () => {
 	const meta = buildShareRecapMeta({ id: 'rec-1', recap: recap(), siteUrl: 'https://threkir.com' });
 	assert.equal(meta.ogUrl, buildRecapShareCanonical('https://threkir.com', 'rec-1'));
+});
+
+test('renderShareRecapHeadTags emits a self-referential canonical', () => {
+	// Eight of the nine share head builders emitted one; this was the ninth,
+	// and `seo_render_map_guard.test.ts` excludes `/recap/share/*` from the
+	// in-app fold table on the stated grounds that it "builds its OWN
+	// canonical". Measured before the fix: the served page carried none at
+	// all — the SPA shell it is injected into is adapter-static's bare
+	// fallback, which has no canonical for it to inherit either.
+	const meta = buildShareRecapMeta({ id: 'rec-1', recap: recap(), siteUrl: 'https://threkir.com' });
+	const tags = renderShareRecapHeadTags(meta);
+	assert.match(tags, /<link rel="canonical" href="https:\/\/threkir\.com\/recap\/share\/rec-1">/);
+	// One canonical, and it agrees with og:url rather than being a second
+	// spelling of the same path.
+	assert.equal((tags.match(/rel="canonical"/g) ?? []).length, 1);
+	assert.ok(tags.includes(`content="${meta.ogUrl}"`));
 });
