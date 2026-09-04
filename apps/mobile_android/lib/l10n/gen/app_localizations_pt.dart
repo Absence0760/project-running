@@ -2559,6 +2559,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailStatElevLoss => 'Perda de elev.';
 
   @override
+  String get runDetailStatHrCoverage => 'Cobertura de FC';
+
+  @override
+  String runDetailHrCoveragePercent(int pct) {
+    return '$pct%';
+  }
+
+  @override
+  String runDetailHrCoverageOnly(int pct) {
+    return '$pct% coberto';
+  }
+
+  @override
   String get runDetailStatAvgHr => 'FC média';
 
   @override
@@ -16572,6 +16585,19 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailStatElevLoss => 'Perda de elev.';
+
+  @override
+  String get runDetailStatHrCoverage => 'Cobertura de FC';
+
+  @override
+  String runDetailHrCoveragePercent(int pct) {
+    return '$pct%';
+  }
+
+  @override
+  String runDetailHrCoverageOnly(int pct) {
+    return '$pct% coberto';
+  }
 
   @override
   String get runDetailStatAvgHr => 'FC média';

@@ -4283,6 +4283,24 @@ abstract class AppLocalizations {
   /// **'Elev Loss'**
   String get runDetailStatElevLoss;
 
+  /// Secondary-stat label on run-detail for the share of the run the heart-rate sensor was delivering
+  ///
+  /// In en, this message translates to:
+  /// **'HR coverage'**
+  String get runDetailStatHrCoverage;
+
+  /// Value of the HR-coverage secondary stat, a whole percent
+  ///
+  /// In en, this message translates to:
+  /// **'{pct}%'**
+  String runDetailHrCoveragePercent(int pct);
+
+  /// Value shown in the average-heart-rate slot when the recorder suppressed the average because the sensor covered too little of the run
+  ///
+  /// In en, this message translates to:
+  /// **'{pct}% covered'**
+  String runDetailHrCoverageOnly(int pct);
+
   /// Secondary-stat label for average heart rate on run-detail
   ///
   /// In en, this message translates to:

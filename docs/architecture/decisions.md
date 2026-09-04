@@ -19672,3 +19672,43 @@ where the test is wedged for a second reason anyway. The three
 `debugWritesSettled` wrappers now also state the precondition in their own doc
 comments, which is § 1072's cheaper option kept alongside the durable one rather
 than instead of it.
+
+## 1094. The phone reads `hr_coverage`, and the average-heart-rate slot now says why it is empty
+
+[§ 1083](#1083) made the wrist record what share of a run its heart rate
+actually covered, and suppress `avg_bpm` below 0.5 on the grounds that a mean
+over less of the run than not is not the run's average. It landed with no
+reader, so the suppression was indistinguishable on the phone from a run
+recorded with no strap at all: both drew nothing.
+
+Three states, and the point is that they are three rather than two.
+
+- **An average with no coverage record** — every non-Wear writer, and any run
+  from a build predating the field — renders exactly as before. Absent is
+  unmeasured, not zero, so nothing is claimed about it.
+- **A partly-covered average** draws the average and, beside it, an `HR
+  coverage` cell. Full coverage is deliberately NOT drawn: it qualifies
+  nothing, and a `100%` cell on every strap-recorded run is the clutter
+  `multi_modal.md`'s IA contract exists to keep out. The cell appears exactly
+  when the reading changes — a 51 % average and a 99 % one are different
+  claims.
+- **A suppressed average** takes the `Avg HR` slot itself and reads
+  `12% covered`. Occupying the slot is the decision: a separate coverage cell
+  next to an empty space asks the reader to connect two facts, where the label
+  the number is missing from is the one place they will look for the reason.
+  `0%` is a real answer here — heart rate was enabled and delivered nothing —
+  and it is why the guard is on the KEY's presence rather than on a truthy
+  value.
+
+A value outside 0..1, a non-finite one, and a non-numeric one are each read as
+no record rather than clamped: they cannot have come from the writer this
+reads, so inventing a percentage from one would put a fabricated figure in the
+slot whose entire purpose is honesty about what was measured.
+
+Not taken, and filed instead: the secondary-stat grid is gated on
+`run.track.length >= 2 || _hasElevation`, so a run carrying an average and no
+geometry shows no heart rate — which is four other geometry-independent cells'
+problem as much as this one's, and the durable fix is to gate the block on its
+own cell list rather than to widen the condition with a seventh disjunct.
+Web's half of this is a separate lane's, deliberately without coordination, so
+the two surfaces may well word it differently.
