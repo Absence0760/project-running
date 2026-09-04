@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
@@ -49,7 +50,8 @@ const (
 // an empty payload reaps the `exports` bucket at the default window, which is
 // what a nightly schedule wants to say.
 type ExportBlobReapPayload struct {
-	// Bucket defaults to the exports bucket.
+	// Bucket defaults to the exports bucket, and may only name a bucket
+	// that holds export artifacts. See isExportArtifact.
 	Bucket string `json:"bucket"`
 	// Prefix scopes the walk. Empty walks the whole bucket.
 	Prefix string `json:"prefix"`
@@ -61,10 +63,11 @@ type ExportBlobReapPayload struct {
 
 // ExportReapResult reports what one sweep did, so the caller can log a fact.
 type ExportReapResult struct {
-	Listed  int
-	Expired int
-	Deleted int
-	Skipped int
+	Listed    int
+	NotExport int
+	Expired   int
+	Deleted   int
+	Skipped   int
 }
 
 // handleExportBlobReap erases export archives past the retention window.
@@ -94,6 +97,7 @@ func (w *Worker) handleExportBlobReap(ctx context.Context, job *Job) error {
 		"prefix", p.Prefix,
 		"cutoff", cutoff.UTC().Format(time.RFC3339),
 		"listed", res.Listed,
+		"not_an_export", res.NotExport,
 		"expired", res.Expired,
 		"deleted", res.Deleted,
 		"skipped_unknown_age", res.Skipped)
@@ -109,6 +113,9 @@ func (w *Worker) handleExportBlobReap(ctx context.Context, job *Job) error {
 // artifact the subject may still be waiting to download.
 func (w *Worker) reapStorageObjectsBefore(ctx context.Context, bucket, prefix string, cutoff time.Time) (ExportReapResult, error) {
 	var res ExportReapResult
+	if bucket != schema.BucketExports && bucket != schema.BucketRuns {
+		return res, fmt.Errorf("export_blob_reap: %q holds no export artifacts", bucket)
+	}
 	entries, err := w.Backend.ListStorageObjectsWithMeta(ctx, bucket, prefix)
 	if err != nil {
 		return res, fmt.Errorf("export_blob_reap: list %s: %w", bucket, err)
@@ -117,6 +124,10 @@ func (w *Worker) reapStorageObjectsBefore(ctx context.Context, bucket, prefix st
 
 	var stale []string
 	for _, e := range entries {
+		if !isExportArtifact(bucket, e.Path) {
+			res.NotExport++
+			continue
+		}
 		if e.CreatedAt.IsZero() {
 			res.Skipped++
 			continue
@@ -144,4 +155,26 @@ func (w *Worker) reapStorageObjectsBefore(ctx context.Context, bucket, prefix st
 		res.Deleted += len(batch)
 	}
 	return res, nil
+}
+
+// isExportArtifact mirrors `cleanup_stale_export_blobs()`'s own predicate,
+// `(bucket_id = 'runs' and name like '%/exports/%') or bucket_id = 'exports'`.
+//
+// It is what stands between this job and the rest of Storage. The reaper
+// selects on AGE alone, and every bucket holds objects older than a week: a
+// payload naming `runs` without it erases every GPS track the runner has, and
+// the byte is gone in the sense § 1049 spent a round establishing the SQL
+// sweep could not manage. The `exports` bucket is Art 20 archives by
+// construction (20270602_001 created it for them and nothing else writes
+// there), so it needs no path test; `runs` holds tracks alongside the legacy
+// `{uid}/exports/<ts>.zip` leg, so it needs the same one the SQL has.
+func isExportArtifact(bucket, path string) bool {
+	switch bucket {
+	case schema.BucketExports:
+		return true
+	case schema.BucketRuns:
+		return strings.Contains(path, "/exports/")
+	default:
+		return false
+	}
 }

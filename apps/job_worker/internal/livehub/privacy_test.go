@@ -8,7 +8,7 @@ import (
 // 1 m east at 47.37 °N latitude ≈ 1.3261 × 10^-5 degrees lng. Lets
 // the test scenarios use easy round-number metres.
 const (
-	testLat       = 47.37
+	testLat        = 47.37
 	metrePerDegLng = 111320 * 0.6773
 )
 

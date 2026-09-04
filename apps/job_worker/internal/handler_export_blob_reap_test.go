@@ -204,8 +204,8 @@ func TestExportBlobReap_IsIdempotent(t *testing.T) {
 }
 
 // The legacy path put archives under runs/<uid>/exports/, which the SQL sweep
-// also names. The bucket is a payload field so one schedule can reach both.
-func TestExportBlobReap_ReapsAnyNamedBucketUnderAPrefix(t *testing.T) {
+// also names. The bucket is a payload field so an operator can reach it.
+func TestExportBlobReap_ReapsTheLegacyRunsExportsPrefix(t *testing.T) {
 	be := &fakeBackend{storageObjects: map[string][]StorageObject{
 		schema.BucketRuns: {
 			obj("u1/exports/old.zip", 30*24*time.Hour),
@@ -222,5 +222,76 @@ func TestExportBlobReap_ReapsAnyNamedBucketUnderAPrefix(t *testing.T) {
 		be.storageDeleted[0][0] != "u1/exports/old.zip" {
 		t.Fatalf("deleted %v, want only the export archive — a track is not an export",
 			be.storageDeleted)
+	}
+}
+
+// The selection is on AGE, and every bucket holds objects older than a week.
+// Without the artifact predicate a `runs` payload erases the runner's whole
+// track history — and unlike the SQL sweep it erases the BYTES, which is the
+// entire point of moving the reap to this tier. The prefix is not the guard:
+// an operator who omits it, or a schedule that reaps the legacy leg
+// bucket-wide rather than per user, must still lose nothing.
+func TestExportBlobReap_NeverErasesANonExportObject(t *testing.T) {
+	be := &fakeBackend{storageObjects: map[string][]StorageObject{
+		schema.BucketRuns: {
+			obj("u1/exports/old.zip", 30*24*time.Hour),
+			obj("u1/2026-01-01.json.gz", 30*24*time.Hour),
+			obj("u2/2025-06-06.json.gz", 400*24*time.Hour),
+		},
+	}}
+	w := newTestWorker(be, nil)
+
+	res, err := w.reapStorageObjectsBefore(context.Background(), schema.BucketRuns, "", time.Now())
+	if err != nil {
+		t.Fatalf("reap: %v", err)
+	}
+	if res.NotExport != 2 || res.Deleted != 1 {
+		t.Fatalf("res = %+v, want the two tracks passed over and only the archive erased", res)
+	}
+	if len(be.storageDeleted) != 1 || len(be.storageDeleted[0]) != 1 ||
+		be.storageDeleted[0][0] != "u1/exports/old.zip" {
+		t.Fatalf("deleted %v — a GPS track is not an export artifact", be.storageDeleted)
+	}
+}
+
+// A bucket that holds no export artifacts is refused rather than walked. The
+// predicate above would already erase nothing there, but a job that lists
+// every avatar in the project and reports a successful sweep is a silent
+// no-op; the honest answer is that the payload is wrong.
+func TestExportBlobReap_RefusesABucketThatHoldsNoExports(t *testing.T) {
+	for _, bucket := range []string{schema.BucketRunPhotos, schema.BucketAvatars, ""} {
+		be := &fakeBackend{storageObjects: map[string][]StorageObject{
+			bucket: {obj("u1/anything.jpg", 400*24*time.Hour)},
+		}}
+		w := newTestWorker(be, nil)
+		_, err := w.reapStorageObjectsBefore(context.Background(), bucket, "", time.Now())
+		if err == nil {
+			t.Fatalf("bucket %q was walked; it holds no export artifacts", bucket)
+		}
+		if len(be.storageDeleted) != 0 {
+			t.Fatalf("bucket %q: erased %v", bucket, be.storageDeleted)
+		}
+	}
+}
+
+// The predicate is the SQL sweep's, and the two have to name the same set or
+// the sweep deletes a row for an object the reaper passed over — which is the
+// orphaned-byte state § 1049 measured, reintroduced one bucket over.
+func TestExportBlobReap_ArtifactPredicateMatchesTheSqlSweep(t *testing.T) {
+	for _, tc := range []struct {
+		bucket, path string
+		want         bool
+	}{
+		{schema.BucketExports, "u1/exports/a.zip", true},
+		{schema.BucketExports, "anything-at-all", true},
+		{schema.BucketRuns, "u1/exports/a.zip", true},
+		{schema.BucketRuns, "u1/exports/nested/a.zip", true},
+		{schema.BucketRuns, "u1/2026-01-01.json.gz", false},
+		{schema.BucketRuns, "exports/a.zip", false},
+		{schema.BucketRunPhotos, "u1/exports/a.jpg", false},
+	} {
+		if got := isExportArtifact(tc.bucket, tc.path); got != tc.want {
+			t.Errorf("isExportArtifact(%q, %q) = %v, want %v", tc.bucket, tc.path, got, tc.want)
+		}
 	}
 }

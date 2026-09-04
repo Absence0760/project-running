@@ -20947,3 +20947,169 @@ worklist by listing, the list API reads `storage.objects`, and those rows are
 the ones the sweep already deleted — so the 74 files § 1049 counted against 0
 rows stay on the backend whatever the reaper does. A retention page that
 described the reaper as the answer without saying so would have overstated it.
+## 1144. `export_blob_reap` is routed, and the enqueue expires the rows before the bytes go rather than leaving that ten minutes behind
+
+[§ 1112](#1112) landed the handler and shipped it unroutable on purpose:
+`internal/worker_dispatch_coverage_test.go` fails a `case` for a kind
+`jobs_kind_chk` forbids, and that CHECK is a migration. The two halves are
+therefore one commit, which is a claim worth measuring rather than repeating.
+Measured on this branch: with the dispatch line and no migration the guard
+reports `export_blob_reap` orphaned — "nothing can ever enqueue one and the
+handler is dead code reading as a shipped feature" — and with the migration and
+no dispatch line it reports it unrouted — "every row a producer enqueues is
+claimed, failed as unknown, retried to exhaustion and lost". Both directions
+red, from the one test, for the same missing half.
+
+The CHECK widen is `drop` + `add ... not valid` and deliberately does **not**
+validate; [§ 1148](#1148) has the argument, which is that the two-step every
+previous widen used does not avoid the scan when both halves share a file, and
+that for a widen the scan can only confirm what the previous constraint already
+proved.
+
+**Two departures from the filing's SQL, both about ordering.** The enqueue calls
+`expire_stale_export_jobs()` before it queues anything. That function is what
+removes *reachability* — it flips a `ready` row to `expired` and nulls
+`object_path` — and § 1049's whole finding was that reachability is the part SQL
+can buy. The sweep already calls it, but at 04:23, and the reap runs at 04:13:
+in between, a subject asking for their latest export would be handed a path to
+an archive the reaper is about to erase, which answers 404 where "expired" is
+the true sentence. It is idempotent and the sweep still calls it, so running it
+early costs nothing and closes a ten-minute window. And the schedule stays ten
+minutes AHEAD of `cleanup-stale-export-blobs` rather than replacing it: the lead
+is best-effort, and a worker that is down at 04:13 leaves the sweep to delete
+the rows at 04:23 and orphan the bytes. Keeping the sweep is the deliberate
+trade — removing reachability unconditionally is better for the subject than
+holding a downloadable stale archive open on the chance the erasure tier comes
+back — and the residue it creates is filed rather than papered over.
+
+**The legacy `runs/<uid>/exports/` leg is not scheduled, and that is a
+measurement rather than a concession.** The filing left the choice open between
+enqueuing one job per user and accepting row-delete-only behaviour there.
+Nothing has written that prefix since `20270602_001` moved both producers to the
+`exports` bucket (`export-data/index.ts`'s `EXPORT_BUCKET` and the worker's own
+resumable upload both name it), and the nightly sweep has been deleting those
+rows since `20260720_001` — so any surviving legacy object has no
+`storage.objects` row, and the Storage list API reads exactly those rows. A
+per-user walk would be O(users) list calls over a set that is invisible to it by
+construction. Those bytes are the § 1049 residue, and they need a bucket
+lifecycle rule, not a job. The leg stays *reachable* — an operator can name
+`{"bucket":"runs","prefix":"<uid>"}` — because § 1146's predicate makes that
+safe.
+
+## 1145. The Storage walk returned paths that named no object, so the reap it was built for would have erased nothing and said it worked
+
+`ListStorageObjectsWithMeta` joined each entry as `folder + "/" + name`. At the
+bucket root the folder is the empty string, so the first level came back as
+`"/u1"` and the recursion asked the Storage API for a prefix no
+`storage.objects.name` starts with: the whole-bucket walk returned **zero
+objects**, measured against a fixture that answers on the normalised prefix the
+way storage-api does. A prefix written with a trailing separator produced
+`"u1/exports//a.zip"` by the same arithmetic.
+
+Those are precisely the two shapes the export reaper uses — the nightly schedule
+walks `exports` from `""`, and the legacy leg is a per-user `"<uid>/exports/"`
+prefix — and neither failure is visible from the outside. The multi-delete
+endpoint matches names literally and answers a miss with the same empty array it
+answers an already-erased path with, so `DeleteStorageObjects` would have
+returned success, the handler would have logged a completed sweep, and § 1049's
+orphaned-byte state would have continued while a cron job reported otherwise.
+
+It was latent rather than shipped-broken because the only caller until now is
+the export builder's own storage walk, which passes a bare user id — a prefix
+that is neither shape, and the one case the join gets right. That is the
+argument for pinning all three shapes rather than the one in use: the defect was
+introduced with a consumer that did not exercise it, and the next consumer was
+the one the walk was written for. The existing transport test asserted
+`"/u1/a.zip"`, having been written against the implementation rather than
+against the API, and it is corrected here.
+
+## 1146. The export reaper selected on age alone, in whatever bucket the payload named — a `runs` job would have erased every track over a week old
+
+`reapStorageObjectsBefore` filtered listed objects by creation time and nothing
+else. The bucket name in the payload was therefore the only thing between the
+job and the rest of Storage, and every bucket holds objects older than a week.
+Measured before the fix: three objects listed under `runs`, three deleted, two
+of them GPS tracks. This tier erases the BYTES — that is the entire reason
+§ 1112 moved the reap here — so the failure mode is not a recoverable row
+delete.
+
+The selection now mirrors `cleanup_stale_export_blobs()`'s own predicate,
+`(bucket_id = 'runs' and name like '%/exports/%') or bucket_id = 'exports'`,
+because that is by definition the set the SQL half deletes rows for: any
+asymmetry puts the two tiers back into the state § 1049 measured, one bucket
+over. The `exports` bucket needs no path test — `20270602_001` created it for
+Art 20 archives and nothing else writes there — and `runs` needs the same one
+the SQL has. A bucket holding no export artifacts is refused outright rather
+than walked to a silent no-op: the predicate alone would erase nothing there,
+but a job that lists every avatar in the project and reports a successful sweep
+is the wrong answer to a wrong payload. An object passed over as not-an-export
+is counted and logged separately from one skipped because its age was never
+established, so a per-user legacy run reads as "listed 812, not an export 810,
+expired 2" rather than as a suspiciously small sweep.
+
+## 1147. `gofmt` was gated by nothing and seven files were unformatted; the reformat and the gate are deliberately in different lanes
+
+`test-worker` and `test-graph-cycle` run `go vet ./...` + `go test ./...` and
+nothing else, and `gofmt -l .` from `apps/job_worker` listed
+`internal/handler_photo_process_test.go`, `internal/livehub/privacy_test.go`,
+`internal/livehub/server_test.go`, `internal/mailer_test.go`,
+`internal/stravahook/server.go`, `internal/stravahook/server_test.go` and
+`internal/worker.go` — the filing's list exactly, re-measured rather than
+trusted. All struct-field alignment plus one trailing blank line, none of it
+visible to `vet`. `apps/graph_cycle` was already clean.
+
+The reformat is here and the `gofmt -l` CI step is the infra lane's, because
+`.github/workflows/ci.yml` is one file that several changes want this round and
+a formatting sweep is the change most certain to conflict with everything else
+touching the same tree. The split is safe in one direction and not the other: a
+reformat with no gate leaves the tree correct and unenforced, whereas a gate
+with no reformat fails every Go job on `main` immediately. So the reformat
+lands first by construction, and the gate is additive when it arrives.
+
+The sweep is its own commit for the reason the filing gave: folded into a
+behaviour change it re-aligns blocks the author did not edit, and the review
+then reads as a bigger change than it is.
+
+## 1148. A `NOT VALID` + `VALIDATE` pair in ONE migration file takes exactly the lock it exists to avoid, because the apply path wraps the file in a transaction
+
+`migration_locks.md` says a validating `ADD CONSTRAINT` holds `ACCESS EXCLUSIVE`
+for a full scan and that the online form is `ADD ... NOT VALID` then a separate
+`VALIDATE CONSTRAINT` under `SHARE UPDATE EXCLUSIVE`. Both true. It then says
+"putting both in one migration is still far better than the single-step form",
+and `20270603_001` widened `jobs_kind_chk` on that basis, writing that
+"`VALIDATE` runs it under `SHARE UPDATE EXCLUSIVE` instead, with reads and
+writes proceeding". **That is not what happens.**
+
+`apps/backend/scripts/apply-pending-migrations.sh` applies each file as
+`begin;` … `commit;` — the ledger row is committed atomically with the SQL,
+which is the point of it — and `migration_locks.md` itself asserts the CLI wraps
+a migration the same way (it is the stated reason `CREATE INDEX CONCURRENTLY`
+errors as apply-time DDL). A lock taken by DDL is held until the transaction
+ends. So in a file containing `drop constraint` + `add ... not valid` +
+`validate constraint`, the `ACCESS EXCLUSIVE` taken by the `drop` is still held
+when the `validate` scan runs; `VALIDATE`'s weaker request is subsumed by the
+lock already held, never a downgrade. Same-file, the two-step and the
+single-step take the identical lock for the identical duration, and the
+difference is ceremony. The benefit is real only across transactions, which is
+why the doc's own stronger sentence — "`VALIDATE` ideally a later migration" —
+is the one that matters.
+
+`check_migration_online_safety.mjs` cannot see this: it grades the STATEMENT
+shape, and a same-file two-step is the shape it is looking for. So it passes a
+migration that takes the lock it was written to prevent, on a table it names as
+guarded. That is the [§ 764](#764) hazard in a different tier — a guard whose
+green means less than its name says — and it is filed with the doc and the guard
+as its owners, because both are outside the lane that measured it.
+
+**What this migration does about it.** It skips the scan rather than relocating
+it, because for a WIDEN the scan can only confirm what is already proven: every
+existing row was admitted by the narrower constraint being replaced, which
+enforced on every INSERT and UPDATE, and the new set is a strict superset. The
+argument is inductive and survives the constraint being left
+`convalidated = false` — a `NOT VALID` CHECK still binds every new write, so the
+next widen can make the same claim about the rows this one admits. Nothing in
+the repo requires `jobs_kind_chk` to be validated (`free_text_caps_test.sql`'s
+validity assertion is scoped to `%_len_chk`), and `20270503_001` records three
+constraints that sat `convalidated = false` on `main` for months while binding
+every write. A `VALIDATE` in its own later migration would be free and is
+welcome; it is not owed, because there is nothing to find.

@@ -439,7 +439,7 @@ func TestBuildMIME_HeadersAndCRLF(t *testing.T) {
 		"Subject: Hi\r\n",
 		"List-Unsubscribe: <https://threkir.test/settings/preferences>\r\n",
 		"Content-Type: text/plain; charset=UTF-8\r\n",
-		"\r\n\r\n", // header/body separator
+		"\r\n\r\n",             // header/body separator
 		"line one\r\nline two", // body LF rewritten to CRLF
 	} {
 		if !strings.Contains(raw, want) {
