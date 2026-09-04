@@ -21837,3 +21837,144 @@ behavioural change, or leave the box open and say the read is all that was done.
 Two smaller instances of the same shape sat beside it. `totalSteps` accepted any `number`, so a `metadata.steps` of 0 rendered as a step count of zero — and then divided into a cadence of `0 spm`, because `Math.round((0 / x) || 0)` is 0 rather than null. `metadata` has no schema and third-party importers write it, so the type and the sign are both checked now, a fractional count truncates the way mobile's `_steps` truncates it, and a reported `cadence_spm` that rounds away to zero claims nothing rather than falling through to the pedometer derivation — mobile returns the rounded reading and hides the tile, and falling through would make the two platforms disagree about the same run.
 
 The fourth defect was the grid's own bookkeeping and is why the fix is a derived list rather than one more `{#if}`. `keyStatsCount` was a hand-maintained `6 +` over the conditionals, and its comment named Distance, Time, Pace, Speed, Elevation and Calories as the six that "never hide" while the template gated Calories on `showCalories && estimatedCalories > 0` — so the odd/even Activity-type filler flipped the wrong way on every run whose calorie estimate was unusable or whose pref was off. Deciding whether the comment or the count was wrong is the wrong question: the durable answer is that the count is not written down at all. `keyStats` is now a derived list of `{label, value}` cells, each pushed when its datum exists, the template renders it with an `{#each}`, and the filler reads `keyStats.length`. A cell added later cannot desynchronise a count that is the list's own length. The gating predicates moved to `$lib/runs/key_stats` so they are testable without mounting the component, while the elevation rule itself stays called directly on the page — § 1004's guard requires the `realElevationGain` line to name `computeElevationGain` and to import it from the module that owns it, so that no second climb rule can reappear.
+## 1167. The default document title moved out of `app.html` and into the root layout, because Svelte's head dedupe cannot see a template literal — and the SPA fallback now carries no title, deliberately
+
+`src/app.html` spelled `<title>Threkir</title>` on the line before
+`%sveltekit.head%`. Svelte 5's SSR renderer keeps exactly ONE title per
+document — `Renderer.set_title` does a depth-first path comparison and lets the
+deepest component's title displace every ancestor's, and `get_title()` is
+appended to the head once — but that dedupe operates over the component tree,
+so a literal in the template is not a candidate it can drop. It simply landed
+beside whatever the page contributed. Measured on a production build before the
+change: **15 of the 16 built HTML files carried two `<title>` elements**, the
+sole exception being `build/index.html`, the SPA fallback, which renders no
+components at all. Per the HTML spec the document title is the FIRST such
+element, so `build/learn/couch-to-5k.html` read
+`<title>Threkir</title><title>Couch to 5K: your first month — Threkir</title>`
+and presented as the bare site name — to every non-JS crawler, to every social
+unfurler, and in the browser tab until hydration — on all twelve `/learn`
+guides, the hub and the six category indexes. Those are the only surfaces this
+app deliberately prerenders FOR indexing (§ 161), so the defect landed exactly
+where prerendering was supposed to pay, and it gave the whole content section
+one identical title.
+
+The filing that measured it proposed a default in the root layout's
+`<svelte:head>` but flagged the premise as unmeasured, guessing that Svelte
+"concatenates rather than dedupes" and that a layout title would merely
+reproduce the pair one level down. **That guess was wrong and the measurement
+says so**: a layout title placed in `+layout.svelte` never appeared in any
+prerendered page, because every one of them sets its own. So the shape works —
+a page that sets a title replaces the default, a page that sets none still has
+one — and `app.html` is where a default may not live.
+
+The consequence is the part worth stating rather than discovering later.
+adapter-static's fallback renders no components, so `%sveltekit.head%`
+contributes only the hash-CSP meta and the modulepreload links to
+`build/index.html` and the default cannot reach it: the shell CloudFront serves
+as the site root, and as the body of every deep-link 403 (§ 1022), now carries
+no title in its raw HTML. That was weighed against the alternative and taken
+deliberately. The alternative — moving the literal to sit AFTER
+`%sveltekit.head%`, so a page's own title comes first and wins — keeps the
+shell titled and costs nothing cross-tree, but it ships a document the HTML
+spec forbids on fifteen pages, relies on every consumer resolving the duplicate
+the same way, and plants a trap for the day `/` is prerendered into
+`index.html` (§ 1116): the shell would then carry two titles, the share
+injectors strip only the first, and a share page would go out with a stale
+`Threkir` beside the injected one. Fixing fifteen indexable pages is worth
+un-titling one shell whose body is empty, whose landing content is
+client-rendered anyway (Google's renderer executes JS and reaches the real
+`SeoHead`), and which § 1116 is already scheduled to replace with the real
+prerendered landing page.
+
+Two guards, in `src/lib/seo/document_title.test.ts`. The source half asserts
+`app.html` declares no title element and the root layout declares exactly one,
+inside its `<svelte:head>`. The artifact half, when a build is present, asserts
+no built page carries more than one and that every prerendered Learn page
+carries its own rather than the bare site name. All four were proved
+non-vacuous by reintroducing the literal and by planting a second title in a
+built page. The one thing this change invalidates is § 1115's measurement of
+the shell: `countHeadSignals(src/app.html)` and `countHeadSignals(build/index.html)`
+are now `{title: 0, social: 0, canonical: 0, jsonLd: 0}`, so all four strips in
+the share injectors are dead rather than three, and
+`spa_shell_head_signals.test.ts` must be re-measured to that. That is the guard
+doing what it was built to do — "a signal disappearing means a strip lost its
+subject … worth a deliberate decision" — and this is the decision; the exact
+edit is filed, because that file is another tree.
+
+## 1168. The Learn hub and its category pages are `CollectionPage`s, and the render map is now pinned against the artifact rather than against the source that intends it
+
+`docs/features/seo.md`'s render map claimed `Article` + `BreadcrumbList` for all
+three Learn routes for as long as the surface has existed. Measured on a
+production build: `build/learn.html` and all six `build/learn/category/*.html`
+carried **zero** `application/ld+json` blocks; only the seven guide pages
+carried any. So the two page types a reader reaches from a search for a
+category — the hub and the category indexes — were eligible for no breadcrumb
+rich result and declared themselves a collection of nothing, while the guides
+they exist to funnel into were richly marked up.
+
+The type is the load-bearing decision, not the presence. `buildLearnCollectionJsonLd`
+emits a `CollectionPage`, deliberately not the `Article` the render map named:
+a guide is an article, an index of guides is not, and structured data asserting
+the wrong type describes a page that does not exist — worse for indexing than
+none at all. It carries a `BreadcrumbList` of the same rungs `buildGuideJsonLd`
+already builds, minus the article's own, so the hub is Home → Learn and a
+category is Home → Learn → category; the last rung names the page being viewed
+and carries no `item`, which is the shape Google documents and the shape the
+guide builder already used. It carries an `ItemList` of the guides the page
+lists, in the order it lists them — the hub flattens its rendered sections
+rather than re-deriving a second ordering — with `numberOfItems` taken from the
+list itself so the node cannot miscount. A page listing nothing omits the
+`ItemList` entirely rather than emitting an empty one: an empty collection is a
+claim, and the wrong one.
+
+The guard is what stops this recurring, and it reads the artifact rather than
+the source, because that is the gap the original drift lived in: a render map
+is a claim about what is served, and `learn_meta.ts` had a correct `Article`
+builder the whole time while two of the three routes never called anything.
+`src/lib/seo/learn_structured_data.test.ts` asserts the population first (one
+hub, six categories, at least seven guides), then one JSON-LD block per page
+whose `@type` matches the route kind, a breadcrumb of the right depth whose
+positions run 1..n and whose last rung links nowhere, and — on the two index
+kinds — a non-empty `ItemList` whose count matches its own contents and whose
+entries all point at a guide. Proved non-vacuous against three mutations of the
+built pages: a dropped block, a category declaring itself an `Article`, and a
+self-linking final rung.
+
+## 1169. Naming `%sveltekit.head%` in an `app.html` comment substitutes the head into the comment, and every head-shape assertion still passes
+
+Self-inflicted while landing § 1167 and worth recording, because the failure is
+invisible to every check the tree has except one, and the surviving artifact
+looks right. The replacement comment left in `app.html` explained that a title
+literal "is emitted before `%sveltekit.head%`" — and SvelteKit substitutes that
+placeholder at its **first** occurrence in the template, which was now the
+mention inside the comment. So the entire injected head went into a comment,
+the comment terminated early on the first `-->` it contained (a Svelte hydration
+marker), and the built page came out with the hash-CSP `<meta>` and half the
+modulepreload links inert inside a truncated comment, the comment's own
+remaining prose as raw text inside `<head>`, and the literal string
+`%sveltekit.head%` standing at the position the head was supposed to occupy. A
+browser hoists stray text out of `<head>`, so `<head>` effectively ended early
+and the CSP declaration was gone.
+
+The reason this is an ADR rather than a footnote is what the guards did.
+Because the truncation point fell between the modulepreloads and the rest, the
+`<title>`, the canonical, the social meta and the JSON-LD all landed **outside**
+the comment as live markup — so a measurement of the artifact's head shape read
+exactly the intended values on all fifteen pages: one title each, one JSON-LD
+block each, one canonical each. `npm run check` was clean, the build exited 0,
+the bundle budget passed, and every assertion in both new guards passed against
+a document whose head was structurally destroyed. It was found by reading the
+built `<head>` byte by byte for an unrelated reason (confirming what
+`%sveltekit.head%` contributes to the SPA fallback), not by anything that could
+have failed.
+
+Three consequences taken. The comment no longer spells the placeholder and says
+why not, which is the fix. Both artifact guards now strip HTML comments before
+counting, because a title or a JSON-LD block inside a comment is not one the
+page emits and a counter that cannot tell the difference is measuring the wrong
+document — that hardening would not have caught **this** instance (the real
+tags fell outside the truncated comment) but it closes the near neighbour where
+they do not. And `document_title.test.ts` gained the assertion that would have
+caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
+That is a whole-artifact claim rather than a head-shape one, which is the level
+this class of damage is visible at.

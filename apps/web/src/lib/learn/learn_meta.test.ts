@@ -5,6 +5,7 @@ import {
 	buildGuideJsonLd,
 	buildGuideTitle,
 	buildLearnCanonical,
+	buildLearnCollectionJsonLd,
 	normaliseSiteUrl,
 } from './learn_meta';
 
@@ -103,4 +104,144 @@ test('buildGuideJsonLd — escapes <, >, & so it cannot break out of the script 
 	// Still valid JSON once unescaped.
 	const json = raw.replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&');
 	assert.doesNotThrow(() => JSON.parse(json));
+});
+
+// ---------------- buildLearnCollectionJsonLd ----------------
+
+const HUB_GUIDES = [
+	{ slug: 'couch-to-5k', title: 'Couch to 5K: your first month' },
+	{ slug: 'road-running-101', title: 'Road running 101' },
+];
+
+function parseCollection(json: string): Record<string, any> {
+	// Round-trips the escape the builder applies, the way a browser's JSON-LD
+	// reader does: the payload is valid JSON either way, so a test that read
+	// the raw string would pass on a payload no consumer could parse.
+	return JSON.parse(json.replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&'));
+}
+
+test('buildLearnCollectionJsonLd — the hub is a CollectionPage, never an Article', () => {
+	const node = parseCollection(
+		buildLearnCollectionJsonLd({
+			title: 'Learn to run — Threkir',
+			description: 'Guides for new runners.',
+			category: null,
+			guides: HUB_GUIDES,
+			base: 'https://threkir.com',
+		}),
+	);
+	assert.equal(node['@context'], 'https://schema.org');
+	assert.equal(node['@type'], 'CollectionPage');
+	assert.equal(node.name, 'Learn to run — Threkir');
+	assert.equal(node.description, 'Guides for new runners.');
+	assert.equal(node.url, 'https://threkir.com/learn');
+	assert.deepEqual(node.publisher, { '@type': 'Organization', name: 'Threkir' });
+});
+
+test('buildLearnCollectionJsonLd — the hub breadcrumb ends on itself, with no item', () => {
+	const node = parseCollection(
+		buildLearnCollectionJsonLd({
+			title: 'Learn',
+			description: 'd',
+			category: null,
+			guides: HUB_GUIDES,
+			base: 'https://threkir.com',
+		}),
+	);
+	assert.equal(node.breadcrumb['@type'], 'BreadcrumbList');
+	assert.deepEqual(node.breadcrumb.itemListElement, [
+		{ '@type': 'ListItem', position: 1, name: 'Threkir', item: 'https://threkir.com/' },
+		{ '@type': 'ListItem', position: 2, name: 'Learn' },
+	]);
+});
+
+test('buildLearnCollectionJsonLd — a category adds the Learn rung and names itself last', () => {
+	const node = parseCollection(
+		buildLearnCollectionJsonLd({
+			title: 'Racing — Threkir',
+			description: 'd',
+			category: { id: 'racing', label: 'Racing' },
+			guides: HUB_GUIDES,
+			base: 'https://threkir.com/',
+		}),
+	);
+	assert.equal(node.url, 'https://threkir.com/learn/category/racing');
+	assert.deepEqual(node.breadcrumb.itemListElement, [
+		{ '@type': 'ListItem', position: 1, name: 'Threkir', item: 'https://threkir.com/' },
+		{ '@type': 'ListItem', position: 2, name: 'Learn', item: 'https://threkir.com/learn' },
+		{ '@type': 'ListItem', position: 3, name: 'Racing' },
+	]);
+});
+
+test('buildLearnCollectionJsonLd — the ItemList carries the guides in the order given', () => {
+	const node = parseCollection(
+		buildLearnCollectionJsonLd({
+			title: 't',
+			description: 'd',
+			category: null,
+			guides: HUB_GUIDES,
+			base: 'https://threkir.com',
+		}),
+	);
+	assert.equal(node.mainEntity['@type'], 'ItemList');
+	assert.equal(node.mainEntity.numberOfItems, 2);
+	assert.deepEqual(node.mainEntity.itemListElement, [
+		{
+			'@type': 'ListItem',
+			position: 1,
+			name: 'Couch to 5K: your first month',
+			url: 'https://threkir.com/learn/couch-to-5k',
+		},
+		{
+			'@type': 'ListItem',
+			position: 2,
+			name: 'Road running 101',
+			url: 'https://threkir.com/learn/road-running-101',
+		},
+	]);
+});
+
+test('buildLearnCollectionJsonLd — a page listing nothing omits the ItemList rather than claiming an empty one', () => {
+	const node = parseCollection(
+		buildLearnCollectionJsonLd({
+			title: 't',
+			description: 'd',
+			category: { id: 'trail', label: 'Trail' },
+			guides: [],
+			base: 'https://threkir.com',
+		}),
+	);
+	assert.equal('mainEntity' in node, false);
+	// The breadcrumb is still a claim the page can make about itself.
+	assert.equal(node.breadcrumb.itemListElement.length, 3);
+});
+
+test('buildLearnCollectionJsonLd — an empty base yields root-relative URLs, not "undefined/"', () => {
+	const node = parseCollection(
+		buildLearnCollectionJsonLd({
+			title: 't',
+			description: 'd',
+			category: null,
+			guides: HUB_GUIDES,
+			base: null,
+		}),
+	);
+	assert.equal(node.url, '/learn');
+	assert.equal(node.breadcrumb.itemListElement[0].item, '/');
+	assert.equal(node.mainEntity.itemListElement[0].url, '/learn/couch-to-5k');
+});
+
+test('buildLearnCollectionJsonLd — escapes the characters that would break out of the script block', () => {
+	const raw = buildLearnCollectionJsonLd({
+		title: '</script><img src=x onerror=alert(1)>',
+		description: 'a & b',
+		category: null,
+		guides: [{ slug: 's', title: '<b>' }],
+		base: 'https://threkir.com',
+	});
+	assert.equal(raw.includes('<'), false);
+	assert.equal(raw.includes('>'), false);
+	assert.equal(raw.includes('&'), false);
+	// And it is still the payload it claims to be once a reader unescapes it.
+	assert.equal(parseCollection(raw).name, '</script><img src=x onerror=alert(1)>');
 });

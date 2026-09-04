@@ -33,7 +33,7 @@ apps/web/src/lib/learn/
   guides.test.ts       # frontmatter / slug-uniqueness / category / CTA guard (reads .md off disk; tsx-runnable)
   guides_index.test.ts # unit tests for the pure index ops (ordering, locale fallback, empty-category filtering)
   categories.ts        # CATEGORIES catalogue + CTA_TARGETS map (pure; labelKeys typed MessageKey)
-  learn_meta.ts        # pure SEO builders (title / desc / canonical / Article+BreadcrumbList JSON-LD)
+  learn_meta.ts        # pure SEO builders (title / desc / canonical; Article+BreadcrumbList JSON-LD for a guide, CollectionPage+BreadcrumbList+ItemList for the hub and a category index — decisions § 1168)
   learn_meta.test.ts
 apps/web/src/lib/components/
   GuideCard.svelte     # hub/category preview card (.card-elevated)
@@ -106,3 +106,4 @@ Two layers:
 
 - Unit (`npx tsx --test`): `guides.test.ts`, `learn_meta.test.ts`, `sitemap.test.ts` (extended).
 - Playwright (`apps/web/tests-e2e/learn/`): `hub`, `article`, `seo`, `category`, `cta-links-resolve`, `localized-prose` (localized body + H1, English fallback + notice, localized hub-card title), `chrome` (the shared PublicHeader/PublicFooter landing chrome on all three learn routes).
+- Artifact guards (`apps/web/src/lib/seo/`): `learn_structured_data.test.ts` reads the BUILT pages and pins one JSON-LD block per learn route whose `@type` matches the route kind, a breadcrumb of the right depth whose last rung links nowhere, and a non-empty self-consistent `ItemList` on the two index kinds; `document_title.test.ts` pins that every prerendered page carries exactly one `<title>`, its own. Both self-skip when `apps/web/build` is absent, so they bind only after a production build (decisions § 1167 + § 1168).

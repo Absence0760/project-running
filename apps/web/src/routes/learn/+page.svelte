@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
-	import { buildLearnCanonical } from '$lib/learn/learn_meta';
+	import { buildLearnCanonical, buildLearnCollectionJsonLd } from '$lib/learn/learn_meta';
 	import { guidesByCategory } from '$lib/learn/guides';
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import LearnPage from '$lib/components/LearnPage.svelte';
@@ -11,6 +11,23 @@
 	const pageTitle = $derived(m('learn.hubPageTitle'));
 	const pageDesc = $derived(m('learn.hubPageDescription'));
 	const canonicalUrl = $derived(buildLearnCanonical(data.siteUrl, '/learn'));
+
+	// The guides in the order the sections below render them, so the ItemList
+	// describes the page a reader sees rather than a second ordering.
+	const listedGuides = $derived(
+		data.categories
+			.flatMap((c) => guidesByCategory(c.id))
+			.map((g) => ({ slug: g.slug, title: g.title })),
+	);
+	const jsonLd = $derived(
+		buildLearnCollectionJsonLd({
+			title: pageTitle,
+			description: pageDesc,
+			category: null,
+			guides: listedGuides,
+			base: data.siteUrl,
+		}),
+	);
 </script>
 
 <svelte:head>
@@ -29,6 +46,7 @@
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDesc} />
 	<meta name="twitter:image" content="/og-default.png" />
+	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
 <LearnPage>

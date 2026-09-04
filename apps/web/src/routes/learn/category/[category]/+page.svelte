@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { m } from '$lib/i18n/store.svelte';
-	import { buildGuideTitle, buildLearnCanonical } from '$lib/learn/learn_meta';
+	import {
+		buildGuideTitle,
+		buildLearnCanonical,
+		buildLearnCollectionJsonLd,
+	} from '$lib/learn/learn_meta';
 	import GuideCard from '$lib/components/GuideCard.svelte';
 	import LearnPage from '$lib/components/LearnPage.svelte';
 	import LearnBreadcrumb from '$lib/components/LearnBreadcrumb.svelte';
@@ -12,6 +16,15 @@
 	const pageDesc = $derived(m('learn.hubPageDescription'));
 	const canonicalUrl = $derived(
 		buildLearnCanonical(data.siteUrl, `/learn/category/${data.category.id}`),
+	);
+	const jsonLd = $derived(
+		buildLearnCollectionJsonLd({
+			title: pageTitle,
+			description: pageDesc,
+			category: { id: data.category.id, label: categoryLabel },
+			guides: data.guides.map((g) => ({ slug: g.slug, title: g.title })),
+			base: data.siteUrl,
+		}),
 	);
 </script>
 
@@ -31,6 +44,7 @@
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDesc} />
 	<meta name="twitter:image" content="/og-default.png" />
+	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
 <LearnPage>
