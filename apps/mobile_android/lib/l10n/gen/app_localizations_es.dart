@@ -2561,6 +2561,19 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailStatElevLoss => 'Desnivel -';
 
   @override
+  String get runDetailStatHrCoverage => 'Cobertura de FC';
+
+  @override
+  String runDetailHrCoveragePercent(int pct) {
+    return '$pct %';
+  }
+
+  @override
+  String runDetailHrCoverageOnly(int pct) {
+    return '$pct % cubierto';
+  }
+
+  @override
   String get runDetailStatAvgHr => 'FC media';
 
   @override

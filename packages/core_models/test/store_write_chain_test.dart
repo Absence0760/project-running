@@ -75,6 +75,64 @@ void main() {
     expect(landed, isTrue);
   });
 
+  test('an unsatisfiable wait reports itself instead of hanging', () async {
+    // The real shape is a write queued from a widget test's fake-async zone,
+    // whose chain link a `tester.runAsync` await can never drain (§ 1093). A
+    // gate nobody opens reproduces the same thing without a zone: the chain
+    // is pending and the wait cannot be met.
+    final gate = Completer<void>();
+    unawaited(serialiseStoreWrite('unsatisfiable', () => gate.future));
+
+    await expectLater(
+      storeWritesSettled('unsatisfiable',
+          bound: const Duration(milliseconds: 200)),
+      throwsA(isA<StateError>().having(
+        (e) => e.message,
+        'message',
+        allOf(contains('did not settle'), contains('pumpUntil')),
+      )),
+    );
+  });
+
+  test('the report carries the call site that asked', () async {
+    final gate = Completer<void>();
+    unawaited(serialiseStoreWrite('unsatisfiable_stack', () => gate.future));
+
+    try {
+      await storeWritesSettled('unsatisfiable_stack',
+          bound: const Duration(milliseconds: 200));
+      fail('expected the bounded wait to report');
+    } on StateError catch (_, st) {
+      expect('$st', contains('store_write_chain_test.dart'),
+          reason: 'a hang that names no call site is why this exists');
+    }
+  });
+
+  test('a wait that settles inside the bound stays a plain completion',
+      () async {
+    var landed = false;
+    unawaited(serialiseStoreWrite('within_bound', () async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      landed = true;
+    }));
+
+    await storeWritesSettled('within_bound',
+        bound: const Duration(seconds: 5));
+    expect(landed, isTrue);
+  });
+
+  test('a failed operation surfaces its own error, not the bound report',
+      () async {
+    serialiseStoreWrite<void>('settled_failure', () async {
+      throw StateError('boom');
+    }).ignore();
+
+    // The chain never becomes an error future, so the wait completes
+    // normally — the failure belongs to the write's own caller.
+    await storeWritesSettled('settled_failure',
+        bound: const Duration(seconds: 5));
+  });
+
   test('a drained chain is discarded, so a reused key starts clean', () async {
     await serialiseStoreWrite('reused', () async {});
     var ran = false;

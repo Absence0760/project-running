@@ -439,6 +439,17 @@ class RaceService extends ChangeNotifier {
   /// forgetting to catch. The two screens keep their own L4 try/catch anyway —
   /// a probe is the layering contract's named example of an auxiliary network
   /// effect, and web's callers of the same probes carry the same backstop.
+  ///
+  /// **Deliberately single-sourced per platform, not a registered parity
+  /// pair** (decisions § 1095). Web states the same rule as
+  /// `apps/web/src/lib/core/provider_probe.ts#probeSaysConfigured`, but the two
+  /// client libraries hand a failure over differently — `@supabase/
+  /// functions-js` RETURNS `{data, error}`, so web's half is one expression
+  /// over a nullable error, while `functions_client` 2.5.0 THROWS, so this one
+  /// is control flow. A Dart twin would take an error value no Dart caller
+  /// holds. What a pair would have bought — the two halves read against each
+  /// other — is bought instead by a source guard in `race_providers_test.dart`
+  /// that reads web's grader directly.
   Future<bool> isProviderConfigured(String provider) async {
     final spec = raceImportProviderFor(provider);
     if (spec == null) return false;

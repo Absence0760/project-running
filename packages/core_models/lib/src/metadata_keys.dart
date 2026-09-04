@@ -36,6 +36,7 @@ class MetadataKeys {
   static const String gymSessionDraft = 'gym_session_draft';
   static const String gymStepResults = 'gym_step_results';
   static const String healthConnectType = 'health_connect_type';
+  static const String hrCoverage = 'hr_coverage';
   static const String hrSeriesUrl = 'hr_series_url';
   static const String importedAt = 'imported_at';
   static const String importedFrom = 'imported_from';

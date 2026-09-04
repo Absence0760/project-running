@@ -19763,3 +19763,255 @@ computed the string for `og:url`, so the whole fix is the tag — and the test
 asserts it agrees with `og:url` rather than being a second spelling of the same
 path, which is [§ 520](#520)'s rule applied to the one surface that had escaped
 it.
+## 1092. The mobile geocode lost a usable centroid to its own bbox cast, and the coordinate check stopped one function short
+
+[§ 1011](#1011) added `isUsableLatitude` / `isUsableLongitude` to
+`geocoding.dart` and applied them to the two SEARCH paths. `geocodePlace` — the
+MapTiler-only geocode forty lines below — kept a shape check (`centerRaw is!
+List || centerRaw.length < 2`) followed by a bare `as num`, which is a different
+question: `is num` asks whether a value has a numeric TYPE, and both exposures
+[§ 1066](#1066) closed on web live in the gap between that and whether it is a
+coordinate.
+
+Both re-measured here rather than inherited. `jsonDecode('1e400')` is
+`Infinity`, and `Infinity is num` is true — so the centre reached a `LatLng`,
+which carries no assertion of its own, and a map camera built from it silently
+stops rendering. A bbox corner of the same shape made `bboxRadius` a NaN, which
+compares false against every bound a caller might check the radius with.
+
+**The bbox cast was the worse of the two, and in the opposite direction.**
+`(bboxRaw[0] as num)` on a JSON string throws a `TypeError` — measured, not
+inferred — and it threw *inside* the `try` whose catch returns null. So a
+feature carrying a perfectly good centroid and one malformed corner reported the
+whole geocode as a miss, and the caller fell back to the text-only path. The
+documented 5 km default was already sitting one branch away, unreachable for
+exactly the input it was written for. A bbox is now usable whole or not at all
+(web's rule, `_usableBbox`), and an unusable one degrades to that default with
+the centroid intact.
+
+Six tests pin it, and each was run against the pre-fix file first: all six fail
+there — three on the centre (non-finite, out of range, non-numeric) and three on
+the bbox (non-numeric corner keeps the centroid, non-finite corner does not
+produce a NaN radius, out-of-range corner defaults).
+
+## 1093. `Zone.current` cannot discriminate the `debugWritesSettled` deadlock — measured — so the wait is bounded and reports itself instead
+
+[§ 1072](#1072) measured that `OfflineSyncStore.debugWritesSettled()` is only
+awaitable when the write it waits on was queued from inside `tester.runAsync`,
+and left the durable fix filed with one precondition attached: check whether
+`Zone.current` is a usable discriminator before building a detector on it. It
+is not, and the measurement is the reason this entry exists.
+
+**Five configurations, each run in its own process** (a timed-out widget test
+poisons the fake-async state for every test after it in the file, which is how
+a first attempt produced five identical hangs and one misleading conclusion).
+Each queues one real file write through `serialiseStoreWrite`, then awaits
+`storeWritesSettled`, and records whether the queueing zone and the awaiting
+zone are `identical`:
+
+| # | write queued from | awaited from | `identical` | outcome |
+|---|---|---|---|---|
+| 1 | fake zone | `runAsync` | false | **hangs** |
+| 2 | `runAsync` #1, then `pump` | `runAsync` #2 | false | settles |
+| 3 | `runAsync` #1, no pump | `runAsync` #2 | false | settles |
+| 4 | fake zone, then `pump` | `runAsync` | false | **hangs** |
+| 5 | fake zone | fake zone | — | **hangs** |
+
+`identical` is false in all four cases where it is defined, two of which settle
+and two of which hang, so zone identity carries no signal at all. It is worse
+than uninformative: every `tester.runAsync` call **forks a fresh zone**
+(`AutomatedTestWidgetsFlutterBinding.runAsync` builds one with a
+`ZoneSpecification` delegating microtasks and timers to the root), so the
+working pattern in `nutrition_screen_test` — tap inside one `runAsync`, settle
+inside a second — is precisely a case where the two zones differ. A detector
+keyed on identity would have fired on the file that proves the helper works.
+
+A behavioural probe was tried before the identity one and is also out: a
+microtask scheduled directly into the fake zone *does* run while a `runAsync`
+await is pending (measured three ways), so "can I drain the queueing zone" says
+yes in the configuration that then deadlocks.
+
+**Two things § 1072's rule understates**, both from the table. Row 4: an
+intervening `pump` does not rescue a fake-zone write, because the pump advances
+fake time and flushes fake microtasks while the real file I/O it is waiting on
+completes on an event loop the fake clock never turns. Row 5: awaiting from the
+fake zone hangs too — the failure is not specific to `runAsync`, it is that the
+write and the await sit on either side of the boundary.
+
+**So the probe is bounded rather than diagnosed.** `storeWritesSettled` now
+races the chain against a timer armed on `Zone.root` — deliberately the root,
+because a caller inside the fake zone would otherwise arm a fake timer, which is
+the same queue the wait is already stuck on — and on expiry completes with a
+`StateError` naming the precondition, the remedy (`pumpUntil` on an observable
+outcome) and, as the error's stack trace, the call site that asked. This is not
+the timeout-as-band-aid the house rules forbid: nothing that would otherwise
+fail now passes, and nothing waits longer. A hang that produced no message in
+240 s produces a named diagnosis in 20, and `kStoreWritesSettledBound` sits four
+orders of magnitude above the JSON writes this helper serialises.
+
+**What it does not cover, stated rather than discovered later.** The report is
+delivered through the awaiting zone, so row 5 — a fake-zone await with no pump —
+still hangs; the root timer fires but its completion is a fake-zone
+continuation. That case is unchanged rather than improved, and it is the one
+where the test is wedged for a second reason anyway. The three
+`debugWritesSettled` wrappers now also state the precondition in their own doc
+comments, which is § 1072's cheaper option kept alongside the durable one rather
+than instead of it.
+
+## 1094. The phone reads `hr_coverage`, and the average-heart-rate slot now says why it is empty
+
+[§ 1083](#1083) made the wrist record what share of a run its heart rate
+actually covered, and suppress `avg_bpm` below 0.5 on the grounds that a mean
+over less of the run than not is not the run's average. It landed with no
+reader, so the suppression was indistinguishable on the phone from a run
+recorded with no strap at all: both drew nothing.
+
+Three states, and the point is that they are three rather than two.
+
+- **An average with no coverage record** — every non-Wear writer, and any run
+  from a build predating the field — renders exactly as before. Absent is
+  unmeasured, not zero, so nothing is claimed about it.
+- **A partly-covered average** draws the average and, beside it, an `HR
+  coverage` cell. Full coverage is deliberately NOT drawn: it qualifies
+  nothing, and a `100%` cell on every strap-recorded run is the clutter
+  `multi_modal.md`'s IA contract exists to keep out. The cell appears exactly
+  when the reading changes — a 51 % average and a 99 % one are different
+  claims.
+- **A suppressed average** takes the `Avg HR` slot itself and reads
+  `12% covered`. Occupying the slot is the decision: a separate coverage cell
+  next to an empty space asks the reader to connect two facts, where the label
+  the number is missing from is the one place they will look for the reason.
+  `0%` is a real answer here — heart rate was enabled and delivered nothing —
+  and it is why the guard is on the KEY's presence rather than on a truthy
+  value.
+
+A value outside 0..1, a non-finite one, and a non-numeric one are each read as
+no record rather than clamped: they cannot have come from the writer this
+reads, so inventing a percentage from one would put a fabricated figure in the
+slot whose entire purpose is honesty about what was measured.
+
+Not taken, and filed instead: the secondary-stat grid is gated on
+`run.track.length >= 2 || _hasElevation`, so a run carrying an average and no
+geometry shows no heart rate — which is four other geometry-independent cells'
+problem as much as this one's, and the durable fix is to gate the block on its
+own cell list rather than to widen the condition with a seventh disjunct.
+Web's half of this is a separate lane's, deliberately without coordination, so
+the two surfaces may well word it differently.
+
+## 1095. The probe rule stays single-sourced per platform, and the comparison a parity pair would have bought is bought directly
+
+[§ 1073](#1073) moved the phone onto web's rule — a credential probe reports
+configured iff the call did not fail — and stated it natively inside
+`RaceService.isProviderConfigured` rather than as a `provider_probe.dart`,
+filing the registration question because that lane owned neither registry. The
+answer is: do not register it, and the reason is not taste.
+
+**The two halves have no shared signature.** `@supabase/functions-js` RETURNS
+`{ data, error }` and never throws, so web's `probeSaysConfigured(error)` is one
+expression over a nullable value its callers already hold. Dart's
+`functions_client` 2.5.0 THROWS for every status outside 200-299, so there is no
+error VALUE at the point of decision — the rule is control flow. A Dart twin
+would have to take an `Object? error` that no Dart caller naturally holds,
+which means catching in order to hand it to a function whose whole body is
+`return true` / `return false`. That is a layer added to remove nothing, and a
+parity pair exists so a syncer can compare two implementations of one
+computation; here one side has no computation to compare.
+
+**But the filing's worry is real and is not answered by declining.** A rule
+stated twice with nothing reading both is exactly [§ 641](#641)'s shape, and
+each platform's existing guard covers only its own half — web's `data.test.ts`
+requires all three probes to `return probeSaysConfigured(error)`, and mobile's
+`race_providers_test.dart` fails if `isProviderConfigured` inspects a status
+again (mutation-tested by reinstating the old grader). Neither can see the
+other move.
+
+So the mobile suite reads web's grader directly: `provider_probe.ts` must still
+export `probeSaysConfigured`, its body must still be the nullish check, and the
+file's code — comments stripped, because its own doc comment discusses the
+status-grading rule it replaced — must not mention a status. That is the whole
+of what a registered pair's syncer would have compared, at the cost of one file
+read instead of a module with one call site and rows in two registries that
+must be edited together. It fails loudly on a rename, which is the same
+property [check 4 of `check_parity_pair_registry.mjs`](#604) exists for.
+
+The reciprocal note belongs in `provider_probe.ts`'s own header and is not
+written here: this lane cannot edit `apps/web/`. Until it is, the web file is
+the half that does not say why it has no twin.
+
+## 1096. The parked-push state owes web nothing, re-verified against the code rather than restated
+
+[§ 1070](#1070)'s parked-run machinery is mobile-only, and the reasoning was
+filed for confirmation before someone reads the asymmetry as a
+[§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+inversion and opens work to "close" it. Confirmed on 2026-09-03, by looking at
+each half rather than by re-reading the entry.
+
+The state exists because the phone has a **local queue that retries**:
+`LocalRunStore` holds unsynced runs, five push sites drain them, and parking is
+defined as leaving the drainable set. Web has no such set — `apps/web/src/lib`
+contains no reference to an unsynced queue or a blocked run at all, which is the
+same fact `parity.md`'s "Bulk sync button" row already carries as **web N/A,
+always online**. A parked-run surface on web would be a surface over a queue
+that does not exist.
+
+`RunPushOutcome` living in `core_models` rather than in `api_client` is
+occasionally read as anticipating a second consumer. It is not:
+`local_run_store.dart` imports `core_models` and `flutter/foundation` and
+nothing else, so the store can read the outcome without taking a dependency on
+the client that produces it, while `api_client` depends on `core_models` in the
+usual direction. The placement is a layering fact about one platform.
+
+Recorded where a future reader will actually look: a `parity.md` row of its own
+beside the bulk-sync row, marked N/A for web with the reason, rather than only
+here. If web ever grows an offline queue, this is the design to mirror — and
+that would be a NEW web feature, not a parity debt being paid.
+
+## 1097. The temp-dir-plus-taps census has no members left, and its discriminator is wrong in both directions
+
+[§ 1072](#1072) re-measured the fixed-delay residue and corrected three of four
+counts; the survivor it left was a population — "26 mobile test files pair a
+temp directory with widget taps and no `pumpUntil` at all" — filed as a sweep
+for a later lane. Swept 2026-09-03. **Nothing in it needed converting**, and
+the reason is worth more than the sweep.
+
+**The count, re-measured.** Naively — the greps the filing used — the
+population is **27** at `076b624c8`, not 26, over **89** files that create a
+temp directory, not 88. Corrected for comment text, it is **25**: two members
+are files whose only match is the line *"Timed pumps only — `pumpAndSettle`
+spins `LiveRunMap`'s pulse animation"*, so a grep counted a comment explaining
+why the file does NOT use `pumpAndSettle` as evidence that it does. That is the
+identical failure § 1072 found in the `pumpEventQueue` count, in a census
+written to replace it.
+
+**The two the filing named as the worst shape are not members.**
+`gym_exercise_screen_test.dart` does every `createLocal` inside
+`tester.runAsync` before the widget is pumped, and its single tap opens
+`GymDetailScreen`, whose `initState` reads. `route_builder_screen_test.dart`
+does every `routeStore.save` in plain real-zone `test()` bodies with the call
+awaited; its `testWidgets` taps are a save DIALOG that pops a result object, a
+switch, and map taps — none reaches a store. Both were nominated for the shape
+of their teardown (`addTearDown` + a temp dir + taps), which is the pattern, not
+the property.
+
+**And the discriminator misses in the other direction too.** The two files that
+WERE genuine members are `run_screen_conclude_retry_test.dart` and
+`run_screen_expected_return_test.dart` — both already fixed by
+[§ 1012](#1012), each awaiting `debugInProgressSettled()` in `tearDown`. They
+are still in the population, because the census asks whether a file mentions
+`pumpUntil` and the correct lever for an in-progress recording write is a
+different one. A census keyed on a helper's NAME counts files that use the
+right instrument as unconverted.
+
+**Triage, stated with its limits.** All 25 were scanned for the property that
+matters — a `tester.tap` followed in the same test by an assertion reading a
+store — which found **zero**. The mutation-shaped taps (Save / Delete / Done /
+Log / START / Retry) were enumerated across the population and the four highest
+-risk files hand-read: `gear_rotations_screen_test.dart` (writes inside
+`runAsync`, taps drive a fake api), and the three `run_screen_*` files, of
+which `run_screen_test.dart` never taps START at all. The remaining files were
+not read line by line, so the claim is "no member survives this triage", not
+"no member can exist".
+
+The entry is closed rather than re-filed with a corrected number, because the
+number was never the missing piece: the residual question is which tests start
+store I/O from a fake-zone tap, and no grep over helper names answers it.

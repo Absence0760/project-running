@@ -131,6 +131,11 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
   /// finished. A widget test whose UI signal is the in-memory row (which
   /// [persist] installs synchronously, before its file write) is otherwise
   /// free to tear its temp directory down under a write still in flight.
+  ///
+  /// Only awaitable when the write it waits on was queued from inside
+  /// `tester.runAsync`; after a fake-zone tap, wait on an observable
+  /// outcome with `pumpUntil` instead. The wait is bounded and reports
+  /// itself rather than hanging when it is not (decisions § 1093).
   @visibleForTesting
   Future<void> debugWritesSettled() => storeWritesSettled(_chainKey);
 

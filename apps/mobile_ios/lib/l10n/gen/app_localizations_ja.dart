@@ -2426,6 +2426,19 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailStatElevLoss => '下り標高';
 
   @override
+  String get runDetailStatHrCoverage => '心拍カバー率';
+
+  @override
+  String runDetailHrCoveragePercent(int pct) {
+    return '$pct%';
+  }
+
+  @override
+  String runDetailHrCoverageOnly(int pct) {
+    return '$pct% を計測';
+  }
+
+  @override
   String get runDetailStatAvgHr => '平均心拍';
 
   @override
