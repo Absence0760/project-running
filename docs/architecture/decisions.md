@@ -20798,3 +20798,44 @@ keep the `registrou` / `registou` split that makes them two catalogues. The
 existing Playwright pin asserts the sentence's opening clause and the
 interpolated average, both of which survive; the new wording is model-authored
 in six of the seven and joins the standing native-review item.
+## 1124. Run detail's secondary stats gate per cell on the datum each one needs, not once on the geometry — and calories gained the value test the pref was standing in for
+
+The mobile run-detail screen wrapped its entire secondary-stat grid in
+`if (run.track.length >= 2 || _hasElevation)`. Ten cell definitions sat inside
+it and exactly three of them need geometry: elevation gain and loss, gated on
+`_hasElevation` walking `run.track`, and the grade-adjusted pace, which is
+`gradeAdjustedPaceSecPerKm(run.track)`. The other seven read the `runs` row and
+the metadata bag — calories, steps, cadence, average heart rate, the two
+heart-rate-coverage variants and age grade — and none of them becomes less true
+when the run has no track. `_hasElevation` requires a non-empty track, so the
+disjunction collapses to "has a track", and a Health Connect import (which
+writes `avg_bpm` beside `track: const []` whenever the source app released a
+workout summary but no route) or any manual entry rendered no heart rate for a
+reason that had nothing to do with heart rate.
+
+The condition is not widened with six more disjuncts. `_secondaryStatCells`
+builds the list first, each cell tests its own datum, and the section renders
+only when the list is non-empty — which drops the padding rather than drawing an
+empty frame, and which is what stops the next cell added inheriting the gate.
+`StatGrid` already collapses on an empty `cells`, so the `isNotEmpty` test is
+about the surrounding `Padding`, not about the grid.
+
+Extracting the list surfaced a cell that had no datum test at all. `_showCalories`
+reads the universal `show_calories` preference and answers true unless it is
+explicitly `false`; it says whether the runner wants the estimate, not whether
+there is one. `estimateRunCalories` answers `0` for a distance it cannot use and
+for a product past the range the two platforms share, so the moment the grid
+stopped being hidden a run stopped before it moved would have reported "0 kcal"
+as though that were the estimate. A fabricated zero is worse than an omitted
+stat: an omitted stat says nothing, a zero makes a claim. It now gates on
+`_showCalories && calories > 0`.
+
+Web is canonical here and was read for the same shape before any of this was
+built. Its `/runs/[id]` key-stats grid has no geometry gate — every optional
+cell carries its own `{#if}`, and calories already gate on
+`showCalories && estimatedCalories > 0` — so this is mobile converging on web
+rather than a new rule. Reading it did surface the inverse defect on the
+canonical surface, which is filed rather than fixed because this lane owns no
+path under `apps/web/`: web renders `realElevationGain` with no condition at
+all, so a run with no track, a run whose track carries no altitude, and a
+genuinely flat run all render the same `0 m`.
