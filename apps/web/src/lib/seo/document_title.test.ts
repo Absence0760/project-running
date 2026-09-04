@@ -43,8 +43,15 @@ const BUILD = resolve(webRoot, 'build');
 /// must keep counting what a browser would parse.
 const TITLE = /<title(?=[\s/>])[^>]*>[\s\S]*?<\/title(?=[\s/>])[^>]*>/gi;
 
+/// A comment ends at the FIRST `-->`, and everything between is inert. Counted
+/// without this, a title inside one reads as a title the document has: writing
+/// the SvelteKit head placeholder into a comment in `app.html` substituted the
+/// whole head there, and the pages still measured as carrying one title each
+/// because the match came out of the wreckage.
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+
 function titles(html: string): string[] {
-	return html.match(TITLE) ?? [];
+	return html.replace(HTML_COMMENT, '').match(TITLE) ?? [];
 }
 
 function htmlFiles(dir: string, out: string[] = []): string[] {
@@ -126,4 +133,25 @@ test('every prerendered Learn page carries its own title, not the site name', (t
 				'every Learn page before decisions § 1167.',
 		);
 	}
+});
+
+test('no built page leaks an unsubstituted SvelteKit template placeholder', (t) => {
+	if (!existsSync(BUILD)) {
+		t.skip('no apps/web/build -- run `npm run build --workspace=apps/web` to check the artifact');
+		return;
+	}
+	// `%sveltekit.head%` is substituted at its FIRST occurrence in app.html, so
+	// naming it anywhere earlier -- in a comment, say -- injects the head there
+	// and leaves the literal standing at the real position, as raw text inside
+	// <head>. The page still renders enough to look right and every head-shape
+	// assertion above still passes; this is the one that does not.
+	const offenders = htmlFiles(BUILD)
+		.map((f) => ({ file: relative(webRoot, f), html: readFileSync(f, 'utf8') }))
+		.filter((r) => r.html.includes('%sveltekit.'))
+		.map((r) => r.file);
+	assert.deepEqual(
+		offenders,
+		[],
+		`these built pages carry an unsubstituted %sveltekit.* placeholder:\n  ${offenders.join('\n  ')}`,
+	);
 });

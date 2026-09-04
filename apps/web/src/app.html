@@ -26,10 +26,13 @@
 		<meta name="application-name" content="Threkir" />
 		<meta name="apple-mobile-web-app-title" content="Threkir" />
 		<!-- No title element here on purpose: a literal in this template is
-		     emitted before %sveltekit.head% and is invisible to Svelte's SSR
-		     head dedupe, so it followed every page's own instead of being
-		     replaced by it. The default lives in the root layout's
-		     <svelte:head>. decisions.md § 1167. -->
+		     emitted before the SvelteKit head placeholder below and is
+		     invisible to Svelte's SSR head dedupe, so it followed every page's
+		     own title instead of being replaced by it. The default lives in the
+		     root layout's <svelte:head>. Do not name that placeholder in prose
+		     here: SvelteKit substitutes its FIRST occurrence in the template,
+		     so a mention inside a comment swallows the head. decisions.md
+		     § 1167. -->
 		<!--
 		Material Symbols Outlined: self-hosted, @font-face'd from app.css
 		against a subset built by scripts/gen_web_icon_font.mjs. Prior shape

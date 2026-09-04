@@ -29,10 +29,14 @@ const BUILD = resolve(webRoot, 'build');
 const LD_BLOCK =
 	/<script(?=[\s/>])[^>]*\stype="application\/ld\+json"[^>]*>([\s\S]*?)<\/script(?=[\s/>])[^>]*>/gi;
 
+/// A comment ends at the FIRST `-->` and everything inside is inert, so a
+/// block found in one is not a block the page emits.
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+
 /// The builders escape `<`, `>` and `&` so a payload cannot break out of the
 /// script element; a JSON reader sees through that, and so must this.
 function payloads(html: string): unknown[] {
-	return [...html.matchAll(LD_BLOCK)].map(([, body]) =>
+	return [...html.replace(HTML_COMMENT, '').matchAll(LD_BLOCK)].map(([, body]) =>
 		JSON.parse(
 			body.replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&'),
 		),
