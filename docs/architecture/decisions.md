@@ -20617,3 +20617,182 @@ its message says whether the ping was lost or merely late. The regression pin is
 25 subscribe-then-publish rounds down both paths asserting one receiver each; it
 fails within the first few rounds on the unfixed code under load and passes 20
 consecutive `-race` runs on the fixed code under the same load.
+
+## 1159. A registry row now covers the file that TAKES a value as well as the files that restate it
+
+`check_watch_wire_vectors.mjs` compares a value that is restated on two or more
+rails. It could not see a file that restates nothing and instead IMPORTS the
+value from the rail that declares it — a consumer holds no constant to compare,
+so the day one stops sharing, every rail in the row still agrees and the guard
+still passes while two copies of the value are in use.
+
+That is the `roadbook`'s relationship to the grade window. [§ 992](#992-the-gap-grade-window-was-shorter-than-the-noise-floor-divided-by-the-clamp-on-all-four-rails)
+raised `MIN_SEGMENT_M` and the roadbook's four rails moved with it — correctly,
+for the same reason, and silently: their own suites passed unchanged, so nothing
+would have reported a rail that did NOT move. Written down nowhere was that the
+sharing is a decision. A later reader giving the roadbook its own window had no
+note saying so, and a later reader retuning the window had no note saying three
+roadbook rails move with it.
+
+`CONSTANT_ROWS` entries therefore gain an optional `consumers` block: a set of
+files, each with the import that must match its source exactly once, plus the
+reason the sharing is deliberate. The regex targets the IMPORT rather than a
+use, so a file that keeps the identifier while declaring its own copy no longer
+matches. The reason is in the block rather than in prose because prose drifts
+and a guard does not — but the reverse direction cannot be mechanised the same
+way (a reader editing `MIN_SEGMENT_M` moves every rail together and the guard
+stays green), so the four GAP modules also carry one sentence naming the
+roadbook as a second consumer. That sentence is the only prose in the change.
+
+The reason itself: the roadbook allocates a goal time by grade-adjusted EFFORT
+and walks the course with the same anchored window for the same reason a live
+GAP does. A leg graded over less reads altitude jitter as a wall and hands the
+crew a schedule that front-loads climbs that are not there. Two windows would
+mean the pace a runner is shown mid-race and the arrival time their crew is
+holding a drop bag against were computed over different terrain. Someone may
+still decide the roadbook wants its own; the block makes that a decision rather
+than an edit.
+
+## 1160. The grade window is bracketed from both ends by one frozen reference track, and needed no fixture generator to do it
+
+[§ 992](#992-the-gap-grade-window-was-shorter-than-the-noise-floor-divided-by-the-clamp-on-all-four-rails)
+recorded that nothing had ever pinned the window's value: every suite on every
+rail passed at 5, 20, 30 and 50 m. The pin it added asserts the RELATIONSHIP to
+the noise floor — `ELEVATION_GAIN_MIN_DELTA_M / MIN_SEGMENT_M < MAX_GRADE`, and
+the resulting factor under 2.1 — which is a floor and only a floor. Measured, it
+admits nothing under **19.396 m** and would pass at 200 m, a window long enough
+to average real terrain flat.
+
+The ceiling is now pinned by a golden. Three suites (four files, counting the
+iOS twin) build one frozen synthetic track — a clean, noise-free 6 % climb
+switchbacking +/- 8 m every 150 m, 601 points 5 m apart at 3 s each, the
+30-minute power-hike-paced staircase § 992 measured the cost on — and grade it
+against the truth the same walk gives with NO window at all, every point pair on
+its own rise over its own run. Both a tolerance and a value: the cost must stay
+under 3 %, which is § 992's own rule for the upper end, and the reported figure
+must be the frozen 311 s/km. Measured on the fixture against a true
+302.611 s/km: 5 m reports 304 (-0.46 %), 15 m 308 (-1.78 %), 20 m 311
+(-2.77 %), 25 m 316 (-4.42 %), 30 m 322 (-6.41 %), 200 m 426 (-40.78 %). The
+two tests together admit only **[19.40 m, 24.97 m]**. The upper edge is 24.97
+rather than 25 because the walk closes a segment on the first pair that clears
+the window, so what is really bounded is the EFFECTIVE segment — which is the
+honest bound.
+
+**The filing asked for the AR(1) fixture generator of § 981 to be committed
+somewhere both a `tsx --test` and a `cargo test` could read, and that turns out
+not to be needed.** The noisy rows in § 992's table all IMPROVE as the window
+grows: they motivate a longer window, which is the direction the noise-floor
+relationship already pins analytically and exactly. The clean oscillation is
+what binds the ceiling, and it is deterministic — no PRNG, no cross-language
+sampler, no committed data file that one rail could read while another drifts
+from it. A triangle wave was measured as the alternative and rejected: its hard
+corners cost 7.81 % at 20 m against 8.11 % at 30 m, which does not discriminate.
+
+What a golden across rails needs is that the TRACK be the same track, not only
+the answer — a golden pace says nothing about a rail's algorithm otherwise. So
+the eight numbers (six fixture parameters, the expected pace, the tolerance) are
+one `CONSTANT_ROWS` row per [§ 1159](#1159-a-registry-row-now-covers-the-file-that-takes-a-value-as-well-as-the-files-that-restate-it)'s
+file, read out of each rail and compared as one joined spec, so a period that
+moved on one rail fails loudly rather than turning the other two goldens into
+answers to a different question. The geometry sits on a line of constant
+latitude, where the haversine collapses exactly to `R * dLambda` — measured
+identical to the last bit — so the per-pair step is a closed form rather than a
+second copy of the module's own distance function, and one further test ties it
+to that function by grading a flat track of the same geometry against the raw
+pace the step implies.
+
+The Garmin rail carries `MIN_SEGMENT_M` but not this fixture: its field is a
+streaming estimator with no batch entry point to grade a track through, and
+there is no Connect IQ SDK on this machine to run one if there were.
+
+## 1161. `recap.rs` capped its streak input on runs where the cap is named for days
+
+Both watch recap builders filled a `Vec<i32, MAX_STREAK_DAYS>` with raw run days
+and handed it to `compute_run_streaks`, which dedupes afterwards. `MAX_STREAK_DAYS`
+is 512 and `streaks.rs` documents it as a cap on **distinct run days** — so a
+512-entry buffer of RUNS capped the card on run count instead, and the dedupe it
+was sized for could never be reached.
+
+Measured against the shipped web module: a runner logging twice a day through
+2026 (730 `RecapRun`s, chronological) got `{best: 256, current: 0}` from the
+firmware where `buildYearInRunningRecap` gives `{best: 365, current: 365}`. The
+512th run is the evening of 12 September, so the card saw 1 January to 12
+September, `current` collapsed to zero, and `compute_recap_badges` is fed off
+`best`, so the streak trophies went with it. The month card was worse: it is
+handed the same lifetime run set, so any runner past ~512 lifetime runs
+oldest-first lost the month the card is about.
+
+Fixed one layer earlier than the truncation, because only there is the anchor
+known: `recent_distinct_days(runs, anchor)` keeps distinct days on or before the
+anchor and, when full, the MOST RECENT of them — replacing the oldest rather
+than refusing the newest. That is `compute_run_streaks`'s own filter plus the
+only selection policy a card that ends at an anchor can want, and it leaves that
+function's buffer unable to overflow behind this one. `streaks.rs` is a parity
+port of a web helper with no cap at all, so the policy deliberately does not go
+there. Pinned by the 730-run year (365/365) and by a 600-day consecutive history
+that must report 512 rather than the 0 the old fill produced.
+
+`build_year_in_running_recap` still has no non-test caller in the firmware, so
+nothing shipped wrong — which is exactly why no suite noticed: every recap test
+used a few dozen runs, and the defect needs more than 512.
+
+## 1162. The segment crown carried a gender tier the database had deleted end-to-end
+
+`SegmentGenderFilter` in `apps/custom_watch/core/src/segments.rs` still had a
+`Nonbinary` variant seven weeks after migration
+`20270422_001_restrict_gender_options.sql` (issue #220) dropped `nonbinary` from
+the option set end-to-end: existing rows folded into `prefer_not_to_say` — the
+same calculation branch as a withheld gender — the `user_profiles_gender_check`
+CHECK narrowed behind them, `gender_options_test.sql` pins the rejection, and
+web's `SegmentGenderFilter` union narrowed with it. The Dart rail carries no
+gender-filter vocabulary at all, so the firmware was the last rail able to name
+a leaderboard tier the database can no longer produce, and web's `crownLabel`
+maps any non-`male` value through to "woman", so the two rails did not even
+disagree in the same direction.
+
+Nothing in `core` outside `segments.rs` constructs one, so the impact was latent
+rather than shipped — but a glance page built on `CrownLabel::Gender(Nonbinary)`
+would have needed an English string web has deleted.
+
+The reason no suite could see it is worth keeping: `crown_label` BINDS the
+gender rather than matching it, so it is total over the enum however many
+variants exist and no input it can be handed would ever fail. Two of the four
+crown assertions pinned the dead variant, which is a suite defending a value
+rather than testing one. The replacement is an exhaustive `match` over the two
+survivors — the only construct a third variant has to get past.
+
+## 1163. Re-reading a one-way port does not show it identical, and two of the five were not
+
+The standing follow-up on `recap`, `plan_replan`, `segments`,
+`auto_segment_effort` and `age_grade` recorded that each moved on web after its
+firmware port was taken, and that a round had read them without finding a
+defect — noting honestly that none had been shown identical either. Closing it
+by reading again would have produced the same sentence.
+
+Measured instead — each web commit to the counterpart since the port's own
+commit, read as a diff, then the corresponding Rust function read against it,
+and a discriminating input constructed wherever the two could answer
+differently — two of the five were divergent
+([§ 1161](#1161-recaprs-capped-its-streak-input-on-runs-where-the-cap-is-named-for-days),
+[§ 1162](#1162-the-segment-crown-carried-a-gender-tier-the-database-had-deleted-end-to-end)),
+and neither divergence was the one the filing pointed at. `recap`'s was
+pre-existing rather than caused by web #747, whose `bestSince` bound the
+firmware already carries; `segments`' came from #322, filed as a comment-only
+change because that is what it was in `age_grade.ts` — in `segments.ts` the same
+commit deleted a union member.
+
+The other three are identical for what the firmware ports, and the evidence is
+stated rather than asserted: `plan_replan`'s only web change was the extraction
+of `easeOffNextWeek` plus a second caller, and the firmware has both the
+extracted function and the `plan_adaptive_replan` deep-fatigue arm with matching
+thresholds; `auto_segment_effort`'s was the switch to a batched
+`computeEffortsFromTrack`, which the firmware made in the same round;
+`age_grade`'s was verified comment-only against `git show`, and its factor
+tables have not been touched since before the port. Web's binary-search
+`timestampAtDistance` against the firmware's linear walk is performance-only —
+the predicate is monotone over a running sum of non-negative distances, so both
+return the same first index.
+
+The general rule this leaves: a re-read of a one-way port closes nothing. Either
+diff the counterpart's history since the port and construct an input on each
+behavioural change, or leave the box open and say the read is all that was done.
