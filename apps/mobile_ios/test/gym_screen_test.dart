@@ -19,6 +19,7 @@ import '../lib/screens/sessions_screen.dart';
 import '../lib/widgets/pending_sync_banner.dart';
 import '../lib/widgets/surface_peer_strip.dart';
 import 'pump_until.dart';
+import 'store_write_watch.dart';
 
 /// No-op so a resumed session screen's `WakelockPlus.enable()` / `.disable()`
 /// don't hit the real pigeon channel (which throws under flutter_test).
@@ -604,9 +605,7 @@ void main() {
         expect(find.text('Retry'), findsOneWidget);
         expect(store.hasPending, isTrue);
         // Let the in-flight refresh drain before tearing the temp dir down.
-        await tester.runAsync(
-            () => Future<void>.delayed(const Duration(milliseconds: 100)));
-        await tester.pump();
+        await pumpUntilStoreWritesSettle(tester);
       } finally {
         dir.deleteSync(recursive: true);
       }

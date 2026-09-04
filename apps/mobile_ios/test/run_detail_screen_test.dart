@@ -19,6 +19,7 @@ import '../lib/screens/run_detail_screen.dart';
 import '../lib/settings_sync.dart';
 import '../lib/widgets/live_run_map.dart';
 import 'pump_until.dart';
+import 'store_write_watch.dart';
 
 late Directory _runsDir;
 
@@ -1077,6 +1078,7 @@ void main() {
       expect(api.updated, [run.id]);
       expect(runStore.unsyncedRuns, isEmpty,
           reason: 'the server row is current after the column push');
+      await pumpUntilStoreWritesSettle(tester);
     });
 
     testWidgets('a failed updateRunFields leaves the run queued for the drain',

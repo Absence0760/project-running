@@ -11,6 +11,7 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/screens/gym_detail_screen.dart';
 import 'pump_until.dart';
+import 'store_write_watch.dart';
 
 /// Counts updateLocal calls so the double-submit guard can be asserted.
 class _CountingGymStore extends LocalGymStore {
@@ -116,6 +117,7 @@ void main() {
     // The chip + tooltip now reflect public.
     expect(find.text('Public'), findsOneWidget);
     expect(find.byTooltip('Make private'), findsOneWidget);
+    await pumpUntilStoreWritesSettle(tester);
   });
 
   testWidgets(
@@ -254,6 +256,7 @@ void main() {
 
     expect(store.updateCalls, 1);
     expect(store.byId(id)!.workout.isPublic, isTrue);
+    await pumpUntilStoreWritesSettle(tester);
   });
 
   group('GymDetailScreen — the set-number lane holds its localized label', () {
