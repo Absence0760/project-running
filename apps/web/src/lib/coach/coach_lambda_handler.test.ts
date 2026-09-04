@@ -283,7 +283,7 @@ test('a sub-path refusal forwards the core\'s own status, headers and body', asy
 });
 
 test('the production config never honours the dev paywall bypass', async () => {
-	// A source-level pin lives in security_guards.test.ts; this is the
+	// A source-level pin lives in lambda_guards.test.ts; this is the
 	// behavioural half — BYPASS_PAYWALL set in the function's environment must
 	// change nothing, because the wrapper hardcodes the field.
 	process.env.BYPASS_PAYWALL = 'true';

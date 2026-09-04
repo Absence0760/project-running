@@ -657,58 +657,180 @@ test("a pt-PT fragment keeps the spacing its Brazilian twin assembles with", asy
 });
 
 /**
- * European Portuguese substitutions that change the noun's GENDER, which the
- * § 755 corpus applied word-for-word and did not carry into the article or the
- * adjective agreeing with it: Brazilian `a tela` is European `o ecrã`, and `os
- * compartilhamentos` are `as partilhas`. Both were live — "Manter a ecrã
+ * Determiners that cannot stand before the noun they are written against,
+ * because the two disagree in gender. Two classes of defect land here.
+ *
+ * The first is a European Portuguese substitution that changes the noun's
+ * GENDER, which the § 755 corpus applied word-for-word and did not carry into
+ * the article agreeing with it: Brazilian `a tela` is European `o ecrã`, and
+ * `os compartilhamentos` are `as partilhas`. Both were live — "Manter a ecrã
  * ligada", "ocultado dos partilhas públicos".
+ *
+ * The second is a `{noun}` slot filled from a set that is not one gender. The
+ * report dialog's title was one string per locale — "Denunciar este {noun}",
+ * "Signaler ce {noun}", "Diese {noun} melden" — against seven nouns of which
+ * four are feminine in Portuguese and Spanish, two are feminine in French and
+ * four are masculine or neuter in German, so every locale but `en` and `ja`
+ * rendered the wrong determiner on some of them. It is now a title per target
+ * kind, which is what puts the determiner in the same string as the noun it
+ * governs and therefore inside this guard's reach (§ 1060).
  *
  * Determiners only. They are closed classes, so the scan is exact; an adjective
  * would need a morphology this guard has no business carrying, and the
  * determiner is already immediately before the noun in every one of these.
+ *
+ * A determiner is listed only where it is wrong in EVERY reading. French plural
+ * `les` / `ces` / `aux` carry no gender at all and were dropped after they
+ * reported 31 correct strings; German is listed by exact singular, because the
+ * genitive takes an `-s` on the noun (`dieses Clubs`) and matching `Clubs` would
+ * report it — and only the demonstratives no case licenses are named, so
+ * `dieser Lauf` (nominative) and `diesem Lauf` (dative) stand.
  */
-const GENDER_FLIPPED_NOUNS: { noun: RegExp; wrong: string[]; gender: string }[] = [
-	{
-		noun: /ecrãs?/,
-		gender: "masculine in Portugal, where Brazilian `tela` is feminine",
-		wrong: ["a", "as", "da", "das", "na", "nas", "à", "às", "uma", "umas", "esta", "estas", "essa", "essas"],
-	},
-	{
-		noun: /partilhas?/,
-		gender: "feminine, where Brazilian `compartilhamento` is masculine",
-		wrong: ["o", "os", "do", "dos", "no", "nos", "ao", "aos", "pelo", "pelos", "um", "uns", "este", "estes", "esse", "esses"],
-	},
-];
+const PT_MASCULINE_WRONG = ["a", "as", "da", "das", "na", "nas", "à", "às", "uma", "umas", "esta", "estas", "essa", "essas"];
+const PT_FEMININE_WRONG = ["o", "os", "do", "dos", "no", "nos", "ao", "aos", "pelo", "pelos", "um", "uns", "este", "estes", "esse", "esses"];
+const ES_MASCULINE_WRONG = ["la", "las", "una", "unas", "esta", "estas", "esa", "esas"];
+const ES_FEMININE_WRONG = ["el", "los", "del", "al", "un", "unos", "este", "estos", "ese", "esos"];
+const FR_MASCULINE_WRONG = ["la", "cette", "une"];
+const FR_FEMININE_WRONG = ["le", "ce", "cet", "un", "du", "au"];
 
-test("a gender-flipped European noun agrees with what governs it", async () => {
-	const messages = await catalogue("pt-PT");
+interface GenderRow {
+	noun: RegExp;
+	wrong: string[];
+	gender: string;
+}
+
+/// The report dialog's seven target nouns, per locale, with the gender that
+/// decides the determiner in front of them.
+function reportNouns(
+	masculine: [RegExp, ...RegExp[]],
+	feminine: RegExp[],
+	wrongForMasculine: string[],
+	wrongForFeminine: string[],
+): GenderRow[] {
+	return [
+		...masculine.map((noun) => ({ noun, wrong: wrongForMasculine, gender: "masculine" })),
+		...feminine.map((noun) => ({ noun, wrong: wrongForFeminine, gender: "feminine" })),
+	];
+}
+
+const GENDER_FLIPPED_NOUNS: Record<string, GenderRow[]> = {
+	"pt-PT": [
+		{
+			noun: /ecrãs?/,
+			gender: "masculine in Portugal, where Brazilian `tela` is feminine",
+			wrong: PT_MASCULINE_WRONG,
+		},
+		{
+			noun: /partilhas?/,
+			gender: "feminine, where Brazilian `compartilhamento` is masculine",
+			wrong: PT_FEMININE_WRONG,
+		},
+		...reportNouns(
+			[/perfis?/, /clubes?/, /comentários?/],
+			[/rotas?/, /publicaç(ão|ões)/, /corridas?/, /avaliaç(ão|ões)/],
+			PT_MASCULINE_WRONG,
+			PT_FEMININE_WRONG,
+		),
+	],
+	"pt-BR": reportNouns(
+		[/perfis?/, /clubes?/, /comentários?/],
+		[/rotas?/, /publicaç(ão|ões)/, /corridas?/, /avaliaç(ão|ões)/],
+		PT_MASCULINE_WRONG,
+		PT_FEMININE_WRONG,
+	),
+	es: reportNouns(
+		[/perfil(es)?/, /clubs?/, /comentarios?/],
+		[/rutas?/, /publicaci(ón|ones)/, /carreras?/, /reseñas?/],
+		ES_MASCULINE_WRONG,
+		ES_FEMININE_WRONG,
+	),
+	fr: reportNouns(
+		[/profils?/, /clubs?/, /itinéraires?/, /commentaires?/, /avis/],
+		[/publications?/, /courses?/],
+		FR_MASCULINE_WRONG,
+		FR_FEMININE_WRONG,
+	),
+	de: [
+		// Three genders, so neither Romance list applies: `Dieser`/`Diesem` are
+		// a correct masculine nominative and dative, `Dieser` a correct feminine
+		// dative and genitive, and only the two below are wrong in every case.
+		{ noun: /Profil/, gender: "neuter", wrong: ["Diese", "Diesen"] },
+		{ noun: /Club/, gender: "masculine", wrong: ["Diese", "Dieses"] },
+		{ noun: /Kommentar/, gender: "masculine", wrong: ["Diese", "Dieses"] },
+		{ noun: /Beitrag/, gender: "masculine", wrong: ["Diese", "Dieses"] },
+		{ noun: /Lauf/, gender: "masculine", wrong: ["Diese", "Dieses"] },
+		{ noun: /Route/, gender: "feminine", wrong: ["Diesen", "Dieses"] },
+		{ noun: /Bewertung/, gender: "feminine", wrong: ["Diesen", "Dieses"] },
+	],
+};
+
+test("a determiner agrees with the noun it governs", async () => {
 	const offenders: string[] = [];
-	for (const { noun, wrong, gender } of GENDER_FLIPPED_NOUNS) {
-		const re = new RegExp(
-			`(?<![a-zà-ÿ])(${wrong.join("|")})\\s+(${noun.source})(?![a-zà-ÿ])`,
-			"giu",
-		);
-		for (const [key, value] of Object.entries(messages)) {
-			if (typeof value !== "string") continue;
-			for (const m of value.matchAll(re)) {
-				offenders.push(`${key}: "${m[0]}" — ${noun.source} is ${gender}`);
+	for (const [tag, rows] of Object.entries(GENDER_FLIPPED_NOUNS)) {
+		assert.ok(supported.has(tag), `${tag} is not a shipped locale.`);
+		const messages = (await CATALOGUE_LOADERS[
+			tag as keyof typeof CATALOGUE_LOADERS
+		]()) as Record<string, unknown>;
+		for (const { noun, wrong, gender } of rows) {
+			const re = new RegExp(
+				`(?<![a-zà-ÿ])(${wrong.join("|")})\\s+(${noun.source})(?![a-zà-ÿ])`,
+				"giu",
+			);
+			for (const [key, value] of Object.entries(messages)) {
+				if (typeof value !== "string") continue;
+				for (const m of value.matchAll(re)) {
+					offenders.push(`${tag} ${key}: "${m[0]}" — ${noun.source} is ${gender}`);
+				}
 			}
 		}
 	}
 	assert.deepEqual(
 		offenders,
 		[],
-		"locales/pt-PT.ts carries a European word inside its Brazilian counterpart's " +
-			"agreement. Substituting the noun is half the change; the article and the " +
-			"adjective agreeing with it have to move too.",
+		"a catalogue puts a determiner in front of a noun of the other gender. In " +
+			"pt-PT that is usually a European word left inside its Brazilian " +
+			"counterpart's agreement — substituting the noun is half the change. " +
+			"Everywhere else it is a determiner written for a slot whose contents are " +
+			"not one gender: write the determiner into the same string as the noun it " +
+			"governs (decisions § 1060).",
 	);
+});
+
+test("every report-dialog target kind has its own title, and the guard reaches it", async () => {
+	// The seven titles are the strings the guard above exists for on five of the
+	// six non-English catalogues. If a kind's title went back to a `{noun}` slot
+	// — or a new target kind shipped without one — the determiner would leave
+	// this guard's reach without anything else noticing.
+	const kinds = ["Profile", "Club", "Route", "Comment", "Post", "Run", "Review"];
+	for (const tag of SUPPORTED_LOCALES) {
+		const messages = (await CATALOGUE_LOADERS[tag]()) as Record<string, string>;
+		for (const kind of kinds) {
+			const value = messages[`reportDialog.title${kind}`];
+			assert.ok(value?.trim().length, `${tag} has no reportDialog.title${kind}`);
+			assert.doesNotMatch(
+				value,
+				/\{noun\}/,
+				`${tag} reportDialog.title${kind} still fills a noun slot, so its ` +
+					"determiner cannot agree with all seven nouns at once",
+			);
+		}
+	}
+	const component = readFileSync(
+		join(SRC, "lib", "components", "ReportDialog.svelte"),
+		"utf-8",
+	);
+	for (const kind of kinds) {
+		assert.ok(
+			component.includes(`'reportDialog.title${kind}'`),
+			`ReportDialog.svelte can never render reportDialog.title${kind}`,
+		);
+	}
 });
 
 /**
  * A value one key interpolates INTO another cannot open a sentence it is in the
- * middle of. `profile.thisRunner` fills `{name}` inside "Bloqueou {name}." and
- * `reportDialog.nounProfile` fills `{noun}` inside "Denunciar este {noun}", so a
- * capital there renders "Bloqueou Este corredor." — a sentence with a second
+ * middle of. `profile.thisRunner` fills `{name}` inside "Bloqueou {name}.", so
+ * a capital there renders "Bloqueou Este corredor." — a sentence with a second
  * beginning in it. The § 755 derivation walked `pt-BR.ts` value by value and
  * sentence-cased each one it met, which put a capital on 248 of them; the ones
  * reached this way are the subset whose position is a FACT about the catalogue
@@ -720,9 +842,9 @@ test("a gender-flipped European noun agrees with what governs it", async () => {
  * fallback shape, which is how most of them are actually written — so a new
  * one is covered the day it is written and a deleted one stops being checked.
  * The scan follows a literal key through a literal params object and nothing
- * else, so a key reached through a `Record<Kind, MessageKey>` map (the report
- * dialog's nouns, the route description's parts) is invisible to it; those were
- * settled by reading the call site and are not guarded. What this catches is
+ * else, so a key reached through a `Record<Kind, MessageKey>` map (the route
+ * description's parts) is invisible to it; those were settled by reading the
+ * call site and are not guarded. What this catches is
  * the shape that recurs, not every instance of the class.
  *
  * Cross-locale rather than pt-PT-against-pt-BR, unlike the two guards above:

@@ -86,7 +86,7 @@ test('returns 503 when provider=anthropic but anthropicApiKey is unset', async (
 });
 
 test('503 message does NOT leak the COACH_PROVIDER value to the wire', async () => {
-	// Reason: security_guards.test.ts pins that the 503 doesn't
+	// Reason: lambda_guards.test.ts pins that the 503 doesn't
 	// interpolate the provider name (that's an operator hint that
 	// goes to console.error). The contract is "the wire sees a
 	// generic 'not configured'; the operator reads the logs". Pin
@@ -146,7 +146,7 @@ test('returns 401 when Authorization is empty / non-Bearer', async () => {
 });
 
 test('401 wire message is the static "not authenticated" string', async () => {
-	// Reason: security_guards.test.ts pins this so the GoTrue
+	// Reason: lambda_guards.test.ts pins this so the GoTrue
 	// internal-identifier oracle stays closed. Reverify here for
 	// the no-token path specifically — a different upstream string
 	// would change the wire shape clients depend on.

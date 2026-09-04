@@ -32,6 +32,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ImportFailureReport from '$lib/components/ImportFailureReport.svelte';
 	import { newImportFailureLog, type ImportFailureLog } from '$lib/integrations/import_failures';
+	import { importRefusalMessage } from '$lib/i18n/import_refusal_message';
 	import { browser } from '$app/environment';
 	import { parkrunLikelyUnavailable } from '$lib/integrations/parkrun_regions';
 
@@ -274,7 +275,7 @@
 				zipFailures = result.failures;
 			}
 		} catch (err) {
-			zipError = err instanceof Error ? err.message : String(err);
+			zipError = importRefusalMessage(m, err, 'settingsIntegrations.stravaZipImportFailed');
 		} finally {
 			window.removeEventListener('beforeunload', beforeUnloadGuard);
 			input.value = '';
@@ -315,7 +316,7 @@
 				garminFailures = result.failures;
 			}
 		} catch (err) {
-			garminError = err instanceof Error ? err.message : String(err);
+			garminError = importRefusalMessage(m, err, 'settingsIntegrations.garminImportFailed');
 		} finally {
 			window.removeEventListener('beforeunload', beforeUnloadGuard);
 			input.value = '';

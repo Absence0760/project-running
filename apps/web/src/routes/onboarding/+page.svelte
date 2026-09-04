@@ -692,7 +692,7 @@
 	   WCAG 2.4.7 (Focus Visible) + 2.4.11 (Focus Appearance).
 	   Pointer / touch focus loses the ring (handled by the :focus
 	   rule above) so the form looks clean during mouse use. The
-	   security_guards.test.ts accessibility guard pins that every
+	   a11y_guards.test.ts guard pins that every
 	   `:focus { outline:none }` selector has a matching
 	   `:focus-visible` companion. */
 	.field input:focus-visible, .field select:focus-visible {

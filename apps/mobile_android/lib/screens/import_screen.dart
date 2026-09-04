@@ -288,7 +288,11 @@ class _ImportScreenState extends State<ImportScreen> {
     if (filled.isNotEmpty && api != null && api.userId != null) {
       var landed = const <Run>[];
       try {
-        final failed = await api.saveRunsBatch(filled);
+        final outcome = await api.saveRunsBatch(filled);
+        if (outcome.blocked.isNotEmpty) {
+          await widget.runStore.markBlocked(outcome.blocked);
+        }
+        final failed = outcome.failedIds;
         // A non-empty `failed` set is not an error and never throws: the
         // batch landed minus those runs, whose maps are on disk and not on
         // the server. Same claim as a thrown push, for fewer runs.
@@ -414,7 +418,7 @@ class _ImportScreenState extends State<ImportScreen> {
       if (mounted) setState(() => _status = l10n.importStatusSyncingToCloud);
       var landed = const <Run>[];
       try {
-        final failed = await api.saveRunsBatch(
+        final outcome = await api.saveRunsBatch(
           savedRuns,
           onProgress: (saved) {
             if (mounted) {
@@ -423,6 +427,13 @@ class _ImportScreenState extends State<ImportScreen> {
             }
           },
         );
+        // Import is where an over-size track actually arrives (decisions
+        // § 1009), so this is the call site most likely to see a parked run —
+        // park it here or the drain inherits a retry it can never finish.
+        if (outcome.blocked.isNotEmpty) {
+          await widget.runStore.markBlocked(outcome.blocked);
+        }
+        final failed = outcome.failedIds;
         // Mark only the runs that successfully uploaded — same
         // partial-success contract as SyncService / background_sync. The ones
         // left out are on disk and not on the server, which is the deferral

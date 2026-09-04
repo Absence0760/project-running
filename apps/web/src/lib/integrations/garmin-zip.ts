@@ -44,6 +44,7 @@ import {
 	recordImportFailure,
 	type ImportFailureLog,
 } from './import_failures';
+import { ImportRefusedError } from './import_refusal';
 
 export interface GarminZipProgress {
 	total: number;
@@ -96,7 +97,7 @@ export async function importGarminBundle(
 	onProgress?: ProgressHandler,
 ): Promise<GarminZipProgress> {
 	const uid = auth.user?.id;
-	if (!uid) throw new Error('Not signed in');
+	if (!uid) throw new ImportRefusedError('not_signed_in');
 
 	const lower = file.name.toLowerCase();
 
@@ -177,7 +178,7 @@ export async function importGarminBundle(
 	}
 
 	if (!lower.endsWith('.zip')) {
-		throw new Error('Upload a .fit file or a .zip bundle.');
+		throw new ImportRefusedError('garmin_unsupported_file');
 	}
 
 	const zip = await JSZip.loadAsync(file);

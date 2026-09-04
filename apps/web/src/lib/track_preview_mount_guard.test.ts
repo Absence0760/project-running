@@ -4,7 +4,7 @@
 // and public routes (decisions.md § 33), and it is the shape § 772's filing
 // would have rebuilt if it had been implemented literally.
 //
-// `security_guards.test.ts` pins four SURFACES off it by name — the routes
+// `privacy_guards.test.ts` pins four SURFACES off it by name — the routes
 // list, the clubs Routes tab, `/routes/[id]` and the DM thread. Four named
 // surfaces is a list, and § 738's standing lesson is that a list rots: the
 // fifth non-owner surface to want a route thumbnail is invisible to all four

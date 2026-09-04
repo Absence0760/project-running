@@ -56,15 +56,9 @@ const Map<String, String> _documentedDelays = <String, String>{
           'its callers, so no predicate is ever false',
   'test/route_detail_watch_course_test.dart':
       'shared helper — same race-plan adoption read as roadbook_screen_test',
-  'test/route_review_report_test.dart':
-      'mount drain with no observable outcome — the screen is asserted on '
-          'directly afterwards',
   'test/routes_screen_fab_double_tap_test.dart':
       'zero-duration microtask flush after completing a picker, not a timed '
           'wait',
-  'test/routine_public_library_screen_test.dart':
-      'store seeding inside runAsync, ordered before the frame rather than '
-          'waiting on it',
   'test/run_screen_recording_flow_test.dart':
       'models elapsed time — the 11 s GPS blackout § 715 named; plus the paired-'
           'belt read whose only assertion is an absence',

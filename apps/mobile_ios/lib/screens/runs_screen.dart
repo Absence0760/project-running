@@ -193,6 +193,7 @@ class _RunsScreenState extends State<RunsScreen> {
   // Capped at _filtered.length so taking past the end is a no-op.
   List<Run> _visible = const [];
   Set<String> _unsyncedIds = const {};
+  Set<String> _blockedIds = const {};
 
   /// How many filtered rows the list is currently revealing. Resets to
   /// _kRunsPageSize whenever the filter/sort changes. Grows by
@@ -417,6 +418,7 @@ class _RunsScreenState extends State<RunsScreen> {
     final resident = {for (final r in widget.runStore.runs) r.id: r};
     _visible = [for (final s in slice) resident[s.id] ?? s];
     _unsyncedIds = widget.runStore.unsyncedRuns.map((r) => r.id).toSet();
+    _blockedIds = widget.runStore.blockedRuns.keys.toSet();
   }
 
   /// Reset paging window back to the first page. Called on filter /
@@ -768,22 +770,40 @@ class _RunsScreenState extends State<RunsScreen> {
     }
 
     final unsynced = widget.runStore.unsyncedRuns;
-    if (unsynced.isEmpty) return;
+    final blocked = widget.runStore.blockedCount;
+    if (unsynced.isEmpty) {
+      // Parked runs are absent from `unsyncedRuns` by design, so with nothing
+      // else queued this button would otherwise do nothing and say nothing —
+      // and the runner would be left with a badge and no explanation.
+      if (blocked > 0) {
+        showTopBanner(context, l10n.historySyncBlocked(blocked),
+            duration: const Duration(seconds: 6));
+      }
+      return;
+    }
 
     setState(() => _syncing = true);
     int synced = 0;
     String? lastError;
 
     try {
-      final failed = await api.saveRunsBatch(unsynced);
+      final outcome = await api.saveRunsBatch(unsynced);
+      if (outcome.blocked.isNotEmpty) {
+        await widget.runStore.markBlocked(outcome.blocked);
+      }
+      final failed = outcome.failedIds;
       // Same partial-success contract as SyncService — only mark
       // the runs whose track upload succeeded.
       await widget.runStore.markManySynced(
         unsynced.where((r) => !failed.contains(r.id)),
       );
       synced = unsynced.length - failed.length;
-      if (failed.isNotEmpty) {
-        lastError = l10n.historySyncTrackFailed(failed.length);
+      // A parked run and a deferred one read differently: one is coming back
+      // on its own, the other needs the runner to decide something.
+      if (outcome.retryable.isNotEmpty) {
+        lastError = l10n.historySyncTrackFailed(outcome.retryable.length);
+      } else if (outcome.blocked.isNotEmpty) {
+        lastError = l10n.historySyncBlocked(outcome.blocked.length);
       }
     } catch (e) {
       debugPrint('RunsScreen sync failed: $e');
@@ -1089,6 +1109,7 @@ class _RunsScreenState extends State<RunsScreen> {
 
   AppBar _normalAppBar(AppLocalizations l10n) {
     final unsyncedCount = widget.runStore.unsyncedCount;
+    final blockedCount = widget.runStore.blockedCount;
     final visibleCount = _visible.length;
     // Move the date-range label + visible-count into the AppBar
     // title so the otherwise-empty left half of the bar carries
@@ -1219,6 +1240,22 @@ class _RunsScreenState extends State<RunsScreen> {
               child: IconButton(
                 icon: const Icon(Icons.cloud_upload),
                 tooltip: l10n.historySyncTooltip(unsyncedCount),
+                onPressed: _syncAll,
+              ),
+            ),
+          )
+        else if (widget.showSyncActions && blockedCount > 0)
+          // With nothing queued, a parked run would leave the bar showing the
+          // ordinary refresh icon and no sign that a run is stuck. It gets the
+          // error colour because it needs a decision, not patience.
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Badge.count(
+              count: blockedCount,
+              backgroundColor: Theme.of(context).colorScheme.error,
+              child: IconButton(
+                icon: const Icon(Icons.cloud_off),
+                tooltip: l10n.historyBlockedTooltip(blockedCount),
                 onPressed: _syncAll,
               ),
             ),
@@ -1640,6 +1677,7 @@ class _RunsScreenState extends State<RunsScreen> {
       run: run,
       unit: unit,
       isUnsynced: _unsyncedIds.contains(run.id),
+      isBlocked: _blockedIds.contains(run.id),
       selecting: _selecting,
       selected: _selected.contains(run.id),
       onTap: () async {

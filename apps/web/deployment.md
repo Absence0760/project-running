@@ -241,7 +241,7 @@ The server hop for the route builder's manual waypoint snapping (`/nearest/v1/..
 
 **Response contract.** Passes the OSRM JSON through on success. `400` malformed path/query, `401` unauthenticated, `501` when `OSRM_URL` is unconfigured, `502` when the engine is down (or answered non-200), `503` on an unhandled error. The client treats any non-200 exactly as it treated a failed OSRM call before: a failed snap returns the un-snapped pin, a failed segment falls back to a straight line with the existing warning banner.
 
-**Demo fallback is dev-only.** The dev SvelteKit wrapper may fall back to `router.project-osrm.org` when `OSRM_URL` is unset (local convenience, NODE_ENV-gated); the Lambda hard-codes the fallback off, so production can never leak coordinates to the uncontracted community endpoint. `security_guards.test.ts` pins both halves.
+**Demo fallback is dev-only.** The dev SvelteKit wrapper may fall back to `router.project-osrm.org` when `OSRM_URL` is unset (local convenience, NODE_ENV-gated); the Lambda hard-codes the fallback off, so production can never leak coordinates to the uncontracted community endpoint. `consent_guards.test.ts` pins both halves.
 
 **Memory + timeout.** 256 MB, 15 s. Each invocation is one auth round trip + one engine fetch (10 s upstream timeout inside the handler).
 

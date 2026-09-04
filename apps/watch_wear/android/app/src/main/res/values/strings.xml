@@ -124,6 +124,7 @@
     <string name="submit">Submit</string>
     <string name="cancel">Cancel</string>
     <string name="token_refresh_failed">Token refresh failed: %1$s</string>
+    <string name="sync_queue_unreadable">Saved runs unreadable</string>
 
     <!-- ───────────── Running screen ───────────── -->
     <string name="no_gps_time_only">No GPS — time only</string>

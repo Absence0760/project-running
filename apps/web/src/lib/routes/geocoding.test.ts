@@ -373,3 +373,137 @@ test('geocodePlace returns null when fetch throws', async () => {
 		globalThis.fetch = originalFetch;
 	}
 });
+
+// ---- usable coordinates (decisions § 1066) ------------------------------
+//
+// A provider's coordinate is not a coordinate because its TypeScript type
+// says so. `JSON.parse('1e400')` is `Infinity` and `parseFloat('NaN')` is
+// NaN, so both wire shapes can carry a value the declared `[number, number]`
+// and the `isFinite` check respectively did not stop.
+
+import { isUsableLatitude, isUsableLongitude } from './geocoding_math';
+
+// Serve one body to the MapTiler branch and hand back what came out.
+async function withBody<T>(body: string, run: () => Promise<T>): Promise<T> {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () => new Response(body, { status: 200 })) as typeof fetch;
+	try {
+		return await run();
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+}
+
+const searchViaKey = (q: string) => searchPlacesWithKey('k', q);
+const geocodeViaKey = (q: string) => geocodePlaceWithKey('k', q);
+
+test('isUsableLatitude / isUsableLongitude accept a coordinate and nothing else', () => {
+	assert.equal(isUsableLatitude(37.5), true);
+	assert.equal(isUsableLatitude(90), true);
+	assert.equal(isUsableLatitude(-90), true);
+	assert.equal(isUsableLatitude(90.0001), false);
+	assert.equal(isUsableLatitude(Infinity), false);
+	assert.equal(isUsableLatitude(-Infinity), false);
+	assert.equal(isUsableLatitude(NaN), false);
+	assert.equal(isUsableLatitude(null), false);
+	assert.equal(isUsableLatitude(undefined), false);
+	assert.equal(isUsableLatitude('37.5'), false);
+
+	assert.equal(isUsableLongitude(-77.4), true);
+	assert.equal(isUsableLongitude(180), true);
+	assert.equal(isUsableLongitude(-180), true);
+	assert.equal(isUsableLongitude(180.0001), false);
+	// The bounds differ, which is the whole reason there are two: a valid
+	// longitude of 120 is not a valid latitude.
+	assert.equal(isUsableLatitude(120), false);
+	assert.equal(isUsableLongitude(120), true);
+	assert.equal(isUsableLongitude(Infinity), false);
+	assert.equal(isUsableLongitude(NaN), false);
+});
+
+test('searchPlaces (MapTiler path) drops a feature whose centre is not a coordinate',
+	async () => {
+		// `1e400` is how a provider spells Infinity in JSON — it survives
+		// `JSON.parse` as a number, so the declared `[number, number]` is no
+		// protection at all.
+		const body = `{"features":[
+			{"place_name":"Infinite","center":[1e400,37.5]},
+			{"place_name":"Off the globe","center":[-77.4,91]},
+			{"place_name":"Not an array","center":"-77.4,37.5"},
+			{"place_name":"One element","center":[-77.4]},
+			{"place_name":"Null centre","center":null},
+			{"place_name":"Richmond","center":[-77.4,37.5]}
+		]}`;
+		const outcome = await withBody(body, () => searchViaKey('Richmond'));
+		assert.equal(outcome.status, 'ok');
+		const results = outcome.status === 'ok' ? outcome.results : [];
+		assert.deepEqual(
+			results,
+			[{ name: 'Richmond', lng: -77.4, lat: 37.5 }],
+			'only the one real place survives',
+		);
+	});
+
+test('geocodePlace (MapTiler path) returns null on a centre that is not a coordinate',
+	async () => {
+		assert.equal(
+			await withBody('{"features":[{"place_name":"X","center":[1e400,37.5]}]}', () =>
+				geocodeViaKey('Xanadu')),
+			null,
+		);
+		assert.equal(
+			await withBody('{"features":[{"place_name":"X","center":[-77.4,91]}]}', () =>
+				geocodeViaKey('Xanadu')),
+			null,
+		);
+		assert.equal(
+			await withBody('{"features":[{"place_name":"X","center":{}}]}', () =>
+				geocodeViaKey('Xanadu')),
+			null,
+		);
+	});
+
+test('geocodePlace (MapTiler path) falls back to the default radius on an unusable bbox',
+	async () => {
+		// A NaN radius compares false against every bound a caller checks it
+		// with, so an unusable bbox has to yield the default rather than a
+		// number that is quietly no number.
+		const out = await withBody(
+			'{"features":[{"place_name":"X","center":[-77.4,37.5],"bbox":[-77.6,1e400,-77.2,37.7]}]}',
+			() => geocodeViaKey('Xanadu'),
+		);
+		assert.ok(out);
+		assert.equal(out!.radiusM, 5000);
+	});
+
+test('geocodePlace (MapTiler path) returns null on a 200 with an unparseable body',
+	async () => {
+		// The contract is null on failure. This branch used to throw out of a
+		// call site whose only handling was the null one.
+		assert.equal(await withBody('<html>502</html>', () => geocodeViaKey('Xanadu')), null);
+	});
+
+test('searchPlaces (Nominatim path) drops a coordinate string that parses to no place',
+	async () => {
+		// `parseFloat('NaN')` is NaN and `parseFloat('1e400')` is Infinity, so
+		// the string wire shape reaches the same two failures by a different
+		// road — and `'91'` parses perfectly well into a latitude that does
+		// not exist.
+		const body = JSON.stringify([
+			{ display_name: 'NaN', lat: 'NaN', lon: '-77.4' },
+			{ display_name: 'Infinite', lat: '1e400', lon: '-77.4' },
+			{ display_name: 'Off the globe', lat: '91', lon: '-77.4' },
+			{ display_name: 'Off the globe too', lat: '37.5', lon: '181' },
+			{ display_name: 'Richmond', lat: '37.5', lon: '-77.4' },
+		]);
+		const outcome = await withBody(body, () => searchPlaces('Richmond'));
+		assert.equal(outcome.status, 'ok');
+		const results = outcome.status === 'ok' ? outcome.results : [];
+		assert.deepEqual(results, [{ name: 'Richmond', lng: -77.4, lat: 37.5 }]);
+	});
+
+test('geocodePlace (Nominatim path) returns null on a latitude off the globe',
+	async () => {
+		const body = JSON.stringify([{ display_name: 'X', lat: '91', lon: '-77.4' }]);
+		assert.equal(await withBody(body, () => geocodePlace('Xanadu')), null);
+	});

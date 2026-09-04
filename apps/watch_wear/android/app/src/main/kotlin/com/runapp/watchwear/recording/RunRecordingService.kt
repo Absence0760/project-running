@@ -136,6 +136,16 @@ class RunRecordingService : Service() {
     private var bpmSum = 0L
     private var bpmCount = 0L
 
+    // How much of the run the sensor actually covered. `bpmSum`/`bpmCount`
+    // alone say what the samples averaged, not what share of the run produced
+    // them, and `avg_bpm` is read as the run's average either way
+    // (decisions § 1083). `hrAvailableMs` accumulates on the ticker against
+    // `lastHrSampleAtMs`; `lastHrTickElapsedMs` is the previous tick's ACTIVE
+    // elapsed, so a paused stretch advances neither.
+    private var hrAvailableMs = 0L
+    private var lastHrSampleAtMs = 0L
+    private var lastHrTickElapsedMs = 0L
+
     private var pausedAccumulatedMs = 0L
     private var pausedSinceMs = 0L
 
@@ -215,6 +225,9 @@ class RunRecordingService : Service() {
         trackOverlay.clear()
         bpmSum = 0
         bpmCount = 0
+        hrAvailableMs = 0
+        lastHrSampleAtMs = 0
+        lastHrTickElapsedMs = 0
         tickIndex = 0
         lastAnnouncedSplit = 0
         lastPaceAlertAtMs = 0L
@@ -315,6 +328,7 @@ class RunRecordingService : Service() {
                         if (live && sample != null && !paused) {
                             bpmSum += sample
                             bpmCount++
+                            lastHrSampleAtMs = SystemClock.elapsedRealtime()
                         }
                         val avg = if (bpmCount == 0L) null else bpmSum.toDouble() / bpmCount
                         RecordingRepository.update {
@@ -352,6 +366,7 @@ class RunRecordingService : Service() {
             while (true) {
                 delay(500)
                 val elapsed = activeElapsedMs()
+                advanceHrCoverage(elapsed)
                 RecordingRepository.update { it.copy(elapsedMs = elapsed) }
                 tickIndex++
                 if (tickIndex % NOTIFICATION_THROTTLE_TICKS == 0) {
@@ -417,7 +432,13 @@ class RunRecordingService : Service() {
         }
         val finalElapsed = activeElapsedMs()
         val finalDistance = RecordingRepository.metrics.value.distanceM
-        val avgBpm = if (bpmCount == 0L) null else bpmSum.toDouble() / bpmCount
+        advanceHrCoverage(finalElapsed)
+        val hr = heartRateClaim(
+            bpmSum = bpmSum,
+            bpmCount = bpmCount,
+            hrAvailableMs = if (BuildConfig.ENABLE_HR) hrAvailableMs else null,
+            activeElapsedMs = finalElapsed,
+        )
 
         val file = trackWriter?.close()
         trackWriter = null
@@ -427,7 +448,8 @@ class RunRecordingService : Service() {
                 stage = RecordingRepository.Stage.Finished,
                 elapsedMs = finalElapsed,
                 distanceM = finalDistance,
-                avgBpm = avgBpm,
+                avgBpm = hr.avgBpm,
+                hrCoverage = hr.coverage,
                 trackFilePath = file?.absolutePath,
                 laps = laps.toList(),
                 activityType = activityType,
@@ -449,6 +471,20 @@ class RunRecordingService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         com.runapp.watchwear.tiles.ActiveRunTileService.requestUpdate(this)
         stopSelf()
+    }
+
+    /// Credit the tick's active milliseconds to heart-rate coverage when the
+    /// last usable sample is still fresh. Called from the ticker rather than
+    /// from the HR collect because the gap this measures is a stream that has
+    /// gone quiet — there is no emission to hang it on.
+    private fun advanceHrCoverage(activeElapsedMs: Long) {
+        if (!BuildConfig.ENABLE_HR) return
+        val step = activeElapsedMs - lastHrTickElapsedMs
+        lastHrTickElapsedMs = activeElapsedMs
+        if (step <= 0L || lastHrSampleAtMs == 0L) return
+        if (SystemClock.elapsedRealtime() - lastHrSampleAtMs <= HR_SAMPLE_FRESH_MS) {
+            hrAvailableMs += step
+        }
     }
 
     private fun isPaused(): Boolean =
@@ -636,6 +672,7 @@ class RunRecordingService : Service() {
                 trackPointCount = file.pointCount,
                 bpmSum = bpmSum,
                 bpmCount = bpmCount,
+                hrAvailableMs = if (BuildConfig.ENABLE_HR) hrAvailableMs else null,
                 activityType = activityType,
                 laps = laps.map { CheckpointLap(it.number, it.atMs, it.distanceM) },
                 steps = RecordingRepository.metrics.value.steps,

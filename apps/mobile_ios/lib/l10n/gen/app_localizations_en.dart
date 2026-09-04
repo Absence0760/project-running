@@ -2243,6 +2243,71 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyDelete => 'Delete';
 
   @override
+  String get historyUnsyncedRowSemantics => 'not yet synced';
+
+  @override
+  String get historyBlockedRowSemantics => 'cannot be uploaded';
+
+  @override
+  String get historyBlockedRowTooltip => 'Can\'t be uploaded';
+
+  @override
+  String historyBlockedTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count runs can\'t be uploaded',
+      one: '$count run can\'t be uploaded',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String historySyncBlocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count runs can\'t be uploaded and won\'t be retried. Open each one to choose what to do.',
+      one:
+          '$count run can\'t be uploaded and won\'t be retried. Open it to choose what to do.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runDetailBlockedDropTrack => 'Upload without the trace';
+
+  @override
+  String get runDetailBlockedExport => 'Export a copy';
+
+  @override
+  String get runDetailBlockedTitle => 'This run can\'t be uploaded';
+
+  @override
+  String runDetailBlockedTrackTooLarge(int waypoints) {
+    return 'Its GPS trace ($waypoints points) is larger than the cloud store will hold, so trying again will never work. Everything else about the run — distance, time, pace, elevation — can still be saved.';
+  }
+
+  @override
+  String get runDetailDropTrackBody =>
+      'The trace is removed from this device and the run uploads without a map. Its distance, time, pace and elevation are unchanged. Export a copy first if you want to keep it.';
+
+  @override
+  String get runDetailDropTrackConfirm => 'Upload without it';
+
+  @override
+  String get runDetailDropTrackDone =>
+      'Trace removed. The run syncs on the next cycle.';
+
+  @override
+  String get runDetailDropTrackFailed =>
+      'The trace could not be removed. Try again.';
+
+  @override
+  String get runDetailDropTrackTitle => 'Upload without the GPS trace?';
+
+  @override
   String get historyQueuedToSync => 'Queued to sync';
 
   @override

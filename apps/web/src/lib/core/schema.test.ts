@@ -4,7 +4,7 @@
 // else in the source tree — a stray literal silently dodges the registry
 // and reopens the rename-by-grep hazard the registry exists to close.
 //
-// Mirrors the `security_guards.test.ts` file-as-text pattern: walk the
+// Mirrors the `privacy_guards.test.ts` file-as-text pattern: walk the
 // source tree, read each file, assert the forbidden pattern is absent.
 // See reviews/audit-db-optimization.md § F11.
 

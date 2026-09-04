@@ -3821,6 +3821,90 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get historyDelete;
 
+  /// Screen-reader fragment on a runs-list row that is queued to sync
+  ///
+  /// In en, this message translates to:
+  /// **'not yet synced'**
+  String get historyUnsyncedRowSemantics;
+
+  /// Screen-reader fragment on a runs-list row whose push is parked
+  ///
+  /// In en, this message translates to:
+  /// **'cannot be uploaded'**
+  String get historyBlockedRowSemantics;
+
+  /// Tooltip on the per-row icon marking a run whose push is parked
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t be uploaded'**
+  String get historyBlockedRowTooltip;
+
+  /// Tooltip on the History AppBar badge counting runs whose push is parked
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run can\'t be uploaded} other{{count} runs can\'t be uploaded}}'**
+  String historyBlockedTooltip(int count);
+
+  /// Banner on History when one or more runs are parked and will not be retried
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run can\'t be uploaded and won\'t be retried. Open it to choose what to do.} other{{count} runs can\'t be uploaded and won\'t be retried. Open each one to choose what to do.}}'**
+  String historySyncBlocked(int count);
+
+  /// Button on the parked-push card that uploads the run without its GPS trace
+  ///
+  /// In en, this message translates to:
+  /// **'Upload without the trace'**
+  String get runDetailBlockedDropTrack;
+
+  /// Button on the parked-push card that opens the file-export sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Export a copy'**
+  String get runDetailBlockedExport;
+
+  /// Title of the run-detail card shown when the run's push is parked
+  ///
+  /// In en, this message translates to:
+  /// **'This run can\'t be uploaded'**
+  String get runDetailBlockedTitle;
+
+  /// Body of the parked-push card when the run's GPS trace is larger than the cloud store allows
+  ///
+  /// In en, this message translates to:
+  /// **'Its GPS trace ({waypoints} points) is larger than the cloud store will hold, so trying again will never work. Everything else about the run — distance, time, pace, elevation — can still be saved.'**
+  String runDetailBlockedTrackTooLarge(int waypoints);
+
+  /// Body of the confirmation dialog for uploading a run without its GPS trace
+  ///
+  /// In en, this message translates to:
+  /// **'The trace is removed from this device and the run uploads without a map. Its distance, time, pace and elevation are unchanged. Export a copy first if you want to keep it.'**
+  String get runDetailDropTrackBody;
+
+  /// Confirm action in the drop-GPS-trace dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Upload without it'**
+  String get runDetailDropTrackConfirm;
+
+  /// Banner after the GPS trace was dropped so the run can sync
+  ///
+  /// In en, this message translates to:
+  /// **'Trace removed. The run syncs on the next cycle.'**
+  String get runDetailDropTrackDone;
+
+  /// Banner when dropping the GPS trace failed
+  ///
+  /// In en, this message translates to:
+  /// **'The trace could not be removed. Try again.'**
+  String get runDetailDropTrackFailed;
+
+  /// Title of the confirmation dialog for uploading a run without its GPS trace
+  ///
+  /// In en, this message translates to:
+  /// **'Upload without the GPS trace?'**
+  String get runDetailDropTrackTitle;
+
   /// Tooltip on the per-row unsynced icon in the runs list
   ///
   /// In en, this message translates to:

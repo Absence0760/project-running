@@ -40,7 +40,7 @@ class _SignInControllableApi extends ApiClient {
   String? get userId => _userId;
 
   @override
-  Future<Set<String>> saveRunsBatch(
+  Future<RunPushOutcome> saveRunsBatch(
     List<Run> runs, {
     int uploadConcurrency = 8,
     int rowChunkSize = 100,
@@ -49,7 +49,7 @@ class _SignInControllableApi extends ApiClient {
     saveBatchCallCount++;
     if (throwOnPush) throw Exception('boom');
     pushedBatches.add(List<Run>.from(runs));
-    return nextBatchFailedIds;
+    return RunPushOutcome(retryable: nextBatchFailedIds);
   }
 
   @override

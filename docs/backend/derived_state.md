@@ -48,9 +48,22 @@ retention cron referenced in a comment that was never created.
   embedded-best efforts (`20260529000002`; read from the promoted
   `runs.fastest_*_s` columns since `20270325_001`), DNF exclusion
   (`20260530000001`), mile bracket (`20261021_001`), the auth guard
-  (`20260904_001`), consolidated by `20261009_001`, and the parkrun/race source
-  widening (`20270424_001`). The live body is the **latest** migration that
+  (`20260904_001`), consolidated by `20261009_001`, the parkrun/race source
+  widening (`20270424_001`), and the positive-time filters (`20270706000003`).
+  The live body is the **latest** migration that
   touches the function — read it, don't reconstruct from the originals.
+- **Every candidate time is positive** (`20270706000003`, decisions § 1078).
+  `runs_duration_s_check` is `duration_s >= 0` on purpose — a run imported with
+  a distance and no time is a row we store — and the whole-run branch had no
+  positivity filter at all, so a zero-second run in a PR bracket became the
+  FASTEST candidate for it and reached this cache, where
+  `personal_records_best_time_s_check` refused it. That refusal happens inside
+  an AFTER trigger on `runs`, so the 23514 failed the INSERT of the run:
+  measured, an ordinary session could not save
+  `(duration_s => 0, distance_m => 5000, source => 'app')` at all. The four
+  embedded-best branches read `>= 0` and are tightened with it. The bound
+  belongs here rather than on the column — not having run 5 km in zero seconds
+  is a PR-eligibility rule, not a storage rule.
 - **Maintained by:** statement-level AFTER INSERT/UPDATE/DELETE triggers on
   `runs` (`20270315_001`; per-row until then) calling the refresher once per
   statement per affected `user_id` from the transition tables — a bulk import
@@ -70,6 +83,8 @@ retention cron referenced in a comment that was never created.
   (multi-row statements refresh once per affected user and still land the
   authoritative result), `personal_records_run_family_test.sql` (a bike ride
   holds no PR and no single-run distance badge; a re-type re-derives the cache),
+  `personal_records_positive_times_test.sql` (a zero-second run saves and sets
+  nothing, a zero embedded best sets nothing, both with positive controls),
   plus the brackets / DNF / embedded / mile suites.
 - **Trap:** this function is the canonical bare-body casualty. Any new migration
   that does `create or replace function refresh_personal_records_for_user` must
@@ -190,6 +205,46 @@ retention cron referenced in a comment that was never created.
 - **Pinned by:** `gym_workout_totals_test.sql` (insert/update/delete a set, assert
   both the columns and the view summary track the recompute) and
   `frozen_managed_columns_test.sql`.
+
+## `gym_sets.exercise_key`
+
+- **What it caches:** the exercise grouping key for one logged set —
+  `normalise_exercise_name(exercise_name)`. Every RPC that groups a lifter's
+  history (`gym_exercise_names`, `gym_exercise_records`,
+  `gym_exercise_set_history`, `gym_exercise_set_history_batch`,
+  `gym_workout_summaries`) folded the name once per `gym_sets` row inside its
+  own scan until `20270706000002`; they read the column now. Measured on a
+  15,000-set history the same aggregate went from 66-74 ms to 4.9-5.4 ms, and
+  from 2,241 ms to 196 ms at 500,000 sets (decisions § 1076).
+- **Authoritative recompute:**
+  `public.normalise_exercise_name(exercise_name)`, and the validated CHECK
+  `gym_sets_exercise_key_canonical` says so at the boundary rather than leaving
+  it a claim. `gym_sets_exercise_key_len_chk` bounds it at the name's own 120,
+  which the fold cannot exceed.
+- **Maintained by:** `gym_sets_stamp_exercise_key()` (BEFORE INSERT OR UPDATE on
+  `gym_sets`), migration `20270706000001`. Unqualified rather than
+  `update of exercise_name`, so an UPDATE naming only the key is re-stamped
+  instead of hitting a 23514 the client cannot act on.
+- **Manual rebuild:**
+  `update gym_sets set exercise_key = normalise_exercise_name(exercise_name)
+  where exercise_key is distinct from normalise_exercise_name(exercise_name);`
+  — batch it by primary-key range on a populated database
+  (`migration_locks.md`), and keyset-paginate rather than re-running the
+  predicate, which is O(n²/batch).
+- **Client writes are discarded:** by the same trigger, and unconditionally —
+  a client value is OVERWRITTEN, never refused. That is the difference from
+  `gym_routine_exercises.exercise_key`, where the client stamps the key under a
+  CHECK and mobile's older Unicode case table could therefore produce a 23514
+  on a legitimate save (decisions § 830). The trigger is not keyed on
+  `current_user` as `20270704000003`'s freezes are: the value is a pure function
+  of a column on the same row, so there is no writer, privileged or not, that
+  should be allowed a different answer.
+- **Pinned by:** `gym_sets_exercise_key_test.sql` (13 tests — the stamp on
+  insert, on rename and on a key-only UPDATE, the empty key for a
+  whitespace-only name, the `service_role` write, the five RPCs bucketing four
+  spellings as one exercise, and a mutation that moves a stored key with the
+  trigger and CHECK dropped, proving the RPCs read the column rather than
+  re-folding the name).
 
 ## `user_coach_usage`
 

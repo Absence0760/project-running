@@ -231,38 +231,6 @@ final Map<String, RaceImportProvider> _providerByToken = {
 RaceImportProvider? raceImportProviderFor(String provider) =>
     _providerByToken[provider];
 
-/// Whether a thrown probe failure leaves the provider UNCONFIRMED, so the
-/// surface must treat it as unavailable.
-///
-/// A port of web's `isProviderNotConfigured` (`core/data.ts`), which is the
-/// reference implementation for this decision and was already fail-closed while
-/// the phone was not. Only two answers report a provider live: a clean success,
-/// and a readable non-429 4xx — which means the function ran PAST its
-/// credential gate and refused for its own reasons. Everything else is a probe
-/// that never reached the gate, or never got past it:
-///
-///  * 503 — the gate itself, whatever the body says. `race-results-import`
-///    answers 503 for UltraSignup's unliftable attribution refusal too, with a
-///    `reason` rather than a missing credential, and both are "do not offer".
-///  * 429 — the function's own per-user rate limit. Several probes on one
-///    screen exceed it, and a rate-limited probe confirms nothing.
-///  * any other 5xx — did not reach, or did not get past, the credential gate.
-///  * no readable status at all — a transport failure (the `http` client's own
-///    exception on this package version, a status-0 `FunctionsFetchException`
-///    on a later one), Supabase not yet initialised, or any unexpected throw.
-///
-/// Offering an action that 503s on its very next call is worse than hiding a
-/// live leg for one page load, which a later probe corrects.
-bool raceProbeUnavailable(Object error) {
-  if (error is FunctionException && error.status > 0) {
-    if (error.status == 503 || error.status == 429 || error.status >= 500) {
-      return true;
-    }
-    return false;
-  }
-  return true;
-}
-
 /// All Supabase calls for the race calendar + results import (race_calendar.md).
 /// Mirrors the web `data.ts` race helpers; wire-level methods are exercisable
 /// against a real local Supabase via the `withClient` seam.
@@ -451,8 +419,21 @@ class RaceService extends ChangeNotifier {
   /// call for a listing provider that has no import leg at all, so a caller can
   /// ask about any listing and get an honest answer rather than a peer's.
   ///
-  /// Every other answer is [raceProbeUnavailable]'s, which is fail-closed: only
-  /// a clean success, or a readable non-429 4xx, reports the provider live.
+  /// **Configured iff the invoke did not throw** — web's `probeSaysConfigured`
+  /// rule (`core/provider_probe.ts`), because a probe asks one question and
+  /// only a 200 answers it. `functions_client` throws `FunctionException` for
+  /// every status outside 200-299, so "did not throw" is exactly "2xx", and the
+  /// probe branch of `race-results-import` has exactly one affirmative answer:
+  /// `{configured: true}`. Everything else it can say is a refusal.
+  ///
+  /// This replaced a grader that reported a readable non-429 4xx as CONFIGURED,
+  /// on the theory that such a status proved the function ran past its
+  /// credential gate. Reading the endpoint rather than the theory refutes it
+  /// twice (decisions § 1073): the function answers **401 before it reads any
+  /// provider credential at all**, so a signed-out or expired session lit every
+  /// card as live; and it answers **400 `unknown_provider`** for a leg it does
+  /// not dispatch, which its own comment introduces as "not configured" — the
+  /// function and the client had opposite readings of one response.
   ///
   /// Total by construction, so a caller cannot lose the fail-closed answer by
   /// forgetting to catch. The two screens keep their own L4 try/catch anyway —
@@ -465,7 +446,8 @@ class RaceService extends ChangeNotifier {
       await _c.functions.invoke(spec.probeFunction, body: spec.probeBody);
       return true;
     } catch (e) {
-      return !raceProbeUnavailable(e);
+      debugPrint('RaceService: $provider probe reports unavailable: $e');
+      return false;
     }
   }
 

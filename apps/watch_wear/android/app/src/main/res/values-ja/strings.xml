@@ -95,6 +95,7 @@
     <string name="submit">送信</string>
     <string name="cancel">キャンセル</string>
     <string name="token_refresh_failed">トークンの更新に失敗しました：%1$s</string>
+    <string name="sync_queue_unreadable">保存した記録を読み取れません</string>
 
     <string name="no_gps_time_only">GPS なし — 時間のみ</string>
     <string name="gps_lost">GPS を喪失</string>

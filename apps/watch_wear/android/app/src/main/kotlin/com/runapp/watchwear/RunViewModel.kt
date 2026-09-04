@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.runapp.watchwear.recording.Checkpoint
 import com.runapp.watchwear.recording.CheckpointStore
 import com.runapp.watchwear.recording.checkpointActiveDurationS
+import com.runapp.watchwear.recording.heartRateClaim
 import com.runapp.watchwear.recording.RecordingRepository
 import com.runapp.watchwear.recording.RecoveryAction
 import com.runapp.watchwear.recording.recoveryActionFor
@@ -20,6 +21,8 @@ import com.runapp.watchwear.system.BatteryOptimization
 import com.runapp.watchwear.system.BatteryStatus
 import com.runapp.watchwear.system.NetworkWatcher
 import java.io.File
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
@@ -350,6 +353,29 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// at the purgeable location.
     private var trackStorageReconciled = false
 
+    /// Last-resort net under every coroutine this view model starts.
+    ///
+    /// `viewModelScope` carries a `SupervisorJob`, which stops one failing
+    /// child from cancelling its siblings but does NOT stop an unhandled throw
+    /// from reaching the thread's uncaught handler — and on Android that ends
+    /// the process the recording service is in. Twenty-three `launch` sites
+    /// each had to remember their own `try` for a run not to die of a route
+    /// cache write; § 1055 closed the one that had already cost a run, and the
+    /// residual was every site nobody had reached yet.
+    ///
+    /// It is a net, not a substitute. A site whose failure the runner should
+    /// hear about still catches and says so — this only decides what happens
+    /// to the ones that say nothing, and "logged" beats "process gone".
+    private val crashGuard = CoroutineExceptionHandler { _, e ->
+        Log.e(TAG, "unhandled failure in a view-model coroutine", e)
+    }
+
+    /// Every `launch` in this class goes through here. `ViewModelStreamResilienceTest`
+    /// fails the build on a bare `viewModelScope.launch`, because a handler
+    /// installed on 22 of 23 sites is the same defect with better odds.
+    private fun launchGuarded(block: suspend CoroutineScope.() -> Unit): Job =
+        viewModelScope.launch(crashGuard, block = block)
+
     private var queueWatchJob: Job? = null
     private var recordingObserverJob: Job? = null
     private var connectivityJob: Job? = null
@@ -386,7 +412,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// `refreshRoutes()` remains the canonical refresh path when the
     /// watch has its own connectivity.
     private fun observeRoutesBridge() {
-        viewModelScope.launch {
+        launchGuarded {
             try {
                 routesBridge.current()?.let { push ->
                     if (push.routes.isNotEmpty() &&
@@ -402,7 +428,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (_: Throwable) { /* best-effort cold-start hydrate */ }
         }
-        viewModelScope.launch {
+        launchGuarded {
             routesBridge.events
                 .catch { e -> Log.w(TAG, "routes bridge stream failed", e) }
                 .collect { push ->
@@ -426,7 +452,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun observeRecording() {
-        recordingObserverJob = viewModelScope.launch {
+        recordingObserverJob = launchGuarded {
             RecordingRepository.metrics.collect { m ->
                 when (m.stage) {
                     RecordingRepository.Stage.Recording,
@@ -467,7 +493,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         lastRacePingAtMs = now
         val token = supabase.currentAccessToken ?: return
         val uid = supabase.authedUserId ?: return
-        racePingJob = viewModelScope.launch {
+        racePingJob = launchGuarded {
             try {
                 raceClient.pushPing(
                     accessToken = token,
@@ -487,7 +513,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun observeQueue() {
-        queueWatchJob = viewModelScope.launch {
+        queueWatchJob = launchGuarded {
             store.queue
                 .catch { e -> Log.w(TAG, "run queue stream failed", e) }
                 .collect { list ->
@@ -502,7 +528,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun observeConnectivity() {
-        connectivityJob = viewModelScope.launch {
+        connectivityJob = launchGuarded {
             var seeded = false
             networkWatcher.availability().collect { online ->
                 _state.value = _state.value.copy(online = online)
@@ -516,7 +542,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// has no realtime client today so we poll — 30s cadence is fine
     /// because the organiser usually arms a few minutes before GO.
     private fun observeRace() {
-        racePollJob = viewModelScope.launch {
+        racePollJob = launchGuarded {
             while (true) {
                 kotlinx.coroutines.delay(5_000)
                 if (authReady.value) refreshRace()
@@ -552,13 +578,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun bootstrapAuth() {
-        viewModelScope.launch {
+        launchGuarded {
             val cached = sessionStore.current()
             if (cached != null) {
                 applySession(cached)
                 refreshIfExpired(cached)
                 drainQueue()
-                return@launch
+                return@launchGuarded
             }
             if (BuildConfig.BYPASS_LOGIN) {
                 try {
@@ -566,7 +592,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 } catch (_: Throwable) { /* sign-in screen will surface */ }
             }
         }
-        viewModelScope.launch {
+        launchGuarded {
             try {
                 sessionBridge.current()?.let { payload ->
                     val stored = StoredSession.fromPayload(payload)
@@ -577,7 +603,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (_: Throwable) { /* no paired phone, fine */ }
         }
-        viewModelScope.launch {
+        launchGuarded {
             sessionBridge.events
                 .catch { e -> Log.w(TAG, "session bridge stream failed", e) }
                 .collect { event ->
@@ -595,10 +621,12 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                         // Encrypted-store I/O, the route + run + tile wipes and
                         // the drain all run from here. The sibling one-shot
                         // read of the same payload was already guarded; this
-                        // one was not, and viewModelScope installs no
-                        // CoroutineExceptionHandler, so a throw reached the
-                        // thread's uncaught handler and took the recording
-                        // service down with the process.
+                        // one was not, so a throw reached the thread's
+                        // uncaught handler and took the recording service
+                        // down with the process. `launchGuarded` is the net
+                        // under that now; this stays because a failure the
+                        // runner's session depends on is worth naming here
+                        // rather than reading as an anonymous crash.
                         Log.w(TAG, "session bridge event failed", e)
                     }
                 }
@@ -665,8 +693,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun checkRecovery() {
-        viewModelScope.launch {
-            val cp = checkpoints.current() ?: return@launch
+        launchGuarded {
+            val cp = checkpoints.current() ?: return@launchGuarded
             when (gradeRecovery(cp)) {
                 RecoveryAction.Offer ->
                     _state.value = _state.value.copy(pendingRecovery = cp)
@@ -695,19 +723,27 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// track file deleted — while the prompt sits on screen waiting for a tap.
     fun recoverCheckpoint() {
         val cp = _state.value.pendingRecovery ?: return
-        viewModelScope.launch {
+        launchGuarded {
             if (gradeRecovery(cp) != RecoveryAction.Offer) {
                 checkpoints.clear()
                 _state.value = _state.value.copy(pendingRecovery = null)
-                return@launch
+                return@launchGuarded
             }
             val durationS = checkpointActiveDurationS(cp)
-            val avgBpm = if (cp.bpmCount == 0L) null
-                else cp.bpmSum.toDouble() / cp.bpmCount
+            // A recovered run is graded the same way the normal stop path
+            // grades one; a checkpoint carrying no coverage measurement claims
+            // none and keeps its average (decisions § 1083).
+            val hr = heartRateClaim(
+                bpmSum = cp.bpmSum,
+                bpmCount = cp.bpmCount,
+                hrAvailableMs = cp.hrAvailableMs,
+                activeElapsedMs = durationS * 1000L,
+            )
+            val avgBpm = hr.avgBpm
             val sealed = sealTrackFile(cp.trackFilePath) ?: run {
                 checkpoints.clear()
                 _state.value = _state.value.copy(pendingRecovery = null)
-                return@launch
+                return@launchGuarded
             }
             store.save(
                 QueuedRun(
@@ -717,6 +753,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     distanceM = cp.distanceM,
                     trackFilePath = sealed.absolutePath,
                     avgBpm = avgBpm,
+                    hrCoverage = hr.coverage,
                     activityType = cp.activityType,
                     laps = cp.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                     steps = cp.steps,
@@ -753,7 +790,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         withContext(Dispatchers.IO) { sealTrackFileOrNull(File(path)) }
 
     fun discardCheckpoint() {
-        viewModelScope.launch {
+        launchGuarded {
             checkpoints.clear()
             _state.value = _state.value.copy(pendingRecovery = null)
         }
@@ -802,8 +839,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     ///     `followers` / `private` → false. The phone/web social layer
     ///     is the authoritative path for the `followers` nuance.
     private fun applyUniversalPrefsAsync() {
-        viewModelScope.launch {
-            val settings = supabase.fetchUniversalSettings() ?: return@launch
+        launchGuarded {
+            val settings = supabase.fetchUniversalSettings() ?: return@launchGuarded
             // privacy_default — stash regardless of stage; the snapshot
             // matters at handleFinishedRun, which can run minutes or
             // hours after the fetch returns.
@@ -823,10 +860,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             )
             // default_activity_type — only prime; never override a
             // started run or a manual chip choice.
-            val preferred = settings.defaultActivityType ?: return@launch
+            val preferred = settings.defaultActivityType ?: return@launchGuarded
             val s = _state.value
-            if (s.stage != Stage.PreRun) return@launch
-            if (s.activityType != "run") return@launch
+            if (s.stage != Stage.PreRun) return@launchGuarded
+            if (s.activityType != "run") return@launchGuarded
             _state.value = s.copy(activityType = preferred)
         }
     }
@@ -919,7 +956,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// network refresh in `refreshRoutes` fires when the user opens
     /// the picker.
     private fun loadCachedRoutes() {
-        viewModelScope.launch {
+        launchGuarded {
             try {
                 val cached = routeStore.current()
                 if (cached.isNotEmpty()) {
@@ -944,7 +981,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         _state.value = _state.value.copy(routesLoading = true)
-        viewModelScope.launch {
+        launchGuarded {
             try {
                 val fresh = supabase.fetchRoutes()
                 routeStore.save(fresh)
@@ -984,9 +1021,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// fix is available (indoor, GPS off) or when a planned route is
     /// already selected (its tiles were prefetched on selectRoute).
     fun prefetchTilesForRunStart() {
-        viewModelScope.launch {
+        launchGuarded {
             try {
-                val fix = gpsForPrefetch.lastLocation() ?: return@launch
+                val fix = gpsForPrefetch.lastLocation() ?: return@launchGuarded
                 val latLng = com.runapp.watchwear.recording.RouteMath.LatLng(fix.lat, fix.lng)
                 // Publish the fix so the countdown screen can render
                 // a preview of the running-screen map under the digit
@@ -1013,7 +1050,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             selectedRoute = route,
             stage = Stage.PreRun,
         )
-        viewModelScope.launch {
+        launchGuarded {
             // Bump LRU so the next picker open puts this route at
             // the top regardless of `updated_at` on the server.
             try {
@@ -1092,7 +1129,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             thisRunSynced = false,
             lastRunSummary = summary,
         )
-        viewModelScope.launch {
+        launchGuarded {
             store.save(
                 QueuedRun(
                     id = runId,
@@ -1101,6 +1138,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     distanceM = m.distanceM,
                     trackFilePath = trackPath,
                     avgBpm = m.avgBpm,
+                    hrCoverage = m.hrCoverage,
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                     steps = m.steps,
@@ -1151,7 +1189,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sync() {
-        viewModelScope.launch {
+        launchGuarded {
             _state.value = _state.value.copy(syncing = true, syncError = null)
             drainQueue(force = true)
             _state.value = _state.value.copy(syncing = false)
@@ -1169,7 +1207,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     fun discard() {
         val id = _state.value.thisRunId
-        viewModelScope.launch {
+        launchGuarded {
             if (id != null) store.remove(id)
             startNextRun()
         }
@@ -1178,7 +1216,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     // ----- Sign in / out -----
 
     fun signOut() {
-        viewModelScope.launch { tearDownSession() }
+        launchGuarded { tearDownSession() }
     }
 
     fun openSignIn() {
@@ -1190,7 +1228,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun signInWithEmail(email: String, password: String) {
-        viewModelScope.launch {
+        launchGuarded {
             _state.value = _state.value.copy(
                 authed = false,
                 authError = null,
@@ -1255,7 +1293,30 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             // force=true so a manual Sync chip always fires.
             return
         }
-        val snapshot = store.queue.first()
+        // An unreadable queue is not an empty one, and the three things this
+        // could do are not equivalent. DataStore reports a corrupt or
+        // unreadable file by FAILING the read, so treating the failure as an
+        // empty list drains nothing, arms no backoff and clears the error
+        // banner — the runner is told their runs are synced by the same code
+        // path that could not open the file holding them. Letting it throw is
+        // worse still: this runs under `drainMutex` inside a coroutine, and
+        // before `launchGuarded` it ended the process the recording service
+        // was in. So it is reported, and it arms backoff because the condition
+        // persists — every network flap would otherwise retry a read that
+        // cannot succeed — while a `force` drain (the Sync chip, a fresh
+        // sign-in) still gets through, which is the one thing that makes a
+        // retry after a reboot possible.
+        val snapshot = try {
+            store.queue.first()
+        } catch (e: Throwable) {
+            Log.e(TAG, "run queue unreadable — drain skipped", e)
+            drainBackoff.onFailure()
+            _state.value = _state.value.copy(
+                syncError = getApplication<Application>()
+                    .getString(R.string.sync_queue_unreadable),
+            )
+            return
+        }
         // The loop body itself is in the pure `drainQueueLoop` helper
         // so the per-error-class semantics, refresh-then-retry shape,
         // and transient-vs-permanent split can be unit-tested in
@@ -1312,6 +1373,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         val metadata: JsonObject = buildRunMetadata(
             activityType = run.activityType,
             avgBpm = run.avgBpm,
+            hrCoverage = run.hrCoverage,
             steps = run.steps,
             laps = run.laps,
             lastModifiedAtIso = Instant.now().toString(),

@@ -8,7 +8,7 @@
 -- That change landed on the client rails: `STRIPPABLE_IMAGE_MIME_TYPES`
 -- (apps/web/src/lib/util/exif_strip.ts), `kStrippableImageMimeTypes`
 -- (apps/mobile_android/lib/exif_strip.dart) and `PHOTO_MIME_TO_EXT`, with a
--- guard in security_guards.test.ts asserting accepted ⊆ strippable.
+-- guard in privacy_guards.test.ts asserting accepted ⊆ strippable.
 --
 -- It did not land here. `run-photos` (20260620_001), `route-photos`
 -- (20270114_001) and `club-photos` (20270301_001) were all written before

@@ -29,6 +29,10 @@ data class QueuedRun(
     /// ultra-length runs where the track file can be multiple megabytes.
     val trackFilePath: String,
     val avgBpm: Double? = null,
+    /// Share of the run's active time the heart-rate sensor covered, 0..1.
+    /// Uploaded as `metadata.hr_coverage`; null omits the key — a run queued
+    /// before the field existed says nothing rather than claiming zero.
+    val hrCoverage: Double? = null,
     val activityType: String = "run",
     val laps: List<QueuedLap> = emptyList(),
     /// Cumulative step count for the run — captured from the

@@ -92,13 +92,19 @@ Future<void> runBackgroundSyncCycle(
       .toList();
   if (unsynced.isNotEmpty) {
     try {
-      final failed = await api.saveRunsBatch(unsynced);
+      final outcome = await api.saveRunsBatch(unsynced);
+      // Park before marking: a run left in neither set drains again next cycle,
+      // which is the right default, but a blocked one re-sends bytes the bucket
+      // has already refused (decisions § 1070).
+      if (outcome.blocked.isNotEmpty) await store.markBlocked(outcome.blocked);
+      final failed = outcome.failedIds;
       await store.markManySynced(
         unsynced.where((r) => !failed.contains(r.id)),
       );
       debugPrint(
         'Background sync: pushed ${unsynced.length - failed.length} '
-        '(skipped ${failed.length} on track-upload failure)',
+        '(${outcome.retryable.length} deferred, '
+        '${outcome.blocked.length} parked)',
       );
     } catch (e) {
       debugPrint('Background sync batch failed: $e');

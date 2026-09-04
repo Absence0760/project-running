@@ -36,7 +36,7 @@ const REDTHROW_EXEMPT = new Map<string, string>([
 	],
 	[
 		'data.ts::race-results-import',
-		'Rethrown only after isProviderNotConfigured() has already read the ' +
+		'Rethrown only after isProviderGateRefusal() has already read the ' +
 			'envelope off `context`, which is the unwrap this rule is about.',
 	],
 ]);

@@ -28,6 +28,10 @@ import {
   parseEnvWire,
   parseKmsDecryptGrant,
   parseWorkflowJobs,
+  UNEXERCISED_LAMBDA_ACTIONS,
+  checkLambdaActionScope,
+  iamActionForCliVerb,
+  parseWorkflowLambdaActions,
   readWorkflowFiles,
 } from './check_infra_iam.mjs';
 
@@ -841,4 +845,105 @@ test('neither committed composite action assumes an AWS role', () => {
 
 test('credentialedActions on a missing directory is empty, not a throw', () => {
   assert.deepEqual(credentialedActions(join(ACTION_DIR, 'does-not-exist')), []);
+});
+
+// ───────────── claim 10: lambda verb scope ─────────────
+
+const INVOKED = new Set(['lambda:UpdateFunctionCode', 'lambda:UpdateAlias']);
+
+/** @param {string[]} actions */
+const lambdaPolicy = (actions) => ({
+  provider: null,
+  providerLabel: null,
+  roles: [],
+  policies: [
+    {
+      roleLabel: 'deploy_prod',
+      statements: [{ sid: 'LambdaUpdate', effect: 'Allow', actions, resources: [] }],
+    },
+  ],
+});
+
+test('a CLI verb maps to the one IAM action its operation is named for', () => {
+  // `--publish` is a member of the UpdateFunctionCode REQUEST, not a second
+  // call, which is what made lambda:PublishVersion a third unused verb.
+  assert.equal(iamActionForCliVerb('update-function-code'), 'UpdateFunctionCode');
+  assert.equal(iamActionForCliVerb('update-alias'), 'UpdateAlias');
+  assert.equal(iamActionForCliVerb('get-alias'), 'GetAlias');
+});
+
+test('the committed workflows invoke exactly update-function-code and update-alias', () => {
+  assert.deepEqual(
+    [...parseWorkflowLambdaActions(readWorkflowFiles(WORKFLOW_DIR))].sort(),
+    ['lambda:UpdateAlias', 'lambda:UpdateFunctionCode'],
+  );
+});
+
+test('a verb only MENTIONED in a run-body comment is not an invocation', () => {
+  const text = [
+    'jobs:',
+    '  deploy:',
+    '    steps:',
+    '      - name: Deploy',
+    '        run: |',
+    '          # bin/lambda-alias-sync.sh runs aws lambda get-alias under the operator profile',
+    '          aws lambda update-function-code --function-name x --publish',
+    '',
+  ].join('\n');
+  assert.deepEqual([...parseWorkflowLambdaActions([{ name: 'w.yml', text }])], [
+    'lambda:UpdateFunctionCode',
+  ]);
+});
+
+test('the committed roles grant exactly what the pipeline invokes', () => {
+  const { errors, ok } = checkLambdaActionScope(
+    parseOidcStack(readFileSync(OIDC_FILE, 'utf-8')),
+    parseWorkflowLambdaActions(readWorkflowFiles(WORKFLOW_DIR)),
+  );
+  assert.deepEqual(errors, []);
+  assert.equal(ok.length, 2, ok.join('\n'));
+});
+
+test('an unexercised verb fails and is named', () => {
+  const { errors } = checkLambdaActionScope(
+    lambdaPolicy(['lambda:UpdateFunctionCode', 'lambda:UpdateAlias', 'lambda:GetFunction']),
+    INVOKED,
+  );
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /grants lambda:GetFunction, which no workflow invokes/);
+});
+
+test('a verb the pipeline needs but the role lacks fails the other way', () => {
+  // The direction that breaks a release rather than widening one.
+  const { errors } = checkLambdaActionScope(lambdaPolicy(['lambda:UpdateFunctionCode']), INVOKED);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /missing lambda:UpdateAlias/);
+});
+
+test('reading no invocation at all is reported, not treated as a clean set', () => {
+  const { errors, ok } = checkLambdaActionScope(lambdaPolicy(['lambda:UpdateAlias']), new Set());
+  assert.equal(ok.length, 0);
+  assert.match(errors[0], /would have been compared against nothing/);
+});
+
+test('a policy with no lambda statement is reported', () => {
+  const { errors } = checkLambdaActionScope(lambdaPolicy(['s3:PutObject']), INVOKED);
+  assert.match(errors[0], /no statement granting any `lambda:` action/);
+});
+
+test('a declared exemption nothing grants fails, and the live map is empty', () => {
+  assert.equal(UNEXERCISED_LAMBDA_ACTIONS.size, 0);
+  const saved = new Map(UNEXERCISED_LAMBDA_ACTIONS);
+  UNEXERCISED_LAMBDA_ACTIONS.set('lambda:GetFunction', 'kept for a reason nobody wrote down');
+  try {
+    const { errors } = checkLambdaActionScope(
+      lambdaPolicy(['lambda:UpdateFunctionCode', 'lambda:UpdateAlias']),
+      INVOKED,
+    );
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /declares lambda:GetFunction .* but no role grants it/);
+  } finally {
+    UNEXERCISED_LAMBDA_ACTIONS.clear();
+    for (const [k, v] of saved) UNEXERCISED_LAMBDA_ACTIONS.set(k, v);
+  }
 });

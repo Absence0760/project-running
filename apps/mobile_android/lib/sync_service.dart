@@ -249,20 +249,31 @@ class SyncService with WidgetsBindingObserver {
       if (unsynced.isNotEmpty) {
         debugPrint('SyncService: pushing ${unsynced.length} runs ($reason)');
         try {
-          final failed = await api.saveRunsBatch(unsynced);
+          final outcome = await api.saveRunsBatch(unsynced);
           // Mark only the runs whose track upload succeeded — the
           // failed-track set comes back from saveRunsBatch so a single
           // corrupted run no longer blocks the rest of the queue.
           // (The full batch-throw path stays for catastrophic
           // failures like an auth error — we land in the catch below.)
+          // A blocked run is parked rather than left queued: retrying it is
+          // re-sending a payload the server has already refused, and the
+          // residency invariant would hold its track for the whole session
+          // to do it (decisions § 1070).
+          if (outcome.blocked.isNotEmpty) {
+            await runStore.markBlocked(outcome.blocked);
+          }
+          final failed = outcome.failedIds;
           final succeeded =
               unsynced.where((r) => !failed.contains(r.id)).toList();
           await runStore.markManySynced(succeeded);
           debugPrint(
             'SyncService: pushed ${unsynced.length - failed.length} '
-            '(skipped ${failed.length} on track-upload failure)',
+            '(${outcome.retryable.length} deferred, '
+            '${outcome.blocked.length} parked)',
           );
-          if (failed.isNotEmpty) anyFailure = true;
+          // A parked run is not a failure to retry — scheduling a backoff
+          // retry for it would be the same forever-loop one layer up.
+          if (outcome.retryable.isNotEmpty) anyFailure = true;
           if (succeeded.isNotEmpty) {
             await socialService
                 ?.recomputeChallengesForRuns(succeeded.map((r) => r.startedAt));

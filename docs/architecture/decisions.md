@@ -18686,3 +18686,894 @@ of its needle flagged it, which is the § 1034 mistake in miniature.
 Both were found by verifying the merged tree rather than the branches, which is
 the standing round discipline and earned its cost again here.
 
+
+## 1058. A bulk import that refuses the whole file now says so in the reader's language, and the reason travels as data
+
+`strava-zip.ts` threw four English `Error`s — the 500 MB archive cap, "Not a
+Strava export zip (missing activities.csv)", "activities.csv contained no
+rows", and the missing-required-columns list — and
+`settings/integrations/+page.svelte` assigned `err.message` straight into
+`zipError`. Every other string on that page resolves through `m()`. So the
+most informative message in the whole migration flow was the only one on the
+page that never translated, and it is the one a non-English operator most
+needs: nothing imported, and this sentence is all they get.
+
+The fix is the split `util/rate_limit_errors.ts` already keeps from
+`i18n/rate_limit_message.ts`. `integrations/import_refusal.ts` carries the
+refusal as a reason IDENTIFIER plus its specifics as data — the archive's own
+size and the cap it passed, the list of column labels the export does not name
+— and stops there. `i18n/import_refusal_message.ts` maps the reason to a whole
+translated sentence and drops only the figures into slots. Six reasons, keyed
+in all seven catalogues: `not_signed_in`, `strava_zip_too_large`,
+`strava_zip_not_an_export`, `strava_zip_no_rows`,
+`strava_zip_missing_columns`, `garmin_unsupported_file`. The Garmin importer
+was in scope for the same reason it always is — it threw the same shape from
+the same page, and closing one importer would have left the page half
+translated.
+
+Three things were decided rather than fallen into.
+
+**A whole sentence per reason, not a sentence with a `{reason}` slot.** The
+same argument § 744 made for the rate-limit buckets: the refusal is a clause
+whose verb inflects and whose object is a file, and German puts the verb
+second. The only slots are figures and a list of literal `activities.csv`
+header cells — which are deliberately NOT translated and NOT list-formatted
+with a locale's conjunction, because the operator has to find those exact
+words in a file we did not write.
+
+**The narrowing is structural, and fails closed.** `asImportRefusal` reads a
+`reason` field and checks it against the shipped set rather than using
+`instanceof`, so a value that crossed a module boundary still renders its own
+sentence, and a reason this build has no key for falls through to the framed
+generic rather than rendering a bare identifier at a reader. `ImportRefusedError.message`
+is the identifier itself, the shape `exchangeStravaCode` already rethrows
+`strava_not_configured` in, so anything that logs it gets something
+machine-readable.
+
+**The per-row `detail` stays raw English, and that is not the same defect.**
+`import_failures.ts` classifies a per-row throw into a keyed `reason` and
+keeps a log-safe `detail` beside it; the detail is a diagnostic pasted into a
+spreadsheet or a support thread, and `importFailureReportCsv` already argues
+for English column headers on the same ground. Only the file-level region is
+in scope, which is why the guard that neither importer throws a bare `Error`
+is anchored to that region and not to the file.
+
+The guards are two: the render half is executed against all seven catalogues,
+asserting no placeholder is left unfilled and that a non-refusal is framed
+rather than shown bare; the throw half is executed for the narrowing and reads
+source for the two claims that cannot be — that every shipped reason is raised
+by the importer it belongs to (so a key nothing can show, or a reason with no
+sentence, fails), and that the page assigns both error slots from
+`importRefusalMessage` and never from `err`. Both were proved to trip by
+reverting the page's assignment and by deleting a slot from the German string.
+
+## 1059. A source-level guard had decided where production code lives, and moving the code was the fix
+
+`strava_zip_strictness.test.ts` read the slice of `strava-zip.ts` between
+`const idx = indexHeader(header)` and `const seen = await` looking for the
+literals `idx.type < 0` and `Activity Type`. `strava-zip.ts` imports
+supabase-js and cannot be executed under raw `tsx`, which is why that guard
+was written as a text scan in the first place — and the consequence was that
+§ 1042's six-column refusal was left INLINE in the unexecutable module
+instead of moving to `strava-zip-header.ts`, which exists for exactly this:
+pure header logic, unit-testable for real. The guard's own shape was deciding
+where the code lived, and the code that mattered was the least tested.
+
+`missingRequiredStravaColumns(idx)` now lives beside `indexHeader` and returns
+the labels an operator has to look for. Both guards execute it: the strictness
+suite's activity-type case is a real call with a real header, and the
+required-columns suite measures every column's absence, the either-block
+distance rule, the Sport-Type-only era § 979 added, and the complete-header
+case that would otherwise let a guard pass while refusing every export. What
+is left as source is the one claim executing the function cannot make — that
+the importer still asks it, before it reads anything, and refuses with the
+column list as data.
+
+The generalisation is worth stating because this tree has several of these
+scans: a source-level guard is a last resort for a module that cannot be
+loaded, and when it starts constraining where logic may live, the answer is to
+move the logic to a module that loads — not to widen the scan.
+
+## 1060. The report dialog's title is one string per target kind, because a determiner cannot agree with a slot
+
+`reportDialog.title` was one string with a `{noun}` slot and seven nouns to
+fill it with, and the nouns are not one gender. pt-PT and pt-BR say
+"Denunciar este {noun}" against `rota`, `corrida`, `avaliação` and
+`publicação`, which are feminine, so four of the seven rendered "Denunciar
+**este** rota". Spanish had the same four. French "Signaler ce {noun}" hit
+`publication` and `course`. German "Diese {noun} melden" had the mirror
+problem on four masculine nouns and one neuter — `Club`, `Kommentar`,
+`Beitrag`, `Lauf`, `Profil`. Only `en` and `ja` are gender-free.
+
+A per-noun determiner param was the other candidate and is the worse one: it
+is a second vocabulary to keep in lockstep with the noun set, it needs a
+different vocabulary per locale (French elides before a vowel — `cet
+itinéraire` against `ce club` — and German inflects for case as well as
+gender), and nothing can check it. Seven title keys instead, six non-English
+catalogues each writing the determiner into the same string as the noun it
+governs. That is a **net reduction** of one key per catalogue, since it
+replaces the title plus the seven bare nouns, which had no other caller.
+
+The point of the shape is that a catalogue can then be read for agreement,
+and § 872's `GENDER_FLIPPED_NOUNS` is the guard that reads it. It was
+pt-PT-only, holding `ecrã` and `partilha`; it is now keyed by locale and
+carries the seven report nouns in es, fr, both Portuguese catalogues and de.
+Two things were measured rather than assumed before widening it. French
+plural determiners carry no gender at all, and `les` / `ces` / `aux` in the
+first draft reported **31 correct strings** — dropped, so the French rows are
+singular-only. German has three genders and four cases, so only the
+demonstratives no case licenses are listed (`Diese`/`Dieses` before a
+masculine noun, `Diesen`/`Dieses` before a feminine one), the nouns are
+matched as exact singulars because the genitive takes an `-s` on the noun and
+`dieses Clubs` is correct, and `dieser Lauf` / `diesem Lauf` are left alone.
+With that, the scan reports **zero** across all five catalogues, and it was
+proved to trip by writing "Denunciar este ruta", "Signaler ce course" and
+"Diese Club melden".
+
+A second guard holds the shape itself: every target kind has its own title in
+every catalogue, none of them contains a `{noun}` slot, and `ReportDialog.svelte`
+names all seven — so a new report target kind cannot ship a title the
+agreement guard has never seen, and no kind can quietly go back to a slot.
+
+The English rendering is byte-identical to what the slot produced, so the six
+Playwright specs that assert "Report this profile" / "club" / "post" / "run" /
+"comment" needed no change; every locale that was wrong is a locale no e2e
+spec reads.
+## 1064. Web's last RunSignUp probe moved to the results leg, and the listings sync's no-sync branch is not dead code
+
+**Decided 2026-09-03.** [§ 1041](#1041-a-credential-probe-stopped-being-charged-to-the-import-allowance-and-runsignups-probe-moved-onto-the-leg-it-asks-about)
+moved every mobile probe onto `race-results-import` and left the web half
+behind because it sat in a tree that change did not own. It is now moved:
+`isRunSignUpConfigured` invokes `race-results-import` with
+`{ provider: 'runsignup', probe: true }`, the shape its two siblings already
+used. The reason is the one § 975 gave for UltraSignup and it is not
+RunSignUp-specific: the Settings card gates an **import**, the two Edge
+Functions read different credentials for different work — the sync walks an
+upcoming-races feed, the import fetches a finisher list — and nothing makes one
+leg's verdict binding on the other. That the two happen to gate on the same
+`RUNSIGNUP_API_KEY` + `_SECRET` pair today is a coincidence of provisioning, not
+a contract.
+
+**The half the filing asked to decide: the now caller-less probe branch in
+`race-listings-sync` stays, and so does its bucket.** The filing described the
+branch as dead once web moved off it. Reading the function says otherwise. The
+credential gate sits *above* the `if (!isSync) return { configured: true }`
+early return, and that early return is what makes a sync **opt-in** — it is the
+fail-safe default § 977 installed precisely so a page load cannot walk a
+provider feed and spend the 2/hour allowance. Delete it and a call that did not
+ask for a sync performs one; that is the opposite of the invariant, and
+`wiring.test.ts` pins it by name. The `race-listings-sync:probe` bucket is what
+prices that same default: without it a no-sync call charges the 2/hour sync
+bucket, which is the exact defect § 977 split the buckets to remove. What
+actually became caller-less is the probe as an advertised **capability**, not
+the code implementing it — so `api_database.md`'s claim that "the web + mobile
+UIs probe it" is what needed correcting, and it has been.
+
+## 1065. `security_guards.test.ts` is twelve files, split by concern, with every assertion moved verbatim
+
+**Decided 2026-09-03.** The file had reached 3,728 lines and 91 tests covering
+privacy clipping, Terraform, CloudFront headers, Deno import pins, WCAG, the
+paywall, rate limits, CI workflow shape and the comment-stripper register. Any
+lane touching any cross-cutting guard collided with any other lane touching a
+different one, twice in one round.
+
+It is now one file per concern: `privacy_guards` (21), `infra_guards` (12),
+`consent_guards` (11), `lambda_guards` (9), `a11y_guards` (8),
+`credential_guards` (6), `rate_limit_guards` (6), `edge_function_guards` (5),
+`paywall_guards` (5), `ci_workflow_guards` (4), `xss_guards` (3),
+`source_scanner_guards` (1). The three-test and one-test files are deliberate,
+not leftovers: the stripper **register** is the single thing every lane adding a
+source scanner must edit, so isolating it is the whole point rather than an
+accident of arithmetic.
+
+**It is a move, not a rewrite, and that is mechanically checked.** All 91 test
+bodies appear byte-identical in exactly one of the twelve files — verified by
+substring containment before the original was deleted — and the sorted set of
+test names is identical to the original's. The suite reports the same 4,742
+tests before and after. The one segment that is not verbatim is the register
+itself, whose `src/lib/security_guards.test.ts` entry (count 4) became two
+entries of 2, because the two CSS-reading scans it covered went to different
+files.
+
+**Choosing the axis.** Grouping by the tree a guard *reads* was the tempting
+alternative, since lanes own trees — but a single guard routinely reads three
+(the sigv4 pair reads web source, mobile Dart and Terraform), so that axis
+cannot assign them. Concern can, and the residual judgement calls are recorded
+where they land: the mobile coach header guard sits with its web twin in
+`lambda_guards` because the contract is the Lambda's, and the mobile markdown
+scheme allowlist sits in `xss_guards` because the contract is the sanitiser's.
+
+**The cost is ~50 prose pointers naming the old path**, of which 17 are in this
+file. Those are **not** rewritten: an ADR records what was true when it was
+written, and the same goes for `test_inventory.md`'s per-round entries. The
+pointers that describe *current* behaviour were repointed at the guard they
+actually mean. Six live in trees no web lane owns and are filed.
+
+## 1066. A geocoder's coordinate is not a coordinate because its type says so
+
+**Decided 2026-09-03.** [§ 1011](#1011-the-settings-bag-class-the-filing-named-has-no-population-the-class-beside-it-had-a-live-defect)
+added `isUsableLatitude` / `isUsableLongitude` to the mobile geocoder. The
+filing for the web side said there was nothing to mirror, because web "has no
+Nominatim string-parse path". It has two, and it had four defects. Measured
+against the pre-change module rather than reasoned about:
+
+- a MapTiler feature whose centre is `1e400` came out of the search dropdown
+  with an **infinite longitude** — `JSON.parse` yields `Infinity`, so the
+  declared `center?: [number, number]` is a claim about the wire the wire never
+  made;
+- a latitude of `91` survived **both** providers — the Nominatim path checked
+  `isFinite` and nothing checked range, and a latitude is ±90 by definition, so
+  a value outside it is a malformed answer rather than a place;
+- one unusable bbox corner made the geocoded radius **NaN**, which compares
+  false against every bound a caller might check it with;
+- a 200 carrying an unparseable body **threw a SyntaxError** out of
+  `geocodePlaceWithKey`, whose documented contract is to return null on failure
+  and whose call sites handle only the null.
+
+Every coordinate out of a provider response now goes through the two
+predicates, and an unusable bbox falls back to the 5 km default exactly as the
+Nominatim branch already did with its own.
+
+**Is it a registerable TS↔Dart pair? The predicates, yes; the modules, no.**
+`geocoding_math.ts` and `geocoding.dart` are not in lockstep and never have
+been: web's outcome type carries a third `aborted` state mobile does not have,
+web takes an `AbortSignal` where mobile injects a `GeocodingFetcher`, and web's
+geocode half falls back to Nominatim where mobile's returns null on an empty
+key. Registering the modules would assert a lockstep that does not exist, which
+is a worse failure than not registering — the registry's value is that a row
+means something. Registering the two predicates alone has no precedent in the
+registry, which is keyed on module paths. So: not registered, the contract is
+stated in both doc comments, and the honest recommendation is filed rather than
+acted on, since neither registry is a web lane's to edit
+(§ 641, and § 604 for the guard that compares the two registries).
+Filed alongside it: mobile's own `geocodePlace` — the geocode half § 1011 did
+not reach — still reads `center[0]` / `center[1]` through a bare `as num` with
+no usability check, so the exposure § 1011 closed on the two search paths is
+still open one function below them.
+
+## 1067. A credential probe reports available only on a clean answer
+
+**Decided 2026-09-03.** The followup asked for a decision — fail open, or fail
+closed — for `isProviderConfigured`. **Fail closed**, and on web that is a real
+change rather than a restatement: the grader read *any readable 4xx other than
+429* as proof the Edge Function "ran past the credential gate", which is not
+something a status can carry. `race-results-import` answers **401 before it
+reads a single environment variable**, and **400 `unknown_provider`** for a leg
+it does not dispatch at all — so a signed-out session and a provider that does
+not exist both reported the Settings card as live, and the card's next call
+refuses after the runner has typed their bib.
+
+A probe asks one question and exactly one answer says yes: the 200, which is
+not an error and never reaches the grader. So the rule is `probeSaysConfigured`
+in `core/provider_probe.ts` — available iff there was no error — and every
+other shape reads as unavailable. It is also what the Settings page's own
+`catch` already did for a *thrown* failure, so the returned-error path had been
+disagreeing with the thrown one on the same page.
+
+**The import path keeps a grader, under a name that says which of the two rules
+it is.** `isProviderGateRefusal` still decides whether an *import*'s failure was
+the credential gate, because an import can fail for reasons that say nothing
+about a credential — a listing that does not exist, a bib with no match — and
+those must reach the caller as themselves rather than as "this provider is
+unavailable". Two callers, two questions, two functions; conflating them is how
+one fail-open default ended up serving both.
+
+**For the mobile lane to check against.** The reasoning above is not web-specific
+and none of it turns on `FunctionException` versus a returned error object: the
+question is whether the client can *prove* the credential gate was cleared, and
+it cannot. If mobile's `isProviderConfigured` keeps its fail-open residual, the
+two platforms disagree about whether the same card is live against the same
+backend, which is a divergence rather than a platform difference.
+## 1070. A permanently refused push is PARKED, and the runner is offered the one action that exists
+
+§ 986 refused to build a terminal-error taxonomy while the category had no
+reachable member. § 1009 measured the first one: a track blob past the `runs`
+bucket's 25 MiB `file_size_limit`, unreachable by recording (~266 h at 1 Hz) and
+ordinary by import (a 959,883-point GPX is 94 MiB of `trkpt`, sixty times inside
+`importFromZip`'s own archive cap). It closed the *waste* at the source — the
+uploader refuses before spending the network, with a typed
+`TrackTooLargeException` — and left the *loop* open: `saveRunsBatch` returned a
+bare `Set<String>`, five call sites marked everything else synced, and the same
+waypoints gzipped to the same refused bytes on every drain, forever, with the
+residency invariant holding the million-point track in memory to do it.
+
+**The product question the filing owed an answer to** was what a runner can
+actually DO about a run whose track is too big to store. The answer taken here
+is the one the data supports and nothing more: *stop retrying, say which run and
+why, and offer the action that already exists.* Every number on the run —
+distance, duration, elevation, pace — is a **column**; only the trace is a
+Storage object. So the run is not lost, one artefact of it is, and the offer is
+to keep a copy of that artefact and then let the run go to the cloud without it.
+`dropTrack` empties the track locally, which un-parks the run and lets the
+ordinary drain upsert it with `track_url = null`; the card that offers it sits
+beside an **Export a copy** button opening the existing GPX/TCX/FIT sheet, and
+the confirm goes through `confirmDestructive` because the trace is the only
+record of where someone went and nothing brings it back. Nothing does this
+automatically: writing a track-less row on the drain's own initiative is exactly
+what `saveRunsBatch` already refuses to do, and under a *transient* failure it
+would discard a trace nobody agreed to lose.
+
+**Two states, not a taxonomy.** `RunPushOutcome` (in `core_models`, so the store
+can read it without depending on `api_client`) carries `retryable` and `blocked`;
+`RunPushBlockReason` has exactly one member and its `name` is an on-disk value in
+the new `blocked_runs.json` sidecar, so a rename orphans every run already parked
+under the old spelling. A second member is earned by measuring a second permanent
+failure, not by anticipating one — which is § 986's rule, applied rather than
+overturned.
+
+**Parking is defined as leaving the drainable set**, and that is one rule with
+two consequences rather than two decisions. `unsyncedRuns` excludes a parked run,
+so no drain re-sends it; and the residency invariant — whose own contract is
+"the newest window ∪ everything the drain must reach" — excludes it too, so the
+track stops being hydrated on cold load for a drain that will never run. The run
+stays in `_summaries`, so it is still in the history, still rendered by the list,
+and still hydrated on demand by `runById` when the runner opens it. Three
+knock-on rules follow: the park is a verdict on the **bytes**, so `save`,
+`update`, `delete` and `deleteMany` all clear it; the sidecar merges rather than
+replaces, because `background_sync.dart` is one of the five push sites and runs
+in its own isolate over the same directory; and a reason name this build cannot
+resolve is **dropped**, not honoured — parking under a reason no surface can
+explain strands the run with no exit, whereas dropping it lets this build's own
+uploader re-derive its own verdict.
+
+**Two failure paths had to change with it.** `saveRunsBatch`'s
+"every-track-failed" branch threw, which reports "nothing landed" and nothing
+else — fine when every failure is transient, wrong the moment one is terminal,
+because the caller then needs the id to park and a thrown batch leaves it queued.
+It now returns the outcome whenever anything is blocked and throws only for the
+all-transient case the existing tests pin. And `SyncService` sets `anyFailure`
+from `retryable` alone: scheduling a backoff retry for a parked run is the same
+forever-loop one layer up.
+
+**Thinning the track to fit was considered and refused.** `simplifyToBudget`
+exists and would make the blob fit, but it silently rewrites the runner's
+recorded data and moves every track-derived number on the run, with no honest
+place to record that the trace shown is not the trace recorded. Dropping the
+trace is legible: the run says it has no map, and the runner is the one who said
+so.
+
+Surfaces: an error-coloured `cloud_off` badge in the History app bar when
+nothing is queued but something is parked (tapping it explains, since parked runs
+are absent from the sync path by construction), a per-row mark that outranks the
+queued-to-sync cloud (they are different promises and only one is true), and the
+`_BlockedPushCard` on run detail. 13 keys x 7 catalogues. Pinned by
+`blocked_push_test.dart` (13), the outcome's own contract in `core_models`, and a
+parked-not-retried case in each of `sync_service_test`, `background_sync_test`
+and `import_cloud_push_deferred_test` — the last of those being the call site
+where an over-size track actually arrives.
+
+## 1071. The `isProviderConfigured` fail-open filing was stale on mobile — § 1007 had already closed it, and here is the proof
+
+The round-36 mobile lane took the followups item asking for a decision on
+`RaceService.isProviderConfigured`: fail open (a probe failure should not hide a
+working provider) or fail closed (the house default). Read against `main`, the
+mobile half of the question was **already answered, in the fail-closed
+direction, by § 1007** — which landed on 2026-09-02, two days after the filing
+was written on 2026-08-31 (`7e1d1172d`, PR #833). Nobody ticked the box, so the
+entry outlived the work.
+
+The evidence, not an assertion. `isProviderConfigured` delegates every failure to
+the top-level `raceProbeUnavailable`, which returns `true` — unavailable — for
+anything that is not a `FunctionException` with `status > 0`, and for a 429 /
+5xx even when it is. Only a clean success or a readable non-429 4xx reports the
+provider live, because only those prove the function ran **past** its credential
+gate. The two cases the filing named by name are each pinned:
+`raceProbeUnavailable(SocketException(...))` and
+`raceProbeUnavailable(StateError('not initialized'))` are both asserted `isTrue`
+in `race_providers_test.dart`, and the end-to-end shape is pinned separately —
+`RaceService()` with no Supabase behind it answers `false` for all three import
+providers, because `_c` throws its own `StateError` inside the same `try`. Both
+call sites (`races_screen._probe`, `settings_integrations_screen`
+`._probeRaceProvider`) additionally initialise `ok = false` before their try, so
+the screen-level degrade is fail-closed even if the service ever stopped being.
+13 tests, green.
+
+The filing's remaining half — "same question on web" — is not this lane's file,
+and is worth reading against § 1007 rather than answered fresh: **web is where
+the fail-closed rule came from.** `core/data.ts`'s `isProviderNotConfigured`
+already graded a 429 as its own per-user rate limit, a 5xx as never having
+reached the gate, and a status-0 transport failure as no evidence at all; § 1007
+ported that grading to the phone precisely because the two platforms disagreed
+about a configured provider whenever the probe did not cleanly reach the gate.
+The asymmetry recorded there is the reasoning either lane should reconcile
+against: hiding a live leg for one page load is corrected by the next probe,
+while offering an action whose very next call 503s spends a runner's attention on
+a tile that cannot work.
+
+No code changed. A filing that describes shipped behaviour is itself the defect,
+and the fix is to correct the filing.
+
+## 1072. The fixed-delay residue re-measured: three of the filing's four counts were stale, and `debugWritesSettled` has a zone precondition nobody had stated
+
+§ 723 converted 44 fixed real-clock delays to `pumpUntil` predicates and § 991
+closed a third family member on `main`. The followups entry that survived them
+carries a census of what is left. Re-measured on 2026-09-03, **three of its four
+numbers are wrong, and its enumeration is short by three sites** — which matters
+because the census is what a later lane sizes the work from.
+
+- "9 bare `pumpEventQueue()` calls across 2 files" → **8 call sites across 3
+  files**. The ninth occurrence is inside a *comment* in `sync_service_test.dart`
+  describing § 991's own fix, so a grep counted the entry's evidence as more of
+  the problem. Of the 8, one is the in-loop case the entry already excuses
+  (`run_detail_screen_test.dart`), and `sync_service_test.dart` still holds two
+  bare ones — § 991 converted the lifecycle-resumed test and left the two
+  absence assertions, which is correct and which the entry reads as having
+  cleared the file.
+- "28 files pair a temp directory with widget taps and no `pumpUntil`" → **26**.
+- "86 mobile test files create a temp directory" → **88** at `ac6dc7022`.
+- The 14-item enumeration is missing `route_review_report_test.dart:74`,
+  `routine_public_library_screen_test.dart:188` and
+  `run_screen_recording_flow_test.dart:1626`.
+
+**The last of those four is the one that matters, because the entry is a
+hand-transcribed copy of a register that is already machine-checked.**
+`test_timing_guard_test.dart`'s `_documentedDelays` map lists every surviving
+real-clock wait with its reason, fails on a site that is neither listed nor
+converted, and fails on an exemption whose sites have all been converted. All
+three of the "missing" sites were in it; only the prose had drifted. The guard
+also proved that on this change: removing the two waits made their exemptions
+stale and it failed the suite naming both, which is precisely the loop the
+followups copy cannot close. A later lane should size this work from the map,
+not from the prose, and the prose should stop restating it.
+
+Two of those three were convertible and are converted. The review-report helper
+waited a flat 10 ms for `_fetchReviews`, when all three of its callers then
+assert the seeded review renders — so it now waits on that, with the comment text
+hoisted to one named constant because a literal in two places is how a wait stops
+matching the thing it is waiting for. The public-library adopt polled a fixed
+8 x 20 ms after tapping the FAB, for a store row the very next line asserts.
+The third is byte-identical to a case the entry lists as deliberate (the
+`pairedName()` read, invisible at idle) and got the stated reason it was missing
+rather than a conversion.
+
+**The entry's own open question is closed, and the answer came with a
+precondition.** It asks whether `nutrition_screen_test`'s two
+`f.store.rows.length == 2` waits should move off the before-the-write proxy, and
+says the levers are the store's `notifyListeners` or a UI state ordered after
+`persist()`. There is a third the entry does not cite:
+`OfflineSyncStore.debugWritesSettled()`, `@visibleForTesting`, whose doc comment
+describes this exact race almost verbatim. Both waits now chase the row list with
+`pumpUntil` and then settle the write with it.
+
+The precondition was found by trying it in the second file and measuring, with a
+three-way A/B: **`debugWritesSettled()` is only awaitable when the write it is
+waiting on was queued from inside `tester.runAsync`.** `serialiseStoreWrite`
+links its chain with `.then`, so a write queued from a fake-zone tap has its
+continuation scheduled as a fake-zone microtask — which only `pump` drains, and
+`runAsync` does not pump. Awaiting the chain from inside `runAsync` then waits on
+a microtask nothing will run. Measured: fake-zone tap + `debugWritesSettled` hung
+past a 240 s bound twice; the same test with the call removed passed in 1 s; the
+same test with the tap moved inside `runAsync` and the call restored passed in
+1 s. `nutrition_screen_test` was already green because its taps are inside
+`runAsync` — so the two files differed by exactly the variable the mechanism
+predicts. The rule for the next lane: after a fake-zone tap, wait on an
+observable outcome with `pumpUntil`; `debugWritesSettled` is for a real-zone
+write, and reaching for it otherwise deadlocks rather than failing.
+
+## 1073. Two lanes read one followup in the same round and reached opposite verdicts; the one that read the ENDPOINT was right
+
+Round 36 put the `isProviderConfigured` followup in front of two lanes at once.
+The mobile lane read the filing's wording, checked it against the code, and
+closed it as stale (§ 1071). The web lane read the probe's own **endpoint** and
+found a live defect. Both were right about what they looked at, and the
+difference between them is the lesson worth keeping.
+
+**What § 1071 measured, and still stands.** The filing named two cases —
+"offline, or Supabase not initialised" — and asserted they read as configured.
+They do not, and had not since § 1007: `raceProbeUnavailable` answered
+"unavailable" for anything that was not a `FunctionException` with `status > 0`,
+and for a 429 or any 5xx even when it was. `SocketException` and
+`StateError('not initialized')` were each pinned `isTrue`, `RaceService()` with
+no Supabase behind it answered `false` for all three providers, and both call
+sites initialise `ok = false` before their try. Every one of those claims
+re-verified on this change. § 1071 is not being rewritten, because it is
+accurate about what it examined.
+
+**What neither § 1071 nor § 1007 considered.** Both reasoned about the failure
+*shapes the filing named* and inherited web's then-rule that a readable non-429
+4xx reports a provider live — on the theory that such a status proves the
+function ran PAST its credential gate. Nobody read `race-results-import` to ask
+which 4xx it can actually answer. It answers two that refute the theory:
+
+* **401, before it reads any provider credential at all.** The auth gate is two
+  returns at the top of the handler — no `Authorization` header, then no `user`
+  — and both precede the `isProbe` branch and every `RUNSIGNUP_API_KEY` /
+  `ULTRASIGNUP_API_KEY` / `CHRONOTRACK_CLIENT_ID` read. So a signed-out or
+  expired session probed every provider, got 401, and the phone lit **every**
+  card as live.
+* **400 `unknown_provider`, for a leg it does not dispatch** — and the comment
+  introducing that line reads "An unrecognised provider is not 'configured' —
+  answering true for it is the same class of bug as the two credential-gated
+  legs above." The function wrote the 400 to mean *not configured*; the client
+  read it as *configured*. One response, two opposite readings, on the same
+  team's code.
+
+The theory failed because "ran past the credential gate" is not something a
+status can testify to. The probe branch has exactly **one** affirmative answer,
+`{configured: true}`, and every other return it can make carries an `error`.
+
+**So the rule is web's `probeSaysConfigured`: configured iff the invoke did not
+throw.** On the phone that is not an approximation — `functions_client` 2.5.0
+returns a `FunctionResponse` only for 200-299 and throws `FunctionException` for
+everything else, so "did not throw" is exactly "2xx". A probe asks one question
+and only a 200 answers it.
+
+**`raceProbeUnavailable` is deleted rather than kept.** It had exactly one
+`lib/` call site, which was this method, and no second grader is owed: the
+import path already has its own, `_isProviderNotConfigured` / `_detailsSay`,
+which asks a different question (*was this particular 503 a credential
+refusal, so the provider's own explainer can be thrown*) and is untouched. That
+separation is § 1007's and it survives — a probe is a yes/no availability
+question that fails closed, an import is an action whose failure should surface
+as itself. Keeping a second, differently-shaped grader for a path that does not
+call it would be the unused-code shim the house rules forbid.
+
+**A Dart `provider_probe.dart` was deliberately NOT created.** Web's rule is one
+expression over a nullable error because its callers hold one; Dart's
+`try { … return true; } catch { return false; }` is that same rule stated
+natively, and a one-call-site helper wrapping it would be a preemptive
+abstraction. More decisively, a Dart twin of `provider_probe.ts` would be a new
+parity pair, and a pair needs rows in **both** registries — the root `CLAUDE.md`
+table and `shared-library-syncer.md` — neither of which this lane owns. A pair
+named by only one registry is a pair whose divergence nothing detects, which is
+§ 641's mistake and § 1039's filing. Registering it is filed instead.
+
+**The generalisable finding: a filing describes a symptom, and a symptom is a
+worse specification than the interface.** § 1071's method — take the entry's
+claims and check them — is sound and produced a true result, but its reach is
+bounded by whatever the filer happened to notice. The web lane asked the
+endpoint what it can say, which is a question the filing could not bound. When
+an entry asks for a decision about a boundary, enumerate the boundary's answers
+before grading them. The pinning follows the same rule: the two endpoint facts
+are guarded by reading `race-results-import` (with re-anchor reasons, so a
+moved needle fails loudly rather than passing vacuously), and the client half by
+a guard that fails if `isProviderConfigured` inspects a status again —
+mutation-tested by reinstating the old grader, which it catches by name.
+## 1076. `gym_sets.exercise_key` is trigger-maintained, not a generated column — measured, the generated form is a full-table rewrite twice over
+
+Persisting the exercise grouping key on `gym_sets` was the prerequisite [§ 830](#830)
+filed for closing the key's remaining runtime-version dependence: the frozen
+1,488-entry case table the three rails need costs 60 µs a call against 0.34 µs
+for `lower()`, and five RPCs re-derived the key once per `gym_sets` row, so a
+15,000-set history would have paid ~0.9 s of pure folding per
+`gym_workout_summaries()` call. Persisted, the fold is paid once per WRITE and
+its cost stops being a function of how much history a lifter has.
+
+`generated always as (public.normalise_exercise_name(exercise_name)) stored` is
+the form that says exactly what is meant, and it was rejected on two
+measurements taken on PG 17.6 against a 500,000-row copy of the table.
+
+**It rewrites the table.** 2,756 ms holding `ACCESS EXCLUSIVE` *and* `ShareLock`,
+with `pg_relation_filenode` moving 28885 → 28895. The plain
+`add column exercise_key text default ''` took **5 ms** and left the filenode
+alone. The rewrite is ~5.5 µs/row and linear, so a 5,000,000-row `gym_sets` is
+~28 s during which no session can read or write a set — downtime, on the
+highest-volume gym table, which is the case `migration_locks.md` exists for.
+
+**And it would make the next change a second rewrite.** A generated column
+freezes its expression into the catalogue and Postgres never recomputes stored
+values when the function underneath is replaced. The entire point of persisting
+the key is to make the *next* edit to `normalise_exercise_name` affordable; with
+a generated column that edit is a `drop expression` plus another full rewrite,
+where the trigger makes it a `create or replace function` plus the batched
+backfill this change already establishes.
+
+The trigger's cost was measured rather than waved at: 50,000 inserts took 146 ms
+without it and 462 ms with it, **+6.3 µs a row**. A logged gym session is 10-40
+sets, so it is a quarter of a millisecond on a save. `CREATE TRIGGER` takes
+`SHARE ROW EXCLUSIVE` — catalogue-only, readers unaffected — the same call
+[§ 737](#737)'s `direct_messages` throttle made.
+
+It is `before insert or update`, unqualified, not `update of exercise_name`. The
+narrower form is cheaper and leaves a hole: an UPDATE naming only `exercise_key`
+would not fire it and the canonical CHECK would answer with a 23514 the client
+cannot act on. Stamping unconditionally makes the column derived in fact, which
+is a strict improvement on the `gym_routine_exercises.exercise_key` precedent
+where the CLIENT stamps the key under a CHECK — that is exactly the shape whose
+mobile-vs-server case-table disagreement § 830 measured as a 23514 on a
+legitimate save. `gym_sets` — the PR-bearing table — is now out of that blast
+radius entirely.
+
+The `default ''` is not a value any row keeps; the trigger overwrites it on the
+same statement. It is there because a NOT NULL column with no default is
+REQUIRED in the `Insert` type both row-type generators emit, and a client must
+not have to compute a key the server derives. Every trigger-maintained column in
+this schema already carries a constant default for the same reason
+(`gym_workouts.set_count`, `clubs.member_count`,
+`challenges.participant_count`), and a constant default is still the no-rewrite
+fast path.
+
+Three constraints, not one. The canonical CHECK alone does not reject a NULL
+key — `null = <text>` is NULL and a CHECK evaluating to NULL passes — and a NULL
+key would be silently dropped from every aggregate rather than mis-bucketed,
+which is worse because nothing surfaces it. So a `not null` CHECK goes on
+`not valid`, is validated (41.8 ms), and lets `alter column ... set not null`
+skip its own scan: **0.83 ms**, the PG12+ route `migration_locks.md` names,
+after which the redundant CHECK is dropped. The third is the length cap
+`free_text_caps_test.sql` demands of every user-writable free-text column;
+120 is the name's own ceiling, and the fold cannot exceed it — `translate` is
+1:1 both times, the whitespace collapse and the trim only shorten, and `lower()`
+under `und-x-icu` was measured 1:1 in length over all 1,112,064 assignable code
+points in five contexts each (5,560,320 strings, none longer than its input).
+
+Read-path effect, measured: the same aggregate over a 15,000-set history went
+from 66-74 ms to 4.9-5.4 ms, and from 2,241 ms to 196 ms at 500,000 sets.
+
+## 1077. The batched-backfill idiom two shipped migrations use is O(n²/batch), and on `gym_sets` it would have shown
+
+`20270623000001` and `20270630000003` both backfill a key by looping
+`select id … where <predicate> order by id limit N` until it matches nothing.
+Every chunk restarts at the low end of the primary key and steps over every row
+the previous chunks already fixed, so the walk is quadratic in the table.
+
+Measured on the same 500,000 rows: **129.5 s** for that shape against **6.94 s**
+for keyset pagination, which carries the last id forward so each chunk starts
+where the previous one stopped — a 19x difference. It did not bite in either
+shipped migration because both walk bounded tables (one row per exercise per
+routine, one per catalogue entry). On `gym_sets` it would have, and copying the
+idiom because it was there is exactly how a pattern outlives the table it was
+right for.
+
+The predicate stays on the UPDATE rather than on the chunk selection: a chunk is
+a contiguous id range, and a row already carrying its key is skipped without
+leaving a hole the next chunk has to re-find. The two shipped migrations are not
+edited — the schema only moves forward — but `migration_locks.md`'s manual-rebuild
+guidance now names the keyset form.
+
+## 1078. A zero-second run could not be saved at all, and the filing named the branch that was not the problem
+
+The filed defect was that `refresh_personal_records_for_user`'s four
+embedded-best branches read `and fastest_5k_s >= 0`, which `20270705000004`'s
+`> 0` column CHECKs had made equivalent rather than load-bearing — the filter
+written in the shape that admits the bad value, four times, where a reader could
+take it for the guard. That is true and the four are tightened.
+
+It is not the reachable half. The WHOLE-RUN branch filters `duration_s is not
+null` and nothing else, and `runs_duration_s_check` is `duration_s >= 0`
+deliberately — a run imported or logged with a distance and no time is a row we
+store rather than refuse, and `20270705000004` left it that way on purpose. So a
+zero-second run in a PR bracket is storable, becomes the FASTEST candidate for
+that bracket (`order by duration_s asc`), and reaches `personal_records`, whose
+own `best_time_s > 0` CHECK refuses it.
+
+Refusing it there is the wrong place, and the consequence is not a missing PR.
+The refresher is called from `trigger_refresh_personal_records`, an AFTER
+trigger on `runs`, so the 23514 propagates out of the trigger and fails the
+INSERT of the run. Measured on the local stack: an ordinary `authenticated`
+session inserting `(duration_s => 0, distance_m => 5000, source => 'app')` —
+every `runs` CHECK satisfied — gets
+
+    new row for relation "personal_records" violates check constraint
+    "personal_records_best_time_s_check"
+
+and the activity is not saved. The runner cannot record it, and the error names
+a table they have never heard of.
+
+The bound belongs in the refresher, not on `runs.duration_s`: "you did not run
+5 km in zero seconds" is a PR-ELIGIBILITY rule, and moving it onto the column
+would reject rows the app legitimately stores. A zero-duration run now
+contributes no candidate — it saves, and it sets no record.
+
+## 1079. The positive-path Edge Function tests the followups called blocked on real credentials have existed and pass
+
+`docs/product/followups.md`'s "Testing gaps" carried *"Positive-path Edge
+Function tests — the envelope suite covers auth-rejection only; 200-on-valid-HMAC
+/ replay-dedupe / freshness-window tests need real secret values in the CI
+config."* Both halves are wrong.
+
+`_shared/handler_envelope.test.ts` holds 23 cases and **10 of them are positive
+paths**, including every class the filing named: `revenuecat-webhook: 200 on
+valid HMAC + fresh anonymous event`, `revenuecat-webhook: 400
+event_outside_freshness_window on stale event`, `revenuecat-webhook: writes
+user_profiles — pro → dedupe → free → lifetime → lifetime-protected
+PRODUCT_CHANGE`, two `stripe-events-webhook` cases that each dedupe a replay and
+assert the written row, `stripe-events-webhook: event-order
+checkout.session.expired CAS pending->canceled`, and the two `strava-webhook`
+handshake / non-create cases. Verified by booting `supabase functions serve
+--env-file .env.local` exactly as `ci.yml` does and running the file: 23 passed,
+0 failed.
+
+And none of it needs a real third-party credential, because for an HMAC webhook
+the secret is *ours*: `ci.yml` writes `REVENUECAT_WEBHOOK_SECRET=ci-revenuecat-secret`
+and friends into `.env.local`, exports the same values to the test process, and
+the test signs with them. A credential a third party issues is only needed where
+the success branch CALLS the third party.
+
+Two functions genuinely have no positive path, for different reasons, and only
+one of them is what the filing described. `refresh-tokens`' success branch POSTs
+to strava.com, so it needs a real Strava credential and refresh token, or a
+mocked upstream — that one is credential-blocked. `auth-email`'s is not: the
+Standard Webhooks secret is ours and Mailpit is already in the local stack, so a
+correctly-signed request would deliver. What blocks it is that the SMTP env has
+to be added to `.env.local` in `.github/workflows/ci.yml`, a file no backend
+change owns. Filed as that, rather than left standing as a credential problem it
+is not.
+
+## 1080. The type generator was writing a CLI diagnostic into the schema file
+
+Supabase CLI 2.109.1 writes a PostHog shutdown error to **stdout** after the
+generated schema, so `npm run gen:types` appended
+`{"_tag":"Error","error":{...}}` to `database.types.ts` and left it invalid
+TypeScript — the same class as the `Connecting to db 5432` line the script
+already filters, from a different emitter.
+
+The pinned CI CLI (2.84.2) does not emit it, so the added `grep -v` is provably
+a no-op there and `gen:types:check`, which runs the identical pipeline, is
+unaffected. Filtering it is worth doing anyway: the failure mode is a generated
+file that no longer parses, produced by the documented command, on the
+workstation the docs tell you to run it on.
+## 1082. The watch view model gets a crash handler, and the drain says an unreadable queue is unreadable rather than empty
+
+Two rungs of one defect, filed together after [§ 1055](#1055-a-phone-pushed-session-update-could-end-a-run-and-the-asymmetry-that-made-it-findable)
+closed the instance that had already cost a run.
+
+**The net.** `viewModelScope` carries a `SupervisorJob`, which is often read as
+"a failing child cannot take anything down". It stops a child from cancelling
+its SIBLINGS; it does nothing about the child's own exception, which
+`handleCoroutineException` hands to the context's `CoroutineExceptionHandler`
+and, with none installed, to the thread's uncaught handler — the process. The
+recording service lives in that process. `RunViewModel` had 23 `launch` sites
+and no handler, so a route-cache write, a tile prefetch or a session read that
+threw ended a run in progress. Every `launch` now goes through `launchGuarded`,
+which supplies one handler that logs; `ViewModelStreamResilienceTest` fails the
+build on a bare `viewModelScope.launch`, because a handler on 22 of 23 sites is
+the same defect with better odds. It is deliberately a NET, not a replacement:
+the per-site guards stay, because a failure the runner should hear about is
+still caught where it happens and reported. What the handler decides is only
+what becomes of the sites nobody has reached yet.
+
+**The drain's own decision.** `drainQueueLocked` read `store.queue.first()` on
+the same DataStore-backed flow § 1055 put a `.catch` on. DataStore reports a
+corrupt or unreadable file by FAILING the read, so the three answers available
+are not interchangeable and the cheapest one is the worst:
+
+- *Treat it as empty.* The loop drains nothing, `anyTransientFailure` is false,
+  so `DrainBackoff.onSuccess()` fires and `syncError` is CLEARED — the runner is
+  told their runs are synced by the same pass that could not open the file
+  holding them. That is the one state in which "Synced" is a lie, and a blanket
+  `catch` picks it by default.
+- *Let it throw.* Before `launchGuarded` that ended the process; after it, the
+  drain is skipped with nothing on screen saying so.
+- *Report and back off.* What it does. The failure is logged, `syncError` takes
+  a localized `sync_queue_unreadable`, and `DrainBackoff.onFailure()` is armed
+  because the condition PERSISTS — a network flap would otherwise retry a read
+  that cannot succeed. A `force` drain (the Sync chip, a fresh sign-in) is
+  deliberately still let through, which is what makes a retry after a reboot
+  possible at all.
+
+`syncError` renders on `PostRunScreen`, which is where the drain's failures are
+already reported and where it matters most — the run that just finished is the
+one entering the queue that cannot be read. The pre-run "Sync N runs" chip is
+derived from `queuedCount`, which the stream `.catch` freezes at its last value,
+so a corrupt queue leaves no chip to tap; surfacing it there is a second
+affordance on a 1.4-inch screen and is filed rather than smuggled in here.
+
+## 1083. The wrist records how much of the run its heart rate covered, and refuses to call a minority sample the run's average
+
+[§ 1054](#1054-exerciseclient-is-the-right-client-and-is-deliberately-not-started--the-scoping-and-why-nothing-small-falls-out-of-it)
+filed this as the honest consequence of `MeasureClient` being foreground-only:
+`avg_bpm` was saved as **the run's** average heart rate with nothing anywhere
+recording what share of the run produced it, and on a twelve-hour ultra that
+share can be the twenty minutes the runner spent looking at the watch. It became
+computable only with [§ 1052](#1052-the-wrist-says-why-there-is-no-heart-rate-in-the-slot-the-reading-already-occupies)'s
+availability state.
+
+**Both halves, because they answer different questions.** `hr_coverage` is
+written whenever heart rate was enabled for the run — the fraction of ACTIVE
+elapsed time the sensor was delivering, two decimals. It is a record, and the
+data is unrecoverable after the fact, so it is kept whether or not any reader
+exists yet (none does; the phone and web trees belong to other lanes). Separately
+`avg_bpm` is **suppressed below 0.5**. That number is the sentence rather than a
+tuning knob: a mean taken over less of the run than not is not the run's average,
+and every reader — run detail, the coach context, the export CSV — treats
+`avg_bpm` as though it were. The threshold is applied to the ROUNDED figure that
+gets stored, because a run persisting `hr_coverage: 0.5` beside a suppressed
+average is a record that contradicts itself.
+
+**Measured on the ticker, against the age of the last sample.** The obvious
+implementation — open an interval when availability becomes `Available`, close it
+when it leaves — over-reports exactly the runs this exists for: a foreground-only
+client the platform stops feeding can go quiet without ever emitting
+`UNAVAILABLE`, and the open interval then credits the whole silence as covered.
+`advanceHrCoverage` runs on the existing 500 ms recording tick and adds the
+tick's ACTIVE milliseconds only while the last usable sample is younger than
+`HR_SAMPLE_FRESH_MS` (30 s) — loose enough not to punish a batching sensor, tight
+enough that a suspension measured in minutes is not counted. Active elapsed, so a
+paused stretch advances neither numerator nor denominator.
+
+**Null is unmeasured, not zero.** `Checkpoint.hrAvailableMs` is nullable and
+`heartRateClaim` passes the mean through unqualified when it is absent. A
+checkpoint written by a build predating the field would otherwise recover as zero
+coverage and silently drop an average that build would have saved — the absence of
+a measurement being read as evidence of absent coverage.
+
+**Scope.** Everything is inside `apps/watch_wear/` plus the registry row: the
+watch posts straight to Supabase, so no phone-side parser is involved, and the
+web / mobile / iOS metadata guards each scan their own sources against the
+registry rather than the other way round. Not taken: a PostRun caption saying why
+the bpm line is missing. That is a second affordance on a 1.4-inch screen and a
+string in seven catalogues, and it is a display decision rather than the
+saved-data one this entry is about — filed.
+
+## 1084. The distribution's 404 mapping is gone, and the guard that keeps it gone reads the handlers that make that safe
+
+[§ 1022](#1022) added `custom_error_response { error_code = 404 }` because the
+five share Lambdas' own 404 bodies were `<p>This link isn't available.</p>` — one
+unstyled English sentence — so the SPA shell had to be substituted for them. The
+cost, stated in that entry, was that the substitution ALSO discards the `noindex`
+the Lambda body carries, which is the tag the crawler fix was about.
+[§ 1036](#1036) removed the premise: all five now return the SPA shell at 404
+themselves, through the same `injectEntityHead` that keeps a stale
+`og:*`/canonical/JSON-LD off a 200. With the handlers honest the mapping only
+replaces an honest body with an identical one, minus the tag. Dropping it is what
+puts the `noindex` on the wire.
+
+Two things fall out that were not the reason for doing it. `custom_error_response`
+is modelled per DISTRIBUTION, never per behaviour, so the block also rewrote
+`/api/coach*`'s `{"error":"not found"}` into an HTML shell for an API client; that
+stops too. And S3 was never a party to it — the site bucket grants `s3:GetObject`
+with no `s3:ListBucket`, so a missing key is 403 AccessDenied, which is why the
+403 block is the SPA deep-link path and why the two were never symmetric. **403
+stays at 200 and must**: answering a deep link honestly breaks every dynamic
+client route.
+
+**The guard is new, and it is deliberately not in `check_infra_coverage.mjs`.**
+That one asks whether any mapping launders a 4xx/5xx into a 2xx; a 404 → 404
+mapping launders nothing and passed it every time. The question here is whether
+the block exists at all, and the answer is only safe while its premise holds —
+so `scripts/check_infra_error_responses.mjs` reads BOTH sides: no 404 mapping,
+the 403 one still at 200, and every `apps/web/lambda/share-*` handler still
+answering its own 404 with `notFoundShell`, with the handler set derived from the
+directory listing so a sixth share Lambda is covered without anyone remembering.
+If a handler ever stops returning the shell, its bare sentence goes straight to a
+reader on ten paths and nothing in `infra/` could see it; now the PR fails and
+says which of the two halves moved. It joins the already-bundled `infra-guards`
+job, so no new job and no `CI gate` edit.
+
+Not verified: any of this against real state. No lane holds AWS credentials, so
+`terraform validate` on both env roots and `fmt -check` over the tree is the whole
+of what was run. This is a distribution-config change on a `prevent_destroy`-free
+resource with no `plan` behind it — apply preview first, and confirm the response
+of a `/share/run/<missing-id>` is a 404 whose body carries `<meta name="robots"
+content="noindex">`, which is the only observation that closes it.
+
+## 1085. Three unexercised Lambda verbs off both deploy roles, and `PublishVersion` settled from the request shape rather than from the repo
+
+Same shape as the KMS grant [§ 1021](#1021) removed, and the same way it
+accumulated: a verb is added when someone is unsure whether the CLI needs it, and
+nothing ever asks again. The `LambdaUpdate` statement on both deploy roles
+granted five actions. Two were measured unused directly — the only `aws lambda`
+verbs any workflow runs are `update-function-code` and `update-alias`, and no
+workflow executes any `bin/` script, so `bin/lambda-alias-sync.sh`'s `get-alias`
+runs under the operator's own SSO profile and not this role.
+
+**`lambda:PublishVersion` is the one the filing could not settle from the repo,
+and it is a third unused verb.** `aws lambda update-function-code --publish` is
+not two calls: `Publish` is a boolean member of the single `UpdateFunctionCode`
+request shape — visible without an account in `aws lambda update-function-code
+--generate-cli-skeleton`, which renders that operation's own input model and
+lists `Publish` beside `FunctionName` and `ZipFile`. `PublishVersion` is a
+separate operation (`POST /2015-03-31/functions/{FunctionName}/versions`) the
+release never issues, and IAM models one action per operation, so
+`lambda:UpdateFunctionCode` alone authorises the publish and returns the version
+the following `update-alias` points at. The privilege it granted was in any case
+strictly weaker than what the role can already do — publishing a version from
+code it can already replace — which is why removing it costs nothing and why it
+survived unnoticed.
+
+**The durable half is claim 10, not the deletion.** `check_infra_iam.mjs` now
+derives the `aws lambda` verbs out of the workflows' `run:` bodies (skipping
+comment lines, so a verb cannot justify itself by being discussed) and requires
+each role's `lambda:` action set to equal it. It fails in both directions: an
+extra verb is standing privilege, and a missing one is a release that
+`AccessDenied`s mid-deploy against that environment. A verb that genuinely needs
+to be held without being invoked goes in `UNEXERCISED_LAMBDA_ACTIONS` with its
+reason, and a declared exemption nothing grants fails as loudly — the shape
+claim 3 already uses for `RESOURCELESS_ACTIONS`.
+
+Claim 9's own prose named `lambda:GetFunction` as one of the calls that would
+transit the secrets CMK if a function ever set `kms_key_arn`; with the verb gone
+it names `UpdateFunctionCode` alone, which is the one that would. Not verified
+against live IAM: no lane holds AWS credentials, so this is `terraform validate`
+on both env roots and nothing more. `infra/github-oidc` is applied by an
+operator, and the next release after that apply is what confirms it.

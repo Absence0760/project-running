@@ -32,7 +32,7 @@ The web app's blast radius runs through these stacks: a permissive OIDC trust po
    - `response_headers_policy_id` attached to BOTH default and ordered behaviors
    - The response-headers policy has `strict_transport_security` (max_age ≥ 1 year, `include_subdomains`, `preload`), `content_type_options`, `referrer_policy`, `frame_options = "DENY"`, and a `content_security_policy` (permissive at first is OK; `default-src 'self'` plus listed origins is the floor)
    - `price_class = "PriceClass_100"` or `PriceClass_200` (not `PriceClass_All` unless explicitly justified — meaningful cost difference)
-   - SPA fallback `custom_error_response` rewrites 404 → 200 + `/index.html`
+   - SPA fallback `custom_error_response` rewrites 403 → 200 + `/index.html`, and there is NO 404 mapping (the share Lambdas answer their own 404 with the shell; the mapping discarded the `noindex` in it — decisions §§ 1022, 1084)
 
 6. **Lambda function.** `modules/web-stack/main.tf` —
    - `runtime = "nodejs20.x"` or newer (no `nodejs18.x` — deprecated Sept 2025)

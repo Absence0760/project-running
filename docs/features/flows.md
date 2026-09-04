@@ -168,7 +168,7 @@ If the phone isn't reachable (out of range / not yet paired / not signed in), th
 
 Every run the Android app handles lives in `LocalRunStore` first. The store is the source of truth on device; Supabase is the source of truth across devices. Reconciliation between the two is the sync service's job.
 
-- **Push-side** is driven by `SyncService._trySync()`: take `LocalRunStore.unsyncedRuns`, run it through `filterRunsForCurrentUser(unsynced, api.userId)` (drops runs whose `metadata.created_by_user_id` names a *different* user — the shared-device owner-tag guard, see [decisions.md § 67](../architecture/decisions.md#67-offline-saved-runs-carry-a-created_by_user_id-owner-tag--defends-shared-device-sign-out--sign-in)), call `ApiClient.saveRunsBatch(filtered)`, mark synced on success. It's best-effort — failures arm an exponential backoff (60 s → 2 min → … capped at 30 min) but don't surface to the UI.
+- **Push-side** is driven by `SyncService._trySync()`: take `LocalRunStore.unsyncedRuns`, run it through `filterRunsForCurrentUser(unsynced, api.userId)` (drops runs whose `metadata.created_by_user_id` names a *different* user — the shared-device owner-tag guard, see [decisions.md § 67](../architecture/decisions.md#67-offline-saved-runs-carry-a-created_by_user_id-owner-tag--defends-shared-device-sign-out--sign-in)), call `ApiClient.saveRunsBatch(filtered)`, mark synced on success. It's best-effort — failures arm an exponential backoff (60 s → 2 min → … capped at 30 min) but don't surface to the UI. `saveRunsBatch` returns a two-state `RunPushOutcome`: `retryable` failures come back next cycle and arm the backoff, while a `blocked` run is **parked** — `LocalRunStore.markBlocked` records it in the `blocked_runs.json` sidecar, it leaves `unsyncedRuns` and the residency invariant, and no drain sends it again until the runner resolves it (the History app bar names it, run detail explains it and offers `dropTrack`). One reason exists today, `trackTooLarge`; see [decisions.md § 1070](../architecture/decisions.md) and [§ 1009](../architecture/decisions.md).
 - **Pull-side** is driven manually from the History screen's "pull from cloud" button. `ApiClient.getRuns()` returns cloud runs, each gets passed to `LocalRunStore.saveFromRemote()`, which applies newer-wins conflict resolution against `metadata.last_modified_at`.
 
 ### Triggers for a push
@@ -187,8 +187,9 @@ Each _trySync:
   - if apiClient.userId == null: return       (not signed in, stay offline)
   - filter unsyncedRuns by metadata.created_by_user_id
   - if filtered.isEmpty + no pending deletes + no unsynced routes: return
-  - api.saveRunsBatch(filtered) → mark only the ids NOT in the
-    returned failed-track set as synced; arm backoff on any failure
+  - api.saveRunsBatch(filtered) → park outcome.blocked, then mark only
+    the ids in NEITHER set as synced; arm backoff on a RETRYABLE failure
+    only (a parked run has nothing to come back for)
 ```
 
 `{'manual', 'signin'}` is the bypass set: a user-initiated retry from the runs screen always fires, and a fresh auth session is a strong signal that any prior auth-rejection backoff is stale (the session that produced the 401 is gone). Without the signin bypass, a user who signs out, the queue piles up, then signs back in is stuck waiting out a 30-min window from the dead session — their freshly-recorded offline run sits unsynced.

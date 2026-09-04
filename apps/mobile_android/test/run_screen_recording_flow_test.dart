@@ -1622,6 +1622,9 @@ void main() {
         ),
       );
       await tester.pump();
+      // Third copy of the deliberate case at the helper above: the pairedName()
+      // read the post-frame callback kicked off is invisible at idle, so there
+      // is no condition that is ever false to poll for (decisions § 723).
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       });

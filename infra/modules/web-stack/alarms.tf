@@ -246,7 +246,7 @@ resource "aws_cloudwatch_metric_alarm" "osrm_proxy_lambda_errors" {
 # its clean-502 degradation, so a slow engine walks the duration toward the
 # timeout while the error rate stays flat, the route builder quietly falls back
 # to straight-line segments, and — because the distribution's SPA error fallback
-# rewrites a Lambda-origin 403/404 into the shell at 200 — nothing downstream
+# rewrites a Lambda-origin 403 into the shell at 200 — nothing downstream
 # looks wrong either. The alarm is the only place that outage becomes visible.
 resource "aws_cloudwatch_metric_alarm" "osrm_proxy_lambda_p95_duration" {
   alarm_name          = "${local.resource_prefix}-osrm-proxy-lambda-p95"

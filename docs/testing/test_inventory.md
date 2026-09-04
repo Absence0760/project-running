@@ -2184,3 +2184,13 @@ These six cases lived in `strava_sync_result_test.dart` / `.test.ts` until the p
 Run by this lane and passing: every Dart file named above, individually, under a 4 GB cgroup; `packages/core_models` in full (143); `packages/run_recorder` architecture + geolocator-fake suites; `apps/mobile_android` `architecture_guards_test` (272), `l10n_parity_test`, `routes_screen_test`, `csv_run_importer_test`, `preferences*`; `apps/web` `strava_sync_result.test.ts`, `race_import_providers.test.ts`, `catalogues.test.ts`, `messages_parity.test.ts`, `svelte-check` (0 errors), and `check_constraint_unions.mjs`.
 
 NOT run by this lane, and not claimed: Playwright, the full `apps/mobile_android` suite (the box cannot finish it), pgTAP, and anything needing a working local edge runtime.
+
+## #789 round 36 — the web guard split (2026-09-03)
+
+### `apps/web/src/lib/security_guards.test.ts` — 91 tests, split into twelve files
+
+[§ 1065](../architecture/decisions.md): the file reached 3,728 lines and 91 tests, and two unrelated lanes landed in it in one round. Every assertion moved verbatim into a concern-scoped file, checked both ways by script — each of the 91 test bodies appears byte-identical in exactly one destination, and the sorted name sets match. The four `security_guards.test.ts` headings above are per-round historical records of a file that no longer exists; they are left as written.
+
+`privacy_guards.test.ts` 21, `infra_guards.test.ts` 12, `consent_guards.test.ts` 11, `lambda_guards.test.ts` 9, `a11y_guards.test.ts` 8, `credential_guards.test.ts` 6, `rate_limit_guards.test.ts` 6, `edge_function_guards.test.ts` 5, `paywall_guards.test.ts` 5, `ci_workflow_guards.test.ts` 4, `xss_guards.test.ts` 3, `source_scanner_guards.test.ts` 1 — 91 total, recounted on the merged tree.
+
+The one-test file is deliberate: the comment-delimiter REGISTER is the single thing every lane adding a source scanner must edit, so it is the one file a scanner author needs to find.

@@ -30,6 +30,11 @@ data class Checkpoint(
     // the snapshot and the runner would lose the in-flight run.
     val bpmSum: Long = 0L,
     val bpmCount: Long = 0L,
+    // Active milliseconds the heart-rate sensor was delivering by `savedAtMs`.
+    // NULL, not 0, when nothing measured it — a checkpoint written by a build
+    // predating the field would otherwise recover as zero coverage and suppress
+    // an average that build would have saved (decisions § 1083).
+    val hrAvailableMs: Long? = null,
     val activityType: String = "run",
     val laps: List<CheckpointLap> = emptyList(),
     // Cumulative pedometer steps for the in-flight run, and the runner's
