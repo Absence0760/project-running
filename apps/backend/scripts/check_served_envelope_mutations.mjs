@@ -61,6 +61,8 @@ export const STRAVA_WEBHOOK_SECRET =
   process.env.STRAVA_WEBHOOK_SECRET ?? 'ci-strava-webhook-secret-32chars-ok';
 export const STRAVA_VERIFY_TOKEN =
   process.env.STRAVA_VERIFY_TOKEN ?? 'ci-strava-verify-token-32-chars-ok';
+export const CRON_SECRET =
+  process.env.CRON_SECRET ?? 'ci-cron-secret-at-least-32-chars-ok';
 
 // A `beacon` is a SECOND edit in the same file whose only job is to be visible
 // over HTTP. The four side-effect mutations change a database write, not a
@@ -123,6 +125,37 @@ export const MUTATIONS = [
       'any bearer at all is accepted while an absent one is still refused - the sharper half of the ' +
       'gate. The two spares are what say the wrong-secret case measures the COMPARE and not merely ' +
       'that a header is required',
+  },
+  {
+    id: 'cron-sweep-count-fabricated',
+    file: 'refresh-tokens/index.ts',
+    from: '  const { refreshed } = await refreshExpiringStravaTokens(supabase);\n' +
+      '  return Response.json({ refreshed });',
+    to: '  await refreshExpiringStravaTokens(supabase);\n' +
+      '  return Response.json({ refreshed: 1 });',
+    probe: {
+      fn: 'refresh-tokens',
+      method: 'POST',
+      headers: { Authorization: `Bearer ${CRON_SECRET}` },
+    },
+    expect: { status: 200, contains: '"refreshed":1' },
+    kills: [
+      'refresh-tokens: the correct cron bearer is accepted and the sweep completes ' +
+        'without reaching Strava',
+    ],
+    spares: [
+      'refresh-tokens: 403 on missing Authorization header',
+      'refresh-tokens: 403 on wrong CRON_SECRET',
+      'refresh-tokens: 403 on a non-Bearer Authorization header',
+    ],
+    reason:
+      'the hourly job records a count the sweep never produced, so a run that rotated nothing ' +
+      'reports a success. The three spares are what say this is measured PAST the gate: none of ' +
+      'them ever gets through it, so a gate that refused every caller would pass all three ' +
+      'and leave the accepted path unmeasured. The probe carries the real cron bearer for the ' +
+      'same reason the case does, and deliberately does NOT close the gate: the refusal branch ' +
+      'spends an ipBucketKey rate-limit token per call, and twenty polls of it would put the ' +
+      "429 those three cases cannot distinguish from a 403 into some later round's answer",
   },
   {
     id: 'strava-secret-gate-open',
@@ -323,12 +356,16 @@ export const MUTATIONS = [
     from: "return 'missing_headers';",
     to: "return 'ok';",
     probe: { fn: 'auth-email', method: 'POST', body: '{}' },
-    expect: { status: 503, contains: 'smtp_not_configured' },
+    expect: { status: 200, contains: 'no_recipient' },
     kills: ['auth-email: 401 missing_headers when the Standard Webhooks headers are absent'],
     spares: ['auth-email: 401 bad_signature on a wrong signature'],
     reason:
       'a caller supplying no webhook-id / -timestamp / -signature at all verifies, so anyone can ' +
-      "make GoTrue's send-email hook render and send auth mail",
+      "make GoTrue's send-email hook render and send auth mail. The mutant answered 503 " +
+      'smtp_not_configured until the boot step started configuring SMTP for the positive case; ' +
+      'it now reaches the send PLAN and reports no_recipient for a bodyless probe, which is the ' +
+      'mutation getting further rather than less far - the SMTP guard had been standing in for a ' +
+      'signature check that was no longer there',
   },
   {
     id: 'auth-email-signature-compare-accepts',
@@ -341,6 +378,31 @@ export const MUTATIONS = [
     kills: ['auth-email: 401 bad_signature on a wrong signature'],
     spares: ['auth-email: 401 missing_headers when the Standard Webhooks headers are absent'],
     reason: 'any signature verifies once the three headers are merely present',
+  },
+  {
+    id: 'auth-email-metadata-locale-ignored',
+    file: 'auth-email/lib.ts',
+    from: "  if (typeof metadataLocale === 'string' && metadataLocale.trim() !== '') {\n" +
+      '    return normalizeEmailLocale(metadataLocale);\n' +
+      '  }',
+    to: '  if (false) {}',
+    beacon: { file: 'auth-email/handler.ts', from: METHOD_GATE_405, to: METHOD_GATE_BEACON },
+    probe: { fn: 'auth-email' },
+    expect: { status: 418 },
+    kills: [
+      "auth-email: a correctly signed signup hook renders in the recipient's locale " +
+        'and delivers over SMTP',
+    ],
+    spares: [
+      'auth-email: 401 missing_headers when the Standard Webhooks headers are absent',
+      'auth-email: 401 bad_signature on a wrong signature',
+    ],
+    reason:
+      'a brand-new signup has no user_settings row, so the metadata locale is the ONLY locale a ' +
+      'confirmation mail can be rendered in - dropping it silently sends every new account its ' +
+      'confirmation in English. The response is {} either way, which is why this round carries ' +
+      'a beacon; the two spares say the refusals do not move, and the 405 case is deliberately ' +
+      'neither, because the beacon is the status it asserts',
   },
   {
     id: 'stripe-account-updated-flag-dropped',

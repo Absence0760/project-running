@@ -1,0 +1,88 @@
+-- The one routine in this schema whose EXECUTE, for a role that calls it, is
+-- supplied by the image's default privileges and by no statement in this repo.
+--
+-- ── The mechanism ────────────────────────────────────────────────────────────
+-- `20270625000001` and `anon_execute_registry_test.sql` already state it: what
+-- a fresh function in `public` arrives with depends on the image.
+--
+--   * Supabase Cloud and CI (`supabase/setup-cli` pinned to 2.84.2) carry an
+--     `alter default privileges` for `postgres` granting EXECUTE to anon,
+--     authenticated AND service_role. A function arrives with those three BY
+--     NAME, so a later `revoke ... from public` removes nothing.
+--   * The workstation CLI's current image (2.109.1) ships a `postgres` default
+--     ACL of `{postgres=X/postgres}`; a fresh function comes up with `proacl`
+--     NULL — Postgres's built-in owner+PUBLIC default — so `revoke ... from
+--     public` collapses the ACL to `{postgres}` plus whatever was granted by
+--     name, and service_role loses an EXECUTE nothing ever stated.
+--
+-- `20270213_001` created `fundraiser_totals` and wrote exactly that pair:
+--
+--     revoke all on function fundraiser_totals(uuid) from public;
+--     grant execute on function fundraiser_totals(uuid) to anon, authenticated;
+--
+-- Neither statement is wrong. service_role is simply absent from the grant, so
+-- it holds EXECUTE on the deployed image and not on the workstation's, and
+-- `donations_status_lock_test.sql` — which plants the whole donation ledger as
+-- service_role and then reads the thermometer without switching role — dies at
+-- its first `fundraiser_totals` call with 42501 here while passing on CI.
+-- `20270702000002` restated the same class of privilege for `payment_refunds`
+-- one migration family over, for the same reason: inheriting a privilege from
+-- an image default is not the same as having it.
+--
+-- ── The list, and why it is one line long ────────────────────────────────────
+-- The rule is § 790's: name every role that must call the routine. Applying it
+-- means enumerating the routines the default currently covers, which was the
+-- work. Measured against the local image, where `proacl` is exactly
+-- `{postgres}` plus what a migration stated (or NULL where nothing was stated
+-- at all):
+--
+--   * the 7 RPCs the Edge Functions call as service_role (`check_rate_limit`,
+--     `check_rate_limit_tiered`, `get_integration_tokens`,
+--     `set_integration_tokens`, `set_integration_tokens_cas`,
+--     `delete_user_integration_secrets`, `delete_user_provider_secrets`) and
+--     the 5 the Go worker calls (`enqueue_data_export`,
+--     `notify_data_export_ready`, `try_consume_strava_quota`, plus two of the
+--     above) each carry an explicit `service_role` entry already;
+--   * all 95 RPC names the web, Lambda, mobile and api_client trees call carry
+--     an explicit `authenticated` entry already, and none has a NULL `proacl`;
+--   * every base table in `public` already grants service_role the four DML
+--     verbs by name, which is what `20270702000002` closed;
+--   * the 74 functions whose `proacl` is still NULL — nothing ever stated
+--     anything about them — are trigger bodies and definer-internal helpers.
+--     Every reference to one outside the migrations is a COMMENT naming the
+--     trigger, not a call: `enforce_event_capacity`, `promote_event_waitlist`,
+--     `lock_subscription_columns`, `enroll_club_owner`, `notify_plan_assigned`
+--     and the rest are invoked by the executor as the owner and need no grant.
+--     Widening or narrowing that set is a separate, deliberate decision about
+--     what anon may reach on Cloud; it is not this migration's business and a
+--     blanket `grant ... to public` would break the `to public` RLS policies
+--     that motivated `20270625000001`'s `from public, anon` form.
+--
+-- That leaves `fundraiser_totals(uuid)` and nothing else.
+--
+-- ── Why service_role, and why not its sibling ────────────────────────────────
+-- `fundraiser_totals` is SECURITY DEFINER and gated on
+-- `fundraiser_anchor_visible`, and `anon` already holds EXECUTE. service_role
+-- also holds SELECT on `fundraisers`, `donations` and `payment_refunds`
+-- outright, so this grant confers no reach it does not already have by reading
+-- the three tables directly — it states, on every image, the posture the
+-- deployed image already has. It is a no-op against Supabase Cloud and CI's
+-- pinned 2.84.2 and a repair everywhere else.
+--
+-- `fundraiser_feed(uuid, integer)` is deliberately NOT granted alongside it,
+-- even though the two are the same page's pair and were replaced in the same
+-- statement block by `20270630000001`. It has no service_role caller. Adding
+-- one for symmetry would be the blanket sweep this entry exists to avoid, and
+-- the redaction it performs (an anonymous donor's display_name) is a client
+-- concern — a server-side caller that wanted donor rows would read `donations`.
+--
+-- The client rails are untouched: anon and authenticated keep exactly the
+-- grants `20270213_001` gave them, `donations` RLS is unchanged, and no
+-- policy, column grant or function body moves.
+--
+-- ── Online-safety (docs/backend/migration_locks.md) ──────────────────────────
+-- GRANT takes no lock on any relation — the only lock is an AccessShareLock on
+-- the catalogue entry. No scan, no rewrite, no constraint to validate, no
+-- signature change, so neither row-type generator moves.
+
+grant execute on function public.fundraiser_totals(uuid) to service_role;

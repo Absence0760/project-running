@@ -1248,6 +1248,283 @@ Deno.test({
   },
 });
 
+// ── refresh-tokens: the POSITIVE path, without an upstream ────────
+// The two refresh-tokens cases above are both 403s, so a handler that
+// refused every request would pass both. The gate OPENING is the thing
+// they cannot see, and it is the only part of this function that had no
+// coverage: `refreshExpiringStravaTokens` itself already has a positive
+// path in refresh-tokens/lib.test.ts and sweep_invariants.test.ts, both
+// driven through a stubbed `globalThis.fetch` — the same seam
+// _shared/strava_upstream.test.ts uses for the import path.
+//
+// So no live credential is needed here either, and no upstream call is
+// made. The fixture is an integration whose token IS inside the
+// one-hour window (so the sweep selects it, rather than returning zero
+// off an empty select and proving nothing) but which holds no vault
+// secret, so `get_integration_tokens` yields nothing and the loop
+// `continue`s before `refreshStravaToken` is reached. That the upstream
+// was never called is observable rather than assumed: a real call with
+// an unusable grant would 4xx and stamp `disconnected_at` through the
+// wired onPermanentFailure callback, and the test reads that column
+// back.
+
+const CRON_SECRET = Deno.env.get('CRON_SECRET') ??
+  'ci-cron-secret-at-least-32-chars-ok';
+
+Deno.test({
+  name: 'refresh-tokens: the correct cron bearer is accepted and the ' +
+    'sweep completes without reaching Strava',
+  ignore: SKIP_DB,
+  fn: async () => {
+    const email =
+      `cron-sweep-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+    const createRes = await svc('/auth/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'testtest-cron-1', email_confirm: true }),
+    });
+    const created = await createRes.json().catch(() => null);
+    const userId = created?.id as string | undefined;
+    if (!userId) {
+      throw new Error(
+        `failed to create ephemeral user: ${createRes.status} ${JSON.stringify(created)}`,
+      );
+    }
+
+    try {
+      // Inside the sweep's `token_expiry < now + 1h` window, and with
+      // both vault secret ids null.
+      const plant = await svc('/rest/v1/integrations', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          user_id: userId,
+          provider: 'strava',
+          token_expiry: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      });
+      const plantStatus = plant.status;
+      await plant.body?.cancel();
+      if (plantStatus >= 300) {
+        throw new Error(`failed to plant integration: ${plantStatus}`);
+      }
+
+      const res = await fetch(endpoint('refresh-tokens'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${CRON_SECRET}` },
+      });
+      const json = await res.json().catch(() => null);
+      if (res.status !== 200) {
+        throw new Error(
+          `expected 200, got ${res.status} ${JSON.stringify(json)}; 403 means ` +
+          'the bearer and the host\'s CRON_SECRET disagree, 503 means the host ' +
+          'has none (or one under the 32-char floor).',
+        );
+      }
+      // The count is the shape the cron job reads. Zero is the right
+      // answer for a grant with no stored refresh token — a non-zero one
+      // would mean the sweep believed it rotated something.
+      if (json?.refreshed !== 0) {
+        throw new Error(
+          `expected {refreshed: 0}, got ${JSON.stringify(json)}`,
+        );
+      }
+
+      const after = await svc(
+        `/rest/v1/integrations?user_id=eq.${userId}&provider=eq.strava` +
+        '&select=disconnected_at,disconnected_reason',
+      );
+      const rows = await after.json().catch(() => []);
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (!row) throw new Error('planted integration disappeared');
+      if (row.disconnected_at !== null) {
+        throw new Error(
+          `disconnected_at was stamped (${JSON.stringify(row)}) — the sweep ` +
+          'reached Strava with an unusable grant instead of skipping the row.',
+        );
+      }
+    } finally {
+      await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
+        .then((x) => x.body?.cancel());
+    }
+  },
+});
+
+// ── auth-email: the POSITIVE path, end to end into Mailpit ────────
+// The three cases above are all refusals, and a handler that refused
+// everything would pass all three. This one proves the other side: a
+// correctly signed hook renders in the recipient's locale and delivers
+// over SMTP. Nothing here is blocked on a credential — the Standard
+// Webhooks secret is ours (the CI boot step writes it into .env.local
+// beside SMTP_HOST / SMTP_PORT / SMTP_FROM) and the transport is the
+// local Mailpit the stack already runs.
+//
+// The payload carries NO `user.id`, so the handler skips its
+// `user_settings` locale read entirely: this test needs the function
+// host and the mail catcher, not the database, and so is gated on the
+// hook secret rather than on SERVICE_ROLE_KEY.
+
+const SEND_EMAIL_SECRET = Deno.env.get('SEND_EMAIL_HOOK_SECRET') ??
+  'v1,Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz';
+// Read from the RUNNER, which is why this is a published host port and
+// not the `host.docker.internal:54325` the function host dials.
+const MAILPIT_URL = Deno.env.get('MAILPIT_URL') ?? 'http://127.0.0.1:54324';
+const SKIP_MAIL = SKIP || SEND_EMAIL_SECRET.length === 0;
+
+// Standard Webhooks signs `${id}.${timestamp}.${body}` and carries the
+// result base64, not hex — so this is not `hmacHex`. Mirrors
+// `signSendEmailHook` / `parseHookSecrets` in auth-email/lib.ts; kept
+// hand-rolled here for the same reason `hmacHex` is, so the test does
+// not import the module whose live deployment it is measuring.
+async function signHook(
+  secretConfig: string,
+  id: string,
+  timestamp: string,
+  body: string,
+): Promise<string> {
+  let raw = secretConfig.split('|')[0].trim();
+  if (raw.startsWith('v1,')) raw = raw.slice(3);
+  if (raw.startsWith('whsec_')) raw = raw.slice(6);
+  const bin = atob(raw);
+  const keyBytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) keyBytes[i] = bin.charCodeAt(i);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(`${id}.${timestamp}.${body}`),
+  );
+  let out = '';
+  for (const b of new Uint8Array(sig)) out += String.fromCharCode(b);
+  return `v1,${btoa(out)}`;
+}
+
+interface MailpitItem {
+  ID: string;
+  To: { Address: string }[];
+  Subject: string;
+}
+
+// Searched by recipient rather than cleared-then-read: `DELETE
+// /api/v1/messages` wipes the whole catcher, and a Playwright shard or
+// another agent's stack may be reading it at the same time.
+async function waitForMail(
+  to: string,
+  timeoutMs = 20_000,
+): Promise<{ subject: string; body: string }> {
+  const deadline = Date.now() + timeoutMs;
+  let lastErr = 'no message matched';
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${MAILPIT_URL}/api/v1/messages?limit=200`);
+      if (res.ok) {
+        const list = await res.json() as { messages?: MailpitItem[] };
+        const hit = (list.messages ?? []).find((m) =>
+          (m.To ?? []).some((t) => t.Address.toLowerCase() === to.toLowerCase())
+        );
+        if (hit) {
+          const detail = await fetch(`${MAILPIT_URL}/api/v1/message/${hit.ID}`);
+          if (detail.ok) {
+            const msg = await detail.json() as {
+              Subject: string;
+              HTML?: string;
+              Text?: string;
+            };
+            return {
+              subject: msg.Subject,
+              body: (msg.HTML ?? '') + (msg.Text ?? ''),
+            };
+          }
+        }
+      } else {
+        lastErr = `mailpit ${res.status}`;
+        await res.body?.cancel();
+      }
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : 'fetch failed';
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`no mail for ${to} within ${timeoutMs}ms (${lastErr})`);
+}
+
+Deno.test({
+  name: 'auth-email: a correctly signed signup hook renders in the ' +
+    "recipient's locale and delivers over SMTP",
+  ignore: SKIP_MAIL,
+  fn: async () => {
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const to = `auth-email-pos-${stamp}@example.test`;
+    // Unique per run, so finding it in the delivered body proves the mail
+    // was rendered from THIS payload rather than matched off an older one.
+    const tokenHash = `pkce_${stamp}`;
+    const body = JSON.stringify({
+      user: {
+        email: to,
+        // No settings row exists for a hook payload carrying no user id,
+        // so this is the locale the handler must fall back to — and it
+        // must not be English.
+        user_metadata: { locale: 'fr-FR' },
+      },
+      email_data: {
+        email_action_type: 'signup',
+        token: '123456',
+        token_hash: tokenHash,
+        redirect_to: 'http://127.0.0.1:7777/auth/callback',
+        site_url: 'http://127.0.0.1:7777',
+      },
+    });
+    const id = `msg_pos_${stamp}`;
+    const ts = String(Math.floor(Date.now() / 1000));
+    const res = await fetch(endpoint('auth-email'), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'webhook-id': id,
+        'webhook-timestamp': ts,
+        'webhook-signature': await signHook(SEND_EMAIL_SECRET, id, ts, body),
+      },
+      body,
+    });
+    const json = await res.json().catch(() => null);
+    if (res.status !== 200) {
+      throw new Error(
+        `expected 200, got ${res.status} ${JSON.stringify(json)}; ` +
+        '503 smtp_not_configured means the function host has no SMTP_HOST / ' +
+        'SMTP_FROM, 401 means the signature or the secret disagree.',
+      );
+    }
+    if (json?.skipped) {
+      throw new Error(
+        `handler skipped the send (${JSON.stringify(json)}); a planned send ` +
+        'is what this test exists to exercise.',
+      );
+    }
+
+    const mail = await waitForMail(to);
+    // The French signup subject from authEmailCatalogue. Asserting the
+    // localized one rather than any subject is what separates "it sent
+    // something" from "it resolved the locale and rendered that entry".
+    if (mail.subject !== 'Confirmez votre adresse e-mail') {
+      throw new Error(
+        `expected the fr signup subject, got ${JSON.stringify(mail.subject)}; ` +
+        'an English subject means the fr-FR metadata locale was not resolved.',
+      );
+    }
+    if (!mail.body.includes(tokenHash)) {
+      throw new Error(
+        'delivered body carries no verify link for this run\'s token_hash; ' +
+        'the mail was not rendered from this payload.',
+      );
+    }
+  },
+});
+
 // ── docstring placeholder so deno test reports zero ignored when the
 //    env var isn't set, instead of "no tests" ────────────────────────
 if (SKIP) {

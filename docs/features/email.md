@@ -262,8 +262,13 @@ Dashboard → Auth → Hooks in prod):
   GoTrue's own format validation); an invalid recipient is a 400
   `invalid_recipient`, never a silent skip, and `smtpSend` re-checks at the
   wire as a last-line guard. Pinned by `lib.test.ts` + `handler.test.ts`
-  (45 deno tests) and three wire-level cases in
-  `_shared/handler_envelope.test.ts`.
+  (45 deno tests) and four cases in `_shared/handler_envelope.test.ts` —
+  three refusals plus, since [decisions § 1100](../architecture/decisions.md),
+  the positive path: a correctly signed signup hook delivered into the local
+  Mailpit, asserted on the localized subject and on this run's own
+  `token_hash`. The CI boot step writes `SMTP_HOST=host.docker.internal` /
+  `SMTP_PORT=54325` / `SMTP_FROM` for it; `127.0.0.1` there would be the
+  functions container's own loopback.
 - **Locale** — `user_settings.prefs.locale` (service-role read, the same
   §120 pref the worker uses) → signup-time `user_metadata.locale` → `en`. The
   settings read is auxiliary: if it fails the mail still goes out in the
