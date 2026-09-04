@@ -361,8 +361,29 @@ func (c *SupabaseClient) DownloadAvatar(ctx context.Context, path string) ([]byt
 // with a null id, so the walk pages each folder and descends on the
 // null-id entries. Backs the backup export's orphan sweep.
 func (c *SupabaseClient) ListStorageObjects(ctx context.Context, bucket, prefix string) ([]string, error) {
+	entries, err := c.ListStorageObjectsWithMeta(ctx, bucket, prefix)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Path)
+	}
+	return out, nil
+}
+
+// ListStorageObjectsWithMeta is the same walk carrying each object's
+// creation time, which is what a retention sweep selects on. Kept as one
+// implementation rather than two so the paging and the folder descent cannot
+// drift; ListStorageObjects is the name-only projection of it.
+//
+// An entry whose `created_at` the API does not send is returned with a zero
+// time. A caller filtering on age must treat that as UNKNOWN and skip it —
+// a zero time is older than every cutoff, so reading it as an age would
+// delete an object whose age was never established.
+func (c *SupabaseClient) ListStorageObjectsWithMeta(ctx context.Context, bucket, prefix string) ([]StorageObject, error) {
 	const pageSize = 100
-	var out []string
+	var out []StorageObject
 	var walk func(folder string) error
 	walk = func(folder string) error {
 		for offset := 0; ; offset += pageSize {
@@ -386,8 +407,9 @@ func (c *SupabaseClient) ListStorageObjects(ctx context.Context, bucket, prefix 
 				return err
 			}
 			var entries []struct {
-				Name string  `json:"name"`
-				ID   *string `json:"id"`
+				Name      string     `json:"name"`
+				ID        *string    `json:"id"`
+				CreatedAt *time.Time `json:"created_at"`
 			}
 			if err := json.Unmarshal(body, &entries); err != nil {
 				return err
@@ -403,7 +425,11 @@ func (c *SupabaseClient) ListStorageObjects(ctx context.Context, bucket, prefix 
 					}
 					continue
 				}
-				out = append(out, full)
+				var created time.Time
+				if e.CreatedAt != nil {
+					created = *e.CreatedAt
+				}
+				out = append(out, StorageObject{Path: full, CreatedAt: created})
 			}
 			if len(entries) < pageSize {
 				return nil
@@ -414,6 +440,32 @@ func (c *SupabaseClient) ListStorageObjects(ctx context.Context, bucket, prefix 
 		return nil, err
 	}
 	return out, nil
+}
+
+// DeleteStorageObjects removes objects through the Storage API, which is the
+// only caller that erases the BYTES: a DELETE against storage.objects removes
+// the row and leaves the file on the backend, measured in decisions § 1049.
+// storage-api's own `protect_objects_delete` trigger exists to say so.
+//
+// The multi-object form (`DELETE /object/<bucket>` with a `prefixes` body) is
+// one round trip per batch. It is idempotent — a path already gone is simply
+// absent from the response — so a retried job cannot fail on its own progress.
+func (c *SupabaseClient) DeleteStorageObjects(ctx context.Context, bucket string, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	payload, err := json.Marshal(map[string]any{"prefixes": paths})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+		c.BaseURL+"/storage/v1/object/"+bucket, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	_, err = c.do(ctx, req)
+	return err
 }
 
 // UploadPhoto writes a run photo back to the run-photos bucket. Used by

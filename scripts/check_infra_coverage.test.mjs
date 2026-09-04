@@ -30,6 +30,8 @@ import {
   parseDistribution,
   parseModuleFunctions,
   parseStackMatrix,
+  parseFmtScopes,
+  fmtCovers,
   terraformDirs,
 } from './check_infra_coverage.mjs';
 
@@ -38,6 +40,7 @@ import {
 const DIRS = ['infra/bootstrap', 'infra/envs/prod', 'infra/modules/web-stack'];
 const MATRIX = ['infra/bootstrap', 'infra/envs/prod'];
 const DEPENDABOT = ['infra/bootstrap', 'infra/envs/prod', 'infra/modules/web-stack'];
+const FMT_SCOPES = [{ dir: 'infra', recursive: true }];
 const FUNCTIONS = ['coach', 'share_run'];
 
 /** @type {import('./check_infra_coverage.mjs').Alarm[]} */
@@ -114,7 +117,8 @@ function envRoot(env, over = {}) {
 const ENV_ROOTS = [envRoot('prod'), envRoot('preview')];
 
 /**
- * @param {Partial<{ dirs: string[], matrix: string[], dependabot: string[],
+ * @param {Partial<{ dirs: string[], matrix: string[],
+ *                   fmtScopes: { dir: string, recursive: boolean }[], dependabot: string[],
  *                   functions: string[], alarms: import('./check_infra_coverage.mjs').Alarm[],
  *                   distribution: import('./check_infra_coverage.mjs').Distribution,
  *                   waf: import('./check_infra_coverage.mjs').WafScopeDown[],
@@ -125,6 +129,7 @@ function run(over = {}) {
   return compareSources(
     over.dirs ?? DIRS,
     over.matrix ?? MATRIX,
+    over.fmtScopes ?? FMT_SCOPES,
     over.dependabot ?? DEPENDABOT,
     over.functions ?? FUNCTIONS,
     over.alarms ?? ALARMS,
@@ -303,9 +308,12 @@ test('parseAlarms tells an error-rate alarm from a p95 one', () => {
 // ───────────────────── the committed sources ─────────────────────
 
 test('the committed infra/ tree is fully covered', () => {
+  const workflowSrc = readFileSync(TERRAFORM_WORKFLOW, 'utf-8');
+  const matrix = parseStackMatrix(workflowSrc);
   const { errors, ok } = compareSources(
     terraformDirs(INFRA_DIR),
-    parseStackMatrix(readFileSync(TERRAFORM_WORKFLOW, 'utf-8')),
+    matrix,
+    parseFmtScopes(workflowSrc, matrix),
     parseDependabotTerraform(readFileSync(DEPENDABOT_FILE, 'utf-8')),
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
@@ -788,5 +796,89 @@ test('every committed env root can set every engine URL', () => {
       assert.ok(root.declared.has(engine), `envs/${env} declares no var.${engine}`);
       assert.equal(root.wired.get(engine), `var.${engine}`, `envs/${env} wires ${engine}`);
     }
+  }
+});
+
+// ───────────────────── fmt scope coverage (§ 1111) ─────────────────────
+
+const PER_STACK_FMT_WORKFLOW = [
+  'jobs:',
+  '  fmt-validate:',
+  '    strategy:',
+  '      matrix:',
+  '        stack:',
+  '          - infra/bootstrap',
+  '          - infra/envs/prod',
+  '    steps:',
+  '      - name: terraform fmt -check',
+  '        working-directory: ${{ matrix.stack }}',
+  '        run: terraform fmt -check -diff',
+  '',
+].join('\n');
+
+const RECURSIVE_FMT_WORKFLOW = [
+  'jobs:',
+  '  fmt:',
+  '    steps:',
+  '      - name: terraform fmt -check',
+  '        run: terraform fmt -check -diff -recursive infra',
+  '',
+].join('\n');
+
+test('a per-stack fmt step expands to one scope per matrix entry, none recursive', () => {
+  const scopes = parseFmtScopes(PER_STACK_FMT_WORKFLOW, ['infra/bootstrap', 'infra/envs/prod']);
+  assert.deepEqual(scopes, [
+    { dir: 'infra/bootstrap', recursive: false },
+    { dir: 'infra/envs/prod', recursive: false },
+  ]);
+});
+
+test('a recursive fmt with a path argument covers the subtree', () => {
+  const scopes = parseFmtScopes(RECURSIVE_FMT_WORKFLOW, []);
+  assert.deepEqual(scopes, [{ dir: 'infra', recursive: true }]);
+  assert.ok(fmtCovers('infra/modules/web-stack', scopes));
+  assert.ok(fmtCovers('infra', scopes));
+  assert.ok(!fmtCovers('terraform/elsewhere', scopes));
+});
+
+test('a non-recursive scope covers only itself', () => {
+  const scopes = [{ dir: 'infra/envs/prod', recursive: false }];
+  assert.ok(fmtCovers('infra/envs/prod', scopes));
+  assert.ok(!fmtCovers('infra/envs/prod/sub', scopes));
+});
+
+test('a fmt invocation only mentioned in a comment is not a scope', () => {
+  const text = [
+    'jobs:',
+    '  fmt:',
+    '    steps:',
+    '      - run: |',
+    '          # run terraform fmt -recursive infra before pushing',
+    '          echo hi',
+    '',
+  ].join('\n');
+  assert.deepEqual(parseFmtScopes(text, []), []);
+});
+
+test('a Terraform directory outside every fmt scope fails, exempt from validate or not', () => {
+  const scopes = parseFmtScopes(PER_STACK_FMT_WORKFLOW, ['infra/bootstrap', 'infra/envs/prod']);
+  const { errors } = run({ fmtScopes: scopes });
+  assert.ok(has(errors, /infra\/modules\/web-stack holds Terraform that no `terraform fmt`/));
+  // The matrixed stacks are covered by their own per-stack scopes, so this
+  // fires for the module and nothing else.
+  assert.equal(errors.filter((e) => /terraform fmt/.test(e)).length, 1);
+});
+
+test('reading no fmt invocation at all is reported rather than passing every directory', () => {
+  const { errors } = run({ fmtScopes: [] });
+  assert.ok(has(errors, /no `terraform fmt` invocation was read out of the terraform workflow/));
+});
+
+test('the committed terraform workflow fmt-covers every Terraform directory', () => {
+  const src = readFileSync(TERRAFORM_WORKFLOW, 'utf-8');
+  const scopes = parseFmtScopes(src, parseStackMatrix(src));
+  assert.ok(scopes.length > 0);
+  for (const dir of terraformDirs(INFRA_DIR)) {
+    assert.ok(fmtCovers(dir, scopes), `${dir} is format-checked by nothing`);
   }
 });

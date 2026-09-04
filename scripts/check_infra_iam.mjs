@@ -81,15 +81,26 @@
 //      says to widen the scan — which is the only outcome that cannot be a
 //      false negative about a credentialed terraform run nobody read.
 //
-//  10. Lambda verb scope. The `lambda:` actions on each deploy role equal the
-//      set of `aws lambda` operations the workflows actually invoke, derived
-//      from their `run:` bodies. `GetFunction`, `GetAlias` and `PublishVersion`
-//      were granted and exercised by nothing (§ 1085) — the same shape as the
-//      KMS grant § 1021 removed, and the same way it accumulated: a verb is
-//      added when someone is unsure, and nothing ever asks again. The
-//      derivation's premise is that a workflow is the only thing holding these
-//      roles' credentials, which claim 9's scan already establishes; the
-//      operator's own SSO profile is what runs `bin/lambda-alias-sync.sh`.
+//  10. Lambda verb scope, PER ENVIRONMENT. The `lambda:` actions on each deploy
+//      role equal the set of `aws lambda` operations the workflows invoke
+//      AGAINST THAT ROLE'S OWN ENVIRONMENT, derived from their `run:` bodies.
+//      `GetFunction`, `GetAlias` and `PublishVersion` were granted and
+//      exercised by nothing (§ 1085) — the same shape as the KMS grant § 1021
+//      removed, and the same way it accumulated: a verb is added when someone
+//      is unsure, and nothing ever asks again. The derivation's premise is that
+//      a workflow is the only thing holding these roles' credentials, which
+//      claim 9's scan already establishes; the operator's own SSO profile is
+//      what runs `bin/lambda-alias-sync.sh`.
+//
+//      Comparing both roles against the UNION of every verb any workflow runs
+//      is right only while every credentialed job deploys every environment,
+//      which release-web.yml does today. A workflow deploying one environment
+//      only would make the union demand a verb the other never issues, and the
+//      fix would then read as widening a role rather than narrowing a
+//      derivation. So a verb is attributed to the environments its job can
+//      assume a role for — the `AWS_DEPLOY_ROLE_ARN_<ENV>` Secrets it names —
+//      narrowed by the step's own `if:` when that reads an output of the job's
+//      env branch. § 1110.
 //
 // Offline by design: no AWS credentials, no `terraform init`. Nothing here is
 // transcribed — every name, every environment, every function suffix and every
@@ -107,6 +118,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/** @import { Step } from './check_ci_diagnostics.mjs' */
 import { parseSteps, runBody } from './check_ci_diagnostics.mjs';
 import {
   blockEnd,
@@ -245,54 +257,243 @@ export function iamActionForCliVerb(verb) {
     .join('');
 }
 
-/// Every `lambda:` action the workflows' own shell reaches for. Comment lines
-/// are skipped: ci.yml's run bodies discuss `aws lambda update-function-code`
-/// in prose, and reading that as an invocation would let a verb justify itself
-/// by being mentioned.
+/// The repo Secret a job names to pick a deploy role, and the environment
+/// token it carries. This is the only statement in a workflow of WHICH
+/// identity its AWS steps run as, so it is what an invoked verb is attributed
+/// to — a job naming one of these targets one environment, a job naming both
+/// targets both.
+export const ROLE_ARN_SECRET = /secrets\.AWS_DEPLOY_ROLE_ARN_([A-Z0-9_]+)/g;
+
+/// One job's own text, from its key line to the next job's. Needed because a
+/// job states two things outside any step: which role ARNs it can assume, and
+/// the branch its steps are conditioned on.
+/**
+ * @param {string} text
+ * @returns {Map<string, string>} job name -> its lines
+ */
+export function jobRegions(text) {
+  const lines = text.split('\n');
+  /** @type {Map<string, string>} */
+  const regions = new Map();
+  /** @type {string | null} */
+  let job = null;
+  /** @type {string[]} */
+  let buf = [];
+  const flush = () => {
+    if (job !== null) regions.set(job, buf.join('\n'));
+  };
+  for (const line of lines) {
+    const key = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    if (key) {
+      flush();
+      job = key[1];
+      buf = [];
+      continue;
+    }
+    if (job !== null) buf.push(line);
+  }
+  flush();
+  return regions;
+}
+
+/// Every `k=v` written to $GITHUB_OUTPUT on each side of a job's env-deciding
+/// `if … then … else … fi`. `parseReleaseWorkflow` reads the same shell for
+/// claim 2 and keeps only `env=`; this keeps all of them, because the output a
+/// step's `if:` is written against (`is_prod`) is not the one that names the
+/// environment (`env`), and attributing a step needs both.
+/**
+ * @param {string} jobBody
+ * @returns {Map<string, { whenTrue: string | null, whenFalse: string | null }>}
+ */
+export function parseBranchOutputs(jobBody) {
+  /** @type {Map<string, { whenTrue: string | null, whenFalse: string | null }>} */
+  const outputs = new Map();
+  const shell = jobBody.match(
+    /if\s*\[\[[\s\S]*?\]\];\s*then([\s\S]*?)\n\s*else\n([\s\S]*?)\n\s*fi/,
+  );
+  if (!shell) return outputs;
+  /** @param {string} side @param {'whenTrue' | 'whenFalse'} slot */
+  const read = (side, slot) => {
+    for (const m of side.matchAll(/echo\s+"([A-Za-z0-9_]+)=([^"]*)"\s*>>\s*"\$GITHUB_OUTPUT"/g)) {
+      const entry = outputs.get(m[1]) ?? { whenTrue: null, whenFalse: null };
+      entry[slot] = m[2];
+      outputs.set(m[1], entry);
+    }
+  };
+  read(shell[1], 'whenTrue');
+  read(shell[2], 'whenFalse');
+  return outputs;
+}
+
+/// Which branch(es) of the job's env decision a step's `if:` leaves reachable,
+/// as the environments they produce. Null when the condition names no output
+/// this reader knows, which is not an error — it means the step runs on both
+/// branches as far as anything here can tell, and attributing it to both is
+/// the reading that can only over-demand a grant, never under-demand one.
+/**
+ * @param {string | null} cond
+ * @param {Map<string, { whenTrue: string | null, whenFalse: string | null }>} outputs
+ * @returns {string[] | null}
+ */
+export function envsForCondition(cond, outputs) {
+  if (!cond) return null;
+  const m = cond.match(
+    /steps\.[A-Za-z0-9_-]+\.outputs\.([A-Za-z0-9_]+)\s*(==|!=)\s*'([^']*)'/,
+  );
+  if (!m) return null;
+  const branch = outputs.get(m[1]);
+  const envs = outputs.get('env');
+  if (!branch || !envs) return null;
+  const holds = (/** @type {string | null} */ value) =>
+    m[2] === '==' ? value === m[3] : value !== m[3];
+  /** @type {string[]} */
+  const reachable = [];
+  if (holds(branch.whenTrue) && envs.whenTrue !== null) reachable.push(envs.whenTrue);
+  if (holds(branch.whenFalse) && envs.whenFalse !== null) reachable.push(envs.whenFalse);
+  return reachable;
+}
+
+/**
+ * @typedef {{ where: string, action: string, envs: string[] }} LambdaInvocation
+ * @typedef {{ byEnv: Map<string, Set<string>>, unattributed: string[], uncredentialed: string[],
+ *             invocations: LambdaInvocation[] }} LambdaScan
+ */
+
+/// Every `lambda:` action the workflows' own shell reaches for, PAIRED WITH THE
+/// ENVIRONMENT the invoking job deploys to.
+///
+/// The union of all of them was what each role used to be compared against,
+/// which is right only while every credentialed job deploys to every
+/// environment. release-web.yml does — it runs the same steps down both
+/// branches — so the union and this agree today. The moment a workflow deploys
+/// one environment only, the union demands a verb the other never uses, and
+/// the fix then looks like widening a role rather than narrowing a derivation.
+///
+/// Attribution has two levels. A job's environments are the ones its
+/// role-ARN Secrets name, because that Secret is the only place a workflow
+/// says which identity it assumes. A step's are those narrowed by its own
+/// `if:` when the condition reads an output of the job's env branch.
+///
+/// Comment lines are skipped: ci.yml's run bodies discuss
+/// `aws lambda update-function-code` in prose, and reading that as an
+/// invocation would let a verb justify itself by being mentioned.
 /**
  * @param {readonly {name: string, text: string}[]} files
- * @returns {Set<string>}
+ * @returns {LambdaScan}
  */
-export function parseWorkflowLambdaActions(files) {
-  /** @type {Set<string>} */
-  const actions = new Set();
-  for (const { text } of files) {
+export function scanWorkflowLambdaActions(files) {
+  /** @type {Map<string, Set<string>>} */
+  const byEnv = new Map();
+  /** @type {string[]} */
+  const unattributed = [];
+  /** @type {string[]} */
+  const uncredentialed = [];
+  /** @type {LambdaInvocation[]} */
+  const invocations = [];
+
+  for (const { name, text } of files) {
+    const regions = jobRegions(text);
+    /** @type {Map<string, Step[]>} */
+    const byJob = new Map();
     for (const step of parseSteps(text)) {
-      if (!step.hasRun) continue;
-      for (const line of runBody(step).split('\n')) {
-        if (/^\s*#/.test(line)) continue;
-        for (const m of line.matchAll(/\baws\s+lambda\s+([a-z][a-z0-9-]*)/g)) {
-          actions.add(`lambda:${iamActionForCliVerb(m[1])}`);
+      const list = byJob.get(step.job) ?? [];
+      list.push(step);
+      byJob.set(step.job, list);
+    }
+
+    for (const [job, steps] of byJob) {
+      const region = regions.get(job) ?? steps.map((s) => s.body).join('\n');
+      /** @type {string[]} */
+      const jobEnvs = [
+        ...new Set([...region.matchAll(ROLE_ARN_SECRET)].map((m) => m[1].toLowerCase())),
+      ];
+      const credentialed = steps.some((s) => s.body.includes(CREDENTIALS_ACTION));
+      const outputs = parseBranchOutputs(region);
+
+      for (const step of steps) {
+        if (!step.hasRun) continue;
+        /** @type {Set<string>} */
+        const actions = new Set();
+        for (const line of runBody(step).split('\n')) {
+          if (/^\s*#/.test(line)) continue;
+          for (const m of line.matchAll(/\baws\s+lambda\s+([a-z][a-z0-9-]*)/g)) {
+            actions.add(`lambda:${iamActionForCliVerb(m[1])}`);
+          }
+        }
+        if (actions.size === 0) continue;
+        const where = `${name}:${job}${step.name === null ? '' : ` / ${step.name}`}`;
+
+        if (!credentialed) {
+          uncredentialed.push(`${where} (${[...actions].sort().join(', ')})`);
+          continue;
+        }
+        if (jobEnvs.length === 0) {
+          unattributed.push(`${where} (${[...actions].sort().join(', ')})`);
+          continue;
+        }
+        const narrowed = envsForCondition(step.if, outputs);
+        const envs =
+          narrowed === null ? jobEnvs : jobEnvs.filter((e) => narrowed.includes(e));
+        if (envs.length === 0) {
+          unattributed.push(
+            `${where} (${[...actions].sort().join(', ')}) — its \`if:\` leaves no branch ` +
+              `reachable among the environments the job can assume (${jobEnvs.join(', ')})`,
+          );
+          continue;
+        }
+        for (const action of actions) {
+          invocations.push({ where, action, envs });
+          for (const env of envs) {
+            const set = byEnv.get(env) ?? new Set();
+            set.add(action);
+            byEnv.set(env, set);
+          }
         }
       }
     }
   }
-  return actions;
+
+  return { byEnv, unattributed, uncredentialed, invocations };
 }
 
 /**
- * Claim 10: no deploy role holds a `lambda:` action the pipeline never uses,
- * and none is missing one it does.
+ * Claim 10: no deploy role holds a `lambda:` action the pipeline never uses
+ * AGAINST THAT ROLE'S OWN ENVIRONMENT, and none is missing one it does.
  *
  * @param {OidcStack} oidc
- * @param {Set<string>} invoked
+ * @param {LambdaScan} scan
  * @returns {{ errors: string[], ok: string[] }}
  */
-export function checkLambdaActionScope(oidc, invoked) {
+export function checkLambdaActionScope(oidc, scan) {
   /** @type {string[]} */
   const errors = [];
   /** @type {string[]} */
   const ok = [];
 
-  if (invoked.size === 0) {
+  for (const where of scan.unattributed) {
     errors.push(
-      'no `aws lambda <verb>` invocation was read out of any workflow, so the granted set below ' +
-        'would have been compared against nothing. Either the release stopped deploying Lambdas ' +
-        'or this reader stopped matching.',
+      `${where} runs an \`aws lambda\` verb under an assumed AWS role, but which environment it ` +
+        'deploys to could not be read. A job states that by naming an ' +
+        'AWS_DEPLOY_ROLE_ARN_<ENV> Secret; without one, the verb belongs to no role and this ' +
+        'guard would silently stop asking for it. decisions § 1110.',
+    );
+  }
+
+  if (scan.byEnv.size === 0) {
+    errors.push(
+      'no `aws lambda <verb>` invocation was attributed to any environment, so the granted sets ' +
+        'below would have been compared against nothing. Either the release stopped deploying ' +
+        'Lambdas or this reader stopped matching.',
     );
     return { errors, ok };
   }
 
+  /** @type {Map<string, string>} */
+  const roleEnv = new Map();
+  for (const role of oidc.roles) if (role.envToken !== null) roleEnv.set(role.label, role.envToken);
+
+  /** @type {Set<string>} */
+  const envsChecked = new Set();
   let statements = 0;
   for (const policy of oidc.policies) {
     for (const statement of policy.statements) {
@@ -300,26 +501,56 @@ export function checkLambdaActionScope(oidc, invoked) {
       if (granted.length === 0) continue;
       statements++;
       const where = `${policy.roleLabel ?? '?'} / ${statement.sid ?? 'unnamed statement'}`;
+      const env = policy.roleLabel === null ? undefined : roleEnv.get(policy.roleLabel);
+      if (env === undefined) {
+        errors.push(
+          `${where} grants ${granted.join(', ')} but its role carries no Environment tag, so there ` +
+            'is no environment to compare the grant against. Claim 4 reads the same tag.',
+        );
+        continue;
+      }
+      envsChecked.add(env);
+      const invoked = scan.byEnv.get(env) ?? new Set();
+      if (invoked.size === 0) {
+        errors.push(
+          `${where} grants ${granted.join(', ')} against the ${env} environment, which no workflow ` +
+            'runs any `aws lambda` verb for. Either nothing deploys Lambdas there any more — in ' +
+            'which case the statement is standing privilege — or the job that does no longer ' +
+            `names an AWS_DEPLOY_ROLE_ARN_${env.toUpperCase()} Secret.`,
+        );
+        continue;
+      }
       const extra = granted.filter((a) => !invoked.has(a) && !UNEXERCISED_LAMBDA_ACTIONS.has(a));
       const missing = [...invoked].filter((a) => !granted.includes(a));
       if (extra.length > 0) {
         errors.push(
-          `${where} grants ${extra.join(', ')}, which no workflow invokes. The only ` +
-            `\`aws lambda\` verbs any workflow runs are ${[...invoked].sort().join(', ')}; ` +
-            `the operator's own SSO ` +
+          `${where} grants ${extra.join(', ')}, which no workflow invokes against ${env}. The ` +
+            `only \`aws lambda\` verbs any workflow runs there are ` +
+            `${[...invoked].sort().join(', ')}; the operator's own SSO ` +
             'profile is what runs bin/lambda-alias-sync.sh. Remove them, or declare each in ' +
             'UNEXERCISED_LAMBDA_ACTIONS with the reason it is still needed. decisions § 1085.',
         );
       }
       if (missing.length > 0) {
         errors.push(
-          `${where} is missing ${missing.join(', ')}, which a workflow invokes — the release fails ` +
-            'with AccessDenied mid-deploy, against that environment.',
+          `${where} is missing ${missing.join(', ')}, which a workflow invokes against ${env} — ` +
+            'the release fails with AccessDenied mid-deploy, against that environment.',
         );
       }
       if (extra.length === 0 && missing.length === 0) {
-        ok.push(`${where}: lambda actions equal the ${granted.length} the pipeline invokes`);
+        ok.push(
+          `${where}: lambda actions equal the ${granted.length} the pipeline invokes against ${env}`,
+        );
       }
+    }
+  }
+  for (const env of scan.byEnv.keys()) {
+    if (!envsChecked.has(env)) {
+      errors.push(
+        `a workflow runs ${[...(scan.byEnv.get(env) ?? [])].sort().join(', ')} against the ${env} ` +
+          'environment, for which no deploy role grants any `lambda:` action. That deploy fails ' +
+          'with AccessDenied, or assumes a role this stack does not create.',
+      );
     }
   }
   for (const [action, reason] of UNEXERCISED_LAMBDA_ACTIONS) {
@@ -336,6 +567,16 @@ export function checkLambdaActionScope(oidc, invoked) {
       'no statement granting any `lambda:` action was found on either deploy role. The release ' +
         'calls `aws lambda update-function-code` eight times, so this is either a broken parse or ' +
         'a release that can no longer deploy.',
+    );
+  }
+  if (errors.length === 0) {
+    ok.push(
+      `${scan.invocations.length} \`aws lambda\` invocation(s) attributed across ` +
+        `${scan.byEnv.size} environment(s)` +
+        (scan.uncredentialed.length === 0
+          ? ''
+          : `; ${scan.uncredentialed.length} in job(s) that assume no AWS role, not attributed ` +
+            `(${scan.uncredentialed.join('; ')})`),
     );
   }
 
@@ -1441,7 +1682,7 @@ export function main() {
   const workflowFiles = readWorkflowFiles(WORKFLOW_DIR);
   const scope = checkLambdaActionScope(
     parseOidcStack(readFileSync(OIDC_FILE, 'utf-8')),
-    parseWorkflowLambdaActions(workflowFiles),
+    scanWorkflowLambdaActions(workflowFiles),
   );
   errors.push(...scope.errors);
   ok.push(...scope.ok);

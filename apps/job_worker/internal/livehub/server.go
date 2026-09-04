@@ -536,6 +536,16 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	// Pro-Round2 #1 + the dedup race.
 	history, ch, unsub, subErr := s.Hub.SubscribeWithHistory(ctx, runID, 0)
 	if subErr != nil {
+		if !errors.Is(subErr, ErrSubscriberCapReached) {
+			// Anything else is the hub failing to reach its backing store —
+			// a SUBSCRIBE the server never acknowledged, most likely. Saying
+			// "cap reached" here would send the operator hunting an
+			// amplification attack that isn't happening, and tell a lone
+			// spectator to back off from a room with no other subscriber.
+			s.log().Error("subscribe failed", "run_id", runID, "err", subErr)
+			_ = c.Close(websocket.StatusInternalError, "live hub unavailable")
+			return
+		}
 		// Per-room subscriber cap reached. Audit/livehub M3. Close
 		// with `1013 Try Again Later` (StatusTryAgainLater) so well-
 		// behaved clients back off rather than reconnect-loop. Also

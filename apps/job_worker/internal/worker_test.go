@@ -30,7 +30,13 @@ type fakeBackend struct {
 	// Inputs
 	jobs        []*Job // queued in order; ClaimNextJob pops from the front
 	trackByPath map[string][]TrackPoint
-	trackURL    string
+	// Storage-retention doubles, keyed by bucket.
+	storageObjects        map[string][]StorageObject
+	storageDeleted        [][]string
+	storageDeleteCalls    int
+	storageDeleteErrAfter int
+	storageListErr        error
+	trackURL              string
 	// Optional override: when non-nil, ReadRunTrackURL returns
 	// trackURLs[i] on the i-th call (clamped to the last entry).
 	// Lets tests simulate a re-upload mid-match — the worker reads
@@ -326,6 +332,42 @@ func (f *fakeBackend) UploadRoutePhoto(ctx context.Context, path string, body []
 
 func (f *fakeBackend) UpdateRoutePhotoThumb512Path(ctx context.Context, photoID, path string) error {
 	return f.UpdatePhotoThumb512Path(ctx, photoID, path)
+}
+
+// Export-retention doubles. `storageObjects` is the bucket as the list API
+// would report it; `storageDeleted` records every path handed to a DELETE, in
+// order, so a test can assert the batching rather than only the total.
+func (f *fakeBackend) ListStorageObjectsWithMeta(ctx context.Context, bucket, prefix string) ([]StorageObject, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.storageListErr != nil {
+		return nil, f.storageListErr
+	}
+	var out []StorageObject
+	for _, o := range f.storageObjects[bucket] {
+		if prefix == "" || strings.HasPrefix(o.Path, prefix) {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeBackend) DeleteStorageObjects(ctx context.Context, bucket string, paths []string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.storageDeleteCalls++
+	if f.storageDeleteErrAfter > 0 && f.storageDeleteCalls > f.storageDeleteErrAfter {
+		return errors.New("storage delete refused")
+	}
+	f.storageDeleted = append(f.storageDeleted, append([]string(nil), paths...))
+	remaining := f.storageObjects[bucket][:0]
+	for _, o := range f.storageObjects[bucket] {
+		if !slicesContains(paths, o.Path) {
+			remaining = append(remaining, o)
+		}
+	}
+	f.storageObjects[bucket] = remaining
+	return nil
 }
 
 func (f *fakeBackend) DownloadClubPhoto(ctx context.Context, path string) ([]byte, string, error) {

@@ -9,17 +9,29 @@
 //   1. Stack coverage. `.github/workflows/terraform.yml` expands its stacks as
 //      an inline `stack:` matrix and its header says "when adding a new stack:
 //      append it to the matrix below AND add a terraform ecosystem entry to
-//      .github/dependabot.yml". A stack absent from the matrix gets no `fmt`,
-//      no `validate` and no Trivy verdict of its own; one absent from
-//      dependabot never hears about a provider CVE. Neither absence shows up
-//      as a red check — the workflow simply has one fewer green row than it
-//      could have, which is invisible next to the twenty it does have.
+//      .github/dependabot.yml". A stack absent from the matrix gets no
+//      `validate` of its own; one absent from dependabot never hears about a
+//      provider CVE. Neither absence shows up as a red check — the workflow
+//      simply has one fewer green row than it could have, which is invisible
+//      next to the twenty it does have.
 //
 //      infra/modules/web-stack is the one directory that cannot be validated
 //      on its own: it takes an `aws.us_east_1` aliased provider from its
 //      caller, so a standalone `terraform validate` fails with "Provider
-//      configuration not present" (measured, not assumed). It is exempt here
-//      WITH that reason, and the exemption fails if it ever stops being needed.
+//      configuration not present" (measured, not assumed, and still true under
+//      `configuration_aliases`). It is exempt here WITH that reason, and the
+//      exemption fails if it ever stops being needed.
+//
+//      The exemption is from `validate` and from NOTHING ELSE. `fmt` has no
+//      such excuse — formatting a module needs no provider — and it was
+//      nonetheless skipped for a year, because the fmt step lived inside the
+//      matrix job with a per-stack `working-directory` and `terraform fmt`
+//      without `-recursive` reads one directory. Measured: drift added to
+//      infra/modules/web-stack left all five per-stack steps exiting 0.
+//      So the fmt invocations are read out of the workflow as SCOPES — a
+//      directory plus whether `-recursive` extends it over the subtree — and
+//      every Terraform directory must fall inside one, exempt or not.
+//      decisions § 1111.
 //
 //   2. Distribution behaviour coverage. The CloudFront distribution carries
 //      eighteen cache behaviours and every one of them re-states, by hand, the
@@ -94,6 +106,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parseSteps, runBody } from './check_ci_diagnostics.mjs';
 import {
   blockEnd,
   hclResources,
@@ -137,6 +150,8 @@ export const FORBIDDEN_URI_TRANSFORM = 'LOWERCASE';
 
 /// Directories `terraform validate` cannot be run against on their own, and
 /// why. An entry that stops being needed fails as loudly as a missing one.
+/// Exempt from VALIDATE only — every directory here is still fmt-checked and
+/// Trivy-scanned, both of which walk the tree rather than the matrix.
 export const VALIDATE_EXEMPT = new Map([
   [
     'infra/modules/web-stack',
@@ -210,6 +225,66 @@ export function parseStackMatrix(src) {
     out.push(item[1].replace(/^['"]|['"]$/g, ''));
   }
   return out;
+}
+
+/// Every `terraform fmt` invocation in the workflow, as the tree it reads.
+///
+/// `dir` is the directory the command resolves against: its own path argument
+/// if it has one, else the step's `working-directory`, else the repo root. A
+/// `${{ matrix.stack }}` working-directory expands to one scope per matrix
+/// entry, because that is what the job does. `recursive` says whether the scope
+/// reaches subdirectories — without it `terraform fmt` reads exactly one
+/// directory's .tf files, which is how a module inside the tree went unchecked.
+/**
+ * @param {string} src
+ * @param {readonly string[]} matrix
+ * @returns {{ dir: string, recursive: boolean }[]}
+ */
+export function parseFmtScopes(src, matrix) {
+  /** @type {{ dir: string, recursive: boolean }[]} */
+  const scopes = [];
+  for (const step of parseSteps(src)) {
+    if (!step.hasRun) continue;
+    for (const line of runBody(step).split('\n')) {
+      if (/^\s*#/.test(line)) continue;
+      const cmd = line.match(/\bterraform\s+fmt\b(.*)$/);
+      if (!cmd) continue;
+      const recursive = /(^|\s)-recursive(\s|$)/.test(cmd[1]);
+      const positional = cmd[1]
+        .split(/\s+/)
+        .filter((t) => t !== '' && !t.startsWith('-'));
+      /** @type {string[]} */
+      const dirs =
+        positional.length > 0
+          ? positional
+          : (() => {
+              const wd = step.body.match(/^\s*working-directory:\s*(.+?)\s*$/m)?.[1];
+              if (wd === undefined) return ['.'];
+              if (/\$\{\{\s*matrix\.stack\s*\}\}/.test(wd)) return [...matrix];
+              return [wd.replace(/^['"]|['"]$/g, '')];
+            })();
+      for (const dir of dirs) {
+        scopes.push({ dir: dir.replace(/^\.\//, '').replace(/\/+$/, ''), recursive });
+      }
+    }
+  }
+  return scopes;
+}
+
+/// Whether a Terraform directory falls inside some fmt scope. A non-recursive
+/// scope covers only itself; the repo root covers everything only when it is
+/// recursive.
+/**
+ * @param {string} dir
+ * @param {readonly { dir: string, recursive: boolean }[]} scopes
+ * @returns {boolean}
+ */
+export function fmtCovers(dir, scopes) {
+  return scopes.some((scope) => {
+    if (scope.dir === dir) return true;
+    if (!scope.recursive) return false;
+    return scope.dir === '.' || dir.startsWith(`${scope.dir}/`);
+  });
 }
 
 /// Every `directory:` declared under a `package-ecosystem: "terraform"` entry,
@@ -561,6 +636,7 @@ export function parseEnvRoot(env, mainSrc, variablesSrc) {
 /**
  * @param {string[]} dirs
  * @param {string[]} matrix
+ * @param {{ dir: string, recursive: boolean }[]} fmtScopes
  * @param {string[]} dependabot
  * @param {string[]} functions
  * @param {Alarm[]} alarms
@@ -573,6 +649,7 @@ export function parseEnvRoot(env, mainSrc, variablesSrc) {
 export function compareSources(
   dirs,
   matrix,
+  fmtScopes,
   dependabot,
   functions,
   alarms,
@@ -597,6 +674,12 @@ export function compareSources(
         'until this parses again an unvalidated stack reads as covered.',
     );
   }
+  if (fmtScopes.length === 0) {
+    errors.push(
+      'no `terraform fmt` invocation was read out of the terraform workflow, so every directory ' +
+        'below would report as format-checked by nothing this guard can see.',
+    );
+  }
 
   const matrixSet = new Set(matrix);
   const dependabotSet = new Set(dependabot);
@@ -612,15 +695,24 @@ export function compareSources(
             'two is wrong; if it validates now, drop the exemption.',
         );
       }
-      ok.push(`${dir}: fmt + validate + Trivy in CI`);
+      ok.push(`${dir}: validate + Trivy in CI`);
     } else if (exemption !== undefined) {
       usedExemptions.add(dir);
-      ok.push(`${dir}: exempt from validate (${exemption.split(';')[0]})`);
+      ok.push(`${dir}: exempt from validate, still fmt + Trivy (${exemption.split(';')[0]})`);
     } else {
       errors.push(
         `${dir} holds Terraform that no CI job validates. Add it to the \`stack:\` matrix in ` +
           '.github/workflows/terraform.yml, or to VALIDATE_EXEMPT in this guard with the reason ' +
           'validate cannot run against it.',
+      );
+    }
+
+    if (fmtScopes.length > 0 && !fmtCovers(dir, fmtScopes)) {
+      errors.push(
+        `${dir} holds Terraform that no \`terraform fmt\` invocation in the workflow reads. A ` +
+          'per-stack step scoped by `working-directory` reads that one directory only, so drift ' +
+          'here would never turn a check red. Widen the recursive pass, or add the directory to ' +
+          'it. VALIDATE_EXEMPT exempts a directory from `validate` and from nothing else.',
       );
     }
 
@@ -1015,9 +1107,12 @@ function engineUrlCoverage(engines, roots, errors, ok) {
 }
 
 export function main() {
+  const workflowSrc = readFileSync(TERRAFORM_WORKFLOW, 'utf-8');
+  const matrix = parseStackMatrix(workflowSrc);
   const { errors, ok } = compareSources(
     terraformDirs(INFRA_DIR),
-    parseStackMatrix(readFileSync(TERRAFORM_WORKFLOW, 'utf-8')),
+    matrix,
+    parseFmtScopes(workflowSrc, matrix),
     parseDependabotTerraform(readFileSync(DEPENDABOT_FILE, 'utf-8')),
     parseModuleFunctions(readFileSync(MODULE_FILE, 'utf-8')),
     parseAlarms(readFileSync(ALARMS_FILE, 'utf-8')),
