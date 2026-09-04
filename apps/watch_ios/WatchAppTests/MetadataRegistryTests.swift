@@ -81,7 +81,12 @@ final class MetadataRegistryTests: XCTestCase {
     /// none — so the sources must stay clear of it. And the statement that
     /// makes the absence readable has to exist somewhere a maintainer will
     /// find it, or the next person adds an assumed `1.0` (decisions § 1106).
-    func testWatchOSMakesNoCoverageClaimAndSaysSoWhereTheAverageIsProduced() throws {
+    /// Renamed from `testWatchOSMakesNoCoverageClaimAndSaysSoWhereTheAverageIsProduced`
+    /// when the watch started measuring coverage: it writes no `hr_coverage`
+    /// KEY, which is a different claim from making no measurement, and a guard
+    /// whose name asserts the second while the code does the first is a guard
+    /// nobody can read (decisions § 1156).
+    func testWatchOSWritesNoCoverageKeyAndGradesTheAverageItDoesWrite() throws {
         let root = repoRoot()
         let sourceRoot = root.appendingPathComponent("apps/watch_ios/WatchApp")
         var writers: [String] = []
@@ -117,13 +122,49 @@ final class MetadataRegistryTests: XCTestCase {
                 hk.contains(token),
                 """
                 HealthKitManager.swift no longer states what `summaryAverageBPM` is scoped to \
-                (missing "\(token)"). The value goes to the row as `avg_bpm` with no coverage \
-                figure beside it, and both watch clients write `source = 'watch'` — so without \
-                this statement the absence of `hr_coverage` is indistinguishable from a Wear run \
-                predating the key. Restore it where the average is produced (decisions § 1106).
+                (missing "\(token)"). The value goes to the row as `avg_bpm`, and both watch \
+                clients write `source = 'watch'` — so without this statement the absence of \
+                `hr_coverage` is indistinguishable from a Wear run predating the key. Restore \
+                it where the average is produced (decisions § 1106).
                 """
             )
         }
+
+        // The measurement itself. § 1106 recorded the unquantified gap — a
+        // live session whose sensor goes quiet still averages what it got —
+        // and § 1156 quantified it. The key is still not sent (the assertion
+        // above), so the ONLY thing the figure does is decide whether the run
+        // keeps its `avg_bpm`; delete the threshold and the measurement stops
+        // having any effect at all, silently.
+        XCTAssertTrue(
+            hk.contains("minAverageBPMCoverage"),
+            """
+            HealthKitManager.swift no longer suppresses `avg_bpm` below a coverage floor. \
+            A mean taken over less of the run than not is not the run's average, and every \
+            reader of `avg_bpm` treats it as though it were (decisions § 1083 / § 1156).
+            """
+        )
+
+        // And the grading has to be on the path a SAVED run takes, not merely
+        // available beside it. `summaryAverageBPM` is the ungraded mean; a
+        // recorder reading it straight into a `FinishedRun` or a checkpoint
+        // is the defect the grade exists to prevent.
+        let wmURL = root.appendingPathComponent("apps/watch_ios/WatchApp/WorkoutManager.swift")
+        let wmData = try Data(contentsOf: wmURL)
+        let wm = stripComments(String(decoding: wmData, as: UTF8.self))
+        XCTAssertTrue(
+            wm.contains("heartRateClaim("),
+            "WorkoutManager no longer grades the heart rate it saves (decisions § 1156)"
+        )
+        XCTAssertFalse(
+            wm.contains("summaryAverageBPM"),
+            """
+            WorkoutManager reads the UNGRADED mean. Every average that reaches a row — the \
+            finished run and the 15 s checkpoint a crash recovers from — must go through \
+            `heartRateClaim(activeElapsedSeconds:)`, or a mean over three minutes of a \
+            twelve-hour run is saved as that run's average heart rate (decisions § 1156).
+            """
+        )
     }
 
     /// Repo root resolved from THIS source file so the test doesn't depend on
