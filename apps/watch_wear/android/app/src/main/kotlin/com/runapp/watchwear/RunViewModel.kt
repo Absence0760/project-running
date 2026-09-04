@@ -538,6 +538,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     true
                 }
                 .collect { list ->
+                val wasUnreadable = _state.value.queueUnreadable
                 _state.value = _state.value.copy(
                     queuedCount = list.size,
                     queueUnreadable = false,
@@ -545,6 +546,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                         list.none { it.id == id }
                     } ?: _state.value.thisRunSynced,
                 )
+                onQueueBecameReadable(wasUnreadable)
             }
         }
     }
@@ -712,6 +714,30 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(
             batteryPercent = BatteryStatus.percent(getApplication()),
         )
+    }
+
+    /// Re-raise the recovery prompt `checkRecovery` withheld because the queue
+    /// could not be read. Called from wherever the unreadable flag is CLEARED,
+    /// which is both readers of that one file — the stream, which retries on
+    /// its own backoff, and the drain, which is what the runner's own retry
+    /// goes through.
+    ///
+    /// Until the read recovers there is nothing to re-raise: `gradeRecovery`
+    /// answers `Ignore` and changes nothing, deliberately, because the queue
+    /// is the only thing that can say whether the run is already banked
+    /// somewhere better than this snapshot (decisions § 1107). The checkpoint
+    /// survives to the next launch either way, so this is not what makes the
+    /// run safe — it is what stops a runner being made to relaunch the app for
+    /// a fault that has already cleared underneath them.
+    ///
+    /// Gated on the TRANSITION so the ordinary per-save emission does not
+    /// re-read the checkpoint store on every queue change, and skipped while a
+    /// prompt is already up so an arriving emission cannot swap the checkpoint
+    /// under a decision the runner is mid-way through making (decisions § 1154).
+    private fun onQueueBecameReadable(wasUnreadable: Boolean) {
+        if (!wasUnreadable) return
+        if (_state.value.pendingRecovery != null) return
+        checkRecovery()
     }
 
     private fun checkRecovery() {
@@ -1393,7 +1419,9 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
+        val wasUnreadable = _state.value.queueUnreadable
         _state.value = _state.value.copy(queueUnreadable = false)
+        onQueueBecameReadable(wasUnreadable)
         // The loop body itself is in the pure `drainQueueLoop` helper
         // so the per-error-class semantics, refresh-then-retry shape,
         // and transient-vs-permanent split can be unit-tested in

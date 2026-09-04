@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -667,8 +669,27 @@ private fun PreRunScreen(
     // Recovery prompt takes precedence — user has unsaved-run state from
     // a previous app kill. Show that exclusively until they decide.
     if (pendingRecoveryDistance != null) {
+        // Scrollable because the decision has to stay REACHABLE, not because
+        // the content is long: the title, the distance and two 52 dp chips
+        // already measure past the ~152 dp a 192 dp round watch leaves inside
+        // this padding, so Discard was the part falling off the bottom edge
+        // with no way to reach it — and the unreadable line below adds to it.
+        // Centred while it fits, so nothing moves on the common path, and
+        // rotary-wired so the bezel/crown reaches it like every other
+        // scrolling surface here (decisions § 1154).
+        val recoveryScroll = rememberScrollState()
+        val rotaryFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { rotaryFocus.requestFocus() }
         Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(recoveryScroll)
+                    .rotaryScrollable(
+                        RotaryScrollableDefaults.behavior(scrollableState = recoveryScroll),
+                        focusRequester = rotaryFocus,
+                    ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Text(stringResource(R.string.recover_unsaved_run), style = MaterialTheme.typography.title3, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -676,9 +697,35 @@ private fun PreRunScreen(
                     style = MaterialTheme.typography.caption2,
                     color = DuskPalette.haze,
                 )
+                // The one condition under which "Save it" cannot work, said
+                // out loud. `recoverCheckpoint` re-grades on the tap and an
+                // unreadable queue grades `Ignore` — nothing is queued and
+                // nothing is cleared, correctly, because `store.save` reads
+                // the same file the grade could not (decisions § 1107). The
+                // tap was therefore silent: this prompt is a takeover and
+                // `syncError` renders on `PostRunScreen`, a screen the runner
+                // cannot be on. Disabled rather than left tappable-and-inert,
+                // because an affordance that does nothing reads as a broken
+                // app rather than as a fault that will clear — and it does
+                // clear: `observeQueue` retries the read on its own, and the
+                // chip re-enables the moment it succeeds. Discard stays live
+                // on purpose. It is the only way off a screen with no Start
+                // button, and stranding a runner who wants to record NOW
+                // behind a corrupt file would cost them the next run as well
+                // as this one.
+                if (queueUnreadable) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.sync_queue_unreadable),
+                        style = MaterialTheme.typography.caption3,
+                        color = DuskPalette.warning,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Chip(
                     onClick = onRecover,
+                    enabled = !queueUnreadable,
                     label = { Text(stringResource(R.string.save_it)) },
                     colors = ChipDefaults.primaryChipColors(),
                     modifier = Modifier.fillMaxWidth(),
