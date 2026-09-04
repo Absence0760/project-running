@@ -20617,3 +20617,87 @@ its message says whether the ping was lost or merely late. The regression pin is
 25 subscribe-then-publish rounds down both paths asserting one receiver each; it
 fails within the first few rounds on the unfixed code under load and passes 20
 consecutive `-race` runs on the fixed code under the same load.
+
+## 1119. The OSRM browser-direct-leak guard now binds `RouteBuilder`'s inline calls; the three helpers nothing imported are deleted
+
+Issue #198 moved every OSRM call behind the `/api/routes/osrm` proxy so a user's
+pin coordinates — routinely their home — never leave the client unproxied, and
+`consent_guards.test.ts` has pinned that ever since. It pinned the wrong code.
+The claim it made was that `snapToRoad`, `fetchRoute` and `fetchFullRoute` in
+`routes/routing.ts` each issue their call through `osrmProxyFetch`; repo-wide,
+the only references to those three names were their own definitions and the
+guard's own loop. `RouteBuilder.svelte` — the one OSRM caller a user can reach —
+imports `osrmProxyFetch` alone and builds its OSRM paths inline, and the guard
+said so in a comment while checking it only with `doesNotMatch` on the host
+constant and a **count** of `osrmProxyFetch(` call sites `>= 2`. A bare `fetch()`
+added beside the two existing proxy calls does not move that count, so the live
+path was the one thing the privacy invariant did not cover. § 1087 had already
+had to fix a real body-parse defect inside one of the dead helpers, which is the
+maintenance cost of keeping code alive for a test.
+
+The three are deleted rather than adopted. Adoption was the other candidate and
+it is worse on the merits: `RouteBuilder` needs a `radiuses=` cap, a per-request
+`AbortSignal`, a retry ladder, batching in groups of three and a
+`routeVersion` cancellation check on both sides of every `await`, and growing
+three helpers to carry all of that for one consumer is an abstraction with one
+call site, not a shared library. `routing.ts` is now the proxy client and
+nothing else, and the guard states two claims over code that runs: routing.ts
+must export **exactly one** function and reach the network **exactly once**,
+with that one `fetch` prefixed by `OSRM_PROXY_BASE`; and every OSRM service path
+literal in `RouteBuilder.svelte` — matched as `/nearest|route|match|trip|table/v1/`
+after `stripComments` — must be handed to `osrmProxyFetch`, inline at the call
+or through a `const` the call is given, with no bare `fetch()` in the file
+carrying one. A population assertion fails if the path scan ever matches
+nothing, so the per-path loop cannot pass vacuously. Proven by planting five
+violations one at a time — the const-bound path sent via `fetch`, the inline
+path sent via `fetch`, a new bare `fetch` to OSRM added beside the two proxy
+calls, a second exported function in routing.ts, and an absolute host in place
+of the proxy base — each of which fails the guard, on a tree that is otherwise
+green. `routing.ts` also leaves the `response_body_parse_guard` register, whose
+two entries for that file were `fetchRoute` and `fetchFullRoute`.
+
+## 1120. `provider_probe.ts` records its own half of the single-sourcing decision, in `///` lines because the Dart guard strips them
+
+§ 1095 decided the credential-probe rule stays stated natively on each platform
+rather than becoming a registered parity pair, and wrote the reasoning into
+`race_service.dart` plus a source guard in `race_providers_test.dart` that reads
+`provider_probe.ts` directly. The web half of that record was never written —
+the mobile lane cannot edit `apps/web/` — so a reader of the web file saw a
+one-expression helper with no twin and no explanation, which is precisely the
+shape § 641 was about: a relationship asserted on one side and detectable from
+neither. The header now names `RaceService.isProviderConfigured` as the other
+statement of the rule, gives the reason the two cannot share a signature
+(`@supabase/functions-js` RETURNS `{data, error}` so web's half is one
+expression over a nullable error, while `functions_client` THROWS so Dart's is
+control flow around the invoke, and a Dart twin would take an error value no
+Dart caller holds), and names the guard that compares them.
+
+One constraint is recorded with it because it is invisible from the web side:
+that guard strips every line beginning with `///` before asserting the file does
+not grade a status, so the prose has to live in `///` lines. Moving this
+explanation into a `/* */` block or into the code would fail a Dart test a web
+editor has no reason to be looking at.
+
+## 1121. The HR-zone empty state states what the run carries, not what a recorder may write later
+
+`runDetail.hrAvgOnly` is the run-detail heart-rate panel's commonest empty
+state: the run has `metadata.avg_bpm` and no per-point `bpm` on the track, which
+is every imported Strava activity and every Wear/Apple run whose samples did not
+survive the hop. Its copy read "A full zone distribution needs per-point
+samples, which the recording apps will start writing alongside GPS soon" — a
+roadmap promise with no date and no owner, shipped in seven locales, made to the
+user at the moment they are told what they cannot see. `metadata.md`'s `avg_bpm`
+row states the actual position and has all along: no mobile recorder writes
+per-point `bpm` yet, and it arrives when the recorder gains streaming-HR
+support, which is not scheduled.
+
+Nothing in this change can schedule that work, so the copy loses the promise and
+describes the present instead: a zone distribution needs a heart-rate reading at
+each point of the track, and this run does not carry one. That is checkable by
+the reader against the page in front of them, where "soon" was not. All seven
+catalogues move together — leaving one on the old sentence would be the same
+promise, made only to the users who read that language — and pt-BR and pt-PT
+keep the `registrou` / `registou` split that makes them two catalogues. The
+existing Playwright pin asserts the sentence's opening clause and the
+interpolated average, both of which survive; the new wording is model-authored
+in six of the seven and joins the standing native-review item.
