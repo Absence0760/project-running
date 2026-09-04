@@ -14,10 +14,13 @@
 /// reaches its renderer; here the track is `JSON.parse` of a blob the subject
 /// uploaded, and nothing between the two has a schema.
 ///
-/// Both transports are live and a runner reaches whichever one their build's
-/// `PUBLIC_EXPORT_HUB_URL` selects, so the two column lists must agree. The Go
-/// half of the `hr_coverage` column of § 1134 is filed, not written — that
-/// tree belonged to no lane in the round that added it.
+/// The two column lists must agree, and the Go one is the one most runners
+/// reach: mobile has no Edge Function path at all and always enqueues, and
+/// web takes this rail only when `PUBLIC_EXPORT_HUB_URL` is unset (§ 724
+/// keeps it deployed as the rollback path). So the Go half of the
+/// `hr_coverage` column of § 1134 is the load-bearing half, and it is filed
+/// rather than written — that tree belonged to no lane in the round that
+/// added the column here.
 
 export type RenderRunRow = {
 	id: string;
