@@ -310,6 +310,53 @@ export function minettiFit(src, where) {
   return lines[0];
 }
 
+/**
+ * The whole GAP reference fixture — the synthetic switchback three suites grade
+ * themselves against, plus the pace they must grade it to — as one comparable
+ * string. Joined rather than split into eight rows because a fixture is one
+ * artefact: a golden pace is only a claim about a rail's algorithm while the
+ * track under it is the same track, so a period that moved on one rail turns
+ * the other two rails' goldens into answers to a different question. The
+ * failure message then prints both specs side by side and the drifted field is
+ * the one that differs.
+ * @param {(name: string) => (src: string, where: string) => number | string} constOf
+ * @param {readonly string[]} names
+ */
+const gapReferenceSpec =
+  (constOf, names) => (/** @type {string} */ src, /** @type {string} */ where) =>
+    names.map((n, i) => `${GAP_REFERENCE_FIELDS[i]}=${constOf(n)(src, where)}`).join(' ');
+
+const GAP_REFERENCE_FIELDS = /** @type {const} */ ([
+  'points',
+  'stepM',
+  'stepS',
+  'baseGrade',
+  'amplitudeM',
+  'periodM',
+  'sPerKm',
+  'maxCost',
+]);
+const GAP_REFERENCE_UPPER = /** @type {const} */ ([
+  'GAP_REFERENCE_POINTS',
+  'GAP_REFERENCE_STEP_M',
+  'GAP_REFERENCE_STEP_S',
+  'GAP_REFERENCE_BASE_GRADE',
+  'GAP_REFERENCE_AMPLITUDE_M',
+  'GAP_REFERENCE_PERIOD_M',
+  'GAP_REFERENCE_S_PER_KM',
+  'GAP_REFERENCE_MAX_COST',
+]);
+const GAP_REFERENCE_DART = /** @type {const} */ ([
+  'kGapReferencePoints',
+  'kGapReferenceStepM',
+  'kGapReferenceStepS',
+  'kGapReferenceBaseGrade',
+  'kGapReferenceAmplitudeM',
+  'kGapReferencePeriodM',
+  'kGapReferenceSPerKm',
+  'kGapReferenceMaxCost',
+]);
+
 const RS_COURSE_GEOM = 'apps/custom_watch/core/src/course.rs';
 const RS_ALERTS = 'apps/custom_watch/core/src/alerts.rs';
 const RS_GAP = 'apps/custom_watch/core/src/grade_adjusted_pace.rs';
@@ -332,12 +379,26 @@ const SW_INGEST = 'apps/mobile_ios/ios/Runner/WatchIngestBridge.swift';
 const KT_RUN_APP =
   'apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/ui/RunWatchApp.kt';
 const TS_GAP = 'apps/web/src/lib/runs/grade_adjusted_pace.ts';
+const TS_GAP_TEST = 'apps/web/src/lib/runs/grade_adjusted_pace.test.ts';
+const DT_GAP_ANDROID = 'apps/mobile_android/test/grade_adjusted_pace_test.dart';
+const DT_GAP_IOS = 'apps/mobile_ios/test/grade_adjusted_pace_test.dart';
 const MC_GAP = 'apps/watch_garmin/source/GradeAdjustedPaceView.mc';
 
 /**
+ * A file that does NOT restate a row's value but TAKES it from the rail that
+ * declares it. The sharing is a decision, and prose is the wrong place to
+ * record it in both directions at once: a reader who gives the consumer its own
+ * copy has no note saying the sharing was deliberate, and a reader who retunes
+ * the value has no note saying the consumer moves with it. `takes` must match
+ * the consumer's source exactly once — it is the import, not a use, so a file
+ * that keeps the identifier while declaring its own no longer matches.
+ *
+ * @typedef {{ label: string, file: string, lang: 'rust' | 'dart' | 'other',
+ *             takes: RegExp }} Consumer
  * @typedef {{ label: string, file: string, lang: 'rust' | 'dart' | 'other',
  *             read: (src: string, where: string) => number | string }} Rail
- * @typedef {{ name: string, why: string, rails: readonly Rail[] }} ConstantRow
+ * @typedef {{ name: string, why: string, rails: readonly Rail[],
+ *             consumers?: { why: string, rails: readonly Consumer[] } }} ConstantRow
  */
 
 /** @type {(f: string, r: (s: string, w: string) => number | string) => Rail} */
@@ -346,6 +407,12 @@ const rustRail = (file, read) => ({ label: file, file, lang: 'rust', read });
 const dartRail = (file, read) => ({ label: file, file, lang: 'dart', read });
 /** @type {(f: string, r: (s: string, w: string) => number | string) => Rail} */
 const otherRail = (file, read) => ({ label: file, file, lang: 'other', read });
+/** @type {(f: string, t: RegExp) => Consumer} */
+const rustConsumer = (file, takes) => ({ label: file, file, lang: 'rust', takes });
+/** @type {(f: string, t: RegExp) => Consumer} */
+const dartConsumer = (file, takes) => ({ label: file, file, lang: 'dart', takes });
+/** @type {(f: string, t: RegExp) => Consumer} */
+const otherConsumer = (file, takes) => ({ label: file, file, lang: 'other', takes });
 
 /** @type {readonly ConstantRow[]} */
 export const CONSTANT_ROWS = [
@@ -614,6 +681,37 @@ export const CONSTANT_ROWS = [
       dartRail(DL_GAP, dartConst('minSegmentM')),
       otherRail(TS_GAP, tsConst('MIN_SEGMENT_M')),
       otherRail(MC_GAP, mcConst('MIN_SEGMENT_M')),
+    ],
+    consumers: {
+      why: "the roadbook allocates a goal time by grade-adjusted EFFORT, and it walks the course with the same anchored window for the same reason: a leg graded over less than this reads altitude jitter as a wall and hands the crew a schedule that front-loads the climbs that are not there. § 992 raised the window and the roadbook's three rails moved with it, correctly and silently — their suites passed unchanged, so nothing would have reported a rail that did not. Giving the roadbook a window of its own is a decision someone may take, but it must be taken deliberately: two windows means the pace a runner is shown mid-race and the arrival time their crew is holding a drop bag against were computed over different terrain",
+      rails: [
+        rustConsumer(
+          'apps/custom_watch/core/src/roadbook.rs',
+          /\buse\s+crate::grade_adjusted_pace::\{[^}]*\bMIN_SEGMENT_M\b[^}]*\}/,
+        ),
+        dartConsumer(
+          'apps/mobile_android/lib/roadbook.dart',
+          /\bimport\s+'grade_adjusted_pace\.dart'\s+show\b[^;]*\bminSegmentM\b/,
+        ),
+        dartConsumer(
+          'apps/mobile_ios/lib/roadbook.dart',
+          /\bimport\s+'grade_adjusted_pace\.dart'\s+show\b[^;]*\bminSegmentM\b/,
+        ),
+        otherConsumer(
+          'apps/web/src/lib/routes/roadbook.ts',
+          /\bimport\s+\{[^}]*\bMIN_SEGMENT_M\b[^}]*\}\s+from\s+'[^']*grade_adjusted_pace'/,
+        ),
+      ],
+    },
+  },
+  {
+    name: 'GAP reference track (fixture and the pace it must grade to)',
+    why: "the window above is a number, and until this round nothing on any rail pinned it: every suite passed at 5, 20, 30 and 50 m. Each rail now grades one frozen synthetic switchback and must report the same integer, which brackets the window from ABOVE the way the noise-floor test brackets it from below — the noise-floor relationship would pass at 200 m, a window that averages real terrain flat. The eight fields are one artefact, not eight constants: a golden pace says nothing about a rail's algorithm unless the track under it is the same track",
+    rails: [
+      rustRail(RS_GAP, gapReferenceSpec(rustConst, GAP_REFERENCE_UPPER)),
+      dartRail(DT_GAP_ANDROID, gapReferenceSpec(dartConst, GAP_REFERENCE_DART)),
+      dartRail(DT_GAP_IOS, gapReferenceSpec(dartConst, GAP_REFERENCE_DART)),
+      otherRail(TS_GAP_TEST, gapReferenceSpec(tsConst, GAP_REFERENCE_UPPER)),
     ],
   },
 ];
@@ -966,12 +1064,36 @@ export function main() {
     const first = seen[0];
     if (seen.every((s) => s.value === first.value)) {
       ok.push(`${row.name} = ${first.value} on ${seen.length} rails`);
-      continue;
+    } else {
+      errors.push(
+        `${row.name}: the rails disagree — ${row.why}\n` +
+          seen.map((s) => `    ${s.label} -> ${s.value}`).join('\n'),
+      );
     }
-    errors.push(
-      `${row.name}: the rails disagree — ${row.why}\n` +
-        seen.map((s) => `    ${s.label} -> ${s.value}`).join('\n'),
-    );
+
+    // 5b. Files that TAKE the value rather than restate it. Nothing above can
+    //     see these: a consumer holds no constant to compare, so the day one
+    //     stops sharing, every rail above still agrees and the guard still
+    //     passes while two windows are in use.
+    for (const c of row.consumers?.rails ?? []) {
+      /** @type {string} */
+      let src;
+      try {
+        src = read(c.file, c.lang);
+      } catch (e) {
+        errors.push(`${row.name}: ${c.label}: ${e instanceof Error ? e.message : String(e)}`);
+        continue;
+      }
+      const hits = src.match(new RegExp(c.takes.source, `${c.takes.flags.replace('g', '')}g`));
+      if (hits?.length === 1) {
+        ok.push(`${row.name} is taken from the declaring rail by ${c.label}`);
+        continue;
+      }
+      errors.push(
+        `${row.name}: ${c.label} ${hits ? `names it ${hits.length} times` : 'no longer takes it'} ` +
+          `from the rail that declares it, and it must — ${row.consumers?.why}`,
+      );
+    }
   }
 
   for (const line of ok) console.log(`[OK] ${line}`);
