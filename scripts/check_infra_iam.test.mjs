@@ -31,7 +31,10 @@ import {
   UNEXERCISED_LAMBDA_ACTIONS,
   checkLambdaActionScope,
   iamActionForCliVerb,
-  parseWorkflowLambdaActions,
+  scanWorkflowLambdaActions,
+  jobRegions,
+  parseBranchOutputs,
+  envsForCondition,
   readWorkflowFiles,
 } from './check_infra_iam.mjs';
 
@@ -849,20 +852,93 @@ test('credentialedActions on a missing directory is empty, not a throw', () => {
 
 // ───────────── claim 10: lambda verb scope ─────────────
 
-const INVOKED = new Set(['lambda:UpdateFunctionCode', 'lambda:UpdateAlias']);
+/// A workflow that deploys BOTH environments from one job, as release-web.yml
+/// does. `prodOnly` is the verb only the production leg runs, gated on the
+/// same `is_prod` output the real workflow already gates two steps on.
+/** @param {{ prodOnly?: string }} [over] */
+const twoEnvWorkflow = (over = {}) =>
+  [
+    'jobs:',
+    '  release:',
+    '    environment:',
+    "      name: ${{ startsWith(github.ref, 'refs/tags/web@') && 'production' || 'preview' }}",
+    '    steps:',
+    '      - name: Determine env',
+    '        id: env',
+    '        run: |',
+    '          if [[ "$GITHUB_REF" == refs/tags/web@* ]]; then',
+    '            echo "env=prod" >> "$GITHUB_OUTPUT"',
+    '            echo "is_prod=true" >> "$GITHUB_OUTPUT"',
+    '          else',
+    '            echo "env=preview" >> "$GITHUB_OUTPUT"',
+    '            echo "is_prod=false" >> "$GITHUB_OUTPUT"',
+    '          fi',
+    '      - name: Pick deploy role ARN',
+    '        env:',
+    '          ARN_PROD: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}',
+    '          ARN_PREVIEW: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PREVIEW }}',
+    '        run: echo picked',
+    `      - uses: ${CREDENTIALS_ACTION}@v6`,
+    '      - name: Update coach Lambda',
+    '        run: |',
+    '          aws lambda update-function-code --function-name x --publish',
+    '          aws lambda update-alias --function-name x --name live',
+    ...(over.prodOnly === undefined
+      ? []
+      : [
+          '      - name: Production-only step',
+          "        if: steps.env.outputs.is_prod == 'true'",
+          `        run: aws lambda ${over.prodOnly} --function-name x`,
+        ]),
+    '',
+  ].join('\n');
 
-/** @param {string[]} actions */
-const lambdaPolicy = (actions) => ({
+/// A parsed deploy role, not the HCL `role()` renders. Claim 10 reads only the
+/// Environment tag off it, which is the same tag claim 4 keys blast-radius
+/// separation on.
+/** @param {string} env @returns {import('./check_infra_iam.mjs').DeployRole} */
+const deployRole = (env) => ({
+  label: `deploy_${env}`,
+  name: `threkir-web-deploy-${env}`,
+  envToken: env,
+  providerRef: 'github',
+  action: 'sts:AssumeRoleWithWebIdentity',
+  operators: ['StringEquals'],
+  claims: new Map(),
+});
+
+/** @param {{ prod?: string[], preview?: string[] }} grants */
+const lambdaStack = (grants) => ({
   provider: null,
   providerLabel: null,
-  roles: [],
+  roles: [deployRole('prod'), deployRole('preview')],
   policies: [
-    {
-      roleLabel: 'deploy_prod',
-      statements: [{ sid: 'LambdaUpdate', effect: 'Allow', actions, resources: [] }],
-    },
+    ...(grants.prod === undefined
+      ? []
+      : [
+          {
+            roleLabel: 'deploy_prod',
+            statements: [
+              { sid: 'LambdaUpdate', effect: 'Allow', actions: grants.prod, resources: [] },
+            ],
+          },
+        ]),
+    ...(grants.preview === undefined
+      ? []
+      : [
+          {
+            roleLabel: 'deploy_preview',
+            statements: [
+              { sid: 'LambdaUpdate', effect: 'Allow', actions: grants.preview, resources: [] },
+            ],
+          },
+        ]),
   ],
 });
+
+const BOTH = ['lambda:UpdateFunctionCode', 'lambda:UpdateAlias'];
+const scanOf = (/** @type {string} */ text) =>
+  scanWorkflowLambdaActions([{ name: 'w.yml', text }]);
 
 test('a CLI verb maps to the one IAM action its operation is named for', () => {
   // `--publish` is a member of the UpdateFunctionCode REQUEST, not a second
@@ -872,63 +948,174 @@ test('a CLI verb maps to the one IAM action its operation is named for', () => {
   assert.equal(iamActionForCliVerb('get-alias'), 'GetAlias');
 });
 
-test('the committed workflows invoke exactly update-function-code and update-alias', () => {
-  assert.deepEqual(
-    [...parseWorkflowLambdaActions(readWorkflowFiles(WORKFLOW_DIR))].sort(),
-    ['lambda:UpdateAlias', 'lambda:UpdateFunctionCode'],
-  );
+test('the committed workflows invoke update-function-code + update-alias, against both envs', () => {
+  const scan = scanWorkflowLambdaActions(readWorkflowFiles(WORKFLOW_DIR));
+  assert.deepEqual([...scan.byEnv.keys()].sort(), ['preview', 'prod']);
+  for (const env of ['prod', 'preview']) {
+    assert.deepEqual(
+      [...(scan.byEnv.get(env) ?? [])].sort(),
+      ['lambda:UpdateAlias', 'lambda:UpdateFunctionCode'],
+      env,
+    );
+  }
+  assert.deepEqual(scan.unattributed, []);
 });
 
 test('a verb only MENTIONED in a run-body comment is not an invocation', () => {
-  const text = [
-    'jobs:',
-    '  deploy:',
-    '    steps:',
-    '      - name: Deploy',
-    '        run: |',
-    '          # bin/lambda-alias-sync.sh runs aws lambda get-alias under the operator profile',
+  const text = twoEnvWorkflow().replace(
     '          aws lambda update-function-code --function-name x --publish',
-    '',
-  ].join('\n');
-  assert.deepEqual([...parseWorkflowLambdaActions([{ name: 'w.yml', text }])], [
-    'lambda:UpdateFunctionCode',
-  ]);
+    '          # bin/lambda-alias-sync.sh runs aws lambda get-alias under the operator profile\n' +
+      '          aws lambda update-function-code --function-name x --publish',
+  );
+  assert.deepEqual([...(scanOf(text).byEnv.get('prod') ?? [])].sort(), BOTH.slice().sort());
 });
 
-test('the committed roles grant exactly what the pipeline invokes', () => {
+test('the committed roles grant exactly what the pipeline invokes against each env', () => {
   const { errors, ok } = checkLambdaActionScope(
     parseOidcStack(readFileSync(OIDC_FILE, 'utf-8')),
-    parseWorkflowLambdaActions(readWorkflowFiles(WORKFLOW_DIR)),
+    scanWorkflowLambdaActions(readWorkflowFiles(WORKFLOW_DIR)),
   );
   assert.deepEqual(errors, []);
-  assert.equal(ok.length, 2, ok.join('\n'));
+  assert.equal(ok.length, 3, ok.join('\n'));
 });
 
-test('an unexercised verb fails and is named', () => {
+// ── the per-environment derivation, on the input today's workflows cannot
+//    produce. Without a synthetic disagreement the stronger derivation and the
+//    repo-wide union pass on identical input, and the strengthening is a claim
+//    rather than a demonstration (decisions § 1110).
+
+test('a verb only the production leg runs is attributed to prod alone', () => {
+  const scan = scanOf(twoEnvWorkflow({ prodOnly: 'publish-version' }));
+  assert.deepEqual(
+    [...(scan.byEnv.get('prod') ?? [])].sort(),
+    ['lambda:PublishVersion', 'lambda:UpdateAlias', 'lambda:UpdateFunctionCode'],
+  );
+  assert.deepEqual([...(scan.byEnv.get('preview') ?? [])].sort(), BOTH.slice().sort());
+  // The union the guard used to compare BOTH roles against.
+  const union = new Set([...scan.byEnv.values()].flatMap((v) => [...v]));
+  assert.ok(union.has('lambda:PublishVersion'));
+  assert.ok(!scan.byEnv.get('preview')?.has('lambda:PublishVersion'));
+});
+
+test('the preview role passes without a verb only production invokes', () => {
+  const scan = scanOf(twoEnvWorkflow({ prodOnly: 'publish-version' }));
   const { errors } = checkLambdaActionScope(
-    lambdaPolicy(['lambda:UpdateFunctionCode', 'lambda:UpdateAlias', 'lambda:GetFunction']),
-    INVOKED,
+    lambdaStack({ prod: [...BOTH, 'lambda:PublishVersion'], preview: BOTH }),
+    scan,
+  );
+  assert.deepEqual(errors, []);
+});
+
+test('and the same input makes the preview role FAIL if it holds that verb', () => {
+  // The over-grant the repo-wide union could never see: standing privilege on
+  // an environment whose own release never issues the call.
+  const scan = scanOf(twoEnvWorkflow({ prodOnly: 'publish-version' }));
+  const { errors } = checkLambdaActionScope(
+    lambdaStack({ prod: [...BOTH, 'lambda:PublishVersion'], preview: [...BOTH, 'lambda:PublishVersion'] }),
+    scan,
   );
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /grants lambda:GetFunction, which no workflow invokes/);
+  assert.match(errors[0], /deploy_preview .* grants lambda:PublishVersion, which no workflow invokes against preview/);
+});
+
+test('a production role missing the verb only production invokes still fails', () => {
+  const scan = scanOf(twoEnvWorkflow({ prodOnly: 'publish-version' }));
+  const { errors } = checkLambdaActionScope(lambdaStack({ prod: BOTH, preview: BOTH }), scan);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /missing lambda:PublishVersion, which a workflow invokes against prod/);
+});
+
+test('an unexercised verb fails and is named, per environment', () => {
+  const scan = scanOf(twoEnvWorkflow());
+  const { errors } = checkLambdaActionScope(
+    lambdaStack({ prod: [...BOTH, 'lambda:GetFunction'], preview: BOTH }),
+    scan,
+  );
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /grants lambda:GetFunction, which no workflow invokes against prod/);
 });
 
 test('a verb the pipeline needs but the role lacks fails the other way', () => {
   // The direction that breaks a release rather than widening one.
-  const { errors } = checkLambdaActionScope(lambdaPolicy(['lambda:UpdateFunctionCode']), INVOKED);
+  const { errors } = checkLambdaActionScope(
+    lambdaStack({ prod: ['lambda:UpdateFunctionCode'], preview: BOTH }),
+    scanOf(twoEnvWorkflow()),
+  );
   assert.equal(errors.length, 1);
   assert.match(errors[0], /missing lambda:UpdateAlias/);
 });
 
 test('reading no invocation at all is reported, not treated as a clean set', () => {
-  const { errors, ok } = checkLambdaActionScope(lambdaPolicy(['lambda:UpdateAlias']), new Set());
+  const { errors, ok } = checkLambdaActionScope(
+    lambdaStack({ prod: ['lambda:UpdateAlias'] }),
+    scanOf('jobs:\n  build:\n    steps:\n      - run: echo hi\n'),
+  );
   assert.equal(ok.length, 0);
   assert.match(errors[0], /would have been compared against nothing/);
 });
 
 test('a policy with no lambda statement is reported', () => {
-  const { errors } = checkLambdaActionScope(lambdaPolicy(['s3:PutObject']), INVOKED);
-  assert.match(errors[0], /no statement granting any `lambda:` action/);
+  const { errors } = checkLambdaActionScope(
+    lambdaStack({ prod: ['s3:PutObject'], preview: ['s3:PutObject'] }),
+    scanOf(twoEnvWorkflow()),
+  );
+  assert.ok(errors.some((e) => /no statement granting any `lambda:` action/.test(e)));
+});
+
+test('an environment a workflow deploys to with no role granting it fails', () => {
+  const { errors } = checkLambdaActionScope(
+    lambdaStack({ prod: BOTH }),
+    scanOf(twoEnvWorkflow()),
+  );
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /against the preview environment, for which no deploy role grants/);
+});
+
+test('a role with no Environment tag has no environment to be compared against', () => {
+  const stack = lambdaStack({ prod: BOTH, preview: BOTH });
+  stack.roles[0].envToken = null;
+  const { errors } = checkLambdaActionScope(stack, scanOf(twoEnvWorkflow()));
+  assert.ok(errors.some((e) => /carries no Environment tag/.test(e)));
+});
+
+test('an aws lambda verb under an assumed role naming no ARN Secret is unattributed, not dropped', () => {
+  const text = twoEnvWorkflow()
+    .replace('          ARN_PROD: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}\n', '')
+    .replace('          ARN_PREVIEW: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PREVIEW }}\n', '');
+  const scan = scanOf(text);
+  assert.equal(scan.unattributed.length, 1);
+  const { errors } = checkLambdaActionScope(lambdaStack({ prod: BOTH, preview: BOTH }), scan);
+  assert.ok(errors.some((e) => /which environment it deploys to could not be read/.test(e)));
+});
+
+test('an aws lambda verb in a job that assumes no role is reported, not attributed', () => {
+  const text = twoEnvWorkflow().replace(`      - uses: ${CREDENTIALS_ACTION}@v6\n`, '');
+  const scan = scanOf(text);
+  assert.equal(scan.byEnv.size, 0);
+  assert.equal(scan.uncredentialed.length, 1);
+  assert.match(scan.uncredentialed[0], /Update coach Lambda/);
+});
+
+test('jobRegions splits a workflow at its two-space job keys', () => {
+  const regions = jobRegions(twoEnvWorkflow());
+  assert.deepEqual([...regions.keys()], ['release']);
+  assert.ok(regions.get('release')?.includes('AWS_DEPLOY_ROLE_ARN_PROD'));
+});
+
+test('parseBranchOutputs keeps every output of the branch, not just env=', () => {
+  const outputs = parseBranchOutputs(twoEnvWorkflow());
+  assert.deepEqual(outputs.get('env'), { whenTrue: 'prod', whenFalse: 'preview' });
+  assert.deepEqual(outputs.get('is_prod'), { whenTrue: 'true', whenFalse: 'false' });
+});
+
+test('envsForCondition reads both operators and gives up on anything else', () => {
+  const outputs = parseBranchOutputs(twoEnvWorkflow());
+  assert.deepEqual(envsForCondition("steps.env.outputs.is_prod == 'true'", outputs), ['prod']);
+  assert.deepEqual(envsForCondition("steps.env.outputs.is_prod != 'true'", outputs), ['preview']);
+  assert.deepEqual(envsForCondition("steps.env.outputs.env == 'preview'", outputs), ['preview']);
+  // Not narrowable: attributing to both can only over-demand a grant.
+  assert.equal(envsForCondition('always()', outputs), null);
+  assert.equal(envsForCondition(null, outputs), null);
 });
 
 test('a declared exemption nothing grants fails, and the live map is empty', () => {
@@ -937,8 +1124,8 @@ test('a declared exemption nothing grants fails, and the live map is empty', () 
   UNEXERCISED_LAMBDA_ACTIONS.set('lambda:GetFunction', 'kept for a reason nobody wrote down');
   try {
     const { errors } = checkLambdaActionScope(
-      lambdaPolicy(['lambda:UpdateFunctionCode', 'lambda:UpdateAlias']),
-      INVOKED,
+      lambdaStack({ prod: BOTH, preview: BOTH }),
+      scanOf(twoEnvWorkflow()),
     );
     assert.equal(errors.length, 1);
     assert.match(errors[0], /declares lambda:GetFunction .* but no role grants it/);

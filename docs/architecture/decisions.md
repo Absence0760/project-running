@@ -19577,3 +19577,1043 @@ it names `UpdateFunctionCode` alone, which is the one that would. Not verified
 against live IAM: no lane holds AWS credentials, so this is `terraform validate`
 on both env roots and nothing more. `infra/github-oidc` is applied by an
 operator, and the next release after that apply is what confirms it.
+
+## 1086. The share sanitisers close a script tag the way a parser does, and the cost of the old spelling was the whole page, not a duplicate node
+
+[§ 1065](#1065) moved one `js/bad-tag-filter` regex into `consent_guards.test.ts`
+and CodeQL flagged it, because it reports an alert per changed FILE — so a
+byte-identical shape that had sat on `main` since it was written surfaced only
+because the code got a new path. The filing that followed named four siblings and
+called the worst case "a stale default JSON-LD served beside the real one". That
+understated it, and the correction is the point of this entry.
+
+**The lazy body does not stop at a close tag it cannot see; it runs to the next
+one.** The three served SPA-shell injectors stripped an existing JSON-LD block
+with `<script\s+type="application\/ld\+json">[\s\S]*?<\/script>`. Against a shell
+spelling that block `</script >` — which every browser closes, since `</script`
+followed by whitespace, `/` or `>` ends the element and everything to the first
+`>` is junk — the `[\s\S]*?` continues to the SPA bundle's own `</script>` near
+the end of the document. Measured on the shells the tests already use: the match
+consumes the stale JSON-LD, `</head>`, `<body>`, the `#svelte` mount div and the
+bundle `<script>` tag. `injectEntityHead` then searches the wreckage for
+`</head>`, finds none, takes its malformed-shell branch and returns the string
+**without the per-entity head tags at all**. So the failure is not a duplicate
+signal: it is a share page with no meta, no mount point and no application.
+
+The same parser rule governs the two other end tags these files match. `</title >`
+is a legal close, so the non-global `<\/title>` replace leaves the shell's generic
+title standing beside the entity's and a crawler picks the first. `</head >` is a
+legal close, so the splice search returns `-1` and the injection is dropped
+whole. All three now spell `<\/name(?=[\s/>])[^>]*>`.
+
+**The JSON-LD open tag was matched to one attribute spelling, and that is the
+smaller half of the same mistake.** `<script\s+type="application/ld+json">`
+misses a block carrying a CSP nonce, a `data-` attribute, or the same two
+attributes in the other order — none of which would be a new feature so much as a
+build-tool change, and each of which leaves a second `WebPage` node standing
+beside the real one. The strip now matches any `<script>` carrying that type.
+
+**Measured after the fix, and it corrects the severity: the class was latent
+everywhere, not live.** The shell the five share Lambdas embed is
+`apps/web/build/index.html`, and a production build of it carries a
+`<title>Threkir</title>` from `app.html`, the CSP meta, the icons and the
+module preloads — no canonical, no `og:`/`twitter:`/`description` meta and no
+JSON-LD block at all, so nothing in the served shell could take the overrunning
+path today. `SeoHead.svelte` spells its own close `</script>` without
+whitespace, and no `.svelte` file in the tree spells one with it, so the two
+guard instances had no live trigger either. What the measurement does not do is
+make the spelling correct: the shell is BUILD OUTPUT, so its exact bytes are a
+property of `app.html`, the adapter, and whatever minifier is in the chain on
+the day — which is the argument for stating the parser rule rather than matching
+today's emission, and the reason the guard is the deliverable. (That same
+measurement turned up why the shell is so bare, which is a separate and larger
+finding — filed, not fixed here.)
+
+**`raw_text_end_tag_guard.test.ts` is the durable half.** It scans `src/` and
+`lambda/`, comment-stripped, for the escaped-slash spelling a regex literal must
+use, and requires the parser rule after it. Scope is the raw-text and RCDATA
+elements plus `head` — 20 occurrences today (7 `title`, 6 `script`, 5 `head`, 2
+`style`), of which **19 were intolerant before this change** and only
+§ 1065's own was right. XML end tags are deliberately out of scope: XML's grammar
+allows optional whitespace and nothing else there, which `<\/name\s*>` states
+exactly, and those regexes assert against documents this repo generates. Test
+files are in scope, because two of the five instances were in guards — where an
+unseen `</script >` makes the guard read a `.svelte` file's markup as TypeScript
+and under-enforce without saying so.
+
+## 1087. A body parse outside a `try` is a class, it had two more members, and the contract that decides is the doc comment rather than the return type
+
+[§ 1066](#1066) guarded `geocodeViaMapTiler` after measuring that a 200 carrying
+an unparseable body threw a `SyntaxError` out of a function documented to return
+null, and filed the class as unsearched. Searching it found two more, and the
+first is the same file.
+
+**`geocodeViaNominatim` is the other branch of the same exported function.**
+`geocodePlaceWithKey` dispatches to MapTiler with a key and to Nominatim without
+one; § 1066 fixed the branch it was looking at, a hundred lines above the branch
+it was not, while that branch's own *search* sibling forty lines further down had
+carried the guard all along. A dev stack with no MapTiler key takes the
+unguarded road exclusively. **`snapToRoad` is the sharper one:** it returns the
+unsnapped input point on a non-2xx and has no throwing branch anywhere, so a
+caller has no reason to wrap it — and an unparseable 200 threw out of a function
+whose entire contract is that it cannot fail.
+
+**The rule is not that every parse must be guarded, and the register is why.**
+Ten of the tree's 36 body-parse sites are outside a `try` on purpose:
+`food_search`'s three document `THROWS on a network / non-2xx / parse failure` so
+the merge caller can tell a failed source from an empty one, `parseRouteFile`'s
+four throw on an unsupported extension in the same breath as on a bad parse, and
+`requestAiDescription` throws on every non-200 already. A rule keyed on the
+declared return type would have got `lookupBarcode` wrong in the dangerous
+direction: it returns `Promise<FoodSearchResult | null>` and throws on a parse
+failure deliberately, the null being reserved for a genuine no-match. The
+contract lives in the doc comment, so `response_body_parse_guard.test.ts` takes a
+hand-written register of counts and reasons and fails in both directions — an
+unguarded parse in an unregistered file, and a registered file whose count has
+moved. That count is also the only pin `snapToRoad` can have: `routing.ts`
+imports `core/supabase`, which imports `$env/static/public`, so the raw
+`tsx --test` suite cannot load it at all.
+
+## 1088. `hr_coverage` gets a reader, because a suppressed average and no heart-rate monitor were rendering the same sentence
+
+[§ 1083](#1083) had the wrist record the share of active elapsed time its sensor
+actually delivered, and suppress `avg_bpm` below 0.5 on the grounds that a mean
+over less of the run than not is not the run's average. It also observed that the
+key's most useful reading is when the average is ABSENT. Nothing read it, so that
+reading did not exist: run detail rendered `No heart-rate data on this run` — the
+identical sentence a phone run recorded with no strap gets. One of those is a
+fact about our sampling, the other is a fact about the runner's equipment, and
+only the second is something they can act on.
+
+**Three states, not one.** Coverage present with no average states the share and
+that it was too little for an average. A coverage of exactly `0` — the sensor was
+enabled and delivered nothing — gets its own sentence rather than "covered 0 %",
+because that is a different diagnosis and because `0` must not be reachable by
+rounding: `hrCoveragePercent` floors a nonzero fraction at 1 %. And an average
+that IS reported now carries the share it was taken over whenever that is under
+100 %, in a line of its own outside the zone-breakdown branch, because 142 bpm
+over 62 % of a twelve-hour run is not that run's average and nothing on the page
+said so.
+
+**Absent stays unmeasured.** A run from a build predating the field, or one
+recovered from a checkpoint that never carried it, omits the key; an unusable
+value — a non-number, a non-finite one, or a fraction outside `0..1` — resolves
+to null and the page keeps its old copy rather than reporting a duty cycle nobody
+measured. The out-of-range refusal is not defensive noise: a future writer
+storing a percentage instead of a fraction would otherwise render "covered
+8500 % of this run".
+
+The pure grading is `runs/hr_coverage.ts`, web-only. The mobile half of this
+reading was built independently in the same round and neither registry names the
+two as a pair — the shaping either platform needs is a percentage and a branch,
+not an algorithm.
+
+## 1089. The web and Dart geocoders stay unregistered as a parity pair, verified against the code rather than recalled
+
+Recorded so the question is not reopened as an oversight, and re-checked against
+both files rather than against the filing. All three stated divergences hold
+today, and there is a fourth the filing did not name.
+
+`PlaceSearchOutcome` carries `aborted` on web and does not in Dart, and the Dart
+enum's own doc comment gives the reason: web's call sites pass an `AbortSignal`
+and must stay silent when they supersede their own request, while mobile's
+debounce is a cancelled `Timer`, so a superseded keystroke never reaches that
+layer and a third state would describe nothing. Web takes an `AbortSignal` and
+calls `fetch` itself; Dart injects a `GeocodingFetcher`, which is
+`Future<String> Function(Uri)` — a seam that returns a **body**, so status
+handling sits on the other side of it and there is no `res.ok` to mirror.
+`geocodePlaceWithKey` falls back to Nominatim on an empty key where Dart's
+`geocodePlace` returns null. The fourth: Nominatim rejects a stock HTTP-library
+User-Agent, so the Dart default fetcher sets one — a header a browser forbids
+scripts from setting at all, which is why the web side cannot have that line and
+why the two will never converge on one fetch layer.
+
+A row asserting lockstep over that would assert something that has never held,
+which [§ 604](#604) and [§ 641](#641) both name as worse than no row. What
+genuinely is one contract is the pair of coordinate predicates —
+`isUsableLatitude` / `isUsableLongitude`, same bounds, same reason, identical on
+both sides — and the registry is keyed on module paths with no precedent for
+registering two functions out of a module. Registering the modules to get the
+predicates would buy the predicates' safety at the price of a permanent standing
+lie about the other four differences.
+
+[§ 1087](#1087)'s fix moved the two closer rather than further apart, which is
+worth noting because it is the direction an unregistered pair usually fails in:
+Dart wraps its whole decode in one `try`, so both of web's geocode branches
+guarding their parse is web catching up to behaviour Dart already had. If a
+future change disagrees with this entry, the rows it needs live in the root
+`CLAUDE.md` table and `.claude/agents/shared-library-syncer.md`, neither of which
+a web lane owns — the same wall [§ 1014](#1014) and § 1039's filings hit.
+
+## 1090. The recap share page emits the canonical its eight siblings do
+
+Every other public share head builder renders a self-referential
+`<link rel="canonical">`. `renderShareRecapHeadTags` rendered `og:url` and no
+link, so `/recap/share/[id]` served **none at all** — and it had none to inherit
+either, because the SPA shell the Lambda injects into is adapter-static's bare
+fallback. `seo_render_map_guard.test.ts` excludes the route from its in-app fold
+table on the stated grounds that these pages "build their OWN canonical", which
+was true of eight of the nine and not of this one; the guard checks the in-app
+folds, not the fold targets, so nothing was watching.
+
+The consequence is the ordinary one and it is why every sibling has the tag: a
+recap link is shared, comes back carrying a `?utm_source=`, and indexes as a page
+of its own competing with the clean URL. `buildRecapShareCanonical` already
+computed the string for `og:url`, so the whole fix is the tag — and the test
+asserts it agrees with `og:url` rather than being a second spelling of the same
+path, which is [§ 520](#520)'s rule applied to the one surface that had escaped
+it.
+## 1092. The mobile geocode lost a usable centroid to its own bbox cast, and the coordinate check stopped one function short
+
+[§ 1011](#1011) added `isUsableLatitude` / `isUsableLongitude` to
+`geocoding.dart` and applied them to the two SEARCH paths. `geocodePlace` — the
+MapTiler-only geocode forty lines below — kept a shape check (`centerRaw is!
+List || centerRaw.length < 2`) followed by a bare `as num`, which is a different
+question: `is num` asks whether a value has a numeric TYPE, and both exposures
+[§ 1066](#1066) closed on web live in the gap between that and whether it is a
+coordinate.
+
+Both re-measured here rather than inherited. `jsonDecode('1e400')` is
+`Infinity`, and `Infinity is num` is true — so the centre reached a `LatLng`,
+which carries no assertion of its own, and a map camera built from it silently
+stops rendering. A bbox corner of the same shape made `bboxRadius` a NaN, which
+compares false against every bound a caller might check the radius with.
+
+**The bbox cast was the worse of the two, and in the opposite direction.**
+`(bboxRaw[0] as num)` on a JSON string throws a `TypeError` — measured, not
+inferred — and it threw *inside* the `try` whose catch returns null. So a
+feature carrying a perfectly good centroid and one malformed corner reported the
+whole geocode as a miss, and the caller fell back to the text-only path. The
+documented 5 km default was already sitting one branch away, unreachable for
+exactly the input it was written for. A bbox is now usable whole or not at all
+(web's rule, `_usableBbox`), and an unusable one degrades to that default with
+the centroid intact.
+
+Six tests pin it, and each was run against the pre-fix file first: all six fail
+there — three on the centre (non-finite, out of range, non-numeric) and three on
+the bbox (non-numeric corner keeps the centroid, non-finite corner does not
+produce a NaN radius, out-of-range corner defaults).
+
+## 1093. `Zone.current` cannot discriminate the `debugWritesSettled` deadlock — measured — so the wait is bounded and reports itself instead
+
+[§ 1072](#1072) measured that `OfflineSyncStore.debugWritesSettled()` is only
+awaitable when the write it waits on was queued from inside `tester.runAsync`,
+and left the durable fix filed with one precondition attached: check whether
+`Zone.current` is a usable discriminator before building a detector on it. It
+is not, and the measurement is the reason this entry exists.
+
+**Five configurations, each run in its own process** (a timed-out widget test
+poisons the fake-async state for every test after it in the file, which is how
+a first attempt produced five identical hangs and one misleading conclusion).
+Each queues one real file write through `serialiseStoreWrite`, then awaits
+`storeWritesSettled`, and records whether the queueing zone and the awaiting
+zone are `identical`:
+
+| # | write queued from | awaited from | `identical` | outcome |
+|---|---|---|---|---|
+| 1 | fake zone | `runAsync` | false | **hangs** |
+| 2 | `runAsync` #1, then `pump` | `runAsync` #2 | false | settles |
+| 3 | `runAsync` #1, no pump | `runAsync` #2 | false | settles |
+| 4 | fake zone, then `pump` | `runAsync` | false | **hangs** |
+| 5 | fake zone | fake zone | — | **hangs** |
+
+`identical` is false in all four cases where it is defined, two of which settle
+and two of which hang, so zone identity carries no signal at all. It is worse
+than uninformative: every `tester.runAsync` call **forks a fresh zone**
+(`AutomatedTestWidgetsFlutterBinding.runAsync` builds one with a
+`ZoneSpecification` delegating microtasks and timers to the root), so the
+working pattern in `nutrition_screen_test` — tap inside one `runAsync`, settle
+inside a second — is precisely a case where the two zones differ. A detector
+keyed on identity would have fired on the file that proves the helper works.
+
+A behavioural probe was tried before the identity one and is also out: a
+microtask scheduled directly into the fake zone *does* run while a `runAsync`
+await is pending (measured three ways), so "can I drain the queueing zone" says
+yes in the configuration that then deadlocks.
+
+**Two things § 1072's rule understates**, both from the table. Row 4: an
+intervening `pump` does not rescue a fake-zone write, because the pump advances
+fake time and flushes fake microtasks while the real file I/O it is waiting on
+completes on an event loop the fake clock never turns. Row 5: awaiting from the
+fake zone hangs too — the failure is not specific to `runAsync`, it is that the
+write and the await sit on either side of the boundary.
+
+**So the probe is bounded rather than diagnosed.** `storeWritesSettled` now
+races the chain against a timer armed on `Zone.root` — deliberately the root,
+because a caller inside the fake zone would otherwise arm a fake timer, which is
+the same queue the wait is already stuck on — and on expiry completes with a
+`StateError` naming the precondition, the remedy (`pumpUntil` on an observable
+outcome) and, as the error's stack trace, the call site that asked. This is not
+the timeout-as-band-aid the house rules forbid: nothing that would otherwise
+fail now passes, and nothing waits longer. A hang that produced no message in
+240 s produces a named diagnosis in 20, and `kStoreWritesSettledBound` sits four
+orders of magnitude above the JSON writes this helper serialises.
+
+**What it does not cover, stated rather than discovered later.** The report is
+delivered through the awaiting zone, so row 5 — a fake-zone await with no pump —
+still hangs; the root timer fires but its completion is a fake-zone
+continuation. That case is unchanged rather than improved, and it is the one
+where the test is wedged for a second reason anyway. The three
+`debugWritesSettled` wrappers now also state the precondition in their own doc
+comments, which is § 1072's cheaper option kept alongside the durable one rather
+than instead of it.
+
+## 1094. The phone reads `hr_coverage`, and the average-heart-rate slot now says why it is empty
+
+[§ 1083](#1083) made the wrist record what share of a run its heart rate
+actually covered, and suppress `avg_bpm` below 0.5 on the grounds that a mean
+over less of the run than not is not the run's average. It landed with no
+reader, so the suppression was indistinguishable on the phone from a run
+recorded with no strap at all: both drew nothing.
+
+Three states, and the point is that they are three rather than two.
+
+- **An average with no coverage record** — every non-Wear writer, and any run
+  from a build predating the field — renders exactly as before. Absent is
+  unmeasured, not zero, so nothing is claimed about it.
+- **A partly-covered average** draws the average and, beside it, an `HR
+  coverage` cell. Full coverage is deliberately NOT drawn: it qualifies
+  nothing, and a `100%` cell on every strap-recorded run is the clutter
+  `multi_modal.md`'s IA contract exists to keep out. The cell appears exactly
+  when the reading changes — a 51 % average and a 99 % one are different
+  claims.
+- **A suppressed average** takes the `Avg HR` slot itself and reads
+  `12% covered`. Occupying the slot is the decision: a separate coverage cell
+  next to an empty space asks the reader to connect two facts, where the label
+  the number is missing from is the one place they will look for the reason.
+  `0%` is a real answer here — heart rate was enabled and delivered nothing —
+  and it is why the guard is on the KEY's presence rather than on a truthy
+  value.
+
+A value outside 0..1, a non-finite one, and a non-numeric one are each read as
+no record rather than clamped: they cannot have come from the writer this
+reads, so inventing a percentage from one would put a fabricated figure in the
+slot whose entire purpose is honesty about what was measured.
+
+Not taken, and filed instead: the secondary-stat grid is gated on
+`run.track.length >= 2 || _hasElevation`, so a run carrying an average and no
+geometry shows no heart rate — which is four other geometry-independent cells'
+problem as much as this one's, and the durable fix is to gate the block on its
+own cell list rather than to widen the condition with a seventh disjunct.
+Web's half of this is a separate lane's, deliberately without coordination, so
+the two surfaces may well word it differently.
+
+## 1095. The probe rule stays single-sourced per platform, and the comparison a parity pair would have bought is bought directly
+
+[§ 1073](#1073) moved the phone onto web's rule — a credential probe reports
+configured iff the call did not fail — and stated it natively inside
+`RaceService.isProviderConfigured` rather than as a `provider_probe.dart`,
+filing the registration question because that lane owned neither registry. The
+answer is: do not register it, and the reason is not taste.
+
+**The two halves have no shared signature.** `@supabase/functions-js` RETURNS
+`{ data, error }` and never throws, so web's `probeSaysConfigured(error)` is one
+expression over a nullable value its callers already hold. Dart's
+`functions_client` 2.5.0 THROWS for every status outside 200-299, so there is no
+error VALUE at the point of decision — the rule is control flow. A Dart twin
+would have to take an `Object? error` that no Dart caller naturally holds,
+which means catching in order to hand it to a function whose whole body is
+`return true` / `return false`. That is a layer added to remove nothing, and a
+parity pair exists so a syncer can compare two implementations of one
+computation; here one side has no computation to compare.
+
+**But the filing's worry is real and is not answered by declining.** A rule
+stated twice with nothing reading both is exactly [§ 641](#641)'s shape, and
+each platform's existing guard covers only its own half — web's `data.test.ts`
+requires all three probes to `return probeSaysConfigured(error)`, and mobile's
+`race_providers_test.dart` fails if `isProviderConfigured` inspects a status
+again (mutation-tested by reinstating the old grader). Neither can see the
+other move.
+
+So the mobile suite reads web's grader directly: `provider_probe.ts` must still
+export `probeSaysConfigured`, its body must still be the nullish check, and the
+file's code — comments stripped, because its own doc comment discusses the
+status-grading rule it replaced — must not mention a status. That is the whole
+of what a registered pair's syncer would have compared, at the cost of one file
+read instead of a module with one call site and rows in two registries that
+must be edited together. It fails loudly on a rename, which is the same
+property [check 4 of `check_parity_pair_registry.mjs`](#604) exists for.
+
+The reciprocal note belongs in `provider_probe.ts`'s own header and is not
+written here: this lane cannot edit `apps/web/`. Until it is, the web file is
+the half that does not say why it has no twin.
+
+## 1096. The parked-push state owes web nothing, re-verified against the code rather than restated
+
+[§ 1070](#1070)'s parked-run machinery is mobile-only, and the reasoning was
+filed for confirmation before someone reads the asymmetry as a
+[§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+inversion and opens work to "close" it. Confirmed on 2026-09-03, by looking at
+each half rather than by re-reading the entry.
+
+The state exists because the phone has a **local queue that retries**:
+`LocalRunStore` holds unsynced runs, five push sites drain them, and parking is
+defined as leaving the drainable set. Web has no such set — `apps/web/src/lib`
+contains no reference to an unsynced queue or a blocked run at all, which is the
+same fact `parity.md`'s "Bulk sync button" row already carries as **web N/A,
+always online**. A parked-run surface on web would be a surface over a queue
+that does not exist.
+
+`RunPushOutcome` living in `core_models` rather than in `api_client` is
+occasionally read as anticipating a second consumer. It is not:
+`local_run_store.dart` imports `core_models` and `flutter/foundation` and
+nothing else, so the store can read the outcome without taking a dependency on
+the client that produces it, while `api_client` depends on `core_models` in the
+usual direction. The placement is a layering fact about one platform.
+
+Recorded where a future reader will actually look: a `parity.md` row of its own
+beside the bulk-sync row, marked N/A for web with the reason, rather than only
+here. If web ever grows an offline queue, this is the design to mirror — and
+that would be a NEW web feature, not a parity debt being paid.
+
+## 1097. The temp-dir-plus-taps census has no members left, and its discriminator is wrong in both directions
+
+[§ 1072](#1072) re-measured the fixed-delay residue and corrected three of four
+counts; the survivor it left was a population — "26 mobile test files pair a
+temp directory with widget taps and no `pumpUntil` at all" — filed as a sweep
+for a later lane. Swept 2026-09-03. **Nothing in it needed converting**, and
+the reason is worth more than the sweep.
+
+**The count, re-measured.** Naively — the greps the filing used — the
+population is **27** at `076b624c8`, not 26, over **89** files that create a
+temp directory, not 88. Corrected for comment text, it is **25**: two members
+are files whose only match is the line *"Timed pumps only — `pumpAndSettle`
+spins `LiveRunMap`'s pulse animation"*, so a grep counted a comment explaining
+why the file does NOT use `pumpAndSettle` as evidence that it does. That is the
+identical failure § 1072 found in the `pumpEventQueue` count, in a census
+written to replace it.
+
+**The two the filing named as the worst shape are not members.**
+`gym_exercise_screen_test.dart` does every `createLocal` inside
+`tester.runAsync` before the widget is pumped, and its single tap opens
+`GymDetailScreen`, whose `initState` reads. `route_builder_screen_test.dart`
+does every `routeStore.save` in plain real-zone `test()` bodies with the call
+awaited; its `testWidgets` taps are a save DIALOG that pops a result object, a
+switch, and map taps — none reaches a store. Both were nominated for the shape
+of their teardown (`addTearDown` + a temp dir + taps), which is the pattern, not
+the property.
+
+**And the discriminator misses in the other direction too.** The two files that
+WERE genuine members are `run_screen_conclude_retry_test.dart` and
+`run_screen_expected_return_test.dart` — both already fixed by
+[§ 1012](#1012), each awaiting `debugInProgressSettled()` in `tearDown`. They
+are still in the population, because the census asks whether a file mentions
+`pumpUntil` and the correct lever for an in-progress recording write is a
+different one. A census keyed on a helper's NAME counts files that use the
+right instrument as unconverted.
+
+**Triage, stated with its limits.** All 25 were scanned for the property that
+matters — a `tester.tap` followed in the same test by an assertion reading a
+store — which found **zero**. The mutation-shaped taps (Save / Delete / Done /
+Log / START / Retry) were enumerated across the population and the four highest
+-risk files hand-read: `gear_rotations_screen_test.dart` (writes inside
+`runAsync`, taps drive a fake api), and the three `run_screen_*` files, of
+which `run_screen_test.dart` never taps START at all. The remaining files were
+not read line by line, so the claim is "no member survives this triage", not
+"no member can exist".
+
+The entry is closed rather than re-filed with a corrected number, because the
+number was never the missing piece: the residual question is which tests start
+store I/O from a fake-zone tap, and no grep over helper names answers it.
+## 1098. One routine's EXECUTE was inherited rather than stated, and enumerating the rest is what proved it was one
+
+`donations_status_lock_test.sql` has been failing on the workstation and passing
+on CI, dying at its first `fundraiser_totals` call with `permission denied for
+function` as `service_role`. The mechanism was already written down by
+[§ 799](decisions.md)'s migration `20270625000001` and by
+`anon_execute_registry_test.sql`: Supabase Cloud and the CI-pinned image
+(2.84.2) carry an `alter default privileges` for `postgres` granting EXECUTE to
+anon, authenticated **and** service_role by name, while the workstation CLI's
+image (2.109.1) leaves a fresh function on Postgres's own owner+PUBLIC default.
+`20270213_001` wrote `revoke all on function fundraiser_totals(uuid) from
+public` and then granted anon and authenticated. On the first image that revoke
+removes nothing; on the second it removes PUBLIC, and service_role goes with it.
+
+The fix is [§ 790](decisions.md)'s form, the same one `20270702000002` applied to
+`payment_refunds` one migration family over: name the role. What made this worth
+a round rather than a one-line patch is that the filing described the work as
+"re-emitting the grants for the routines the default currently covers", and the
+size of that set was unknown. It was measured, and it is **one**.
+
+The local image is the oracle, because there `proacl` is exactly `{postgres}`
+plus what a migration stated — or NULL where nothing was stated at all. Against
+it: the 7 RPCs the Edge Functions call as service_role and the 5 the Go worker
+calls each already carry an explicit `service_role` entry; all 95 RPC names the
+web, Lambda, mobile and `api_client` trees call carry an explicit
+`authenticated` entry and none has a NULL `proacl`; every base table in `public`
+already grants service_role the four DML verbs by name, which is what
+`20270702000002` closed. The 74 functions still on a NULL `proacl` are trigger
+bodies and definer-internal helpers — every reference to one outside the
+migrations (`enforce_event_capacity`, `promote_event_waitlist`,
+`lock_subscription_columns`, `enroll_club_owner`, `notify_plan_assigned`, …) is
+a comment naming the trigger, not a call. What anon may reach on Cloud through
+that set is a real and separate question; it is not this one, and a blanket
+`grant … to public` would break the `to public` RLS policies that made
+`20270625000001` write `from public, anon` in the first place.
+
+`fundraiser_feed(uuid, integer)` is deliberately **not** granted beside its
+sibling. The two are the same page's pair and `20270630000001` replaced them in
+one statement block, but the feed has no service_role caller, and granting a
+role a privilege because its neighbour has one is the sweep this entry exists to
+avoid. The grant that was issued confers nothing new: `fundraiser_totals` is
+SECURITY DEFINER, gated on `fundraiser_anchor_visible`, `anon` already holds
+EXECUTE, and service_role holds SELECT on `fundraisers`, `donations` and
+`payment_refunds` outright.
+
+`anon_execute_registry_test.sql` gains the positive half of its registry — each
+routine a named role must call holds EXECUTE, and holds it through an ACL entry
+naming that role rather than through PUBLIC or a NULL `proacl`. Note what that
+cannot see: on an image whose default privileges hand out EXECUTE by name the
+assertion holds whether or not a migration said anything, so it is the
+workstation image that makes it bite. A guard reading the migration TEXT would
+bite on both and is filed rather than built. Before: `Files=286, Tests=2601`
+with `donations_status_lock_test` reporting a bad plan (19 planned, 0 ran).
+After: `Files=286, Tests=2622`, all pass.
+
+## 1099. The retention register was still promising an erasure the sweep does not perform
+
+[§ 1049](decisions.md) measured that `cleanup_stale_export_blobs()` deletes the
+`storage.objects` row and leaves the bytes, and the lane that measured it
+corrected the narrative paragraph in `docs/compliance/data-subject-rights.md`
+while flagging that it did not own `docs/compliance/`. Re-measured here on a
+fresh stack and it reproduces exactly: a 4 KiB probe uploaded through the real
+Storage API into `exports`, aged nine days and swept, leaves `cleanup_stale_
+export_blobs()` reporting 1, zero rows in `storage.objects`, an empty
+`object/list` response — and the backend file still present with the uploaded
+`sha256` unchanged.
+
+The paragraph that was corrected was not the document that mattered.
+`docs/compliance/retention.md` is the register a regulator would be handed, and
+its Art 20 row still read "7 days from creation, OR account deletion" with the
+nightly cron named as the trigger — the single stronger guarantee stated for
+both legs. Its cron table said the same thing again, "data-export blobs older
+than 7 days". Both now state the two legs separately.
+
+Separating them needed one measurement § 1049 had asserted rather than taken:
+that storage-api's own delete path is what removes a backend object. Measured on
+the same bucket in the same session — upload, then `DELETE
+/storage/v1/object/exports` with the object's prefix — the backend goes from one
+file to zero. That is the path `delete-account`'s drain walks, so the
+account-deletion leg **is** an Art 17 erasure and the nightly SQL leg is not,
+and the register can now say which is which instead of averaging them. The
+residual on § 1049's claim is untouched and restated in both documents: this is
+the local `file` backend, so what is proved is the mechanism, and confirming the
+byte residue on Cloud still means listing the bucket over the S3-compatible
+endpoint.
+
+## 1100. The auth-email hook gets its positive path, and the thing blocking it was three env lines
+
+[§ 1079](decisions.md) found the general "positive-path Edge Function tests"
+filing wrong and left `auth-email` as the honest residue: three envelope cases,
+all of them refusals (405 on GET, 401 on absent Standard Webhooks headers, 401
+on a wrong signature), so a handler that refused every request passed all three.
+Nothing about that was blocked on a credential — the signing secret is ours and
+`ci.yml` already wrote it — and the only real obstacle was that the function
+reads `SMTP_HOST` / `SMTP_PORT` / `SMTP_FROM` and the CI boot step wrote none of
+them, with a comment saying so.
+
+The host that matters is the container's, not the runner's. `127.0.0.1` inside
+the functions container is that container's own loopback and reaches nothing, so
+the boot step writes `host.docker.internal:54325` — the pair the committed
+`supabase/functions/.env` already uses for local dev, reachable because the CLI
+starts that container with `--add-host host.docker.internal:host-gateway`. The
+network alias `inbucket:1025` resolves from there too and would have worked
+equally; the published-port form was chosen because it keeps one story with the
+committed local-dev file and with `smtp.ts`'s own doc comment. Mailpit is read
+from the RUNNER, so `MAILPIT_URL` is the web port, 54324.
+
+Two assertions carry the test, and both were checked for discriminating power
+rather than assumed. The subject must be the FRENCH signup entry from
+`authEmailCatalogue`, driven by a `user_metadata.locale` of `fr-FR` — measured
+against the live host, the same payload with no locale renders "Confirm your
+email address" and with `de-DE` renders "Bestätige deine E-Mail-Adresse", so the
+assertion separates "it resolved the locale and rendered that entry" from "it
+sent something". And the delivered body must carry this run's unique
+`token_hash`, so the mail was rendered from this payload rather than matched off
+an older one in a catcher other lanes also write to. For the same reason the
+test SEARCHES Mailpit by recipient and never clears it: `DELETE
+/api/v1/messages` wipes the whole catcher, and a Playwright shard may be reading
+it.
+
+The payload deliberately carries no `user.id`, which makes the handler skip its
+`user_settings` locale read entirely — so this case is gated on the hook secret
+rather than on `SUPABASE_SERVICE_ROLE_KEY`, and it exercises the metadata
+fallback branch that a settings row would have shadowed. Negative control: with
+a wrong secret the case fails at the 200 assertion with `401 bad_signature`.
+
+## 1101. `refresh-tokens` already had the seam the filing asked for; what it lacked was the gate opening
+
+The filing said `refresh-tokens` has no positive-path test and that the durable
+shape is an injectable token-exchange fetch, following the
+`_shared/strava_upstream.test.ts` seam. Both halves are wrong, and the second is
+wrong in the way that matters: that seam is a `globalThis.fetch` stub, not an
+injected parameter, and `refresh-tokens/lib.test.ts` has been using it since
+PR #438 — "refresh-tokens routes through the CAS helper with
+the read refresh token" drives the success branch through a stubbed Strava token
+response and asserts `refreshed === 1` plus the compare-and-swap arguments, and
+`sweep_invariants.test.ts` adds "each integration is refreshed with its OWN
+token, and the count is the successes". Sixteen unit tests, all passing. Adding
+an injection parameter would have been a second seam for a problem the first one
+already solves.
+
+What was genuinely missing sits one layer up. `handler_envelope.test.ts` carried
+three `refresh-tokens` cases and every one is a 403 — missing header, wrong
+secret, non-Bearer scheme — so a handler that refused everything passed all
+three. The gate OPENING had no coverage anywhere.
+
+That case needs no upstream either, and the fixture is where the care went. An
+empty `integrations` table would return `{refreshed: 0}` off a select that
+matched nothing, which proves the bearer was accepted and nothing else. So the
+test plants an integration whose `token_expiry` IS inside the sweep's one-hour
+window — the sweep selects it — but which holds no vault secret, so
+`get_integration_tokens` yields nothing and the loop `continue`s before
+`refreshStravaToken` is reached. That the upstream was not contacted is then
+observable rather than asserted: a real call with an unusable grant would 4xx
+and stamp `disconnected_at` through the wired `onPermanentFailure` callback, and
+the test reads that column back after the sweep.
+
+Verified against a functions host booted the way `ci.yml` boots it, with the
+same `.env.local` values: 25/25 handler-envelope cases pass. Negative control
+with a wrong `CRON_SECRET` fails at the 200 assertion.
+
+## 1102. The case-fold table's SQL rail is cheap to write and cannot be shipped on its own
+
+The frozen 1,488-pair fold table is filed as three rails — `EXERCISE_*` in
+`gym_prs.ts`, `gym_prs.dart` and `normalise_exercise_name` — with a note that
+"the SQL rail is the cheap one" because [§ 1076](decisions.md) made the fold a
+write-time cost and the keyset backfill of `20270706000002` establishes the
+pattern: `create or replace function`, no rewrite. The DDL claim is correct. The
+conclusion drawn from it is not, and this round measured why rather than taking
+the rail.
+
+`normalise_exercise_name` is named by three **validated** CHECK constraints —
+`gym_sets_exercise_key_canonical`, `gym_routine_exercises_exercise_key_canonical`
+and `exercises_name_key_canonical` — each of the form `key = normalise_exercise_
+name(name)`. Two of those columns are still CLIENT-stamped. So the function is
+not a private implementation detail of the server: it is the acceptance
+predicate two other rails write against, and moving it moves what they may
+store.
+
+Measured in a rolled-back transaction, on a table carrying the same CHECK. A row
+whose key was computed under the current fold is inserted and accepted. The
+function is then replaced with one that folds a single extra code point.
+Postgres does not re-check anything, so the row is still there — and
+`update t set name = name`, a no-op self-update, raises **23514**. The stored row
+is un-updatable, a fresh insert of the same pair is refused, and
+`alter table … validate constraint` fails. Nothing warns at replace time.
+
+The blast radius was measured too, and it is small but not empty. Postgres's ICU
+lowercase map on this image is non-identity at **1,433** code points; a current
+single-char lowercase table (Unicode 16.0) is non-identity at **1,459**; the two
+disagree at **28** — 27 the newer table lowercases and ICU does not (U+1C89,
+U+A7CB, U+A7CC, U+A7DA, U+A7DC, the Garay block U+10D50-52 and 19 more), and one
+the other way, U+0130, which [§ 830](decisions.md) already folds by name. At
+**zero** code points do the two map to different values. So adopting a frozen
+table on the SQL rail alone would move the fold at 27 points, all of them recent
+additions — which is precisely the population the table exists to protect — and
+every stored key containing one of them becomes un-updatable.
+
+The decision: **do not ship the SQL rail alone.** The three rails move together
+or not at all, and the sequencing note the filing carries should say so. That is
+a stronger constraint than the filing assumed, and it changes who can take the
+work: not a backend lane, but one holding `apps/web/src/lib/gym/`,
+`apps/mobile_android/lib/` and the migration at once. Whether the 27 points move
+the SQL rail TOWARD or AWAY from either client is not decidable from this rail —
+the 465 / 410 / 55 pairwise divergences are defined against two runtimes a
+backend lane cannot measure, and a change that fixes one pair while widening the
+other is exactly the outcome a single-rail edit risks.
+## 1104. The run queue is retried rather than caught, and the pre-run screen offers the drain when the count is unknown
+
+[§ 1082](#1082-the-watch-view-model-gets-a-crash-handler-and-the-drain-says-an-unreadable-queue-is-unreadable-rather-than-empty)
+closed the drain's half of this and filed the rest, because the rest is two UI
+and state decisions rather than the saved-data one that entry was about. Both
+are made here, and the filing was right that picking either by default is the
+mistake.
+
+**The mechanism, restated because it is the whole finding.** `Flow.catch` does
+not "handle" a failure and carry on: it emits at most once and **completes the
+flow**. The `.catch { log }` [§ 1055](#1055-a-phone-pushed-session-update-could-end-a-run-and-the-asymmetry-that-made-it-findable)
+put on `store.queue` therefore ended the collection on the first failed read,
+and `queuedCount` froze at whatever it last held — 0 on a cold start. The
+pre-run "Sync N runs" chip is gated on `queuedCount > 0`, so it never appeared
+again for the life of the process. A runner who reboots into a corrupt queue
+was shown nothing at all: `syncError` renders on `PostRunScreen`, and they are
+not on it. The frozen count was the bug; a flow that can never recover was the
+mechanism.
+
+**(a) Retry, not catch.** Catching is not a judgement about corruption. It is
+a judgement that the FIRST failure is the LAST one, and nothing establishes
+that — DataStore fails a read for a corrupt file, which will fail again, and
+for transient I/O, which will not, and the exception does not reliably separate
+them. The cheap distinguishing test is to read it again, and a read is one file
+open. So the stream is `retryWhen`-ed, unbounded, with `queueReadRetryDelayMs`
+doubling 1 s → 60 s. Unbounded because a bounded retry only moves the freeze
+later; backed off because an unbounded immediate retry against a genuinely
+corrupt file is a busy loop. The curve is deliberately not `DrainBackoff`'s
+60 s → 30 min: that one throttles a network round trip to a third party, this
+one throttles a local file open whose failure takes the recovery affordance off
+screen, so it recovers a transient blip inside a second and settles at one
+failed open a minute. The clamp on the shift is not decoration — `1_000L shl
+64` is `1_000L shl 0` on the JVM, so an unclamped exponent silently resets the
+backoff to its base after 64 failures.
+
+**(b) A retry chip in the counted chip's own slot.** Three candidates. "Sync ?"
+is rejected for the reason the filing gives — the number is the entire content
+of that chip, and a question mark invites a tap whose outcome is a mystery. A
+persistent error LINE is rejected because it is a second thing on a 1.4-inch
+top arc, and because a sentence that cannot be acted on is not what is missing:
+the affordance is. What ships is the same chip, in the same slot, with the count
+replaced by a label that claims no figure. Nothing else on the arc moves, no
+state gains a line, and the thing the `queuedCount > 0` gate withheld on
+precisely the condition that guarantees the count is wrong is restored.
+
+Three details that are decisions, not defaults. It is **not** gated on
+`online`: reading the queue is a local file open and the network is not a party
+to whether it succeeds, so disabling it offline would withhold the recovery path
+for a purely local fault. It **is** still gated on `authed`, because
+`drainQueue` returns from `awaitAuth()` before reading anything without a
+session, and an enabled chip that cannot reach the read is a dead affordance.
+And the warning colour is not the only signal — the label differs from the
+counted one, and the content description carries the whole sentence, which has
+no width limit where the chip has 100 dp.
+
+**One flag, two readers.** `queueUnreadable` is a second field beside
+`queuedCount` rather than a nullable count or a three-state type, because the
+two are orthogonal facts that cannot contradict: the count is the last figure
+anyone read, the flag is whether it still stands. A null count would collapse
+"never read yet" into "read and failed" and flash the retry chip on every cold
+start. Both readers of the file write the flag — the stream and the drain's
+`first()` — so tapping the chip cannot fix the drain while leaving the chip
+claiming the queue is still unreadable.
+
+## 1105. The finished heart-rate claim gets its own field, and the source guard that pinned the ordering is deleted rather than converted
+
+`RecordingRepository.Metrics.avgBpm` carried two different claims at two
+different times: the heart-rate collect wrote a live rolling mean into it on
+every sample, and `stopRecording` overwrote it with the graded claim
+[§ 1083](#1083-the-wrist-records-how-much-of-the-run-its-heart-rate-covered-and-refuses-to-call-a-minority-sample-the-runs-average)
+produced. `RunViewModel.handleFinishedRun` read the field and could not tell
+which it had; it was correct only because the overwrite happened first.
+
+That ordering is worse than it sounds, and the file says so in its own words.
+`update` is a CAS loop *because* five writers race on it, and the comment above
+it records that cancelling a job cannot interrupt a non-suspending call already
+in flight. So the collect's transform could land after the stop's — restoring
+an ungraded mean over an average the grader had deliberately suppressed, and
+saving a twelve-hour run with a claim over 3 % of it. The pin against that was
+`HeartRateCoverageTest` reading the two functions' source for the right
+statement order.
+
+`Metrics` now carries `finishedHr: HeartRateClaim?` — the pair § 1083 already
+returns, written once by whoever makes the `Finished` transition and null at
+every other stage. Null claims no heart rate rather than falling back.
+
+**The live write is deleted, not renamed, and that is the part the filing did
+not predict.** Verifying the premise first is what turned this up: the filing
+said the rolling mean was "the live figure the running screen renders", and it
+is not. `RunningScreen` takes the instantaneous `bpm`; the active-run tile
+carries no heart rate at all; and the grader takes the raw `bpmSum`/`bpmCount`
+off the service's own fields, never off this state. The rolling mean had **no
+reader anywhere** between the sample that produced it and the stop that
+overwrote it. Its only effect was the hazard.
+
+**The guard is replaced rather than converted, and the two halves split on
+whether a type can express them.** "Both save paths grade through
+`heartRateClaim`" stays a source guard: that two named call sites call one
+function is not a Kotlin type. The ordering assertion goes, because its premise
+goes with the second writer — a test re-asserting what the compiler now enforces
+can only fail when someone reintroduces the field, which is a change the other
+half already catches. In its place, one **real** test: apply the collect's
+transform after the stop's on the actual repository and assert the suppressed
+claim survives. And one widened scan — an average divided out of the pair
+anywhere in the recorder, not only inside the two save bodies, because the
+collect was doing exactly that in a body the old guard deliberately excluded.
+
+## 1106. `apps/watch_ios` states what its heart-rate average is scoped to, because `source` cannot say which watch wrote a run
+
+The filing offered two outcomes: measure coverage on the watchOS side and write
+`hr_coverage` from it, or state explicitly that its absence on a
+`source = 'watch_ios'` run means workout-scoped. Verifying the premise first
+disposed of the second as written and reshaped the answer.
+
+**There is no `watch_ios`.** Both watch clients write `source = 'watch'` —
+`SupabaseClient.kt` puts the literal, `ContentView.syncRun` puts the same one.
+So the absence of `hr_coverage` is not self-addressing: a reader holding a
+`source = 'watch'` run with no coverage figure cannot tell an Apple Watch's
+workout-scoped average from a Wear run recorded by a build predating the key or
+recovered from a checkpoint that never carried it — the third case being one the
+registry row itself documents as legitimate. Any statement has to name all
+three, and it cannot be phrased as a property of a source value that does not
+exist.
+
+**Why the measurement is not in this change, in the order the reasons bind.**
+The strong one is structural, not effort: watchOS hands a finished run to the
+phone through `WCSession.transferFile(_:metadata:)`, and claim (6) of
+`scripts/check_watch_ios_source.mjs` reads BOTH ends — a key the watch sends
+that `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` never lifts out fails
+the PR, which is exactly how Apple-Watch runs once reached the phone with no
+`activity_type`. Adding `hr_coverage` to the envelope therefore requires an edit
+in `apps/mobile_ios/`, a tree no lane owned this round. The second is that this
+is a Linux workstation with no Xcode, so a new accumulator on a live sensor path
+could be neither compiled nor exercised, and the two cheap approximations each
+measure something other than coverage: `HKStatistics`' start-to-end span credits
+a two-hour silence in the middle as covered, which is the interval error § 1083
+rejected, and ticking against the DELIVERY of `didCollectDataOf` measures
+HealthKit's batching rather than the sensor's. The honest instrument is
+`mostRecentQuantityDateInterval()` — the sample's own timestamp — or a post-
+`finishWorkout` sample query over the workout interval, and neither is worth
+shipping unverified: a nil that silently writes `hr_coverage: 0.0` on every run
+is the fabricated measurement the filing rules out.
+
+**What ships.** The scope statement goes where the average is produced, on
+`HealthKitManager.summaryAverageBPM`, because that is what a maintainer reads
+before adding an assumed `1.0`. It states the claim (`HKLiveWorkoutBuilder`'s
+average over an `HKWorkoutSession`, which holds the sensor for the life of the
+session rather than the life of the foreground app — the failure § 1015 makes
+Wear's `MeasureClient` prone to), what the claim does **not** cover (a live
+session whose sensor goes quiet still averages what it got), and the
+three-way ambiguity above. A guard in `MetadataRegistryTests` pins both halves:
+no watchOS source may write `hr_coverage`, and the statement must stay. The
+registry row's replacement text is handed to integration —
+`docs/backend/metadata.md` belonged to another lane this round.
+
+Not built. Both runnable watchOS guards pass (`check_watch_ios_source.mjs`,
+`check_xcstrings_parity.sh`, neither of which compiles anything); the Swift is
+unverified until CI's watchOS job runs it, and it joins the existing population
+of watchOS edits landed unbuilt.
+
+## 1107. An unreadable queue was ungraded on the crash-recovery path, and the bail-out that grades it was deleting the thing it protects
+
+Surfaced surveying the Wear tier after [§ 1104](#1104-the-run-queue-is-retried-rather-than-caught-and-the-pre-run-screen-offers-the-drain-when-the-count-is-unknown),
+looking for the rest of the population that reads `LocalRunStore`. There were
+two more readers and one of them mattered: `gradeRecovery`'s
+`store.contains(cp.runId)`, which is `queue.first().any { … }` on the same
+DataStore-backed flow. (The other, `reconcileTrackStorage`'s
+`migrateTrackFiles`, was already guarded.)
+
+**What it cost.** The read throws on a corrupt file, and the throw went out of
+both callers into `launchGuarded`, which logs and swallows. `checkRecovery`
+therefore set no `pendingRecovery`, so a cold start into an unreadable queue
+withheld the recovery prompt for a crashed run **whose checkpoint is its only
+durable record** — and said nothing. `recoverCheckpoint` threw from the same
+call, so the prompt stayed on screen and the tap did nothing, again silently.
+Same shape as § 1082, one layer over: the cheapest reading of a failed queue
+read is the worst one, and here it was not even a reading — it was a swallow.
+
+**The failure is its own grade, and `Ignore` is not the timid choice, it is the
+only non-destructive one.** Standing the failure in for `alreadyQueued = true`
+grades `Discard`, which **deletes the checkpoint** on precisely the condition
+under which the queue cannot be holding the run instead — the one moment the
+snapshot is load-bearing. Standing it in for `false` grades `Offer`, and the
+recovery it offers cannot complete, because `store.save` reads the same file.
+`RecoveryAction.Ignore` already carries the meaning wanted — "leave it
+completely alone: neither prompt nor clear" — so the net stays armed and the
+grade is retaken on the next launch. It also raises `queueUnreadable`, so the
+pre-run chip § 1104 added reports the same file rather than two surfaces
+disagreeing about it.
+
+**Which exposed a latent second defect in the line that was supposed to be the
+safety check.** `recoverCheckpoint` opened with `if (gradeRecovery(cp) !=
+RecoveryAction.Offer) { checkpoints.clear() … }`, collapsing the two bail-out
+grades into one when they are opposites. `Ignore` means a **live recording**
+whose crash-safety net this checkpoint IS, and clearing there disarms the net
+mid-run. It was unreachable in practice — the prompt is a full-screen takeover
+with no Start button, so no recording can begin under it — but it became
+reachable the moment an unreadable queue also graded `Ignore`, which is how a
+latent bug turns into a live one. Only `Discard` may clear the checkpoint now,
+and the arm is exhaustive rather than a negation.
+
+**Not taken, filed.** The tap is still silent while the queue is unreadable:
+the runner presses "Save it" and nothing visibly happens, because the recovery
+prompt is a takeover with no failure line and `syncError` renders on
+`PostRunScreen`. And `checkRecovery` runs once, from `init`, so a read that
+recovers inside the same process does not re-raise a prompt it withheld. Both
+want the same small thing — the prompt disclosing an unreadable queue, using
+the `sync_queue_unreadable` string that already exists in all seven catalogues,
+with "Save it" disabled while it stands — and both are display decisions on the
+one screen § 1104 was careful with rather than the fail-closed data one this
+entry is about.
+## 1110. Claim 10 pairs each Lambda verb with the environment its job deploys to, and the strengthening had to be demonstrated on input no committed workflow can produce
+
+[§ 1085](#1085) derived the `lambda:` actions each deploy role may hold from the
+`aws lambda` verbs the workflows run, and compared BOTH roles against the union
+of all of them. That is correct exactly while every credentialed job deploys
+every environment. `release-web.yml` does — one job, one set of steps, the
+branch deciding only which role ARN it assumes and which resource names it
+builds — so on this tree the union and the per-environment reading are the same
+set, and the guard could not tell them apart.
+
+It would stop being correct the first time a workflow deployed one environment
+only. The union would then require, on the preview role, a verb only the
+production release issues; the guard would report the preview role as *missing*
+it, and the obvious response to a red check that says "missing" is to widen the
+role. A derivation that under-scopes reads exactly like a role that
+under-grants.
+
+**A verb is now attributed to the environments its job can assume a role for.**
+That is read from the `AWS_DEPLOY_ROLE_ARN_<ENV>` Secrets the job names, which
+is the only statement a workflow makes about which identity its AWS steps run
+as, and it is narrowed by a step's own `if:` when the condition reads an output
+of the job's env-deciding branch — `release-web.yml` already gates two steps on
+`steps.env.outputs.is_prod`, so a future `aws lambda` step gated the same way
+attributes to one environment rather than two. A condition this reader cannot
+interpret leaves the step on both, which can only over-demand a grant and never
+under-demand one. A verb run under an assumed role whose environment cannot be
+read at all **fails**: unattributed is the one outcome that would silently stop
+the guard asking for a verb, and it is the shape a hardcoded role ARN produces.
+
+**The demonstration is the point of the entry.** The filing was honest that the
+change is unfalsifiable against today's workflows, and a guard change nothing
+can distinguish from the old one is an assertion, not evidence. So the pin is a
+synthetic two-branch workflow carrying a verb only the production leg runs:
+under it the verb attributes to `prod` alone, the preview role passes without
+it, holding it on the preview role fails as standing privilege, and a
+production role lacking it fails the other way. The union derivation passes the
+second of those and fails on the third — which is the whole difference, stated
+as four tests rather than as a paragraph.
+
+Not verified against live IAM. No lane holds AWS credentials; this is
+`node scripts/check_infra_iam.mjs` plus its 77 unit tests, and the next release
+after an `infra/github-oidc` apply is what confirms anything about the roles
+themselves.
+
+## 1111. `terraform fmt` was scoped per stack, so the one directory outside the matrix was format-checked by nothing — and the transitive-validate claim that excuses the exclusion is now measured
+
+`terraform.yml`'s `fmt` step lived inside the validate matrix, with
+`working-directory: ${{ matrix.stack }}`, and `terraform fmt` without
+`-recursive` reads exactly one directory's `.tf` files. `infra/modules/web-stack`
+is deliberately not in that matrix, so it was checked by no fmt invocation at
+all. Measured: with `output   "fmt_probe"    {` appended to the module's
+`outputs.tf`, all five per-stack steps exit 0 and `terraform fmt -check
+-recursive infra` exits 3.
+
+`check_infra_coverage.mjs` had a `VALIDATE_EXEMPT` entry for that directory
+carrying a real reason, and the reason is still true — re-measured, and true
+even though the module declares `configuration_aliases = [aws.us_east_1]`,
+which is the mechanism that is supposed to make a child module validatable
+standalone: `terraform validate` in the module directory still answers
+`Provider configuration not present`. But the guard's own header said an
+unmatrixed stack "gets no `fmt`, no `validate` and no Trivy verdict of its
+own", and two of those three were wrong in opposite directions. Trivy already
+scanned it (`scan-ref: infra` walks the tree); fmt already did not, and nothing
+said so.
+
+**So the exemption is narrowed to what it can justify.** A module cannot be
+validated without a provider; it can always be formatted. `fmt` is now one
+recursive job over `infra/`, and the guard reads the workflow's `terraform fmt`
+invocations as SCOPES — a directory, plus whether `-recursive` extends it over
+the subtree — and fails when any Terraform directory falls outside all of them.
+A future module is covered without anyone remembering, which the matrix could
+never offer, and the five per-stack `fmt` runs it replaces were redundant with
+each other anyway.
+
+**The claim the exemption rests on is measured rather than asserted.** "Validated
+transitively by envs/prod + envs/preview" was a sentence in a comment. Probed:
+an undeclared-input-variable reference added to `infra/modules/web-stack/waf.tf`
+makes `terraform validate` in `infra/envs/prod` fail, naming the module file and
+line. So the module's *validate* coverage is real, and only its *fmt* coverage
+was the gap.
+
+Verification, all offline by design: `terraform init -backend=false` +
+`terraform validate` in `infra/envs/prod` and `infra/envs/preview`, both
+`Success!`; `terraform fmt -check -recursive infra` clean; the three infra
+guards and their suites green. Still no `plan` behind any of it — no lane holds
+AWS credentials — but this change touches no resource, only a workflow and a
+guard.
+
+## 1112. The export reaper lists the bucket rather than being handed a worklist, which is what removes the ordering trap — and it ships unroutable because its CHECK is a migration
+
+[§ 1049](#1049) measured that `cleanup_stale_export_blobs()` deletes
+`storage.objects` rows and leaves the bytes on the backend with a matching
+`sha256`, and named the durable fix: a job kind in the Go worker, which already
+writes these archives through the Storage API and already holds the service key.
+It also named the trap — once the row is gone nothing in the database knows the
+object exists — and proposed enqueue-then-delete in one transaction as the cheap
+ordering.
+
+**The reaper derives its own worklist instead, and the trap does not arise.**
+The Storage list API reads the same `storage.objects` rows, so a reap that lists
+and then deletes through the API removes the bytes AND the rows in one step;
+the SQL row-delete becomes redundant rather than something the Go half has to be
+sequenced against. A payload carrying paths would have made the job's
+correctness depend on a transaction in another tier, and a reap that ran after
+that transaction would be reaping a list nobody can produce. Listing costs one
+walk of a bucket that holds at most a week of archives.
+
+Two refusals in the handler, both about not erasing an Art 20 artifact by
+accident. An object the list API did not date is **skipped**, not deleted: a
+zero time compares as older than every cutoff, so reading it as an age erases an
+archive whose age was never established. And a `retention_days` of zero or
+negative falls back to the default rather than meaning "reap everything", so a
+payload that lost a field cannot empty the bucket. The default window is the
+SQL sweep's own seven days and a test fails if the two ever disagree — a reaper
+running longer than the sweep leaves the sweep deleting rows for objects nothing
+has erased, which is exactly the state § 1049 measured.
+
+**It is not in `Worker.dispatch`, deliberately.**
+`internal/worker_dispatch_coverage_test.go` fails a `case` for a kind
+`jobs_kind_chk` forbids — dead code reading as a shipped feature — and widening
+that CHECK is a migration, which this change could not land. So the handler and
+its 15 tests are on `main` and nothing enqueues them. The remaining half is one
+commit: the CHECK, the pgtap allowlist case, a `cron.schedule` that enqueues the
+job ahead of the existing sweep, and the one-line dispatch case. Its exact
+statements are in `followups.md` rather than described, because "a queue nothing
+drains is worse than an honest gap" cuts both ways: a handler nothing routes is
+only honest while the way to route it is written down precisely enough to apply.
+
+**What this does not recover**: the objects whose rows a previous sweep already
+deleted — § 1049 counted 74 files across every bucket against 0 rows, including
+20 export archives stamped nine days earlier. Those are unreachable through the
+Storage API by construction, since list reads the rows that are gone. Erasing
+them needs a bucket lifecycle rule or direct backend access, and is filed
+separately.
+
+## 1113. `rdb.Subscribe` confirms nothing, so a spectator could miss the first ping — the flake was a lost message after all, and the probe that ruled that out had subscribed differently from the code
+
+A CI flake in `TestRedisHub_SubscribeWithHistoryReplaysThenStreams` was filed
+with the natural diagnosis — `Subscribe` returning before Redis has registered
+the subscription, so the immediately-following `Publish` is dropped — recorded
+as **measured and ruled out**: a probe that built a fresh miniredis, subscribed,
+took `Channel()` and published immediately lost 0 of 300 under `-race`. The
+filing concluded the remaining explanation was goroutine starvation and said
+plainly that raising the deadline was not the fix.
+
+The rule-out was wrong, and the reason is instructive: **the probe was not the
+code.** It ran on an idle machine, and it called `Channel()` on its own
+goroutine before publishing, where `startForwarder` calls it inside a goroutine
+that may not have been scheduled. Neither difference is the mechanism, but
+together they hid it. Re-probed under the condition the flake actually occurred
+in — two cores saturated, `-race` — the same subscribe-then-publish round lost
+**8 of 400**, and every loss carried the same signature: `PUBLISH` reported
+**zero receivers**.
+
+That count is the whole diagnosis and it was already on the wire.
+`RedisHub.Publish` returns `PUBLISH`'s own receiver count and every caller
+discarded it. Zero is the server saying it had no subscriber for that channel at
+that instant — so the ping was never sent to us, and no amount of waiting finds
+it. The mechanism is in go-redis: `Client.Subscribe` calls `pubsub.Subscribe`
+and **discards its error**, and that writes the SUBSCRIBE and releases the
+connection without reading a reply. It returns when the bytes are flushed, on a
+connection that is not the one `PUBLISH` uses. go-redis's own `ExamplePubSub`
+performs a `Receive` for precisely this reason, with the comment "Wait for
+confirmation that subscription is created before publishing anything."
+
+The `SubscribeWithHistory` doc comment asserted the opposite — "go-redis's
+Subscribe confirms the SUBSCRIBE before returning, so any ping PUBLISHed after
+this point is guaranteed to be delivered" — and the dedup reasoning below it
+rests on that sentence. Both subscribe paths now block for the `*Subscription`
+reply before returning. Re-measured on the identical load: **0 of 400.** A
+`*Message` arriving before the confirmation is forwarded rather than dropped;
+Redis cannot send one first, but "cannot happen" reasoning is what left this
+open.
+
+Two consequences beyond the flake. The subscribe paths can now fail for a reason
+that is not the per-room cap, so `server.go` stops closing every subscribe error
+as `1013 Try Again Later, subscriber cap reached` — telling a lone spectator to
+back off from an empty room, and an operator to hunt an amplification attack
+that is not happening. And the test no longer fails blind: it asserts the
+receiver count, and on a missed deadline waits a grace window before failing, so
+its message says whether the ping was lost or merely late. The regression pin is
+25 subscribe-then-publish rounds down both paths asserting one receiver each; it
+fails within the first few rounds on the unfixed code under load and passes 20
+consecutive `-race` runs on the fixed code under the same load.

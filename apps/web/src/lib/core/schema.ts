@@ -94,6 +94,7 @@ export const BUCKETS = {
 /// is documented in docs/backend/metadata.md — keep the two in lockstep.
 export const METADATA_KEYS = {
 	avg_bpm: 'avg_bpm',
+	hr_coverage: 'hr_coverage',
 	max_bpm: 'max_bpm',
 	cadence_spm: 'cadence_spm',
 	laps: 'laps',

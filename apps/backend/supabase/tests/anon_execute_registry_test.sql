@@ -23,10 +23,22 @@
 -- image change is a loud failure here rather than a silent re-reading of every
 -- `revoke` in the tree. Assertions (1)-(3) pin the four withholdings
 -- 20270625000001 made, in a form that survives either image.
+--
+-- Assertions (7)-(8) are the same registry read the other way round: the
+-- routines a named role must be able to CALL, whose grant is therefore the
+-- migration's job to state rather than the image's to supply. That direction
+-- was measured once, for 20270707000001, and came to exactly one entry — every
+-- other RPC the Edge Functions, the Go worker and the three client trees call
+-- already carries the grant by name. Note what (7)-(8) can and cannot see: on
+-- an image whose default privileges hand out EXECUTE by name they hold whether
+-- or not a migration said anything, so it is the workstation image — where
+-- `proacl` is exactly `{postgres}` plus what was stated — that makes them bite.
+-- A guard that reads the migration TEXT instead of the catalogue would bite on
+-- both, and is filed rather than built.
 
 begin;
 
-select plan(6);
+select plan(8);
 
 create temporary table withheld (fn name, args text, kept name, why text);
 
@@ -113,6 +125,46 @@ select ok(
   not has_function_privilege('anon', 'public.zz_grant_probe_both()', 'EXECUTE'),
   'naming both PUBLIC and anon withholds the function on either image — the '
   'house form, and the form 20270625000001 uses'
+);
+
+-- (7)-(8) The mirror of (1)-(3): the routines a named role must be able to
+-- call, registered so the grant is the repo's statement and not the image's
+-- default. `fundraiser_totals` is the whole list — see 20270707000001 for the
+-- enumeration that establishes that, and for why its sibling `fundraiser_feed`
+-- is deliberately absent.
+create temporary table stated (fn name, args text, caller name, why text);
+
+insert into stated (fn, args, caller, why) values
+  ('fundraiser_totals', 'uuid', 'service_role',
+   '20270213_001 revoked from public and granted anon + authenticated only, so on an image whose default ACL is {postgres} the thermometer read is refused to the role that writes the ledger; donations_status_lock_test reads it as service_role');
+
+select is(
+  (select coalesce(string_agg(t.fn || ' (' || t.caller || ')', ', ' order by t.fn), '')
+     from stated t
+     join pg_proc p on p.proname = t.fn
+     join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+    where pg_get_function_identity_arguments(p.oid) = t.args
+      and not has_function_privilege(t.caller, p.oid, 'EXECUTE')),
+  '',
+  'each registered routine is executable by the role that calls it'
+);
+
+-- (8) And by a grant naming that role, not through PUBLIC and not through a
+-- NULL proacl. This is what separates a stated grant from an inherited one on
+-- the image that can tell them apart.
+select is(
+  (select coalesce(string_agg(t.fn || ' (' || coalesce(p.proacl::text, 'proacl is null') || ')', ', ' order by t.fn), '')
+     from stated t
+     join pg_proc p on p.proname = t.fn
+     join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+    where pg_get_function_identity_arguments(p.oid) = t.args
+      and (p.proacl is null
+           or not exists (select 1 from aclexplode(p.proacl) a
+                           where a.privilege_type = 'EXECUTE'
+                             and a.grantee = t.caller::regrole))),
+  '',
+  'each registered routine carries an EXECUTE entry naming that role, so the '
+  'grant survives an image whose default privileges supply nothing'
 );
 
 select * from finish();

@@ -110,12 +110,12 @@ function stripJsComments(source: string): string {
 /// object-literal and `METADATA_KEYS` extraction would silently skip it — a
 /// guard that under-enforces without saying so, which is the exact failure
 /// this file exists to replace.
-const SCRIPT_BLOCK = /<script(?=[\s/>])[^>]*>[\s\S]*?<\/script\s*>/gi;
-const STYLE_BLOCK = /<style(?=[\s/>])[^>]*>[\s\S]*?<\/style\s*>/gi;
+const SCRIPT_BLOCK = /<script(?=[\s/>])[^>]*>[\s\S]*?<\/script(?=[\s/>])[^>]*>/gi;
+const STYLE_BLOCK = /<style(?=[\s/>])[^>]*>[\s\S]*?<\/style(?=[\s/>])[^>]*>/gi;
 
 function chunksOf(file: string, raw: string): string[] {
 	if (!file.endsWith('.svelte')) return [stripJsComments(raw)];
-	const scripts = [...raw.matchAll(/<script(?=[\s/>])[^>]*>([\s\S]*?)<\/script\s*>/gi)].map((m) =>
+	const scripts = [...raw.matchAll(/<script(?=[\s/>])[^>]*>([\s\S]*?)<\/script(?=[\s/>])[^>]*>/gi)].map((m) =>
 		stripJsComments(m[1]),
 	);
 	const markup = raw

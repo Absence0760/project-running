@@ -1261,6 +1261,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   label: l10n.runDetailStatAvgHr,
                   value: '$_avgBpm ${l10n.runUnitBpm}',
                 ),
+              if (_avgBpm > 0 &&
+                  _hrCoveragePercent != null &&
+                  _hrCoveragePercent! < 100)
+                StatTile.small(
+                  icon: Icons.monitor_heart,
+                  label: l10n.runDetailStatHrCoverage,
+                  value: l10n.runDetailHrCoveragePercent(_hrCoveragePercent!),
+                ),
+              if (_avgBpm <= 0 && _hrCoveragePercent != null)
+                StatTile.small(
+                  icon: Icons.monitor_heart,
+                  label: l10n.runDetailStatAvgHr,
+                  value: l10n.runDetailHrCoverageOnly(_hrCoveragePercent!),
+                ),
               if (_ageGrade != null)
                 StatTile.small(
                   icon: Icons.emoji_events,
@@ -1668,6 +1682,24 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (v is int) return v;
     if (v is num) return v.round();
     return 0;
+  }
+
+  /// Share of the run's ACTIVE time the heart-rate sensor was delivering, as
+  /// whole percent, or null when the run carries no such record.
+  ///
+  /// The Wear recorder suppresses `avg_bpm` below 0.5 coverage — a mean over
+  /// less of the run than not is not the run's average (decisions § 1083) —
+  /// so a run carrying this key and NO average is a suppressed average, which
+  /// this screen used to render exactly as it renders a run recorded with no
+  /// strap at all. Absent is unmeasured, never zero: a run predating the field
+  /// omits the key, while a genuine 0 means heart rate was enabled and
+  /// delivered nothing.
+  int? get _hrCoveragePercent {
+    final v = run.metadata?[MetadataKeys.hrCoverage];
+    if (v is! num) return null;
+    final d = v.toDouble();
+    if (!d.isFinite || d < 0 || d > 1) return null;
+    return (d * 100).round();
   }
 
   /// Age grade shown on the secondary-stat tile. Prefers the parkrun importer's

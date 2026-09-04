@@ -24,12 +24,14 @@ import java.io.File
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -112,6 +114,11 @@ data class UiState(
     val locationAvailable: Boolean = true,
     val online: Boolean = true,
     val queuedCount: Int = 0,
+    /// The last read of the run queue failed, so [queuedCount] is stale rather
+    /// than current. DataStore reports a corrupt or unreadable file by failing
+    /// the read, and the two facts are orthogonal: the count is the last figure
+    /// anyone saw, this is whether it still stands (decisions § 1104).
+    val queueUnreadable: Boolean = false,
     val authed: Boolean = false,
     val authError: String? = null,
     val signInLoading: Boolean = false,
@@ -512,13 +519,28 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /// `Flow.catch` was the wrong operator here and its cost was total: catch
+    /// COMPLETES the flow, so one failed read froze `queuedCount` at its last
+    /// value for the life of the process — 0 on a cold start — and the pre-run
+    /// "Sync N runs" chip, gated on `queuedCount > 0`, never appeared again. A
+    /// runner rebooting into a corrupt queue was shown nothing at all. Catching
+    /// is not a judgement about corruption; it is a judgement that the FIRST
+    /// failure is the LAST one, which nothing establishes. Retrying makes the
+    /// cheap distinguishing test — read it again — and costs one file open
+    /// (decisions § 1104).
     private fun observeQueue() {
         queueWatchJob = launchGuarded {
             store.queue
-                .catch { e -> Log.w(TAG, "run queue stream failed", e) }
+                .retryWhen { e, attempt ->
+                    Log.w(TAG, "run queue stream failed, retry $attempt", e)
+                    _state.value = _state.value.copy(queueUnreadable = true)
+                    delay(queueReadRetryDelayMs(attempt))
+                    true
+                }
                 .collect { list ->
                 _state.value = _state.value.copy(
                     queuedCount = list.size,
+                    queueUnreadable = false,
                     thisRunSynced = _state.value.thisRunId?.let { id ->
                         list.none { it.id == id }
                     } ?: _state.value.thisRunSynced,
@@ -704,12 +726,38 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun gradeRecovery(cp: Checkpoint): RecoveryAction = recoveryActionFor(
-        activeRecording = RecordingRepository.metrics.value.stage !=
-            RecordingRepository.Stage.Idle,
-        alreadyQueued = store.contains(cp.runId),
-        trackFileExists = withContext(Dispatchers.IO) { File(cp.trackFilePath).exists() },
-    )
+    /// `store.contains` reads the same DataStore-backed queue the drain and the
+    /// pre-run count read, and it fails the same way: a corrupt file THROWS
+    /// rather than reads empty. It threw straight out of both callers into
+    /// `launchGuarded`, which logs and swallows — so a cold start into an
+    /// unreadable queue silently withheld the recovery prompt for a crashed
+    /// run whose checkpoint is its only durable record, and a tap on that
+    /// prompt did nothing at all (decisions § 1107).
+    ///
+    /// The two answers the failure could stand in for are not symmetric and
+    /// the destructive one is not the cautious one: reading it as "already
+    /// queued" grades `Discard`, which DELETES the checkpoint on precisely the
+    /// condition under which the queue cannot be holding the run instead.
+    /// Reading it as "not queued" grades `Offer`, and the recovery it offers
+    /// cannot complete — `store.save` reads the same file. So the failure is
+    /// its own answer: `Ignore` already means "leave it completely alone,
+    /// neither prompt nor clear", the net stays armed, and the grade is retaken
+    /// on the next launch.
+    private suspend fun gradeRecovery(cp: Checkpoint): RecoveryAction {
+        val alreadyQueued = try {
+            store.contains(cp.runId)
+        } catch (e: Throwable) {
+            Log.e(TAG, "run queue unreadable — checkpoint left armed, ungraded", e)
+            _state.value = _state.value.copy(queueUnreadable = true)
+            return RecoveryAction.Ignore
+        }
+        return recoveryActionFor(
+            activeRecording = RecordingRepository.metrics.value.stage !=
+                RecordingRepository.Stage.Idle,
+            alreadyQueued = alreadyQueued,
+            trackFileExists = withContext(Dispatchers.IO) { File(cp.trackFilePath).exists() },
+        )
+    }
 
     /// User accepted the recovery prompt. Treat the checkpointed run as
     /// finished-as-of-savedAt and queue it for upload. The track file is
@@ -724,10 +772,26 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     fun recoverCheckpoint() {
         val cp = _state.value.pendingRecovery ?: return
         launchGuarded {
-            if (gradeRecovery(cp) != RecoveryAction.Offer) {
-                checkpoints.clear()
-                _state.value = _state.value.copy(pendingRecovery = null)
-                return@launchGuarded
+            when (gradeRecovery(cp)) {
+                RecoveryAction.Offer -> Unit
+                // The run is captured somewhere strictly better than this
+                // snapshot, so the snapshot goes. This is the only grade that
+                // may clear it.
+                RecoveryAction.Discard -> {
+                    checkpoints.clear()
+                    _state.value = _state.value.copy(pendingRecovery = null)
+                    return@launchGuarded
+                }
+                // Nothing may be destroyed on this one. `Ignore` is either a
+                // live recording whose crash-safety net this checkpoint IS, or
+                // a queue that could not be read at all — and the old
+                // `!= Offer` branch cleared the checkpoint on both, disarming
+                // the net in the first case and dropping the run's only
+                // durable record in the second. The prompt stays up too, so
+                // the affordance is not silently taken away; the tap does
+                // nothing until the read recovers, which is filed
+                // (decisions § 1107).
+                RecoveryAction.Ignore -> return@launchGuarded
             }
             val durationS = checkpointActiveDurationS(cp)
             // A recovered run is graded the same way the normal stop path
@@ -1114,10 +1178,16 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // an empty list if the file is missing or malformed (indoor
         // mode produces a `[]` stub via TrackWriter.close).
         val trackPoints = readTrackForPreview(trackPath)
+        // The graded claim, and there is no ungraded one to read by mistake:
+        // `Metrics` carries the finished pair or nothing (decisions § 1105).
+        // Null is a `Finished` transition made by something other than
+        // `stopRecording`, and it claims no heart rate rather than falling
+        // back to a figure nothing measured.
+        val hr = m.finishedHr
         val summary = FinishedSummary(
             distanceM = m.distanceM,
             durationS = durationS,
-            avgBpm = m.avgBpm,
+            avgBpm = hr?.avgBpm,
             lapCount = m.laps.size,
             activityType = m.activityType,
             laps = laps,
@@ -1137,8 +1207,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     durationS = durationS,
                     distanceM = m.distanceM,
                     trackFilePath = trackPath,
-                    avgBpm = m.avgBpm,
-                    hrCoverage = m.hrCoverage,
+                    avgBpm = hr?.avgBpm,
+                    hrCoverage = hr?.coverage,
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                     steps = m.steps,
@@ -1311,12 +1381,19 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Throwable) {
             Log.e(TAG, "run queue unreadable — drain skipped", e)
             drainBackoff.onFailure()
+            // The same flag the stream raises. Two readers of one file, so
+            // whichever read last decides whether the count on screen still
+            // stands — otherwise tapping the retry chip could fix the drain
+            // and leave the chip claiming the queue is still unreadable, or
+            // the reverse.
             _state.value = _state.value.copy(
+                queueUnreadable = true,
                 syncError = getApplication<Application>()
                     .getString(R.string.sync_queue_unreadable),
             )
             return
         }
+        _state.value = _state.value.copy(queueUnreadable = false)
         // The loop body itself is in the pure `drainQueueLoop` helper
         // so the per-error-class semantics, refresh-then-retry shape,
         // and transient-vs-permanent split can be unit-tested in

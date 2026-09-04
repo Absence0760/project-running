@@ -2536,6 +2536,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailStatElevLoss => 'Elev Loss';
 
   @override
+  String get runDetailStatHrCoverage => 'HR coverage';
+
+  @override
+  String runDetailHrCoveragePercent(int pct) {
+    return '$pct%';
+  }
+
+  @override
+  String runDetailHrCoverageOnly(int pct) {
+    return '$pct% covered';
+  }
+
+  @override
   String get runDetailStatAvgHr => 'Avg HR';
 
   @override

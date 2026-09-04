@@ -27,11 +27,12 @@ Each stack has its own remote state in the bucket created by `bootstrap`. State 
 
 ## What CI enforces about this tree
 
-Three jobs read `infra/`, none of which needs AWS credentials:
+Four jobs read `infra/`, none of which needs AWS credentials:
 
 | Job (`.github/workflows/…`) | What it proves |
 |---|---|
-| `fmt + validate` (`terraform.yml`, one per stack) | `terraform fmt -check` and `terraform validate` with `-backend=false`. Syntax, provider constraints, reference shapes. **Not** anything about applied state. |
+| `fmt (whole tree)` (`terraform.yml`) | `terraform fmt -check -recursive infra`. One pass over every directory, including ones outside the validate matrix — a per-stack `working-directory` reads that stack's own `.tf` files and nothing below them, which left `modules/web-stack` unformatted-checked (decisions § 1111). |
+| `validate` (`terraform.yml`, one per stack) | `terraform validate` with `-backend=false`. Syntax, provider constraints, reference shapes. **Not** anything about applied state. `modules/web-stack` is not in the matrix — a module taking an aliased provider from its caller cannot be validated standalone — and is validated transitively by both env roots instead (measured: an undeclared-variable reference in the module fails `validate` in `envs/prod`). |
 | `Trivy IaC scan` (`terraform.yml`) | Known-bad IaC patterns across the whole tree. Suppressions with rationale live in `.trivyignore` at the repo root. |
 | `infra-guards` (`ci.yml`) | `scripts/check_infra_iam.mjs` + `scripts/check_infra_coverage.mjs` — see below. In the required `CI gate` aggregator's `needs:` list. |
 

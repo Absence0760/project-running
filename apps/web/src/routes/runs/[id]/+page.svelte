@@ -70,6 +70,7 @@
 		type CalorieGender,
 	} from '$lib/runs/calories';
 	import { ageGradeForRun, formatAgeGradePercent } from '$lib/runs/age_grade';
+	import { hrCoveragePercent } from '$lib/runs/hr_coverage';
 	import { supabase } from '$lib/core/supabase';
 	import { TABLES, METADATA_KEYS } from '$lib/core/schema';
 	import { m } from '$lib/i18n/store.svelte';
@@ -839,6 +840,13 @@
 		const v = run?.metadata?.[METADATA_KEYS.avg_bpm];
 		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
 	});
+
+	/** Share of the run the heart-rate sensor actually covered, as whole
+	 *  percent. Written by the Wear recorder, which also suppresses `avg_bpm`
+	 *  below 0.5 — so coverage present with no average is a SUPPRESSED
+	 *  average, which rendered exactly like a run with no strap until this
+	 *  read it. See `docs/backend/metadata.md` + decisions § 1088. */
+	let hrCoveragePct = $derived(hrCoveragePercent(run?.metadata?.[METADATA_KEYS.hr_coverage]));
 
 	/** Age grade shown on the key-stat tile. Prefers the parkrun importer's
 	 *  scraped `metadata.age_grade` string; otherwise computes it for any
@@ -2055,10 +2063,21 @@
 				<p class="hr-empty">
 					{#if avgBpm != null}
 						{m('runDetail.hrAvgOnly', { bpm: avgBpm })}
+					{:else if hrCoveragePct === 0}
+						{m('runDetail.hrCoverageNone')}
+					{:else if hrCoveragePct != null}
+						{m('runDetail.hrCoverageOnly', { pct: hrCoveragePct })}
 					{:else}
 						{m('runDetail.hrNoData')}
 					{/if}
 				</p>
+			{/if}
+			<!-- An average over part of the run is not the run's average, so
+			     say which part. Outside the zone branch above because a run
+			     that carries BOTH per-point samples and a coverage figure owes
+			     the same qualifier. -->
+			{#if avgBpm != null && hrCoveragePct != null && hrCoveragePct < 100}
+				<p class="hr-coverage">{m('runDetail.hrCoveragePartial', { pct: hrCoveragePct })}</p>
 			{/if}
 		</section>
 	</aside>
@@ -3377,6 +3396,12 @@
 		color: var(--color-text-secondary);
 		line-height: 1.5;
 		margin: 0;
+	}
+
+	.hr-coverage {
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
+		margin: 0.5rem 0 0;
 	}
 
 	.hr-disclaimer {

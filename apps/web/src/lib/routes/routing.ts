@@ -69,8 +69,11 @@ export async function snapToRoad(
 	const res = await osrmProxyFetch(`/nearest/v1/${profile}/${point.lng},${point.lat}`);
 	if (!res.ok) return [point.lng, point.lat];
 
-	const data = await res.json();
-	if (data.code === 'Ok' && data.waypoints?.[0]?.location) {
+	// A 200 carrying a truncated or non-JSON body is a failed snap, and this
+	// function's contract is to hand back the unsnapped point on any failure —
+	// it has no throwing branch at all, so a caller has no reason to wrap it.
+	const data = (await res.json().catch(() => null)) as OsrmResponse | null;
+	if (data?.code === 'Ok' && data.waypoints?.[0]?.location) {
 		return data.waypoints[0].location;
 	}
 	return [point.lng, point.lat];

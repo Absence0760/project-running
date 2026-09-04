@@ -377,3 +377,12 @@ type IngestedRunInfo struct {
 	ID     string `json:"id"`
 	UserID string `json:"user_id"`
 }
+
+// StorageObject is one file in a Supabase Storage bucket, as the list API
+// reports it. `CreatedAt` is zero when the API sent none — see
+// [SupabaseClient.ListStorageObjectsWithMeta] for why that must not be read
+// as "very old".
+type StorageObject struct {
+	Path      string
+	CreatedAt time.Time
+}

@@ -18,7 +18,7 @@ import { escapeHtml } from '../util/html_escape';
 export function injectEntityHead(spaShellHtml: string, headTags: string): string {
 	let out = spaShellHtml;
 	// Strip the existing <title> so the new one (inside headTags) wins.
-	out = out.replace(/<title>[\s\S]*?<\/title>/i, '');
+	out = out.replace(/<title(?=[\s/>])[^>]*>[\s\S]*?<\/title(?=[\s/>])[^>]*>/i, '');
 	// Strip stale og:* / twitter:* / description meta — adapter-static
 	// emits a default set that would render as duplicates and confuse
 	// some crawlers (Slackbot picks the first; Twitterbot the last).
@@ -27,20 +27,29 @@ export function injectEntityHead(spaShellHtml: string, headTags: string): string
 		'',
 	);
 	// Strip any existing canonical link + JSON-LD block so the per-entity
-	// ones don't sit alongside a stale default. The JSON-LD strip repeats
-	// until the string stops changing so a crafted/overlapping
-	// `<script ...><script>…</script>` can't leave a residual `<script`
-	// behind (js/incomplete-multi-character-sanitization).
+	// ones don't sit alongside a stale default. Two parser rules the naive
+	// spelling gets wrong. The end tag is `</script` followed by whitespace,
+	// `/` or `>`, then junk up to the first `>` (js/bad-tag-filter): against
+	// `</script >` a `<\/script>` close does not stop there, so the lazy body
+	// runs on to the NEXT `</script>` in the document -- the SPA bundle's --
+	// and takes `</head>`, the mount div and the bundle tag with it, at which
+	// point the splice below finds no head and returns the wreckage unmeta'd.
+	// And the open tag is any `<script>` carrying the ld+json type, not one
+	// exact attribute spelling, so a nonce or a reordered attribute cannot
+	// leave a stale block standing. The strip repeats until the string stops
+	// changing so a crafted/overlapping `<script ...><script>...</script>`
+	// can't leave a residual `<script` behind
+	// (js/incomplete-multi-character-sanitization).
 	out = out.replace(/<link\s+rel="canonical"[^>]*>/gi, '');
 	let prev: string;
 	do {
 		prev = out;
 		out = out.replace(
-			/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/gi,
+			/<script(?=[\s/>])[^>]*\stype="application\/ld\+json"[^>]*>[\s\S]*?<\/script(?=[\s/>])[^>]*>/gi,
 			'',
 		);
 	} while (out !== prev);
-	const insertedAt = out.search(/<\/head>/i);
+	const insertedAt = out.search(/<\/head(?=[\s/>])[^>]*>/i);
 	if (insertedAt === -1) {
 		// SPA shell is malformed — return as-is rather than synthesise a
 		// head wrapper that might not match the SvelteKit shape. Caller's
@@ -75,7 +84,7 @@ export function notFoundShell(spaShellHtml: string, title: string): string {
 	// envelope and answer 503 -- a retry signal for something that will never
 	// come back. `injectEntityHead` returns a spliceable-less shell unchanged,
 	// which would carry no noindex at all, so both cases resolve here.
-	if (typeof spaShellHtml !== 'string' || !/<\/head>/i.test(spaShellHtml)) {
+	if (typeof spaShellHtml !== 'string' || !/<\/head(?=[\s/>])[^>]*>/i.test(spaShellHtml)) {
 		return `<!doctype html><html lang="en"><head><meta charset="utf-8">${head}</head><body></body></html>`;
 	}
 	return injectEntityHead(spaShellHtml, head);

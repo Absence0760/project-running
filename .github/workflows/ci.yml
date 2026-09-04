@@ -2490,13 +2490,22 @@ jobs:
           STRIPE_EVENTS_WEBHOOK_SECRET=ci-stripe-events-secret
           # Standard Webhooks secret for the auth-email envelope tests
           # (the rejection branches need the secret PRESENT so they hit
-          # 401, not the 503 hook_not_configured guard). No SMTP vars:
-          # this job never sends a correctly signed request.
+          # 401, not the 503 hook_not_configured guard).
           # Deliberately the prefix-less `v1,<base64>` form (which
           # parseHookSecrets accepts): a `whsec_` marker here trips
           # GitHub secret scanning's Stripe-webhook pattern on a value
           # that is a throwaway CI fixture (alert #2).
           SEND_EMAIL_HOOK_SECRET=v1,Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz
+          # SMTP for the auth-email POSITIVE path, which delivers into the
+          # stack's own Mailpit. `127.0.0.1` would be the functions
+          # CONTAINER's own loopback and reach nothing; the CLI starts that
+          # container with `--add-host host.docker.internal:host-gateway`,
+          # so this is the same pair the committed
+          # supabase/functions/.env uses for local dev, and 54325 is the
+          # host-published smtp_port from config.toml's [inbucket].
+          SMTP_HOST=host.docker.internal
+          SMTP_PORT=54325
+          SMTP_FROM="Threkir <noreply@threkir.com>"
           SENTRY_DSN=
           APP_RELEASE=ci
           ENV
@@ -2556,6 +2565,15 @@ jobs:
           STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret-32chars-ok
           STRAVA_VERIFY_TOKEN: ci-strava-verify-token-32-chars-ok
           STRIPE_EVENTS_WEBHOOK_SECRET: ci-stripe-events-secret
+          # The cron bearer the refresh-tokens positive case sends.
+          CRON_SECRET: ci-cron-secret-at-least-32-chars-ok
+          # Same value the .env.local block wrote, so the auth-email
+          # positive path signs with the key the function host verifies
+          # against. Mailpit is read from the RUNNER, so this is the
+          # host-published web port (54324), not the SMTP one the
+          # function host dials.
+          SEND_EMAIL_HOOK_SECRET: v1,Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz
+          MAILPIT_URL: http://127.0.0.1:54324
           # Service-role key (exported to $GITHUB_ENV in the boot step)
           # unlocks the revenuecat-webhook + stripe-events-webhook
           # side-effect tests (plant a fixture, read the written row).
@@ -2576,7 +2594,7 @@ jobs:
       # This guard mutates the SERVED tree one gate at a time and requires the
       # case naming that gate to fail. `functions serve` re-reads a changed
       # module on the next request, so it needs no second host and no second
-      # stack - measured at ~60 s for 20 mutations. It goes after the honest
+      # stack - measured at ~60 s for 20 mutations, 22 since § 1100. It goes after the honest
       # run above, whose green baseline it re-measures and refuses to proceed
       # without.
       - name: Validate the served-tree mutation table
@@ -2593,6 +2611,11 @@ jobs:
           STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret-32chars-ok
           STRAVA_VERIFY_TOKEN: ci-strava-verify-token-32-chars-ok
           STRIPE_EVENTS_WEBHOOK_SECRET: ci-stripe-events-secret
+          # The two positive-path cases and the mutations that measure
+          # them: the cron probe carries this bearer, and the auth-email
+          # case signs with this secret.
+          CRON_SECRET: ci-cron-secret-at-least-32-chars-ok
+          SEND_EMAIL_HOOK_SECRET: v1,Y2ktYXV0aC1lbWFpbC1ob29rLXNlY3JldC0zMmNoYXJz
           SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if ! node apps/backend/scripts/check_served_envelope_mutations.mjs; then

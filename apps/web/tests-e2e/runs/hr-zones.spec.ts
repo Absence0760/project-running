@@ -17,6 +17,16 @@ import { USER_A } from '../fixtures/users';
  *   3. Neither per-point bpm NOR `metadata.avg_bpm` → bare empty
  *      state: "No heart-rate data on this run."
  *
+ * Branch 3 split in two once `metadata.hr_coverage` had a reader
+ * (decisions § 1088). The Wear recorder suppresses `avg_bpm` below
+ * 0.5 coverage, so a run whose sensor covered 12 % of it landed in
+ * branch 3 and was indistinguishable from a run recorded with no
+ * strap at all. Coverage present now says so, and a coverage of
+ * exactly 0 — sensor enabled, nothing delivered — is its own
+ * sentence. An average that IS reported carries the share it was
+ * taken over, in a separate `.hr-coverage` line, because an average
+ * over part of the run is not the run's average.
+ *
  * The pure zone math has unit-test parity (`hr_zones_test.dart`, 8
  * tests). What this spec pins is the rendered surface — that the
  * page actually picks the right branch for each run shape, and that
@@ -266,6 +276,88 @@ test.describe('/runs/[id] — Heart Rate Zones section', () => {
 				expect(w).not.toContain('NaN');
 				expect(w).toMatch(/^\d+(\.\d+)?%$/);
 			}
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('hr_coverage without avg_bpm says the sensor covered part of the run', async ({
+		page
+	}) => {
+		// Wear-recorder shape: HR was on, the foreground-only MeasureClient
+		// delivered for 12 % of the run, and the recorder therefore suppressed
+		// the average. Before § 1088 this rendered "No heart-rate data on this
+		// run" — the same sentence as a run recorded with no strap, which is a
+		// different fact about the runner's own equipment.
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false,
+			metadata: { activity_type: 'run', hr_coverage: 0.12 }
+		});
+		try {
+			await page.goto(`/runs/${runId}`);
+			await expect(page.getByRole('heading', { name: 'Heart Rate Zones' }))
+				.toBeVisible({ timeout: 10_000 });
+
+			await expect(page.locator('.hr-empty')).toContainText(/12%/);
+			await expect(page.locator('.hr-empty')).toContainText(
+				/too little to report an average/i
+			);
+			await expect(page.locator('.hr-empty')).not.toContainText(
+				/No heart-rate data on this run/
+			);
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('hr_coverage of exactly 0 says the sensor delivered nothing', async ({ page }) => {
+		// Zero is a MEASUREMENT — HR was enabled and the sensor produced no
+		// usable sample — so it must not borrow the "0 %" phrasing of a
+		// partial cover, and must not read as the key being absent.
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false,
+			metadata: { activity_type: 'run', hr_coverage: 0 }
+		});
+		try {
+			await page.goto(`/runs/${runId}`);
+			await expect(page.getByRole('heading', { name: 'Heart Rate Zones' }))
+				.toBeVisible({ timeout: 10_000 });
+
+			await expect(page.locator('.hr-empty')).toContainText(/delivered no readings/i);
+			await expect(page.locator('.hr-empty')).not.toContainText(/0%/);
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
+	test('avg_bpm with partial hr_coverage states the share it was taken over', async ({
+		page
+	}) => {
+		// Above the suppression threshold the average IS reported, and the
+		// qualifier is the whole point: 142 bpm over 62 % of a run is not the
+		// run's average heart rate, and nothing on the page said so.
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false,
+			metadata: { activity_type: 'run', avg_bpm: 142, hr_coverage: 0.62 }
+		});
+		try {
+			await page.goto(`/runs/${runId}`);
+			await expect(page.getByRole('heading', { name: 'Heart Rate Zones' }))
+				.toBeVisible({ timeout: 10_000 });
+
+			await expect(page.locator('.hr-coverage')).toContainText(/Average over 62% of this run/);
+			// The average itself still renders — the qualifier adds to the
+			// claim, it does not replace it.
+			await expect(page.locator('.hr-empty')).toContainText(/142/);
 		} finally {
 			await deleteRun(runId);
 		}

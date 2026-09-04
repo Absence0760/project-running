@@ -67,14 +67,69 @@ class ViewModelStreamResilienceTest {
     }
 
     @Test
-    fun `the run queue stream carries a catch`() {
+    fun `the run queue stream is retried, not caught`() {
         // DataStore reports a corrupt or unreadable file by failing the
         // flow. The queue is exactly what such a file would be — the
         // runner's unsynced runs — so losing the process over it loses
         // the recording that was about to join them.
+        //
+        // `.catch` answered that and cost more than it saved: catch
+        // COMPLETES the flow, so one failed read froze `queuedCount` at its
+        // last value for the life of the process and the pre-run chip, gated
+        // on `queuedCount > 0`, never appeared again. Catching is not a
+        // judgement about corruption — it is a judgement that the FIRST
+        // failure is the LAST one (decisions § 1104).
         assertTrue(
-            "store.queue is collected with no `.catch`",
-            Regex("""store\.queue\s*\.catch""").containsMatchIn(src),
+            "store.queue is collected with a terminal `.catch` — after one " +
+                "failed read the count freezes and the pre-run Sync chip can " +
+                "never appear again; retry the stream instead",
+            !Regex("""store\.queue\s*\.catch""").containsMatchIn(src),
+        )
+        assertTrue(
+            "store.queue must be retried so a read that fails once can " +
+                "recover without a process restart",
+            Regex("""store\.queue\s*\.retryWhen""").containsMatchIn(src),
+        )
+    }
+
+    @Test
+    fun `the queue retry backs off and says the count is stale`() {
+        val body = Regex(
+            """store\.queue\s*\.retryWhen\s*\{(.*?)\n                \}""",
+            RegexOption.DOT_MATCHES_ALL,
+        ).find(src)
+        assertTrue("no `store.queue.retryWhen { … }` body parsed — the checks below read nothing", body != null)
+        val branch = body!!.groupValues[1]
+        assertTrue(
+            "the retry must delay — an unbounded immediate retry against a " +
+                "corrupt DataStore file is a busy loop: $branch",
+            branch.contains("delay(queueReadRetryDelayMs("),
+        )
+        assertTrue(
+            "the retry must raise `queueUnreadable` — a count that is being " +
+                "retried is stale, and the pre-run screen has no other way to " +
+                "know it: $branch",
+            branch.contains("queueUnreadable = true"),
+        )
+        assertTrue(
+            "the retry must log — a stream failing every minute in silence is " +
+                "the state this exists to make visible: $branch",
+            branch.contains("Log."),
+        )
+    }
+
+    @Test
+    fun `a successful read clears the stale flag`() {
+        // Both readers of the file set the flag, so whichever read last
+        // decides whether the figure on screen still stands. Without the
+        // clear on the collect, a queue that recovered would keep offering a
+        // retry chip for a count it now knows.
+        assertTrue(
+            "the queue collect must clear `queueUnreadable`",
+            Regex(
+                """\.collect\s*\{\s*list\s*->.{0,400}?queueUnreadable = false""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
         )
     }
 
@@ -164,6 +219,13 @@ class ViewModelStreamResilienceTest {
             "the failure branch must return rather than fall through into the " +
                 "drain loop with no snapshot: $branch",
             branch.contains("return"),
+        )
+        assertTrue(
+            "the failure branch must raise `queueUnreadable` — the drain and " +
+                "the stream read the same file, and a pre-run chip that " +
+                "disagrees with the drain about whether the queue is readable " +
+                "is worse than either answer: $branch",
+            branch.contains("queueUnreadable = true"),
         )
     }
 

@@ -279,6 +279,32 @@ double bboxRadius(List<double> bbox, double centerLng, double centerLat) {
   return maxD;
 }
 
+/// A bbox is usable whole or not at all. One unusable corner makes
+/// [bboxRadius] a NaN, which compares false against every bound a caller
+/// might check it with; and reading a corner through `as num` threw a
+/// `TypeError` out into [geocodePlace]'s catch-all, which discarded a
+/// perfectly usable centroid rather than falling back to the documented
+/// default radius.
+List<double>? _usableBbox(Object? raw) {
+  if (raw is! List || raw.length != 4) return null;
+  final w = raw[0];
+  final s = raw[1];
+  final e = raw[2];
+  final n = raw[3];
+  if (w is! num || s is! num || e is! num || n is! num) return null;
+  final west = w.toDouble();
+  final south = s.toDouble();
+  final east = e.toDouble();
+  final north = n.toDouble();
+  if (!isUsableLongitude(west) ||
+      !isUsableLatitude(south) ||
+      !isUsableLongitude(east) ||
+      !isUsableLatitude(north)) {
+    return null;
+  }
+  return [west, south, east, north];
+}
+
 /// Geocode a free-text place query via MapTiler. Returns null when
 /// the query is too short, MapTiler returns no features, or the key
 /// isn't configured. Callers treat null as "fall back to the
@@ -302,24 +328,18 @@ Future<GeocodedPlace?> geocodePlace(
     if (top is! Map) return null;
     final centerRaw = top['center'];
     if (centerRaw is! List || centerRaw.length < 2) return null;
-    final lng = (centerRaw[0] as num).toDouble();
-    final lat = (centerRaw[1] as num).toDouble();
-    final bboxRaw = top['bbox'];
-    final radiusM = (bboxRaw is List && bboxRaw.length == 4)
-        ? bboxRadius(
-            [
-              (bboxRaw[0] as num).toDouble(),
-              (bboxRaw[1] as num).toDouble(),
-              (bboxRaw[2] as num).toDouble(),
-              (bboxRaw[3] as num).toDouble(),
-            ],
-            lng,
-            lat,
-          )
-        // MapTiler occasionally returns features without a bbox (rare
-        // — usually address-level POIs). Default to a small radius so
-        // the centroid is still useful but doesn't sweep a continent.
-        : 5000.0;
+    final lngRaw = centerRaw[0];
+    final latRaw = centerRaw[1];
+    if (lngRaw is! num || latRaw is! num) return null;
+    final lng = lngRaw.toDouble();
+    final lat = latRaw.toDouble();
+    if (!isUsableLongitude(lng) || !isUsableLatitude(lat)) return null;
+    final bbox = _usableBbox(top['bbox']);
+    // MapTiler occasionally returns features without a bbox (rare —
+    // usually address-level POIs), and an unusable one is treated the
+    // same way: default to a small radius so the centroid is still
+    // useful but doesn't sweep a continent.
+    final radiusM = bbox == null ? 5000.0 : bboxRadius(bbox, lng, lat);
     final placeTypeRaw = top['place_type'];
     final placeType = (placeTypeRaw is List && placeTypeRaw.isNotEmpty)
         ? placeTypeRaw.first.toString()

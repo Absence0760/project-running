@@ -40,6 +40,8 @@
 
     <string name="start">Démarrer</string>
     <string name="sync_count">Synchroniser %1$d</string>
+    <string name="sync_retry">Réessayer</string>
+    <string name="cd_sync_unreadable_retry">Courses enregistrées illisibles, appuyez pour réessayer</string>
     <string name="offline">Hors ligne</string>
     <string name="not_signed_in">Non connecté</string>
     <string name="race_armed">COURSE PRÊTE</string>

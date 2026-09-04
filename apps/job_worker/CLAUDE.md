@@ -88,6 +88,15 @@ Function moves per
   `token_refresh` (sweeps expiring Strava integrations + rotates via
   `/oauth/token`) is in `handler_token_refresh.go` and is the worked
   example for "port a scheduled Edge Function into the queue".
+- **`export_blob_reap` is written and not yet routable.**
+  `handler_export_blob_reap.go` + its tests are on `main`; the
+  `Worker.dispatch` case is deliberately absent because
+  `internal/worker_dispatch_coverage_test.go` fails a `case` for a kind
+  `jobs_kind_chk` forbids, and the CHECK is a migration. Adding the
+  migration, the pgtap case and the one-line `case "export_blob_reap":
+  return w.handleExportBlobReap(ctx, job)` is one commit; the exact SQL
+  is in `docs/product/followups.md`. Until then nothing enqueues it and
+  the handler runs only under its own tests. See `decisions.md § 1112`.
   `notification_email` (`handler_notification_email.go` +
   `mailer.go`) is the worked example for "trigger-enqueued fan-out with
   an external transport": the notifications AFTER-INSERT trigger queues
@@ -263,6 +272,8 @@ apps/job_worker/
 │   ├── handler_weekly_digest.go # kind='weekly_digest' — opt-in + suppression gate, bounded summary render (GATED on SMTP); engagementUnsubURL helper shared with the drip
 │   ├── handler_weekly_digest_test.go # 13 tests on opt-in / suppression hard-block / fail-closed / quiet-week / unsubscribe header
 │   ├── handler_lifecycle_drip.go # kind='lifecycle_drip' — onboarding/re-engagement/streak nudges; opt-IN email_lifecycle_drip + suppression gate (GATED on SMTP); cohort selection is in SQL, not here
+│   ├── handler_export_blob_reap.go # kind='export_blob_reap' — erases Art 20 export archives past the 7-day window through the Storage API (a storage.objects row delete leaves the bytes, decisions § 1049). NOT yet in dispatch: the CHECK is a migration
+│   ├── handler_export_blob_reap_test.go # 11 tests on the window boundary, unknown-age skip, batching, partial progress, idempotence
 │   ├── handler_lifecycle_drip_test.go # 14 tests on opt-in / digest-opt-in-does-not-imply-drip / suppression / per-template / fail-closed / unsubscribe
 │   ├── digest_builder.go    # EnqueueAllWeeklyDigests — selects opted-in recipients, chunked bulk-enqueues jobs (UNSCHEDULED; pg_cron is the CISO/counsel-gated step)
 │   ├── digest_builder_test.go # 5 tests on enqueue / no-candidates / select-error / chunking / failing-chunk skip

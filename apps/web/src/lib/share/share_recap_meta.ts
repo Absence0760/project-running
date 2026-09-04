@@ -76,6 +76,13 @@ export function renderShareRecapHeadTags(meta: ShareRecapMeta): string {
 	return [
 		`<title>${escapeHtml(meta.title)}</title>`,
 		`<meta name="description" content="${e(meta.description)}">`,
+		// The recap share page is the fold target for every in-app recap
+		// surface and the only public home of a published recap, so it owes
+		// the same self-referential canonical its eight siblings emit —
+		// without one, `?utm_source=` copies of a shared link index as
+		// separate pages. It was the one share head builder that had none
+		// (decisions § 1090); the URL was already computed for `og:url`.
+		`<link rel="canonical" href="${e(meta.ogUrl)}">`,
 		`<meta property="og:title" content="${e(meta.title)}">`,
 		`<meta property="og:description" content="${e(meta.description)}">`,
 		`<meta property="og:type" content="article">`,

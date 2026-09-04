@@ -92,6 +92,13 @@ type Backend interface {
 	// methods above (kind='club_photo_process', migration 20270301_001).
 	// Same download → strip → 512w thumbnail → PATCH contract against the
 	// `club-photos` bucket + `club_photos` table.
+	// Export retention path — used by the kind='export_blob_reap' handler.
+	// Listing carries each object's creation time because that is what the
+	// window selects on, and the DELETE goes through the Storage API because
+	// that is the only caller that erases the bytes rather than the row
+	// (decisions § 1049 / § 1112).
+	ListStorageObjectsWithMeta(ctx context.Context, bucket, prefix string) ([]StorageObject, error)
+	DeleteStorageObjects(ctx context.Context, bucket string, paths []string) error
 	DownloadClubPhoto(ctx context.Context, path string) (body []byte, contentType string, err error)
 	UploadClubPhoto(ctx context.Context, path string, body []byte, contentType string) error
 	UpdateClubPhotoThumb512Path(ctx context.Context, photoID, path string) error

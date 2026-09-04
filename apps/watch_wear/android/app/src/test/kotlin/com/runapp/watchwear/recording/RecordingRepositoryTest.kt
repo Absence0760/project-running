@@ -81,7 +81,7 @@ class RecordingRepositoryTest {
         assertEquals(0.0, m.distanceM, 0.0)
         assertNull(m.paceSecPerKm)
         assertNull(m.bpm)
-        assertNull(m.avgBpm)
+        assertNull(m.finishedHr)
         assertEquals(0, m.trackPointCount)
         assertNull(m.latestPoint)
         assertNull(m.trackFilePath)

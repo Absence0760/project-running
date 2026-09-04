@@ -172,6 +172,12 @@ func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, fu
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
 	sub := &subscriber{ch: make(chan Ping, subBufferSize)}
 
+	if err := h.confirmSubscribe(ctx, pubsub, sub); err != nil {
+		h.releaseSub(runID)
+		_ = pubsub.Close()
+		return nil, nil, err
+	}
+
 	// Pre-load last-known so a late joiner sees the runner immediately.
 	if last := h.LastKnown(runID); last != nil {
 		sub.trySend(*last)
@@ -181,13 +187,13 @@ func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, fu
 	return sub.ch, closeFn, nil
 }
 
-// SubscribeWithHistory opens the pub/sub subscription FIRST, then
-// snapshots the `:hist` list. go-redis's Subscribe confirms the
-// SUBSCRIBE before returning, so any ping PUBLISHed after this point is
-// guaranteed to be delivered on the live channel — it cannot be lost in
-// the window the in-process Hub closes with a single lock. The boundary
-// overlap (a ping PUBLISHed after our SUBSCRIBE confirmed but RPUSHed
-// into history before our LRANGE) would otherwise appear on both paths,
+// SubscribeWithHistory opens the pub/sub subscription FIRST, waits for
+// the server to acknowledge it, then snapshots the `:hist` list. The
+// acknowledgement is what makes a ping PUBLISHed after this point
+// certain to reach the live channel; `rdb.Subscribe` returning does not,
+// because it reads no reply (see [RedisHub.confirmSubscribe]). The
+// boundary overlap (a ping PUBLISHed after our SUBSCRIBE confirmed but
+// RPUSHed into history before our LRANGE) would otherwise appear on both paths,
 // so we de-dup the history tail against the pings the forwarder already
 // buffered, by value. Unlike the in-process Hub there is no shared lock
 // across processes, so the dedup narrows the duplicate window to the
@@ -201,6 +207,11 @@ func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHi
 	}
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
 	sub := &subscriber{ch: make(chan Ping, subBufferSize)}
+	if err := h.confirmSubscribe(ctx, pubsub, sub); err != nil {
+		h.releaseSub(runID)
+		_ = pubsub.Close()
+		return nil, nil, nil, err
+	}
 	closeFn := h.startForwarder(ctx, runID, pubsub, sub)
 
 	history := h.History(runID, maxHistory)
@@ -218,6 +229,56 @@ func (h *RedisHub) SubscribeWithHistory(ctx context.Context, runID string, maxHi
 		history = append(dedupHistoryTail(history, buffered), buffered...)
 	}
 	return history, sub.ch, closeFn, nil
+}
+
+// subscribeConfirmTimeout bounds the wait for the SUBSCRIBE reply when the
+// caller's own context carries no deadline. A spectator's context lives as long
+// as the WebSocket, so without this a Redis that accepts the connection and
+// then answers nothing would hang the handshake instead of failing it.
+const subscribeConfirmTimeout = 5 * time.Second
+
+// confirmSubscribe blocks until the server acknowledges the SUBSCRIBE.
+//
+// `rdb.Subscribe` does NOT confirm anything: it calls `pubsub.Subscribe`,
+// DISCARDS the error, and that in turn writes the command and releases the
+// connection without reading a reply. So it returns as soon as the bytes are
+// flushed, on a connection that is not the one PUBLISH uses — and the server
+// may not have registered the subscriber yet. Measured on this package under
+// 2-core CPU saturation: 14 of 400 subscribe-then-publish rounds had PUBLISH
+// report ZERO receivers, and that ping was lost. go-redis's own ExamplePubSub
+// performs this Receive for exactly this reason.
+//
+// Redis writes the subscribe confirmation to that connection before it can
+// deliver anything published to it, so the first reply is always the
+// *Subscription. A *Message is forwarded rather than dropped anyway — losing a
+// ping is the failure this function exists to prevent, and reasoning that a
+// case "cannot happen" is what left the window open in the first place.
+func (h *RedisHub) confirmSubscribe(ctx context.Context, pubsub *redis.PubSub, sub *subscriber) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, subscribeConfirmTimeout)
+		defer cancel()
+	}
+	for {
+		reply, err := pubsub.Receive(ctx)
+		if err != nil {
+			return fmt.Errorf("livehub: subscribe not confirmed: %w", err)
+		}
+		switch m := reply.(type) {
+		case *redis.Subscription:
+			return nil
+		case *redis.Message:
+			var p Ping
+			if err := json.Unmarshal([]byte(m.Payload), &p); err != nil {
+				h.log().Debug("redis_hub: bad payload, skipping", "err", err)
+				continue
+			}
+			sub.trySend(p)
+		}
+	}
 }
 
 // startForwarder wires the cancel-driven close + the Redis-message

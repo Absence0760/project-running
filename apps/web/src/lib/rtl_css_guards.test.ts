@@ -40,7 +40,7 @@ function cssOf(file: string): string {
 	if (file.endsWith('.css')) {
 		css = raw;
 	} else {
-		css = [...raw.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
+		css = [...raw.matchAll(/<style(?=[\s/>])[^>]*>([\s\S]*?)<\/style(?=[\s/>])[^>]*>/g)].map((m) => m[1]).join('\n');
 	}
 	return css.replace(/\/\*[\s\S]*?\*\//g, ''); // strip CSS comments
 }

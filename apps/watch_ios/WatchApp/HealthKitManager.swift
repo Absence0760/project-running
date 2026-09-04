@@ -95,6 +95,31 @@ class HealthKitManager: NSObject, ObservableObject {
     /// covers only the minutes before the sensor stream died, so it is
     /// withheld rather than written to the row as the whole run's — 20
     /// minutes of a 4-hour run is a wrong number, not a partial one.
+    ///
+    /// **What this average is scoped to, because the row does not say.**
+    /// It is `HKLiveWorkoutBuilder`'s own average over the
+    /// `HKWorkoutSession`, so it is workout-scoped by construction: HealthKit
+    /// holds the sensor for the life of the session, not for the life of the
+    /// foreground app. That is exactly the failure Wear OS's `hr_coverage`
+    /// measures against — `MeasureClient` there is documented foreground-only,
+    /// so its mean can be the minutes the runner spent looking at the watch
+    /// (decisions § 1015 / § 1083). This watch therefore writes **no**
+    /// `hr_coverage` key. It does not write an assumed `1.0` either: an
+    /// assumed measurement is a fabricated one, and worse than none.
+    ///
+    /// **The absence is not self-addressing, and that is a real gap.** Both
+    /// watch clients write `source = 'watch'` — there is no `watch_ios` value
+    /// — so a reader holding a `source = 'watch'` run with no `hr_coverage`
+    /// cannot tell this claim from a Wear run recorded by a build predating
+    /// the key, or one recovered from a checkpoint that never carried it.
+    /// `docs/backend/metadata.md`'s `hr_coverage` row states all three.
+    ///
+    /// **What it does NOT claim** is that every second of the session
+    /// produced a sample. A session that stays alive while the sensor goes
+    /// quiet — the watch loosened on the wrist, water lock — still averages
+    /// what it got. Quantifying that needs a measurement rather than an
+    /// assumption; the shape it would take, and the two things blocking it,
+    /// are filed (decisions § 1106).
     var summaryAverageBPM: Double? {
         sessionDidFail ? nil : averageBPM
     }

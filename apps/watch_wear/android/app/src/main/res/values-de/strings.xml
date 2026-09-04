@@ -40,6 +40,8 @@
 
     <string name="start">Start</string>
     <string name="sync_count">%1$d synchronisieren</string>
+    <string name="sync_retry">Sync erneut</string>
+    <string name="cd_sync_unreadable_retry">Gespeicherte Läufe nicht lesbar, zum Wiederholen tippen</string>
     <string name="offline">Offline</string>
     <string name="not_signed_in">Nicht angemeldet</string>
     <string name="race_armed">RENNEN BEREIT</string>

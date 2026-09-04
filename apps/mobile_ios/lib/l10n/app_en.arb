@@ -3295,6 +3295,28 @@
   "@runDetailStatElevLoss": {
     "description": "Secondary-stat label for elevation loss on run-detail"
   },
+  "runDetailStatHrCoverage": "HR coverage",
+  "@runDetailStatHrCoverage": {
+    "description": "Secondary-stat label on run-detail for the share of the run the heart-rate sensor was delivering"
+  },
+  "runDetailHrCoveragePercent": "{pct}%",
+  "@runDetailHrCoveragePercent": {
+    "description": "Value of the HR-coverage secondary stat, a whole percent",
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "runDetailHrCoverageOnly": "{pct}% covered",
+  "@runDetailHrCoverageOnly": {
+    "description": "Value shown in the average-heart-rate slot when the recorder suppressed the average because the sensor covered too little of the run",
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
   "runDetailStatAvgHr": "Avg HR",
   "@runDetailStatAvgHr": {
     "description": "Secondary-stat label for average heart rate on run-detail"

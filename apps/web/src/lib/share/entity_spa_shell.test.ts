@@ -29,7 +29,7 @@ const TAGS = [
 
 test('injectEntityHead — replaces the SPA-shell title with the entity title', () => {
 	const out = injectEntityHead(SHELL, TAGS);
-	const titles = out.match(/<title>[^<]*<\/title>/g) ?? [];
+	const titles = out.match(/<title(?=[\s/>])[^>]*>[^<]*<\/title(?=[\s/>])[^>]*>/g) ?? [];
 	assert.equal(titles.length, 1);
 	assert.ok(titles[0].includes('My Event'));
 });
@@ -105,4 +105,45 @@ test('notFoundShell — an unusable shell still answers a noindex document', () 
 		assert.match(out, /name="robots" content="noindex"/, String(broken));
 		assert.ok(out.includes('<title>Not found — Threkir</title>'), String(broken));
 	}
+});
+
+/// An end tag closes at `</script` + whitespace, `/` or `>`, whatever follows
+/// to the first `>`. Before § 1086 the strip demanded `</script>` exactly, so
+/// each of these left the stale block standing AND ran the lazy body on to the
+/// bundle's own `</script>` — taking `</head>`, the mount div and the bundle
+/// tag with it, after which the splice found no head and returned a shell with
+/// none of the entity's meta on it.
+const CLOSINGS = ['</script >', '</script\t\n bar>', '</script/>'];
+
+for (const close of CLOSINGS) {
+	test(`injectEntityHead — strips a JSON-LD block closed with ${JSON.stringify(close)}`, () => {
+		const shell = SHELL.replace(
+			'<script type="application/ld+json">{"@type":"WebSite"}</script>',
+			`<script type="application/ld+json">{"@type":"WebSite"}${close}`,
+		);
+		const out = injectEntityHead(shell, TAGS);
+		assert.equal(out.includes('"WebSite"'), false, 'stale JSON-LD must be gone');
+		assert.ok(out.includes('start.abc.js'), 'the SPA bundle must survive the strip');
+		assert.ok(out.includes('<div id="svelte">'), 'the mount div must survive the strip');
+		assert.ok(out.includes('"SportsEvent"'), 'the entity tags must still be spliced in');
+	});
+}
+
+test('injectEntityHead — splices before a `</head >` spelled with trailing junk', () => {
+	const shell = SHELL.replace('</head>', '</head\n>');
+	const out = injectEntityHead(shell, TAGS);
+	assert.ok(out.includes('"SportsEvent"'), 'the entity tags must still be spliced in');
+	assert.ok(out.indexOf('"SportsEvent"') < out.indexOf('</head'), 'and inside the head');
+});
+
+test('injectEntityHead — strips a JSON-LD block carrying extra attributes', () => {
+	// A CSP nonce or a reordered attribute is still a JSON-LD block; matching
+	// one exact attribute spelling would leave a second WebPage node standing.
+	const shell = SHELL.replace(
+		'<script type="application/ld+json">',
+		'<script nonce="abc123" type="application/ld+json" data-x="1">',
+	);
+	const out = injectEntityHead(shell, TAGS);
+	assert.equal(out.includes('"WebSite"'), false);
+	assert.ok(out.includes('start.abc.js'));
 });
