@@ -1,62 +1,31 @@
-/// Generic SPA-shell `<head>` injector for the entity-SSR Lambda. Pure —
+/// Generic SPA-shell `<head>` injector for the entity-SSR Lambda. Pure --
 /// separated from the Lambda handler so the substitution logic is
 /// unit-testable without an AWS event in scope. Generalises
 /// share_route_spa_shell.ts: rather than take a typed head object, it
 /// takes an ALREADY-RENDERED head-tags string (produced by any of the
-/// render*HeadTags builders — event / profile / club / race), so one
+/// render*HeadTags builders -- event / profile / club / race), so one
 /// injector serves every entity type the shared Lambda dispatches.
 ///
-/// The strategy is the same as the per-type shells: SvelteKit's
-/// adapter-static builds an `index.html` fallback with a generic `<head>`;
-/// at deploy time the Lambda's bundler embeds that file as a string, and
-/// per request the Lambda strips the shell's stale title / og / twitter /
-/// description / canonical / JSON-LD and splices in the per-entity tags
-/// before `</head>` so no duplicate signals reach a crawler.
+/// The strategy is the same as the per-type shells: at deploy time the
+/// Lambda's bundler embeds `apps/web/build/index.html` as a string, and per
+/// request the Lambda strips the shell's stale signals and splices the
+/// per-entity tags in before `</head>`. The strip/splice steps themselves live
+/// once, in head_splice.ts.
+///
+/// All four signals are named here because an entity head supplies all four,
+/// and because `notFoundShell` runs through this same function: a page that
+/// says the entity is GONE must carry nothing about it, whatever the shell
+/// arrived with. What the shell actually carries today is measured, not
+/// assumed -- see spa_shell_head_signals.test.ts.
 
 import { escapeHtml } from '../util/html_escape';
+import { spliceIntoHead, stripStaleHeadSignals } from './head_splice';
 
 export function injectEntityHead(spaShellHtml: string, headTags: string): string {
-	let out = spaShellHtml;
-	// Strip the existing <title> so the new one (inside headTags) wins.
-	out = out.replace(/<title(?=[\s/>])[^>]*>[\s\S]*?<\/title(?=[\s/>])[^>]*>/i, '');
-	// Strip stale og:* / twitter:* / description meta — adapter-static
-	// emits a default set that would render as duplicates and confuse
-	// some crawlers (Slackbot picks the first; Twitterbot the last).
-	out = out.replace(
-		/<meta\s+(?:property|name)="(?:og:[^"]+|twitter:[^"]+|description)"[^>]*>/gi,
-		'',
+	return spliceIntoHead(
+		stripStaleHeadSignals(spaShellHtml, ['title', 'social', 'canonical', 'jsonLd']),
+		headTags,
 	);
-	// Strip any existing canonical link + JSON-LD block so the per-entity
-	// ones don't sit alongside a stale default. Two parser rules the naive
-	// spelling gets wrong. The end tag is `</script` followed by whitespace,
-	// `/` or `>`, then junk up to the first `>` (js/bad-tag-filter): against
-	// `</script >` a `<\/script>` close does not stop there, so the lazy body
-	// runs on to the NEXT `</script>` in the document -- the SPA bundle's --
-	// and takes `</head>`, the mount div and the bundle tag with it, at which
-	// point the splice below finds no head and returns the wreckage unmeta'd.
-	// And the open tag is any `<script>` carrying the ld+json type, not one
-	// exact attribute spelling, so a nonce or a reordered attribute cannot
-	// leave a stale block standing. The strip repeats until the string stops
-	// changing so a crafted/overlapping `<script ...><script>...</script>`
-	// can't leave a residual `<script` behind
-	// (js/incomplete-multi-character-sanitization).
-	out = out.replace(/<link\s+rel="canonical"[^>]*>/gi, '');
-	let prev: string;
-	do {
-		prev = out;
-		out = out.replace(
-			/<script(?=[\s/>])[^>]*\stype="application\/ld\+json"[^>]*>[\s\S]*?<\/script(?=[\s/>])[^>]*>/gi,
-			'',
-		);
-	} while (out !== prev);
-	const insertedAt = out.search(/<\/head(?=[\s/>])[^>]*>/i);
-	if (insertedAt === -1) {
-		// SPA shell is malformed — return as-is rather than synthesise a
-		// head wrapper that might not match the SvelteKit shape. Caller's
-		// caching + monitoring catches this case.
-		return out;
-	}
-	return out.slice(0, insertedAt) + headTags + '\n' + out.slice(insertedAt);
 }
 
 /// The 404 body: the app's own shell, told not to be indexed.
