@@ -20663,7 +20663,12 @@ file"). The wiring cannot be severed from either end without a red.
 
 The path filter moved onto a new `infra` output of the `changes` job, so a
 diff touching nothing under `infra/` skips the call exactly as the trigger used
-to skip the workflow. It is an INCLUSION list where `web_e2e`'s is deliberately
+to skip the workflow — widened by one path the trigger did not have, `ci.yml`
+itself, because the caller lives there now: the `uses:`, the `if:` and the
+`security-events` scope the SARIF upload needs are all edited here, and a filter
+that skipped on a `ci.yml` diff would ship a change to the wiring without ever
+exercising it. actionlint catches a reference that does not resolve; it cannot
+catch a permission that is too narrow. It is an INCLUSION list where `web_e2e`'s is deliberately
 an exclusion list, and the asymmetry is justified rather than inherited: these
 three checks read an enumerable input set and nothing else — `fmt -recursive
 infra`, `validate` on the five stacks under `infra/`, Trivy's `scan-ref: infra`

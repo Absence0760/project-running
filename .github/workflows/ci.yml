@@ -163,7 +163,15 @@ jobs:
           # `infra-guards` job) fails the PR if a Terraform directory under
           # infra/ falls outside the fmt scope or the validate matrix, so the
           # set cannot widen inside infra/ without a red.
-          if echo "$files" | grep -qE '^(infra/|\.trivyignore$|\.github/workflows/terraform\.yml$)'; then
+          #
+          # This file is in the list because the CALLER lives here now: the
+          # `terraform` job's `uses:`, its `if:` and the `security-events`
+          # scope the Trivy SARIF upload needs are all edited in ci.yml, and a
+          # filter that skipped on a ci.yml diff would ship a change to the
+          # wiring without ever exercising it. actionlint catches a reference
+          # that does not resolve; it cannot catch a permission that is too
+          # narrow, which only shows up when the call actually runs.
+          if echo "$files" | grep -qE '^(infra/|\.trivyignore$|\.github/workflows/(terraform|ci)\.yml$)'; then
             echo "infra=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::nothing under infra/ changed — the Terraform checks skip"
