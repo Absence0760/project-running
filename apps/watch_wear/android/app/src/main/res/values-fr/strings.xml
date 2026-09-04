@@ -54,7 +54,7 @@
     <string name="pace">Allure</string>
     <string name="activity_run">Course</string>
     <string name="activity_walk">Marche</string>
-    <string name="activity_hike">Rando</string>
+    <string name="activity_hike">Trail</string>
     <string name="activity_cycle">Vélo</string>
     <string name="activity_stroller">Poussette</string>
     <string name="sign_in">Se connecter</string>

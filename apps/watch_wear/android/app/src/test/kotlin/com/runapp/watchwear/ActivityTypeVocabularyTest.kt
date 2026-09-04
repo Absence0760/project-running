@@ -50,12 +50,6 @@ class ActivityTypeVocabularyTest {
     /// values-* directory, and a stale entry the wrist has caught up on.
     private val unmirroredPhoneCatalogues = emptySet<String>()
 
-    /// `hike` reads "Trail run" on web and mobile since decisions § 547 and
-    /// still "Hike" on the wrist. That is a product RENAME, not a translation
-    /// fix, so it is exempt from the comparison below until the owner calls it
-    /// rather than being steamrollered — see `docs/product/followups.md`.
-    private val renameAwaitingOwner = setOf("hike")
-
     @Test
     fun `every activity_type CHECK value carries a non-empty label in every locale`() {
         val values = checkValues()
@@ -136,8 +130,12 @@ class ActivityTypeVocabularyTest {
 
     @Test
     fun `every activity word is the phone's word and the web's, locale for locale`() {
-        val values = checkValues().filter { it !in renameAwaitingOwner }
-        assertTrue("the exemption swallowed the whole vocabulary", values.isNotEmpty())
+        // No exemptions. `hike` held one from § 547 until decisions § 1155
+        // took the owner call and the wrist adopted "Trail run"; a new one
+        // would need the same, and would be a divergence recorded rather than
+        // a difference nobody chose.
+        val values = checkValues()
+        assertTrue("parsed an EMPTY value set out of the CHECK constraint", values.isNotEmpty())
 
         val res = resourceSet()
         val l10n = findUp("apps/mobile_android/lib/l10n")
@@ -184,34 +182,6 @@ class ActivityTypeVocabularyTest {
             localeCatalogues.size * values.size,
             compared,
         )
-    }
-
-    @Test
-    fun `the hike rename is the only exemption, and it is still open`() {
-        val values = checkValues().toSet()
-        assertEquals(
-            "an exemption names a value the CHECK constraint does not admit, which " +
-                "silently drops nothing and hides a typo",
-            emptySet<String>(),
-            renameAwaitingOwner - values,
-        )
-
-        val res = resourceSet()
-        val l10n = findUp("apps/mobile_android/lib/l10n")
-        assertTrue("could not locate apps/mobile_android/lib/l10n", l10n != null)
-        for (value in renameAwaitingOwner) {
-            val diverges = localeCatalogues.any { (dir, cat) ->
-                val wrist = wristLabel(File(res, "$dir/strings.xml").readText(), value)
-                wrist != arbValue(File(l10n!!, cat.arb).readText(), arbKey(value))
-            }
-            assertTrue(
-                "\"$value\" is exempt from the vocabulary comparison, but the wrist " +
-                    "already says what the phone says in every locale. The rename " +
-                    "landed — drop it from renameAwaitingOwner and close the box in " +
-                    "docs/product/followups.md.",
-                diverges,
-            )
-        }
     }
 
     @Test

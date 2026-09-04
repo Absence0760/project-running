@@ -53,7 +53,7 @@
     <string name="pace">ペース</string>
     <string name="activity_run">ランニング</string>
     <string name="activity_walk">ウォーキング</string>
-    <string name="activity_hike">ハイク</string>
+    <string name="activity_hike">トレイルラン</string>
     <string name="activity_cycle">サイクリング</string>
     <string name="activity_stroller">ベビーカー</string>
     <string name="sign_in">サインイン</string>
