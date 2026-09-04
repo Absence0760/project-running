@@ -11,12 +11,12 @@ export function injectShareRecapMeta(
 ): string {
 	const newTags = renderShareRecapHeadTags(meta);
 	let out = spaShellHtml;
-	out = out.replace(/<title>[\s\S]*?<\/title>/i, '');
+	out = out.replace(/<title(?=[\s/>])[^>]*>[\s\S]*?<\/title(?=[\s/>])[^>]*>/i, '');
 	out = out.replace(
 		/<meta\s+(?:property|name)="(?:og:[^"]+|twitter:[^"]+|description)"[^>]*>/gi,
 		'',
 	);
-	const insertedAt = out.search(/<\/head>/i);
+	const insertedAt = out.search(/<\/head(?=[\s/>])[^>]*>/i);
 	if (insertedAt === -1) return out;
 	return out.slice(0, insertedAt) + newTags + '\n' + out.slice(insertedAt);
 }
