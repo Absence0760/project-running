@@ -248,6 +248,12 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             guard let self, let startDate = self.startDate else { return }
             guard self.state == .recording else { return }
             self.elapsedSeconds = Date().timeIntervalSince(startDate) - self.totalPausedInterval
+            // Heart-rate coverage advances on THIS clock, not on HealthKit's
+            // deliveries: the gap it measures is a stream that has gone quiet,
+            // and a quiet stream emits nothing to hang the measurement on.
+            // Inside the `.recording` guard, so a pause neither credits
+            // coverage nor charges the run for it (decisions § 1156).
+            self.healthKit.advanceCoverage(activeElapsedSeconds: self.elapsedSeconds)
         }
 
         checkpointTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
@@ -322,7 +328,12 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             distanceMetres: distanceMetres,
             trackFileURL: store?.trackFileURL ?? CheckpointStore.trackFile(runId: runId),
             trackPointCount: trackPointCount,
-            averageBPM: healthKit.summaryAverageBPM
+            // Graded, never the raw mean: a mean taken over less of the run
+            // than not is not the run's average, and every reader of
+            // `avg_bpm` treats it as though it were (decisions § 1083).
+            averageBPM: healthKit.heartRateClaim(
+                activeElapsedSeconds: elapsedSeconds
+            ).averageBPM
         )
 
         state = .finished
@@ -558,7 +569,13 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             pausedIntervalSeconds: totalPausedInterval,
             trackPointCount: trackPointCount,
             cacheFileURL: store.trackFileURL,
-            averageBPM: healthKit.summaryAverageBPM
+            // Graded against coverage SO FAR, on the same clock the checkpoint
+            // stamps its own duration from — so a crash-recovered run carries
+            // the claim it would have carried had it been stopped here, rather
+            // than an ungraded mean the recovery path has no way to grade.
+            averageBPM: healthKit.heartRateClaim(
+                activeElapsedSeconds: elapsedSeconds
+            ).averageBPM
         )
         store.write(checkpoint: cp)
         // Match the track's crash-durability window to the checkpoint's.

@@ -671,14 +671,16 @@ Android string resources** — no custom framework, no in-app picker
   `apps/web/src/lib/i18n/locales/*.ts` use, not shorter ones chosen for the
   56 dp pre-run chip: that chip's label box is 32 dp, which the long words
   already overflow in every locale, so it ellipsises and the
-  `contentDescription` carries the whole word (decisions § 713). The one live
-  divergence is `hike` — "Hike" here, "Trail run" there — an open product
-  rename, exempted in the guard rather than steamrollered.
+  `contentDescription` carries the whole word (decisions § 713). There is no
+  divergence left: `hike` read "Hike" here and "Trail run" there under a guard
+  exemption until decisions § 1155 took the owner call and the wrist adopted
+  the phone's word in all six locales that differed. The guard now compares
+  the whole vocabulary with nothing exempt.
 - **Tests**: `L10nResourceParityTest` (Wear-OS analogue of the mobile
   `l10n_parity_test`) asserts every `values-xx` declares exactly the default
   key set, no empty values, and matching format-arg sets.
   `ActivityTypeVocabularyTest` asserts the activity words equal the ARB's and
-  the web catalogue's locale for locale, keeps the `hike` exemption non-stale,
+  the web catalogue's locale for locale with no exemptions,
   and pins the phone catalogues the wrist does not mirror —
   `unmirroredPhoneCatalogues` is `emptySet()` since the wrist gained European
   Portuguese, and it is checked in BOTH directions, so a phone locale with no

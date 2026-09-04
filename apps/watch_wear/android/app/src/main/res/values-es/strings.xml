@@ -54,7 +54,7 @@
     <string name="pace">Ritmo</string>
     <string name="activity_run">Carrera</string>
     <string name="activity_walk">Caminata</string>
-    <string name="activity_hike">Senderismo</string>
+    <string name="activity_hike">Trail</string>
     <string name="activity_cycle">Ciclismo</string>
     <string name="activity_stroller">Cochecito</string>
     <string name="sign_in">Iniciar sesión</string>

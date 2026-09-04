@@ -76,7 +76,7 @@
          no fit. Guarded by ActivityTypeVocabularyTest. -->
     <string name="activity_run">Run</string>
     <string name="activity_walk">Walk</string>
-    <string name="activity_hike">Hike</string>
+    <string name="activity_hike">Trail run</string>
     <string name="activity_cycle">Cycle</string>
     <string name="activity_stroller">Stroller</string>
     <string name="sign_in">Sign in</string>

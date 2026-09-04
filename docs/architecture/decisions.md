@@ -21228,3 +21228,174 @@ step's exact shell from each module directory under the go1.26.6 toolchain:
 `apps/job_worker` exits 1 and prints the seven paths, `apps/graph_cycle` exits 0.
 The two halves are green together or the PR is red, which is the correct
 coupling.
+## 1154. The crash-recovery prompt discloses the unreadable queue and disables the tap that cannot work — and the prompt it withheld is re-offered when the read recovers
+
+[§ 1107](#1107-an-unreadable-queue-was-ungraded-on-the-crash-recovery-path-and-the-bail-out-that-grades-it-was-deleting-the-thing-it-protects)
+made `gradeRecovery` fail closed on an unreadable run queue: the grade is
+`Ignore`, nothing is queued and nothing is cleared, and the checkpoint — the
+crashed run's only durable record — stays armed. Correct for the data, and
+completely silent for the runner. It filed the display half rather than taking
+it, and this is that half, both parts, because they only work together.
+
+**The tap.** A runner pressing "Save it" got nothing. The prompt is a
+full-screen takeover in `PreRunScreen` with no failure line, and `syncError` —
+the surface that would otherwise have said something — renders on
+`PostRunScreen`, a screen a runner sitting under this takeover cannot reach.
+The chip is now **disabled** while `queueUnreadable` stands, with
+`sync_queue_unreadable` stated above it in the warning colour. Disabled rather
+than left tappable-and-inert because an affordance that does nothing reads as a
+broken app rather than as a fault that will pass, and this one does pass:
+`observeQueue` retries the read on its own backoff and the chip re-enables the
+moment it succeeds. No new string — that key already exists in all seven
+catalogues, so there is no locale work and no window in which one locale ships
+the English.
+
+**Discard stays live, deliberately.** It is the only way off a takeover with no
+Start button. Disabling it too would strand a runner who wants to record *now*
+behind a corrupt file, costing them the next run as well as this one — a worse
+outcome than the one this entry is fixing.
+
+**The prompt is re-offered, which is what makes the disclosure reachable at
+all.** `checkRecovery` ran once, from `init`, so a cold start into an unreadable
+queue withheld the prompt and never revisited it however long the process lived.
+`onQueueBecameReadable` re-takes the grade, called from **both** sites that
+clear the flag — the retrying stream and the drain the runner's own retry goes
+through — because the file has two readers and hooking one leaves the other
+clearing the flag while the prompt stays withheld, which is the same silence in
+a new place. Gated on the transition so an ordinary per-save emission does not
+re-read the checkpoint store, and skipped while a prompt is already up so an
+arriving emission cannot swap the checkpoint under a decision in progress. This
+is not what makes the run safe — the checkpoint survives to the next launch
+either way — it is what stops a runner being made to relaunch the app for a
+fault that has already cleared underneath them.
+
+**A second defect, found by measuring the screen rather than reading it.** The
+takeover was a non-scrolling `Column`: a title that wraps to two lines, a
+distance caption and two 52 dp chips already measure past the ~152 dp a 192 dp
+round watch leaves inside its 20 dp padding, so **Discard was falling off the
+bottom edge with no way to reach it** — before this change added a line to it.
+It now scrolls, rotary-wired like every other scrolling surface in the file, and
+stays centred while it fits so nothing moves on the common path. The rename of
+its `FocusRequester` to the file's own `rotaryFocus` is not cosmetic:
+`RotaryScrollWiringTest` counts that identifier, and the first build here failed
+on the mismatch.
+
+`RecoveryPromptDisclosureTest` pins all of it by source grep — Compose wiring is
+not host-JVM testable without Robolectric, which this module avoids — including
+the both-readers count, so a third clear site cannot be added without a third
+re-raise. Each of its assertions was confirmed to discriminate by deleting the
+line it guards and watching exactly that test fail.
+
+## 1155. The wrist says "Trail run": the owner call filed at § 547 is taken, and the guard exemption goes with it
+
+`hike` has read "Trail run" on web and mobile since
+[§ 547](#547) and "Hike" on the wrist ever since, exempted from
+`ActivityTypeVocabularyTest`'s word-for-word comparison as a product rename
+awaiting an owner rather than a translation defect. The filing laid the decision
+out in full and recommended aligning; this takes it.
+
+The reasoning is the filing's and stands up: the rename was made on recorded
+user evidence — a user gave "Hike" as the reason trail runners did not see
+themselves in the picker — and that evidence is about the concept, not about the
+screen it is read on. A runner who picks "Trail run" on the phone and finds
+"Hike" on the wrist is looking at one product with two names for one activity.
+The counter-argument (a trailhead picker is read by someone who already knows
+what they chose, where "Hike" is the plainer word) is real but does not outweigh
+one product, one word.
+
+**Six values changed, not five.** The filing enumerated the wrist's labels as
+"Hike / Wandern / Senderismo / Rando / ハイク / Trilha" and concluded pt-BR
+already matched and the other five did not. That list is six entries for seven
+locales: it omits **European Portuguese**, which said `Trilho` against the
+phone's and web's `Trail`, so it diverged too. pt-BR's `Trilha` is the one that
+already matched. Verifying the premise before acting is what surfaced it, and
+the wrong count would have left one locale behind with the guard's exemption
+deleted and nothing to catch it.
+
+Display-only, exactly as the filing established: `'hike'` is still the stored
+identifier in `runs_activity_type_check`, in the watch payload, in the calorie
+coefficient table and as the ingest target of the Strava and Garmin importers.
+No migration, no regenerated types, no wire change. `renameAwaitingOwner` and
+the test that kept it non-stale are deleted rather than emptied — an exemption
+set with nothing in it is an invitation to add one — so the whole vocabulary is
+now compared with nothing exempt and a future divergence fails the build.
+
+## 1156. `apps/watch_ios` measures how much of the run its heart rate covered, and spends the measurement on the average it already writes rather than on a key it cannot send
+
+[§ 1106](#1106-appswatch_ios-states-what-its-heart-rate-average-is-scoped-to-because-source-cannot-say-which-watch-wrote-a-run)
+stated the gap and left it unquantified: `HKLiveWorkoutBuilder`'s average is
+workout-scoped by construction, which is better than Wear's foreground-only
+`MeasureClient`, but being workout-scoped establishes nothing about whether the
+sensor was *delivering* — a live session whose watch has loosened on the wrist
+still averages what it got. It named the honest instrument
+(`mostRecentQuantityDateInterval()`, the sample's own timestamp) and two
+blockers. Both premises hold on re-verification, and the second is the one that
+shapes this change.
+
+**The blocker is the envelope, and it still blocks.** A finished run reaches the
+phone through `WCSession.transferFile(_:metadata:)`, and claim (6) of
+`scripts/check_watch_ios_source.mjs` reads BOTH ends: a key the watch sends that
+`apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` never lifts out fails the
+PR. The `syncRunDirect` path that could bypass it is `#if DEBUG`. So
+`hr_coverage` still cannot be written, and relaxing the guard was never an
+option — it exists because Apple-Watch runs once reached the phone with no
+`activity_type` exactly this way. The phone-side lift is one line and is filed.
+
+**So the measurement is spent on `avg_bpm` instead, which needs no envelope at
+all.** § 1083's grading has two halves and only one of them is a new key: the
+other **suppresses `avg_bpm` below 0.5 coverage**, and suppression reaches the
+row by omitting a key that already exists. That is the half that was worth
+having first anyway — a mean over three minutes of a twelve-hour run saved as
+that run's average heart rate is a wrong number reaching run detail, the coach
+context and the export, where a missing coverage figure is only an unanswered
+question.
+
+**Every unusable input keeps today's behaviour, and that direction is the whole
+safety argument.** This is a live sensor path on a platform with no compiler on
+this workstation, so the failure that matters is not "no measurement" but "a
+measurement that fails toward zero", which would delete a good `avg_bpm` on
+every run rather than on the runs it is about. `coveredSeconds` is therefore
+**nil until the `HKWorkoutSession` actually starts** — unmeasured, not zero — and
+`HeartRateCoverage.claim` passes the mean through unqualified on nil, on a
+non-finite figure and on a non-positive clock. In the one place where the
+instrument could read blank mid-run, `mostRecentQuantityDateInterval()` returning
+nil for a sample HealthKit did hand over, the fallback is the delivery instant
+rather than "no evidence": a delivered sample is evidence the sensor is
+delivering now, and the other reading is the one that zeroes coverage on a whole
+build.
+
+**Wear's meaning, verbatim, because both clients write one column.** The
+threshold is 0.5 and the sample-freshness window 30 s — the same figures as
+`MIN_AVG_BPM_COVERAGE` / `HR_SAMPLE_FRESH_MS`. Coverage advances on the
+recorder's own 1 s tick against the AGE of the newest sample, not on HealthKit's
+deliveries, because the gap being measured is a stream that has gone quiet and a
+quiet stream emits nothing to hang an interval on. It advances only inside the
+`.recording` guard, so a pause is neither credited nor charged. The rounded
+figure is what is compared, so a run can never suppress its average beside a
+coverage of 0.5. This is deliberately **not** a registered parity pair: the
+registries pair web with mobile, the two watch clients are additive under § 24,
+and no rail enforces them against each other — what must match is the meaning,
+which lives in the `hr_coverage` registry row.
+
+**Testable where it matters, and honest about where it is not.** A real
+`HKWorkoutSession` cannot be constructed in the test host, so the accumulator's
+own state is unreachable from the suite. The arithmetic that gates the field is
+therefore pure and separate — `HeartRateCoverage.creditedStep` and `.claim` —
+and eleven cases cover it, including every unusable-input branch. The
+accumulator's wiring is pinned by a widened source guard: § 1106's
+"no watchOS source writes `hr_coverage`" assertion still holds and is kept, but
+the method is **renamed** — it asserted the watch makes no coverage *claim*,
+which is a different sentence from writing no coverage *key*, and a guard whose
+name contradicts the shipped behaviour is a guard nobody can read. It now also
+requires the threshold to exist (delete it and the measurement silently stops
+having any effect) and requires `WorkoutManager` to contain no reference to
+`summaryAverageBPM` at all, so the ungraded mean cannot reach either the
+finished run or the 15 s checkpoint a crash recovers from.
+
+**Not built.** No Xcode on this workstation. Both runnable watchOS guards pass
+and neither compiles anything; the Swift is unverified until CI's
+`Test watchOS app (Swift)` job runs it, and it joins the existing population of
+watchOS edits landed unbuilt. Nothing here is added to the Xcode project — the
+new type lives in `HealthKitManager.swift` and the new tests in
+`HealthKitFailureTests.swift`, both already members — so the compile surface is
+the two files a reviewer would read anyway.

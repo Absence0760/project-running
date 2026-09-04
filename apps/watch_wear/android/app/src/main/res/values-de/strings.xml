@@ -54,7 +54,7 @@
     <string name="pace">Pace</string>
     <string name="activity_run">Laufen</string>
     <string name="activity_walk">Gehen</string>
-    <string name="activity_hike">Wandern</string>
+    <string name="activity_hike">Traillauf</string>
     <string name="activity_cycle">Radfahren</string>
     <string name="activity_stroller">Kinderwagen</string>
     <string name="sign_in">Anmelden</string>
