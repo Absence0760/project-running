@@ -1136,10 +1136,16 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         // an empty list if the file is missing or malformed (indoor
         // mode produces a `[]` stub via TrackWriter.close).
         val trackPoints = readTrackForPreview(trackPath)
+        // The graded claim, and there is no ungraded one to read by mistake:
+        // `Metrics` carries the finished pair or nothing (decisions § 1105).
+        // Null is a `Finished` transition made by something other than
+        // `stopRecording`, and it claims no heart rate rather than falling
+        // back to a figure nothing measured.
+        val hr = m.finishedHr
         val summary = FinishedSummary(
             distanceM = m.distanceM,
             durationS = durationS,
-            avgBpm = m.avgBpm,
+            avgBpm = hr?.avgBpm,
             lapCount = m.laps.size,
             activityType = m.activityType,
             laps = laps,
@@ -1159,8 +1165,8 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
                     durationS = durationS,
                     distanceM = m.distanceM,
                     trackFilePath = trackPath,
-                    avgBpm = m.avgBpm,
-                    hrCoverage = m.hrCoverage,
+                    avgBpm = hr?.avgBpm,
+                    hrCoverage = hr?.coverage,
                     activityType = m.activityType,
                     laps = m.laps.map { QueuedLap(it.number, it.atMs, it.distanceM) },
                     steps = m.steps,
