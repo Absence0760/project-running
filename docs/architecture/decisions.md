@@ -19663,3 +19663,125 @@ residual on § 1049's claim is untouched and restated in both documents: this is
 the local `file` backend, so what is proved is the mechanism, and confirming the
 byte residue on Cloud still means listing the bucket over the S3-compatible
 endpoint.
+
+## 1100. The auth-email hook gets its positive path, and the thing blocking it was three env lines
+
+[§ 1079](decisions.md) found the general "positive-path Edge Function tests"
+filing wrong and left `auth-email` as the honest residue: three envelope cases,
+all of them refusals (405 on GET, 401 on absent Standard Webhooks headers, 401
+on a wrong signature), so a handler that refused every request passed all three.
+Nothing about that was blocked on a credential — the signing secret is ours and
+`ci.yml` already wrote it — and the only real obstacle was that the function
+reads `SMTP_HOST` / `SMTP_PORT` / `SMTP_FROM` and the CI boot step wrote none of
+them, with a comment saying so.
+
+The host that matters is the container's, not the runner's. `127.0.0.1` inside
+the functions container is that container's own loopback and reaches nothing, so
+the boot step writes `host.docker.internal:54325` — the pair the committed
+`supabase/functions/.env` already uses for local dev, reachable because the CLI
+starts that container with `--add-host host.docker.internal:host-gateway`. The
+network alias `inbucket:1025` resolves from there too and would have worked
+equally; the published-port form was chosen because it keeps one story with the
+committed local-dev file and with `smtp.ts`'s own doc comment. Mailpit is read
+from the RUNNER, so `MAILPIT_URL` is the web port, 54324.
+
+Two assertions carry the test, and both were checked for discriminating power
+rather than assumed. The subject must be the FRENCH signup entry from
+`authEmailCatalogue`, driven by a `user_metadata.locale` of `fr-FR` — measured
+against the live host, the same payload with no locale renders "Confirm your
+email address" and with `de-DE` renders "Bestätige deine E-Mail-Adresse", so the
+assertion separates "it resolved the locale and rendered that entry" from "it
+sent something". And the delivered body must carry this run's unique
+`token_hash`, so the mail was rendered from this payload rather than matched off
+an older one in a catcher other lanes also write to. For the same reason the
+test SEARCHES Mailpit by recipient and never clears it: `DELETE
+/api/v1/messages` wipes the whole catcher, and a Playwright shard may be reading
+it.
+
+The payload deliberately carries no `user.id`, which makes the handler skip its
+`user_settings` locale read entirely — so this case is gated on the hook secret
+rather than on `SUPABASE_SERVICE_ROLE_KEY`, and it exercises the metadata
+fallback branch that a settings row would have shadowed. Negative control: with
+a wrong secret the case fails at the 200 assertion with `401 bad_signature`.
+
+## 1101. `refresh-tokens` already had the seam the filing asked for; what it lacked was the gate opening
+
+The filing said `refresh-tokens` has no positive-path test and that the durable
+shape is an injectable token-exchange fetch, following the
+`_shared/strava_upstream.test.ts` seam. Both halves are wrong, and the second is
+wrong in the way that matters: that seam is a `globalThis.fetch` stub, not an
+injected parameter, and `refresh-tokens/lib.test.ts` has been using it since
+PR #438 — "refresh-tokens routes through the CAS helper with
+the read refresh token" drives the success branch through a stubbed Strava token
+response and asserts `refreshed === 1` plus the compare-and-swap arguments, and
+`sweep_invariants.test.ts` adds "each integration is refreshed with its OWN
+token, and the count is the successes". Sixteen unit tests, all passing. Adding
+an injection parameter would have been a second seam for a problem the first one
+already solves.
+
+What was genuinely missing sits one layer up. `handler_envelope.test.ts` carried
+three `refresh-tokens` cases and every one is a 403 — missing header, wrong
+secret, non-Bearer scheme — so a handler that refused everything passed all
+three. The gate OPENING had no coverage anywhere.
+
+That case needs no upstream either, and the fixture is where the care went. An
+empty `integrations` table would return `{refreshed: 0}` off a select that
+matched nothing, which proves the bearer was accepted and nothing else. So the
+test plants an integration whose `token_expiry` IS inside the sweep's one-hour
+window — the sweep selects it — but which holds no vault secret, so
+`get_integration_tokens` yields nothing and the loop `continue`s before
+`refreshStravaToken` is reached. That the upstream was not contacted is then
+observable rather than asserted: a real call with an unusable grant would 4xx
+and stamp `disconnected_at` through the wired `onPermanentFailure` callback, and
+the test reads that column back after the sweep.
+
+Verified against a functions host booted the way `ci.yml` boots it, with the
+same `.env.local` values: 25/25 handler-envelope cases pass. Negative control
+with a wrong `CRON_SECRET` fails at the 200 assertion.
+
+## 1102. The case-fold table's SQL rail is cheap to write and cannot be shipped on its own
+
+The frozen 1,488-pair fold table is filed as three rails — `EXERCISE_*` in
+`gym_prs.ts`, `gym_prs.dart` and `normalise_exercise_name` — with a note that
+"the SQL rail is the cheap one" because [§ 1076](decisions.md) made the fold a
+write-time cost and the keyset backfill of `20270706000002` establishes the
+pattern: `create or replace function`, no rewrite. The DDL claim is correct. The
+conclusion drawn from it is not, and this round measured why rather than taking
+the rail.
+
+`normalise_exercise_name` is named by three **validated** CHECK constraints —
+`gym_sets_exercise_key_canonical`, `gym_routine_exercises_exercise_key_canonical`
+and `exercises_name_key_canonical` — each of the form `key = normalise_exercise_
+name(name)`. Two of those columns are still CLIENT-stamped. So the function is
+not a private implementation detail of the server: it is the acceptance
+predicate two other rails write against, and moving it moves what they may
+store.
+
+Measured in a rolled-back transaction, on a table carrying the same CHECK. A row
+whose key was computed under the current fold is inserted and accepted. The
+function is then replaced with one that folds a single extra code point.
+Postgres does not re-check anything, so the row is still there — and
+`update t set name = name`, a no-op self-update, raises **23514**. The stored row
+is un-updatable, a fresh insert of the same pair is refused, and
+`alter table … validate constraint` fails. Nothing warns at replace time.
+
+The blast radius was measured too, and it is small but not empty. Postgres's ICU
+lowercase map on this image is non-identity at **1,433** code points; a current
+single-char lowercase table (Unicode 16.0) is non-identity at **1,459**; the two
+disagree at **28** — 27 the newer table lowercases and ICU does not (U+1C89,
+U+A7CB, U+A7CC, U+A7DA, U+A7DC, the Garay block U+10D50-52 and 19 more), and one
+the other way, U+0130, which [§ 830](decisions.md) already folds by name. At
+**zero** code points do the two map to different values. So adopting a frozen
+table on the SQL rail alone would move the fold at 27 points, all of them recent
+additions — which is precisely the population the table exists to protect — and
+every stored key containing one of them becomes un-updatable.
+
+The decision: **do not ship the SQL rail alone.** The three rails move together
+or not at all, and the sequencing note the filing carries should say so. That is
+a stronger constraint than the filing assumed, and it changes who can take the
+work: not a backend lane, but one holding `apps/web/src/lib/gym/`,
+`apps/mobile_android/lib/` and the migration at once. Whether the 27 points move
+the SQL rail TOWARD or AWAY from either client is not decidable from this rail —
+the 465 / 410 / 55 pairwise divergences are defined against two runtimes a
+backend lane cannot measure, and a change that fixes one pair while widening the
+other is exactly the outcome a single-rail edit risks.
