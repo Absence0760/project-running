@@ -1,0 +1,57 @@
+-- The routine § 1098's caller inventory missed: `host_can_take_payment(uuid)`
+-- is called by two Edge Functions as service_role and no statement in this repo
+-- grants it to that role.
+--
+-- ── The mechanism, unchanged from § 1098 ─────────────────────────────────────
+-- What a fresh function in `public` arrives with depends on the image. Supabase
+-- Cloud and CI (`supabase/setup-cli` pinned to 2.84.2) carry an `alter default
+-- privileges` handing anon, authenticated AND service_role an EXECUTE entry by
+-- name, so a later `revoke ... from public` removes nothing. The workstation
+-- CLI's image (2.109.1) starts a function at `proacl` NULL, so the same revoke
+-- collapses the ACL to `{postgres}` plus whatever a migration granted by name.
+--
+-- `20261229_001` created the function and wrote the same pair `20270213_001`
+-- wrote for `fundraiser_totals`:
+--
+--     revoke all on function host_can_take_payment(uuid) from public;
+--     grant execute on function host_can_take_payment(uuid) to authenticated;
+--
+-- and `20270626000001` later re-closed the anon channel. Neither statement is
+-- wrong; service_role is simply absent, so it holds EXECUTE on the deployed
+-- image and not on the workstation's. Measured here after `supabase db reset`:
+-- `{postgres=X/postgres,authenticated=X/postgres}`.
+--
+-- ── Why it matters more than the thermometer read did ────────────────────────
+-- `fundraiser_totals` cost a pgtap file. This one is on the money path.
+-- `donations-checkout` and `events-checkout` both build a service-role client
+-- (`createClient(SUPABASE_URL, secretKey())`) and call the routine on it to
+-- decide whether the host may take payment at all, before any Stripe Checkout
+-- session is created. On an image whose default privileges supply nothing that
+-- call is a 42501, and the checkout refuses a host who is perfectly able to
+-- take money. It works today only because the deployed image happens to grant
+-- what no migration states — which is the whole failure mode § 1098 named.
+--
+-- ── Why the inventory missed it ──────────────────────────────────────────────
+-- § 1098 enumerated "the 7 RPCs the Edge Functions call as service_role" by
+-- reading the tree once. That count is short by one: the two checkout calls are
+-- written `await service.rpc(\n  'host_can_take_payment', ...)`, with the name
+-- on the following line, so a single-line grep for `rpc('<name>'` does not see
+-- them. The durable answer is not a better grep in a comment — it is
+-- `apps/backend/scripts/check_stated_function_grants.mjs`, which derives the
+-- inventory on every run and fails the PR that adds a caller whose grant no
+-- migration states. That guard is what found this line.
+--
+-- ── Scope ────────────────────────────────────────────────────────────────────
+-- The body is a single `exists` over `instructor_payout_accounts`, on which
+-- service_role already holds SELECT outright, so a service-role caller could
+-- compute the same boolean by reading the table directly; this grant confers no
+-- reach and states, on every image, the posture the deployed image already has.
+-- The client rails are untouched: `authenticated` keeps the grant `20261229_001`
+-- gave it and anon stays closed per `20270626000001`.
+--
+-- ── Online-safety (docs/backend/migration_locks.md) ──────────────────────────
+-- GRANT takes no lock on any relation — the only lock is on the catalogue entry
+-- for the function. No scan, no rewrite, no constraint to validate, no
+-- signature change, so neither row-type generator moves.
+
+grant execute on function public.host_can_take_payment(uuid) to service_role;
