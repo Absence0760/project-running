@@ -20617,3 +20617,112 @@ its message says whether the ping was lost or merely late. The regression pin is
 25 subscribe-then-publish rounds down both paths asserting one receiver each; it
 fails within the first few rounds on the unfixed code under load and passes 20
 consecutive `-race` runs on the fixed code under the same load.
+
+## 1134. The Art 20 CSV carries `hr_coverage` beside `avg_bpm`, and the column is graded rather than passed through
+
+[§ 1083](#1083) had the Wear recorder measure the share of ACTIVE elapsed time
+its sensor delivered and suppress `avg_bpm` below 0.5, and [§ 1088](#1088) gave
+run detail three readings of that pair rather than one. The export had one: a
+bare `avg_bpm` column, and no column for the coverage. So an average taken over
+51 % of a twelve-hour run left as a confident number, and a *suppressed* average
+left as an empty cell — the same empty cell a run recorded with no strap gets.
+That is the exact confusion § 1088 closed on the page, on data the runner is
+carrying to another platform.
+
+**The filing's premise needed one correction, and it does not change the fix.**
+The datum was never absent from the export: the CSV's `metadata` column carries
+`JSON.stringify(md)` verbatim, so `hr_coverage` has always ridden along inside
+it and Art 20 completeness was never at issue. What was wrong is narrower and
+still worth fixing — a *promoted* column stating a qualified number with its
+qualifier buried in a JSON blob two columns over is a column that misleads at
+the level anyone actually reads a CSV.
+
+**Which is also why the header grew at all.** `CSV_COLS` carries a standing rule
+that new metadata keys go in the `metadata` column rather than expanding the
+header, so a user-owned pipeline can rely on the shape. The rule survives with
+one stated exception: a key earns a column when a column ALREADY there cannot be
+read without it, because then header stability is buying the consumer a number
+it will misinterpret. It sits immediately after `avg_bpm` rather than at the end
+— adjacency is the whole mechanism, and any header change already breaks a
+consumer reading by index while a consumer reading by name is unaffected either
+way.
+
+**Graded, not passed through.** `hrCoverageCell` refuses a non-number, a
+non-finite one and anything outside `0..1`, exactly as `hrCoveragePercent` does
+for the page and for the reason § 1088 gives: a writer storing a percentage
+would otherwise put `85` in a column documented as a fraction. Grading withholds
+nothing — the stored value is still in the `metadata` column — it keeps this
+column to what its header promises. A coverage of exactly `0` renders `0` and
+not the empty cell, because a sensor that was enabled and delivered nothing is a
+measurement.
+
+**The load-bearing half is filed, not written.** The Go worker's `csvColumns` /
+`csvRow` mirror this list by hand with no guard comparing them, and that is the
+rail most runners reach: mobile has no Edge Function path at all and always
+enqueues ([§ 724](#724)), and web takes the EF only when
+`PUBLIC_EXPORT_HUB_URL` is unset. `apps/job_worker/` belonged to no lane this
+round, so the column shipped on the rollback rail and the queued rail's copy is
+filed with its exact change.
+
+## 1135. The Art 20 export's `runs` projection is short by seven real columns, and a promotion migration is what emptied four of them
+
+Found while checking whether any other column of the CSV's family was missing
+for the same reason as `hr_coverage`. It is not the same reason and it is worse.
+Both export transports read the run row through a hand-written column list —
+`RUNS_SELECT` in the Edge Function, `ExportRun` in
+`apps/job_worker/internal/dataexport/server.go` — and neither list has been
+widened as the table gained columns. Measured against the generated row type:
+the table has 24 columns, the projection selects 17, and `concluded_at`,
+`elevation_gain_m`, `race_listing_id`, `fastest_5k_s`, `fastest_10k_s`,
+`fastest_half_marathon_s` and `fastest_marathon_s` reach neither `runs.csv` nor
+the backup archive's `runs.json`.
+
+**Four of them used to be exported and stopped.** Migration `20270325_001`
+promoted the four `fastest_*_s` PR times out of `runs.metadata` into real
+columns and **stripped the keys from the bag in the same statement**. Until that
+ran they rode inside the CSV's `metadata` column and inside `runs.json`'s
+`metadata` object; afterwards they are in a column nothing selects, so they left
+the export silently. The promotion was right and the audit that asked for it was
+right; the exporter was simply not on the list of things a promotion has to
+touch.
+
+**`manifest.json` cannot show this.** Its whole completeness contract is row
+counts against each section's authoritative total, and every row is present —
+short by columns, not by rows. So the archive reports itself complete while
+carrying less than the subject's record.
+
+Not built here, and the reason is which rail matters. Fixing only the Edge
+Function would widen the rollback path while mobile and configured web keep
+enqueuing to the Go worker, which would deliver almost no benefit to a real data
+subject and add a second divergence between two live transports on top of
+§ 1134's. It is filed as one change owning both trees, with the column list and
+the two projection sites named.
+
+## 1136. The export-retention paragraph in `data-subject-rights.md` was right about the measurement and stale about the fix
+
+[§ 1049](#1049)'s measurement stands on re-reading and every one of its claims is
+still true of the code: the SQL sweep deletes `storage.objects` rows, the bytes
+stay on the backend with a matching `sha256`, `20260927_001`'s belief in a
+background sweeper is wrong, deleting through the Storage API does remove the
+file, and the residual on the measurement is that this was the local `file`
+backend. So the hunk a backend lane wrote while not owning `docs/compliance/`
+needed no retraction.
+
+One sentence had gone stale. It named the durable fix — a Go-worker job kind —
+as "filed with an owner", and [§ 1112](#1112) has since written it:
+`export_blob_reap` lists the `exports` bucket and deletes through the Storage
+API, so bytes and rows go together. But it ships unroutable — `jobs_kind_chk`
+forbids the kind, nothing can enqueue it, and `Worker.dispatch` deliberately
+carries no case — so **the state the paragraph describes is still the state in
+production**, and a reader who took "the durable fix is filed" as "not yet
+built" would draw the right conclusion for the wrong reason and would draw the
+wrong one the moment they saw the handler on `main`. Both compliance documents
+now say the fix is half built and inert, and name the four statements that
+finish it.
+
+A second thing was missing rather than wrong, and § 1112 named it: a
+Storage-API reaper cannot reach what is already orphaned. It derives its
+worklist by listing, the list API reads `storage.objects`, and those rows are
+the ones the sweep already deleted — so the 74 files § 1049 counted against 0
+rows stay on the backend whatever the reaper does. A retention page that
+described the reaper as the answer without saying so would have overstated it.
