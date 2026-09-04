@@ -2815,6 +2815,24 @@ jobs:
             echo "The failure above names the file and line. Give the assertion a subject, register a permissive replacement for the relation it reads, or add it to EXPECTED_SURVIVORS with the reason its empty result is a real answer."
             exit 1
           fi
+      # The catalogue half of the grant contract is the pgtap step above, and on
+      # THIS image it cannot bite: 2.84.2's default privileges name anon,
+      # authenticated and service_role on every new function, so an inherited
+      # grant and a stated one read identically here. This step replays the
+      # migration TEXT instead, which answers the same on every image and needs
+      # no stack at all -- it is deliberately not conditioned on the steps above.
+      - name: Check every caller's EXECUTE grant is stated by a migration
+        run: |
+          if ! node --test apps/backend/scripts/check_stated_function_grants.test.mjs; then
+            echo "::error::The stated-grant guard's own tests fail."
+            echo "Fix apps/backend/scripts/check_stated_function_grants.mjs (or its tests) first — a broken replay reports a clean grant contract it never checked."
+            exit 1
+          fi
+          if ! node apps/backend/scripts/check_stated_function_grants.mjs; then
+            echo "::error::A routine some tree calls holds EXECUTE only from the Supabase image's default privileges, not from any migration in this repo — so the call works on Cloud and on CI's pinned 2.84.2 and raises 42501 on an image whose defaults grant nothing."
+            echo "The failure above names the routine, the role and the calling files. Grant EXECUTE to that role by name in a migration that says why, or stop calling the routine from a tree that runs as that role. See decisions.md § 1098 for the image difference."
+            exit 1
+          fi
 
   e2e-web:
     needs: changes

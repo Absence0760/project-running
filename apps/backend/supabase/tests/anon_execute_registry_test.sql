@@ -26,19 +26,32 @@
 --
 -- Assertions (7)-(8) are the same registry read the other way round: the
 -- routines a named role must be able to CALL, whose grant is therefore the
--- migration's job to state rather than the image's to supply. That direction
--- was measured once, for 20270707000001, and came to exactly one entry — every
--- other RPC the Edge Functions, the Go worker and the three client trees call
--- already carries the grant by name. Note what (7)-(8) can and cannot see: on
--- an image whose default privileges hand out EXECUTE by name they hold whether
--- or not a migration said anything, so it is the workstation image — where
--- `proacl` is exactly `{postgres}` plus what was stated — that makes them bite.
--- A guard that reads the migration TEXT instead of the catalogue would bite on
--- both, and is filed rather than built.
+-- migration's job to state rather than the image's to supply. Note what (7)-(8)
+-- can and cannot see: on an image whose default privileges hand out EXECUTE by
+-- name they hold whether or not a migration said anything, so it is the
+-- workstation image — where `proacl` is exactly `{postgres}` plus what was
+-- stated — that makes them bite.
+--
+-- So the `stated` table below is a THIRD RAIL, not a local fixture:
+-- `apps/backend/scripts/check_stated_function_grants.mjs` parses these same
+-- rows out of this file and replays the migration TEXT to prove each grant is
+-- stated, which bites on every image and needs no database at all. Editing a
+-- row here changes what that guard demands, and the guard refuses outright
+-- rather than passing if it cannot parse a row.
+--
+-- What is NOT here is deliberate. The guard DERIVES the far larger part of the
+-- obligation from the call sites — every RPC name the web, Lambda, api_client
+-- and mobile trees call must carry a stated `authenticated` grant, and every
+-- one the Edge Functions and the Go worker call must carry a stated
+-- `service_role` one — so a routine with an app caller needs no row. This table
+-- carries only the pairs no source tree names: `fundraiser_totals`, whose
+-- service_role caller is a pgtap file, and `host_can_take_payment`, which the
+-- guard would derive anyway and which is registered because the round that
+-- granted it wanted the reason recorded beside the other.
 
 begin;
 
-select plan(8);
+select plan(9);
 
 create temporary table withheld (fn name, args text, kept name, why text);
 
@@ -129,21 +142,24 @@ select ok(
 
 -- (7)-(8) The mirror of (1)-(3): the routines a named role must be able to
 -- call, registered so the grant is the repo's statement and not the image's
--- default. `fundraiser_totals` is the whole list — see 20270707000001 for the
--- enumeration that establishes that, and for why its sibling `fundraiser_feed`
--- is deliberately absent.
+-- default. Its sibling `fundraiser_feed` is deliberately absent — see
+-- 20270707000001 for why it is not granted service_role for symmetry, and
+-- check_stated_function_grants.mjs for what now catches the day it acquires a
+-- server-side caller.
 create temporary table stated (fn name, args text, caller name, why text);
 
 insert into stated (fn, args, caller, why) values
   ('fundraiser_totals', 'uuid', 'service_role',
-   '20270213_001 revoked from public and granted anon + authenticated only, so on an image whose default ACL is {postgres} the thermometer read is refused to the role that writes the ledger; donations_status_lock_test reads it as service_role');
+   '20270213_001 revoked from public and granted anon + authenticated only, so on an image whose default ACL is {postgres} the thermometer read is refused to the role that writes the ledger; donations_status_lock_test reads it as service_role'),
+  ('host_can_take_payment', 'uuid', 'service_role',
+   '20261229_001 granted authenticated only; donations-checkout and events-checkout both call it on a service-role client to decide whether a host may take payment at all, so on an image whose default ACL is {postgres} every checkout refuses a host who can. Granted by 20270708000001');
 
 select is(
   (select coalesce(string_agg(t.fn || ' (' || t.caller || ')', ', ' order by t.fn), '')
      from stated t
      join pg_proc p on p.proname = t.fn
      join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-    where pg_get_function_identity_arguments(p.oid) = t.args
+    where pg_catalog.oidvectortypes(p.proargtypes) = t.args
       and not has_function_privilege(t.caller, p.oid, 'EXECUTE')),
   '',
   'each registered routine is executable by the role that calls it'
@@ -157,7 +173,7 @@ select is(
      from stated t
      join pg_proc p on p.proname = t.fn
      join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-    where pg_get_function_identity_arguments(p.oid) = t.args
+    where pg_catalog.oidvectortypes(p.proargtypes) = t.args
       and (p.proacl is null
            or not exists (select 1 from aclexplode(p.proacl) a
                            where a.privilege_type = 'EXECUTE'
@@ -165,6 +181,29 @@ select is(
   '',
   'each registered routine carries an EXECUTE entry naming that role, so the '
   'grant survives an image whose default privileges supply nothing'
+);
+
+-- (9) The control for (7) and (8), and the reason this file plans nine.
+-- Both are aggregates over the join, so a row that matches NO routine is
+-- reported as no failure rather than as a row that could not be checked -- the
+-- shape decisions § 741 names. That is not hypothetical: the join was written
+-- `pg_get_function_identity_arguments(p.oid) = t.args`, which renders a named
+-- parameter as `p_fundraiser_id uuid` against a registry that says `uuid`, so
+-- it matched nothing on EITHER image and (7)-(8) asserted over an empty set
+-- from the day they were added. `oidvectortypes` renders the type list alone,
+-- which is what the registry carries and what a `grant execute on function
+-- f(uuid)` statement names.
+select is(
+  (select coalesce(string_agg(t.fn || '(' || t.args || ')', ', ' order by t.fn), '')
+     from stated t
+    where (select count(*)
+             from pg_proc p
+             join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+            where p.proname = t.fn
+              and pg_catalog.oidvectortypes(p.proargtypes) = t.args) <> 1),
+  '',
+  'each registered routine resolves to exactly one function in public, so '
+  '(7) and (8) are asserting about something'
 );
 
 select * from finish();

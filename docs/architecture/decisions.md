@@ -20947,6 +20947,140 @@ worklist by listing, the list API reads `storage.objects`, and those rows are
 the ones the sweep already deleted — so the 74 files § 1049 counted against 0
 rows stay on the backend whatever the reaper does. A retention page that
 described the reaper as the answer without saying so would have overstated it.
+## 1139. A routine's EXECUTE grant is checked against the migration TEXT, and the obligation is derived from the call sites rather than registered
+
+§ 1098 closed one instance of a class and filed the class: a routine
+some tree calls can hold its EXECUTE from the Supabase image's default
+privileges rather than from any statement in this repo, and
+`anon_execute_registry_test.sql`'s assertions (7)-(8) — which read the
+catalogue — cannot tell the two apart on the image the PR gate runs. CI pins
+`supabase/setup-cli` to 2.84.2, whose `alter default privileges` names anon,
+authenticated and service_role on every new function; the workstation's 2.109.1
+starts one at `proacl` NULL. So the registry is vacuous exactly where it
+matters, and the failure surfaces as a local-only 42501 that costs a lane a
+diagnosis.
+
+`apps/backend/scripts/check_stated_function_grants.mjs` reads the migration text
+instead. It replays create / drop / grant / revoke in version order through the
+same lexer the sibling revoke guards use and derives, per routine, the roles
+this repo STATES a grant for — discounting PUBLIC, because PUBLIC is precisely
+the channel the two images disagree about. That answer is the same on every
+image and needs no database, so it runs as a step in the `pgtap RLS suite` job
+without depending on the stack.
+
+**The obligation is DERIVED, which is the part that makes § 1098's other
+filing checkable.** Every RPC name the web, Lambda, `api_client` and mobile
+trees call must carry a stated `authenticated` grant; every one the Edge
+Functions and the Go worker call must carry a stated `service_role` one.
+Nothing is registered by hand for a routine an app tree calls, so the moment
+server-side code reads `fundraiser_feed` — the specific worry § 1098 refused to
+pre-empt with a symmetry grant — the PR that adds that caller fails, rather than
+the round after. `authenticated` is the bar for a client tree because PostgREST
+resolves the role from the caller's JWT, so a signed-in reader of a public share
+page calls as `authenticated` and an anon-only grant would refuse most of the
+tree's callers; measured, no routine any client tree calls is anon-only today.
+`service_role` is the bar for a server tree even where a particular call sits on
+a user-JWT client, because service_role bypasses RLS and holds the underlying
+tables outright — stating the grant confers no reach, and the point is that it
+be stated rather than inherited. The pgtap `stated` table remains as the second,
+much smaller source, for a pair no source tree names (`fundraiser_totals`, whose
+only service_role caller is a pgtap file), and the guard parses those rows out
+of the pgtap file so the two read one registry.
+
+It refuses rather than reporting clean when it cannot see: no migrations, no
+registry rows, a configured caller tree with no source files of its kind, an
+`alter default privileges … on functions` (which would move the very default the
+replay assumes), or a call site whose callee is not a string literal. Two
+smaller refusals are worth naming because each was a live bug in the first
+draft: the registry reader compares its parsed row count against a
+paren-counted tuple count, because matching the `insert` statement up to the
+next `;` stopped inside the first row's own reason text and read a two-row
+registry as one; and the call-site reader blanks comments before scanning, both
+so a commented-out `.rpc(` is not a call site and so a comment sitting between
+`.rpc(` and its name (there is one, in `data.ts`) does not hide it.
+
+Measured on first run: 92 RPC names across the web and Lambda trees, 46 across
+the two Dart ones and 19 across the Edge Functions and the Go worker. Three
+violations, all real, all fixed in the same round — §§ 1140 and 1142.
+
+## 1140. `host_can_take_payment` had no service_role grant, and both checkout functions call it as service_role
+
+The first thing the § 1139 guard found. `20261229_001` created the routine and
+wrote `revoke all … from public` plus `grant execute … to authenticated`;
+`20270626000001` later re-closed the anon channel. Nothing ever named
+service_role. Measured on the local stack after a reset, its ACL was
+`{postgres=X/postgres,authenticated=X/postgres}`.
+
+Both `donations-checkout` and `events-checkout` build a service-role client
+(`createClient(SUPABASE_URL, secretKey())`) and call the routine on it to decide
+whether a host may take payment at all, before any Stripe Checkout session is
+created. On an image whose default privileges supply nothing, that call is a
+42501 and the checkout refuses a host who is perfectly able to take money — the
+same failure `fundraiser_totals` had, one layer further out, on the money path.
+`20270708000001` states the grant. It is a no-op against Cloud and CI and a
+repair everywhere else; the body is a single `exists` over
+`instructor_payout_accounts`, on which service_role already holds SELECT, so it
+confers no reach.
+
+§ 1098 enumerated "the 7 RPCs the Edge Functions call as service_role" by
+reading the tree once and missed this one, because both call sites are written
+`await service.rpc(\n  'host_can_take_payment', …)` with the name on the
+following line, where a single-line grep for `rpc('<name>'` does not see it.
+That is the argument for deriving the inventory rather than recording it.
+
+## 1141. `anon_execute_registry_test`'s stated-grant assertions matched no routine on either image, so they had never asserted anything
+
+Found while registering a second row in the `stated` table. Assertions (7) and
+(8) joined `pg_get_function_identity_arguments(p.oid) = t.args`, which renders a
+named parameter as `p_fundraiser_id uuid`, against a registry whose `args`
+column says `uuid` — the form a `grant execute on function f(uuid)` statement
+names and the form the neighbouring `withheld` table uses. The join therefore
+matched zero rows, both assertions aggregated over an empty set, and
+`coalesce(string_agg(…), '')` returned the empty string the `is()` expects. They
+passed for the same reason a refusal assertion over a table nobody wrote to
+passes (§ 741), and this instance is worse than the vacuity § 1098 disclosed:
+that entry says (7)-(8) bite on the workstation image and are blind only on CI's,
+where in fact they bit nowhere.
+
+Proved rather than reasoned: with a deliberately known-bad row registered
+(`fundraiser_feed` / `service_role`, which holds no such grant), the old join
+reports nothing and the assertion passes, while `oidvectortypes(p.proargtypes)`
+— the type list alone — reports the violation. The join now uses that, and a new
+assertion (9) is the control the pair was missing: every registered routine must
+resolve to exactly one function in `public`, so a row that matches nothing fails
+loudly instead of quietly excusing itself. The suite goes from 2,622 to 2,623
+assertions and all pass.
+
+## 1142. `api_client`'s two dead RPC callers are deleted rather than made to work — one is a privacy oracle, the other names a function that has never existed
+
+`ApiClient.clipTrackForUser` called `clip_track_for_user` under the caller's own
+JWT. `20270521_001` revoked EXECUTE on that function from `authenticated`
+because it is an oracle: it trims LEADING in-zone points, so a three-point probe
+returns two inside a zone and three outside, and roughly forty calls
+binary-search a victim's privacy-zone centre — usually their home — to metre
+precision, with none of the Edge Function rate limiting in the way because it is
+a PostgREST RPC. That migration deleted web's helper in the same change and
+missed this one, so the method has returned `[]` through its own fail-closed
+`catch` since 2026-05-21.
+
+Re-granting is the one repair not available: the withholding IS the security
+decision, and a mobile surface that needed clipping would be asking for the
+oracle back. Mobile's non-owner surfaces already clip through
+`fetchClippedTrackForRun` — the `clip-public-track` Edge Function, service-role
+inside — so the privacy-zone invariant is untouched by the deletion; what
+changes is that runs now have one clipping path on the client rather than one
+live and one dead. The three architecture-guard assertions pinning the method's
+fail-closed shape go with it, and the fourth (public_route_screen must not call
+it) now forbids the run-bound `fetchClippedTrackForRun`, which is the claim it
+was making all along — an assertion that a screen does not call a method nobody
+has is not a guard.
+
+`ApiClient.publishPlanAsTemplate` is the same class without the privacy
+dimension: it called `publish_plan_as_template`, which no migration has ever
+created. `TrainingService`'s own copy was rewritten as the multi-table INSERT
+web does and its doc comment says outright that no such RPC exists; the
+`api_client` one was left behind and would answer PGRST202 on every deployment.
+Both methods had zero callers anywhere in the repo.
 ## 1144. `export_blob_reap` is routed, and the enqueue expires the rows before the bytes go rather than leaving that ten minutes behind
 
 [§ 1112](#1112) landed the handler and shipped it unroutable on purpose:
