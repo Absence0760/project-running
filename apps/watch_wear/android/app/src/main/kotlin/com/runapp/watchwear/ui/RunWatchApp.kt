@@ -221,6 +221,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     } else {
                         PreRunScreen(
                             queuedCount = state.queuedCount,
+                            queueUnreadable = state.queueUnreadable,
                             syncing = state.syncing,
                             authed = state.authed,
                             authError = state.authError,
@@ -638,6 +639,7 @@ private fun permissionCostLabel(cost: PermissionCost): Int = when (cost) {
 @Composable
 private fun PreRunScreen(
     queuedCount: Int,
+    queueUnreadable: Boolean,
     syncing: Boolean,
     authed: Boolean,
     authError: String?,
@@ -741,7 +743,54 @@ private fun PreRunScreen(
                 .padding(top = 30.dp, start = 16.dp, end = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (queuedCount > 0) {
+            if (queueUnreadable && authed) {
+                // The queue read failed, so there is no count to state and
+                // "Sync ?" would be worse than the silence it replaces. What
+                // the runner needs is not the number — it is the one
+                // affordance that can recover the queue, which is exactly
+                // what the counted chip's `queuedCount > 0` gate withheld on
+                // the only condition that guarantees the count is wrong.
+                //
+                // It occupies the counted chip's own slot, so nothing else on
+                // this arc moves, and it states no figure it cannot support.
+                // NOT gated on `online`: the read is a local file open and
+                // the network is not a party to whether it succeeds, so
+                // disabling it offline would withhold the recovery path for a
+                // purely local fault. Still gated on `authed`, because
+                // `drainQueue` bails before reading anything without a
+                // session. The warning colour is not the only signal — the
+                // label differs from the counted one and the content
+                // description carries the whole sentence, which has no width
+                // limit where this chip has 100 dp (decisions § 1104).
+                val unreadableCd = stringResource(R.string.cd_sync_unreadable_retry)
+                CompactChip(
+                    onClick = onSync,
+                    enabled = !syncing,
+                    label = {
+                        if (syncing) {
+                            CircularProgressIndicator(
+                                strokeWidth = 1.5.dp,
+                                modifier = Modifier.size(12.dp),
+                                indicatorColor = DuskPalette.warning,
+                            )
+                        } else {
+                            Text(
+                                stringResource(R.string.sync_retry),
+                                style = MaterialTheme.typography.caption3,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                    },
+                    colors = ChipDefaults.secondaryChipColors(
+                        backgroundColor = Color.White.copy(alpha = 0.15f),
+                        contentColor = DuskPalette.warning,
+                    ),
+                    modifier = Modifier
+                        .widthIn(max = 100.dp)
+                        .semantics { contentDescription = unreadableCd },
+                )
+            } else if (queuedCount > 0) {
                 // Tappable so the runner can force a retry — the queue
                 // also drains automatically on every connectivity edge
                 // and on app cold-start, but if the user just got home

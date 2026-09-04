@@ -368,6 +368,63 @@ class ScreenWiringTest {
         )
     }
 
+    @Test fun `an unreadable queue still offers the drain the count would have`() {
+        // The counted chip is gated on `queuedCount > 0`, and the count comes
+        // off a stream that a failed read used to terminate — so on the one
+        // condition that guarantees the count is wrong, the pre-run screen
+        // showed nothing at all and the runner had no way to retry
+        // (decisions § 1104). A second branch renders the same slot when the
+        // read failed, stating no figure it cannot support.
+        val src = readRunWatchApp()
+        assertTrue(
+            "PreRunScreen no longer takes `queueUnreadable` — a frozen count " +
+                "is indistinguishable from an empty queue without it.",
+            Regex("""private fun PreRunScreen\(\s*queuedCount: Int,\s*queueUnreadable: Boolean,""")
+                .containsMatchIn(src),
+        )
+        assertTrue(
+            "the unreadable branch must render before the counted one — the " +
+                "count it would show is the stale figure the read failed on.",
+            src.indexOf("if (queueUnreadable && authed) {") in 0 until src.indexOf("} else if (queuedCount > 0) {"),
+        )
+        assertTrue(
+            "the unreadable chip must call onSync — a chip that states the " +
+                "problem and does not offer the retry is the silence it replaced.",
+            Regex(
+                """if \(queueUnreadable && authed\) \{.{0,2000}?onClick = onSync""",
+                RegexOption.DOT_MATCHES_ALL,
+            ).containsMatchIn(src),
+        )
+    }
+
+    @Test fun `the unreadable-queue chip is not gated on the network`() {
+        // Reading the queue is a local file open. The network is not a party
+        // to whether it succeeds, so gating the only affordance that can
+        // recover it on `online` withholds the recovery path for a purely
+        // local fault. The COUNTED chip stays gated — that one uploads.
+        val src = readRunWatchApp()
+        val branch = Regex(
+            """if \(queueUnreadable && authed\) \{(.*?)\n            \} else if \(queuedCount > 0\) \{""",
+            RegexOption.DOT_MATCHES_ALL,
+        ).find(src)
+        assertTrue("no unreadable-queue branch parsed — the checks below read nothing", branch != null)
+        val body = branch!!.groupValues[1]
+        assertTrue(
+            "the unreadable chip must be enabled offline: $body",
+            body.contains("enabled = !syncing,"),
+        )
+        assertTrue(
+            "the unreadable chip must carry a contentDescription — its 100 dp " +
+                "label cannot hold the sentence and colour alone is not a signal: $body",
+            body.contains("R.string.cd_sync_unreadable_retry"),
+        )
+        assertTrue(
+            "the unreadable chip must not reuse the counted label — `Sync N` " +
+                "on a count nobody could read is the claim this removes: $body",
+            !body.contains("R.string.sync_count"),
+        )
+    }
+
     @Test
     fun `running-screen Buttons carry contentDescription for TalkBack`() {
         // Reason: audit/accessibility High (May 2026). The Pause /

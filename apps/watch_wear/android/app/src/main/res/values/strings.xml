@@ -57,6 +57,8 @@
     <!-- ───────────── Pre-run screen ───────────── -->
     <string name="start">Start</string>
     <string name="sync_count">Sync %1$d</string>
+    <string name="sync_retry">Retry sync</string>
+    <string name="cd_sync_unreadable_retry">Saved runs unreadable, tap to retry</string>
     <string name="offline">Offline</string>
     <string name="not_signed_in">Not signed in</string>
     <string name="race_armed">RACE ARMED</string>

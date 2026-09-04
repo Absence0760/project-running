@@ -36,12 +36,24 @@ object RecordingRepository {
         val distanceM: Double = 0.0,
         val paceSecPerKm: Double? = null,
         val bpm: Int? = null,
-        val avgBpm: Double? = null,
-        /// Share of the run's ACTIVE elapsed time the heart-rate sensor was
-        /// delivering, 0..1. Stamped once at stop beside [avgBpm], which the
-        /// same grading may have suppressed (decisions § 1083). Null while a
-        /// run is in flight and on a build with heart rate off.
-        val hrCoverage: Double? = null,
+        /// What the FINISHED run may claim about its heart rate: the graded
+        /// average and the share of active elapsed time the sensor covered
+        /// (decisions § 1083). Written once, by whichever party makes the
+        /// `Finished` transition, and null at every other stage.
+        ///
+        /// There is deliberately no ungraded live average beside it. This
+        /// field used to be a bare `avgBpm` that the heart-rate collect
+        /// updated on every sample and `stopRecording` then overwrote with
+        /// the graded figure, so one name carried two different claims at two
+        /// different times and `handleFinishedRun` was correct only because
+        /// the overwrite happened first — an ordering, pinned by a source
+        /// guard, between two writers on a CAS loop that exists precisely
+        /// because writes here can land out of order. The live rolling mean
+        /// had no reader at all: the running screen renders the INSTANTANEOUS
+        /// [bpm], and the grader takes the raw `bpmSum`/`bpmCount` off the
+        /// service rather than off this state. So the write was dead and its
+        /// only effect was the hazard (decisions § 1105).
+        val finishedHr: HeartRateClaim? = null,
         /// Why there is (or is not) a live [bpm]. A null bpm is four
         /// different situations and the running screen rendered them as
         /// one blank space; this is what lets it say which

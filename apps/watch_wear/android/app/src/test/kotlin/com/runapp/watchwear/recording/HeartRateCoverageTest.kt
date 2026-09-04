@@ -129,26 +129,77 @@ class HeartRateCoverageTest {
     fun `the finished run is graded once, where the average is born`() {
         // Both producers of a SAVED `avg_bpm` — the normal stop and the crash
         // recovery — go through the same grader, or a recovered run keeps a
-        // claim the stop path would have refused. The rolling mean inside the
-        // HR collect is deliberately out of scope: that is the live figure on
-        // the running screen, and `stopRecording` overwrites it.
+        // claim the stop path would have refused.
         val stop = bodyOf(serviceSrc, "private fun stopRecording()")
         val vm = File("src/main/kotlin/com/runapp/watchwear/RunViewModel.kt").readText()
         val recover = bodyOf(vm, "fun recoverCheckpoint()")
         for ((name, body) in listOf("stopRecording" to stop, "recoverCheckpoint" to recover)) {
             assertTrue("$name must grade through heartRateClaim", body.contains("heartRateClaim("))
-            assertEquals(
-                "an `avg_bpm` divided out of the rolling pair inside $name is a claim " +
-                    "nothing measured — hand the pair to heartRateClaim instead",
-                0,
-                Regex("""bpmSum\.toDouble\(\)""").findAll(body).count(),
-            )
         }
         assertTrue(
-            "stopRecording must publish the GRADED pair — the live rolling mean is " +
-                "still on Metrics.avgBpm until this overwrites it",
-            Regex("""avgBpm = hr\.avgBpm,\s*\n\s*hrCoverage = hr\.coverage,""")
-                .containsMatchIn(stop),
+            "stopRecording must publish the graded pair whole — splitting it back " +
+                "into two fields is what let one of them be written by something " +
+                "else (decisions § 1105)",
+            Regex("""finishedHr = hr,""").containsMatchIn(stop),
         )
+    }
+
+    @Test
+    fun `nothing in the recorder divides the rolling pair itself`() {
+        // Wider than the two save paths on purpose. The HR collect used to do
+        // exactly this, publishing an UNGRADED mean onto the same field the
+        // save path later read, and the guard that scanned only the two save
+        // bodies could not see it. `heartRateClaim` is the one place the pair
+        // becomes a number.
+        assertEquals(
+            "an average divided out of `bpmSum` / `bpmCount` outside heartRateClaim " +
+                "is a claim nothing measured — hand the pair to the grader instead",
+            0,
+            Regex("""bpmSum\.toDouble\(\)""").findAll(serviceSrc).count(),
+        )
+        assertTrue(
+            "the grader itself must still be the thing that divides — a zero count " +
+                "above with no divider anywhere means the scan is reading nothing",
+            Regex("""bpmSum\.toDouble\(\)""").containsMatchIn(
+                File("src/main/kotlin/com/runapp/watchwear/recording/HeartRateCoverage.kt").readText(),
+            ),
+        )
+    }
+
+    @Test
+    fun `a late heart-rate update cannot walk back the graded claim`() {
+        // The defect the type closes. `RecordingRepository.update` is a CAS
+        // loop precisely because five writers race on it, and cancelling the
+        // HR job cannot interrupt a non-suspending update already in flight —
+        // so the HR collect's transform could land AFTER the stop transform.
+        // While it carried an average, that restored the ungraded rolling mean
+        // over an average the grader had deliberately suppressed, and the run
+        // was saved with a claim over 3 % of its own duration.
+        RecordingRepository.reset()
+        val suppressed = heartRateClaim(
+            bpmSum = 1500,
+            bpmCount = 10,
+            hrAvailableMs = 20 * 60_000L,
+            activeElapsedMs = 12 * 3_600_000L,
+        )
+        assertNull("fixture must be a SUPPRESSED claim or this proves nothing", suppressed.avgBpm)
+
+        RecordingRepository.update {
+            it.copy(stage = RecordingRepository.Stage.Finished, finishedHr = suppressed)
+        }
+        // The HR collect's transform, verbatim in shape: the last sample the
+        // sensor delivered, arriving after the stop.
+        RecordingRepository.update { it.copy(bpm = 174) }
+
+        val m = RecordingRepository.metrics.value
+        assertEquals(RecordingRepository.Stage.Finished, m.stage)
+        assertEquals(174, m.bpm)
+        assertNull(
+            "the save path must still see the suppressed claim — a live heart-rate " +
+                "update landing after the stop must not be able to reach it",
+            m.finishedHr!!.avgBpm,
+        )
+        assertEquals(0.03, m.finishedHr!!.coverage!!, 0.0001)
+        RecordingRepository.reset()
     }
 }

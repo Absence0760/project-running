@@ -66,6 +66,66 @@ final class MetadataRegistryTests: XCTestCase {
             """)
     }
 
+    /// `hr_coverage` is a MEASUREMENT, and this watch does not make one.
+    ///
+    /// Wear OS writes it because Health Services' `MeasureClient` is
+    /// foreground-only, so its `avg_bpm` can be a mean over a few minutes of a
+    /// twelve-hour run (decisions § 1015 / § 1083). HealthKit's
+    /// `HKLiveWorkoutBuilder` average is workout-scoped instead, so the claim
+    /// here is genuinely better — but the row carries no figure saying so, and
+    /// both watch clients write `source = 'watch'`, so the ABSENCE of the key
+    /// is what a reader has to interpret.
+    ///
+    /// Two halves, and each fails for a different reason. Writing the key from
+    /// here without measuring it would be a fabricated measurement, worse than
+    /// none — so the sources must stay clear of it. And the statement that
+    /// makes the absence readable has to exist somewhere a maintainer will
+    /// find it, or the next person adds an assumed `1.0` (decisions § 1106).
+    func testWatchOSMakesNoCoverageClaimAndSaysSoWhereTheAverageIsProduced() throws {
+        let root = repoRoot()
+        let sourceRoot = root.appendingPathComponent("apps/watch_ios/WatchApp")
+        var writers: [String] = []
+        for file in swiftFiles(under: sourceRoot) {
+            let raw = try Data(contentsOf: file)
+            let source = stripComments(String(decoding: raw, as: UTF8.self))
+            if extractMetadataKeys(source).contains("hr_coverage") {
+                writers.append(file.lastPathComponent)
+            }
+        }
+        XCTAssertEqual(writers, [], """
+            apps/watch_ios now writes `hr_coverage` (\(writers.joined(separator: ", "))).
+
+            If that figure is MEASURED — sample coverage over the workout's active
+            elapsed time — this guard is what should change, and the `hr_coverage` row
+            in docs/backend/metadata.md must gain watch_ios as a writer in the same
+            change; its Notes currently tell readers no watchOS run carries the key.
+
+            If it is assumed (a hardcoded 1.0, or the workout duration divided by
+            itself), remove it. An assumed measurement is a fabricated one and is worse
+            than the absence it replaces.
+            """)
+
+        let hkURL = root.appendingPathComponent("apps/watch_ios/WatchApp/HealthKitManager.swift")
+        let hkData = try Data(contentsOf: hkURL)
+        let hk = String(decoding: hkData, as: UTF8.self)
+        XCTAssertTrue(
+            hk.contains("summaryAverageBPM"),
+            "HealthKitManager no longer produces `summaryAverageBPM` — this guard is reading nothing"
+        )
+        for token in ["hr_coverage", "workout-scoped"] {
+            XCTAssertTrue(
+                hk.contains(token),
+                """
+                HealthKitManager.swift no longer states what `summaryAverageBPM` is scoped to \
+                (missing "\(token)"). The value goes to the row as `avg_bpm` with no coverage \
+                figure beside it, and both watch clients write `source = 'watch'` — so without \
+                this statement the absence of `hr_coverage` is indistinguishable from a Wear run \
+                predating the key. Restore it where the average is produced (decisions § 1106).
+                """
+            )
+        }
+    }
+
     /// Repo root resolved from THIS source file so the test doesn't depend on
     /// the runner's cwd — same trick as `WatchRunPayloadFixtureTests`.
     private func repoRoot(file: StaticString = #filePath) -> URL {

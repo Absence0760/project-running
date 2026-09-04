@@ -330,7 +330,6 @@ class RunRecordingService : Service() {
                             bpmCount++
                             lastHrSampleAtMs = SystemClock.elapsedRealtime()
                         }
-                        val avg = if (bpmCount == 0L) null else bpmSum.toDouble() / bpmCount
                         RecordingRepository.update {
                             it.copy(
                                 hrAvailability = update.availability,
@@ -344,7 +343,6 @@ class RunRecordingService : Service() {
                                     paused -> it.bpm
                                     else -> sample ?: it.bpm
                                 },
-                                avgBpm = avg ?: it.avgBpm,
                             )
                         }
                     }
@@ -448,8 +446,7 @@ class RunRecordingService : Service() {
                 stage = RecordingRepository.Stage.Finished,
                 elapsedMs = finalElapsed,
                 distanceM = finalDistance,
-                avgBpm = hr.avgBpm,
-                hrCoverage = hr.coverage,
+                finishedHr = hr,
                 trackFilePath = file?.absolutePath,
                 laps = laps.toList(),
                 activityType = activityType,

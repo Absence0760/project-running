@@ -72,7 +72,70 @@ class CheckpointRecoveryWiringTest {
         assertTrue("must re-grade before queueing", grade < save)
         assertTrue(
             "must bail out on any grade other than Offer",
-            fn.contains("gradeRecovery(cp) != RecoveryAction.Offer"),
+            Regex("""RecoveryAction\.Offer\s*->\s*Unit""").containsMatchIn(fn),
+        )
+    }
+
+    @Test
+    fun `only a Discard grade may clear the checkpoint`() {
+        // `!= Offer -> clear` treated the two bail-out grades as one, and they
+        // are opposites. `Ignore` means "leave it completely alone" — a live
+        // recording whose crash-safety net this checkpoint IS, or (since the
+        // grader stopped throwing) a queue that could not be read at all. The
+        // old branch disarmed the net in the first case and dropped the run's
+        // only durable record in the second (decisions § 1107).
+        val fn = body("fun recoverCheckpoint()")
+        val ignoreArm = fn.indexOf("RecoveryAction.Ignore ->")
+        val discardArm = fn.indexOf("RecoveryAction.Discard ->")
+        assertTrue("expected an explicit Ignore arm", ignoreArm >= 0)
+        assertTrue("expected an explicit Discard arm", discardArm >= 0)
+        assertTrue("expected Discard before Ignore in the when", discardArm < ignoreArm)
+        val ignoreBody = fn.substring(ignoreArm)
+        assertFalse(
+            "the Ignore arm must not clear the checkpoint: $ignoreBody",
+            ignoreBody.substringBefore("}").contains("checkpoints.clear()"),
+        )
+        assertTrue(
+            "the Discard arm must clear it — that is what Discard means",
+            fn.substring(discardArm, ignoreArm).contains("checkpoints.clear()"),
+        )
+    }
+
+    @Test
+    fun `an unreadable queue cannot throw out of the grader`() {
+        // `store.contains` reads the DataStore-backed queue, which reports a
+        // corrupt file by FAILING the read. It threw out of both callers into
+        // `launchGuarded`, which logs and swallows — so a cold start into a
+        // corrupt queue silently withheld the recovery prompt for a run whose
+        // checkpoint is its only record, and a tap on the prompt did nothing.
+        val fn = body("private suspend fun gradeRecovery(")
+        assertTrue(
+            "the queue read must be guarded — it is the one input of the three " +
+                "that can throw",
+            Regex("""try\s*\{\s*store\.contains\(cp\.runId\)\s*\}\s*catch""")
+                .containsMatchIn(fn),
+        )
+        val branch = fn.substringAfter("catch (e: Throwable)")
+        assertTrue(
+            "the failure must grade Ignore — reading it as `alreadyQueued` " +
+                "grades Discard, which deletes the checkpoint on exactly the " +
+                "condition under which the queue cannot be holding the run " +
+                "instead: $branch",
+            branch.contains("return RecoveryAction.Ignore"),
+        )
+        assertFalse(
+            "the failure must not grade Offer either — the recovery it would " +
+                "offer cannot complete, because `store.save` reads the same file",
+            branch.substringBefore("return ").contains("RecoveryAction.Offer"),
+        )
+        assertTrue(
+            "the failure must raise `queueUnreadable` — it is the same file the " +
+                "pre-run chip reports on: $branch",
+            branch.contains("queueUnreadable = true"),
+        )
+        assertTrue(
+            "the failure must log: $branch",
+            branch.contains("Log."),
         )
     }
 
