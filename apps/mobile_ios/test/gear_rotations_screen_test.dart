@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gear_store.dart';
 import '../lib/screens/gear_rotations_screen.dart';
+import 'store_write_watch.dart';
 
 GearRotationWithMembers _rot({
   String id = 'r1',
@@ -271,6 +272,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       expect(api.lastDefaultGearId, 'g2');
       expect(api.lastDefaultKind, 'shoe');
+      await pumpUntilStoreWritesSettle(tester);
     } finally {
       f.dir.deleteSync(recursive: true);
     }
