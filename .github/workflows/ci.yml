@@ -351,10 +351,6 @@ jobs:
         with:
           go-version-file: apps/job_worker/go.mod
           cache-dependency-path: apps/job_worker/go.sum
-      # The build is already covered by CodeQL (security.yml) + the e2e
-      # live-hub job; this job is the only place `go test` runs, so the
-      # personal-data export-completeness guard (and every other worker
-      # test) finally gates a PR instead of only failing locally.
       # Nothing in .github/ read `gofmt` until now: `go vet` and the compiler
       # are both blind to formatting, so seven files under this module sat
       # unformatted on main long enough for nobody to notice. The cost is not
@@ -372,6 +368,10 @@ jobs:
             echo 'Reproduce and fix with: cd apps/job_worker && gofmt -l . && gofmt -w $(gofmt -l .)'
             exit 1
           fi
+      # The build is already covered by CodeQL (security.yml) + the e2e
+      # live-hub job; this job is the only place `go test` runs, so the
+      # personal-data export-completeness guard (and every other worker
+      # test) finally gates a PR instead of only failing locally.
       - name: go vet
         working-directory: apps/job_worker
         run: |
@@ -407,9 +407,6 @@ jobs:
         with:
           go-version-file: apps/graph_cycle/go.mod
           cache-dependency-path: apps/graph_cycle/go.sum
-      # The graph-cycle map sidecar is a separate Go module; this is the only
-      # place its foot-graph build, Dijkstra, cycle search, guard, and HTTP
-      # handlers run under `go test` in CI.
       # The same gofmt gate the worker job carries, for the reason stated
       # there. This module is gofmt-clean today; the step exists so it stays
       # that way rather than because it starts red (decisions § 1150).
@@ -423,6 +420,9 @@ jobs:
             echo 'Reproduce and fix with: cd apps/graph_cycle && gofmt -l . && gofmt -w $(gofmt -l .)'
             exit 1
           fi
+      # The graph-cycle map sidecar is a separate Go module; this is the only
+      # place its foot-graph build, Dijkstra, cycle search, guard, and HTTP
+      # handlers run under `go test` in CI.
       - name: go vet
         working-directory: apps/graph_cycle
         run: |
