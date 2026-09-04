@@ -318,12 +318,22 @@ pub const SEGMENT_AGE_BANDS: [SegmentAgeBand; 13] = [
 ];
 
 /// The gender leaderboard filter.
+///
+/// Two variants, not three. `nonbinary` was dropped from the option set
+/// END-TO-END by migration `20270422_001_restrict_gender_options.sql` (issue
+/// #220): existing rows were folded into `prefer_not_to_say` — the same branch
+/// as a withheld gender — before the `user_profiles_gender_check` CHECK
+/// narrowed, and `gender_options_test.sql` pins the rejection. Web's
+/// `SegmentGenderFilter` narrowed with it. This rail kept the variant for
+/// seven weeks after that, so it held a leaderboard tier the database can no
+/// longer produce and no render site has a string for; web's `crownLabel`
+/// falls a stray value through to "woman", so the two rails did not even
+/// disagree in the same direction. Do not restore it from the older history.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum SegmentGenderFilter {
     Male,
     Female,
-    Nonbinary,
 }
 
 /// Which KOM/QOM crown tier the rank-1 holder owns, given the active filter.
@@ -891,10 +901,6 @@ mod tests {
             crown_label(Some(SegmentGenderFilter::Female), None),
             CrownLabel::Gender(SegmentGenderFilter::Female)
         );
-        assert_eq!(
-            crown_label(Some(SegmentGenderFilter::Nonbinary), None),
-            CrownLabel::Gender(SegmentGenderFilter::Nonbinary)
-        );
     }
 
     #[test]
@@ -925,12 +931,23 @@ mod tests {
             ),
             CrownLabel::GenderAge(SegmentGenderFilter::Male, SegmentAgeBand::A75Plus)
         );
-        assert_eq!(
-            crown_label(
-                Some(SegmentGenderFilter::Nonbinary),
-                Some(SegmentAgeBand::A1819)
-            ),
-            CrownLabel::GenderAge(SegmentGenderFilter::Nonbinary, SegmentAgeBand::A1819)
-        );
+    }
+
+    /// The vocabulary itself, not a mapping. `crown_label` BINDS the gender
+    /// rather than matching it, so it stays total however many variants exist
+    /// and no input it can be handed would ever have failed while a third tier
+    /// was carried — which is why the deleted `Nonbinary` survived seven weeks
+    /// of green suites. The exhaustive match below is the only thing a fourth
+    /// has to get past: web's union is `'male' | 'female'` and the
+    /// `user_profiles_gender_check` CHECK admits those two beside the withheld
+    /// `prefer_not_to_say`, which is not a leaderboard tier.
+    #[test]
+    fn the_gender_filter_carries_exactly_the_two_tiers_the_database_can_produce() {
+        for g in [SegmentGenderFilter::Male, SegmentGenderFilter::Female] {
+            match g {
+                SegmentGenderFilter::Male | SegmentGenderFilter::Female => {}
+            }
+            assert_eq!(crown_label(Some(g), None), CrownLabel::Gender(g));
+        }
     }
 }

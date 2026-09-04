@@ -213,12 +213,32 @@ test('every constant row names at least two rails and says why it matters', () =
   assert.equal(new Set(CONSTANT_ROWS.map((r) => r.name)).size, CONSTANT_ROWS.length);
 });
 
+test('every consumer block says why the sharing is deliberate, and names files once', () => {
+  // The block exists to record a DECISION, so an entry with no reason is worse
+  // than none: it enforces the sharing while leaving the next reader with
+  // nothing to weigh when they want to break it.
+  for (const row of CONSTANT_ROWS) {
+    if (!row.consumers) continue;
+    assert.ok(row.consumers.rails.length >= 1, `${row.name} has an empty consumer block`);
+    assert.ok(
+      row.consumers.why.trim().length > 40,
+      `${row.name}'s consumer block needs the reason the sharing is deliberate, not a label`,
+    );
+    const files = row.consumers.rails.map((c) => c.file);
+    assert.equal(new Set(files).size, files.length, `${row.name} names a consumer twice`);
+    for (const c of row.consumers.rails) {
+      assert.ok(!row.rails.some((r) => r.file === c.file), `${c.file} both declares and consumes`);
+    }
+  }
+});
+
 test('every file the registries name exists', () => {
   const files = new Set([
     ...VECTOR_PAIRS.flatMap((p) => [p.rust.file, p.dart.file]),
     ...RUST_ONLY.map((r) => r.file),
     ...DART_ONLY.map((d) => d.file),
     ...CONSTANT_ROWS.flatMap((r) => r.rails.map((rail) => rail.file)),
+    ...CONSTANT_ROWS.flatMap((r) => (r.consumers?.rails ?? []).map((c) => c.file)),
   ]);
   for (const f of files) {
     assert.ok(existsSync(join(REPO_ROOT, f)), `${f} is named by the registry but does not exist`);
@@ -296,7 +316,10 @@ function fixtureRoot() {
   }
   for (const r of RUST_ONLY) extras.add(r.file);
   for (const d of DART_ONLY) extras.add(d.file);
-  for (const row of CONSTANT_ROWS) for (const rail of row.rails) extras.add(rail.file);
+  for (const row of CONSTANT_ROWS) {
+    for (const rail of row.rails) extras.add(rail.file);
+    for (const c of row.consumers?.rails ?? []) extras.add(c.file);
+  }
   mirror(root, ['apps/custom_watch', 'apps/mobile_android/test'], [...extras]);
   process.on('exit', () => rmSync(root, { recursive: true, force: true }));
   mirrorRoot = root;
@@ -378,6 +401,36 @@ test('the third copy of the run blob is held to the registered one', () => {
   const res = runGuard('apps/mobile_android/test/sim_watch_screen_test.dart', flipFirstGoldenByte);
   assert.equal(res.status, 1);
   assert.match(res.stderr, /is a hex vector the registry does not know about, and it is not a copy of one it does/);
+});
+
+test('a roadbook that gives itself its own grade window fails the consumer check', () => {
+  // The four rails still agree with each other, so every check above this one
+  // passes; only the consumer block can see that the roadbook stopped sharing.
+  const res = runGuard('apps/web/src/lib/routes/roadbook.ts', (src) =>
+    src
+      .replace(
+        "import { gradeFactor, MIN_SEGMENT_M } from '../runs/grade_adjusted_pace';",
+        "import { gradeFactor } from '../runs/grade_adjusted_pace';\nconst MIN_SEGMENT_M = 5;",
+      ),
+  );
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /roadbook\.ts no longer takes it from the rail that declares it/);
+  assert.match(res.stderr, /grade-adjusted EFFORT/);
+});
+
+test('a reference-fixture drift on one rail fails the row, not only its own suite', () => {
+  // A rail that quietly grades a different track still passes its own golden
+  // — it would simply be answering a different question — so the drift is
+  // invisible from inside any one suite.
+  const res = runGuard('apps/mobile_android/test/grade_adjusted_pace_test.dart', (src) =>
+    src.replace(
+      'const double kGapReferencePeriodM = 150.0;',
+      'const double kGapReferencePeriodM = 120.0;',
+    ),
+  );
+  assert.equal(res.status, 1);
+  assert.match(res.stderr, /GAP reference track.*the rails disagree/);
+  assert.match(res.stderr, /periodM=120/);
 });
 
 test('a Wear-OS-only off-route threshold fails the four-rail row', () => {

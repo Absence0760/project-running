@@ -61,6 +61,13 @@ export const MAX_GRADE = 0.45;
  *
  * Matches `GradeAdjustedPaceView.mc`, the Dart twin and the firmware port; the
  * four are held equal by `scripts/check_watch_wire_vectors.mjs`.
+ *
+ * The roadbook is a SECOND consumer, deliberately: `routes/roadbook.ts` and
+ * its Dart and firmware ports allocate a goal time by grade-adjusted effort
+ * over this same anchored window, so a change here moves the arrival times a
+ * race crew holds drop bags against as well as the pace a runner is shown.
+ * Two windows would grade one course two ways. The same guard's consumer block
+ * fails the day a roadbook rail stops importing this.
  */
 export const MIN_SEGMENT_M = 20.0;
 
