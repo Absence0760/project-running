@@ -20631,13 +20631,11 @@ no dispatch line it reports it unrouted — "every row a producer enqueues is
 claimed, failed as unknown, retried to exhaustion and lost". Both directions
 red, from the one test, for the same missing half.
 
-The CHECK widen takes the `NOT VALID` + `VALIDATE` two-step `20270603_001`
-established for this table. `jobs` accumulates finished rows, so a validating
-`ADD` scans all of them under `ACCESS EXCLUSIVE`; the constraint only ever ADDS
-a kind, so every existing row already satisfies it and the scan is pure waste.
-`VALIDATE` runs the same scan under `SHARE UPDATE EXCLUSIVE` with reads and
-writes proceeding. Both halves sit in one migration because the table scanned is
-the queue, not `runs`.
+The CHECK widen is `drop` + `add ... not valid` and deliberately does **not**
+validate; [§ 1148](#1148) has the argument, which is that the two-step every
+previous widen used does not avoid the scan when both halves share a file, and
+that for a widen the scan can only confirm what the previous constraint already
+proved.
 
 **Two departures from the filing's SQL, both about ordering.** The enqueue calls
 `expire_stale_export_jobs()` before it queues anything. That function is what
@@ -20742,3 +20740,47 @@ lands first by construction, and the gate is additive when it arrives.
 The sweep is its own commit for the reason the filing gave: folded into a
 behaviour change it re-aligns blocks the author did not edit, and the review
 then reads as a bigger change than it is.
+
+## 1148. A `NOT VALID` + `VALIDATE` pair in ONE migration file takes exactly the lock it exists to avoid, because the apply path wraps the file in a transaction
+
+`migration_locks.md` says a validating `ADD CONSTRAINT` holds `ACCESS EXCLUSIVE`
+for a full scan and that the online form is `ADD ... NOT VALID` then a separate
+`VALIDATE CONSTRAINT` under `SHARE UPDATE EXCLUSIVE`. Both true. It then says
+"putting both in one migration is still far better than the single-step form",
+and `20270603_001` widened `jobs_kind_chk` on that basis, writing that
+"`VALIDATE` runs it under `SHARE UPDATE EXCLUSIVE` instead, with reads and
+writes proceeding". **That is not what happens.**
+
+`apps/backend/scripts/apply-pending-migrations.sh` applies each file as
+`begin;` … `commit;` — the ledger row is committed atomically with the SQL,
+which is the point of it — and `migration_locks.md` itself asserts the CLI wraps
+a migration the same way (it is the stated reason `CREATE INDEX CONCURRENTLY`
+errors as apply-time DDL). A lock taken by DDL is held until the transaction
+ends. So in a file containing `drop constraint` + `add ... not valid` +
+`validate constraint`, the `ACCESS EXCLUSIVE` taken by the `drop` is still held
+when the `validate` scan runs; `VALIDATE`'s weaker request is subsumed by the
+lock already held, never a downgrade. Same-file, the two-step and the
+single-step take the identical lock for the identical duration, and the
+difference is ceremony. The benefit is real only across transactions, which is
+why the doc's own stronger sentence — "`VALIDATE` ideally a later migration" —
+is the one that matters.
+
+`check_migration_online_safety.mjs` cannot see this: it grades the STATEMENT
+shape, and a same-file two-step is the shape it is looking for. So it passes a
+migration that takes the lock it was written to prevent, on a table it names as
+guarded. That is the [§ 764](#764) hazard in a different tier — a guard whose
+green means less than its name says — and it is filed with the doc and the guard
+as its owners, because both are outside the lane that measured it.
+
+**What this migration does about it.** It skips the scan rather than relocating
+it, because for a WIDEN the scan can only confirm what is already proven: every
+existing row was admitted by the narrower constraint being replaced, which
+enforced on every INSERT and UPDATE, and the new set is a strict superset. The
+argument is inductive and survives the constraint being left
+`convalidated = false` — a `NOT VALID` CHECK still binds every new write, so the
+next widen can make the same claim about the rows this one admits. Nothing in
+the repo requires `jobs_kind_chk` to be validated (`free_text_caps_test.sql`'s
+validity assertion is scoped to `%_len_chk`), and `20270503_001` records three
+constraints that sat `convalidated = false` on `main` for months while binding
+every write. A `VALIDATE` in its own later migration would be free and is
+welcome; it is not owed, because there is nothing to find.

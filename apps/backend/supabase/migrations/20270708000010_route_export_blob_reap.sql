@@ -14,14 +14,37 @@
 
 -- ─────────────────── 1. jobs_kind_chk ───────────────────
 
--- The online two-step, for the reason 20270603_001 spells out: `jobs` is a
--- queue that accumulates finished rows, and a validating ADD holds ACCESS
--- EXCLUSIVE while it scans all of them. Every existing row already satisfies
--- the wider set — this only ever ADDS a kind — so the scan is pure waste, and
--- VALIDATE runs it under SHARE UPDATE EXCLUSIVE with reads and writes
--- proceeding. Both halves are here rather than split across migrations
--- because the scan is of the queue, not of `runs`; the lock class is what
--- mattered (migration_locks.md § CHECK constraints).
+-- `drop` + `add ... not valid`, and DELIBERATELY NO `validate` — read this
+-- before "finishing" it (decisions § 1148).
+--
+-- `jobs` is on migration_locks.md's guarded list: it accumulates every
+-- finished job, so a scan of it under ACCESS EXCLUSIVE blocks the worker's
+-- claim AND every trigger that enqueues, which is the notification fan-out on
+-- the app's own write path.
+--
+-- The two-step every previous widen used does NOT avoid that scan when both
+-- halves sit in one file. `apps/backend/scripts/apply-pending-migrations.sh`
+-- wraps each file in `begin;` … `commit;` around an include of it (and the CLI
+-- wraps a migration the same way — migration_locks.md § Lock reference says as
+-- much about CONCURRENTLY), and a lock taken by DDL is held until the
+-- transaction ends. The `drop` above
+-- takes ACCESS EXCLUSIVE, so it is still held when `validate` runs; VALIDATE's
+-- weaker SHARE UPDATE EXCLUSIVE is subsumed, never a downgrade. Same-file, the
+-- two-step and the single-step take the identical lock for the identical
+-- duration.
+--
+-- So the scan is skipped rather than relocated, because for a WIDEN it can
+-- only confirm what is already proven. Every existing row was admitted by the
+-- narrower constraint this replaces, which enforced on INSERT and UPDATE, and
+-- the new set is a strict superset — so no row can violate it. That argument
+-- is inductive and survives this constraint being left `convalidated = false`:
+-- a NOT VALID CHECK still binds every new write, so the next widen may make
+-- the same claim about the rows this one admitted.
+--
+-- Validating it would be free correctness only if it were its own migration,
+-- in its own transaction, in a quiet window — which is what migration_locks.md
+-- recommends and what this lane could not do (it holds one migration file).
+-- It is not owed: there is nothing to find.
 alter table public.jobs
   drop constraint jobs_kind_chk;
 alter table public.jobs
@@ -35,8 +58,6 @@ alter table public.jobs
     )
   )
   not valid;
-alter table public.jobs
-  validate constraint jobs_kind_chk;
 
 -- ─────────────────── 2. enqueue_export_blob_reap ───────────────────
 
