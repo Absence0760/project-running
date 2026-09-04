@@ -2565,6 +2565,8 @@ jobs:
           STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret-32chars-ok
           STRAVA_VERIFY_TOKEN: ci-strava-verify-token-32-chars-ok
           STRIPE_EVENTS_WEBHOOK_SECRET: ci-stripe-events-secret
+          # The cron bearer the refresh-tokens positive case sends.
+          CRON_SECRET: ci-cron-secret-at-least-32-chars-ok
           # Same value the .env.local block wrote, so the auth-email
           # positive path signs with the key the function host verifies
           # against. Mailpit is read from the RUNNER, so this is the

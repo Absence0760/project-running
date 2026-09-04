@@ -1248,6 +1248,107 @@ Deno.test({
   },
 });
 
+// ── refresh-tokens: the POSITIVE path, without an upstream ────────
+// The two refresh-tokens cases above are both 403s, so a handler that
+// refused every request would pass both. The gate OPENING is the thing
+// they cannot see, and it is the only part of this function that had no
+// coverage: `refreshExpiringStravaTokens` itself already has a positive
+// path in refresh-tokens/lib.test.ts and sweep_invariants.test.ts, both
+// driven through a stubbed `globalThis.fetch` — the same seam
+// _shared/strava_upstream.test.ts uses for the import path.
+//
+// So no live credential is needed here either, and no upstream call is
+// made. The fixture is an integration whose token IS inside the
+// one-hour window (so the sweep selects it, rather than returning zero
+// off an empty select and proving nothing) but which holds no vault
+// secret, so `get_integration_tokens` yields nothing and the loop
+// `continue`s before `refreshStravaToken` is reached. That the upstream
+// was never called is observable rather than assumed: a real call with
+// an unusable grant would 4xx and stamp `disconnected_at` through the
+// wired onPermanentFailure callback, and the test reads that column
+// back.
+
+const CRON_SECRET = Deno.env.get('CRON_SECRET') ??
+  'ci-cron-secret-at-least-32-chars-ok';
+
+Deno.test({
+  name: 'refresh-tokens: the correct cron bearer is accepted and the ' +
+    'sweep completes without reaching Strava',
+  ignore: SKIP_DB,
+  fn: async () => {
+    const email =
+      `cron-sweep-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+    const createRes = await svc('/auth/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'testtest-cron-1', email_confirm: true }),
+    });
+    const created = await createRes.json().catch(() => null);
+    const userId = created?.id as string | undefined;
+    if (!userId) {
+      throw new Error(
+        `failed to create ephemeral user: ${createRes.status} ${JSON.stringify(created)}`,
+      );
+    }
+
+    try {
+      // Inside the sweep's `token_expiry < now + 1h` window, and with
+      // both vault secret ids null.
+      const plant = await svc('/rest/v1/integrations', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          user_id: userId,
+          provider: 'strava',
+          token_expiry: new Date(Date.now() + 60_000).toISOString(),
+        }),
+      });
+      const plantStatus = plant.status;
+      await plant.body?.cancel();
+      if (plantStatus >= 300) {
+        throw new Error(`failed to plant integration: ${plantStatus}`);
+      }
+
+      const res = await fetch(endpoint('refresh-tokens'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${CRON_SECRET}` },
+      });
+      const json = await res.json().catch(() => null);
+      if (res.status !== 200) {
+        throw new Error(
+          `expected 200, got ${res.status} ${JSON.stringify(json)}; 403 means ` +
+          'the bearer and the host\'s CRON_SECRET disagree, 503 means the host ' +
+          'has none (or one under the 32-char floor).',
+        );
+      }
+      // The count is the shape the cron job reads. Zero is the right
+      // answer for a grant with no stored refresh token — a non-zero one
+      // would mean the sweep believed it rotated something.
+      if (json?.refreshed !== 0) {
+        throw new Error(
+          `expected {refreshed: 0}, got ${JSON.stringify(json)}`,
+        );
+      }
+
+      const after = await svc(
+        `/rest/v1/integrations?user_id=eq.${userId}&provider=eq.strava` +
+        '&select=disconnected_at,disconnected_reason',
+      );
+      const rows = await after.json().catch(() => []);
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (!row) throw new Error('planted integration disappeared');
+      if (row.disconnected_at !== null) {
+        throw new Error(
+          `disconnected_at was stamped (${JSON.stringify(row)}) — the sweep ` +
+          'reached Strava with an unusable grant instead of skipping the row.',
+        );
+      }
+    } finally {
+      await svc(`/auth/v1/admin/users/${userId}`, { method: 'DELETE' })
+        .then((x) => x.body?.cancel());
+    }
+  },
+});
+
 // ── auth-email: the POSITIVE path, end to end into Mailpit ────────
 // The three cases above are all refusals, and a handler that refused
 // everything would pass all three. This one proves the other side: a
