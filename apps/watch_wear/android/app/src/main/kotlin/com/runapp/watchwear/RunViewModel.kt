@@ -24,12 +24,14 @@ import java.io.File
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -112,6 +114,11 @@ data class UiState(
     val locationAvailable: Boolean = true,
     val online: Boolean = true,
     val queuedCount: Int = 0,
+    /// The last read of the run queue failed, so [queuedCount] is stale rather
+    /// than current. DataStore reports a corrupt or unreadable file by failing
+    /// the read, and the two facts are orthogonal: the count is the last figure
+    /// anyone saw, this is whether it still stands (decisions § 1104).
+    val queueUnreadable: Boolean = false,
     val authed: Boolean = false,
     val authError: String? = null,
     val signInLoading: Boolean = false,
@@ -512,13 +519,28 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /// `Flow.catch` was the wrong operator here and its cost was total: catch
+    /// COMPLETES the flow, so one failed read froze `queuedCount` at its last
+    /// value for the life of the process — 0 on a cold start — and the pre-run
+    /// "Sync N runs" chip, gated on `queuedCount > 0`, never appeared again. A
+    /// runner rebooting into a corrupt queue was shown nothing at all. Catching
+    /// is not a judgement about corruption; it is a judgement that the FIRST
+    /// failure is the LAST one, which nothing establishes. Retrying makes the
+    /// cheap distinguishing test — read it again — and costs one file open
+    /// (decisions § 1104).
     private fun observeQueue() {
         queueWatchJob = launchGuarded {
             store.queue
-                .catch { e -> Log.w(TAG, "run queue stream failed", e) }
+                .retryWhen { e, attempt ->
+                    Log.w(TAG, "run queue stream failed, retry $attempt", e)
+                    _state.value = _state.value.copy(queueUnreadable = true)
+                    delay(queueReadRetryDelayMs(attempt))
+                    true
+                }
                 .collect { list ->
                 _state.value = _state.value.copy(
                     queuedCount = list.size,
+                    queueUnreadable = false,
                     thisRunSynced = _state.value.thisRunId?.let { id ->
                         list.none { it.id == id }
                     } ?: _state.value.thisRunSynced,
@@ -1311,12 +1333,19 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Throwable) {
             Log.e(TAG, "run queue unreadable — drain skipped", e)
             drainBackoff.onFailure()
+            // The same flag the stream raises. Two readers of one file, so
+            // whichever read last decides whether the count on screen still
+            // stands — otherwise tapping the retry chip could fix the drain
+            // and leave the chip claiming the queue is still unreadable, or
+            // the reverse.
             _state.value = _state.value.copy(
+                queueUnreadable = true,
                 syncError = getApplication<Application>()
                     .getString(R.string.sync_queue_unreadable),
             )
             return
         }
+        _state.value = _state.value.copy(queueUnreadable = false)
         // The loop body itself is in the pure `drainQueueLoop` helper
         // so the per-error-class semantics, refresh-then-retry shape,
         // and transient-vs-permanent split can be unit-tested in

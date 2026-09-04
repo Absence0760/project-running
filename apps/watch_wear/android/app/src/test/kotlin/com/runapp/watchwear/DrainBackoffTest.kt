@@ -85,5 +85,44 @@ class DrainBackoffTest {
         assertEquals(90_000L, b.lastFailureAtMs)
     }
 
+    // ---- queueReadRetryDelayMs ----
+    //
+    // The queue STREAM's retry curve, which is not this class's. `Flow.catch`
+    // on `store.queue` completed the flow, so one failed read froze the
+    // pre-run count for the life of the process (decisions § 1104). The
+    // replacement is a retry, and a retry that never slows down against a
+    // permanently corrupt file is a busy loop.
+
+    @Test
+    fun `the first retry is immediate enough to ride out a transient blip`() {
+        // A local file open, not a network round trip: waiting the drain's
+        // 60 s to re-read a file that recovered in the same second would
+        // leave the chip wrong for a minute for no reason.
+        assertEquals(1_000L, queueReadRetryDelayMs(0))
+    }
+
+    @Test
+    fun `consecutive failures double the wait`() {
+        assertEquals(2_000L, queueReadRetryDelayMs(1))
+        assertEquals(4_000L, queueReadRetryDelayMs(2))
+        assertEquals(8_000L, queueReadRetryDelayMs(3))
+    }
+
+    @Test
+    fun `the wait is capped so a corrupt file costs one open a minute`() {
+        assertEquals(32_000L, queueReadRetryDelayMs(5))
+        assertEquals(60_000L, queueReadRetryDelayMs(6))
+        assertEquals(60_000L, queueReadRetryDelayMs(60))
+    }
+
+    @Test
+    fun `an attempt count that would overflow the shift still clamps`() {
+        // `1_000L shl 64` is `1_000L shl 0` on the JVM — the shift wraps, so
+        // an unclamped exponent returns the BASE delay after 64 failures and
+        // the backoff silently resets to a busy retry.
+        assertEquals(60_000L, queueReadRetryDelayMs(64))
+        assertEquals(60_000L, queueReadRetryDelayMs(Long.MAX_VALUE))
+    }
+
     private class ClockHolder(var value: Long = 0L)
 }
