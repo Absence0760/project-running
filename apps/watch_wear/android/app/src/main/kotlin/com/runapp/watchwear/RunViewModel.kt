@@ -726,12 +726,38 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun gradeRecovery(cp: Checkpoint): RecoveryAction = recoveryActionFor(
-        activeRecording = RecordingRepository.metrics.value.stage !=
-            RecordingRepository.Stage.Idle,
-        alreadyQueued = store.contains(cp.runId),
-        trackFileExists = withContext(Dispatchers.IO) { File(cp.trackFilePath).exists() },
-    )
+    /// `store.contains` reads the same DataStore-backed queue the drain and the
+    /// pre-run count read, and it fails the same way: a corrupt file THROWS
+    /// rather than reads empty. It threw straight out of both callers into
+    /// `launchGuarded`, which logs and swallows — so a cold start into an
+    /// unreadable queue silently withheld the recovery prompt for a crashed
+    /// run whose checkpoint is its only durable record, and a tap on that
+    /// prompt did nothing at all (decisions § 1107).
+    ///
+    /// The two answers the failure could stand in for are not symmetric and
+    /// the destructive one is not the cautious one: reading it as "already
+    /// queued" grades `Discard`, which DELETES the checkpoint on precisely the
+    /// condition under which the queue cannot be holding the run instead.
+    /// Reading it as "not queued" grades `Offer`, and the recovery it offers
+    /// cannot complete — `store.save` reads the same file. So the failure is
+    /// its own answer: `Ignore` already means "leave it completely alone,
+    /// neither prompt nor clear", the net stays armed, and the grade is retaken
+    /// on the next launch.
+    private suspend fun gradeRecovery(cp: Checkpoint): RecoveryAction {
+        val alreadyQueued = try {
+            store.contains(cp.runId)
+        } catch (e: Throwable) {
+            Log.e(TAG, "run queue unreadable — checkpoint left armed, ungraded", e)
+            _state.value = _state.value.copy(queueUnreadable = true)
+            return RecoveryAction.Ignore
+        }
+        return recoveryActionFor(
+            activeRecording = RecordingRepository.metrics.value.stage !=
+                RecordingRepository.Stage.Idle,
+            alreadyQueued = alreadyQueued,
+            trackFileExists = withContext(Dispatchers.IO) { File(cp.trackFilePath).exists() },
+        )
+    }
 
     /// User accepted the recovery prompt. Treat the checkpointed run as
     /// finished-as-of-savedAt and queue it for upload. The track file is
@@ -746,10 +772,26 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     fun recoverCheckpoint() {
         val cp = _state.value.pendingRecovery ?: return
         launchGuarded {
-            if (gradeRecovery(cp) != RecoveryAction.Offer) {
-                checkpoints.clear()
-                _state.value = _state.value.copy(pendingRecovery = null)
-                return@launchGuarded
+            when (gradeRecovery(cp)) {
+                RecoveryAction.Offer -> Unit
+                // The run is captured somewhere strictly better than this
+                // snapshot, so the snapshot goes. This is the only grade that
+                // may clear it.
+                RecoveryAction.Discard -> {
+                    checkpoints.clear()
+                    _state.value = _state.value.copy(pendingRecovery = null)
+                    return@launchGuarded
+                }
+                // Nothing may be destroyed on this one. `Ignore` is either a
+                // live recording whose crash-safety net this checkpoint IS, or
+                // a queue that could not be read at all — and the old
+                // `!= Offer` branch cleared the checkpoint on both, disarming
+                // the net in the first case and dropping the run's only
+                // durable record in the second. The prompt stays up too, so
+                // the affordance is not silently taken away; the tap does
+                // nothing until the read recovers, which is filed
+                // (decisions § 1107).
+                RecoveryAction.Ignore -> return@launchGuarded
             }
             val durationS = checkpointActiveDurationS(cp)
             // A recovered run is graded the same way the normal stop path
