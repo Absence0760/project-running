@@ -493,6 +493,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleLifecycleDrip(ctx, job)
 	case "data_export":
 		return w.handleDataExport(ctx, job)
+	case "export_blob_reap":
+		return w.handleExportBlobReap(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}
