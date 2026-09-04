@@ -19577,3 +19577,215 @@ it names `UpdateFunctionCode` alone, which is the one that would. Not verified
 against live IAM: no lane holds AWS credentials, so this is `terraform validate`
 on both env roots and nothing more. `infra/github-oidc` is applied by an
 operator, and the next release after that apply is what confirms it.
+
+## 1104. The run queue is retried rather than caught, and the pre-run screen offers the drain when the count is unknown
+
+[§ 1082](#1082-the-watch-view-model-gets-a-crash-handler-and-the-drain-says-an-unreadable-queue-is-unreadable-rather-than-empty)
+closed the drain's half of this and filed the rest, because the rest is two UI
+and state decisions rather than the saved-data one that entry was about. Both
+are made here, and the filing was right that picking either by default is the
+mistake.
+
+**The mechanism, restated because it is the whole finding.** `Flow.catch` does
+not "handle" a failure and carry on: it emits at most once and **completes the
+flow**. The `.catch { log }` [§ 1055](#1055-a-phone-pushed-session-update-could-end-a-run-and-the-asymmetry-that-made-it-findable)
+put on `store.queue` therefore ended the collection on the first failed read,
+and `queuedCount` froze at whatever it last held — 0 on a cold start. The
+pre-run "Sync N runs" chip is gated on `queuedCount > 0`, so it never appeared
+again for the life of the process. A runner who reboots into a corrupt queue
+was shown nothing at all: `syncError` renders on `PostRunScreen`, and they are
+not on it. The frozen count was the bug; a flow that can never recover was the
+mechanism.
+
+**(a) Retry, not catch.** Catching is not a judgement about corruption. It is
+a judgement that the FIRST failure is the LAST one, and nothing establishes
+that — DataStore fails a read for a corrupt file, which will fail again, and
+for transient I/O, which will not, and the exception does not reliably separate
+them. The cheap distinguishing test is to read it again, and a read is one file
+open. So the stream is `retryWhen`-ed, unbounded, with `queueReadRetryDelayMs`
+doubling 1 s → 60 s. Unbounded because a bounded retry only moves the freeze
+later; backed off because an unbounded immediate retry against a genuinely
+corrupt file is a busy loop. The curve is deliberately not `DrainBackoff`'s
+60 s → 30 min: that one throttles a network round trip to a third party, this
+one throttles a local file open whose failure takes the recovery affordance off
+screen, so it recovers a transient blip inside a second and settles at one
+failed open a minute. The clamp on the shift is not decoration — `1_000L shl
+64` is `1_000L shl 0` on the JVM, so an unclamped exponent silently resets the
+backoff to its base after 64 failures.
+
+**(b) A retry chip in the counted chip's own slot.** Three candidates. "Sync ?"
+is rejected for the reason the filing gives — the number is the entire content
+of that chip, and a question mark invites a tap whose outcome is a mystery. A
+persistent error LINE is rejected because it is a second thing on a 1.4-inch
+top arc, and because a sentence that cannot be acted on is not what is missing:
+the affordance is. What ships is the same chip, in the same slot, with the count
+replaced by a label that claims no figure. Nothing else on the arc moves, no
+state gains a line, and the thing the `queuedCount > 0` gate withheld on
+precisely the condition that guarantees the count is wrong is restored.
+
+Three details that are decisions, not defaults. It is **not** gated on
+`online`: reading the queue is a local file open and the network is not a party
+to whether it succeeds, so disabling it offline would withhold the recovery path
+for a purely local fault. It **is** still gated on `authed`, because
+`drainQueue` returns from `awaitAuth()` before reading anything without a
+session, and an enabled chip that cannot reach the read is a dead affordance.
+And the warning colour is not the only signal — the label differs from the
+counted one, and the content description carries the whole sentence, which has
+no width limit where the chip has 100 dp.
+
+**One flag, two readers.** `queueUnreadable` is a second field beside
+`queuedCount` rather than a nullable count or a three-state type, because the
+two are orthogonal facts that cannot contradict: the count is the last figure
+anyone read, the flag is whether it still stands. A null count would collapse
+"never read yet" into "read and failed" and flash the retry chip on every cold
+start. Both readers of the file write the flag — the stream and the drain's
+`first()` — so tapping the chip cannot fix the drain while leaving the chip
+claiming the queue is still unreadable.
+
+## 1105. The finished heart-rate claim gets its own field, and the source guard that pinned the ordering is deleted rather than converted
+
+`RecordingRepository.Metrics.avgBpm` carried two different claims at two
+different times: the heart-rate collect wrote a live rolling mean into it on
+every sample, and `stopRecording` overwrote it with the graded claim
+[§ 1083](#1083-the-wrist-records-how-much-of-the-run-its-heart-rate-covered-and-refuses-to-call-a-minority-sample-the-runs-average)
+produced. `RunViewModel.handleFinishedRun` read the field and could not tell
+which it had; it was correct only because the overwrite happened first.
+
+That ordering is worse than it sounds, and the file says so in its own words.
+`update` is a CAS loop *because* five writers race on it, and the comment above
+it records that cancelling a job cannot interrupt a non-suspending call already
+in flight. So the collect's transform could land after the stop's — restoring
+an ungraded mean over an average the grader had deliberately suppressed, and
+saving a twelve-hour run with a claim over 3 % of it. The pin against that was
+`HeartRateCoverageTest` reading the two functions' source for the right
+statement order.
+
+`Metrics` now carries `finishedHr: HeartRateClaim?` — the pair § 1083 already
+returns, written once by whoever makes the `Finished` transition and null at
+every other stage. Null claims no heart rate rather than falling back.
+
+**The live write is deleted, not renamed, and that is the part the filing did
+not predict.** Verifying the premise first is what turned this up: the filing
+said the rolling mean was "the live figure the running screen renders", and it
+is not. `RunningScreen` takes the instantaneous `bpm`; the active-run tile
+carries no heart rate at all; and the grader takes the raw `bpmSum`/`bpmCount`
+off the service's own fields, never off this state. The rolling mean had **no
+reader anywhere** between the sample that produced it and the stop that
+overwrote it. Its only effect was the hazard.
+
+**The guard is replaced rather than converted, and the two halves split on
+whether a type can express them.** "Both save paths grade through
+`heartRateClaim`" stays a source guard: that two named call sites call one
+function is not a Kotlin type. The ordering assertion goes, because its premise
+goes with the second writer — a test re-asserting what the compiler now enforces
+can only fail when someone reintroduces the field, which is a change the other
+half already catches. In its place, one **real** test: apply the collect's
+transform after the stop's on the actual repository and assert the suppressed
+claim survives. And one widened scan — an average divided out of the pair
+anywhere in the recorder, not only inside the two save bodies, because the
+collect was doing exactly that in a body the old guard deliberately excluded.
+
+## 1106. `apps/watch_ios` states what its heart-rate average is scoped to, because `source` cannot say which watch wrote a run
+
+The filing offered two outcomes: measure coverage on the watchOS side and write
+`hr_coverage` from it, or state explicitly that its absence on a
+`source = 'watch_ios'` run means workout-scoped. Verifying the premise first
+disposed of the second as written and reshaped the answer.
+
+**There is no `watch_ios`.** Both watch clients write `source = 'watch'` —
+`SupabaseClient.kt` puts the literal, `ContentView.syncRun` puts the same one.
+So the absence of `hr_coverage` is not self-addressing: a reader holding a
+`source = 'watch'` run with no coverage figure cannot tell an Apple Watch's
+workout-scoped average from a Wear run recorded by a build predating the key or
+recovered from a checkpoint that never carried it — the third case being one the
+registry row itself documents as legitimate. Any statement has to name all
+three, and it cannot be phrased as a property of a source value that does not
+exist.
+
+**Why the measurement is not in this change, in the order the reasons bind.**
+The strong one is structural, not effort: watchOS hands a finished run to the
+phone through `WCSession.transferFile(_:metadata:)`, and claim (6) of
+`scripts/check_watch_ios_source.mjs` reads BOTH ends — a key the watch sends
+that `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` never lifts out fails
+the PR, which is exactly how Apple-Watch runs once reached the phone with no
+`activity_type`. Adding `hr_coverage` to the envelope therefore requires an edit
+in `apps/mobile_ios/`, a tree no lane owned this round. The second is that this
+is a Linux workstation with no Xcode, so a new accumulator on a live sensor path
+could be neither compiled nor exercised, and the two cheap approximations each
+measure something other than coverage: `HKStatistics`' start-to-end span credits
+a two-hour silence in the middle as covered, which is the interval error § 1083
+rejected, and ticking against the DELIVERY of `didCollectDataOf` measures
+HealthKit's batching rather than the sensor's. The honest instrument is
+`mostRecentQuantityDateInterval()` — the sample's own timestamp — or a post-
+`finishWorkout` sample query over the workout interval, and neither is worth
+shipping unverified: a nil that silently writes `hr_coverage: 0.0` on every run
+is the fabricated measurement the filing rules out.
+
+**What ships.** The scope statement goes where the average is produced, on
+`HealthKitManager.summaryAverageBPM`, because that is what a maintainer reads
+before adding an assumed `1.0`. It states the claim (`HKLiveWorkoutBuilder`'s
+average over an `HKWorkoutSession`, which holds the sensor for the life of the
+session rather than the life of the foreground app — the failure § 1015 makes
+Wear's `MeasureClient` prone to), what the claim does **not** cover (a live
+session whose sensor goes quiet still averages what it got), and the
+three-way ambiguity above. A guard in `MetadataRegistryTests` pins both halves:
+no watchOS source may write `hr_coverage`, and the statement must stay. The
+registry row's replacement text is handed to integration —
+`docs/backend/metadata.md` belonged to another lane this round.
+
+Not built. Both runnable watchOS guards pass (`check_watch_ios_source.mjs`,
+`check_xcstrings_parity.sh`, neither of which compiles anything); the Swift is
+unverified until CI's watchOS job runs it, and it joins the existing population
+of watchOS edits landed unbuilt.
+
+## 1107. An unreadable queue was ungraded on the crash-recovery path, and the bail-out that grades it was deleting the thing it protects
+
+Surfaced surveying the Wear tier after [§ 1104](#1104-the-run-queue-is-retried-rather-than-caught-and-the-pre-run-screen-offers-the-drain-when-the-count-is-unknown),
+looking for the rest of the population that reads `LocalRunStore`. There were
+two more readers and one of them mattered: `gradeRecovery`'s
+`store.contains(cp.runId)`, which is `queue.first().any { … }` on the same
+DataStore-backed flow. (The other, `reconcileTrackStorage`'s
+`migrateTrackFiles`, was already guarded.)
+
+**What it cost.** The read throws on a corrupt file, and the throw went out of
+both callers into `launchGuarded`, which logs and swallows. `checkRecovery`
+therefore set no `pendingRecovery`, so a cold start into an unreadable queue
+withheld the recovery prompt for a crashed run **whose checkpoint is its only
+durable record** — and said nothing. `recoverCheckpoint` threw from the same
+call, so the prompt stayed on screen and the tap did nothing, again silently.
+Same shape as § 1082, one layer over: the cheapest reading of a failed queue
+read is the worst one, and here it was not even a reading — it was a swallow.
+
+**The failure is its own grade, and `Ignore` is not the timid choice, it is the
+only non-destructive one.** Standing the failure in for `alreadyQueued = true`
+grades `Discard`, which **deletes the checkpoint** on precisely the condition
+under which the queue cannot be holding the run instead — the one moment the
+snapshot is load-bearing. Standing it in for `false` grades `Offer`, and the
+recovery it offers cannot complete, because `store.save` reads the same file.
+`RecoveryAction.Ignore` already carries the meaning wanted — "leave it
+completely alone: neither prompt nor clear" — so the net stays armed and the
+grade is retaken on the next launch. It also raises `queueUnreadable`, so the
+pre-run chip § 1104 added reports the same file rather than two surfaces
+disagreeing about it.
+
+**Which exposed a latent second defect in the line that was supposed to be the
+safety check.** `recoverCheckpoint` opened with `if (gradeRecovery(cp) !=
+RecoveryAction.Offer) { checkpoints.clear() … }`, collapsing the two bail-out
+grades into one when they are opposites. `Ignore` means a **live recording**
+whose crash-safety net this checkpoint IS, and clearing there disarms the net
+mid-run. It was unreachable in practice — the prompt is a full-screen takeover
+with no Start button, so no recording can begin under it — but it became
+reachable the moment an unreadable queue also graded `Ignore`, which is how a
+latent bug turns into a live one. Only `Discard` may clear the checkpoint now,
+and the arm is exhaustive rather than a negation.
+
+**Not taken, filed.** The tap is still silent while the queue is unreadable:
+the runner presses "Save it" and nothing visibly happens, because the recovery
+prompt is a takeover with no failure line and `syncError` renders on
+`PostRunScreen`. And `checkRecovery` runs once, from `init`, so a read that
+recovers inside the same process does not re-raise a prompt it withheld. Both
+want the same small thing — the prompt disclosing an unreadable queue, using
+the `sync_queue_unreadable` string that already exists in all seven catalogues,
+with "Save it" disabled while it stands — and both are display decisions on the
+one screen § 1104 was careful with rather than the fail-closed data one this
+entry is about.
