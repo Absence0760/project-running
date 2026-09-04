@@ -14,9 +14,10 @@ import { stripComments } from './core/strip_comments';
  * found `geocodeViaMapTiler` doing that inside a function documented to return
  * null, forty lines from a sibling that guarded it, and asked for the class to
  * be searched. It ran to two more (§ 1087): `geocodeViaNominatim`, the OTHER
- * branch of the same exported function, and `snapToRoad`, which has no
- * throwing branch at all — it hands back the unsnapped point on every failure,
- * so no caller has a reason to wrap it.
+ * branch of the same exported function, and `snapToRoad`, whose whole contract
+ * was to hand back the unsnapped point on every failure. That second one went
+ * with the dead `routing.ts` exports (§ 1119), which is why a reader arriving
+ * from § 1087 finds no routing.ts row in the register below.
  *
  * The rule is not "every parse must be guarded": three of the sites here
  * document a THROWS contract, and their callers depend on it to tell a failed
@@ -44,12 +45,6 @@ const REGISTER: Record<string, [number, string]> = {
 		'searchFoods / lookupBarcode / searchUsda each document THROWS on a ' +
 			'network, non-2xx or parse failure so the merge caller can tell a ' +
 			'failed source from an empty one and offer a retry',
-	],
-	'src/lib/routes/routing.ts': [
-		2,
-		'fetchRoute / fetchFullRoute throw on every failure by contract ' +
-			'(`OSRM error:` / `no route found`); snapToRoad, which fails soft, ' +
-			'is guarded',
 	],
 	'src/lib/integrations/import.ts': [
 		4,
