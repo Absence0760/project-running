@@ -270,6 +270,7 @@ See [features § Run history](features.md#run-history), [features § Analytics d
 |---|---|---|---|---|---|---|
 | Pull remote runs from Supabase | ✓ | Partial | ✓ | N/A | N/A | Watches hand off to the phone rather than maintaining their own synced history. |
 | Bulk sync button (manual re-push) | ✓ | Partial | N/A | N/A | N/A | Web has no unsynced-queue concept — it's always online. |
+| Parked run (permanently-refused push) + drop-track offer | ✓ | Partial | N/A | N/A | N/A | Mobile-only **by construction**, not by drift: parking is a verdict on a run sitting in the phone's local queue, and web has no queue to park from — the row above records why. `blocked_runs.json` + `RunPushOutcome` + the run-detail parked card ([decisions § 1070](../architecture/decisions.md), re-verified [§ 1096](../architecture/decisions.md)). A missing web surface here is correct, not a § 24 inversion. |
 | Auto-sync on connectivity change | ✓ | Partial | N/A | ✓ | ✓ | Both watches sync on reconnect; Wear OS via `RunViewModel.observeConnectivity` collecting from `system/NetworkWatcher.kt` (offline → online edge fires `drainQueue`), in addition to app-open + post-stop drains. |
 | Background periodic sync (WorkManager etc.) | ✓ | Partial | N/A | ✗ | ✗ | |
 | Conflict resolution (newer-wins) | ✓ | Partial | ✓ | N/A | N/A | |

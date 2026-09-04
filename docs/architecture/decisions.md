@@ -19752,3 +19752,31 @@ property [check 4 of `check_parity_pair_registry.mjs`](#604) exists for.
 The reciprocal note belongs in `provider_probe.ts`'s own header and is not
 written here: this lane cannot edit `apps/web/`. Until it is, the web file is
 the half that does not say why it has no twin.
+
+## 1096. The parked-push state owes web nothing, re-verified against the code rather than restated
+
+[§ 1070](#1070)'s parked-run machinery is mobile-only, and the reasoning was
+filed for confirmation before someone reads the asymmetry as a
+[§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+inversion and opens work to "close" it. Confirmed on 2026-09-03, by looking at
+each half rather than by re-reading the entry.
+
+The state exists because the phone has a **local queue that retries**:
+`LocalRunStore` holds unsynced runs, five push sites drain them, and parking is
+defined as leaving the drainable set. Web has no such set — `apps/web/src/lib`
+contains no reference to an unsynced queue or a blocked run at all, which is the
+same fact `parity.md`'s "Bulk sync button" row already carries as **web N/A,
+always online**. A parked-run surface on web would be a surface over a queue
+that does not exist.
+
+`RunPushOutcome` living in `core_models` rather than in `api_client` is
+occasionally read as anticipating a second consumer. It is not:
+`local_run_store.dart` imports `core_models` and `flutter/foundation` and
+nothing else, so the store can read the outcome without taking a dependency on
+the client that produces it, while `api_client` depends on `core_models` in the
+usual direction. The placement is a layering fact about one platform.
+
+Recorded where a future reader will actually look: a `parity.md` row of its own
+beside the bulk-sync row, marked N/A for web with the reason, rather than only
+here. If web ever grows an offline queue, this is the design to mirror — and
+that would be a NEW web feature, not a parity debt being paid.
