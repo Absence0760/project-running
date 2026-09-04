@@ -25,7 +25,11 @@
 		<meta name="theme-color" content="#FE5932" />
 		<meta name="application-name" content="Threkir" />
 		<meta name="apple-mobile-web-app-title" content="Threkir" />
-		<title>Threkir</title>
+		<!-- No title element here on purpose: a literal in this template is
+		     emitted before %sveltekit.head% and is invisible to Svelte's SSR
+		     head dedupe, so it followed every page's own instead of being
+		     replaced by it. The default lives in the root layout's
+		     <svelte:head>. decisions.md § 1167. -->
 		<!--
 		Material Symbols Outlined: self-hosted, @font-face'd from app.css
 		against a subset built by scripts/gen_web_icon_font.mjs. Prior shape

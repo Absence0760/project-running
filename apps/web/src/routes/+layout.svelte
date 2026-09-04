@@ -407,6 +407,12 @@
 </script>
 
 <svelte:head>
+	<!-- The site-wide default title, and the ONLY place a default may live:
+	     Svelte's SSR renderer keeps one title per document, the deepest one
+	     in the component tree, so a page that sets its own replaces this and
+	     a page that sets none still has one. A literal in app.html cannot be
+	     replaced that way and became a second element instead (§ 1167). -->
+	<title>Threkir</title>
 	{#if supabaseOrigin}
 		<link rel="preconnect" href={supabaseOrigin} crossorigin="anonymous" />
 	{/if}
