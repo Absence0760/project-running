@@ -269,7 +269,7 @@ async function geocodeViaNominatim(
 		return null;
 	}
 	if (!res.ok) return null;
-	const body = (await res.json()) as Array<{
+	let body: Array<{
 		display_name?: string;
 		lat?: string;
 		lon?: string;
@@ -277,6 +277,16 @@ async function geocodeViaNominatim(
 		type?: string;
 		class?: string;
 	}>;
+	try {
+		// A 200 carrying a truncated or non-JSON body is a failed geocode, and
+		// this function's contract is to return null on one — not to throw out
+		// of a call site whose only handling is the null branch. The MapTiler
+		// branch forty lines up carries the same guard (§ 1066); this one did
+		// not, which is what § 1087's search of the class found.
+		body = await res.json();
+	} catch (_) {
+		return null;
+	}
 	const top = body[0];
 	if (!top?.lat || !top.lon) return null;
 	const lat = parseFloat(top.lat);

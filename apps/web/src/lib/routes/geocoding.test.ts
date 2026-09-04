@@ -507,3 +507,21 @@ test('geocodePlace (Nominatim path) returns null on a latitude off the globe',
 		const body = JSON.stringify([{ display_name: 'X', lat: '91', lon: '-77.4' }]);
 		assert.equal(await withBody(body, () => geocodePlace('Xanadu')), null);
 	});
+
+test('geocodePlace (Nominatim path) returns null on a 200 with an unparseable body',
+	async () => {
+		// § 1066 added this guard to the MapTiler branch after measuring that a
+		// 200 with an unparseable body threw a SyntaxError out of a function
+		// documented to return null. The Nominatim branch of the SAME function,
+		// a hundred lines down, still had none — its own search sibling did.
+		// A caller whose only handling is the null branch sees an exception
+		// either way, so both branches guard now.
+		assert.equal(await withBody('<html>502</html>', () => geocodePlace('Xanadu')), null);
+	});
+
+test('geocodePlace (Nominatim path) returns null on a body that is not an array',
+	async () => {
+		// `body[0]` on an object is undefined, so this already resolved to null
+		// — pinned so the guard above cannot be "fixed" into a throw later.
+		assert.equal(await withBody('{"error":"rate limited"}', () => geocodePlace('X')), null);
+	});
