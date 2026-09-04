@@ -19780,3 +19780,53 @@ Recorded where a future reader will actually look: a `parity.md` row of its own
 beside the bulk-sync row, marked N/A for web with the reason, rather than only
 here. If web ever grows an offline queue, this is the design to mirror — and
 that would be a NEW web feature, not a parity debt being paid.
+
+## 1097. The temp-dir-plus-taps census has no members left, and its discriminator is wrong in both directions
+
+[§ 1072](#1072) re-measured the fixed-delay residue and corrected three of four
+counts; the survivor it left was a population — "26 mobile test files pair a
+temp directory with widget taps and no `pumpUntil` at all" — filed as a sweep
+for a later lane. Swept 2026-09-03. **Nothing in it needed converting**, and
+the reason is worth more than the sweep.
+
+**The count, re-measured.** Naively — the greps the filing used — the
+population is **27** at `076b624c8`, not 26, over **89** files that create a
+temp directory, not 88. Corrected for comment text, it is **25**: two members
+are files whose only match is the line *"Timed pumps only — `pumpAndSettle`
+spins `LiveRunMap`'s pulse animation"*, so a grep counted a comment explaining
+why the file does NOT use `pumpAndSettle` as evidence that it does. That is the
+identical failure § 1072 found in the `pumpEventQueue` count, in a census
+written to replace it.
+
+**The two the filing named as the worst shape are not members.**
+`gym_exercise_screen_test.dart` does every `createLocal` inside
+`tester.runAsync` before the widget is pumped, and its single tap opens
+`GymDetailScreen`, whose `initState` reads. `route_builder_screen_test.dart`
+does every `routeStore.save` in plain real-zone `test()` bodies with the call
+awaited; its `testWidgets` taps are a save DIALOG that pops a result object, a
+switch, and map taps — none reaches a store. Both were nominated for the shape
+of their teardown (`addTearDown` + a temp dir + taps), which is the pattern, not
+the property.
+
+**And the discriminator misses in the other direction too.** The two files that
+WERE genuine members are `run_screen_conclude_retry_test.dart` and
+`run_screen_expected_return_test.dart` — both already fixed by
+[§ 1012](#1012), each awaiting `debugInProgressSettled()` in `tearDown`. They
+are still in the population, because the census asks whether a file mentions
+`pumpUntil` and the correct lever for an in-progress recording write is a
+different one. A census keyed on a helper's NAME counts files that use the
+right instrument as unconverted.
+
+**Triage, stated with its limits.** All 25 were scanned for the property that
+matters — a `tester.tap` followed in the same test by an assertion reading a
+store — which found **zero**. The mutation-shaped taps (Save / Delete / Done /
+Log / START / Retry) were enumerated across the population and the four highest
+-risk files hand-read: `gear_rotations_screen_test.dart` (writes inside
+`runAsync`, taps drive a fake api), and the three `run_screen_*` files, of
+which `run_screen_test.dart` never taps START at all. The remaining files were
+not read line by line, so the claim is "no member survives this triage", not
+"no member can exist".
+
+The entry is closed rather than re-filed with a corrected number, because the
+number was never the missing piece: the residual question is which tests start
+store I/O from a fake-zone tap, and no grep over helper names answers it.
