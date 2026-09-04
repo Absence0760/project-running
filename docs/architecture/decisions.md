@@ -20617,3 +20617,123 @@ its message says whether the ping was lost or merely late. The regression pin is
 25 subscribe-then-publish rounds down both paths asserting one receiver each; it
 fails within the first few rounds on the unfixed code under load and passes 20
 consecutive `-race` runs on the fixed code under the same load.
+
+## 1129. The census that could not be written as a grep is an instrument, and the first thing it did was disprove the hand-triage that closed the last one
+
+[§ 1097](#1097) closed the third attempt to count "which widget tests start a
+store write from a fake-zone tap", having found its discriminator wrong in both
+directions — it counted a comment explaining why a file does NOT use
+`pumpAndSettle` as evidence that it does, and counted two correctly-fixed files
+as unconverted because their right lever is `debugInProgressSettled` rather than
+`pumpUntil`. It closed with the residual question stated rather than answered:
+the property is dynamic, and no grep over helper names can see it.
+
+So it is measured instead. `serialiseStoreWrite` takes a test-only
+`StoreWriteObserver`: when one is installed it allocates an id, hands over the
+`StackTrace.current` of the call, and reports settlement from the same
+continuation that completes the queueing caller's own future — deliberately the
+caller's zone, because a write whose chain link is a fake-zone microtask nothing
+will ever run has not settled as far as that test is concerned and must not be
+recorded as if it had. `apps/mobile_android/test/flutter_test_config.dart` wires
+it for every test in the suite, and the harness fails a test that ends with an
+operation still open, naming the store directory and the call site. In release
+the cost is one static null test per queued operation; no stack is captured and
+no id is allocated unless a test installed the observer.
+
+**What it found, run over the 107 test files that can reach the chain** (64
+pairing a temp directory with widget taps, 39 more naming a store class, and 4
+mocking `path_provider`): **17 tests across 7 files**, every one a real screen
+operation left in flight — `_stamp` -> `syncWithServer` -> `markSynced`,
+`_makeCurrent` -> `replaceFromServer` -> `rewriteAll`, `_toggleVisibility` ->
+`updateLocal` -> `persist`, `_saveAsMeal` -> `createLocal`, and six
+`_initOwnedStores` -> `init` -> `loadAll`. One of the seven is
+`gear_rotations_screen_test.dart`, which § 1097 hand-read and cleared as "writes
+inside `runAsync`, taps drive a fake api". It was not: `Make current` reaches
+`LocalGearStore.replaceFromServer` through the screen, and the write was still
+in flight when the temp directory was deleted under it. A file-by-file reading
+missed it; the instrument reported it on the first run.
+
+**The property is a race, so observing it is racy, and that is stated rather
+than discovered later.** Three identical runs of the seven files reported
+17/17/16 — one `gym_detail_visibility_test` case wins its race sometimes — and
+`run_detail_screen_test` flagged only when run alongside fifteen other files at
+concurrency 2, never on its own. That is the shape of the defect, not of the
+instrument: a write racing a teardown sometimes lands first. It rules out a
+staleness-checked exemption register (a registered file that happens to pass on
+one run would fail the staleness check on that run), which is why § 1131 fixes
+the population rather than exempting it. `allowStoreWritesToOutliveTest` exists
+for the one honest case — a test whose SUBJECT is an unsettleable write, which
+`store_writes_settled_zone_test.dart` needs and nothing else does.
+
+The population was measured over the files that can reach the chain at all: a
+store needs a directory, and `OfflineSyncStore.init` without an override calls
+`getApplicationDocumentsDirectory`, which throws in a test that has not mocked
+it. A file outside that 107 that starts flagging is a real find rather than a
+false positive, and it arrives naming its own call site.
+
+## 1130. The bound's diagnosis is delivered twice over, because the awaiting zone is the one channel row 5 cannot use
+
+[§ 1093](#1093) bounded `storeWritesSettled` and left row 5 of its own table
+uncovered, stating why: the bound's `StateError` is delivered by completing a
+future, and a future's error reaches its awaiter through the AWAITING zone's
+continuation — so a widget test awaiting from the fake zone with no pump behind
+it never receives it. Measured at `c4b6137ec`, that case prints
+`TimeoutException after 0:00:25.000000` and nothing else: not the store, not the
+call site, not the precondition it violated.
+
+`Zone.root.run` plus `FlutterError.reportError` was the fix the filing named,
+and it does not work. Measured, in a test wedged on an unresolvable future with
+a root-zone timer firing four channels at once: `stderr.writeln`, `print` and
+`debugPrint` all surface immediately, prefixed `Shell:`, while
+`FlutterError.reportError` produces no output at all — the test binding parks it
+in `_pendingExceptionDetails` and reports it when the test body ends, which for
+a wedged body is never. The same rules out `registerException`, which is
+delivered through the same end-of-test path.
+
+So the diagnosis goes to a sink installed from the Flutter side —
+`core_models` cannot reach `package:flutter_test` and should not take the
+dependency — and the sink prints. Both deliveries are kept, because one channel
+cannot serve both callers: completing the future is the useful form for an
+awaiter that can be resumed (the test fails where it asked, and
+`store_writes_settled_zone_test` still pins that), while the sink is what a
+runner can read while the body is wedged. Which of the two happened is decided
+after the fact rather than in advance, since § 1093 measured that no property of
+the zone says: one root-zone second after the bound expires — `Future.whenComplete`
+having had every chance to run, since resuming a live awaiter is a single
+microtask — an awaiter that has not observed the error is one that never will,
+and the sink fires. Both directions are pinned: a fake-zone await with no pump
+reports to the sink, and a `runAsync` await that receives the error does not,
+so a resumable caller is never told twice.
+
+## 1131. The seven files § 1129 named were fixed rather than exempted, and letting the writes finish surfaced a second defect underneath
+
+The alternative was a register of known offenders, and § 1129's own measurement
+rules out the version of that this repo would accept: the property is a race, so
+a staleness-checked exemption fails on the runs where a registered file happens
+to win it. An exemption without a staleness check drifts, which leaves fixing
+the 17 as the only option that ends with a guard that is both on and honest.
+
+The fix is one line each and the same line: `pumpUntilStoreWritesSettle(tester)`,
+a bounded `pumpUntil` whose observable outcome is the write chain being empty.
+It is the right instrument for the case these tests are in — the store belongs
+to the screen, so there is no store handle to call `debugWritesSettled` on and
+no UI signal that tracks the file rather than the in-memory row — and it costs
+nothing where nothing is open, since `pumpUntil` tests its condition before it
+pumps. One of the seventeen replaced a hand-rolled
+`runAsync(Future.delayed(100 ms))` in `gym_screen_test.dart` whose own comment
+said "let the in-flight refresh drain before tearing the temp dir down": the
+fixed delay § 715 forbids, in the position § 715 describes, and it was not
+enough.
+
+**Letting the writes finish is what exposed the second defect.** Five of the
+seventeen then failed on `A Timer is still pending even after the widget tree was
+disposed` — `showTopBanner`'s three-second dismissal timer, armed by
+`_saveAsMeal` / `_saveAsRecipe` / `_stamp` at the end of the very path the tests
+were not waiting for. The banner was never reached before, so the timer was
+never armed, so the assertion never fired: a test that stopped short of the
+screen's own completion also stopped short of its own invariant check. Those
+five now pump four seconds after the drain, which is a delay that models elapsed
+time — the banner's own display duration — and stays a delay per § 715.
+
+Verified: all 119 test files that can reach the write chain pass with the watch
+armed, reporting zero operations left in flight.
