@@ -1191,7 +1191,7 @@ export const messages = {
 	"runDetail.hrDisclaimerPrefix": "ゾーンは年齢から推定した最大心拍数を使用します。心拍に影響する薬（ベータ遮断薬など）を服用している場合や最大心拍数を測定済みの場合は、次で設定してください:",
 	"runDetail.hrDisclaimerLink": "設定 → 環境設定",
 	"runDetail.hrDisclaimerSuffix": "で正確なゾーンを取得できます。",
-	"runDetail.hrAvgOnly": "このランでは平均心拍数（{bpm} bpm）のみが記録されました。完全なゾーン分布にはポイントごとのサンプルが必要で、記録アプリは間もなくGPSと併せて書き込むようになります。",
+	"runDetail.hrAvgOnly": "このランでは平均心拍数（{bpm} bpm）のみが記録されました。ゾーン分布には軌跡の各ポイントの心拍データが必要ですが、このランには含まれていません。",
 	"runDetail.hrCoverageNone": "このランでは心拍センサーは動作していましたが、測定値は取得できませんでした。",
 	"runDetail.hrCoverageOnly": "心拍はこのランの{pct}%で記録されました。平均を出すには不足しています。",
 	"runDetail.hrCoveragePartial": "このランの{pct}%に対する平均です。",
