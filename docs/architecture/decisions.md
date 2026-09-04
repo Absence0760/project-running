@@ -19613,6 +19613,22 @@ attributes in the other order — none of which would be a new feature so much a
 build-tool change, and each of which leaves a second `WebPage` node standing
 beside the real one. The strip now matches any `<script>` carrying that type.
 
+**Measured after the fix, and it corrects the severity: the class was latent
+everywhere, not live.** The shell the five share Lambdas embed is
+`apps/web/build/index.html`, and a production build of it carries a
+`<title>Threkir</title>` from `app.html`, the CSP meta, the icons and the
+module preloads — no canonical, no `og:`/`twitter:`/`description` meta and no
+JSON-LD block at all, so nothing in the served shell could take the overrunning
+path today. `SeoHead.svelte` spells its own close `</script>` without
+whitespace, and no `.svelte` file in the tree spells one with it, so the two
+guard instances had no live trigger either. What the measurement does not do is
+make the spelling correct: the shell is BUILD OUTPUT, so its exact bytes are a
+property of `app.html`, the adapter, and whatever minifier is in the chain on
+the day — which is the argument for stating the parser rule rather than matching
+today's emission, and the reason the guard is the deliverable. (That same
+measurement turned up why the shell is so bare, which is a separate and larger
+finding — filed, not fixed here.)
+
 **`raw_text_end_tag_guard.test.ts` is the durable half.** It scans `src/` and
 `lambda/`, comment-stripped, for the escaped-slash spelling a regex literal must
 use, and requires the parser rule after it. Scope is the raw-text and RCDATA
@@ -19728,3 +19744,22 @@ guarding their parse is web catching up to behaviour Dart already had. If a
 future change disagrees with this entry, the rows it needs live in the root
 `CLAUDE.md` table and `.claude/agents/shared-library-syncer.md`, neither of which
 a web lane owns — the same wall [§ 1014](#1014) and § 1039's filings hit.
+
+## 1090. The recap share page emits the canonical its eight siblings do
+
+Every other public share head builder renders a self-referential
+`<link rel="canonical">`. `renderShareRecapHeadTags` rendered `og:url` and no
+link, so `/recap/share/[id]` served **none at all** — and it had none to inherit
+either, because the SPA shell the Lambda injects into is adapter-static's bare
+fallback. `seo_render_map_guard.test.ts` excludes the route from its in-app fold
+table on the stated grounds that these pages "build their OWN canonical", which
+was true of eight of the nine and not of this one; the guard checks the in-app
+folds, not the fold targets, so nothing was watching.
+
+The consequence is the ordinary one and it is why every sibling has the tag: a
+recap link is shared, comes back carrying a `?utm_source=`, and indexes as a page
+of its own competing with the clean URL. `buildRecapShareCanonical` already
+computed the string for `og:url`, so the whole fix is the tag — and the test
+asserts it agrees with `og:url` rather than being a second spelling of the same
+path, which is [§ 520](#520)'s rule applied to the one surface that had escaped
+it.
