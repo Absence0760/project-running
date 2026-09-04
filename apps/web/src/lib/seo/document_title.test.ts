@@ -48,10 +48,16 @@ const TITLE = /<title(?=[\s/>])[^>]*>[\s\S]*?<\/title(?=[\s/>])[^>]*>/gi;
 /// the SvelteKit head placeholder into a comment in `app.html` substituted the
 /// whole head there, and the pages still measured as carrying one title each
 /// because the match came out of the wreckage.
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+///
+/// Comments are consumed by the SAME scan rather than stripped in a prior
+/// pass: deleting them first can splice two halves of the remaining text into
+/// a `<title>` the document never contained, and re-running the strip to a
+/// fixpoint would delete comment-looking spans the original never had either.
+/// One alternation, first-match-wins, is what the parser actually does.
+const SCAN = new RegExp(`<!--[\\s\\S]*?-->|${TITLE.source}`, 'gi');
 
 function titles(html: string): string[] {
-	return html.replace(HTML_COMMENT, '').match(TITLE) ?? [];
+	return [...html.matchAll(SCAN)].map((m) => m[0]).filter((m) => !m.startsWith('<!--'));
 }
 
 function htmlFiles(dir: string, out: string[] = []): string[] {

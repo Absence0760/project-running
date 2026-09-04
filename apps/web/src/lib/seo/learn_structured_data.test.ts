@@ -30,13 +30,17 @@ const LD_BLOCK =
 	/<script(?=[\s/>])[^>]*\stype="application\/ld\+json"[^>]*>([\s\S]*?)<\/script(?=[\s/>])[^>]*>/gi;
 
 /// A comment ends at the FIRST `-->` and everything inside is inert, so a
-/// block found in one is not a block the page emits.
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+/// block found in one is not a block the page emits. Consumed by the SAME
+/// scan rather than stripped in a prior pass: deleting them first can splice
+/// two halves of the remaining text into a block the document never carried.
+const SCAN = new RegExp(`<!--[\\s\\S]*?-->|${LD_BLOCK.source}`, 'gi');
 
 /// The builders escape `<`, `>` and `&` so a payload cannot break out of the
 /// script element; a JSON reader sees through that, and so must this.
 function payloads(html: string): unknown[] {
-	return [...html.replace(HTML_COMMENT, '').matchAll(LD_BLOCK)].map(([, body]) =>
+	return [...html.matchAll(SCAN)]
+		.filter((m) => !m[0].startsWith('<!--'))
+		.map(([, body]) =>
 		JSON.parse(
 			body.replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&'),
 		),

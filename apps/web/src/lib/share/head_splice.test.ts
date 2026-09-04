@@ -147,6 +147,11 @@ test('injectShareRecapMeta — keeps the shell canonical + JSON-LD it does not r
 			siteUrl: 'https://threkir.com',
 		}),
 	);
-	assert.ok(out.includes('https://threkir.com/stale'), 'the shell canonical must survive');
+	// Read the canonical out and compare it, rather than asking whether the URL
+	// appears anywhere in the document: a substring test also passes when the
+	// href survives only inside the og:url the recap head just spliced in, which
+	// is the one outcome this test exists to rule out.
+	const canonical = out.match(/<link\s[^>]*rel="canonical"[^>]*href="([^"]*)"/i)?.[1];
+	assert.equal(canonical, 'https://threkir.com/stale', 'the shell canonical must survive');
 	assert.ok(out.includes('"WebSite"'), 'the shell JSON-LD must survive');
 });
