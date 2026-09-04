@@ -19712,3 +19712,43 @@ problem as much as this one's, and the durable fix is to gate the block on its
 own cell list rather than to widen the condition with a seventh disjunct.
 Web's half of this is a separate lane's, deliberately without coordination, so
 the two surfaces may well word it differently.
+
+## 1095. The probe rule stays single-sourced per platform, and the comparison a parity pair would have bought is bought directly
+
+[§ 1073](#1073) moved the phone onto web's rule — a credential probe reports
+configured iff the call did not fail — and stated it natively inside
+`RaceService.isProviderConfigured` rather than as a `provider_probe.dart`,
+filing the registration question because that lane owned neither registry. The
+answer is: do not register it, and the reason is not taste.
+
+**The two halves have no shared signature.** `@supabase/functions-js` RETURNS
+`{ data, error }` and never throws, so web's `probeSaysConfigured(error)` is one
+expression over a nullable value its callers already hold. Dart's
+`functions_client` 2.5.0 THROWS for every status outside 200-299, so there is no
+error VALUE at the point of decision — the rule is control flow. A Dart twin
+would have to take an `Object? error` that no Dart caller naturally holds,
+which means catching in order to hand it to a function whose whole body is
+`return true` / `return false`. That is a layer added to remove nothing, and a
+parity pair exists so a syncer can compare two implementations of one
+computation; here one side has no computation to compare.
+
+**But the filing's worry is real and is not answered by declining.** A rule
+stated twice with nothing reading both is exactly [§ 641](#641)'s shape, and
+each platform's existing guard covers only its own half — web's `data.test.ts`
+requires all three probes to `return probeSaysConfigured(error)`, and mobile's
+`race_providers_test.dart` fails if `isProviderConfigured` inspects a status
+again (mutation-tested by reinstating the old grader). Neither can see the
+other move.
+
+So the mobile suite reads web's grader directly: `provider_probe.ts` must still
+export `probeSaysConfigured`, its body must still be the nullish check, and the
+file's code — comments stripped, because its own doc comment discusses the
+status-grading rule it replaced — must not mention a status. That is the whole
+of what a registered pair's syncer would have compared, at the cost of one file
+read instead of a module with one call site and rows in two registries that
+must be edited together. It fails loudly on a rename, which is the same
+property [check 4 of `check_parity_pair_registry.mjs`](#604) exists for.
+
+The reciprocal note belongs in `provider_probe.ts`'s own header and is not
+written here: this lane cannot edit `apps/web/`. Until it is, the web file is
+the half that does not say why it has no twin.

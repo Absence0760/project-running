@@ -140,6 +140,36 @@ void main() {
     });
   });
 
+  test('web states the same probe rule, which is why there is no Dart twin',
+      () {
+    // The rule is stated natively on each platform rather than registered as a
+    // parity pair (decisions § 1095): `@supabase/functions-js` RETURNS
+    // `{data, error}` so web's half is one expression over a nullable error,
+    // while `functions_client` THROWS so Dart's is control flow, and a Dart
+    // `provider_probe.dart` would take an error value no Dart caller holds.
+    // What a registered pair would have bought is the two halves read against
+    // each other — which is this, and it costs one file read instead of a
+    // module with one call site and rows in two registries.
+    final web =
+        File('../web/src/lib/core/provider_probe.ts').readAsStringSync();
+    expect(web.contains('export function probeSaysConfigured('), isTrue,
+        reason: 're-anchor: web renamed or moved the probe grader');
+    expect(
+      RegExp(r'return error === null \|\| error === undefined;').hasMatch(web),
+      isTrue,
+      reason: "web's grader no longer reports configured iff the call did not "
+          'fail. RaceService.isProviderConfigured states the same rule '
+          'natively and has to move with it.',
+    );
+    final webCode = web
+        .split('\n')
+        .where((l) => !l.trimLeft().startsWith('///'))
+        .join('\n');
+    expect(webCode.contains('status'), isFalse,
+        reason: 'web grades a status again — the § 1073 defect returning on '
+            'the platform this one cannot see.');
+  });
+
   test('a probe that cannot reach Supabase answers unconfigured', () async {
     // RaceService has no Supabase behind it here, so `_c` throws a StateError
     // before any call is made. That used to answer `true` — the phone offered
