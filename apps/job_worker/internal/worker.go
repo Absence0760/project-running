@@ -205,9 +205,9 @@ type StravaIngestor interface {
 // interval keeps latency low when the queue's busy, exponential
 // backoff caps avoid hammering the matching upstream when it's down.
 type Config struct {
-	WorkerID       string
-	PollInterval   time.Duration // sleep between empty claims
-	HandleTimeout  time.Duration // per-job timeout
+	WorkerID      string
+	PollInterval  time.Duration // sleep between empty claims
+	HandleTimeout time.Duration // per-job timeout
 	// ExportTimeout is the per-attempt timeout for kind='data_export'
 	// only. A deep-history archive is dominated by per-object Storage
 	// fetches and does not fit the generic HandleTimeout; capping it
@@ -280,7 +280,7 @@ type Worker struct {
 	// CISO/counsel-gated step (no pg_cron schedule ships here).
 	DigestUnsubSecret string
 	Config            Config
-	Log        *slog.Logger
+	Log               *slog.Logger
 	// OnPollTick fires after every claim attempt (whether or not a job
 	// was returned). Used by the /health server to distinguish "queue
 	// empty" from "loop wedged" — see main.go. Safe to leave nil; the

@@ -167,7 +167,7 @@ func TestHandlePhotoProcess_DownloadErrorBubblesUp(t *testing.T) {
 	be := &fakeBackend{downloadPhotoErr: errors.New("storage 503")}
 	w := newPhotoTestWorker(be)
 	job := &Job{
-		Kind: "photo_process",
+		Kind:    "photo_process",
 		Payload: mustJSON(PhotoProcessPayload{StoragePath: "a/b.jpg"}),
 	}
 	err := w.handlePhotoProcess(context.Background(), job)
@@ -183,7 +183,7 @@ func TestHandlePhotoProcess_UploadErrorBubblesUp(t *testing.T) {
 	}
 	w := newPhotoTestWorker(be)
 	job := &Job{
-		Kind: "photo_process",
+		Kind:    "photo_process",
 		Payload: mustJSON(PhotoProcessPayload{StoragePath: "a/b.jpg"}),
 	}
 	err := w.handlePhotoProcess(context.Background(), job)
