@@ -8,11 +8,16 @@
 /// renderers. Keep the file pure: no `Deno.env`, no `createClient`, no
 /// `fetch`.
 ///
-/// Twin: `BuildCsvRow` / `buildGpxDoc` / `xmlEscape` in the Go worker's
-/// `apps/job_worker/internal/dataexport/server.go`. The Go side decodes a
-/// track into typed fields, so a non-numeric coordinate never reaches its
-/// renderer; here the track is `JSON.parse` of a blob the subject uploaded,
-/// and nothing between the two has a schema.
+/// Twin: `csvColumns` / `csvRow` / `buildGpxDoc` / `xmlEscape` in the Go
+/// worker's `apps/job_worker/internal/dataexport/server.go`. The Go side
+/// decodes a track into typed fields, so a non-numeric coordinate never
+/// reaches its renderer; here the track is `JSON.parse` of a blob the subject
+/// uploaded, and nothing between the two has a schema.
+///
+/// Both transports are live and a runner reaches whichever one their build's
+/// `PUBLIC_EXPORT_HUB_URL` selects, so the two column lists must agree. The Go
+/// half of the `hr_coverage` column of § 1134 is filed, not written — that
+/// tree belonged to no lane in the round that added it.
 
 export type RenderRunRow = {
 	id: string;
@@ -47,7 +52,14 @@ export type GpxRef = { id: string; startedAt: string; title: string; key: string
 
 /// Field set kept stable across the GDPR export so a user-owned
 /// pipeline can rely on the column shape. New metadata keys go in
-/// the `metadata` column as JSON rather than expanding the header.
+/// the `metadata` column as JSON rather than expanding the header —
+/// the one thing that earns a column of its own is a key without
+/// which a column ALREADY here cannot be read, because then the
+/// header's stability is buying a consumer a number it will
+/// misinterpret. `hr_coverage` is that case for `avg_bpm`
+/// (decisions § 1134), and it sits beside the column it qualifies
+/// rather than at the end, where a reader would have to know to
+/// look for it.
 export const CSV_COLS = [
 	'id',
 	'started_at',
@@ -58,6 +70,7 @@ export const CSV_COLS = [
 	'is_dnf',
 	'title',
 	'avg_bpm',
+	'hr_coverage',
 	'steps',
 	'elevation_m',
 	'route_id',
@@ -94,6 +107,33 @@ export function stringy(v: unknown): string {
 	return JSON.stringify(v);
 }
 
+/// `metadata.hr_coverage` as the export may state it, or `''` when the
+/// stored value is not one this build can vouch for.
+///
+/// The column exists because the `avg_bpm` beside it is a QUALIFIED number.
+/// The Wear recorder measures the share of ACTIVE elapsed time its sensor
+/// delivered and SUPPRESSES the average below 0.5, because a mean over less
+/// of the run than not is not the run's average (decisions § 1083). So a bare
+/// `avg_bpm` cell states a mean over an unstated share of the run, and an
+/// EMPTY one is either a suppressed average or a run recorded with no strap
+/// at all. Run detail resolves those three states (§ 1088); an export that
+/// contradicts the page is its own defect.
+///
+/// Graded rather than passed straight through, for the reason § 1088 gives
+/// for the page: the writer's contract is a FRACTION, and a writer storing a
+/// percentage would put `85` in a column whose consumer reads it as 8500 %.
+/// The stored value survives verbatim in the `metadata` column either way, so
+/// grading withholds nothing from the subject — it keeps this column to what
+/// its header promises.
+export function hrCoverageCell(v: unknown): string {
+	if (typeof v !== 'number' || !Number.isFinite(v)) return '';
+	if (v < 0 || v > 1) return '';
+	// `0` is a measurement, not an absence: the sensor was enabled and
+	// delivered nothing. It must not render as the empty cell an unmeasured
+	// run gets.
+	return String(v);
+}
+
 export function csvRow(r: RenderRunRow): string {
 	const md = r.metadata ?? {};
 	return [
@@ -107,6 +147,7 @@ export function csvRow(r: RenderRunRow): string {
 		csvEscape(String(r.is_dnf ?? false)),
 		csvEscape((md.title as string | undefined) ?? ''),
 		csvEscape(stringy(md.avg_bpm)),
+		csvEscape(hrCoverageCell(md.hr_coverage)),
 		csvEscape(stringy(md.steps)),
 		csvEscape(stringy(md.elevation_m)),
 		csvEscape(r.route_id ?? ''),
