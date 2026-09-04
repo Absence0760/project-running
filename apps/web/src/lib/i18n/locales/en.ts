@@ -1207,7 +1207,7 @@ export const en = {
 	"runDetail.hrDisclaimerPrefix": "Zones use an age-estimated max HR. On heart-rate medication (e.g. beta-blockers) or if you've measured your max HR, set it in",
 	"runDetail.hrDisclaimerLink": "Settings → Preferences",
 	"runDetail.hrDisclaimerSuffix": "for accurate zones.",
-	"runDetail.hrAvgOnly": "Only the run's average heart rate was captured ({bpm} bpm). A full zone distribution needs per-point samples, which the recording apps will start writing alongside GPS soon.",
+	"runDetail.hrAvgOnly": "Only the run's average heart rate was captured ({bpm} bpm). A zone distribution needs a heart-rate reading at each point of the track, which this run does not carry.",
 	"runDetail.hrCoverageNone": "The heart-rate sensor was on for this run but delivered no readings.",
 	"runDetail.hrCoverageOnly": "Heart rate was recorded for {pct}% of this run — too little to report an average.",
 	"runDetail.hrCoveragePartial": "Average over {pct}% of this run.",
