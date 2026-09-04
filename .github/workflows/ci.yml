@@ -83,6 +83,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       web_e2e: ${{ steps.filter.outputs.web_e2e }}
+      infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -110,6 +111,7 @@ jobs:
             echo "::notice::could not determine changed files — running full CI"
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "web_e2e=true" >> "$GITHUB_OUTPUT"
+            echo "infra=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "$files"
@@ -149,6 +151,31 @@ jobs:
           else
             echo "::notice::nothing the web suite can reach changed — web e2e skips"
             echo "web_e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+          # The path filter that used to live on terraform.yml's own `push` /
+          # `pull_request` triggers, moved here because the file is now CALLED
+          # rather than triggered (decisions § 1149). An INCLUSION list is safe
+          # for exactly this job and not for the `web_e2e` one above, because
+          # the three checks read an enumerable input set and nothing else:
+          # `terraform fmt -recursive infra`, `validate` on the five stacks
+          # under infra/, and Trivy's `scan-ref: infra` with its suppressions
+          # in the root .trivyignore. `check_infra_coverage.mjs` (in the gated
+          # `infra-guards` job) fails the PR if a Terraform directory under
+          # infra/ falls outside the fmt scope or the validate matrix, so the
+          # set cannot widen inside infra/ without a red.
+          #
+          # This file is in the list because the CALLER lives here now: the
+          # `terraform` job's `uses:`, its `if:` and the `security-events`
+          # scope the Trivy SARIF upload needs are all edited in ci.yml, and a
+          # filter that skipped on a ci.yml diff would ship a change to the
+          # wiring without ever exercising it. actionlint catches a reference
+          # that does not resolve; it cannot catch a permission that is too
+          # narrow, which only shows up when the call actually runs.
+          if echo "$files" | grep -qE '^(infra/|\.trivyignore$|\.github/workflows/(terraform|ci)\.yml$)'; then
+            echo "infra=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::nothing under infra/ changed — the Terraform checks skip"
+            echo "infra=false" >> "$GITHUB_OUTPUT"
           fi
 
   # A workflow file GitHub's parser rejects never fails a PR job — it produces
@@ -324,13 +351,35 @@ jobs:
         with:
           go-version-file: apps/job_worker/go.mod
           cache-dependency-path: apps/job_worker/go.sum
+      # Nothing in .github/ read `gofmt` until now: `go vet` and the compiler
+      # are both blind to formatting, so seven files under this module sat
+      # unformatted on main long enough for nobody to notice. The cost is not
+      # the whitespace — it is that a diff touching one of them re-aligns a
+      # struct block the author did not edit, so the review reads as a bigger
+      # change than it is. Same mechanism as the per-stack `terraform fmt`
+      # scope § 1111 closed one tree over (decisions § 1150).
+      - name: gofmt
+        working-directory: apps/job_worker
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files under apps/job_worker are not gofmt-clean. Neither go vet nor go test can see formatting, so this step is the only thing in CI that reads it. Nothing here is a vet finding or a test failure; those are the other steps in this job."
+            echo "$unformatted"
+            echo 'Reproduce and fix with: cd apps/job_worker && gofmt -l . && gofmt -w $(gofmt -l .)'
+            exit 1
+          fi
       # The build is already covered by CodeQL (security.yml) + the e2e
       # live-hub job; this job is the only place `go test` runs, so the
       # personal-data export-completeness guard (and every other worker
       # test) finally gates a PR instead of only failing locally.
       - name: go vet
         working-directory: apps/job_worker
-        run: go vet ./...
+        run: |
+          if ! go vet ./...; then
+            echo "::error::go vet reported a suspicious construct in apps/job_worker. Nothing here is gofmt drift or a failing test; those are the other steps in this job."
+            echo "Reproduce with: cd apps/job_worker && go vet ./..."
+            exit 1
+          fi
       # `-race`, not a plain run: this binary is the most concurrent thing in
       # the repo — an in-process pub/sub hub with per-room goroutines, a GC
       # sweeper, a bridge poller, an atomic heartbeat and six HTTP servers on
@@ -340,7 +389,12 @@ jobs:
       # cost of the flag on this suite: 20 s -> 35 s.
       - name: go test
         working-directory: apps/job_worker
-        run: go test -race ./...
+        run: |
+          if ! go test -race ./...; then
+            echo "::error::The apps/job_worker suite failed, or the race detector reported a data race. Nothing here is gofmt drift or a vet finding; those are the other steps in this job."
+            echo "Reproduce with: cd apps/job_worker && go test -race ./..."
+            exit 1
+          fi
 
   test-graph-cycle:
     needs: changes
@@ -353,18 +407,41 @@ jobs:
         with:
           go-version-file: apps/graph_cycle/go.mod
           cache-dependency-path: apps/graph_cycle/go.sum
+      # The same gofmt gate the worker job carries, for the reason stated
+      # there. This module is gofmt-clean today; the step exists so it stays
+      # that way rather than because it starts red (decisions § 1150).
+      - name: gofmt
+        working-directory: apps/graph_cycle
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files under apps/graph_cycle are not gofmt-clean. Neither go vet nor go test can see formatting, so this step is the only thing in CI that reads it. Nothing here is a vet finding or a test failure; those are the other steps in this job."
+            echo "$unformatted"
+            echo 'Reproduce and fix with: cd apps/graph_cycle && gofmt -l . && gofmt -w $(gofmt -l .)'
+            exit 1
+          fi
       # The graph-cycle map sidecar is a separate Go module; this is the only
       # place its foot-graph build, Dijkstra, cycle search, guard, and HTTP
       # handlers run under `go test` in CI.
       - name: go vet
         working-directory: apps/graph_cycle
-        run: go vet ./...
+        run: |
+          if ! go vet ./...; then
+            echo "::error::go vet reported a suspicious construct in apps/graph_cycle. Nothing here is gofmt drift or a failing test; those are the other steps in this job."
+            echo "Reproduce with: cd apps/graph_cycle && go vet ./..."
+            exit 1
+          fi
       # `-race` for the reason the worker job states: the cycle search runs
       # concurrent workers over a shared graph, and a plain run cannot see a
       # race at all. Measured cost here: 5 s -> 5.5 s.
       - name: go test
         working-directory: apps/graph_cycle
-        run: go test -race ./...
+        run: |
+          if ! go test -race ./...; then
+            echo "::error::The apps/graph_cycle suite failed, or the race detector reported a data race. Nothing here is gofmt drift or a vet finding; those are the other steps in this job."
+            echo "Reproduce with: cd apps/graph_cycle && go test -race ./..."
+            exit 1
+          fi
 
   parity-types:
     needs: changes
@@ -1481,6 +1558,36 @@ jobs:
             echo "::error::The infra coverage guard's own unit tests failed. The Terraform itself is fine — the check above just passed — so this is a defect in scripts/check_infra_coverage.mjs."
             exit 1
           fi
+
+  # The Terraform checks, CALLED rather than triggered. `fmt (whole tree)`,
+  # `validate (<stack>)` and the Trivy IaC scan lived in terraform.yml under
+  # its own `pull_request` trigger, where none of them could ever block a
+  # merge: branch protection requires exactly one context — the `CI gate`
+  # aggregator below — and a `needs:` entry is scoped to its own workflow, so
+  # no wiring could have named them. They were three rows that went red and
+  # merged anyway, and on a PR touching no infra the path filter meant they
+  # were not merely non-blocking but absent (decisions § 1149).
+  #
+  # A reusable-workflow call rather than three jobs copied over here, because
+  # `scripts/check_infra_coverage.mjs` reads the `stack:` matrix and the
+  # `terraform fmt` invocations OUT of terraform.yml — that guard is what
+  # fails the PR when a new stack is added to no matrix, and moving the matrix
+  # would have taken it with it. Calling the file leaves both where the guard
+  # looks, and gives the property inlining would not: a called workflow's job
+  # results fan into the calling job, so this ONE `needs:` entry covers every
+  # job terraform.yml has today and every one it gains later, with nothing to
+  # remember.
+  terraform:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    name: Terraform (fmt, validate, Trivy IaC)
+    permissions:
+      contents: read
+      # The Trivy job uploads SARIF to the Security tab. A called workflow's
+      # own `permissions:` is a ceiling the caller sets, so the scope has to be
+      # granted here as well as declared there.
+      security-events: write
+    uses: ./.github/workflows/terraform.yml
 
   build-watch-wear:
     needs: changes
@@ -3280,6 +3387,7 @@ jobs:
       - watch-garmin-source
       - lambda-alias-coverage
       - infra-guards
+      - terraform
       - build-watch-wear
       - build-firmware
       - sim-firmware

@@ -21113,3 +21113,118 @@ validity assertion is scoped to `%_len_chk`), and `20270503_001` records three
 constraints that sat `convalidated = false` on `main` for months while binding
 every write. A `VALIDATE` in its own later migration would be free and is
 welcome; it is not owed, because there is nothing to find.
+## 1149. The Terraform checks are called by `ci.yml` rather than triggered, because a `needs:` entry cannot name a job in another workflow
+
+`terraform.yml` ran on its own path-filtered `push` + `pull_request` triggers
+and produced three rows on every infra PR — `fmt (whole tree)`,
+`validate (<stack>)` and `Trivy IaC scan`. None of them could block a merge.
+Branch protection on this repo requires exactly one context, the `CI gate`
+aggregator, and that aggregator is a job in `ci.yml` whose `needs:` list is
+scoped to its own workflow: naming a job in a sibling file is not something the
+syntax permits. Verified rather than assumed — the gate `needs:` 32 jobs, all 32
+are keys of `ci.yml`, and `ci.yml` runs no `terraform` command at all (its
+matches are prose in its own comments, which is what [§ 1021](#1021) measured
+for a different reason). So a change that failed `terraform validate` went red
+and merged, and this repo's own `CLAUDE.md` asserted the opposite: "the single
+required **CI gate** status check". This is [§ 764](#764)'s hazard one workflow
+over, and worse there: the path filter meant that on a PR touching no infra the
+rows were not merely non-blocking but absent, so their absence read as normal.
+
+**Two fixes were available and the choice is about what regresses silently.**
+Adding the three contexts to branch protection by name puts a path-filtered
+required check on every PR — a check that never starts on a web-only diff and
+therefore never reports, which is the classic way to wedge a merge queue; it
+also lives in a setting no lane can read or review, so nothing in the repo would
+ever show it had been undone. Moving the three jobs' bodies into `ci.yml` would
+have taken the `stack:` matrix with them, and `scripts/check_infra_coverage.mjs`
+reads that matrix and the `terraform fmt` invocations out of `terraform.yml` by
+path — that guard is the thing that fails a PR adding a stack to no matrix, so
+the fix would have broken the mechanism [§ 890](#890) exists for.
+
+**So the file is called, not triggered.** `terraform.yml` is `on: workflow_call`
+only, and `ci.yml` gains a `terraform` job that is `uses:
+./.github/workflows/terraform.yml` and is in the gate's `needs:` list. Three
+properties fall out, and each is what makes the wiring hard to undo by accident.
+A called workflow's job results fan into the calling job, so the ONE `needs:`
+entry covers every job `terraform.yml` has today and every one it gains later —
+nothing has to remember to register a new one. `scripts/check_ci_diagnostics.mjs`
+rule 3 now counts 33 jobs in `ci.yml` and fails the PR if `terraform` is dropped
+from the list (demonstrated: removing the line reports "job `terraform` is in no
+`needs:` entry of `ci-gate`"). And actionlint — already in the gated
+`workflow-lint` job — parses the reference, so `terraform.yml` losing its
+`workflow_call` trigger fails `ci.yml` ("`workflow_call` event trigger is not
+found") and deleting the file fails it too ("could not read reusable workflow
+file"). The wiring cannot be severed from either end without a red.
+
+The path filter moved onto a new `infra` output of the `changes` job, so a
+diff touching nothing under `infra/` skips the call exactly as the trigger used
+to skip the workflow — widened by one path the trigger did not have, `ci.yml`
+itself, because the caller lives there now: the `uses:`, the `if:` and the
+`security-events` scope the SARIF upload needs are all edited here, and a filter
+that skipped on a `ci.yml` diff would ship a change to the wiring without ever
+exercising it. actionlint catches a reference that does not resolve; it cannot
+catch a permission that is too narrow. It is an INCLUSION list where `web_e2e`'s is deliberately
+an exclusion list, and the asymmetry is justified rather than inherited: these
+three checks read an enumerable input set and nothing else — `fmt -recursive
+infra`, `validate` on the five stacks under `infra/`, Trivy's `scan-ref: infra`
+with the root `.trivyignore` — and `check_infra_coverage.mjs` already fails the
+PR when a Terraform directory under `infra/` falls outside the fmt scope or the
+validate matrix, so the set cannot widen inside `infra/` without a red. What it
+still cannot see is Terraform added OUTSIDE `infra/`, which the old trigger
+could not see either and which that guard does not walk; filed rather than
+built for, because no such tree exists and the fix is a guard-side change.
+
+`pull-requests: write` went with the triggers. It was there for a `terraform
+validate` PR comment nobody ever wired up, no step in the file posts anything,
+and a caller that does not grant the scope would have downgraded it silently
+anyway. The remaining `security-events: write` (the Trivy SARIF upload) is now
+declared in both places, because a called workflow's permissions are a ceiling
+the caller sets.
+
+Verification: actionlint clean; `check_ci_diagnostics.mjs` reports the gate
+waiting for all 33 jobs; `check_infra_coverage.mjs`, `check_infra_iam.mjs`,
+`check_infra_error_responses.mjs`, `check_toolchain_pins.mjs` and
+`check_workflow_binaries.mjs` all green with 283 guard unit tests passing. The
+one thing not verifiable from here is the branch-protection setting itself — no
+lane can read it — so the claim this change supports is the narrower one: the
+Terraform checks are now inside the context branch protection is documented to
+require.
+
+## 1150. `gofmt` is gated on both Go modules, and the gate ships red against the seven files it found
+
+`.github/` invoked `gofmt` nowhere. `test-worker` and `test-graph-cycle` ran
+`go vet ./...` and `go test -race ./...`, and neither the vet analysers nor the
+compiler can see formatting, so the two Go modules had no formatter check of any
+kind. Measured on `main` with the go1.26.6 toolchain `gofmt` — the same one
+`go-version-file: apps/<module>/go.mod` resolves for CI, so this is what the job
+will see rather than a workstation approximation — `gofmt -l .` lists seven
+files under `apps/job_worker` (`internal/handler_photo_process_test.go`,
+`internal/livehub/privacy_test.go`, `internal/livehub/server_test.go`,
+`internal/mailer_test.go`, `internal/stravahook/server.go`,
+`internal/stravahook/server_test.go`, `internal/worker.go`) and nothing under
+`apps/graph_cycle`.
+
+The cost is not the whitespace. All seven are struct-field alignment, which
+`gofmt` recomputes over a whole block: a diff that adds one field to one of
+those structs re-aligns lines the author never touched, so the review reads as a
+bigger change than it is and the real edit is buried. That is the same mechanism
+[§ 1111](#1111) closed one tree over, where a `terraform fmt` scoped per stack
+left one directory unchecked.
+
+Each Go job now runs `gofmt -l .` before `vet`, failing on a non-empty list and
+printing the list. Every check step in both jobs prints its own `::error::` as
+well: a job named "Test job_worker (Go)" going red used to mean one of two
+things and now means one of three, and [§ 764](#764)'s rule is that a job whose
+name cannot say which check broke owes a diagnosis per step. (The derivation in
+`check_ci_diagnostics.mjs` does not classify these two as bundled — it counts
+invocations of this repo's own `.mjs` guards, and `gofmt`/`vet`/`go test` match
+none — so this is the rule applied by hand where the mechanism cannot reach.)
+
+**The gate is deliberately red on `apps/job_worker` as landed.** The reformat is
+the other half of the same follow-up and is being done in a sibling lane of the
+same round; reformatting seven files that four other lanes are editing
+concurrently is the one change guaranteed to conflict. Verified by running the
+step's exact shell from each module directory under the go1.26.6 toolchain:
+`apps/job_worker` exits 1 and prints the seven paths, `apps/graph_cycle` exits 0.
+The two halves are green together or the PR is red, which is the correct
+coupling.
