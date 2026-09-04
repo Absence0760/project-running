@@ -121,6 +121,7 @@ const (
 const (
 	MetaTitle              = "title"
 	MetaAvgBPM             = "avg_bpm"
+	MetaHRCoverage         = "hr_coverage"
 	MetaSteps              = "steps"
 	MetaElevationM         = "elevation_m"
 	MetaStravaID           = "strava_id"

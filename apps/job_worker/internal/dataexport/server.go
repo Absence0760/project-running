@@ -54,8 +54,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"path"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -482,6 +484,7 @@ var csvColumns = []string{
 	"is_dnf",
 	schema.MetaTitle,
 	schema.MetaAvgBPM,
+	schema.MetaHRCoverage,
 	schema.MetaSteps,
 	schema.MetaElevationM,
 	"route_id",
@@ -550,6 +553,7 @@ func csvRow(r ExportRun) []string {
 		strconv.FormatBool(r.IsDNF),
 		stringy(md[schema.MetaTitle]),
 		stringy(md[schema.MetaAvgBPM]),
+		hrCoverageCell(md[schema.MetaHRCoverage]),
 		stringy(md[schema.MetaSteps]),
 		stringy(md[schema.MetaElevationM]),
 		deref(r.RouteID),
@@ -561,6 +565,47 @@ func csvRow(r ExportRun) []string {
 		r.UpdatedAt,
 	}
 }
+
+// hrCoverageCell is the Go rail of the EF's `hrCoverageCell`
+// (export-data/render.ts). The `avg_bpm` beside it is a QUALIFIED number --
+// the Wear recorder suppresses the average below 0.5 coverage (decisions
+// § 1083) -- so a bare average states a mean over an unstated share of the
+// run and an empty one is either a suppression or no strap at all. The two
+// rails must emit the same bytes for the same row or one export contradicts
+// the other; the stored value rides verbatim in `metadata` either way, so
+// grading withholds nothing from the subject.
+func hrCoverageCell(v interface{}) string {
+	f, ok := v.(float64)
+	if !ok || math.IsNaN(f) || math.IsInf(f, 0) {
+		return ""
+	}
+	if f < 0 || f > 1 {
+		return ""
+	}
+	// `0` is a measurement, not an absence: the sensor was enabled and
+	// delivered nothing. It must not render as the empty cell an
+	// unmeasured run gets.
+	return jsNumberString(f)
+}
+
+// jsNumberString renders a float64 as JavaScript's `String(number)` does,
+// over the [0,1] domain hrCoverageCell has already graded into. `stringy`'s
+// `%g` is NOT equivalent: it writes 1e-07 and 1e-06 where JS writes 1e-7 and
+// 0.000001, so a coverage below 1e-6 would have the two rails disagreeing on
+// a value both consider well formed.
+func jsNumberString(v float64) string {
+	if v == float64(int64(v)) {
+		return strconv.FormatInt(int64(v), 10)
+	}
+	// ECMA-262 Number::toString uses positional notation for 1e-6 <= |v|
+	// and exponential below it, with no zero-padded exponent.
+	if v >= 1e-6 {
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+	return jsExpZeroPad.ReplaceAllString(strconv.FormatFloat(v, 'e', -1, 64), "e-$1")
+}
+
+var jsExpZeroPad = regexp.MustCompile(`e-0*(\d)`)
 
 func stringy(v interface{}) string {
 	switch x := v.(type) {
