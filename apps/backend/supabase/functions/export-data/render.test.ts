@@ -19,6 +19,7 @@ import {
 	CSV_COLS,
 	csvEscape,
 	csvRow,
+	hrCoverageCell,
 	type RenderRunRow,
 	type RenderTrackPoint,
 	stringy,
@@ -82,7 +83,7 @@ Deno.test('csvRow emits exactly one value per declared column', () => {
 	// A column added to CSV_COLS without a matching value in csvRow shifts
 	// every later field by one for the whole export, silently — a consumer
 	// reads `is_public` out of the `external_id` slot and nothing errors.
-	assertEquals(CSV_COLS.length, 18);
+	assertEquals(CSV_COLS.length, 19);
 	assertEquals(csvFields(csvRow(REF)).length, CSV_COLS.length);
 });
 
@@ -104,6 +105,76 @@ Deno.test('csvRow puts each value under the header its name promises', () => {
 	// the owner's folder that any live session JWT could then fetch directly.
 	assert(!CSV_COLS.includes('track_url'));
 	assert(!csvRow(REF).includes('.json.gz'));
+});
+
+Deno.test('hr_coverage sits beside the column it qualifies', () => {
+	// Adjacency is the point of the column, not a cosmetic. `avg_bpm` is a
+	// mean over a share of the run the recorder measured and the CSV never
+	// stated; a reader scanning a spreadsheet has to see the two together or
+	// the qualification does not reach them (decisions § 1134).
+	assertEquals(CSV_COLS.indexOf('hr_coverage'), CSV_COLS.indexOf('avg_bpm') + 1);
+});
+
+Deno.test('the three heart-rate shapes are distinguishable in the CSV', () => {
+	const cell = (r: RenderRunRow, col: string) => csvFields(csvRow(r))[CSV_COLS.indexOf(col)];
+	const run = (metadata: Record<string, unknown>) => ({ ...REF, metadata });
+
+	// 1. Full coverage: the average is the run's average, and the column
+	//    says the sensor covered all of it.
+	const full = run({ avg_bpm: 142, hr_coverage: 1 });
+	assertEquals(cell(full, 'avg_bpm'), '142');
+	assertEquals(cell(full, 'hr_coverage'), '1');
+
+	// 2. Partial coverage: the same 142 bpm, measured over 51 % of the run.
+	//    Before § 1134 this exported identically to the row above.
+	const partial = run({ avg_bpm: 142, hr_coverage: 0.51 });
+	assertEquals(cell(partial, 'avg_bpm'), '142');
+	assertEquals(cell(partial, 'hr_coverage'), '0.51');
+	assert(cell(partial, 'hr_coverage') !== cell(full, 'hr_coverage'));
+
+	// 3. Suppressed average: the Wear recorder drops `avg_bpm` below 0.5
+	//    coverage (§ 1083), so the average is absent BECAUSE it was measured
+	//    badly — not because the runner wore no strap. The strap-less run is
+	//    the contrast that makes the claim mean anything, and the two used to
+	//    export as the same empty cell.
+	const suppressed = run({ hr_coverage: 0.12 });
+	const noStrap = run({});
+	assertEquals(cell(suppressed, 'avg_bpm'), '');
+	assertEquals(cell(noStrap, 'avg_bpm'), '');
+	assertEquals(cell(suppressed, 'hr_coverage'), '0.12');
+	assertEquals(cell(noStrap, 'hr_coverage'), '');
+
+	// A sensor enabled that delivered nothing is a MEASUREMENT of zero, and
+	// must not collapse onto the strap-less run's empty cell either.
+	assertEquals(cell(run({ hr_coverage: 0 }), 'hr_coverage'), '0');
+});
+
+Deno.test('hrCoverageCell states only a fraction it can vouch for', () => {
+	// The writer's contract is 0..1 (decisions § 1083). A value outside it is
+	// one this build cannot interpret, and a consumer reading `85` out of a
+	// column documented as a fraction computes 8500 % — the same refusal the
+	// page makes in § 1088.
+	assertEquals(hrCoverageCell(0), '0');
+	assertEquals(hrCoverageCell(0.5), '0.5');
+	assertEquals(hrCoverageCell(1), '1');
+	assertEquals(hrCoverageCell(1.4), '');
+	assertEquals(hrCoverageCell(85), '');
+	assertEquals(hrCoverageCell(-0.1), '');
+	assertEquals(hrCoverageCell(Number.NaN), '');
+	assertEquals(hrCoverageCell(Number.POSITIVE_INFINITY), '');
+	assertEquals(hrCoverageCell('0.5'), '');
+	assertEquals(hrCoverageCell(null), '');
+	assertEquals(hrCoverageCell(undefined), '');
+});
+
+Deno.test('a refused coverage is withheld from its column, not from the export', () => {
+	// Grading the column withholds nothing from the subject: Art 20 is
+	// satisfied by the `metadata` column, which carries the stored bag
+	// verbatim. The column carries what its header promises; the bag carries
+	// what the row holds.
+	const row = csvFields(csvRow({ ...REF, metadata: { hr_coverage: 85 } }));
+	assertEquals(row[CSV_COLS.indexOf('hr_coverage')], '');
+	assertEquals(JSON.parse(row[CSV_COLS.indexOf('metadata')]).hr_coverage, 85);
 });
 
 Deno.test('a title carrying the delimiter set survives the round trip', () => {

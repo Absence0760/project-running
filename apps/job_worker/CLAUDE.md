@@ -85,6 +85,15 @@ Function moves per
   three steps must land together — the DB rejects an unknown kind
   at INSERT (23514) rather than at the worker's dispatch, so
   shipping a new kind without all three slips it through silently.
+  Two of the three are now enforced rather than remembered:
+  `internal/worker_dispatch_coverage_test.go` replays the migrations
+  for the final `jobs_kind_chk` and fails a `case` the CHECK forbids
+  (dead code reading as a shipped feature) as well as an admitted
+  kind with no `case` (every enqueued row claimed, failed as unknown
+  and retried to exhaustion). So the migration and the switch line
+  are ONE commit — either alone is red, in opposite directions
+  (measured both ways for `export_blob_reap`, decisions § 1144).
+  The pgtap file is still on you.
   `token_refresh` (sweeps expiring Strava integrations + rotates via
   `/oauth/token`) is in `handler_token_refresh.go` and is the worked
   example for "port a scheduled Edge Function into the queue".

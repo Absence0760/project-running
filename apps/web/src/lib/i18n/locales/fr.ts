@@ -1196,7 +1196,7 @@ export const messages = {
 	"runDetail.hrDisclaimerPrefix": "Les zones utilisent une FC max estimée selon l'âge. Si tu prends des médicaments cardiaques (p. ex. bêtabloquants) ou si tu as mesuré ta FC max, définis-la dans",
 	"runDetail.hrDisclaimerLink": "Paramètres → Préférences",
 	"runDetail.hrDisclaimerSuffix": "pour des zones précises.",
-	"runDetail.hrAvgOnly": "Seule la fréquence cardiaque moyenne de la course a été enregistrée ({bpm} bpm). Une répartition complète des zones nécessite des relevés point par point, que les applications d'enregistrement écriront bientôt avec le GPS.",
+	"runDetail.hrAvgOnly": "Seule la fréquence cardiaque moyenne de la course a été enregistrée ({bpm} bpm). Une répartition des zones nécessite des relevés de fréquence cardiaque à chaque point du tracé, que cette course ne contient pas.",
 	"runDetail.hrCoverageNone": "Le capteur de fréquence cardiaque était actif sur cette course, mais n'a fourni aucune mesure.",
 	"runDetail.hrCoverageOnly": "La fréquence cardiaque a été enregistrée sur {pct}% de cette course — trop peu pour en donner une moyenne.",
 	"runDetail.hrCoveragePartial": "Moyenne sur {pct}% de cette course.",

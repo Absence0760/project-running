@@ -2031,11 +2031,29 @@ grant  execute on function public.<fn>(<args>) to authenticated;   -- and/or ser
 Add `authenticated` to the revoke list when no client role should hold it at all
 (the `cleanup_*` / `enqueue_*` cron family, and helpers only a SECURITY DEFINER
 trigger calls). 48 migrations write a function-level `from public, anon` revoke
-today (36 as `revoke execute`, 12 as `revoke all`); it is the house form for
+today (42 as `revoke execute`, 12 as `revoke all`); it is the house form for
 exactly this reason, and `check_migration_function_revoke_noop.mjs` is what
-keeps it — it replays all 448 migrations in version order and fails the PR on
+keeps it — it replays all 469 migrations in version order and fails the PR on
 any EXECUTE revoke that leaves the other channel at its image-dependent
 default, in either direction.
+
+**The same replay runs in the positive direction**, and that half is
+`check_stated_function_grants.mjs` ([decisions § 1139](../architecture/decisions.md)).
+A catalogue assertion cannot tell a stated grant from an inherited one on the
+image the PR gate runs, so this one reads the migration text and derives the ACL
+the repo *states* — PUBLIC discounted, since PUBLIC is exactly the channel the
+two images disagree about. The obligation is **derived from the call sites**:
+every RPC name the web, Lambda, `api_client` and mobile trees call must carry a
+stated `authenticated` grant, and every one the Edge Functions and the Go worker
+call must carry a stated `service_role` one, so a PR that adds a caller whose
+grant no migration states fails on that PR. The `stated` table in
+`anon_execute_registry_test.sql` is the second, much smaller source, for a pair
+no source tree names; the guard parses its rows out of that file so the two read
+one registry. It runs as a step in the `pgtap RLS suite` job and needs no stack.
+It found three violations on its first run: `host_can_take_payment` (called as
+service_role by both checkout functions, granted by `20270708000001`,
+[§ 1140](../architecture/decisions.md)) and `api_client`'s two dead callers
+([§ 1142](../architecture/decisions.md)).
 
 Two further rules follow from the same mechanism:
 
@@ -2047,7 +2065,13 @@ Two further rules follow from the same mechanism:
   (repaired in `20270625000001`; see [decisions.md § 799](../architecture/decisions.md)).
 - **The grant is the only control a SECURITY DEFINER function has** unless its
   body checks `auth.uid()` itself. `anon_execute_registry_test.sql` pins the
-  rule and the four functions `20270625000001` withheld.
+  rule and the four functions `20270625000001` withheld, plus — in assertions
+  (7)-(9) — the routines a named role must be able to CALL. Those three joined
+  the registry on `pg_get_function_identity_arguments`, which carries parameter
+  NAMES, against an `args` column that carries the type list, so they matched
+  nothing on either image and asserted over an empty set until
+  [§ 1141](../architecture/decisions.md) moved them to
+  `oidvectortypes(p.proargtypes)` and added (9) as the control.
 
 **The set of anon-executable functions is closed, and pinned.**
 `20270626000001` swept the remaining 71 and
@@ -2305,7 +2329,7 @@ Owner-only SECURITY DEFINER RPC for the duplicate-a-week bulk op (migration `202
 
 ### `clip_track_for_user(target_user_id uuid, points jsonb)`
 
-SECURITY DEFINER RPC for privacy-zone clipping (decisions §33). Reads `user_settings.prefs.privacy_zones` for the target user, walks the input points dropping in-zone leading + trailing entries, and returns the contiguous middle as jsonb. Zones never leave the database. **Granted to no client role.** `20260915_001` revoked `anon` because the RPC is a probe oracle — it trims LEADING in-zone points, so a 3-point probe returning 2 means "inside a zone" and 3 means "outside", and ~40 calls binary-search a victim's home to metre precision with no Edge Function rate limit in the way (it is a PostgREST RPC). `20270521_001` revoked `authenticated` for the same reason: signup is free and unthrottled, so the role is not a trust boundary. Anonymous and signed-in viewers still receive clipped output — every consumer (`clip_route_for_viewer`, `privacy_aware_route_geom`, `route_markers_for_viewer`, the `clip-public-track` Edge Function) is SECURITY DEFINER or service-role and does not need the caller to hold the grant. Web's `clipTrackForUser` helper, the only direct client caller, had no production call sites left and was deleted in the same change. Input is capped at 50 000 points (raise on overflow) to bound the residual dense-grid probe attack. Returns input unchanged when the target user has no zones configured. Helpers `privacy_distance_m(lat1, lng1, lat2, lng2)` and `privacy_in_any_zone(lat, lng, zones_json)` are exposed in the same migration but used only internally by the RPC.
+SECURITY DEFINER RPC for privacy-zone clipping (decisions §33). Reads `user_settings.prefs.privacy_zones` for the target user, walks the input points dropping in-zone leading + trailing entries, and returns the contiguous middle as jsonb. Zones never leave the database. **Granted to no client role.** `20260915_001` revoked `anon` because the RPC is a probe oracle — it trims LEADING in-zone points, so a 3-point probe returning 2 means "inside a zone" and 3 means "outside", and ~40 calls binary-search a victim's home to metre precision with no Edge Function rate limit in the way (it is a PostgREST RPC). `20270521_001` revoked `authenticated` for the same reason: signup is free and unthrottled, so the role is not a trust boundary. Anonymous and signed-in viewers still receive clipped output — every consumer (`clip_route_for_viewer`, `privacy_aware_route_geom`, `route_markers_for_viewer`, the `clip-public-track` Edge Function) is SECURITY DEFINER or service-role and does not need the caller to hold the grant. Web's `clipTrackForUser` helper was deleted in the same change; `api_client`'s twin of it was missed and survived, unreachable and returning `[]` through its own fail-closed catch, until [decisions § 1142](../architecture/decisions.md) deleted it too. **There is no client caller now** — the only clipping path a client has for a run is `fetchClippedTrackForRun` / the `clip-public-track` Edge Function. Input is capped at 50 000 points (raise on overflow) to bound the residual dense-grid probe attack. Returns input unchanged when the target user has no zones configured. Helpers `privacy_distance_m(lat1, lng1, lat2, lng2)` and `privacy_in_any_zone(lat, lng, zones_json)` are exposed in the same migration but used only internally by the RPC.
 
 ### `clip_route_for_viewer(p_route_id uuid)`
 

@@ -36,9 +36,6 @@ const Map<String, String> _documentedDelays = <String, String>{
   'test/checkpoint_checkin_screen_test.dart':
       'absence assertion — a refused stamp writes nothing, so every predicate '
           'already holds before the tap',
-  'test/gym_screen_test.dart':
-      'teardown drain — runs after the last assertion, before the temp dir is '
-          'deleted',
   'test/import_screen_paths_test.dart':
       'absence assertion — a pick carrying no readable path returns before the '
           'screen sets any state',
@@ -56,6 +53,10 @@ const Map<String, String> _documentedDelays = <String, String>{
           'its callers, so no predicate is ever false',
   'test/route_detail_watch_course_test.dart':
       'shared helper — same race-plan adoption read as roadbook_screen_test',
+  'test/store_writes_settled_zone_test.dart':
+      'the delay IS the subject — the bound has to actually elapse for the '
+          'root-zone report to be produced at all, and the second wait is an '
+          'absence assertion that nothing reports twice',
   'test/routes_screen_fab_double_tap_test.dart':
       'zero-duration microtask flush after completing a picker, not a timed '
           'wait',

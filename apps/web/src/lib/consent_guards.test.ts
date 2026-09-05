@@ -9,6 +9,8 @@ import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { stripComments } from './core/strip_comments';
+
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
 }
@@ -200,49 +202,90 @@ test('route-builder OSRM traffic goes through the server-side proxy, never brows
 	// the GraphHopper hop closed on the generate path. The OSRM base is now
 	// server-only (`OSRM_URL`), and every client call rides the
 	// /api/routes/osrm proxy via osrmProxyFetch.
-	const source = read('src/lib/routes/routing.ts');
+	//
+	// The claims below are made over the code a user actually runs (§ 1119).
+	// They used to be made over three exported helpers in routing.ts that
+	// nothing imported, while RouteBuilder — the tree's only OSRM caller —
+	// built its paths inline and was checked by a COUNT of osrmProxyFetch call
+	// sites, which a bare fetch() added beside them would not have moved.
+	const routingSource = read('src/lib/routes/routing.ts');
 	assert.doesNotMatch(
-		source,
+		routingSource,
 		/PUBLIC_OSRM_URL|\$env\/dynamic\/public|router\.project-osrm\.org/,
 		'routing.ts must not read a PUBLIC_ OSRM env or reference the OSRM ' +
 			'host/demo — the browser only ever talks to /api/routes/osrm.',
 	);
 	assert.match(
-		source,
+		routingSource,
 		/OSRM_PROXY_BASE = '\/api\/routes\/osrm'/,
 		'routing.ts must route through the /api/routes/osrm proxy base.',
 	);
-	for (const fn of ['snapToRoad', 'fetchRoute', 'fetchFullRoute']) {
-		const body = source.match(
-			new RegExp(`async function ${fn}\\b[\\s\\S]*?\\n\\}`),
-		)?.[0];
-		assert.ok(body, `routing.ts missing function ${fn}`);
-		assert.match(
-			body!,
-			/osrmProxyFetch\(/,
-			`${fn} must issue its OSRM call through osrmProxyFetch — a bare ` +
-				'fetch() here reopens the browser-direct coordinate leak.',
-		);
-	}
+
+	// routing.ts is the proxy client and nothing else. A second exported
+	// function here is a second way to reach OSRM, and one that no caller
+	// imports is how the invariant came to be enforced over dead code.
+	const routing = stripComments(routingSource);
+	assert.deepEqual(
+		[...routing.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z0-9_$]+)/g)].map(
+			(m) => m[1],
+		),
+		['osrmProxyFetch'],
+		'routing.ts must export exactly one function, osrmProxyFetch.',
+	);
+	const routingFetches = [...routing.matchAll(/(?<![\w$.])fetch\(/g)];
+	assert.equal(
+		routingFetches.length,
+		1,
+		`routing.ts must reach the network exactly once — found ${routingFetches.length} bare fetch() calls.`,
+	);
+	assert.match(
+		routing.slice(routingFetches[0].index),
+		/^fetch\(`\$\{OSRM_PROXY_BASE\}/,
+		"routing.ts's one fetch() must be prefixed with OSRM_PROXY_BASE — an " +
+			'absolute URL here is the browser-direct coordinate leak.',
+	);
 
 	// RouteBuilder.svelte builds OSRM paths inline (custom retry + batching +
-	// radius / version cancellation) instead of going through the helper
-	// functions — both inline call sites (snapWaypointsToRoads +
-	// recalculateRoute's fetchSegment) must ride the proxy too.
-	const rb = read('src/lib/components/RouteBuilder.svelte');
+	// radius / version cancellation) rather than through a helper, so the
+	// invariant is asserted over the path literals themselves: each must be
+	// handed to osrmProxyFetch, inline at the call or through a const the call
+	// is given, and no bare fetch() may carry one.
+	const rbSource = read('src/lib/components/RouteBuilder.svelte');
 	assert.doesNotMatch(
-		rb,
+		rbSource,
 		/OSRM_BASE_URL|PUBLIC_OSRM_URL|router\.project-osrm\.org/,
 		'RouteBuilder.svelte must not reference the OSRM host directly.',
 	);
-	const rbMatches = rb.match(/osrmProxyFetch\(/g) ?? [];
+	const rb = stripComments(rbSource);
+	const osrmPaths = [...rb.matchAll(/`\/(?:nearest|route|match|trip|table)\/v1\/[^`]*`/g)];
 	assert.ok(
-		rbMatches.length >= 2,
-		'RouteBuilder.svelte must call osrmProxyFetch() at each OSRM-fetch ' +
-			'entry point (snapWaypointsToRoads + recalculateRoute). Found ' +
-			rbMatches.length +
-			' call sites.',
+		osrmPaths.length >= 2,
+		'population: RouteBuilder.svelte must still build its OSRM service ' +
+			'paths (snapWaypointsToRoads + recalculateRoute). A scan matching ' +
+			`nothing satisfies every per-path claim below; found ${osrmPaths.length}.`,
 	);
+	for (const hit of osrmPaths) {
+		const before = rb.slice(Math.max(0, hit.index - 120), hit.index);
+		const bound = /(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*(?::[^=\n]*)?=\s*$/.exec(before);
+		const viaConst =
+			bound !== null &&
+			(rb.includes(`osrmProxyFetch(${bound[1]},`) || rb.includes(`osrmProxyFetch(${bound[1]})`));
+		assert.ok(
+			/osrmProxyFetch\(\s*$/.test(before) || viaConst,
+			`RouteBuilder.svelte builds the OSRM path ${hit[0].slice(0, 40)}… ` +
+				'without handing it to osrmProxyFetch — a bare fetch() here ' +
+				'reopens the browser-direct coordinate leak of issue #198.',
+		);
+	}
+	for (const hit of rb.matchAll(/(?<![\w$.])fetch\(/g)) {
+		assert.doesNotMatch(
+			rb.slice(hit.index, hit.index + 200),
+			/\/v1\//,
+			'RouteBuilder.svelte passes an OSRM service path to a bare fetch() ' +
+				'instead of osrmProxyFetch — the coordinates leave the browser ' +
+				'with no server boundary (issue #198).',
+		);
+	}
 
 	// The demo fallback now lives server-side and is dev-only: the proxy core
 	// must gate it on allowDemoFallback, and the production Lambda must pin

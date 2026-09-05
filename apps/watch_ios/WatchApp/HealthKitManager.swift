@@ -1,6 +1,107 @@
 import Foundation
 import HealthKit
 
+/// What a finished run may say about its heart rate.
+///
+/// The watchOS half of Wear OS's `HeartRateClaim` / `heartRateClaim`
+/// (`apps/watch_wear/.../recording/HeartRateCoverage.kt`). Deliberately NOT a
+/// registered parity pair: the registries pair web with mobile, the two watch
+/// clients are additive surfaces under decisions § 24, and there is no
+/// enforcement rail between them. What has to match is the MEANING of the
+/// number, because both clients write the same row — see the `hr_coverage`
+/// registry entry in `docs/backend/metadata.md` (decisions § 1156).
+struct HeartRateClaim: Equatable {
+    /// The mean of the run's samples, or nil when there were none — or when
+    /// there were, but over too little of the run to call it the run's
+    /// average.
+    let averageBPM: Double?
+    /// Fraction of ACTIVE elapsed time the sensor was delivering, 0..1 to two
+    /// decimals. Nil when nothing measured it.
+    let coverage: Double?
+}
+
+enum HeartRateCoverage {
+    /// The share of a run's active time the wrist sensor must have been
+    /// delivering for the mean of its samples to be saved as THE RUN'S average
+    /// heart rate.
+    ///
+    /// Half, and the number is the sentence rather than a tuning knob: a mean
+    /// taken over less of the run than not is not the run's average, and
+    /// `avg_bpm` is read everywhere — run detail, the coach context, the
+    /// export — as though it were. Same figure as Wear's
+    /// `MIN_AVG_BPM_COVERAGE`, because a threshold that differed by platform
+    /// would mean one number with two meanings on one column
+    /// (decisions § 1083).
+    static let minAverageBPMCoverage = 0.5
+
+    /// A sample older than this is not evidence that the sensor is delivering
+    /// NOW. Thirty seconds is loose enough that HealthKit's batching is not
+    /// punished — it delivers heart rate in bursts a few seconds apart — and
+    /// short enough that a silence measured in minutes is not credited.
+    static let sampleFreshInterval: TimeInterval = 30
+
+    /// The active seconds one recorder tick may credit to coverage: the step
+    /// since the last tick, and only while the newest sample is still fresh
+    /// at that moment.
+    ///
+    /// Pure, and separated from the accumulator that calls it, because this is
+    /// the arithmetic that GATES a shipped field and a real `HKWorkoutSession`
+    /// cannot be constructed in the test host — an accumulator whose only
+    /// exercise is a wrist is one nobody can check before it deletes an
+    /// `avg_bpm` (decisions § 1156).
+    ///
+    /// A nil `sampleAgeSeconds` is "no sample has ever arrived", which credits
+    /// nothing: the run has not started delivering yet. A NEGATIVE age is
+    /// credited — a sample stamped slightly ahead of the reader's clock is a
+    /// clock disagreement, not a stale sensor.
+    static func creditedStep(
+        activeElapsedSeconds: TimeInterval,
+        lastTickSeconds: TimeInterval,
+        sampleAgeSeconds: TimeInterval?
+    ) -> TimeInterval {
+        guard activeElapsedSeconds.isFinite, lastTickSeconds.isFinite else { return 0 }
+        let step = activeElapsedSeconds - lastTickSeconds
+        guard step > 0,
+              let sampleAgeSeconds,
+              sampleAgeSeconds.isFinite,
+              sampleAgeSeconds <= sampleFreshInterval else { return 0 }
+        return step
+    }
+
+    /// Grade the run's mean against how much of the run it covered.
+    ///
+    /// A nil `coveredSeconds` is **unmeasured, not zero**. The absence of a
+    /// measurement is no evidence of absent coverage, so the mean passes
+    /// through unqualified exactly as it did before coverage existed — which
+    /// is what keeps a run whose `HKWorkoutSession` never started (HealthKit
+    /// unavailable, the entitlement missing, a simulator) carrying the
+    /// average it would have carried anyway. Every unusable input lands on
+    /// that same branch on purpose: this figure GATES a shipped field, and a
+    /// measurement that fails toward zero would delete a good `avg_bpm` on
+    /// every run rather than on the runs it is about.
+    static func claim(
+        mean: Double?,
+        coveredSeconds: TimeInterval?,
+        activeElapsedSeconds: TimeInterval
+    ) -> HeartRateClaim {
+        guard let coveredSeconds,
+              coveredSeconds.isFinite,
+              activeElapsedSeconds.isFinite,
+              activeElapsedSeconds > 0 else {
+            return HeartRateClaim(averageBPM: mean, coverage: nil)
+        }
+        let raw = min(max(coveredSeconds / activeElapsedSeconds, 0), 1)
+        // Rounded first, then compared: grading the raw fraction lets a run
+        // report a coverage of 0.5 beside a suppressed average, and a record
+        // that contradicts itself is worse than either answer.
+        let coverage = (raw * 100).rounded() / 100
+        return HeartRateClaim(
+            averageBPM: coverage >= minAverageBPMCoverage ? mean : nil,
+            coverage: coverage
+        )
+    }
+}
+
 /// Live heart-rate readings during a run. Apple Watch only samples HR
 /// continuously inside an active `HKWorkoutSession`, so we start one
 /// alongside the `CLLocationManager`-based recording even though GPS
@@ -26,6 +127,24 @@ class HealthKitManager: NSObject, ObservableObject {
     private var builder: HKLiveWorkoutBuilder?
 
     private let hrUnit = HKUnit.count().unitDivided(by: .minute())
+
+    /// `timeIntervalSinceReferenceDate` of the newest usable heart-rate
+    /// sample, 0 for none yet. A bare `Double` rather than a `Date?` because
+    /// `didCollectDataOf` arrives on whatever queue HealthKit pleases while
+    /// the recorder's ticker reads this on the main one — the same
+    /// cross-queue shape `sessionDidFail` above already carries, and the same
+    /// one Wear's `lastHrSampleAtMs` has.
+    private var lastSampleAtEpoch: TimeInterval = 0
+
+    /// Active seconds credited to heart-rate coverage, and the tick they were
+    /// last credited at.
+    ///
+    /// Nil is **unmeasured**: the workout session never started, so there is
+    /// no sensor whose duty cycle this could be. Set to zero the moment the
+    /// session does start, which is when a run of zero coverage becomes a
+    /// real answer rather than a missing one.
+    private var coveredSeconds: TimeInterval?
+    private var lastCoverageTick: TimeInterval = 0
 
     func requestAuthorization() async {
         guard HKHealthStore.isHealthDataAvailable() else { return }
@@ -54,6 +173,10 @@ class HealthKitManager: NSObject, ObservableObject {
             let startDate = Date()
             session.startActivity(with: startDate)
             builder.beginCollection(withStart: startDate) { _, _ in }
+            // From here a zero is a real measurement. Before it — and in the
+            // catch below — there is no sensor to have a duty cycle.
+            coveredSeconds = 0
+            lastCoverageTick = 0
         } catch {
             // HealthKit unavailable (simulator edge cases, missing entitlement).
             // HR display stays at "—"; the rest of the run records normally.
@@ -84,6 +207,9 @@ class HealthKitManager: NSObject, ObservableObject {
 
     func reset() {
         sessionDidFail = false
+        lastSampleAtEpoch = 0
+        coveredSeconds = nil
+        lastCoverageTick = 0
         DispatchQueue.main.async {
             self.currentBPM = nil
             self.averageBPM = nil
@@ -91,7 +217,7 @@ class HealthKitManager: NSObject, ObservableObject {
         }
     }
 
-    /// The average a finished run may carry. A failed session's average
+    /// The UNGRADED mean of the session's samples. A failed session's average
     /// covers only the minutes before the sensor stream died, so it is
     /// withheld rather than written to the row as the whole run's — 20
     /// minutes of a 4-hour run is a wrong number, not a partial one.
@@ -103,25 +229,73 @@ class HealthKitManager: NSObject, ObservableObject {
     /// foreground app. That is exactly the failure Wear OS's `hr_coverage`
     /// measures against — `MeasureClient` there is documented foreground-only,
     /// so its mean can be the minutes the runner spent looking at the watch
-    /// (decisions § 1015 / § 1083). This watch therefore writes **no**
-    /// `hr_coverage` key. It does not write an assumed `1.0` either: an
-    /// assumed measurement is a fabricated one, and worse than none.
+    /// (decisions § 1015 / § 1083).
     ///
-    /// **The absence is not self-addressing, and that is a real gap.** Both
-    /// watch clients write `source = 'watch'` — there is no `watch_ios` value
-    /// — so a reader holding a `source = 'watch'` run with no `hr_coverage`
-    /// cannot tell this claim from a Wear run recorded by a build predating
-    /// the key, or one recovered from a checkpoint that never carried it.
-    /// `docs/backend/metadata.md`'s `hr_coverage` row states all three.
+    /// **What being workout-scoped does NOT establish** is that every second
+    /// of the session produced a sample. A session that stays alive while the
+    /// sensor goes quiet — the watch loosened on the wrist, water lock, a
+    /// sleeve pushed over it at an aid station — still averages what it got,
+    /// and § 1106 recorded that as unquantified. It is quantified now:
+    /// `advanceCoverage` measures it, and `heartRateClaim(activeElapsedSeconds:)`
+    /// is what a saved run must go through. Nothing may read this property
+    /// straight onto a row.
     ///
-    /// **What it does NOT claim** is that every second of the session
-    /// produced a sample. A session that stays alive while the sensor goes
-    /// quiet — the watch loosened on the wrist, water lock — still averages
-    /// what it got. Quantifying that needs a measurement rather than an
-    /// assumption; the shape it would take, and the two things blocking it,
-    /// are filed (decisions § 1106).
+    /// **This watch still writes no `hr_coverage` key**, and the absence is
+    /// still not self-addressing. Both watch clients write `source = 'watch'`
+    /// — there is no `watch_ios` value — so a reader holding a
+    /// `source = 'watch'` run with no coverage figure cannot tell this claim
+    /// from a Wear run recorded by a build predating the key, or one recovered
+    /// from a checkpoint that never carried it. `docs/backend/metadata.md`'s
+    /// `hr_coverage` row states all three. The figure exists here and is not
+    /// sent because the run reaches the phone through
+    /// `WCSession.transferFile(_:metadata:)` and claim (6) of
+    /// `scripts/check_watch_ios_source.mjs` reads BOTH ends: a key this watch
+    /// sends that `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` never
+    /// lifts out is dropped silently, which is exactly how Apple-Watch runs
+    /// once arrived with no `activity_type`. That lift is one line beside the
+    /// existing `avg_bpm` one, in a tree this change does not touch
+    /// (decisions § 1156).
     var summaryAverageBPM: Double? {
         sessionDidFail ? nil : averageBPM
+    }
+
+    /// Credit the tick's active seconds to coverage when the newest usable
+    /// sample is still fresh.
+    ///
+    /// Driven from the recorder's own 1 s ticker rather than from
+    /// `didCollectDataOf`, because the gap this exists to measure is a stream
+    /// that has GONE QUIET — there is no delivery to hang it on, and an
+    /// interval left open across the silence would credit the whole of it.
+    ///
+    /// `activeElapsedSeconds` is the recorder's own active clock, so time
+    /// spent paused is neither credited nor charged: the ticker does not
+    /// advance while paused, the step is the difference between two of its
+    /// readings, and `pauseSession()` stops the sensor anyway.
+    func advanceCoverage(activeElapsedSeconds: TimeInterval) {
+        guard let covered = coveredSeconds else { return }
+        let age: TimeInterval? = lastSampleAtEpoch > 0
+            ? Date().timeIntervalSinceReferenceDate - lastSampleAtEpoch
+            : nil
+        let step = HeartRateCoverage.creditedStep(
+            activeElapsedSeconds: activeElapsedSeconds,
+            lastTickSeconds: lastCoverageTick,
+            sampleAgeSeconds: age
+        )
+        // Advanced even on a tick that credits nothing, so a silence is
+        // charged to the run exactly once rather than re-credited the moment
+        // the sensor comes back.
+        if activeElapsedSeconds.isFinite { lastCoverageTick = activeElapsedSeconds }
+        coveredSeconds = covered + step
+    }
+
+    /// What a run ending now may claim about its heart rate. The one way a
+    /// saved run — finished or checkpointed — may take an average from here.
+    func heartRateClaim(activeElapsedSeconds: TimeInterval) -> HeartRateClaim {
+        HeartRateCoverage.claim(
+            mean: summaryAverageBPM,
+            coveredSeconds: coveredSeconds,
+            activeElapsedSeconds: activeElapsedSeconds
+        )
     }
 
     /// A workout session that reports a failure is dead: it delivers no
@@ -183,6 +357,23 @@ extension HealthKitManager: HKLiveWorkoutBuilderDelegate {
 
         let most = stats.mostRecentQuantity()?.doubleValue(for: hrUnit)
         let avg = stats.averageQuantity()?.doubleValue(for: hrUnit)
+
+        if most != nil {
+            // The SAMPLE's own timestamp, not this delivery's. HealthKit
+            // batches, so grading arrivals would measure its scheduling
+            // rather than the sensor — a burst of five one-second samples
+            // handed over at once is the sensor working, not failing.
+            //
+            // The fallback is deliberately the delivery instant and not
+            // "no evidence": a sample HealthKit handed us with an
+            // unreadable interval is still evidence the sensor is
+            // delivering NOW, and the other reading would drive coverage
+            // to zero and suppress a good average on every run rather
+            // than on the runs this measures (decisions § 1156).
+            lastSampleAtEpoch = stats.mostRecentQuantityDateInterval()?.end
+                .timeIntervalSinceReferenceDate
+                ?? Date().timeIntervalSinceReferenceDate
+        }
 
         DispatchQueue.main.async {
             if let most = most { self.currentBPM = Int(most.rounded()) }

@@ -134,6 +134,105 @@ test('the grade window is longer than the noise floor the gain path discards', (
 	);
 });
 
+/// The GAP reference track: a clean, noise-free 6% climb switchbacking
+/// +/-8 m every 150 m, walked at 5 m every 3 s for 3 km — the 30-minute
+/// power-hike-paced staircase decisions § 992 measured the window's cost on,
+/// and the profile that binds its UPPER end. Points sit on a line of constant
+/// latitude, where the haversine collapses exactly to R * dLambda, so the
+/// per-pair horizontal step below is a closed form rather than a second copy
+/// of the module's own distance function.
+///
+/// Frozen on three rails — this file, `grade_adjusted_pace_test.dart` and the
+/// firmware's `grade_adjusted_pace.rs` — and compared between them by
+/// `scripts/check_watch_wire_vectors.mjs`, which reads all eight constants out
+/// of each. A fixture that drifts on one rail makes its golden meaningless
+/// rather than wrong, which is the failure nothing would otherwise report
+/// (decisions § 641).
+const GAP_REFERENCE_POINTS = 601;
+const GAP_REFERENCE_STEP_M = 5.0;
+const GAP_REFERENCE_STEP_S = 3;
+const GAP_REFERENCE_BASE_GRADE = 0.06;
+const GAP_REFERENCE_AMPLITUDE_M = 8.0;
+const GAP_REFERENCE_PERIOD_M = 150.0;
+const GAP_REFERENCE_S_PER_KM = 311;
+const GAP_REFERENCE_MAX_COST = 0.03;
+
+const GAP_REFERENCE_HORIZ_STEP_M = (6_371_000 * ((GAP_REFERENCE_STEP_M / 111_320) * Math.PI)) / 180;
+
+function gapReferenceTrack(amplitudeM = GAP_REFERENCE_AMPLITUDE_M): TrackPoint[] {
+	const t0 = Date.parse('2026-01-01T00:00:00Z');
+	const out: TrackPoint[] = [];
+	for (let i = 0; i < GAP_REFERENCE_POINTS; i++) {
+		const x = i * GAP_REFERENCE_STEP_M;
+		out.push({
+			lat: 0,
+			lng: x / 111_320,
+			ele:
+				100 +
+				GAP_REFERENCE_BASE_GRADE * x +
+				amplitudeM * Math.sin((2 * Math.PI * x) / GAP_REFERENCE_PERIOD_M),
+			ts: new Date(t0 + i * GAP_REFERENCE_STEP_S * 1000).toISOString()
+		});
+	}
+	return out;
+}
+
+/// The same walk with no window at all: every point pair graded on its own
+/// rise over its own run. This is what the runner actually spent, and what a
+/// window can only approximate — a window wider than the terrain averages the
+/// climbs and the drops together and hands back a flatter course than the one
+/// underfoot.
+function gapReferenceTruthSecPerKm(track: TrackPoint[]): number {
+	let adjDistM = 0;
+	for (let i = 1; i < track.length; i++) {
+		const rise = (track[i].ele ?? 0) - (track[i - 1].ele ?? 0);
+		adjDistM += GAP_REFERENCE_HORIZ_STEP_M * gradeFactor(rise / GAP_REFERENCE_HORIZ_STEP_M);
+	}
+	const timeS = (track.length - 1) * GAP_REFERENCE_STEP_S;
+	return timeS / (adjDistM / 1000);
+}
+
+test('the reference geometry measures the horizontal step the module does', () => {
+	// Ties the closed form above to the module's own haversine: with no
+	// oscillation and no base grade every factor is exactly 1, so the reported
+	// GAP is the raw pace that step implies. Without this the truth below would
+	// be graded against a distance nothing had checked.
+	const flat = gapReferenceTrack(0).map((p) => ({ ...p, ele: 100 }));
+	const timeS = (GAP_REFERENCE_POINTS - 1) * GAP_REFERENCE_STEP_S;
+	const horizM = GAP_REFERENCE_HORIZ_STEP_M * (GAP_REFERENCE_POINTS - 1);
+	assert.equal(gradeAdjustedPaceSecPerKm(flat), Math.round(timeS / (horizM / 1000)));
+});
+
+test('the grade window is short enough to keep the reference track', () => {
+	// The other end of the bracket. The noise-floor test above states the FLOOR
+	// — it admits nothing under 19.40 m — and would pass at 200 m, a window
+	// long enough to erase the terrain outright. This states the CEILING, as
+	// decisions § 992 stated it: on the most oscillating realistic profile
+	// measured, the window may not cost more than 3% against the truth.
+	//
+	// Measured on this fixture, reported against truth 302.611 s/km:
+	//   5 m -> 304 (-0.46%)   15 m -> 308 (-1.78%)   20 m -> 311 (-2.77%)
+	//   25 m -> 316 (-4.42%)  30 m -> 322 (-6.41%)   200 m -> 426 (-40.78%)
+	// so the pair of tests together admits only [19.40 m, 24.97 m]. The 5 m
+	// point spacing is what makes the ceiling 24.97 rather than 25: the walk
+	// closes a segment on the first pair that clears the window, so what is
+	// really bounded is the EFFECTIVE segment, which is the honest bound.
+	const track = gapReferenceTrack();
+	const truth = gapReferenceTruthSecPerKm(track);
+	const reported = gradeAdjustedPaceSecPerKm(track);
+	assert.ok(reported != null);
+	const cost = Math.abs(reported - truth) / truth;
+	assert.ok(
+		cost < GAP_REFERENCE_MAX_COST,
+		`a ${MIN_SEGMENT_M} m window reports ${reported} s/km against a true ${truth.toFixed(3)} s/km on the reference switchback — ${(cost * 100).toFixed(2)}% of the climb averaged away`
+	);
+	assert.equal(
+		reported,
+		GAP_REFERENCE_S_PER_KM,
+		'the reference track no longer grades to its frozen value: the window, the fixture or the Minetti fit moved. Re-measure the cost against truth before updating this number, and update the Dart and firmware rails with it'
+	);
+});
+
 test('a track shorter than one window yields no grade-adjusted pace', () => {
 	// Proof that the walk reads the constant rather than a literal: four
 	// quarter-window steps carry elevation and a duration, and still never

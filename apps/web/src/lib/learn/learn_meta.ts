@@ -93,3 +93,72 @@ export function buildGuideJsonLd(input: GuideJsonLdInput): string {
 	};
 	return escapeJsonLd(JSON.stringify(graph));
 }
+
+export type LearnCollectionEntry = { slug: string; title: string };
+
+export type LearnCollectionJsonLdInput = {
+	/// The page's rendered title and description — the same strings the
+	/// `<title>` and `<meta name="description">` carry, so the structured
+	/// data cannot describe a different page from the one served.
+	title: string;
+	description: string;
+	/// The category this page indexes, or null for the `/learn` hub. Decides
+	/// both the canonical path and how many breadcrumb rungs there are.
+	category: { id: string; label: string } | null;
+	/// The guides the page lists, in the order it lists them.
+	guides: readonly LearnCollectionEntry[];
+	base: string | null | undefined;
+};
+
+/// schema.org JSON-LD for the two Learn pages that index other pages: the
+/// `/learn` hub and each `/learn/category/<id>`. A `CollectionPage` node —
+/// NOT an `Article`, which is what a guide is; a hub that claimed to be an
+/// article would be structured data describing a page that does not exist —
+/// carrying a `BreadcrumbList` of the same rungs `buildGuideJsonLd` builds
+/// (minus the article's own) and an `ItemList` of the guides listed.
+///
+/// The `ItemList` is omitted entirely when the page lists nothing, rather
+/// than emitted empty: an empty collection is a claim, and the wrong one.
+/// Returns a string ready to drop inside a `<script type="application/ld+json">`.
+export function buildLearnCollectionJsonLd(input: LearnCollectionJsonLdInput): string {
+	const base = normaliseSiteUrl(input.base);
+	const path = input.category ? `/learn/category/${input.category.id}` : '/learn';
+	const canonical = `${base}${path}`;
+
+	// The last rung is the page being viewed, so it carries no `item` — the
+	// shape Google documents and `buildGuideJsonLd` already uses.
+	const crumbs: Record<string, unknown>[] = [
+		{ '@type': 'ListItem', position: 1, name: SITE_NAME, item: `${base}/` },
+	];
+	if (input.category) {
+		crumbs.push({ '@type': 'ListItem', position: 2, name: 'Learn', item: `${base}/learn` });
+		crumbs.push({ '@type': 'ListItem', position: 3, name: input.category.label });
+	} else {
+		crumbs.push({ '@type': 'ListItem', position: 2, name: 'Learn' });
+	}
+
+	const node: Record<string, unknown> = {
+		'@context': 'https://schema.org',
+		'@type': 'CollectionPage',
+		name: input.title,
+		description: input.description,
+		url: canonical,
+		publisher: { '@type': 'Organization', name: SITE_NAME },
+		breadcrumb: { '@type': 'BreadcrumbList', itemListElement: crumbs },
+	};
+
+	if (input.guides.length > 0) {
+		node.mainEntity = {
+			'@type': 'ItemList',
+			numberOfItems: input.guides.length,
+			itemListElement: input.guides.map((g, i) => ({
+				'@type': 'ListItem',
+				position: i + 1,
+				name: g.title,
+				url: `${base}/learn/${g.slug}`,
+			})),
+		};
+	}
+
+	return escapeJsonLd(JSON.stringify(node));
+}

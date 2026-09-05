@@ -133,9 +133,9 @@ func TestServer_BadRouteIs404(t *testing.T) {
 	base, teardown := newTestServer(t, &Server{})
 	defer teardown()
 	for _, path := range []string{
-		"/v1/live/",                 // no run id
-		"/v1/live/run-1/",           // no action
-		"/v1/live/run-1/whatever",   // unknown action
+		"/v1/live/",               // no run id
+		"/v1/live/run-1/",         // no action
+		"/v1/live/run-1/whatever", // unknown action
 	} {
 		resp, err := http.Get(base + path)
 		if err != nil {

@@ -14,6 +14,7 @@ import '../lib/screens/nutrition_screen.dart';
 import '../lib/screens/nutrition_targets_screen.dart';
 import '../lib/screens/settings_body_metrics_screen.dart';
 import '../lib/settings_sync.dart';
+import 'store_write_watch.dart';
 
 /// 70 kg / 175 cm / 30 y / male with a 10 km run logged today, which pins
 /// every term of the derivation:
@@ -366,6 +367,7 @@ void main() {
         await tester.tap(find.text('Targets'));
         await tester.pumpAndSettle();
         expect(find.byType(NutritionTargetsScreen), findsOneWidget);
+        await pumpUntilStoreWritesSettle(tester);
       } finally {
         f.dir.deleteSync(recursive: true);
       }

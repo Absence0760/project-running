@@ -19,8 +19,17 @@ name: Terraform
 #      second IaC scanner; the same SARIF flows to the Security tab.
 #      `scan-ref: infra` walks the tree, so it is not per-stack either.
 #
-# Runs on every PR that touches `infra/` and on every push to main.
-# Doesn't run on docs-only edits — the path filter below scopes it.
+# Called by ci.yml's `terraform` job, and by nothing else. It ran on
+# its own path-filtered `push` + `pull_request` triggers until
+# 2026-09-04, which made every row it produced ADVISORY: branch
+# protection requires exactly one context, the `CI gate` aggregator in
+# ci.yml, and a `needs:` entry cannot name a job in another workflow —
+# so `fmt`, `validate` and the Trivy scan could each be red on a PR
+# that merged anyway (decisions § 1149). A called workflow's jobs run
+# inside the caller's run and the calling job fails when any of them
+# does, so one `needs:` entry over there covers every job this file
+# has and every job it gains later. The path filter moved with it, to
+# the `infra` output of ci.yml's `changes` job.
 #
 # Stacks scanned (matrix expanded inline; keep in lockstep with
 # `infra/README.md` § Layout):
@@ -51,23 +60,16 @@ name: Terraform
 # having one fewer green row than its siblings (decisions § 890).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'infra/**'
-      - '.github/workflows/terraform.yml'
-  pull_request:
-    paths:
-      - 'infra/**'
-      - '.github/workflows/terraform.yml'
+  workflow_call:
 
+# A called workflow cannot escalate past what the calling job grants,
+# so these are declared in BOTH places and the caller's are the ceiling.
+# `pull-requests: write` used to sit here for a `terraform validate` PR
+# comment nobody ever wired up; no step in this file posts anything, and
+# a write scope granted to no caller of it is standing privilege.
 permissions:
   contents: read
   security-events: write
-  # `pull-requests: write` lets us post the `terraform validate`
-  # summary as a PR comment if we ever wire one up (today the only
-  # output is the workflow log + the Security tab).
-  pull-requests: write
 
 jobs:
   fmt:

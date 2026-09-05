@@ -497,4 +497,3 @@ func (l *ipRateLimiter) evict(now time.Time) {
 	// defence in depth, not the thing holding the door.
 	clear(l.buckets)
 }
-

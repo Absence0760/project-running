@@ -66,6 +66,13 @@ pub const MAX_GRADE: f64 = 0.45;
 ///
 /// Matches `GradeAdjustedPaceView.mc`, the web canonical and the Dart twin; the
 /// four are held equal by `scripts/check_watch_wire_vectors.mjs`.
+///
+/// The roadbook is a SECOND consumer, deliberately: [`crate::roadbook`] and its
+/// web and Dart siblings allocate a goal time by grade-adjusted effort over
+/// this same anchored window, so a change here moves the arrival times a race
+/// crew holds drop bags against as well as the pace a runner is shown. Two
+/// windows would grade one course two ways. The same guard's consumer block
+/// fails the day a roadbook rail stops importing this.
 pub const MIN_SEGMENT_M: f64 = 20.0;
 
 /// Below this speed the runner is walking / stopped and a live GAP is noise —
@@ -586,6 +593,118 @@ mod tests {
             grade_factor(noise_floor_grade) < 2.1,
             "the noise floor alone must not more than double the reported effort; it multiplies              it by {}",
             grade_factor(noise_floor_grade)
+        );
+    }
+
+    /// The GAP reference track: a clean, noise-free 6% climb switchbacking
+    /// +/-8 m every 150 m, walked at 5 m every 3 s for 3 km — the 30-minute
+    /// power-hike-paced staircase decisions.md § 992 measured the window's cost
+    /// on, and the profile that binds its UPPER end. Points sit on a line of
+    /// constant latitude, where the haversine collapses exactly to R * dLambda,
+    /// so [`GAP_REFERENCE_HORIZ_STEP_M`] is a closed form rather than a second
+    /// copy of the module's own distance function.
+    ///
+    /// Frozen on three rails — this file, web's `grade_adjusted_pace.test.ts`
+    /// and the phone's `grade_adjusted_pace_test.dart` — and compared between
+    /// them by `scripts/check_watch_wire_vectors.mjs`, which reads all eight
+    /// constants out of each. A fixture that drifts on one rail makes its
+    /// golden meaningless rather than wrong, which is the failure nothing would
+    /// otherwise report (decisions.md § 641).
+    const GAP_REFERENCE_POINTS: usize = 601;
+    const GAP_REFERENCE_STEP_M: f64 = 5.0;
+    const GAP_REFERENCE_STEP_S: i64 = 3;
+    const GAP_REFERENCE_BASE_GRADE: f64 = 0.06;
+    const GAP_REFERENCE_AMPLITUDE_M: f64 = 8.0;
+    const GAP_REFERENCE_PERIOD_M: f64 = 150.0;
+    const GAP_REFERENCE_S_PER_KM: u32 = 311;
+    const GAP_REFERENCE_MAX_COST: f64 = 0.03;
+
+    const GAP_REFERENCE_HORIZ_STEP_M: f64 =
+        6_371_000.0 * ((GAP_REFERENCE_STEP_M / 111_320.0) * core::f64::consts::PI) / 180.0;
+
+    fn gap_reference_track(amplitude_m: f64) -> [GapPoint; GAP_REFERENCE_POINTS] {
+        let mut out = [GapPoint {
+            lat_deg: 0.0,
+            lon_deg: 0.0,
+            ele_m: None,
+            t_ms: None,
+        }; GAP_REFERENCE_POINTS];
+        for (i, p) in out.iter_mut().enumerate() {
+            let x = i as f64 * GAP_REFERENCE_STEP_M;
+            p.lon_deg = x / 111_320.0;
+            p.ele_m = Some(
+                100.0
+                    + GAP_REFERENCE_BASE_GRADE * x
+                    + amplitude_m
+                        * libm::sin(2.0 * core::f64::consts::PI * x / GAP_REFERENCE_PERIOD_M),
+            );
+            p.t_ms = Some(i as i64 * GAP_REFERENCE_STEP_S * 1000);
+        }
+        out
+    }
+
+    /// The same walk with no window at all: every point pair graded on its own
+    /// rise over its own run. This is what the runner actually spent, and what
+    /// a window can only approximate — a window wider than the terrain averages
+    /// the climbs and the drops together and hands back a flatter course than
+    /// the one underfoot.
+    fn gap_reference_truth_s_per_km(track: &[GapPoint]) -> f64 {
+        let mut adj_dist_m = 0.0;
+        for i in 1..track.len() {
+            let rise = track[i].ele_m.unwrap_or(0.0) - track[i - 1].ele_m.unwrap_or(0.0);
+            adj_dist_m +=
+                GAP_REFERENCE_HORIZ_STEP_M * grade_factor(rise / GAP_REFERENCE_HORIZ_STEP_M);
+        }
+        let time_s = (track.len() - 1) as f64 * GAP_REFERENCE_STEP_S as f64;
+        time_s / (adj_dist_m / 1000.0)
+    }
+
+    #[test]
+    fn the_reference_geometry_measures_the_horizontal_step_the_module_does() {
+        // Ties the closed form above to the module's own haversine: with no
+        // oscillation and no base grade every factor is exactly 1, so the
+        // reported GAP is the raw pace that step implies. Without this the
+        // truth below would be graded against a distance nothing had checked.
+        let mut flat = gap_reference_track(0.0);
+        for p in flat.iter_mut() {
+            p.ele_m = Some(100.0);
+        }
+        let time_s = (GAP_REFERENCE_POINTS - 1) as f64 * GAP_REFERENCE_STEP_S as f64;
+        let horiz_m = GAP_REFERENCE_HORIZ_STEP_M * (GAP_REFERENCE_POINTS - 1) as f64;
+        assert_eq!(
+            grade_adjusted_pace_s_per_km(&flat),
+            Some(libm::round(time_s / (horiz_m / 1000.0)) as u32)
+        );
+    }
+
+    /// The other end of the bracket. The noise-floor test above states the
+    /// FLOOR — it admits nothing under 19.40 m — and would pass at 200 m, a
+    /// window long enough to erase the terrain outright. This states the
+    /// CEILING, as decisions.md § 992 stated it: on the most oscillating
+    /// realistic profile measured, the window may not cost more than 3% against
+    /// the truth.
+    ///
+    /// Measured on this fixture, reported against truth 302.611 s/km:
+    ///   5 m -> 304 (-0.46%)   15 m -> 308 (-1.78%)   20 m -> 311 (-2.77%)
+    ///   25 m -> 316 (-4.42%)  30 m -> 322 (-6.41%)   200 m -> 426 (-40.78%)
+    /// so the pair of tests together admits only [19.40 m, 24.97 m]. The 5 m
+    /// point spacing is what makes the ceiling 24.97 rather than 25: the walk
+    /// closes a segment on the first pair that clears the window, so what is
+    /// really bounded is the EFFECTIVE segment, which is the honest bound.
+    #[test]
+    fn the_grade_window_is_short_enough_to_keep_the_reference_track() {
+        let track = gap_reference_track(GAP_REFERENCE_AMPLITUDE_M);
+        let truth = gap_reference_truth_s_per_km(&track);
+        let reported = grade_adjusted_pace_s_per_km(&track).expect("the reference track grades");
+        let cost = libm::fabs(reported as f64 - truth) / truth;
+        assert!(
+            cost < GAP_REFERENCE_MAX_COST,
+            "a {MIN_SEGMENT_M} m window reports {reported} s/km against a true {truth} s/km on              the reference switchback — {} % of the climb averaged away",
+            cost * 100.0
+        );
+        assert_eq!(
+            reported, GAP_REFERENCE_S_PER_KM,
+            "the reference track no longer grades to its frozen value: the window, the fixture              or the Minetti fit moved. Re-measure the cost against truth before updating this              number, and update the web and phone rails with it"
         );
     }
 

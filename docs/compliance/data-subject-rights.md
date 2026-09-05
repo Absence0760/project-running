@@ -50,6 +50,19 @@ named in `incomplete`; it is never silently dropped, and never counted
 as whole. The CSV and GPX formats carry the same signal in the endpoint's
 JSON response (`count` / `total` / `complete`).
 
+**Row completeness is not column completeness, and the `runs` projection
+is short by seven** (found 2026-09-04, [decisions § 1135](../architecture/decisions.md)).
+Both transports read the run row through a hand-written column list, and
+neither list has been widened as columns were added: `concluded_at`,
+`elevation_gain_m`, `race_listing_id` and the four `fastest_*_s` PR-time
+columns reach neither `runs.csv` nor the backup's `runs.json`. The four
+PR times are the sharpest case — migration `20270325_001` promoted them
+out of `runs.metadata` into real columns **and stripped the keys from the
+bag**, so runs that used to export them inside the `metadata` column
+stopped exporting them at all. `manifest.json` cannot show this: it
+counts rows, and every row is present. Filed with the exact change; the
+gap is stated here rather than left for a data subject to discover.
+
 **Known bounds, stated rather than hidden — and they now differ per
 rail.** The Edge Function streams; the Go worker does not yet. Whatever
 bound applies, it is visible in the manifest.
@@ -104,10 +117,32 @@ deletion leg erases the bytes, the nightly SQL leg does not.
 [retention.md](retention.md) states them separately for that reason; it
 had been claiming only the stronger one for both. Removing reachability
 is still strictly better than the state § 857 replaced, where the sweep
-deleted nothing at all, but no document may call it an Art 17 erasure. The durable fix is a job kind in
-the Go worker, which already writes the archive through the Storage API
-and already holds the service key, leaving `expire_stale_export_jobs()`
-as the only SQL half; it is filed with an owner. The residual on the
+deleted nothing at all, but no document may call it an Art 17 erasure. **The durable fix is half
+built and cannot yet run** ([decisions § 1112](../architecture/decisions.md)):
+the Go worker gained an `export_blob_reap` job kind that lists the
+`exports` bucket and deletes through the Storage API — which removes the
+bytes and the rows together, so the SQL row-delete becomes redundant
+rather than something to sequence against — but `jobs_kind_chk` forbids
+that kind, so nothing can enqueue it and `Worker.dispatch` deliberately
+carries no case for it. **Until the four statements that finish it land
+(a CHECK widening, an `enqueue_export_blob_reap()`, a `cron.schedule`
+and the dispatch case, all in one commit), the state described above is
+the state in production: the nightly path has never erased an export
+archive's bytes, only its reachability.** That is filed with an owner
+and its exact statements are written out rather than described.
+
+**And a Storage-API reaper cannot recover what is already orphaned.**
+§ 1049 counted 74 files across every bucket against 0 rows, including 20
+export archives stamped nine days earlier. The reaper derives its
+worklist by listing, the list API reads `storage.objects`, and those
+rows are the ones the sweep already deleted — so every byte a past sweep
+orphaned is invisible to it by construction. Erasing that residue needs
+something outside the Storage API (an S3 lifecycle rule on the object
+prefix, or an operator pass with direct backend access), which is not a
+code change in this repo and is filed separately. The reaper stops the
+pile growing; it is not a remedy for the pile.
+
+The residual on the
 measurement is the backend: this was the local `file` backend, so what
 is proved is the MECHANISM, and confirming the byte residue on Cloud's
 S3 still means listing the bucket over the S3-compatible endpoint.

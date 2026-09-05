@@ -16,6 +16,7 @@ import '../lib/screens/settings_body_metrics_screen.dart';
 import '../lib/widgets/nutrition_log_sheet.dart';
 import '../lib/widgets/undo_bar.dart';
 import 'pump_until.dart';
+import 'store_write_watch.dart';
 
 class _OfflineFakeApi extends ApiClient {
   @override
@@ -121,6 +122,7 @@ void main() {
       // Rings + water cards still render with zeros.
       expect(find.text('Water'), findsOneWidget);
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
       f.dir.deleteSync(recursive: true);
     }
   });
@@ -148,6 +150,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(SettingsBodyMetricsScreen), findsOneWidget);
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
       f.dir.deleteSync(recursive: true);
     }
   });
@@ -170,6 +173,7 @@ void main() {
       // 350 kcal shows twice: the calories ring centre + the meal-row value.
       expect(find.text('350'), findsNWidgets(2));
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
       f.dir.deleteSync(recursive: true);
     }
   });
@@ -205,6 +209,7 @@ void main() {
       await _pumpUntil(tester, () => f.store.rows.isEmpty,
           describe: 'the deferred delete to commit');
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
       f.dir.deleteSync(recursive: true);
     }
   });
@@ -234,6 +239,7 @@ void main() {
       await tester.pump(const Duration(seconds: 9));
       expect(f.store.rows.length, 1);
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
       f.dir.deleteSync(recursive: true);
     }
   });
@@ -257,6 +263,7 @@ void main() {
       expect(find.text('Oats'), findsNothing);
       expect(f.store.rows.length, 0);
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
       f.dir.deleteSync(recursive: true);
     }
   });
@@ -294,6 +301,7 @@ void main() {
       // Drain the showTopBanner auto-dismiss timer.
       await tester.pump(const Duration(seconds: 5));
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
       dir.deleteSync(recursive: true);
     }
   });
@@ -792,6 +800,10 @@ void _diaryDayTests() {
 
       await tester.pump(const Duration(seconds: 5));
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
+      // The drain lets `_saveAsMeal` finish, which arms `showTopBanner`'s
+      // dismissal timer; the widget tree may not be disposed under it.
+      await tester.pump(const Duration(seconds: 4));
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
     }
@@ -848,6 +860,10 @@ void _diaryDayTests() {
 
       await tester.pump(const Duration(seconds: 5));
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
+      // The drain lets `_saveAsMeal` finish, which arms `showTopBanner`'s
+      // dismissal timer; the widget tree may not be disposed under it.
+      await tester.pump(const Duration(seconds: 4));
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
     }
@@ -900,6 +916,10 @@ void _diaryDayTests() {
 
       await tester.pump(const Duration(seconds: 5));
     } finally {
+      await pumpUntilStoreWritesSettle(tester);
+      // The drain lets `_saveAsMeal` finish, which arms `showTopBanner`'s
+      // dismissal timer; the widget tree may not be disposed under it.
+      await tester.pump(const Duration(seconds: 4));
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
     }

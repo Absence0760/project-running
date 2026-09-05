@@ -32,9 +32,9 @@ func (f *fakeEnqueuer) EnqueueStravaEvent(_ context.Context, p StravaEventPayloa
 }
 
 type fakeWebhookEvents struct {
-	mu    sync.Mutex
-	seen  map[string]bool
-	err   error
+	mu   sync.Mutex
+	seen map[string]bool
+	err  error
 }
 
 func newFakeWebhookEvents() *fakeWebhookEvents {

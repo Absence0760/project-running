@@ -1447,10 +1447,12 @@ class ApiClient {
   /// `clip-public-track` Edge Function which downloads the gzipped
   /// track via service-role, passes the points through
   /// `clip_track_for_user`, and returns the clipped result. Use this
-  /// on every non-owner surface where the old pattern was
-  /// "fetchTrackByPath then clipTrackForUser client-side" — that
-  /// pattern leaked the unclipped blob (audit/storage High, closed
-  /// by migration `20260619_001`).
+  /// on every non-owner surface. It is the only clipping path a client
+  /// has: the old "fetchTrackByPath then clip the points client-side"
+  /// pattern leaked the unclipped blob (audit/storage High, closed by
+  /// migration `20260619_001`), and `20270521_001` then withdrew
+  /// `clip_track_for_user` from `authenticated` outright because a
+  /// caller who can run it can binary-search the owner's zone centres.
   Future<List<Waypoint>> fetchClippedTrackForRun(String runId) async {
     if (runId.isEmpty) return const [];
     final res = await _client.functions.invoke(
@@ -2712,8 +2714,9 @@ class ApiClient {
 
   /// Server-side privacy-zone-clipped waypoints for a route the viewer
   /// does not own. Fails closed (empty polyline) on RPC error rather
-  /// than leaking the unclipped track — matches the `clipTrackForUser`
-  /// contract. Used by both non-owner read paths in [fetchRouteById].
+  /// than leaking the unclipped track — the same contract
+  /// [fetchClippedTrackForRun] keeps for runs. Used by both non-owner
+  /// read paths in [fetchRouteById].
   Future<List<Waypoint>> _clipRouteForViewer(String routeId) async {
     try {
       final clip = await _client.rpc(
@@ -4543,38 +4546,6 @@ class ApiClient {
 
   // ──────────────────── Privacy zones (P1.C) ────────────────────
 
-  /// Server-side privacy-zone clipping. The zones never reach the
-  /// client; the RPC reads them with security-definer privileges and
-  /// returns the clipped middle of the input track. The RPC is a
-  /// no-op (returns the input) when the owner has no zones configured.
-  ///
-  /// **Fails closed:** on RPC error or unexpected response shape this
-  /// returns `[]` rather than the unclipped input. The previous
-  /// behaviour (return `points` on error) was the leak this helper
-  /// exists to prevent — a transient DB blip that bypassed clipping
-  /// was a privacy regression. Callers should guard owner views
-  /// *before* calling so an outage doesn't blank the owner's own
-  /// map; this function only ever speaks for non-owner viewers.
-  Future<List<Map<String, dynamic>>> clipTrackForUser({
-    required String targetUserId,
-    required List<Map<String, dynamic>> points,
-  }) async {
-    if (points.isEmpty) return points;
-    try {
-      final data = await _client.rpc('clip_track_for_user', params: {
-        'target_user_id': targetUserId,
-        'points': points,
-      });
-      if (data is List) {
-        return data.cast<Map<String, dynamic>>();
-      }
-      return const [];
-    } catch (e) {
-      debugPrint('clipTrackForUser failed: ${safeErrorLabel(e)}');
-      return const [];
-    }
-  }
-
   /// Server-side privacy-zone-clipped waypoints for a route owned by
   /// someone other than the caller. Routes carry waypoints inline as
   /// a jsonb column (no Storage indirection like runs), so this is a
@@ -5065,20 +5036,6 @@ class ApiClient {
     return data
         .map<TrainingPlanRow>((r) => TrainingPlanRow.fromJson(r))
         .toList();
-  }
-
-  /// Publish a personal plan as a club template. Server-side RPC
-  /// clones the source plan + its weeks + workouts so the source
-  /// stays in the user's plan list (decisions §35).
-  Future<String> publishPlanAsTemplate({
-    required String planId,
-    required String clubId,
-  }) async {
-    final newId = await _client.rpc(
-      'publish_plan_as_template',
-      params: {'p_source_plan_id': planId, 'p_club_id': clubId},
-    );
-    return newId as String;
   }
 
   /// Adopt a club template — clones the template back into a personal
