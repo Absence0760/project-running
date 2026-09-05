@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { injectEntityHead, notFoundShell } from './entity_spa_shell';
+import { countHeadSignals } from './head_splice';
 
 const SHELL = `<!DOCTYPE html>
 <html>
@@ -86,6 +87,28 @@ test('notFoundShell — the 404 body is the app shell, not a bespoke sentence', 
 	assert.equal(out.includes('"WebSite"'), false);
 	// Exactly one title, so no crawler picks the stale one.
 	assert.equal((out.match(/<title>/g) ?? []).length, 1);
+});
+
+test('notFoundShell — strips three signals it deliberately does not replace', () => {
+	// § 1190 settled that an injector strips exactly what its own head emits, so
+	// that a strip can never delete one of the shell's nodes and put nothing
+	// back. THIS PATH IS THE ONE DELIBERATE EXCEPTION, and the exception is the
+	// point of the surface: a page whose whole message is that the entity is gone
+	// must not describe it, so the description, the social meta, the canonical
+	// and the JSON-LD are removed with no replacement offered. A canonical here
+	// would point a crawler at the missing thing as though it were the page's
+	// home; a JSON-LD node would be structured data about an entity that no
+	// longer exists.
+	//
+	// The cases above assert the SHELL's values are gone, which stays true if
+	// something new is put in their place -- so a later tidy-up bringing this
+	// path back in line with the § 1190 rule would pass every one of them. This
+	// counts what the document actually carries instead, with the same patterns
+	// the strips act on: the title the 404 supplies, the robots meta, and
+	// nothing else.
+	const out = notFoundShell(SHELL, 'Run not found — Threkir');
+	assert.deepEqual(countHeadSignals(out), { title: 1, social: 0, canonical: 0, jsonLd: 0 });
+	assert.equal((out.match(/name="robots"/g) ?? []).length, 1, 'exactly one robots directive');
 });
 
 test('notFoundShell — a title carrying markup cannot break out of the tag', () => {
