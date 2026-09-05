@@ -7,7 +7,7 @@
 # The Garmin tier is the least verified thing in the monorepo. No CI job builds
 # it, no CI job runs its `(:test)` suite, and until this file existed nothing
 # read a line of it except `scripts/check_watch_wire_vectors.mjs`, which pins
-# four numbers (the Minetti polynomial, the +/-45% clamp, C(0), and the 5 m
+# four numbers (the Minetti polynomial, the +/-45% clamp, C(0), and the
 # segment gate) and nothing else. Everything BETWEEN those numbers — the state
 # machine that decides which grade they are applied to, the annotations that
 # keep test code off the watch, the permissions the runtime enforces and the
@@ -342,8 +342,12 @@ for perm in sorted(declared - {p for _, p, _ in used}):
 # --------------------------------------------------------------------------
 # 4. The cross-rail constants are named, and used by name.
 # --------------------------------------------------------------------------
-# name -> the magic number it must not be spelled as inline, anywhere in the
-# file other than its own declaration.
+# The names other rails read. The literal each one must not ALSO be spelled
+# inline is taken from the declaration itself rather than restated here: this
+# map used to carry its own copy, and when decisions § 992 moved the segment
+# gate from 5 m to 20 m the copy stayed at 5.0 — so for the value the whole
+# four-rail bracket is about, the claim was searching the file for a number it
+# no longer held and passing on every tree.
 #
 # FLAT_COST is deliberately absent: 3.6 is also the constant term of the
 # Minetti polynomial in `costAtGrade`, because C(0) IS that term — the two
@@ -351,13 +355,8 @@ for perm in sorted(declared - {p for _, p, _ in used}):
 # for the same reason. Both halves are independently registered across the
 # four rails by `scripts/check_watch_wire_vectors.mjs` (the fit, and C(0)),
 # and `flatFactorIsOne` in the (:test) suite pins them equal.
-NAMED_CONSTANTS = {
-    "MIN_SEGMENT_M": "5.0",
-    "MAX_GRADE": "0.45",
-    "MIN_SPEED_MPS": "0.4",
-    "MAX_PACE_S": "5940.0",
-}
-for name, literal in sorted(NAMED_CONSTANTS.items()):
+NAMED_CONSTANTS = ("MAX_GRADE", "MAX_PACE_S", "MIN_SEGMENT_M", "MIN_SPEED_MPS")
+for name in NAMED_CONSTANTS:
     decl = re.search(r"\bconst\s+%s\s*=\s*([^;]+);" % name, gap)
     if decl is None:
         fail(
@@ -367,6 +366,7 @@ for name, literal in sorted(NAMED_CONSTANTS.items()):
             "one is then an instruction rather than an enforcement." % name
         )
         continue
+    literal = decl.group(1).strip()
     rest = gap[: decl.start()] + gap[decl.end():]
     if re.search(r"(?<![\w.])%s(?![\d])" % re.escape(literal), rest):
         fail(
