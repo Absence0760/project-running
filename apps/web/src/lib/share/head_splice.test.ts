@@ -97,6 +97,31 @@ test('stripStaleHeadSignals — overlapping JSON-LD opens leave no residual <scr
 	assert.equal(head.includes('<script'), false);
 });
 
+test('stripStaleHeadSignals — deleting a block never splices a new one out of its neighbours', () => {
+	// The JSON-LD strip used to re-run until the string stopped changing, to stop
+	// an overlapping `<script ...><script>` leaving a residual `<script` behind.
+	// A global replace already consumes every leftmost non-overlapping match the
+	// input holds, so a second pass can only ever match text that became adjacent
+	// when the first pass deleted something -- which is a block the document
+	// never carried. Here the head holds the characters `<scr` before a real
+	// block and `ipt type="application/ld+json">` after it; removing the block
+	// joins them into an open tag whose nearest close is the SPA BUNDLE's, so the
+	// second pass swallowed `</head>`, the mount div and the bundle tag, and the
+	// splice then found no head and returned the shell unmeta'd -- the exact
+	// § 1086 damage, caused by the loop meant to prevent it (§ 1192).
+	const shell = SHELL.replace(
+		'<script type="application/ld+json">{"@type":"WebSite"}</script>',
+		'<scr<script type="application/ld+json">{"@type":"WebSite"}</script>ipt type="application/ld+json">',
+	);
+	const out = stripStaleHeadSignals(shell, ALL);
+	assert.ok(/<\/head(?=[\s/>])[^>]*>/i.test(out), 'the head close must survive the strip');
+	assert.ok(out.includes('<div id="svelte">'), 'the mount div must survive the strip');
+	assert.ok(out.includes('start.abc.js'), 'the SPA bundle must survive the strip');
+	// The real block IS gone; only the two fragments that were never a block stay.
+	assert.equal(out.includes('"WebSite"'), false, 'the block the document did carry must go');
+	assert.ok(spliceIntoHead(out, '<meta name="x" content="y">').includes('name="x"'));
+});
+
 test('stripStaleHeadSignals — a nonce or reordered attribute is still a JSON-LD block', () => {
 	const shell = SHELL.replace(
 		'<script type="application/ld+json">',

@@ -52,18 +52,14 @@ export function stripStaleHeadSignals(html: string, signals: readonly HeadSignal
 			out = out.replace(new RegExp(SOURCES.title, 'i'), '');
 			continue;
 		}
-		if (signal === 'jsonLd') {
-			// Repeat until the string stops changing, so a crafted or overlapping
-			// `<script ...><script>...</script>` cannot leave a residual `<script`
-			// behind (js/incomplete-multi-character-sanitization).
-			const pattern = all('jsonLd');
-			let prev: string;
-			do {
-				prev = out;
-				out = out.replace(pattern, '');
-			} while (out !== prev);
-			continue;
-		}
+		// ONE global pass, never repeated to a fixpoint. A global replace already
+		// consumes every leftmost non-overlapping match the input contains, so a
+		// second pass can only match text that became adjacent when the first
+		// deleted something -- a block the document never carried. The JSON-LD
+		// strip did loop, to stop an overlapping `<script ...><script>` leaving a
+		// residual; it never could, and the loop instead deleted `</head>`, the
+		// mount div and the bundle tag out of a head holding `<scr` before a block
+		// and `ipt type="application/ld+json">` after it. See decisions § 1192.
 		out = out.replace(all(signal), '');
 	}
 	return out;

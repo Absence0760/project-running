@@ -22038,3 +22038,44 @@ folded into them would inherit that skip and bind nowhere — which is the
 condition this row drifted under. Reading a committed markdown file needs no
 artifact, so this half runs on every PR today, and the artifact half joins it
 when the build-step filing lands.
+
+## 1192. The JSON-LD strip's fixpoint loop could not do the job it was added for, and destroyed the head doing it
+
+`stripStaleHeadSignals` removed a JSON-LD block by re-running its global replace
+until the string stopped changing. The comment gave the reason as
+`js/incomplete-multi-character-sanitization`: a crafted or overlapping
+`<script ...><script>…</script>` must not leave a residual `<script` behind.
+Both halves of that turned out to be wrong, and the second one dangerously.
+
+The loop adds no coverage, and the argument is structural rather than
+statistical. A global `String.replace` already consumes every leftmost
+non-overlapping match the input contains, and an open tag that has any close
+after it always produces a match at that open, so after one pass the only
+`<script … ld+json …>` opens left are ones with no close anywhere — which no
+number of passes can remove either. It follows that anything a second iteration
+matches must span a junction the first iteration created, i.e. is assembled out
+of characters that were never adjacent. Measured to confirm it: over 500,000
+generated documents drawn from an alphabet of open tags, the four `</script …>`
+end-tag spellings § 1086 established, head/body furniture and loose `<` and `>`,
+a single pass never once left a matchable block. The suite's own
+overlapping-opens case — the one the loop was written for — passes unchanged
+without it.
+
+What the loop did instead was manufacture blocks. Put the characters `<scr`
+before a real JSON-LD block and `ipt type="application/ld+json">` after it, and
+deleting the block joins the two fragments into an open tag whose nearest
+following close is the SPA bundle's own `</script>`. The second pass then
+swallows `</head>`, the mount div and the bundle tag, `spliceIntoHead` finds no
+head, and the share page goes out with none of its meta — precisely the § 1086
+damage, delivered by the mechanism added to prevent it. Every one of 48
+documents in that family loses its head to the loop and keeps it under a single
+pass.
+
+So the loop is gone and the case is pinned. This also settles a disagreement
+inside the tree: `document_title.test.ts` and `learn_structured_data.test.ts`
+both spell out, in their own comments, that re-running a strip to a fixpoint
+deletes spans the original never had, and both chose a single alternation
+instead — while the module those guards measure was doing the opposite thing for
+the opposite reason. The `social` and `canonical` strips beside it were already
+single global passes over multi-character structures, so the loop was never what
+satisfied the query for this file.
