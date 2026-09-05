@@ -498,6 +498,16 @@ Manifest: `<service android:name=".tiles.ActiveRunTileService">` with `permissio
 What the UI exposes during a recording, for quick reference when reading
 `ui/RunWatchApp.kt`:
 
+**Post-run Discard is a two-press confirm, like the recovery prompt's.**
+`PostRunScreen`'s bottom-end `×` renders only on the `!synced` branch, and
+`RunViewModel.discard` is `store.remove(id)` — the queue is the only place
+that run exists. The first tap arms; the whole bottom cluster is then replaced
+by a labelled `Discard?` chip with "Not saved anywhere else" above it, and only
+a tap on THAT chip calls `onDiscard`. The arm lapses after `CONFIRM_WINDOW_MS`
+and a sync that lands while armed retires it. The confirm sits at bottom-CENTRE
+rather than in the corner the arming tap landed in, so a double tap cannot
+reach it. Pinned by `PostRunDiscardConfirmTest`; decisions § 1253.
+
 **Post-run calories (persona samsung #34).** `PostRunScreen` shows a
 `kcal` figure computed by `recording/RunCalories.kt` — the same
 1 kcal/kg/km activity ladder as `apps/web/src/lib/calories.ts`, reading

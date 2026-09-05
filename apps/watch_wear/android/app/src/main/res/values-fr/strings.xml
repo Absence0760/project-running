@@ -124,6 +124,7 @@
     <string name="cd_start_next_run">Démarrer la course suivante</string>
     <string name="cd_sync_run">Synchroniser la course</string>
     <string name="cd_discard_unsaved_run">Supprimer la course non enregistrée</string>
+    <string name="cd_discard_confirm">Confirmer la suppression. Enregistrée nulle part ailleurs.</string>
 
     <string name="tts_run_started">Course démarrée</string>
     <plurals name="tts_split_unit_km">

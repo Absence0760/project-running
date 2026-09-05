@@ -155,6 +155,7 @@
     <string name="cd_start_next_run">Start next run</string>
     <string name="cd_sync_run">Sync run</string>
     <string name="cd_discard_unsaved_run">Discard unsaved run</string>
+    <string name="cd_discard_confirm">Confirm discard. Not saved anywhere else.</string>
 
     <!-- ───────────── TTS spoken phrases ───────────── -->
     <!-- Mirrors apps/mobile_android/lib/l10n/app_*.arb so a runner carrying

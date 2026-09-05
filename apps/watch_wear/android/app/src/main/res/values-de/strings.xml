@@ -124,6 +124,7 @@
     <string name="cd_start_next_run">Nächsten Lauf starten</string>
     <string name="cd_sync_run">Lauf synchronisieren</string>
     <string name="cd_discard_unsaved_run">Nicht gespeicherten Lauf verwerfen</string>
+    <string name="cd_discard_confirm">Verwerfen bestätigen. Nirgendwo sonst gespeichert.</string>
 
     <string name="tts_run_started">Lauf gestartet</string>
     <plurals name="tts_split_unit_km">

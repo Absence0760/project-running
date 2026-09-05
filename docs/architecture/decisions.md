@@ -23875,3 +23875,40 @@ difference. Semantics checked against SQL ground truth on the same data: 12
 events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
+
+## 1253. The Wear post-run Discard arms by replacing the cluster it sits in, because a 52 dp glyph has nowhere to announce an arm
+
+`PostRunScreen`'s bottom-end `×` called `RunViewModel.discard` on a single tap.
+That is `store.remove(id)`, the button renders only under `!synced`, and while
+the run has not reached Supabase the local queue is the only place it exists —
+so the tap was the end of the run, the same shape § 1206 fixed on the crash
+recovery prompt and § 1208 fixed twice on watchOS. The comment defending it
+argued a Discard tap "can be re-triggered if dismissed by mistake", which is a
+claim about re-opening a *confirm*; nothing re-triggers `store.remove`.
+
+The § 1206 idiom is two presses inside `CONFIRM_WINDOW_MS` graded by the pure
+`confirmPress`, with the arm announced by a relabel. This control has nowhere to
+put a label: its whole visual is a 52 dp `×`, and this module's own
+`ScreenWiringTest` already refuses colour as a signal. So the ARM replaces the
+whole bottom cluster — Sync, Next and the `×` give way to "Not saved anywhere
+else" above a labelled `Discard?` chip, and the second press lands on that. Two
+consequences worth having: the commit target moves from the bottom-END corner to
+bottom-CENTRE, so a fat-finger double tap where the arming tap landed reaches
+empty space rather than the confirm; and the arm is announced to TalkBack too,
+by `cd_discard_confirm` in all seven catalogues, where the `×` and the confirm
+would otherwise have read identically. The arm lapses on its own, and a sync
+that lands while armed retires it rather than leaving a confirm live over a run
+that is no longer only here.
+
+`PostRunDiscardConfirmTest` pins the shape rather than the wording: `onDiscard()`
+is called from exactly one place in the composable, that place is the
+`ConfirmPress.Confirmed` branch, no control binds the callback directly, both the
+label and the stake render, and the extraction refuses to pass vacuously if
+`PostRunScreen` is renamed. Five mutations were planted and each was refused by
+the guard — rebinding the `×` straight to `onDiscard`, swapping the stake string
+for the plain `discard` one, deleting the lapse `delay`, moving the call into the
+`Armed` branch, and dropping `&& !synced` from the armed predicate. Unlike § 1206
+and § 1208 this one is **build-verified**, not read: `./gradlew assembleDebug
+testDebugUnitTest` runs on this workstation and both are green at 744 tests. What
+that does NOT settle is how the armed strip renders on a 192 dp round bezel — no
+Wear emulator was run, and that is the one claim left for a device.

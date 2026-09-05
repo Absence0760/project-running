@@ -124,6 +124,7 @@
     <string name="cd_start_next_run">Iniciar a corrida seguinte</string>
     <string name="cd_sync_run">Sincronizar corrida</string>
     <string name="cd_discard_unsaved_run">Descartar corrida não guardada</string>
+    <string name="cd_discard_confirm">Confirmar eliminação. Não guardada em mais nenhum lado.</string>
 
     <string name="tts_run_started">Corrida iniciada</string>
     <plurals name="tts_split_unit_km">
