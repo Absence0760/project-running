@@ -23932,3 +23932,42 @@ streak is 4 or 3. The Dart suite goes 36 -> 43 tests against the web half's 42;
 the pair was 6 apart before this change and is now 1, the extra being the
 `recapSnapshotJson` case, which is the direction the pair's registry entry
 already documents.
+
+## 1240. The recap's Dart half cannot read the promoted ascent column, because the seam that surfaces every other promoted column drops that one
+
+The filing said `recap.dart` reads the bag key where `recap.ts` reads the
+promoted `runs.elevation_gain_m` column first, and named
+`apps/mobile_android/` as the owner tree. **The mechanism is real and the owner
+tree is wrong.** The Dart domain `Run` carries no column at all — only
+`metadata` — so no edit inside `recap.dart` can prefer one. `runRowFromRun`
+lifts the bag key INTO the column on the way out, and
+`kRunMirroredMetadataColumns` declares elevation as a deliberate double-write
+kept in the bag; but the read direction, `ApiClient._runFromRow`, surfaces
+`activity_type`, `is_dnf`, the four `fastest_*_s`, `track_url` and
+`hr_series_url` back onto the bag and silently omits `elevation_gain_m`.
+
+Measured with `ApiClient.debugRunFromRow` on a row carrying
+`elevation_gain_m: 312.5` and a bag of `{title: hilly}`: the resulting `Run`
+holds `{title, activity_type, is_dnf}` and `buildYearInRunningRecap` reports
+`totalElevationM: 0.0`. The reachable population today is nonetheless **zero**,
+which the filing's body says and its headline does not: every writer of the
+column also writes the key — `_shared/strava.ts` (the OAuth ingest and the
+webhook), web `createManualRun`, mobile `runRowFromRun`, and `20270302_001`'s
+own backfill — while `parkrun-import`, `race-results-import` and the backup
+restore write neither. The gap opens the moment one writer sets only the column.
+The structural cause is that `run_row_shape_test.dart` guards the WRITE
+direction ("runRowFromRun fills every declared column") and nothing guards the
+read one; the fix and its guard both live in `packages/api_client`, which is
+another lane's tree this round, so the entry stays open with the owner tree
+corrected.
+
+What did land here is the half that is `recap.dart`'s own. The comment calling
+`metadata.elevation_m` "the canonical key" has not been true since
+`20270302_001` and is precisely the belief under which the seam gap went
+unnoticed; it now names the seam. And `raw is num` admitted a non-finite value
+where the TS half's `Number.isFinite` does not — a NaN in the schemaless bag
+would have summed into the year total and taken every other run's climb with
+it. Not a fix for anything measured reachable (nothing on the phone writes that
+key, and `jsonDecode` cannot produce a NaN), but the two halves of a registered
+pair should not answer the same input differently; pinned, and verified failing
+without the guard.

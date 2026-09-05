@@ -361,6 +361,28 @@ void main() {
       expect(r.totalElevationM, 50);
     });
 
+    test('a non-finite elevation contributes nothing rather than poisoning the '
+        'total', () {
+      // The bag is schemaless jsonb; `raw is num` admits a NaN the way the TS
+      // half's `Number.isFinite` does not, and one such run would take every
+      // other run's climb in the year down with it.
+      final runs = [
+        _run(
+          id: 'a',
+          startedAt: DateTime(2025, 2, 1),
+          distanceM: 5000,
+          elevationM: double.nan,
+        ),
+        _run(
+          id: 'b',
+          startedAt: DateTime(2025, 2, 2),
+          distanceM: 5000,
+          elevationM: 50,
+        ),
+      ];
+      expect(buildYearInRunningRecap(runs, 2025).totalElevationM, 50);
+    });
+
     test('zero runs → null earliest + latest start', () {
       final r = buildYearInRunningRecap(const [], 2025);
       expect(r.earliestStartLocal, isNull);

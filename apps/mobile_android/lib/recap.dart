@@ -243,12 +243,23 @@ String _hhmm(DateTime d) =>
 DateTime _currentAnchor(DateTime periodEnd, DateTime now) =>
     now.isBefore(periodEnd) ? now : periodEnd;
 
+/// The stored ascent for [r], mirroring `key_stats.ts`'s `storedElevationGainM`
+/// over the one reading a domain [Run] carries.
+///
+/// Migration `20270302_001` promoted total ascent to `runs.elevation_gain_m`
+/// and the TS half reads that column first, falling back to the bag key. A
+/// `Run` has no column to read: `ApiClient._runFromRow` surfaces
+/// `activity_type`, `is_dnf` and the four `fastest_*_s` back onto the bag but
+/// drops `elevation_gain_m`, so a row carrying only the column arrives here
+/// with no ascent at all. Filed against the seam rather than patched here,
+/// because every Dart reader of the bag key has the same gap.
+///
+/// A non-finite value is no reading, exactly as the TS half's `Number.isFinite`
+/// says: the bag is schemaless and a NaN summed into the year total takes every
+/// other run's climb with it.
 double _elevationOf(Run r) {
-  // Run.metadata.elevation_m is the canonical key (jsonb).
-  final m = r.metadata;
-  if (m == null) return 0;
-  final raw = m['elevation_m'];
-  if (raw is num) return raw.toDouble();
+  final raw = r.metadata?['elevation_m'];
+  if (raw is num && raw.isFinite) return raw.toDouble();
   return 0;
 }
 
