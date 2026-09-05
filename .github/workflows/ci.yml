@@ -929,6 +929,25 @@ jobs:
             echo "Reproduce with: npm run build --workspace=apps/web && node scripts/check_web_bundle_budget.mjs"
             exit 1
           fi
+      # The artifact half of three head/SEO guards, which cannot run in the job
+      # that owns them. `test:unit` runs in `parity-types`, which never builds,
+      # so each of these reads `build/` only when one is present and otherwise
+      # reports `# no apps/web/build` — a self-skip that is indistinguishable
+      # from a pass on a green row (decisions § 1115, § 1167, § 1168). Their
+      # source-level cases do bind there and are not repeated here; what is
+      # uncovered without this step is everything that can only be read off the
+      # emitted HTML, the learn JSON-LD claims in particular, which have no
+      # source-level twin at all. `npx tsx` rather than a bare `tsx`: the binary
+      # is declared in apps/web's devDependencies, so the runner resolves it out
+      # of node_modules rather than off the registry at run time (§ 764).
+      - name: Assert the built artifact's head signals + structured data
+        working-directory: apps/web
+        run: |
+          if ! npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts; then
+            echo "::error::The built apps/web artifact does not carry the head signals or the JSON-LD these guards claim. The compile gate and the bundle budget above both passed, so this is not about whether the app builds or how big it is — it is about what the emitted HTML says."
+            echo "Reproduce with: npm ci && npm run build --workspace=apps/web && cd apps/web && npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts"
+            exit 1
+          fi
 
   # Three checks over one subject: no production value reaches a dev build, no
   # dev value reaches a release build, and no live value sits in a committed
