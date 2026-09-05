@@ -1,4 +1,5 @@
 import type { TrackPoint } from '../types';
+import { haversineMetres } from './run_stats';
 
 /**
  * Grade-adjusted pace (GAP): the flat-ground pace that would cost the same
@@ -137,17 +138,4 @@ export function gradeAdjustedPaceSecPerKm(track: TrackPoint[] | null | undefined
 
 	if (!sawEle || adjDistM <= 0 || timeS <= 0) return null;
 	return Math.round(timeS / (adjDistM / 1000));
-}
-
-/** Great-circle distance between two lat/lng points, in metres. */
-function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
-	const r = 6371000;
-	const dLat = ((lat2 - lat1) * Math.PI) / 180;
-	const dLng = ((lng2 - lng1) * Math.PI) / 180;
-	const sinLat = Math.sin(dLat / 2);
-	const sinLng = Math.sin(dLng / 2);
-	const a =
-		sinLat * sinLat +
-		Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * sinLng * sinLng;
-	return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
