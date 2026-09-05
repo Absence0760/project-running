@@ -87,6 +87,13 @@ struct ContentView: View {
                 "last_modified_at": formatter.string(from: Date())
             ]
             if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
+            // Written only when the run actually measured it. Nil is
+            // UNMEASURED — an HKWorkoutSession that never started, or a
+            // checkpoint from a build predating the field — and an assumed
+            // figure is a fabricated one, so the key is omitted rather than
+            // sent as 0, which would claim the sensor delivered nothing
+            // (decisions § 1207).
+            if let coverage = run.hrCoverage { metadata["hr_coverage"] = coverage }
             // Only mark the run synced when WCSession actually queued it.
             // A false means nothing was handed off (session not yet
             // activated) — leave `thisRunSynced` false so `PostRunView`

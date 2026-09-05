@@ -22047,3 +22047,52 @@ through `confirmPress`, `onDiscardRecovery()` appears exactly ONCE in the whole
 takeover (an unguarded second call site is the defect wearing a guard), the armed
 label and the stake line both render, and the arm lapses. Discard stays ENABLED
 throughout — § 1154's reason for that is untouched, and a guard is not a lock.
+
+## 1207. `apps/watch_ios` sends the heart-rate coverage it measures, and only when it measured one
+
+§ 1156 built the watchOS coverage accumulator and spent it entirely on the local
+`avg_bpm` suppression: the figure existed, decided whether a run kept its
+average, and then went nowhere. It could not be sent from that lane, because
+claim (6) of `scripts/check_watch_ios_source.mjs` reads BOTH ends of the
+`WCSession.transferFile(_:metadata:)` envelope and fails the PR on a key the
+phone never lifts — so the write and the lift had to land together or CI is red
+between them. They do, here, across three trees in one change:
+`WorkoutManager.FinishedRun` and `RunCheckpoint` gain an `hrCoverage`,
+`ContentView.syncRun` packs `hr_coverage`, and
+`apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` lifts it out beside
+`avg_bpm`.
+
+**The key is written only from a non-nil claim, and nothing defaults it.** Nil
+means UNMEASURED — an `HKWorkoutSession` that never started (HealthKit
+unavailable, the entitlement missing, a simulator), or a checkpoint written by a
+build predating the field — and the whole reason § 1106 refused to write an
+assumed `1.0` is that a fabricated measurement is worse than a missing one. The
+same rule runs one layer down: `RunCheckpoint.hrCoverage` decodes with
+`decodeIfPresent`, so an older checkpoint recovers as nil rather than as a zero
+claiming the sensor delivered nothing for the whole run, and the recovery path
+carries that nil straight through to an omitted key. `MetadataRegistryTests`
+enforces the shape rather than the presence: the write must match
+`if let <x> = run.hrCoverage { metadata["hr_coverage"] = <x> }`, and a `??`
+anywhere near `hrCoverage` fails.
+
+The average and the coverage are now taken from ONE `heartRateClaim` call at
+each of the two sites that produce them (the finished run and the 15 s
+checkpoint), where the old code called it once for the average alone. Two calls
+grade against two readings of the clock and two accumulator states, and could
+publish a coverage that contradicts the average it suppressed — a row saying the
+sensor covered a third of the run while carrying that third's mean as the run's
+average.
+
+**Two honest limits, both recorded on the `hr_coverage` registry row rather than
+left for a reader to discover.** First, the figure is over the first hop and not
+the second: past the Swift bridge, `WatchIngest._runFromArgs` and
+`runFromWatchPayload` build `metadata` from an explicit key allowlist that does
+not name `hr_coverage`, so the key is still dropped before the row. That is two
+lines in a tree this lane does not own, and it is filed; `MetadataKeys.hrCoverage`
+already exists. Second, this is **read, not run**: there is no Xcode on this
+workstation, the only compiler that sees this tier is the `test-watch-ios` macOS
+job, and the accumulator has never executed on a simulator or a device. Its one
+silent failure mode is a sample-timestamp source reading blank on hardware, which
+would send `hr_coverage: 0.0` on every run — the non-nil gate does not catch
+that, because zero is a measurement. A simulator or bench run is owed before the
+figure is trusted, per `docs/custom_watch/quality_standards.md`.

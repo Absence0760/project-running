@@ -240,21 +240,24 @@ class HealthKitManager: NSObject, ObservableObject {
     /// is what a saved run must go through. Nothing may read this property
     /// straight onto a row.
     ///
-    /// **This watch still writes no `hr_coverage` key**, and the absence is
-    /// still not self-addressing. Both watch clients write `source = 'watch'`
-    /// — there is no `watch_ios` value — so a reader holding a
-    /// `source = 'watch'` run with no coverage figure cannot tell this claim
-    /// from a Wear run recorded by a build predating the key, or one recovered
-    /// from a checkpoint that never carried it. `docs/backend/metadata.md`'s
-    /// `hr_coverage` row states all three. The figure exists here and is not
-    /// sent because the run reaches the phone through
-    /// `WCSession.transferFile(_:metadata:)` and claim (6) of
-    /// `scripts/check_watch_ios_source.mjs` reads BOTH ends: a key this watch
-    /// sends that `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` never
-    /// lifts out is dropped silently, which is exactly how Apple-Watch runs
-    /// once arrived with no `activity_type`. That lift is one line beside the
-    /// existing `avg_bpm` one, in a tree this change does not touch
-    /// (decisions § 1156).
+    /// **The measurement is now SENT as well as spent.** `ContentView.syncRun`
+    /// packs `hr_coverage` into the `WCSession.transferFile(_:metadata:)`
+    /// envelope whenever the claim carries one, and
+    /// `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` lifts it back out
+    /// — both ends, because claim (6) of `scripts/check_watch_ios_source.mjs`
+    /// reads both and a key one end sends that the other never lifts is
+    /// dropped in silence, which is exactly how Apple-Watch runs once arrived
+    /// with no `activity_type` (decisions § 1207). Only a MEASURED figure is
+    /// written: nil is unmeasured and omits the key rather than sending a
+    /// zero, which would claim the sensor delivered nothing.
+    ///
+    /// The absence of the key is still not self-addressing, because both watch
+    /// clients write `source = 'watch'` — there is no `watch_ios` value — so a
+    /// `source = 'watch'` run with no coverage figure is an Apple-Watch run
+    /// whose `HKWorkoutSession` never started, a Wear run from a build
+    /// predating the key, or either client recovered from a checkpoint that
+    /// never carried it. `docs/backend/metadata.md`'s `hr_coverage` row states
+    /// the population.
     var summaryAverageBPM: Double? {
         sessionDidFail ? nil : averageBPM
     }

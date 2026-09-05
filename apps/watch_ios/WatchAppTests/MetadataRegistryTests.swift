@@ -16,8 +16,8 @@ final class MetadataRegistryTests: XCTestCase {
     /// `WCSession.transferFile(_:metadata:)` takes a transport envelope, not a
     /// jsonb bag: `ContentView.syncRun` packs the run's own COLUMNS into it
     /// (`id`, `started_at`, `duration_s`, `distance_m`, `source`) alongside the
-    /// three real metadata keys the phone lifts out of it — see the matching
-    /// key list in `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift`. Column
+    /// real metadata keys the phone lifts out of it — see the matching key
+    /// list in `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift`. Column
     /// names have no registry row by definition, so they are exempt; the
     /// metadata keys in that same dict stay guarded.
     private let exemptReferences: Set<String> = [
@@ -66,49 +66,63 @@ final class MetadataRegistryTests: XCTestCase {
             """)
     }
 
-    /// `hr_coverage` is a MEASUREMENT, and this watch does not make one.
+    /// `hr_coverage` is a MEASUREMENT, and this watch now makes one and sends it.
     ///
-    /// Wear OS writes it because Health Services' `MeasureClient` is
+    /// Wear OS writes the key because Health Services' `MeasureClient` is
     /// foreground-only, so its `avg_bpm` can be a mean over a few minutes of a
     /// twelve-hour run (decisions § 1015 / § 1083). HealthKit's
     /// `HKLiveWorkoutBuilder` average is workout-scoped instead, so the claim
-    /// here is genuinely better — but the row carries no figure saying so, and
-    /// both watch clients write `source = 'watch'`, so the ABSENCE of the key
-    /// is what a reader has to interpret.
+    /// here is genuinely better — but "better" is not a figure, and both watch
+    /// clients write `source = 'watch'`, so until § 1207 the ABSENCE of the key
+    /// was all a reader had. § 1156 built the measurement and spent it locally
+    /// on the `avg_bpm` suppression; § 1207 sends it.
     ///
-    /// Two halves, and each fails for a different reason. Writing the key from
-    /// here without measuring it would be a fabricated measurement, worse than
-    /// none — so the sources must stay clear of it. And the statement that
-    /// makes the absence readable has to exist somewhere a maintainer will
-    /// find it, or the next person adds an assumed `1.0` (decisions § 1106).
-    /// Renamed from `testWatchOSMakesNoCoverageClaimAndSaysSoWhereTheAverageIsProduced`
-    /// when the watch started measuring coverage: it writes no `hr_coverage`
-    /// KEY, which is a different claim from making no measurement, and a guard
-    /// whose name asserts the second while the code does the first is a guard
-    /// nobody can read (decisions § 1156).
-    func testWatchOSWritesNoCoverageKeyAndGradesTheAverageItDoesWrite() throws {
+    /// What this guard holds, in the order the value travels. The figure must
+    /// be MEASURED, not assumed — an assumed measurement is a fabricated one
+    /// and worse than the absence it replaces — so the key may only be written
+    /// from a non-nil claim, never unconditionally. It must be graded on the
+    /// path a SAVED run takes, not merely available beside it: reading the
+    /// ungraded `summaryAverageBPM` into a `FinishedRun` or a checkpoint is the
+    /// defect the grade exists to prevent. And the statement that makes the
+    /// remaining ambiguity readable has to stay where a maintainer will find
+    /// it, or the next person adds an assumed `1.0`.
+    /// Renamed from `testWatchOSWritesNoCoverageKeyAndGradesTheAverageItDoesWrite`
+    /// when the key started being sent: a guard whose name asserts the opposite
+    /// of what its code checks is a guard nobody can read.
+    func testWatchOSSendsOnlyAMeasuredCoverageAndGradesTheAverageBesideIt() throws {
         let root = repoRoot()
-        let sourceRoot = root.appendingPathComponent("apps/watch_ios/WatchApp")
-        var writers: [String] = []
-        for file in swiftFiles(under: sourceRoot) {
-            let raw = try Data(contentsOf: file)
-            let source = stripComments(String(decoding: raw, as: UTF8.self))
-            if extractMetadataKeys(source).contains("hr_coverage") {
-                writers.append(file.lastPathComponent)
-            }
-        }
-        XCTAssertEqual(writers, [], """
-            apps/watch_ios now writes `hr_coverage` (\(writers.joined(separator: ", "))).
-
-            If that figure is MEASURED — sample coverage over the workout's active
-            elapsed time — this guard is what should change, and the `hr_coverage` row
-            in docs/backend/metadata.md must gain watch_ios as a writer in the same
-            change; its Notes currently tell readers no watchOS run carries the key.
-
-            If it is assumed (a hardcoded 1.0, or the workout duration divided by
-            itself), remove it. An assumed measurement is a fabricated one and is worse
-            than the absence it replaces.
-            """)
+        let contentView = root.appendingPathComponent("apps/watch_ios/WatchApp/ContentView.swift")
+        let cvData = try Data(contentsOf: contentView)
+        let cv = stripComments(String(decoding: cvData, as: UTF8.self))
+        XCTAssertTrue(
+            cv.contains("metadata[\"hr_coverage\"]"),
+            """
+            apps/watch_ios no longer sends `hr_coverage`. The figure is measured \
+            (`HealthKitManager.advanceCoverage`) and both ends of the WCSession \
+            envelope carry it; dropping the write silently returns every Apple-Watch \
+            run to the three-way-ambiguous absence § 1207 removed it from.
+            """
+        )
+        XCTAssertNotNil(
+            firstMatch(
+                #"if\s+let\s+(\w+)\s*=\s*run\.hrCoverage\s*\{\s*metadata\["hr_coverage"\]\s*=\s*\1\s*\}"#,
+                in: cv
+            ),
+            """
+            `hr_coverage` must be written only from a non-nil claim — the shape is \
+            `if let <x> = run.hrCoverage { metadata["hr_coverage"] = <x> }`. An \
+            unconditional write publishes 0.0 on every run whose HKWorkoutSession \
+            never started, and a fabricated measurement is worse than a missing one \
+            (decisions § 1207).
+            """
+        )
+        XCTAssertFalse(
+            cv.contains("hrCoverage ?? "),
+            """
+            A defaulted coverage is a fabricated measurement. Nil is UNMEASURED and \
+            must omit the key, not resolve to a number.
+            """
+        )
 
         let hkURL = root.appendingPathComponent("apps/watch_ios/WatchApp/HealthKitManager.swift")
         let hkData = try Data(contentsOf: hkURL)
@@ -130,12 +144,13 @@ final class MetadataRegistryTests: XCTestCase {
             )
         }
 
-        // The measurement itself. § 1106 recorded the unquantified gap — a
-        // live session whose sensor goes quiet still averages what it got —
-        // and § 1156 quantified it. The key is still not sent (the assertion
-        // above), so the ONLY thing the figure does is decide whether the run
-        // keeps its `avg_bpm`; delete the threshold and the measurement stops
-        // having any effect at all, silently.
+        // The threshold itself. § 1106 recorded the unquantified gap — a live
+        // session whose sensor goes quiet still averages what it got — and
+        // § 1156 quantified it. The figure now travels to the row as well
+        // (§ 1207), but the suppression is the half that CHANGES `avg_bpm`:
+        // delete the threshold and a mean over three minutes of a twelve-hour
+        // run is saved as that run's average, with the coverage sitting
+        // truthfully beside it saying so and nothing acting on it.
         XCTAssertTrue(
             hk.contains("minAverageBPMCoverage"),
             """

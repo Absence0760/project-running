@@ -38,7 +38,8 @@ final class WorkoutManagerTrackJSONTests: XCTestCase {
             distanceMetres: 5230.5,
             trackFileURL: store.trackFileURL,
             trackPointCount: points.count,
-            averageBPM: 152
+            averageBPM: 152,
+            hrCoverage: 0.5
         )
     }
 
