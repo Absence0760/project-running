@@ -11,6 +11,7 @@ import {
 	GLOBAL_SEGMENT_SCORING_LIMIT,
 	singleEmbed,
 	fitnessSnapshotDue,
+	publicRouteListFill,
 } from './data_normalise.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -500,5 +501,67 @@ test('the fitness-snapshot write is gated on the per-day check and reports its o
 		body,
 		/\.upsert\(/,
 		'fitness_snapshots has no UPDATE policy, so ON CONFLICT DO UPDATE is refused by RLS',
+	);
+});
+
+// -------------------------------------------------------------------
+// publicRouteListFill — the narrow public_routes row is filled, not cast
+// -------------------------------------------------------------------
+
+test('every column the public_routes half cannot serve is filled with what it means', () => {
+	// Reason: the requirement is DERIVED from the two column lists the reads
+	// actually use, so widening ROUTE_LIST_COLS without teaching the public
+	// half about the new column fails here rather than silently producing rows
+	// missing a field under a type that promises it. That is exactly how
+	// `waypoints` came to be `undefined` on every route saved from Explore.
+	const source = readFileSync(resolve('src/lib/core/data.ts'), 'utf-8');
+	const listOf = (name: string): string[] => {
+		const m = source.match(new RegExp(`const ${name}\\s*=\\s*\\n?\\s*'([^']*)'`));
+		assert.ok(m, `Could not locate ${name} — rename?`);
+		return m![1].split(',').map((c) => c.trim());
+	};
+	const owned = listOf('ROUTE_LIST_COLS');
+	const publicCols = new Set(listOf('PUBLIC_ROUTE_LIST_COLS'));
+	const withheld = owned.filter((c) => !publicCols.has(c));
+	assert.ok(withheld.length > 0, 'the two lists differ — that is the point of the fill');
+	const fill = publicRouteListFill() as Record<string, unknown>;
+	const unfilled = withheld.filter((c) => !(c in fill));
+	assert.deepEqual(
+		unfilled,
+		[],
+		`public_routes cannot serve these and the fill does not supply them: ${unfilled.join(', ')}`,
+	);
+});
+
+test('an empty waypoints array is the withheld-line signal, not an absent field', () => {
+	// Reason: RouteTrackPreview treats `waypoints.length < 2` as "ask
+	// clip_route_for_viewer for this viewer's clipped line" — the same path
+	// the RouteExplorer cards take. `undefined` is not that signal; it is a
+	// field the type says cannot be missing, and a consumer reading `.length`
+	// off it throws.
+	const fill = publicRouteListFill();
+	assert.deepEqual(fill.waypoints, []);
+	assert.equal(Array.isArray(fill.waypoints), true);
+	// A fresh array per call — a shared one would be mutated across rows.
+	assert.notEqual(publicRouteListFill().waypoints, fill.waypoints);
+	// The star is the owner's flag, and every row from this view is somebody
+	// else's, so false is the truth rather than a placeholder.
+	assert.equal(fill.is_starred, false);
+});
+
+test('the saved-public route rows are filled before they are treated as routes', () => {
+	// Reason: the defect was the `as unknown as Route[]` on the public half —
+	// a cast asserting a shape the select cannot produce. Casting again, with
+	// or without the fill, puts it back.
+	const source = stripComments(
+		readFileSync(resolve('src/lib/core/data.ts'), 'utf-8'),
+	);
+	const start = source.indexOf('export async function fetchRoutesWithError(');
+	assert.ok(start > 0, 'fetchRoutesWithError moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	assert.match(
+		body,
+		/savedPublicRes\.data[\s\S]{0,200}?publicRouteListFill\(\)/,
+		'the public_routes rows must be filled, not asserted to be full Route rows',
 	);
 });

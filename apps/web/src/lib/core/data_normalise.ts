@@ -11,6 +11,7 @@
 /// edge cases (null / empty / whitespace / "0" truthiness / emoji).
 
 import { METADATA_KEYS } from './schema';
+import type { TrackPoint } from '../types';
 
 /// Trim a string and collapse empty-after-trim to null. Mirrors
 /// `s?.trim() || null`. Pulled out so it can be reused without the
@@ -195,4 +196,30 @@ export function fitnessSnapshotDue(
 		latest.getUTCMonth() !== now.getUTCMonth() ||
 		latest.getUTCDate() !== now.getUTCDate()
 	);
+}
+
+/// The columns `ROUTE_LIST_COLS` selects off the base `routes` table that the
+/// `public_routes` view has no counterpart for, filled with the value that
+/// means "withheld here" — one object rather than a cast that asserts the
+/// narrow row is already the wide type.
+///
+/// `waypoints: []` is not "this route has no line". It is the signal
+/// `RouteTrackPreview` already reads as "fetch this viewer's clipped line",
+/// which is the shape the RouteExplorer cards pass and the only correct one
+/// here: `public_routes` withholds the polyline on purpose, because a
+/// non-owner's line is served only through `clip_route_for_viewer` with the
+/// owner's privacy zones removed (decisions § 33). Casting instead left
+/// `waypoints` `undefined` under a type declaring `TrackPoint[]`, so the
+/// routes list gated its thumbnail on a field that could not be there and
+/// every route saved from Explore — the dominant case — rendered a grey
+/// placeholder.
+///
+/// `is_starred: false` is the truth, not a placeholder: the star is the
+/// OWNER's flag on their own row, and every row from this view belongs to
+/// somebody else.
+export function publicRouteListFill(): {
+	waypoints: TrackPoint[];
+	is_starred: boolean;
+} {
+	return { waypoints: [], is_starred: false };
 }

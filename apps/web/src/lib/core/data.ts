@@ -4,7 +4,7 @@
 import { supabase } from './supabase';
 import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function_error';
 import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
-import { singleEmbed, fitnessSnapshotDue } from './data_normalise';
+import { singleEmbed, fitnessSnapshotDue, publicRouteListFill } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { isEntityId } from './entity_id';
 import { probeSaysConfigured } from './provider_probe';
@@ -1667,7 +1667,9 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 		const byId = new Map<string, Route>();
 		for (const r of [
 			...((savedBaseRes.data ?? []) as unknown as Route[]),
-			...((savedPublicRes.data ?? []) as unknown as Route[]),
+			...((savedPublicRes.data ?? []) as unknown as Omit<Route, 'waypoints' | 'is_starred'>[]).map(
+				(r) => ({ ...r, ...publicRouteListFill() }) as Route,
+			),
 		]) {
 			if (!byId.has(r.id)) byId.set(r.id, r);
 		}

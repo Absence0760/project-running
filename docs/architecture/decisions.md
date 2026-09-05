@@ -23998,3 +23998,44 @@ so the invariance is what is tested rather than one zone's coincidence.
 Mutation-tested: unbinding the insert error, failing open on an unparseable
 timestamp, and switching to local-day comparison each fail, the last of them
 under `TZ=UTC`.
+
+## 1229. The saved-public route rows are filled with what the view withholds, not cast to the type they are not
+
+`fetchRoutesWithError` merges two reads: the base `routes` table via
+`ROUTE_LIST_COLS`, and the `public_routes` view via `PUBLIC_ROUTE_LIST_COLS`
+for every route the runner bookmarked from Explore — which its own comment
+calls the dominant case, because the base table's RLS only exposes your own and
+your clubs' routes. The view withholds `waypoints` and `is_starred` by
+construction, and both halves were then `as unknown as Route[]`. `Route`
+declares `waypoints: TrackPoint[]`, non-nullable, so every bookmarked route
+carried `undefined` under a type promising an array. `/routes` gates its
+thumbnail on `route.waypoints && route.waypoints.length > 1`, so the whole
+class rendered a grey icon instead of a mini-map, with no crash and no error.
+
+Withholding the polyline is right and is not the defect: a non-owner's line is
+served only through `clip_route_for_viewer`, with the owner's privacy zones
+removed (§ 33). Widening the select would undo that. The defect is modelling
+the narrow row as the wide type, so the fix is to fill the two withheld columns
+with the values that state what is true. `waypoints: []` is not "this route has
+no line" — it is the signal `RouteTrackPreview` already reads as "fetch this
+viewer's clipped line", which is exactly what the RouteExplorer cards pass, so
+the fill routes the thumbnail through the clip RPC rather than fabricating one.
+`is_starred: false` is the truth rather than a placeholder: the star is the
+owner's own flag and every row from this view belongs to somebody else.
+
+The guard derives its requirement from the two column-list constants the reads
+actually pass to `.select()`, computes the set difference and demands the fill
+supply a key for each — so adding a column to `ROUTE_LIST_COLS` fails the PR
+until the public half is taught about it, rather than silently producing rows
+missing a field under a type that promises it. Mutation-tested three ways:
+widening `ROUTE_LIST_COLS`, restoring the bare cast, and sharing one empty
+array across rows each fail exactly one assertion.
+
+Two things are deliberately not done here. The list rows are still typed
+`Route` while the projection omits `description`, `tags`, `is_public` and
+`updated_at` on BOTH halves — narrowing that to a `RouteListItem` is right but
+retypes four consumer files across three trees this lane does not own, so it is
+filed with its blast radius rather than half-applied. And `/routes` still gates
+the preview on a non-empty `waypoints`, so the fill alone does not yet put the
+map back on screen; that is one block in a page this lane does not own, handed
+to the integrator as a grant.
