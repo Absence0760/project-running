@@ -40,6 +40,66 @@ export function elevationSourceTrack(
 }
 
 /**
+ * The fewest altitude samples a profile can be drawn from. Two: one sample is
+ * a point, and the chart would render it as a flat line spanning the whole run
+ * at that altitude -- the same false claim about a flat course the all-zero
+ * array used to make, only at 1800 m instead of 0.
+ */
+export const MIN_ELEVATION_SAMPLES = 2;
+
+/**
+ * The altitude series the elevation profile is drawn from -- one value per
+ * track point, gaps filled by interpolation -- or null when the track carries
+ * too few samples to draw one.
+ *
+ * The array has to stay 1:1 with the track: the chart reports a hovered INDEX
+ * and the page maps it straight back to a lat/lng for the linked map cursor,
+ * so a compacted series would paint the marker somewhere the runner never was.
+ * That is why the gaps are filled rather than dropped. Filling them at sea
+ * level, which is what `p.ele ?? 0` did, drew an alpine run at 1800-2400 m as
+ * a set of vertical cliffs to 0 m with a y-axis stretched from zero -- and one
+ * point carrying an altitude was enough to mount the chart (decisions § 1224).
+ *
+ * Interpolation is linear in INDEX, not in distance, because the chart's own
+ * x-axis is the index: the filled values are exactly the straight line it
+ * would have drawn between the two real samples had the gap not been there.
+ * Leading and trailing gaps carry the nearest known sample, the same
+ * carry-across `computeElevationGain` applies to the identical dropout, so the
+ * chart and the climb figure beside it agree about what a gap means.
+ */
+export function elevationSeries(
+	track: TrackPoint[] | null | undefined,
+): number[] | null {
+	if (!track || track.length < 2) return null;
+	const known: number[] = [];
+	for (let i = 0; i < track.length; i++) {
+		const ele = track[i].ele;
+		if (typeof ele === 'number' && Number.isFinite(ele)) known.push(i);
+	}
+	if (known.length < MIN_ELEVATION_SAMPLES) return null;
+
+	const out = new Array<number>(track.length);
+	const eleAt = (i: number) => track[i].ele as number;
+	for (let k = 0; k < known.length; k++) {
+		out[known[k]] = eleAt(known[k]);
+	}
+	for (let i = 0; i < known[0]; i++) out[i] = eleAt(known[0]);
+	const last = known[known.length - 1];
+	for (let i = last + 1; i < track.length; i++) out[i] = eleAt(last);
+	for (let k = 1; k < known.length; k++) {
+		const a = known[k - 1];
+		const b = known[k];
+		const span = b - a;
+		if (span < 2) continue;
+		const rise = eleAt(b) - eleAt(a);
+		for (let i = a + 1; i < b; i++) {
+			out[i] = eleAt(a) + (rise * (i - a)) / span;
+		}
+	}
+	return out;
+}
+
+/**
  * A step count off the schemaless `metadata` bag, or null when the value is
  * not a count of steps taken.
  *

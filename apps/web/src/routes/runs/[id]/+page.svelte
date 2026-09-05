@@ -51,6 +51,7 @@
 	import { computeElevationGain } from '$lib/routes/route_simplify';
 	import {
 		cadenceSpm,
+		elevationSeries,
 		elevationSourceTrack,
 		stepCount,
 		storedElevationGainM,
@@ -1163,12 +1164,16 @@
 			: run?.track ?? [],
 	);
 	let hasMapTrack = $derived(baseTrack.length >= 2);
-	let elevations = $derived(baseTrack.map((p) => p.ele ?? 0));
-	// Gate the elevation chart on real samples. Without any `ele` the
-	// array is all-zero and the chart renders as a deceptive flat line
-	// (a Health Connect / summary import reads as a genuinely flat route).
-	// Mirrors mobile's `_hasElevation`.
-	let hasElevation = $derived(baseTrack.some((p) => p.ele != null));
+	// Gate the elevation chart on real samples, and carry the line across
+	// the ones that are missing rather than plotting them at sea level.
+	// Without any `ele` the array used to be all-zero and the chart rendered
+	// as a deceptive flat line (a Health Connect / summary import reads as a
+	// genuinely flat route); with an intermittent `ele` it fell to 0 m at
+	// every dropout. Null when too few points carry an altitude to draw a
+	// profile at all.
+	let elevationSamples = $derived(elevationSeries(baseTrack));
+	let elevations = $derived(elevationSamples ?? []);
+	let hasElevation = $derived(elevationSamples !== null);
 
 	/// Linked-cursor index — fed by ElevationProfile's onhover, consumed
 	/// by RunMap's hoverIdx. Null when the pointer is off the chart.

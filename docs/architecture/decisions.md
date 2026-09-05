@@ -23904,3 +23904,34 @@ cell dividing by the run's distance therefore cannot reintroduce a second
 clock. Mutation-tested by planting three violations — the card's pace reverted
 to `run.duration_s`, a second `paceSeconds` declaration, and the card's time
 reverted while its pace stayed — each caught by the intended assertion.
+
+## 1224. The run-detail elevation profile carries the line across a dropout instead of plotting it at sea level
+
+`/runs/[id]` handed the chart `baseTrack.map((p) => p.ele ?? 0)`. On a track
+with intermittent altitude — tree cover, a tunnel, a GPX import where only some
+points carry `<ele>` — every gap was drawn as a vertical plunge to 0 m, and
+`hasElevation` needed only ONE point with an altitude to mount the chart at
+all. Measured on a synthetic 30-minute alpine climb (1 Hz, 1800 to 2400 m, 3 %
+dropout rate, 3.8 m altitude sigma, 55 dropouts): the chart's own "Total gain"
+read **116,484 m** over a 600 m climb and its y-axis spanned 0 to 2,405 m.
+
+`elevationSeries` replaces the coalesce. It keeps the array 1:1 with the track
+— the chart reports a hovered INDEX which the page maps straight back to a
+lat/lng for the linked map cursor, so a compacted series would paint the marker
+where the runner never was — and fills each gap by linear interpolation in
+INDEX, which is exactly the straight line the chart's index-based x-axis would
+have drawn had the two real samples been adjacent. Leading and trailing gaps
+carry the nearest sample, the same carry-across `computeElevationGain` already
+applies to the identical dropout, so the chart and the climb figure beside it
+read one gap the same way. A non-numeric altitude is not a sample, and fewer
+than two samples draws nothing rather than a flat line spanning the run at one
+altitude. On the same track: total 4,460 m, y-axis 1,793 to 2,405 m.
+
+Half the filing is deliberately not closed here. The chart's `totalGain` is an
+UNGATED sum of positive deltas living in `lib/components/ElevationProfile.svelte`,
+which five surfaces share and this lane does not own; against the key stat's
+`ELEVATION_GAIN_MIN_DELTA_M`-gated 3,958 m on the measurement above it still
+reads 4,460 m, so the panel and the grid still grade one run by two rules. The
+change wanted is four lines in that one file — derive `totalGain` through
+`computeElevationGain` over the samples rather than summing them inline — and
+it fixes every consumer at once rather than adding a prop for this one.
