@@ -204,6 +204,49 @@ export function auditMigrations(migrations) {
   return { scanned, unmodelled, violations };
 }
 
+// How many migrations write the house-form lockdown, and in which of its two
+// spellings. `docs/backend/api_database.md` states these four figures in prose,
+// and this guard's own test suite asserts the paragraph against this function —
+// they had gone stale twice and been hand-corrected twice, the second time to a
+// total that did not even agree with its own parenthesis, because nothing
+// re-measured them ([§ 1181]). The parse is the guard's own, deliberately: a
+// second reader of the same SQL is a second thing to drift.
+/**
+ * @param {{ filename: string, sql: string }[]} migrations
+ * @returns {{ total: number, files: number, execute: number, all: number }}
+ */
+export function countPortableRevokes(migrations) {
+  /** @type {Set<string>} */
+  const execute = new Set();
+  /** @type {Set<string>} */
+  const all = new Set();
+  for (const { filename, sql } of migrations) {
+    for (const raw of splitSqlStatements(sql)) {
+      const statement = raw.replace(/\s+/g, ' ').trim();
+      const match = GRANT_OR_REVOKE.exec(statement);
+      if (!match) continue;
+      const [, verb, privilegeClause, objectKind, , roleClause] = match;
+      if (verb.toLowerCase() !== 'revoke') continue;
+      // `on all functions in schema` is a schema-level revoke, not the
+      // per-function house form the paragraph is counting.
+      if (/^all\b/i.test(objectKind.trim())) continue;
+      const roles = new Set(
+        splitList(roleClause).map((role) => role.replace(/"/g, '').toLowerCase()),
+      );
+      if (!roles.has('public') || !roles.has('anon')) continue;
+      const privilege = privilegeClause.trim().toLowerCase();
+      if (/^execute\b/.test(privilege)) execute.add(filename);
+      else if (/^all\b/.test(privilege)) all.add(filename);
+    }
+  }
+  return {
+    total: migrations.length,
+    files: new Set([...execute, ...all]).size,
+    execute: execute.size,
+    all: all.size,
+  };
+}
+
 /**
  * @param {{ routine: string, named: string, missing: string }} violation
  * @returns {string}
@@ -257,9 +300,15 @@ function main() {
   }
 
   if (violations.length > 0 || unmodelled.length > 0) process.exit(1);
+  const counts = countPortableRevokes(migrations);
   console.log(
     `OK: ${scanned.length} migrations replayed, every EXECUTE revoke closes both the PUBLIC and ` +
       `the anon channel.`,
+  );
+  console.log(
+    `Counts stated in docs/backend/api_database.md: ${counts.total} migrations, ` +
+      `${counts.files} writing a function-level "from public, anon" revoke ` +
+      `(${counts.execute} as "revoke execute", ${counts.all} as "revoke all").`,
   );
 }
 

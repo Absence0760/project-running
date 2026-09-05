@@ -15,21 +15,28 @@
 -- Coverage:
 --   1. One INSERT per allowlisted kind — each accepted, because a
 --      kind the CHECK admits is a kind the Go dispatch switch must
---      know. The list here IS the assertion: `club_photo_process`
---      (20270301_001) and `safety_sms` (20270410_001) shipped their
---      migration and their handler but were never added below, so for
---      two rounds the suite passed while asserting nothing about them.
---      A kind missing from this file is a kind whose three-file rule
---      was only followed twice.
+--      know.
 --   2. INSERT 'unknown_kind'  — rejected (23514)
 --   3. INSERT 'map-match'     — rejected (the typo-catcher path)
 --   4. UPDATE flipping a valid kind to a junk one is also rejected
 --      (so a future REST surface that lets a row be re-classified
 --      can't bypass the constraint via UPDATE).
+--   5. The list in (1) is the same set the CHECK admits, read off
+--      `pg_get_constraintdef`.
+--
+-- (5) exists because (1) used to be a hand-kept list vouching for
+-- itself, and three kinds fell out of it: `club_photo_process`
+-- (20270301_001) and `safety_sms` (20270410_001) shipped their
+-- migration and their handler but were never added, so for two rounds
+-- the suite passed while asserting nothing about them, and
+-- `export_blob_reap` (20270708000010) was the third. An omission is a
+-- suite that silently covers less, which is the one failure a list
+-- naming only what it does cover cannot report. Now a kind added to
+-- the CHECK without a case here turns (5) red.
 
 begin;
 
-select plan(18);
+select plan(20);
 
 -- Accepted kinds round-trip cleanly. We're not asserting any
 -- particular id; just that the INSERT doesn't throw.
@@ -153,6 +160,12 @@ select lives_ok(
   'public.jobs accepts kind = ''data_export'''
 );
 
+select lives_ok(
+  $$ insert into public.jobs (kind, payload)
+     values ('export_blob_reap', '{}'::jsonb) $$,
+  'public.jobs accepts kind = ''export_blob_reap'''
+);
+
 -- Junk kinds are rejected at INSERT time, not deferred to dispatch.
 select throws_ok(
   $$ insert into public.jobs (kind, payload)
@@ -187,6 +200,24 @@ select throws_ok(
   '23514',
   null,
   'public.jobs UPDATE rejects flipping kind to a junk value'
+);
+
+-- The set (1) exercises is the set the constraint admits. The kinds are the
+-- only single-quoted literals `pg_get_constraintdef` renders for this CHECK
+-- (`CHECK ((kind = ANY (ARRAY['map_match'::text, ...)))` — the casts and the
+-- column name are unquoted), and both sides are ordered under `C` so the
+-- comparison does not depend on the database's collation opinion about `_`.
+select is(
+  (select string_agg(m.caps[1], ', ' order by m.caps[1] collate "C")
+     from pg_constraint c,
+          lateral regexp_matches(pg_get_constraintdef(c.oid), '''([a-z_]+)''', 'g') as m(caps)
+    where c.conrelid = 'public.jobs'::regclass
+      and c.conname = 'jobs_kind_chk'),
+  'club_photo_process, data_export, export_blob_reap, lifecycle_drip, ' ||
+  'lifecycle_email, map_match, native_push, notification_email, photo_process, ' ||
+  'route_photo_process, safety_email, safety_sms, strava_event, token_refresh, ' ||
+  'web_push, weekly_digest',
+  'jobs_kind_chk admits exactly the kinds exercised above'
 );
 
 select * from finish();

@@ -1,7 +1,17 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { auditMigrations } from './check_migration_function_revoke_noop.mjs';
+import { MIGRATIONS_DIR } from './check_migration_versions.mjs';
+import {
+  auditMigrations,
+  countPortableRevokes,
+} from './check_migration_function_revoke_noop.mjs';
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const API_DATABASE_MD = join(REPO_ROOT, 'docs', 'backend', 'api_database.md');
 
 /** @param {readonly (readonly [string, string])[]} pairs */
 function audit(pairs) {
@@ -303,4 +313,45 @@ test('the scanned list names every migration handed in', () => {
     ['20260102_001_grant.sql', 'grant execute on function coach_roster_summary() to authenticated;'],
   ]);
   assert.deepEqual(scanned, ['20260101_001_create.sql', '20260102_001_grant.sql']);
+});
+
+test('countPortableRevokes counts a file once per spelling, and skips the schema-wide form', () => {
+  const counts = countPortableRevokes([
+    { filename: 'a.sql', sql: 'revoke execute on function f() from public, anon;' },
+    {
+      filename: 'b.sql',
+      sql: `revoke all on function g() from public, anon, authenticated;
+        revoke all on function h() from public, anon;`,
+    },
+    // Named alone, so it withholds on one image only — not the house form.
+    { filename: 'c.sql', sql: 'revoke execute on function i() from public;' },
+    // Schema-wide, not function-level.
+    { filename: 'd.sql', sql: 'revoke execute on all functions in schema public from public, anon;' },
+    // A privilege other than EXECUTE / ALL is not this lockdown.
+    { filename: 'e.sql', sql: 'revoke usage on function j() from public, anon;' },
+  ]);
+  assert.deepEqual(counts, { total: 5, files: 2, execute: 1, all: 1 });
+});
+
+test('docs/backend/api_database.md states the counts this guard measures', () => {
+  // The four figures in that paragraph had gone stale on every migration-bearing
+  // PR and been hand-corrected twice — the second time to a total that did not
+  // agree with its own parenthesis (48, beside "42 as revoke execute, 12 as
+  // revoke all"). Nothing re-measured them, which is what this assertion is.
+  const counts = countPortableRevokes(
+    readdirSync(MIGRATIONS_DIR)
+      .filter((filename) => filename.endsWith('.sql'))
+      .map((filename) => ({ filename, sql: readFileSync(join(MIGRATIONS_DIR, filename), 'utf8') })),
+  );
+  const doc = readFileSync(API_DATABASE_MD, 'utf8');
+
+  const stated = /(\d+) migrations write a function-level `from public, anon` revoke/.exec(doc);
+  const spellings = /\((\d+) as `revoke execute`, (\d+) as `revoke all`\)/.exec(doc);
+  const replayed = /replays all (\d+) migrations in version order/.exec(doc);
+  assert.ok(stated && spellings && replayed, 'the counted paragraph is no longer where the guard states it is');
+
+  assert.equal(Number(stated[1]), counts.files);
+  assert.equal(Number(spellings[1]), counts.execute);
+  assert.equal(Number(spellings[2]), counts.all);
+  assert.equal(Number(replayed[1]), counts.total);
 });
