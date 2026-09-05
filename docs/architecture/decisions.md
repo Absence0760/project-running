@@ -21978,3 +21978,122 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1200. Three replan rails broke a same-date tie three ways; all three now scan for the earliest instead of sorting
+
+`replanRemaining` adds a missed long run's distance to the NEXT future long
+run. Which one that is, when a plan carries two non-past non-taper `long`
+workouts on the same `scheduled_date` — a double long-run day, or a plan edited
+to move one — was decided differently on each of the three rails.
+`plan_replan.ts` sorted with `(a, b) => (a.scheduledDate < b.scheduledDate ? -1
+: 1)`, which never returns 0 and is therefore not an ordering at all; the Dart
+twin used `compareTo` (correct) but `List.sort`; the firmware scanned with a
+strict `<` and kept the first encountered, which was the only deterministic one
+of the three.
+
+**Two thirds of the filing measured out differently than it was written, and
+the remaining third is real.** V8's TimSort with that comparator was measured
+over 260,000 random arrays (2–570 elements, 1–5 distinct dates, including
+shapes built to force galloping) and NEVER disagreed with a valid stable sort:
+every comparison path in TimSort treats "not less than" as "go right", and the
+descending-run detector that would break stability refuses to open on an equal
+pair, so the web rail was accidentally stable rather than arbitrary. Dart is the
+opposite — `List.sort` is an insertion sort up to 33 elements and a dual-pivot
+quicksort past it, so it was stable by list size, not by contract: measured over
+20,000 random cases, zero divergences at 33 elements or fewer and 12,024 past
+it. `plan_weeks` bounds `week_index >= 0` with no ceiling and `plan_workouts`
+has no per-week cap, so 34 future long runs is reachable, and there the phone
+would have moved the make-up to a different session than the web.
+
+Both scripting rails now **scan** rather than sort, in the shape the firmware
+already had: only the minimum is ever read, so an O(n log n) sort feeding a
+single subscript was the wrong instrument, and a strict `<` keeps the first in
+week-then-workout order with no appeal to any sort's stability. That is
+deliberately NOT the `readiness` / `routine_history` house shape (web leans on
+ES2019 stability, Dart carries an explicit input-index tiebreak) — those two
+consume a whole ordered list and genuinely need one. Here the three rails are
+now structurally identical, which is the strongest available guarantee for a
+port nothing compares automatically ([§ 641](#641)). The tie is pinned on all
+three suites, twice each: the two-workout case from the filing, and a 40-element
+case past Dart's insertion-sort threshold, which is the one that would have
+failed before.
+
+## 1201. The Garmin GAP rail joins the reference-track bracket by driving its streaming tracker, not by growing a batch grader
+
+[§ 1160](#1160) froze one synthetic switchback — 601 points, a 6 % climb
+oscillating ±8 m every 150 m — on web, both Dart rails and the firmware, each of
+which must grade it to 311 s/km at the shipped 20 m window, with the eight
+fixture constants joined into one comparable spec per rail so a golden pace is a
+claim about an algorithm rather than about an arbitrary track. It recorded the
+Garmin rail as out of reach for two stated reasons: the Connect IQ field is a
+streaming estimator with no batch entry point, and there is no SDK on this
+machine.
+
+The first reason turns out not to bind. `GradeTracker.onSample(dist, alt)` IS
+the same anchored window the three batch graders walk — it re-anchors on exactly
+the condition they close a segment on — so the fixture can be fed to a real
+tracker one sample at a time and each closed window credited its horizontal
+length times the factor the tracker's own grade earns it. Measured against a
+faithful transliteration run on the host, that reduction returns **311 s/km**
+against a true 302.611 s/km, a 2.77 % cost: the same two numbers § 1160 recorded
+for the other three rails, reached through this rail's own window, its own
+±45 % clamp and its own Minetti fit. The reduction lives in the `(:test)` suite
+rather than in `source/`, because the field genuinely has no batch entry point
+and inventing one to be graded would be production code shaped by a test.
+
+**What this does not prove, stated at the rung.** The Monkey C is unexecuted —
+no `monkeyc` on this machine — so it sits below *host-tested* in
+[`quality_standards.md`](../custom_watch/quality_standards.md)'s ladder, the
+same caveat § 992 recorded for the rest of that suite. What IS executed here is
+the transliteration and the eight-constant join: all four rails were read
+through `check_watch_wire_vectors.mjs`'s own `mcConst` / `tsConst` / `dartConst`
+/ `rustConst` regexes and produce byte-identical specs. Float precision was
+checked rather than assumed — the walk was re-run under emulated 32-bit floats,
+Monkey C's default `Float` width, and reports the same 311 (quotient 311.0520
+against 311.0517 in 64-bit, with 0.448 of rounding headroom). The remaining
+enforcement is one line in `check_watch_wire_vectors.mjs` adding the Monkey C
+test file as a fourth rail of the existing `GAP reference fixture` row; that
+file belonged to another lane and the change is filed rather than made, so until
+it lands the four goldens agree without anything checking that they still do.
+
+A seventh claim in `apps/watch_garmin/scripts/check_garmin_source.sh` covers the
+exposure the reduction's location creates: it must drive a real `GradeTracker`
+and read `MIN_SEGMENT_M`, because a private copy of the walk, or the window
+spelled inline, would go on reporting 311 against a window nothing on this rail
+uses — agreeing with the other three about a number while saying nothing about
+the code.
+
+## 1202. The Garmin source guard held a copy of the value it was guarding, and ended a class name by substring
+
+Two independent ways `check_garmin_source.sh` was reporting a verdict it had not
+reached. Both are the guard's own version of the failure it exists to catch.
+
+**Claim 4 searched for a number the file stopped holding.** It refuses a
+cross-rail constant spelled inline as well as named, and it carried its own map
+of name → forbidden literal: `MIN_SEGMENT_M: "5.0"`. [§ 992](#992) moved that
+window to 20 m and the map stayed at 5.0, so for the single value the whole
+four-rail bracket is about, the claim was scanning the file for a number it no
+longer held — measured, a tree with `if (run >= 20.0)` written in place of the
+constant passed the guard clean. The literal is now taken from the declaration
+the guard has already located, so the map is a list of names and there is
+nothing left to go stale.
+
+**The vacuity guard ended the class name with a substring test.** Every claim
+below it reads `source/GradeAdjustedPaceView.mc`, so it checks the class is
+still declared — with `"class GradeAdjustedPaceView" not in gap`, which
+`GradeAdjustedPaceViewV2` satisfies. `body_of` ends the name correctly, so on
+such a rename it found no class, `view` was `None`, and the two claims guarded
+by `if view is not None:` skipped themselves: measured, a tree with the class
+renamed, `onTimerReset` renamed away and the pace-unit read replaced by a
+member that does not exist passed with exit 0. The check is now a
+word-boundary match, and a `None` body is a failure rather than a silent skip —
+a claim that cannot find its subject has not passed.
+
+Both were mutation-checked at authoring: nine mutations across the two claims
+plus the new claim 7 (the window spelled inline, a constant undeclared, a
+constant declared twice, the tracker replaced, the class renamed two ways, the
+reset removed, the unit read replaced), all refused, with the pre-fix tree
+confirmed to accept the first. The suite that makes this file's green mean
+anything, `scripts/check_garmin_source.test.mjs`, lives in another lane's tree —
+its rows for claim 7 and for the suffixed rename are filed, not written, so
+those two mutations are measured here and unmeasured in CI.
