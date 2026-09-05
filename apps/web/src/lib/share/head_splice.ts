@@ -5,10 +5,13 @@
 /// times, and why the fourth copy having drifted (share_recap strips two of the
 /// four signals) was not detectable as drift at all.
 ///
-/// Deliberately NOT one do-everything `injectHead`: the recap head emits
-/// neither a canonical nor a JSON-LD block, so a pipeline that always stripped
-/// those would delete the shell's own node from every recap share page. Each
-/// injector names the signals its own head replaces, and strips exactly those.
+/// Deliberately NOT one do-everything `injectHead`: the recap head emits no
+/// JSON-LD block, and neither does the badge head that reuses the run
+/// injector, so a pipeline that always stripped it would delete the shell's
+/// own WebSite node from those pages and put nothing back. Each injector names
+/// the signals its own head replaces, and strips exactly those -- which for
+/// the run injector is a per-call answer, because `ShareRunMeta.jsonLd` is
+/// optional.
 
 export type HeadSignal = 'title' | 'social' | 'canonical' | 'jsonLd';
 
