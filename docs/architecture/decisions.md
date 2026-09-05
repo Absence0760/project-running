@@ -24017,3 +24017,131 @@ Those trees belong to other lanes; the six `release-web.yml` comments that
 described `build/index.html` as "the SPA shell the Lambda embeds" are this
 lane's and now name `200.html`, which is what makes the mismatch visible if the
 `build.mjs` half does not land.
+
+## 1266. Two "argued, not measured" edge filings, measured — one settled against prod, the other shown to be unsettleable in the order it was filed
+
+**Decided 2026-09-05.** [§ 1084](#1084)'s `noindex` claim and [§ 1023](#1023)'s
+`URL_DECODE` claim were both filed as repo-level statements with the same
+prescribed settling command, a `curl` against `preview.threkir.com`. Neither had
+been run. Both are now answered, and the answers differ.
+
+**That command could never have run, and the repo says so without any
+credential.** `infra/envs/preview/main.tf:38` passes `aliases = []` to the
+module, so the preview distribution is deliberately given no alternate domain
+name; the ACM cert covers `preview.<apex>` (`infra/dns/main.tf:56`) but nothing
+attaches it to a distribution and no Route 53 record exists. Measured:
+`getent hosts preview.threkir.com` returns not-found while `threkir.com`
+resolves to CloudFront. Both filings prescribed a probe against a host their own
+Terraform does not create, and repeated it for rounds.
+
+**§ 1084 is settled against prod, in the direction the filing feared.**
+`GET https://threkir.com/share/run/00000000-...-000000000000` answers
+**HTTP 200, `content-type: text/html`, 5,666 bytes, `server: AmazonS3`,
+`x-cache: Error from cloudfront`**, and the body contains **no** `robots` meta
+at all. So the `custom_error_response` deletion is unapplied and the `noindex`
+is not on the wire; the claim stays repo-level, now as an observation rather
+than an inference. Content is NOT the stale half: the shell's `last-modified`
+is `2026-08-15T23:30:39Z` against `web@1.4.0` published `2026-08-15T23:08:00Z`,
+so the bucket is current and it is the distribution config that trails the
+Terraform.
+
+**§ 1023 cannot be settled from outside at all, and the reason is a property of
+the experiment rather than of the network.** The probe compares an encoded
+`/api/%63oach/turn` against a plain `/api/coach/turn`; both return the same
+5,666 bytes — but so does `/api/zzz-no-such-route`, under `GET` and under
+`POST` alike. Every path in the set lands on one substituted body, so treatment
+and control are indistinguishable from a path that matches nothing, and the
+comparison measures nothing about behaviour matching. No variant of it helps
+while the distribution answers every unmatched path with the same document.
+**The two filings are therefore ORDERED, which nobody had noticed**: § 1084's
+mapping deletion has to be applied before § 1023's question is observable from
+outside at all. Absent that, it takes
+`aws cloudfront get-distribution-config`, which is a credential.
+
+**One finding neither filing was looking for.** The 403 mapping is
+distribution-wide — CloudFront has no per-behaviour `custom_error_response` —
+so it rewrites a 403 from ANY origin on ANY path, not only a missing S3 key on
+a client route. Measured: `POST /api/coach/turn` returns `200 text/html`
+carrying the SPA shell. Any API caller that is rejected receives an HTML
+document with a success status, and a client doing `JSON.parse` on it gets a
+syntax error rather than the refusal. § 1084 removed the 404 mapping and named
+`/api/coach*` while doing it; the 403 one is still live, [§ 1022](#1022)
+argues correctly that it must stay for deep links, and the two requirements
+cannot both be met by editing the mapping. Filed rather than fixed: the shape
+is a CloudFront Function or an origin that does not answer a bare 403 on the
+API behaviours, and that is a design choice, not a one-line change.
+
+## 1267. The Lambda execution role's `kms:Decrypt` and the deploy roles' plaintext read are one fact from two sides, and closing the first would make the second permanent
+
+**Decided 2026-09-05.** Two `followups.md` entries sit next to each other:
+the execution role's `kms:Decrypt` on the secrets CMK is exercised by nothing
+and could be deleted, and the deploy roles can read `ANTHROPIC_API_KEY` and
+`SUPABASE_SECRET_KEY` in plaintext out of any API that returns a
+`FunctionConfiguration`. Both are correct as stated. Read together they are
+the same architectural fact — the secret is a plaintext Lambda environment
+variable — and **the action the first proposes is the one thing that would
+make the second unfixable**, because every repair for the second needs the
+execution role to hold exactly that grant.
+
+**The second filing's cost estimate is wrong by a factor of four, and that is
+why it read as deferrable.** It priced the fix as "a per-Lambda code change
+across eight functions". Measured by walking every `*_lambda_env` local in
+`infra/modules/web-stack/main.tf` and asking which merges `data.sops_file`:
+**two do.** `lambda_env` (coach — `ANTHROPIC_API_KEY`, `SUPABASE_SECRET_KEY`,
+`OPENAI_API_KEY`) and `generate_route_lambda_env` (`GRAPHHOPPER_API_KEY`,
+`GRAPH_CYCLE_API_KEY`). The five share Lambdas and the OSRM proxy take public
+values only and hold no secret to leak, which their own comments already say
+and no filing had counted.
+
+**The obvious repair is blocked by a guard that already encodes the reason.**
+Setting `kms_key_arn` on the two functions puts their environment under the
+secrets CMK, and AWS documents that key as the one "used to encrypt ... the
+function's environment variables" (read out of `aws lambda
+update-function-code help`, aws-cli 2.36.4 — the same reference confirms the
+filing's premise, that `UpdateFunctionCode`'s response carries `Environment ->
+Variables`, and shows the response also has an `Environment -> Error` member
+for the case where they cannot be returned). But `check_infra_iam.mjs` claim 9
+holds "no `aws_lambda_function` sets `kms_key_arn`" as a live premise and
+fails in BOTH directions: the moment one does, it *demands* that
+`kms_decrypt_principal_arn` be wired back to the deploy role, on the reasoning
+that `UpdateFunctionCode` would otherwise fail with `AccessDenied` mid-release.
+Whether that reasoning is right — whether the caller of `UpdateFunctionCode`
+needs `kms:Decrypt` on the function's CMK, or merely gets `Environment.Error`
+instead of the values — is not settleable from the CLI reference and is a live
+API behaviour. If claim 9 is right, this route hands the deploy role the grant
+back and buys nothing.
+
+**The route that is immune to that question is a ciphertext environment
+variable the handler decrypts itself, and it is the recommendation.**
+`kms_key_arn` stays unset, so claim 9's premise is untouched; the env var holds
+a KMS ciphertext blob that `GetFunctionConfiguration` hands to anyone and that
+is useless without `kms:Decrypt`; and the decrypt happens at cold start under
+the execution role — which is what makes the grant in the first filing
+load-bearing for the first time. Cost: one `kms:Decrypt` per cold start on two
+functions, and a small shared module. **So this is NOT an inherent property to
+accept with a compensating control** — it is fixable, at a price the filing
+overstated. What is genuinely inherent, and worth writing down, is the weaker
+statement: while a secret is a plaintext env var, any principal that can call
+an operation returning a `FunctionConfiguration` can read it, and
+`UpdateFunctionCode` is such an operation and is one the release cannot do
+without.
+
+**Neither is taken here.** The change is unplannable — no lane holds AWS
+credentials, and §§ 1021-1024, 1084-1085 and 1111 are already six unapplied
+Terraform changes deep — and it needs an edit to `check_infra_iam.mjs`, which
+was not in this lane's tree. The first filing is marked **do not take**; the
+second keeps the fix spelled out.
+
+**Standing verification, re-run this round.** `terraform init -backend=false`
++ `terraform validate` in all five root stacks — `bootstrap`, `dns`,
+`github-oidc`, `envs/prod`, `envs/preview` — every one `Success!` on Terraform
+v1.13.0; `terraform fmt -check -recursive infra` exit 0. The module still
+refuses a standalone `validate`, and that is now settled as **unfixable rather
+than unfixed**: `configuration_aliases = [aws.us_east_1]` declares a provider
+the CALLER supplies, so a module carrying one cannot be a root module by
+construction, and both ways out (a `provider` block inside the module, or a
+throwaway wrapper root) are worse than the state. Its transitive coverage went
+from asserted to measured — [§ 1111](#1111) planted one undeclared-variable
+reference in `waf.tf` and read `envs/prod`; this round planted one in `waf.tf`,
+`alarms.tf` and `outputs.tf` in turn and read BOTH env roots, six runs, all six
+exit 1 naming the module file.
