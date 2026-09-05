@@ -518,8 +518,21 @@
 				return s.rep_index && s.rep_total
 					? m('runDetail.stepRecoveryNumbered', { index: s.rep_index, total: s.rep_total })
 					: m('runDetail.stepRecovery');
+			case 'walk':
+				// The rest step of a walk-run, which is what the beginner
+				// generator the onboarding wizard seeds produces. It carries the
+				// same reduced total a recovery does.
+				return s.rep_index && s.rep_total
+					? m('runDetail.stepWalkNumbered', { index: s.rep_index, total: s.rep_total })
+					: m('runDetail.stepWalk');
 			default:
-				return s.kind;
+				// `kind` comes off a schemaless jsonb bag written by a phone
+				// that ships independently of this build, so a kind from a newer
+				// recorder can arrive here. A generic translated word beats a
+				// bare lowercase English slug in a Japanese UI; the guard in
+				// `workout_review_guard.test.ts` keeps every kind the recorder
+				// can currently emit out of this branch.
+				return m('runDetail.stepOther');
 		}
 	}
 
