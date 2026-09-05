@@ -98,7 +98,7 @@ test('gym_workout_summaries: w3 is a weight PR on the whitespace-collapsed name'
 	tracker.judge(FIXTURE[0].sets);
 	tracker.judge(FIXTURE[1].sets);
 	assert.deepEqual(tracker.judge(FIXTURE[2].sets), [
-		{ exerciseName: 'bench  press', kinds: ['weight'] },
+		{ key: 'bench press', exerciseName: 'bench  press', kinds: ['weight'] },
 	]);
 });
 
@@ -106,7 +106,7 @@ test('gym_workout_summaries: w6 is a volume + e1rm PR at an unchanged weight', (
 	const tracker = new RunningPrTracker();
 	for (const w of FIXTURE.slice(0, 5)) tracker.judge(w.sets);
 	assert.deepEqual(tracker.judge(FIXTURE[5].sets), [
-		{ exerciseName: 'Overhead Press', kinds: ['volume', 'e1rm'] },
+		{ key: 'overhead press', exerciseName: 'Overhead Press', kinds: ['volume', 'e1rm'] },
 	]);
 });
 

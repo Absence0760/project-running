@@ -14,7 +14,13 @@
 		type GymSet,
 		type GymSetWithDate,
 	} from '$lib/core/data';
-	import { workoutPrs, normaliseExerciseName, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
+	import {
+		workoutPrs,
+		normaliseExerciseName,
+		distinctExerciseCount,
+		type GymSetLike,
+		type PrKind,
+	} from '$lib/gym/gym_prs';
 	import { previousExerciseSession, type ExerciseSession } from '$lib/gym/exercise_history';
 	import { progressionParamsWithStreak } from '$lib/gym/progression_prefill';
 	import { nextPrescription, type ProgressionSetLike } from '$lib/gym/gym_progression';
@@ -228,13 +234,16 @@
 		await load();
 	});
 
-	// Group this workout's sets into exercise blocks (set_index order).
+	// Group this workout's sets into exercise blocks (set_index order). Each
+	// block carries the canonical grouping key alongside its display spelling,
+	// so every lookup below is keyed on the same thing the PR engine and the
+	// server-stamped `exercise_key` are — never on the block's own spelling.
 	const blocks = $derived.by(() => {
-		const out: { name: string; sets: GymSet[] }[] = [];
+		const out: { name: string; key: string; sets: GymSet[] }[] = [];
 		for (const s of data?.sets ?? []) {
 			const last = out[out.length - 1];
 			if (last && last.name === s.exercise_name) last.sets.push(s);
-			else out.push({ name: s.exercise_name, sets: [s] });
+			else out.push({ name: s.exercise_name, key: normaliseExerciseName(s.exercise_name), sets: [s] });
 		}
 		return out;
 	});
@@ -254,7 +263,7 @@
 			weight_kg: s.weight_kg,
 		}));
 		for (const r of workoutPrs(prior, mine)) {
-			out.set(r.exerciseName.trim().toLowerCase(), r.kinds);
+			out.set(r.key, r.kinds);
 		}
 		return out;
 	});
@@ -266,19 +275,24 @@
 		const out = new Map<string, { prev: ExerciseSession; deltaKg: number | null }>();
 		if (!data || !isOwner) return out;
 		const startedAt = data.workout.started_at;
+		// Heaviest set per exercise across the WHOLE workout, not per block: a
+		// superset logs one lift in non-consecutive sets, so `blocks` holds two
+		// groups for it and a per-block top reports the delta off whichever
+		// half came first.
+		const topByKey = new Map<string, number>();
+		for (const st of data.sets) {
+			const key = normaliseExerciseName(st.exercise_name);
+			if (key === '' || st.weight_kg == null || st.weight_kg <= 0) continue;
+			const seen = topByKey.get(key);
+			if (seen == null || st.weight_kg > seen) topByKey.set(key, st.weight_kg);
+		}
 		for (const b of blocks) {
-			const key = b.name.trim().toLowerCase();
-			if (out.has(key)) continue;
+			if (out.has(b.key)) continue;
 			const prev = previousExerciseSession(history, b.name, startedAt);
 			if (!prev) continue;
-			let thisTop: number | null = null;
-			for (const st of b.sets) {
-				if (st.weight_kg != null && st.weight_kg > 0 && (thisTop == null || st.weight_kg > thisTop)) {
-					thisTop = st.weight_kg;
-				}
-			}
+			const thisTop = topByKey.get(b.key) ?? null;
 			const deltaKg = thisTop != null ? Math.round((thisTop - prev.topWeightKg) * 10) / 10 : null;
-			out.set(key, { prev, deltaKg });
+			out.set(b.key, { prev, deltaKg });
 		}
 		return out;
 	});
@@ -320,13 +334,15 @@
 	// Header summary stats — total exercises / sets / working volume.
 	const summary = $derived.by(() => {
 		const sets = data?.sets ?? [];
-		const names = new Set<string>();
 		let volume = 0;
 		for (const s of sets) {
-			names.add(s.exercise_name.trim().toLowerCase());
 			if (s.reps != null && s.weight_kg != null) volume += s.reps * s.weight_kg;
 		}
-		return { exercises: names.size, sets: sets.length, volume: Math.round(volume) };
+		return {
+			exercises: distinctExerciseCount(sets.map((s) => s.exercise_name)),
+			sets: sets.length,
+			volume: Math.round(volume),
+		};
 	});
 
 	const review = $derived(
@@ -534,11 +550,11 @@
 		     with the same name — a name key throws each_key_duplicate and wedges the
 		     page on its loading state. -->
 		{#each blocks as block (block.sets[0].id)}
-			{@const lt = prevByExercise.get(block.name.trim().toLowerCase())}
+			{@const lt = prevByExercise.get(block.key)}
 			<section class="card-elevated exercise-block">
 				<div class="block-head">
 					<h2>{block.name}</h2>
-					{#each prByExercise.get(block.name.trim().toLowerCase()) ?? [] as kind (kind)}
+					{#each prByExercise.get(block.key) ?? [] as kind (kind)}
 						<span class="pr-chip">
 							<span class="material-symbols" aria-hidden="true">trophy</span>
 							{prLabel(kind)}

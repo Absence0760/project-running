@@ -205,10 +205,38 @@ Map<String, ExercisePr> computeExercisePrs(List<GymSetLike> sets) {
   return out;
 }
 
+/// How many distinct exercises a flat set list covers, bucketed by the same
+/// canonical key the PR engine groups on. Blank names contribute nothing, as
+/// they do to the PR map.
+///
+/// The header stat, the dashboard lift card and the mobile list row each
+/// counted this with the runtime's own `trim().toLowerCase()`, which splits an
+/// internal whitespace run and every code point the frozen fold collapses —
+/// so one lift logged under two spellings was reported as two exercises while
+/// every keyed surface treated it as one (§ 1248).
+int distinctExerciseCount(Iterable<String> exerciseNames) {
+  final keys = <String>{};
+  for (final n in exerciseNames) {
+    final key = normaliseExerciseName(n);
+    if (key != '') keys.add(key);
+  }
+  return keys.length;
+}
+
 class WorkoutPrResult {
+  /// The grouping key — [normaliseExerciseName] of the exercise. Carried so a
+  /// caller keying a lookup on the result never re-derives it from
+  /// [exerciseName], which is a DISPLAY string: re-deriving it with the
+  /// runtime's own `toLowerCase()` misses every spelling the frozen fold
+  /// collapses and the exercise's chips silently stop rendering (§ 1248).
+  final String key;
   final String exerciseName;
   final List<PrKind> kinds;
-  const WorkoutPrResult({required this.exerciseName, required this.kinds});
+  const WorkoutPrResult({
+    required this.key,
+    required this.exerciseName,
+    required this.kinds,
+  });
 }
 
 /// Which PRs a workout newly set, given every set logged BEFORE it. A kind is
@@ -230,7 +258,7 @@ List<WorkoutPrResult> workoutPrs(
     if (_beats(cur.bestVolumeKg, before?.bestVolumeKg)) kinds.add(PrKind.volume);
     if (_beats(cur.bestEst1RmKg, before?.bestEst1RmKg)) kinds.add(PrKind.e1rm);
     if (kinds.isNotEmpty) {
-      results.add(WorkoutPrResult(exerciseName: cur.exerciseName, kinds: kinds));
+      results.add(WorkoutPrResult(key: key, exerciseName: cur.exerciseName, kinds: kinds));
     }
   });
   return results;
@@ -258,7 +286,7 @@ class RunningPrTracker {
       if (_beats(cur.bestVolumeKg, before?.bestVolumeKg)) kinds.add(PrKind.volume);
       if (_beats(cur.bestEst1RmKg, before?.bestEst1RmKg)) kinds.add(PrKind.e1rm);
       if (kinds.isNotEmpty) {
-        results.add(WorkoutPrResult(exerciseName: cur.exerciseName, kinds: kinds));
+        results.add(WorkoutPrResult(key: key, exerciseName: cur.exerciseName, kinds: kinds));
       }
     });
     for (final s in workoutSets) {

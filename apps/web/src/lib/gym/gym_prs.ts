@@ -191,7 +191,31 @@ export function computeExercisePrs(sets: GymSetLike[]): Map<string, ExercisePr> 
 	return out;
 }
 
+/// How many distinct exercises a flat set list covers, bucketed by the same
+/// canonical key the PR engine groups on. Blank names contribute nothing, as
+/// they do to the PR map.
+///
+/// The header stat, the dashboard lift card and the mobile list row each
+/// counted this with the runtime's own `trim().toLowerCase()`, which splits an
+/// internal whitespace run and every code point the frozen fold collapses —
+/// so one lift logged under two spellings was reported as two exercises while
+/// every keyed surface treated it as one (§ 1248).
+export function distinctExerciseCount(exerciseNames: Iterable<string>): number {
+	const keys = new Set<string>();
+	for (const n of exerciseNames) {
+		const key = normaliseExerciseName(n ?? '');
+		if (key !== '') keys.add(key);
+	}
+	return keys.size;
+}
+
 export interface WorkoutPrResult {
+	/// The grouping key — [normaliseExerciseName] of the exercise. Carried so a
+	/// caller keying a lookup on the result never re-derives it from
+	/// [exerciseName], which is a DISPLAY string: re-deriving it with the
+	/// runtime's own `toLowerCase()` misses every spelling the frozen fold
+	/// collapses and the exercise's chips silently stop rendering (§ 1248).
+	key: string;
 	/// Display spelling of the exercise that set the PR(s).
 	exerciseName: string;
 	/// Which metrics this workout's sets newly bettered vs. all prior sets.
@@ -219,7 +243,7 @@ export function workoutPrs(
 		if (beats(cur.heaviestWeightKg, before?.heaviestWeightKg)) kinds.push('weight');
 		if (beats(cur.bestVolumeKg, before?.bestVolumeKg)) kinds.push('volume');
 		if (beats(cur.bestEst1RmKg, before?.bestEst1RmKg)) kinds.push('e1rm');
-		if (kinds.length > 0) results.push({ exerciseName: cur.exerciseName, kinds });
+		if (kinds.length > 0) results.push({ key, exerciseName: cur.exerciseName, kinds });
 	}
 	return results;
 }
@@ -245,7 +269,7 @@ export class RunningPrTracker {
 			if (beats(cur.heaviestWeightKg, before?.heaviestWeightKg)) kinds.push('weight');
 			if (beats(cur.bestVolumeKg, before?.bestVolumeKg)) kinds.push('volume');
 			if (beats(cur.bestEst1RmKg, before?.bestEst1RmKg)) kinds.push('e1rm');
-			if (kinds.length > 0) results.push({ exerciseName: cur.exerciseName, kinds });
+			if (kinds.length > 0) results.push({ key, exerciseName: cur.exerciseName, kinds });
 		}
 		for (const s of workoutSets) accumulateSet(this.running, s);
 		return results;

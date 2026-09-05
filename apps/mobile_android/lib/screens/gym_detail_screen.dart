@@ -472,7 +472,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     }
     final out = <String, List<PrKind>>{};
     for (final r in workoutPrs(prior, _setsToLikes(w))) {
-      out[normaliseExerciseName(r.exerciseName)] = r.kinds;
+      out[r.key] = r.kinds;
     }
     return out;
   }
