@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/exercise_fold_table.dart';
 import '../lib/gym_prs.dart';
 
 GymSetLike _set(String name, num? reps, num? weightKg) =>
@@ -201,16 +202,14 @@ void main() {
   });
 
   test('the case fold matches what the SQL rail case-folds', () {
-    // The three rails' lowercase tables are not each other's: measured over
-    // every assignable code point, JS and Dart disagree at 466, and Postgres
-    // answers with its argument's collation until the SQL mirror pins
-    // `collate "und-x-icu"` (decisions § 830). These are the disagreements
-    // reachable in a Latin or Greek exercise name.
+    // No rail reaches for its own runtime's lowercase any more: all three fold
+    // through the frozen table (decisions § 1175). These are the cases that
+    // were reachable in a Latin or Greek exercise name while they did.
     //
     // U+0130's FULL lowercase is 'i' + U+0307 (what JS and ICU return); its
-    // SIMPLE one is a bare 'i' (what this rail and the libc provider return).
-    // The key takes the simple form, so a key written here no longer violates
-    // the CHECK on gym_routine_exercises.exercise_key.
+    // SIMPLE one is a bare 'i', which is the mapping the table carries, so a
+    // key written here satisfies the CHECK on
+    // gym_routine_exercises.exercise_key.
     expect(normaliseExerciseName('\u0130tme'), 'itme');
     expect(normaliseExerciseName('\u0130TME'), 'itme');
     // Final sigma: ICU and JS apply Unicode's contextual Final_Sigma rule and
@@ -227,5 +226,62 @@ void main() {
     // intact — an ASCII-only fold would have split these two.
     expect(normaliseExerciseName('\u00dcBERZ\u00dcGE'), '\u00fcberz\u00fcge');
     expect(normaliseExerciseName('\u00fcberz\u00fcge'), '\u00fcberz\u00fcge');
+  });
+
+  test('the frozen fold table is 1:1, ascending and unchained', () {
+    // Every rail applies the table in ONE pass — Postgres translate() and both
+    // clients' per-code-point lookup — so these are the claims that make the
+    // three answers the same answer rather than three passes that happen to
+    // agree today (decisions § 1175).
+    expect(kExerciseFoldKeys.length, kExerciseFoldValues.length);
+    final keys = kExerciseFoldKeys.toSet();
+    expect(keys.length, kExerciseFoldKeys.length);
+    for (var i = 1; i < kExerciseFoldKeys.length; i++) {
+      expect(kExerciseFoldKeys[i - 1] < kExerciseFoldKeys[i], isTrue);
+    }
+    for (var i = 0; i < kExerciseFoldKeys.length; i++) {
+      expect(kExerciseFoldValues[i], isNot(kExerciseFoldKeys[i]));
+      // A value the table also folds would make fold(fold(x)) differ from
+      // fold(x), and the CHECK re-derives the key from the name on every write.
+      expect(keys.contains(kExerciseFoldValues[i]), isFalse);
+    }
+    // The SQL rail takes a 26-pair fast path for an all-ASCII name, which is
+    // only answer-identical to the full table while its ASCII half is exactly
+    // this.
+    final ascii = <int, int>{
+      for (var i = 0; i < kExerciseFoldKeys.length; i++)
+        if (kExerciseFoldKeys[i] < 0x80) kExerciseFoldKeys[i]: kExerciseFoldValues[i],
+    };
+    expect(ascii, {for (var i = 0; i < 26; i++) 0x41 + i: 0x61 + i});
+  });
+
+  test('the fold is the table, not this runtime', () {
+    // The point of the table. Dart's own toLowerCase() is simple case mapping
+    // from an older Unicode revision and leaves every one of these alone, so
+    // before the table each was a name this rail could not persist without a
+    // 23514 from a CHECK web and the server both agreed on. One from each
+    // family the 465-code-point gap covered: Cherokee (Unicode 8.0), the Latin
+    // Extended-D additions, Garay and Medefaidrin in the supplementary planes.
+    for (final pair in <List<String>>[
+      ['\u13a0', '\uab70'],
+      ['\ua7cb', '\u0264'],
+      ['\u{10d50}', '\u{10d70}'],
+      ['\u{16e40}', '\u{16e60}'],
+    ]) {
+      expect(pair[0].toLowerCase(), pair[0],
+          reason: 'this runtime would have left ${pair[0]} alone');
+      expect(normaliseExerciseName(pair[0]), pair[1]);
+    }
+    expect(kExerciseFoldUnicodeVersion.isNotEmpty, isTrue);
+  });
+
+  test('the fold walks code points, not code units', () {
+    // 307 of the 1,488 entries are outside the BMP. A code-unit walk would fold
+    // each half of the surrogate pair separately, match neither, and leave the
+    // name uppercase — a second bucket for the same lift.
+    const deseret = '\u{10400}\u{10401}';
+    expect(normaliseExerciseName(deseret), '\u{10428}\u{10429}');
+    expect(normaliseExerciseName('Bench $deseret Press'),
+        'bench \u{10428}\u{10429} press');
   });
 }

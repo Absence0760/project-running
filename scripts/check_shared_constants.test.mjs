@@ -43,6 +43,10 @@ import {
 	parseGuidedRunLibrary,
 	parseGuidedSeconds,
 	parseCaseFoldPair,
+	parseFoldTableList,
+	parseSqlFoldTable,
+	parseSqlUnicodeLiteral,
+	checkExerciseFoldTable,
 	parseWhitespaceClass,
 	MOBILE_GUIDED_RUNS,
 	WEB_GUIDED_RUNS,
@@ -1243,4 +1247,80 @@ test('MUTATION: a view redefined without a strip line fails, naming the key only
 	// point of holding three homes rather than two.
 	assert.equal(errors.length, 2);
 	for (const error of errors) assert.match(error, /only there: {4}watch_workout/);
+});
+
+test('a fold table is read the same way from the TypeScript and the Dart rail', () => {
+	const ts = 'export const EXERCISE_FOLD_KEYS: readonly number[] = [\n\t0x0041, 0x00C0,\n\t0x10D50,\n];';
+	const dart = 'const List<int> kExerciseFoldKeys = <int>[\n  0x0041, 0x00C0,\n  0x10D50,\n];';
+	assert.deepEqual(parseFoldTableList(ts, 'EXERCISE_FOLD_KEYS'), [0x41, 0xc0, 0x10d50]);
+	assert.deepEqual(parseFoldTableList(dart, 'kExerciseFoldKeys'), [0x41, 0xc0, 0x10d50]);
+	assert.deepEqual(parseFoldTableList(ts, 'kNotThere'), []);
+});
+
+test('a wrapped U& literal reads as its code points, BMP and supplementary alike', () => {
+	// Postgres string continuation: adjacent quoted literals separated by a
+	// newline are one literal, which is how a 1,488-entry table stays reviewable.
+	const literal = "U&'\\0041\\00C0'\n    '\\+010D50'";
+	assert.deepEqual(parseSqlUnicodeLiteral(literal), [0x41, 0xc0, 0x10d50]);
+});
+
+test('both halves of the SQL fold are read, and a shape it does not know reads as empty', () => {
+	const sql = [
+		'select case',
+		"  when octet_length(p_name) = length(p_name)",
+		"    then translate(p_name, 'AB', 'ab')",
+		'    else translate(',
+		'      p_name,',
+		"      U&'\\0041\\0042'",
+		"      '\\+010D50',",
+		"      U&'\\0061\\0062'",
+		"      '\\+010D70'",
+		'    )',
+		'end;',
+	].join('\n');
+	const parsed = parseSqlFoldTable(sql);
+	assert.deepEqual(parsed.keys, [0x41, 0x42, 0x10d50]);
+	assert.deepEqual(parsed.values, [0x61, 0x62, 0x10d70]);
+	assert.equal(parsed.asciiFrom, 'AB');
+	assert.equal(parsed.asciiTo, 'ab');
+	assert.deepEqual(parseSqlFoldTable('select lower(p_name);'), {
+		keys: [],
+		values: [],
+		asciiFrom: '',
+		asciiTo: '',
+	});
+});
+
+test('a fold rail that reads nothing is reported as blindness, not as agreement', () => {
+	// Two empty tables compare equal, which is exactly the failure a 1,488-pair
+	// comparison cannot see on its own.
+	const real = defaultContext();
+	const { errors } = checkExerciseFoldTable({
+		read: (path) => (path.endsWith('.dart') ? 'library;' : real.read(path)),
+		sql: real.sql,
+	});
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /read 0 keys and 0 values/);
+});
+
+test('a fold table that drifts on one code point is named, with its total', () => {
+	const real = defaultContext();
+	const { errors, ok } = checkExerciseFoldTable({
+		read: (path) =>
+			path.endsWith('exercise_fold_table.dart')
+				? real.read(path).replace('0x00E0,', '0x00E1,')
+				: real.read(path),
+		sql: real.sql,
+	});
+	assert.equal(ok.length, 0);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /disagree at 1 code point\(s\)/);
+	assert.match(errors[0], /U\+00C0 U\+00E0 here, U\+00E1 there/);
+});
+
+test('the shipped fold table agrees across all three rails', () => {
+	const { errors, ok } = checkExerciseFoldTable(defaultContext());
+	assert.deepEqual(errors, []);
+	assert.equal(ok.length, 1);
+	assert.match(ok[0], /folds agree across 3 rails/);
 });
