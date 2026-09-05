@@ -1427,6 +1427,7 @@ export type Database = {
           id: string
           notes: string | null
           qualifying_run_count: number
+          snapshot_day: string | null
           source: string
           training_stress_bal: number | null
           user_id: string
@@ -1441,6 +1442,7 @@ export type Database = {
           id?: string
           notes?: string | null
           qualifying_run_count?: number
+          snapshot_day?: string | null
           source?: string
           training_stress_bal?: number | null
           user_id: string
@@ -1455,6 +1457,7 @@ export type Database = {
           id?: string
           notes?: string | null
           qualifying_run_count?: number
+          snapshot_day?: string | null
           source?: string
           training_stress_bal?: number | null
           user_id?: string
@@ -5500,6 +5503,7 @@ export type Database = {
           id: string
           notes: string | null
           qualifying_run_count: number
+          snapshot_day: string | null
           source: string
           training_stress_bal: number | null
           user_id: string
