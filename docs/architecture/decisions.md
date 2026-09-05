@@ -22015,6 +22015,225 @@ The section also said "Model it on `20260621_001_runs_track_url_path_check.sql` 
 
 The generalisation: prose about a guard can be stale and merely unhelpful, but an **example** is executable advice. When a guard's rule changes, the examples that demonstrate the old rule are the first thing to re-read, and they are worth grepping for by shape rather than by the guard's name — this block never mentioned `check_migration_online_safety.mjs` at all, so a search for references to the guard would not have found it. Both messages the guard prints now also say which fix is wanted: split the file if it is not merged yet, and reserve `GRANDFATHERED_VIOLATIONS` for migrations already applied to prod, which cannot be edited.
 
+## 1210. The three artifact-reading web guards now run in the job that builds, because the job that owns them never does
+
+**Decided 2026-09-05.** `spa_shell_head_signals.test.ts` ([§ 1115](#1115)),
+`document_title.test.ts` ([§ 1167](#1167)) and `learn_structured_data.test.ts`
+([§ 1168](#1168)) each read `apps/web/build` only when a build is present, and
+report `# no apps/web/build` otherwise. `test:unit` runs in `parity-types`,
+which never builds; `build-web` builds and ran none of them. So the artifact
+half of all three was executed by nothing in CI, and the shape of the omission
+is the dangerous one: a self-skip is a PASS, on a green row, in a job the
+required gate waits for.
+
+Measured on this branch against a real production build rather than argued:
+with `apps/web/build` present all **11** cases pass; with the directory parked,
+`# no apps/web/build` is printed **7** times and the run still exits 0 with
+`tests 11 / pass 4`. Seven assertions, four of them about JSON-LD that has no
+source-level twin at all, were being made by nobody.
+
+One step in `build-web` after the bundle budget runs all three from `apps/web`
+through `npx tsx --test`. `tsx` is declared in `apps/web`'s devDependencies, so
+this satisfies [§ 764](#764)'s no-unpinned-`npx` rule rather than restoring the
+run-time download that rule exists to refuse — `check_workflow_binaries.mjs`
+already maps the binary. The step prints its own `::error::`, as every check
+step in that bundled job must. `build-web` was already in the `CI gate`
+aggregator's `needs:`, so the gate's list and job count are unchanged: 33 jobs,
+33 `needs:` entries.
+
+Placed after the budget rather than immediately after the build so the
+diagnosis can say the compile gate and the budget both passed, which is what
+narrows the reader's search to the emitted HTML.
+
+## 1211. Terraform outside `infra/` is now a red check, rather than a stack nothing looks at
+
+**Decided 2026-09-05.** `check_infra_coverage.mjs`'s stack-coverage half walks
+`infra/`, so its claim — every Terraform directory validated, fmt-scoped and
+dependency-tracked — was scoped to the one tree that is already covered. A `.tf`
+file anywhere else was not reported as uncovered; it was not seen. Nothing else
+would have seen it either: `ci.yml`'s `changes` job gates the `terraform` call
+on an `infra/`-shaped path filter inherited from the old workflow trigger, and
+the fmt scopes, the stack matrix and the dependabot entries are all paths under
+`infra/`. Such a stack would be format-checked, validated, Trivy-scanned and
+triggered by nothing at all.
+
+The fix is the guard, not the filter. Widening the path filter to a tree that
+does not exist buys nothing and makes the trigger a lie in the other direction;
+`scanStrayTerraform` sweeps from the repo ROOT instead and fails on any
+Terraform directory outside the top-level `infra/`, naming the tree and what
+does not read it. Today there is none — measured, `find . -name '*.tf'` outside
+`infra/` and `node_modules` is empty — so the sweep's verdict is an absence, and
+an absence from a walk that never started is worth nothing. It therefore also
+reports whether it saw `infra/` at the top level, and an unrooted sweep fails
+even with nothing to report. Both directions are pinned by the guard's own
+suite, and the sweep was mutation-tested end to end: a `.tf` planted under
+`docs/ops/` fails the guard by name and exit 1.
+
+The walk skips `node_modules`, `build`, `dist`, `target`, `vendor` and
+`coverage` — dependency trees and build output, where a `.tf` is not a stack
+anyone deploys, and where `node_modules` alone would dominate the cost. Measured
+whole-guard runtime with the sweep added: 0.13 s. A nested directory *named*
+`infra` is still swept; only the top-level one is the covered tree.
+
+One residual, stated rather than closed: `infra-guards` is gated on the
+`changes` job's `code` output, which is false for a docs-only diff, so a `.tf`
+committed under `docs/` would land before the sweep sees it and then fail every
+subsequent PR. Loud, and late, which is the right side of that trade for a case
+nothing else in the repo protects against either.
+
+## 1212. The committed-env scan is derived from the index, after its hand-written list fell four files behind the repo
+
+**Decided 2026-09-05.** `env-isolation`'s third step is named for the
+`.env.example` scan and read a nine-entry array written by hand. The repo has
+**twelve** committed `.env*` files. The four it did not name are
+`apps/backend/supabase/functions/.env`, `apps/mobile_android/.env.example`,
+`apps/mobile_ios/.env.example` and `apps/watch_wear/android/.env.example` —
+three of the six `.env.example` templates the step is named for, plus the edge
+runtime's own committed env.
+
+gitleaks still scans those four (they are not in `.gitleaks.toml`'s path
+allowlist, which covers exactly the seven dev defaults the list did name), so
+this is a coverage gap rather than a live leak, and measured as such: none of
+the four matches any of the four patterns today. But two of the step's four
+patterns are not secret shapes at all — a live-looking `<20 letters>.supabase.co`
+project URL and `ALLOW_PROD_URL_IN_DEV=true` — and gitleaks has no opinion about
+either. Those two were read by nothing in three of the six templates whose whole
+purpose is to carry no live value.
+
+The list is now derived from `git ls-files`, so a new app's env file is scanned
+the day it is committed and a rename cannot silently drop one. Two guards come
+with it, because a derivation that stops matching fails the same way the list
+did: an empty derivation is an error rather than a clean pass (the `grep` sits
+in a process substitution, whose exit status `set -euo pipefail` does not read),
+and the one entry that is still named by hand —
+`apps/watch_ios/WatchApp/SupabaseService.swift`, the non-env source that
+hard-codes a Supabase URL and that [§ 866](#866) put in scope — fails when it is
+absent instead of being skipped by the `[ -f ] || continue` the loop used to
+carry.
+
+## 1213. A diagnosis that quotes an identifier in backticks hands it to bash to run, and two of them did
+
+**Decided 2026-09-05.** `check_ci_diagnostics.mjs` had four rules about whether
+a CI failure is SEEN and ATTRIBUTED to the right step. None of them asks whether
+the message survives the shell. A backtick inside a double-quoted word is
+command substitution, and this repo's prose quotes identifiers in backticks
+everywhere, so the two habits met inside an `::error::` string.
+
+Measured by running the committed line: `parity-matrix`'s malformed-table
+annotation named the legal symbol set and the `Partial` keyword in backticks, so
+bash executed `✓ / ✗ / Partial / N/A`, printed two `command not found` lines to
+stderr and spliced the empty result in. The reader was shown
+
+    a symbol outside , a  with no Notes
+
+with both of the things the sentence exists to name cut out of it. Rules 1-4 all
+passed on it: the annotation fired, from the right step, in a job the gate waits
+for. That is why it survived — those rules are about attribution, and this is
+about delivery.
+
+Rule 5 scans every non-comment line of every `run:` block for an unescaped
+backtick inside double quotes, tracking quote state per line so
+`"$(go env GOPATH)/bin/actionlint"` and `echo '```json'` are both left alone —
+a backtick inside single quotes is literal, which is how `audit.yml` writes a
+Markdown fence. Measured over the committed workflows: 6 backtick-bearing echo
+lines, 4 of them correctly single-quoted, 2 defects. Both are fixed by escaping;
+the second was in the very message this round added to the env scan, written the
+same way for the same reason, which is the argument for a rule rather than two
+edits. The rule also fails when it reads no shell line at all.
+
+## 1214. Every `setup-node` step names an exact Node, because the release build was on whatever 24.x shipped that week
+
+**Decided 2026-09-05.** Twenty-two `actions/setup-node` steps named
+`node-version: 24`, which resolves to the newest 24.x at run time. The standing
+reason for leaving it was that "a Node minor break is loud and local to the job
+that runs it, not a silent change to what gets built or shipped". The second
+half is not true: `release-web.yml` builds the shipped web bundle under the same
+floating input, so the artifact that reaches production is compiled by whichever
+runtime the runner resolved that morning.
+
+The first half is the argument [§ 595](#595) already rejected for Flutter and
+`check_toolchain_pins.mjs`'s own header rejects for Deno — "a Deno release
+lands, `deno check` gains a diagnostic, and CI fails on code nobody touched with
+the blame landing on whichever PR ran next". Node is the runtime under roughly
+thirty stdlib-only `node --test` guard suites, `tsc`, and every `vite build` in
+the repo. There is no principled line that pins the Flutter SDK, the Rust
+channel, `defmt-print`, Terraform and Deno and leaves this one floating.
+
+Pinned to **24.20.0**, the current Krypton LTS (2026-08-26), verified against
+`nodejs.org/dist/index.json` rather than recalled. No other file changes:
+`check_toolchain_pins.mjs` compares `.tool-versions`' `nodejs` line on the MAJOR
+alone by design ("asdf needs a version it can resolve"), so `nodejs 24` still
+matches, and its cross-step rule — every `setup-node` names a version and all of
+them agree — is satisfied by the pin exactly as it was by the line. The guard
+reports `22 setup-node step(s) on Node 24.20.0`.
+
+The cost is a manual bump, like the six toolchains already on that footing, and
+possibly a tool-cache miss on runners whose preinstalled 24.x differs. The
+alternative is that nothing in the repo can say which runtime built the release.
+
+## 1215. Each `check_ci_diagnostics` rule now names its own subject, and the two that read a step's shell read composite actions too
+
+**Decided 2026-09-05.** Every rule in `check_ci_diagnostics.mjs` read
+`.github/workflows` and nothing else, so the two composite actions under
+`.github/actions` were outside all of them at once. `check_workflow_binaries.mjs`
+and `check_toolchain_pins.mjs` both read that directory; this one silently did
+not, and nothing said so — the same shape as [§ 1213](#1213), where a defect
+survived because no rule had that subject.
+
+The fix is a per-rule subject rather than a wider file list, because the rules
+are not about the same thing. Rules 1 and 5 read a step's `if:` and its shell,
+which an action step has, so they now read both directories. Rules 2, 3 and 4
+are about JOBS — bundling is a property of a job NAME that cannot say which
+check broke, a `needs:` entry names a job, and the gate is one job in one
+workflow — and a composite action has no jobs, so widening them would have been
+a claim about nothing. `RULE_SUBJECTS` records which is which with the reason,
+and the guard PRINTS the split rather than leaving a reader to infer it, which
+is the property whose absence let this sit.
+
+An empty action list is a **failure**, not a quiet skip: "rules 1 and 5 covered
+workflows only" is precisely the state that went unnoticed, so it must not be
+reachable silently again. `parseSteps` and the new `parseActionSteps` share one
+`collectStepList`, because `runs.steps` in an action is the same list
+`jobs.<id>.steps` is at a different indent under a different key, and two
+readers of one YAML shape would drift. The refactor was proved neutral rather
+than assumed: **437 steps across the 21 committed workflows parse byte-identical
+to the previous implementation.**
+
+**The widened subject found no real defect in `.github/actions`** — measured, not
+asserted: rule 1 finds no `failure()`-conditioned diagnosis there at all (the
+repo-wide count stays 9), and rule 5 reads **126 further shell lines**, 2,046 to
+2,172, all clean. So this closes a scope hole rather than a live bug, which is
+why the mutation test is the evidence: a backtick-in-double-quotes echo and an
+unscoped `if: failure()` diagnosis planted in
+`.github/actions/install-playwright/action.yml` each fail the guard at exit 1,
+at the right line, naming `composite action \`install-playwright\`` rather than
+a job.
+
+## 1216. `.tool-versions`' `nodejs` line is compared exactly, because the reason it was not has stopped being true
+
+**Decided 2026-09-05.** `toolVersionAgrees` compared `nodejs` on the MAJOR alone
+while every other plugin was exact, and its stated reason was "asdf needs a
+version it can resolve to a build, CI states a major, and demanding they match
+to the patch would make every runner-image bump a repo edit". All three clauses
+are now false. `24` is the spelling asdf cannot resolve and `24.20.0` is not;
+[§ 1214](#1214) made every `setup-node` step name the patch; and there is no
+runner-image bump left to absorb, because CI no longer follows the image — a
+Node change is a deliberate repo edit either way, and this makes `.tool-versions`
+part of that same edit rather than a second place to remember.
+
+Left on the major, the file could have said `nodejs 24.0.0` while CI ran
+`24.20.0` and this guard would have called them equal — twenty minor releases
+apart, and a contributor developing on a toolchain CI never runs. That is a pin
+nothing compares, which is the class this whole lane has been closing. Measured
+both ways: under the major-only comparison `24.0.0` vs `24.20.0` PASSES, under
+the exact one it fails, and the end-to-end mutation fails the guard at exit 1
+with a line naming both versions.
+
+`.tool-versions` now reads `nodejs 24.20.0`, and its header's "(major only; asdf
+wants a resolvable version, CI states a major)" — stale from the moment § 1214
+landed — says what is now true. Six of its seven lines are checked against a pin
+this repo enforces; the seventh, `python`, still has none.
+
 ## 1217. Half the counts this repo states about itself were wrong, and half the filings asking to fix them were already stale
 
 Round 39's docs-registry lane was filed four separate one-line count

@@ -837,14 +837,30 @@ test('a missing .tool-versions fails rather than reading as nothing to check', (
 	assert.match(errors[0], /\.tool-versions is missing/);
 });
 
-// nodejs is the one plugin compared on the major: asdf wants a resolvable
-// build, CI states a major, and demanding a patch match would make every
-// runner-image bump a repo edit.
-test('nodejs agrees on the major; every other plugin is exact', () => {
-	assert.equal(toolVersionAgrees('nodejs', '24.9.0', '24'), true);
-	assert.equal(toolVersionAgrees('nodejs', '22.11.0', '24'), false);
+// Every plugin is compared exactly, nodejs included since § 1216 — the
+// carve-out's own reason ("asdf wants a resolvable build, CI states a major")
+// stopped being true when § 1214 made every setup-node step name the patch.
+test('every plugin agrees only on the exact version, nodejs included', () => {
+	assert.equal(toolVersionAgrees('nodejs', '24.20.0', '24.20.0'), true);
+	// The hole the major-only comparison left: twenty minor releases apart, and
+	// called equal.
+	assert.equal(toolVersionAgrees('nodejs', '24.0.0', '24.20.0'), false);
+	assert.equal(toolVersionAgrees('nodejs', '24', '24.20.0'), false);
+	assert.equal(toolVersionAgrees('nodejs', '22.11.0', '24.20.0'), false);
 	assert.equal(toolVersionAgrees('rust', '1.98', '1.98.0'), false);
 	assert.equal(toolVersionAgrees('rust', '1.98.0', '1.98.0'), true);
+});
+
+test('the committed .tool-versions names the exact Node the workflows install', () => {
+	const declared = parseToolVersions(realToolVersions()).get('nodejs');
+	assert.ok(declared, '.tool-versions names no `nodejs` line');
+	assert.match(declared.version, /^\d+\.\d+\.\d+$/, `nodejs ${declared.version} is not exact`);
+	const files = readdirSync(WORKFLOW_DIR)
+		.filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
+		.map((name) => ({ name, text: readFileSync(join(WORKFLOW_DIR, name), 'utf-8') }));
+	const versions = checkNode(files).versions;
+	assert.equal(versions.size, 1, `the setup-node steps name ${versions.size} versions`);
+	assert.equal(declared.version, [...versions.keys()][0]);
 });
 
 test('parseGoDirective refuses to pin when the modules disagree', () => {

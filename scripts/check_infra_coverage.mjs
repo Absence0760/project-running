@@ -33,6 +33,21 @@
 //      every Terraform directory must fall inside one, exempt or not.
 //      decisions § 1111.
 //
+//      That whole half is scoped to `infra/`, which is also the answer it
+//      assumes: the walk starts there, so a `.tf` file in some other tree is
+//      not reported as uncovered, it is not seen. Nothing else would see it
+//      either — ci.yml's `changes` job gates the `terraform` call on an
+//      `infra/`-shaped path filter inherited from the old workflow trigger, so
+//      such a stack is format-checked, validated, Trivy-scanned and TRIGGERED
+//      by nothing, and reads as covered because nothing looks. A second sweep
+//      therefore runs from the repo ROOT and fails on any Terraform directory
+//      outside `infra/`, which turns "a stack somewhere else" into a red check
+//      and leaves the path filter honest at `infra/` rather than widened to a
+//      tree that does not exist. Today there is none (measured), so the sweep's
+//      verdict is an absence — and an absence from a walk that never started is
+//      worth nothing, which is why the sweep also reports whether it saw
+//      `infra/` at the top level.
+//
 //   2. Distribution behaviour coverage. The CloudFront distribution carries
 //      eighteen cache behaviours and every one of them re-states, by hand, the
 //      three properties that make it safe: the security response-headers policy
@@ -115,7 +130,7 @@ import {
   stripComments,
 } from './hcl_lex.mjs';
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 export const INFRA_DIR = process.env.INFRA_COVERAGE_DIR ?? join(REPO_ROOT, 'infra');
 export const TERRAFORM_WORKFLOW =
@@ -205,6 +220,66 @@ export function terraformDirs(root, list = (d) => readdirSync(d)) {
   };
   walk(root, 'infra');
   return out.sort();
+}
+
+/// Trees the repo-root sweep below does not descend into. Everything here is
+/// either a dependency tree or build output — a `.tf` inside one is not a stack
+/// anyone deploys, and `node_modules` alone is large enough to dominate the
+/// walk's cost.
+export const STRAY_SCAN_SKIP = new Set([
+  'node_modules',
+  'build',
+  'dist',
+  'target',
+  'vendor',
+  'coverage',
+]);
+
+/// Every directory ANYWHERE in the repo holding `.tf` files, except under the
+/// top-level `infra/`.
+///
+/// `terraformDirs` walks `infra/` and therefore can only ever report on
+/// directories already inside the one tree CI reads: `ci.yml`'s `changes` job
+/// gates the `terraform` call on an `infra/`-shaped path filter, and the fmt
+/// scopes, the stack matrix and the dependabot entries are all paths under it.
+/// A `.tf` file outside that tree is format-checked, validated, Trivy-scanned
+/// and triggered by nothing at all, and reads as covered precisely because
+/// nothing looks — the same shape as the per-stack `fmt` scope § 1111 closed,
+/// one level up.
+///
+/// `rooted` is the vacuity guard: this sweep's whole verdict is an absence, and
+/// an absence proves nothing if the walk never started. The top-level listing
+/// naming `infra` is what says it ran against the repo root rather than against
+/// an unreadable path.
+/**
+ * @param {string} root absolute path to the repo root
+ * @param {(dir: string) => string[]} [list] injectable for the tests
+ * @returns {{ dirs: string[], rooted: boolean }}
+ */
+export function scanStrayTerraform(root, list = (d) => readdirSync(d)) {
+  /** @type {string[]} */
+  const out = [];
+  let rooted = false;
+  /** @param {string} abs @param {string} rel */
+  const walk = (abs, rel) => {
+    /** @type {string[]} */
+    let entries;
+    try {
+      entries = list(abs);
+    } catch {
+      return;
+    }
+    if (rel === '') rooted = entries.includes('infra');
+    if (entries.some((e) => e.endsWith('.tf'))) out.push(rel === '' ? '.' : rel);
+    for (const entry of entries) {
+      if (entry.startsWith('.')) continue;
+      if (rel === '' && entry === 'infra') continue;
+      if (STRAY_SCAN_SKIP.has(entry)) continue;
+      walk(join(abs, entry), rel === '' ? entry : `${rel}/${entry}`);
+    }
+  };
+  walk(root, '');
+  return { dirs: out.sort(), rooted };
 }
 
 /// The `stack:` matrix of the terraform workflow, in file order.
@@ -644,6 +719,7 @@ export function parseEnvRoot(env, mainSrc, variablesSrc) {
  * @param {WafScopeDown[]} wafScopeDowns
  * @param {ModuleVar[]} moduleVars
  * @param {EnvRoot[]} envRoots
+ * @param {{ dirs: string[], rooted: boolean }} strays
  * @returns {{ errors: string[], ok: string[] }}
  */
 export function compareSources(
@@ -657,6 +733,7 @@ export function compareSources(
   wafScopeDowns,
   moduleVars,
   envRoots,
+  strays,
 ) {
   /** @type {string[]} */
   const errors = [];
@@ -666,6 +743,25 @@ export function compareSources(
   if (dirs.length === 0) {
     errors.push(
       'no Terraform directory was found under infra/ — the stack-coverage half checked nothing.',
+    );
+  }
+  if (!strays.rooted) {
+    errors.push(
+      'the repo-root sweep for Terraform outside infra/ did not find infra/ at the top level, so ' +
+        'it was not reading the repo root. Its verdict is an absence and an absence proves nothing ' +
+        'from a walk that never started.',
+    );
+  } else if (strays.dirs.length === 0) {
+    ok.push('no Terraform outside infra/, which is the only tree any CI job reads');
+  }
+  for (const dir of strays.dirs) {
+    errors.push(
+      `${dir} holds Terraform outside infra/, where no CI job reads it: the \`terraform\` call in ` +
+        'ci.yml is gated on an `infra/`-shaped path filter, and the fmt scopes, the stack matrix ' +
+        'and the dependabot entries are all paths under that tree — so this directory is ' +
+        'format-checked, validated, Trivy-scanned and triggered by nothing. Move it under infra/, ' +
+        'or widen the `infra` filter in ci.yml\'s `changes` job and cover it the way every stack ' +
+        'above is covered.',
     );
   }
   if (matrix.length === 0) {
@@ -1126,16 +1222,17 @@ export function main() {
         readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
       ),
     ),
+    scanStrayTerraform(REPO_ROOT),
   );
 
   for (const line of ok) console.log(`[OK] ${line}`);
   for (const line of errors) console.error(`[FAIL] ${line}`);
 
   if (errors.length > 0) {
-    console.error(`\n${errors.length} coverage gap(s) under infra/.`);
+    console.error(`\n${errors.length} infra coverage gap(s).`);
     return 1;
   }
-  console.log(`\n${ok.length} infra/ coverage claim(s) hold.`);
+  console.log(`\n${ok.length} infra coverage claim(s) hold.`);
   return 0;
 }
 
