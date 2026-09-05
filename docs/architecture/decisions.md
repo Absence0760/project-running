@@ -23875,3 +23875,26 @@ difference. Semantics checked against SQL ground truth on the same data: 12
 events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
+
+## 1238. The mobile test doc still prescribed the banner drain that § 1195 deleted, and the one file note that cited it was pointing at a different timer
+
+`apps/mobile_android/CLAUDE.md` § Tests closed with "Waiting for a screen's
+completion path often also arms `showTopBanner`'s 3 s dismissal timer, which
+then trips `A Timer is still pending`: pump past it (decisions § 1131)." That
+stopped being true when § 1195 moved the pill's clock into its own `State` —
+armed in `initState`, cancelled in `dispose` — and deleted 60 of the 70 drains
+it had produced. A doc that keeps prescribing a deleted remedy re-manufactures
+the population the sweep just cleared, one new screen test at a time, which is
+how 70 of them accumulated in the first place. The sentence now states the rule
+from `docs/testing/testing.md` § Patterns instead: a screen test reaching a
+completion path needs no drain, and a pending timer under a widget you control
+is that widget's bug, because the assertion is raised inside the test body
+before any `tearDown` can run.
+
+The file-notes list carried the same claim one level down and it was wrong in a
+second way: `route_conditions_test.dart` was annotated "`showTopBanner` timer
+drained per the mobile-test gotcha", but that file's `_drain` pumps nine seconds
+and its own docstring names the **armed undo window** as the owner of the timer
+— the banner was never what it was draining. Left as written, the note would
+have invited the next sweep to delete a pump the undo window still needs. It now
+names the undo window.
