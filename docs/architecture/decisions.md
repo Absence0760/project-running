@@ -22099,3 +22099,78 @@ could.
 The `hr_coverage` half of [§ 1134](#1134) needed nothing: it had already landed,
 guard and all, and its `TestCSVColumnsMatchTheEdgeFunctionRail` is what forced
 both CSV rails to move together here.
+
+## 1172. The retention sweep comes off the clock, because its row delete is now the only thing that can orphan a byte
+
+[§ 1144](#1144) put `enqueue-export-blob-reap` at 04:13, ten minutes ahead of
+`cleanup-stale-export-blobs` at 04:23, so in the normal case the Storage-API
+erasure lands before the row delete and the sweep finds nothing left to orphan.
+The lead is best-effort, and a lead is the wrong instrument. A night the worker
+is down — or a job that fails its three attempts — and the sweep still deletes
+the `storage.objects` rows at 04:23, after which the bytes are unreachable by
+any Storage-API reaper for ever, because list reads the rows that are gone
+([§ 1049](#1049)). A clock cannot be conditioned on the erasure having
+happened, so the fix is not a longer lead.
+
+**What the sweep was buying, measured rather than assumed.** Erasure: none —
+§ 1049 measured the bytes surviving a row delete with a matching `sha256`.
+Reachability: **none either**, and this is the half § 1049 left implicit and the
+followup's own objection to unscheduling ("a long worker outage leaves week-old
+archives listable") rested on. The `exports` bucket carries no
+`storage.objects` policies at all — `20270602_001` made that choice
+deliberately — and `20260816_001` had already carved `exports/` out of the
+owner-folder SELECT on `runs`. An export is reachable through the ten-minute
+signed URL the server mints and through nothing else, so deleting the row
+removes a reachability nobody had. Expiry of the `data_export_jobs` rows that
+point at an archive: real, and **already unconditional without the sweep** —
+§ 1144 moved `expire_stale_export_jobs()` into `enqueue_export_blob_reap()`,
+which is the pg_cron half and runs whether or not a worker ever claims the job.
+
+So the sweep is redundant when the reaper works and harmful when it does not,
+and `20270709000001` unschedules it. The failure mode becomes a bounded
+retention overrun — rows and bytes both survive, both still erasable by the
+next successful night, no subject able to reach either — instead of permanent
+residue. The function is kept rather than dropped: it has a `service_role`
+grant for an operator who wants the unconditional removal of reachability as a
+break-glass, and `export_surface_contract_test.sql` drives it directly rather
+than through the schedule, so **its body is untouched** and every assertion
+that reads `prosrc` still holds. Only the schedule and the comment moved.
+
+**The legacy prefix had to move with it**, which is the open question § 1144
+left for whoever took this. `runs/{uid}/exports/*` was reachable by the sweep
+and is not reachable by the reaper's default payload, whose walk is
+prefix-scoped, and a whole-`runs` walk is O(users) list calls. Answered by
+deriving the prefixes from the rows that exist: the enqueue emits one
+`{"bucket":"runs","prefix":"<uid>/exports/"}` job per user who still HAS a
+legacy archive, and none at all once they are erased. Nothing has written that
+prefix since `20270602_001`, so the set is finite and shrinking, and the query
+is the same `name like '%/exports/%'` predicate the sweep already ran nightly.
+The singleton guard becomes per-PAYLOAD rather than per-kind: two queued reaps
+of the same worklist are still not two sweeps, but the default job and a
+prefix-scoped one are different worklists and a kind-wide guard would let
+whichever was inserted first suppress the rest every night.
+
+**Two guards, both cross-tier, both shown to fail before they were committed.**
+The payload between a pg_cron `insert` and a Go handler is a wire format with no
+type on either side, so `TestExportBlobReap_PayloadShapesMatchTheEnqueue` reads
+the `jsonb_build_object` keys out of the migration and drives both shapes end to
+end — a key renamed on one side is a job that runs with an EMPTY payload, which
+reaps the `exports` bucket instead and reports success.
+`TestExportBlobReap_IsTheOnlyScheduledExportRetentionPath` replays every
+migration's `cron.schedule` / `cron.unschedule` and fails if the reap enqueue is
+not scheduled or if the sweep is scheduled again, because the whole safety
+property here is that nothing else deletes one of these rows.
+
+The migration was verified against a throwaway `supabase/postgres` container
+with the surrounding objects stubbed — it applies, is idempotent on re-apply,
+leaves no `cleanup-stale-export-blobs` entry in `cron.job`, emits one job per
+legacy user deduplicated across that user's several archives, emits none for a
+plain track object in the `runs` bucket, re-emits after a drained night, and
+falls back to the single default job once the legacy leg is empty. It is not
+run against the shared local stack, which another lane holds.
+
+What this does NOT do: alert. A worker down for a week leaves archives past
+retention with nothing saying so louder than a queued `jobs` row and a growing
+bucket. Adding the alarm needs the sweep's post-condition check to move
+somewhere that can raise without also deleting, and the pgtap suite that drives
+that function is outside this lane's tree; it is filed.
