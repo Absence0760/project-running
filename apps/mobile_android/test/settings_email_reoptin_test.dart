@@ -8,7 +8,6 @@ import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/settings_preferences_screen.dart';
 import '../lib/settings_sync.dart';
-import '../lib/widgets/top_banner.dart';
 
 class _FakeApi extends ApiClient {
   int clearCalls = 0;
@@ -107,8 +106,6 @@ void main() {
     await initializeDateFormatting();
   });
 
-  tearDown(hideTopBanner);
-
   testWidgets('opting into the weekly digest lifts the unsubscribe block',
       (tester) async {
     final s = await _setUp();
@@ -167,10 +164,5 @@ void main() {
       find.textContaining('Emails may still be blocked'),
       findsOneWidget,
     );
-
-    // The banner owns an auto-dismiss Timer; drop it before the tree is torn
-    // down or the binding asserts on the pending timer.
-    hideTopBanner();
-    await tester.pump();
   });
 }

@@ -132,13 +132,6 @@ Future<void> _pumpPrefs(
   await tester.pumpAndSettle();
 }
 
-/// Lets a shown top banner's own timer expire — it outlives the action that
-/// showed it and would otherwise fail the test as a pending timer.
-Future<void> _drainBanner(WidgetTester tester) async {
-  await tester.pump(const Duration(seconds: 5));
-  await tester.pump();
-}
-
 void main() {
   setUp(initializeDateFormatting);
   setUpAll(_ensureSupabase);
@@ -246,7 +239,6 @@ void main() {
 
       await tester.tap(find.text('Richmond, London'));
       await tester.pump();
-      await _drainBanner(tester);
 
       expect(api.saved.length, 1);
       expect(api.saved.single.$1, closeTo(-0.30, 1e-9));
@@ -314,7 +306,6 @@ void main() {
       await tester.tap(find.descendant(
           of: find.byType(AlertDialog), matching: find.text('Forget my area')));
       await tester.pumpAndSettle();
-      await _drainBanner(tester);
 
       expect(api.clearCalls, 1);
       expect(find.text('No area set'), findsOneWidget);
@@ -335,7 +326,6 @@ void main() {
       await tester.tap(find.descendant(
           of: find.byType(AlertDialog), matching: find.text('Forget my area')));
       await tester.pumpAndSettle();
-      await _drainBanner(tester);
 
       expect(api.clearCalls, 1);
       expect(find.text('Current area: Richmond, VA'), findsOneWidget);

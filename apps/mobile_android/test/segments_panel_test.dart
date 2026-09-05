@@ -236,10 +236,6 @@ void main() {
       await tester.tap(find.text('Create'));
       await tester.pump();
       expect(find.text('Enter a segment name'), findsOneWidget);
-
-      // Drain the top-banner auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 4));
-      await tester.pump();
     });
   });
 

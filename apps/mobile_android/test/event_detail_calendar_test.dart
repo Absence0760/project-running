@@ -9,7 +9,6 @@ import '../lib/calendar_intent.dart';
 import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/event_detail_screen.dart';
 import '../lib/social_service.dart';
-import '../lib/widgets/top_banner.dart';
 import 'realtime_drain.dart';
 
 ClubView _club() => ClubView(
@@ -286,9 +285,6 @@ void main() {
       await tester.pump();
 
       expect(find.text("Couldn't open your calendar app."), findsOneWidget);
-      // showTopBanner leaves an auto-dismiss timer behind.
-      await tester.pump(kTopBannerMaxDuration);
-      await tester.pumpAndSettle();
     });
   });
 }

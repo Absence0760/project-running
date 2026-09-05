@@ -23876,7 +23876,7 @@ events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
 
-## 1238. The mobile test doc still prescribed the banner drain that § 1195 deleted, and the one file note that cited it was pointing at a different timer
+## 1238. Finishing § 1195: the doc still prescribed the drain, and every one of the 33 sites the sweep had left as judgement calls turned out not to be one
 
 `apps/mobile_android/CLAUDE.md` § Tests closed with "Waiting for a screen's
 completion path often also arms `showTopBanner`'s 3 s dismissal timer, which
@@ -23898,6 +23898,42 @@ and its own docstring names the **armed undo window** as the owner of the timer
 — the banner was never what it was draining. Left as written, the note would
 have invited the next sweep to delete a pump the undo window still needs. It now
 names the undo window.
+
+**The 10 drains § 1195 kept, and the 23 more nobody had counted, are gone too.**
+The filing described what was left as deliberately harder — nine drains "each
+doing something else as well", two `_drainBanner` helpers with "9 call sites
+between them", and two pumps in `run_screen_recording_flow_test.dart` that
+"advance the RECORDING clock mid-test, which is why they were deliberately put
+back after the sweep first removed them". Measured by removing each and running
+the file: **every one of them was removable and none of the stated reasons
+held.** The six standalone drains are each `pump(4 s)` followed by a settling
+`pump()` — the "further pumping whose purpose is not the banner" is the settle
+after the drain. The two clock-advancing pumps sit after their test's last
+`expect`, ahead of a `pumpWidget(const SizedBox())` teardown, so there is no
+assertion downstream for a shortened clock to reach. And the helper count was
+wrong in the other direction: `nearby_area_test.dart` has 3 call sites and
+`route_detail_watch_course_test.dart` has 15, not 9 between them.
+
+A census of the same class found three more sites the filing never listed, two
+of them still carrying the false sentence in comment form: four
+`hideTopBanner()` calls trailing an assertion in
+`route_detail_review_delete_test.dart` and `watch_live_screen_test.dart` (one
+annotated "the binding asserts on a pending timer at teardown, so it has to be
+cleared here" — wrong twice over, since § 1195 established the assertion is
+raised inside the test body), one in `settings_email_reoptin_test.dart`, and a
+drain inside `top_banner_test.dart` itself. The filing's own suggestion to drop
+`settings_email_reoptin_test.dart`'s `tearDown(hideTopBanner)` was checked
+rather than taken on trust — `_current` is a library global cleared by the
+pill's `onDisposed` only for a banner that was BUILT, so a never-built one does
+leak past the test — and a probe showing a never-built banner into a tree that
+is then replaced, followed by a second test showing and asserting its own
+banner, passes: the leak is inert. Removed.
+
+103 lines across 11 files, no insertions, plus five now-unused
+`top_banner.dart` imports; `dart analyze` over the eleven exits 0 and all 191
+tests pass. The rule this leaves is the one in `docs/testing/testing.md`
+§ Patterns and now in `apps/mobile_android/CLAUDE.md`: there is no such thing as
+a banner drain any more.
 
 ## 1239. The recap's Dart half kept anchoring the current streak at 31 December, and it was the half that publishes the snapshot
 

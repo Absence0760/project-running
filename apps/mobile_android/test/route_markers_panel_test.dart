@@ -383,10 +383,6 @@ void main() {
         reason: 'lat ${api.addedLat}');
     expect((api.addedLng! - -0.11).abs() < 1e-6, isTrue,
         reason: 'lng ${api.addedLng}');
-
-    // Drain the "tap to place" banner timer.
-    await tester.pump(const Duration(seconds: 4));
-    await tester.pumpAndSettle();
   });
 
   testWidgets('marker save shows a progress bar while the add is in flight',
@@ -423,9 +419,6 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsNothing);
-    // Drain the "Tap to place" banner auto-dismiss timer from _startAdd.
-    await tester.pump(const Duration(seconds: 4));
-    await tester.pump();
   });
 
   testWidgets('typed coordinates create a marker without any map tap',
