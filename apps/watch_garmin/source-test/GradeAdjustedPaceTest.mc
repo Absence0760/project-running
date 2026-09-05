@@ -1,4 +1,5 @@
 import Toybox.Lang;
+import Toybox.Math;
 import Toybox.Test;
 
 // Unit tests for the Minetti grade-adjusted-pace model in
@@ -465,6 +466,151 @@ module GradeAdjustedPaceTest {
             var fd = GradeAdjustedPaceView.gradeFactor(descents[j]);
             Test.assertMessage(fd < 1.0, "descent " + descents[j].toString() + " factor " + fd.toString() + " should be below 1");
         }
+        return true;
+    }
+
+    // ---- The GAP reference track: the fourth rail of the window bracket ---
+
+    // A clean, noise-free 6% climb switchbacking +/-8 m every 150 m, walked at
+    // 5 m every 3 s for 3 km -- the 30-minute power-hike-paced staircase
+    // decisions § 992 measured the window's cost on, and the profile that
+    // binds its UPPER end. The other end is theWindowIsLongerThanTheNoiseFloor
+    // above, which is a floor and only a floor: it admits nothing under
+    // 19.40 m and would pass at 200 m, a window long enough to average real
+    // terrain flat. Points sit on a line of constant latitude, where the
+    // haversine collapses exactly to R * dLambda, so the per-pair horizontal
+    // step below is a closed form rather than a distance function this rail
+    // does not have.
+    //
+    // The eight constants are frozen identically on the three rails that own a
+    // batch grader -- grade_adjusted_pace.test.ts, grade_adjusted_pace_test.dart
+    // and the firmware's grade_adjusted_pace.rs -- and compared between them by
+    // scripts/check_watch_wire_vectors.mjs, which reads all eight out of each.
+    // A fixture that drifts on one rail makes its golden meaningless rather
+    // than wrong, which is the failure nothing would otherwise report
+    // (decisions § 641).
+    //
+    // This rail is the fourth, and it joins on different terms. The field is a
+    // STREAMING estimator: it reports an instantaneous pace once a second and
+    // has no batch entry point to grade a track through, so the reduction below
+    // lives in the test rather than in source/. What it still buys is what the
+    // bracket is for -- the SAME track, driven through THIS rail's own
+    // GradeTracker window and its own Minetti factor, must reduce to the same
+    // 311 s/km, so a window, a clamp or a polynomial coefficient that moved
+    // here fails against a golden the other three share. What it does NOT pin
+    // is the per-second value the cell renders; the tracker tests above are
+    // what cover that.
+    const GAP_REFERENCE_POINTS = 601;
+    const GAP_REFERENCE_STEP_M = 5.0;
+    const GAP_REFERENCE_STEP_S = 3;
+    const GAP_REFERENCE_BASE_GRADE = 0.06;
+    const GAP_REFERENCE_AMPLITUDE_M = 8.0;
+    const GAP_REFERENCE_PERIOD_M = 150.0;
+    const GAP_REFERENCE_S_PER_KM = 311;
+    const GAP_REFERENCE_MAX_COST = 0.03;
+
+    // R * dLambda at the equator for one nominal 5 m step: 4.994382 m, not
+    // 5 -- which is why the window's measured upper edge is 24.97 m rather
+    // than 25. The walk closes a segment on the first pair that CLEARS the
+    // window, so what is really bounded is the effective segment.
+    function gapReferenceHorizStepM() as Numeric {
+        return (6371000.0 * ((GAP_REFERENCE_STEP_M / 111320.0) * Math.PI)) / 180.0;
+    }
+
+    // The profile is parameterised on the NOMINAL x = i * 5 m, exactly as the
+    // three sibling fixtures are; the horizontal step above is what the walk
+    // measures across. Keeping both is what makes the four goldens comparable.
+    function gapReferenceElevation(i as Number, amplitudeM as Numeric, baseGrade as Numeric) as Numeric {
+        var x = i * GAP_REFERENCE_STEP_M;
+        return 100.0 + baseGrade * x
+            + amplitudeM * Math.sin((2.0 * Math.PI * x) / GAP_REFERENCE_PERIOD_M);
+    }
+
+    // Feed the fixture to a real GradeTracker one sample at a time -- which is
+    // how the recorder feeds the field -- and credit each closed window its
+    // horizontal length times the factor the tracker's own grade earns it.
+    // The walk re-anchors on the same condition the tracker does, so the grade
+    // read back is always the window that just closed.
+    function gapReferenceReportedSPerKm(amplitudeM as Numeric, baseGrade as Numeric) as Number {
+        var step = gapReferenceHorizStepM();
+        var t = new GradeTracker();
+        var anchor = 0;
+        var adjDistM = 0.0;
+        var timeS = 0.0;
+        t.onSample(0.0, gapReferenceElevation(0, amplitudeM, baseGrade));
+        for (var i = 1; i < GAP_REFERENCE_POINTS; i += 1) {
+            t.onSample(i * step, gapReferenceElevation(i, amplitudeM, baseGrade));
+            var segHoriz = (i - anchor) * step;
+            if (segHoriz >= $.MIN_SEGMENT_M) {
+                adjDistM += segHoriz * GradeAdjustedPaceView.gradeFactor(t.grade());
+                timeS += (i - anchor) * GAP_REFERENCE_STEP_S;
+                anchor = i;
+            }
+        }
+        return Math.round(timeS / (adjDistM / 1000.0)).toNumber();
+    }
+
+    // The same walk with no window at all: every point pair graded on its own
+    // rise over its own run. This is what the runner actually spent, and what
+    // a window can only approximate -- a window wider than the terrain averages
+    // the climbs and the drops together and hands back a flatter course than
+    // the one underfoot.
+    function gapReferenceTruthSPerKm() as Numeric {
+        var step = gapReferenceHorizStepM();
+        var adjDistM = 0.0;
+        for (var i = 1; i < GAP_REFERENCE_POINTS; i += 1) {
+            var rise = gapReferenceElevation(i, GAP_REFERENCE_AMPLITUDE_M, GAP_REFERENCE_BASE_GRADE)
+                - gapReferenceElevation(i - 1, GAP_REFERENCE_AMPLITUDE_M, GAP_REFERENCE_BASE_GRADE);
+            adjDistM += step * GradeAdjustedPaceView.gradeFactor(rise / step);
+        }
+        return ((GAP_REFERENCE_POINTS - 1) * GAP_REFERENCE_STEP_S) / (adjDistM / 1000.0);
+    }
+
+    // Ties the closed form to the reduction: with no oscillation and no base
+    // grade every factor is exactly 1, so the walk must report the raw pace
+    // that step implies (601 s/km). Without this the truth below would be
+    // graded against a distance nothing had checked. The web twin ties the
+    // same closed form to its own haversine; this rail has none to tie it to,
+    // because Garmin hands the field `Activity.Info.elapsedDistance` rather
+    // than coordinates -- so what is pinned here is the reduction, not a
+    // distance function.
+    (:test)
+    function gapReferenceGeometryIsRawPaceWhenFlat(logger as Test.Logger) as Boolean {
+        var step = gapReferenceHorizStepM();
+        var timeS = (GAP_REFERENCE_POINTS - 1) * GAP_REFERENCE_STEP_S;
+        var horizM = step * (GAP_REFERENCE_POINTS - 1);
+        var want = Math.round(timeS / (horizM / 1000.0)).toNumber();
+        var got = gapReferenceReportedSPerKm(0.0, 0.0);
+        Test.assertEqualMessage(
+            got, want,
+            "a level reference walk must report the raw pace the step implies: got "
+                + got.toString() + ", want " + want.toString());
+        return true;
+    }
+
+    // Measured on this fixture, reported against truth 302.611 s/km:
+    //   5 m -> 304 (-0.46%)   15 m -> 308 (-1.78%)   20 m -> 311 (-2.77%)
+    //   25 m -> 316 (-4.42%)  30 m -> 322 (-6.41%)   200 m -> 426 (-40.78%)
+    // so this test and theWindowIsLongerThanTheNoiseFloor together admit only
+    // [19.40 m, 24.97 m] on this rail, the same bracket the other three carry.
+    (:test)
+    function gapReferenceTrackGradesToTheFrozenPace(logger as Test.Logger) as Boolean {
+        var truth = gapReferenceTruthSPerKm();
+        var reported = gapReferenceReportedSPerKm(
+            GAP_REFERENCE_AMPLITUDE_M, GAP_REFERENCE_BASE_GRADE);
+        var cost = (reported - truth) / truth;
+        if (cost < 0) { cost = -cost; }
+        Test.assertMessage(
+            cost < GAP_REFERENCE_MAX_COST,
+            "a " + $.MIN_SEGMENT_M.toString() + " m window reports " + reported.toString()
+                + " s/km against a true " + truth.toString()
+                + " s/km on the reference switchback -- too much of the climb averaged away");
+        Test.assertEqualMessage(
+            reported, GAP_REFERENCE_S_PER_KM,
+            "the reference track no longer grades to its frozen value: the window, "
+                + "the fixture or the Minetti fit moved on this rail. Re-measure the "
+                + "cost against truth before updating this number, and update the web, "
+                + "Dart and firmware rails with it. Got " + reported.toString());
         return true;
     }
 }

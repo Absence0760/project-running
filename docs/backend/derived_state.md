@@ -300,6 +300,17 @@ retention cron referenced in a comment that was never created.
   at read time (`20270308_001`).
 - **Authoritative recompute:** `count(*) from challenge_participants where
   challenge_id = <challenge>`.
+- **Read by:** `browse_public_challenges` (server-side), and since 2026-09-05
+  the two web readers as well — `fetchChallenges` and `fetchChallengeById` in
+  `apps/web/src/lib/core/data.ts`, whose `select('*')` already carried the
+  column. Both used to length a `challenge_participants` page instead, which is
+  the shape `clubs.member_count` was created to remove (issue #331): the read
+  was unbounded, PostgREST truncates a result at its configured row ceiling
+  without saying so, and the same page was also scanned for the caller's own
+  membership — so a popular challenge under-reported its board and could drop a
+  genuine participant's row, emptying their "My challenges" tab and offering
+  them "Join" on a challenge they were already in. The membership read is now
+  scoped to the caller.
 - **Maintained by:** `sync_challenge_participant_count()` (AFTER INSERT/DELETE on
   `challenge_participants`), SECURITY DEFINER — a runner joining a challenge they
   don't own has no UPDATE grant on the `challenges` row (the update RLS policy is

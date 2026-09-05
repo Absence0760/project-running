@@ -1518,8 +1518,7 @@ func walkExportPages[T any](ctx context.Context, c *SupabaseClient, baseURL stri
 func (c *SupabaseClient) StreamExportRuns(ctx context.Context, userID string, emit func([]ExportRunRow) error) (ExportCompleteness, error) {
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
-	q.Set("select",
-		"id,user_id,started_at,duration_s,distance_m,source,activity_type,is_dnf,external_id,metadata,track_url,hr_series_url,is_public,event_id,route_id,created_at,updated_at")
+	q.Set("select", exportRunsSelect)
 	// `id` is the tiebreaker: two runs can share a `started_at`, and
 	// offset paging under a non-total order repeats one row and drops
 	// another.
@@ -1538,28 +1537,47 @@ func (c *SupabaseClient) StreamExportRuns(ctx context.Context, userID string, em
 	return comp, err
 }
 
+// exportRunsSelect is every column of `public.runs`, in ExportRunRow
+// order. Not a curated subset: what each output format omits is decided
+// at the renderer, and a column that is not selected cannot be omitted
+// deliberately -- it just disappears, which is what happened to seven of
+// them (decisions § 1171). Held to the Edge Function's own RUNS_SELECT
+// and to the generated row type by
+// TestExportRunProjectionCoversEveryRunsColumn.
+const exportRunsSelect = "id,user_id,started_at,concluded_at,duration_s,distance_m," +
+	"elevation_gain_m,source,activity_type,is_dnf,external_id,metadata,track_url," +
+	"hr_series_url,is_public,event_id,route_id,race_listing_id,fastest_5k_s," +
+	"fastest_10k_s,fastest_half_marathon_s,fastest_marathon_s,created_at,updated_at"
+
 // ExportRunRow mirrors dataexport.ExportRun. We don't import the
 // dataexport package here to keep `internal` a leaf (the adapter
 // in main.go bridges across). Exported because it is the page type
 // StreamExportRuns hands to its caller.
 type ExportRunRow struct {
-	ID           string                 `json:"id"`
-	UserID       string                 `json:"user_id"`
-	StartedAt    string                 `json:"started_at"`
-	DurationS    int                    `json:"duration_s"`
-	DistanceM    float64                `json:"distance_m"`
-	Source       string                 `json:"source"`
-	ActivityType string                 `json:"activity_type"`
-	IsDNF        bool                   `json:"is_dnf"`
-	ExternalID   *string                `json:"external_id"`
-	Metadata     map[string]interface{} `json:"metadata"`
-	TrackURL     *string                `json:"track_url"`
-	HrSeriesURL  *string                `json:"hr_series_url"`
-	IsPublic     *bool                  `json:"is_public"`
-	EventID      *string                `json:"event_id"`
-	RouteID      *string                `json:"route_id"`
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
+	ID                   string                 `json:"id"`
+	UserID               string                 `json:"user_id"`
+	StartedAt            string                 `json:"started_at"`
+	ConcludedAt          *string                `json:"concluded_at"`
+	DurationS            int                    `json:"duration_s"`
+	DistanceM            float64                `json:"distance_m"`
+	ElevationGainM       *float64               `json:"elevation_gain_m"`
+	Source               string                 `json:"source"`
+	ActivityType         string                 `json:"activity_type"`
+	IsDNF                bool                   `json:"is_dnf"`
+	ExternalID           *string                `json:"external_id"`
+	Metadata             map[string]interface{} `json:"metadata"`
+	TrackURL             *string                `json:"track_url"`
+	HrSeriesURL          *string                `json:"hr_series_url"`
+	IsPublic             *bool                  `json:"is_public"`
+	EventID              *string                `json:"event_id"`
+	RouteID              *string                `json:"route_id"`
+	RaceListingID        *string                `json:"race_listing_id"`
+	Fastest5kS           *int                   `json:"fastest_5k_s"`
+	Fastest10kS          *int                   `json:"fastest_10k_s"`
+	FastestHalfMarathonS *int                   `json:"fastest_half_marathon_s"`
+	FastestMarathonS     *int                   `json:"fastest_marathon_s"`
+	CreatedAt            string                 `json:"created_at"`
+	UpdatedAt            string                 `json:"updated_at"`
 }
 
 // CreateSignedURL calls the Storage /object/sign endpoint to mint a

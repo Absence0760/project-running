@@ -58,17 +58,28 @@ alter table runs
   check (activity_type in ('run', 'walk', 'hike', 'cycle', 'stroller'))
   not valid;
 
--- Migration 2 (ideally a later migration / low-traffic window): scans existing
--- rows under SHARE UPDATE EXCLUSIVE — reads and writes proceed during the scan.
+-- Migration 2 — a SEPARATE file, ideally a low-traffic window: scans existing
+-- rows under SHARE UPDATE EXCLUSIVE, so reads and writes proceed during the
+-- scan. In the same file as migration 1 it would scan under migration 1's lock.
 alter table runs
   validate constraint runs_activity_type_check;
 ```
 
 After `VALIDATE` the constraint is indistinguishable from one added in a single
-step. Splitting the `VALIDATE` into its own migration lets you apply the (free)
-`NOT VALID` half immediately and schedule the scan for a quiet window; putting
-both in one migration is still far better than the single-step form (the `NOT
-VALID` add doesn't scan, and the `VALIDATE` uses the weaker lock).
+step.
+
+**The split has to be across migrations, or it buys nothing.** Each migration
+file is applied inside one transaction (`apply-pending-migrations.sh` wraps it
+in `begin;` … `commit;` so the ledger row commits atomically with the SQL, and
+the CLI wraps a file the same way — that is why `CREATE INDEX CONCURRENTLY`
+errors as apply-time DDL, below). A lock taken by DDL is held until the
+transaction ends, so in one file the `ADD … NOT VALID`'s own `ACCESS EXCLUSIVE`
+— or a preceding `DROP CONSTRAINT` or `ADD COLUMN` — is *still held* while the
+`VALIDATE` scans. `SHARE UPDATE EXCLUSIVE` is subsumed by it, never a downgrade.
+Same-file, the two-step and the single step block writers for the identical
+duration; only the `VALIDATE` in a **later** migration, in its own transaction,
+lets writes through during the scan.
+`check_migration_online_safety.mjs` fails both shapes on a guarded table.
 
 **Widening an existing IN-list is the common case** (e.g. re-emitting
 `notifications_kind_check` to allow a new notification kind). Every existing row
@@ -138,7 +149,7 @@ touched row, bloats the table, and holds those locks for the whole statement.
 |---|---|---|
 | `ADD CONSTRAINT … CHECK/FK` (single step) | `ACCESS EXCLUSIVE` + full-row scan | **No** — blocks all reads+writes for the scan |
 | `ADD CONSTRAINT … NOT VALID` | brief `ACCESS EXCLUSIVE`, no scan | Yes |
-| `VALIDATE CONSTRAINT` | `SHARE UPDATE EXCLUSIVE` | Yes — reads+writes proceed |
+| `VALIDATE CONSTRAINT` | `SHARE UPDATE EXCLUSIVE` | Yes — reads+writes proceed, **but only in its own migration**: a stronger lock taken earlier in the same file is still held during the scan |
 | `ADD COLUMN … DEFAULT <constant>` | brief `ACCESS EXCLUSIVE`, no rewrite (PG11+) | Yes |
 | `ADD COLUMN … DEFAULT <volatile>` (`now()`, `gen_random_uuid()`, a function) | `ACCESS EXCLUSIVE` + full rewrite | **No** |
 | `SET NOT NULL` | `ACCESS EXCLUSIVE` + full scan | **No** — use the `NOT VALID CHECK` route |
@@ -178,7 +189,7 @@ won't rebuild — it needs a manual `DROP INDEX` + retry.
 Three shipped migrations predate this playbook and took blocking locks. They are
 already applied, so they are **not** edited (the schema only moves forward); they
 stand as the reference for the corrected pattern, and the forward guard
-grandfathers them by version.
+grandfathers them by name.
 
 - **#411 — `20261210_001_status_policy_check_constraints.sql`** adds four
   first-time CHECK constraints (`event_attendees.status`, `clubs.join_policy`,
@@ -202,22 +213,26 @@ grandfathers them by version.
 
 ## Forward guard
 
-`apps/backend/scripts/check_migration_online_safety.mjs` fails CI if a migration
-adds a CHECK or FK to one of the high-volume tables without `NOT VALID`. It
-scans **every** committed migration on every run — 436 today — and it is
-deliberately narrow only in the table set it guards (constraints on small config
-tables don't trip it). It runs in the `parity-types` CI job right after the
-version-uniqueness guard, and `check_migration_online_safety.test.mjs` pins the
-parse + detection logic. Run it locally before pushing a new migration:
+`apps/backend/scripts/check_migration_online_safety.mjs` fails CI on either
+shape that scans a high-volume table under a lock that blocks writers: a CHECK
+or FK added without `NOT VALID` (`blocking_add`), and a `VALIDATE CONSTRAINT`
+in the same file as the DDL whose lock is still held (`same_txn_validate`). It
+scans **every** committed migration on every run, and it is deliberately narrow
+only in the table set it guards (constraints on small config tables don't trip
+it). It runs in the `parity-types` CI job right after the version-uniqueness
+guard, and `check_migration_online_safety.test.mjs` pins the parse + detection
+logic. Run it locally before pushing a new migration:
 
 ```bash
 node apps/backend/scripts/check_migration_online_safety.mjs
 ```
 
 **Adding a migration requires no edit to the guard.** The already-applied
-blocking constraints are grandfathered one at a time in
-`GRANDFATHERED_VIOLATIONS` — 32 entries, each naming a `{filename, table,
-constraint}` triple — rather than by a version cutoff. The cutoff it replaces
+violations are grandfathered one at a time in `GRANDFATHERED_VIOLATIONS`, each
+naming a `{filename, kind, table, constraint}` tuple, rather than by a version
+cutoff. The `kind` is part of the key so an entry vouching for a blocking add
+cannot silently also vouch for a same-transaction validate in the same file. The
+cutoff it replaces
 had to be bumped past the newest migration by its own test, and the bump was
 what removed that migration from the scan, so the scanned set was empty at rest
 ([decisions § 775](../architecture/decisions.md)). A name cannot do that: it
@@ -227,14 +242,17 @@ the tree fails the guard rather than sitting there as unused cover.
 If it flags a constraint you are certain is safe to validate inline (a genuinely
 small or empty table the guard's table set happens to include), add that one
 constraint to `GRANDFATHERED_VIOLATIONS` and say why in the PR — a named entry
-is the conscious, reviewed escape hatch, not a silent bypass.
+is the conscious, reviewed escape hatch, not a silent bypass. For a
+`same_txn_validate` the normal answer is not an entry at all: move the
+`VALIDATE CONSTRAINT` into its own migration file.
 
 ## Pre-merge checklist
 
 Before merging a migration, for each statement:
 
 - [ ] `ADD CONSTRAINT … CHECK/FK` on a high-volume table → `NOT VALID` + a
-      separate `VALIDATE CONSTRAINT` (VALIDATE ideally a later migration).
+      `VALIDATE CONSTRAINT` in a **later migration file** — same-file, the
+      VALIDATE scans under the lock the ADD is still holding.
 - [ ] New FK → covering index in the same migration; multi-table FK work split
       one table per migration.
 - [ ] `SET NOT NULL` on a big table → `NOT VALID CHECK (col IS NOT NULL)` +

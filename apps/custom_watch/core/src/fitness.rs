@@ -17,9 +17,20 @@
 //! [`crate::training_load`]'s precedent — a run carries a plain **day index**
 //! ([`RunForFitness::day`], calendar days from any fixed epoch, local tz) and
 //! every window (`now_day` for the layoff/gap/90-day cutoffs, the trainingLoad
-//! walk) is integer day arithmetic. Only relative day differences matter, so
-//! this is the honest collapse of `localDateKey` + `Date.now()`, and every test
-//! maps a `Date` offset to a day offset one-for-one.
+//! walk) is integer day arithmetic, and every test maps a `Date` offset to a
+//! day offset one-for-one.
+//!
+//! **That collapse is exact for the trainingLoad walk and a rounding for the
+//! three cutoffs**, and the difference is worth naming rather than leaving as an
+//! "only relative differences matter". Web buckets the EWMA walk by
+//! `localDateKey`, so the day index IS its unit there. But
+//! `isReturningFromLayoff`, `hasLayoffGap` and `currentVdot`'s 90-day cutoff are
+//! measured on web in raw MILLISECONDS between instants — so a gap web calls
+//! 27 d 20 h is 28 whole calendar days here, and a latest run web calls 14 d 1 h
+//! stale is 14 days here. Each cutoff therefore sits up to a day wider on this
+//! rail. Nothing on the wire carries a time of day for a run, so this is not a
+//! rounding that could be tightened without a frame change; it is a stated
+//! difference, pinned by `layoff_windows_are_measured_in_whole_calendar_days`.
 //!
 //! Human-readable advice is modelled as the [`RecoveryAdvice`] enum rather than
 //! English string literals — the presentation layer owns the wording, matching
@@ -976,6 +987,35 @@ mod tests {
     fn is_returning_from_layoff_true_after_gap() {
         let runs = [run(REF - 150, 10000.0, 3000), run(REF - 1, 5000.0, 1800)];
         assert!(is_returning_from_layoff(&runs, REF));
+    }
+
+    /// The rail's own rule, stated because it is NOT web's. Web measures both
+    /// layoff windows on raw instants; this rail has only a day index, so a run
+    /// exactly `LAYOFF_ACTIVE_WINDOW_DAYS` back still counts as active and a gap
+    /// of exactly `LAYOFF_RESET_DAYS` calendar days still counts as a layoff —
+    /// where the same two instants, an hour either side, would answer the other
+    /// way on web.
+    #[test]
+    fn layoff_windows_are_measured_in_whole_calendar_days() {
+        let latest = REF - LAYOFF_ACTIVE_WINDOW_DAYS;
+        let runs = [
+            run(latest - LAYOFF_RESET_DAYS, 10000.0, 3000),
+            run(latest, 5000.0, 1800),
+        ];
+        assert!(is_returning_from_layoff(&runs, REF));
+
+        // One day past either edge and the answer flips, so the test is about
+        // the edges rather than about the pair being unusual.
+        let stale = [
+            run(latest - 1 - LAYOFF_RESET_DAYS, 10000.0, 3000),
+            run(latest - 1, 5000.0, 1800),
+        ];
+        assert!(!is_returning_from_layoff(&stale, REF));
+        let short_gap = [
+            run(latest - (LAYOFF_RESET_DAYS - 1), 10000.0, 3000),
+            run(latest, 5000.0, 1800),
+        ];
+        assert!(!is_returning_from_layoff(&short_gap, REF));
     }
 
     #[test]

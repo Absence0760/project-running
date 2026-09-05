@@ -186,8 +186,6 @@ void main() {
         find.textContaining('If that email is registered'),
         findsOneWidget,
       );
-      // Drain the top-banner auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('other sign-in failures do not show the resend button',
@@ -249,9 +247,6 @@ void main() {
       // redirectTo GoTrue falls back to the project Site URL (localhost
       // by default) and the link dies in prod.
       expect(client.capturedResetRedirectTo, 'https://threkir.com/auth/reset');
-      // Tear down the banner timer before the test ends so the
-      // fake-async loop doesn't flag a pending timer.
-      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('Forgot password shows the privacy-preserving confirmation',
@@ -273,8 +268,6 @@ void main() {
         find.textContaining('If that email is registered'),
         findsOneWidget,
       );
-      // Drain the banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('Forgot password rejects a non-email shape', (tester) async {

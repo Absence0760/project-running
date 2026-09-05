@@ -18,10 +18,14 @@ import {
 	canonicalTrackUrl,
 	CSV_COLS,
 	csvEscape,
+	CSV_OMIT,
 	csvRow,
+	GPX_MANIFEST_OMIT,
 	hrCoverageCell,
+	omitKeys,
 	type RenderRunRow,
 	type RenderTrackPoint,
+	RUNS_JSON_OMIT,
 	stringy,
 	xmlEscape,
 } from './render.ts';
@@ -30,8 +34,10 @@ const REF: RenderRunRow = {
 	id: '11111111-1111-1111-1111-111111111111',
 	user_id: '22222222-2222-2222-2222-222222222222',
 	started_at: '2026-05-01T06:00:00+00:00',
+	concluded_at: null,
 	duration_s: 3600,
 	distance_m: 10000,
+	elevation_gain_m: null,
 	source: 'manual',
 	activity_type: 'run',
 	is_dnf: false,
@@ -43,6 +49,11 @@ const REF: RenderRunRow = {
 	is_public: false,
 	event_id: null,
 	route_id: null,
+	race_listing_id: null,
+	fastest_5k_s: null,
+	fastest_10k_s: null,
+	fastest_half_marathon_s: null,
+	fastest_marathon_s: null,
 	created_at: '2026-05-01T07:00:00+00:00',
 	updated_at: '2026-05-01T07:00:00+00:00',
 };
@@ -83,7 +94,7 @@ Deno.test('csvRow emits exactly one value per declared column', () => {
 	// A column added to CSV_COLS without a matching value in csvRow shifts
 	// every later field by one for the whole export, silently — a consumer
 	// reads `is_public` out of the `external_id` slot and nothing errors.
-	assertEquals(CSV_COLS.length, 19);
+	assertEquals(CSV_COLS.length, 26);
 	assertEquals(csvFields(csvRow(REF)).length, CSV_COLS.length);
 });
 
@@ -105,6 +116,68 @@ Deno.test('csvRow puts each value under the header its name promises', () => {
 	// the owner's folder that any live session JWT could then fetch directly.
 	assert(!CSV_COLS.includes('track_url'));
 	assert(!csvRow(REF).includes('.json.gz'));
+});
+
+Deno.test('the seven columns that reached no format now reach the CSV', () => {
+	// Four of them stopped being exported the day migration 20270325_001
+	// promoted them out of `runs.metadata` and stripped the keys from the bag
+	// in the same statement; the other three were never selected at all
+	// (decisions § 1171). `manifest.json` cannot show this — its completeness
+	// contract is row counts, and every row was present.
+	const row = csvFields(csvRow({
+		...REF,
+		concluded_at: '2026-05-01T07:02:11+00:00',
+		elevation_gain_m: 128.5,
+		race_listing_id: '33333333-3333-3333-3333-333333333333',
+		fastest_5k_s: 1320,
+		fastest_10k_s: 2790,
+		fastest_half_marathon_s: 6180,
+		fastest_marathon_s: null,
+	}));
+	const at = (col: string) => row[CSV_COLS.indexOf(col)];
+	assertEquals(at('concluded_at'), '2026-05-01T07:02:11+00:00');
+	assertEquals(at('elevation_gain_m'), '128.5');
+	assertEquals(at('race_listing_id'), '33333333-3333-3333-3333-333333333333');
+	assertEquals(at('fastest_5k_s'), '1320');
+	assertEquals(at('fastest_10k_s'), '2790');
+	assertEquals(at('fastest_half_marathon_s'), '6180');
+	// A run that set no marathon PR states nothing rather than a zero.
+	assertEquals(at('fastest_marathon_s'), '');
+	assertEquals(row.length, CSV_COLS.length);
+});
+
+Deno.test('the CSV names every runs column except the three it declares', () => {
+	// The rule the header is derived from, asserted here rather than left to
+	// the reader: CSV_COLS is the table minus CSV_OMIT, plus the five
+	// `metadata` keys it names outright. The Go worker's own guard is what
+	// holds the two rails to the same list.
+	const metadataCells = ['title', 'avg_bpm', 'hr_coverage', 'steps', 'elevation_m'];
+	const columns = Object.keys(REF).sort();
+	const carried = CSV_COLS.filter((c) => !metadataCells.includes(c)).sort();
+	assertEquals(carried.concat([...CSV_OMIT]).sort(), columns);
+});
+
+Deno.test('the runs.json projections are omissions, so a new column is exported by default', () => {
+	const backup = omitKeys(REF as unknown as Record<string, unknown>, RUNS_JSON_OMIT);
+	const manifest = omitKeys(REF as unknown as Record<string, unknown>, GPX_MANIFEST_OMIT);
+	assertEquals(
+		Object.keys(backup).sort().concat([...RUNS_JSON_OMIT]).sort(),
+		Object.keys(REF).sort(),
+	);
+	assertEquals(
+		Object.keys(manifest).sort().concat([...GPX_MANIFEST_OMIT]).sort(),
+		Object.keys(REF).sort(),
+	);
+	// The archive is re-homeable, so neither carries the subject's own id;
+	// the manifest additionally drops the two Storage paths, which the GPX
+	// files beside it make redundant.
+	assert(!('user_id' in backup));
+	assert(!('track_url' in manifest));
+	assert(!('hr_series_url' in manifest));
+	// And the backup keeps them, because a restore needs the path.
+	assertEquals(backup.track_url, REF.track_url);
+	assertEquals(backup.fastest_5k_s, REF.fastest_5k_s);
+	assertEquals(manifest.fastest_5k_s, REF.fastest_5k_s);
 });
 
 Deno.test('hr_coverage sits beside the column it qualifies', () => {

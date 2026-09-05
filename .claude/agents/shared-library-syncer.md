@@ -26,7 +26,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/routes/distance_bands.ts` | `apps/mobile_android/lib/distance_bands.dart` | `routes/distance_bands.test.ts` ↔ `test/distance_bands_test.dart` |
 | `apps/web/src/lib/util/exif_strip.ts` (`stripJpegExif`) | `apps/mobile_android/lib/exif_strip.dart` | `util/exif_strip.test.ts` ↔ `test/exif_strip_test.dart` |
 | `apps/web/src/lib/runs/grade_adjusted_pace.ts` | `apps/mobile_android/lib/grade_adjusted_pace.dart` | `runs/grade_adjusted_pace.test.ts` ↔ `test/grade_adjusted_pace_test.dart` |
-| `apps/web/src/lib/gym/gym_prs.ts` | `apps/mobile_android/lib/gym_prs.dart` | `gym/gym_prs.test.ts` ↔ `test/gym_prs_test.dart` |
+| `apps/web/src/lib/gym/gym_prs.ts` + the generated `apps/web/src/lib/gym/exercise_fold_table.ts` | `apps/mobile_android/lib/gym_prs.dart` + the generated `apps/mobile_android/lib/exercise_fold_table.dart` | `gym/gym_prs.test.ts` ↔ `test/gym_prs_test.dart` |
 | `apps/web/src/lib/nutrition/nutrition_targets.ts` | `apps/mobile_android/lib/nutrition_targets.dart` | `nutrition/nutrition_targets.test.ts` ↔ `test/nutrition_targets_test.dart` |
 | `apps/web/src/lib/gym/lift_load.ts` (`liftsFromSetHistory`) | `apps/mobile_android/lib/lift_load.dart` | `gym/lift_load.test.ts` ↔ `test/lift_load_test.dart` |
 | `apps/web/src/lib/nutrition/exercise_calories.ts` | `apps/mobile_android/lib/exercise_calories.dart` | `nutrition/exercise_calories.test.ts` ↔ `test/exercise_calories_test.dart` |
@@ -49,7 +49,7 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 | `apps/web/src/lib/gym/routine_history.ts` (`routineHistoryFromAggregate`) | `apps/mobile_android/lib/routine_history.dart` | `gym/routine_history.test.ts` ↔ `test/routine_history_test.dart` |
 | `apps/web/src/lib/gym/gym_progression.ts` (`nextPrescription`, `workingSets`, `fiveByFiveTargets`, `fiveByFiveSessionSucceeded`) | `apps/mobile_android/lib/gym_progression.dart` | `gym/gym_progression.test.ts` ↔ `test/gym_progression_test.dart` |
 | `apps/web/src/lib/training/plan_adherence.ts` (`weeklyDrift`, `missedWorkoutAdvice`) | `apps/mobile_android/lib/plan_adherence.dart` | `training/plan_adherence.test.ts` ↔ `test/plan_adherence_test.dart` |
-| `apps/web/src/lib/training/plan_replan.ts` (`replanRemaining`) | `apps/mobile_android/lib/plan_replan.dart` | `training/plan_replan.test.ts` ↔ `test/plan_replan_test.dart` |
+| `apps/web/src/lib/training/plan_replan.ts` (`replanRemaining`, `easeOffNextWeek`) | `apps/mobile_android/lib/plan_replan.dart` | `training/plan_replan.test.ts` ↔ `test/plan_replan_test.dart` |
 | `apps/web/src/lib/training/plan_week.ts` (`currentPlanWeekIndex`) | `apps/mobile_android/lib/plan_week.dart` | `training/plan_week.test.ts` ↔ `test/plan_week_test.dart` |
 | `apps/web/src/lib/training/plan_ramp.ts` (`recentRunVolume`, `volumeSample`, `openingWeekVolumeM`, `peakWeekVolumeM`, `planRampCheck`, `shouldSurfaceRampNote`) | `apps/mobile_android/lib/plan_ramp.dart` | `training/plan_ramp.test.ts` ↔ `test/plan_ramp_test.dart` |
 | `apps/web/src/lib/training/self_load.ts` (`selfLoad`, `shouldSurfaceSelfLoad`) | `apps/mobile_android/lib/self_load.dart` | `training/self_load.test.ts` ↔ `test/self_load_test.dart` |
@@ -146,7 +146,16 @@ Not a pair: `apps/mobile_android/lib/exercise_records.dart` (per-exercise curren
    - Same constants and thresholds.
    - Same public-function set (a function added on one side must be added to the other).
 3. Read both mirror test suites. Compare:
-   - Test count parity (the per-app CLAUDE.md notes the canonical count for each — e.g. "8-test mirror suite").
+   - Test count parity, **counted from the two suites, never read off a doc**.
+     `apps/mobile_android/CLAUDE.md` states a count per test file, but nothing
+     re-derives those numbers and 44 of its 79 such claims were wrong when they
+     were last measured ([decisions § 1217](../../docs/architecture/decisions.md));
+     treat the note as a cross-check that may itself be stale, and count with
+     `grep -cE '^\s*(test|testWidgets)\(' <file>` on the Dart side and the
+     matching `test(` / `it(` count on the web side. A count written against a
+     PARAMETERISED declaration (a `test()` inside a `for` loop) is a runtime
+     count and will not match the grep — read the note's own wording before
+     calling it a divergence.
    - Test names — ideally identical strings.
    - Same fixture data where the test uses concrete numbers.
 4. Report:

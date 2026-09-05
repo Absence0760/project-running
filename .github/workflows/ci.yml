@@ -205,7 +205,7 @@ jobs:
           fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # decisions.md § 595 — the Flutter SDK pin is declared once per workflow
       # file, because a workflow-level `env` cannot span ci.yml and the two
       # release workflows; the melos pin is checked against pubspec.lock,
@@ -465,7 +465,7 @@ jobs:
           # third-party packages (e.g. `jszip` in backup_reader.test.ts)
           # — the runner can't resolve them without a populated workspace
           # `node_modules/`, and `tsx` itself is one of them.
-          node-version: 24
+          node-version: 24.20.0
           cache: npm
       - run: npm ci
       # Cheap, deterministic guard ahead of the stack start: two migrations
@@ -855,7 +855,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
           cache: npm
       # Stdlib-only, so it runs before the install: a broken guard should say
       # so in seconds rather than three minutes into a build whose verdict it
@@ -929,6 +929,25 @@ jobs:
             echo "Reproduce with: npm run build --workspace=apps/web && node scripts/check_web_bundle_budget.mjs"
             exit 1
           fi
+      # The artifact half of three head/SEO guards, which cannot run in the job
+      # that owns them. `test:unit` runs in `parity-types`, which never builds,
+      # so each of these reads `build/` only when one is present and otherwise
+      # reports `# no apps/web/build` — a self-skip that is indistinguishable
+      # from a pass on a green row (decisions § 1115, § 1167, § 1168). Their
+      # source-level cases do bind there and are not repeated here; what is
+      # uncovered without this step is everything that can only be read off the
+      # emitted HTML, the learn JSON-LD claims in particular, which have no
+      # source-level twin at all. `npx tsx` rather than a bare `tsx`: the binary
+      # is declared in apps/web's devDependencies, so the runner resolves it out
+      # of node_modules rather than off the registry at run time (§ 764).
+      - name: Assert the built artifact's head signals + structured data
+        working-directory: apps/web
+        run: |
+          if ! npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts; then
+            echo "::error::The built apps/web artifact does not carry the head signals or the JSON-LD these guards claim. The compile gate and the bundle budget above both passed, so this is not about whether the app builds or how big it is — it is about what the emitted HTML says."
+            echo "Reproduce with: npm ci && npm run build --workspace=apps/web && cd apps/web && npx tsx --test src/lib/share/spa_shell_head_signals.test.ts src/lib/seo/document_title.test.ts src/lib/seo/learn_structured_data.test.ts"
+            exit 1
+          fi
 
   # Three checks over one subject: no production value reaches a dev build, no
   # dev value reaches a release build, and no live value sits in a committed
@@ -955,7 +974,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # Three checks under one job name, so each says which one broke
       # (decisions § 764): dev refuses to start against prod endpoints, release
       # refuses to build against placeholder / loopback ones, and no committed
@@ -987,20 +1006,33 @@ jobs:
           # (gitleaks-allowlisted in .gitleaks.toml) — both must stay free of
           # any live key/URL. The dev defaults carry the PUBLIC Supabase local
           # demo JWTs, which are fine; this scan catches a real one slipping in.
-          FILES=(
-            apps/web/.env.example
-            apps/backend/.env.example
-            apps/web/.env.development
-            apps/backend/.env.development
-            apps/job_worker/.env.development
-            apps/mobile_android/.env.development
-            apps/mobile_ios/.env.development
-            apps/watch_wear/android/.env.development
-            apps/watch_ios/WatchApp/SupabaseService.swift
-          )
+          #
+          # DERIVED from the index rather than listed. The list was written by
+          # hand and had fallen four files behind the repo — three of the six
+          # committed .env.example templates (mobile_android, mobile_ios,
+          # watch_wear) and the edge runtime's own committed .env were absent
+          # from it, so a step named for the .env.example scan was reading half
+          # of them. gitleaks covers those four for SECRET shapes, but two of
+          # the four patterns below are not secrets — a live-shaped project URL
+          # and ALLOW_PROD_URL_IN_DEV=true — so nothing read them at all. A new
+          # app's env file is now scanned the day it is committed.
+          mapfile -t FILES < <(git ls-files -- ':(glob).env*' ':(glob)**/.env*' | grep -E '(^|/)\.env(\..+)?$')
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::the committed-env scan derived NO files from the index, so every pattern below would pass over nothing. The \`git ls-files\` pathspec or the filter above it has stopped matching — this is a defect in this step, not a finding about the repo."
+            exit 1
+          fi
+          # The one non-env file in scope, and the only entry still named by
+          # hand: it hard-codes a Supabase URL in Swift, so no env-file
+          # derivation reaches it. Its absence is a failure rather than a skip —
+          # a rename used to drop it from the scan in silence.
+          SWIFT=apps/watch_ios/WatchApp/SupabaseService.swift
+          if [ ! -f "$SWIFT" ]; then
+            echo "::error file=$SWIFT::this file is the scan's only hand-named entry and it is not there, so the one non-env source that hard-codes a Supabase URL is being read by nothing. Point the path at wherever it moved."
+            exit 1
+          fi
+          FILES+=("$SWIFT")
           errors=0
           for f in "${FILES[@]}"; do
-            [ -f "$f" ] || continue
             echo "Scanning $f"
             # Live key formats — keep the regex deliberately narrow so a
             # placeholder like 'sk_live_REPLACE_ME' (which isn't a real
@@ -1092,7 +1124,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: CLAUDE.md vs shared-library-syncer pair registry
         run: |
           if ! node --test scripts/markdown_lines.test.mjs; then
@@ -1178,7 +1210,7 @@ jobs:
       - name: parity.md table structure — columns, symbols, Partial needs Notes
         run: |
           if ! dart run scripts/check_parity_matrix.dart; then
-            echo "::error::docs/product/parity.md's table is malformed — a row without 7 cells, a symbol outside `✓ / ✗ / Partial / N/A`, a `Partial` with no Notes, or a pipe-leading line belonging to no table at all. Nothing here is about the TS<->Dart pairs or the doc checkboxes — those are two of the other guards in this job."
+            echo "::error::docs/product/parity.md's table is malformed — a row without 7 cells, a symbol outside \`✓ / ✗ / Partial / N/A\`, a \`Partial\` with no Notes, or a pipe-leading line belonging to no table at all. Nothing here is about the TS<->Dart pairs or the doc checkboxes — those are two of the other guards in this job."
             echo "The failing line above names the row and the cell. Reproduce with: dart run scripts/check_parity_matrix.dart."
             exit 1
           fi
@@ -1206,7 +1238,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Firmware GATT table vs phone client constants
         run: |
           if ! node scripts/check_watch_ble_uuids.mjs; then
@@ -1250,7 +1282,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Firmware golden vectors vs the phone encoder's, and the shared constants
         run: |
           if ! node scripts/check_watch_wire_vectors.mjs; then
@@ -1311,7 +1343,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # Drift first, then the tool's own suite — the suite's last two cases
       # read the committed tree, so running it first would report "the guard is
       # broken" over an ordinary undeclared capability.
@@ -1362,7 +1394,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: String Catalog coverage vs CFBundleLocalizations + knownRegions
         run: |
           if ! bash apps/watch_ios/scripts/check_xcstrings_parity.sh; then
@@ -1442,7 +1474,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Monkey C source-level claims (no Connect IQ SDK needed)
         run: |
           if ! bash apps/watch_garmin/scripts/check_garmin_source.sh; then
@@ -1478,7 +1510,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Terraform Lambda aliases vs the tooling that repoints them
         run: |
           node scripts/check_lambda_alias_sync.mjs
@@ -1510,7 +1542,10 @@ jobs:
     #                            to 200, and every share handler still returning
     #                            the shell that makes the first claim safe.
     #   check_infra_coverage.mjs every Terraform directory validated and
-    #                            dependency-tracked, and every Lambda in the
+    #                            dependency-tracked, no Terraform at all outside
+    #                            infra/ (where the path filter, the stack matrix
+    #                            and the fmt scopes all stop, so such a stack is
+    #                            read by nothing), and every Lambda in the
     #                            module carrying an error-rate and a p95 alarm
     #                            — the only signal a Lambda-origin failure has,
     #                            since the distribution-wide 403 fallback
@@ -1524,7 +1559,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: IAM least privilege + the OIDC trust contract
         run: |
           if ! node scripts/check_infra_iam.mjs; then
@@ -1550,7 +1585,7 @@ jobs:
       - name: Every stack validated, every Lambda alarmed
         run: |
           if ! node scripts/check_infra_coverage.mjs; then
-            echo "::error::A Terraform directory under infra/ is validated or dependency-tracked by nothing, or a Lambda in the web-stack module has no error-rate or p95 alarm. Nothing here is about IAM scope or the OIDC trust policies; that is the other check in this job."
+            echo "::error::A Terraform directory under infra/ is validated or dependency-tracked by nothing, a Terraform directory exists OUTSIDE infra/ where no CI job reads it at all, or a Lambda in the web-stack module has no error-rate or p95 alarm. Nothing here is about IAM scope or the OIDC trust policies; that is the other check in this job."
             echo "The failing line above names the directory or the function. decisions § 890 is why a Lambda-origin failure is invisible without its alarm."
             exit 1
           fi
@@ -2307,7 +2342,7 @@ jobs:
           # native DecompressionStream (landed in Node 18, stable since), and
           # @supabase/realtime-js needs native WebSocket (22+). Match the rest
           # of the Node jobs.
-          node-version: 24
+          node-version: 24.20.0
           cache: npm
       - run: npm ci
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
@@ -2532,7 +2567,7 @@ jobs:
       # pinned runtime.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # A green Deno suite says every assertion passed, not that any of them
       # asked anything. decisions § 741 found that shape in the pgtap suite and
       # § 777 in the Playwright suite; this is the third tier, and what hides a
@@ -2770,7 +2805,7 @@ jobs:
       # node:*, so no workspace install is needed — only a pinned runtime.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
@@ -2883,7 +2918,7 @@ jobs:
           # only landed in Node 22. On older runtimes
           # `createClient(...)` crashes at construction and the Vite
           # dev server dies before Playwright's webServer connects.
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
@@ -3011,7 +3046,7 @@ jobs:
         with:
           # Node 24 — see e2e-web for why 22+ is mandatory (realtime-js
           # needs native WebSocket).
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -3103,7 +3138,7 @@ jobs:
         with:
           # Node 24 — see e2e-web for why 22+ is mandatory (realtime-js
           # needs native WebSocket).
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -3216,7 +3251,7 @@ jobs:
           version: 10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:

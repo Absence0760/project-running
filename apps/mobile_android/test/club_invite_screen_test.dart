@@ -111,10 +111,6 @@ void main() {
       // block on its in-flight network call.
       await tester.pump();
       expect(social.capturedToken, 'ABC-123-XYZ');
-      // Drain the success top-banner's auto-dismiss timer + give
-      // ClubDetailScreen's mount-time fetches a moment to settle
-      // so the test ends cleanly.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('a failure shows friendly generic copy, not the raw exception',
@@ -174,9 +170,6 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(social.capturedToken, 'deeplink-token');
-      // Drain pending timers (banner + ClubDetailScreen mount
-      // fetches) so the test ends cleanly.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('initialToken whitespace-only does NOT auto-redeem',
@@ -250,8 +243,6 @@ void main() {
       await tester.pump();
       expect(social.joinCalls, 2);
       expect(social.capturedToken, 'good-token');
-      // Drain banner + ClubDetailScreen mount fetches so teardown is clean.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('a token with internal spaces is trimmed at the edges only',

@@ -680,6 +680,17 @@ private fun PreRunScreen(
         val recoveryScroll = rememberScrollState()
         val rotaryFocus = remember { FocusRequester() }
         LaunchedEffect(Unit) { rotaryFocus.requestFocus() }
+        // Discard destroys the run's only durable record — while the queue
+        // does not hold it, the checkpoint IS the run (decisions § 1107) — so
+        // it is behind the estate's two-press confirm rather than one tap.
+        // The arm is announced, and it lapses on its own so a runner who put
+        // the watch down does not come back to a live destructive control.
+        var discardArmedAtMs by remember { mutableStateOf<Long?>(null) }
+        LaunchedEffect(discardArmedAtMs) {
+            val armedAt = discardArmedAtMs ?: return@LaunchedEffect
+            delay(CONFIRM_WINDOW_MS)
+            if (discardArmedAtMs == armedAt) discardArmedAtMs = null
+        }
         Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
             Column(
                 modifier = Modifier
@@ -730,10 +741,35 @@ private fun PreRunScreen(
                     colors = ChipDefaults.primaryChipColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (discardArmedAtMs != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.discard_stake),
+                        style = MaterialTheme.typography.caption3,
+                        color = DuskPalette.warning,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 Spacer(Modifier.height(4.dp))
                 Chip(
-                    onClick = onDiscardRecovery,
-                    label = { Text(stringResource(R.string.discard)) },
+                    onClick = {
+                        val now = System.currentTimeMillis()
+                        when (confirmPress(discardArmedAtMs, now)) {
+                            ConfirmPress.Armed -> discardArmedAtMs = now
+                            ConfirmPress.Confirmed -> {
+                                discardArmedAtMs = null
+                                onDiscardRecovery()
+                            }
+                        }
+                    },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (discardArmedAtMs != null) R.string.discard_confirm
+                                else R.string.discard
+                            )
+                        )
+                    },
                     colors = ChipDefaults.secondaryChipColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )

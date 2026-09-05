@@ -5208,6 +5208,7 @@ export type Database = {
           going_count: number
         }[]
       }
+      exercise_fold_case: { Args: { p_name: string }; Returns: string }
       expire_stale_export_jobs: { Args: never; Returns: number }
       fetch_checkpoint_crossings_for_organiser: {
         Args: { p_event_id: string; p_instance_start: string }

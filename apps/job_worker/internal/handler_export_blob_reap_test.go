@@ -3,6 +3,11 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -293,5 +298,103 @@ func TestExportBlobReap_ArtifactPredicateMatchesTheSqlSweep(t *testing.T) {
 		if got := isExportArtifact(tc.bucket, tc.path); got != tc.want {
 			t.Errorf("isExportArtifact(%q, %q) = %v, want %v", tc.bucket, tc.path, got, tc.want)
 		}
+	}
+}
+
+// The enqueue is SQL and the handler is Go, so the payload between them is a
+// wire format with no type on either side of it. Since 20270709000001 the
+// enqueue emits two shapes rather than one -- the default `{}` for the
+// `exports` bucket, and one `jsonb_build_object('bucket', 'runs', 'prefix',
+// <uid> || '/exports/')` per user who still has a legacy archive -- because
+// the SQL sweep that used to be the only thing reaching that prefix came off
+// the clock (decisions § 1172). A key renamed on either side is a job that
+// runs with an empty payload, which reaps the wrong bucket entirely and
+// reports success.
+func TestExportBlobReap_PayloadShapesMatchTheEnqueue(t *testing.T) {
+	const enqueuePath = "../../backend/supabase/migrations/20270709000001_export_reap_owns_the_retention_sweep.sql"
+	src, err := os.ReadFile(enqueuePath)
+	if err != nil {
+		t.Fatalf("cannot read the enqueue at %s: %v", enqueuePath, err)
+	}
+	m := regexp.MustCompile(`(?s)jsonb_build_object\((.*?)\)`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal("no jsonb_build_object in the enqueue; this guard reads its source and the shape changed")
+	}
+	var keys []string
+	for _, q := range regexp.MustCompile(`'([a-z_]+)'`).FindAllStringSubmatch(string(m[1]), -1) {
+		keys = append(keys, q[1])
+	}
+	// 'runs' is the VALUE of the bucket key, so the odd entries are the keys.
+	var got []string
+	for i := 0; i < len(keys); i += 2 {
+		got = append(got, keys[i])
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, []string{"bucket", "prefix"}) {
+		t.Fatalf("the enqueue builds %v; the handler reads `bucket` + `prefix`", got)
+	}
+
+	// And both shapes drive the handler end to end, against a backend holding
+	// one archive in each leg.
+	for _, tc := range []struct {
+		name, payload, want string
+	}{
+		{"the exports bucket", `{}`, "u1/old.zip"},
+		{"the legacy prefix", `{"bucket":"runs","prefix":"u1/exports/"}`, "u1/exports/legacy.zip"},
+	} {
+		be := &fakeBackend{storageObjects: map[string][]StorageObject{
+			schema.BucketExports: {obj("u1/old.zip", 30*24*time.Hour)},
+			schema.BucketRuns: {
+				obj("u1/exports/legacy.zip", 30*24*time.Hour),
+				obj("u1/2026-01-01.json.gz", 30*24*time.Hour),
+			},
+		}}
+		w := newTestWorker(be, nil)
+		job := &Job{Kind: "export_blob_reap", Payload: []byte(tc.payload)}
+		if err := w.handleExportBlobReap(context.Background(), job); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if len(be.storageDeleted) != 1 || len(be.storageDeleted[0]) != 1 ||
+			be.storageDeleted[0][0] != tc.want {
+			t.Errorf("%s: deleted %v, want only %s", tc.name, be.storageDeleted, tc.want)
+		}
+	}
+}
+
+// The sweep is off the clock, so nothing else deletes a `storage.objects` row
+// for an export any more. That is the whole safety property of § 1172 -- a row
+// deleted without the byte being erased puts the byte beyond every
+// Storage-API reaper, because list reads the rows -- and it holds only while
+// this handler is the one path that touches these objects.
+func TestExportBlobReap_IsTheOnlyScheduledExportRetentionPath(t *testing.T) {
+	const migrationsDir = "../../backend/supabase/migrations"
+	entries, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduled := map[string]bool{}
+	reSchedule := regexp.MustCompile(`cron\.schedule\(\s*'([a-z0-9-]+)'`)
+	reUnschedule := regexp.MustCompile(`cron\.unschedule\(\s*'([a-z0-9-]+)'`)
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".sql") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(migrationsDir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range reSchedule.FindAllStringSubmatch(string(src), -1) {
+			scheduled[m[1]] = true
+		}
+		for _, m := range reUnschedule.FindAllStringSubmatch(string(src), -1) {
+			delete(scheduled, m[1])
+		}
+	}
+	if !scheduled["enqueue-export-blob-reap"] {
+		t.Error("enqueue-export-blob-reap is not scheduled; nothing erases an expired Art 20 archive")
+	}
+	if scheduled["cleanup-stale-export-blobs"] {
+		t.Error("cleanup-stale-export-blobs is scheduled again: its row delete orphans the bytes " +
+			"this handler exists to erase (decisions § 1049 / § 1172)")
 	}
 }

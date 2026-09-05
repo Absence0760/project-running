@@ -738,8 +738,6 @@ void main() {
           reason: 'finishing must clear the draft marker');
       expect(meta['gym_adherence'], 'completed');
 
-      // Drain the confirmation banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('Save as is keeps the sets and clears the draft marker',
@@ -761,8 +759,6 @@ void main() {
       expect(meta.containsKey('gym_session_draft'), isFalse);
       expect(meta['routine_id'], 'routine-1');
 
-      // Drain the confirmation banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('Discard confirms, then deletes the draft row',

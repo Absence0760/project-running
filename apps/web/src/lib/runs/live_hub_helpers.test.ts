@@ -14,6 +14,7 @@ import {
 	nextBackoff,
 	createReconnectingSocket,
 	type SocketLike,
+	type LivePing,
 } from './live_hub_helpers';
 
 test('trimTrailingSlash — strips one trailing slash', () => {
@@ -164,4 +165,56 @@ test('createReconnectingSocket — close() suppresses the reconnect loop', () =>
 	// A close that arrives after teardown must not schedule a retry.
 	opened[0].onclose?.(null);
 	assert.equal(scheduled, 0);
+});
+
+test('createReconnectingSocket — a corrupt frame is dropped, a throwing onPing is not', () => {
+	const opened: FakeSocket[] = [];
+	const seen: LivePing[] = [];
+	let explode = false;
+	const handle = createReconnectingSocket({
+		baseUrl: 'https://x',
+		runId: 'r',
+		getToken: () => 't',
+		createSocket: (url) => {
+			const s = new FakeSocket(url);
+			opened.push(s);
+			return s;
+		},
+		onPing: (p) => {
+			if (explode) throw new TypeError("Cannot read properties of null (reading 'lat')");
+			seen.push(p);
+		},
+		setTimer: (fn) => {
+			void fn;
+			return 0 as unknown as ReturnType<typeof setTimeout>;
+		},
+		clearTimer: () => undefined,
+	});
+	const ws = opened[0];
+
+	// A frame that isn't JSON at all is the case the guard exists for.
+	ws.onmessage?.({ data: '<html>502 Bad Gateway</html>' });
+	assert.deepEqual(seen, [], 'an unparseable frame must not reach onPing');
+
+	ws.onmessage?.({ data: JSON.stringify({ lat: 1, lng: 2 }) });
+	assert.deepEqual(seen, [{ lat: 1, lng: 2 }], 'a well-formed frame is delivered');
+
+	// A consumer that throws is a DEFECT, not a corrupt frame. Swallowing it
+	// left the socket open and reporting itself healthy while every ping was
+	// dropped: the spectator watched a runner's position stop advancing with
+	// nothing logged anywhere. It must surface.
+	explode = true;
+	assert.throws(
+		() => ws.onmessage?.({ data: JSON.stringify({ lat: 3, lng: 4 }) }),
+		TypeError,
+		'a throwing onPing must not be swallowed as a malformed frame',
+	);
+
+	// …and the loop survives it: the socket is untouched and still delivers.
+	explode = false;
+	ws.onmessage?.({ data: JSON.stringify({ lat: 5, lng: 6 }) });
+	assert.deepEqual(seen.at(-1), { lat: 5, lng: 6 });
+	assert.equal(opened.length, 1, 'a consumer throw must not tear the socket down');
+
+	handle.close();
 });

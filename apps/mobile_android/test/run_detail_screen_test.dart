@@ -358,8 +358,6 @@ void main() {
       expect(api.calls, 1);
       expect(find.text('Run is now private'), findsOneWidget);
 
-      // Drain the banner auto-dismiss timer before teardown.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('make-private cancel leaves the run untouched',
@@ -447,8 +445,6 @@ void main() {
 
       expect(find.textContaining('as a route'), findsOneWidget);
 
-      // Drain the banner auto-dismiss timer before teardown.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     // a11y: the h/m/s duration subfields in the edit dialog had no
@@ -937,8 +933,6 @@ void main() {
       await tester.runAsync(() => runStore.saveFromRemote(run));
       expect(runStore.pendingRemoteDeleteIds, contains(run.id));
 
-      // Drain the banner auto-dismiss timer before teardown.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets(
@@ -1093,8 +1087,6 @@ void main() {
 
       expect(runStore.unsyncedRuns.map((r) => r.id), [run.id]);
 
-      // Drain the failure banner's auto-dismiss timer before teardown.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 

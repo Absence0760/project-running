@@ -314,8 +314,6 @@ void main() {
       await tester.tap(find.text('Add contact'));
       await tester.pump();
       expect(find.text('Enter a valid email address.'), findsOneWidget);
-      // Drain the top-banner auto-dismiss timer so no Timer outlives the test.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('a valid-looking email passes the inline check',
@@ -393,8 +391,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(api.addCalls, 2);
-      // Drain the replacement banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
     });
   });
 
@@ -642,8 +638,6 @@ void main() {
       expect(sync.universalWrites, [
         {'safety_overdue_minutes': 30},
       ]);
-      // Drain the saved-banner timer.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('the auto-live-share toggle writes the device pref',
@@ -694,8 +688,6 @@ void main() {
           reason: 'a safety switch may not claim a setting the server rejected');
       expect(find.textContaining('Could not save setting'), findsOneWidget);
 
-      // Drain the showTopBanner auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 7));
     });
 
     testWidgets('a rejected overdue-window write reverts the dropdown',
@@ -850,8 +842,6 @@ void main() {
             .value,
         isTrue,
       );
-      // Drain the banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 6));
     });
 
     testWidgets('a refused write leaves the switch where the server has it',

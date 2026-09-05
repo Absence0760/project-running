@@ -226,7 +226,15 @@
 		// Remove the ones that succeeded from the in-memory list
 		// without refetching — keeps the scroll position.
 		const failedSet = new Set(failed);
-		runs = runs.filter((r) => failedSet.has(r.id) || !selected.has(r.id));
+		// Reconcile against the ids the delete was ISSUED for, not the live
+		// selection. A bounded delete of 200 runs is many seconds of round
+		// trips and the cards stay tappable throughout (only the Delete button
+		// is disabled), so a tap during the run edited the set this filter
+		// reads: un-selecting a run already deleted server-side kept it in the
+		// list as a card that 404s, and selecting a new one dropped a run that
+		// still exists.
+		const requested = new Set(ids);
+		runs = runs.filter((r) => failedSet.has(r.id) || !requested.has(r.id));
 		deleting = false;
 		if (failed.length === 0) {
 			showToast(

@@ -96,6 +96,12 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let trackFileURL: URL
         let trackPointCount: Int
         let averageBPM: Double?
+        /// The share of the run's active time the heart-rate sensor was
+        /// delivering, or nil when nothing measured it. Taken from the SAME
+        /// `heartRateClaim` call as `averageBPM` — the two are one statement
+        /// about one run, and grading twice could publish a coverage that
+        /// contradicts the average it suppressed.
+        let hrCoverage: Double?
     }
 
     /// A track point in the wire shape the phone, web and mobile clients
@@ -321,6 +327,13 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         // are keyed under — instead of minting a fresh one here, which
         // previously orphaned the streamed track from the run row.
         let runId = currentRunId ?? UUID().uuidString.lowercased()
+        // Graded, never the raw mean: a mean taken over less of the run than
+        // not is not the run's average, and every reader of `avg_bpm` treats
+        // it as though it were (decisions § 1083). Taken once — the claim's
+        // two halves have to describe the same grading or the row can say the
+        // sensor covered a third of the run while carrying that third's mean
+        // as the run's average.
+        let claim = healthKit.heartRateClaim(activeElapsedSeconds: elapsedSeconds)
         finishedRun = FinishedRun(
             id: runId,
             startedAt: startDate ?? Date(),
@@ -328,12 +341,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             distanceMetres: distanceMetres,
             trackFileURL: store?.trackFileURL ?? CheckpointStore.trackFile(runId: runId),
             trackPointCount: trackPointCount,
-            // Graded, never the raw mean: a mean taken over less of the run
-            // than not is not the run's average, and every reader of
-            // `avg_bpm` treats it as though it were (decisions § 1083).
-            averageBPM: healthKit.heartRateClaim(
-                activeElapsedSeconds: elapsedSeconds
-            ).averageBPM
+            averageBPM: claim.averageBPM,
+            hrCoverage: claim.coverage
         )
 
         state = .finished
@@ -561,6 +570,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         guard let store = checkpointStore,
               let runId = currentRunId,
               let start = startDate else { return }
+        // Graded against coverage SO FAR, on the same clock the checkpoint
+        // stamps its own duration from — so a crash-recovered run carries the
+        // claim it would have carried had it been stopped here, rather than an
+        // ungraded mean the recovery path has no way to grade.
+        let claim = healthKit.heartRateClaim(activeElapsedSeconds: elapsedSeconds)
         let cp = RunCheckpoint(
             id: runId,
             startedAt: start,
@@ -569,13 +583,8 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             pausedIntervalSeconds: totalPausedInterval,
             trackPointCount: trackPointCount,
             cacheFileURL: store.trackFileURL,
-            // Graded against coverage SO FAR, on the same clock the checkpoint
-            // stamps its own duration from — so a crash-recovered run carries
-            // the claim it would have carried had it been stopped here, rather
-            // than an ungraded mean the recovery path has no way to grade.
-            averageBPM: healthKit.heartRateClaim(
-                activeElapsedSeconds: elapsedSeconds
-            ).averageBPM
+            averageBPM: claim.averageBPM,
+            hrCoverage: claim.coverage
         )
         store.write(checkpoint: cp)
         // Match the track's crash-durability window to the checkpoint's.
@@ -599,7 +608,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             trackPointCount: count,
             // Restored from the checkpoint so a recovered run keeps its
             // heart-rate summary instead of dropping to "— bpm".
-            averageBPM: cp.averageBPM
+            averageBPM: cp.averageBPM,
+            // A checkpoint from a build that never carried the field decodes
+            // as nil, and nil rides through to the row as an OMITTED key —
+            // never as a zero, which would claim the sensor delivered nothing.
+            hrCoverage: cp.hrCoverage
         )
     }
 

@@ -10,6 +10,9 @@ import {
 } from './grade_adjusted_pace';
 import { ELEVATION_GAIN_MIN_DELTA_M } from '../routes/route_simplify';
 import type { TrackPoint } from '../types';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { stripComments } from '../core/strip_comments';
 
 /// Mirror of `apps/mobile_android/test/grade_adjusted_pace_test.dart`. Keep in
 /// lockstep — the GAP figure shown on web run detail and on mobile run detail
@@ -240,4 +243,48 @@ test('a track shorter than one window yields no grade-adjusted pace', () => {
 	// helper says so instead of grading the jitter.
 	const track = gradedTrack({ points: 4, stepM: MIN_SEGMENT_M / 4, stepS: 1, gradePct: 10 });
 	assert.equal(gradeAdjustedPaceSecPerKm(track), null);
+});
+
+test('a near-antipodal fix pair does not erase the whole run\'s grade-adjusted pace', () => {
+	// The walk used a PRIVATE copy of `haversineMetres` that never got the
+	// clamp `run_stats.ts` grew: on (-87.5, 0) -> (87.5, 180) the haversine `a`
+	// rounds to 1.0000000000000002, `Math.sqrt(1 - a)` is NaN, and the distance
+	// came back NaN. Every downstream guard is NaN-permissive — `NaN <
+	// MIN_SEGMENT_M` is false so the anchor walk never resets again, and `NaN
+	// <= 0` is false so the null return is skipped — so ONE corrupt fix pair
+	// returned NaN out of a `number | null` signature, and the run-detail
+	// page's GAP cell, GAP split column and grade-adjusted pacing verdict all
+	// vanished together (each is gated on `Math.abs(gap - raw) >= 2`, which NaN
+	// fails). The Dart twin imports the clamped helper from `run_stats.dart`
+	// and was never affected; this side now does too.
+	const track: TrackPoint[] = [
+		{ lat: -87.5, lng: 0, ele: 100, ts: '2026-01-01T00:00:00Z' },
+		{ lat: 87.5, lng: 180, ele: 110, ts: '2026-01-01T01:00:00Z' },
+		{ lat: 87.5, lng: 180.001, ele: 120, ts: '2026-01-01T02:00:00Z' },
+	];
+	const gap = gradeAdjustedPaceSecPerKm(track);
+	assert.ok(gap != null, 'the pair grades to a real distance, so GAP is stateable');
+	assert.ok(Number.isFinite(gap), `GAP must be a number, got ${gap}`);
+});
+
+test('the walk measures distance with the shared clamped haversine, not a copy', () => {
+	// The copy is how the divergence happened and how it stayed invisible: the
+	// clamp landed in `run_stats.ts` (and in `run_stats.dart`, which the Dart
+	// twin of THIS module imports) while this file kept its own unclamped
+	// `Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))`. Nothing compares two
+	// helpers on the same platform, so only the pair's own suites could have
+	// caught it and neither had an antipodal case.
+	const source = stripComments(
+		readFileSync(resolve(import.meta.dirname, './grade_adjusted_pace.ts'), 'utf-8'),
+	);
+	assert.match(
+		source,
+		/import \{[^}]*\bhaversineMetres\b[^}]*\} from '\.\/run_stats'/,
+		'grade_adjusted_pace must take its distances from the shared helper',
+	);
+	assert.doesNotMatch(
+		source,
+		/function haversineMetres\(/,
+		'a second copy of the great-circle formula in this file is the defect itself',
+	);
 });

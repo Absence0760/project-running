@@ -94,6 +94,8 @@
     <string name="recover_unsaved_run">Recover unsaved run?</string>
     <string name="save_it">Save it</string>
     <string name="discard">Discard</string>
+    <string name="discard_confirm">Discard?</string>
+    <string name="discard_stake">Not saved anywhere else</string>
 
     <!-- Battery instructions card -->
     <string name="battery_allow_background">Allow background activity</string>

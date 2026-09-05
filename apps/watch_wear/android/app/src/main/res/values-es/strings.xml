@@ -71,6 +71,8 @@
     <string name="recover_unsaved_run">¿Recuperar carrera sin guardar?</string>
     <string name="save_it">Guardar</string>
     <string name="discard">Descartar</string>
+    <string name="discard_confirm">¿Descartar?</string>
+    <string name="discard_stake">No se guarda en ningún otro sitio</string>
 
     <string name="battery_allow_background">Permitir actividad en segundo plano</string>
     <string name="battery_samsung_summary">Los relojes Samsung gestionan esto en Galaxy Wearable en tu teléfono.</string>

@@ -100,8 +100,8 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
       // SECURITY DEFINER call. Fails closed (returns []) on outage so
       // a transient blip renders an empty map for non-owners instead
       // of leaking the start / end home location. Run-bound
-      // `clipTrackForUser` would be wrong here — it doesn't do route
-      // visibility.
+      // `fetchClippedTrackForRun` would be wrong here — it doesn't do
+      // route visibility.
       final viewerId = widget.api.userId;
       final ownerId = fetched.ownerId;
       final isOwner =

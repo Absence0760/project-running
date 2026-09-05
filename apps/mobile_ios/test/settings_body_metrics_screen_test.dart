@@ -278,8 +278,6 @@ void main() {
 
       expect(find.textContaining('Could not save'), findsOneWidget);
 
-      // Drain the showTopBanner auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 
@@ -382,8 +380,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(api.withdrawCalled, isTrue);
 
-      // Drain the showTopBanner auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('withdrawal clears the Art 9 mirror and leaves the age record '

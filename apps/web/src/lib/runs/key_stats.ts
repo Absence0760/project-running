@@ -78,3 +78,29 @@ export function cadenceSpm(
 	const derived = Math.round(steps / (movingSeconds / 60));
 	return derived > 0 ? derived : null;
 }
+
+/**
+ * The run row's own total ascent in metres, or null when the row carries none.
+ *
+ * `20270302_001` promoted total ascent to `runs.elevation_gain_m` and left
+ * `metadata.elevation_m` in place for the rows written before it; the column is
+ * canonical and the key is what older rows carry, so both are read here and in
+ * one order. This is a claim ABOUT THE ROW — it is not `computeElevationGain`
+ * over a track, and a caller that has a track with altitudes should prefer that
+ * measurement, which is the one the elevation profile on the same page is drawn
+ * from.
+ *
+ * Null, not 0, when neither is a usable number: a run nothing measured the
+ * ascent of and a genuinely flat one are different facts (§ 1164), and the
+ * challenge aggregate that sums this column coalesces its own nulls.
+ */
+export function storedElevationGainM(run: {
+	elevation_gain_m?: number | null;
+	metadata?: unknown;
+}): number | null {
+	const gain = run.elevation_gain_m;
+	if (typeof gain === 'number' && Number.isFinite(gain)) return gain;
+	const meta = run.metadata as { elevation_m?: unknown } | null | undefined;
+	const legacy = meta?.elevation_m;
+	return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : null;
+}

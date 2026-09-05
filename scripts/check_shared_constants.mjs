@@ -1466,14 +1466,14 @@ export const REGISTRY = [
 	{
 		name: 'exercise-name case fold',
 		why:
-			'The grouping key is lower-cased on three rails whose case tables are ' +
-			'not each other\'s. Measured over every assignable code point, JS and ' +
-			'Dart toLowerCase() disagree at 466, and Postgres lower() answers with ' +
-			'the collation of its argument. These two folds are the disagreements ' +
-			'reachable in a Latin or Greek exercise name, and the key is PERSISTED ' +
-			'as gym_routine_exercises.exercise_key and exercises.name_key: a rail ' +
-			'that stops applying one either splits a lifter\'s history into two ' +
-			'buckets or writes a key the CHECK on those columns rejects outright.',
+			'The one fold applied around the frozen case-fold table. Final sigma is ' +
+			'a CONTEXT, not a case: ICU and JS produce it when lowercasing a ' +
+			'word-final capital sigma, Dart and libc never do, and no ' +
+			'per-code-point table can express either behaviour. The key is ' +
+			'PERSISTED as gym_sets.exercise_key, gym_routine_exercises.exercise_key ' +
+			'and exercises.name_key: a rail that stops applying it either splits a ' +
+			'Greek lifter\'s history into two buckets or writes a key the CHECK on ' +
+			'those columns rejects outright.',
 		match: 'key',
 		compare: 'ordered',
 		rails: [
@@ -1481,15 +1481,7 @@ export const REGISTRY = [
 				label: 'web (apps/web/src/lib/gym/gym_prs.ts)',
 				sites: (ctx) => [
 					{
-						key: 'pre-fold (before the lowercase)',
-						where: 'EXERCISE_CASE_PRE_FOLD',
-						values: parseCaseFoldPair(
-							ctx.read('apps/web/src/lib/gym/gym_prs.ts'),
-							'EXERCISE_CASE_PRE_FOLD = [',
-						),
-					},
-					{
-						key: 'post-fold (after the lowercase)',
+						key: 'post-fold (after the table)',
 						where: 'EXERCISE_CASE_POST_FOLD',
 						values: parseCaseFoldPair(
 							ctx.read('apps/web/src/lib/gym/gym_prs.ts'),
@@ -1502,15 +1494,7 @@ export const REGISTRY = [
 				label: 'mobile (apps/mobile_android/lib/gym_prs.dart)',
 				sites: (ctx) => [
 					{
-						key: 'pre-fold (before the lowercase)',
-						where: 'kExerciseCasePreFold',
-						values: parseCaseFoldPair(
-							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
-							'kExerciseCasePreFold = [',
-						),
-					},
-					{
-						key: 'post-fold (after the lowercase)',
+						key: 'post-fold (after the table)',
 						where: 'kExerciseCasePostFold',
 						values: parseCaseFoldPair(
 							ctx.read('apps/mobile_android/lib/gym_prs.dart'),
@@ -1526,14 +1510,9 @@ export const REGISTRY = [
 					if (!fn) return [];
 					return [
 						{
-							key: 'pre-fold (before the lowercase)',
+							key: 'post-fold (after the table)',
 							where: `normalise_exercise_name() in ${fn.file}`,
-							values: parseCaseFoldPair(fn.sql, 'translate(p_name,'),
-						},
-						{
-							key: 'post-fold (after the lowercase)',
-							where: `normalise_exercise_name() in ${fn.file}`,
-							values: parseCaseFoldPair(fn.sql, 'collate "und-x-icu"),'),
+							values: parseCaseFoldPair(fn.sql, 'translate(public.exercise_fold_case(p_name),'),
 						},
 					];
 				},
@@ -1543,10 +1522,10 @@ export const REGISTRY = [
 	{
 		name: 'exercise-name whitespace class',
 		why:
-			'The exercise grouping key is derived on three rails and PERSISTED by ' +
-			'the clients as gym_routine_exercises.exercise_key and ' +
-			'exercises.name_key, while four SQL RPCs re-derive it from ' +
-			'gym_sets.exercise_name at read time. A name one rail folds and another ' +
+			'The exercise grouping key is derived on three rails and PERSISTED as ' +
+			'gym_sets.exercise_key (server-stamped), ' +
+			'gym_routine_exercises.exercise_key and exercises.name_key (both ' +
+			'client-stamped). A name one rail folds and another ' +
 			'does not splits one exercise into two buckets: the local PR tracker ' +
 			'says PR where gym_workout_summaries.is_pr says no, and ' +
 			'gym_exercise_set_history returns an empty history for a lift that ' +
@@ -1724,6 +1703,217 @@ function splitColumns(literal) {
 		.filter((c) => c.length > 0);
 }
 
+// ── The frozen exercise case-fold table ────────────────────────────────────
+
+// Not an `Entry`, for the same reason `checkColumnBounds` is not: the rails
+// carry 1,488 pairs each, and the entry checker prints every value it compared
+// on SUCCESS. A 30 KB line on every green run is not a report. This compares
+// the three rails itself and, on a disagreement, names the first few code
+// points and the total rather than the set.
+//
+// The table is FROZEN at the Unicode version stamped into the two client files
+// (decisions § 1175). There is deliberately no "re-render it and compare"
+// guard: re-rendering under a newer Node is how the NEXT version arrives, and a
+// guard that failed on it would be reporting an intended act as drift. What
+// must not drift is the three rails from EACH OTHER, which is this.
+
+export const WEB_FOLD_TABLE = 'apps/web/src/lib/gym/exercise_fold_table.ts';
+export const MOBILE_FOLD_TABLE = 'apps/mobile_android/lib/exercise_fold_table.dart';
+
+/** Below this a parse has read a fragment of the table, not the table. */
+export const FOLD_TABLE_MIN = 1000;
+
+/**
+ * The `0x0041,`-shaped entries of a named TS or Dart list. Hex, because a
+ * generated table of code points is unreadable in decimal and both clients
+ * write it the same way.
+ *
+ * @param {string} src @param {string} declName @returns {number[]}
+ */
+export function parseFoldTableList(src, declName) {
+	const decl = new RegExp(`\\b${declName}\\b[^=\\n]*=\\s*(?:<[^>]*>\\s*)?\\[([^\\]]*)\\]`).exec(src);
+	if (decl === null) return [];
+	return [...decl[1].matchAll(/0x([0-9a-fA-F]+)\s*,/g)].map((m) => parseInt(m[1], 16));
+}
+
+/**
+ * The code points of a Postgres `U&'...'` literal, including the adjacent-
+ * literal continuations a 1,488-entry table is wrapped across. `\XXXX` is a BMP
+ * code point and `\+XXXXXX` a supplementary one.
+ *
+ * @param {string} literal @returns {number[]}
+ */
+export function parseSqlUnicodeLiteral(literal) {
+	const joined = [...literal.matchAll(/'([^']*)'/g)].map((m) => m[1]).join('');
+	return [...joined.matchAll(/\\(?:\+([0-9A-Fa-f]{6})|([0-9A-Fa-f]{4}))/g)].map((m) =>
+		parseInt(m[1] ?? m[2], 16),
+	);
+}
+
+/**
+ * Both halves of the SQL rail: the frozen table in the `else` branch, and the
+ * ASCII fast path in the `then` branch that is only answer-identical to it
+ * while the table's ASCII half is exactly A-Z.
+ *
+ * @param {string} sql
+ * @returns {{ keys: number[], values: number[], asciiFrom: string, asciiTo: string }}
+ */
+export function parseSqlFoldTable(sql) {
+	const empty = { keys: [], values: [], asciiFrom: '', asciiTo: '' };
+	const fast = /then\s+translate\(\s*p_name\s*,\s*'([^']*)'\s*,\s*'([^']*)'\s*\)/.exec(sql);
+	const elseAt = sql.indexOf('else translate(');
+	if (elseAt < 0) return empty;
+	const region = sql.slice(elseAt);
+	const keyAt = region.indexOf("U&'");
+	if (keyAt < 0) return empty;
+	const valueAt = region.indexOf("U&'", keyAt + 3);
+	if (valueAt < 0) return empty;
+	return {
+		keys: parseSqlUnicodeLiteral(region.slice(keyAt, valueAt)),
+		values: parseSqlUnicodeLiteral(region.slice(valueAt)),
+		asciiFrom: fast === null ? '' : fast[1],
+		asciiTo: fast === null ? '' : fast[2],
+	};
+}
+
+/**
+ * @param {number[]} keys @param {number[]} values
+ * @returns {Map<number, number>}
+ */
+function foldMap(keys, values) {
+	return new Map(keys.map((cp, i) => [cp, values[i]]));
+}
+
+/** @param {number} cp @returns {string} */
+function hex(cp) {
+	return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+/**
+ * @param {Ctx} ctx
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkExerciseFoldTable(ctx) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+
+	const webSrc = ctx.read(WEB_FOLD_TABLE);
+	const mobileSrc = ctx.read(MOBILE_FOLD_TABLE);
+	const fn = ctx.sql.live.get('exercise_fold_case');
+
+	const rails = [
+		{
+			label: `web (${WEB_FOLD_TABLE})`,
+			keys: parseFoldTableList(webSrc, 'EXERCISE_FOLD_KEYS'),
+			values: parseFoldTableList(webSrc, 'EXERCISE_FOLD_VALUES'),
+		},
+		{
+			label: `mobile (${MOBILE_FOLD_TABLE})`,
+			keys: parseFoldTableList(mobileSrc, 'kExerciseFoldKeys'),
+			values: parseFoldTableList(mobileSrc, 'kExerciseFoldValues'),
+		},
+	];
+	const sql = fn === undefined ? { keys: [], values: [], asciiFrom: '', asciiTo: '' } : parseSqlFoldTable(fn.sql);
+	rails.push({
+		label: `sql (exercise_fold_case in ${fn === undefined ? '<no live definition>' : fn.file})`,
+		keys: sql.keys,
+		values: sql.values,
+	});
+
+	// A rail that reads nothing agrees with every other rail that reads nothing,
+	// so it is reported as the guard going blind rather than as agreement — the
+	// same rule `checkEntry` applies to an empty site.
+	for (const rail of rails) {
+		if (rail.keys.length >= FOLD_TABLE_MIN && rail.keys.length === rail.values.length) continue;
+		errors.push(
+			`exercise case-fold table: rail "${rail.label}" read ${rail.keys.length} keys and ` +
+				`${rail.values.length} values.\n` +
+				`  A frozen Unicode simple-lowercase table is ~1,488 pairs, so this is a parse ` +
+				`that no longer understands the shape the table is written in, not a table that ` +
+				`shrank. The guard is blind on that rail until its extractor is taught the new form.`,
+		);
+	}
+	if (errors.length > 0) return { errors, ok };
+
+	const reference = rails[0];
+	const referenceMap = foldMap(reference.keys, reference.values);
+	for (const rail of rails.slice(1)) {
+		const theirs = foldMap(rail.keys, rail.values);
+		/** @type {string[]} */
+		const differing = [];
+		for (const cp of new Set([...referenceMap.keys(), ...theirs.keys()])) {
+			const a = referenceMap.get(cp);
+			const b = theirs.get(cp);
+			if (a === b) continue;
+			differing.push(
+				`${hex(cp)} ${a === undefined ? 'unfolded' : hex(a)} here, ` +
+					`${b === undefined ? 'unfolded' : hex(b)} there`,
+			);
+		}
+		if (differing.length === 0) continue;
+		differing.sort();
+		errors.push(
+			`exercise case-fold table: "${reference.label}" and "${rail.label}" disagree at ` +
+				`${differing.length} code point(s).\n` +
+				differing.slice(0, 8).map((d) => `    ${d}`).join('\n') +
+				(differing.length > 8 ? `\n    ... and ${differing.length - 8} more` : '') +
+				`\n  The grouping key is PERSISTED as gym_sets.exercise_key, ` +
+				`gym_routine_exercises.exercise_key and exercises.name_key, and all three columns ` +
+				`carry a VALIDATED CHECK naming normalise_exercise_name. A code point one rail ` +
+				`folds and another does not is a name one of them cannot write without a 23514, ` +
+				`and a lift the three would bucket as two exercises. Regenerate the clients with ` +
+				`scripts/gen_exercise_fold_table.mjs and move the SQL rail in the same change — ` +
+				`its literals come from the generator's --sql mode (decisions § 1175).`,
+		);
+	}
+
+	// The version stamp is a rail value of its own: two tables that agree today
+	// while naming different Unicode versions agree by luck.
+	const stamps = [
+		[WEB_FOLD_TABLE, /EXERCISE_FOLD_UNICODE_VERSION\s*=\s*'([^']*)'/.exec(webSrc)?.[1] ?? ''],
+		[MOBILE_FOLD_TABLE, /kExerciseFoldUnicodeVersion\s*=\s*'([^']*)'/.exec(mobileSrc)?.[1] ?? ''],
+	];
+	if (stamps.some(([, v]) => v === '') || stamps[0][1] !== stamps[1][1]) {
+		errors.push(
+			`exercise case-fold table: the two client rails name different frozen Unicode ` +
+				`versions — ${stamps.map(([f, v]) => `${f}: ${v === '' ? '<unreadable>' : v}`).join(', ')}.\n` +
+				`  Both are rendered by one generator in one run, so this is a hand edit or a ` +
+				`half-applied regeneration.`,
+		);
+	}
+
+	// The SQL fast path is the one place a rail may hold a SECOND copy of part
+	// of the table, and it is only answer-identical while that copy is exactly
+	// the table's ASCII half.
+	const asciiExpected = reference.keys
+		.map((cp, i) => [cp, reference.values[i]])
+		.filter(([cp]) => cp < 0x80);
+	const asciiFrom = [...sql.asciiFrom].map((c) => /** @type {number} */ (c.codePointAt(0)));
+	const asciiTo = [...sql.asciiTo].map((c) => /** @type {number} */ (c.codePointAt(0)));
+	const asciiActual = asciiFrom.map((cp, i) => [cp, asciiTo[i]]);
+	if (JSON.stringify(asciiActual) !== JSON.stringify(asciiExpected)) {
+		errors.push(
+			`exercise case-fold table: the SQL all-ASCII fast path is not the table's ASCII half.\n` +
+				`    fast path: ${JSON.stringify(sql.asciiFrom)} -> ${JSON.stringify(sql.asciiTo)}\n` +
+				`    table:     ${asciiExpected.map(([k, v]) => `${hex(k)}->${hex(v)}`).join(' ')}\n` +
+				`  exercise_fold_case takes the 26-pair branch for a name that is entirely ASCII, ` +
+				`which is answer-identical to the full table ONLY while the two agree there. They ` +
+				`no longer do, so the commonest exercise names in the product fold differently on ` +
+				`the server than on either client.`,
+		);
+	}
+
+	if (errors.length === 0) {
+		ok.push(
+			`exercise case-fold table: ${reference.keys.length} folds agree across 3 rails at ` +
+				`Unicode ${stamps[0][1]}, ASCII fast path included`,
+		);
+	}
+	return { errors, ok };
+}
+
 // ── Comparison ─────────────────────────────────────────────────────────────
 
 /** @param {string[]} values @param {'set' | 'ordered'} compare @returns {string} */
@@ -1855,6 +2045,9 @@ export function check(registry = REGISTRY, ctx = defaultContext()) {
 	const maxima = checkColumnCheckMaxima(ctx);
 	errors.push(...maxima.errors);
 	ok.push(...maxima.ok);
+	const foldTable = checkExerciseFoldTable(ctx);
+	errors.push(...foldTable.errors);
+	ok.push(...foldTable.ok);
 	return { errors, ok };
 }
 

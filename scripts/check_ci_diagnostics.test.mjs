@@ -13,8 +13,16 @@ import {
 	checkFailureScoping,
 	checkGateCoverage,
 	checkGateVerdict,
+	checkRuleSubjects,
+	checkShellSafeDiagnoses,
 	checkStepDiagnoses,
 	derivedBundles,
+	hasShellSubstitutionBacktick,
+	ACTION_DIR,
+	RULE_SUBJECTS,
+	parseActionSteps,
+	readActions,
+	stepSources,
 	isGuardStep,
 	parseJobBlock,
 	parseJobIf,
@@ -519,7 +527,7 @@ test('the exempt set over the real workflows is unnamed setup, and nothing else'
 
 test('the repo’s real workflows carry no misattributable diagnosis', () => {
 	const files = readWorkflows(WORKFLOW_DIR);
-	const { errors, diagnoses, scoping, gate } = checkAll(files);
+	const { errors, diagnoses, scoping, gate } = checkAll(files, readActions(ACTION_DIR));
 	assert.deepEqual(errors, []);
 	assert.ok(scoping.conditioned >= 5, `expected the on-failure steps, found ${scoping.conditioned}`);
 	assert.ok(
@@ -574,6 +582,12 @@ const NOT_A_GUARD = new Map([
 	['scripts/web_icon_font.mjs', "the icon extractor, consumed by the generator and its suite"],
 	['scripts/gen_web_icon_font.mjs', 'a generator; its output is what the guard checks'],
 	['scripts/gen_catalogue_fold_table.mjs', 'a generator; its output is what the guard checks'],
+	[
+		'scripts/gen_exercise_fold_table.mjs',
+		'a generator; unlike the catalogue table it is FROZEN, so nothing re-renders it '
+			+ '(decisions § 1176) and what CI checks is check_shared_constants.mjs comparing its '
+			+ 'three rails',
+	],
 	['scripts/sync_deno_lock.mjs', 'a syncer; ci.yml runs it with --check'],
 	['scripts/dev_run_graphhopper.mjs', 'a local dev tool'],
 	['scripts/dev_run_osrm.mjs', 'a local dev tool'],
@@ -829,4 +843,206 @@ test('a NOT_A_GUARD entry that no longer exists fails rather than sitting as cov
 		[],
 		'a list of exemptions that has stopped describing the tree exempts nothing (decisions § 775)',
 	);
+});
+
+// ───────── rule 5: the message the shell prints is the message written ─────────
+
+test('a backtick inside double quotes is command substitution, escaped or single-quoted is not', () => {
+	assert.equal(hasShellSubstitutionBacktick('echo "a `Partial` with no Notes"'), true);
+	assert.equal(hasShellSubstitutionBacktick('echo "a \\`Partial\\` with no Notes"'), false);
+	assert.equal(hasShellSubstitutionBacktick("echo 'a `Partial` with no Notes'"), false);
+	assert.equal(hasShellSubstitutionBacktick("echo '```json'"), false);
+	assert.equal(hasShellSubstitutionBacktick('echo "$(go env GOPATH)/bin/actionlint"'), false);
+	assert.equal(hasShellSubstitutionBacktick("awk '{print \"x\"}' # `y`"), false);
+});
+
+test('a diagnosis the shell would eat half of fails, naming the file and line', () => {
+	const { errors } = checkShellSafeDiagnoses([
+		{
+			name: 'ci.yml',
+			text: [
+				'jobs:',
+				'  parity-matrix:',
+				'    steps:',
+				'      - name: Table shape',
+				'        run: |',
+				'          echo "::error::a symbol outside `A / B`, or a `Partial` with no Notes"',
+			].join('\n'),
+		},
+	]);
+	assert.equal(errors.length, 1, errors.join('\n'));
+	assert.match(errors[0], /^ci\.yml:6 — job `parity-matrix`/);
+});
+
+test('a comment carrying a backtick reaches no shell and is left alone', () => {
+	const { errors, ok } = checkShellSafeDiagnoses([
+		{
+			name: 'ci.yml',
+			text: [
+				'jobs:',
+				'  a:',
+				'    steps:',
+				'      # a `Partial` cell, in prose',
+				'      - name: x',
+				'        run: |',
+				'          # the `stack:` matrix',
+				'          echo ok',
+			].join('\n'),
+		},
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(ok.length, 1);
+});
+
+test('reading no shell line at all is reported rather than passing every workflow', () => {
+	const { errors } = checkShellSafeDiagnoses([{ name: 'ci.yml', text: 'jobs:\n  a:\n' }]);
+	assert.ok(
+		errors.some((e) => /passed over nothing/.test(e)),
+		errors.join('\n'),
+	);
+});
+
+test('every committed workflow prints its diagnoses whole', () => {
+	const { errors, scanned } = checkShellSafeDiagnoses(readWorkflows(WORKFLOW_DIR));
+	assert.deepEqual(errors, []);
+	assert.ok(scanned > 500, `only ${scanned} shell line(s) read`);
+});
+
+// ───────── the subject is per rule, and composite actions are half of it ─────────
+
+const ACTION_FIXTURE = [
+	'name: Do a thing',
+	'inputs:',
+	'  steps:',
+	'    description: a decoy key at the same indent as the real one',
+	'runs:',
+	'  using: composite',
+	'  steps:',
+	'    - name: First',
+	'      shell: bash',
+	'      run: echo hello',
+	'    - shell: bash',
+	'      if: failure()',
+	'      run: |',
+	'        echo "::error::something above failed"',
+].join('\n');
+
+test('a composite action’s runs.steps are read, and a decoy `steps:` key outside runs is not', () => {
+	const steps = parseActionSteps(ACTION_FIXTURE, 'do-a-thing');
+	assert.equal(steps.length, 2);
+	assert.deepEqual(
+		steps.map((s) => [s.job, s.line, s.name, s.if, s.hasRun]),
+		[
+			['do-a-thing', 8, 'First', null, true],
+			['do-a-thing', 11, null, 'failure()', true],
+		],
+	);
+});
+
+test('a workflow has no runs.steps, so the action reader returns nothing for one', () => {
+	assert.deepEqual(parseActionSteps(readWorkflows(WORKFLOW_DIR)[0].text, 'x'), []);
+});
+
+test('the shared collector gives a job step and an action step the same shape', () => {
+	const body = ['      - name: Same', '        shell: bash', '        run: echo hi'].join('\n');
+	const [job] = parseSteps(['jobs:', '  a:', '    steps:', body].join('\n'));
+	const [act] = parseActionSteps(
+		['runs:', '  using: composite', '  steps:', body.replace(/^ {2}/gm, '')].join('\n'),
+		'a',
+	);
+	assert.deepEqual(
+		{ ...job, line: 0, body: '' },
+		{ ...act, line: 0, body: '' },
+		'the two readers disagree about the same step',
+	);
+});
+
+test('the committed composite actions are read, named by directory', () => {
+	const actions = readActions(ACTION_DIR);
+	assert.ok(actions.length >= 2, `found ${actions.length} composite action(s)`);
+	for (const a of actions) assert.match(a.name, /^[a-z0-9-]+\/action\.ya?ml$/);
+	const sources = stepSources([], actions);
+	assert.ok(sources.every((s) => s.kind === 'action'));
+	const owners = new Set(sources.flatMap((s) => s.steps.map((x) => x.job)));
+	assert.ok(owners.has('start-supabase') && owners.has('install-playwright'), [...owners].join(','));
+	assert.ok(
+		sources.reduce((n, s) => n + s.steps.length, 0) >= 4,
+		'the composite actions contributed no steps, so rules 1 + 5 read nothing there',
+	);
+});
+
+test('rule 5 reads a composite action, and names it as one rather than as a job', () => {
+	const { errors } = checkShellSafeDiagnoses(
+		[],
+		[{ name: 'setup-x/action.yml', text: ACTION_FIXTURE.replace('echo hello', 'echo "a `bad` word"') }],
+	);
+	assert.equal(errors.length, 1, errors.join('\n'));
+	assert.match(errors[0], /^setup-x\/action\.yml:10 — composite action `setup-x`/);
+});
+
+test('rule 1 reads a composite action’s unscoped failure() diagnosis', () => {
+	const { errors, conditioned } = checkFailureScoping(
+		[],
+		[{ name: 'setup-x/action.yml', text: ACTION_FIXTURE }],
+	);
+	assert.equal(conditioned, 1);
+	assert.equal(errors.length, 1, errors.join('\n'));
+	assert.match(errors[0], /^setup-x\/action\.yml:11 — this step prints an `::error::`/);
+});
+
+test('rules 2, 3 and 4 are not applied to a composite action', () => {
+	// Two guard steps in one action would bundle a JOB; an action has no job to
+	// bundle, and nothing in it can be named in a `needs:` list.
+	const text = [
+		'runs:',
+		'  using: composite',
+		'  steps:',
+		'    - name: One',
+		'      shell: bash',
+		'      run: node --test a.test.mjs',
+		'    - name: Two',
+		'      shell: bash',
+		'      run: node scripts/check_thing.mjs',
+	].join('\n');
+	const actions = [{ name: 'setup-x/action.yml', text }];
+	assert.equal(derivedBundles(actions).size, 0, 'an action was derived as a bundled job');
+	// Rule 2 still reports its own vacuity (a list with no jobs derives no
+	// bundle), which is the point: what it must not do is say anything about
+	// the action or the steps inside it.
+	const { errors, ok } = checkStepDiagnoses(actions);
+	assert.deepEqual(ok, []);
+	for (const e of errors) assert.doesNotMatch(e, /setup-x|\bOne\b|\bTwo\b/, e);
+	assert.equal(checkGateCoverage(actions).covered, 0);
+});
+
+test('RULE_SUBJECTS names every rule exactly once, with a reason', () => {
+	assert.deepEqual(
+		RULE_SUBJECTS.map((r) => r.rule),
+		[1, 2, 3, 4, 5],
+	);
+	for (const r of RULE_SUBJECTS) {
+		assert.ok(r.what.length > 10 && r.why.length > 10, `rule ${r.rule} states no reason`);
+	}
+});
+
+test('an empty subject list fails rather than reading as a clean pass', () => {
+	const files = readWorkflows(WORKFLOW_DIR);
+	assert.ok(
+		checkRuleSubjects(files, []).errors.some((e) => /no composite action was read/.test(e)),
+		'rules 1 + 5 silently covered workflows only',
+	);
+	assert.ok(
+		checkRuleSubjects([], readActions(ACTION_DIR)).errors.some((e) => /no workflow file/.test(e)),
+	);
+	const both = checkRuleSubjects(files, readActions(ACTION_DIR));
+	assert.deepEqual(both.errors, []);
+	assert.ok(both.ok.some((l) => /rule\(s\) 1 \+ 5 read \d+ workflow\(s\) AND \d+ composite/.test(l)));
+});
+
+test('the committed composite actions carry no rule-1 or rule-5 defect', () => {
+	const actions = readActions(ACTION_DIR);
+	assert.deepEqual(checkFailureScoping(readWorkflows(WORKFLOW_DIR), actions).errors, []);
+	const delivery = checkShellSafeDiagnoses([], actions);
+	assert.deepEqual(delivery.errors, []);
+	assert.ok(delivery.scanned > 50, `only ${delivery.scanned} action shell line(s) read`);
 });

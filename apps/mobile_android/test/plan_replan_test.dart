@@ -492,4 +492,69 @@ void main() {
     // -1 means "no completed week yet" — the earliest eligible week is eased.
     expect(easeOffNextWeek(buildOnly, -1).length, 1);
   });
+
+  test('two future long runs on the same date: the first in plan order absorbs the make-up',
+      () {
+    final weeks = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'build',
+        plannedMetres: 40000,
+        actualMetres: 20000,
+        isComplete: true,
+        workouts: [_wo('missed', '2026-06-01', 'long', 28000, isPast: true)],
+      ),
+      ReplanWeek(
+        weekIndex: 1,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: [
+          _wo('first', '2026-06-08', 'long', 22000),
+          _wo('second', '2026-06-08', 'long', 22000),
+        ],
+      ),
+    ];
+    final r = replanRemaining(weeks: weeks, today: '2026-06-05');
+    final makeUps =
+        r.changes.where((c) => c.reason == ReplanReason.makeUpLong).toList();
+    expect(makeUps.length, 1);
+    expect(makeUps.first.workoutId, 'first');
+  });
+
+  test('the same-date tie holds on a plan past the small-array sort path', () {
+    // 40 future long runs, the first and last sharing the earliest date, so an
+    // unstable ordering of the equal pair would pick the wrong session.
+    // `List.sort` hands off to an unstable quicksort past 33 elements, which is
+    // what made a shipped tie-break by sort unsafe on either platform.
+    final future = <ReplanWorkout>[
+      _wo('first', '2026-06-08', 'long', 22000),
+      for (var i = 0; i < 38; i++) _wo('mid', '2026-06-15', 'long', 22000),
+      _wo('last', '2026-06-08', 'long', 22000),
+    ];
+    final weeks = [
+      ReplanWeek(
+        weekIndex: 0,
+        phase: 'build',
+        plannedMetres: 40000,
+        actualMetres: 20000,
+        isComplete: true,
+        workouts: [_wo('missed', '2026-06-01', 'long', 28000, isPast: true)],
+      ),
+      ReplanWeek(
+        weekIndex: 1,
+        phase: 'build',
+        plannedMetres: 42000,
+        actualMetres: 0,
+        isComplete: false,
+        workouts: future,
+      ),
+    ];
+    final r = replanRemaining(weeks: weeks, today: '2026-06-05');
+    final makeUps =
+        r.changes.where((c) => c.reason == ReplanReason.makeUpLong).toList();
+    expect(makeUps.length, 1);
+    expect(makeUps.first.workoutId, 'first');
+  });
 }

@@ -15,6 +15,8 @@
 // All three are single-set metrics so they're deterministic and a typo in
 // one set can't poison a session aggregate.
 
+import { EXERCISE_FOLD_KEYS, EXERCISE_FOLD_VALUES } from './exercise_fold_table';
+
 export interface GymSetLike {
 	exercise_name: string;
 	reps: number | null;
@@ -58,47 +60,58 @@ export function estimatedOneRepMax(weightKg: number, reps: number): number {
 /// internal whitespace collapsed. "Bench Press", "bench  press" and
 /// "  Bench press " all collapse to one PR bucket.
 export function normaliseExerciseName(name: string): string {
-	return name
-		.replace(EXERCISE_WS, ' ')
-		.trim()
-		.replaceAll(EXERCISE_CASE_PRE_FOLD[0], EXERCISE_CASE_PRE_FOLD[1])
-		.toLowerCase()
+	return foldExerciseCase(name.replace(EXERCISE_WS, ' ').trim())
 		.replaceAll(EXERCISE_CASE_POST_FOLD[0], EXERCISE_CASE_POST_FOLD[1])
 		.replace(/ +/g, ' ');
 }
 
-/// The two case folds every rail applies around its own lowercase, spelled out
-/// by code point for the same reason the whitespace class below is: past ASCII,
-/// no two of the three rails' lowercase tables agree.
+/// Lower-case through the FROZEN table rather than through `toLowerCase()`.
 ///
-/// Postgres `lower()` answers with the collation of its argument, so the SQL
-/// mirror pins `collate "und-x-icu"` (decisions § 830) — without it the same
-/// migration set keys `Incline Press` differently on a Turkish-locale database
-/// (`lower('I')` is U+0131 there) and folds nothing past ASCII on a `C` one.
-/// The clients need no such pin: JS and Dart `toLowerCase()` are both
-/// locale-independent. But their TABLES are not each other's, and measured over
-/// every assignable code point they disagree at 466 — Dart's is Unicode simple
-/// case mapping from an older revision, JS's is full mapping from a newer one.
-/// These two are the disagreements reachable in a Latin or Greek exercise name:
+/// The runtime's own table is the last thing about this key that still moved
+/// with the runtime. Measured over every assignable code point, JS full case
+/// mapping, Dart simple case mapping from an older Unicode revision and the
+/// server's ICU root collation answered differently at 465 / 410 / 55 code
+/// points, and the key is PERSISTED — so one rail writes a key the CHECK the
+/// other two agree on rejects outright (decisions § 1175). The table is
+/// generated from Unicode's own data by `scripts/gen_exercise_fold_table.mjs`
+/// and frozen at the version stamped into it; the mirrors are
+/// `apps/mobile_android/lib/exercise_fold_table.dart` and the `translate()`
+/// inside `public.exercise_fold_case`.
 ///
-///   * U+0130 folds to a bare `i` BEFORE the lowercase, its Unicode SIMPLE
-///     lowercase mapping and what Dart and the libc provider already return.
-///     Without it, a mobile-written key for such a name violates the CHECK on
-///     `gym_routine_exercises.exercise_key` — 23514 on a legitimate save.
-///   * U+03C2 folds to U+03C3 AFTER. ICU and JS apply Unicode's contextual
-///     Final_Sigma rule and Dart and libc never do, so an all-caps Greek
-///     spelling would otherwise never meet its own lower-case one.
-const EXERCISE_CASE_PRE_FOLD = ['\u0130', '\u0069'] as const;
+/// Iterating with `for..of` is load-bearing: 307 of the 1,488 entries are
+/// outside the BMP, and a code-unit walk would fold each half of a surrogate
+/// pair separately and match nothing.
+function foldExerciseCase(value: string): string {
+	let out = '';
+	for (const ch of value) {
+		const folded = EXERCISE_FOLD.get(ch.codePointAt(0) as number);
+		out += folded === undefined ? ch : folded;
+	}
+	return out;
+}
+
+const EXERCISE_FOLD: ReadonlyMap<number, string> = new Map(
+	EXERCISE_FOLD_KEYS.map((cp, i) => [cp, String.fromCodePoint(EXERCISE_FOLD_VALUES[i])]),
+);
+
+/// The one case fold applied around the table, spelled out by code point for
+/// the same reason the whitespace class below is.
+///
+/// U+03C2 folds to U+03C3 AFTER the table. Final sigma is a CONTEXT, not a
+/// case: ICU and JS produce it when lowercasing a word-final capital sigma and
+/// Dart and libc never do, and no per-code-point table can express either
+/// behaviour. The table always answers U+03C3, so this collapses a lifter's own
+/// typed final sigma onto it and an all-caps Greek spelling meets its
+/// lower-case one on all three rails.
 const EXERCISE_CASE_POST_FOLD = ['\u03c2', '\u03c3'] as const;
 
 /// The whitespace class every rail folds, spelled out by code point rather
 /// than left to a runtime's default.
 ///
-/// This value is PERSISTED as `gym_routine_exercises.exercise_key` and
-/// `exercises.name_key`, and four SQL RPCs re-derive it from
-/// `gym_sets.exercise_name` at read time, so all three rails must produce an
-/// identical key or one exercise buckets as two: the local PR tracker says PR
-/// where `gym_workout_summaries.is_pr` says no, and
+/// This value is PERSISTED as `gym_sets.exercise_key` (server-stamped),
+/// `gym_routine_exercises.exercise_key` and `exercises.name_key`, so all three
+/// rails must produce an identical key or one exercise buckets as two: the
+/// local PR tracker says PR where `gym_workout_summaries.is_pr` says no, and
 /// `gym_exercise_set_history(p_name)` returns an empty history for a lift that
 /// has one.
 ///

@@ -555,7 +555,7 @@ export async function fetchRunsOnRoute(
 		.eq('route_id', routeId)
 		.order('duration_s', { ascending: true });
 	if (error || !data) return [];
-	return data as never;
+	return data;
 }
 
 /**
@@ -786,7 +786,9 @@ async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
 	return out;
 }
 
-export async function fetchPublicRun(id: string): Promise<Run | null> {
+export async function fetchPublicRun(
+	id: string,
+): Promise<{ run: Run | null; error: string | null }> {
 	// Public reads go through the public_runs view (decisions §33,
 	// migration 20260626_001) which strips external_id, redacts the
 	// metadata bag's audit / sync / training-plan-linkage keys, and
@@ -800,14 +802,21 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 	// decisions §33. RunShareView already branches on owner — owner takes
 	// the direct Storage path via fetchTrack(); non-owner takes
 	// fetchClippedTrackForRun(). This function only returns the row.
-	const { data } = await supabase
+	const { data, error } = await supabase
 		.from('public_runs')
 		.select('*')
 		.eq('id', id)
 		.single();
 
-	if (!data) return null;
-	return { ...data, track: null } as Run;
+	// PGRST116 is "no rows matched" — the run is private, deleted, or was
+	// never there. Anything else is a failure to find out, and collapsing the
+	// two rendered "Run not found" to every recipient of a shared link
+	// whenever the read merely failed. `fetchRunById` was fixed for exactly
+	// this and says so; the public half is the one strangers hit, and a
+	// stranger has no way to tell a broken read from a deleted run.
+	if (error && error.code !== 'PGRST116') return { run: null, error: error.message };
+	if (!data) return { run: null, error: null };
+	return { run: { ...data, track: null } as Run, error: null };
 }
 
 export interface PublicRunAttribution {
@@ -837,14 +846,21 @@ export interface PublicRunAttribution {
 /// surface is `/coaching/athletes/[id]`.
 export async function fetchPublicRunAttribution(
 	runId: string,
-): Promise<PublicRunAttribution | null> {
-	const { data: run } = await supabase
+): Promise<{ attribution: PublicRunAttribution | null; error: string | null }> {
+	// Reported separately for the same reason `fetchRunById` reports it: the
+	// caller decides whether the viewer is a non-owner or whether nothing has
+	// been established yet, and an errored read is evidence of neither.
+	const { data: run, error } = await supabase
 		.from('public_runs')
 		.select('user_id')
 		.eq('id', runId)
 		.maybeSingle();
+	if (error) return { attribution: null, error: error.message };
 	const ownerId = (run as { user_id?: string | null } | null)?.user_id;
-	if (!ownerId) return null;
+	if (!ownerId) return { attribution: null, error: null };
+	// The display name is decoration on an entitlement already established by
+	// the row above, so its own failure degrades to an unnamed owner rather
+	// than withdrawing the entitlement.
 	const { data: profile } = await supabase
 		.from('user_profiles')
 		.select('display_name, avatar_url')
@@ -852,9 +868,12 @@ export async function fetchPublicRunAttribution(
 		.maybeSingle();
 	const p = profile as { display_name?: string | null; avatar_url?: string | null } | null;
 	return {
-		ownerId,
-		displayName: p?.display_name ?? null,
-		avatarUrl: p?.avatar_url ?? null,
+		attribution: {
+			ownerId,
+			displayName: p?.display_name ?? null,
+			avatarUrl: p?.avatar_url ?? null,
+		},
+		error: null,
 	};
 }
 
@@ -1527,6 +1546,13 @@ export async function fetchRoutes(): Promise<Route[]> {
 	return result.routes;
 }
 
+/// Reason string for a failed routes read: message plus the PostgREST code
+/// when there is one, which is what tells a reporting user whether they hit a
+/// policy or a transport fault.
+function describeReadError(e: { message: string; code?: string | null }): string {
+	return `${e.message}${e.code ? ` (${e.code})` : ''}`;
+}
+
 /// Same as `fetchRoutes` but returns the error message alongside the
 /// rows. Callers that want to surface a failure to the user (rather
 /// than silently rendering an empty state — which is indistinguishable
@@ -1564,10 +1590,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 
 	if (ownedRes.error) {
 		console.error('fetchRoutes (owned) failed', ownedRes.error);
-		return {
-			routes: [],
-			error: `${ownedRes.error.message}${ownedRes.error.code ? ` (${ownedRes.error.code})` : ''}`,
-		};
+		return { routes: [], error: describeReadError(ownedRes.error) };
 	}
 
 	const owned = (ownedRes.data ?? []) as unknown as Route[];
@@ -1581,6 +1604,17 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	// the same privacy-preserving path Explore uses — waypoints stay behind
 	// clip_route_for_viewer) AND the base table (for own / club-visible
 	// saved routes), then union, preferring the fuller base-table row.
+	//
+	// A failed saved-route read is not an empty bookmark list. `?? []` on any
+	// of the three below reported the runner's own routes with `error: null`
+	// and their bookmarks silently gone — inside the one function in this file
+	// whose whole shape exists to keep that from happening. The page renders
+	// the banner INSTEAD of the list, so a partial answer would still be
+	// hidden; report the failure and let the retry button do its job.
+	if (savedIdsRes.error) {
+		console.error('fetchRoutes (saved ids) failed', savedIdsRes.error);
+		return { routes: [], error: describeReadError(savedIdsRes.error) };
+	}
 	const savedIds = ((savedIdsRes.data ?? []) as { route_id: string }[]).map(
 		(r) => r.route_id,
 	);
@@ -1590,6 +1624,15 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 			supabase.from('routes').select(ROUTE_LIST_COLS).in('id', savedIds),
 			supabase.from('public_routes').select(PUBLIC_ROUTE_LIST_COLS).in('id', savedIds),
 		]);
+		// Either half missing is a whole class of bookmark gone: the base table
+		// carries the runner's own + club-visible saved routes, the view
+		// carries every route they saved from someone else's — the dominant
+		// case, per the comment above.
+		const savedErr = savedBaseRes.error ?? savedPublicRes.error;
+		if (savedErr) {
+			console.error('fetchRoutes (saved bodies) failed', savedErr);
+			return { routes: [], error: describeReadError(savedErr) };
+		}
 		const byId = new Map<string, Route>();
 		for (const r of [
 			...((savedBaseRes.data ?? []) as unknown as Route[]),
@@ -2008,7 +2051,7 @@ export async function browseClubsWithError(
 	}
 	const { data, error } = await query.order('created_at', { ascending: false }).limit(60);
 	if (error) return { clubs: [], error: error.message };
-	return { clubs: data ? await enrichClubs(data) : [], error: null };
+	return data ? enrichClubs(data) : { clubs: [], error: null };
 }
 
 export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
@@ -2069,7 +2112,7 @@ export async function searchClubsWithError(
 		created_at: r.created_at as string,
 		updated_at: r.updated_at as string,
 	}));
-	return { clubs: await enrichClubs(rows), error: null };
+	return enrichClubs(rows);
 }
 
 export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
@@ -2497,7 +2540,7 @@ export async function fetchMyClubsWithError(): Promise<{
 		.order('joined_at', { ascending: false });
 	if (error) return { clubs: [], error: error.message };
 	const clubs = (data ?? []).map((row: any) => row.clubs).filter(Boolean);
-	return { clubs: await enrichClubs(clubs), error: null };
+	return enrichClubs(clubs);
 }
 
 export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
@@ -2518,7 +2561,9 @@ export async function fetchClubBySlug(
 		.maybeSingle();
 	if (error) return { club: null, error: error.message };
 	if (!data) return { club: null, error: null };
-	const [enriched] = await enrichClubs([data]);
+	const { clubs: enrichedClubs, error: rolesError } = await enrichClubs([data]);
+	if (rolesError) return { club: null, error: rolesError };
+	const [enriched] = enrichedClubs;
 	if (!enriched) return { club: null, error: null };
 	if (enriched.viewer_role === 'owner' || enriched.viewer_role === 'admin') {
 		const { data: token } = await supabase.rpc('get_club_invite_token', {
@@ -2556,9 +2601,23 @@ export async function fetchClubSlugById(id: string): Promise<string | null> {
 }
 
 /** Attach viewer_role + viewer_status to clubs. member_count is the
- * trigger-maintained cache on the row (derived_state.md), not recomputed. */
-async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
-	if (clubs.length === 0) return [];
+ * trigger-maintained cache on the row (derived_state.md), not recomputed.
+ *
+ * Returns the read failure rather than absorbing it. `viewer_role: null` is
+ * the assertion "you are not a member of this club", and it drives whether the
+ * owner gets their admin controls, whether a member is offered "Join", and
+ * whether `fetchClubBySlug` asks for an invite token at all — so deriving it
+ * from a membership read nobody checked meant a transport blip logged every
+ * member out of their own club while `error: null` said the answer was good.
+ * `fetchClubBySlug`'s own doc comment describes that exact failure one call
+ * up, for the club row; this is the same collapse for the membership row.
+ *
+ * The result shape matches the `{ clubs, error }` every caller already
+ * returns, so three of the four hand it straight back. */
+async function enrichClubs(
+	clubs: Club[]
+): Promise<{ clubs: ClubWithMeta[]; error: string | null }> {
+	if (clubs.length === 0) return { clubs: [], error: null };
 	const ids = clubs.map((c) => c.id);
 	const userId = auth.user?.id;
 
@@ -2568,7 +2627,12 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 				.select('club_id, role, status')
 				.in('club_id', ids)
 				.eq('user_id', userId)
-		: { data: [] as { club_id: string; role: string; status: string }[] };
+		: { data: [] as { club_id: string; role: string; status: string }[], error: null };
+
+	if (rolesRes.error) {
+		console.error('enrichClubs (viewer membership) failed', rolesRes.error);
+		return { clubs: [], error: describeReadError(rolesRes.error) };
+	}
 
 	const roles = new Map<string, ClubRole>();
 	const statuses = new Map<string, MembershipStatus>();
@@ -2576,13 +2640,16 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 		if (row.status === 'active') roles.set(row.club_id, row.role as ClubRole);
 		statuses.set(row.club_id, row.status as MembershipStatus);
 	}
-	return clubs.map((c) => ({
-		...c,
-		join_policy: (c.join_policy ?? 'open') as JoinPolicy,
-		member_count: c.member_count ?? 0,
-		viewer_role: roles.get(c.id) ?? null,
-		viewer_status: statuses.get(c.id) ?? null
-	}));
+	return {
+		clubs: clubs.map((c) => ({
+			...c,
+			join_policy: (c.join_policy ?? 'open') as JoinPolicy,
+			member_count: c.member_count ?? 0,
+			viewer_role: roles.get(c.id) ?? null,
+			viewer_status: statuses.get(c.id) ?? null
+		})),
+		error: null
+	};
 }
 
 export async function createClub(input: {
@@ -2969,16 +3036,34 @@ export async function fetchNextRsvpedEvent(
 }
 
 export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta[]> {
-	// For recurring series, `starts_at` can be in the past even though the
-	// next instance is in the future. Pull anything that's either (a) one-off
-	// in the future OR (b) recurring with an until-date that's still ahead.
-	// The client-side enrichment computes `next_instance_start` per event.
-	// Cap at 200 — busy clubs accumulate event history but the upcoming-set
-	// of interest is far smaller; the client filter discards the rest.
+	// For recurring series, `starts_at` can be in the past even though the next
+	// instance is in the future, so the candidate set is (a) one-off in the
+	// future OR (b) recurring and not past its until-date. That predicate has
+	// to run SERVER-side: ordering `starts_at` ascending under a cap returns
+	// the club's OLDEST rows, so a club with more than `limit` finished
+	// one-offs — a weekly series is 200 rows in four years — pushed every
+	// future event past the cap and its Events tab went permanently empty.
+	// (The same shape `fetchWeeklyMileage` documents: an ascending cap over a
+	// growing history windows the wrong end of it.)
+	//
+	// A count-limited series carries no until-date, so it lands in the
+	// candidate set and `nextLiveInstance` retires it once exhausted — the
+	// filter below is deliberately a superset of what is actually live. The
+	// two recurring clauses are spelled separately rather than as one nested
+	// `or(...)` because a single `and(...)` inside an `or=` is the only nesting
+	// depth this file already exercises, and a filter PostgREST cannot parse
+	// 400s into the discarded `error` and empties the tab exactly as the bug
+	// being fixed did.
+	const nowIso = new Date().toISOString();
 	const { data } = await supabase
 		.from('events')
 		.select(EVENT_SELECT_COLS)
 		.eq('club_id', clubId)
+		.or(
+			`starts_at.gte.${nowIso},` +
+				`and(recurrence_freq.not.is.null,recurrence_until.is.null),` +
+				`and(recurrence_freq.not.is.null,recurrence_until.gte.${nowIso})`
+		)
 		.order('starts_at', { ascending: true })
 		.limit(200);
 	const events = (data as Event[]) ?? [];
@@ -3076,12 +3161,10 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	// produce N integers. The viewer's RSVPs are a single bounded per-user
 	// fetch, so those still come back as rows and are matched to the next
 	// instance client-side.
-	const countsPromise = supabase.rpc(
-		// Not yet in database.types.ts (orchestrator regenerates on landing the
-		// 20270122_001 migration); the RPC name is cast until then.
-		'event_next_instance_going_counts' as never,
-		{ p_event_ids: ids, p_next_starts: nextStarts } as never
-	);
+	const countsPromise = supabase.rpc('event_next_instance_going_counts', {
+		p_event_ids: ids,
+		p_next_starts: nextStarts,
+	});
 	const rsvpPromise = userId
 		? supabase
 				.from(TABLES.event_attendees)
@@ -3100,7 +3183,7 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	const sameInstant = (a: string, b: string | undefined): boolean =>
 		b != null && new Date(a).getTime() === new Date(b).getTime();
 	const counts = new Map<string, number>();
-	for (const row of (countRes.data ?? []) as { event_id: string; going_count: number }[]) {
+	for (const row of countRes.data ?? []) {
 		counts.set(row.event_id, Number(row.going_count));
 	}
 	const rsvps = new Map<string, RsvpStatus | null>();
@@ -3625,30 +3708,60 @@ export async function fetchEventRsvpSummary(
 	instanceStart: string
 ): Promise<EventRsvpSummary> {
 	const viewerId = auth.user?.id ?? null;
-	const { data, error } = await supabase
-		.from(TABLES.event_attendees)
-		.select('user_id, status')
-		.eq('event_id', eventId)
-		.eq('instance_start', instanceStart);
+
+	// Counted in the database, one HEAD request per status, rather than by
+	// pulling every attendee row and tallying here. PostgREST caps a returned
+	// result at 1000 rows and says nothing when it does, so the old read
+	// silently became a count of the first thousand: past that the capacity
+	// and waitlist math believed a full event had room, and the viewer's own
+	// row could fall outside the page entirely — `viewerStatus` then read null
+	// and the page re-showed "Register for £X" to someone who had already
+	// paid, burning a Stripe session and a capacity-holding pending order.
+	// `count: 'exact'` is a `count(*)` over the filtered set and is not
+	// subject to that cap; `head: true` transfers no rows at all.
+	//
+	// The viewer's own status is a separate one-row read for the same reason:
+	// it must not depend on their row appearing in any page.
+	const statuses = ['going', 'maybe', 'declined', 'waitlisted'] as const;
+	const [counts, viewerRow] = await Promise.all([
+		Promise.all(
+			statuses.map((status) =>
+				supabase
+					.from(TABLES.event_attendees)
+					.select('user_id', { count: 'exact', head: true })
+					.eq('event_id', eventId)
+					.eq('instance_start', instanceStart)
+					.eq('status', status)
+			)
+		),
+		viewerId
+			? supabase
+					.from(TABLES.event_attendees)
+					.select('status')
+					.eq('event_id', eventId)
+					.eq('instance_start', instanceStart)
+					.eq('user_id', viewerId)
+					.maybeSingle()
+			: Promise.resolve({ data: null, error: null })
+	]);
+
 	// A failed read must not come back as a zeroed summary: `viewerStatus`
 	// null is what tells the page the viewer has no slot, so a swallowed
-	// error re-shows "Register for £X" to someone who has already paid.
-	if (error) throw error;
-	const summary: EventRsvpSummary = {
-		going: 0,
-		maybe: 0,
-		declined: 0,
-		waitlisted: 0,
-		viewerStatus: null
-	};
-	for (const row of data ?? []) {
-		const status = row.status as RsvpStatus;
-		if (status === 'going') summary.going += 1;
-		else if (status === 'maybe') summary.maybe += 1;
-		else if (status === 'declined') summary.declined += 1;
-		else if (status === 'waitlisted') summary.waitlisted += 1;
-		if (viewerId && row.user_id === viewerId) summary.viewerStatus = status;
+	// error re-shows "Register for £X" to someone who has already paid. A
+	// missing count is the same claim about capacity, so it throws too.
+	for (const res of counts) {
+		if (res.error) throw res.error;
 	}
+	if (viewerRow.error) throw viewerRow.error;
+
+	const summary: EventRsvpSummary = {
+		going: counts[0].count ?? 0,
+		maybe: counts[1].count ?? 0,
+		declined: counts[2].count ?? 0,
+		waitlisted: counts[3].count ?? 0,
+		viewerStatus: ((viewerRow.data as { status?: string } | null)?.status ??
+			null) as RsvpStatus | null
+	};
 	return summary;
 }
 
@@ -11407,28 +11520,43 @@ export async function fetchChallenges(
 	if (error) throw error;
 	const rows = (data ?? []).map(challengeFromRow);
 
-	// Enrich with participant counts + the caller's joined flag in two scoped
-	// reads (no per-row N+1): one count-grouped read over participants for the
-	// listed ids, one self-membership read.
+	// The count comes off the row. `challenges.participant_count` is the
+	// trigger-maintained, self-healing cache of exactly this number
+	// (`20270308_001`, derived_state.md) and `select('*')` already carried it;
+	// it was being ignored in favour of tallying a participant read that
+	// spanned every listed challenge at once, with no bound. PostgREST
+	// truncates a result at its configured row ceiling and reports nothing
+	// when it does, so a couple of popular public challenges were enough to
+	// exhaust the page: every board then under-reported, and — worse — a
+	// genuine participant's own row could fall outside it, emptying their "My
+	// challenges" tab and offering them "Join" on a challenge they were in.
+	// This is the same read `enrichClubs` already makes of `clubs.member_count`
+	// for the same reason.
+	//
+	// What is left needs no aggregate: the caller's OWN membership, scoped to
+	// the caller, so the read is bounded by the number of challenges listed
+	// rather than by how many people are in them.
 	const ids = rows.map((r) => r.id);
 	if (ids.length === 0) return [];
-	const { data: parts } = await supabase
-		.from(TABLES.challenge_participants)
-		.select('challenge_id, user_id, completed_at')
-		.in('challenge_id', ids);
-	const counts = new Map<string, number>();
 	const mineSet = new Set<string>();
 	const myCompletedAt = new Map<string, string | null>();
-	for (const p of parts ?? []) {
-		counts.set(p.challenge_id, (counts.get(p.challenge_id) ?? 0) + 1);
-		if (userId && p.user_id === userId) {
+	if (userId) {
+		const { data: parts, error: partsError } = await supabase
+			.from(TABLES.challenge_participants)
+			.select('challenge_id, completed_at')
+			.eq('user_id', userId)
+			.in('challenge_id', ids);
+		// `joined` drives the Join affordance; a dropped error offered "Join"
+		// on every challenge the caller is already in.
+		if (partsError) throw partsError;
+		for (const p of parts ?? []) {
 			mineSet.add(p.challenge_id);
 			myCompletedAt.set(p.challenge_id, p.completed_at ?? null);
 		}
 	}
 	const enriched: ChallengeWithMeta[] = rows.map((r) => ({
 		...r,
-		participant_count: counts.get(r.id) ?? 0,
+		participant_count: (r as { participant_count?: number }).participant_count ?? 0,
 		my_value: null,
 		my_rank: null,
 		joined: mineSet.has(r.id),
@@ -11497,15 +11625,24 @@ export async function fetchChallengeById(id: string): Promise<ChallengeWithMeta 
 	// on a challenge the caller may well have joined — so the page offered
 	// "Join" to someone already in, against a board it claimed was empty. A
 	// partial read failure fails the whole read.
-	const { data: parts, error: partsError } = await supabase
-		.from(TABLES.challenge_participants)
-		.select('user_id, completed_at, team_club_id')
-		.eq('challenge_id', id);
+	//
+	// Scoped to the caller's own row, and the count taken off the cache on the
+	// challenge row: reading every participant to find one of them and to
+	// length the array made both answers depend on a page PostgREST silently
+	// truncates, so a popular challenge reported a smaller board than it has
+	// and could drop the viewer's own membership out of its own detail page.
+	const { data: joinedRow, error: partsError } = userId
+		? await supabase
+				.from(TABLES.challenge_participants)
+				.select('completed_at, team_club_id')
+				.eq('challenge_id', id)
+				.eq('user_id', userId)
+				.maybeSingle()
+		: { data: null, error: null };
 	if (partsError) throw partsError;
-	const joinedRow = userId ? (parts ?? []).find((p) => p.user_id === userId) : undefined;
 	return {
 		...challenge,
-		participant_count: (parts ?? []).length,
+		participant_count: (data as { participant_count?: number }).participant_count ?? 0,
 		my_value: null,
 		my_rank: null,
 		joined: !!joinedRow,
@@ -11595,7 +11732,15 @@ export async function fetchFundraiserForRun(runId: string): Promise<Fundraiser |
 		.select('*')
 		.eq('run_id', runId)
 		.maybeSingle();
-	if (error || !data) return null;
+	// Throws on a failed read, exactly as `fetchFundraiserById` does and for
+	// the reason its comment gives: `.maybeSingle()` already distinguishes a
+	// genuine miss (`{data: null, error: null}`) from a failure, and returning
+	// null for both told a donor the campaign they were linked to does not
+	// exist. The section's own loader catches this and keeps the owner's
+	// "Create fundraiser" CTA alive — a branch that could never run while the
+	// error was swallowed here.
+	if (error) throw error;
+	if (!data) return null;
 	return fundraiserFromRow(data);
 }
 
@@ -11605,7 +11750,15 @@ export async function fetchFundraiserForEvent(eventId: string): Promise<Fundrais
 		.select('*')
 		.eq('event_id', eventId)
 		.maybeSingle();
-	if (error || !data) return null;
+	// Throws on a failed read, exactly as `fetchFundraiserById` does and for
+	// the reason its comment gives: `.maybeSingle()` already distinguishes a
+	// genuine miss (`{data: null, error: null}`) from a failure, and returning
+	// null for both told a donor the campaign they were linked to does not
+	// exist. The section's own loader catches this and keeps the owner's
+	// "Create fundraiser" CTA alive — a branch that could never run while the
+	// error was swallowed here.
+	if (error) throw error;
+	if (!data) return null;
 	return fundraiserFromRow(data);
 }
 

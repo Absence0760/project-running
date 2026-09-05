@@ -23,6 +23,14 @@ struct RunCheckpoint: Codable {
     // Optional as nil, which is exactly the recover-an-in-flight-run-
     // after-app-upgrade path we must not break.
     let averageBPM: Double?
+    // Added alongside `averageBPM`: the share of the run's active time the
+    // sensor was delivering when the checkpoint was written, so a recovered
+    // run states the same thing about its heart rate that a stopped one
+    // would. Optional for the same reason, and decoded the same way — a
+    // checkpoint from a build predating the field is UNMEASURED, which is
+    // what nil means here and everywhere else this figure travels. It must
+    // never decode as 0: that would claim the sensor delivered nothing.
+    let hrCoverage: Double?
 
     init(
         id: String,
@@ -33,6 +41,7 @@ struct RunCheckpoint: Codable {
         trackPointCount: Int,
         cacheFileURL: URL,
         averageBPM: Double?,
+        hrCoverage: Double?,
         version: Int = RunCheckpoint.currentVersion
     ) {
         self.version = version
@@ -44,6 +53,7 @@ struct RunCheckpoint: Codable {
         self.trackPointCount = trackPointCount
         self.cacheFileURL = cacheFileURL
         self.averageBPM = averageBPM
+        self.hrCoverage = hrCoverage
     }
 
     /// Every field is decoded with a fallback default rather than the
@@ -66,6 +76,7 @@ struct RunCheckpoint: Codable {
         cacheFileURL = try c.decodeIfPresent(URL.self, forKey: .cacheFileURL)
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         averageBPM = try c.decodeIfPresent(Double.self, forKey: .averageBPM)
+        hrCoverage = try c.decodeIfPresent(Double.self, forKey: .hrCoverage)
     }
 }
 

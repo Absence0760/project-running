@@ -208,7 +208,8 @@ final class CheckpointStoreTrackTests: XCTestCase {
             pausedIntervalSeconds: 30,
             trackPointCount: 200,
             cacheFileURL: store.trackFileURL,
-            averageBPM: 150
+            averageBPM: 150,
+            hrCoverage: 0.5
         )
         store.write(checkpoint: cp)
         defer { CheckpointStore.clearStatic() }
@@ -218,12 +219,13 @@ final class CheckpointStoreTrackTests: XCTestCase {
         XCTAssertEqual(peeked?.id, runId)
         XCTAssertEqual(peeked?.distanceMetres ?? -1, 4200, accuracy: 0.0001)
         XCTAssertEqual(peeked?.averageBPM, 150)
+        XCTAssertEqual(peeked?.hrCoverage, 0.5)
     }
 
     func testClearStaticRemovesCheckpoint() {
         let cp = RunCheckpoint(
             id: runId, startedAt: Date(), distanceMetres: 1, activeDurationSeconds: 1,
-            pausedIntervalSeconds: 0, trackPointCount: 1, cacheFileURL: store.trackFileURL, averageBPM: nil
+            pausedIntervalSeconds: 0, trackPointCount: 1, cacheFileURL: store.trackFileURL, averageBPM: nil, hrCoverage: nil
         )
         store.write(checkpoint: cp)
         XCTAssertNotNil(CheckpointStore.peekCheckpoint())
@@ -237,7 +239,7 @@ final class CheckpointStoreTrackTests: XCTestCase {
         store.closeAppendHandle()
         store.write(checkpoint: RunCheckpoint(
             id: runId, startedAt: Date(), distanceMetres: 1, activeDurationSeconds: 1,
-            pausedIntervalSeconds: 0, trackPointCount: 1, cacheFileURL: store.trackFileURL, averageBPM: nil
+            pausedIntervalSeconds: 0, trackPointCount: 1, cacheFileURL: store.trackFileURL, averageBPM: nil, hrCoverage: nil
         ))
         CheckpointStore.clearStatic()
         XCTAssertNil(CheckpointStore.peekCheckpoint())

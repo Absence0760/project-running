@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isTrackOwner, resolveTrackOwnership } from './track_ownership';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { stripComments } from '../core/strip_comments';
 
 test('isTrackOwner: owner viewer is the owner', () => {
 	assert.equal(isTrackOwner('u-1', 'u-1'), true);
@@ -61,4 +64,40 @@ test('resolveTrackOwnership: no known owner never clips', async () => {
 	);
 	assert.equal(isOwner, false);
 	assert.equal(shouldClip, false);
+});
+
+// ── Source guard: the run-detail page's own owner/non-owner classification ──
+//
+// `isTrackOwner` decides ownership from two ids. `/runs/[id]` decides it from
+// a FAILED READ, which is a different question with a different failure mode:
+// `fetchRunById` returning no row means either "not yours" or "could not find
+// out", and only the first licenses the non-owner branch.
+
+test('the run-detail page only falls back to public attribution on a real not-yours', () => {
+	// `public_runs` has no owner exclusion (`where r.is_public = true`), so the
+	// attribution read succeeds on the viewer's OWN public run. When a
+	// transient failure on the wide owner read was allowed to reach it, the
+	// owner landed on the read-only stranger view — back-link to their own
+	// profile, "a run by <themselves>", and no edit / delete / visibility /
+	// GPX / save-as-route / rematch control — with the retry card suppressed
+	// because the template tests `otherRunOwner` before `loadError`.
+	const page = stripComments(
+		readFileSync(resolve(import.meta.dirname, '../../routes/runs/[id]/+page.svelte'), 'utf-8'),
+	);
+	const at = page.indexOf('fetchPublicRunAttribution(pageData.id)');
+	assert.ok(at > 0, 'the attribution fallback moved — re-anchor this guard');
+	const block = page.slice(Math.max(0, at - 400), at + 400);
+	assert.match(
+		block,
+		/if \(!runError\) \{/,
+		'the fallback must be gated on the owner read having answered — an errored read is not evidence of anything about ownership',
+	);
+	// And the attribution read establishes nothing when IT fails either, so it
+	// must reach the same retry surface rather than falling through to the
+	// not-found branch below it.
+	assert.match(
+		block,
+		/loadError = \w+\.error;/,
+		'a failed attribution read must set loadError, not leave the page on "Run not found"',
+	);
 });

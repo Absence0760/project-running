@@ -566,8 +566,6 @@ void main() {
       expect(find.text('e2e-comment-body'), findsOneWidget);
       await tester.pump(const Duration(seconds: 9));
       expect(api.deleteCalls, 0);
-      // Drain the Restored banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('a failed commit restores the comment and surfaces a banner', (
@@ -587,8 +585,6 @@ void main() {
       expect(find.text('e2e-comment-body'), findsOneWidget);
       expect(find.textContaining('Failed to delete'), findsOneWidget);
 
-      // Drain the banner's auto-dismiss timer before teardown.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 

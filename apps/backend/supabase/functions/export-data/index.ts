@@ -83,8 +83,11 @@ import {
 	CSV_COLS,
 	csvRow,
 	type GpxRef,
+	GPX_MANIFEST_OMIT,
+	omitKeys,
 	type RenderRunRow,
 	type RenderTrackPoint,
+	RUNS_JSON_OMIT,
 } from './render.ts';
 
 const SIGNED_URL_TTL_S = 600; // 10 minutes
@@ -96,8 +99,14 @@ const SIGNED_URL_TTL_S = 600; // 10 minutes
 /// Migration `20270602_001`, decisions §703.
 const EXPORT_BUCKET = 'exports';
 
+/// Every column of `public.runs`, in `RenderRunRow` order. Not a curated
+/// subset: what each output format omits is decided at the renderer, and a
+/// column that is not selected cannot be omitted deliberately — it just
+/// disappears, which is what happened to seven of them (decisions § 1171).
+/// The Go worker's own select is held to this one by
+/// `TestExportRunProjectionCoversEveryRunsColumn`.
 const RUNS_SELECT =
-	'id, user_id, started_at, duration_s, distance_m, source, activity_type, is_dnf, external_id, metadata, track_url, hr_series_url, is_public, event_id, route_id, created_at, updated_at';
+	'id, user_id, started_at, concluded_at, duration_s, distance_m, elevation_gain_m, source, activity_type, is_dnf, external_id, metadata, track_url, hr_series_url, is_public, event_id, route_id, race_listing_id, fastest_5k_s, fastest_10k_s, fastest_half_marathon_s, fastest_marathon_s, created_at, updated_at';
 
 type RunRow = RenderRunRow;
 
@@ -317,20 +326,7 @@ async function writeGpxZip(
 				key,
 			});
 		},
-		shape: (r) => ({
-			id: r.id,
-			started_at: r.started_at,
-			distance_m: r.distance_m,
-			duration_s: r.duration_s,
-			source: r.source,
-			activity_type: r.activity_type,
-			is_dnf: r.is_dnf,
-			external_id: r.external_id,
-			metadata: r.metadata,
-			is_public: r.is_public,
-			event_id: r.event_id,
-			route_id: r.route_id,
-		}),
+		shape: (r) => omitKeys(r as unknown as Record<string, unknown>, GPX_MANIFEST_OMIT),
 	});
 	if (!section.opened && !section.summary.complete) {
 		throw new RunFetchError('runs read failed');
@@ -452,27 +448,10 @@ async function writeBackupZip(
 			const hr = canonicalHrUrl(r);
 			if (hr) hrRefs.push({ id: r.id, key: hr });
 		},
-		// Same projection as the Go worker's backup (track_url +
-		// hr_series_url + created_at/updated_at included; user_id
-		// stripped for re-homeability).
-		shape: (r) => ({
-			id: r.id,
-			started_at: r.started_at,
-			duration_s: r.duration_s,
-			distance_m: r.distance_m,
-			source: r.source,
-			activity_type: r.activity_type,
-			is_dnf: r.is_dnf,
-			external_id: r.external_id,
-			metadata: r.metadata,
-			track_url: r.track_url,
-			hr_series_url: r.hr_series_url,
-			is_public: r.is_public,
-			event_id: r.event_id,
-			route_id: r.route_id,
-			created_at: r.created_at,
-			updated_at: r.updated_at,
-		}),
+		// Same projection as the Go worker's backup: the whole row less
+		// `user_id`, so a restore can re-home the archive into another
+		// account.
+		shape: (r) => omitKeys(r as unknown as Record<string, unknown>, RUNS_JSON_OMIT),
 	});
 	if (!runsSection.opened && !runsSection.summary.complete) {
 		throw new RunFetchError('runs read failed');

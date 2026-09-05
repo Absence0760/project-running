@@ -370,9 +370,6 @@ void main() {
   }
 
   Future<void> drainAndUnmount(WidgetTester tester) async {
-    // Drain top-banner timers, then unmount so LiveRunMap schedules no
-    // further tile fetches before the timersPending teardown guard.
-    await tester.pump(const Duration(seconds: 7));
     tester.takeException();
     await tester.pumpWidget(const SizedBox());
     for (var i = 0; i < 4; i++) {

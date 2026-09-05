@@ -4905,31 +4905,54 @@ void main() {
     // each `replaceFromServer` has already rebuilt `rowsById` from the fetch by
     // the time it calls down, so the refusal has to be the method's first
     // statement or a failed fill leaves a half-replaced store behind.
+    // The scan finds a DECLARATION by its name and its parameter list, not by
+    // its return type or an `async` keyword, and it walks the parameter list's
+    // own parentheses to reach the body. Anchoring on `Future<void> ` and then
+    // on the next `async` left three measured holes, each of which passes an
+    // ungated override: a non-async override skipped forward to the next
+    // `async` method in the file and read THAT body's first statement; an
+    // override returning anything but `Future<void>` was not found at all,
+    // with the count floor still met by its seven siblings; and the gate's
+    // argument was never read, so one naming another method refused under a
+    // name its caller never called.
     test('requireInitialised is the first statement of each override', () {
       final offenders = <String>[];
-      var found = 0;
+      final found = <String>[];
       for (final entity in Directory('lib').listSync(recursive: true)) {
         if (entity is! File || !entity.path.endsWith('.dart')) continue;
         final src = entity.readAsStringSync();
         var from = 0;
         while (true) {
-          final at = src.indexOf('Future<void> replaceFromServer', from);
+          final at = src.indexOf('replaceFromServer(', from);
           if (at < 0) break;
           from = at + 1;
-          final open = src.indexOf('{', src.indexOf('async', at));
-          if (open < 0) {
+          final before = src.substring(0, at).trimRight();
+          if (before.endsWith('.') || before.endsWith('`')) continue;
+          var depth = 0;
+          var i = src.indexOf('(', at);
+          for (; i < src.length; i++) {
+            if (src[i] == '(') depth++;
+            if (src[i] == ')') {
+              depth--;
+              if (depth == 0) break;
+            }
+          }
+          final open = src.indexOf('{', i);
+          if (i >= src.length || open < 0) {
             offenders.add('${entity.path}: unparseable signature');
             continue;
           }
-          found++;
+          found.add(entity.path);
           final firstStatement = src.substring(open + 1).trimLeft();
-          if (!firstStatement.startsWith("requireInitialised('")) {
+          if (!firstStatement
+              .startsWith("requireInitialised('replaceFromServer');")) {
             offenders.add(entity.path);
           }
         }
       }
-      expect(found, greaterThanOrEqualTo(7),
-          reason: 'the scan itself must find the replaceFromServer overrides');
+      expect(found.length, greaterThanOrEqualTo(7),
+          reason: 'the scan itself must find the replaceFromServer overrides, '
+              'found: ${found.join(', ')}');
       expect(offenders, isEmpty,
           reason: 'these replaceFromServer overrides rebuild rowsById before '
               'anything checks the store was init()ed, so a fill that can '

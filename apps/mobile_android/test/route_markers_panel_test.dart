@@ -209,8 +209,6 @@ void main() {
 
       await tester.pump(const Duration(seconds: 9));
       expect(api.deletedIds, isEmpty);
-      // Drain the Restored banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 

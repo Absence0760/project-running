@@ -35,6 +35,17 @@
         "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Inicia uma nova corrida, ativando o GPS e o registo da frequência cardíaca" } }
       }
     },
+    "Cancel" : {
+      "comment" : "Confirmation dialog button: dismiss without discarding.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Abbrechen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cancelar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Annuler" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キャンセル" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Cancelar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Cancelar" } }
+      }
+    },
     "Clear route" : {
       "comment" : "Pre-run button that drops the route the phone pushed.",
       "localizations" : {
@@ -89,6 +100,17 @@
         "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Descartar" } }
       }
     },
+    "Discard this run?" : {
+      "comment" : "Confirmation dialog title before discarding an unsaved or unsynced run.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Lauf verwerfen?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Descartar esta carrera?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer cette course ?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "このランを破棄しますか？" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Descartar esta corrida?" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar esta corrida?" } }
+      }
+    },
     "Distance" : {
       "comment" : "Stat column header during a run.",
       "localizations" : {
@@ -131,6 +153,17 @@
         "ja" : { "stringUnit" : { "state" : "translated", "value" : "なし — タップして設定" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Nenhum — toque para definir" } },
         "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Nenhum — toque para definir" } }
+      }
+    },
+    "Not saved anywhere else" : {
+      "comment" : "Confirmation dialog message: the run exists only on this watch.",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nirgendwo sonst gespeichert" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se guarda en ningún otro sitio" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrée nulle part ailleurs" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "他に保存されていません" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Não salva em nenhum outro lugar" } },
+        "pt-PT" : { "stringUnit" : { "state" : "translated", "value" : "Não guardada em mais nenhum lado" } }
       }
     },
     "Off route" : {

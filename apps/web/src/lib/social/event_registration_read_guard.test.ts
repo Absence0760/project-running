@@ -27,10 +27,26 @@ test('fetchEventRsvpSummary fails the read instead of returning a zeroed summary
 	assert.ok(start >= 0, 'Could not locate fetchEventRsvpSummary — rename?');
 	const next = source.indexOf('\nexport ', start + 1);
 	const body = source.slice(start, next > start ? next : undefined);
-	assert.match(
-		body,
-		/if \(error\) throw error;/,
-		'a dropped error hands back going/maybe/declined/waitlisted = 0 and viewerStatus = null, which the page reads as "not registered"',
+	// The claim is that every read is RAISED on failure, not that it is spelled
+	// one particular way. Pinning the literal `if (error) throw error;` made this
+	// guard fail the moment the read became four counts plus a scoped viewer row
+	// (decisions § 1222) -- a strictly stronger body than the one it was written
+	// against.
+	//
+	// The count is anchored to the READS, never to the error references: deriving
+	// it from `.error` occurrences lets deleting a check delete its own
+	// requirement, which is how a guard passes a body it should refuse. A read
+	// cannot be removed without changing what the function does, so it is the
+	// honest denominator. One check may cover several reads built in a loop --
+	// that is one `supabase` expression, so the arithmetic still holds.
+	const reads = [...body.matchAll(/\bsupabase\s*\n?\s*\.from\(/g)].length;
+	const raised = [...body.matchAll(/throw\s+(?:\w+\.)?error\b/g)].length;
+	assert.ok(reads > 0, 'fetchEventRsvpSummary performs no read at all -- renamed?');
+	assert.ok(
+		raised >= reads,
+		`fetchEventRsvpSummary makes ${reads} read(s) but raises only ${raised} of them. ` +
+			'a dropped error hands back going/maybe/declined/waitlisted = 0 and ' +
+			'viewerStatus = null, which the page reads as "not registered"',
 	);
 });
 

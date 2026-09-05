@@ -10,6 +10,7 @@
 
 import type { Run } from '../types';
 import { computeRunStreaks } from './streaks';
+import { storedElevationGainM } from './key_stats';
 
 export interface RecapMonthBucket {
 	/** 1-based month (1=Jan … 12=Dec). */
@@ -179,23 +180,16 @@ function hhmm(d: Date): string {
 }
 
 /**
- * Returns a Run's elevation_gain in metres. audit/metadata-keys
- * (May 2026) dropped the `elevation_gain_m` fallback: no writer in
- * the codebase ever set the key, it was not in docs/backend/metadata.md,
- * and the fallback branch was dead code that confused dead-key
- * audits.
+ * The day the "current streak" walk may count back from: the earlier of the
+ * period's last day and now.
+ *
+ * `computeRunStreaks` ignores runs after its anchor and starts the walk at the
+ * anchor (or its grace day), so an anchor in the future is not merely
+ * imprecise — it puts the walk on two empty days and returns 0 for every live
+ * streak there is.
  */
-function elevationOf(r: Run): number {
-	// `elevation_m` was never a top-level column, so this read was always 0 and
-	// both elevation trophies were unreachable. The promoted `elevation_gain_m`
-	// column is the canonical value (writers populate it alongside the jsonb
-	// key); `metadata.elevation_m` is the fallback the Dart twin reads and is
-	// what older rows carry.
-	const gain = r.elevation_gain_m;
-	if (typeof gain === 'number' && Number.isFinite(gain)) return gain;
-	const meta = (r.metadata ?? {}) as { elevation_m?: unknown };
-	const legacy = meta.elevation_m;
-	return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : 0;
+function currentAnchor(periodEnd: Date, now: Date): Date {
+	return now.getTime() < periodEnd.getTime() ? now : periodEnd;
 }
 
 /**
@@ -210,6 +204,7 @@ export function buildYearInRunningRecap(
 	runs: Run[],
 	year: number,
 	extras: RecapExtras = {},
+	now: Date = new Date(),
 ): YearInRunningRecap {
 	const inYear: Run[] = [];
 	for (const r of runs) {
@@ -244,7 +239,7 @@ export function buildYearInRunningRecap(
 		const d = new Date(r.started_at);
 		totalDistance += r.distance_m;
 		totalDuration += r.duration_s;
-		totalElevation += elevationOf(r);
+		totalElevation += storedElevationGainM(r) ?? 0;
 
 		// "Longest run" + "fastest pace" are run-family headline stats —
 		// exclude cycling so a single long, fast bike ride doesn't masquerade
@@ -307,13 +302,20 @@ export function buildYearInRunningRecap(
 
 	// Streaks — pass the *full* run set (not just inYear) because a
 	// streak that started in the previous year still counts the days
-	// it covered in this year. Anchor "today" at Dec 31 23:59 local, and
-	// bound `best` at Jan 1 so a streak that ended before this year is
-	// somebody else's card's headline, not this one's.
+	// it covered in this year. Bound `best` at Jan 1 so a streak that
+	// ended before this year is somebody else's card's headline.
+	//
+	// The "current" anchor is the EARLIER of the period's last day and now.
+	// Anchoring unconditionally at 31 Dec meant that for the year you are
+	// living in — the only card anyone opens while a streak is running — the
+	// walk looked for a run on 31 Dec, then on the grace day of 30 Dec, found
+	// neither, and reported `current: 0`. A runner on a live 40-day streak got
+	// a zero. `best` keeps the period's own end so a past year's card still
+	// clamps at 31 Dec of that year rather than at today.
 	const endOfYear = new Date(year, 11, 31, 23, 59);
 	const streaks = computeRunStreaks(
 		runs.map((r) => new Date(r.started_at)),
-		endOfYear,
+		currentAnchor(endOfYear, now),
 		new Date(year, 0, 1),
 	);
 
@@ -377,8 +379,9 @@ export function buildMonthInRunningRecap(
 	year: number,
 	month: number,
 	extras: RecapExtras = {},
+	now: Date = new Date(),
 ): YearInRunningRecap {
-	const yearRecap = buildYearInRunningRecap(runs, year, extras);
+	const yearRecap = buildYearInRunningRecap(runs, year, extras, now);
 	const bucket = yearRecap.monthly[month - 1] ?? {
 		month,
 		distanceM: 0,
@@ -405,7 +408,7 @@ export function buildMonthInRunningRecap(
 
 	for (const r of inMonth) {
 		const d = new Date(r.started_at);
-		totalElevation += elevationOf(r);
+		totalElevation += storedElevationGainM(r) ?? 0;
 		const isRunFamily = (r.activity_type ?? 'run') !== 'cycle';
 		if (isRunFamily && r.distance_m > longest) longest = r.distance_m;
 		if (isRunFamily && r.distance_m > 500 && r.duration_s > 0) {
@@ -448,7 +451,7 @@ export function buildMonthInRunningRecap(
 	const endOfMonth = new Date(year, month, 0, 23, 59); // day 0 of next month = last day of this
 	const streaks = computeRunStreaks(
 		runs.map((r) => new Date(r.started_at)),
-		endOfMonth,
+		currentAnchor(endOfMonth, now),
 		new Date(year, month - 1, 1),
 	);
 

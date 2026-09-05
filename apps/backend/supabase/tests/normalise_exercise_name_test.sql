@@ -27,10 +27,15 @@
 --     provider nor its locale, which the bare `lower()` it replaced was, and
 --     that it lands on the answer the mobile rail's own case table gives
 --     (decisions § 830)
+--   * that the case fold is now the FROZEN Unicode 17.0 table rather than the
+--     linked ICU build's -- it folds everything ICU folds and 55 more, it is
+--     1:1 so the key can never outgrow its own length CHECK, its all-ASCII
+--     fast path answers exactly what the full table does, and a key a client
+--     folded through the table is accepted by the CHECK (decisions § 1175)
 
 begin;
 
-select plan(21);
+select plan(27);
 
 -- ── The pure derivation ─────────────────────────────────────────────────────
 
@@ -334,6 +339,91 @@ select lives_ok(
     values ('00000000-0000-0000-0000-0000000b2001',
             chr(304) || 'tme', 'itme', 2)$$,
   'the key the mobile rail derives for a U+0130 name satisfies the CHECK'
+);
+
+-- ---- The frozen fold table (decisions § 1175) -------------------------------
+
+-- 22. The whole point of the table. `lower()` under the pinned ICU root
+--     collation folds neither of these -- ICU's map is non-identity at 1,433
+--     code points where the frozen Unicode 17.0 table is at 1,488, and measured
+--     against each other ICU folds NOTHING the table does not. So each of the
+--     55 in the gap was a name web keyed one way and this server keyed another,
+--     and the two client-stamped columns then refused whichever arrived second.
+select is(
+  (select array_agg(public.normalise_exercise_name(chr(cp)) order by cp)
+     from unnest(array[7305, 42955, 68944, 93760]) as cp),
+  array[chr(7306), chr(612), chr(68976), chr(93792)],
+  'the frozen table folds the code points the linked ICU build does not'
+);
+
+-- 23. And ICU folds nothing the table leaves alone: the fold only ever widens,
+--     which is what makes the stored keys safe -- no key changes VALUE, 55 code
+--     points gain a fold they did not have. U+0130 was the one differing value
+--     and 20270630000003 had already replaced ICU's `i` + U+0307 with the bare
+--     `i` by hand; the table now carries that mapping directly.
+select is(
+  (select count(*)::int
+     from generate_series(1, 1114111) as cp
+    where (cp < 55296 or cp > 57343)
+      and lower(chr(cp) collate "und-x-icu") <> chr(cp)
+      and public.exercise_fold_case(chr(cp)) = chr(cp)),
+  0,
+  'the frozen table folds every code point the ICU root collation folds'
+);
+
+-- 24. The ASCII fast path is answer-identical, not an approximation. Every
+--     ASCII code point is sent through BOTH branches -- alone, which is
+--     all-ASCII and takes the 26-pair translate, and followed by a non-ASCII
+--     character, which forces the 1,488-pair one -- and the leading character
+--     has to fold the same either way. A fast path that folded one ASCII code
+--     point differently would split a bucket on the commonest names there are.
+select is(
+  (select count(*)::int
+     from generate_series(1, 127) as cp
+    where public.exercise_fold_case(chr(cp))
+          <> left(public.exercise_fold_case(chr(cp) || chr(233)), 1)),
+  0,
+  'the all-ASCII fast path answers exactly what the full table answers'
+);
+
+-- 25. The fold is 1:1, so the key can never be longer than the name it groups.
+--     `gym_sets_exercise_key_len_chk` and `gym_routine_exercises_exercise_key_check`
+--     are 120 because `..._exercise_name_check` is, and that reasoning holds
+--     only while no fold expands. Under FULL lowercase it would not: U+0130
+--     expands to two code points, which is why the table takes the SIMPLE
+--     mapping.
+select is(
+  (select count(*)::int
+     from generate_series(1, 1114111) as cp
+    where (cp < 55296 or cp > 57343)
+      and length(public.exercise_fold_case(chr(cp))) <> 1),
+  0,
+  'every code point folds to exactly one code point'
+);
+
+-- 26. The reachability pin for 22, the shape assertion 21 has for U+0130. A
+--     Cherokee name keyed by a client that folds through the table is accepted
+--     by the CHECK, where before the table this server derived the unfolded
+--     spelling and refused it -- 23514 on a legitimate save.
+select lives_ok(
+  $$insert into gym_routine_exercises (routine_id, exercise_name, exercise_key, position)
+    values ('00000000-0000-0000-0000-0000000b2001',
+            chr(5024) || 'press', chr(43888) || 'press', 3)$$,
+  'a key folded through the frozen table satisfies the CHECK'
+);
+
+-- 27. `normalise_exercise_name` reaches `exercise_fold_case` as SECURITY
+--     INVOKER, so the role doing the INSERT needs EXECUTE on BOTH or the CHECK
+--     fails with 42501 rather than 23514 -- the same defect assertion 14 pins
+--     one function further out, and a new function is exactly where it recurs
+--     (Supabase's default privileges hand every new function an explicit `anon`
+--     grant, which `revoke ... from public` does not reach).
+select is(
+  (select array_agg(r order by r)
+   from (values ('authenticated'), ('service_role'), ('anon')) as t(r)
+   where has_function_privilege(r, 'public.exercise_fold_case(text)', 'EXECUTE')),
+  array['authenticated', 'service_role'],
+  'exactly the roles that can write the keyed tables may evaluate the inner fold'
 );
 
 select * from finish();
