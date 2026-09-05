@@ -21979,7 +21979,7 @@ caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
 
-## 1215. Half the counts this repo states about itself were wrong, because a number in prose is the one claim nothing re-derives
+## 1217. Half the counts this repo states about itself were wrong, and half the filings asking to fix them were already stale
 
 Round 39's docs-registry lane was filed four separate one-line count
 corrections. Measuring rather than transcribing them turned a tidy-up into a
@@ -22045,61 +22045,31 @@ own text declares a parameterised count. Until one exists, this number will be
 wrong again within a few rounds; it has been wrong after every round that added
 a test.
 
-## 1216. `routing.dart` is the sole OSRM client and is deliberately not a parity pair
+**The same class reaches the filings themselves.** Half of this lane's filed items were stale before it started, and all three went
+stale the same way. Round 38's merge (`8a414ff79`, the base this branch was cut
+from) corrected the root `CLAUDE.md` CI job count from 33 to 34, dropped the
+`snapToRoad` sentence from `test_inventory.md`'s body-parse register entry and
+moved its numbers to the measured "33 sites, 8 registered across three files",
+and corrected `export-data/render.test.ts` from 13 tests to 17 — and left all
+three `- [ ]` boxes unticked in `followups.md`. A later lane then read the
+filings, believed them, and was assigned work that no longer existed.
 
-[§ 1119](decisions.md) deleted `snapToRoad`, `fetchRoute` and `fetchFullRoute`
-from web's `routes/routing.ts` because nothing imported them, leaving that file
-the `/api/routes/osrm` proxy client (`OSRM_PROXY_BASE` + `osrmProxyFetch`) and
-nothing else. The Dart `routing.dart` was untouched and is still correct, but
-its header opened "Dart port of `apps/web/src/lib/routes/routing.ts`" and named
-two functions that end no longer holds, and `apps/mobile_android/CLAUDE.md`
-repeated the claim.
+The cost is not the wasted read; it is that a stale filing is indistinguishable
+from a live one, so the only safe response is to re-measure every filing before
+acting on it — which is the rule this round was run under and is why all three
+were caught. Two of the three re-measurements confirmed the tree was already
+right (33 sites and 8 registrations, both recomputed here; 17 `Deno.test`
+declarations, counted here). The third found a residual falsehood the round-38
+fix had left behind: with 34 jobs stated, "the aggregator that needs: all of
+them" is off by one, because the gate cannot wait on itself. It needs the other
+33, and `terraform` among them is a caller job whose own work lives in
+`terraform.yml`, whose jobs could never be named in a `needs:` list at all.
 
-Nothing failed, and nothing could have: the two were registered in neither the
-root `CLAUDE.md` pair list nor `.claude/agents/shared-library-syncer.md`, so
-`check_parity_pair_registry.mjs` had no row to check and the syncer agent had
-no table entry to compare. This is [§ 641](decisions.md)'s shape again — a
-header asserting lockstep that no registry knows about — except that here the
-right answer is not to register the pair. It is to say outright that there is no
-pair: the Dart file is the only client-side OSRM implementation in the tree, web
-reaches OSRM through a signed-in, fail-closed server proxy, and the two
-platforms no longer share a function to keep in step. Both the header and the
-CLAUDE.md row now say that, so a future reader does not add a row to the
-registries for a relationship that does not exist.
+The rule to take from it: a filing is closed by ticking its box in the same
+change that fixes it. A round that fixes a filed item without ticking it has not
+closed it — it has converted a real item into a trap.
 
-The same header carried a second dead reference: it said
-`assertOsrmConfiguredForProd` "mirrors the web `assertOsrmConfiguredForProd` in
-`apps/web/src/lib/routes/routing.ts`". There is no such web function any more —
-the posture moved to where the config lives, as the proxy handler's fail-closed
-501 when `OSRM_URL` is unset. The Dart guard is still needed and still correct,
-because a phone binary resolves its own OSRM base; it just has no client-side
-counterpart to mirror.
-
-## 1217. `core/method_gate` owes no Dart twin, and the reason is structural
-
-Filed as an open question: the gate is server-side today, so it owes nothing
-"but" the mobile client's own reads of an Edge Function 405 are not routed
-through anything shared, and if that ever became a pair it would need rows in
-both registries. Recording the answer so the question stops being re-asked.
-
-`methodRefusal` BUILDS a 405 — a status, an `Allow` header, `cache-control:
-no-store` and a body — for the eight Lambdas that gate their own method (three
-directly, five through `share_method_gate`). A parity pair exists where both
-platforms must make the same DECISION and would otherwise make it differently;
-here only one platform makes the decision at all. A Dart twin would be a
-function no Flutter code could call, and a mirror suite pinning a response
-nothing on the phone constructs. There is also nothing to keep in step: a grep
-of `apps/mobile_android/lib/` and `packages/*/lib/` finds no read of a 405
-status anywhere.
-
-If a client-side reading of a 405 is ever wanted, it is a CLASSIFIER and not a
-twin of a builder, and it already has a home: `import_failures` buckets a thrown
-value into the reason a surface shows, keys three of its branches off
-`errorStatus` (429, 401/403, 413), and adding 405 there is one branch in an
-existing registered pair. That is where the work would go — not into a new pair
-whose web half is a response builder.
-
-## 1218. `ApiClient.clipTrackForUser` was deleted and its name survives in twenty places
+## 1218. Two deleted symbols still named as live: `ApiClient.clipTrackForUser` in twenty places, and web's `routing.ts` helpers in a Dart header
 
 [§ 1142](decisions.md) deleted the method; the two architecture-guard trees were
 updated with it. A repo-wide grep for the identifier now returns twenty sites,
@@ -22133,28 +22103,56 @@ absence and reports it as a privacy defect. `/audit/privacy-zones` is a
 first-class command in this repo; its criterion should name
 `fetchClippedTrackForRun` and `clipRouteForViewer`.
 
-## 1219. Three of six filings in one lane were already fixed, because the fix and the checkbox landed in different changes
+### The same round, the same shape: `routing.dart`'s port claim
 
-Half of this lane's filed items were stale before it started, and all three went
-stale the same way. Round 38's merge (`8a414ff79`, the base this branch was cut
-from) corrected the root `CLAUDE.md` CI job count from 33 to 34, dropped the
-`snapToRoad` sentence from `test_inventory.md`'s body-parse register entry and
-moved its numbers to the measured "33 sites, 8 registered across three files",
-and corrected `export-data/render.test.ts` from 13 tests to 17 — and left all
-three `- [ ]` boxes unticked in `followups.md`. A later lane then read the
-filings, believed them, and was assigned work that no longer existed.
+[§ 1119](decisions.md) deleted `snapToRoad`, `fetchRoute` and `fetchFullRoute`
+from web's `routes/routing.ts` because nothing imported them, leaving that file
+the `/api/routes/osrm` proxy client (`OSRM_PROXY_BASE` + `osrmProxyFetch`) and
+nothing else. The Dart `routing.dart` was untouched and is still correct, but
+its header opened "Dart port of `apps/web/src/lib/routes/routing.ts`" and named
+two functions that end no longer holds, and `apps/mobile_android/CLAUDE.md`
+repeated the claim.
 
-The cost is not the wasted read; it is that a stale filing is indistinguishable
-from a live one, so the only safe response is to re-measure every filing before
-acting on it — which is the rule this round was run under and is why all three
-were caught. Two of the three re-measurements confirmed the tree was already
-right (33 sites and 8 registrations, both recomputed here; 17 `Deno.test`
-declarations, counted here). The third found a residual falsehood the round-38
-fix had left behind: with 34 jobs stated, "the aggregator that needs: all of
-them" is off by one, because the gate cannot wait on itself. It needs the other
-33, and `terraform` among them is a caller job whose own work lives in
-`terraform.yml`, whose jobs could never be named in a `needs:` list at all.
+Nothing failed, and nothing could have: the two were registered in neither the
+root `CLAUDE.md` pair list nor `.claude/agents/shared-library-syncer.md`, so
+`check_parity_pair_registry.mjs` had no row to check and the syncer agent had
+no table entry to compare. This is [§ 641](decisions.md)'s shape again — a
+header asserting lockstep that no registry knows about — except that here the
+right answer is not to register the pair. It is to say outright that there is no
+pair: the Dart file is the only client-side OSRM implementation in the tree, web
+reaches OSRM through a signed-in, fail-closed server proxy, and the two
+platforms no longer share a function to keep in step. Both the header and the
+CLAUDE.md row now say that, so a future reader does not add a row to the
+registries for a relationship that does not exist.
 
-The rule to take from it: a filing is closed by ticking its box in the same
-change that fixes it. A round that fixes a filed item without ticking it has not
-closed it — it has converted a real item into a trap.
+The same header carried a second dead reference: it said
+`assertOsrmConfiguredForProd` "mirrors the web `assertOsrmConfiguredForProd` in
+`apps/web/src/lib/routes/routing.ts`". There is no such web function any more —
+the posture moved to where the config lives, as the proxy handler's fail-closed
+501 when `OSRM_URL` is unset. The Dart guard is still needed and still correct,
+because a phone binary resolves its own OSRM base; it just has no client-side
+counterpart to mirror.
+
+## 1219. `core/method_gate` owes no Dart twin, and the reason is structural
+
+Filed as an open question: the gate is server-side today, so it owes nothing
+"but" the mobile client's own reads of an Edge Function 405 are not routed
+through anything shared, and if that ever became a pair it would need rows in
+both registries. Recording the answer so the question stops being re-asked.
+
+`methodRefusal` BUILDS a 405 — a status, an `Allow` header, `cache-control:
+no-store` and a body — for the eight Lambdas that gate their own method (three
+directly, five through `share_method_gate`). A parity pair exists where both
+platforms must make the same DECISION and would otherwise make it differently;
+here only one platform makes the decision at all. A Dart twin would be a
+function no Flutter code could call, and a mirror suite pinning a response
+nothing on the phone constructs. There is also nothing to keep in step: a grep
+of `apps/mobile_android/lib/` and `packages/*/lib/` finds no read of a 405
+status anywhere.
+
+If a client-side reading of a 405 is ever wanted, it is a CLASSIFIER and not a
+twin of a builder, and it already has a home: `import_failures` buckets a thrown
+value into the reason a surface shows, keys three of its branches off
+`errorStatus` (429, 401/403, 413), and adding 405 there is one branch in an
+existing registered pair. That is where the work would go — not into a new pair
+whose web half is a response builder.
