@@ -9,7 +9,11 @@ import {
 	shouldRescoreGlobalSegments,
 	stampGlobalSegmentsScored,
 	GLOBAL_SEGMENT_SCORING_LIMIT,
+	singleEmbed,
 } from './data_normalise.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { stripComments } from './strip_comments.js';
 
 // ---------------------------------------------------------------------------
 // trimOrNull — the JS `s?.trim() || null` mirror
@@ -319,4 +323,68 @@ test('stampGlobalSegmentsScored: merging the STALE pre-pass bag silently reverts
 
 	assert.equal(store.metadata.title, 'Morning run', 'stale merge reverts the rename — data loss');
 	assert.equal(store.metadata.notes, undefined, 'stale merge drops the notes the owner added');
+});
+
+// -------------------------------------------------------------------
+// singleEmbed — one shape for a PostgREST to-one embed
+// -------------------------------------------------------------------
+
+test('singleEmbed collapses both shapes PostgREST can return for a to-one embed', () => {
+	// Reason: the same `events → clubs(slug)` embed comes back as an object or
+	// as a one-element array depending on the FK metadata PostgREST detects.
+	// Three sites in data.ts normalised it and the fourth read `.slug` off the
+	// raw value, so an array shape would have produced `club_slug: undefined`
+	// under a type declaring `string`.
+	assert.deepEqual(singleEmbed({ slug: 'harriers' }), { slug: 'harriers' });
+	assert.deepEqual(singleEmbed([{ slug: 'harriers' }]), { slug: 'harriers' });
+	assert.deepEqual(singleEmbed([{ slug: 'a' }, { slug: 'b' }]), { slug: 'a' });
+});
+
+test('singleEmbed answers null for every shape that carries no related row', () => {
+	// Reason: an empty array and a null embed mean the same thing, and a caller
+	// that treats one as a row gets `undefined` where it expected a value. The
+	// caller decides whether that is a skip or a fallback — this returns null
+	// for all three so there is only one case to decide about.
+	assert.equal(singleEmbed([]), null);
+	assert.equal(singleEmbed(null), null);
+	assert.equal(singleEmbed(undefined), null);
+});
+
+test('no data.ts reader hand-rolls the to-one embed collapse', () => {
+	// Reason: the four sites drifted precisely because each spelled the ternary
+	// itself — three got it right and fetchNextRsvpedEvent did not, and nothing
+	// could see the difference. A restated `Array.isArray(x) ? x[0] : x` is the
+	// drift returning.
+	const source = stripComments(
+		readFileSync(resolve('src/lib/core/data.ts'), 'utf-8'),
+	);
+	const offenders = [...source.matchAll(/Array\.isArray\((\w+(?:\.\w+)*)\)\s*\?[^;\n]*\[0\]/g)].map(
+		(mm) => mm[0],
+	);
+	assert.deepEqual(
+		offenders,
+		[],
+		`these reads must collapse a to-one embed through singleEmbed:\n  ${offenders.join('\n  ')}`,
+	);
+});
+
+test('the run track and HR sidecar uploads address the Storage bucket registry, not the table one', () => {
+	// Reason: `saveRun`'s two uploads read `supabase.storage.from(TABLES.runs)`
+	// while every other Storage call in the file uses `BUCKETS.runs`. The two
+	// registries hold the same string today, which is exactly why the mistake
+	// was invisible: renaming either one would silently send a runner's GPS
+	// trace to a bucket that does not exist, and the upload failure path is a
+	// console.warn.
+	const source = stripComments(
+		readFileSync(resolve('src/lib/core/data.ts'), 'utf-8'),
+	);
+	const storageReads = [...source.matchAll(/storage\s*\n?\s*\.from\((\w+)\./g)].map(
+		(mm) => mm[1],
+	);
+	assert.ok(storageReads.length >= 10, 'expected the Storage call sites to be found');
+	assert.deepEqual(
+		[...new Set(storageReads)],
+		['BUCKETS'],
+		'every supabase.storage.from(...) must name the BUCKETS registry',
+	);
 });

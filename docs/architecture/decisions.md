@@ -23914,3 +23914,43 @@ re-inlining the workout list in `publishPlanToLibrary` fails the fourth.
 Not closed here: `clone_public_plan` (`20270126_001`) drops the same four
 columns on the read-back path, so a cloner of an already-published plan still
 loses them. That is a migration and belongs to the backend tree; it is filed.
+
+## 1230. Two idioms that were copied to each call site are now one function each — the duplicate-key absorb and the PostgREST to-one embed collapse
+
+Five writes in `core/data.ts` compared `error.code !== '23505'` themselves and
+a sixth, `joinChallenge`, never got the comparison at all. `challenge_participants`
+has a `(challenge_id, user_id)` primary key, so a second tap on Join — or a
+first tap on a list whose `joined` flag was computed before another tab wrote
+the row — surfaced a raw failure toast for the state the user had already
+reached. The same shape holds for the embed collapse: a PostgREST embed comes
+back as an object when it can prove the relation is to-one and as an array when
+it cannot, and which you get depends on the FK metadata it detects rather than
+on the query. Three `events → clubs(slug)` readers normalised it; the fourth,
+`fetchNextRsvpedEvent`, read `ev.clubs.slug` through, which under the array
+shape puts `undefined` into a `club_slug` field typed `string` and deep-links
+the dashboard's next-run card at `/clubs/undefined/events/…`.
+
+Both are the same defect in two costumes: an idiom restated at every site is an
+idiom that can be missed at a site, and nothing can see the one that was.
+`isDuplicateKeyError` now lives beside `supabaseErrorFields` in
+`core/supabase_error.ts` and `singleEmbed` beside the other pure reshapers in
+`core/data_normalise.ts`; all ten call sites route through them. The predicate
+is deliberately exact rather than a prefix — 23503 is a dangling FK, 23514 a
+CHECK the row genuinely violates, 42501 an RLS refusal, and each must still
+reach the caller as a failure. `fetchNextRsvpedEvent` additionally skips a
+candidate whose club slug will not resolve instead of returning a card that
+cannot be clicked.
+
+Both guards scan for the restated form rather than for the helper's name, so
+they fail on the drift returning rather than on a rename. A third, in the same
+commit, pins that every `supabase.storage.from(...)` in the file names the
+`BUCKETS` registry: `saveRun`'s track and HR-sidecar uploads addressed
+`TABLES.runs`, which is the same string today and would therefore have gone on
+working right up until either registry was renamed, at which point a runner's
+GPS trace uploads to a bucket that does not exist and the failure path is a
+`console.warn`. That is two sites, not the one the filing named — the second is
+the HR sidecar, missed because the call wraps across a line. Mutation-tested
+six ways: reverting `joinChallenge` to a bare throw, restating the `'23505'`
+literal, widening the predicate to `235*`, hand-rolling one embed collapse,
+sending one upload back to `TABLES.runs`, and letting `singleEmbed` return
+`undefined` for an empty array each fail exactly one assertion.

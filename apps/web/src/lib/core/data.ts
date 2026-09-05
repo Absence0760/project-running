@@ -3,6 +3,8 @@
  */
 import { supabase } from './supabase';
 import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function_error';
+import { isDuplicateKeyError } from './supabase_error';
+import { singleEmbed } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { isEntityId } from './entity_id';
 import { probeSaysConfigured } from './provider_probe';
@@ -1250,7 +1252,7 @@ export async function saveRun(input: {
 			const encoded = new TextEncoder().encode(JSON.stringify(input.track));
 			const gzipped = await gzipBytes(encoded);
 			const { error: upErr } = await supabase.storage
-				.from(TABLES.runs)
+				.from(BUCKETS.runs)
 				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
 					contentType: 'application/gzip',
 					upsert: true,
@@ -1293,7 +1295,7 @@ export async function saveRun(input: {
 			const encoded = new TextEncoder().encode(JSON.stringify(input.hrSeries));
 			const gzipped = await gzipBytes(encoded);
 			const { error: upErr } = await supabase.storage
-				.from(TABLES.runs)
+				.from(BUCKETS.runs)
 				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
 					contentType: 'application/gzip',
 					upsert: true,
@@ -1683,7 +1685,7 @@ export async function bookmarkRoute(routeId: string): Promise<void> {
 		.from('saved_routes')
 		.insert({ user_id: userId, route_id: routeId });
 	// Treat duplicate (already saved) as a no-op.
-	if (error && error.code !== '23505') throw error;
+	if (error && !isDuplicateKeyError(error)) throw error;
 }
 
 export async function unbookmarkRoute(routeId: string): Promise<void> {
@@ -2718,7 +2720,7 @@ export async function createClub(input: {
 		// migration 20260907_001) bubbles. The rate-limit branch is
 		// converted to a friendlier 'wait N minutes' message rather than
 		// the raw `rate limit exceeded for create_club, retry in Ns`.
-		if (error && error.code !== '23505') {
+		if (error && !isDuplicateKeyError(error)) {
 			const friendly = rateLimitErrorMessage(m, error);
 			if (friendly) throw new Error(friendly);
 			throw error;
@@ -2799,7 +2801,7 @@ export async function joinClub(
 		// (persona #45); null when the club doesn't require a waiver.
 		activity_waiver_ack_at: ackWaiver ? new Date().toISOString() : null,
 	});
-	if (error && error.code !== '23505') throw error;
+	if (error && !isDuplicateKeyError(error)) throw error;
 	return status;
 }
 
@@ -3022,13 +3024,21 @@ export async function fetchNextRsvpedEvent(
 		const instanceStart = row.instance_start as string;
 		if (isOccurrenceCancelled(cancelled.get(eventId) ?? [], instanceStart)) continue;
 		const ev = row.events as
-			| { title: string; meet_label: string | null; clubs: { slug: string } }
+			| {
+					title: string;
+					meet_label: string | null;
+					clubs: { slug: string } | { slug: string }[] | null;
+			  }
 			| null;
 		if (!ev) continue;
+		// The card's whole job is to deep-link the club. A missing slug would
+		// route it at /clubs/undefined, so skip the candidate and try the next.
+		const clubSlug = singleEmbed(ev.clubs)?.slug;
+		if (!clubSlug) continue;
 		return {
 			event_id: eventId,
 			instance_start: instanceStart,
-			club_slug: ev.clubs.slug,
+			club_slug: clubSlug,
 			title: ev.title,
 			meet_label: ev.meet_label ?? null,
 		};
@@ -3104,7 +3114,7 @@ export async function fetchEventClubSlug(eventId: string): Promise<string | null
 		.maybeSingle();
 	if (!data) return null;
 	const clubs = (data as { clubs: { slug: string } | { slug: string }[] | null }).clubs;
-	const club = Array.isArray(clubs) ? clubs[0] ?? null : clubs;
+	const club = singleEmbed(clubs);
 	return club?.slug ?? null;
 }
 
@@ -5331,7 +5341,7 @@ export async function followUser(targetUserId: string): Promise<void> {
 		.from('user_follows')
 		.insert({ follower_id: userId, followee_id: targetUserId });
 	// Treat duplicate (already following) as a no-op.
-	if (error && error.code !== '23505') throw error;
+	if (error && !isDuplicateKeyError(error)) throw error;
 }
 
 export async function unfollowUser(targetUserId: string): Promise<void> {
@@ -6165,7 +6175,7 @@ export async function giveKudos(runId: string): Promise<boolean> {
 		.from(TABLES.run_kudos)
 		.insert({ user_id: userId, run_id: runId });
 	if (error) {
-		if (error.code === '23505') return false;
+		if (isDuplicateKeyError(error)) return false;
 		throw error;
 	}
 	return true;
@@ -8458,7 +8468,7 @@ export async function fetchNotificationsWithError(
 	}
 	const eventBy = new Map<string, { title: string; club_slug: string | null }>();
 	for (const e of (events.data ?? []) as { id: string; title: string; clubs: { slug: string } | { slug: string }[] | null }[]) {
-		const club = Array.isArray(e.clubs) ? e.clubs[0] ?? null : e.clubs;
+		const club = singleEmbed(e.clubs);
 		eventBy.set(e.id, { title: e.title, club_slug: club?.slug ?? null });
 	}
 	const clubBy = new Map<string, { name: string; slug: string }>();
@@ -8571,7 +8581,7 @@ export async function submitReport(input: {
 		// friendly messages. The PostgREST envelope surfaces the
 		// SQLSTATE / hint exactly as raised in the migration; we
 		// don't lean on the raw text because that string can change.
-		if (error.code === '23505') {
+		if (isDuplicateKeyError(error)) {
 			throw new Error('You already have a pending report against this content.');
 		}
 		// The `create_report` bucket goes through the same
@@ -9323,7 +9333,7 @@ export async function fetchGymSetHistoryWithError(opts?: {
 			set_type: string | null;
 			gym_workouts: { started_at: string } | { started_at: string }[];
 		};
-		const w = Array.isArray(r.gym_workouts) ? r.gym_workouts[0] : r.gym_workouts;
+		const w = singleEmbed(r.gym_workouts);
 		return {
 			workout_id: r.workout_id,
 			started_at: w?.started_at ?? '',
@@ -11752,7 +11762,10 @@ export async function joinChallenge(id: string, teamClubId?: string | null): Pro
 	const { error } = await supabase
 		.from(TABLES.challenge_participants)
 		.insert({ challenge_id: id, user_id: userId, team_club_id: teamClubId ?? null });
-	if (error) throw error;
+	// The (challenge_id, user_id) primary key makes a double-tap — or a tap on
+	// a list whose `joined` flag was computed before another tab wrote the row
+	// — a duplicate, which is this call's own success condition restated.
+	if (error && !isDuplicateKeyError(error)) throw error;
 }
 
 export async function leaveChallenge(id: string): Promise<void> {

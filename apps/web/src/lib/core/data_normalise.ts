@@ -143,3 +143,21 @@ export function normalisePlanWorkoutNotes(
 	const t = value.trim();
 	return t.length > 0 ? t : null;
 }
+
+/// Collapse a PostgREST embedded relation to the single row it represents.
+///
+/// A `select('…, clubs(slug)')` embed comes back as an OBJECT when PostgREST
+/// can prove the relationship is to-one and as an ARRAY when it cannot — and
+/// which of the two you get depends on the FK metadata it detects, not on
+/// anything in the query. Four sites in `data.ts` read the same
+/// `events → clubs` embed; three normalised, and the fourth
+/// (`fetchNextRsvpedEvent`) read `ev.clubs.slug` straight through, so an array
+/// shape would have put `undefined` into a `club_slug` typed `string` and
+/// deep-linked the dashboard card at `/clubs/undefined/events/…`.
+///
+/// An empty array and a null embed both mean "no related row" and both answer
+/// null; the caller decides whether that is a skip or a fallback.
+export function singleEmbed<T>(value: T | T[] | null | undefined): T | null {
+	if (Array.isArray(value)) return value[0] ?? null;
+	return value ?? null;
+}
