@@ -150,6 +150,7 @@ import WatchConnectivity
         if let v = metadata["duration_s"] { payload["duration_s"] = v }
         if let v = metadata["distance_m"] { payload["distance_m"] = v }
         if let v = metadata["avg_bpm"] { payload["avg_bpm"] = v }
+        if let v = metadata["hr_coverage"] { payload["hr_coverage"] = v }
 
         // The file itself is the raw JSON array of track points the
         // watch wrote. Forward it as a string and let the Dart side

@@ -1,6 +1,6 @@
 // Unit tests for scripts/check_watch_ios_source.mjs.
 //
-// That guard makes five claims about a tier this repo compiles in exactly one
+// That guard makes eight claims about a tier this repo compiles in exactly one
 // job, on a runner nobody here has. Every failure it exists to catch is silent
 // on the platform: a localization key with no catalog entry renders English and
 // throws nothing, an entitlement nothing claims builds and links fine and is
@@ -25,8 +25,11 @@ import { fileURLToPath } from 'node:url';
 import {
 	INGEST,
 	ROUTE_BRIDGE,
+	UNGUARDED_DESTRUCTIVE,
 	check,
+	confirmationDialogSpans,
 	dartInvokeKeys,
+	destructiveButtons,
 	methodBody,
 	functionBody,
 	normalizeKey,
@@ -538,4 +541,96 @@ test('phoneEnvelopeKeys reads the required-field loop and the individual reads',
 
 test('phoneEnvelopeKeys ignores an array literal that has nothing to do with the envelope', () => {
 	assert.deepEqual([...phoneEnvelopeKeys('for x in ["unrelated"] { print(x) }\n')], []);
+});
+
+// --- (8) destructive controls -----------------------------------------------
+
+test('destructiveButtons reads the label and body of a destructive Button only', () => {
+	const src =
+		'Button("Keep", role: .cancel) { keep() }\n' +
+		'Button("Discard", role: .destructive) {\n    armed = true\n}\n';
+	const found = destructiveButtons(src);
+	assert.equal(found.length, 1);
+	assert.equal(found[0].label, 'Discard');
+	assert.equal(found[0].body?.trim(), 'armed = true');
+});
+
+test('destructiveButtons is not unbalanced by a paren inside a label', () => {
+	// `Button("Delete (all)", role: .destructive)` closes at the wrong paren
+	// under a matcher that does not skip string literals, and the role is then
+	// outside the args it reads — so the button vanishes from the claim.
+	const found = destructiveButtons('Button("Delete (all)", role: .destructive) { go() }\n');
+	assert.equal(found.length, 1);
+	assert.equal(found[0].label, 'Delete (all)');
+});
+
+test('confirmationDialogSpans covers the trailing actions and message closures', () => {
+	const src =
+		'.confirmationDialog(\n  "Discard this run?",\n  isPresented: $flag\n) {\n' +
+		'    Button("Discard", role: .destructive) { onDiscard() }\n' +
+		'} message: {\n    Text("Not saved anywhere else")\n}\n';
+	const spans = confirmationDialogSpans(src);
+	assert.equal(spans.length, 1);
+	const button = src.indexOf('Button("Discard"');
+	assert.ok(button > spans[0][0] && button < spans[0][1], 'the action must fall inside the span');
+	// And the span must END — a walker that runs to EOF would swallow every
+	// later Button in the file and pass them all as "the dialog's action".
+	assert.equal(spans[0][1], src.length - 1);
+});
+
+test('claim (8) fails when a destructive Button acts on the tap', () => {
+	const { errors } = runMutated((dir) => {
+		const f = join(dir, SYNC);
+		writeFileSync(
+			f,
+			readFileSync(f, 'utf8').replace('confirmingDiscard = true', 'onDiscard()'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('acts on the tap instead of arming a confirmation')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (8) fails when the armed flag is presented by no dialog', () => {
+	const { errors } = runMutated((dir) => {
+		const f = join(dir, SYNC);
+		writeFileSync(
+			f,
+			readFileSync(f, 'utf8').replace(/isPresented: \$confirmingDiscard/g, 'isPresented: $other'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('and no confirmationDialog is presented on it')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (8) fails when every confirmationDialog is deleted', () => {
+	const { errors } = runMutated((dir) => {
+		const f = join(dir, SYNC);
+		writeFileSync(f, readFileSync(f, 'utf8').replaceAll('.confirmationDialog(', '.ignored('));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('destructive Button(s) and no confirmationDialog')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (8) fails on an exemption for a button that no longer exists', () => {
+	assert.ok(
+		Object.keys(UNGUARDED_DESTRUCTIVE).length > 0,
+		'the register is empty, so the staleness test below proves nothing',
+	);
+	const { errors } = runMutated((dir) => {
+		const f = join(dir, SYNC);
+		writeFileSync(
+			f,
+			readFileSync(f, 'utf8').replace('Button("Stop", role: .destructive)', 'Button("Halt", role: .destructive)'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('UNGUARDED_DESTRUCTIVE exempts a destructive Button')),
+		errors.join('\n'),
+	);
 });

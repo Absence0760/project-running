@@ -70,6 +70,8 @@
     <string name="recover_unsaved_run">未保存のランを復元しますか？</string>
     <string name="save_it">保存</string>
     <string name="discard">破棄</string>
+    <string name="discard_confirm">破棄しますか？</string>
+    <string name="discard_stake">他に保存されていません</string>
 
     <string name="battery_allow_background">バックグラウンド動作を許可</string>
     <string name="battery_samsung_summary">Samsung のウォッチでは、スマートフォンの Galaxy Wearable で管理します。</string>

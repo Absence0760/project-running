@@ -313,7 +313,13 @@ backgrounding, low-memory kills).
   checkpoint is graded (below); one that still holds the only copy of a
   run raises the **"Recover unsaved run?"** prompt on the pre-run screen
   — accepting saves it as a finished run (queued for upload), discarding
-  clears it. This is what saves a run when the process is killed
+  clears it. **Discard is behind a two-press confirm** (`ui/ConfirmGuard.kt`,
+  decisions § 1206): the first press arms and relabels the chip, names what
+  is at stake, and lapses after `CONFIRM_WINDOW_MS`; only a second press
+  inside that window calls `discardCheckpoint`. The checkpoint is the run's
+  only durable record while the queue does not hold it, and since § 1154
+  Discard is the only enabled control on the screen whenever the queue is
+  unreadable. This is what saves a run when the process is killed
   mid-recording. **The service never clears it**: stopping publishes
   `Finished` and tears the service down, and the checkpoint is cleared by
   `RunViewModel.handleFinishedRun` *after* `LocalRunStore` has accepted

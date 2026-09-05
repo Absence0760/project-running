@@ -36,7 +36,8 @@ final class WorkoutManagerRecoveryTests: XCTestCase {
             pausedIntervalSeconds: 60,
             trackPointCount: 2,
             cacheFileURL: store.trackFileURL,
-            averageBPM: 148.0
+            averageBPM: 148.0,
+            hrCoverage: 0.75
         ))
         defer { store.clear() }
 
@@ -49,6 +50,12 @@ final class WorkoutManagerRecoveryTests: XCTestCase {
         XCTAssertEqual(recovered?.trackFileURL, store.trackFileURL)
         XCTAssertEqual(recovered?.trackPointCount, 2)
         XCTAssertEqual(recovered?.averageBPM, 148.0, "avg HR must survive recovery, not drop to nil")
+        XCTAssertEqual(
+            recovered?.hrCoverage, 0.75,
+            "the share the average was taken over must survive recovery beside it — a run " +
+                "that keeps its avg_bpm and loses its hr_coverage states the mean with " +
+                "nothing saying what it covered"
+        )
         XCTAssertEqual(wm.trackPointCount, 2, "trackPointCount is counted off the recovered track")
     }
 
@@ -65,13 +72,15 @@ final class WorkoutManagerRecoveryTests: XCTestCase {
         store.closeAppendHandle()
         store.write(checkpoint: RunCheckpoint(
             id: id, startedAt: Date(), distanceMetres: 100, activeDurationSeconds: 60,
-            pausedIntervalSeconds: 0, trackPointCount: 1, cacheFileURL: store.trackFileURL, averageBPM: nil
+            pausedIntervalSeconds: 0, trackPointCount: 1, cacheFileURL: store.trackFileURL, averageBPM: nil,
+            hrCoverage: nil
         ))
         defer { store.clear() }
 
         let recovered = WorkoutManager().recoverRun()
         XCTAssertNotNil(recovered)
         XCTAssertNil(recovered?.averageBPM)
+        XCTAssertNil(recovered?.hrCoverage)
     }
 
     // MARK: - formattedElapsed

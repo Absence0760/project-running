@@ -5,7 +5,7 @@
 // job compiles it — `test-watch-ios`, on a macOS runner — and every other
 // claim about it rests on reading. `apps/watch_ios/scripts/check_xcstrings_parity.sh`
 // already holds the String Catalog against its two locale-declaration sites
-// (decisions § 761 / § 850). This guard holds the six *other* things about
+// (decisions § 761 / § 850). This guard holds the seven *other* things about
 // the tier that a bare `node` on Linux can honestly measure, each of which
 // fails in a way no Swift test and no `xcodebuild` run would report:
 //
@@ -58,6 +58,16 @@
 //       than none), so a key renamed on one rail is a route the runner arms on
 //       the phone that silently never reaches the wrist — with a success
 //       reported at the point they armed it.
+//
+//   (8) No destructive control in `ContentView.swift` destroys a run on one
+//       tap. Both "Discard" buttons end a run that exists nowhere else — the
+//       crash-recovery checkpoint, and a finished run WCSession has not been
+//       handed — and neither the compiler nor any Swift test can see that one
+//       of them lost its confirmation, because a `Button` that calls its
+//       closure directly is the same program as one that arms a dialog first.
+//       Each destructive `Button` must therefore either ARM a confirmation
+//       (`<flag> = true`, bound to some `confirmationDialog(isPresented:)`) or
+//       BE the confirming action inside one.
 //
 // WHAT THIS GUARD DOES NOT PROVE. It parses text. It does not compile Swift,
 // does not run it, and cannot see anything a type-checker would: claim (1)
@@ -568,6 +578,106 @@ export function functionBody(src, name) {
 	return null;
 }
 
+/**
+ * Index of the delimiter closing the one at `open`, or -1. Skips string
+ * literals, so a brace or paren inside `"…"` cannot unbalance the walk.
+ * @param {string} src @param {number} open @param {string} o @param {string} c
+ */
+export function matchDelimiter(src, open, o, c) {
+	let depth = 0;
+	for (let i = open; i < src.length; i += 1) {
+		if (src[i] === '"') {
+			i += 1;
+			while (i < src.length && src[i] !== '"') i += src[i] === '\\' ? 2 : 1;
+			continue;
+		}
+		if (src[i] === o) depth += 1;
+		else if (src[i] === c) {
+			depth -= 1;
+			if (depth === 0) return i;
+		}
+	}
+	return -1;
+}
+
+/**
+ * The `[start, end)` span of every `.confirmationDialog(…)` call, argument
+ * list plus its trailing `actions:` / `message:` closures — so "is this Button
+ * the dialog's own action" is a position, not a guess.
+ * @param {string} src comment-stripped Swift
+ * @returns {[number, number][]}
+ */
+export function confirmationDialogSpans(src) {
+	/** @type {[number, number][]} */
+	const spans = [];
+	const re = /\.confirmationDialog\s*\(/g;
+	let m;
+	while ((m = re.exec(src)) !== null) {
+		const open = m.index + m[0].length - 1;
+		const close = matchDelimiter(src, open, '(', ')');
+		if (close === -1) continue;
+		let i = close + 1;
+		for (;;) {
+			const t = /^\s*(?:\w+\s*:\s*)?\{/.exec(src.slice(i));
+			if (t === null) break;
+			const braceOpen = i + t[0].length - 1;
+			const braceEnd = matchDelimiter(src, braceOpen, '{', '}');
+			if (braceEnd === -1) break;
+			i = braceEnd + 1;
+		}
+		spans.push([m.index, i]);
+	}
+	return spans;
+}
+
+/**
+ * Every `Button(…, role: .destructive) { … }` with its label and the body of
+ * its action closure (null when it has none to read).
+ * @param {string} src comment-stripped Swift
+ * @returns {{ index: number, label: string, body: string | null }[]}
+ */
+export function destructiveButtons(src) {
+	/** @type {{ index: number, label: string, body: string | null }[]} */
+	const out = [];
+	const re = /\bButton\s*\(/g;
+	let m;
+	while ((m = re.exec(src)) !== null) {
+		const open = m.index + m[0].length - 1;
+		const close = matchDelimiter(src, open, '(', ')');
+		if (close === -1) continue;
+		const args = src.slice(open, close + 1);
+		if (!/role\s*:\s*\.destructive/.test(args)) continue;
+		const label = /"([^"\\\n]*)"/.exec(args)?.[1] ?? '(unlabelled)';
+		const t = /^\s*\{/.exec(src.slice(close + 1));
+		if (t === null) {
+			out.push({ index: m.index, label, body: null });
+			continue;
+		}
+		const braceOpen = close + 1 + t[0].length - 1;
+		const braceEnd = matchDelimiter(src, braceOpen, '{', '}');
+		out.push({
+			index: m.index,
+			label,
+			body: braceEnd === -1 ? null : src.slice(braceOpen + 1, braceEnd),
+		});
+	}
+	return out;
+}
+
+/**
+ * Destructive-styled buttons that destroy nothing, by label, each with the
+ * reason. `role: .destructive` is a COLOUR as well as a claim, and a control
+ * that ends a run into a screen still holding it is not the thing claim (8) is
+ * about. An entry matching no button in the file is an error, so the register
+ * cannot outlive what it exempts.
+ * @type {Record<string, string>}
+ */
+export const UNGUARDED_DESTRUCTIVE = {
+	Stop: 'ends the recording into PostRunView, which still holds the finished run, its ' +
+		'on-disk track and a Sync Run button — nothing is deleted, and a runner who stops ' +
+		'by accident loses the recording state, not the run',
+};
+
 // --- the checks -------------------------------------------------------------
 
 /**
@@ -847,6 +957,70 @@ export function check(watchRoot, ingestPath = null, routeBridgePath = null) {
 				ok.push(
 					`all ${(/** @type {Set<string>} */ (dart)).size} route-push keys agree across the ` +
 						'Dart channel, the phone repack and the watch decode',
+				);
+			}
+		}
+	}
+
+	// (8) No destructive control ends a run on one tap.
+	{
+		const src = stripSwiftComments(read(SYNC_SITE));
+		const spans = confirmationDialogSpans(src);
+		const buttons = destructiveButtons(src);
+		if (buttons.length === 0) {
+			errors.push(
+				`Parsed no \`role: .destructive\` Button out of ${SYNC_SITE} — claim (8) would pass ` +
+					'vacuously. Both Discard buttons carry that role; if the shape changed, this ' +
+					'reads nothing rather than reading a clean tree.',
+			);
+		} else if (spans.length === 0) {
+			errors.push(
+				`${SYNC_SITE} has ${buttons.length} destructive Button(s) and no confirmationDialog. ` +
+					'Each of them ends a run that exists nowhere else — the crash-recovery checkpoint, ' +
+					'and a finished run WCSession has not been handed — and a single tap is the whole ' +
+					'interaction.',
+			);
+		} else {
+			/** @type {string[]} */
+			const armedFlags = [];
+			for (const b of buttons) {
+				if (spans.some(([a, z]) => b.index > a && b.index < z)) continue;
+				if (b.label in UNGUARDED_DESTRUCTIVE) continue;
+				const armed = /^\s*(\w+)\s*=\s*true\s*$/.exec(b.body ?? '');
+				if (armed === null) {
+					errors.push(
+						`\`Button("${b.label}", role: .destructive)\` in ${SYNC_SITE} acts on the tap ` +
+							'instead of arming a confirmation. A destructive control on this watch must ' +
+							'either set a `confirmationDialog` flag or BE that dialog\'s action — the run ' +
+							'it ends is on no other device, and there is no undo. Body: ' +
+							`\`${(b.body ?? '').trim().replace(/\s+/g, ' ').slice(0, 80)}\``,
+					);
+					continue;
+				}
+				armedFlags.push(armed[1]);
+			}
+			for (const flag of armedFlags) {
+				if (new RegExp(`isPresented\\s*:\\s*\\$${flag}\\b`).test(src)) continue;
+				errors.push(
+					`\`${flag}\` is set by a destructive Button in ${SYNC_SITE} and no ` +
+						'confirmationDialog is presented on it, so the tap arms a dialog that never ' +
+						'appears and the control is inert.',
+				);
+			}
+			for (const label of Object.keys(UNGUARDED_DESTRUCTIVE)) {
+				if (buttons.some((b) => b.label === label)) continue;
+				errors.push(
+					`UNGUARDED_DESTRUCTIVE exempts a destructive Button labelled \`${label}\`, and ` +
+						`${SYNC_SITE} has none. A stale exemption is a hole nobody can see: the next ` +
+						'button to take that label inherits it. Delete the entry.',
+				);
+			}
+			if (armedFlags.length > 0 && errors.length === 0) {
+				const exempt = buttons.filter((b) => b.label in UNGUARDED_DESTRUCTIVE).length;
+				ok.push(
+					`every run-ending control in ${SYNC_SITE} is confirmed: ${armedFlags.length} ` +
+						`arm a confirmationDialog, ${buttons.length - armedFlags.length - exempt} are ` +
+						`a dialog's own action, ${exempt} exempt`,
 				);
 			}
 		}

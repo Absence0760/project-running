@@ -71,6 +71,8 @@
     <string name="recover_unsaved_run">Nicht gespeicherten Lauf wiederherstellen?</string>
     <string name="save_it">Speichern</string>
     <string name="discard">Verwerfen</string>
+    <string name="discard_confirm">Verwerfen?</string>
+    <string name="discard_stake">Nirgendwo sonst gespeichert</string>
 
     <string name="battery_allow_background">Hintergrundaktivität erlauben</string>
     <string name="battery_samsung_summary">Samsung-Uhren verwalten dies in Galaxy Wearable auf deinem Handy.</string>

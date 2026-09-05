@@ -22436,6 +22436,213 @@ the route case, reverting to the loop fails the `head_splice` case.
 Process note worth keeping: § 1192's verification ran the changed module's own
 test file and not the suite around it. The contradiction was one directory away.
 
+## 1205. `RotaryScrollWiringTest` pairs each rotary list with the requester IT names, not with a fixed variable name
+
+The Wear guard asserted the wiring of `Modifier.rotaryScrollable` by counting
+two things and comparing the totals: `.rotaryScrollable(` call sites, and
+matches of the literal `rotaryFocus.requestFocus()`. That is a claim about a
+variable name, and it was wrong in both directions. A correctly-wired list whose
+requester is called anything else fails the build — § 1154's scrolling
+crash-recovery takeover named its requester `recoveryRotary` and the guard
+reported 4 against 3, so the rename to the file's idiom was made to satisfy a
+guard rather than the program. And two lists inside one composable sharing a
+single `FocusRequester` count 2 against 2 and pass, while only one of them can
+ever hold focus.
+
+The guard now reads the pairing. `RunWatchApp.kt` is split into its top-level
+functions — that span is the scope a `remember { FocusRequester() }` lives in,
+so it is the unit within which a pairing has to hold — and inside each, every
+`.rotaryScrollable(` argument list is brace-matched, its own
+`focusRequester = <name>` argument read, and that `<name>` required to be both
+created and focused in the same function, with no two call sites naming the
+same one. Two assertions keep it from decaying into something weaker than what
+it replaced: the total call-site count must still be at least two (a scan
+finding nothing is a broken scan, not a clean tree), and every call site in the
+file must fall inside a parsed function, so a site the splitter fails to
+attribute is a failure rather than a silent exemption.
+
+Measured against the three shapes rather than argued: the renamed-requester tree
+passes the new guard and fails the old one (4 against 3); a list whose
+`requestFocus()` is deleted fails the new guard naming `RoutePickerScreen`; and
+two lists sharing one requester fail the new guard while passing the old one at
+5 against 5. `RecoveryPromptDisclosureTest` carried a local copy of the same
+count-vs-count check and now calls the shared `RotaryWiring` helper, so the
+takeover cannot drift back to the identifier form on its own.
+
+## 1206. Discard on the Wear crash-recovery prompt is a two-press confirm, not a dialog and not one tap
+
+`discardCheckpoint` called `checkpoints.clear()` on a single tap, and the
+checkpoint is — in § 1107's own words — "the run's only durable record" whenever
+the queue does not hold the run. That is the house
+destructive-action-without-confirm anti-pattern on the most consequential button
+in the app, read by a runner who has just crashed out of a recording. § 1154
+made it worse rather than leaving it unchanged: while the queue is unreadable,
+"Save it" is disabled and Discard is the ONLY enabled control on the screen, so a
+runner who wants their run and finds Save greyed out has exactly one thing left
+to press.
+
+**Two presses inside a window, not a dialog.** The prompt is a full-screen
+takeover on a 192 dp round watch; a modal over a takeover is a second takeover,
+and Wear has no `AlertDialog` idiom in this tree to reach for. The shape taken is
+the estate's own: `apps/custom_watch`'s FACTORY ERASE (§ 378) and PAIR PHONE
+(§ 432) both arm on one press, announce the arm by replacing what the row says,
+and commit only on a second press inside `ERASE_CONFIRM_WINDOW_S`. `ui/ConfirmGuard.kt`
+is that in Kotlin: `confirmPress(armedAtMs, nowMs)` returns `Armed` or
+`Confirmed`, the chip relabels to `discard_confirm` while armed and shows
+`discard_stake` — "Not saved anywhere else" — beside it, and a `LaunchedEffect`
+disarms after `CONFIRM_WINDOW_MS` so a watch put down while armed is not found
+later with a destructive control one press from firing.
+
+Everything that is not a live arm re-arms, including an arm stamped in the
+reader's FUTURE: that is a clock that moved, not a runner who pressed twice, and
+a device disagreeing with itself about the time must not make an irreversible
+action reachable in one press. The decision is a pure function precisely so it
+can be exercised — this module has no Robolectric, so a Compose-resident
+`when` would have been untestable, the same split `PaceAlert.shouldFirePaceAlert`
+already uses. `RecoveryPromptDisclosureTest` pins the wiring: the press is graded
+through `confirmPress`, `onDiscardRecovery()` appears exactly ONCE in the whole
+takeover (an unguarded second call site is the defect wearing a guard), the armed
+label and the stake line both render, and the arm lapses. Discard stays ENABLED
+throughout — § 1154's reason for that is untouched, and a guard is not a lock.
+
+## 1207. `apps/watch_ios` sends the heart-rate coverage it measures, and only when it measured one
+
+§ 1156 built the watchOS coverage accumulator and spent it entirely on the local
+`avg_bpm` suppression: the figure existed, decided whether a run kept its
+average, and then went nowhere. It could not be sent from that lane, because
+claim (6) of `scripts/check_watch_ios_source.mjs` reads BOTH ends of the
+`WCSession.transferFile(_:metadata:)` envelope and fails the PR on a key the
+phone never lifts — so the write and the lift had to land together or CI is red
+between them. They do, here, across three trees in one change:
+`WorkoutManager.FinishedRun` and `RunCheckpoint` gain an `hrCoverage`,
+`ContentView.syncRun` packs `hr_coverage`, and
+`apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` lifts it out beside
+`avg_bpm`.
+
+**The key is written only from a non-nil claim, and nothing defaults it.** Nil
+means UNMEASURED — an `HKWorkoutSession` that never started (HealthKit
+unavailable, the entitlement missing, a simulator), or a checkpoint written by a
+build predating the field — and the whole reason § 1106 refused to write an
+assumed `1.0` is that a fabricated measurement is worse than a missing one. The
+same rule runs one layer down: `RunCheckpoint.hrCoverage` decodes with
+`decodeIfPresent`, so an older checkpoint recovers as nil rather than as a zero
+claiming the sensor delivered nothing for the whole run, and the recovery path
+carries that nil straight through to an omitted key. `MetadataRegistryTests`
+enforces the shape rather than the presence: the write must match
+`if let <x> = run.hrCoverage { metadata["hr_coverage"] = <x> }`, and a `??`
+anywhere near `hrCoverage` fails.
+
+The average and the coverage are now taken from ONE `heartRateClaim` call at
+each of the two sites that produce them (the finished run and the 15 s
+checkpoint), where the old code called it once for the average alone. Two calls
+grade against two readings of the clock and two accumulator states, and could
+publish a coverage that contradicts the average it suppressed — a row saying the
+sensor covered a third of the run while carrying that third's mean as the run's
+average.
+
+**Two honest limits, both recorded on the `hr_coverage` registry row rather than
+left for a reader to discover.** First, the figure is over the first hop and not
+the second: past the Swift bridge, `WatchIngest._runFromArgs` and
+`runFromWatchPayload` build `metadata` from an explicit key allowlist that does
+not name `hr_coverage`, so the key is still dropped before the row. That is two
+lines in a tree this lane does not own, and it is filed; `MetadataKeys.hrCoverage`
+already exists. Second, this is **read, not run**: there is no Xcode on this
+workstation, the only compiler that sees this tier is the `test-watch-ios` macOS
+job, and the accumulator has never executed on a simulator or a device. Its one
+silent failure mode is a sample-timestamp source reading blank on hardware, which
+would send `hr_coverage: 0.0` on every run — the non-nil gate does not catch
+that, because zero is a measurement. A simulator or bench run is owed before the
+figure is trusted, per `docs/custom_watch/quality_standards.md`.
+
+## 1208. Both watchOS Discard buttons are confirmed, and claim (8) of the source guard is what keeps them that way
+
+Hunted in the same round that fixed the Wear side (§ 1206) and found to be the
+same defect twice on the other watch. `ContentView.swift` carried two
+`Button("Discard", role: .destructive)` controls, each calling its closure on a
+single tap. `RecoveryView`'s ends the crash-recovery checkpoint — the run's only
+durable record, and the next `start()` purges the NDJSON a discarded recovery
+strands. `PostRunView`'s sits on the **unsynced** branch, where the run has not
+been handed to `WCSession` at all and `reset()` deletes its track file: the tap
+is the end of the run, not a tidy-up. Neither had a confirmation, and the
+accessibility hints said so out loud ("Deletes the unsaved run permanently",
+"Throws away the unsynced run permanently").
+
+Both now arm a `.confirmationDialog` — the platform's own idiom, available at
+the project's watchOS 10 floor, and already anticipated by the guard's
+`LOCALIZING_APIS` list — titled "Discard this run?" with the stake stated
+underneath as "Not saved anywhere else", the same sentence the Wear chip shows.
+Three catalog keys in all six translated locales. `Start next run` in the SYNCED
+branch calls the identical closure and is deliberately left unguarded: there the
+run is already on its way and nothing is lost.
+
+**The pin is a new claim in `scripts/check_watch_ios_source.mjs`, not a Swift
+test**, and the reason is structural rather than convenient. A new file in
+`WatchAppTests` has to be added to an Xcode target by hand, and a test file in no
+target is the exact failure mode claim (4) already exists to catch; the Node
+guard also runs on Linux CI, where every PR sees it, rather than only in the one
+macOS job. Claim (8) brace-matches every `Button(…, role: .destructive)` and its
+action closure, computes the `[start, end)` span of every `.confirmationDialog(…)`
+including its trailing `actions:` / `message:` closures, and requires each
+destructive button either to ARM a flag that some dialog is `isPresented:` on, or
+to sit inside a dialog span as that dialog's own action. It refuses to pass
+vacuously in both directions: no destructive button parsed, or destructive
+buttons with no dialog anywhere, are each an error.
+
+`role: .destructive` is a colour as well as a claim, so the guard needs a way to
+say "this one destroys nothing" — `Stop` ends the recording into a `PostRunView`
+that still holds the run, its track and a Sync button. `UNGUARDED_DESTRUCTIVE`
+registers that by label with the reason, and an entry matching no button in the
+file FAILS: a stale exemption is a hole nobody can see, because the next button
+to take that label inherits it. Four mutation tests in
+`check_watch_ios_source.test.mjs` drive each refusal, plus two on the parsers —
+one pinning that a paren inside a button label does not unbalance the argument
+walk, and one that a dialog span ends where its closures end rather than running
+to EOF, which would swallow every later button in the file and pass them all.
+
+Read, not run: there is no Xcode on this workstation and none in Linux CI, so
+nothing here has been compiled. The `Test watchOS app (Swift)` macOS job settles
+whether it builds; this ADR claims only what a parser can see.
+
+## 1209. The watchOS queued-run count is read off `WCSession.outstandingFileTransfers`, not kept as a private tally
+
+Hunted in the same round as § 1208. `WatchConnectivityManager` held
+`queuedCount` and `transferState` as in-memory `@Published` state, seeded at `0`
+and `.idle`, incremented on hand-off and decremented in
+`session(_:didFinish:)`. WCSession's outbox is not in-memory: the file's own
+doc comment says a queued transfer "survives app closure and watch reboot" and
+that "a day of offline runs will all drain to Supabase the moment the phone
+companion app next activates its own `WCSession`."
+
+So on every relaunch the two disagreed, and in the direction that hides the
+problem. `PreRunView` renders `"N run queued to sync"` on `queuedCount > 0` —
+the ONLY place this watch ever tells a runner a recorded run has not reached the
+phone. A runner who syncs with the phone off, then closes the app or lets the
+watch reboot, comes back to a pre-run screen that says nothing at all, while the
+platform is still holding their run. It is the same class as Wear's frozen
+`queuedCount` (§ 1104): a count that stops tracking the thing it names, and
+whose failure is silence.
+
+`outstandingFileTransfers` is the authoritative list and this file already
+consulted it — `pendingTransferURLs()` uses it as "the authoritative keep-set for
+the stale-export sweep", so the durable answer was one read away in a delegate
+callback that was an empty stub. The count is now taken from it at the two
+moments it can be trusted without a device to verify callback ordering against:
+`activationDidCompleteWith` (the relaunch case, which is the defect) and
+immediately after `transferFile`, where the outbox demonstrably already holds
+what was just handed over. `didFinish` keeps its decrement, because whether a
+finished transfer has left `outstandingFileTransfers` by the time the delegate
+runs is not something this workstation can establish, and a derived read there
+could sit one high until the next event — worse than the tally it replaced.
+
+The decision half is pure — `stateOnActivation(outstanding:)` — for the reason
+`canTransfer(activationState:)` already is: constructing the manager activates a
+real `WCSession`, which the unit-test host does not have. It is pinned both ways,
+because coming up `.pending` on an empty outbox would leave a fresh install
+saying "Queued — will retry" forever.
+
+Read, not run. No Xcode here; the `Test watchOS app (Swift)` macOS job is what
+compiles any of this.
+
 ## 1210. The three artifact-reading web guards now run in the job that builds, because the job that owns them never does
 
 **Decided 2026-09-05.** `spa_shell_head_signals.test.ts` ([§ 1115](#1115)),

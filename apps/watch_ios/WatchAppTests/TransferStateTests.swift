@@ -67,4 +67,24 @@ final class TransferStateTests: XCTestCase {
         // must also refuse the hand-off so the run is kept for retry.
         XCTAssertFalse(WatchConnectivityManager.canTransfer(activationState: .inactive))
     }
+
+    // A WCSession file transfer outlives the app AND the watch reboot, and
+    // waits days for a phone that is switched off — so `queuedCount` and
+    // `transferState`, both in-memory, start every launch disagreeing with the
+    // outbox. `PreRunView`'s "N run queued to sync" is the only place the watch
+    // ever says a run is still waiting, and it renders on `queuedCount > 0`.
+    func testActivationWithOutstandingTransfersIsPending() {
+        XCTAssertEqual(
+            WatchConnectivityManager.stateOnActivation(outstanding: 1),
+            .pending,
+            "a relaunch over a queued run must not come up idle — the outbox still holds it"
+        )
+        XCTAssertEqual(WatchConnectivityManager.stateOnActivation(outstanding: 7), .pending)
+    }
+
+    func testActivationWithAnEmptyOutboxIsIdle() {
+        // And it must not claim pending when nothing is queued, or the watch
+        // says "queued — will retry" on a fresh install forever.
+        XCTAssertEqual(WatchConnectivityManager.stateOnActivation(outstanding: 0), .idle)
+    }
 }
