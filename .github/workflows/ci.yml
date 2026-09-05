@@ -205,7 +205,7 @@ jobs:
           fi
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # decisions.md § 595 — the Flutter SDK pin is declared once per workflow
       # file, because a workflow-level `env` cannot span ci.yml and the two
       # release workflows; the melos pin is checked against pubspec.lock,
@@ -465,7 +465,7 @@ jobs:
           # third-party packages (e.g. `jszip` in backup_reader.test.ts)
           # — the runner can't resolve them without a populated workspace
           # `node_modules/`, and `tsx` itself is one of them.
-          node-version: 24
+          node-version: 24.20.0
           cache: npm
       - run: npm ci
       # Cheap, deterministic guard ahead of the stack start: two migrations
@@ -855,7 +855,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
           cache: npm
       # Stdlib-only, so it runs before the install: a broken guard should say
       # so in seconds rather than three minutes into a build whose verdict it
@@ -974,7 +974,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # Three checks under one job name, so each says which one broke
       # (decisions § 764): dev refuses to start against prod endpoints, release
       # refuses to build against placeholder / loopback ones, and no committed
@@ -1124,7 +1124,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: CLAUDE.md vs shared-library-syncer pair registry
         run: |
           if ! node --test scripts/markdown_lines.test.mjs; then
@@ -1238,7 +1238,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Firmware GATT table vs phone client constants
         run: |
           if ! node scripts/check_watch_ble_uuids.mjs; then
@@ -1282,7 +1282,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Firmware golden vectors vs the phone encoder's, and the shared constants
         run: |
           if ! node scripts/check_watch_wire_vectors.mjs; then
@@ -1343,7 +1343,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # Drift first, then the tool's own suite — the suite's last two cases
       # read the committed tree, so running it first would report "the guard is
       # broken" over an ordinary undeclared capability.
@@ -1394,7 +1394,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: String Catalog coverage vs CFBundleLocalizations + knownRegions
         run: |
           if ! bash apps/watch_ios/scripts/check_xcstrings_parity.sh; then
@@ -1474,7 +1474,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Monkey C source-level claims (no Connect IQ SDK needed)
         run: |
           if ! bash apps/watch_garmin/scripts/check_garmin_source.sh; then
@@ -1510,7 +1510,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: Terraform Lambda aliases vs the tooling that repoints them
         run: |
           node scripts/check_lambda_alias_sync.mjs
@@ -1559,7 +1559,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       - name: IAM least privilege + the OIDC trust contract
         run: |
           if ! node scripts/check_infra_iam.mjs; then
@@ -2342,7 +2342,7 @@ jobs:
           # native DecompressionStream (landed in Node 18, stable since), and
           # @supabase/realtime-js needs native WebSocket (22+). Match the rest
           # of the Node jobs.
-          node-version: 24
+          node-version: 24.20.0
           cache: npm
       - run: npm ci
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
@@ -2567,7 +2567,7 @@ jobs:
       # pinned runtime.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # A green Deno suite says every assertion passed, not that any of them
       # asked anything. decisions § 741 found that shape in the pgtap suite and
       # § 777 in the Playwright suite; this is the third tier, and what hides a
@@ -2805,7 +2805,7 @@ jobs:
       # node:*, so no workspace install is needed — only a pinned runtime.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
       # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
         uses: ./.github/actions/start-supabase
@@ -2918,7 +2918,7 @@ jobs:
           # only landed in Node 22. On older runtimes
           # `createClient(...)` crashes at construction and the Vite
           # dev server dies before Playwright's webServer connects.
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:
@@ -3046,7 +3046,7 @@ jobs:
         with:
           # Node 24 — see e2e-web for why 22+ is mandatory (realtime-js
           # needs native WebSocket).
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -3138,7 +3138,7 @@ jobs:
         with:
           # Node 24 — see e2e-web for why 22+ is mandatory (realtime-js
           # needs native WebSocket).
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -3251,7 +3251,7 @@ jobs:
           version: 10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
       - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
         with:

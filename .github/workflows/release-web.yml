@@ -94,7 +94,7 @@ jobs:
           # esbuild produces actually runs in Lambda. Node 22+ is
           # also a hard requirement for @supabase/realtime-js >=2.105
           # which the coach Lambda transitively imports.
-          node-version: "24"
+          node-version: "24.20.0"
 
       - run: npm ci
 

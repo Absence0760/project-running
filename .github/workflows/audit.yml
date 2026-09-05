@@ -36,7 +36,7 @@ jobs:
           # release-web.yml, compliance-drift.yml)
           # — was 22, bumped to 24 per /audit/deps May 2026 to close
           # the workflow-Node-version drift Low.
-          node-version: 24
+          node-version: 24.20.0
           cache: pnpm
 
       - name: Install dependencies
