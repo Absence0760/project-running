@@ -1663,6 +1663,33 @@ jobs:
       security-events: write
     uses: ./.github/workflows/terraform.yml
 
+  # The secret scan, CALLED rather than triggered — the same fix § 1149
+  # applied to terraform.yml, for the same reason. gitleaks.yml ran on its own
+  # `push` + `pull_request` triggers, where its red could never block a merge:
+  # branch protection requires exactly one context, the `CI gate` aggregator
+  # below, and a `needs:` entry is scoped to its own workflow. So a committed
+  # AWS key produced a red row on a mergeable PR (decisions § 1264).
+  #
+  # UNGATED deliberately, like `parity-matrix`. A pasted credential arrives in
+  # a markdown file as readily as in code — a `.env` snippet in a runbook, a
+  # curl example in an ADR — and the `changes` filter calls that a docs-only
+  # diff, on which every code-gated job skips and the gate counts a skip as a
+  # pass. The measured cost of not gating it is 18 s (run 33955515670).
+  #
+  # The action's own exit status is the whole signal: read at the pinned SHA,
+  # gitleaks-action posts no SARIF anywhere — it writes a job summary and
+  # exits 1 on a detection. Nothing else about the scan reaches a reader.
+  gitleaks:
+    name: Secret scan (gitleaks)
+    permissions:
+      contents: read
+      # The action lists a PR's existing review comments before deciding
+      # whether to add one. It cannot add one — that needs `write` — so the
+      # called workflow turns the comment path off; the read stays because it
+      # is what the scan's own event handling reads.
+      pull-requests: read
+    uses: ./.github/workflows/gitleaks.yml
+
   build-watch-wear:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -3480,6 +3507,7 @@ jobs:
       - lambda-alias-coverage
       - infra-guards
       - terraform
+      - gitleaks
       - build-watch-wear
       - build-firmware
       - sim-firmware

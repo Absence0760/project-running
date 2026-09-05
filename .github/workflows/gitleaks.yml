@@ -5,6 +5,17 @@ name: gitleaks
 # role tokens, Strava client secrets, etc. — anything an automated
 # pattern can recognise.
 #
+# CALLED by ci.yml's `gitleaks` job for the push / PR half, and
+# triggered on its own only by the weekly cron. It ran on its own
+# `push` + `pull_request` triggers until 2026-09-05, which made a
+# found secret ADVISORY: branch protection requires exactly one
+# context, the `CI gate` aggregator in ci.yml, and a `needs:` entry
+# cannot name a job in another workflow — so a red gitleaks row
+# merged (decisions § 1264). The action exits 1 on a detection
+# (`process.exit(1)` in its `src/index.js` at the pinned SHA), and a
+# called workflow's job result fans into the calling job, so that
+# exit is now the merge gate it always read as.
+#
 # Complements existing controls:
 #   - CodeQL (workflows/security.yml) — finds source-level injection
 #     vulns, not secrets.
@@ -24,21 +35,25 @@ name: gitleaks
 # secret (not the file) so a real key in the same source still fails.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
   schedule:
     # Weekly full-history sweep. The push / PR triggers above only
     # diff against the base, so a secret that landed on a forgotten
     # branch and got merged via fast-forward could slip through.
     - cron: '0 6 * * 1'
 
+# A called workflow cannot escalate past what the calling job grants,
+# so these are declared in BOTH places and the caller's are the ceiling.
+# `security-events: write` used to sit here with a comment saying the
+# action POSTs SARIF findings to the Security tab. It does not: read at
+# the pinned SHA, none of gitleaks-action's four source files mentions
+# `code-scanning`, `sarifs` or `security-events` at all. It writes a job
+# summary, uploads a `gitleaks-results.sarif` ARTIFACT (which
+# GITLEAKS_ENABLE_UPLOAD_ARTIFACT below turns off), and attempts PR
+# review comments. So the scan's only signal is this job's own exit
+# status, and the write scope was granted for nothing (decisions § 1264).
 permissions:
-  # The action POSTs SARIF findings via the same security-events
-  # permission the CodeQL / Trivy jobs use — keeps the Security tab
-  # the single pane of glass.
   contents: read
-  security-events: write
   pull-requests: read
 
 jobs:
@@ -63,3 +78,9 @@ jobs:
           # want the upstream-managed dashboard, set the license as a
           # repo secret and the action will pick it up.
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          # The comment path needs `pull-requests: write`, which no caller
+          # grants: it lists existing comments with the read scope, then
+          # fails the POST and `core.warning`s. Off rather than warning on
+          # every run about something it is not permitted to do; the job
+          # summary and the exit status carry the finding.
+          GITLEAKS_ENABLE_COMMENTS: 'false'

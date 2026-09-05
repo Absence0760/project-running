@@ -23911,3 +23911,53 @@ tree: 70 self-diagnosing steps across 12 derived + 2 listed bundled jobs, the
 gate waiting for all 33 others, 2,196 shell lines clean; `actionlint
 -shellcheck= -pyflakes=` exit 0; 134 unit tests across
 `check_ci_diagnostics.test.mjs` + `check_infra_coverage.test.mjs`.
+
+## 1264. gitleaks now gates a merge; folding CodeQL in would not have, and the measurement says why
+
+**Decided 2026-09-05.** [§ 1149](#1149) folded `terraform.yml` into `ci.yml`
+as a called workflow so its three advisory rows could reach the one context
+branch protection requires. `gitleaks.yml` and `security.yml` were the two
+left, and the filing that raised them treated them as one problem with one
+answer ("probably branch protection, not a fold, because both upload SARIF to
+the Security tab"). They are two different problems, and half of that sentence
+is false.
+
+**gitleaks posts no SARIF anywhere, so its exit status was the whole signal —
+and the whole signal blocked nothing.** Read at the pinned SHA
+`e0c47f4`, none of `gitleaks-action`'s four source files contains the string
+`code-scanning`, `sarifs` or `security-events`. It writes a job summary,
+uploads a `gitleaks-results.sarif` *artifact* (which this repo's
+`GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'` already disables), and attempts PR
+review comments. What it does on a detection is `process.exit(1)` in
+`src/index.js`, and that red row was in no `needs:` of the `CI gate`. So the
+scan is now CALLED from an ungated `gitleaks` job in `ci.yml` that is named in
+that list — the § 1149 shape exactly. Ungated deliberately, like
+`parity-matrix`: a pasted credential arrives in a runbook or an ADR as readily
+as in code, and the `changes` filter calls that a docs-only diff on which every
+code-gated job skips and the gate counts a skip as a pass. Measured cost of
+running it on every diff: **18 s** (run 33955515670), against a gate critical
+path of **18 m 34 s** (`Test Flutter packages`, run 33955515785). Two
+least-privilege corrections came with it: the `security-events: write` scope
+the workflow granted "so the action can POST SARIF findings" is granted for
+nothing and is gone, and `GITLEAKS_ENABLE_COMMENTS` is now explicitly off
+rather than attempting a POST that `pull-requests: read` cannot authorise and
+warning about it on every run.
+
+**Folding CodeQL in cannot make an alert block a merge, and would re-key every
+analysis in the Security tab.** Two measurements. First,
+`github/codeql-action/analyze` at the pinned SHA `cdf488f` declares 18 inputs
+and not one of them is a severity threshold — an alert does not turn the job
+red, so the fold would gate only on the analysis COMPLETING, not on what it
+found. Second, `getAnalysisKey()` in that action's `src/api-client.ts` is
+`` `${workflowPath}:${jobName}` `` where `workflowPath` is resolved from the
+RUN's workflow, and it feeds `computeAutomationID`. A called workflow runs
+inside the caller's run, so folding would change the automation ID of all four
+analyses at once — which is precisely the identity churn `security.yml`'s own
+header records being burned by when a duplicate `codeql.yml` "made the alert
+set flip-flop and left the Security tab flagging configuration errors". Paying
+that to gain "the scan completed" — when `build-watch-wear` and the two Go
+jobs in `ci.yml` already gate on the same trees compiling — is the wrong
+trade. `security.yml` is unchanged. **What gates a CodeQL alert is a repo
+setting and only a repo setting**, and the context to require is the
+code-scanning check run (`CodeQL`), not the four `analyze` job names; the ask
+is recorded in `followups.md` rather than guessed at here.
