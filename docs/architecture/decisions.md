@@ -21978,3 +21978,36 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1205. `RotaryScrollWiringTest` pairs each rotary list with the requester IT names, not with a fixed variable name
+
+The Wear guard asserted the wiring of `Modifier.rotaryScrollable` by counting
+two things and comparing the totals: `.rotaryScrollable(` call sites, and
+matches of the literal `rotaryFocus.requestFocus()`. That is a claim about a
+variable name, and it was wrong in both directions. A correctly-wired list whose
+requester is called anything else fails the build — § 1154's scrolling
+crash-recovery takeover named its requester `recoveryRotary` and the guard
+reported 4 against 3, so the rename to the file's idiom was made to satisfy a
+guard rather than the program. And two lists inside one composable sharing a
+single `FocusRequester` count 2 against 2 and pass, while only one of them can
+ever hold focus.
+
+The guard now reads the pairing. `RunWatchApp.kt` is split into its top-level
+functions — that span is the scope a `remember { FocusRequester() }` lives in,
+so it is the unit within which a pairing has to hold — and inside each, every
+`.rotaryScrollable(` argument list is brace-matched, its own
+`focusRequester = <name>` argument read, and that `<name>` required to be both
+created and focused in the same function, with no two call sites naming the
+same one. Two assertions keep it from decaying into something weaker than what
+it replaced: the total call-site count must still be at least two (a scan
+finding nothing is a broken scan, not a clean tree), and every call site in the
+file must fall inside a parsed function, so a site the splitter fails to
+attribute is a failure rather than a silent exemption.
+
+Measured against the three shapes rather than argued: the renamed-requester tree
+passes the new guard and fails the old one (4 against 3); a list whose
+`requestFocus()` is deleted fails the new guard naming `RoutePickerScreen`; and
+two lists sharing one requester fail the new guard while passing the old one at
+5 against 5. `RecoveryPromptDisclosureTest` carried a local copy of the same
+count-vs-count check and now calls the shared `RotaryWiring` helper, so the
+takeover cannot drift back to the identifier form on its own.

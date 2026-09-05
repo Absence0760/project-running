@@ -99,11 +99,7 @@ class RecoveryPromptDisclosureTest {
         // The module-wide pairing invariant, restated locally so this branch
         // cannot drift out of it: a rotary modifier with no focused requester
         // silently receives nothing.
-        assertEquals(
-            "each rotaryScrollable in the takeover needs its FocusRequester focused",
-            Regex("""\.rotaryScrollable\(""").findAll(block).count(),
-            Regex("""rotaryFocus\.requestFocus\(\)""").findAll(block).count(),
-        )
+        RotaryWiring.assertPaired(block, "the recovery takeover")
     }
 
     @Test
