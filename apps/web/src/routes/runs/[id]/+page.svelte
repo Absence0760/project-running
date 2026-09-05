@@ -219,7 +219,17 @@
 			// comments — rather than the not-found state a public run used
 			// to get here (issue #666; every "a runner you follow finished
 			// a run" link landed on "Run not found").
-			otherRunOwner = await fetchPublicRunAttribution(pageData.id);
+			//
+			// Only when the owner read actually ANSWERED, though.
+			// `fetchRunById` reports "no such run / not yours" and "could not
+			// find out" separately for this reason: `public_runs` carries no
+			// owner exclusion, so on a transient failure over the viewer's OWN
+			// public run the attribution read succeeds, and the page rendered
+			// the read-only stranger view — attributed to the viewer
+			// themselves, every edit / delete / visibility / export control
+			// gone — while the template's retry card sat behind it in a later
+			// branch and never showed.
+			if (!runError) otherRunOwner = await fetchPublicRunAttribution(pageData.id);
 			loading = false;
 			// None of the background work below is reachable for a
 			// non-owner: the matched track, route suggestion, linked
