@@ -22,6 +22,13 @@ import { relative, resolve } from 'node:path';
 
 const webRoot = resolve(import.meta.dirname, '..', '..', '..');
 const BUILD = resolve(webRoot, 'build');
+const SEO_DOC = resolve(webRoot, '..', '..', 'docs', 'features', 'seo.md');
+
+/// One statement of what each kind of Learn page declares itself to be. The
+/// artifact cases below assert the build agrees with it; the doc case asserts
+/// the render map in seo.md does. Changing what a page emits therefore fails
+/// until both the artifact and the doc have followed.
+const DECLARED_TYPE = { hub: 'CollectionPage', category: 'CollectionPage', guide: 'Article' } as const;
 
 /// The same parser-rule end tag `raw_text_end_tag_guard.test.ts` requires: a
 /// block spelled `</script >` closes in every browser, and a regex that does
@@ -93,7 +100,6 @@ test('every prerendered Learn page carries exactly one JSON-LD block, of the typ
 		`expected the hub, six category pages and at least seven guides to be prerendered, found ${JSON.stringify(kinds)}`,
 	);
 
-	const expected = { hub: 'CollectionPage', category: 'CollectionPage', guide: 'Article' };
 	for (const page of pages) {
 		const found = payloads(readFileSync(page.file, 'utf8'));
 		assert.equal(
@@ -105,7 +111,7 @@ test('every prerendered Learn page carries exactly one JSON-LD block, of the typ
 		assert.equal(node['@context'], 'https://schema.org', `${page.rel} JSON-LD lacks the context`);
 		assert.equal(
 			node['@type'],
-			expected[page.kind],
+			DECLARED_TYPE[page.kind],
 			`${page.rel} is a ${page.kind} page and must not declare itself a ${String(node['@type'])}`,
 		);
 	}
@@ -163,4 +169,54 @@ test('a Learn index lists the guides it shows, and never an empty collection', (
 			);
 		});
 	}
+});
+
+/// The render map is a claim about the artifact, and this one row has now been
+/// corrected in BOTH wrong directions in consecutive rounds: it over-claimed
+/// `Article` for the two index routes for as long as the surface existed, then
+/// under-claimed "none emitted" once § 1168 gave them a builder. Re-measuring
+/// it by hand is what keeps failing, so the doc is read here instead -- against
+/// the same `DECLARED_TYPE` the artifact cases assert, and with no build
+/// needed, so this case binds in `test-web` rather than self-skipping.
+test('seo.md names the structured data each Learn route actually emits', () => {
+	const cells = readFileSync(SEO_DOC, 'utf8')
+		.split('\n')
+		.filter((line) => line.startsWith('|'))
+		.map((line) => line.split('|').map((c) => c.trim()));
+
+	const rowFor = (surface: string) => {
+		const found = cells.filter((row) => row[1] === surface);
+		assert.equal(found.length, 1, `expected exactly one render-map row for ${surface}`);
+		return found[0];
+	};
+
+	// The two index routes share one row; the guides have their own.
+	const indexRow = rowFor('`/learn`, `/learn/category/[category]`');
+	const guideRow = rowFor('`/learn/[slug]`');
+
+	for (const name of [DECLARED_TYPE.hub, 'BreadcrumbList', 'ItemList']) {
+		assert.ok(
+			indexRow[4].includes(name),
+			`the Learn index row must name ${name}, which every hub and category page emits; it reads: ${indexRow[4]}`,
+		);
+	}
+	for (const name of [DECLARED_TYPE.guide, 'BreadcrumbList']) {
+		assert.ok(
+			guideRow[4].includes(name),
+			`the Learn guide row must name ${name}; it reads: ${guideRow[4]}`,
+		);
+	}
+	// Both historical drifts, stated as the negatives. Under-claiming reads as
+	// a dash, which the loop above already rejects; over-claiming reads as the
+	// wrong type name beside the right one, which it does not.
+	assert.equal(
+		indexRow[4].includes(DECLARED_TYPE.guide),
+		false,
+		`an index page is not an ${DECLARED_TYPE.guide}; the row reads: ${indexRow[4]}`,
+	);
+	assert.equal(
+		guideRow[4].includes(DECLARED_TYPE.hub),
+		false,
+		`a guide is not a ${DECLARED_TYPE.hub}; the row reads: ${guideRow[4]}`,
+	);
 });

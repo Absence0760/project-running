@@ -27,7 +27,7 @@ indexed anyway).
 |---|---|---|---|
 | `/` landing | prerendered **(intended — see the note below; the artifact is the SPA shell today)** | `SeoHead.svelte` + `+page.ts` | `Organization` + `WebSite` |
 | `/learn/[slug]` | prerendered (`entries()`) | inline `<svelte:head>` | `Article` (with an embedded `BreadcrumbList`) |
-| `/learn`, `/learn/category/[category]` | prerendered (`entries()`) | inline `<svelte:head>` | — (none emitted; measured 2026-09-04) |
+| `/learn`, `/learn/category/[category]` | prerendered (`entries()`) | inline `<svelte:head>` + `buildLearnCollectionJsonLd` | `CollectionPage` (with an embedded `BreadcrumbList` + an `ItemList` of the guides listed) |
 | `/sitemap.xml` | prerendered | — | — |
 | `/share/run/[id]`, `/og/run/[id].png` | Lambda-SSR (`share-run`) | `share_run_meta` | `WebPage` + breadcrumb |
 | `/share/route/[id]`, `/og/route/[id].png` | Lambda-SSR (`share-route`) | `share_route_meta` | `WebPage` + breadcrumb |
