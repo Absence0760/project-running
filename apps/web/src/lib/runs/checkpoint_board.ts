@@ -92,12 +92,21 @@ export function buildBoard(
 
 	const runners: BoardRunner[] = [];
 	for (const [key, g] of grouped) {
+		// `Math.max(0, ...)` was the wrong instrument twice over. An unparseable
+		// `in_time` makes `getTime()` NaN and `Math.max(0, NaN)` is NaN, not 0,
+		// so the crossing reached `projectRunner` and graded `safe`; and a stamp
+		// that legitimately predates the race start (a volunteer's tablet
+		// running fast) clamped to elapsed 0 and graded `safe` with the full
+		// cutoff as its margin. Neither is a timing sample, and a race director
+		// is better served by a runner shown as not yet through a checkpoint
+		// than by one shown as safely through it (decisions § 1225).
 		const projCrossings = g.crossings
 			.filter((c) => c.inTime !== null)
 			.map((c) => ({
 				checkpointId: c.checkpointId,
-				elapsedS: Math.max(0, (new Date(c.inTime as string).getTime() - raceStartMs) / 1000)
-			}));
+				elapsedS: (new Date(c.inTime as string).getTime() - raceStartMs) / 1000
+			}))
+			.filter((c) => Number.isFinite(c.elapsedS) && c.elapsedS >= 0);
 		runners.push({
 			key,
 			userId: g.userId,

@@ -69,8 +69,21 @@ export interface RunnerProjection {
 	status: RunnerStatus;
 }
 
-function gradeCutoff(cutoffS: number, arrivalS: number): CutoffVerdict {
+/**
+ * Grade one arrival against one cutoff, or null when the margin is not a
+ * number.
+ *
+ * The ladder is `marginS < 0 ? miss : marginS < TIGHT ? tight : safe`, and a
+ * NaN margin fails BOTH comparisons and lands on the optimistic terminal
+ * branch — so a crossing nothing could time was reported to a race director as
+ * `safe`, with `marginS: NaN` printed beside it (decisions § 1225). On a
+ * cutoff board the only honest answer about an ungradeable crossing is no
+ * answer: `ProjectionLeg.cutoff` is already nullable and every consumer
+ * renders a null as ungraded.
+ */
+function gradeCutoff(cutoffS: number, arrivalS: number): CutoffVerdict | null {
 	const marginS = cutoffS - arrivalS;
+	if (!Number.isFinite(marginS)) return null;
 	return {
 		marginS,
 		status: marginS < 0 ? 'miss' : marginS < CUTOFF_TIGHT_S ? 'tight' : 'safe'
@@ -93,6 +106,12 @@ export function projectRunner(
 
 	const byId = new Map<string, number>();
 	for (const x of crossings) {
+		// A crossing whose elapsed time is not a number is not a crossing this
+		// module can say anything about — the same sanitisation `positionM` gets
+		// one block up. Admitting it made the runner `reached` at that
+		// checkpoint and every comparison downstream answered false, which the
+		// cutoff ladder reads as `safe`.
+		if (!Number.isFinite(x.elapsedS)) continue;
 		// Keep the earliest stamp if a checkpoint somehow has two (merge already
 		// happened server-side, but be defensive).
 		const prev = byId.get(x.checkpointId);
@@ -139,7 +158,7 @@ export function projectRunner(
 			const arrival = reached ? (actual as number) : projected;
 			if (arrival !== null) {
 				cutoff = gradeCutoff(c.cutoffElapsedS, arrival);
-				if (reached && cutoff.status === 'miss') blownCutoff = true;
+				if (reached && cutoff?.status === 'miss') blownCutoff = true;
 			}
 		}
 

@@ -23935,3 +23935,37 @@ reads 4,460 m, so the panel and the grid still grade one run by two rules. The
 change wanted is four lines in that one file — derive `totalGain` through
 `computeElevationGain` over the samples rather than summing them inline — and
 it fixes every consumer at once rather than adding a prop for this one.
+
+## 1225. A cutoff board says nothing about a crossing it cannot time, rather than saying "safe"
+
+`gradeCutoff` graded a margin with `marginS < 0 ? 'miss' : marginS < TIGHT ?
+'tight' : 'safe'`. A NaN margin fails both comparisons and falls through to the
+optimistic terminal branch, so the race-director board reported `safe` — with
+`marginS: NaN` printed beside it — about a runner it could not time at all. The
+NaN got in through `buildBoard`'s `Math.max(0, (new Date(c.inTime).getTime() -
+raceStartMs) / 1000)`: `Math.max(0, NaN)` is NaN, not 0, so the clamp meant to
+floor a bad stamp passed it straight through. Worse than the leg: the status
+ladder is `blownCutoff ? dnf : reachedLast ? finished`, so an unparseable stamp
+on the FINAL checkpoint promoted the runner to `finished` with every cutoff on
+the board graded safe.
+
+Three changes, and the split between them is deliberate. `gradeCutoff` now
+returns null on a non-finite margin — `ProjectionLeg.cutoff` was already
+nullable and both consumers already render a null as ungraded, so nothing
+downstream had to move. `projectRunner` drops a crossing whose `elapsedS` is
+not finite, the same sanitisation it already applies to `positionM` one block
+up, which makes the module fail closed for every caller rather than only for
+the one that had the bug. And `buildBoard` — web-only, no Dart twin — drops a
+crossing whose derived elapsed is not finite OR is negative instead of clamping
+it: a stamp predating the race start is not a timing sample either, and
+clamping it to 0 graded the leg `safe` with the full cutoff as its margin, the
+exact case `projectRunner`'s own `lastElapsedS > 0` comment already names.
+
+`checkpoint_projection` is an enforced TS<->Dart pair, so both halves moved
+together; the Dart `_gradeCutoff` returns `CutoffVerdict?` and `blownCutoff`
+reads `cutoff?.status`. Seven new web cases and three Dart mirrors, each of the
+seven verified to FAIL against `b7f3467a3` and pass after. The web suite carries
+one case the Dart side cannot reach — a `cutoffElapsedS` that is not a number —
+because that field is a Dart `int?`. A race director shown "not yet through" is
+better served than one shown "safely through": the fail-open direction was the
+one that gets a runner left on a mountain.
