@@ -49,7 +49,12 @@
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
 	import { movingTimeSeconds, computeRealSplits } from '$lib/runs/run_stats';
 	import { computeElevationGain } from '$lib/routes/route_simplify';
-	import { cadenceSpm, elevationSourceTrack, stepCount } from '$lib/runs/key_stats';
+	import {
+		cadenceSpm,
+		elevationSourceTrack,
+		stepCount,
+		storedElevationGainM,
+	} from '$lib/runs/key_stats';
 	import { gradeAdjustedPaceSecPerKm } from '$lib/runs/grade_adjusted_pace';
 	import {
 		analysePacing,
@@ -811,6 +816,20 @@
 	 *  a real 0 m over a track that did measure it still renders. */
 	let realElevationGain = $derived(elevationTrack ? Math.round(computeElevationGain(elevationTrack)) : null);
 
+	/** What the page may say the climb was. The measured track wins — it is the
+	 *  same samples the elevation profile below is drawn from, so a different
+	 *  number beside that chart would contradict it. Falling back to the row's
+	 *  own ascent is what closes the gap: a summary import (a Strava activity
+	 *  under the 200 m stream threshold, or one whose stream carried no
+	 *  altitude) has an `elevation_gain_m` the /runs card, the Year-in-Running
+	 *  total and the vert challenge board all count, and this page alone
+	 *  rendered no climb at all. */
+	let elevationGainM = $derived.by(() => {
+		if (realElevationGain != null) return realElevationGain;
+		const stored = run ? storedElevationGainM(run) : null;
+		return stored == null ? null : Math.round(stored);
+	});
+
 	/** Grade-adjusted pace (sec/km) — effort-equivalent flat pace over hilly
 	 *  terrain (Minetti 2002). Null on flat runs / tracks without elevation. */
 	let gradeAdjustedPace = $derived(run?.track ? gradeAdjustedPaceSecPerKm(run.track) : null);
@@ -909,8 +928,8 @@
 			label: m('runDetail.avgSpeed'),
 			value: formatSpeed(paceSeconds, run.distance_m),
 		});
-		if (realElevationGain != null) {
-			cells.push({ label: m('runDetail.elevation'), value: `${realElevationGain} m` });
+		if (elevationGainM != null) {
+			cells.push({ label: m('runDetail.elevation'), value: `${elevationGainM} m` });
 		}
 		if (showCalories && estimatedCalories > 0) {
 			cells.push({ label: calorieLabel, value: String(estimatedCalories) });

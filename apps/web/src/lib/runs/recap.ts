@@ -10,6 +10,7 @@
 
 import type { Run } from '../types';
 import { computeRunStreaks } from './streaks';
+import { storedElevationGainM } from './key_stats';
 
 export interface RecapMonthBucket {
 	/** 1-based month (1=Jan … 12=Dec). */
@@ -179,26 +180,6 @@ function hhmm(d: Date): string {
 }
 
 /**
- * Returns a Run's elevation_gain in metres. audit/metadata-keys
- * (May 2026) dropped the `elevation_gain_m` fallback: no writer in
- * the codebase ever set the key, it was not in docs/backend/metadata.md,
- * and the fallback branch was dead code that confused dead-key
- * audits.
- */
-function elevationOf(r: Run): number {
-	// `elevation_m` was never a top-level column, so this read was always 0 and
-	// both elevation trophies were unreachable. The promoted `elevation_gain_m`
-	// column is the canonical value (writers populate it alongside the jsonb
-	// key); `metadata.elevation_m` is the fallback the Dart twin reads and is
-	// what older rows carry.
-	const gain = r.elevation_gain_m;
-	if (typeof gain === 'number' && Number.isFinite(gain)) return gain;
-	const meta = (r.metadata ?? {}) as { elevation_m?: unknown };
-	const legacy = meta.elevation_m;
-	return typeof legacy === 'number' && Number.isFinite(legacy) ? legacy : 0;
-}
-
-/**
  * Build the year-in-running aggregate from a list of Runs.
  *
  * Pass *all* of the user's runs, not just the ones in the target year;
@@ -244,7 +225,7 @@ export function buildYearInRunningRecap(
 		const d = new Date(r.started_at);
 		totalDistance += r.distance_m;
 		totalDuration += r.duration_s;
-		totalElevation += elevationOf(r);
+		totalElevation += storedElevationGainM(r) ?? 0;
 
 		// "Longest run" + "fastest pace" are run-family headline stats —
 		// exclude cycling so a single long, fast bike ride doesn't masquerade
@@ -405,7 +386,7 @@ export function buildMonthInRunningRecap(
 
 	for (const r of inMonth) {
 		const d = new Date(r.started_at);
-		totalElevation += elevationOf(r);
+		totalElevation += storedElevationGainM(r) ?? 0;
 		const isRunFamily = (r.activity_type ?? 'run') !== 'cycle';
 		if (isRunFamily && r.distance_m > longest) longest = r.distance_m;
 		if (isRunFamily && r.distance_m > 500 && r.duration_s > 0) {
