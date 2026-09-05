@@ -21978,3 +21978,183 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1215. Half the counts this repo states about itself were wrong, because a number in prose is the one claim nothing re-derives
+
+Round 39's docs-registry lane was filed four separate one-line count
+corrections. Measuring rather than transcribing them turned a tidy-up into a
+census, and the census is the finding.
+
+**`docs/testing/test_inventory.md`.** Its census section (everything above the
+`Suite totals` divider; the per-round sections below it are historical records
+and are deliberately left alone) carries 111 per-file headings whose count can
+be measured. **49 of them were wrong** — 44 percent — and not by rounding:
+`local_run_store_test.dart` was written as 23 against 94 declarations,
+`run_screen_recording_flow_test.dart` as 6 against 36, `sync_service_test.dart`
+as 19 against 61, `food_search.test.ts` as 9 against 40. Five aggregate claims
+in the same section were wrong in the same direction: the Playwright suite was
+described as "~1,130 tests across ~229 files" and is 1,784 declared tests across
+471 spec files; the Deno function suite as 879 across 64 and is 947 across 70;
+the Wear OS suite as 701 across 69 and is 733 across 71; the pgtap RLS suite as
+"~390 assertions across 49 files" and is 484 planned assertions across 57; and
+`apps/mobile_ios/test/` as "same 430 files" where both trees hold 541 (the
+byte-for-byte half of that heading is true and was re-verified).
+
+**`apps/mobile_android/CLAUDE.md`.** 79 claim-instances of the form
+"`X_test.dart` — N tests"; **44 were wrong**. `training_test.dart` was written
+as 18 against 65, `route_builder_screen_test.dart` as 9 against 54,
+`routing_test.dart` as 14 against 36 in both of the two places it is stated.
+One moved the other way: `route_photos_helpers_test.dart` claims 11 and the file
+holds 2.
+
+**The root `CLAUDE.md`.** Five of its stated registry sizes were stale. The
+CHECK-constraint union guard is described as "67 live set-shaped CHECK columns,
+171 rails across 70 files" and its `PAIRS` export holds 68 columns and 173 rails
+across 72 files; the note-only columns as "15 of the 67" and there are 11 of the
+68. The icon subset is described as "the 347 the tree names — 74 KB, against
+3866 KB for the full font"; `selectIcons` over the current tree yields 324, the
+shipped `.woff2` is 70,416 bytes and the upstream one 3,963,852. Three of its
+subsidiary numbers were RIGHT and were left alone — 80 Dart rails, 46
+switch-shaped rails, 22 of them carrying `allowMissing` — which is the point:
+the wrong ones are not wrong at random, they are the ones a later change moved.
+
+**One claim read as wrong and was not**, and it is the reason this ADR insists
+on measuring rather than counting declarations. `l10n_generated_parity_test.dart`
+is written as "22 tests (1 + 3 per catalogue)" and holds four `test(`
+declarations; three of them sit inside a loop over seven catalogues, so 22 is
+exactly right. `catalogues.test.ts`'s "11" is the same shape (four plus one per
+locale). Both headings say so in their own text, and both were left as written.
+A sweep that had trusted a `grep -c` would have replaced two correct numbers
+with wrong ones.
+
+**Why it drifted.** Every one of these is a number stated in prose that no guard
+re-derives, in a file no test reads. `test_inventory.md` was honest about it —
+its preamble said the counts "are approximate and lag the suite" — but a
+disclaimer is not a bound, and "approximate" stopped describing a figure that is
+four times the truth. That preamble now records what was measured, when, and
+that a parameterised heading is a runtime count rather than a declaration count.
+
+**The durable fix is a guard, and it is filed rather than built** because
+`scripts/` was not this lane's tree. Two claims are mechanically checkable and
+neither needs a new census to be written by hand: the root `CLAUDE.md` layout
+block's `ci.yml → the same N CI jobs` against `parseJobKeys` (which
+`check_ci_diagnostics.mjs` already computes), and every
+`### <path> — N tests` heading in `test_inventory.md`'s census section against
+the recompute command that file already prescribes, skipping any heading whose
+own text declares a parameterised count. Until one exists, this number will be
+wrong again within a few rounds; it has been wrong after every round that added
+a test.
+
+## 1216. `routing.dart` is the sole OSRM client and is deliberately not a parity pair
+
+[§ 1119](decisions.md) deleted `snapToRoad`, `fetchRoute` and `fetchFullRoute`
+from web's `routes/routing.ts` because nothing imported them, leaving that file
+the `/api/routes/osrm` proxy client (`OSRM_PROXY_BASE` + `osrmProxyFetch`) and
+nothing else. The Dart `routing.dart` was untouched and is still correct, but
+its header opened "Dart port of `apps/web/src/lib/routes/routing.ts`" and named
+two functions that end no longer holds, and `apps/mobile_android/CLAUDE.md`
+repeated the claim.
+
+Nothing failed, and nothing could have: the two were registered in neither the
+root `CLAUDE.md` pair list nor `.claude/agents/shared-library-syncer.md`, so
+`check_parity_pair_registry.mjs` had no row to check and the syncer agent had
+no table entry to compare. This is [§ 641](decisions.md)'s shape again — a
+header asserting lockstep that no registry knows about — except that here the
+right answer is not to register the pair. It is to say outright that there is no
+pair: the Dart file is the only client-side OSRM implementation in the tree, web
+reaches OSRM through a signed-in, fail-closed server proxy, and the two
+platforms no longer share a function to keep in step. Both the header and the
+CLAUDE.md row now say that, so a future reader does not add a row to the
+registries for a relationship that does not exist.
+
+The same header carried a second dead reference: it said
+`assertOsrmConfiguredForProd` "mirrors the web `assertOsrmConfiguredForProd` in
+`apps/web/src/lib/routes/routing.ts`". There is no such web function any more —
+the posture moved to where the config lives, as the proxy handler's fail-closed
+501 when `OSRM_URL` is unset. The Dart guard is still needed and still correct,
+because a phone binary resolves its own OSRM base; it just has no client-side
+counterpart to mirror.
+
+## 1217. `core/method_gate` owes no Dart twin, and the reason is structural
+
+Filed as an open question: the gate is server-side today, so it owes nothing
+"but" the mobile client's own reads of an Edge Function 405 are not routed
+through anything shared, and if that ever became a pair it would need rows in
+both registries. Recording the answer so the question stops being re-asked.
+
+`methodRefusal` BUILDS a 405 — a status, an `Allow` header, `cache-control:
+no-store` and a body — for the eight Lambdas that gate their own method (three
+directly, five through `share_method_gate`). A parity pair exists where both
+platforms must make the same DECISION and would otherwise make it differently;
+here only one platform makes the decision at all. A Dart twin would be a
+function no Flutter code could call, and a mirror suite pinning a response
+nothing on the phone constructs. There is also nothing to keep in step: a grep
+of `apps/mobile_android/lib/` and `packages/*/lib/` finds no read of a 405
+status anywhere.
+
+If a client-side reading of a 405 is ever wanted, it is a CLASSIFIER and not a
+twin of a builder, and it already has a home: `import_failures` buckets a thrown
+value into the reason a surface shows, keys three of its branches off
+`errorStatus` (429, 401/403, 413), and adding 405 there is one branch in an
+existing registered pair. That is where the work would go — not into a new pair
+whose web half is a response builder.
+
+## 1218. `ApiClient.clipTrackForUser` was deleted and its name survives in twenty places
+
+[§ 1142](decisions.md) deleted the method; the two architecture-guard trees were
+updated with it. A repo-wide grep for the identifier now returns twenty sites,
+and they are not one class but three.
+
+Two are HISTORY and are correct as written: the migrations and pgtap comments
+that record what was revoked, and the ADRs and `api_database.md` paragraphs that
+narrate the deletion. Nothing should touch those.
+
+Four were live descriptions of a path that does not exist, and are fixed here.
+`apps/mobile_android/CLAUDE.md` said `public_run_screen.dart` "routes the
+fetched track through `clipTrackForUser` for non-owner viewers" — which was
+already wrong before the deletion, because that screen has read owner tracks
+through `fetchTrackByPath` and non-owner tracks through
+`fetchClippedTrackForRun` since `20260619_001`, so the sentence pointed a
+reader at a privacy path that had been gone for months and then at a method that
+had been gone for one round. The same file named it again describing the
+segment catalogue. Two Dart comments — in `global_segments_screen.dart` and
+`public_route_screen.dart` — named it to explain why it is NOT used at those
+sites, which is exactly the comment a reviewer relies on and exactly the comment
+that misleads when the named function is gone.
+
+The remaining fourteen are the sharp ones and are FILED rather than fixed,
+because they live outside this lane's tree: eleven persona and auditor agent
+definitions under `.claude/agents/`, plus `.claude/commands/audit/README.md`,
+`.claude/commands/audit/privacy-zones.md` and `.claude/commands/audit/auth.md`,
+each instructing an auditor to verify that every non-owner track render "routes
+through `clipTrackForUser`". An audit whose acceptance criterion names a symbol
+the tree does not have either finds nothing and reports clean, or finds the
+absence and reports it as a privacy defect. `/audit/privacy-zones` is a
+first-class command in this repo; its criterion should name
+`fetchClippedTrackForRun` and `clipRouteForViewer`.
+
+## 1219. Three of six filings in one lane were already fixed, because the fix and the checkbox landed in different changes
+
+Half of this lane's filed items were stale before it started, and all three went
+stale the same way. Round 38's merge (`8a414ff79`, the base this branch was cut
+from) corrected the root `CLAUDE.md` CI job count from 33 to 34, dropped the
+`snapToRoad` sentence from `test_inventory.md`'s body-parse register entry and
+moved its numbers to the measured "33 sites, 8 registered across three files",
+and corrected `export-data/render.test.ts` from 13 tests to 17 — and left all
+three `- [ ]` boxes unticked in `followups.md`. A later lane then read the
+filings, believed them, and was assigned work that no longer existed.
+
+The cost is not the wasted read; it is that a stale filing is indistinguishable
+from a live one, so the only safe response is to re-measure every filing before
+acting on it — which is the rule this round was run under and is why all three
+were caught. Two of the three re-measurements confirmed the tree was already
+right (33 sites and 8 registrations, both recomputed here; 17 `Deno.test`
+declarations, counted here). The third found a residual falsehood the round-38
+fix had left behind: with 34 jobs stated, "the aggregator that needs: all of
+them" is off by one, because the gate cannot wait on itself. It needs the other
+33, and `terraform` among them is a caller job whose own work lives in
+`terraform.yml`, whose jobs could never be named in a `needs:` list at all.
+
+The rule to take from it: a filing is closed by ticking its box in the same
+change that fixes it. A round that fixes a filed item without ticking it has not
+closed it — it has converted a real item into a trap.
