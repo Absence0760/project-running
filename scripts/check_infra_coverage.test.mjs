@@ -33,6 +33,9 @@ import {
   parseFmtScopes,
   fmtCovers,
   terraformDirs,
+  scanStrayTerraform,
+  STRAY_SCAN_SKIP,
+  REPO_ROOT,
 } from './check_infra_coverage.mjs';
 
 // ─────────────────────────────── fixtures ───────────────────────────────
@@ -41,6 +44,7 @@ const DIRS = ['infra/bootstrap', 'infra/envs/prod', 'infra/modules/web-stack'];
 const MATRIX = ['infra/bootstrap', 'infra/envs/prod'];
 const DEPENDABOT = ['infra/bootstrap', 'infra/envs/prod', 'infra/modules/web-stack'];
 const FMT_SCOPES = [{ dir: 'infra', recursive: true }];
+const STRAYS = { dirs: [], rooted: true };
 const FUNCTIONS = ['coach', 'share_run'];
 
 /** @type {import('./check_infra_coverage.mjs').Alarm[]} */
@@ -123,7 +127,8 @@ const ENV_ROOTS = [envRoot('prod'), envRoot('preview')];
  *                   distribution: import('./check_infra_coverage.mjs').Distribution,
  *                   waf: import('./check_infra_coverage.mjs').WafScopeDown[],
  *                   moduleVars: import('./check_infra_coverage.mjs').ModuleVar[],
- *                   envRoots: import('./check_infra_coverage.mjs').EnvRoot[] }>} [over]
+ *                   envRoots: import('./check_infra_coverage.mjs').EnvRoot[],
+ *                   strays: { dirs: string[], rooted: boolean } }>} [over]
  */
 function run(over = {}) {
   return compareSources(
@@ -137,6 +142,7 @@ function run(over = {}) {
     over.waf ?? WAF,
     over.moduleVars ?? MODULE_VARS,
     over.envRoots ?? ENV_ROOTS,
+    over.strays ?? STRAYS,
   );
 }
 
@@ -327,6 +333,7 @@ test('the committed infra/ tree is fully covered', () => {
         readFileSync(join(ENV_ROOT_DIR, env, 'variables.tf'), 'utf-8'),
       ),
     ),
+    scanStrayTerraform(REPO_ROOT),
   );
   assert.deepEqual(errors, []);
   assert.ok(ok.length >= 12, 'a passing run that checked almost nothing is not a pass');
@@ -881,4 +888,83 @@ test('the committed terraform workflow fmt-covers every Terraform directory', ()
   for (const dir of terraformDirs(INFRA_DIR)) {
     assert.ok(fmtCovers(dir, scopes), `${dir} is format-checked by nothing`);
   }
+});
+
+// ───────────────── Terraform outside infra/, which nothing reads ─────────────────
+
+/// A repo-shaped directory listing, as `scanStrayTerraform`'s injectable `list`.
+/** @param {Record<string, string[]>} tree */
+function lister(tree) {
+  return (/** @type {string} */ dir) => {
+    const entry = tree[dir];
+    if (entry === undefined) throw new Error(`ENOENT ${dir}`);
+    return entry;
+  };
+}
+
+test('a .tf directory outside infra/ is found, and infra/ itself is not re-reported', () => {
+  const { dirs, rooted } = scanStrayTerraform(
+    '/repo',
+    lister({
+      '/repo': ['infra', 'apps', 'package.json'],
+      '/repo/apps': ['deploy'],
+      '/repo/apps/deploy': ['main.tf', 'variables.tf'],
+    }),
+  );
+  assert.equal(rooted, true);
+  assert.deepEqual(dirs, ['apps/deploy']);
+});
+
+test('the sweep skips dependency and build trees rather than walking them', () => {
+  for (const skipped of STRAY_SCAN_SKIP) {
+    const { dirs } = scanStrayTerraform(
+      '/repo',
+      lister({
+        '/repo': ['infra', skipped],
+        [`/repo/${skipped}`]: ['main.tf'],
+      }),
+    );
+    assert.deepEqual(dirs, [], `${skipped} was walked`);
+  }
+});
+
+test('a nested directory named infra is still swept — only the top-level one is covered', () => {
+  const { dirs } = scanStrayTerraform(
+    '/repo',
+    lister({
+      '/repo': ['infra', 'apps'],
+      '/repo/apps': ['infra'],
+      '/repo/apps/infra': ['main.tf'],
+    }),
+  );
+  assert.deepEqual(dirs, ['apps/infra']);
+});
+
+test('a .tf file at the repo root is reported as its own directory', () => {
+  const { dirs } = scanStrayTerraform('/repo', lister({ '/repo': ['infra', 'main.tf'] }));
+  assert.deepEqual(dirs, ['.']);
+});
+
+test('a sweep that never saw infra/ reports itself unrooted rather than clean', () => {
+  const { dirs, rooted } = scanStrayTerraform('/nowhere', lister({}));
+  assert.deepEqual(dirs, []);
+  assert.equal(rooted, false);
+});
+
+test('Terraform outside infra/ fails, naming the tree and what reads it', () => {
+  const { errors } = run({ strays: { dirs: ['tools/edge'], rooted: true } });
+  assert.ok(has(errors, /tools\/edge holds Terraform outside infra\//), errors.join('\n'));
+  assert.ok(has(errors, /triggered by nothing/), errors.join('\n'));
+});
+
+test('an unrooted sweep fails even with nothing to report, so the absence is never vacuous', () => {
+  const { errors, ok } = run({ strays: { dirs: [], rooted: false } });
+  assert.ok(has(errors, /did not find infra\/ at the top level/), errors.join('\n'));
+  assert.ok(!ok.some((line) => /no Terraform outside infra\//.test(line)));
+});
+
+test('the committed repo holds no Terraform outside infra/', () => {
+  const { dirs, rooted } = scanStrayTerraform(REPO_ROOT);
+  assert.equal(rooted, true, 'the sweep did not read the repo root');
+  assert.deepEqual(dirs, [], `${dirs.join(', ')} is read by no CI job`);
 });

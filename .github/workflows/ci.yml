@@ -1529,7 +1529,10 @@ jobs:
     #                            to 200, and every share handler still returning
     #                            the shell that makes the first claim safe.
     #   check_infra_coverage.mjs every Terraform directory validated and
-    #                            dependency-tracked, and every Lambda in the
+    #                            dependency-tracked, no Terraform at all outside
+    #                            infra/ (where the path filter, the stack matrix
+    #                            and the fmt scopes all stop, so such a stack is
+    #                            read by nothing), and every Lambda in the
     #                            module carrying an error-rate and a p95 alarm
     #                            — the only signal a Lambda-origin failure has,
     #                            since the distribution-wide 403 fallback
@@ -1569,7 +1572,7 @@ jobs:
       - name: Every stack validated, every Lambda alarmed
         run: |
           if ! node scripts/check_infra_coverage.mjs; then
-            echo "::error::A Terraform directory under infra/ is validated or dependency-tracked by nothing, or a Lambda in the web-stack module has no error-rate or p95 alarm. Nothing here is about IAM scope or the OIDC trust policies; that is the other check in this job."
+            echo "::error::A Terraform directory under infra/ is validated or dependency-tracked by nothing, a Terraform directory exists OUTSIDE infra/ where no CI job reads it at all, or a Lambda in the web-stack module has no error-rate or p95 alarm. Nothing here is about IAM scope or the OIDC trust policies; that is the other check in this job."
             echo "The failing line above names the directory or the function. decisions § 890 is why a Lambda-origin failure is invisible without its alarm."
             exit 1
           fi
