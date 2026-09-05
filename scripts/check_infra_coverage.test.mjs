@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { REQUIRED_MAPPING } from './check_infra_error_responses.mjs';
+
 import {
   ALARMS_FILE,
   ALLOWED_STATUS_LAUNDERING,
@@ -621,9 +623,13 @@ test('the committed module maps 403 to 200 and nothing else', () => {
   // asserts the set THIS guard reads, so a returning block still shows up here.
   const dist = parseDistribution(readFileSync(MODULE_FILE, 'utf-8'));
   assert.ok(dist);
+  // The page is read off the mapping's own contract rather than spelled here:
+  // it moved from /index.html to /200.html when the landing page was
+  // prerendered onto index.html (decisions § 1268), and a literal in this
+  // guard's test would have to be edited in lockstep for no reason of its own.
   assert.deepEqual(
     dist.errorResponses.map((e) => `${e.errorCode}->${e.responseCode}@${e.responsePage}`),
-    ['403->200@/index.html'],
+    [`403->200@${REQUIRED_MAPPING.page}`],
   );
 });
 
