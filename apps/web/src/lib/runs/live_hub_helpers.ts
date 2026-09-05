@@ -144,13 +144,23 @@ export function createReconnectingSocket(opts: ReconnectingSocketOpts): { close:
 			emitStatus('open');
 		};
 		ws.onmessage = (ev) => {
+			let p: LivePing;
 			try {
-				const p = JSON.parse(ev.data as string) as LivePing;
-				opts.onPing(p);
+				p = JSON.parse(ev.data as string) as LivePing;
 			} catch {
 				// Drop malformed frames — server sends JSON only, but
 				// be defensive: a corrupt frame must not kill the loop.
+				return;
 			}
+			// Deliberately OUTSIDE the parse guard. `onPing` is the whole
+			// point of the socket, not an advisory effect like `onStatus`:
+			// a handler that throws — on a frame that parses to `null`, or
+			// on its own state update — is a defect the spectator has to
+			// learn about, and inside the guard it was indistinguishable
+			// from a corrupt frame. The socket stayed open and reported
+			// itself healthy while every ping was dropped, so a runner's
+			// position simply stopped advancing with nothing logged.
+			opts.onPing(p);
 		};
 		ws.onerror = () => {
 			// `onclose` fires next; defer the reconnect there so we
