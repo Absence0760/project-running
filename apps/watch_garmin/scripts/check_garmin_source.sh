@@ -7,13 +7,13 @@
 # The Garmin tier is the least verified thing in the monorepo. No CI job builds
 # it, no CI job runs its `(:test)` suite, and until this file existed nothing
 # read a line of it except `scripts/check_watch_wire_vectors.mjs`, which pins
-# four numbers (the Minetti polynomial, the +/-45% clamp, C(0), and the 5 m
+# four numbers (the Minetti polynomial, the +/-45% clamp, C(0), and the
 # segment gate) and nothing else. Everything BETWEEN those numbers — the state
 # machine that decides which grade they are applied to, the annotations that
 # keep test code off the watch, the permissions the runtime enforces and the
 # build does not — was unread.
 #
-# Four claims, each covering a failure that produces no error anywhere:
+# Seven claims, each covering a failure that produces no error anywhere:
 #
 #   1. The grade tracker recovers from a distance rewind, in both of the two
 #      ways it can. `Activity.Info.elapsedDistance` restarts at 0 when the
@@ -61,6 +61,18 @@
 #      `distanceUnits` shows min/mi to a runner whose watch is set to min/km
 #      everywhere else. Both members exist and are the same type, so the wrong
 #      one compiles, runs, and is wrong only for the runners who set them apart.
+#
+#   7. The GAP reference golden is graded through the SHIPPED window. The
+#      four-rail fixture bracket (decisions § 1160) freezes eight numbers on
+#      each rail and joins them as one spec, so a golden pace is a claim about
+#      an algorithm rather than about an arbitrary track. On this rail the
+#      reduction that turns the fixture into a pace lives in the (:test) suite
+#      rather than in source/, because the field is a streaming estimator with
+#      no batch entry point. That is the whole exposure: a reduction that
+#      stopped driving a real `GradeTracker`, or that spelled the window as a
+#      literal instead of reading `MIN_SEGMENT_M`, would go on reporting 311
+#      against a window nothing on this rail uses -- agreeing with the other
+#      three about a number while saying nothing about the code.
 #
 # WHAT THIS DOES NOT PROVE. It parses text. It does not compile Monkey C, does
 # not run it, and is not evidence that the app builds or that the GAP numbers
@@ -161,8 +173,13 @@ gap_raw = read("source/GradeAdjustedPaceView.mc")
 gap = strip_comments(gap_raw)
 
 # Vacuity guard: everything below reads this file, so a rename that made the
-# reads return nothing would pass silently.
-if "class GradeAdjustedPaceView" not in gap:
+# reads return nothing would pass silently. Matched on a word boundary rather
+# than as a substring — `class GradeAdjustedPaceViewV2` CONTAINS the name, so a
+# substring test reported the class present while `body_of`, which ends the
+# name correctly, found none; claim 1's `onTimerReset` half and the whole of
+# claim 6 then skipped themselves and the guard passed on a field with no
+# reset override and no unit read at all.
+if re.search(r"\bclass\s+GradeAdjustedPaceView\b", gap) is None:
     fail(
         "source/GradeAdjustedPaceView.mc no longer declares "
         "`class GradeAdjustedPaceView` — every claim below reads it and would "
@@ -218,7 +235,14 @@ else:
                 )
 
 view = body_of(gap, "class GradeAdjustedPaceView")
-if view is not None:
+if view is None:
+    fail(
+        "no `class GradeAdjustedPaceView` body in "
+        "source/GradeAdjustedPaceView.mc. Two claims read it — the "
+        "`onTimerReset` override and the pace-unit preference — and both would "
+        "otherwise skip themselves rather than fail."
+    )
+else:
     timer_reset = body_of(view, "function onTimerReset")
     if timer_reset is None:
         fail(
@@ -330,8 +354,12 @@ for perm in sorted(declared - {p for _, p, _ in used}):
 # --------------------------------------------------------------------------
 # 4. The cross-rail constants are named, and used by name.
 # --------------------------------------------------------------------------
-# name -> the magic number it must not be spelled as inline, anywhere in the
-# file other than its own declaration.
+# The names other rails read. The literal each one must not ALSO be spelled
+# inline is taken from the declaration itself rather than restated here: this
+# map used to carry its own copy, and when decisions § 992 moved the segment
+# gate from 5 m to 20 m the copy stayed at 5.0 — so for the value the whole
+# four-rail bracket is about, the claim was searching the file for a number it
+# no longer held and passing on every tree.
 #
 # FLAT_COST is deliberately absent: 3.6 is also the constant term of the
 # Minetti polynomial in `costAtGrade`, because C(0) IS that term — the two
@@ -339,13 +367,8 @@ for perm in sorted(declared - {p for _, p, _ in used}):
 # for the same reason. Both halves are independently registered across the
 # four rails by `scripts/check_watch_wire_vectors.mjs` (the fit, and C(0)),
 # and `flatFactorIsOne` in the (:test) suite pins them equal.
-NAMED_CONSTANTS = {
-    "MIN_SEGMENT_M": "5.0",
-    "MAX_GRADE": "0.45",
-    "MIN_SPEED_MPS": "0.4",
-    "MAX_PACE_S": "5940.0",
-}
-for name, literal in sorted(NAMED_CONSTANTS.items()):
+NAMED_CONSTANTS = ("MAX_GRADE", "MAX_PACE_S", "MIN_SEGMENT_M", "MIN_SPEED_MPS")
+for name in NAMED_CONSTANTS:
     decl = re.search(r"\bconst\s+%s\s*=\s*([^;]+);" % name, gap)
     if decl is None:
         fail(
@@ -355,6 +378,7 @@ for name, literal in sorted(NAMED_CONSTANTS.items()):
             "one is then an instruction rather than an enforcement." % name
         )
         continue
+    literal = decl.group(1).strip()
     rest = gap[: decl.start()] + gap[decl.end():]
     if re.search(r"(?<![\w.])%s(?![\d])" % re.escape(literal), rest):
         fail(
@@ -369,7 +393,7 @@ for name, literal in sorted(NAMED_CONSTANTS.items()):
 strings_xml = read("resources/strings/strings.xml")
 defined = set(re.findall(r'<string\s+id="([^"]+)"', strings_xml))
 if not defined:
-    fail("resources/strings/strings.xml defines no <string> — claim 4 would pass vacuously")
+    fail("resources/strings/strings.xml defines no <string> — claim 5 would pass vacuously")
 
 referenced = set(re.findall(r"@Strings\.([A-Za-z_][A-Za-z_0-9]*)", manifest))
 for mc in sorted((root / "source").glob("*.mc")):
@@ -417,6 +441,59 @@ if view is not None:
             "source/GradeAdjustedPaceView.mc reads `distanceUnits`. Nothing in "
             "this field is a distance; the label and the divisor are both about "
             "pace, so the pace preference is the one to follow."
+        )
+
+# --------------------------------------------------------------------------
+# 7. The GAP reference golden is graded through the shipped window.
+# --------------------------------------------------------------------------
+GAP_REFERENCE_CONSTANTS = (
+    "GAP_REFERENCE_POINTS",
+    "GAP_REFERENCE_STEP_M",
+    "GAP_REFERENCE_STEP_S",
+    "GAP_REFERENCE_BASE_GRADE",
+    "GAP_REFERENCE_AMPLITUDE_M",
+    "GAP_REFERENCE_PERIOD_M",
+    "GAP_REFERENCE_S_PER_KM",
+    "GAP_REFERENCE_MAX_COST",
+)
+gap_test = strip_comments(read("source-test/GradeAdjustedPaceTest.mc"))
+if re.search(r"\bmodule\s+GradeAdjustedPaceTest\b", gap_test) is None:
+    fail(
+        "source-test/GradeAdjustedPaceTest.mc no longer declares "
+        "`module GradeAdjustedPaceTest` — the claims below read it and would "
+        "pass on an empty file"
+    )
+for name in GAP_REFERENCE_CONSTANTS:
+    hits = len(re.findall(r"\bconst\s+%s\s*=\s*[^;]+;" % name, gap_test))
+    if hits != 1:
+        fail(
+            "source-test/GradeAdjustedPaceTest.mc declares `const %s` %d times, "
+            "expected once. scripts/check_watch_wire_vectors.mjs joins all eight "
+            "GAP_REFERENCE_* values into one spec per rail and compares the "
+            "specs; a name it cannot read exactly once takes this rail out of "
+            "the comparison rather than failing it." % (name, hits)
+        )
+
+walk = body_of(gap_test, "function gapReferenceReportedSPerKm")
+if walk is None:
+    fail(
+        "source-test/GradeAdjustedPaceTest.mc declares no "
+        "`gapReferenceReportedSPerKm` — the golden has nothing to grade the "
+        "reference track through"
+    )
+else:
+    if not re.search(r"\bnew\s+GradeTracker\s*\(", walk):
+        fail(
+            "gapReferenceReportedSPerKm does not drive a `GradeTracker`. The "
+            "golden's only value is that the fixture is graded through THIS "
+            "rail's rolling window; a private copy of the walk would report 311 "
+            "whatever the shipped tracker did."
+        )
+    if not re.search(r"\$\.MIN_SEGMENT_M\b", walk):
+        fail(
+            "gapReferenceReportedSPerKm does not read `$.MIN_SEGMENT_M`. The "
+            "window is the value this golden brackets; spelled as a literal it "
+            "would keep reporting 311 after the window moved."
         )
 
 if failures:

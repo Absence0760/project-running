@@ -135,11 +135,20 @@ export function replanRemaining(input: {
 	const weeks = [...input.weeks].sort((a, b) => a.weekIndex - b.weekIndex);
 	const changes: ReplanChange[] = [];
 
-	// Future, non-taper workouts available to absorb a make-up or ease-off.
-	const futureLongRuns = weeks
-		.flatMap((w) => (isTaper(w.phase) ? [] : w.workouts))
-		.filter((wo) => !wo.isPast && wo.kind === 'long')
-		.sort((a, b) => (a.scheduledDate < b.scheduledDate ? -1 : 1));
+	// Earliest future, non-taper long run available to absorb a make-up. Only
+	// the minimum is ever read, so this scans rather than sorts: a strict `<`
+	// keeps the FIRST of two long runs sharing a date — the plan's own
+	// week-then-workout order — with no dependence on a sort's stability. The
+	// Dart twin and the firmware port scan identically, so all three rails pick
+	// the same session out of a double-long-run day.
+	let nextLong: ReplanWorkout | null = null;
+	for (const week of weeks) {
+		if (isTaper(week.phase)) continue;
+		for (const wo of week.workouts) {
+			if (wo.isPast || wo.kind !== 'long') continue;
+			if (nextLong === null || wo.scheduledDate < nextLong.scheduledDate) nextLong = wo;
+		}
+	}
 
 	// ── 1. Missed long runs in past weeks → make up in the future ──
 	// The missed run itself is FROZEN (past) — we never mutate it; it just
@@ -163,7 +172,6 @@ export function replanRemaining(input: {
 	}
 	// Make up by ensuring the NEXT future long run doesn't regress below the
 	// largest missed distance — capped so it can't spike.
-	const nextLong = futureLongRuns[0];
 	if (nextLong && maxMissedLong > 0) {
 		const plannedNext = nextLong.targetDistanceM ?? 0;
 		if (plannedNext > 0) {
