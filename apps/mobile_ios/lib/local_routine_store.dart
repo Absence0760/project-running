@@ -368,8 +368,8 @@ class LocalRoutineStore extends OfflineSyncStore<StoredRoutine> {
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
         preserved[entry.key] = entry.value;
-      } else if (windowStart != null &&
-          entry.value.lastModifiedAt.isBefore(windowStart)) {
+      } else if (outsideFetchWindow(
+          entry.value.lastModifiedAt, windowStart, null)) {
         preserved[entry.key] = entry.value;
       } else {
         syncedLocal[entry.key] = entry.value;

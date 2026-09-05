@@ -287,7 +287,8 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
     for (final entry in rowsById.entries) {
       if (entry.value.syncState != SyncState.synced) {
         preserved[entry.key] = entry.value;
-      } else if (_outsideWindow(entry.value.startedAt, windowStart, windowEnd)) {
+      } else if (outsideFetchWindow(
+          entry.value.startedAt, windowStart, windowEnd)) {
         preserved[entry.key] = entry.value;
       } else {
         syncedLocal[entry.key] = entry.value;
@@ -329,18 +330,6 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   static DateTime? _parseTs(dynamic v) {
     if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
     return null;
-  }
-
-  /// True when [at] falls outside the half-open fetch window `[start, end)`.
-  /// A null timestamp can't be placed, so it's treated as in-window (eligible
-  /// for prune) — preserving the no-window full-replace contract when both
-  /// bounds are null. Compares absolute instants, so a UTC `started_at` and a
-  /// local window bound compare correctly.
-  static bool _outsideWindow(DateTime? at, DateTime? start, DateTime? end) {
-    if (at == null) return false;
-    if (start != null && at.isBefore(start)) return true;
-    if (end != null && !at.isBefore(end)) return true;
-    return false;
   }
 
   @override

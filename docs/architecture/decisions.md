@@ -24013,3 +24013,43 @@ the pair already carries elsewhere. Two mirrored tests each — the two-run case
 from the filing and a 40-run all-tied case past Dart's threshold, both asserted
 from two opposite input orders — take the suites to 12 and 12, and each was
 verified failing with its own tiebreak removed.
+
+## 1242. Three copies of the prune predicate, and the argument for extracting a five-line function
+
+The house rule is that three similar lines beat a premature helper, so the case
+has to be made rather than assumed. It is made by what the predicate DECIDES,
+not by its length. `outsideFetchWindow` answers whether a windowed refresh may
+prune a synced row that the fetch did not return — outside the window the
+absence means "never asked for" and the row must be kept; inside it means the
+server deleted it and the row must go. Get the half-open convention wrong on one
+store and that store silently discards synced rows the server still has, which
+is data loss with no error and no test failure anywhere else. It is a
+contract that three call sites have to agree on, which is the same thing the
+TS-Dart parity registry exists for, one platform down; § 1198 declined a
+`replaceResident(build)` template on the opposite finding — that all seven
+`replaceFromServer` gates were verbatim identical, so the extraction would have
+caught nothing — and here the three were already NOT identical.
+
+`local_food_store.dart` and `local_gym_store.dart` carried it character for
+character. `local_routine_store.dart` open-coded
+`windowStart != null && entry.value.lastModifiedAt.isBefore(windowStart)`, which
+is the same predicate with the `end` bound dropped and the null-`at` branch
+unreachable behind a non-nullable field — correct today, and the shape from
+which a drift starts, because the next person adding an `end` bound to the
+routine library has no shared function to add it to. One top-level function in
+`offline_sync_store.dart`, which all three already import; a top-level function
+rather than the filing's suggested `@protected static` because `@protected` is
+an instance-member annotation and a static one that ignores `this` would only
+be documentation.
+
+The three suites reached the predicate only through a whole `replaceFromServer`,
+so the extraction ships the first direct cases: the unplaceable timestamp, the
+no-bounds full replace, start-inclusive against end-exclusive at
+microsecond resolution, each single-sided window, and a UTC row timestamp
+against a local window bound. Four mutations were planted in the extracted body
+and each was caught — start made exclusive, end made inclusive, a null timestamp
+read as outside the window, and a wall-clock field comparison in place of the
+instant one. **Filed rather than done in the same pass:** `_parseTs` is a
+byte-identical private static in SIX stores (food, gear, gym, meal template,
+recipe, routine), a larger instance of the same shape than the one this entry
+closes, but three of those files belong to no lane this round.

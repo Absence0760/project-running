@@ -58,6 +58,28 @@ abstract class SyncEntry {
   Map<String, dynamic> toJson();
 }
 
+/// True when [at] falls outside the half-open fetch window `[start, end)`.
+///
+/// A windowed [OfflineSyncStore.replaceFromServer]-style refresh may only prune
+/// a synced row the fetch COULD have returned; a row outside the window is
+/// absent because it was never asked for, not because the server deleted it.
+/// This is the one place that decides which, because the half-open convention
+/// is the whole contract: three stores carried the predicate — two byte for
+/// byte, one open-coded with the `end` bound dropped — and a drift on any one
+/// of them changes which synced rows a refresh is allowed to clobber, with
+/// nothing in the tree comparing them.
+///
+/// A null [at] cannot be placed, so it is in-window and therefore eligible for
+/// prune, which is what preserves the full-replace contract when both bounds
+/// are null. Compares absolute instants, so a UTC timestamp and a local window
+/// bound compare correctly.
+bool outsideFetchWindow(DateTime? at, DateTime? start, DateTime? end) {
+  if (at == null) return false;
+  if (start != null && at.isBefore(start)) return true;
+  if (end != null && !at.isBefore(end)) return true;
+  return false;
+}
+
 /// Disk-backed per-row sync-state machine shared by the gear / gym / food
 /// stores (decisions §73 + §122). One JSON file per row under
 /// `<appDocs>/<storeSubdir>/`, an in-memory `ChangeNotifier` so screens
