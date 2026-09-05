@@ -22134,3 +22134,66 @@ reports `22 setup-node step(s) on Node 24.20.0`.
 The cost is a manual bump, like the six toolchains already on that footing, and
 possibly a tool-cache miss on runners whose preinstalled 24.x differs. The
 alternative is that nothing in the repo can say which runtime built the release.
+
+## 1215. Each `check_ci_diagnostics` rule now names its own subject, and the two that read a step's shell read composite actions too
+
+**Decided 2026-09-05.** Every rule in `check_ci_diagnostics.mjs` read
+`.github/workflows` and nothing else, so the two composite actions under
+`.github/actions` were outside all of them at once. `check_workflow_binaries.mjs`
+and `check_toolchain_pins.mjs` both read that directory; this one silently did
+not, and nothing said so — the same shape as [§ 1213](#1213), where a defect
+survived because no rule had that subject.
+
+The fix is a per-rule subject rather than a wider file list, because the rules
+are not about the same thing. Rules 1 and 5 read a step's `if:` and its shell,
+which an action step has, so they now read both directories. Rules 2, 3 and 4
+are about JOBS — bundling is a property of a job NAME that cannot say which
+check broke, a `needs:` entry names a job, and the gate is one job in one
+workflow — and a composite action has no jobs, so widening them would have been
+a claim about nothing. `RULE_SUBJECTS` records which is which with the reason,
+and the guard PRINTS the split rather than leaving a reader to infer it, which
+is the property whose absence let this sit.
+
+An empty action list is a **failure**, not a quiet skip: "rules 1 and 5 covered
+workflows only" is precisely the state that went unnoticed, so it must not be
+reachable silently again. `parseSteps` and the new `parseActionSteps` share one
+`collectStepList`, because `runs.steps` in an action is the same list
+`jobs.<id>.steps` is at a different indent under a different key, and two
+readers of one YAML shape would drift. The refactor was proved neutral rather
+than assumed: **437 steps across the 21 committed workflows parse byte-identical
+to the previous implementation.**
+
+**The widened subject found no real defect in `.github/actions`** — measured, not
+asserted: rule 1 finds no `failure()`-conditioned diagnosis there at all (the
+repo-wide count stays 9), and rule 5 reads **126 further shell lines**, 2,046 to
+2,172, all clean. So this closes a scope hole rather than a live bug, which is
+why the mutation test is the evidence: a backtick-in-double-quotes echo and an
+unscoped `if: failure()` diagnosis planted in
+`.github/actions/install-playwright/action.yml` each fail the guard at exit 1,
+at the right line, naming `composite action \`install-playwright\`` rather than
+a job.
+
+## 1216. `.tool-versions`' `nodejs` line is compared exactly, because the reason it was not has stopped being true
+
+**Decided 2026-09-05.** `toolVersionAgrees` compared `nodejs` on the MAJOR alone
+while every other plugin was exact, and its stated reason was "asdf needs a
+version it can resolve to a build, CI states a major, and demanding they match
+to the patch would make every runner-image bump a repo edit". All three clauses
+are now false. `24` is the spelling asdf cannot resolve and `24.20.0` is not;
+[§ 1214](#1214) made every `setup-node` step name the patch; and there is no
+runner-image bump left to absorb, because CI no longer follows the image — a
+Node change is a deliberate repo edit either way, and this makes `.tool-versions`
+part of that same edit rather than a second place to remember.
+
+Left on the major, the file could have said `nodejs 24.0.0` while CI ran
+`24.20.0` and this guard would have called them equal — twenty minor releases
+apart, and a contributor developing on a toolchain CI never runs. That is a pin
+nothing compares, which is the class this whole lane has been closing. Measured
+both ways: under the major-only comparison `24.0.0` vs `24.20.0` PASSES, under
+the exact one it fails, and the end-to-end mutation fails the guard at exit 1
+with a line naming both versions.
+
+`.tool-versions` now reads `nodejs 24.20.0`, and its header's "(major only; asdf
+wants a resolvable version, CI states a major)" — stale from the moment § 1214
+landed — says what is now true. Six of its seven lines are checked against a pin
+this repo enforces; the seventh, `python`, still has none.
