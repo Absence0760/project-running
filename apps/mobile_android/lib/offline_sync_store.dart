@@ -280,9 +280,13 @@ abstract class OfflineSyncStore<S extends SyncEntry> extends ChangeNotifier {
       // Skip writing an index for a fresh empty store (no rows AND no prior
       // index file) — there's nothing to cache, the rebuild-from-empty path is
       // O(0), and it avoids a pointless disk write on every cold-load of an
-      // unused store. It also keeps widget tests that init an empty store
-      // outside tester.runAsync from deadlocking the fake-async zone on the
-      // index write (the first real createLocal flushes the index anyway).
+      // unused store. Removing it was measured (decisions § 1196) and does not
+      // merely cost that write: `_readIndex` short-circuits on a missing file,
+      // so this is the ONLY real-async await a fresh empty store's `init()`
+      // would carry, and a widget test that inits one outside
+      // `tester.runAsync` then never completes it. That failure is a HANG, not
+      // a teardown report — the store-write watch (§ 1129) speaks at teardown
+      // and a test that never ends never reaches it.
       if (rowsById.isNotEmpty || _indexFile.existsSync()) {
         await _persistIndex();
       } else {

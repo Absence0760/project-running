@@ -78,8 +78,6 @@ void main() {
     // Never dump the raw exception code into the banner.
     expect(find.textContaining('photo_access_denied'), findsNothing);
 
-    // Drain the banner's auto-dismiss timer before teardown.
-    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('a non-permission failure shows a generic message, not the raw error',

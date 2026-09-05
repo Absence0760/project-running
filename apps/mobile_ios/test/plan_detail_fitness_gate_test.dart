@@ -213,8 +213,6 @@ void main() {
     expect(find.textContaining('ease off', findRichText: true), findsOneWidget);
     expect(find.textContaining('make up a missed long run', findRichText: true),
         findsNothing);
-    // Drain the showTopBanner auto-dismiss timer before teardown.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('gate ON + mildly fatigued runner holds, proposing nothing',

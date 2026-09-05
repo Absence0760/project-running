@@ -213,8 +213,6 @@ void main() {
     expect(_avatarTileIcon(Icons.delete_outline), findsNothing);
     expect(_avatarTileIcon(Icons.photo_camera), findsOneWidget);
 
-    // Drain the showTopBanner auto-dismiss timer so no pending-timer error.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('cancelling the confirm keeps the avatar', (tester) async {

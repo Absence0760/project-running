@@ -22772,6 +22772,149 @@ the route case, reverting to the loop fails the `head_splice` case.
 Process note worth keeping: § 1192's verification ran the changed module's own
 test file and not the suite around it. The contradiction was one directory away.
 
+## 1195. The top banner's dismissal clock belongs to the pill, and both fixes the filing proposed are impossible
+
+[§ 1131](#1131) found five tests needing a four-second pump after
+`showTopBanner`, and filed two candidate fixes: return a handle a test can
+dismiss, or "register its timer somewhere `tearDown` can drain". **Both were
+measured and neither can work.**
+
+`A Timer is still pending even after the widget tree was disposed` is raised by
+`AutomatedTestWidgetsFlutterBinding._verifyInvariants`, called from
+`_runTestBody` immediately after the harness unmounts the tree — *inside* the
+test body, before `package:test` runs a single `tearDown`. A scratch test
+registering `tearDown(hideTopBanner)` and ending with a banner up fails exactly
+as it did without it. And a returned handle is unreachable from the tests that
+hit this: the caller is a screen, so the test never holds what `showTopBanner`
+returned. A repo that had already written `tearDown(hideTopBanner)` into
+`settings_email_reoptin_test.dart` was carrying a cleanup that cannot do what
+its position implies.
+
+The filing also undercounted its own population by an order of magnitude.
+Scanning for a `tester.pump(Duration(...))` under a comment naming the banner
+finds **70 sites across 34 files**, not five — every screen test that ever
+reached a completion path, each one having independently rediscovered the same
+remedy and written its own sentence for it.
+
+**So the fix is on the widget, and it is the ordinary one: a `State` owns its
+own `Timer`.** `_TopBannerWidget` is now stateful; it arms the dismissal timer
+in `initState` and cancels it in `dispose`. Two failure modes close at once,
+and the first fix attempted here only closed one of them — cancelling on
+dispose left `plan_detail_adherence_test` still failing, because
+`showTopBanner` can only *insert* an `OverlayEntry`: a banner shown on a path
+the test never pumps again is never built, so there is no `State` to dispose
+and the externally-armed timer survived a pill that was never displayed.
+Arming from `initState` means an undisplayed banner arms nothing at all.
+
+The behaviour change this carries is a correction, not a cost: the display
+duration now runs from the frame the pill first renders rather than from the
+call, which is what "auto-dismisses after 3 s" has always claimed. 60 of the 70
+drains — every one that was the last statement of its test — are deleted with
+it. The remaining ten stay: two in `run_screen_recording_flow_test.dart` sit
+mid-test and advance the recording clock for their own reasons, and eight are
+followed by further pumping whose purpose is not the banner. Pinned by three
+cases in `top_banner_test.dart` (a banner still up at the end, one whose tree
+is unmounted under it, one never rendered), each verified failing against the
+old widget.
+
+## 1196. The empty-store index skip stays, and the hazard its comment names is a hang the write watch cannot see
+
+`OfflineSyncStore._loadAll` writes no index for a store that is both empty and
+has none on disk. Its comment gave three reasons, and the third — that this
+keeps widget tests initing an empty store outside `tester.runAsync` from
+deadlocking the fake-async zone — was filed as production behaviour shaped by a
+test-harness failure mode that [§ 1129](#1129) now detects. Both halves of that
+were measured, and the filing's premise is wrong on the second.
+
+**Removing the carve-out does deadlock the suite.** `_readIndex` short-circuits
+on `existsSync()`, and every other step of an empty `_loadAll` is synchronous,
+so `_persistIndex` would be the *only* real-async await a fresh empty store's
+`init()` carries. A probe that inits one outside `runAsync` and pumps twenty
+frames never sees it complete; a five-file batch of the screens that do this
+sat at zero CPU for seven minutes and printed nothing at all before it was
+killed.
+
+**And that is exactly what the watch cannot report.** § 1129's instrument fires
+in `tearDown`, naming the operations still on the chain — a test that never
+ends never reaches teardown. So the failure mode here is not "detectable at the
+moment it happens": it is a hang to the runner's timeout, the same class of
+unattributable failure the instrument was built to replace. The comment now
+says so rather than implying the clause is a courtesy.
+
+The two production reasons carry it independently and are now asserted rather
+than argued: nothing to cache, and no write on every cold-load of a store the
+user never opens. Three cases in `offline_sync_store_drain_race_test.dart` pin
+what was chosen — `init()` completing under fake-async pumping alone (a
+`testWidgets`, deliberately, because a plain `test` awaits the real loop and
+would pass either way), no index file for an empty store, and a *drifted* index
+still corrected, because the skip is conditioned on there being no index rather
+than on the store being empty. The first two were verified failing against the
+removal.
+
+## 1197. The write watch's population is 193 files, not 119, and it was computed rather than derived
+
+[§ 1129](#1129) armed the store-write watch for every test in
+`apps/mobile_android/test/` but measured it against 119 files, reached by
+hand-triage: 64 pairing a temp directory with widget taps, 39 naming a store
+class, 4 mocking `path_provider`, 12 covering screens that construct a store
+internally. § 1097 had already established that counting this population by
+grepping for helper names gets it wrong three times running, and the hand
+triage is the same instrument with a different hand.
+
+**Computing it instead gives 193.** The watch can only fire in a test whose
+import closure reaches something that CALLS `serialiseStoreWrite`, and there
+are exactly four such call sites: `local_route_store.dart`, `local_run_store.dart`,
+`offline_sync_store.dart` and `watch_ingest_queue.dart` — the last of which the
+derivation's own account ("a store needs a directory and `OfflineSyncStore.init`")
+does not describe at all. Resolving every `import`/`export` in each test through
+the relative `../lib/` paths and the five workspace packages puts 193 of the 536
+test files in that closure and 343 provably outside it. Reaching the *definition*
+does not count: a test importing the `core_models` barrel pulls in
+`store_write_chain.dart` and still cannot queue anything.
+
+So "run it over all of them" was the wrong question. 343 files cannot exercise
+the watch whatever they do, and the 74-file gap between the derivation and the
+computation is where the coverage claim was actually thin.
+
+**All 536 were run anyway, because the cost is small and a measured answer
+beats an argued one.** 42 batches of 12-14 files, each under
+`MemoryMax=3G, MemorySwapMax=0` at `--concurrency=2`: 415 s for the 193 and 353
+s for the 343, 768 s of wall clock in total, ~7,050 tests, peak RSS 1.42 GB.
+Not one file outside the original 119 flagged a write left in flight, so
+§ 1131's fix set was complete and its derivation was conservative in the
+harmless direction. Two timeout clusters appeared and neither is a find:
+three cases in `routes_screen_test.dart` and four in `routing_test.dart` failed
+`(did not complete)` at a 60 s bound while nine other agents shared the box, and
+both files pass alone and on a re-run of their own batch.
+
+## 1198. The seven `replaceFromServer` gates are identical, and the guard that made the template unnecessary could be evaded three ways
+
+[§ 663](#663) declined a `replaceResident(build)` base-class template on blast
+radius and leaned on an architecture guard instead, with the stated trigger for
+revisiting being the override count GROWING. It has not: still seven. And the
+repetition the filing describes is real but shallow — measured verbatim, all
+seven bodies open with the same 40 characters, `requireInitialised('replaceFromServer');`,
+so there is no divergence hiding in the duplication and nothing the extraction
+would have caught. The template stays refused.
+
+**The guard, though, was weaker than the claim resting on it.** It anchored on
+the literal `Future<void> replaceFromServer` and then on the next `async`, and
+three shapes were planted in `lib/` and confirmed to pass it. A non-async
+override — legal Dart — sends `indexOf('async', at)` forward into an unrelated
+later method, whose first statement is read and approved in its place, while
+the ungated override is still counted toward the floor. An override returning
+anything but `Future<void>` is not found at all, and the floor is met by its
+seven siblings. And the gate's argument was never read, so
+`requireInitialised('loadAll')` passed while making the store refuse under a
+name its caller never called.
+
+The scan now finds a declaration by its name, skips a `.`- or backtick-preceded
+match so call sites and doc references are not mistaken for one, and walks the
+parameter list's own parentheses to reach the body — which is what the `async`
+anchor was standing in for, since `local_gym_store.dart`'s signature contains
+braces inside its record type and the first `{` after the signature is not the
+body. All three planted shapes are now caught.
+
 ## 1200. Three replan rails broke a same-date tie three ways; all three now scan for the earliest instead of sorting
 
 `replanRemaining` adds a missed long run's distance to the NEXT future long

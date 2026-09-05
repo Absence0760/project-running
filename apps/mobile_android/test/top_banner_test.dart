@@ -64,6 +64,48 @@ void main() {
     );
 
     testWidgets(
+      'a banner still on screen when the test ends leaves no pending timer',
+      (tester) async {
+        // No assertion here on purpose: the framework's own
+        // `A Timer is still pending even after the widget tree was disposed`
+        // is the assertion, and it is raised from inside the test body — after
+        // the harness unmounts the tree, before any `tearDown` runs. So a
+        // dismissal timer that outlives the pill can only be answered by the
+        // widget cancelling its own, which is what this pins.
+        await tester.pumpWidget(_BannerHost(
+          onReady: (ctx) => showTopBanner(ctx, 'left up'),
+        ));
+        await tester.pump();
+        expect(find.text('left up'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'a banner inserted but never rendered arms no timer at all',
+      (tester) async {
+        // showTopBanner can only insert an OverlayEntry; the pill is built on
+        // the next frame. A caller that shows one on a path the test never
+        // pumps again left a timer behind for a banner nobody ever saw.
+        await tester.pumpWidget(_BannerHost(
+          onReady: (ctx) => showTopBanner(ctx, 'never rendered'),
+        ));
+      },
+    );
+
+    testWidgets(
+      'unmounting the tree under a live banner cancels its dismissal timer',
+      (tester) async {
+        await tester.pumpWidget(_BannerHost(
+          onReady: (ctx) => showTopBanner(ctx, 'about to lose its tree'),
+        ));
+        await tester.pump();
+        expect(find.text('about to lose its tree'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox.shrink());
+        expect(find.text('about to lose its tree'), findsNothing);
+      },
+    );
+
+    testWidgets(
       'banner with custom duration (1 s) dismisses on its own clock',
       (tester) async {
         await tester.pumpWidget(_BannerHost(

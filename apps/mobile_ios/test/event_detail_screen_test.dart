@@ -716,8 +716,6 @@ void main() {
 
         expect(social.submitCalls, 2);
         expect(find.text('Submit your time'), findsNothing);
-        // Drain the replacement banner's auto-dismiss timer.
-        await tester.pump(const Duration(seconds: 6));
       },
     );
   });

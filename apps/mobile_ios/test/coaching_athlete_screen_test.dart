@@ -283,9 +283,6 @@ void main() {
     await tester.pump();
 
     expect(find.text('athlete already has an active plan'), findsOneWidget);
-    // showTopBanner schedules an auto-dismiss timer; drain it past the hard
-    // ceiling so the test doesn't trip the pending-timer invariant.
-    await tester.pump(const Duration(seconds: 7));
   });
 
   testWidgets(
@@ -303,9 +300,6 @@ void main() {
     expect(find.textContaining('SocketException'), findsNothing);
     expect(find.textContaining('Exception:'), findsNothing);
 
-    // showTopBanner schedules an auto-dismiss timer; drain it past the hard
-    // ceiling so the test doesn't trip the pending-timer invariant.
-    await tester.pump(const Duration(seconds: 7));
   });
 
   group('CoachingAthleteScreen — the run-row lanes', () {

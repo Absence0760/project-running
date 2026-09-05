@@ -200,9 +200,6 @@ void main() {
     await tester.pump();
 
     expect(api.addCalls, 1);
-    // showTopBanner leaves a pending auto-dismiss timer — drain it so the
-    // test tears down cleanly (known mobile-test gotcha).
-    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('a failed report surfaces a banner and keeps the composer open',
@@ -224,8 +221,6 @@ void main() {
     expect(find.text('Could not report condition'), findsOneWidget);
     // The composer stays open for a retry — its Submit button is still mounted.
     expect(find.widgetWithText(FilledButton, 'Report condition'), findsOneWidget);
-    // Drain showTopBanner's auto-dismiss timer before teardown.
-    await tester.pump(const Duration(seconds: 6));
   });
 
   testWidgets('read-only view (canReport false) hides the composer affordance',

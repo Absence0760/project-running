@@ -138,9 +138,6 @@ void main() {
     // The best-effort immediate sync drained it through the RPC.
     expect(api.upserts.single['bib'], '101');
     await pumpUntilStoreWritesSettle(tester);
-    // The drain lets `_stamp` finish, which arms `showTopBanner`'s dismissal
-    // timer; the widget tree may not be disposed under it.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   // The gate parses through the canonical isTruthyFlagValue, so it honours
@@ -182,9 +179,6 @@ void main() {
     expect(find.text(l10n.checkpointWeighInTitle), findsNothing);
     expect(store.rows.single['bib'], '101');
     await pumpUntilStoreWritesSettle(tester);
-    // The drain lets `_stamp` finish, which arms `showTopBanner`'s dismissal
-    // timer; the widget tree may not be disposed under it.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   /// Open the weigh-in sheet and reveal the weight field behind its Art 9

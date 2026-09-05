@@ -214,8 +214,6 @@ void main() {
     // The delete threw; the detail screen stays open (no pop) and an error
     // banner shows rather than the failure being swallowed silently.
     expect(find.textContaining("Couldn't delete the workout"), findsOneWidget);
-    // Drain the showTopBanner auto-dismiss timer.
-    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('double-tapping the visibility toggle writes the store only once',

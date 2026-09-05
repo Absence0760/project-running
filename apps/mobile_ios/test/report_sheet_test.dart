@@ -148,8 +148,6 @@ void main() {
       expect(api.capturedTargetId, 'route-42');
       expect(api.capturedReason, 'harassment');
       expect(api.capturedNotes, 'this user impersonates a coach');
-      // Drain the success banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 5));
     });
 
     testWidgets('empty notes get passed as null (not "")', (tester) async {

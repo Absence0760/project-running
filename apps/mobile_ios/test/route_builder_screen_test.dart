@@ -248,9 +248,6 @@ void main() {
       find.textContaining('Road snapping is unavailable'),
       findsOneWidget,
     );
-    // Drain the banner's 3s auto-dismiss timer (pumpAndSettle hangs on
-    // the flutter_map animation, so pump the fixed duration instead).
-    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('no snapping-unavailable banner when snapping works',

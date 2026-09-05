@@ -228,8 +228,6 @@ void main() {
           describe: 'the re-plan to write its week updates');
       // 28 km capped to 22 km * 1.15 = 25300.
       expect(training.updated['next'], (22000 * 1.15).round());
-      // Drain the showTopBanner auto-dismiss timer before teardown.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 

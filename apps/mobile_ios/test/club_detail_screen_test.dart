@@ -894,8 +894,6 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
 
         expect(social.createCalls, 2);
-        // Drain the replacement banner's auto-dismiss timer.
-        await tester.pump(const Duration(seconds: 6));
       },
     );
   });

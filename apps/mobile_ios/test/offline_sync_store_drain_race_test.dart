@@ -32,6 +32,7 @@ import 'dart:io';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/local_food_store.dart';
@@ -295,6 +296,69 @@ void main() {
 
       expect(store.rewriteAtomicWrites, before,
           reason: 'an unchanged refresh must not rewrite anything');
+    });
+  });
+
+  // `_loadAll` deliberately writes no index for a store that is both empty and
+  // has none on disk. The two production reasons are its own — nothing to
+  // cache, no write on every cold-load of a store the user never opens — and
+  // BOTH claims are asserted here, because neither had a test.
+  //
+  // The third reason its comment gives is the one measured in § 1196:
+  // `_readIndex` short-circuits on a missing file, so the index write would be
+  // the only real-async await a fresh empty store's `init()` carries, and a
+  // widget test that inits one outside `tester.runAsync` would never see it
+  // complete. That is why the first case here is a `testWidgets` pumping the
+  // fake clock rather than a plain `test` — a plain one would await the real
+  // event loop and pass either way, proving nothing.
+  group('a fresh empty store loads without writing an index', () {
+    late Directory dir;
+
+    setUp(() => dir = Directory.systemTemp.createTempSync('empty_load'));
+    tearDown(() => dir.deleteSync(recursive: true));
+
+    testWidgets('init() completes under fake-async pumping alone',
+        (tester) async {
+      var loaded = false;
+      unawaited(LocalFoodStore()
+          .init(overrideDirectory: dir)
+          .then((_) => loaded = true));
+      await tester.pumpWidget(const SizedBox.shrink());
+      for (var i = 0; i < 20 && !loaded; i++) {
+        await tester.pump();
+      }
+
+      expect(loaded, isTrue,
+          reason: 'a fresh empty store\'s init() must carry no real-async '
+              'await, or every widget test that inits one outside '
+              'tester.runAsync hangs to the runner timeout');
+    });
+
+    test('writes no index file, and writes one as soon as a row exists',
+        () async {
+      final store = LocalFoodStore();
+      await store.init(overrideDirectory: dir);
+      final index = File('${dir.path}/index.json');
+
+      expect(index.existsSync(), isFalse,
+          reason: 'there is nothing to cache and no index to correct');
+
+      await store.createLocal(itemName: 'Porridge', startedAt: DateTime.now());
+      expect(index.existsSync(), isTrue,
+          reason: 'the skip is for an empty store, not a standing refusal');
+    });
+
+    test('a drifted index on disk is still corrected when the store is empty',
+        () async {
+      final index = File('${dir.path}/index.json');
+      index.writeAsStringSync('{"summaries": [{"id": "ghost"}]}');
+
+      await LocalFoodStore().init(overrideDirectory: dir);
+
+      expect(index.readAsStringSync(), isNot(contains('ghost')),
+          reason: 'the skip is conditioned on there being no index to '
+              'correct, so one naming a row the store does not hold must '
+              'still be rewritten');
     });
   });
 }
