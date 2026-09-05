@@ -235,7 +235,10 @@ scripts/
 .github/workflows/
   ci.yml             → the same 34 CI jobs run on every PR and push to main
                        (no PR-only/push-only split); the single required status
-                       check is the "CI gate" aggregator that needs: all of them
+                       check is the "CI gate" aggregator, which needs: every
+                       one of the other 33 — among them `terraform`, a caller
+                       job whose real work is terraform.yml, whose own jobs
+                       could never be named in a needs: list (decisions § 1149)
                        Release: per-app deploy workflows run on `<app>@<version>` tags
 ```
 
