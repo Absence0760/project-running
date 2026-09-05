@@ -62,19 +62,33 @@ func (b *dataexportBackend) StreamExportRuns(ctx context.Context, userID string,
 	comp, err := b.client.StreamExportRuns(ctx, userID, func(rows []internal.ExportRunRow) error {
 		out := make([]dataexport.ExportRun, len(rows))
 		for i, r := range rows {
-			out[i] = dataexport.ExportRun{
-				ID: r.ID, UserID: r.UserID, StartedAt: r.StartedAt,
-				DurationS: r.DurationS, DistanceM: r.DistanceM,
-				Source: r.Source, ActivityType: r.ActivityType, IsDNF: r.IsDNF,
-				ExternalID: r.ExternalID,
-				Metadata:   r.Metadata, TrackURL: r.TrackURL, HrSeriesURL: r.HrSeriesURL,
-				IsPublic: r.IsPublic, EventID: r.EventID, RouteID: r.RouteID,
-				CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-			}
+			out[i] = exportRunFromRow(r)
 		}
 		return emit(out)
 	})
 	return exportCompleteness(comp), err
+}
+
+// exportRunFromRow bridges the two identical row structs the leaf-package
+// rule keeps apart (`internal` must not import `dataexport`). A field
+// forgotten here is a column selected from the database and then dropped
+// on the way to the archive, which nothing downstream can see -- so it is
+// its own function rather than an inline literal, and
+// TestExportRunFromRowCopiesEveryField fills every field and compares the
+// two as JSON.
+func exportRunFromRow(r internal.ExportRunRow) dataexport.ExportRun {
+	return dataexport.ExportRun{
+		ID: r.ID, UserID: r.UserID, StartedAt: r.StartedAt, ConcludedAt: r.ConcludedAt,
+		DurationS: r.DurationS, DistanceM: r.DistanceM, ElevationGainM: r.ElevationGainM,
+		Source: r.Source, ActivityType: r.ActivityType, IsDNF: r.IsDNF,
+		ExternalID: r.ExternalID,
+		Metadata:   r.Metadata, TrackURL: r.TrackURL, HrSeriesURL: r.HrSeriesURL,
+		IsPublic: r.IsPublic, EventID: r.EventID, RouteID: r.RouteID,
+		RaceListingID: r.RaceListingID,
+		Fastest5kS:    r.Fastest5kS, Fastest10kS: r.Fastest10kS,
+		FastestHalfMarathonS: r.FastestHalfMarathonS, FastestMarathonS: r.FastestMarathonS,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
 }
 
 func (b *dataexportBackend) DownloadTrackBytes(ctx context.Context, path string) ([]dataexport.TrackPoint, error) {

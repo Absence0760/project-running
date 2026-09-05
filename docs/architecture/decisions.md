@@ -21979,6 +21979,252 @@ caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
 
+## 1170. The OSRM matcher reads `tracepoints`, not the route geometry, and the matched track is now one point per sample
+
+`OSRMMatcher.Match` built its output as `TrackPoint{Lng: c[0], Lat: c[1]}` off
+`matchings[].geometry.coordinates`. Those coordinates are road-network
+vertices: they belong to the ROAD, not to any sample the runner's watch took,
+so the three optional fields on `internal.TrackPoint` — `ele`, `ts`, `bpm` —
+had nowhere to go and were dropped from every matched track. That is invisible
+while the shipped default is `PassthroughMatcher`, and the swap is one env var
+(`OSRM_URL`), with migration `20260609_001`'s trigger enqueueing a `map_match`
+for every run that has a `track_url`. The day the variable is set, three
+surfaces on `/runs/[id]` degrade at once, because `baseTrack` prefers
+`matchInfo.track` whenever it has two points: `hasElevation` goes false and the
+Elevation Profile section disappears from runs that recorded altitude,
+`elevations` collapses behind it, and `RunMap`'s pace heatmap falls back to the
+flat single-line render because it gates on `hasTrackTimestamps`.
+
+The response already carries the correspondence. `tracepoints` holds one entry
+per INPUT coordinate, in input order, each with the `location` that coordinate
+was snapped to, or `null` where the engine called it an outlier. So the matcher
+now pairs `tracepoints[i]` with `chunk[i]`, moves the position and leaves every
+measurement alone. `overview=false` follows from that — the geometry is no
+longer read, and not asking for it makes the response smaller.
+
+**`tidy` is switched off, and that is a consequence rather than an aside.** It
+asks OSRM to drop input points it considers redundant, which used to buy a
+cleaner drawn line at no cost because the line was the road's. Now every point
+it drops is a lost heart-rate sample and a lost timestamp, so the trade has
+inverted.
+
+**Three fallbacks, all in the same direction.** A chunk whose response is not
+`Ok`, has no matchings, or carries a `tracepoints` array of the wrong length
+carries its raw input points through — the last of those because pairing
+against a mis-indexed array would attach one sample's heart rate to another
+sample's position, which is worse than not matching at all. A single `null`
+tracepoint, or one whose `location` is not a coordinate pair, carries that one
+sample through raw for the same reason: the measurement it holds is not the
+engine's to discard, and the raw fix is at worst where the runner's watch said
+they were.
+
+That makes `Match` **length-preserving**: one output point per input point, in
+order, whatever the engine said. The `len(out) < 2` guard that used to translate
+a degenerate match into `status='skipped'` is unreachable under it and is gone —
+a track of two or more points now always yields a matched track. The property is
+worth stating rather than merely having, because the page-side half of the same
+filing was blocked on exactly its absence: the linked map/chart cursor is an
+index into the track the map draws, and the two index spaces were different
+lengths once the geometry was re-sampled. They are the same length now.
+
+The page-side half is therefore no longer needed for the defect it was filed
+for, and sourcing the elevation chart from `elevationSourceTrack` would now be
+a change of preference rather than a repair; it is not re-filed. What IS still
+owed and is filed is an e2e fixture: nothing under `tests-e2e/` plants a
+`matched_track_url` with a Storage object, so no test on either side of the
+seam exercises a run whose matched track is the one being rendered.
+
+## 1171. The Art 20 `runs` projection is derived from the table now, and each format declares what it omits
+
+[§ 1135](#1135) measured it: `public.runs` has 24 columns, both export transports
+selected 17, and `concluded_at`, `elevation_gain_m`, `race_listing_id`,
+`fastest_5k_s`, `fastest_10k_s`, `fastest_half_marathon_s` and
+`fastest_marathon_s` reached neither `runs.csv` nor either archive's
+`runs.json`. Four of them **used to be exported and stopped**: migration
+`20270325_001` promoted the PR times out of `runs.metadata` into real columns
+and stripped the keys from the bag in the same UPDATE, so they rode inside the
+`metadata` cell until the day it ran and then left silently. `manifest.json`
+cannot show any of this — its completeness contract is row counts against each
+section's authoritative total, and every row was present.
+
+Adding seven names to four lists would leave the mechanism that lost them
+intact, so the direction is inverted instead. **The select is the whole table**
+on both rails (`RUNS_SELECT`, `exportRunsSelect`), and each format states what
+it OMITS, with a reason:
+
+* the CSV declines `user_id` and the two Storage paths (`CSV_OMIT` / `csvOmit`)
+  — the subject's own id in a re-homeable archive, and a key into the owner's
+  folder that any live session JWT could fetch, in the format most likely to be
+  shared off-device;
+* the backup archive's `runs.json` declines `user_id` alone, because a restore
+  must be able to re-home it;
+* the GPX zip's manifest declines the two paths as well, because the GPX files
+  are in the same archive, and `created_at` / `updated_at` with them, because it
+  is a manifest of what was exported rather than the restorable record.
+
+The omissions are executed as omissions rather than re-listed: `omitKeys` on the
+TypeScript side, and on the Go side an embedded `ExportRun` with the dropped
+field shadowed. **`json:"-"` does not shadow** — it removes the outer field from
+consideration entirely, so the embedded one is emitted after all, which the
+first version of this did; the working form is a nil `*struct{}` under
+`omitempty` carrying the same JSON name, and it is named `omitted` so the next
+reader does not have to rediscover that.
+
+**Four guards, because four different things can lose a column.**
+`TestExportRunProjectionCoversEveryRunsColumn` reads the `runs` Row out of the
+committed `database.types.ts` and requires it of `ExportRun` and of the EF's
+`RUNS_SELECT`. `TestExportRunRowMirrorsItsSelect` holds the worker's own struct
+to its own select string, where a field present in one and absent from the other
+decodes as null on every row and reads exactly like a column the runner never
+wrote. `TestExportRunFromRowCopiesEveryField` fills every field of
+`internal.ExportRunRow` with a distinct non-zero value and compares the bridge's
+output as JSON — the leaf-package rule keeps the two structs apart, and a field
+forgotten in the hand-written copy between them is invisible to both ends.
+`TestCSVCarriesEveryRunsColumnExceptTheOnesItDeclares` and
+`TestRunsJsonProjectionsOmitOnlyWhatTheyDeclare` close the renderers, the
+second by marshalling a row rather than reading the source. Each was shown to
+fail by perturbing the thing it guards before it was committed.
+
+Two notes on what this does NOT do. The CSV header grew from 19 columns to 26,
+which a positional consumer feels; that is the same call
+[§ 1134](#1134) made when it inserted `hr_coverage` mid-header rather than
+appending, and the reason is the same — a column placed where a reader will
+find it is worth more than a header a script can index blindly. And `runs.json`
+gaining fields flows into web's `restoreBackup`, which spreads the archived row
+into its upsert: `race_listing_id` is the one new FK, it points at the global
+race calendar rather than at anything per-user, and a dangling one fails that
+run's upsert into a per-run warning exactly as a dangling `route_id` already
+could.
+
+The `hr_coverage` half of [§ 1134](#1134) needed nothing: it had already landed,
+guard and all, and its `TestCSVColumnsMatchTheEdgeFunctionRail` is what forced
+both CSV rails to move together here.
+
+## 1172. The retention sweep comes off the clock, because its row delete is now the only thing that can orphan a byte
+
+[§ 1144](#1144) put `enqueue-export-blob-reap` at 04:13, ten minutes ahead of
+`cleanup-stale-export-blobs` at 04:23, so in the normal case the Storage-API
+erasure lands before the row delete and the sweep finds nothing left to orphan.
+The lead is best-effort, and a lead is the wrong instrument. A night the worker
+is down — or a job that fails its three attempts — and the sweep still deletes
+the `storage.objects` rows at 04:23, after which the bytes are unreachable by
+any Storage-API reaper for ever, because list reads the rows that are gone
+([§ 1049](#1049)). A clock cannot be conditioned on the erasure having
+happened, so the fix is not a longer lead.
+
+**What the sweep was buying, measured rather than assumed.** Erasure: none —
+§ 1049 measured the bytes surviving a row delete with a matching `sha256`.
+Reachability: **none either**, and this is the half § 1049 left implicit and the
+followup's own objection to unscheduling ("a long worker outage leaves week-old
+archives listable") rested on. The `exports` bucket carries no
+`storage.objects` policies at all — `20270602_001` made that choice
+deliberately — and `20260816_001` had already carved `exports/` out of the
+owner-folder SELECT on `runs`. An export is reachable through the ten-minute
+signed URL the server mints and through nothing else, so deleting the row
+removes a reachability nobody had. Expiry of the `data_export_jobs` rows that
+point at an archive: real, and **already unconditional without the sweep** —
+§ 1144 moved `expire_stale_export_jobs()` into `enqueue_export_blob_reap()`,
+which is the pg_cron half and runs whether or not a worker ever claims the job.
+
+So the sweep is redundant when the reaper works and harmful when it does not,
+and `20270709000001` unschedules it. The failure mode becomes a bounded
+retention overrun — rows and bytes both survive, both still erasable by the
+next successful night, no subject able to reach either — instead of permanent
+residue. The function is kept rather than dropped: it has a `service_role`
+grant for an operator who wants the unconditional removal of reachability as a
+break-glass, and `export_surface_contract_test.sql` drives it directly rather
+than through the schedule, so **its body is untouched** and every assertion
+that reads `prosrc` still holds. Only the schedule and the comment moved.
+
+**The legacy prefix had to move with it**, which is the open question § 1144
+left for whoever took this. `runs/{uid}/exports/*` was reachable by the sweep
+and is not reachable by the reaper's default payload, whose walk is
+prefix-scoped, and a whole-`runs` walk is O(users) list calls. Answered by
+deriving the prefixes from the rows that exist: the enqueue emits one
+`{"bucket":"runs","prefix":"<uid>/exports/"}` job per user who still HAS a
+legacy archive, and none at all once they are erased. Nothing has written that
+prefix since `20270602_001`, so the set is finite and shrinking, and the query
+is the same `name like '%/exports/%'` predicate the sweep already ran nightly.
+The singleton guard becomes per-PAYLOAD rather than per-kind: two queued reaps
+of the same worklist are still not two sweeps, but the default job and a
+prefix-scoped one are different worklists and a kind-wide guard would let
+whichever was inserted first suppress the rest every night.
+
+**Two guards, both cross-tier, both shown to fail before they were committed.**
+The payload between a pg_cron `insert` and a Go handler is a wire format with no
+type on either side, so `TestExportBlobReap_PayloadShapesMatchTheEnqueue` reads
+the `jsonb_build_object` keys out of the migration and drives both shapes end to
+end — a key renamed on one side is a job that runs with an EMPTY payload, which
+reaps the `exports` bucket instead and reports success.
+`TestExportBlobReap_IsTheOnlyScheduledExportRetentionPath` replays every
+migration's `cron.schedule` / `cron.unschedule` and fails if the reap enqueue is
+not scheduled or if the sweep is scheduled again, because the whole safety
+property here is that nothing else deletes one of these rows.
+
+The migration was verified against a throwaway `supabase/postgres` container
+with the surrounding objects stubbed — it applies, is idempotent on re-apply,
+leaves no `cleanup-stale-export-blobs` entry in `cron.job`, emits one job per
+legacy user deduplicated across that user's several archives, emits none for a
+plain track object in the `runs` bucket, re-emits after a drained night, and
+falls back to the single default job once the legacy leg is empty. It is not
+run against the shared local stack, which another lane holds.
+
+What this does NOT do: alert. A worker down for a week leaves archives past
+retention with nothing saying so louder than a queued `jobs` row and a growing
+bucket. Adding the alarm needs the sweep's post-condition check to move
+somewhere that can raise without also deleting, and the pgtap suite that drives
+that function is outside this lane's tree; it is filed.
+
+## 1173. The already-orphaned export bytes: the remedy the filing named does not exist for this project, and § 1049's own residual was wrong
+
+[§ 1049](#1049) measured that a swept archive's bytes survive on the backend
+with a matching `sha256`, and the followup that tracked the resulting pile said
+erasing it "needs something outside the Storage API: an S3 lifecycle rule on
+the storage bucket keyed on the object prefix, or a one-off operator pass with
+direct backend access." § 1049 left one residual on its own measurement:
+confirming the residue on a real project "still means listing the bucket over
+the S3-compatible endpoint."
+
+Read out of the shipped source of the exact image both CLIs start
+(`storage-api:v1.62.5`), three things:
+
+**The S3-compatible endpoint is a database query.** `S3ProtocolHandler`'s
+`listObjectsV2` calls through to the pg adapter, whose body is
+`SELECT id, name, metadata, updated_at, created_at, last_accessed_at FROM
+storage.objects WHERE bucket_id = $1 ...`. It reads exactly the rows the sweep
+deleted, so it can never show an orphan and cannot be used to confirm the pile.
+That residual is retracted here rather than left standing.
+
+**An S3 lifecycle rule is not available to this project.** On Supabase Cloud
+the storage backend bucket is Supabase's, not the customer's; the only
+S3-shaped surface the project can authenticate to is the one above, which is
+storage-api serving `storage.objects`. So there is no bucket to attach a
+lifecycle rule to. The remedy on Cloud is a Supabase support request. On a
+self-hosted or local stack the operator does own the backend, and there the
+procedure is to enumerate the raw bucket and subtract `storage.objects` — a
+diff, not a lifecycle rule, because the rule would need a prefix and the
+surviving objects are interleaved with live ones under the same prefixes.
+
+**And the orphan's backend key is not derivable from the database.**
+`withOptionalVersion` builds it as `{bucket}/{name}<sep>{version}`, where
+`version` is the `storage.objects` column that went with the row. So even an
+operator holding real backend credentials cannot compute the key of an orphan
+from what the database still knows; enumeration of the backend is the only
+entry. This also confirms the half the filing had right:
+`ObjectStorage.deleteObject` does `findObject(...)` before it touches the
+backend, so a Storage-API DELETE of an orphaned path raises `NotFound` and the
+bytes are untouched — the reaper genuinely cannot reach them, by construction
+rather than by oversight.
+
+The pile is therefore not closable in this repository, and the entry stays
+open with an owner of "an operator". What [§ 1172](#1172) changes is that it is
+now a FIXED pile rather than a growing one: nothing on a schedule deletes one of
+these rows any more, so no new orphan can be created by the retention path that
+made this one. The local measurement could not be repeated in this lane — the
+shared stack's storage volume is empty, having been reset since § 1049 — and a
+count taken from it would be attributable to the reset rather than to the
+sweep, so none is reported.
+
 ## 1180. A `VALIDATE CONSTRAINT` in the same file as its `ADD` is not the online form, and the guard that graded statement shape passed it
 
 `apply-pending-migrations.sh` applies each migration inside one `begin;` … `commit;` — it has to, because the ledger row commits atomically with the SQL — and the Supabase CLI wraps a file the same way, which is `migration_locks.md`'s own stated reason `CREATE INDEX CONCURRENTLY` errors as apply-time DDL. A lock taken by DDL is held until the transaction ends. So in one file, the `ADD CONSTRAINT … NOT VALID`'s own `ACCESS EXCLUSIVE` is still held while the following `VALIDATE CONSTRAINT` scans every row; `SHARE UPDATE EXCLUSIVE` is subsumed by it rather than being a downgrade, and writers are blocked for the scan's whole length exactly as a single-step `ADD` would block them. Same-file, the two-step and the single step cost the identical downtime. Only the `VALIDATE` in a **later** migration, in its own transaction, buys anything.
