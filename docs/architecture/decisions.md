@@ -23912,3 +23912,52 @@ and § 1208 this one is **build-verified**, not read: `./gradlew assembleDebug
 testDebugUnitTest` runs on this workstation and both are green at 744 tests. What
 that does NOT settle is how the armed strip renders on a 192 dp round bezel — no
 Wear emulator was run, and that is the one claim left for a device.
+
+## 1254. The watch bridge had two decoders for one payload, and they had drifted in both directions
+
+§ 1207 sent `hr_coverage` from `apps/watch_ios` and filed the remainder: the two
+Dart decoders past the Swift bridge build `metadata` from hand-written key
+allowlists, and neither named the key. Fixing that by adding two lines to each
+was the filed shape, and it would have left the actual defect in place. The two
+decoders decode the SAME payload — `WatchIngest._runFromArgs` when the runner is
+signed in, `runFromWatchPayload` when the payload was queued because they were
+not — so a key present in one and absent in the other means the run a runner
+gets depends on whether they happened to be signed in when their watch synced.
+
+Measuring the two against each other found a second divergence going the other
+way, and a worse one. `WatchIngestBridge.swift` sets `payload["track"]` to the
+raw JSON TEXT of the file the watch wrote; `_runFromArgs` had a `trackRaw is
+String` branch and `runFromWatchPayload` did not. So an Apple Watch run that
+arrived while the runner was signed out was enqueued, drained on the next
+sign-in, and landed with an EMPTY track — the run's whole GPS trace, gone,
+while its distance and duration made it look complete. Nothing tested it: every
+existing payload test hands the decoder a List, which is the shape the CUSTOM
+watch's BLE sync produces, and that sender never reaches the other decoder at
+all. In the same direction, `_runFromArgs` never read per-point `bpm`, which
+`docs/backend/metadata.md` already claimed the watch-ingest decoder does.
+
+So the fix is one decoder, not four lines. `WatchIngest` normalises the
+method-channel map once and hands it to `runFromWatchPayload` on both branches;
+`_parseSource`, a byte-identical copy of `parseRunSource`, went with it, and
+`runFromWatchPayload` gained the string-track branch. `hr_coverage` is forwarded
+verbatim like `avg_bpm` — every reader already grades the range
+(`hrCoveragePercent`, `_hrCoveragePercent`, `hrCoverageCell`) and the Art 20 CSV
+deliberately keeps the raw figure in its `metadata` column, so a value this
+build cannot interpret is better stored and refused at render than dropped into
+the ambiguous "no key" population `metadata.md` enumerates. The one check is
+finiteness, and that is not fastidiousness: `metadata` is JSON-encoded on the
+way to Postgres, so a non-finite double throws and takes the whole run upload
+with it. An undecodable track string throws rather than degrading to an empty
+track, which quarantines the entry the way a blank id already is — silently
+landing a trackless run is the defect, not the fallback.
+
+`watch_ingest_single_decoder_guard_test.dart` pins the property behaviourally
+rather than by name: building a `Run` or a `Waypoint` inside the bridge, or
+assembling a metadata map there, IS a second decoder however it is spelled, and
+the payload must be normalised exactly once for both branches. Four mutations
+were planted and each was refused — a `cm.Run(` constructed in the signed-in
+branch, a `MetadataKeys.` read reintroduced, a second `args.entries`
+normalisation for the queued branch, and a rename of the class (which the
+vacuity assertion catches rather than passing on an empty extraction). Verified
+by running the targeted Dart suites (131 tests) plus the twin diff; the Swift
+half is unchanged and remains read-not-run.

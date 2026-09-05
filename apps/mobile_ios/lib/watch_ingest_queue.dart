@@ -282,9 +282,21 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
   final distanceM = (raw['distance_m'] as num).toDouble();
   final source = raw['source'] as String? ?? 'watch';
   final trackRaw = raw['track'];
+  // Two senders, two shapes. The custom watch's BLE sync reshapes the blob
+  // into a List of point maps (`sim_watch_sync.payloadFromBlob`); the Apple
+  // Watch bridge forwards the raw JSON TEXT of the file the watch wrote
+  // (`apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` sets
+  // `payload["track"] = str`). Both reach this one decoder, and understanding
+  // only the List shape is why an Apple Watch run that arrived while the
+  // runner was signed out used to be replayed with no track at all — the
+  // signed-IN copy of this decode knew about the string and this one did not.
+  // A malformed string throws rather than degrading to an empty track: drain
+  // quarantines the entry, the same treatment a blank id gets above, because
+  // silently landing a trackless run is the defect, not the fallback.
+  final points = trackRaw is String ? jsonDecode(trackRaw) : trackRaw;
   final track = <cm.Waypoint>[];
-  if (trackRaw is List) {
-    for (final p in trackRaw) {
+  if (points is List) {
+    for (final p in points) {
       if (p is Map) {
         track.add(cm.Waypoint(
           lat: (p['lat'] as num).toDouble(),
@@ -306,6 +318,20 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
   final metadata = <String, dynamic>{};
   final avgBpm = raw['avg_bpm'];
   if (avgBpm is num) metadata[cm.MetadataKeys.avgBpm] = avgBpm.toDouble();
+  // The share of the run the average above was taken over. Forwarded
+  // verbatim like `avg_bpm` — every reader grades the range itself
+  // (`hrCoveragePercent`, `_hrCoveragePercent`, the export's
+  // `hrCoverageCell`), and the export deliberately keeps the raw value in
+  // its `metadata` column, so a figure this build cannot interpret is
+  // better stored and refused at render than dropped into the ambiguous
+  // "no key" population `docs/backend/metadata.md` enumerates. Only
+  // finiteness is required, and that is not fastidiousness: `metadata`
+  // is JSON-encoded on the way to Postgres, so a non-finite double throws
+  // and takes the whole run upload with it.
+  final hrCoverage = raw['hr_coverage'];
+  if (hrCoverage is num && hrCoverage.toDouble().isFinite) {
+    metadata[cm.MetadataKeys.hrCoverage] = hrCoverage.toDouble();
+  }
   final activity = raw['activity_type'];
   if (activity is String) metadata[cm.MetadataKeys.activityType] = activity;
   final lastModified = raw['last_modified_at'];
