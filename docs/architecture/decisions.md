@@ -22174,3 +22174,53 @@ retention with nothing saying so louder than a queued `jobs` row and a growing
 bucket. Adding the alarm needs the sweep's post-condition check to move
 somewhere that can raise without also deleting, and the pgtap suite that drives
 that function is outside this lane's tree; it is filed.
+
+## 1173. The already-orphaned export bytes: the remedy the filing named does not exist for this project, and § 1049's own residual was wrong
+
+[§ 1049](#1049) measured that a swept archive's bytes survive on the backend
+with a matching `sha256`, and the followup that tracked the resulting pile said
+erasing it "needs something outside the Storage API: an S3 lifecycle rule on
+the storage bucket keyed on the object prefix, or a one-off operator pass with
+direct backend access." § 1049 left one residual on its own measurement:
+confirming the residue on a real project "still means listing the bucket over
+the S3-compatible endpoint."
+
+Read out of the shipped source of the exact image both CLIs start
+(`storage-api:v1.62.5`), three things:
+
+**The S3-compatible endpoint is a database query.** `S3ProtocolHandler`'s
+`listObjectsV2` calls through to the pg adapter, whose body is
+`SELECT id, name, metadata, updated_at, created_at, last_accessed_at FROM
+storage.objects WHERE bucket_id = $1 ...`. It reads exactly the rows the sweep
+deleted, so it can never show an orphan and cannot be used to confirm the pile.
+That residual is retracted here rather than left standing.
+
+**An S3 lifecycle rule is not available to this project.** On Supabase Cloud
+the storage backend bucket is Supabase's, not the customer's; the only
+S3-shaped surface the project can authenticate to is the one above, which is
+storage-api serving `storage.objects`. So there is no bucket to attach a
+lifecycle rule to. The remedy on Cloud is a Supabase support request. On a
+self-hosted or local stack the operator does own the backend, and there the
+procedure is to enumerate the raw bucket and subtract `storage.objects` — a
+diff, not a lifecycle rule, because the rule would need a prefix and the
+surviving objects are interleaved with live ones under the same prefixes.
+
+**And the orphan's backend key is not derivable from the database.**
+`withOptionalVersion` builds it as `{bucket}/{name}<sep>{version}`, where
+`version` is the `storage.objects` column that went with the row. So even an
+operator holding real backend credentials cannot compute the key of an orphan
+from what the database still knows; enumeration of the backend is the only
+entry. This also confirms the half the filing had right:
+`ObjectStorage.deleteObject` does `findObject(...)` before it touches the
+backend, so a Storage-API DELETE of an orphaned path raises `NotFound` and the
+bytes are untouched — the reaper genuinely cannot reach them, by construction
+rather than by oversight.
+
+The pile is therefore not closable in this repository, and the entry stays
+open with an owner of "an operator". What [§ 1172](#1172) changes is that it is
+now a FIXED pile rather than a growing one: nothing on a schedule deletes one of
+these rows any more, so no new orphan can be created by the retention path that
+made this one. The local measurement could not be repeated in this lane — the
+shared stack's storage volume is empty, having been reset since § 1049 — and a
+count taken from it would be attributable to the reset rather than to the
+sweep, so none is reported.
