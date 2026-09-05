@@ -71,6 +71,8 @@
     <string name="recover_unsaved_run">Recuperar corrida não guardada?</string>
     <string name="save_it">Guardar</string>
     <string name="discard">Descartar</string>
+    <string name="discard_confirm">Descartar?</string>
+    <string name="discard_stake">Não guardada em mais nenhum lado</string>
 
     <string name="battery_allow_background">Permitir atividade em segundo plano</string>
     <string name="battery_samsung_summary">Os relógios Samsung gerem isto no Galaxy Wearable no seu telemóvel.</string>

@@ -22011,3 +22011,39 @@ two lists sharing one requester fail the new guard while passing the old one at
 5 against 5. `RecoveryPromptDisclosureTest` carried a local copy of the same
 count-vs-count check and now calls the shared `RotaryWiring` helper, so the
 takeover cannot drift back to the identifier form on its own.
+
+## 1206. Discard on the Wear crash-recovery prompt is a two-press confirm, not a dialog and not one tap
+
+`discardCheckpoint` called `checkpoints.clear()` on a single tap, and the
+checkpoint is — in § 1107's own words — "the run's only durable record" whenever
+the queue does not hold the run. That is the house
+destructive-action-without-confirm anti-pattern on the most consequential button
+in the app, read by a runner who has just crashed out of a recording. § 1154
+made it worse rather than leaving it unchanged: while the queue is unreadable,
+"Save it" is disabled and Discard is the ONLY enabled control on the screen, so a
+runner who wants their run and finds Save greyed out has exactly one thing left
+to press.
+
+**Two presses inside a window, not a dialog.** The prompt is a full-screen
+takeover on a 192 dp round watch; a modal over a takeover is a second takeover,
+and Wear has no `AlertDialog` idiom in this tree to reach for. The shape taken is
+the estate's own: `apps/custom_watch`'s FACTORY ERASE (§ 378) and PAIR PHONE
+(§ 432) both arm on one press, announce the arm by replacing what the row says,
+and commit only on a second press inside `ERASE_CONFIRM_WINDOW_S`. `ui/ConfirmGuard.kt`
+is that in Kotlin: `confirmPress(armedAtMs, nowMs)` returns `Armed` or
+`Confirmed`, the chip relabels to `discard_confirm` while armed and shows
+`discard_stake` — "Not saved anywhere else" — beside it, and a `LaunchedEffect`
+disarms after `CONFIRM_WINDOW_MS` so a watch put down while armed is not found
+later with a destructive control one press from firing.
+
+Everything that is not a live arm re-arms, including an arm stamped in the
+reader's FUTURE: that is a clock that moved, not a runner who pressed twice, and
+a device disagreeing with itself about the time must not make an irreversible
+action reachable in one press. The decision is a pure function precisely so it
+can be exercised — this module has no Robolectric, so a Compose-resident
+`when` would have been untestable, the same split `PaceAlert.shouldFirePaceAlert`
+already uses. `RecoveryPromptDisclosureTest` pins the wiring: the press is graded
+through `confirmPress`, `onDiscardRecovery()` appears exactly ONCE in the whole
+takeover (an unguarded second call site is the defect wearing a guard), the armed
+label and the stake line both render, and the arm lapses. Discard stays ENABLED
+throughout — § 1154's reason for that is untouched, and a guard is not a lock.

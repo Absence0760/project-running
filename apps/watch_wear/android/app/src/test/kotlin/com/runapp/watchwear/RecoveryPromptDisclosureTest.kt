@@ -59,7 +59,10 @@ class RecoveryPromptDisclosureTest {
     fun `Save it is disabled while the queue is unreadable and Discard is not`() {
         val block = prompt()
         val save = block.indexOf("R.string.save_it")
-        val discard = block.indexOf("R.string.discard")
+        // Word-boundary: `discard_confirm` (the armed label) and `discard_stake`
+        // (the armed warning) both sit inside this block and both start with
+        // the same eight characters, so a bare indexOf lands on the Save chip.
+        val discard = Regex("""R\.string\.discard\b""").find(block)?.range?.first ?: -1
         assertTrue("expected a Save it chip", save >= 0)
         assertTrue("expected a Discard chip", discard >= 0)
         assertTrue("expected Save it before Discard", save < discard)
@@ -80,6 +83,49 @@ class RecoveryPromptDisclosureTest {
             "\"Discard\" must stay live — it is the only exit from a takeover with " +
                 "no Start button: $discardChip",
             !discardChip.contains("enabled"),
+        )
+    }
+
+    @Test
+    fun `Discard is behind a two-press confirm that announces the arm and the stake`() {
+        // The checkpoint is the run's only durable record while the queue does
+        // not hold it (§ 1107), and since § 1154 Discard is the only ENABLED
+        // control on the screen whenever the queue is unreadable — so a runner
+        // who wants their run and finds "Save it" greyed out has exactly one
+        // thing left to press. One tap must not destroy it (decisions § 1206).
+        val block = prompt()
+        val discardChip = block.substring(
+            block.lastIndexOf("Chip(", block.indexOf("R.string.discard_confirm")),
+        )
+        assertTrue(
+            "the Discard chip must grade its press through `confirmPress` rather than " +
+                "calling the destructive callback directly: $discardChip",
+            Regex("""confirmPress\(discardArmedAtMs""").containsMatchIn(discardChip),
+        )
+        assertTrue(
+            "only the CONFIRMED branch may discard — a first press must arm and do " +
+                "nothing else: $discardChip",
+            Regex("""ConfirmPress\.Confirmed\s*->\s*\{[^}]*onDiscardRecovery\(\)""")
+                .containsMatchIn(discardChip),
+        )
+        assertTrue(
+            "`onDiscardRecovery` must be reachable from nowhere else in the takeover — " +
+                "an unguarded second call site is the defect wearing a guard",
+            Regex("""onDiscardRecovery\(\)""").findAll(block).count() == 1,
+        )
+        assertTrue(
+            "the armed state must change the label — an arm nobody can see reads as a " +
+                "dead button, and the next press then lands on a live discard",
+            block.contains("R.string.discard_confirm"),
+        )
+        assertTrue(
+            "the arm must name the stake: this checkpoint exists nowhere else",
+            block.contains("R.string.discard_stake"),
+        )
+        assertTrue(
+            "the arm must lapse on its own, or a watch put down while armed comes " +
+                "back with a destructive control one tap from firing",
+            Regex("""delay\(CONFIRM_WINDOW_MS\)""").containsMatchIn(block),
         )
     }
 
