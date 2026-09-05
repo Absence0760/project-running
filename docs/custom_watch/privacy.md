@@ -18,7 +18,7 @@ Recorded as [decisions § 377](../architecture/decisions.md), and amended by
 [§ 378](../architecture/decisions.md), which closed the largest gap this page
 opened with: **there is now a user-reachable factory erase** — a guarded
 settings-menu row, reachable on the device alone. See
-[*The erase*](#the-erase-378) below.
+[*The erase*](#the-erase--378) below.
 
 ## What the watch holds
 
@@ -251,7 +251,7 @@ deleting.
 
 1. ~~**No user-reachable erase — the largest gap on this page.**~~ **Closed
    2026-07-31 by [§ 378](../architecture/decisions.md)** — see
-   [*The erase*](#the-erase-378) above. What is left of it is one bench item
+   [*The erase*](#the-erase--378) above. What is left of it is one bench item
    (that the page erase really returns the slots to `0xFF`, which Renode cannot
    settle) and one bounded limit (a live BLE connection is not torn down; the
    durable bond is). Kept as item 1 rather than deleted, because the two items
