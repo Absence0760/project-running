@@ -173,8 +173,13 @@ gap_raw = read("source/GradeAdjustedPaceView.mc")
 gap = strip_comments(gap_raw)
 
 # Vacuity guard: everything below reads this file, so a rename that made the
-# reads return nothing would pass silently.
-if "class GradeAdjustedPaceView" not in gap:
+# reads return nothing would pass silently. Matched on a word boundary rather
+# than as a substring — `class GradeAdjustedPaceViewV2` CONTAINS the name, so a
+# substring test reported the class present while `body_of`, which ends the
+# name correctly, found none; claim 1's `onTimerReset` half and the whole of
+# claim 6 then skipped themselves and the guard passed on a field with no
+# reset override and no unit read at all.
+if re.search(r"\bclass\s+GradeAdjustedPaceView\b", gap) is None:
     fail(
         "source/GradeAdjustedPaceView.mc no longer declares "
         "`class GradeAdjustedPaceView` — every claim below reads it and would "
@@ -230,7 +235,14 @@ else:
                 )
 
 view = body_of(gap, "class GradeAdjustedPaceView")
-if view is not None:
+if view is None:
+    fail(
+        "no `class GradeAdjustedPaceView` body in "
+        "source/GradeAdjustedPaceView.mc. Two claims read it — the "
+        "`onTimerReset` override and the pace-unit preference — and both would "
+        "otherwise skip themselves rather than fail."
+    )
+else:
     timer_reset = body_of(view, "function onTimerReset")
     if timer_reset is None:
         fail(
