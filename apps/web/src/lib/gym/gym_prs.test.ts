@@ -265,15 +265,14 @@ test('the frozen fold table is 1:1, ascending and unchained', () => {
 	);
 });
 
-test('the frozen fold table is the simple lowercase mapping of the version it names', () => {
+test('the frozen fold table is the simple lowercase mapping of the version it names', (t) => {
 	// The table is FROZEN, so a newer Node folding more letters is not drift —
 	// it is the next migration's work. This checks the table against the data it
 	// was rendered from only when the two are the same version, and says so
 	// rather than passing silently when they are not.
 	if (process.versions.unicode !== EXERCISE_FOLD_UNICODE_VERSION) {
-		assert.ok(
-			true,
-			`skipped: this Node carries Unicode ${process.versions.unicode}, the table is frozen at ${EXERCISE_FOLD_UNICODE_VERSION}`,
+		t.skip(
+			`this Node carries Unicode ${process.versions.unicode}, the table is frozen at ${EXERCISE_FOLD_UNICODE_VERSION} — the cross-check needs the two to match`,
 		);
 		return;
 	}

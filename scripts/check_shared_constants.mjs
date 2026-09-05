@@ -1522,10 +1522,10 @@ export const REGISTRY = [
 	{
 		name: 'exercise-name whitespace class',
 		why:
-			'The exercise grouping key is derived on three rails and PERSISTED by ' +
-			'the clients as gym_routine_exercises.exercise_key and ' +
-			'exercises.name_key, while four SQL RPCs re-derive it from ' +
-			'gym_sets.exercise_name at read time. A name one rail folds and another ' +
+			'The exercise grouping key is derived on three rails and PERSISTED as ' +
+			'gym_sets.exercise_key (server-stamped), ' +
+			'gym_routine_exercises.exercise_key and exercises.name_key (both ' +
+			'client-stamped). A name one rail folds and another ' +
 			'does not splits one exercise into two buckets: the local PR tracker ' +
 			'says PR where gym_workout_summaries.is_pr says no, and ' +
 			'gym_exercise_set_history returns an empty history for a lift that ' +
