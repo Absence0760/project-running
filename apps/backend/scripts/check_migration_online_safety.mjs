@@ -413,6 +413,18 @@ export function auditMigrations(migrations, allowlist = GRANDFATHERED_VIOLATIONS
   };
 }
 
+// If you are reading this because a migration you are WRITING failed, the fix
+// is to split it — the file is not applied yet, so it can still be edited.
+// GRANDFATHERED_VIOLATIONS is not the other half of a choice: it exists for
+// migrations already applied to production, where the schema only moves forward
+// and the SQL is uneditable. Every entry in it today is that. Adding one for an
+// unmerged file ships the downtime and records that we meant to.
+const GRANDFATHER_ADVICE =
+  `If this migration is not merged yet, SPLIT IT — that is the fix, and it costs one more file. ` +
+  `GRANDFATHERED_VIOLATIONS is for migrations already applied to prod, which cannot be edited; ` +
+  `naming an unmerged file there ships the blocking scan on purpose, so it needs the table to be ` +
+  `genuinely small despite being in GUARDED_TABLES, and a reason in the PR.`;
+
 function main() {
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
   const migrations = files.map((filename) => ({
@@ -452,18 +464,17 @@ function main() {
             `to the high-volume table "${table}" without NOT VALID: "${statement}". A single-step ` +
             `ADD CONSTRAINT scans every existing row under a blocking lock — downtime against ` +
             `prod. Split it into "ADD CONSTRAINT ... NOT VALID" here and a separate "VALIDATE ` +
-            `CONSTRAINT" in a LATER migration. See docs/backend/migration_locks.md. If this ` +
-            `constraint is genuinely safe to validate inline, name it in ` +
-            `GRANDFATHERED_VIOLATIONS in this script and say why in the PR.`
+            `CONSTRAINT" in a LATER migration file. See docs/backend/migration_locks.md. ` +
+            GRANDFATHER_ADVICE
         : `::error file=apps/backend/supabase/migrations/${filename}::${filename} validates ` +
             `${named} on the high-volume table "${table}" in the same file that already took a ` +
             `write-blocking lock on it: "${statement}". Each migration file is applied inside one ` +
             `transaction, and a lock taken by DDL is held until that transaction ends — so the ` +
             `VALIDATE's SHARE UPDATE EXCLUSIVE is subsumed by the earlier lock, not a downgrade, ` +
             `and the scan blocks writers for its whole length exactly as a single-step ADD would. ` +
-            `Move the VALIDATE CONSTRAINT into a LATER migration, in its own transaction. See ` +
-            `docs/backend/migration_locks.md. If this table is genuinely small enough for the ` +
-            `scan not to matter, name it in GRANDFATHERED_VIOLATIONS and say why in the PR.`,
+            `Move the VALIDATE CONSTRAINT into a LATER migration file, so it runs in its own ` +
+            `transaction with no stronger lock held. See docs/backend/migration_locks.md. ` +
+            GRANDFATHER_ADVICE,
     );
   }
   for (const { filename, kind, table, constraint } of audit.unmatched) {
