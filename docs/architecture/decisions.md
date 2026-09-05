@@ -22261,6 +22261,169 @@ The section also said "Model it on `20260621_001_runs_track_url_path_check.sql` 
 
 The generalisation: prose about a guard can be stale and merely unhelpful, but an **example** is executable advice. When a guard's rule changes, the examples that demonstrate the old rule are the first thing to re-read, and they are worth grepping for by shape rather than by the guard's name — this block never mentioned `check_migration_online_safety.mjs` at all, so a search for references to the guard would not have found it. Both messages the guard prints now also say which fix is wanted: split the file if it is not merged yet, and reserve `GRANDFATHERED_VIOLATIONS` for migrations already applied to prod, which cannot be edited.
 
+## 1185. The web Supabase client has never been given its `Database` generic, so the casts the run-detail data layer dropped were turning off a check that does not exist
+
+`data.ts`'s events enrichment called the going-count RPC as
+`supabase.rpc('event_next_instance_going_counts' as never, {...} as never)` under
+a comment reading "Not yet in database.types.ts (orchestrator regenerates on
+landing the 20270122_001 migration); the RPC name is cast until then." That
+migration landed long ago and `database.types.ts` carries the routine with
+exactly the argument shape the call passes, so the filing that asked for the
+casts to be dropped was right about them being stale. Both are gone, together
+with the sibling `return data as never` in `fetchRunsOnRoute`, and a guard in
+`data.test.ts` now fails the PR when any `.rpc()` in the file names its function
+as anything but a bare string literal.
+
+The filing's stated *benefit* — "let `tsc` check the argument shape" — is where
+it was wrong, and measuring it is the finding. `core/supabase.ts` calls
+`createBrowserClient(url, key)` with **no `Database` generic**, and the
+declaration defaults it to `any`. Nothing augments it (`app.d.ts` carries a bare
+`SupabaseClient`). So `.from(...)`, `.select(...)` and `.rpc(...)` are all
+unchecked everywhere in the web app: a renamed function, a dropped `p_*`
+parameter or a select list that omits a column the caller's declared type
+requires all ship green. The generated, committed, CI-drift-checked
+`database.types.ts` reaches the hand-written row overlays in `types.ts` and
+stops there. Two comments in `data.ts` describe protections that follow from a
+typed client and therefore describe nothing.
+
+Passing the generic was measured rather than assumed: `svelte-check` reports
+**79 errors across 10 files**, 62 of them in `data.ts` — 15 `string | null` vs
+`string | undefined` write-shape mismatches, 13 `Record<string, unknown>` into a
+`Json` parameter, plus narrowings in `backup.ts`, `settings.ts`,
+`stores/auth.svelte.ts`, `PlanEditor.svelte` and four route files. That spans
+four other trees and is not a change one lane may make; it is filed with the
+measurement. The `.rpc()` guard is kept regardless: it holds the call sites in
+the shape the generic will check the day it is passed, and it is the only thing
+that would notice a cast creeping back in the meantime.
+
+## 1186. The live-hub socket caught a spectator's ping handler inside the guard meant for corrupt frames, so a runner's position stopped advancing with nothing logged
+
+`createReconnectingSocket`'s `onmessage` wrapped both the `JSON.parse` of the
+frame **and** the `opts.onPing(p)` dispatch in one `try`, whose comment excused
+it as "drop malformed frames … a corrupt frame must not kill the loop". A
+consumer that throws is not a corrupt frame. `/live/[id]`'s handler reads
+`p.lat` / `p.lng` straight off the parsed value and then mutates page state, so
+a frame that parses to `null` (`JSON.parse('null')` succeeds), or any throw
+inside `pushPing`, was swallowed as if the wire had been garbled — and because
+the throw happened before `status = 'live'`, the page kept whatever status it
+already had. The socket stayed open, `onStatus` kept reporting `open`, every
+ping was discarded, and the spectator watched a frozen dot with nothing in the
+console. On the surfaces this exists for — a Moab or UTMB spectator judging
+whether a runner is still moving — that is the failure the freshness work was
+built to make impossible, arriving through the one path freshness cannot see.
+
+The parse is now the only thing inside the guard, and the dispatch is outside
+it. The distinction is already drawn one function up: `emitStatus` has its own
+`try` because status callbacks are explicitly advisory. `onPing` is the whole
+point of the socket, so its failure surfaces to the browser's error reporting
+instead of being spent as a dropped frame. The loop is unaffected — a throw in
+an event handler does not close a WebSocket — and the new test pins all three
+claims: an unparseable frame is dropped, a throwing handler propagates, and the
+socket keeps delivering afterwards.
+
+## 1187. Two run measurements had two implementations each in one tree, and both divergences were invisible to every guard the repo has
+
+**The climb.** Migration `20270302_001` promoted total ascent to
+`runs.elevation_gain_m` and left `metadata.elevation_m` for the rows written
+before it. Three surfaces then answered "what did this run climb" three ways:
+the `/runs` card read only the jsonb key, `recap.ts` read the column and fell
+back to the key, and `/runs/[id]` — the page dedicated to that one run — read
+neither, measuring the climb off the track and rendering no cell at all when the
+track carried no altitude. A Strava activity under the importer's 200 m stream
+threshold, or one whose stream carried no altitude, therefore had its ascent
+counted by the `/runs` card, by the Year-in-Running total and by the vert
+challenge board, and stated by nothing on its own detail page. The stored
+reading now has one home, `key_stats.storedElevationGainM`, which `recap.ts`
+consumes instead of its private copy and which the detail page falls back to
+when the track cannot measure the climb. The measured value still wins where it
+exists: it is the same samples the elevation profile beside it is drawn from.
+Absent stays null rather than 0, per § 1164.
+
+**The distance.** `grade_adjusted_pace.ts` carried a **private** copy of
+`haversineMetres` that never received the clamp `run_stats.ts` grew, so on a
+near-antipodal pair the haversine `a` rounds to `1.0000000000000002` and
+`Math.sqrt(1 - a)` is NaN — measured on `(-87.5, 0) → (87.5, 180)`: unclamped
+NaN, clamped 20015086.796. Every downstream guard is NaN-permissive (`NaN <
+MIN_SEGMENT_M` is false, so the anchor walk never resets again; `NaN <= 0` is
+false, so the null return is skipped), so one bad fix pair returned NaN out of a
+`number | null` signature and the detail page's GAP cell, GAP split column and
+grade-adjusted pacing verdict all vanished together — each is gated on
+`Math.abs(gap − raw) >= 2`, which NaN fails. The **Dart half of the same
+registered parity pair** imports the clamped helper from `run_stats.dart`, so
+the pair was divergent and the phone rendered a real GAP on a track the web
+dropped it for. The copy is deleted and the shared helper imported; a source
+assertion in the pair's own suite now fails on a second copy of the formula in
+that file, because nothing in this repo compares two helpers on the same
+platform and only the pair's suites could ever have caught it — and neither had
+an antipodal case.
+
+## 1188. The web workout review contradicted the phone about the same run, twice, in eleven lines
+
+`runs.metadata.workout_step_results` is a schemaless bag the phone recorder
+writes and both review tables read, so nothing typechecks across the seam and
+both rails have to be read to know what it holds. Two arithmetic steps on the
+web side disagreed with the recorder:
+
+- **`rep_total` on a recovery step is already the recovery count.** The runner
+  emits one recovery *between* consecutive reps and stamps `repTotal: count - 1`
+  on it. The page subtracted one again, so a 6×400 rendered "Recovery 1/4" …
+  **"Recovery 5/4"**, a fraction that cannot exist, and a 2-rep workout rendered
+  "Recovery 1/0". The phone shows "Recovery 1/5" off the identical rows. The
+  same table's `rep` branch did not subtract, so two rows of one table applied
+  different arithmetic to one field.
+- **Pace adherence was graded against a literal 10 s/km.** The Workout editor
+  offers a 0–60 s/km tolerance, the recorder resolves it and stamps
+  `tolerance_sec_per_km` on every step result, and the phone's `paceDeltaOf`
+  reads it. The web comment claimed the literal "matches the recorder's default
+  tolerance", which was true only of the default. A step a coach authored at
+  25 s/km and missed by 18 graded **green on the phone and amber on the web**;
+  at 30 off, amber on the phone and red on the web.
+
+Both are fixed by reading what is written. `docs/backend/metadata.md`'s shape
+for the key was also short of `tolerance_sec_per_km` and is now current, and a
+guard reads the recorder's Dart source alongside the page so a change to either
+rail fails the PR — the same cross-rail idiom `data.test.ts` already applies to
+`api_client.dart`.
+
+## 1189. Three run and club surfaces answered from evidence that could not support the answer
+
+Three unrelated reads, one shape: each stated something confidently from state
+that was not what it had measured.
+
+**A club's upcoming events were its 200 oldest rows.** `fetchUpcomingEvents`
+ordered `starts_at` ascending under `.limit(200)` with **no server-side
+predicate at all**, then filtered for future occurrences in the browser — so a
+club with more than 200 finished one-offs (a weekly series reaches that in four
+years) pushed every future event past the cap and its Events tab reported "no
+upcoming events" permanently, degrading gradually as the club aged. The
+function's own comment described the WHERE clause it did not have. The candidate
+set is now narrowed on the server: future one-offs, plus recurring series with
+no until-date or an until-date still ahead. It stays a deliberate superset — a
+count-limited series carries no until-date and only `nextLiveInstance` can
+retire it. The clauses are spelled flat rather than nesting an `or(` inside an
+`and(`, because a filter PostgREST cannot parse 400s into the discarded `error`
+and empties the tab in exactly the way being fixed.
+
+**A failed read was treated as proof of non-ownership.** `/runs/[id]` fell back
+to `fetchPublicRunAttribution` whenever `fetchRunById` returned no row.
+`fetchRunById` reports "not yours / no such run" and "could not find out"
+separately, precisely so a caller can tell them apart, and `public_runs` carries
+no owner exclusion — so on a transient failure over the viewer's **own public
+run** the attribution read succeeded and the page rendered the read-only
+stranger view, attributed to the viewer themselves, with every edit / delete /
+visibility / export control gone. The retry card existed but sat in a later
+template branch and never showed. The fallback is now gated on the owner read
+having answered.
+
+**A bulk delete reconciled against a set the user could still edit.** The
+`/runs` delete captured its ids, ran `deleteRunsBounded` (waves of 8, several
+round trips per run, `allSettled`) for many seconds, and then filtered the
+in-memory list against the **live** `selected` set. Only the Delete button is
+disabled during that window; the cards stay tappable. Un-selecting a run already
+gone from the server left a ghost card that 404s on tap, and selecting another
+dropped a run that still exists. It reconciles against the captured ids now —
+the only set the server was actually asked about.
+
 ## 1190. A share injector strips exactly the signals its own head emits — and for the run injector that is a per-call answer, not a fixed list
 
 `head_splice.ts` takes a signal LIST rather than doing everything, and § 1114 /
@@ -23252,4 +23415,147 @@ value into the reason a surface shows, keys three of its branches off
 `errorStatus` (429, 401/403, 413), and adding 405 there is one branch in an
 existing registered pair. That is where the work would go — not into a new pair
 whose web half is a response builder.
+
+## 1220. Four reads answered "there is nothing here" when what had happened was "the read failed", and the worst of them told a stranger a shared run does not exist
+
+supabase-js **resolves** `{data: null, error}` rather than throwing, so
+`const { data } = await …` collapses a transport fault, an RLS refusal and a
+genuinely absent row into one indistinguishable null. `fetchRunById` and
+`fetchClubBySlug` were each repaired for exactly that and carry comments saying
+so. Four more reads still had it, and each rendered a confident falsehood
+rather than an unhelpful truth:
+
+- **`fetchPublicRun`** backs `/share/run/[id]` and the non-owner branch of
+  `/runs/[id]`. A failed read rendered **"Run not found."** to every recipient
+  of a link the runner shared. This is the sharpest of the four for a reason
+  the other three do not have: the person who hits it is usually not the owner,
+  has no other way to check, and reasonably concludes the run was deleted or
+  they were blocked. It now mirrors `fetchRunById` character for character —
+  `PGRST116` is the only code that reads as a genuine miss — and
+  `RunShareView` grew a `loadError` branch with a retry beside the existing
+  `notFound` one. The copy is `runDetail.loadErrorTitle` / `runDetail.retry`,
+  reused rather than added: the component already resolves `shell.loading`
+  across namespaces, and adding a key means editing seven catalogues in a tree
+  this lane does not own.
+- **`fetchPublicRunAttribution`** is the entitlement read behind the same
+  non-owner branch. A failure returned null, which the caller reads as "you are
+  not the owner" — the identical mistake § 1189 closed one call earlier in the
+  same function. It reports separately now, and `/runs/[id]` routes that
+  failure to the retry card instead of "Run not found".
+- **`fetchRoutesWithError`** exists *specifically* so a failure is not rendered
+  as an empty state — and then checked only the owned-routes read, taking
+  `?? []` on all three saved-route reads. A failed `saved_routes` read
+  therefore rendered the runner's own routes with `error: null` beside them and
+  their bookmarks silently gone. Both saved-body reads are checked too: the
+  base table carries their own and club-visible saved routes, the
+  `public_routes` view carries everything they saved from someone else — the
+  dominant case, per the function's own comment.
+- **`enrichClubs`** derived `viewer_role` from one `club_members` read whose
+  error was discarded. `viewer_role: null` is the assertion "you are not a
+  member": it decides whether an owner gets their admin controls, whether a
+  member is offered "Join", and whether `fetchClubBySlug` fetches an invite
+  token at all. A blip logged every member out of their own club, under
+  `error: null`. It returns `{ clubs, error }` now — the shape all four callers
+  already return, so three hand it straight back.
+- **`fetchFundraiserForRun` / `fetchFundraiserForEvent`** returned null on error
+  where their own sibling `fetchFundraiserById` throws, with a comment
+  explaining that a donor must get a retry rather than being told the campaign
+  does not exist. They throw now. `FundraiserSection` already catches, with a
+  deliberate policy (a transient failure must not hide the owner's "Create
+  fundraiser" CTA) — a branch that could never execute while the error was
+  being swallowed upstream. Turning that degradation into a visible retry needs
+  new copy and is filed.
+
+Five source guards pin the set, each negative-tested by reverting the fix and
+confirming the failure message names the right claim. One of them counts
+`enrichClubs` call sites *and* checks each one propagates: the first draft
+counted only, which a caller writing
+`{ clubs: (await enrichClubs(rows)).clubs, error: null }` walks straight past —
+the original defect wearing the new shape.
+
+## 1221. The recap anchored "current streak" at 31 December, so the card for the year you are living in reported every live streak as zero — and its test agreed for a second, wrong reason
+
+`buildYearInRunningRecap` anchored `computeRunStreaks` at
+`new Date(year, 11, 31, 23, 59)`, and the month builder at the last day of its
+month. `computeRunStreaks` ignores runs after its anchor and begins the
+backward walk at the anchor day, falling back to the Strava grace day before
+it. For a **past** period that is right. For the period you are *in* — the only
+card anyone opens while a streak is running — the anchor is in the future, so
+the walk looked for a run on 31 December, then on 30 December, found neither,
+and returned `current: 0`. A runner on a live 40-day streak got a zero. The
+anchor is now the earlier of the period's end and `now`, threaded in as an
+optional parameter so it stays stateable in a test; `best` keeps the period's
+own end, so a past year's card still clamps at its own 31 December instead of
+being dragged forward.
+
+The more dangerous half was the test. `recap.test.ts` asserted
+`currentStreakDays === 0` on a fixture whose runs are in January 2026, with the
+comment "Anchored at 31 Dec 2026, nine months after the last run" — a correct
+expectation reached through the defect's own reasoning. It would have survived
+the fix unchanged and gone on passing, so the regression could return in
+silence. Two things were done rather than one: that assertion now states its
+`now` explicitly and says in comment form why it is 0 for a real reason, and a
+new pair of tests covers the case it never exercised — a streak running up to
+and including today, the same streak one day before today's run (proving the
+grace day still applies at the near end), and a past year's card proving it
+still clamps. Reverting the anchor fix now fails with
+`a streak running up to and including today is the current streak — actual: 0,
+expected: 4`, which names the thing that broke.
+
+`recap` is an enforced TS↔Dart parity pair and **the pair is temporarily
+diverged**: `apps/mobile_android/lib/recap.dart` still anchors at
+`DateTime(year, 12, 31, 23, 59)` and `DateTime(year, month + 1, 0, 23, 59)`.
+The Dart half is another lane's tree, so it is filed with the exact lines and
+the same `now`-parameter shape. Mobile's `recapSnapshotJson` serialises this
+field into `public_recaps`, so until it lands a phone-published snapshot of an
+in-progress period carries the zero.
+
+## 1222. Two "exact" tallies counted a page of rows and called it the set, one of them on the paid-registration path
+
+PostgREST returns at most its configured row ceiling and gives the client no
+signal when it truncates. Measured on the stack this repo runs:
+`PGRST_DB_MAX_ROWS=1000` on PostgREST v14.14, and a plain read comes back
+`Content-Range: 0-11/*` — the total is literally `*`, unknown. Only an explicit
+exact count fills it in (`Content-Range: 0-11/12`). So a tally built by
+counting the rows a `.select()` returned is a count of the page, presented as a
+count of the set, and nothing in the response says otherwise.
+
+**`fetchEventRsvpSummary`** carried a doc comment promising that the
+going/maybe/declined/waitlisted counts "must stay exact even when the displayed
+roster is only its first page", and then read every attendee row for the
+instance and tallied them in a loop. Past the ceiling the capacity and waitlist
+math believes a full event has room. Worse, the same page supplied
+`viewerStatus`: the viewer's own row could fall outside it, `viewerStatus` read
+null, and the page re-showed "Register for £X" to someone who had already paid
+— burning a Stripe session and a capacity-holding pending order. It is now four
+`count: 'exact', head: true` requests (a `count(*)` over the filtered set, not
+subject to the row cap, transferring no rows) plus one scoped single-row read
+for the viewer's own status, all issued together. Five round trips became one
+wall-clock wait and the bytes went to roughly zero.
+
+**`fetchChallenges` and `fetchChallengeById`** lengthed a
+`challenge_participants` array for a number that is already a column on the row
+they had already fetched: `challenges.participant_count`, the
+trigger-maintained, self-healing, client-write-frozen cache added by
+`20270308_001` and documented in `derived_state.md`. `select('*')` was carrying
+it the whole time. This is the same shape `clubs.member_count` was created to
+remove (issue #331), and `enrichClubs`'s own comment says so one screen away.
+The list read also spanned every listed challenge at once, so a couple of
+popular public boards were enough to exhaust the page — every board then
+under-reported, and a genuine participant's own row could fall outside it,
+emptying their "My challenges" tab and offering them "Join" on a challenge they
+were in. Both now read the cache and scope the membership read to the caller,
+which bounds it by the number of challenges listed rather than by how many
+people are in them.
+
+**Postscript — § 1189's `.or()` clause, now verified.** That entry pushed the
+upcoming-events predicate server-side and recorded that the filter had not been
+executed against a live PostgREST, because doing so appeared to require an API
+key. It does not: Kong enforces the key, PostgREST's own port does not, so the
+clause can be exercised from inside the compose network with no credential in
+play. Result: HTTP 200 with rows. A deliberately malformed control returned
+`400 PGRST100 "failed to parse logic tree"`, proving the probe can tell the
+difference. Semantics checked against SQL ground truth on the same data: 12
+events total, the predicate admits 9 and excludes exactly the 3 finished
+one-offs, and PostgREST returns the same 9 through the client-facing path.
 

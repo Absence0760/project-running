@@ -447,8 +447,56 @@ test('buildYearInRunningRecap: the 2026 best streak counts the December 2025 day
 	// …but the streak spans the boundary, so dropping the 2025 runs from the
 	// input would report 3 here instead of 7.
 	assert.equal(r.bestStreakDays, 7);
-	// Anchored at 31 Dec 2026, nine months after the last run.
+	// `now` is stated, not inherited from the clock. Read against a January
+	// 2027 reader the January 2026 streak is long dead, and that is the ONLY
+	// reason this is 0 — before the anchor fix the assertion held for a
+	// second, wrong reason (the card anchored at 31 Dec 2026 regardless of
+	// when it was opened), so it stayed green over the live-streak case it
+	// never exercised. The test below is that case.
 	assert.equal(r.currentStreakDays, 0);
+});
+
+test('buildYearInRunningRecap: the card for the year you are IN reports the live streak', () => {
+	// The anchor used to be 31 Dec of the card's year unconditionally. For the
+	// current year that day is in the future, so `computeRunStreaks` looked for
+	// a run on 31 Dec, then on its grace day of 30 Dec, found neither, and
+	// returned 0 — every runner opening their own in-progress recap on a live
+	// streak was told they had none.
+	const now = new Date(2026, 2, 10, 9, 0); // 10 Mar 2026, 09:00 local
+	const runs = ['2026-03-07', '2026-03-08', '2026-03-09', '2026-03-10'].map((day) =>
+		mkRun({ startedAt: `${day}T07:00:00`, distance_m: 5000, duration_s: 1500 }),
+	);
+	const r = buildYearInRunningRecap(runs, 2026, {}, now);
+	assert.equal(
+		r.currentStreakDays,
+		4,
+		'a streak running up to and including today is the current streak',
+	);
+	assert.equal(r.bestStreakDays, 4);
+
+	// The Strava grace day still applies at the near end: no run yet today,
+	// but yesterday had one, so the streak is alive at its pre-today length.
+	const beforeTodaysRun = buildYearInRunningRecap(runs.slice(0, 3), 2026, {}, now);
+	assert.equal(
+		beforeTodaysRun.currentStreakDays,
+		3,
+		'the grace day keeps a streak alive on a morning before the run',
+	);
+
+	// And a past year's card is unaffected: it still clamps at its own 31 Dec
+	// rather than being dragged forward to now.
+	const pastYear = buildYearInRunningRecap(boundaryStreakRuns(), 2025, {}, now);
+	assert.equal(pastYear.currentStreakDays, 4);
+});
+
+test('buildMonthInRunningRecap: the month you are IN reports the live streak', () => {
+	const now = new Date(2026, 2, 10, 9, 0);
+	const runs = ['2026-03-07', '2026-03-08', '2026-03-09', '2026-03-10'].map((day) =>
+		mkRun({ startedAt: `${day}T07:00:00`, distance_m: 5000, duration_s: 1500 }),
+	);
+	assert.equal(buildMonthInRunningRecap(runs, 2026, 3, {}, now).currentStreakDays, 4);
+	// A finished month still clamps at its own last day.
+	assert.equal(buildMonthInRunningRecap(boundaryStreakRuns(), 2025, 12, {}, now).currentStreakDays, 4);
 });
 
 test('buildYearInRunningRecap: the 2025 card clamps the streak at 31 Dec 2025', () => {

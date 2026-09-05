@@ -49,7 +49,12 @@
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
 	import { movingTimeSeconds, computeRealSplits } from '$lib/runs/run_stats';
 	import { computeElevationGain } from '$lib/routes/route_simplify';
-	import { cadenceSpm, elevationSourceTrack, stepCount } from '$lib/runs/key_stats';
+	import {
+		cadenceSpm,
+		elevationSourceTrack,
+		stepCount,
+		storedElevationGainM,
+	} from '$lib/runs/key_stats';
 	import { gradeAdjustedPaceSecPerKm } from '$lib/runs/grade_adjusted_pace';
 	import {
 		analysePacing,
@@ -214,7 +219,24 @@
 			// comments — rather than the not-found state a public run used
 			// to get here (issue #666; every "a runner you follow finished
 			// a run" link landed on "Run not found").
-			otherRunOwner = await fetchPublicRunAttribution(pageData.id);
+			//
+			// Only when the owner read actually ANSWERED, though.
+			// `fetchRunById` reports "no such run / not yours" and "could not
+			// find out" separately for this reason: `public_runs` carries no
+			// owner exclusion, so on a transient failure over the viewer's OWN
+			// public run the attribution read succeeds, and the page rendered
+			// the read-only stranger view — attributed to the viewer
+			// themselves, every edit / delete / visibility / export control
+			// gone — while the template's retry card sat behind it in a later
+			// branch and never showed.
+			if (!runError) {
+				const attr = await fetchPublicRunAttribution(pageData.id);
+				otherRunOwner = attr.attribution;
+				// A failed attribution read establishes nothing either, so it
+				// takes the same path the owner read's failure does rather
+				// than falling through to "Run not found".
+				loadError = attr.error;
+			}
 			loading = false;
 			// None of the background work below is reachable for a
 			// non-owner: the matched track, route suggestion, linked
@@ -441,6 +463,10 @@
 		target_duration_s?: number;
 		target_pace_sec_per_km: number;
 		actual_pace_sec_per_km: number | null;
+		// Per-step pace tolerance the workout was authored with. The editor
+		// offers 0-60 s/km and the recorder stamps whatever was armed, so a
+		// literal here grades the run against a number the author overrode.
+		tolerance_sec_per_km?: number;
 		duration_s: number;
 		status: 'completed' | 'skipped';
 	}
@@ -484,8 +510,12 @@
 					? m('runDetail.stepRepNumbered', { index: s.rep_index, total: s.rep_total })
 					: m('runDetail.stepRep');
 			case 'recovery':
+				// `rep_total` is already the recovery count, not the rep count:
+				// the recorder emits one recovery BETWEEN reps and stamps
+				// `repTotal: count - 1` on it. Subtracting again rendered the
+				// last recovery of a 6x400 as "Recovery 5/4".
 				return s.rep_index && s.rep_total
-					? m('runDetail.stepRecoveryNumbered', { index: s.rep_index, total: s.rep_total - 1 })
+					? m('runDetail.stepRecoveryNumbered', { index: s.rep_index, total: s.rep_total })
 					: m('runDetail.stepRecovery');
 			default:
 				return s.kind;
@@ -500,8 +530,8 @@
 		// The pace column shows /mi for miles users; the delta must match
 		// or "+12s" reads as sec/km against a sec/mi pace. Convert the
 		// displayed seconds to the preferred unit (the on/amber/off colour
-		// band in paceDeltaClass stays canonical sec/km — a fixed adherence
-		// tolerance, not a display number).
+		// band in paceDeltaClass stays canonical sec/km — the workout's own
+		// adherence tolerance, not a display number).
 		const d = getUnit() === 'mi' ? dPerKm * (METRES_PER_MILE / 1000) : dPerKm;
 		const sign = d > 0 ? '+' : '−';
 		return `${sign}${Math.abs(Math.round(d))}s`;
@@ -510,7 +540,11 @@
 	function paceDeltaClass(s: WorkoutStepResult): string {
 		if (s.actual_pace_sec_per_km == null) return 'neutral';
 		const d = Math.abs(s.actual_pace_sec_per_km - s.target_pace_sec_per_km);
-		const tol = 10; // matches the recorder's default tolerance
+		// The workout's OWN tolerance, which the recorder stamps on every step
+		// result. A coach who set 25 s/km on the plan workout had the phone
+		// grade the step green and this page grade the same step amber.
+		const stamped = s.tolerance_sec_per_km;
+		const tol = typeof stamped === 'number' && Number.isFinite(stamped) ? stamped : 10;
 		if (d <= tol) return 'on';
 		if (d <= tol * 2) return 'amber';
 		return 'off';
@@ -811,6 +845,20 @@
 	 *  a real 0 m over a track that did measure it still renders. */
 	let realElevationGain = $derived(elevationTrack ? Math.round(computeElevationGain(elevationTrack)) : null);
 
+	/** What the page may say the climb was. The measured track wins — it is the
+	 *  same samples the elevation profile below is drawn from, so a different
+	 *  number beside that chart would contradict it. Falling back to the row's
+	 *  own ascent is what closes the gap: a summary import (a Strava activity
+	 *  under the 200 m stream threshold, or one whose stream carried no
+	 *  altitude) has an `elevation_gain_m` the /runs card, the Year-in-Running
+	 *  total and the vert challenge board all count, and this page alone
+	 *  rendered no climb at all. */
+	let elevationGainM = $derived.by(() => {
+		if (realElevationGain != null) return realElevationGain;
+		const stored = run ? storedElevationGainM(run) : null;
+		return stored == null ? null : Math.round(stored);
+	});
+
 	/** Grade-adjusted pace (sec/km) — effort-equivalent flat pace over hilly
 	 *  terrain (Minetti 2002). Null on flat runs / tracks without elevation. */
 	let gradeAdjustedPace = $derived(run?.track ? gradeAdjustedPaceSecPerKm(run.track) : null);
@@ -909,8 +957,8 @@
 			label: m('runDetail.avgSpeed'),
 			value: formatSpeed(paceSeconds, run.distance_m),
 		});
-		if (realElevationGain != null) {
-			cells.push({ label: m('runDetail.elevation'), value: `${realElevationGain} m` });
+		if (elevationGainM != null) {
+			cells.push({ label: m('runDetail.elevation'), value: `${elevationGainM} m` });
 		}
 		if (showCalories && estimatedCalories > 0) {
 			cells.push({ label: calorieLabel, value: String(estimatedCalories) });

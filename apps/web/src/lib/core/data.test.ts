@@ -1213,3 +1213,277 @@ test('every race-import availability probe asks the results leg, not the listing
 		);
 	}
 });
+
+test('every data.ts RPC names its function as a checked literal, never through a cast', () => {
+	// Reason: `database.types.ts` is generated so that `supabase.rpc()` can
+	// check the function name AND the argument object against the deployed
+	// routine. Casting the name (`'foo' as never`) turns that off for the whole
+	// call — the params cast goes with it — so a renamed function, a dropped
+	// parameter or a mistyped argument would reach production as a runtime 404
+	// / 400 from PostgREST rather than as a build failure. The going-count call
+	// carried both casts for months after the migration that made them
+	// unnecessary landed; the comment excusing them named a regeneration that
+	// had already happened.
+	//
+	// The check is not live yet: `core/supabase.ts` calls `createBrowserClient`
+	// with no `Database` generic, which defaults to `any`, so today every
+	// `.rpc()` and `.from()` in this file is unchecked whatever it is written
+	// as. That is filed separately, measured. This guard is what keeps the call
+	// sites in the shape the generic will check the day it is passed — a cast
+	// survives it silently.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const calls = [...source.matchAll(/\.rpc\(\s*([^,)]+)/g)].map((m) => m[1].trim());
+
+	// Population: an empty parse would satisfy the assertion below.
+	assert.ok(calls.length >= 10, `parsed only ${calls.length} rpc calls — reshaped?`);
+
+	for (const name of calls) {
+		assert.match(
+			name,
+			/^'[a-z0-9_]+'$/,
+			`.rpc(${name}) does not name its function as a bare string literal — a cast or a computed name disables the generated type check`
+		);
+	}
+});
+
+test('fetchUpcomingEvents windows the candidate set server-side, not the club\'s oldest 200', () => {
+	// Reason: the read is `order('starts_at', ascending).limit(200)` over every
+	// event the club has ever had. Without a server-side predicate that is the
+	// OLDEST 200 rows — a weekly series accumulates 200 finished one-offs in
+	// four years — so every future event falls past the cap and the club's
+	// Events tab reports "no upcoming events" permanently, getting worse as the
+	// club gets older. The client-side `next_instance_start >= now` filter
+	// cannot recover a row the query never returned. Same shape
+	// `fetchRunsForDashboard` and `fetchWeeklyMileage` already carry guards for.
+	//
+	// The predicate must stay a SUPERSET of what is live: a recurring series
+	// with no until-date has to be admitted (its end may be a `recurrence_count`
+	// only `nextLiveInstance` can evaluate), or a count-limited series
+	// disappears from the tab while it is still running.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('export async function fetchUpcomingEvents');
+	assert.ok(start >= 0, 'fetchUpcomingEvents moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+
+	assert.match(
+		body,
+		/\.or\(/,
+		'the candidate set must be narrowed server-side — an ascending cap over the whole history windows the wrong end of it',
+	);
+	assert.match(
+		body,
+		/starts_at\.gte\.\$\{nowIso\}/,
+		'a one-off is a candidate only when it has not happened yet',
+	);
+	assert.match(
+		body,
+		/recurrence_freq\.not\.is\.null,recurrence_until\.is\.null/,
+		'a recurring series with no until-date must be admitted — its end may be a recurrence_count',
+	);
+	assert.match(
+		body,
+		/recurrence_freq\.not\.is\.null,recurrence_until\.gte\.\$\{nowIso\}/,
+		'and one whose until-date is still ahead',
+	);
+	// Nesting depth: a PostgREST filter this build cannot parse 400s into the
+	// discarded `error` and empties the tab exactly as the bug did, so the
+	// clauses stay at the one `and(...)`-inside-`or=` depth the file already
+	// exercises rather than nesting a second `or(` inside an `and(`.
+	assert.doesNotMatch(
+		body,
+		/and\([^)]*or\(/,
+		'no `or(` nested inside an `and(` — that depth is unexercised in this file',
+	);
+});
+
+test('every "answered empty" read that a stranger can hit reports the failure separately', () => {
+	// Reason: supabase-js RESOLVES `{data: null, error}` rather than throwing,
+	// so `const { data } = await …` turns a transport fault, an RLS refusal and
+	// a genuinely absent row into one indistinguishable null. Each of these
+	// four then rendered a confident falsehood: "Run not found" to every
+	// recipient of a shared link; a routes list with the runner's bookmarks
+	// silently missing and `error: null` beside it; a club owner stripped of
+	// their admin controls and offered "Join"; and a fundraiser page telling a
+	// donor the campaign they followed a link to does not exist.
+	//
+	// `fetchRunById` and `fetchClubBySlug` were each fixed for exactly this and
+	// carry comments saying so. These are the same collapse elsewhere.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const bodyOf = (name: string): string => {
+		const start = source.indexOf(`export async function ${name}(`);
+		assert.ok(start >= 0, `${name} moved — re-anchor this guard`);
+		const next = source.indexOf('\nexport ', start + 1);
+		return source.slice(start, next > start ? next : undefined);
+	};
+
+	// The public run read a stranger hits. PGRST116 is the only "no row".
+	const publicRun = bodyOf('fetchPublicRun');
+	assert.match(
+		publicRun,
+		/Promise<\{ run: Run \| null; error: string \| null \}>/,
+		'fetchPublicRun must report the failure alongside the row, like fetchRunById',
+	);
+	assert.match(
+		publicRun,
+		/error\.code !== 'PGRST116'/,
+		'only "no rows matched" may read as a genuine miss',
+	);
+	assert.doesNotMatch(
+		publicRun,
+		/const \{ data \} =/,
+		'binding data alone is the defect — the error must be read',
+	);
+
+	// The entitlement read behind /runs/[id]'s non-owner branch.
+	const attribution = bodyOf('fetchPublicRunAttribution');
+	assert.match(
+		attribution,
+		/Promise<\{ attribution: PublicRunAttribution \| null; error: string \| null \}>/,
+		'fetchPublicRunAttribution must report its failure — a caller cannot otherwise tell "not yours" from "unknown"',
+	);
+	assert.match(
+		attribution,
+		/if \(error\) return \{ attribution: null, error: error\.message \};/,
+		'the public_runs read is the entitlement; its failure is not a non-entitlement',
+	);
+
+	// The saved half of "My routes" — three reads, none of which was checked.
+	const routes = bodyOf('fetchRoutesWithError');
+	assert.ok(
+		routes.indexOf('if (savedIdsRes.error)') >= 0 &&
+			routes.indexOf('if (savedIdsRes.error)') < routes.indexOf('savedIdsRes.data ?? []'),
+		'the saved-id read must be checked BEFORE its rows are defaulted to [] — a failed read is not an empty bookmark list',
+	);
+	assert.match(
+		routes,
+		/savedBaseRes\.error \?\? savedPublicRes\.error/,
+		'both saved-body reads must be checked — each carries a whole class of bookmark',
+	);
+
+	// Fundraisers: the two sibling reads that swallowed where the third throws.
+	for (const fn of ['fetchFundraiserForRun', 'fetchFundraiserForEvent']) {
+		const body = bodyOf(fn);
+		assert.doesNotMatch(
+			body,
+			/if \(error \|\| !data\) return null;/,
+			`${fn} must not collapse a failed read into "no campaign" — fetchFundraiserById throws and says why`,
+		);
+		assert.match(body, /if \(error\) throw error;/, `${fn} must throw on a failed read`);
+	}
+});
+
+test('enrichClubs reports a failed membership read instead of asserting non-membership', () => {
+	// Reason: `viewer_role` decides whether an owner sees their admin controls
+	// and whether a member is offered "Join". It is derived from one
+	// club_members read whose error was discarded, so a blip logged every
+	// member out of their own club while the enclosing `{ clubs, error }` said
+	// `error: null`. The irony is local: `fetchClubBySlug`'s doc comment
+	// describes precisely this collapse for the club row, one call above the
+	// membership row that still had it.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('async function enrichClubs(');
+	assert.ok(start >= 0, 'enrichClubs moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	assert.match(
+		body,
+		/Promise<\{ clubs: ClubWithMeta\[\]; error: string \| null \}>/,
+		'enrichClubs must return the failure in the same shape its callers already return',
+	);
+	assert.match(
+		body,
+		/if \(rolesRes\.error\)/,
+		'the membership read must be checked before any role is asserted',
+	);
+
+	// And every caller has to propagate it — three hand the shape straight
+	// back, the fourth is the single-club read.
+	// Counting call sites is not enough: a caller can keep the call and drop the
+	// error (`{ clubs: (await enrichClubs(rows)).clubs, error: null }`), which
+	// is the original defect wearing the new shape. Every site must either hand
+	// the whole result back or branch on its error.
+	const sites = [...source.matchAll(/^.*enrichClubs\(/gm)]
+		.map((m) => m[0])
+		.filter((line) => !line.includes('async function enrichClubs('));
+	assert.equal(
+		sites.length,
+		4,
+		`enrichClubs has ${sites.length} call sites, expected 4 — check the new one propagates the error`,
+	);
+	for (const line of sites) {
+		assert.ok(
+			/return (await )?enrichClubs\(/.test(line) ||
+				/\? enrichClubs\(/.test(line) ||
+				/const \{ clubs: \w+, error: \w+ \} = await enrichClubs\(/.test(line),
+			`this enrichClubs call site drops the error rather than propagating it: ${line.trim()}`,
+		);
+	}
+	assert.match(
+		source,
+		/const \{ clubs: enrichedClubs, error: rolesError \} = await enrichClubs\(\[data\]\);\s*\n\s*if \(rolesError\) return \{ club: null, error: rolesError \};/,
+		'fetchClubBySlug must surface a membership-read failure rather than returning the club with no role',
+	);
+});
+
+test('the exact tallies are counted by the database, never by a page of rows', () => {
+	// Reason: `.select()` returns at most the deployment's PostgREST row
+	// ceiling and gives NO signal when it truncates, so a tally built by
+	// counting returned rows is a count of the page, presented as a count of
+	// the set. Two of these sit on a money path and a membership check:
+	//
+	//  - fetchEventRsvpSummary's own doc says the going/maybe/declined/
+	//    waitlisted counts "must stay exact even when the displayed roster is
+	//    only its first page", and it then read every attendee row and tallied
+	//    them here. Past the ceiling the capacity + waitlist math believes a
+	//    full event has room, and the viewer's own row can fall outside the
+	//    page — `viewerStatus` reads null and the page re-shows "Register for
+	//    £X" to someone who has already paid, burning a Stripe session and a
+	//    capacity-holding pending order.
+	//  - fetchChallenges / fetchChallengeById lengthed a participants array
+	//    for a number that is already a trigger-maintained column on the row
+	//    (`challenges.participant_count`, 20270308_001, derived_state.md), and
+	//    found the caller's own membership by scanning that same page.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const bodyOf = (name: string): string => {
+		const start = source.indexOf(`export async function ${name}(`);
+		assert.ok(start >= 0, `${name} moved — re-anchor this guard`);
+		const next = source.indexOf('\nexport ', start + 1);
+		return source.slice(start, next > start ? next : undefined);
+	};
+
+	const rsvp = bodyOf('fetchEventRsvpSummary');
+	assert.match(
+		rsvp,
+		/count: 'exact', head: true/,
+		'the per-status tallies must be counted server-side',
+	);
+	assert.doesNotMatch(
+		rsvp,
+		/summary\.\w+ \+= 1/,
+		'tallying returned rows is the defect — the page is not the set',
+	);
+	assert.match(
+		rsvp,
+		/\.eq\('user_id', viewerId\)/,
+		"the viewer's own status must be its own scoped read, not a scan of a page",
+	);
+
+	// Both challenge readers take the count off the cached column.
+	for (const fn of ['fetchChallenges', 'fetchChallengeById']) {
+		const body = bodyOf(fn);
+		assert.match(
+			body,
+			/participant_count: \([\w.]+ as \{ participant_count\?: number \}\)\.participant_count \?\? 0/,
+			`${fn} must read the trigger-maintained challenges.participant_count cache`,
+		);
+		assert.doesNotMatch(
+			body,
+			/\(parts \?\? \[\]\)\.length|counts\.set\(/,
+			`${fn} must not re-derive the count from a participants page`,
+		);
+		assert.match(
+			body,
+			/\.eq\('user_id', userId\)/,
+			`${fn} must scope the participants read to the caller`,
+		);
+	}
+});

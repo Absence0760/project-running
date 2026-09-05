@@ -2,7 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { cadenceSpm, elevationSourceTrack, stepCount, MIN_CADENCE_MOVING_S } from './key_stats';
+import {
+	cadenceSpm,
+	elevationSourceTrack,
+	stepCount,
+	storedElevationGainM,
+	MIN_CADENCE_MOVING_S,
+} from './key_stats';
 import { stripComments } from '../core/strip_comments';
 import type { TrackPoint } from '../types';
 
@@ -131,8 +137,14 @@ test('the run-detail elevation cell is gated on a track that measured altitude',
 	);
 	assert.match(
 		page,
-		/if \(realElevationGain != null\) \{/,
-		'and the cell has to be gated on it — the render used to be unconditional',
+		/if \(elevationGainM != null\) \{/,
+		'and the cell has to be gated on the resolved reading — the render used to be unconditional',
+	);
+	assert.match(
+		page,
+		/import \{[^}]*\bstoredElevationGainM\b[^}]*\} from '\$lib\/runs\/key_stats'/,
+		'the fall-back to the run row\'s own ascent goes through the one reader — the /runs card, ' +
+			'the recap total and the vert board all count a column this page used to ignore.',
 	);
 });
 
@@ -151,5 +163,38 @@ test('the key-stats grid renders the derived cell list, and counts itself from i
 		page,
 		/keyStatsCount/,
 		'the hand-maintained count is gone — it had already drifted from the template',
+	);
+});
+
+test('storedElevationGainM — the column wins, the legacy key is the fallback, absent is null', () => {
+	// The run-detail page measures the climb off the track and had no other
+	// source, so a summary import — a Strava activity under the 200 m stream
+	// threshold, or one whose stream carried no altitude — rendered NO climb
+	// on the one page dedicated to that run, while the /runs card (reading the
+	// jsonb key), the Year-in-Running total and the vert challenge board (both
+	// reading the column) all counted it. One reader, both rails, one order.
+	assert.equal(storedElevationGainM({ elevation_gain_m: 211 }), 211);
+	assert.equal(
+		storedElevationGainM({ elevation_gain_m: 211, metadata: { elevation_m: 190 } }),
+		211,
+		'the promoted column is canonical when both are present',
+	);
+	assert.equal(
+		storedElevationGainM({ elevation_gain_m: null, metadata: { elevation_m: 190 } }),
+		190,
+		'a row predating 20270302_001 carries only the jsonb key',
+	);
+
+	// Absent is not zero (§ 1164): a flat run measured at 0 m and a run nothing
+	// measured are different facts, and only the first may render "0 m".
+	assert.equal(storedElevationGainM({ elevation_gain_m: 0 }), 0);
+	assert.equal(storedElevationGainM({}), null);
+	assert.equal(storedElevationGainM({ elevation_gain_m: null, metadata: null }), null);
+	assert.equal(storedElevationGainM({ metadata: { elevation_m: '190' } }), null);
+	assert.equal(storedElevationGainM({ elevation_gain_m: NaN }), null);
+	assert.equal(
+		storedElevationGainM({ elevation_gain_m: Infinity, metadata: { elevation_m: 190 } }),
+		190,
+		'an unusable column value falls through to the key rather than rendering Infinity',
 	);
 });
