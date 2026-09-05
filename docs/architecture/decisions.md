@@ -23898,3 +23898,37 @@ and its own docstring names the **armed undo window** as the owner of the timer
 — the banner was never what it was draining. Left as written, the note would
 have invited the next sweep to delete a pump the undo window still needs. It now
 names the undo window.
+
+## 1239. The recap's Dart half kept anchoring the current streak at 31 December, and it was the half that publishes the snapshot
+
+[§ 1221](#1221) fixed `recap.ts` and filed the Dart twin, which is the more
+consequential of the two: `recapSnapshotJson` writes `public_recaps`, so a
+phone-published recap of the year or month you are living in rendered a **zero**
+current streak on the web share page while the web-built snapshot of the same
+runner rendered the real number. `buildYearInRunningRecap` and
+`buildMonthInRunningRecap` now take a trailing optional `now`, resolve it with
+`now ?? DateTime.now()` — Dart cannot default a parameter to a non-constant, and
+that is the only shape difference from `now: Date = new Date()` — and anchor
+`computeRunStreaks` at `_currentAnchor(periodEnd, now)`, the earlier of the
+period's end and the reader's clock. The month builder threads the same instant
+into its own call to the year builder, so one card cannot answer two clocks.
+
+**Two of the six mirrored cases were wrong as first written, and getting them
+right is what the group is for.** A past-year clamp fixture of 29-31 Dec 2025
+plus 1 Jan 2026 expects 4 and yields 3: the 1 January run is after the anchor,
+so it is excluded, and the streak that reaches 31 December is three days long.
+The web suite's `BOUNDARY_STREAK_DAYS` opens on 28 December for exactly that
+reason and the Dart fixture now matches it. And "a finished month still clamps"
+cannot be shown with a March fixture read from September — March's own anchor is
+31 March, two clear days past the last run, so the honest answer is 0. That case
+is now stated as its own test (`a month already over reports no current streak`,
+current 0 with best still 4) and the clamp is shown on the December fixture that
+actually ends on its period's last day.
+
+All four new anchor assertions were verified failing against the old behaviour
+by making `_currentAnchor` return `periodEnd` unconditionally: the year card,
+the grace day, the month card and the published snapshot each report 0 where the
+streak is 4 or 3. The Dart suite goes 36 -> 43 tests against the web half's 42;
+the pair was 6 apart before this change and is now 1, the extra being the
+`recapSnapshotJson` case, which is the direction the pair's registry entry
+already documents.
