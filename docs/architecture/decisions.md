@@ -23969,3 +23969,36 @@ one case the Dart side cannot reach — a `cutoffElapsedS` that is not a number 
 because that field is a Dart `int?`. A race director shown "not yet through" is
 better served than one shown "safely through": the fail-open direction was the
 one that gets a runner left on a mountain.
+
+## 1226. An unusable GAP segment is skipped, not allowed to poison the whole run
+
+`gradeAdjustedPaceSecPerKm` declares `number | null` and returned NaN. A track
+point with a non-finite lat/lng makes `segHoriz` NaN; `NaN < MIN_SEGMENT_M` is
+false so the walk enters the body rather than accumulating, `adjDistM` goes NaN
+and stays NaN, and the closing `adjDistM <= 0` guard is false for NaN — so
+`Math.round(NaN)` came back as the run's pace. The Dart twin THREW on the same
+input: `.round()` on a non-finite double is an `UnsupportedError`, and it is
+raised from inside a widget build. Two platforms, two different wrong answers,
+from one class of bad fix.
+
+The filed change was the NaN-rejecting guard, `!(adjDistM > 0) || !(timeS > 0)`
+— the form `race_day.ts`'s `goalFeasibility` already uses in the same
+directory. That is applied, but on its own it turns one bad GPS fix in a
+three-hour ultra into no GAP at all for the entire run. The root cause is that
+an unusable segment was accumulated rather than skipped, and this module
+already has a rule for an unusable segment: the one with no timestamps is
+skipped while the anchor still advances. So the equivalent-flat distance is now
+tested for finiteness and the segment skipped on the same terms — which also
+covers the second way in, a non-finite ALTITUDE, where `gradeFactor` clamps
+neither bound of a NaN and the Minetti fit returns NaN through a perfectly
+good coordinate pair. A skipped segment does not count as having seen
+elevation either, so a track whose only altitudes are unusable reports no GAP
+rather than reporting raw pace as one.
+
+Both halves of the registered pair moved together and the Dart is mirrored to
+the iOS twin. Three new web cases and three Dart mirrors, each verified to fail
+against `b7f3467a3` — on the web side by returning NaN, on the Dart side by
+throwing — and to pass after. The pinning case for the durable half plants one
+infinite fix in the middle of a 41-point graded track and requires the GAP to
+move by under 10 %; measured, it moves by well under that where before it was
+null on one platform and an exception on the other.
