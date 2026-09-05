@@ -21978,3 +21978,166 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1185. The web Supabase client has never been given its `Database` generic, so the casts the run-detail data layer dropped were turning off a check that does not exist
+
+`data.ts`'s events enrichment called the going-count RPC as
+`supabase.rpc('event_next_instance_going_counts' as never, {...} as never)` under
+a comment reading "Not yet in database.types.ts (orchestrator regenerates on
+landing the 20270122_001 migration); the RPC name is cast until then." That
+migration landed long ago and `database.types.ts` carries the routine with
+exactly the argument shape the call passes, so the filing that asked for the
+casts to be dropped was right about them being stale. Both are gone, together
+with the sibling `return data as never` in `fetchRunsOnRoute`, and a guard in
+`data.test.ts` now fails the PR when any `.rpc()` in the file names its function
+as anything but a bare string literal.
+
+The filing's stated *benefit* — "let `tsc` check the argument shape" — is where
+it was wrong, and measuring it is the finding. `core/supabase.ts` calls
+`createBrowserClient(url, key)` with **no `Database` generic**, and the
+declaration defaults it to `any`. Nothing augments it (`app.d.ts` carries a bare
+`SupabaseClient`). So `.from(...)`, `.select(...)` and `.rpc(...)` are all
+unchecked everywhere in the web app: a renamed function, a dropped `p_*`
+parameter or a select list that omits a column the caller's declared type
+requires all ship green. The generated, committed, CI-drift-checked
+`database.types.ts` reaches the hand-written row overlays in `types.ts` and
+stops there. Two comments in `data.ts` describe protections that follow from a
+typed client and therefore describe nothing.
+
+Passing the generic was measured rather than assumed: `svelte-check` reports
+**79 errors across 10 files**, 62 of them in `data.ts` — 15 `string | null` vs
+`string | undefined` write-shape mismatches, 13 `Record<string, unknown>` into a
+`Json` parameter, plus narrowings in `backup.ts`, `settings.ts`,
+`stores/auth.svelte.ts`, `PlanEditor.svelte` and four route files. That spans
+four other trees and is not a change one lane may make; it is filed with the
+measurement. The `.rpc()` guard is kept regardless: it holds the call sites in
+the shape the generic will check the day it is passed, and it is the only thing
+that would notice a cast creeping back in the meantime.
+
+## 1186. The live-hub socket caught a spectator's ping handler inside the guard meant for corrupt frames, so a runner's position stopped advancing with nothing logged
+
+`createReconnectingSocket`'s `onmessage` wrapped both the `JSON.parse` of the
+frame **and** the `opts.onPing(p)` dispatch in one `try`, whose comment excused
+it as "drop malformed frames … a corrupt frame must not kill the loop". A
+consumer that throws is not a corrupt frame. `/live/[id]`'s handler reads
+`p.lat` / `p.lng` straight off the parsed value and then mutates page state, so
+a frame that parses to `null` (`JSON.parse('null')` succeeds), or any throw
+inside `pushPing`, was swallowed as if the wire had been garbled — and because
+the throw happened before `status = 'live'`, the page kept whatever status it
+already had. The socket stayed open, `onStatus` kept reporting `open`, every
+ping was discarded, and the spectator watched a frozen dot with nothing in the
+console. On the surfaces this exists for — a Moab or UTMB spectator judging
+whether a runner is still moving — that is the failure the freshness work was
+built to make impossible, arriving through the one path freshness cannot see.
+
+The parse is now the only thing inside the guard, and the dispatch is outside
+it. The distinction is already drawn one function up: `emitStatus` has its own
+`try` because status callbacks are explicitly advisory. `onPing` is the whole
+point of the socket, so its failure surfaces to the browser's error reporting
+instead of being spent as a dropped frame. The loop is unaffected — a throw in
+an event handler does not close a WebSocket — and the new test pins all three
+claims: an unparseable frame is dropped, a throwing handler propagates, and the
+socket keeps delivering afterwards.
+
+## 1187. Two run measurements had two implementations each in one tree, and both divergences were invisible to every guard the repo has
+
+**The climb.** Migration `20270302_001` promoted total ascent to
+`runs.elevation_gain_m` and left `metadata.elevation_m` for the rows written
+before it. Three surfaces then answered "what did this run climb" three ways:
+the `/runs` card read only the jsonb key, `recap.ts` read the column and fell
+back to the key, and `/runs/[id]` — the page dedicated to that one run — read
+neither, measuring the climb off the track and rendering no cell at all when the
+track carried no altitude. A Strava activity under the importer's 200 m stream
+threshold, or one whose stream carried no altitude, therefore had its ascent
+counted by the `/runs` card, by the Year-in-Running total and by the vert
+challenge board, and stated by nothing on its own detail page. The stored
+reading now has one home, `key_stats.storedElevationGainM`, which `recap.ts`
+consumes instead of its private copy and which the detail page falls back to
+when the track cannot measure the climb. The measured value still wins where it
+exists: it is the same samples the elevation profile beside it is drawn from.
+Absent stays null rather than 0, per § 1164.
+
+**The distance.** `grade_adjusted_pace.ts` carried a **private** copy of
+`haversineMetres` that never received the clamp `run_stats.ts` grew, so on a
+near-antipodal pair the haversine `a` rounds to `1.0000000000000002` and
+`Math.sqrt(1 - a)` is NaN — measured on `(-87.5, 0) → (87.5, 180)`: unclamped
+NaN, clamped 20015086.796. Every downstream guard is NaN-permissive (`NaN <
+MIN_SEGMENT_M` is false, so the anchor walk never resets again; `NaN <= 0` is
+false, so the null return is skipped), so one bad fix pair returned NaN out of a
+`number | null` signature and the detail page's GAP cell, GAP split column and
+grade-adjusted pacing verdict all vanished together — each is gated on
+`Math.abs(gap − raw) >= 2`, which NaN fails. The **Dart half of the same
+registered parity pair** imports the clamped helper from `run_stats.dart`, so
+the pair was divergent and the phone rendered a real GAP on a track the web
+dropped it for. The copy is deleted and the shared helper imported; a source
+assertion in the pair's own suite now fails on a second copy of the formula in
+that file, because nothing in this repo compares two helpers on the same
+platform and only the pair's suites could ever have caught it — and neither had
+an antipodal case.
+
+## 1188. The web workout review contradicted the phone about the same run, twice, in eleven lines
+
+`runs.metadata.workout_step_results` is a schemaless bag the phone recorder
+writes and both review tables read, so nothing typechecks across the seam and
+both rails have to be read to know what it holds. Two arithmetic steps on the
+web side disagreed with the recorder:
+
+- **`rep_total` on a recovery step is already the recovery count.** The runner
+  emits one recovery *between* consecutive reps and stamps `repTotal: count - 1`
+  on it. The page subtracted one again, so a 6×400 rendered "Recovery 1/4" …
+  **"Recovery 5/4"**, a fraction that cannot exist, and a 2-rep workout rendered
+  "Recovery 1/0". The phone shows "Recovery 1/5" off the identical rows. The
+  same table's `rep` branch did not subtract, so two rows of one table applied
+  different arithmetic to one field.
+- **Pace adherence was graded against a literal 10 s/km.** The Workout editor
+  offers a 0–60 s/km tolerance, the recorder resolves it and stamps
+  `tolerance_sec_per_km` on every step result, and the phone's `paceDeltaOf`
+  reads it. The web comment claimed the literal "matches the recorder's default
+  tolerance", which was true only of the default. A step a coach authored at
+  25 s/km and missed by 18 graded **green on the phone and amber on the web**;
+  at 30 off, amber on the phone and red on the web.
+
+Both are fixed by reading what is written. `docs/backend/metadata.md`'s shape
+for the key was also short of `tolerance_sec_per_km` and is now current, and a
+guard reads the recorder's Dart source alongside the page so a change to either
+rail fails the PR — the same cross-rail idiom `data.test.ts` already applies to
+`api_client.dart`.
+
+## 1189. Three run and club surfaces answered from evidence that could not support the answer
+
+Three unrelated reads, one shape: each stated something confidently from state
+that was not what it had measured.
+
+**A club's upcoming events were its 200 oldest rows.** `fetchUpcomingEvents`
+ordered `starts_at` ascending under `.limit(200)` with **no server-side
+predicate at all**, then filtered for future occurrences in the browser — so a
+club with more than 200 finished one-offs (a weekly series reaches that in four
+years) pushed every future event past the cap and its Events tab reported "no
+upcoming events" permanently, degrading gradually as the club aged. The
+function's own comment described the WHERE clause it did not have. The candidate
+set is now narrowed on the server: future one-offs, plus recurring series with
+no until-date or an until-date still ahead. It stays a deliberate superset — a
+count-limited series carries no until-date and only `nextLiveInstance` can
+retire it. The clauses are spelled flat rather than nesting an `or(` inside an
+`and(`, because a filter PostgREST cannot parse 400s into the discarded `error`
+and empties the tab in exactly the way being fixed.
+
+**A failed read was treated as proof of non-ownership.** `/runs/[id]` fell back
+to `fetchPublicRunAttribution` whenever `fetchRunById` returned no row.
+`fetchRunById` reports "not yours / no such run" and "could not find out"
+separately, precisely so a caller can tell them apart, and `public_runs` carries
+no owner exclusion — so on a transient failure over the viewer's **own public
+run** the attribution read succeeded and the page rendered the read-only
+stranger view, attributed to the viewer themselves, with every edit / delete /
+visibility / export control gone. The retry card existed but sat in a later
+template branch and never showed. The fallback is now gated on the owner read
+having answered.
+
+**A bulk delete reconciled against a set the user could still edit.** The
+`/runs` delete captured its ids, ran `deleteRunsBounded` (waves of 8, several
+round trips per run, `allSettled`) for many seconds, and then filtered the
+in-memory list against the **live** `selected` set. Only the Delete button is
+disabled during that window; the cards stay tappable. Un-selecting a run already
+gone from the server left a ghost card that 404s on tap, and selecting another
+dropped a run that still exists. It reconciles against the captured ids now —
+the only set the server was actually asked about.
