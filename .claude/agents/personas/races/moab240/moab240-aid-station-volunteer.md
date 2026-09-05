@@ -84,4 +84,4 @@ Cap at **5 findings**. The bar: every time I key in survives 12 hours offline an
 
 ## Output → `reviews/`
 
-Persist your triage findings to `reviews/persona-moab240-aid-station-volunteer.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.
+Persist your triage findings to `reviews/persona-moab240-aid-station-volunteer.md` (gitignored working notes — see [`reviews/README.md`](../../../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.

@@ -79,4 +79,4 @@ Cap at **5 findings**. The bar: can one volunteer process 2,500 runners through 
 
 ## Output → `reviews/`
 
-Persist your triage findings to `reviews/persona-utmb-aid-station-volunteer.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.
+Persist your triage findings to `reviews/persona-utmb-aid-station-volunteer.md` (gitignored working notes — see [`reviews/README.md`](../../../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.
