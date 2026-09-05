@@ -1423,3 +1423,67 @@ test('enrichClubs reports a failed membership read instead of asserting non-memb
 		'fetchClubBySlug must surface a membership-read failure rather than returning the club with no role',
 	);
 });
+
+test('the exact tallies are counted by the database, never by a page of rows', () => {
+	// Reason: `.select()` returns at most the deployment's PostgREST row
+	// ceiling and gives NO signal when it truncates, so a tally built by
+	// counting returned rows is a count of the page, presented as a count of
+	// the set. Two of these sit on a money path and a membership check:
+	//
+	//  - fetchEventRsvpSummary's own doc says the going/maybe/declined/
+	//    waitlisted counts "must stay exact even when the displayed roster is
+	//    only its first page", and it then read every attendee row and tallied
+	//    them here. Past the ceiling the capacity + waitlist math believes a
+	//    full event has room, and the viewer's own row can fall outside the
+	//    page — `viewerStatus` reads null and the page re-shows "Register for
+	//    £X" to someone who has already paid, burning a Stripe session and a
+	//    capacity-holding pending order.
+	//  - fetchChallenges / fetchChallengeById lengthed a participants array
+	//    for a number that is already a trigger-maintained column on the row
+	//    (`challenges.participant_count`, 20270308_001, derived_state.md), and
+	//    found the caller's own membership by scanning that same page.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const bodyOf = (name: string): string => {
+		const start = source.indexOf(`export async function ${name}(`);
+		assert.ok(start >= 0, `${name} moved — re-anchor this guard`);
+		const next = source.indexOf('\nexport ', start + 1);
+		return source.slice(start, next > start ? next : undefined);
+	};
+
+	const rsvp = bodyOf('fetchEventRsvpSummary');
+	assert.match(
+		rsvp,
+		/count: 'exact', head: true/,
+		'the per-status tallies must be counted server-side',
+	);
+	assert.doesNotMatch(
+		rsvp,
+		/summary\.\w+ \+= 1/,
+		'tallying returned rows is the defect — the page is not the set',
+	);
+	assert.match(
+		rsvp,
+		/\.eq\('user_id', viewerId\)/,
+		"the viewer's own status must be its own scoped read, not a scan of a page",
+	);
+
+	// Both challenge readers take the count off the cached column.
+	for (const fn of ['fetchChallenges', 'fetchChallengeById']) {
+		const body = bodyOf(fn);
+		assert.match(
+			body,
+			/participant_count: \([\w.]+ as \{ participant_count\?: number \}\)\.participant_count \?\? 0/,
+			`${fn} must read the trigger-maintained challenges.participant_count cache`,
+		);
+		assert.doesNotMatch(
+			body,
+			/\(parts \?\? \[\]\)\.length|counts\.set\(/,
+			`${fn} must not re-derive the count from a participants page`,
+		);
+		assert.match(
+			body,
+			/\.eq\('user_id', userId\)/,
+			`${fn} must scope the participants read to the caller`,
+		);
+	}
+});

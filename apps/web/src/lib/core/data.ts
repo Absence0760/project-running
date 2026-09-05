@@ -3708,30 +3708,60 @@ export async function fetchEventRsvpSummary(
 	instanceStart: string
 ): Promise<EventRsvpSummary> {
 	const viewerId = auth.user?.id ?? null;
-	const { data, error } = await supabase
-		.from(TABLES.event_attendees)
-		.select('user_id, status')
-		.eq('event_id', eventId)
-		.eq('instance_start', instanceStart);
+
+	// Counted in the database, one HEAD request per status, rather than by
+	// pulling every attendee row and tallying here. PostgREST caps a returned
+	// result at 1000 rows and says nothing when it does, so the old read
+	// silently became a count of the first thousand: past that the capacity
+	// and waitlist math believed a full event had room, and the viewer's own
+	// row could fall outside the page entirely — `viewerStatus` then read null
+	// and the page re-showed "Register for £X" to someone who had already
+	// paid, burning a Stripe session and a capacity-holding pending order.
+	// `count: 'exact'` is a `count(*)` over the filtered set and is not
+	// subject to that cap; `head: true` transfers no rows at all.
+	//
+	// The viewer's own status is a separate one-row read for the same reason:
+	// it must not depend on their row appearing in any page.
+	const statuses = ['going', 'maybe', 'declined', 'waitlisted'] as const;
+	const [counts, viewerRow] = await Promise.all([
+		Promise.all(
+			statuses.map((status) =>
+				supabase
+					.from(TABLES.event_attendees)
+					.select('user_id', { count: 'exact', head: true })
+					.eq('event_id', eventId)
+					.eq('instance_start', instanceStart)
+					.eq('status', status)
+			)
+		),
+		viewerId
+			? supabase
+					.from(TABLES.event_attendees)
+					.select('status')
+					.eq('event_id', eventId)
+					.eq('instance_start', instanceStart)
+					.eq('user_id', viewerId)
+					.maybeSingle()
+			: Promise.resolve({ data: null, error: null })
+	]);
+
 	// A failed read must not come back as a zeroed summary: `viewerStatus`
 	// null is what tells the page the viewer has no slot, so a swallowed
-	// error re-shows "Register for £X" to someone who has already paid.
-	if (error) throw error;
-	const summary: EventRsvpSummary = {
-		going: 0,
-		maybe: 0,
-		declined: 0,
-		waitlisted: 0,
-		viewerStatus: null
-	};
-	for (const row of data ?? []) {
-		const status = row.status as RsvpStatus;
-		if (status === 'going') summary.going += 1;
-		else if (status === 'maybe') summary.maybe += 1;
-		else if (status === 'declined') summary.declined += 1;
-		else if (status === 'waitlisted') summary.waitlisted += 1;
-		if (viewerId && row.user_id === viewerId) summary.viewerStatus = status;
+	// error re-shows "Register for £X" to someone who has already paid. A
+	// missing count is the same claim about capacity, so it throws too.
+	for (const res of counts) {
+		if (res.error) throw res.error;
 	}
+	if (viewerRow.error) throw viewerRow.error;
+
+	const summary: EventRsvpSummary = {
+		going: counts[0].count ?? 0,
+		maybe: counts[1].count ?? 0,
+		declined: counts[2].count ?? 0,
+		waitlisted: counts[3].count ?? 0,
+		viewerStatus: ((viewerRow.data as { status?: string } | null)?.status ??
+			null) as RsvpStatus | null
+	};
 	return summary;
 }
 
@@ -11490,28 +11520,43 @@ export async function fetchChallenges(
 	if (error) throw error;
 	const rows = (data ?? []).map(challengeFromRow);
 
-	// Enrich with participant counts + the caller's joined flag in two scoped
-	// reads (no per-row N+1): one count-grouped read over participants for the
-	// listed ids, one self-membership read.
+	// The count comes off the row. `challenges.participant_count` is the
+	// trigger-maintained, self-healing cache of exactly this number
+	// (`20270308_001`, derived_state.md) and `select('*')` already carried it;
+	// it was being ignored in favour of tallying a participant read that
+	// spanned every listed challenge at once, with no bound. PostgREST
+	// truncates a result at its configured row ceiling and reports nothing
+	// when it does, so a couple of popular public challenges were enough to
+	// exhaust the page: every board then under-reported, and — worse — a
+	// genuine participant's own row could fall outside it, emptying their "My
+	// challenges" tab and offering them "Join" on a challenge they were in.
+	// This is the same read `enrichClubs` already makes of `clubs.member_count`
+	// for the same reason.
+	//
+	// What is left needs no aggregate: the caller's OWN membership, scoped to
+	// the caller, so the read is bounded by the number of challenges listed
+	// rather than by how many people are in them.
 	const ids = rows.map((r) => r.id);
 	if (ids.length === 0) return [];
-	const { data: parts } = await supabase
-		.from(TABLES.challenge_participants)
-		.select('challenge_id, user_id, completed_at')
-		.in('challenge_id', ids);
-	const counts = new Map<string, number>();
 	const mineSet = new Set<string>();
 	const myCompletedAt = new Map<string, string | null>();
-	for (const p of parts ?? []) {
-		counts.set(p.challenge_id, (counts.get(p.challenge_id) ?? 0) + 1);
-		if (userId && p.user_id === userId) {
+	if (userId) {
+		const { data: parts, error: partsError } = await supabase
+			.from(TABLES.challenge_participants)
+			.select('challenge_id, completed_at')
+			.eq('user_id', userId)
+			.in('challenge_id', ids);
+		// `joined` drives the Join affordance; a dropped error offered "Join"
+		// on every challenge the caller is already in.
+		if (partsError) throw partsError;
+		for (const p of parts ?? []) {
 			mineSet.add(p.challenge_id);
 			myCompletedAt.set(p.challenge_id, p.completed_at ?? null);
 		}
 	}
 	const enriched: ChallengeWithMeta[] = rows.map((r) => ({
 		...r,
-		participant_count: counts.get(r.id) ?? 0,
+		participant_count: (r as { participant_count?: number }).participant_count ?? 0,
 		my_value: null,
 		my_rank: null,
 		joined: mineSet.has(r.id),
@@ -11580,15 +11625,24 @@ export async function fetchChallengeById(id: string): Promise<ChallengeWithMeta 
 	// on a challenge the caller may well have joined — so the page offered
 	// "Join" to someone already in, against a board it claimed was empty. A
 	// partial read failure fails the whole read.
-	const { data: parts, error: partsError } = await supabase
-		.from(TABLES.challenge_participants)
-		.select('user_id, completed_at, team_club_id')
-		.eq('challenge_id', id);
+	//
+	// Scoped to the caller's own row, and the count taken off the cache on the
+	// challenge row: reading every participant to find one of them and to
+	// length the array made both answers depend on a page PostgREST silently
+	// truncates, so a popular challenge reported a smaller board than it has
+	// and could drop the viewer's own membership out of its own detail page.
+	const { data: joinedRow, error: partsError } = userId
+		? await supabase
+				.from(TABLES.challenge_participants)
+				.select('completed_at, team_club_id')
+				.eq('challenge_id', id)
+				.eq('user_id', userId)
+				.maybeSingle()
+		: { data: null, error: null };
 	if (partsError) throw partsError;
-	const joinedRow = userId ? (parts ?? []).find((p) => p.user_id === userId) : undefined;
 	return {
 		...challenge,
-		participant_count: (parts ?? []).length,
+		participant_count: (data as { participant_count?: number }).participant_count ?? 0,
 		my_value: null,
 		my_rank: null,
 		joined: !!joinedRow,
