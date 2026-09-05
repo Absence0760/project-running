@@ -833,6 +833,14 @@
 	/** Derived from the GPS track rather than stored, matching mobile. */
 	let movingSeconds = $derived(run?.track ? movingTimeSeconds(run.track) : 0);
 
+	/** The seconds every whole-run pace and speed on this page divides by.
+	 *  Moving time when the track yielded one, elapsed otherwise. One value
+	 *  rather than one expression per surface: the share card carried its own
+	 *  `run.duration_s` and so advertised a slower pace than the page it was
+	 *  generated from -- 6:00 /km on the PNG against 5:00 /km on screen for a
+	 *  10 km with ten minutes of traffic lights (decisions § 1223). */
+	let paceSeconds = $derived(movingSeconds > 0 ? movingSeconds : (run?.duration_s ?? 0));
+
 	/** The track the climb is measured over, or null when no point on it
 	 *  carried an altitude. A manual entry and a summary import have no track
 	 *  at all, and a track with no `ele` sums to 0 exactly as a flat run does,
@@ -868,8 +876,7 @@
 	 *  cell is just noise. 2 s/km threshold. */
 	let showGradeAdjustedPace = $derived.by(() => {
 		if (gradeAdjustedPace == null || !run || run.distance_m <= 0) return false;
-		const secs = movingSeconds > 0 ? movingSeconds : run.duration_s;
-		const rawPaceSecPerKm = secs / (run.distance_m / 1000);
+		const rawPaceSecPerKm = paceSeconds / (run.distance_m / 1000);
 		return Math.abs(gradeAdjustedPace - rawPaceSecPerKm) >= 2;
 	});
 
@@ -935,7 +942,6 @@
 	/// the estimate was unusable or the pref was off (decisions § 1164).
 	let keyStats = $derived.by<{ label: string; value: string }[]>(() => {
 		if (!run) return [];
-		const paceSeconds = movingSeconds > 0 ? movingSeconds : run.duration_s;
 		const cells: { label: string; value: string }[] = [
 			{ label: m('runDetail.distance'), value: formatDistance(run.distance_m) },
 			{ label: m('runDetail.time'), value: formatDuration(run.duration_s) },
@@ -2231,14 +2237,20 @@
 				<div class="share-stat-label">{m('runDetail.distance')}</div>
 				<div class="share-stat-value">{formatDistance(run.distance_m)}</div>
 			</div>
+			<!-- Time and pace are the SAME clock. The card is read without the
+				 page beside it, so a reader who divides the two must land on the
+				 pace printed under them; pairing elapsed time with the page's
+				 moving pace would not survive that division. -->
 			<div class="share-stat">
-				<div class="share-stat-label">{m('runDetail.time')}</div>
-				<div class="share-stat-value">{formatDuration(run.duration_s)}</div>
+				<div class="share-stat-label">
+					{movingSeconds > 0 ? m('runDetail.moving') : m('runDetail.time')}
+				</div>
+				<div class="share-stat-value">{formatDuration(paceSeconds)}</div>
 			</div>
 			<div class="share-stat">
 				<div class="share-stat-label">{m('runDetail.pace')}</div>
 				<div class="share-stat-value">
-					{formatPace(run.duration_s, run.distance_m)}
+					{formatPace(paceSeconds, run.distance_m)}
 				</div>
 			</div>
 		</div>

@@ -23875,3 +23875,32 @@ difference. Semantics checked against SQL ground truth on the same data: 12
 events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
+
+## 1223. The share card divides the same clock the page does, and one derived value is what makes that true
+
+`/runs/[id]` computed the run's pace in three places from its own copy of
+`movingSeconds > 0 ? movingSeconds : run.duration_s` — the key-stats grid, the
+threshold that decides whether the grade-adjusted-pace cell appears, and the
+off-screen 1080-square card `html-to-image` rasterises to a PNG. The card's
+copy had lost the moving half: it rendered `formatPace(run.duration_s, ...)`.
+On a 10 km with ten minutes of traffic-light stops the page said 5:00 /km and
+the image the runner posted said 6:00 /km, with no label on the card naming
+which clock it meant. Three copies, one of them already wrong, is the defect;
+the fix is one `paceSeconds` derived and no copies.
+
+The card's time cell moved to the same value, labelled `runDetail.moving` when
+that is what it is. That is a product call and the principle behind it is that
+a share card is read with no page beside it: a reader who divides the printed
+time by the printed distance has to land on the printed pace. Pairing elapsed
+time with moving pace survives on the page — which discloses both clocks in
+adjacent cells — and does not survive on a square image with three numbers.
+The page's own Time cell is unchanged; the card is the surface that has to be
+self-contained.
+
+`run_detail_pace_guard.test.ts` is anchored to the calls rather than to the
+spelling: every `formatPace`/`formatSpeed` whose second argument is
+`run.distance_m` is a whole-run pace, and each must take `paceSeconds`. A new
+cell dividing by the run's distance therefore cannot reintroduce a second
+clock. Mutation-tested by planting three violations — the card's pace reverted
+to `run.duration_s`, a second `paceSeconds` declaration, and the card's time
+reverted while its pace stayed — each caught by the intended assertion.
