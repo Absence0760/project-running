@@ -23875,3 +23875,42 @@ difference. Semantics checked against SQL ground truth on the same data: 12
 events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
+
+## 1228. Both plan publishers copy a plan through one shared field list, and a new plan column now fails the build until it is copied or excused
+
+`publishPlanToLibrary` and `publishPlanAsTemplate` do the same thing in two
+directions — insert a template sibling, copy every `plan_weeks` row, copy every
+`plan_workouts` row — and each carried its own hand-written column list. The
+public-library half had fallen four fields behind the club half: every published
+workout lost `target_pace_end_sec_per_km` (the progression target the workout
+detail page renders) and `pace_zone` (the zone chip), and the head lost `source`
+and `rules`. So an author who published a plan to a club kept their tempo
+sessions' zone labels and progression paces, and publishing the same plan to the
+public library silently dropped both, plus the `rules` the adaptive re-plan
+reads. No error, no warning — the insert simply did not name the columns.
+
+The fix is not to add four lines to the shorter list. Two lists that must agree
+is the defect; `apps/web/src/lib/core/plan_copy.ts` is one list both spread.
+`planHeadCopyFields` / `planWeekCopyRows` / `planWorkoutCopyRows` are pure and
+Supabase-free, so the shape is unit-testable, and the publisher-private fields
+(`vdot`, `current_5k_seconds`, `notes`) are deliberately absent from the shared
+head helper rather than nulled inside it — each caller still states its own
+`vdot: null`, which is what the § 1220-era privacy guard reads and what the
+trigger in `20270508_001` enforces.
+
+The census guard is the durable half. `plan_copy.test.ts` reads the `Row` key
+list for `plan_workouts`, `plan_weeks` and `training_plans` out of the generated
+`database.types.ts` and demands every column be either present on the object the
+helper actually returns or listed in an exclusion map with a stated reason —
+completion state, server-maintained fields, and the four that define what makes
+a row a template. The requirement therefore comes from a file only a migration
+changes, and it is checked against runtime output rather than against a source
+line, so it cannot be satisfied by editing the thing it checks. A fourth guard
+pins that both publishers still route through the module, because re-inlining a
+list would leave the census correct and unused. Mutation-tested: dropping
+`pace_zone` from the copy fails two tests, dropping `rules` fails two, and
+re-inlining the workout list in `publishPlanToLibrary` fails the fourth.
+
+Not closed here: `clone_public_plan` (`20270126_001`) drops the same four
+columns on the read-back path, so a cloner of an already-published plan still
+loses them. That is a migration and belongs to the backend tree; it is filed.

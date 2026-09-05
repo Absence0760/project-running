@@ -16,6 +16,7 @@ import { logInputFromRecipe } from '../nutrition/recipe';
 import { challengesToRecomputeForRun } from '../social/challenge_progress';
 import { mergeMyProgress } from '../social/challenge_list';
 import { selectEffectivePricing } from '../social/event_instance';
+import { planHeadCopyFields, planWeekCopyRows, planWorkoutCopyRows } from './plan_copy';
 import type {
 	Run,
 	Route,
@@ -4592,18 +4593,12 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 	const { data: tmpl, error: planErr } = await supabase
 		.from('training_plans')
 		.insert({
+			...planHeadCopyFields(src),
 			user_id: userId,
-			name: src.name,
-			goal_event: src.goal_event,
-			goal_distance_m: src.goal_distance_m,
-			goal_time_seconds: src.goal_time_seconds,
-			start_date: src.start_date,
-			end_date: src.end_date,
-			days_per_week: src.days_per_week,
 			vdot: null,
 			current_5k_seconds: null,
-			status: 'completed',
 			notes: null,
+			status: 'completed',
 			is_template: true,
 			is_public_template: true,
 			club_id: null,
@@ -4616,13 +4611,7 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 
 	if (source.weeks.length === 0) return newPlanId;
 
-	const weekRows = source.weeks.map((w) => ({
-		plan_id: newPlanId,
-		week_index: w.week_index,
-		phase: w.phase,
-		target_volume_m: w.target_volume_m,
-		notes: w.notes,
-	}));
+	const weekRows = planWeekCopyRows(source.weeks, newPlanId);
 	const { data: weekRes, error: weekErr } = await supabase
 		.from('plan_weeks')
 		.insert(weekRows)
@@ -4639,23 +4628,7 @@ export async function publishPlanToLibrary(sourcePlanId: string): Promise<string
 		if (newId) oldToNew.set(old.id, newId);
 	}
 
-	const workoutRows = source.workouts
-		.map((w) => {
-			const newWeekId = oldToNew.get(w.week_id);
-			if (!newWeekId) return null;
-			return {
-				week_id: newWeekId,
-				scheduled_date: w.scheduled_date,
-				kind: w.kind,
-				target_distance_m: w.target_distance_m,
-				target_duration_seconds: w.target_duration_seconds,
-				target_pace_sec_per_km: w.target_pace_sec_per_km,
-				target_pace_tolerance_sec: w.target_pace_tolerance_sec,
-				structure: w.structure,
-				notes: w.notes,
-			};
-		})
-		.filter((r): r is NonNullable<typeof r> => r != null);
+	const workoutRows = planWorkoutCopyRows(source.workouts, oldToNew);
 	if (workoutRows.length > 0) {
 		const { error: woErr } = await supabase.from('plan_workouts').insert(workoutRows);
 		if (woErr) throw woErr;
@@ -4725,20 +4698,12 @@ export async function publishPlanAsTemplate(
 	const { data: tmpl, error: planErr } = await supabase
 		.from('training_plans')
 		.insert({
+			...planHeadCopyFields(src),
 			user_id: userId,
-			name: src.name,
-			goal_event: src.goal_event,
-			goal_distance_m: src.goal_distance_m,
-			goal_time_seconds: src.goal_time_seconds,
-			start_date: src.start_date,
-			end_date: src.end_date,
-			days_per_week: src.days_per_week,
 			vdot: null,
 			current_5k_seconds: null,
-			status: 'completed',
-			source: src.source ?? 'manual',
 			notes: null,
-			rules: src.rules,
+			status: 'completed',
 			is_template: true,
 			club_id: clubId,
 			parent_template_id: null,
@@ -4750,13 +4715,7 @@ export async function publishPlanAsTemplate(
 
 	if (source.weeks.length === 0) return newPlanId;
 
-	const weekRows = source.weeks.map((w) => ({
-		plan_id: newPlanId,
-		week_index: w.week_index,
-		phase: w.phase,
-		target_volume_m: w.target_volume_m,
-		notes: w.notes,
-	}));
+	const weekRows = planWeekCopyRows(source.weeks, newPlanId);
 	const { data: weekRes, error: weekErr } = await supabase
 		.from('plan_weeks')
 		.insert(weekRows)
@@ -4773,25 +4732,7 @@ export async function publishPlanAsTemplate(
 		if (newId) oldToNew.set(old.id, newId);
 	}
 
-	const workoutRows = source.workouts
-		.map((w) => {
-			const newWeekId = oldToNew.get(w.week_id);
-			if (!newWeekId) return null;
-			return {
-				week_id: newWeekId,
-				scheduled_date: w.scheduled_date,
-				kind: w.kind,
-				target_distance_m: w.target_distance_m,
-				target_duration_seconds: w.target_duration_seconds,
-				target_pace_sec_per_km: w.target_pace_sec_per_km,
-				target_pace_end_sec_per_km: w.target_pace_end_sec_per_km,
-				target_pace_tolerance_sec: w.target_pace_tolerance_sec,
-				pace_zone: w.pace_zone,
-				structure: w.structure,
-				notes: w.notes,
-			};
-		})
-		.filter((r): r is NonNullable<typeof r> => r != null);
+	const workoutRows = planWorkoutCopyRows(source.workouts, oldToNew);
 	if (workoutRows.length > 0) {
 		const { error: woErr } = await supabase.from('plan_workouts').insert(workoutRows);
 		if (woErr) throw woErr;
