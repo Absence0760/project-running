@@ -46,9 +46,11 @@ indexed anyway).
 | dashboard / feed / settings / … | CSR (app shell) | generic shell | — (auth-gated) |
 
 **The `/` row states the intent, not the artifact.** Measured on a production
-build 2026-09-04: `build/index.html` is adapter-static's SPA *fallback* — one
-`<title>`, no canonical, no `og:`/`twitter:`/`description`, no
-`Organization`/`WebSite` JSON-LD — because `src/routes/+page.ts` exports no
+build 2026-09-05: `build/index.html` is adapter-static's SPA *fallback* — no
+`<title>` (since [§ 1167](../architecture/decisions.md) moved the default into
+the root layout, where a fallback rendering no components cannot reach it), no
+canonical, no `og:`/`twitter:`/`description`, no `Organization`/`WebSite`
+JSON-LD — because `src/routes/+page.ts` exports no
 `prerender` and there is no root `+layout.ts` to set one, so `/` is a
 client-rendered route. It is NOT a prerendered page being overwritten: there is
 no `index.html` in `.svelte-kit/output/prerendered/pages/` at all. Closing it is
@@ -94,19 +96,30 @@ The five share Lambdas each embed `apps/web/build/index.html` at bundle time and
 splice their own head into it per request, stripping whatever stale signals the
 shell carries first. Which signals those are is a fact about the artifact, so it
 is measured rather than asserted: `share/spa_shell_head_signals.test.ts` pins the
-counts (`{title: 1, social: 0, canonical: 0, jsonLd: 0}` as of 2026-09-04)
+counts (`{title: 0, social: 0, canonical: 0, jsonLd: 0}` as of 2026-09-05)
 against `src/app.html` unconditionally, and against `build/index.html` whenever a
-build is present. Three of the four strips therefore act on nothing today; they
+build is present. All four strips therefore act on nothing today; they
 stay because a single `og:` default added to `app.html`, or the landing page
 above reaching this filename, makes all four load-bearing in one edit — and
 `injectEntityHead` also serves `notFoundShell`, where nothing about the entity
 may survive onto a page that says it is gone.
 
 The strip and splice steps live once, in `share/head_splice.ts`. It takes a
-signal LIST rather than doing everything, because a recap head emits neither a
-canonical nor a JSON-LD block and stripping those would delete the shell's own
-nodes and put nothing back ([decisions § 1114](../architecture/decisions.md) +
+signal LIST rather than doing everything, because two heads emit no JSON-LD
+block — the recap head, and the badge head that reuses the run injector — and
+stripping it for them would delete the shell's own node and put nothing back
+([decisions § 1114](../architecture/decisions.md) +
 [§ 1115](../architecture/decisions.md)).
+
+The canonical is not in that class, and treating it as though it were was a
+defect: `renderShareRecapHeadTags` has emitted a self-referential canonical
+since [§ 1090](../architecture/decisions.md), so leaving `canonical` out of the
+recap injector's list kept the shell's and spliced the recap's in after it — two
+conflicting `rel=canonical` links, which a crawler honours neither of. Nothing
+shipped broken only because the shell carries none today, and the list above is
+what says that state is provisional. The rule is per-HEAD, and for the run
+injector per-CALL, because `ShareRunMeta.jsonLd` is optional
+([§ 1190](../architecture/decisions.md)).
 
 ## Canonical consolidation (in-app → share twin)
 

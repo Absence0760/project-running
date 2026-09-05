@@ -21978,3 +21978,63 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1190. A share injector strips exactly the signals its own head emits — and for the run injector that is a per-call answer, not a fixed list
+
+`head_splice.ts` takes a signal LIST rather than doing everything, and § 1114 /
+§ 1115 recorded the reason as "the recap head emits neither a canonical nor a
+JSON-LD block". Half of that stopped being true at § 1090, which gave
+`renderShareRecapHeadTags` a self-referential canonical so a `?utm_source=` copy
+of a shared recap link would fold onto one page. The injector's list was never
+widened to match, so the recap Lambda kept the shell's canonical and spliced its
+own in behind it. Two `rel=canonical` links pointing at different URLs is not a
+tie a crawler breaks in our favour — it honours neither — so the consolidation
+§ 1090 added the tag to get was cancelled by the injector that ships it.
+
+Nothing reached production broken, because the shell carries no canonical
+today; `spa_shell_head_signals.test.ts` is the guard that says so, and its own
+header says that state is a property of another tree and ends the day the
+landing page prerenders at `build/index.html`. That is the whole hazard: a
+defect parked behind a zero. The case in `head_splice.test.ts` that should have
+caught it instead pinned it — it asserted the shell's stale canonical must
+survive, read the FIRST match only, and was therefore green on a document
+carrying two. It now reads every canonical href out and compares the whole list,
+which is the same shape the `js/incomplete-url-substring-sanitization` guidance
+already forces elsewhere: extract the value, compare it, never ask whether a URL
+appears somewhere.
+
+The rule the module states — each injector strips exactly what its own head
+replaces — was right; it was spelled at the wrong granularity. `ShareRunMeta`
+carries an OPTIONAL `jsonLd`, and the badge share page reuses that shape and
+`injectShareRunMeta` without one, so a list fixed at module scope stripped the
+shell's own `WebSite` node off every badge page and put nothing back — the exact
+loss the signal list exists to prevent, committed by the mechanism meant to
+prevent it. The run injector now decides `jsonLd` per call. The recap head still
+emits no JSON-LD, so `jsonLd` stays out of its list and the asymmetry that
+justifies the design survives; it is three signals now, not two.
+
+## 1191. The Learn render-map row is read by the guard that measures the artifact, because hand-re-measuring it drifted in both directions
+
+`docs/features/seo.md`'s row for `/learn` and `/learn/category/[category]`
+over-claimed `Article` for as long as the surface existed, was corrected in
+round 37 to "none emitted", and then under-claimed that once § 1168 gave both
+routes `buildLearnCollectionJsonLd`. Two corrections, two directions, one row,
+inside two rounds — the failure is not the reader, it is that a claim about the
+artifact was being restated by hand next to a guard that already measures the
+artifact.
+
+So `learn_structured_data.test.ts` now reads the render map. One
+`DECLARED_TYPE` map states what each kind of Learn page declares itself to be;
+the artifact cases assert the build agrees with it, and a new case asserts the
+doc row does — that the index row names the `CollectionPage`, the
+`BreadcrumbList` and the `ItemList` those pages emit, that the guide row names
+`Article`, and that neither row names the other's type, which is the
+over-claiming direction spelled as its own negative. Changing what a Learn page
+emits now fails until the build, the expectation and the doc have all followed.
+
+The doc case deliberately does NOT gate on a build being present. The three
+artifact cases self-skip without one and `test-web` never builds, so a guard
+folded into them would inherit that skip and bind nowhere — which is the
+condition this row drifted under. Reading a committed markdown file needs no
+artifact, so this half runs on every PR today, and the artifact half joins it
+when the build-step filing lands.
