@@ -31,6 +31,8 @@ import {
 	parseSteps,
 	readWorkflows,
 	runBody,
+	checkStatedJobCount,
+	ORIENTATION_DOC,
 } from './check_ci_diagnostics.mjs';
 
 const CENSUS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -1045,4 +1047,73 @@ test('the committed composite actions carry no rule-1 or rule-5 defect', () => {
 	const delivery = checkShellSafeDiagnoses([], actions);
 	assert.deepEqual(delivery.errors, []);
 	assert.ok(delivery.scanned > 50, `only ${delivery.scanned} action shell line(s) read`);
+});
+
+// ---------------------------------------------------------------------------
+// Rule 6 — the job count the orientation doc states.
+// ---------------------------------------------------------------------------
+
+const THREE_JOBS = [
+	'name: CI',
+	'on:',
+	'  push:',
+	'  pull_request:',
+	'jobs:',
+	'  alpha:',
+	'    runs-on: ubuntu-latest',
+	'  beta:',
+	'    runs-on: ubuntu-latest',
+	'  ci-gate:',
+	'    needs: [alpha, beta]',
+	'    runs-on: ubuntu-latest',
+].join('\n');
+
+const CI_ONLY = [{ name: 'ci.yml', text: THREE_JOBS }];
+
+const DOC_OK = [
+	'.github/workflows/',
+	'  ci.yml             → the same 3 CI jobs run on every PR and push to main',
+	'                       check is the "CI gate" aggregator, which needs: every',
+	'                       one of the other 2 — among them `terraform`',
+].join('\n');
+
+test('rule 6 passes when both figures match the workflow', () => {
+	const { errors, ok, stated } = checkStatedJobCount(CI_ONLY, DOC_OK);
+	assert.deepEqual(errors, []);
+	assert.equal(stated, 2);
+	assert.match(ok[0], /3 job key\(s\), 2 of them/);
+});
+
+test('rule 6 fails on a stale job count', () => {
+	const { errors } = checkStatedJobCount(CI_ONLY, DOC_OK.replace('the same 3 CI jobs', 'the same 9 CI jobs'));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /states 9 where ci\.yml has 3 job keys/);
+});
+
+test('rule 6 fails on a stale needs count, which is a different figure', () => {
+	const { errors } = checkStatedJobCount(CI_ONLY, DOC_OK.replace('the other 2', 'the other 3'));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /states 3 where ci\.yml has 2 entries/);
+});
+
+test('rule 6 fails LOUDLY when the sentence is reworded away, rather than checking nothing', () => {
+	const { errors } = checkStatedJobCount(CI_ONLY, DOC_OK.replace('the same 3 CI jobs', 'a few jobs'));
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /holds no sentence matching .*so that rule checks nothing/);
+});
+
+test('rule 6 fails on a second job-count claim written in a form no template reads', () => {
+	const { errors } = checkStatedJobCount(CI_ONLY, `${DOC_OK}\n\nElsewhere: all 7 CI jobs are required.`);
+	assert.equal(errors.length, 1);
+	assert.match(errors[0], /"7 CI jobs", which no template in checkStatedJobCount reads/);
+});
+
+test('rule 6 refuses to report a verdict when ci.yml was not read', () => {
+	const { errors } = checkStatedJobCount([{ name: 'other.yml', text: THREE_JOBS }], DOC_OK);
+	assert.match(errors[0], /ci\.yml was not read/);
+});
+
+test('the committed CLAUDE.md agrees with the committed ci.yml', () => {
+	const { errors } = checkStatedJobCount(readWorkflows(WORKFLOW_DIR), readFileSync(ORIENTATION_DOC, 'utf-8'));
+	assert.deepEqual(errors, []);
 });
