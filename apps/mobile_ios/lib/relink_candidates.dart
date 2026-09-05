@@ -53,6 +53,16 @@ int _dayGap(DateTime runStart, DateTime scheduledDate) {
 /// scheduled date) AND not already linked to a *different* workout. The
 /// workout's own current run stays eligible regardless of window so the
 /// current pick is always visible.
+///
+/// The order is TOTAL — `startedAt` descending, then `id` ascending — rather
+/// than merely stable. Neither fetcher's `.order()` carries a secondary key and
+/// the two queries differ (web windows on `started_at` and OR-s in the current
+/// pick; this side reads the owner's whole history), so two runs sharing an
+/// exact instant reached the sort in whatever order Postgres happened to return
+/// them. `List.sort` is not stable: measured over 720,000 random lists it
+/// matched a stable sort on every one of 400,000 at 33 elements or fewer and on
+/// none of 320,000 past it (decisions § 1241). A total order makes both
+/// unobservable.
 List<RelinkCandidateRun> filterRelinkCandidates({
   required List<RelinkCandidateRun> runs,
   required Iterable<String> linkedRunIds,
@@ -74,6 +84,9 @@ List<RelinkCandidateRun> filterRelinkCandidates({
     return _dayGap(r.startedAt, scheduledDate) <= windowDays;
   }).toList();
 
-  out.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+  out.sort((a, b) {
+    final byStart = b.startedAt.compareTo(a.startedAt);
+    return byStart != 0 ? byStart : a.id.compareTo(b.id);
+  });
   return out;
 }

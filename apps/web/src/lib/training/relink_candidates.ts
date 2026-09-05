@@ -72,6 +72,15 @@ function dayGap(runStartIso: string, scheduledDate: string): number {
  * scheduled date) AND not already linked to a *different* workout. The
  * workout's own current run stays eligible regardless of window so the
  * current pick is always visible.
+ *
+ * The order is TOTAL — `started_at` descending, then `id` ascending — rather
+ * than merely stable. Neither fetcher's `.order()` carries a secondary key and
+ * the two queries differ (web windows on `started_at` and OR-s in the current
+ * pick; the phone reads the owner's whole history), so two runs sharing an
+ * exact instant reached the sort in whatever order Postgres happened to return
+ * them. `Array.prototype.sort` is stable by contract and preserves that order;
+ * Dart's `List.sort` is not, and past 33 elements it reorders equal elements
+ * every time (decisions § 1241). A total order makes both unobservable.
  */
 export function filterRelinkCandidates(
 	input: RelinkFilterInput
@@ -91,8 +100,12 @@ export function filterRelinkCandidates(
 			if (r.id === input.currentRunId) return true;
 			return dayGap(r.started_at, input.scheduledDate) <= window;
 		})
-		.sort(
-			(a, b) =>
-				new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
-		);
+		.sort((a, b) => {
+			const byStart =
+				new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
+			// NaN is falsy, so an unparseable instant falls to the id tiebreak
+			// rather than being read as a tie and left in fetch order.
+			if (byStart) return byStart;
+			return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+		});
 }

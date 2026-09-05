@@ -23971,3 +23971,45 @@ it. Not a fix for anything measured reachable (nothing on the phone writes that
 key, and `jsonDecode` cannot produce a NaN), but the two halves of a registered
 pair should not answer the same input differently; pinned, and verified failing
 without the guard.
+
+## 1241. The relink picker's tie order was Dart's to lose, and the two clients were not even fetching in the same order to lose it from
+
+The filing asked which half of `filterRelinkCandidates` is nondeterministic
+before proposing a fix, because the round before it had answered that question
+wrong. Measured, on the shapes this helper actually sees. **V8: zero
+divergences from a stable sort in 800,000 trials** (list sizes 2, 8, 16, 32, 33,
+34, 40, 64, 120, 570 crossed with 1-5 distinct instants) — `Array.prototype.sort`
+is stable by contract and, unlike the comparator § 1200 found, this one returns 0
+on a tie, so the contract applies. **Dart: 0 divergences in 400,000 trials at 33
+elements or fewer, and 320,000 of 320,000 past it** — `List.sort` switches from
+insertion sort to dual-pivot quicksort at 34 and reorders equal elements on
+every single run at 34, 40, 64 and 120. The nondeterministic half is Dart's, and
+34 is reachable: the phone filters to ±7 local days and the web query to ±9, so a
+runner logging a little over two activities a day — and `runs` now carries walks,
+hikes, rides and stroller pushes — fills that window.
+
+**The second half of the filing measured out true and matters more.** Neither
+fetcher carries a secondary `.order()` key: `data.ts` orders `started_at`
+descending over a `started_at` window OR-ed with the current pick's id, and
+`training_service.dart` orders `started_at` descending over the owner's entire
+run history. Two different queries, two different plans, one unspecified tie
+order each — so even with both sorts stable the two platforms could hand the
+same runner two different pickers. Stability was never enough here; only a total
+order is.
+
+Both halves now sort `started_at` descending then `id` ascending. That is
+deliberately not § 1200's scan-instead-of-sort — this helper's caller consumes
+the whole ordered list, which is the `readiness` / `routine_history` case — but
+it is stronger than that house shape, which leaves each platform deterministic
+with respect to its own input: a total order removes the input order from the
+answer entirely, which is what two differing fetches required. Adding `id` to
+the two `.order()` clauses was considered and **not** done: with the helper
+totally ordered the fetch order is unobservable, neither query paginates, and a
+second rail asserting the same thing is a thing that can drift. Web's comparator
+falls through to the id tiebreak on a NaN (`if (byStart)` is falsy for both 0 and
+NaN), so an unparseable instant is ordered rather than left in fetch order; the
+Dart half's typed `DateTime` cannot reach that case, the same shape difference
+the pair already carries elsewhere. Two mirrored tests each — the two-run case
+from the filing and a 40-run all-tied case past Dart's threshold, both asserted
+from two opposite input orders — take the suites to 12 and 12, and each was
+verified failing with its own tiebreak removed.

@@ -151,4 +151,49 @@ void main() {
     );
     expect(out.map((r) => r.id).toList(), ['inside']);
   });
+
+  // decisions § 1241: the tie is broken on `id`, not left to whatever the fetch
+  // returned. Both tests below are the same case at the two sizes that matter —
+  // the second is past `List.sort`'s 33-element insertion-sort threshold, where
+  // it reorders equal elements on every run.
+  test('two runs at the identical instant order by id, not by fetch order', () {
+    List<String> order(List<RelinkCandidateRun> runs) => filterRelinkCandidates(
+          runs: runs,
+          linkedRunIds: const [],
+          currentRunId: null,
+          scheduledDate: _date('2026-04-05'),
+        ).map((r) => r.id).toList();
+
+    expect(
+      order([
+        _run('b', '2026-04-05T07:00:00Z'),
+        _run('a', '2026-04-05T07:00:00Z'),
+      ]),
+      ['a', 'b'],
+    );
+    expect(
+      order([
+        _run('a', '2026-04-05T07:00:00Z'),
+        _run('b', '2026-04-05T07:00:00Z'),
+      ]),
+      ['a', 'b'],
+    );
+  });
+
+  test('a 40-run all-tied list is ordered by id regardless of fetch order', () {
+    final ids = [
+      for (var i = 0; i < 40; i++) 'run-${i.toString().padLeft(2, '0')}',
+    ];
+    final runs = [for (final id in ids) _run(id, '2026-04-05T07:00:00Z')];
+    List<String> order(List<RelinkCandidateRun> input) =>
+        filterRelinkCandidates(
+          runs: input,
+          linkedRunIds: const [],
+          currentRunId: null,
+          scheduledDate: _date('2026-04-05'),
+        ).map((r) => r.id).toList();
+
+    expect(order(runs), ids);
+    expect(order(runs.reversed.toList()), ids);
+  });
 }

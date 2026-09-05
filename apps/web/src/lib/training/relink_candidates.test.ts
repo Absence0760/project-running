@@ -134,3 +134,45 @@ test('DST-straddling window counts exact calendar days (8 d → excluded at 7)',
 	});
 	assert.deepEqual(out.map((r) => r.id), ['inside']);
 });
+
+// decisions § 1241: the tie is broken on `id`, not left to whatever the fetch
+// returned. Both tests below are the same case at the two sizes that matter —
+// the second is past Dart's 33-element insertion-sort threshold, where its
+// `List.sort` reorders equal elements on every run.
+test('two runs at the identical instant order by id, not by fetch order', () => {
+	const forward = filterRelinkCandidates({
+		runs: [run('b', '2026-04-05T07:00:00Z'), run('a', '2026-04-05T07:00:00Z')],
+		linkedRunIds: [],
+		currentRunId: null,
+		scheduledDate: '2026-04-05',
+	});
+	const reversed = filterRelinkCandidates({
+		runs: [run('a', '2026-04-05T07:00:00Z'), run('b', '2026-04-05T07:00:00Z')],
+		linkedRunIds: [],
+		currentRunId: null,
+		scheduledDate: '2026-04-05',
+	});
+	assert.deepEqual(
+		forward.map((r) => r.id),
+		['a', 'b']
+	);
+	assert.deepEqual(
+		reversed.map((r) => r.id),
+		['a', 'b']
+	);
+});
+
+test('a 40-run all-tied list is ordered by id regardless of fetch order', () => {
+	const ids = Array.from({ length: 40 }, (_, i) => `run-${String(i).padStart(2, '0')}`);
+	const runs = ids.map((id) => run(id, '2026-04-05T07:00:00Z'));
+	const shuffled = [...runs].reverse();
+	const input = { linkedRunIds: [], currentRunId: null, scheduledDate: '2026-04-05' };
+	assert.deepEqual(
+		filterRelinkCandidates({ runs, ...input }).map((r) => r.id),
+		ids
+	);
+	assert.deepEqual(
+		filterRelinkCandidates({ runs: shuffled, ...input }).map((r) => r.id),
+		ids
+	);
+});
