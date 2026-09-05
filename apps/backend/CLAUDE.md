@@ -13,7 +13,7 @@ apps/backend/
 └── supabase/
     ├── config.toml           # local-stack config — ports, auth, email
     ├── seed.sql              # test user + 12 runs + 5 routes + integrations + gym/nutrition
-    ├── migrations/                # ~50 files; full list at `ls supabase/migrations/`.
+    ├── migrations/                # full list at `ls supabase/migrations/`.
     │   │                          # Apr 2026 batch laid the schema foundation
     │   │                          # (initial_schema → funding); May 2026 added the
     │   │                          # social layer (notifications, kudos/comments,
@@ -136,27 +136,36 @@ lock reference, the #409/#410/#411 worked examples, and a pre-merge checklist
 live in **[../../docs/backend/migration_locks.md](../../docs/backend/migration_locks.md)**.
 Read it before writing a migration that adds a constraint or touches many rows.
 `scripts/check_migration_online_safety.mjs` (in the `parity-types` CI job,
-alongside the version-keys guard) fails a migration that adds a CHECK/FK to a
-guarded table without `NOT VALID`; run it locally with `node
-apps/backend/scripts/check_migration_online_safety.mjs`. It scans **every**
-committed migration on every run, and the already-applied violations are
-grandfathered by name in `GRANDFATHERED_VIOLATIONS`, so **adding a migration
-needs no edit to the guard** ([decisions § 775](../../docs/architecture/decisions.md)). **`jobs` is in the
-guarded set** (#394 follow-up): a bare `DROP CONSTRAINT jobs_kind_chk` +
-`ADD CONSTRAINT … CHECK (…)` widening now fails CI just like the
+alongside the version-keys guard) fails **two** shapes on a guarded table, and
+both are ways of scanning it under a lock that blocks writers: a CHECK/FK added
+without `NOT VALID` (`blocking_add`), and a `VALIDATE CONSTRAINT` in the **same
+file** as the DDL whose lock is still held (`same_txn_validate`) — because a
+migration file is applied inside one transaction, so the `ADD … NOT VALID`'s own
+`ACCESS EXCLUSIVE` is still held while the `VALIDATE` scans, and the split buys
+nothing until it is a split across FILES ([decisions § 1180](../../docs/architecture/decisions.md)).
+Run it locally with `node apps/backend/scripts/check_migration_online_safety.mjs`.
+It scans **every** committed migration on every run, and the already-applied
+violations are grandfathered by name in `GRANDFATHERED_VIOLATIONS` — a
+`{filename, kind, table, constraint}` tuple, with `kind` in the key so an
+exemption for a blocking add cannot silently also cover a same-transaction
+validate in the same file — so **adding a migration needs no edit to the guard**
+([decisions § 775](../../docs/architecture/decisions.md)). That list is for
+migrations already applied to prod, which cannot be edited; if the guard fails
+on a migration you are still writing, **split it** rather than naming it there.
+**`jobs` is in the guarded set** (#394 follow-up): a bare `DROP CONSTRAINT
+jobs_kind_chk` + `ADD CONSTRAINT … CHECK (…)` widening now fails CI just like the
 `notifications` case, because the Go `job_worker` polls `jobs` continuously and
 a blocking validation scan stalls job processing — so a new `kind` allow-list
-entry must use `ADD … NOT VALID` + a separate `VALIDATE CONSTRAINT`. The
-read-only `/audit/migration-locks` command classifies the *existing* migrations
-by lock impact.
+entry must use `ADD … NOT VALID` in one migration and `VALIDATE CONSTRAINT` in a
+**later** one. The read-only `/audit/migration-locks` command classifies the
+*existing* migrations by lock impact.
 
 ### Widening a `kind` CHECK also needs `NOT VALID` — don't `DROP` + bare `ADD`
 
 The online-safety rule above bites hardest on a pattern that keeps recurring:
 widening an enum-style `kind` allowlist by dropping the old CHECK and re-adding
-it. `notifications_kind_check` has been rebuilt this way ~12 times (latest
-`20270218_001_auto_hide_reports.sql`) and `jobs_kind_chk` on nearly every new
-job kind (`20261211_001`, `20270410_001`, …) — always as `drop constraint …;
+it. `notifications_kind_check` has been rebuilt this way over and over, and
+`jobs_kind_chk` on nearly every new job kind — always as `drop constraint …;
 alter table … add constraint … check (kind in (…))`, with **no `NOT VALID`**.
 The bare `ADD CONSTRAINT … CHECK` re-scans the whole table under a blocking
 lock — the exact downtime the two-step avoids — and these are the two worst
@@ -167,20 +176,38 @@ stalls job draining). Already-applied migrations aren't editable; this is a
 forward-guard for the **next** kind addition. Use the two-step:
 
 ```sql
+-- Migration 1 — <version>_widen_notifications_kind.sql
 alter table notifications drop constraint notifications_kind_check;
 alter table notifications
   add constraint notifications_kind_check
   check (kind in (…)) not valid;                        -- instant, no scan
-alter table notifications validate constraint notifications_kind_check;  -- separate; SHARE UPDATE EXCLUSIVE, writes pass
 ```
 
-Model it on `20260621_001_runs_track_url_path_check.sql` and
-`20261124_001_content_length_caps.sql`, which already split the `ADD … NOT
-VALID` from a later `VALIDATE CONSTRAINT`. Re-emit the **complete** union each
-time — a CHECK rebuild replaces the whole allowlist, so the same "bare-body
-strips prior fixes" trap applies (see below). `check_migration_online_safety.mjs` catches
-the missing `NOT VALID` on **both** — `notifications` and `jobs` are each in its
-`GUARDED_TABLES` set, and the add-half trips its check.
+```sql
+-- Migration 2 — a SEPARATE FILE, so the scan gets its own transaction with no
+-- stronger lock held. In migration 1's file it would scan under the
+-- ACCESS EXCLUSIVE that file is still holding, and buy nothing.
+alter table notifications validate constraint notifications_kind_check;
+```
+
+**Two files, not two statements.** Writing both halves into one migration is a
+`same_txn_validate` violation and fails CI — the guard walks each file in order
+and reports a VALIDATE that scans while an earlier statement in the same file
+still holds a write-blocking lock on that table. The fix when it fires on a
+migration you are writing is to move the `VALIDATE` into its own file, not to add
+a `GRANDFATHERED_VIOLATIONS` entry ([decisions § 1180](../../docs/architecture/decisions.md)).
+
+Model it on the `20261124_001_content_length_caps.sql` → `20270503_001_free_text_length_caps.sql`
+pair, which adds `NOT VALID` in one migration and validates in a later one. Do
+**not** model it on `20260621_001_runs_track_url_path_check.sql`: this file used
+to cite that as a split, and it is not one — it adds and validates in the same
+transaction, and is one of the entries grandfathered as `same_txn_validate`. Re-emit
+the **complete** union each time — a CHECK rebuild replaces the whole allowlist,
+so the same "bare-body strips prior fixes" trap applies (see below).
+`check_migration_online_safety.mjs` catches both halves on both tables —
+`notifications` and `jobs` are each in its `GUARDED_TABLES` set, so a missing
+`NOT VALID` trips `blocking_add` and a same-file `VALIDATE` trips
+`same_txn_validate`.
 
 ### Migrations that reference postgis / pg_trgm objects must set search_path themselves
 
@@ -197,7 +224,7 @@ the local stack. Any migration using these must start with:
 set search_path = public, extensions;
 ```
 
-All 30 existing postgis/pg_trgm migrations carry this header (added 2026-07-11
+Every existing postgis/pg_trgm migration carries this header (added 2026-07-11
 when the first prod `db push` hit the error). Function-level
 `set search_path = …` clauses on `security definer` functions are a separate,
 runtime concern — they don't satisfy this apply-time requirement.
@@ -325,7 +352,7 @@ Under RLS a refused SELECT does not error — it returns no rows. So `is_empty(.
 - **A base table** is guarded by row-level security, so every RLS-enabled table gains one extra permissive `SELECT` policy for the span of that one statement, revealing only the rows the test's own transaction wrote ([decisions.md § 753](../../docs/architecture/decisions.md)). It used to be a role change to the BYPASSRLS owner, which revealed the whole table — so a kill said a subject existed in the database rather than that the test built one. File your fixture at the top level or inside `lives_ok`; both count.
 - **A view or an RPC filters in its own SQL**, which RLS never touched, so the relation itself is swapped for a permissive definition inside a savepoint. The replacements live in `apps/backend/scripts/pgtap_definer_neutralisers.mjs`, one per relation, each keeping every predicate that says *which* rows the assertion asked about and dropping every predicate that says *whether the caller may see them*. **Do not assume the catalogue tells you which relations need this**: eight of the twenty-four are `SECURITY INVOKER`, and filter with a `= auth.uid()` or an `is_public = true` written into the body.
 
-Run it locally with the stack up (`node apps/backend/scripts/check_pgtap_refusal_assertions.mjs`, ~34s over 168 assertions), `--validate-operators` to prove each replacement still reveals a subject its real relation hides, or `--static-only` with no DB for the half that fails any `throws_ok` pinning neither a SQLSTATE nor a message.
+Run it locally with the stack up (`node apps/backend/scripts/check_pgtap_refusal_assertions.mjs`, tens of seconds; it prints the assertion and file counts it actually reached), `--validate-operators` to prove each replacement still reveals a subject its real relation hides, or `--static-only` with no DB for the half that fails any `throws_ok` pinning neither a SQLSTATE nor a message.
 
 An assertion whose empty result is genuinely a real answer (a trigger that correctly did not fire) goes in `EXPECTED_SURVIVORS` with its reason — a stale entry fails the guard too, so the list cannot outlive what it excuses. Conversely, an assertion whose refusal is real but whose wording the guard's vocabulary cannot match (`excluded from search` is a privacy floor in one test and a category filter in the next) opts in with a comment on the line above it:
 
