@@ -47,6 +47,23 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
         activationState == .activated
     }
 
+    /// What the watch may say about its own outbox the moment the session
+    /// finishes activating.
+    ///
+    /// `queuedCount` and `transferState` are in-memory, and WCSession's outbox
+    /// is not: a queued transfer survives app closure AND watch reboot, and
+    /// waits days for a phone that is switched off. So on every relaunch the
+    /// two disagreed — the watch came up saying `.idle` with a count of zero
+    /// while the platform was still holding runs, and the pre-run screen's
+    /// "N run queued to sync" line, the only place the watch ever says a run is
+    /// still waiting, was simply absent (decisions § 1209).
+    ///
+    /// Pure because `WCSession` cannot be constructed in the unit-test host —
+    /// the same reason `canTransfer` above is pure.
+    static func stateOnActivation(outstanding: Int) -> TransferState {
+        outstanding > 0 ? .pending : .idle
+    }
+
     /// Hand a finished run off to the phone. Returns `true` only when the file
     /// was handed to WCSession's outbox (queued for delivery); `false` when the
     /// session isn't activated yet and nothing was queued. A `false` MUST be
@@ -60,7 +77,11 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
         }
         WCSession.default.transferFile(fileURL, metadata: metadata)
         DispatchQueue.main.async {
-            self.queuedCount += 1
+            // Read off the platform rather than incremented: the outbox
+            // already holds the transfer just handed to it, and a private
+            // tally seeded at zero on every launch is what made the count a
+            // claim about this app session rather than about the queue.
+            self.queuedCount = WCSession.default.outstandingFileTransfers.count
             self.transferState = .pending
         }
         return true
@@ -68,7 +89,14 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
 
     // MARK: - WCSessionDelegate
 
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        guard Self.canTransfer(activationState: activationState) else { return }
+        let outstanding = session.outstandingFileTransfers.count
+        DispatchQueue.main.async {
+            self.queuedCount = outstanding
+            self.transferState = Self.stateOnActivation(outstanding: outstanding)
+        }
+    }
 
     func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
         if error == nil {

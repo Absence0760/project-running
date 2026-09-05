@@ -22145,3 +22145,43 @@ to EOF, which would swallow every later button in the file and pass them all.
 Read, not run: there is no Xcode on this workstation and none in Linux CI, so
 nothing here has been compiled. The `Test watchOS app (Swift)` macOS job settles
 whether it builds; this ADR claims only what a parser can see.
+
+## 1209. The watchOS queued-run count is read off `WCSession.outstandingFileTransfers`, not kept as a private tally
+
+Hunted in the same round as § 1208. `WatchConnectivityManager` held
+`queuedCount` and `transferState` as in-memory `@Published` state, seeded at `0`
+and `.idle`, incremented on hand-off and decremented in
+`session(_:didFinish:)`. WCSession's outbox is not in-memory: the file's own
+doc comment says a queued transfer "survives app closure and watch reboot" and
+that "a day of offline runs will all drain to Supabase the moment the phone
+companion app next activates its own `WCSession`."
+
+So on every relaunch the two disagreed, and in the direction that hides the
+problem. `PreRunView` renders `"N run queued to sync"` on `queuedCount > 0` —
+the ONLY place this watch ever tells a runner a recorded run has not reached the
+phone. A runner who syncs with the phone off, then closes the app or lets the
+watch reboot, comes back to a pre-run screen that says nothing at all, while the
+platform is still holding their run. It is the same class as Wear's frozen
+`queuedCount` (§ 1104): a count that stops tracking the thing it names, and
+whose failure is silence.
+
+`outstandingFileTransfers` is the authoritative list and this file already
+consulted it — `pendingTransferURLs()` uses it as "the authoritative keep-set for
+the stale-export sweep", so the durable answer was one read away in a delegate
+callback that was an empty stub. The count is now taken from it at the two
+moments it can be trusted without a device to verify callback ordering against:
+`activationDidCompleteWith` (the relaunch case, which is the defect) and
+immediately after `transferFile`, where the outbox demonstrably already holds
+what was just handed over. `didFinish` keeps its decrement, because whether a
+finished transfer has left `outstandingFileTransfers` by the time the delegate
+runs is not something this workstation can establish, and a derived read there
+could sit one high until the next event — worse than the tally it replaced.
+
+The decision half is pure — `stateOnActivation(outstanding:)` — for the reason
+`canTransfer(activationState:)` already is: constructing the manager activates a
+real `WCSession`, which the unit-test host does not have. It is pinned both ways,
+because coming up `.pending` on an empty outbox would leave a fresh install
+saying "Queued — will retry" forever.
+
+Read, not run. No Xcode here; the `Test watchOS app (Swift)` macOS job is what
+compiles any of this.
