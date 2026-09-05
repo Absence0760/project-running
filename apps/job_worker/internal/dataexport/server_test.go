@@ -465,7 +465,7 @@ func TestBuildCSV_ColumnOrderAndDataShape(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("expected 2 lines (header + 1 row); got %d", len(lines))
 	}
-	if !strings.HasPrefix(lines[0], "id,started_at,distance_m") {
+	if !strings.HasPrefix(lines[0], "id,started_at,concluded_at,distance_m") {
 		t.Errorf("header order off: %q", lines[0])
 	}
 	// activity_type + is_dnf are real columns now (F3); they come from the

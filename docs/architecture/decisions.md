@@ -22033,3 +22033,69 @@ a change of preference rather than a repair; it is not re-filed. What IS still
 owed and is filed is an e2e fixture: nothing under `tests-e2e/` plants a
 `matched_track_url` with a Storage object, so no test on either side of the
 seam exercises a run whose matched track is the one being rendered.
+
+## 1171. The Art 20 `runs` projection is derived from the table now, and each format declares what it omits
+
+[§ 1135](#1135) measured it: `public.runs` has 24 columns, both export transports
+selected 17, and `concluded_at`, `elevation_gain_m`, `race_listing_id`,
+`fastest_5k_s`, `fastest_10k_s`, `fastest_half_marathon_s` and
+`fastest_marathon_s` reached neither `runs.csv` nor either archive's
+`runs.json`. Four of them **used to be exported and stopped**: migration
+`20270325_001` promoted the PR times out of `runs.metadata` into real columns
+and stripped the keys from the bag in the same UPDATE, so they rode inside the
+`metadata` cell until the day it ran and then left silently. `manifest.json`
+cannot show any of this — its completeness contract is row counts against each
+section's authoritative total, and every row was present.
+
+Adding seven names to four lists would leave the mechanism that lost them
+intact, so the direction is inverted instead. **The select is the whole table**
+on both rails (`RUNS_SELECT`, `exportRunsSelect`), and each format states what
+it OMITS, with a reason:
+
+* the CSV declines `user_id` and the two Storage paths (`CSV_OMIT` / `csvOmit`)
+  — the subject's own id in a re-homeable archive, and a key into the owner's
+  folder that any live session JWT could fetch, in the format most likely to be
+  shared off-device;
+* the backup archive's `runs.json` declines `user_id` alone, because a restore
+  must be able to re-home it;
+* the GPX zip's manifest declines the two paths as well, because the GPX files
+  are in the same archive, and `created_at` / `updated_at` with them, because it
+  is a manifest of what was exported rather than the restorable record.
+
+The omissions are executed as omissions rather than re-listed: `omitKeys` on the
+TypeScript side, and on the Go side an embedded `ExportRun` with the dropped
+field shadowed. **`json:"-"` does not shadow** — it removes the outer field from
+consideration entirely, so the embedded one is emitted after all, which the
+first version of this did; the working form is a nil `*struct{}` under
+`omitempty` carrying the same JSON name, and it is named `omitted` so the next
+reader does not have to rediscover that.
+
+**Four guards, because four different things can lose a column.**
+`TestExportRunProjectionCoversEveryRunsColumn` reads the `runs` Row out of the
+committed `database.types.ts` and requires it of `ExportRun` and of the EF's
+`RUNS_SELECT`. `TestExportRunRowMirrorsItsSelect` holds the worker's own struct
+to its own select string, where a field present in one and absent from the other
+decodes as null on every row and reads exactly like a column the runner never
+wrote. `TestExportRunFromRowCopiesEveryField` fills every field of
+`internal.ExportRunRow` with a distinct non-zero value and compares the bridge's
+output as JSON — the leaf-package rule keeps the two structs apart, and a field
+forgotten in the hand-written copy between them is invisible to both ends.
+`TestCSVCarriesEveryRunsColumnExceptTheOnesItDeclares` and
+`TestRunsJsonProjectionsOmitOnlyWhatTheyDeclare` close the renderers, the
+second by marshalling a row rather than reading the source. Each was shown to
+fail by perturbing the thing it guards before it was committed.
+
+Two notes on what this does NOT do. The CSV header grew from 19 columns to 26,
+which a positional consumer feels; that is the same call
+[§ 1134](#1134) made when it inserted `hr_coverage` mid-header rather than
+appending, and the reason is the same — a column placed where a reader will
+find it is worth more than a header a script can index blindly. And `runs.json`
+gaining fields flows into web's `restoreBackup`, which spreads the archived row
+into its upsert: `race_listing_id` is the one new FK, it points at the global
+race calendar rather than at anything per-user, and a dangling one fails that
+run's upsert into a per-run warning exactly as a dangling `route_id` already
+could.
+
+The `hr_coverage` half of [§ 1134](#1134) needed nothing: it had already landed,
+guard and all, and its `TestCSVColumnsMatchTheEdgeFunctionRail` is what forced
+both CSV rails to move together here.

@@ -153,10 +153,8 @@ type Backend interface {
 	CheckRateLimitTiered(ctx context.Context, userID, bucket string, freeMax, proMax, windowSec int) (denied bool, retryAfterSec int, err error)
 
 	// StreamExportRuns walks the user's runs most-recent-first, handing
-	// each page to `emit` and dropping it. The projection is the same
-	// shape the EF pulled — id, started_at, duration_s, distance_m,
-	// source, external_id, metadata, track_url, is_public, event_id,
-	// route_id, created_at, updated_at.
+	// each page to `emit` and dropping it. The projection is every
+	// column of `public.runs`, the same set the EF's RUNS_SELECT pulls.
 	// Returns an ExportCompleteness naming the authoritative row count —
 	// a walk that could not read every page must be visible in
 	// manifest.json, not silently truncated.
@@ -375,26 +373,67 @@ type ExportRoute struct {
 	Extra       map[string]interface{} `json:"-"`
 }
 
-// ExportRun is the row projection the export builder consumes.
-// Mirrors the EF's RunRow shape at export-data/index.ts.
+// ExportRun is the row projection the export builder consumes: every
+// column of `public.runs`, mirroring the EF's RenderRunRow at
+// export-data/render.ts. What each output format leaves out is decided
+// at the renderer -- backupRun and gpxManifestRun below, and csvColumns
+// -- so a column added to the table is EXPORTED by default. The opposite
+// default is what let seven of them go missing (decisions § 1171).
 type ExportRun struct {
-	ID           string                 `json:"id"`
-	UserID       string                 `json:"user_id"`
-	StartedAt    string                 `json:"started_at"`
-	DurationS    int                    `json:"duration_s"`
-	DistanceM    float64                `json:"distance_m"`
-	Source       string                 `json:"source"`
-	ActivityType string                 `json:"activity_type"`
-	IsDNF        bool                   `json:"is_dnf"`
-	ExternalID   *string                `json:"external_id"`
-	Metadata     map[string]interface{} `json:"metadata"`
-	TrackURL     *string                `json:"track_url"`
-	HrSeriesURL  *string                `json:"hr_series_url"`
-	IsPublic     *bool                  `json:"is_public"`
-	EventID      *string                `json:"event_id"`
-	RouteID      *string                `json:"route_id"`
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
+	ID                   string                 `json:"id"`
+	UserID               string                 `json:"user_id"`
+	StartedAt            string                 `json:"started_at"`
+	ConcludedAt          *string                `json:"concluded_at"`
+	DurationS            int                    `json:"duration_s"`
+	DistanceM            float64                `json:"distance_m"`
+	ElevationGainM       *float64               `json:"elevation_gain_m"`
+	Source               string                 `json:"source"`
+	ActivityType         string                 `json:"activity_type"`
+	IsDNF                bool                   `json:"is_dnf"`
+	ExternalID           *string                `json:"external_id"`
+	Metadata             map[string]interface{} `json:"metadata"`
+	TrackURL             *string                `json:"track_url"`
+	HrSeriesURL          *string                `json:"hr_series_url"`
+	IsPublic             *bool                  `json:"is_public"`
+	EventID              *string                `json:"event_id"`
+	RouteID              *string                `json:"route_id"`
+	RaceListingID        *string                `json:"race_listing_id"`
+	Fastest5kS           *int                   `json:"fastest_5k_s"`
+	Fastest10kS          *int                   `json:"fastest_10k_s"`
+	FastestHalfMarathonS *int                   `json:"fastest_half_marathon_s"`
+	FastestMarathonS     *int                   `json:"fastest_marathon_s"`
+	CreatedAt            string                 `json:"created_at"`
+	UpdatedAt            string                 `json:"updated_at"`
+}
+
+// omitted suppresses one field of an embedded struct. encoding/json
+// prefers the shallower field carrying a given JSON NAME, and a nil
+// pointer under `omitempty` is written as nothing. `json:"-"` does NOT
+// work here: it removes the field from consideration entirely, so the
+// embedded field is no longer shadowed and is emitted after all.
+type omitted = *struct{}
+
+// backupRun is what `runs.json` carries in the backup archive: the whole
+// row less `user_id`, so a restore can re-home the archive into another
+// account.
+type backupRun struct {
+	ExportRun
+	UserID omitted `json:"user_id,omitempty"`
+}
+
+// gpxManifestRun is `runs.json` in the GPX zip. It drops the two Storage
+// paths as well: the GPX files are in the same archive, so the paths buy
+// the consumer nothing and would put the raw owner-folder key into a
+// document the subject may share -- the leak csvColumns omits track_url
+// for. `created_at` / `updated_at` go with them, because this entry is a
+// manifest of what was exported rather than the restorable record.
+type gpxManifestRun struct {
+	ExportRun
+	UserID      omitted `json:"user_id,omitempty"`
+	TrackURL    omitted `json:"track_url,omitempty"`
+	HrSeriesURL omitted `json:"hr_series_url,omitempty"`
+	CreatedAt   omitted `json:"created_at,omitempty"`
+	UpdatedAt   omitted `json:"updated_at,omitempty"`
 }
 
 // TrackPoint is the wire shape inside each gzipped Storage track.
@@ -470,13 +509,14 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 
 // --- CSV builder -----------------------------------------------------
 
-// csvColumns mirrors the EF's column order at export-data/index.ts.
-// `track_url` is deliberately omitted (audit/all storage Low — see
-// EF comment); consumers get the actual track bytes in the GPX zip
-// when they pick that format.
+// csvColumns mirrors the EF's CSV_COLS at export-data/render.ts, and
+// TestCSVColumnsMatchTheEdgeFunctionRail holds the two to ordered
+// equality. It is every column of `public.runs` except csvOmit, plus the
+// five `metadata` keys the header names outright.
 var csvColumns = []string{
 	"id",
 	"started_at",
+	"concluded_at",
 	"distance_m",
 	"duration_s",
 	"source",
@@ -486,15 +526,35 @@ var csvColumns = []string{
 	schema.MetaAvgBPM,
 	schema.MetaHRCoverage,
 	schema.MetaSteps,
+	// The metadata key the recorders write, and beside it the column the
+	// challenge-vert metric reads (20270302_001). A writer that sets only
+	// one leaves the other empty, so both are named.
 	schema.MetaElevationM,
+	"elevation_gain_m",
+	// Until 20270325_001 these four rode inside the `metadata` cell. The
+	// promotion to real columns stripped the keys from the bag in the
+	// same statement, so they left the export the day it ran.
+	"fastest_5k_s",
+	"fastest_10k_s",
+	"fastest_half_marathon_s",
+	"fastest_marathon_s",
 	"route_id",
 	"event_id",
+	"race_listing_id",
 	"external_id",
 	"is_public",
 	"metadata",
 	"created_at",
 	"updated_at",
 }
+
+// csvOmit is the three columns the CSV does not carry. `user_id` is the
+// subject's own id and the archive is re-homeable; the two Storage paths
+// are a key into the owner's folder that any live session JWT could
+// fetch directly, and the CSV is the format most likely to be shared or
+// stored off-device (/audit/all storage Low). The GPX export already
+// ships the track bytes themselves.
+var csvOmit = []string{"user_id", "track_url", "hr_series_url"}
 
 // WriteCSV streams one summary row per run into `w` with the column
 // shape the EF used, a page at a time. Nothing but the current page is
@@ -546,6 +606,7 @@ func csvRow(r ExportRun) []string {
 	return []string{
 		r.ID,
 		r.StartedAt,
+		deref(r.ConcludedAt),
 		fmt.Sprintf("%.0f", r.DistanceM),
 		fmt.Sprintf("%d", r.DurationS),
 		r.Source,
@@ -556,8 +617,14 @@ func csvRow(r ExportRun) []string {
 		hrCoverageCell(md[schema.MetaHRCoverage]),
 		stringy(md[schema.MetaSteps]),
 		stringy(md[schema.MetaElevationM]),
+		derefNum(r.ElevationGainM),
+		derefInt(r.Fastest5kS),
+		derefInt(r.Fastest10kS),
+		derefInt(r.FastestHalfMarathonS),
+		derefInt(r.FastestMarathonS),
 		deref(r.RouteID),
 		deref(r.EventID),
+		deref(r.RaceListingID),
 		deref(r.ExternalID),
 		derefBool(r.IsPublic),
 		string(mdJSON),
@@ -638,6 +705,24 @@ func deref(s *string) string {
 	return *s
 }
 
+// derefNum / derefInt render a nullable numeric column the way the EF's
+// `stringy` renders the same JSON value, so the two rails emit the same
+// bytes. An absent value is the empty cell, never a zero: a run that set
+// no marathon PR is not a run with a marathon PR of nothing.
+func derefNum(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return stringy(*v)
+}
+
+func derefInt(v *int) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.Itoa(*v)
+}
+
 func derefBool(b *bool) string {
 	if b == nil || !*b {
 		return "false"
@@ -684,20 +769,7 @@ func WriteGpxZip(ctx context.Context, w io.Writer, runs RunSource, trackFetcher 
 	var emitErr error
 	comp, err := runs(ctx, func(page []ExportRun) error {
 		for _, r := range page {
-			if err := manifest.row(map[string]interface{}{
-				"id":            r.ID,
-				"started_at":    r.StartedAt,
-				"distance_m":    r.DistanceM,
-				"duration_s":    r.DurationS,
-				"source":        r.Source,
-				"activity_type": r.ActivityType,
-				"is_dnf":        r.IsDNF,
-				"external_id":   r.ExternalID,
-				"metadata":      r.Metadata,
-				"is_public":     r.IsPublic,
-				"event_id":      r.EventID,
-				"route_id":      r.RouteID,
-			}); err != nil {
+			if err := manifest.row(gpxManifestRun{ExportRun: r}); err != nil {
 				emitErr = err
 				return err
 			}
@@ -974,7 +1046,7 @@ func WriteBackupZip(ctx context.Context, w io.Writer, in BuildBackupZipInput, f 
 	zw := zip.NewWriter(w)
 	completeness := ExportCompleteness{}
 
-	// runs.json — strip user_id for re-homeability.
+	// runs.json — the whole row less user_id, for re-homeability.
 	fw, err := zw.Create("runs.json")
 	if err != nil {
 		return BuildResult{}, err
@@ -985,24 +1057,7 @@ func WriteBackupZip(ctx context.Context, w io.Writer, in BuildBackupZipInput, f 
 	var emitErr error
 	runsComp, err := in.Runs(ctx, func(page []ExportRun) error {
 		for _, r := range page {
-			if err := runsArr.row(map[string]interface{}{
-				"id":            r.ID,
-				"started_at":    r.StartedAt,
-				"duration_s":    r.DurationS,
-				"distance_m":    r.DistanceM,
-				"source":        r.Source,
-				"activity_type": r.ActivityType,
-				"is_dnf":        r.IsDNF,
-				"external_id":   r.ExternalID,
-				"metadata":      r.Metadata,
-				"track_url":     r.TrackURL,
-				"hr_series_url": r.HrSeriesURL,
-				"is_public":     r.IsPublic,
-				"event_id":      r.EventID,
-				"route_id":      r.RouteID,
-				"created_at":    r.CreatedAt,
-				"updated_at":    r.UpdatedAt,
-			}); err != nil {
+			if err := runsArr.row(backupRun{ExportRun: r}); err != nil {
 				emitErr = err
 				return err
 			}
