@@ -36,6 +36,7 @@ pub enum PlanPhase {
     Peak,
     Taper,
     Race,
+    Graduation,
 }
 
 impl PlanPhase {
@@ -46,6 +47,7 @@ impl PlanPhase {
             PlanPhase::Peak => "peak",
             PlanPhase::Taper => "taper",
             PlanPhase::Race => "race",
+            PlanPhase::Graduation => "graduation",
         }
     }
 
@@ -56,25 +58,31 @@ impl PlanPhase {
             "peak" => Some(PlanPhase::Peak),
             "taper" => Some(PlanPhase::Taper),
             "race" => Some(PlanPhase::Race),
+            "graduation" => Some(PlanPhase::Graduation),
             _ => None,
         }
     }
 }
 
 /// Canonical phase ordering, mirroring web's `PLAN_PHASE_ORDER`.
-pub const PLAN_PHASE_ORDER: [PlanPhase; 5] = [
+pub const PLAN_PHASE_ORDER: [PlanPhase; 6] = [
     PlanPhase::Base,
     PlanPhase::Build,
     PlanPhase::Peak,
     PlanPhase::Taper,
     PlanPhase::Race,
+    // The terminal week of every beginner walk-run plan — `generatePlan` stamps
+    // it on the last week instead of `race`, so a C25K plan's whole arc is
+    // `build` then this. Omitting it did not mis-order the marker, it deleted
+    // the ending: `from_name` answered None and the phase was dropped.
+    PlanPhase::Graduation,
 ];
 
 /// The distinct phases the plan moves through, de-duplicated and sorted into
 /// canonical order. Unknown phase strings are ignored. Drives the overall
 /// phase marker.
-pub fn ordered_plan_phases(phases: &[&str]) -> Vec<PlanPhase, 5> {
-    let mut out: Vec<PlanPhase, 5> = Vec::new();
+pub fn ordered_plan_phases(phases: &[&str]) -> Vec<PlanPhase, 6> {
+    let mut out: Vec<PlanPhase, 6> = Vec::new();
     for &phase in PLAN_PHASE_ORDER.iter() {
         if phases
             .iter()
@@ -152,6 +160,36 @@ mod tests {
     #[test]
     fn ordered_plan_phases_empty_plan_yields_no_phases() {
         assert!(ordered_plan_phases(&[]).is_empty());
+    }
+
+    /// Mirror of web's `orderedPlanPhases: a walk-run plan orders build before
+    /// graduation` and its Dart twin. `generatePlan(beginnerWalkRun)` stamps
+    /// `graduation` on the terminal week rather than `race`, so this is the
+    /// whole arc of every C25K plan — and the phase this port had no name for,
+    /// which deleted the ending rather than mis-ordering it.
+    #[test]
+    fn ordered_plan_phases_a_walk_run_plan_orders_build_before_graduation() {
+        assert_eq!(
+            ordered_plan_phases(&["graduation", "build", "build"]).as_slice(),
+            &[PlanPhase::Build, PlanPhase::Graduation]
+        );
+    }
+
+    /// The ladder as strings, so a reader comparing this rail against
+    /// `PLAN_PHASE_ORDER` in `plan_progress.ts` / `planPhaseOrder` in
+    /// `plan_progress.dart` diffs one line — and so a variant added to the enum
+    /// without a `from_name` arm fails here rather than silently dropping every
+    /// week carrying it.
+    #[test]
+    fn plan_phase_order_names_the_whole_canonical_ladder_and_round_trips() {
+        let names: Vec<&str, 6> = PLAN_PHASE_ORDER.iter().map(|p| p.name()).collect();
+        assert_eq!(
+            names.as_slice(),
+            &["base", "build", "peak", "taper", "race", "graduation"]
+        );
+        for p in PLAN_PHASE_ORDER.iter() {
+            assert_eq!(PlanPhase::from_name(p.name()), Some(*p));
+        }
     }
 
     #[test]
