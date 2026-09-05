@@ -264,7 +264,7 @@ class Waypoint {
 }
 ```
 
-**Generated row classes** (`src/generated/db_rows.dart`) — one class per table in the `_tables` allowlist (~51 tables today, tracking most of the schema: `RunRow`, `RouteRow`, `IntegrationRow`, `UserProfileRow`, and ~47 more). Snake-case field names that mirror the Supabase schema exactly, plus column-name constants (e.g. `RunRow.colStartedAt = 'started_at'`). Produced by `scripts/gen_dart_models.dart`, which parses `apps/backend/supabase/migrations/*.sql` and must be rerun after every migration. `ApiClient` marshals between domain classes and row classes, so a column rename forces a recompile at the mapping site instead of silently serialising to a dead field. See [schema_codegen.md](schema_codegen.md) for the full flow.
+**Generated row classes** (`src/generated/db_rows.dart`) — one class per table in the `_tables` allowlist (73 tables today, tracking most of the schema: `RunRow`, `RouteRow`, `IntegrationRow`, `UserProfileRow`, and 69 more). Snake-case field names that mirror the Supabase schema exactly, plus column-name constants (e.g. `RunRow.colStartedAt = 'started_at'`). Produced by `scripts/gen_dart_models.dart`, which parses `apps/backend/supabase/migrations/*.sql` and must be rerun after every migration. `ApiClient` marshals between domain classes and row classes, so a column rename forces a recompile at the mapping site instead of silently serialising to a dead field. See [schema_codegen.md](schema_codegen.md) for the full flow.
 
 ### `gpx_parser`
 
@@ -554,7 +554,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 | Wear OS | Native Kotlin + Jetpack Compose-for-Wear | Separate Gradle project in monorepo, schema-codegen'd Kotlin row classes — see [decisions.md § 15](decisions.md) |
 | Web app | SvelteKit 2 + Svelte 5 + TypeScript | File-based routing, deployed to AWS S3 + CloudFront with `/api/coach` on Lambda — see [decisions.md § 53](decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) |
 | Web maps | MapLibre GL JS | Route builder, run GPS trace, live spectator |
-| Web icons | Self-hosted Material Symbols webfont, rendered as ligatures | Subset to the 347 icons the tree names by `scripts/gen_web_icon_font.mjs` — see [decisions.md § 780](decisions.md). |
+| Web icons | Self-hosted Material Symbols webfont, rendered as ligatures | Subset to the 324 icons the tree names by `scripts/gen_web_icon_font.mjs` — see [decisions.md § 780](decisions.md). |
 | Web auth | Supabase Auth + `@supabase/ssr` | Cookie-based sessions |
 
 | Monorepo tooling | Melos (Flutter) + npm workspaces (web + backend) | Separate toolchains, same repo. `pnpm` lockfile is committed for local convenience; CI runs `npm`. |
