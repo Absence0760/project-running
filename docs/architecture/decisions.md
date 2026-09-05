@@ -23875,3 +23875,171 @@ difference. Semantics checked against SQL ground truth on the same data: 12
 events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
+
+## 1268. `/` is prerendered and the SPA shell moved to `200.html` — two defects at once, each of which hid the other from a previous diagnosis
+
+The landing page had shipped without a `<title>`, a canonical, a description
+or its `Organization`/`WebSite` JSON-LD for as long as the surface existed,
+while `src/routes/+page.svelte` built all of it through `SeoHead` and
+`docs/features/seo.md`'s render map promised every piece. Two rounds diagnosed
+it and neither could act. The first named the cause as adapter-static writing
+the SPA fallback over a prerendered page; § 1116 measured that
+`.svelte-kit/output/prerendered/pages/` held no `index.html` at all, concluded
+the first was simply wrong, and filed a four-part fix. **Both were half right,
+and that is the whole shape of the bug**: `+page.ts` exported no `prerender`,
+so nothing was written to that path — which is why § 1116 found nothing to
+overwrite — *and* the adapter's fallback was named `index.html`, so the moment
+prerendering was switched on the fallback would replace the page. Measured
+here, with `prerender = true` and the fallback still called `index.html`:
+`.svelte-kit/output/prerendered/pages/index.html` is written at 14,873 bytes
+and `build/index.html` comes out at 5,785 — the fallback, generated after the
+prerendered pages and to the same name. So the first diagnosis named a real
+mechanism that was dormant, and the second ruled out a mechanism that was
+merely not yet reachable. Each defect made the other invisible.
+
+Both are closed together, because either alone is worse than neither: the
+`prerender` export alone yields a page that is immediately overwritten, and
+renaming the fallback alone removes `build/index.html` from the output
+entirely, at which point CloudFront's `default_root_object` 403s on the site
+root. With both, `build/index.html` is 14,875 bytes carrying a title, a
+canonical of `https://threkir.com/`, a description, 8 `og:` and 4 `twitter:`
+meta and both JSON-LD blocks; `build/200.html` is 5,784 bytes carrying none of
+them. The bundle budget is unmoved.
+
+Seven files move in one commit because the shell's filename is named in three
+trees (§ 1272) and a rail left behind fails nothing in CI and only production.
+The consequence for § 1167 is the reverse of what its own note predicted: the
+shell did not gain a title, it MOVED, so `spa_shell_head_signals.test.ts` keeps
+`{title: 0, social: 0, canonical: 0, jsonLd: 0}` and only its filename constant
+changes — all four strips in the share injectors are still acting on nothing.
+The untitled document is now the deep-link body rather than the site root,
+which is the half of § 1167's cost that this pays back.
+
+## 1269. Moving the SPA shell's filename on a live distribution has a safe order, and it is not one of the two § 1116 considered
+
+§ 1116 concluded that "there is no order of merge, deploy and `terraform apply`
+that keeps deep links working", and over those three acts it is right. Deploy
+the artifact first and the bucket holds the landing page at `index.html` while
+CloudFront's 403 mapping still points there, so every deep link serves the
+landing page — and serves it broken, since its asset URLs are relative and
+resolve under the deep link's own directory (§ 1270). Apply the infra first and
+the 403 points at a `/200.html` that is not in the bucket yet.
+
+The window closes once a fourth act is allowed: a one-off object copy, made at
+the moment the two files are byte-identical. (1) `aws s3 cp
+s3://<bucket>/index.html s3://<bucket>/200.html` — the live object is still the
+shell, so this adds a duplicate and changes nothing for any visitor. (2)
+`terraform apply` the 403 to `/200.html`; deep links now read the copy, which
+is the same bytes they were reading a moment earlier. (3) Deploy the tag;
+`index.html` becomes the landing page and `200.html` is overwritten with the
+fresh shell. No instant in that sequence serves a wrong body.
+
+**Stated at the confidence it has**: this is derived from
+`.github/workflows/release-web.yml` and the AWS CLI's documented filter
+semantics, and has never been executed against AWS — no CI lane holds
+credentials. The step it rests on is that the pre-seeded `200.html` survives
+the release's `aws s3 sync --delete`, which is true because that sync excludes
+`*.html` and an excluded destination key is not a deletion candidate. **What
+would falsify it**: `--delete` evaluating exclude filters against the source
+side only, in which case step 1's object is removed by the first sync of step 3
+and the window reopens between that sync and the second one. That is the one
+thing to check at the edge, and it is checkable without risk — run step 1, run
+a release, and confirm `200.html` is still listed.
+
+## 1270. One file cannot be both the prerendered landing page and the SPA fallback, for two independent reasons in the framework
+
+The cheap-looking alternative to moving the shell is to let `index.html` be
+both: prerender `/` onto it and keep serving it as the body of every deep-link
+403. It does not work, and the two reasons are worth recording because the
+next reader will propose it again.
+
+**Asset URLs.** A prerendered page is emitted with relative asset references
+(`./_app/immutable/entry/start.*.js`, `./favicon.png`) and a bootstrap that
+computes `base: new URL(".", location).pathname.slice(0, -1)`. Served at `/`
+that resolves correctly. Served as the body of `/runs/<id>` it resolves every
+asset under `/runs/`, so nothing loads at all — not the entry chunk, not the
+manifest, not the icon. The generated fallback, by contrast, is emitted with
+absolute references (`/favicon.png`), which is exactly what lets it boot at
+arbitrary depth. Both were read off the two artifacts in the same build.
+
+**The hydration payload.** SvelteKit's client re-derives `route` and `params`
+from `location` during hydration (`client.js`, `_hydrate` →
+`get_navigation_intent(url, false)`), but it takes `node_ids` verbatim from the
+inline payload. A prerendered `/` carries `node_ids: [0, 3]`, so serving it at
+a run URL would load the landing page's component under the run route's params
+rather than correcting itself. There is no framework-level reconciliation to
+lean on.
+
+Together these are why the split is forced rather than chosen, and why the
+CloudFront 403 mapping is not an optional part of § 1268's change.
+
+## 1271. The render map is a claim about the emitted HTML, so it is asserted against the emitted HTML — for every prerendered surface, not just the one that broke
+
+Three rounds looked at this defect and two got the mechanism wrong, and the
+reason is the same one § 1168 hit on the Learn rows: every source-level reading
+of the tree agreed with the render map. `+page.svelte` really does build the
+whole head, `SeoHead` really is mounted, `+page.ts` really does resolve the
+canonical host — and the only place the claim was false was the file the build
+wrote. A guard over the source could not have caught it and did not.
+
+`src/lib/seo/prerendered_head_contract.test.ts` reads `build/` instead. On the
+landing page it asserts each signal `docs/features/seo.md` promises: exactly one
+title that is neither empty nor the bare site name, a canonical whose pathname
+is `/`, a non-empty description, the five `og:` properties and `twitter:card`,
+and exactly the two JSON-LD types `Organization` and `WebSite`, each carrying
+the schema.org context. Then it widens to the whole prerendered surface, which
+is where the class-level value is: **every** built page except the shell must
+carry a title, a description, `og:title`, `og:image` and `twitter:card`, and a
+canonical whose pathname equals the path that file is actually served at. That
+last one is the general form of the bug — a canonical naming a different page
+than the one the file is served as is precisely what a shell swap looks like
+from the outside — and it holds for the sixteen prerendered pages today.
+
+Proved non-vacuous against four mutations of the built artifact: the canonical
+deleted from `/` (5 cases fail), a Learn page's canonical repointed at a
+sibling (3), `index.html` replaced with the shell, which is the original defect
+exactly (9), and one of the two JSON-LD blocks dropped (3). A population
+assertion guards the widening — at least fifteen pages, the landing page plus
+the Learn hub, six category indexes and seven guides — so a walk that stopped
+matching cannot satisfy every claim by reading nothing. The file self-skips
+without a build, which is why it belongs in the CI job that builds and not only
+in the one that runs the unit suite.
+
+## 1272. The SPA shell's filename is a three-rail contract, and its guard's own fixtures are anchored to the contract rather than to a spelling
+
+One filename is named in three trees: `apps/web/svelte.config.js`'s adapter
+`fallback` writes the file, the five `apps/web/lambda/*/build.mjs` embed it in
+each share Lambda at bundle time, and `infra/modules/web-stack/main.tf`'s 403
+`custom_error_response` serves it as the body of every deep link. Nothing in a
+build can tell that one of them was left behind. A Lambda still reading
+`build/index.html` after § 1268 embeds the landing page as its shell — relative
+asset URLs, a route-`/` payload — on every share URL, and a 403 mapping still
+pointing there serves the same broken document for every client route. Both are
+silent in CI and visible only in production.
+
+`src/lib/seo/spa_shell_filename.test.ts` derives the expected name from the
+config that sets it and compares the other two rails against it, so renaming
+the shell stays a one-line change and the guard reports which rails did not
+follow. The Lambda side is discovered by walking `apps/web/lambda` for any
+`build.mjs` that resolves a path under `build/`, not from a roster, so a sixth
+Lambda is covered the day it names one; a population assertion requires at
+least five, since a walk that stopped matching would otherwise pass. The
+CloudFront side parses the `custom_error_response` block whose `error_code` is
+403 rather than scanning the file, so an unrelated mapping added later cannot
+be mistaken for it. It also asserts the pair that makes the contract necessary
+at all — `/` prerenders, therefore the fallback may not be called
+`index.html`. Non-vacuity was demonstrated by the tree itself: with the config
+changed and the other rails not yet moved, the Lambda case named all five and
+the CloudFront case named `/index.html`; reverting the fallback to
+`index.html`, and separately removing the `prerender` export, each fail too.
+
+`scripts/check_infra_error_responses.mjs` was the fourth rail and its
+`REQUIRED_MAPPING.page` moved with the rest. Its unit-test fixtures spelled
+`/index.html` in nine places, which is how a fixture stops exercising the shape
+it was written for: after the contract moved, those fixtures asserted a
+mismatch nobody intended and one case counted two errors where it expected one.
+They now read the page off `REQUIRED_MAPPING`, and the single place that still
+spells a filename is a new case asserting that pointing the 403 at
+`/index.html` — the prerendered landing page — is reported. A fixture that
+tracks the contract cannot drift; the one that must name a wrong value is the
+one proving the check exists.
