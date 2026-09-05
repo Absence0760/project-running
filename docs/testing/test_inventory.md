@@ -2,9 +2,9 @@
 
 The exhaustive, file-by-file list of what each test file covers, the Playwright spec layout, and the log of production bugs the e2e suite caught. Split out of [testing.md](testing.md) (the durable testing guide) because these per-file descriptions and counts drift fast. Regenerate live counts with `grep -cE '^\s*(test|testWidgets)\(' apps/mobile_android/test/*.dart` (Dart), `npx tsx --test` discovery (web), and `supabase test db --local` (pgTAP).
 
-**The per-file counts below are approximate and lag the suite.** They're not regenerated on every commit — treat them as ballpark, and recompute the specific file with the `grep -cE` command above when an exact number matters.
+**The per-file counts in the census above the round log were re-measured on 2026-09-05** and are the DECLARATION count each recompute command reports — 49 of the 111 measurable ones were wrong when they were checked, several by a factor of four ([decisions § 1215](../architecture/decisions.md)). They still lag the suite the moment a test lands, so recompute the specific file with the `grep -cE` command above when an exact number matters. A count written against a PARAMETERISED declaration — `l10n_generated_parity_test.dart`'s `1 + 3 per catalogue`, `catalogues.test.ts`'s one per locale — is the runtime count, not the declaration count, and says so. **The per-round sections below the `Suite totals` divider are historical records of what one round added; their counts are deliberately NOT refreshed** (the note under the `security_guards.test.ts` headings says the same).
 
-### `apps/mobile_android/test/run_stats_test.dart` — 15 tests
+### `apps/mobile_android/test/run_stats_test.dart` — 27 tests
 
 Pure-function tests for two helpers in `lib/run_stats.dart`:
 
@@ -27,7 +27,7 @@ Pure-function tests for two helpers in `lib/run_stats.dart`:
 - Slow → fast → slow run → picks the fast middle 5 km
 - Regression: a 10 km in 1:14:34 does **not** surface as a 37:17 fastest 5k
 
-### `packages/run_recorder/test/run_recorder_test.dart` — 49 tests
+### `packages/run_recorder/test/run_recorder_test.dart` — 73 tests
 
 The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hooks (see below) to bypass the real geolocator stream and inject synthetic `Position` objects directly into `_onPosition`.
 
@@ -59,13 +59,13 @@ The recorder's state machine and GPS filter chain. Uses `@visibleForTesting` hoo
 
 **Not covered (require mocking `GeolocatorPlatform.instance`):** typed errors thrown from `prepare()`, the `_gpsRetryTimer` retry loop, position-stream `onError` cleanup, `stop`/`dispose` cancelling the retry timer.
 
-### `packages/run_recorder/test/calculate_pace_test.dart` — 8 tests
+### `packages/run_recorder/test/calculate_pace_test.dart` — 16 tests
 
 Tests for the rolling-pace helper exposed via `RunRecorder.debugPaceSecondsPerKm`. Pins the null returns (empty track, fewer than 5 points, total tracked distance below 50 m, paused state), pins the GPS-derived pace value (5 fixes 50 m apart at 10 s intervals → 200 s/km regardless of wall-clock), demonstrates the trailing-window slide (8 fixes with two slow opening segments + six fast trailing segments still yields a fast pace because the early slow part falls outside the ~200 m window), and asserts the snapshot stream's `currentPaceSecondsPerKm` matches `debugPaceSecondsPerKm`.
 
 When the test was first written, `_currentWaypoint.timestamp` was set from `DateTime.now()`; a tight inject loop collapsed all five waypoint timestamps to the same millisecond, and `_calculatePace` returned null because `segmentTime <= 0`. The recorder was changed to `pos.timestamp` for the waypoint timestamp (matching the speed-clamp's GPS-time policy) so the function works correctly under fix-batching / CPU contention. See § Troubleshooting.
 
-### `packages/run_recorder/test/route_helpers_test.dart` — 17 tests
+### `packages/run_recorder/test/route_helpers_test.dart` — 33 tests
 
 Tests for `_routeRemaining` and `_offRouteDistance` exposed via `debugRouteRemaining` / `debugOffRouteDistance`. Routes are constructed at the equator so equirectangular projection (used for the perpendicular-distance and segment-projection math) and haversine (used to total segment lengths) align to within ~0.5 m for the 0.001°-spaced fixtures. `_routeRemaining` block (9 tests): null returns (no route, single-waypoint route), at start = full length, at segment midpoint = unwalked tail, on the boundary between segments = total minus the first leg, at end ≈ 0, past end clamps to 0, perpendicular offset projects onto the nearest segment, multi-segment route sums correctly. `_offRouteDistance` block (8 tests): null returns, on a waypoint ≈ 0, inline along the route ≈ 0, perpendicular offset returns the perpendicular distance, past the end returns distance to the last waypoint, multi-segment route picks the closest segment, degenerate zero-length waypoint pair is tolerated.
 
@@ -73,19 +73,19 @@ Tests for `_routeRemaining` and `_offRouteDistance` exposed via `debugRouteRemai
 
 Round-trips the canonical `metadata.laps` shape through `lapsToCanonicalJson` and `parseLapsFromJson`. Pins the per-lap-delta fields (1-based `index`, `start_offset_s` cumulative-BEFORE, `distance_m` + `duration_s` per-lap deltas) so a refactor of the serialiser can't quietly regress the cross-platform contract. Ties into the watch-payload fixture test on every platform — see [§ Cross-platform fixture contract](manual_testing.md#cross-platform-fixture-contract) in the manual testing guide.
 
-### `packages/run_recorder/test/architecture_guards_test.dart` — 7 tests
+### `packages/run_recorder/test/architecture_guards_test.dart` — 12 tests
 
 Static source-level guards on the recorder package itself: no banned imports, no `print` in production, the public-API surface stays minimal, etc. Same shape as `apps/mobile_android/test/architecture_guards_test.dart` — read the `reason:` strings before rubber-stamping a fix; failures usually mean a recent change reversed an optimisation we deliberately codified.
 
-### `packages/run_recorder/test/workout_runner_test.dart` — 13 tests
+### `packages/run_recorder/test/workout_runner_test.dart` — 42 tests
 
 The structured-workout step engine — step expansion (warmup → reps → recovery → cooldown), auto-advance, halfway / last-50 m progress signals, skip / abandon, and pace-adherence "wayBehind" classification. See [workout_execution.md](../features/workout_execution.md) for the runner state machine + UI contract.
 
-### `packages/run_recorder/test/geolocator_platform_fake_test.dart` — 8 tests
+### `packages/run_recorder/test/geolocator_platform_fake_test.dart` — 19 tests
 
 Closes the documented "typed errors thrown from `prepare()`" gap. Replaces `GeolocatorPlatform.instance` with a fake that extends `GeolocatorPlatform` (so `PlatformInterface.verify` passes) and exposes setters for `serviceEnabled` / `permissionState` / `requestPermissionResult` plus an `emit(Position)` and `emitError(Object)` method that pushes through the live position stream. The error-path tests cover `LocationServiceDisabledError` when services are off, `LocationPermissionDeniedError(forever: false)` when the request returns denied, and `LocationPermissionDeniedError(forever: true)` when permission is denied-forever — plus the "already granted" path that skips the request. The happy-path tests cover `prepare()` opening the position stream, positions flowing through the filter chain (pre-begin updates the dot but not the track; post-begin first fix becomes the track anchor; subsequent fixes accumulate distance), stream `onError` not crashing the recorder, and `dispose()` cancelling the subscription so subsequent emits don't extend the track.
 
-### `apps/mobile_android/test/local_run_store_test.dart` — 23 tests
+### `apps/mobile_android/test/local_run_store_test.dart` — 94 tests
 
 Persistence round-trips against a real temporary filesystem directory. Tests inject a tempDir via `LocalRunStore.init(overrideDirectory: ...)` so they never touch `path_provider` or the platform channel.
 
@@ -137,11 +137,11 @@ Cross-language wire-format compatibility test. The Go service at `apps/job_worke
 
 **Regression (1 test):** end-to-end mixed-source backup — 3 runs (2 with tracks), 2 routes, profile + prefs — restores fully. Caught the bug where offline restore was silently dropping `is_starred` / `description` / `club_id` from route rows; fixed in `apps/mobile_android/lib/backup.dart` by plumbing the missing keys through.
 
-### `apps/mobile_android/test/sim_watch_link_test.dart` — 8 tests
+### `apps/mobile_android/test/sim_watch_link_test.dart` — 11 tests
 
 Decoder for the custom-watch phone-link status frames (schema v1 from `watch_core::link`, `apps/custom_watch/core/src/link.rs` — the sim's TCP bridge today, the step-6 BLE characteristic later). Pins: a full frame parses field-for-field (fixture strings captured from the live sim); `"fix": null` stays null rather than becoming a zeroed fix; null optional fields (`course_deg`/`alt_m`/`tod_s`) survive; garbage lines return null instead of throwing; the byte-stream decoder skips malformed lines and reassembles frames split across chunk boundaries (a UART bridge gives no framing guarantees); the decoder consumes a `Uint8List`-typed stream (the shape a real `Socket` emits — the bind-not-transform choice); a socket that lands after `close()` (screen disposed mid-connect) is destroyed rather than leaked; the default host is the loopback on non-Android hosts.
 
-### `apps/mobile_android/test/sim_watch_screen_test.dart` — 5 tests
+### `apps/mobile_android/test/sim_watch_screen_test.dart` — 12 tests
 
 The dev-only Sim Watch screen (Settings → Developer) against a fake link. Pins: connect renders frames as they arrive (uptime, then position/speed/sats/altitude when a fix lands); a failed connection surfaces the error text rather than silently idling; disconnect closes the link and returns to the connect affordance; and the settings gate both ways — the tile shows against a loopback backend URL and is absent against a production-shaped one (same `isLocalSupabaseUrl` rail as the seed auto-login). Test gotcha pinned in-file: never `await controller.close()` on a single-subscription stream whose listener was cancelled — the done future only completes once a listener consumes it, and the test hangs forever.
 
@@ -155,7 +155,7 @@ The `wear_routes_bridge_test.dart` adds three further groups beyond the basic at
 - **burst + lifecycle characterization (8 tests):** 5 starred saves of different routes → 5 pushes (no throttling today); 100 identical re-saves → ZERO additional pushes (diff cache catches all); 100 alternating star/unstar → 100 pushes; mixed starred + plain interleaved fires once per actual starred-set change; saveBatch with 50/50 starred+plain fires ONE push (notify-once contract); detach mid-burst stops all subsequent pushes; detach during in-flight push doesn't crash and stops further pushes after; hot-restart pattern (attach→detach→new bridge attach) works; two bridge instances on the same store push independently.
 - **end-to-end wire round-trip (4 tests):** the captured `routes_json` from the channel is structurally identical to `encodeRoutesForWatch` direct output; XML/JSON-special characters round-trip via jsonEncode's built-in escaping; `updated_at_ms` is monotonic non-decreasing across consecutive pushes (the watch's stale-push gate depends on this); every captured payload satisfies the wire-format contract — JSON array of objects with exactly `{id, name, distance_m, waypoints}` keys, and every waypoint with exactly `{lat, lng}`.
 
-### `apps/mobile_android/test/wear_routes_bridge_test.dart` — 65 tests
+### `apps/mobile_android/test/wear_routes_bridge_test.dart` — 66 tests
 
 Pin the listener-attach / push-on-change / starred-only filter contract on the phone-side `WearRoutesBridge`. Uses `TestDefaultBinaryMessengerBinding.setMockMethodCallHandler` to intercept the `run_app/wear_routes` `MethodChannel` — no DI seam needed.
 
@@ -169,7 +169,7 @@ Pin the listener-attach / push-on-change / starred-only filter contract on the p
 
 **integration with LocalRouteStore (3 tests):** `saveBatch` triggers exactly one push (single listener notification); `delete` of a starred route triggers a fresh push without the deleted id; starring an existing route triggers a push that includes it.
 
-### `apps/job_worker/internal/supabase_dataexport_test.go` — 21 tests
+### `apps/job_worker/internal/supabase_dataexport_test.go` — 33 tests
 
 HTTP-level coverage for the four `SupabaseClient` methods added in the May 2026 backup work: `FetchExportRoutes`, `FetchExportProfile`, `FetchUserSettingsPrefs`, `DownloadRawTrackBytes`. Uses `httptest.NewServer` to mimic the Supabase REST + Storage surface; asserts that requests are shaped correctly (path, query params, headers) AND decoded responses match the wire contract.
 
@@ -205,7 +205,7 @@ Pluggable-fetcher coverage for `BackupServerClient`, the transport for the Go se
 
 Mirror suite for the `cloud_export_helpers` ↔ `export_job.dart` parity pair: the URL builders, `exportJobFromResponse`, `isExportJobActive`, `exportPollDelayMs` and `exportJobShortfall`. The fail-closed cases are the point and both platforms pin them identically — a status this build does not recognise is TERMINAL carrying its own raw token (a client that keeps polling a status it cannot interpret polls until the battery dies), a `ready` job that arrived with no URL is a failure rather than a dead download button, an unreadable body claims nothing, non-numeric counts are dropped rather than rendered, and a `format` neither build knows is dropped rather than carried while the status survives ([§ 980](../architecture/decisions.md) — the web half reached that field through a cast, so its type asserted a vocabulary the value was never checked against). Two Dart-side extras over the web suite: `none` reads as a real answer rather than an error (the resume path on a fresh install must show nothing, not a failure), and the enqueue body reads on the same vocabulary as the status body, so one normaliser covers both.
 
-### `apps/mobile_android/test/settings_account_export_test.dart` — 10 tests
+### `apps/mobile_android/test/settings_account_export_test.dart` — 20 tests
 
 Widget coverage of the queued Art 20 export on the Account screen, driving a scripted export service through the injected `exportClient` seam. The case they exist for is the ordinary one on a phone: the runner asks and the screen goes dark. **Resume** — an export that finished while the app was closed is simply waiting on mount, found through a status read with no POST and nothing persisted on the device. **Silence** — a subject who never asked is shown nothing about an export, and a resume read that fails is silent rather than claiming a failure. **Enqueue** — the tile POSTs to `/v1/export/jobs`, renders the building notice, and downloads nothing (the archive does not exist yet). **No silent demotion** — a refused enqueue surfaces its retry window and does NOT produce the on-device archive in its place. **Fail-closed rendering** — a `ready` job with no URL renders as a failure, a `stalled` one says so rather than claiming to still be building, and a truncated one discloses both counts. **Fresh signing** — tapping Download re-reads the status endpoint rather than reusing the URL the card was drawn with, which is signed for ten minutes from the read that produced it. Plus a copy assertion that the on-device notice names what that archive does not carry.
 
@@ -217,7 +217,7 @@ The streaming-writer group exercises the testable seam extracted from `createBac
 
 The **BackupOutcome** group covers what the settings screen is allowed to claim about a finished archive: a whole local archive discloses nothing; a blob-short one reports what it could not fetch; an outcome with no summary claims nothing. Since [decisions § 724](../architecture/decisions.md) this class builds ONE thing — the on-device archive — so there is no server verdict here to read and no fall-back to hide. LOCALLY-built archive makes no completeness claim either way (the local writer has no server verdict to read); and the English disclosure copy names both counts plus `manifest.json`.
 
-### `apps/mobile_android/test/csv_run_importer_test.dart` — 26 tests
+### `apps/mobile_android/test/csv_run_importer_test.dart` — 34 tests
 
 Pure-Dart coverage of `CsvRunImporter.parse` — the lossy summary path that round-trips Settings → "Export runs as CSV". Two header shapes are exercised: the 5-column mobile/web Settings export and the 17-column backend `/export-data` GDPR shape. The parser is offline-first by design (no API, no Supabase) and idempotent on re-import via a stable `external_id`. See `decisions.md § 65`.
 
@@ -231,7 +231,7 @@ Pure-Dart coverage of `CsvRunImporter.parse` — the lossy summary path that rou
 
 **Adversarial input (8 tests):** 1000-row CSV parses in under a second (O(n²) regression guard); Unicode + emoji + accents in title round-trip intact through quoted cells; RFC-4180 quoted-comma + escaped-double-quote (`""`) survives; mixed valid + invalid rows produce a partial result (good rows + per-row errors with 1-based row numbers, not all-or-nothing); CRLF line endings (Excel / Windows tools) parse cleanly; negative numerics pass through to the upsert layer (DB CHECK is source of truth, not the parser); trailing whitespace round-trips leniently; deeply-nested 17-column `metadata` (laps array, hr zones) round-trips JSON-equivalent.
 
-### `apps/mobile_android/test/strava_importer_zip_test.dart` — 21 tests
+### `apps/mobile_android/test/strava_importer_zip_test.dart` — 31 tests
 
 Comprehensive coverage for `StravaImporter.importFromZip`. Complements the smaller `importer_external_id_test.dart` (which only pinned the `external_id` prefix). Each test builds an in-memory zip with the `activities.csv` + a track file, then asserts on the resulting `Run`.
 
@@ -245,7 +245,7 @@ Comprehensive coverage for `StravaImporter.importFromZip`. Complements the small
 
 **Metadata + compression (3 tests):** `imported_from`/`strava_activity_type`/`title`/`activity_type`/`imported_at` populate, blank activity name falls back to "Strava import", `.gpx.gz` is decompressed before parsing.
 
-### `apps/mobile_android/test/settings_sync_test.dart` — 36 tests
+### `apps/mobile_android/test/settings_sync_test.dart` — 38 tests
 
 Covers the universal-bag and device-bag overlay logic on `SettingsSyncService` via two new `@visibleForTesting` delegates (`debugApplyUniversal`, `debugApplyDevice`). The applied-bag flow is the substantive logic — `pushX` / `updateX` are passthroughs to `SettingsService` which needs Supabase to test. Uses a real `Preferences` instance backed by `SharedPreferences.setMockInitialValues({})`.
 
@@ -257,7 +257,7 @@ Covers the universal-bag and device-bag overlay logic on `SettingsSyncService` v
 
 **Sign-out account reset (3 tests):** issue #231 — bag-mirrored `Preferences` reset to defaults, the prior user's cached bags dropped when the id is known, idempotent with no cache / no prior id.
 
-### `apps/mobile_android/test/run_screen_recording_flow_test.dart` — 6 tests
+### `apps/mobile_android/test/run_screen_recording_flow_test.dart` — 36 tests
 
 Drives the full RunScreen UI flow on top of the existing data-pipeline integration test. Adds a mock-everything setUp that closes every platform-channel surface RunScreen touches when transitioning out of idle:
 
@@ -283,7 +283,7 @@ Three scenarios: the happy-path full pipeline (GPS feed → recorder → store �
 
 Stops short of driving the full `RunScreen` UI, which would need additional mocks for Pedometer / WakelockPlus / flutter_tts / flutter_local_notifications. The data pipeline is the regression target — UI mocking is documented as a follow-up below.
 
-### `apps/mobile_android/test/sync_service_test.dart` — 19 tests
+### `apps/mobile_android/test/sync_service_test.dart` — 61 tests
 
 Covers the `_trySync` loop on `SyncService` via the new `@visibleForTesting debugTrySync` hook. A `_FakeApiClient` subclasses `ApiClient` and overrides `userId`, `saveRunsBatch`, and `deleteRunById`; `LocalRunStore` runs against a real `tempDir` (same pattern as `local_run_store_test.dart`).
 
@@ -301,7 +301,7 @@ Covers the `_trySync` loop on `SyncService` via the new `@visibleForTesting debu
 
 **start / stop (2 tests):** `start()` registers as a binding observer, fires the startup `_trySync`, and routes subsequent lifecycle events through the observer. `stop()` removes the observer so further binding-level resume events don't fire syncs.
 
-### `apps/mobile_android/test/local_route_store_test.dart` — 31 tests
+### `apps/mobile_android/test/local_route_store_test.dart` — 65 tests
 
 Persistence tests for `LocalRouteStore` mirroring the `local_run_store_test.dart` pattern — `init(overrideDirectory: ...)` with a tempDir, real file I/O, no mocks. Covers init (directory creation, non-`.json` file filtering, corrupt-file tolerance), save (file write, round-trip across fresh instances, replace-on-same-id, newest-first ordering, single-listener-call invariant), `saveBatch` (parallel write + single notify, empty-iterable no-op, overlapping-id replace), `delete` (disk + memory + unknown-id), the unmodifiable `routes` view, and the **offline pin** group (15 tests) — `pinOffline` / `unpinOffline` idempotency, listener notification, sidecar round-trip across cold start, delete clears the pin, unmodifiable views, pin-without-route is allowed and surfaces when the route lands; pin survives saveBatch overwrite of the same id; concurrent pin/unpin pairs serialise correctly and the sidecar matches in-memory; tolerates a corrupt-JSON / wrong-shape / mixed-types sidecar on cold start without crashing; 100-pin round-trip stays well under 2 s and survives cold start intact. The local-only flag semantics are pinned by `decisions.md § 64`.
 
@@ -315,7 +315,7 @@ The run file carries the L0/L1 half: it holds the store's chain open through a `
 
 Pure-function tests for the top-level `smoothTrack(List<LatLng>)` helper extracted from `widgets/live_run_map.dart` (1-2-3-2-1 weighted polyline smoother used to reduce GPS jitter on the live map). Pins: short-track passthrough (length < 5), first-two-and-last-two preservation, the explicit `(a + 2b + 3c + 2d + e) / 9` weighted-mean formula, co-linear evenly-spaced points are unchanged, the no-mutation contract (returns a new list), length-0/1 inputs handled, length-5 input smooths exactly index 2, and constant-coordinate input (weights sum to 9) returns its input.
 
-### `apps/mobile_android/test/period_summary_test.dart` — 23 tests
+### `apps/mobile_android/test/period_summary_test.dart` — 26 tests
 
 Pure-function tests for the period summary screen's extracted helpers in `lib/screens/period_summary_screen.dart`:
 
@@ -346,7 +346,7 @@ Pure-function tests for the period summary screen's extracted helpers in `lib/sc
 - `shortDate`: day + abbreviated month
 - `monthName`: full month name for all positions
 
-### `apps/mobile_android/test/goals_test.dart` — 20 tests
+### `apps/mobile_android/test/goals_test.dart` — 32 tests
 
 Pure-function tests for `evaluateGoal` and `RunGoal` JSON serialisation in `lib/goals.dart`:
 
@@ -361,7 +361,7 @@ Pure-function tests for `evaluateGoal` and `RunGoal` JSON serialisation in `lib/
 
 Round-trips the `lib/fit_export.dart` writer that produces FIT files for sharing recorded runs to Garmin Connect / TrainingPeaks. Pins the binary header layout (`.FIT` magic, protocol version, profile version, data record schema) and a small synthetic-track encode → decode → equality assertion.
 
-### `apps/mobile_android/test/route_simplify_test.dart` — 28 tests
+### `apps/mobile_android/test/route_simplify_test.dart` — 30 tests
 
 Tests for Ramer-Douglas-Peucker track simplification in `lib/route_simplify.dart`:
 
@@ -381,7 +381,7 @@ The `CRS1` course wire format in `lib/watch_course.dart` — the phone's encode 
 - `chunkCourse` offsets reassemble the frame, including a full-capacity elevation frame across many chunks
 - `courseFromWaypoints` shaping: a short route passes through, a dense one is thinned to the cap with its real endpoints intact (never cut), elevation rides along only when every carried point has one (a single missing or non-finite sample drops the whole profile), and fewer than two positions is refused with a reason
 
-### `apps/mobile_android/test/route_detail_watch_course_test.dart` — 7 tests
+### `apps/mobile_android/test/route_detail_watch_course_test.dart` — 18 tests
 
 Widget tests for the Send-to-watch entry in `lib/screens/route_detail_screen.dart`'s share menu, over a fake `WatchBleTransport` and a `devBackendUrl` driving both sides of the dev gate:
 
@@ -392,7 +392,7 @@ Widget tests for the Send-to-watch entry in `lib/screens/route_detail_screen.dar
 - A failed write surfaces the failure (never a success banner) and still disconnects
 - A non-owner's push carries the privacy-CLIPPED trace, not the stored polyline (decisions §33)
 
-### `apps/mobile_android/test/ble_heart_rate_test.dart` — 9 tests
+### `apps/mobile_android/test/ble_heart_rate_test.dart` — 14 tests
 
 Pure-function tests for `parseBleHeartRateMeasurement` in `lib/ble_heart_rate.dart`, the BLE Heart Rate Service characteristic 0x2A37 parser:
 
@@ -403,7 +403,7 @@ Pure-function tests for `parseBleHeartRateMeasurement` in `lib/ble_heart_rate.da
 - Truncated payload returns null
 - Single-byte payload returns null
 
-### `apps/mobile_android/test/training_test.dart` — 40 tests
+### `apps/mobile_android/test/training_test.dart` — 65 tests
 
 Dart mirror of `apps/web/src/lib/training/training.test.ts`. The Dart engine (`lib/training.dart`) must produce the same paces and phase assignments as the TypeScript engine for the same inputs. Covers the same functions:
 
@@ -414,15 +414,15 @@ Dart mirror of `apps/web/src/lib/training/training.test.ts`. The Dart engine (`l
 - `phaseFor`: 2 tests (phase splits, final week)
 - `generatePlan`: 7 tests (week count, day distribution, taper volume, race week, intervals, no-input fallback, stepback)
 
-### `apps/mobile_android/test/training_load_test.dart` — 10 tests
+### `apps/mobile_android/test/training_load_test.dart` — 28 tests
 
 Dart mirror of `apps/web/src/lib/training_load.test.ts`. The Dart engine (`lib/training_load.dart`) must produce the same Fitness / Fatigue / Form curves as the TypeScript engine for the same inputs. Covers `computeStress` (distance fallback ~50 for an easy 5k, TRIMP path lights up with `avg_bpm` + resting + max, zero-input → 0), `aggregateDailyStress` (sums same-day runs), `computeTrainingLoadSeries` (emits exactly `windowDays` entries, TSB rises during a 14-day taper, all-zero with no runs), and `hasTrimpSignal` (no `avg_bpm` / has `avg_bpm` + prefs / prefs missing).
 
-### `apps/mobile_android/test/segments_test.dart` — 8 tests
+### `apps/mobile_android/test/segments_test.dart` — 21 tests
 
 Dart mirror of `apps/web/src/lib/segments.test.ts`. Pure tests for the segment-effort walker in `lib/segments.dart#computeEffortFromTrack`. Same `straightTrack` synthetic helper (meridian-aligned, constant pace) so haversine cumulative distance is predictable. Covers a clean segment, run shorter than segment end, sub-2-point tracks, zero / negative segment windows, sparse-sampling guard (median step > segLen / 5), missing timestamps in the interpolation bracket, mid-segment interpolation, and sample-aligned endpoints.
 
-### `apps/mobile_android/test/privacy_test.dart` — 8 tests
+### `apps/mobile_android/test/privacy_test.dart` — 9 tests
 
 Dart mirror of `apps/web/src/lib/privacy.test.ts`. Pure tests for `lib/privacy.dart`. Covers `isInAnyZone` (empty zones, centre, far point) and `clipPointsToZones` (empty zones returns input, drops leading + trailing in-zone, keeps interior, every-point-in-zone returns empty, multi-zone union).
 
@@ -514,7 +514,7 @@ After the April 2026 mobile-codebase unification, `apps/mobile_ios/test/` is kep
 
 Smoke tests for the `@visibleForTesting ApiClient.withClient(SupabaseClient)` named constructor — the DI seam that lets tests inject a fake `SupabaseClient` without booting `Supabase.initialize`. Pins: `userId` reads from the injected client (null when not signed in), `userEmail` reads from the injected client, two `withClient` instances stay independent (the override is an instance field, not static), and the default `ApiClient()` constructor still falls back to the global (which throws when `Supabase.initialize` hasn't run — the throw is the test value, confirming the seam only fires for `withClient`).
 
-### `packages/api_client/test/api_client_codecs_test.dart` — 24 tests
+### `packages/api_client/test/api_client_codecs_test.dart` — 30 tests
 
 Covers the four pure helpers on `ApiClient` exposed via `@visibleForTesting` static accessors (`debugWaypointToJson`, `debugWaypointFromJson`, `debugRunFromRow`, `debugRouteFromRow`). The methods drive the wire format for the gzipped track blob in the `runs` Storage bucket and the row-to-domain conversion that powers every list / detail screen — code that previously had no direct coverage because it hides behind `Supabase.instance.client`.
 
@@ -526,7 +526,7 @@ Covers the four pure helpers on `ApiClient` exposed via `@visibleForTesting` sta
 
 The tests run under `flutter test` because `api_client` transitively depends on `supabase_flutter` (which pins Flutter); the test bodies themselves use only `package:test/test.dart`.
 
-### `packages/gpx_parser/test/route_parser_test.dart` — 25 tests
+### `packages/gpx_parser/test/route_parser_test.dart` — 60 tests
 
 Pure-parser coverage for `RouteParser` (GPX/KML/TCX/GeoJSON) and `FitParser`. GPX block (9 tests): `<trkpt>` happy path with elevation gain summed correctly, `<rtept>` and `<wpt>` fallbacks when no track points, malformed `lat="bad"` skipped, `name` defaults to "Imported route", elevation gain ignores descents, `<time>` parsed onto `Waypoint.timestamp`, missing `<time>` leaves it null, empty document returns an empty waypoint list. KML block (4 tests): LineString with elevation, missing `<coordinates>` element, non-numeric triples dropped, 2D coordinates leave elevation null. TCX block (3 tests): `<Trackpoint><Position>` with altitude + timestamps, missing `<Position>` skipped, `<Notes>` fallback when `<Name>` is absent. GeoJSON block (5 tests): `[lng, lat, ele]` order, 2D coordinates, missing geometry, missing `properties.name`, malformed coordinate entries skipped. FIT block (4 tests): too-short bytes throw, `.FIT` signature mismatch throws, header size other than 12/14 throws, valid empty header parses to an empty route.
 
@@ -534,7 +534,7 @@ Pure-parser coverage for `RouteParser` (GPX/KML/TCX/GeoJSON) and `FitParser`. GP
 
 Regression for the `RunSource.watch` enum-map regen. Constructs a `Run` with `source: RunSource.watch`, asserts `toJson()['source'] == 'watch'` and `fromJson({'source': 'watch'}).source == RunSource.watch`. Existed to catch the crash that would otherwise hit `_$RunSourceEnumMap[instance.source]!` on any serialisation of a watch-originated run.
 
-### `apps/web/src/lib/training/training.test.ts` — 46 tests
+### `apps/web/src/lib/training/training.test.ts` — 71 tests
 
 TypeScript unit tests for the training plan engine, written against Node's `node:test` API (no test runner dependency). Run with `npx tsx --test src/lib/training/training.test.ts` from `apps/web`.
 
@@ -697,7 +697,7 @@ Every `await res.json()` / `.text()` in production web source must sit inside a 
 
 `hrCoveragePercent`, the grading behind run detail's heart-rate-coverage copy ([decisions § 1088](../architecture/decisions.md)). Pins that `0` is a measurement (sensor enabled, nothing delivered) and absent is not, that a nonzero fraction never rounds down into that reading, that 100 is a ceiling, and that a value outside the writer's `0..1` contract is refused rather than rendered as "covered 8500% of this run".
 
-### `apps/web/src/lib/types.test.ts` — 6 tests
+### `apps/web/src/lib/types.test.ts` — 12 tests
 
 `parseRunSource` defensive-fallback contract — every valid `RunSource` value passes through; null, undefined, empty string, unknown string, and case-mismatched input all fall back to `'app'`.
 
@@ -717,7 +717,7 @@ Pure tests for the GPX / KML / run-GPX writers in `lib/gpx.ts`. `toGpx` covers t
 
 Source guard over the undo queue's one adopter ([§ 984](../architecture/decisions.md)). `createUndoQueue` calls `restore` on undo OR on a commit that later fails, and the two land at very different times — the commit runs when the window closes, by which point the runner may have opened another pair's gear modal, and a bare re-assignment then paints one pair's observations under another's name. Pins that `removeWearLog`'s restore no-ops when `wearLogsEpoch` has moved, that the epoch is CAPTURED before the destruction is deferred (a live read always equals itself), and that every replacement of `wearLogs` goes through the one `setWearLogs` that bumps it — a new assignment written in the obvious shape would otherwise make the check vacuous for that path alone. Source-level because `/settings/gear/+page.svelte` cannot be executed under `tsx --test`.
 
-### `apps/web/src/lib/runs/run_stats.test.ts` — 24 tests
+### `apps/web/src/lib/runs/run_stats.test.ts` — 20 tests
 
 Pure tests for `lib/run_stats.ts` (web-only — Android computes splits inline in `run_detail_screen.dart`). `movingTimeSeconds` covers empty / single-point input = 0, threshold-passing segments counted, sub-threshold (stopped) segments dropped, mixed running + 60 s stop counts only running, the custom `minSpeedMps` override, same-timestamp pairs (`dt == 0`) skipped, and points without `ts` skipped. `elevationGainMetres` was deleted in round 34 ([§ 1004](../architecture/decisions.md)): the run-detail page calls `computeElevationGain` directly, as `run_detail_screen.dart` already did, and every one of its behavioural cases was already covered in `routes/route_simplify.test.ts`. What replaced them here is a source guard over the page — it must derive `realElevationGain` from a `computeElevationGain(` call, import it from the module that owns the rule rather than a re-export, and no longer name the adapter. `computeRealSplits` covers short-track + no-timestamp early returns, the even-paced 3 km run producing three full splits at the right pace and distance (with one-sample overshoot tolerance — see source comment), the final partial split being emitted when remainder > 50 m, the final partial < 50 m being dropped, per-split elevation gain carrying through, and tracks without elevation leaving every split's `elevation_m` null.
 
@@ -733,7 +733,7 @@ Web-only (no Dart twin — mobile does not read `event_exceptions` outside its o
 
 Mirror of `apps/mobile_android/test/goals_test.dart`. Pure tests for `lib/goals.ts`. `periodStart` / `periodEnd` cover Monday-default + Sunday-override week anchoring, month start = 1st, week end = start + 7 days, December → January wrap. `formatPaceSecPerKm` covers em-dash for non-positive / non-finite, m:ss/km formatting with zero-padded seconds, half-up rounding. `evaluateGoal` covers empty list = 0%, runs outside the period excluded, distance target accumulation + complete-on-hit, pace target excluding cycling rides from the distance-weighted average, pace target with no qualifying runs reporting 0% + em-dash currentLabel, lower-is-better partial progress, time + runCount targets, multi-target complete-only-when-every-hit, `overallPercent` as the mean of target percents, and zero / negative targets being filtered out of the targets list. `newGoalId` covers uniqueness across 100 calls. `loadGoals` / `saveGoals` cover empty when no data, save / load round-trip preservation, per-user keying isolating two users on the same browser, null userId returns empty, the legacy unscoped-key migration on first load (with the legacy key removed afterwards), accepting both legacy camelCase and canonical snake_case wire shapes, and corrupt-JSON returning empty.
 
-### `apps/web/src/lib/training/fitness.test.ts` — 33 tests
+### `apps/web/src/lib/training/fitness.test.ts` — 48 tests
 
 Mirror of `apps/mobile_android/test/fitness_test.dart`. Pure tests for `lib/fitness.ts`. `qualifyingRuns` covers sub-1.5km / sub-5min drop (floor lowered from 3 km so comeback runners rebuilding at 1.5-2 km/run still get a fitness signal — persona round-5), a sustained 1.5-2 km comeback run admitted, every recognised `source` accepted plus a non-recognised value rejected. `vdotFromRun` covers sub-1km / sub-2min returning null, ~50 for a 20-min 5k, ~54 for a 3-hour marathon, faster pace → higher VDOT. `currentVdot` covers picking the best in-window qualifying run and ignoring runs older than 90 days. `vo2MaxFromVdot` is identity passthrough. `thresholdPaceSecPerKmFromVdot` covers null in / null out, VDOT 50 in the 240-260 s/km band, and higher VDOT yielding a faster threshold (catches the formula bug fixed during this pass — see [decisions.md § 54](../architecture/decisions.md#54-fix-thresholdpacesecperkmfromvdot-formula)). `runTss` covers the sub-100m / sub-30s / zero-threshold returning 0, threshold pace = 100 TSS at 1 hour (Coggan reference), and faster-than-threshold raising TSS faster than linearly. `trainingLoad` covers null inputs / no qualifying runs all-null, non-null curves with at least one qualifying run, TSB rises during a 14-day taper. `computeSnapshot` covers the rollup contract + empty input. `recoveryAdvice` covers null inputs, sub-10 CTL → consistency-building advice, and the five-band TSB ladder producing five distinct strings.
 
@@ -741,7 +741,7 @@ Mirror of `apps/mobile_android/test/fitness_test.dart`. Pure tests for `lib/fitn
 
 Smoke tests for the coach config / tier shape. `emptyUsage` returns a fresh zeroed object every call (no shared reference; mutation doesn't leak across calls). `TIER_LIMITS.free` keeps a finite daily cap so anonymous abuse can't drain quota. `TIER_LIMITS.pro` carries a finite daily cap that's strictly higher than free's, with larger token + runs windows. Anchors the paywall contract — flipping any of these silently would change rate-limit behaviour without code review.
 
-### `apps/web/src/lib/coach/context.test.ts` — 9 tests
+### `apps/web/src/lib/coach/context.test.ts` — 20 tests
 
 Source-grep guards + pure-helper behaviour for the coach context builder. Pins the audit-compliance invariants in source (subscription_tier never projected; DOB/HR gated on `health_data_consent_at`; runner_context never emits known secret names; the `food_log` nutrition query lives inside the `if (healthConsentGranted)` block — Art 9). Behavioural tests cover the two Tier-1 multi-modal summary helpers: `summarizeRecentLifts` (rolls gym sets into per-session summaries, ignores bodyweight sets in volume, caps at `COACH_LIFTS_CAP`) and `summarizeNutrition` (7-day daily averages over days logged, drops out-of-window rows, null on empty, null per-macro when no row carries it).
 
@@ -753,15 +753,15 @@ The versioned AI-processing consent record (decisions § 571 + § 573). The web 
 
 Pure bridge from the gym data layer (`GymSetWithDate` rows) to the training-load model input (`LiftForLoad`). `liftsFromSetHistory` groups flat set rows by workout, drops rows with no workout date (can't land on a calendar day), and an integration test confirms grouped lifts raise the fitness/fatigue/form curve while the run-only series stays recoverable (separability).
 
-### `apps/web/src/lib/nutrition/nutrition_targets.test.ts` — 13 tests
+### `apps/web/src/lib/nutrition/nutrition_targets.test.ts` — 19 tests
 
 Pure tests for the Mifflin-St Jeor nutrition target engine (`nutrition_targets.ts`, TS↔Dart parity pair with `apps/mobile_android/lib/nutrition_targets.dart` — equal counts). `mifflinStJeorBmr` (+5 male / −161 female / −78 neutral offset), `computeNutritionTargets` (moderate activity factor, protein 1.8 g/kg, fat 30%, carbs fill the remainder, goal delta, sedentary<very_active, the 1200 kcal floor, null on missing/non-physical metrics), `ageFromDob` (whole-year age decremented before the birthday, null on malformed/out-of-range), and the activity-level factor ordering.
 
-### `apps/web/src/lib/nutrition/food_search.test.ts` — 9 tests
+### `apps/web/src/lib/nutrition/food_search.test.ts` — 40 tests
 
 Pure tests for the Open Food Facts client (`food_search.ts`, injectable-fetcher seam; Dart twin `food_search_test.dart`). `parseOffSearch` maps products + drops nameless/calorie-less ones + keeps the first brand, tolerates string-typed nutriments, returns `[]` on malformed input; `scalePortion` scales per-100g to a gram portion (rounded, 0 g → 0); `searchFoods` skips the fetcher on an empty query, parses a canned response, **throws on a non-OK response and propagates a network throw** (so the caller can show a retry state instead of a misleading empty), and treats valid-but-empty JSON as genuinely empty (`[]`). The failure-vs-empty UI split is e2e-pinned in `nutrition.spec.ts`.
 
-### `apps/web/src/lib/nutrition/nutrition_totals.test.ts` — 4 tests
+### `apps/web/src/lib/nutrition/nutrition_totals.test.ts` — 6 tests
 
 Pure tests for the daily nutrition aggregation (`nutrition_totals.ts`; Dart twin `nutrition_totals_test.dart`). `sumMacros` sums fields treating null as zero (zeros for an empty day); `groupByMealSlot` orders slots and omits empty ones (null slot folds into snack); `ringFraction` clamps to [0,1] and returns null on a missing/zero target.
 
@@ -772,7 +772,7 @@ Dart twins of the web nutrition pure logic (equal counts) plus the mobile-only s
 
 Pure tests for the age-grade helper (`age_grade.ts`, TS↔Dart parity pair with `apps/mobile_android/lib/age_grade.dart` — equal counts; Dart twin `age_grade_test.dart`). `matchStandardDistance` (exact + nearest-match disambiguation of 8 km vs 5 mile, GPS over-read within the ±2 % tolerance, out-of-tolerance + non-positive → null, marathon over-read), `ageOnDate` (year decremented before the birthday, counts on the day, null on malformed input), `computeAgeGrade` (100 % at the open standard in the 1.0-factor band, 50 % at double the standard, masters male 10k + female 5k hand-computed against the embedded 2025 factors, null outside the 5–99 / standard-distance / positive-duration / binary-sex domain), `ageGradeForRun` end-to-end from DOB + run start + sex with `formatAgeGradePercent`. Numerics are anchored to the embedded USATF-MLDR 2025 factor values. The iOS twin runs the same file byte-for-byte.
 
-### `apps/web/src/lib/coach/limits.test.ts` — 22 tests
+### `apps/web/src/lib/coach/limits.test.ts` — 41 tests
 
 Pure tests for the validation / clamping helpers extracted from `coach/handler.ts` so they can run under `tsx --test` without booting `createClient`. `parseAuthHeader` covers `Bearer ` prefix stripping (case-insensitive on the prefix), null / undefined / empty input, bare `Bearer ` returning null, and tokens-without-prefix being passed through verbatim. `clampRunsLimit` covers undefined / null returning the default, non-finite (NaN, Infinity, non-numeric strings) returning the default rather than the tier cap, the tier max ceilings (free=30, pro=75), the floor at 1 (zero-runs context is never useful), fractional input being truncated, string-typed integer coercion, and pro tier honouring larger requests up to its cap. `jsonError` covers the canonical pre-stream response shape, extra fields landing alongside `error`, and the spread-order behaviour where `extra.error` wins over the literal. `rateLimitHeaders` covers the free-tier finite limit / remaining, remaining clamping to 0 when usage exceeds the cap, the pro-tier finite cap (10/day) reporting correctly, and pro remaining clamping to 0 when usage exceeds the pro cap. `personalityAddendum` covers the `drill_sergeant` and `analytical` tone overrides + the empty-string default for null / undefined / unknown styles.
 
@@ -800,7 +800,7 @@ What `/settings/account` may say about a backup that came up short ([decisions �
 
 The streaming + parallel-download writer and its paged row reads (was 14). The added case is a source guard on `createBackup`, which needs supabase-js and cannot be executed here: every `supabase` read behind the archive must bind its `error`, and the graded errors must reach `incompleteSections`. § 675/§ 676 paged and flagged the runs + routes reads and left the `get_my_profile` RPC and the `user_settings` read discarding theirs, so a failed read shipped a null profile and an empty prefs bag under a manifest still claiming `complete: true`.
 
-### `apps/web/src/lib/backup/cloud_export_transport.test.ts` — 7 tests
+### `apps/web/src/lib/backup/cloud_export_transport.test.ts` — 9 tests
 
 Which rail an export request takes and what it may assume about the answer. `cloud_export_helpers.test.ts` covers every pure piece `cloud_export.ts` composes; nothing covered the composition, which is where [§ 717](../architecture/decisions.md) and § 724 live. Pins that the deleted synchronous `POST /v1/export` has neither a builder nor a caller (a call site reaching for it again is a production 404 nothing here would see), that the two hub URLs are distinct, that all three declared export formats build a body (`backup` was never built before), that both hub calls resolve a session first, that an unconfigured hub answers `none` rather than throwing on a status read that runs on mount, that a 429 carries the `retry-after` it was given, that the enqueue answer is normalised rather than cast — a cast lets an unrecognised status poll for ever — and, since [§ 983](../architecture/decisions.md), that nothing a server said reaches the caller as a message: every throw out of the module is a `CloudExportError` carrying one of exactly three codes, and `edgeFunctionExport` unwraps the envelope instead of rethrowing supabase-js's fixed "Edge Function returned a non-2xx status code", which the failure toast used to interpolate verbatim.
 
@@ -832,7 +832,7 @@ The notification → deep-link routing (was 13). `row.kind` is typed `string` so
 
 The chunked following-feed reads (was 12). Three added cases: `FEED_FOLLOWEE_CHUNK` and `packages/api_client/lib/src/chunk.dart`'s `kInFilterChunk` each name the other as a mirror in their own docs and nothing compared them — the pair is in neither the parity-pair registry nor `check_shared_constants.mjs`, so bumping one alone is a silent split and the platform that went too high loses whole reads on a gateway that answers 200 with an empty match ([decisions § 653](../architecture/decisions.md)). Plus the negative-limit clamp (`slice(0, -1)` drops the last row and returns the rest) and the documented later-chunk-wins fold, which every other case cannot see because it merges disjoint ids.
 
-### `apps/web/src/lib/track_preview_mount_guard.test.ts` — 6 tests · `live_region_mount_guard.test.ts` — 3 tests
+### `apps/web/src/lib/track_preview_mount_guard.test.ts` — 7 tests · `live_region_mount_guard.test.ts` — 3 tests
 
 Both gained a non-vacuity control (was 5 and 2). Each guard reports an empty offender list when it works AND when it sees nothing at all, and only the matcher half had fixtures: a walk that reaches no file, an `aria-live` filter that stops matching the app's own markup, or a `<TrackPreview` matcher that stops seeing a mount each turns the guard into a green check over an unscanned tree ([§ 762](../architecture/decisions.md)'s rule, applied to two guards that predate it). The `TrackPreview` control is a POSITIVE one taken off the real permitted wrappers rather than a fixture, so it cannot drift away from what it checks.
 
@@ -875,7 +875,7 @@ Run with `go test ./...` from `apps/job_worker`. No network or Postgres dependen
 - **`matcher_test.go`** — pins `PassthroughMatcher` contract: input not aliased into output, empty in → nil out, stable algorithm/version strings.
 - **`matcher_osrm_test.go`** — 10 tests covering `OSRMMatcher`: chunking (250 points → 3 calls, stitched), tail-of-1 passthrough, NoMatch translation (`code != "Ok"` → nil, downstream `'skipped'`), HTTP error surfacing (`*HTTPError` for 5xx), malformed-JSON wrapping, trailing-slash normalisation. The real engine isn't reachable from a unit test (multi-GB pre-extracted graph), so the tests stand up an `httptest.Server` that returns canned `/match` JSON.
 
-### `apps/job_worker/internal/personal_data_export_shape_guard_test.go` — 3 tests (10 subtests)
+### `apps/job_worker/internal/personal_data_export_shape_guard_test.go` — 2 tests (10 subtests)
 
 Structural guard for the GDPR Art 20 export spec, one level below `personal_data_export_guard_test.go`: that one asks whether every personal-data TABLE is in the spec, this one asks whether the entries it carries can actually run. Two failure modes, both silent. A projection or filter naming a column a migration renamed away makes PostgREST answer 400, and `StreamExportPersonalDataTables` deliberately TOLERATES a per-table read failure — so the section is recorded short rather than the export lost, and only a reader comparing the manifest to their own memory would notice. A dotted filter (`runs.user_id`, `events.host_user_id`) reaches through a parent table, and PostgREST applies it as a restriction only when the embed is `!inner`; a plain embed leaves the read returning every row in the table with a null embed, which on `run_kudos_received` is every kudos in the database inside one subject's archive. `exportSpecProblems` grades `(specs, replayed columns)` purely, so the rejection is pinned against deliberately broken specs — a missing filter column, a typo'd projection, an outer embed, an unknown table, a duplicate archive entry name — rather than only asserted about the shipped ones. The migration replay applies drops and renames, and the shipped-spec case fails if it stops finding a known column or starts reporting a dropped one.
 
@@ -887,7 +887,7 @@ Structural guard for the GDPR Art 20 export spec, one level below `personal_data
 
 Every safety subject, heading and body paragraph is a format string, so are the four SMS variants and the four digest stat labels, and nothing compared any of them to the argument list the renderer supplies. `fmt.Sprintf` does not fail on a mismatch — it writes the mismatch into the output, so a translation missing one `%s` ships `%!(EXTRA string=…)` into the "is my runner OK" mail a safety contact opens. Rendered through the real functions across all seven locales and both arms of the `overdue` / `off_route` split, which pick different paragraphs with different argument counts. The `emailShared` completeness check is REFLECTIVE rather than a hand-written field list: the list the package had covered 6 of the 15 fields, so a blank `footerAccountDeleted` or `digestStatRuns` would have shipped unseen and a sixteenth field is covered the moment it exists. A closing case breaks a `de` catalogue entry three ways and an `fr` SMS variant once, and asserts each is caught.
 
-### `apps/graph_cycle/internal/graph/preference_test.go` — 3 added tests (6 total)
+### `apps/graph_cycle/internal/graph/preference_test.go` — 8 tests (3 added here)
 
 `ParsePreference` reads the token a client sends and `String` writes the one the response reports back as `preferenceApplied`; two switches over one vocabulary, edited separately, and neither direction of a mismatch surfaces as an error — a token the parser does not know is accepted as `PrefNone` and silently dropped, and one only the writer knows names a preference no client can ask for again. `prefCost` is swept over all 256 attribution bytes rather than the three a fixture builds, because the soft-cost promise (no preference may disconnect the graph) is a claim about every attribution the packed byte can hold. `preferredShare` is exercised over the degenerate loops the search can hand it — nil, zero-length, non-adjacent, over-credited — and over an all-arterial loop, which is the discriminating half: without it the wholly-preferred case is satisfied by a function that returns 1 unconditionally. It found the unclamped cul-de-sac branch ([decisions § 849](../architecture/decisions.md)).
 
@@ -913,11 +913,11 @@ The guard's verdict is `deepEqual(missed, [])`, which an EMPTY walk satisfies ex
 
 The guard reads 24 firmware symbols out of the Rust that declares them and holds 111 statements across 17 present-tense custom_watch docs to them ([decisions § 867](../architecture/decisions.md)). Its two directions are measured separately, because each covers a failure the other structurally cannot see: a template whose tail carries the wrong number, and a count-shaped phrase no template claimed at all. Ten cases are mutations, six of them against a throwaway copy of the real tree asserting the process exit code — a doc number bumped, the `Page` enum grown while the docs stay correct (both the built-in ring and the composed total move, and both are named), an unregistered count appended to a doc, a registered sentence deleted so its template goes dead, a derived constant frozen to the literal it currently equals (which still equals it, and is exactly the change that makes the doc's number a coincidence), and a new doc dropped into `docs/custom_watch/` that neither `DOC_FILES` nor `DATED_LOGS` claims. The remaining three drive `check` over fixtures: a stale exemption, an exemption naming a file outside `DOC_FILES`, and a resolver that cannot read its source, which must be reported rather than skipped. A positive control (the unmutated copy) and a negative one (a doc set with no counts in it at all, which must fail as dead templates rather than pass) bracket the set, so the suite is shown to discriminate before it is trusted. Runs as a second step of the ungated `parity-matrix` job with its own `::error::` ([§ 869](../architecture/decisions.md)); a code-gated job would skip it on the doc-only diffs it exists to police.
 
-### `packages/core_models/test/atomic_io_test.dart` — 14 tests (6 added)
+### `packages/core_models/test/atomic_io_test.dart` — 17 tests (6 added)
 
 The suite round-tripped the contents and counted temp siblings; nothing measured the property the `.tmp`-then-rename dance exists to provide. A reader now races a stream of 1.5 MB writes and every read must decode a whole document — replacing the rename with a bare `writeAsString` makes it fail with an unterminated string at 819201 characters. Four more the sweep never had: it must not eat a store row however the name is spelled (`a.tmp.json`, `b.lock.json`), it must leave an AGED subdirectory alone (the age gate does not protect one, the `is! File` guard does), an undeletable orphan is reported without stopping the sweep, and the temp name a REAL write creates is captured off an inotify watch rather than transcribed — so a writer that renamed its suffix, which would make every crash orphan permanent, fails here. Each confirmed against a mutation of the subject.
 
-### `packages/core_models/test/store_write_chain_test.dart` — 11 tests (4 added)
+### `packages/core_models/test/store_write_chain_test.dart` — 15 tests (4 added)
 
 A closure that throws SYNCHRONOUSLY takes a different path out of `runZoned` than the async one the existing failure case uses; if it escaped, the link would never complete and every write queued behind it would hang. Order across a failure was untested too — asserting only that the next operation resolves passes even if it ran first, which on a store directory is the delete-overtakes-write race the chain exists to close. `storeWritesSettled` is itself a queued no-op, so calling it from inside a serialised body inherits the re-entrancy grant and returns rather than waiting on itself. The per-key interleave is measured by TIMING rather than by order alone: one shared chain would still order each key internally, so only the fast key draining before the slow key's second write distinguishes them. Confirmed against two mutations — a shared chain fails four cases, removing the `try`/`catch` fails three.
 
@@ -961,7 +961,7 @@ Round 31, *host-tested*. Both modules had been edited hours earlier by the round
 
 Round 31, *host-tested*. Two panics reachable from data rather than from a coding mistake, on a device where a panic is a reset. `predict_race_ladder` seeds both anchor loops with `f64::INFINITY` and takes the strict `<`, so a candidate whose Riegel equivalent IS infinity never wins — a positive-but-denormal distance overflows `libm::pow` — and `best.unwrap()` panicked on a function whose doc already promises `None` for a pool it cannot anchor; the second case pins that one clean effort beside the bad row still predicts, so the guard fails closed on the pool and not on the presence of one row. `compute_calibration` graded the numerator, and `km <= 0.0` is false for a NaN distance, so `trimp / NaN` reached the list: one such row made the window's fallback rate NaN and a second beside it panicked `median`'s `partial_cmp().unwrap()`. Both rails are pinned separately — the source guard by the infinite-distance case, the `total_cmp` comparator by the NaN one. [decisions § 926](../architecture/decisions.md).
 
-### `apps/mobile_android/test/social_service_test.dart` — 13 tests
+### `apps/mobile_android/test/social_service_test.dart` — 35 tests
 
 Pure-unit coverage for the value classes and helpers exposed by `lib/social_service.dart`. Covers `ClubView.isAdmin` / `isEventOrganiser` / `isRaceDirector` / `isMember` (the booleans that drive admin-only buttons + race-director Arm/Fire on `club_detail_screen` + `event_detail_screen`) — pinning that owner / admin both grant the full ladder, that `event_organiser` and `race_director` are siloed, that `member` carries no special affordances, and that an unrecognised viewerRole string is treated as not-admin so a future role we haven't taught the client about doesn't accidentally inherit admin powers. Plus 6 tests for `parseBydayCodes` (the byday-jsonb parser used by `_enrichEvents` + `fetchNextRsvpedEvent`): valid 'MO','WE','FR' shape, order + duplicate preservation, non-array fallback, empty + all-unknown → null (caller treats as "no override"), mixed known/unknown filters to known.
 
@@ -1294,7 +1294,7 @@ Mirror of the web suite above, vector for vector. Twelve of the fourteen fail ag
 The accent-fold drift guard, and the generator under it. Pins that the two causes of a mismatch are reported as different sentences — a hand-edit or a stale commit against a Node whose Unicode tables have moved — because the second reaches a PR that touched none of it, and sending that reader hunting for an edit they did not make wastes the run. Plus: a render that lost its version stamp is itself a finding (without it the guard cannot tell the causes apart), the committed table is what the generator renders, its keys are strictly ascending and parallel to its values, the Hangul arithmetic reproduces NFD across all 11,172 syllables independently of the generator's own assertion, the fold answers the divergence classes and leaves the undecomposable letters alone, and `dartLiteral` emits ASCII only.
 
 
-### `scripts/check_infra_iam.test.mjs` — 29 tests
+### `scripts/check_infra_iam.test.mjs` — 77 tests
 
 The IAM rails under `infra/`, which no test had reached. `infra/github-oidc/`
 mints the only two identities anything outside the AWS account can assume, and
@@ -1317,7 +1317,7 @@ distribution. Two closing cases run the whole comparison against the COMMITTED
 tree and assert the parsers reached it — a passing run that checked almost
 nothing is not a pass.
 
-### `scripts/check_infra_coverage.test.mjs` — 25 tests
+### `scripts/check_infra_coverage.test.mjs` — 73 tests
 
 What in `infra/` is watched by nothing ([decisions § 890](../architecture/decisions.md)).
 Two halves, each mutated on its own. Stack coverage: a new directory missing from
@@ -1343,7 +1343,7 @@ The first tests over `infra/modules/web-stack/functions/`. The CloudFront Functi
 
 Which origin the five share Lambdas resolve `PUBLIC_SITE_URL` to, and what the wrong fold emits. A source register requires every `PUBLIC_SITE_URL` read under `apps/web/lambda/` to go through `siteOrigin`, with a population floor so an empty walk fails rather than reporting a clean tree; reverting one Lambda to `?? DEFAULT_SITE_URL` fails it by name. Two behavioural cases drive the head builders the Lambdas actually call — the first asserts what a blank origin produces (a root-relative `og:url` and `og:image`, the same shape `share_url_source_guard.test.ts` bans in the sources), the second that `undefined`, `null`, `''`, `'   '` and a trailing-slash origin all come out absolute and single-slashed. See [decisions § 895](../architecture/decisions.md).
 
-### `apps/web/src/lib/coach/coach_lambda_handler.test.ts` — 14 tests (new)
+### `apps/web/src/lib/coach/coach_lambda_handler.test.ts` — 17 tests (new)
 
 The production coach Lambda's own wrapper layer, which `handler.test.ts` structurally cannot reach: which sub-path a request dispatches to, which of the three byte caps that sub-path gets, the base64 decode, the custom auth header, the hardcoded `bypassPaywallEnabled: false`, and the outer fail-closed envelope. The module reads a runtime-provided `awslambda` global at import time, so the stub is installed before a dynamic import; every case stops before a network call. Two cases fail without the fixes they pin — a non-POST reaching the core, and a sub-dispatcher re-deriving its response from a parsed copy of the core's body. The rest pin what was right but unproven: each cap measured in bytes rather than `String.length`, the decode firing on the base64 flag and only on it, the JWT read from `x-supabase-authorization` and never `Authorization`, the provider check not gating the route sub-paths, and a missing env var answering a generic 503 that does not name itself. A fourteenth pins the [§ 898](../architecture/decisions.md) gate: `COACH_PROVIDER=openai` with no `OPENAI_BASE_URL` refuses before the daily-quota increment, and hands over to the core once one is configured — so the case shows a gate rather than a blanket refusal of the provider. See [decisions § 896](../architecture/decisions.md).
 
@@ -1351,7 +1351,7 @@ The production coach Lambda's own wrapper layer, which `handler.test.ts` structu
 
 The generate-route Lambda's wrapper, measured the same way. The method gate (which fails without the fix), the 4 KB cap against decoded bytes including the multi-byte case, the base64 decode shown to be flag-driven in both directions, that a well-formed POST reaches the CORE (the 501 is the core's, so the wrapper handed over rather than answering for it), and that every refusal is parseable JSON with a JSON content-type. See [decisions § 896](../architecture/decisions.md).
 
-### `apps/web/src/lib/lambda_log_hygiene.test.ts` — 2 tests (new)
+### `apps/web/src/lib/lambda_log_hygiene.test.ts` — 5 tests (new)
 
 What the eight production Lambdas may put in a CloudWatch line. A per-handler table declares which `event.<field>` its log lines may name — the five share Lambdas declare `rawPath` (a share path is a public URL naming a public entity), the other three declare nothing, and a handler absent from the table fails rather than defaulting to permissive. The second rule requires every log line to be a literal message plus object literals, so no caught value is spread whole. Both walk the sources with a top-level argument splitter that tracks bracket depth and string state, both carry a population floor, and both were checked to discriminate: `path: event.rawPath` added to osrm-proxy's catch fails the first by name (that path *is* the runner's waypoint coordinates), and `console.error('…', e)` restored in the coach's stream pump fails the second. See [decisions § 897](../architecture/decisions.md).
 
