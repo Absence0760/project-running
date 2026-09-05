@@ -8,8 +8,9 @@
 # commented pin is a claim the next reader will uncomment (decisions § 911).
 # The sources of truth are:
 #
-#   nodejs    — every workflow's `actions/setup-node` step (major only; asdf
-#               wants a resolvable version, CI states a major)
+#   nodejs    — every workflow's `actions/setup-node` step (exact, not a major:
+#               CI names the patch since decisions § 1214, so a bare major here
+#               would be a pin nothing compares — § 1216)
 #   rust      — apps/custom_watch/rust-toolchain.toml
 #   golang    — apps/*/go.mod
 #   flutter   — each workflow's top-level env.FLUTTER_VERSION
@@ -20,7 +21,7 @@
 # The rest carry no in-repo pin, so nothing can check them: python3 / zola are
 # whatever the runner ships.
 
-nodejs 24
+nodejs 24.20.0
 
 # rust 1.98.0
 # golang 1.26.6

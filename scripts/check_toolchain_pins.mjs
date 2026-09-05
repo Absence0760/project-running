@@ -45,12 +45,15 @@
 // ended SHA updates for it. Three declarations plus this check keeps both
 // properties.
 //
-//   Node — every `actions/setup-node` step names a `node-version`, and all of
-//     them agree. Same shape as Flutter and for the same reason: no in-repo
-//     file resolves the runtime, so the workflows ARE the source of truth, and
-//     a release built on a Node that CI never ran is an untested binary. A step
+//   Node — every `actions/setup-node` step names a `node-version`, all of them
+//     agree, and the version is an EXACT `MAJOR.MINOR.PATCH` rather than a bare
+//     major. Same shape as Flutter and for the same reason: no in-repo file
+//     resolves the runtime, so the workflows ARE the source of truth, and a
+//     release built on a Node that CI never ran is an untested binary. A step
 //     with no `node-version` at all is the `channel: stable` shape one more
-//     time — it takes whatever the runner image ships that week.
+//     time — it takes whatever the runner image ships that week, and so did a
+//     bare `24`, which is why `release-web.yml` built the shipped bundle on
+//     whichever 24.x the runner resolved that morning (decisions § 1214).
 //
 //   Deno — every `denoland/setup-deno` step names a `deno-version`, all of them
 //     agree, and the version is an EXACT `MAJOR.MINOR.PATCH` rather than a
@@ -935,13 +938,20 @@ export function repoPins(pins) {
 	return out;
 }
 
-/// `nodejs` is compared on the MAJOR alone: asdf needs a version it can
-/// resolve to a build, CI states a major, and demanding they match to the
-/// patch would make every runner-image bump a repo edit. Every other pin is
-/// exact, because both sides already state one.
+/// Every plugin is compared EXACTLY, `nodejs` included since decisions § 1216.
+///
+/// It used to be the one exception, compared on the major, and both halves of
+/// that reason have since stopped being true: the carve-out said "asdf needs a
+/// version it can resolve to a build, CI states a major", but `24` is the
+/// unresolvable spelling and `24.20.0` is not, and § 1214 made every
+/// `setup-node` step state the exact version. Nor is there a runner-image bump
+/// left to absorb — CI no longer follows the image, so a Node change is a
+/// deliberate repo edit either way and this makes `.tool-versions` part of that
+/// same edit. Left on the major, the file could have said `nodejs 24.0.0` while
+/// CI ran `24.20.0` and this guard would have called them equal: a pin nothing
+/// compares.
 /** @param {string} plugin @param {string} declared @param {string} pinned */
 export function toolVersionAgrees(plugin, declared, pinned) {
-	if (plugin === 'nodejs') return declared.split('.')[0] === pinned.split('.')[0];
 	return declared === pinned;
 }
 
