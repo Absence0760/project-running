@@ -18,18 +18,34 @@ package internal
 // their own graphs and a different default in the URL — different
 // engine, different deploy.
 //
+// Output is the input trace with every point's POSITION corrected, not
+// the road geometry OSRM would draw between them. `ele`, `ts` and `bpm`
+// are per-sample measurements, and the response's `tracepoints` array
+// is what makes carrying them possible: it holds one entry per input
+// coordinate, in input order, so each snapped location can be paired
+// with the sample it came from. Reading `matchings[].geometry` instead
+// — which is what this matcher used to do — yields road-network
+// vertices that belong to no sample, so the three optional fields have
+// nowhere to go and were dropped; `/runs/[id]` prefers the matched
+// track, so the elevation profile disappeared and the pace heatmap fell
+// back to a flat line for every run recorded with altitude or a strap
+// (decisions § 1171).
+//
+// Match is therefore LENGTH-PRESERVING: one output point per input
+// point, in order. A caller may index the two against each other.
+//
 // Error model:
 //   * Network / 5xx → returned as an error so the worker's transient
 //     classifier defers the job.
-//   * 200 with `code != "Ok"` on a chunk → the engine couldn't align
-//     that chunk (tunnel, unmapped trail). We carry that chunk's raw
-//     input points through into the stitched output rather than drop
-//     them, so the matched track always covers the WHOLE run with
-//     mixed snapped + raw geometry. Dropping a failed chunk would
-//     silently truncate the run under a 'matched' label.
-//   * Every chunk failing → the whole stitched track is raw. Only a
-//     track too short to match at all (< 2 points stitched) returns
-//     empty, which handleMapMatch writes as `status='skipped'`.
+//   * 200 with `code != "Ok"`, no matchings, or a `tracepoints` array
+//     that does not index this chunk's input → the engine gave us
+//     nothing we can attribute to a sample. We carry that chunk's raw
+//     input points through rather than drop them, so the matched track
+//     always covers the WHOLE run with mixed snapped + raw positions.
+//   * A `null` tracepoint (OSRM's outlier signal) or one whose
+//     `location` is not a coordinate pair → that one sample carries
+//     through raw, for the same reason: the measurement it holds is not
+//     the engine's to discard.
 
 import (
 	"context"
@@ -82,12 +98,10 @@ func (m *OSRMMatcher) Version() string {
 	return m.AlgVersion
 }
 
-// Match runs each chunk through OSRM's /match endpoint and stitches
-// the snapped tracepoints back together. Empty input → empty output. A
-// chunk the engine can't align contributes its raw input points so the
-// stitched track keeps full run coverage; only a track too short to
-// stitch 2+ points returns empty, which handleMapMatch writes as
-// `skipped`.
+// Match runs each chunk through OSRM's /match endpoint and stitches the
+// snapped tracepoints back together. Empty input → empty output;
+// otherwise one output point per input point, carrying that point's
+// `ele` / `ts` / `bpm` across unchanged.
 func (m *OSRMMatcher) Match(ctx context.Context, points []TrackPoint) ([]TrackPoint, error) {
 	if len(points) < 2 {
 		return nil, nil
@@ -123,24 +137,21 @@ func (m *OSRMMatcher) Match(ctx context.Context, points []TrackPoint) ([]TrackPo
 			// truncating coverage of the run. Carry the raw input
 			// points through instead — same passthrough as the
 			// 1-point tail above — so the matched track covers the
-			// WHOLE run with mixed snapped + raw geometry.
+			// WHOLE run with mixed snapped + raw positions.
 			out = append(out, chunk...)
 			continue
 		}
 		out = append(out, matched...)
 	}
-	if len(out) < 2 {
-		// Engine couldn't match anything actionable. Caller treats
-		// this as a skip rather than a failure.
-		return nil, nil
-	}
 	return out, nil
 }
 
-// matchChunk returns the snapped points for one chunk. The bool is
-// false when OSRM replied 200 but couldn't align the chunk (code !=
-// "Ok" / no matchings) — distinct from (nil, true) so the caller can
-// fall back to the raw input rather than silently dropping the span.
+// matchChunk returns the snapped points for one chunk, one per input
+// point and in input order. The bool is false when OSRM replied 200 but
+// gave nothing this chunk's samples can be attributed to (code != "Ok",
+// no matchings, or a `tracepoints` array of the wrong length) — distinct
+// from (nil, true) so the caller can fall back to the raw input rather
+// than silently dropping the span.
 func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]TrackPoint, bool, error) {
 	// OSRM's URL format: /match/v1/{profile}/{lng,lat;lng,lat;...}
 	// Coordinates are lng-first, semicolon-separated. Building the
@@ -154,12 +165,12 @@ func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]Tra
 		}
 		fmt.Fprintf(&sb, "%.6f,%.6f", p.Lng, p.Lat)
 	}
-	// `geometries=geojson` so we get GeoJSON LineStrings out
-	// (lng/lat arrays we can read with one parse). `overview=full`
-	// means every input point gets a snapped output. `tidy=true`
-	// asks OSRM to drop redundant adjacent points the engine
-	// considers noise — leaves the resulting line cleaner.
-	sb.WriteString("?geometries=geojson&overview=full&tidy=true")
+	// `overview=false` because the route geometry is not what we read
+	// — `tracepoints` is, and it is returned regardless. `tidy` is
+	// deliberately left off: it drops input points the engine considers
+	// redundant, and every dropped point is now a lost heart-rate
+	// sample and a lost timestamp rather than a tidier line.
+	sb.WriteString("?overview=false")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sb.String(), nil)
 	if err != nil {
@@ -191,33 +202,39 @@ func (m *OSRMMatcher) matchChunk(ctx context.Context, chunk []TrackPoint) ([]Tra
 	if resp2.Code != "Ok" || len(resp2.Matchings) == 0 {
 		return nil, false, nil
 	}
+	// One tracepoint per input coordinate is the contract that lets a
+	// snapped location be paired with the sample it came from. A
+	// response of any other length indexes something else, and pairing
+	// against it would attach one sample's heart rate to another
+	// sample's position — worse than not matching the chunk at all.
+	if len(resp2.Tracepoints) != len(chunk) {
+		return nil, false, nil
+	}
 
-	// Concatenate every matching's coordinates. Most tracks return
-	// one matching; a route that gets split by a tunnel gap can
-	// return two or three. Order is preserved by OSRM.
 	out := make([]TrackPoint, 0, len(chunk))
-	for _, mtg := range resp2.Matchings {
-		for _, c := range mtg.Geometry.Coordinates {
-			if len(c) < 2 {
-				continue
-			}
-			out = append(out, TrackPoint{Lng: c[0], Lat: c[1]})
+	for i, tp := range resp2.Tracepoints {
+		p := chunk[i]
+		if tp != nil && len(tp.Location) >= 2 {
+			p.Lng, p.Lat = tp.Location[0], tp.Location[1]
 		}
+		out = append(out, p)
 	}
 	return out, true, nil
 }
 
 // osrmMatchResponse is the subset of OSRM's /match response we read.
 // Schema is documented at https://project-osrm.org/docs/v5.24.0/api/#match-service.
-// Tracepoint metadata (alternatives_count, distance, location) is
-// available but not used today; if the matcher ever grows confidence
-// scoring this is where it'd land.
+//
+// `Tracepoints` carries one entry per input coordinate in input order,
+// or `null` where the engine treated that coordinate as an outlier.
+// `Matchings` is read only for its presence: `code == "Ok"` with an
+// empty array is the engine declining the chunk.
 type osrmMatchResponse struct {
-	Code      string `json:"code"`
+	Code        string `json:"code"`
+	Tracepoints []*struct {
+		Location []float64 `json:"location"` // [lng, lat]
+	} `json:"tracepoints"`
 	Matchings []struct {
 		Confidence float64 `json:"confidence"`
-		Geometry   struct {
-			Coordinates [][]float64 `json:"coordinates"` // [lng, lat]
-		} `json:"geometry"`
 	} `json:"matchings"`
 }

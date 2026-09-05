@@ -21978,3 +21978,58 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1170. The OSRM matcher reads `tracepoints`, not the route geometry, and the matched track is now one point per sample
+
+`OSRMMatcher.Match` built its output as `TrackPoint{Lng: c[0], Lat: c[1]}` off
+`matchings[].geometry.coordinates`. Those coordinates are road-network
+vertices: they belong to the ROAD, not to any sample the runner's watch took,
+so the three optional fields on `internal.TrackPoint` — `ele`, `ts`, `bpm` —
+had nowhere to go and were dropped from every matched track. That is invisible
+while the shipped default is `PassthroughMatcher`, and the swap is one env var
+(`OSRM_URL`), with migration `20260609_001`'s trigger enqueueing a `map_match`
+for every run that has a `track_url`. The day the variable is set, three
+surfaces on `/runs/[id]` degrade at once, because `baseTrack` prefers
+`matchInfo.track` whenever it has two points: `hasElevation` goes false and the
+Elevation Profile section disappears from runs that recorded altitude,
+`elevations` collapses behind it, and `RunMap`'s pace heatmap falls back to the
+flat single-line render because it gates on `hasTrackTimestamps`.
+
+The response already carries the correspondence. `tracepoints` holds one entry
+per INPUT coordinate, in input order, each with the `location` that coordinate
+was snapped to, or `null` where the engine called it an outlier. So the matcher
+now pairs `tracepoints[i]` with `chunk[i]`, moves the position and leaves every
+measurement alone. `overview=false` follows from that — the geometry is no
+longer read, and not asking for it makes the response smaller.
+
+**`tidy` is switched off, and that is a consequence rather than an aside.** It
+asks OSRM to drop input points it considers redundant, which used to buy a
+cleaner drawn line at no cost because the line was the road's. Now every point
+it drops is a lost heart-rate sample and a lost timestamp, so the trade has
+inverted.
+
+**Three fallbacks, all in the same direction.** A chunk whose response is not
+`Ok`, has no matchings, or carries a `tracepoints` array of the wrong length
+carries its raw input points through — the last of those because pairing
+against a mis-indexed array would attach one sample's heart rate to another
+sample's position, which is worse than not matching at all. A single `null`
+tracepoint, or one whose `location` is not a coordinate pair, carries that one
+sample through raw for the same reason: the measurement it holds is not the
+engine's to discard, and the raw fix is at worst where the runner's watch said
+they were.
+
+That makes `Match` **length-preserving**: one output point per input point, in
+order, whatever the engine said. The `len(out) < 2` guard that used to translate
+a degenerate match into `status='skipped'` is unreachable under it and is gone —
+a track of two or more points now always yields a matched track. The property is
+worth stating rather than merely having, because the page-side half of the same
+filing was blocked on exactly its absence: the linked map/chart cursor is an
+index into the track the map draws, and the two index spaces were different
+lengths once the geometry was re-sampled. They are the same length now.
+
+The page-side half is therefore no longer needed for the defect it was filed
+for, and sourcing the elevation chart from `elevationSourceTrack` would now be
+a change of preference rather than a repair; it is not re-filed. What IS still
+owed and is filed is an e2e fixture: nothing under `tests-e2e/` plants a
+`matched_track_url` with a Storage object, so no test on either side of the
+seam exercises a run whose matched track is the one being rendered.
