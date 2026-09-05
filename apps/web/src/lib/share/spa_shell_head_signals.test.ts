@@ -1,9 +1,12 @@
 // What the SPA shell the five share Lambdas embed actually carries in its
 // `<head>`, stated rather than assumed.
 //
-// The shell is `apps/web/build/index.html` -- adapter-static's SPA fallback,
-// which CloudFront also serves as the site root and for every deep link (a
-// missing S3 key answers 403, mapped to /index.html at 200). Each injector
+// The shell is `apps/web/build/200.html` -- adapter-static's SPA fallback,
+// which CloudFront serves for every deep link (a missing S3 key answers 403,
+// mapped to /200.html at 200). It was `build/index.html` until § 1268, which
+// gave that filename back to the prerendered landing page; the site root and
+// the deep-link body are different documents now, and this file measures the
+// second one. Each injector
 // strips some of four signals from it before splicing its own head in, and for
 // a long time each carried a comment asserting "adapter-static emits a default
 // set that would render as duplicates", which was false of the artifact: the
@@ -15,10 +18,11 @@
 // on nothing.
 //
 // They are not deleted, because which state holds is a property of another
-// tree: a single `og:` default added to app.html, or the prerendered landing
-// page landing at this filename (docs/product/followups.md), makes all four
-// live again in one edit. So the claim is measured here instead, and this test
-// is what fails when it changes -- in EITHER direction.
+// tree: a single `og:` default added to app.html makes all four live again in
+// one edit, and so would a share Lambda left embedding `build/index.html`
+// after § 1268 -- that file is the landing page now and carries all four.
+// `src/lib/seo/spa_shell_filename.test.ts` is what catches the second case;
+// this one measures the signals, in EITHER direction.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,14 +32,16 @@ import { fileURLToPath } from 'node:url';
 import { countHeadSignals, stripStaleHeadSignals, type HeadSignal } from './head_splice';
 
 const APP_HTML = fileURLToPath(new URL('../../app.html', import.meta.url));
-const BUILT_SHELL = fileURLToPath(new URL('../../../build/index.html', import.meta.url));
+const BUILT_SHELL = fileURLToPath(new URL('../../../build/200.html', import.meta.url));
 
-/// The measured state, 2026-09-04. `%sveltekit.head%` contributes only the
-/// hash-CSP meta and the modulepreload links to a fallback page, so app.html
-/// alone decides these four counts and the artifact is checked against it
-/// below whenever a build is present. All four are zero since § 1167; the
-/// title returns the day § 1116's part (1) prerenders the landing page at this
-/// filename, and this test is what makes that a stated event.
+/// The measured state, re-measured 2026-09-05 against `build/200.html`.
+/// `%sveltekit.head%` contributes only the hash-CSP meta and the modulepreload
+/// links to a fallback page, so app.html alone decides these four counts and
+/// the artifact is checked against it below whenever a build is present. All
+/// four have been zero since § 1167 and stayed zero through § 1268: the
+/// landing page took the `index.html` filename, it did not take over the
+/// shell's job, so the shell still renders no components and the four strips
+/// still act on nothing.
 const SHELL_SIGNALS: Readonly<Record<HeadSignal, number>> = {
 	title: 0,
 	social: 0,

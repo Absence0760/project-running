@@ -11,3 +11,14 @@ import { siteOrigin } from '$lib/core/site_url';
 export const load: PageLoad = () => {
 	return { siteUrl: siteOrigin(env.PUBLIC_SITE_URL) };
 };
+
+// `/` is the site's only indexable non-Learn surface, and everything
+// `docs/features/seo.md` promises for it -- title, canonical, description,
+// og/twitter, Organization + WebSite JSON-LD -- is built by components, which
+// a client-rendered route contributes to no artifact. Prerendering is what
+// writes them into `build/index.html`, the file CloudFront serves as the site
+// root. It is load-bearing with `svelte.config.js`'s `fallback: "200.html"`:
+// adapter-static writes the fallback AFTER the prerendered pages and to the
+// name it is given, so a fallback still called `index.html` silently replaces
+// this page with the component-less shell. decisions § 1268.
+export const prerender = true;

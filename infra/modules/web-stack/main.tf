@@ -2571,10 +2571,23 @@ resource "aws_cloudfront_distribution" "this" {
   # SPA idiom; the distribution serves no genuinely access-protected S3
   # keys (all objects are the public static build), so nothing legitimate
   # is masked by turning 403 into the shell.
+  #
+  # The shell is /200.html and NOT /index.html: since decisions § 1268 the
+  # landing page is prerendered onto index.html, and that document is not a
+  # shell — its asset URLs are relative (`./_app/…`, resolved against the
+  # request path, so nothing loads under /runs/<id>) and its hydration payload
+  # names route "/". Pointing this back at /index.html serves the landing page,
+  # broken, for every client route. `apps/web/src/lib/seo/spa_shell_filename.test.ts`
+  # reads this block, apps/web/svelte.config.js's adapter fallback and the five
+  # share Lambdas' build scripts, and fails when they disagree.
+  #
+  # Changing this value has a deploy order: /200.html must exist in the bucket
+  # BEFORE the apply, or every deep link resolves to a missing error page. See
+  # docs/features/seo.md § Deploying a change to the shell filename.
   custom_error_response {
     error_code         = 403
     response_code      = 200
-    response_page_path = "/index.html"
+    response_page_path = "/200.html"
   }
 
   # There is deliberately NO `custom_error_response` for 404, and
