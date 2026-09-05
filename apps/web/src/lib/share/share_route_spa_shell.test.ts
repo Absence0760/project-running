@@ -69,12 +69,23 @@ test('injectShareRouteMeta — strips the stale JSON-LD block', () => {
 	assert.ok(out.includes('WebPage'));
 });
 
-test('injectShareRouteMeta — strips spliced JSON-LD blocks, no residual <script', () => {
-	// A single global replace scans the original once, so deleting one
-	// ld+json block can splice surrounding text into a brand-new
-	// `<script type="application/ld+json">…</script>` that a one-pass
-	// strip would leave behind. The strip repeats until stable so the
-	// spliced residual is also removed (js/incomplete-multi-character-sanitization).
+test('injectShareRouteMeta — a strip cannot splice a new JSON-LD block out of its neighbours', () => {
+	// Deleting a match joins whatever stood either side of it, so the OUTPUT can
+	// be re-parsed into an element the input never contained: here `<sc` and
+	// `ript type="application/ld+json">…` are inert text a browser parses as one
+	// unknown `sc<script` element, and removing the real block between them used
+	// to join them into a live JSON-LD block on the served page.
+	//
+	// This case previously demanded that the strip CHASE that join -- re-running
+	// to a fixpoint until the synthesised block was gone too. It does remove it,
+	// and it does not stop there: the synthesised open's nearest close may be the
+	// SPA BUNDLE's, so the extra pass takes `</head>`, the mount div and the
+	// bundle tag with it and the splice then returns the shell unmeta'd -- the
+	// § 1086 damage, from the mechanism added to prevent it. The join is now
+	// PREVENTED instead, by replacing a match with whitespace, which a tag name
+	// cannot contain (§ 1194). So no block is synthesised, nothing beyond the
+	// match is deleted, and the fragments that were never a block stay as the
+	// inert text they always were.
 	const spliced =
 		'<sc<script type="application/ld+json">{"a":1}</script>' +
 		'ript type="application/ld+json">{"b":2}</script>';
@@ -83,11 +94,18 @@ test('injectShareRouteMeta — strips spliced JSON-LD blocks, no residual <scrip
 		spliced,
 	);
 	const out = injectShareRouteMeta(shell, head());
-	// Only the per-route WebPage block remains; the spliced residual is gone.
-	const ldMatches = out.match(/<script\s+type="application\/ld\+json">/g) ?? [];
-	assert.equal(ldMatches.length, 1);
-	assert.equal(out.includes('"a":1'), false);
-	assert.equal(out.includes('"b":2'), false);
+	// One JSON-LD block on the page: the per-route one. Counted with the parser
+	// rule rather than a fixed attribute spelling, so a synthesised block cannot
+	// hide behind a different attribute order.
+	const blocks = out.match(/<script(?=[\s/>])[^>]*\stype="application\/ld\+json"[^>]*>/gi) ?? [];
+	assert.equal(blocks.length, 1);
+	assert.ok(out.includes('WebPage'), 'and it is the route\'s own');
+	// The block the shell really carried is gone.
+	assert.equal(out.includes('{"a":1}'), false);
+	// The document survives, which is what the fixpoint loop could not promise.
+	assert.ok(/<\/head(?=[\s/>])[^>]*>/i.test(out), 'the head close must survive');
+	assert.ok(out.includes('<div id="svelte">'), 'the mount div must survive');
+	assert.ok(out.includes('start.abc.js'), 'the SPA bundle must survive');
 });
 
 test('injectShareRouteMeta — inserts a full set of meta tags', () => {

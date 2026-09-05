@@ -22015,6 +22015,181 @@ The section also said "Model it on `20260621_001_runs_track_url_path_check.sql` 
 
 The generalisation: prose about a guard can be stale and merely unhelpful, but an **example** is executable advice. When a guard's rule changes, the examples that demonstrate the old rule are the first thing to re-read, and they are worth grepping for by shape rather than by the guard's name — this block never mentioned `check_migration_online_safety.mjs` at all, so a search for references to the guard would not have found it. Both messages the guard prints now also say which fix is wanted: split the file if it is not merged yet, and reserve `GRANDFATHERED_VIOLATIONS` for migrations already applied to prod, which cannot be edited.
 
+## 1190. A share injector strips exactly the signals its own head emits — and for the run injector that is a per-call answer, not a fixed list
+
+`head_splice.ts` takes a signal LIST rather than doing everything, and § 1114 /
+§ 1115 recorded the reason as "the recap head emits neither a canonical nor a
+JSON-LD block". Half of that stopped being true at § 1090, which gave
+`renderShareRecapHeadTags` a self-referential canonical so a `?utm_source=` copy
+of a shared recap link would fold onto one page. The injector's list was never
+widened to match, so the recap Lambda kept the shell's canonical and spliced its
+own in behind it. Two `rel=canonical` links pointing at different URLs is not a
+tie a crawler breaks in our favour — it honours neither — so the consolidation
+§ 1090 added the tag to get was cancelled by the injector that ships it.
+
+Nothing reached production broken, because the shell carries no canonical
+today; `spa_shell_head_signals.test.ts` is the guard that says so, and its own
+header says that state is a property of another tree and ends the day the
+landing page prerenders at `build/index.html`. That is the whole hazard: a
+defect parked behind a zero. The case in `head_splice.test.ts` that should have
+caught it instead pinned it — it asserted the shell's stale canonical must
+survive, read the FIRST match only, and was therefore green on a document
+carrying two. It now reads every canonical href out and compares the whole list,
+which is the same shape the `js/incomplete-url-substring-sanitization` guidance
+already forces elsewhere: extract the value, compare it, never ask whether a URL
+appears somewhere.
+
+The rule the module states — each injector strips exactly what its own head
+replaces — was right; it was spelled at the wrong granularity. `ShareRunMeta`
+carries an OPTIONAL `jsonLd`, and the badge share page reuses that shape and
+`injectShareRunMeta` without one, so a list fixed at module scope stripped the
+shell's own `WebSite` node off every badge page and put nothing back — the exact
+loss the signal list exists to prevent, committed by the mechanism meant to
+prevent it. The run injector now decides `jsonLd` per call. The recap head still
+emits no JSON-LD, so `jsonLd` stays out of its list and the asymmetry that
+justifies the design survives; it is three signals now, not two.
+
+## 1191. The Learn render-map row is read by the guard that measures the artifact, because hand-re-measuring it drifted in both directions
+
+`docs/features/seo.md`'s row for `/learn` and `/learn/category/[category]`
+over-claimed `Article` for as long as the surface existed, was corrected in
+round 37 to "none emitted", and then under-claimed that once § 1168 gave both
+routes `buildLearnCollectionJsonLd`. Two corrections, two directions, one row,
+inside two rounds — the failure is not the reader, it is that a claim about the
+artifact was being restated by hand next to a guard that already measures the
+artifact.
+
+So `learn_structured_data.test.ts` now reads the render map. One
+`DECLARED_TYPE` map states what each kind of Learn page declares itself to be;
+the artifact cases assert the build agrees with it, and a new case asserts the
+doc row does — that the index row names the `CollectionPage`, the
+`BreadcrumbList` and the `ItemList` those pages emit, that the guide row names
+`Article`, and that neither row names the other's type, which is the
+over-claiming direction spelled as its own negative. Changing what a Learn page
+emits now fails until the build, the expectation and the doc have all followed.
+
+The doc case deliberately does NOT gate on a build being present. The three
+artifact cases self-skip without one and `test-web` never builds, so a guard
+folded into them would inherit that skip and bind nowhere — which is the
+condition this row drifted under. Reading a committed markdown file needs no
+artifact, so this half runs on every PR today, and the artifact half joins it
+when the build-step filing lands.
+
+## 1192. The JSON-LD strip's fixpoint loop could not do the job it was added for, and destroyed the head doing it
+
+`stripStaleHeadSignals` removed a JSON-LD block by re-running its global replace
+until the string stopped changing. The comment gave the reason as
+`js/incomplete-multi-character-sanitization`: a crafted or overlapping
+`<script ...><script>…</script>` must not leave a residual `<script` behind.
+Both halves of that turned out to be wrong, and the second one dangerously.
+
+The loop adds no coverage, and the argument is structural rather than
+statistical. A global `String.replace` already consumes every leftmost
+non-overlapping match the input contains, and an open tag that has any close
+after it always produces a match at that open, so after one pass the only
+`<script … ld+json …>` opens left are ones with no close anywhere — which no
+number of passes can remove either. It follows that anything a second iteration
+matches must span a junction the first iteration created, i.e. is assembled out
+of characters that were never adjacent. Measured to confirm it: over 500,000
+generated documents drawn from an alphabet of open tags, the four `</script …>`
+end-tag spellings § 1086 established, head/body furniture and loose `<` and `>`,
+a single pass never once left a matchable block. The suite's own
+overlapping-opens case — the one the loop was written for — passes unchanged
+without it.
+
+What the loop did instead was manufacture blocks. Put the characters `<scr`
+before a real JSON-LD block and `ipt type="application/ld+json">` after it, and
+deleting the block joins the two fragments into an open tag whose nearest
+following close is the SPA bundle's own `</script>`. The second pass then
+swallows `</head>`, the mount div and the bundle tag, `spliceIntoHead` finds no
+head, and the share page goes out with none of its meta — precisely the § 1086
+damage, delivered by the mechanism added to prevent it. Every one of 48
+documents in that family loses its head to the loop and keeps it under a single
+pass.
+
+So the loop is gone and the case is pinned. This also settles a disagreement
+inside the tree: `document_title.test.ts` and `learn_structured_data.test.ts`
+both spell out, in their own comments, that re-running a strip to a fixpoint
+deletes spans the original never had, and both chose a single alternation
+instead — while the module those guards measure was doing the opposite thing for
+the opposite reason. The `social` and `canonical` strips beside it were already
+single global passes over multi-character structures, so the loop was never what
+satisfied the query for this file.
+
+## 1193. The Learn render-map rows are split one per route and derived cell by cell, because a row covering two routes could not state either exactly
+
+[§ 1191](../architecture/decisions.md) bound the render map's structured-data
+cell for the Learn routes to the same expectation the artifact guard asserts,
+after that cell had been corrected in both wrong directions in consecutive
+rounds. Widening the audit to the rest of the row found the next one already
+there: the mode cell read `prerendered (entries())` for `/learn`, which is a
+static route — `src/routes/learn/+page.ts` exports `prerender = true` and no
+`entries` at all, because there is no dynamic segment to enumerate. Only
+`/learn/category/[category]` and `/learn/[slug]` have one.
+
+That cell could not have been right, because the row described TWO routes whose
+modes differ. So the row is split — `/learn` and `/learn/category/[category]`
+now have one row each — and with each row describing exactly one route, every
+cell becomes a checkable statement about a named file rather than a summary of
+two.
+
+The guard is widened to match, and now derives all three cells from the route's
+own source: the mode cell names `prerendered` exactly when the loader exports
+`prerender = true` and `entries()` exactly when it exports `entries`; the
+head-owner cell names `<svelte:head>` exactly when the page uses one and names
+the JSON-LD builder the page actually calls, and only that one; the
+structured-data cell keeps § 1191's binding to `DECLARED_TYPE` plus the
+`BreadcrumbList` and, for the two index routes, the `ItemList`. Proved against
+five planted drifts — the two historical ones, both directions of the
+`entries()` claim, and a head-owner cell that stops naming its builder.
+
+Still deliberately no build: the three artifact cases self-skip without one and
+`test-web` does not build, so anything folded into them would bind nowhere,
+which is the condition all of these cells drifted under. Route source and a
+committed markdown file are both readable without an artifact, so this half runs
+on every PR today.
+
+## 1194. A stripped head signal is replaced by whitespace, not by nothing — deleting to the empty string is what made the fixpoint loop look necessary
+
+[§ 1192](../architecture/decisions.md) removed the JSON-LD strip's fixpoint loop
+after measuring that it could delete `</head>`, the mount div and the SPA bundle
+tag out of a shell. That was right and incomplete, and running the whole share
+suite rather than the module's own file surfaced the missing half: a test in
+`share_route_spa_shell.test.ts` had been asserting the loop's behaviour was
+*required*, and it went red.
+
+Both positions were defensible because both forms are wrong. Deleting a match to
+the empty string joins whatever stood either side of it, so the OUTPUT can be
+re-parsed into an element the input never contained — plant `<sc` before a real
+block and `ript type="application/ld+json">…` after it, and removing the block
+joins them into a live JSON-LD element on the served page. That is a real
+regression, and the route test was guarding a real thing. The loop chased that
+join; the trouble is that it cannot stop, because the synthesised open's nearest
+close may be the bundle's, and then the extra pass eats the document. So the
+tree held two tests encoding contradictory contracts — chase the join, and do
+not chase it — and each was pinning half of a defect.
+
+The fix is to prevent the join instead of arbitrating between the two: a match
+is replaced by a newline. A tag name cannot contain whitespace, so `<sc` +
+separator + `ript type=…>` is inert text rather than a script element. One pass,
+nothing synthesised, and nothing deleted beyond what was matched. Applied to all
+four signals, because the hazard is general to delete-based rewriting and not
+specific to JSON-LD. Measured on both adversarial inputs: the separator is the
+only one of the three forms that keeps `</head>`, the mount div and the bundle
+while leaving no parseable block behind.
+
+The route case is rewritten rather than deleted, and now asserts what it was
+really for — no synthesised block, exactly one JSON-LD element on the page, the
+real one gone — plus the structural survival the loop could not promise. Its old
+demand that the leftover fragments vanish as TEXT is dropped deliberately: that
+is the one thing only chasing the join can achieve, the fragments are inert
+either way, and the input cannot arise in our own build artifact. The two cases
+now bracket the behaviour from both sides — reverting to the empty string fails
+the route case, reverting to the loop fails the `head_splice` case.
+
+Process note worth keeping: § 1192's verification ran the changed module's own
+test file and not the suite around it. The contradiction was one directory away.
+
 ## 1210. The three artifact-reading web guards now run in the job that builds, because the job that owns them never does
 
 **Decided 2026-09-05.** `spa_shell_head_signals.test.ts` ([§ 1115](#1115)),

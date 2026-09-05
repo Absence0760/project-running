@@ -97,6 +97,31 @@ test('stripStaleHeadSignals — overlapping JSON-LD opens leave no residual <scr
 	assert.equal(head.includes('<script'), false);
 });
 
+test('stripStaleHeadSignals — deleting a block never splices a new one out of its neighbours', () => {
+	// The JSON-LD strip used to re-run until the string stopped changing, to stop
+	// an overlapping `<script ...><script>` leaving a residual `<script` behind.
+	// A global replace already consumes every leftmost non-overlapping match the
+	// input holds, so a second pass can only ever match text that became adjacent
+	// when the first pass deleted something -- which is a block the document
+	// never carried. Here the head holds the characters `<scr` before a real
+	// block and `ipt type="application/ld+json">` after it; removing the block
+	// joins them into an open tag whose nearest close is the SPA BUNDLE's, so the
+	// second pass swallowed `</head>`, the mount div and the bundle tag, and the
+	// splice then found no head and returned the shell unmeta'd -- the exact
+	// § 1086 damage, caused by the loop meant to prevent it (§ 1192).
+	const shell = SHELL.replace(
+		'<script type="application/ld+json">{"@type":"WebSite"}</script>',
+		'<scr<script type="application/ld+json">{"@type":"WebSite"}</script>ipt type="application/ld+json">',
+	);
+	const out = stripStaleHeadSignals(shell, ALL);
+	assert.ok(/<\/head(?=[\s/>])[^>]*>/i.test(out), 'the head close must survive the strip');
+	assert.ok(out.includes('<div id="svelte">'), 'the mount div must survive the strip');
+	assert.ok(out.includes('start.abc.js'), 'the SPA bundle must survive the strip');
+	// The real block IS gone; only the two fragments that were never a block stay.
+	assert.equal(out.includes('"WebSite"'), false, 'the block the document did carry must go');
+	assert.ok(spliceIntoHead(out, '<meta name="x" content="y">').includes('name="x"'));
+});
+
 test('stripStaleHeadSignals — a nonce or reordered attribute is still a JSON-LD block', () => {
 	const shell = SHELL.replace(
 		'<script type="application/ld+json">',
@@ -128,11 +153,17 @@ test('countHeadSignals — counts what the strips act on, so a full strip zeroes
 	});
 });
 
-test('injectShareRecapMeta — keeps the shell canonical + JSON-LD it does not replace', () => {
-	// This is the whole reason head_splice takes a signal list. A recap head
-	// emits neither, so a do-everything pipeline would strip the shell's own
-	// WebSite node and canonical off every recap share page and put nothing
-	// back.
+test('injectShareRecapMeta \u2014 replaces the shell canonical, keeps the JSON-LD it does not emit', () => {
+	// Half of this is the whole reason head_splice takes a signal list: a recap
+	// head emits no JSON-LD, so a do-everything pipeline would strip the shell's
+	// own WebSite node off every recap share page and put nothing back.
+	//
+	// The other half is the same rule read the other way. The recap head HAS
+	// emitted a self-referential canonical since \u00a7 1090, so it must strip the
+	// shell's -- and for a while it did not, which this case pinned as correct.
+	// Nothing shipped broken only because the shell carries no canonical today
+	// (spa_shell_head_signals.test.ts), a state that ends the day the landing
+	// page prerenders at that filename.
 	const out = injectShareRecapMeta(
 		SHELL,
 		buildShareRecapMeta({
@@ -147,11 +178,13 @@ test('injectShareRecapMeta — keeps the shell canonical + JSON-LD it does not r
 			siteUrl: 'https://threkir.com',
 		}),
 	);
-	// Read the canonical out and compare it, rather than asking whether the URL
-	// appears anywhere in the document: a substring test also passes when the
-	// href survives only inside the og:url the recap head just spliced in, which
-	// is the one outcome this test exists to rule out.
-	const canonical = out.match(/<link\s[^>]*rel="canonical"[^>]*href="([^"]*)"/i)?.[1];
-	assert.equal(canonical, 'https://threkir.com/stale', 'the shell canonical must survive');
+	// Every canonical href, read out and compared: asking whether the recap's
+	// URL appears anywhere also passes when it appears only as the og:url the
+	// head just spliced in, and asking for the FIRST one also passes when a
+	// second is standing behind it -- the outcome this case exists to rule out.
+	const canonicals = [...out.matchAll(/<link\s[^>]*rel="canonical"[^>]*href="([^"]*)"/gi)].map(
+		(m) => m[1],
+	);
+	assert.deepEqual(canonicals, ['https://threkir.com/recap/share/rec-1']);
 	assert.ok(out.includes('"WebSite"'), 'the shell JSON-LD must survive');
 });

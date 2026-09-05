@@ -9,25 +9,30 @@
 /// `injectShareRunMeta` to splice in the run-specific tags. The strip and
 /// splice steps live once, in head_splice.ts.
 ///
-/// The run head carries all four signals -- title, social meta, canonical and
-/// a JSON-LD block -- so all four are named here; a stale copy of any of them
-/// in the shell would sit alongside the per-run one, and unfurlers disagree
-/// about which of two they read (Slackbot picks the first; Twitterbot the
-/// last). What the shell actually carries today is measured, not assumed: see
+/// A stale copy of any signal this head supplies would sit alongside the
+/// per-run one, and unfurlers disagree about which of two they read (Slackbot
+/// picks the first; Twitterbot the last), so each is stripped before the
+/// splice. What the shell actually carries today is measured, not assumed: see
 /// spa_shell_head_signals.test.ts.
+///
+/// The JSON-LD is the one that has to be decided per call rather than named
+/// once. `ShareRunMeta.jsonLd` is optional and the badge share page -- which
+/// reuses this shape and this injector -- leaves it unset, so stripping it
+/// unconditionally deleted the shell's own node from every badge page and put
+/// nothing back. That is the case head_splice.ts takes a signal list FOR; a
+/// list fixed at the module level just spelled it in the wrong place.
 ///
 /// Persona-hunt finding Casual #4.
 
 import { renderShareRunHeadTags, type ShareRunMeta } from './share_run_meta';
-import { spliceIntoHead, stripStaleHeadSignals } from './head_splice';
+import { spliceIntoHead, stripStaleHeadSignals, type HeadSignal } from './head_splice';
 
 export function injectShareRunMeta(
 	spaShellHtml: string,
 	meta: ShareRunMeta,
 ): string {
 	const newTags = renderShareRunHeadTags(meta);
-	return spliceIntoHead(
-		stripStaleHeadSignals(spaShellHtml, ['title', 'social', 'canonical', 'jsonLd']),
-		newTags,
-	);
+	const signals: HeadSignal[] = ['title', 'social', 'canonical'];
+	if (meta.jsonLd) signals.push('jsonLd');
+	return spliceIntoHead(stripStaleHeadSignals(spaShellHtml, signals), newTags);
 }

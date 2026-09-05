@@ -22,6 +22,13 @@ import { relative, resolve } from 'node:path';
 
 const webRoot = resolve(import.meta.dirname, '..', '..', '..');
 const BUILD = resolve(webRoot, 'build');
+const SEO_DOC = resolve(webRoot, '..', '..', 'docs', 'features', 'seo.md');
+
+/// One statement of what each kind of Learn page declares itself to be. The
+/// artifact cases below assert the build agrees with it; the doc case asserts
+/// the render map in seo.md does. Changing what a page emits therefore fails
+/// until both the artifact and the doc have followed.
+const DECLARED_TYPE = { hub: 'CollectionPage', category: 'CollectionPage', guide: 'Article' } as const;
 
 /// The same parser-rule end tag `raw_text_end_tag_guard.test.ts` requires: a
 /// block spelled `</script >` closes in every browser, and a regex that does
@@ -93,7 +100,6 @@ test('every prerendered Learn page carries exactly one JSON-LD block, of the typ
 		`expected the hub, six category pages and at least seven guides to be prerendered, found ${JSON.stringify(kinds)}`,
 	);
 
-	const expected = { hub: 'CollectionPage', category: 'CollectionPage', guide: 'Article' };
 	for (const page of pages) {
 		const found = payloads(readFileSync(page.file, 'utf8'));
 		assert.equal(
@@ -105,7 +111,7 @@ test('every prerendered Learn page carries exactly one JSON-LD block, of the typ
 		assert.equal(node['@context'], 'https://schema.org', `${page.rel} JSON-LD lacks the context`);
 		assert.equal(
 			node['@type'],
-			expected[page.kind],
+			DECLARED_TYPE[page.kind],
 			`${page.rel} is a ${page.kind} page and must not declare itself a ${String(node['@type'])}`,
 		);
 	}
@@ -162,5 +168,87 @@ test('a Learn index lists the guides it shows, and never an empty collection', (
 				`${page.rel} ItemList entry ${i + 1} does not point at a guide`,
 			);
 		});
+	}
+});
+
+/// The render map is a claim about the code and the artifact, and the Learn
+/// rows have now been corrected three times in three rounds: the structured-data
+/// cell over-claimed `Article` for the two index routes for as long as the
+/// surface existed, was corrected to "none emitted", and then under-claimed that
+/// once § 1168 gave both routes a builder; the mode cell then turned out to name
+/// `entries()` for `/learn`, which is a static route and has none. Re-measuring
+/// by hand is what keeps failing, so all three cells are DERIVED here from the
+/// route's own files. The merged `/learn`, `/learn/category/[category]` row is
+/// split for the same reason — one row describing two routes whose modes differ
+/// cannot state either one exactly (§ 1193).
+///
+/// Deliberately no build: the artifact cases above self-skip without one and
+/// `test-web` never builds, so a check folded into them would bind nowhere,
+/// which is the condition these cells drifted under. Reading route source and a
+/// committed markdown file needs no artifact.
+const LEARN_ROUTES = [
+	{ surface: '`/learn`', dir: 'learn', kind: 'hub' },
+	{ surface: '`/learn/category/[category]`', dir: 'learn/category/[category]', kind: 'category' },
+	{ surface: '`/learn/[slug]`', dir: 'learn/[slug]', kind: 'guide' },
+] as const;
+
+test('seo.md states, for every cell of every Learn row, what the route actually does', () => {
+	const cells = readFileSync(SEO_DOC, 'utf8')
+		.split('\n')
+		.filter((line) => line.startsWith('|'))
+		.map((line) => line.split('|').map((c) => c.trim()));
+
+	for (const route of LEARN_ROUTES) {
+		const found = cells.filter((row) => row[1] === route.surface);
+		assert.equal(found.length, 1, `expected exactly one render-map row for ${route.surface}`);
+		const [, , mode, headOwner, structured] = found[0];
+
+		const loader = readFileSync(resolve(webRoot, 'src', 'routes', route.dir, '+page.ts'), 'utf8');
+		const page = readFileSync(resolve(webRoot, 'src', 'routes', route.dir, '+page.svelte'), 'utf8');
+
+		// Mode: prerendering and enumeration are separate facts, and the row that
+		// merged the two index routes could state only one of them for both.
+		assert.equal(
+			mode.includes('prerendered'),
+			/export const prerender\s*=\s*true/.test(loader),
+			`${route.surface}: the mode cell disagrees with its own +page.ts about prerendering; it reads: ${mode}`,
+		);
+		assert.equal(
+			mode.includes('entries()'),
+			/export const entries\b/.test(loader),
+			`${route.surface}: only a route with a dynamic segment to enumerate has entries(); the cell reads: ${mode}`,
+		);
+
+		// Head owner: who writes the head, and which JSON-LD builder it calls.
+		assert.equal(
+			headOwner.includes('<svelte:head>'),
+			page.includes('<svelte:head>'),
+			`${route.surface}: the head-owner cell disagrees with the page; it reads: ${headOwner}`,
+		);
+		for (const builder of ['buildLearnCollectionJsonLd', 'buildGuideJsonLd']) {
+			assert.equal(
+				headOwner.includes(builder),
+				page.includes(builder),
+				`${route.surface}: the head-owner cell must name the builder the page calls, and only that one; it reads: ${headOwner}`,
+			);
+		}
+
+		// Structured data, against the same expectation the artifact cases assert.
+		const owed = [DECLARED_TYPE[route.kind], 'BreadcrumbList'];
+		if (route.kind !== 'guide') owed.push('ItemList');
+		for (const name of owed) {
+			assert.ok(
+				structured.includes(name),
+				`${route.surface}: the structured-data cell must name ${name}; it reads: ${structured}`,
+			);
+		}
+		// Under-claiming reads as a dash, which the loop above already rejects;
+		// over-claiming reads as the wrong type name beside the right one.
+		const otherType = route.kind === 'guide' ? DECLARED_TYPE.hub : DECLARED_TYPE.guide;
+		assert.equal(
+			structured.includes(otherType),
+			false,
+			`${route.surface}: a ${route.kind} page is not a ${otherType}; the cell reads: ${structured}`,
+		);
 	}
 });
