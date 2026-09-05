@@ -258,6 +258,59 @@ Two orthogonal axes. **Release** is "we cut a tagged version of the product"; **
 
 Tag → workflow → deploy is the canonical path for every Fly service, GraphHopper included — `release-graphhopper.yml` fires on a published `graphhopper@*` release, so no service is left on a hand-rolled `flyctl deploy` from a maintainer's laptop. See [`apps/job_worker/deployment.md`](../../apps/job_worker/deployment.md) § CI wiring.
 
+### One-off: the SPA-shell cutover from `index.html` to `200.html`
+
+adapter-static's `fallback` moves from `build/index.html` to `build/200.html`
+so the prerendered landing page can occupy `build/index.html`. CloudFront's
+403 -> shell `custom_error_response` is what serves every deep link (each
+dynamic client route is a missing S3 key, so S3 answers 403 and the
+distribution substitutes the shell at 200), so the mapping has to follow the
+shell to its new name or every deep link serves the landing page instead of
+the app.
+
+**Neither single-step order is safe.** Apply the Terraform first and
+`/200.html` is a key the bucket does not hold, so a deep link 403s into a
+second 403. Deploy the tag first and `/index.html` is the landing page, so a
+deep link serves marketing at 200. Both windows last until the other half
+lands.
+
+**Three steps, in this order, close both windows** (derived from the workflow
+and the Terraform, never executed against AWS -- no lane holds credentials):
+
+1. `aws s3 cp s3://<bucket>/index.html s3://<bucket>/200.html` -- pre-seed the
+   CURRENT shell under its new name. The default `--copy-props default` copies
+   `content-type` and `cache-control` from the source object, so the copy is
+   byte- and header-identical to what a deploy would have written.
+2. `terraform apply` the `custom_error_response` change in
+   [`infra/envs/<env>`](../../infra/README.md). `/200.html` now resolves to the
+   shell deep links were already being served, so nothing about them changes.
+3. Publish the `web@*` release. `index.html` becomes the landing page and
+   `200.html` the new shell, both in the same `aws s3 sync` pass, and the
+   workflow's closing `create-invalidation --paths "/*"` clears any cached
+   error-response body rather than waiting out a TTL.
+
+Between 1 and 3 the pre-seeded object cannot be swept: the deploy's first
+`aws s3 sync` runs `--delete` but excludes `*.html`, and the CLI's own
+reference states that "files excluded by filters are excluded from deletion".
+The same two filter rules are why the sync needs no edit for the new file --
+pass 2's `--exclude "*" --include "*.html"` matches `200.html` on
+last-match-wins, so it uploads with the 60 s HTML cache like any other page.
+
+**This order is necessary and not sufficient.** It closes the CloudFront seam
+and does nothing about a second one that is not a deploy-order problem at all:
+the five share Lambdas EMBED the shell at bundle time, and each
+`apps/web/lambda/share-*/build.mjs` resolves it as `build/index.html`. Left
+unchanged, step 3 bakes the landing page into every share handler -- for its
+200 responses and for the `notFoundShell()` 404 body alike -- and no ordering
+repairs that. Those five paths, the three `*_spa_shell.ts` header comments and
+`spa_shell_head_signals.test.ts`'s artifact path must move to `200.html` in
+the same change as the `fallback`.
+
+Rollback is the mirror image: revert the Terraform first (the bucket still
+holds an `index.html`, though after a post-cutover deploy it is the landing
+page, so re-seed it from `200.html` before reverting), then redeploy the
+previous tag.
+
 ---
 
 ## Pre-flight checklist before going live

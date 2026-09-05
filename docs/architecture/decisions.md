@@ -23961,3 +23961,59 @@ trade. `security.yml` is unchanged. **What gates a CodeQL alert is a repo
 setting and only a repo setting**, and the context to require is the
 code-scanning check run (`CodeQL`), not the four `analyze` job names; the ask
 is recorded in `followups.md` rather than guessed at here.
+
+## 1265. The SPA shell's move to `200.html` needs no change to the S3 sync, a three-step deploy order, and one edit no order can substitute for
+
+**Decided 2026-09-05**, alongside the web-landing lane's move of
+adapter-static's `fallback` off `index.html` so the prerendered landing page
+can occupy that name. Three questions were put to this lane about the
+infrastructure half; all three are answered by measurement rather than by
+reading the change.
+
+**The `aws s3 sync` filter list needs nothing added, and the reason runs in
+both directions.** The deploy syncs twice: pass 1 with `--delete` and a long
+immutable cache excluding `index.html`, `*.html` and `app-capabilities.json`;
+pass 2 with a 60 s cache and `--exclude "*" --include "*.html" --include
+"app-capabilities.json"`. Read out of the installed CLI's own reference
+(aws-cli 2.36.4): filters "that appear later in the command take precedence",
+so pass 2's `*.html` include matches `200.html` and uploads it with the HTML
+cache; and `--delete` says outright that "files excluded by filters are
+excluded from deletion", so pass 1's `*.html` exclude covers the DESTINATION
+listing and no HTML key is ever a deletion candidate. That second rule is not
+incidental — it is the only reason `index.html` has survived every deploy to
+date, since it is excluded from pass 1's source set while pass 1 is the pass
+that deletes. `--exclude "index.html"` beside the glob has been redundant since
+the glob was added and is left as documentation of intent. Attempting the
+measurement locally is worth recording as a dead end: `aws s3 sync` refuses a
+local-to-local pair (`usage: ... <LocalPath> <S3Uri> or <S3Uri> <LocalPath> or
+<S3Uri> <S3Uri>`), so the offline read of the reference is the measurement
+available without credentials.
+
+**The web-landing lane's three-step deploy order is sound, and this lane can
+strengthen it rather than break it.** Pre-seeding `200.html` from the live
+`index.html`, applying the Terraform, then publishing the tag keeps
+`/200.html` resolving to the shell deep links were already being served
+throughout — so neither of the two single-step windows (a mapping at a missing
+key, or a mapping at the landing page) ever opens. Three further facts hold it
+up: `aws s3 cp`'s default `--copy-props default` copies `content-type` and
+`cache-control` from the source object, so the pre-seed is header-identical to
+a deployed one; the deploy's closing `create-invalidation --paths "/*"` clears
+any cached error-response body rather than waiting out the unset
+`error_caching_min_ttl`; and the `--delete` rule above is what stops the
+pre-seeded object being swept between steps 1 and 3. The order is now in
+[`docs/ops/deployment.md`](../ops/deployment.md), with its rollback.
+
+**What the order cannot fix, and what nearly shipped.** All five share Lambdas
+EMBED the shell at bundle time — `resolve(webRoot, 'build', 'index.html')`,
+hardcoded identically in `share-run`, `share-route`, `share-recap`,
+`share-badge` and `share-entity`'s `build.mjs`. Left as they are, the deploy
+bakes the LANDING PAGE into every share handler, for its 200 responses and for
+[§ 1036](#1036)'s `notFoundShell()` 404 body alike, so `/share/run/<id>` would
+answer with marketing carrying the run's `og:*` spliced into it. That is a code
+dependency, not a sequencing one, and no deploy order addresses it.
+`apps/web/src/lib/share/spa_shell_head_signals.test.ts` reads the same path as
+its artifact and would begin asserting head signals about the landing page.
+Those trees belong to other lanes; the six `release-web.yml` comments that
+described `build/index.html` as "the SPA shell the Lambda embeds" are this
+lane's and now name `200.html`, which is what makes the mismatch visible if the
+`build.mjs` half does not land.

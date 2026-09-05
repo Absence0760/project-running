@@ -190,15 +190,19 @@ jobs:
       - name: Bundle share-run Lambda
         # Persona-hunt finding Casual #4. Per-request SSR handler for
         # /share/run/* + /og/run/*.png. Must run AFTER the web build so
-        # apps/web/build/index.html (the SPA shell the Lambda embeds)
-        # exists. See apps/web/lambda/share-run/README.md.
+        # apps/web/build/200.html (the SPA shell the Lambda embeds) exists.
+        # The shell is adapter-static's `fallback`, and it moved off
+        # index.html so the prerendered landing page could occupy that
+        # name — an embed still reading index.html would bake the LANDING
+        # PAGE into every share handler, 200s and 404s alike. See
+        # apps/web/lambda/share-run/README.md.
         working-directory: apps/web
         run: node lambda/share-run/build.mjs
 
       - name: Bundle share-route Lambda
         # Web SEO parity with share-run. Per-request SSR handler for
         # /share/route/* + /og/route/*.png. Same post-build ordering
-        # constraint — it embeds apps/web/build/index.html. See
+        # constraint — it embeds apps/web/build/200.html. See
         # apps/web/lambda/share-route/README.md.
         working-directory: apps/web
         run: node lambda/share-route/build.mjs
@@ -207,7 +211,7 @@ jobs:
         # Year-in-Running "Wrapped" share parity with share-run/route.
         # Per-request SSR handler for /recap/share/* + /og/recap/*.png.
         # Same post-build ordering constraint — it embeds
-        # apps/web/build/index.html. See apps/web/lambda/share-recap/README.md.
+        # apps/web/build/200.html. See apps/web/lambda/share-recap/README.md.
         working-directory: apps/web
         run: node lambda/share-recap/build.mjs
 
@@ -215,20 +219,20 @@ jobs:
         # Per-badge achievement share parity with share-run/route/recap.
         # Per-request SSR handler for /share/badge/* + /og/badge/*.png.
         # Same post-build ordering constraint — it embeds
-        # apps/web/build/index.html. See apps/web/lambda/share-badge/README.md.
+        # apps/web/build/200.html. See apps/web/lambda/share-badge/README.md.
         working-directory: apps/web
         run: node lambda/share-badge/build.mjs
 
       - name: Bundle share-entity Lambda
         # One HTML-only Lambda serving /share/{event,profile,club,race}
         # per-request SSR. Same post-build ordering constraint — it embeds
-        # apps/web/build/index.html. See apps/web/lambda/share-entity/README.md.
+        # apps/web/build/200.html. See apps/web/lambda/share-entity/README.md.
         working-directory: apps/web
         run: node lambda/share-entity/build.mjs
 
       - name: Bundle generate-route Lambda
         # Server-side loop generation for POST /api/routes/generate. Pure
-        # esbuild bundle, no build/index.html dependency. See
+        # esbuild bundle, no SPA-shell dependency. See
         # apps/web/lambda/generate-route/README.md.
         working-directory: apps/web
         run: node lambda/generate-route/build.mjs
@@ -308,6 +312,18 @@ jobs:
           # the native clients read it to decide whether Pro is sellable
           # (decisions §466), so an immutable year-long cache would keep
           # a mobile storefront selling a perk the deploy has turned off.
+          #
+          # The filter list needs nothing added for the SPA shell's move to
+          # 200.html, and the reason is worth writing down because it is not
+          # obvious in either direction (decisions § 1265). Pass 2's
+          # `--exclude "*"` + `--include "*.html"` matches 200.html on the
+          # last-match-wins rule, so it uploads with the 60 s cache like any
+          # other HTML. And pass 1's `--exclude "*.html"` applies to the
+          # DESTINATION listing as well as the source, so `--delete` never
+          # considers an HTML key — which is the only reason index.html has
+          # survived every deploy to date. `--exclude "index.html"` beside it
+          # is subsumed by that glob and has been redundant since the glob was
+          # added; it is left as documentation of intent.
           aws s3 sync apps/web/build/ "s3://${{ steps.aws.outputs.bucket }}/" \
             --delete \
             --cache-control "public,max-age=31536000,immutable" \
