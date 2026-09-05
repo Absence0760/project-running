@@ -60,6 +60,17 @@
 //      non-zero and the failure is printed as text on a green check. All three
 //      leave rule 3 satisfied, so all three were reachable (decisions § 909).
 //
+//   5. No message a step prints hands part of itself to the shell to run. A
+//      backtick inside a double-quoted word is command substitution, and this
+//      repo's prose quotes identifiers in backticks everywhere, so the two
+//      habits meet inside an `::error::` string and bash deletes exactly the
+//      identifier the sentence exists to name. Measured on the committed
+//      workflows: `parity-matrix` told the reader a cell held "a symbol outside
+//      , a  with no Notes" and printed two "command not found" lines beside it.
+//      Rules 1-4 all passed on it — the annotation fired, from the right step,
+//      in a job the gate waits for. They are about whether a diagnosis is
+//      ATTRIBUTED correctly; this one is about whether it is DELIVERED.
+//
 // Line-based rather than YAML-parsed on purpose: the `workflow-lint` job runs
 // `node` against a bare checkout with no `npm ci`, so only the stdlib is
 // available. Same constraint check_toolchain_pins.mjs works under.
@@ -663,19 +674,106 @@ export function checkGateVerdict(files) {
 	return { errors, ok };
 }
 
+/// Whether a line hands a backtick to the shell as command substitution: one
+/// that is unescaped and inside a double-quoted word. Single quotes make a
+/// backtick literal, which is how a Markdown fence is echoed.
+/**
+ * @param {string} line
+ * @returns {boolean}
+ */
+export function hasShellSubstitutionBacktick(line) {
+	let single = false;
+	let double = false;
+	for (let i = 0; i < line.length; i++) {
+		const c = line[i];
+		if (c === '\\' && !single) {
+			i++;
+			continue;
+		}
+		if (c === "'" && !double) single = !single;
+		else if (c === '"' && !single) double = !double;
+		else if (c === '`' && double) return true;
+	}
+	return false;
+}
+
+/// Rule 5 — a diagnosis reaches the reader whole.
+///
+/// A backtick inside a double-quoted shell word is command substitution, so a
+/// message that quotes an identifier the way this repo's prose everywhere else
+/// does hands that identifier to bash to RUN. Measured on the committed
+/// workflows: `parity-matrix`'s malformed-table annotation named the legal
+/// symbol set and the `Partial` keyword in backticks, so bash printed two
+/// "command not found" lines to stderr and substituted the empty result — the
+/// reader was shown "a symbol outside , a  with no Notes", with both of the
+/// things the sentence exists to name deleted out of it. The `::error::` still
+/// fires and the step still exits 1, which is exactly why four rules about
+/// whether a diagnosis is ATTRIBUTED correctly never noticed that this one was
+/// not DELIVERED.
+///
+/// Comment lines are skipped: a backtick in one reaches no shell.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @returns {{ errors: string[], ok: string[], scanned: number }}
+ */
+export function checkShellSafeDiagnoses(files) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+	let scanned = 0;
+
+	for (const { name, text } of files) {
+		for (const step of parseSteps(text)) {
+			if (!step.hasRun) continue;
+			const lines = step.body.split('\n');
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+				if (line.trim().startsWith('#')) continue;
+				scanned++;
+				if (!hasShellSubstitutionBacktick(line)) continue;
+				errors.push(
+					`${name}:${step.line + i} — job \`${step.job}\` prints a message carrying a ` +
+						'backtick inside double quotes, so the shell runs what it quotes and splices the ' +
+						'empty result in: the reader is shown the sentence with exactly the identifier it ' +
+						'was naming cut out of it. Escape it (\\`) or single-quote the message.',
+				);
+			}
+		}
+	}
+
+	if (scanned === 0) {
+		errors.push(
+			'no shell line was read out of any `run:` block, so this rule passed over nothing.',
+		);
+	} else if (errors.length === 0) {
+		ok.push(`${scanned} shell line(s) print what they say, with no backtick for bash to run`);
+	}
+
+	return { errors, ok, scanned };
+}
+
 /** @param {readonly WorkflowFile[]} files */
 export function checkAll(files) {
 	const scoping = checkFailureScoping(files);
 	const diagnoses = checkStepDiagnoses(files);
 	const gate = checkGateCoverage(files);
 	const verdict = checkGateVerdict(files);
+	const delivery = checkShellSafeDiagnoses(files);
 	return {
-		errors: [...scoping.errors, ...diagnoses.errors, ...gate.errors, ...verdict.errors],
-		ok: [...scoping.ok, ...diagnoses.ok, ...gate.ok, ...verdict.ok],
+		errors: [
+			...scoping.errors,
+			...diagnoses.errors,
+			...gate.errors,
+			...verdict.errors,
+			...delivery.errors,
+		],
+		ok: [...scoping.ok, ...diagnoses.ok, ...gate.ok, ...verdict.ok, ...delivery.ok],
 		scoping,
 		diagnoses,
 		gate,
 		verdict,
+		delivery,
 	};
 }
 

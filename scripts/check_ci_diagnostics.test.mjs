@@ -13,8 +13,10 @@ import {
 	checkFailureScoping,
 	checkGateCoverage,
 	checkGateVerdict,
+	checkShellSafeDiagnoses,
 	checkStepDiagnoses,
 	derivedBundles,
+	hasShellSubstitutionBacktick,
 	isGuardStep,
 	parseJobBlock,
 	parseJobIf,
@@ -829,4 +831,67 @@ test('a NOT_A_GUARD entry that no longer exists fails rather than sitting as cov
 		[],
 		'a list of exemptions that has stopped describing the tree exempts nothing (decisions § 775)',
 	);
+});
+
+// ───────── rule 5: the message the shell prints is the message written ─────────
+
+test('a backtick inside double quotes is command substitution, escaped or single-quoted is not', () => {
+	assert.equal(hasShellSubstitutionBacktick('echo "a `Partial` with no Notes"'), true);
+	assert.equal(hasShellSubstitutionBacktick('echo "a \\`Partial\\` with no Notes"'), false);
+	assert.equal(hasShellSubstitutionBacktick("echo 'a `Partial` with no Notes'"), false);
+	assert.equal(hasShellSubstitutionBacktick("echo '```json'"), false);
+	assert.equal(hasShellSubstitutionBacktick('echo "$(go env GOPATH)/bin/actionlint"'), false);
+	assert.equal(hasShellSubstitutionBacktick("awk '{print \"x\"}' # `y`"), false);
+});
+
+test('a diagnosis the shell would eat half of fails, naming the file and line', () => {
+	const { errors } = checkShellSafeDiagnoses([
+		{
+			name: 'ci.yml',
+			text: [
+				'jobs:',
+				'  parity-matrix:',
+				'    steps:',
+				'      - name: Table shape',
+				'        run: |',
+				'          echo "::error::a symbol outside `A / B`, or a `Partial` with no Notes"',
+			].join('\n'),
+		},
+	]);
+	assert.equal(errors.length, 1, errors.join('\n'));
+	assert.match(errors[0], /^ci\.yml:6 — job `parity-matrix`/);
+});
+
+test('a comment carrying a backtick reaches no shell and is left alone', () => {
+	const { errors, ok } = checkShellSafeDiagnoses([
+		{
+			name: 'ci.yml',
+			text: [
+				'jobs:',
+				'  a:',
+				'    steps:',
+				'      # a `Partial` cell, in prose',
+				'      - name: x',
+				'        run: |',
+				'          # the `stack:` matrix',
+				'          echo ok',
+			].join('\n'),
+		},
+	]);
+	assert.deepEqual(errors, []);
+	assert.equal(ok.length, 1);
+});
+
+test('reading no shell line at all is reported rather than passing every workflow', () => {
+	const { errors } = checkShellSafeDiagnoses([{ name: 'ci.yml', text: 'jobs:\n  a:\n' }]);
+	assert.ok(
+		errors.some((e) => /passed over nothing/.test(e)),
+		errors.join('\n'),
+	);
+});
+
+test('every committed workflow prints its diagnoses whole', () => {
+	const { errors, scanned } = checkShellSafeDiagnoses(readWorkflows(WORKFLOW_DIR));
+	assert.deepEqual(errors, []);
+	assert.ok(scanned > 500, `only ${scanned} shell line(s) read`);
 });

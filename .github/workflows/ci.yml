@@ -1210,7 +1210,7 @@ jobs:
       - name: parity.md table structure — columns, symbols, Partial needs Notes
         run: |
           if ! dart run scripts/check_parity_matrix.dart; then
-            echo "::error::docs/product/parity.md's table is malformed — a row without 7 cells, a symbol outside `✓ / ✗ / Partial / N/A`, a `Partial` with no Notes, or a pipe-leading line belonging to no table at all. Nothing here is about the TS<->Dart pairs or the doc checkboxes — those are two of the other guards in this job."
+            echo "::error::docs/product/parity.md's table is malformed — a row without 7 cells, a symbol outside \`✓ / ✗ / Partial / N/A\`, a \`Partial\` with no Notes, or a pipe-leading line belonging to no table at all. Nothing here is about the TS<->Dart pairs or the doc checkboxes — those are two of the other guards in this job."
             echo "The failing line above names the row and the cell. Reproduce with: dart run scripts/check_parity_matrix.dart."
             exit 1
           fi
