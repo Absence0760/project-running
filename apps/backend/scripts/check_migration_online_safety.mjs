@@ -1,16 +1,31 @@
 #!/usr/bin/env node
-// Fail loudly if a migration adds a CHECK or FOREIGN KEY constraint to a
-// high-volume table without the online-safe `NOT VALID` two-step.
+// Fail loudly when a migration takes a validating full-table scan on a
+// high-volume table under a lock that blocks writers.
 //
-// Adding a CHECK or FK in a single `ALTER TABLE ... ADD CONSTRAINT ...` holds a
-// strong lock while Postgres scans every existing row to validate it. On a
-// tiny local / CI database that is invisible; against the populated prod
-// `runs` (or `notifications`, `segment_efforts`, ...) it blocks readers and
-// writers for the length of the scan — that is downtime. The online form is
-// `ADD CONSTRAINT ... NOT VALID` (instant, no scan) followed by a separate
-// `VALIDATE CONSTRAINT` (scans under the weaker SHARE UPDATE EXCLUSIVE lock,
-// which lets writes through). The full pattern + worked examples live in
-// docs/backend/migration_locks.md.
+// Two shapes do that, and the guard grades both.
+//
+// (a) The single step. A CHECK or FK added in one `ALTER TABLE ... ADD
+// CONSTRAINT ...` holds a strong lock while Postgres scans every existing row
+// to validate it. On a tiny local / CI database that is invisible; against the
+// populated prod `runs` (or `notifications`, `segment_efforts`, ...) it blocks
+// readers and writers for the length of the scan — that is downtime.
+//
+// (b) The two-step written into ONE FILE. `ADD CONSTRAINT ... NOT VALID` is
+// instant and `VALIDATE CONSTRAINT` scans under SHARE UPDATE EXCLUSIVE, which
+// lets INSERT/UPDATE/DELETE through — but only while nothing stronger is
+// already held. `apply-pending-migrations.sh` wraps each file in one `begin;
+// ... commit;` (the ledger row has to commit atomically with the SQL, and the
+// Supabase CLI wraps a file the same way — it is why `CREATE INDEX
+// CONCURRENTLY` errors as apply-time DDL), and a lock taken by DDL is held
+// until that transaction ends. So the `ADD`'s own ACCESS EXCLUSIVE — or a
+// preceding `DROP CONSTRAINT`, `ADD COLUMN`, `CREATE INDEX`, `CREATE TRIGGER`
+// — is still held while the scan runs, and SHARE UPDATE EXCLUSIVE is subsumed
+// by it rather than being a downgrade. Same-file, the two-step and the single
+// step block writers for the identical duration. Only splitting the `VALIDATE`
+// into a LATER migration, in its own transaction, buys anything, and that is
+// what docs/backend/migration_locks.md now says.
+//
+// The full pattern + worked examples live in docs/backend/migration_locks.md.
 //
 // EVERY committed migration is scanned, on every run. The shipped history is
 // grandfathered by NAME — the entries in GRANDFATHERED_VIOLATIONS below — and
@@ -72,44 +87,84 @@ export const GUARDED_TABLES = new Set([
 //
 // Adding to this list is not bookkeeping and must not become it. A new entry
 // says "this constraint takes a blocking scan of a high-volume table and we are
-// shipping it anyway"; the normal path is the NOT VALID + VALIDATE two-step,
-// which needs nothing here.
-/** @typedef {{ filename: string, table: string, constraint: string }} Grandfathered */
+// shipping it anyway"; the normal path is `ADD ... NOT VALID` in one migration
+// and `VALIDATE CONSTRAINT` in a LATER one, which needs nothing here. The
+// `kind` is part of the key, so an entry vouching for a blocking add does not
+// silently also vouch for a same-transaction validate in the same file.
+/** @typedef {{ filename: string, kind: ViolationKind, table: string, constraint: string }} Grandfathered */
 /** @type {readonly Grandfathered[]} */
 export const GRANDFATHERED_VIOLATIONS = [
-  { filename: '20260505_001_narrow_union_check_constraints.sql', table: 'runs', constraint: 'runs_source_check' },
-  { filename: '20260601_001_runs_metadata_activity_type_required.sql', table: 'runs', constraint: 'runs_metadata_activity_type_check' },
-  { filename: '20260728_001_cascade_auth_users_fks.sql', table: 'runs', constraint: 'runs_user_id_fkey' },
-  { filename: '20260822_001_jobs_kind_allowlist.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20260823_001_jobs_kind_allowlist_strava_event.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20260825_001_jobs_kind_allowlist_photo_process.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20260903_001_notify_event_rsvp.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20260928_001_gdpr_dsar_closeouts.sql', table: 'rate_limits', constraint: 'rate_limits_user_id_fkey' },
-  { filename: '20261019_001_event_instance_cancellation.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20261024_001_plan_workout_audit_notify.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20261026_001_direct_messages.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20261101_001_notify_club_post_run_completed.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20261130_001_notification_email_channel.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20261130_001_notification_email_channel.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20261202_001_welcome_email.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20261207_001_promote_activity_type_is_dnf.sql', table: 'runs', constraint: 'runs_activity_type_check' },
-  { filename: '20261211_001_consolidate_kind_check_constraints.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20261211_001_consolidate_kind_check_constraints.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20261218_001_safety_contacts.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20261219_001_web_push_channel.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20270107_001_notify_plan_assigned.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20270108_001_email_engagement.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20270208_001_achievements.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20270210_001_challenge_progress_rpc.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20270211_001_notifications_kind_check_reconcile.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20270212_001_native_push_channel.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20270218_001_auto_hide_reports.sql', table: 'notifications', constraint: 'notifications_kind_check' },
-  { filename: '20270223_001_lifecycle_drip.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20270224_001_route_photo_thumbnails.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20270301_001_club_photos.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
-  { filename: '20270322_001_routes_fk_alignment.sql', table: 'runs', constraint: 'runs_route_id_fkey' },
-  { filename: '20270410_001_safety_sms_escalation.sql', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20260505_001_narrow_union_check_constraints.sql', kind: 'blocking_add', table: 'runs', constraint: 'runs_source_check' },
+  { filename: '20260601_001_runs_metadata_activity_type_required.sql', kind: 'blocking_add', table: 'runs', constraint: 'runs_metadata_activity_type_check' },
+  { filename: '20260728_001_cascade_auth_users_fks.sql', kind: 'blocking_add', table: 'runs', constraint: 'runs_user_id_fkey' },
+  { filename: '20260822_001_jobs_kind_allowlist.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20260823_001_jobs_kind_allowlist_strava_event.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20260825_001_jobs_kind_allowlist_photo_process.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20260903_001_notify_event_rsvp.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20260928_001_gdpr_dsar_closeouts.sql', kind: 'blocking_add', table: 'rate_limits', constraint: 'rate_limits_user_id_fkey' },
+  { filename: '20261019_001_event_instance_cancellation.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20261024_001_plan_workout_audit_notify.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20261026_001_direct_messages.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20261101_001_notify_club_post_run_completed.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20261130_001_notification_email_channel.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20261130_001_notification_email_channel.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20261202_001_welcome_email.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20261207_001_promote_activity_type_is_dnf.sql', kind: 'blocking_add', table: 'runs', constraint: 'runs_activity_type_check' },
+  { filename: '20261211_001_consolidate_kind_check_constraints.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20261211_001_consolidate_kind_check_constraints.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20261218_001_safety_contacts.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20261219_001_web_push_channel.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20270107_001_notify_plan_assigned.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20270108_001_email_engagement.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20270208_001_achievements.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20270210_001_challenge_progress_rpc.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20270211_001_notifications_kind_check_reconcile.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20270212_001_native_push_channel.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20270218_001_auto_hide_reports.sql', kind: 'blocking_add', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20270223_001_lifecycle_drip.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20270224_001_route_photo_thumbnails.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20270301_001_club_photos.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20270322_001_routes_fk_alignment.sql', kind: 'blocking_add', table: 'runs', constraint: 'runs_route_id_fkey' },
+  { filename: '20270410_001_safety_sms_escalation.sql', kind: 'blocking_add', table: 'jobs', constraint: 'jobs_kind_chk' },
+
+  // The `same_txn_validate` half: eleven files that wrote both steps of the
+  // two-step, and so scanned under the lock the first step was still holding.
+  // Every one was written and reviewed as the ONLINE form — the guard passed
+  // them and migration_locks.md called them "far better than the single-step
+  // form" — which is why they are grandfathered rather than blamed. They are
+  // applied and uneditable; what changes is that the next one fails.
+  { filename: '20260621_001_runs_track_url_path_check.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_track_url_path_shape' },
+  { filename: '20260622_001_run_photos_storage_path_check.sql', kind: 'same_txn_validate', table: 'run_photos', constraint: 'run_photos_storage_path_shape' },
+  { filename: '20260916_001_run_photos_thumb_path_lockdown.sql', kind: 'same_txn_validate', table: 'run_photos', constraint: 'run_photos_thumb_512_path_shape' },
+  { filename: '20261127_001_runs_hr_series_url.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_hr_series_url_path_shape' },
+  { filename: '20270603_001_async_data_export.sql', kind: 'same_txn_validate', table: 'jobs', constraint: 'jobs_kind_chk' },
+  { filename: '20270607_001_data_export_ready_notification.sql', kind: 'same_txn_validate', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20270701000001_refund_failed_notification.sql', kind: 'same_txn_validate', table: 'notifications', constraint: 'notifications_kind_check' },
+  { filename: '20270704000001_runs_physical_quantity_bounds.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_distance_m_check' },
+  { filename: '20270704000001_runs_physical_quantity_bounds.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_duration_s_check' },
+  { filename: '20270704000001_runs_physical_quantity_bounds.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_elevation_gain_m_check' },
+  { filename: '20270704000002_numeric_bounds_reject_nan.sql', kind: 'same_txn_validate', table: 'segment_efforts', constraint: 'segment_efforts_time_seconds_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'live_run_pings', constraint: 'live_run_pings_lat_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'live_run_pings', constraint: 'live_run_pings_lng_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'live_run_pings', constraint: 'live_run_pings_ele_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'live_run_pings', constraint: 'live_run_pings_distance_m_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'live_run_pings', constraint: 'live_run_pings_elapsed_s_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'live_run_pings', constraint: 'live_run_pings_bpm_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'race_pings', constraint: 'race_pings_lat_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'race_pings', constraint: 'race_pings_lng_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'race_pings', constraint: 'race_pings_distance_m_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'race_pings', constraint: 'race_pings_elapsed_s_check' },
+  { filename: '20270705000001_ping_and_meet_point_numeric_bounds.sql', kind: 'same_txn_validate', table: 'race_pings', constraint: 'race_pings_bpm_check' },
+  { filename: '20270705000004_never_bounded_integer_columns.sql', kind: 'same_txn_validate', table: 'rate_limits', constraint: 'rate_limits_count_check' },
+  { filename: '20270705000004_never_bounded_integer_columns.sql', kind: 'same_txn_validate', table: 'run_photos', constraint: 'run_photos_position_idx_check' },
+  { filename: '20270705000004_never_bounded_integer_columns.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_fastest_5k_s_check' },
+  { filename: '20270705000004_never_bounded_integer_columns.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_fastest_10k_s_check' },
+  { filename: '20270705000004_never_bounded_integer_columns.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_fastest_half_marathon_s_check' },
+  { filename: '20270705000004_never_bounded_integer_columns.sql', kind: 'same_txn_validate', table: 'runs', constraint: 'runs_fastest_marathon_s_check' },
 ];
+
+const ALTER_PREFIX =
+  /^alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:public\.)?([a-z0-9_]+)\s*/;
 
 // The target table of an `ALTER TABLE [IF EXISTS] [ONLY] [public.]<table> ...`.
 /**
@@ -117,10 +172,7 @@ export const GRANDFATHERED_VIOLATIONS = [
  * @returns {string | null}
  */
 function alterTargetTable(statement) {
-  const match =
-    /^alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:public\.)?([a-z0-9_]+)/.exec(
-      statement,
-    );
+  const match = ALTER_PREFIX.exec(statement);
   return match ? match[1] : null;
 }
 
@@ -149,7 +201,48 @@ function alterActions(statement) {
     }
   }
   actions.push(statement.slice(start));
-  return actions;
+  // The first slice still carries `alter table <t>`. Strip it so an action is a
+  // bare subcommand and can be read for what lock it takes, not just searched
+  // for an ADD.
+  actions[0] = actions[0].replace(ALTER_PREFIX, '');
+  return actions.map((action) => action.trim()).filter((action) => action !== '');
+}
+
+// `VALIDATE CONSTRAINT` is the one ALTER TABLE subcommand in this tree that
+// leaves writers running; every other form takes at least SHARE ROW EXCLUSIVE,
+// which conflicts with the ROW EXCLUSIVE an INSERT holds. The name is returned
+// so the allowlist can key on it, and a quoted identifier arrives blanked by
+// the lexer, so it is unnamed here for the same fail-closed reason a quoted
+// constraint name is: no entry can ever match it.
+/**
+ * @param {string} action
+ * @returns {{ constraint: string | null } | null}
+ */
+function validateAction(action) {
+  const name = /^validate\s+constraint\s+([a-z0-9_"]+)/.exec(action)?.[1];
+  if (name === undefined) return null;
+  return { constraint: /^[a-z0-9_]+$/.test(name) ? name : null };
+}
+
+// Statements other than ALTER TABLE that take a write-blocking lock on a table
+// and hold it to commit: CREATE INDEX takes SHARE, CREATE TRIGGER takes SHARE
+// ROW EXCLUSIVE, and both conflict with the SHARE UPDATE EXCLUSIVE a later
+// VALIDATE would otherwise scan under. DML is deliberately absent — ROW
+// EXCLUSIVE does not conflict with SHARE UPDATE EXCLUSIVE, so a backfill in the
+// same file does not escalate the scan.
+const CREATE_INDEX_ON =
+  /^create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?(?:[a-z0-9_"]+\s+)?on\s+(?:only\s+)?(?:public\.)?([a-z0-9_]+)/;
+const CREATE_TRIGGER_ON =
+  /^create\s+(?:or\s+replace\s+)?(?:constraint\s+)?trigger\s+.*?\bon\s+(?:public\.)?([a-z0-9_]+)/;
+
+/**
+ * @param {string} statement
+ * @returns {string | null}
+ */
+function lockedByCreate(statement) {
+  return (
+    CREATE_INDEX_ON.exec(statement)?.[1] ?? CREATE_TRIGGER_ON.exec(statement)?.[1] ?? null
+  );
 }
 
 const BLOCKING_ADD =
@@ -191,37 +284,68 @@ export class UnlexableMigration extends Error {
   }
 }
 
-/** @typedef {{ table: string, constraint: string | null, statement: string }} ConstraintFinding */
+/** @typedef {'blocking_add' | 'same_txn_validate'} ViolationKind */
+/** @typedef {{ kind: ViolationKind, table: string, constraint: string | null, statement: string }} ConstraintFinding */
 /** @typedef {{ filename: string, sql: string }} MigrationSource */
-/** @typedef {{ filename: string, table: string, constraint: string | null, statement: string }} ConstraintViolation */
+/** @typedef {{ filename: string, kind: ViolationKind, table: string, constraint: string | null, statement: string }} ConstraintViolation */
 /** @typedef {{ scanned: string[], violations: ConstraintViolation[], unmatched: Grandfathered[] }} Audit */
 
-// Returns the guarded-table constraint violations in one migration's SQL.
+// Returns the guarded-table lock violations in one migration's SQL: the
+// single-step blocking adds, and the VALIDATEs that scan while an earlier
+// statement in the same file is still holding a write-blocking lock on the
+// same table. The walk is ordered because the second verdict depends on what
+// came before — a VALIDATE alone in a file is the online form and passes.
 /**
  * @param {string} sql
  * @returns {ConstraintFinding[]}
  * @throws when the SQL cannot be lexed; a verdict over text the lexer could
  *   not read would be a guess.
  */
-export function findUnsafeConstraintAdds(sql) {
+export function findOnlineSafetyViolations(sql) {
   /** @type {ConstraintFinding[]} */
   const findings = [];
+  /** @type {Set<string>} */
+  const held = new Set();
   // Literals are blanked as well as split correctly: a `check (note <> 'not
   // valid')` otherwise reads as a statement that carries the escape hatch.
   const statements = splitSqlStatements(sql, { blankLiterals: true });
   for (const raw of statements) {
     const statement = raw.replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!statement.startsWith('alter table')) continue;
+    if (!statement.startsWith('alter table')) {
+      const created = lockedByCreate(statement);
+      if (created !== null && GUARDED_TABLES.has(created)) held.add(created);
+      continue;
+    }
     const table = alterTargetTable(statement);
     if (table === null || !GUARDED_TABLES.has(table)) continue;
-    for (const action of alterActions(statement)) {
-      if (!isBlockingAdd(action)) continue;
-      findings.push({
-        table,
-        constraint: constraintName(action),
-        statement: statement.slice(0, 120),
-      });
+    const actions = alterActions(statement);
+    // One ALTER TABLE acquires the strongest lock any of its actions needs, for
+    // the whole statement — so a VALIDATE sharing a statement with an ADD is
+    // scanning under the ADD's lock however the two are ordered.
+    const escalatesHere = actions.some((action) => validateAction(action) === null);
+    for (const action of actions) {
+      const validated = validateAction(action);
+      if (validated !== null) {
+        if (held.has(table) || escalatesHere) {
+          findings.push({
+            kind: 'same_txn_validate',
+            table,
+            constraint: validated.constraint,
+            statement: statement.slice(0, 120),
+          });
+        }
+        continue;
+      }
+      if (isBlockingAdd(action)) {
+        findings.push({
+          kind: 'blocking_add',
+          table,
+          constraint: constraintName(action),
+          statement: statement.slice(0, 120),
+        });
+      }
     }
+    if (escalatesHere) held.add(table);
   }
   return findings;
 }
@@ -230,11 +354,11 @@ export function findUnsafeConstraintAdds(sql) {
 // onto the empty string would let an entry with a blank name exempt every
 // anonymous ADD in its file.
 /**
- * @param {{ filename: string, table: string, constraint: string | null }} violation
+ * @param {{ filename: string, kind: ViolationKind, table: string, constraint: string | null }} violation
  * @returns {string | null}
  */
-function violationKey({ filename, table, constraint }) {
-  return constraint ? `${filename} ${table} ${constraint}` : null;
+function violationKey({ filename, kind, table, constraint }) {
+  return constraint ? `${filename} ${kind} ${table} ${constraint}` : null;
 }
 
 // Every guarded-table violation the allowlist does not name, the allowlist
@@ -264,7 +388,7 @@ export function auditMigrations(migrations, allowlist = GRANDFATHERED_VIOLATIONS
     /** @type {ConstraintFinding[]} */
     let findings;
     try {
-      findings = findUnsafeConstraintAdds(sql);
+      findings = findOnlineSafetyViolations(sql);
     } catch (cause) {
       throw new UnlexableMigration(filename, cause);
     }
@@ -320,22 +444,32 @@ function main() {
     process.exit(1);
   }
 
-  for (const { filename, table, constraint, statement } of audit.violations) {
+  for (const { filename, kind, table, constraint, statement } of audit.violations) {
+    const named = constraint ? `the constraint "${constraint}"` : 'an unnamed CHECK/FK';
     console.error(
-      `::error file=apps/backend/supabase/migrations/${filename}::${filename} adds ` +
-        `${constraint ? `the constraint "${constraint}"` : 'an unnamed CHECK/FK'} to the ` +
-        `high-volume table "${table}" without NOT VALID: "${statement}". A single-step ADD ` +
-        `CONSTRAINT scans every existing row under a blocking lock — downtime against prod. Split ` +
-        `it into "ADD CONSTRAINT ... NOT VALID" (instant) then a separate "VALIDATE CONSTRAINT" ` +
-        `(scans under SHARE UPDATE EXCLUSIVE, lets writes through). See ` +
-        `docs/backend/migration_locks.md. If this constraint is genuinely safe to validate inline, ` +
-        `name it in GRANDFATHERED_VIOLATIONS in this script and say why in the PR.`,
+      kind === 'blocking_add'
+        ? `::error file=apps/backend/supabase/migrations/${filename}::${filename} adds ${named} ` +
+            `to the high-volume table "${table}" without NOT VALID: "${statement}". A single-step ` +
+            `ADD CONSTRAINT scans every existing row under a blocking lock — downtime against ` +
+            `prod. Split it into "ADD CONSTRAINT ... NOT VALID" here and a separate "VALIDATE ` +
+            `CONSTRAINT" in a LATER migration. See docs/backend/migration_locks.md. If this ` +
+            `constraint is genuinely safe to validate inline, name it in ` +
+            `GRANDFATHERED_VIOLATIONS in this script and say why in the PR.`
+        : `::error file=apps/backend/supabase/migrations/${filename}::${filename} validates ` +
+            `${named} on the high-volume table "${table}" in the same file that already took a ` +
+            `write-blocking lock on it: "${statement}". Each migration file is applied inside one ` +
+            `transaction, and a lock taken by DDL is held until that transaction ends — so the ` +
+            `VALIDATE's SHARE UPDATE EXCLUSIVE is subsumed by the earlier lock, not a downgrade, ` +
+            `and the scan blocks writers for its whole length exactly as a single-step ADD would. ` +
+            `Move the VALIDATE CONSTRAINT into a LATER migration, in its own transaction. See ` +
+            `docs/backend/migration_locks.md. If this table is genuinely small enough for the ` +
+            `scan not to matter, name it in GRANDFATHERED_VIOLATIONS and say why in the PR.`,
     );
   }
-  for (const { filename, table, constraint } of audit.unmatched) {
+  for (const { filename, kind, table, constraint } of audit.unmatched) {
     console.error(
-      `::error::GRANDFATHERED_VIOLATIONS names "${constraint}" on "${table}" in ${filename}, and ` +
-        `the scan found no such blocking constraint add there. An entry that matches nothing is ` +
+      `::error::GRANDFATHERED_VIOLATIONS names "${constraint}" on "${table}" in ${filename} as a ` +
+        `${kind}, and the scan found no such violation there. An entry that matches nothing is ` +
         `cover for nothing — the file was renamed, the SQL was rewritten, or the entry was never ` +
         `right. Correct it or delete it; leaving it is how a list of exemptions stops describing ` +
         `the tree it exempts.`,
@@ -345,7 +479,8 @@ function main() {
   if (audit.violations.length > 0 || audit.unmatched.length > 0) process.exit(1);
   console.log(
     `OK: ${audit.scanned.length} migrations scanned, no guarded-table CHECK/FK added without ` +
-      `NOT VALID beyond the ${GRANDFATHERED_VIOLATIONS.length} grandfathered by name.`,
+      `NOT VALID and no VALIDATE scanning under a lock its own file already held, beyond the ` +
+      `${GRANDFATHERED_VIOLATIONS.length} grandfathered by name.`,
   );
 }
 
