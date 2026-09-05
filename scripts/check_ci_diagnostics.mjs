@@ -71,21 +71,38 @@
 //      in a job the gate waits for. They are about whether a diagnosis is
 //      ATTRIBUTED correctly; this one is about whether it is DELIVERED.
 //
+// THE SUBJECT IS PER RULE, and stated in the output. For this file's whole
+// life every rule read `.github/workflows` and nothing else, so the two
+// composite actions under `.github/actions` were outside all of them at once
+// — `check_workflow_binaries.mjs` and `check_toolchain_pins.mjs` both read that
+// directory, and this one silently did not. Rules 1 and 5 read a step's `if:`
+// and its shell, which an action step has, so they read both directories; rules
+// 2, 3 and 4 are about JOBS — bundling, the gate's `needs:`, the gate's own
+// verdict — and an action has none, so widening them would have been a claim
+// about nothing. `RULE_SUBJECTS` records which is which with the reason, and
+// the guard prints the split rather than leaving a reader to infer it. An empty
+// action list is a FAILURE, not a quiet skip, because "covered workflows only"
+// is precisely the state that went unnoticed (decisions § 1215).
+//
 // Line-based rather than YAML-parsed on purpose: the `workflow-lint` job runs
 // `node` against a bare checkout with no `npm ci`, so only the stdlib is
 // available. Same constraint check_toolchain_pins.mjs works under.
+//
+// Reads: `.github/workflows/*.yml` (every rule) + `.github/actions/*/action.yml`
+//        (rules 1 and 5 — see RULE_SUBJECTS).
 //
 // Run: `node scripts/check_ci_diagnostics.mjs`
 // CI:  the `workflow-lint` job in .github/workflows/ci.yml, which is in the
 //      `CI gate` aggregator's `needs:` list.
 // Unit tests: `node --test scripts/check_ci_diagnostics.test.mjs`
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const WORKFLOW_DIR = join(REPO_ROOT, '.github', 'workflows');
+export const ACTION_DIR = join(REPO_ROOT, '.github', 'actions');
 
 /// Bundled jobs the derivation below cannot see, and why the job name cannot
 /// diagnose for them. Anything running two or more of this repo's own guards
@@ -116,7 +133,75 @@ export const ANNOTATION = '::error::';
  * @typedef {{ job: string, line: number, name: string | null, if: string | null, hasRun: boolean, body: string }} Step
  */
 
-/// Every step of every job in one workflow file, as `{ job, name, if, body }`.
+/// One `steps:` list, from the line after the `steps:` key. Shared by the
+/// workflow reader and the composite-action reader so the two cannot answer
+/// differently about the same YAML shape — `runs.steps` in an action is the
+/// same list `jobs.<id>.steps` is, at a different indent under a different key.
+///
+/// Stops at the first non-blank line indented less than the list's own `- `,
+/// and reports where, so the caller can re-read that line as whatever it is.
+/**
+ * @param {readonly string[]} lines
+ * @param {number} from index of the first line AFTER the `steps:` key
+ * @param {string} owner the job name, or the composite action's directory
+ * @returns {{ steps: RawStep[], next: number }}
+ */
+function collectStepList(lines, from, owner) {
+	/** @type {RawStep[]} */
+	const steps = [];
+	/** @type {RawStep | null} */
+	let current = null;
+	let listIndent = -1;
+	let i = from;
+
+	const close = () => {
+		if (current) steps.push(current);
+		current = null;
+	};
+
+	for (; i < lines.length; i++) {
+		const line = lines[i];
+		if (!line.trim()) {
+			if (current) current.lines.push(line);
+			continue;
+		}
+		const indent = line.length - line.trimStart().length;
+
+		if (listIndent === -1) {
+			const first = line.match(/^(\s*)-\s/);
+			if (!first) continue; // awaiting the first `- `
+			listIndent = first[1].length;
+		}
+		if (indent < listIndent) break;
+		if (indent === listIndent) {
+			close();
+			if (!/^\s*-\s/.test(line)) continue; // a comment between two steps
+			current = { job: owner, line: i + 1, lines: [line] };
+			continue;
+		}
+		if (current) current.lines.push(line);
+	}
+
+	close();
+	return { steps, next: i };
+}
+
+/** @param {RawStep} s @returns {Step} */
+function toStep(s) {
+	const body = s.lines.join('\n');
+	const cond = body.match(/^\s*(?:-\s+)?if:\s*(.*?)\s*$/m);
+	const name = body.match(/^\s*(?:-\s+)?name:\s*(.*?)\s*$/m);
+	return {
+		job: s.job,
+		line: s.line,
+		name: name ? name[1] : null,
+		if: cond ? cond[1] : null,
+		hasRun: /^\s*(?:-\s+)?run:/m.test(body),
+		body,
+	};
+}
+
+/// Every step of every job in one workflow, as `{ job, name, if, body }`.
 /// `body` is the step's own lines joined — comments between steps belong to no
 /// step, so a `::error::` mentioned in prose above one is not read as a
 /// diagnosis it prints.
@@ -130,98 +215,132 @@ export function parseSteps(text) {
 	const steps = [];
 	/** @type {string | null} */
 	let job = null;
-	/// The `steps:` list being read. Its job travels with it, so every step
-	/// this loop opens has one — a step attributed to no job is unreportable.
-	/** @type {{ job: string, indent: number } | null} */
-	let list = null;
-	/** @type {RawStep | null} */
-	let current = null;
-
-	const close = () => {
-		if (current) steps.push(current);
-		current = null;
-	};
 
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
-		const trimmed = line.trim();
-		const indent = line.length - line.trimStart().length;
-
-		if (!trimmed) {
-			if (current) current.lines.push(line);
-			continue;
-		}
+		if (!line.trim()) continue;
 
 		// A job key sits at two spaces under the file's `jobs:` mapping.
 		const jobKey = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
 		if (jobKey) {
-			close();
 			job = jobKey[1];
-			list = null;
 			continue;
 		}
+		if (job === null || !/^ {4}steps:\s*$/.test(line)) continue;
 
-		if (job && list === null) {
-			if (/^ {4}steps:\s*$/.test(line)) list = { job, indent: -1 }; // awaiting the first `- `
-			continue;
-		}
-		if (list === null) continue;
-
-		if (list.indent === -1) {
-			const first = line.match(/^(\s*)-\s/);
-			if (!first) continue;
-			list.indent = first[1].length;
-		}
-
-		if (indent < list.indent) {
-			// Back out to the job (or workflow) level: the steps list is over.
-			close();
-			list = null;
-			job = null;
-			// Re-read this line as a possible job key.
-			i--;
-			continue;
-		}
-
-		if (indent === list.indent) {
-			close();
-			if (!/^\s*-\s/.test(line)) continue; // a comment between two steps
-			current = { job: list.job, line: i + 1, lines: [line] };
-			continue;
-		}
-
-		if (current) current.lines.push(line);
+		const found = collectStepList(lines, i + 1, job);
+		steps.push(...found.steps);
+		// The line the list stopped at is unread — it is usually the next job
+		// key, so hand it back to this loop rather than consuming it here.
+		i = found.next - 1;
+		job = null;
 	}
-	close();
 
-	return steps.map((s) => {
-		const body = s.lines.join('\n');
-		const cond = body.match(/^\s*(?:-\s+)?if:\s*(.*?)\s*$/m);
-		const name = body.match(/^\s*(?:-\s+)?name:\s*(.*?)\s*$/m);
-		return {
-			job: s.job,
-			line: s.line,
-			name: name ? name[1] : null,
-			if: cond ? cond[1] : null,
-			hasRun: /^\s*(?:-\s+)?run:/m.test(body),
-			body,
-		};
-	});
+	return steps.map(toStep);
+}
+
+/// Every step of a COMPOSITE ACTION's `runs.steps`, in `parseSteps`' shape.
+///
+/// An action has no jobs, so `job` carries the action's own directory name
+/// instead — enough for a message to name the subject, and deliberately not a
+/// job, because the rules that are ABOUT jobs must not be handed one of these.
+/**
+ * @param {string} text
+ * @param {string} owner the action's directory name
+ * @returns {Step[]}
+ */
+export function parseActionSteps(text, owner) {
+	const lines = text.split('\n');
+	let inRuns = false;
+	for (let i = 0; i < lines.length; i++) {
+		if (/^runs:\s*$/.test(lines[i])) {
+			inRuns = true;
+			continue;
+		}
+		if (/^\S/.test(lines[i])) inRuns = false;
+		if (!inRuns || !/^ {2}steps:\s*$/.test(lines[i])) continue;
+		return collectStepList(lines, i + 1, owner).steps.map(toStep);
+	}
+	return [];
+}
+
+/// Which rules have a subject inside a composite action, and which do not.
+///
+/// Stated as data rather than left implicit, because "this guard reads
+/// `.github/workflows` and not `.github/actions`" was true of every rule at
+/// once for the file's whole life and nothing said so — the omission was
+/// invisible in exactly the way rule 5's own defect was. Two rules read a
+/// step's shell and its condition, which an action step has; three are about
+/// jobs, which an action does not have at all.
+export const RULE_SUBJECTS = [
+	{
+		rule: 1,
+		what: 'a `failure()`-conditioned diagnosis is scoped to a step',
+		actions: true,
+		why: "an action's step takes an `if:` and prints `::error::` like any other, and `failure()` there is true for a failure anywhere earlier in the CALLING job",
+	},
+	{
+		rule: 2,
+		what: "every check step of a bundled job carries its own `::error::`",
+		actions: false,
+		why: 'bundling is a property of a JOB name that cannot say which check broke, and an action has no jobs',
+	},
+	{
+		rule: 3,
+		what: "every job is named in the gate's `needs:`",
+		actions: false,
+		why: "nothing inside an action can be named in a `needs:` list",
+	},
+	{
+		rule: 4,
+		what: "the gate derives its verdict from the jobs it waits for",
+		actions: false,
+		why: 'it is one job in one workflow',
+	},
+	{
+		rule: 5,
+		what: 'a message reaches the reader whole',
+		actions: true,
+		why: "the shell runs an action's `run:` block exactly as it runs a job's, and an action step's text is further from the job that reports it than any other",
+	},
+];
+
+/// The workflows and the composite actions as one list of step lists, so the
+/// two rules that apply to both read them the same way.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @param {readonly WorkflowFile[]} actions
+ * @returns {{ name: string, kind: 'workflow' | 'action', steps: Step[] }[]}
+ */
+export function stepSources(files, actions) {
+	return [
+		...files.map((f) => ({
+			name: f.name,
+			kind: /** @type {'workflow'} */ ('workflow'),
+			steps: parseSteps(f.text),
+		})),
+		...actions.map((a) => ({
+			name: a.name,
+			kind: /** @type {'action'} */ ('action'),
+			steps: parseActionSteps(a.text, a.name.split('/')[0]),
+		})),
+	];
 }
 
 /// Rule 1 — a diagnosis behind an unscoped `failure()` speaks for every step
 /// above it. `steps.<id>.` in the condition is what scopes it to one.
 /**
  * @param {readonly WorkflowFile[]} files
+ * @param {readonly WorkflowFile[]} [actions]
  * @returns {{ errors: string[], ok: string[], conditioned: number }}
  */
-export function checkFailureScoping(files) {
+export function checkFailureScoping(files, actions = []) {
 	const errors = [];
 	const ok = [];
 	let conditioned = 0;
 
-	for (const { name, text } of files) {
-		for (const step of parseSteps(text)) {
+	for (const { name, steps } of stepSources(files, actions)) {
+		for (const step of steps) {
 			if (!step.if || !step.if.includes('failure()')) continue;
 			conditioned++;
 			if (!step.body.includes(ANNOTATION)) continue;
@@ -244,9 +363,9 @@ export function checkFailureScoping(files) {
 
 	if (conditioned === 0) {
 		errors.push(
-			`no \`failure()\`-conditioned steps found in any workflow. Either every ` +
-				`on-failure step was removed, or the condition was reworded and this ` +
-				`check now enforces nothing.`,
+			`no \`failure()\`-conditioned steps found in any workflow or composite ` +
+				`action. Either every on-failure step was removed, or the condition was ` +
+				`reworded and this check now enforces nothing.`,
 		);
 	}
 
@@ -714,17 +833,18 @@ export function hasShellSubstitutionBacktick(line) {
 /// Comment lines are skipped: a backtick in one reaches no shell.
 /**
  * @param {readonly WorkflowFile[]} files
+ * @param {readonly WorkflowFile[]} [actions]
  * @returns {{ errors: string[], ok: string[], scanned: number }}
  */
-export function checkShellSafeDiagnoses(files) {
+export function checkShellSafeDiagnoses(files, actions = []) {
 	/** @type {string[]} */
 	const errors = [];
 	/** @type {string[]} */
 	const ok = [];
 	let scanned = 0;
 
-	for (const { name, text } of files) {
-		for (const step of parseSteps(text)) {
+	for (const { name, kind, steps } of stepSources(files, actions)) {
+		for (const step of steps) {
 			if (!step.hasRun) continue;
 			const lines = step.body.split('\n');
 			for (let i = 0; i < lines.length; i++) {
@@ -733,7 +853,8 @@ export function checkShellSafeDiagnoses(files) {
 				scanned++;
 				if (!hasShellSubstitutionBacktick(line)) continue;
 				errors.push(
-					`${name}:${step.line + i} — job \`${step.job}\` prints a message carrying a ` +
+					`${name}:${step.line + i} — ${kind === 'action' ? 'composite action' : 'job'} ` +
+						`\`${step.job}\` prints a message carrying a ` +
 						'backtick inside double quotes, so the shell runs what it quotes and splices the ' +
 						'empty result in: the reader is shown the sentence with exactly the identifier it ' +
 						'was naming cut out of it. Escape it (\\`) or single-quote the message.',
@@ -744,7 +865,8 @@ export function checkShellSafeDiagnoses(files) {
 
 	if (scanned === 0) {
 		errors.push(
-			'no shell line was read out of any `run:` block, so this rule passed over nothing.',
+			'no shell line was read out of any `run:` block in any workflow or composite ' +
+				'action, so this rule passed over nothing.',
 		);
 	} else if (errors.length === 0) {
 		ok.push(`${scanned} shell line(s) print what they say, with no backtick for bash to run`);
@@ -753,27 +875,82 @@ export function checkShellSafeDiagnoses(files) {
 	return { errors, ok, scanned };
 }
 
-/** @param {readonly WorkflowFile[]} files */
-export function checkAll(files) {
-	const scoping = checkFailureScoping(files);
+/// What each rule was applied to, said out loud, plus the vacuity guard on the
+/// subject itself: a rule that reads an empty file list enforces nothing, and
+/// the composite-action list is the one that was empty for this file's whole
+/// life without anything noticing.
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @param {readonly WorkflowFile[]} actions
+ * @returns {{ errors: string[], ok: string[] }}
+ */
+export function checkRuleSubjects(files, actions) {
+	/** @type {string[]} */
+	const errors = [];
+	/** @type {string[]} */
+	const ok = [];
+
+	if (files.length === 0) {
+		errors.push(`no workflow file was read from ${WORKFLOW_DIR} — every rule below read nothing.`);
+	}
+	if (actions.length === 0) {
+		errors.push(
+			`no composite action was read from ${ACTION_DIR}, so rules ` +
+				`${RULE_SUBJECTS.filter((r) => r.actions)
+					.map((r) => r.rule)
+					.join(' + ')} covered workflows only. That is the state this whole subject ` +
+				'split exists to make visible, so it is a failure rather than a quiet skip.',
+		);
+	}
+
+	const applied = RULE_SUBJECTS.filter((r) => r.actions).map((r) => r.rule);
+	const jobsOnly = RULE_SUBJECTS.filter((r) => !r.actions).map((r) => r.rule);
+	ok.push(
+		`rule(s) ${applied.join(' + ')} read ${files.length} workflow(s) AND ${actions.length} ` +
+			`composite action(s); rule(s) ${jobsOnly.join(' + ')} read workflows only, having no ` +
+			'subject in an action (it has no jobs)',
+	);
+	for (const r of RULE_SUBJECTS.filter((rr) => !rr.actions)) {
+		ok.push(`rule ${r.rule} (${r.what}) is workflow-only: ${r.why}`);
+	}
+
+	return { errors, ok };
+}
+
+/**
+ * @param {readonly WorkflowFile[]} files
+ * @param {readonly WorkflowFile[]} [actions]
+ */
+export function checkAll(files, actions = []) {
+	const scoping = checkFailureScoping(files, actions);
 	const diagnoses = checkStepDiagnoses(files);
 	const gate = checkGateCoverage(files);
 	const verdict = checkGateVerdict(files);
-	const delivery = checkShellSafeDiagnoses(files);
+	const delivery = checkShellSafeDiagnoses(files, actions);
+	const subjects = checkRuleSubjects(files, actions);
 	return {
 		errors: [
+			...subjects.errors,
 			...scoping.errors,
 			...diagnoses.errors,
 			...gate.errors,
 			...verdict.errors,
 			...delivery.errors,
 		],
-		ok: [...scoping.ok, ...diagnoses.ok, ...gate.ok, ...verdict.ok, ...delivery.ok],
+		ok: [
+			...subjects.ok,
+			...scoping.ok,
+			...diagnoses.ok,
+			...gate.ok,
+			...verdict.ok,
+			...delivery.ok,
+		],
 		scoping,
 		diagnoses,
 		gate,
 		verdict,
 		delivery,
+		subjects,
 	};
 }
 
@@ -788,9 +965,37 @@ export function readWorkflows(dir) {
 		.map((name) => ({ name, text: readFileSync(join(dir, name), 'utf-8') }));
 }
 
+/// Every composite action's `action.yml`, named `<dir>/action.yml` so a
+/// reported line points at a path rather than at a bare filename two of them
+/// share.
+/**
+ * @param {string} dir
+ * @returns {WorkflowFile[]}
+ */
+export function readActions(dir) {
+	/** @type {WorkflowFile[]} */
+	const out = [];
+	/** @type {string[]} */
+	let entries;
+	try {
+		entries = readdirSync(dir);
+	} catch {
+		return out;
+	}
+	for (const entry of entries.sort()) {
+		for (const file of ['action.yml', 'action.yaml']) {
+			const path = join(dir, entry, file);
+			if (!existsSync(path)) continue;
+			out.push({ name: `${entry}/${file}`, text: readFileSync(path, 'utf-8') });
+		}
+	}
+	return out;
+}
+
 function main() {
 	const files = readWorkflows(WORKFLOW_DIR);
-	const { errors, ok, diagnoses, gate } = checkAll(files);
+	const actions = readActions(ACTION_DIR);
+	const { errors, ok, diagnoses, gate, delivery } = checkAll(files, actions);
 
 	for (const line of ok) console.log(`[OK] ${line}`);
 	for (const line of diagnoses.exempt) console.log(`[SKIP] ${line}`);
@@ -810,7 +1015,9 @@ function main() {
 			`${DIAGNOSING_JOBS.size} listed bundled job(s) diagnose themselves, with ` +
 			`${diagnoses.exempt.length} unnamed non-guard step(s) outside the rule; ` +
 			`\`${GATE_JOB}\` waits for all ${gate.covered} of them, and derives its own ` +
-			`exit status from every one.`,
+			`exit status from every one. ${delivery.scanned} shell line(s) across ` +
+			`${files.length} workflow(s) + ${actions.length} composite action(s) print what ` +
+			`they say.`,
 	);
 	return 0;
 }
