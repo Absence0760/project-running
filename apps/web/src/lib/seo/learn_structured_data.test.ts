@@ -171,52 +171,84 @@ test('a Learn index lists the guides it shows, and never an empty collection', (
 	}
 });
 
-/// The render map is a claim about the artifact, and this one row has now been
-/// corrected in BOTH wrong directions in consecutive rounds: it over-claimed
-/// `Article` for the two index routes for as long as the surface existed, then
-/// under-claimed "none emitted" once § 1168 gave them a builder. Re-measuring
-/// it by hand is what keeps failing, so the doc is read here instead -- against
-/// the same `DECLARED_TYPE` the artifact cases assert, and with no build
-/// needed, so this case binds in `test-web` rather than self-skipping.
-test('seo.md names the structured data each Learn route actually emits', () => {
+/// The render map is a claim about the code and the artifact, and the Learn
+/// rows have now been corrected three times in three rounds: the structured-data
+/// cell over-claimed `Article` for the two index routes for as long as the
+/// surface existed, was corrected to "none emitted", and then under-claimed that
+/// once § 1168 gave both routes a builder; the mode cell then turned out to name
+/// `entries()` for `/learn`, which is a static route and has none. Re-measuring
+/// by hand is what keeps failing, so all three cells are DERIVED here from the
+/// route's own files. The merged `/learn`, `/learn/category/[category]` row is
+/// split for the same reason — one row describing two routes whose modes differ
+/// cannot state either one exactly (§ 1193).
+///
+/// Deliberately no build: the artifact cases above self-skip without one and
+/// `test-web` never builds, so a check folded into them would bind nowhere,
+/// which is the condition these cells drifted under. Reading route source and a
+/// committed markdown file needs no artifact.
+const LEARN_ROUTES = [
+	{ surface: '`/learn`', dir: 'learn', kind: 'hub' },
+	{ surface: '`/learn/category/[category]`', dir: 'learn/category/[category]', kind: 'category' },
+	{ surface: '`/learn/[slug]`', dir: 'learn/[slug]', kind: 'guide' },
+] as const;
+
+test('seo.md states, for every cell of every Learn row, what the route actually does', () => {
 	const cells = readFileSync(SEO_DOC, 'utf8')
 		.split('\n')
 		.filter((line) => line.startsWith('|'))
 		.map((line) => line.split('|').map((c) => c.trim()));
 
-	const rowFor = (surface: string) => {
-		const found = cells.filter((row) => row[1] === surface);
-		assert.equal(found.length, 1, `expected exactly one render-map row for ${surface}`);
-		return found[0];
-	};
+	for (const route of LEARN_ROUTES) {
+		const found = cells.filter((row) => row[1] === route.surface);
+		assert.equal(found.length, 1, `expected exactly one render-map row for ${route.surface}`);
+		const [, , mode, headOwner, structured] = found[0];
 
-	// The two index routes share one row; the guides have their own.
-	const indexRow = rowFor('`/learn`, `/learn/category/[category]`');
-	const guideRow = rowFor('`/learn/[slug]`');
+		const loader = readFileSync(resolve(webRoot, 'src', 'routes', route.dir, '+page.ts'), 'utf8');
+		const page = readFileSync(resolve(webRoot, 'src', 'routes', route.dir, '+page.svelte'), 'utf8');
 
-	for (const name of [DECLARED_TYPE.hub, 'BreadcrumbList', 'ItemList']) {
-		assert.ok(
-			indexRow[4].includes(name),
-			`the Learn index row must name ${name}, which every hub and category page emits; it reads: ${indexRow[4]}`,
+		// Mode: prerendering and enumeration are separate facts, and the row that
+		// merged the two index routes could state only one of them for both.
+		assert.equal(
+			mode.includes('prerendered'),
+			/export const prerender\s*=\s*true/.test(loader),
+			`${route.surface}: the mode cell disagrees with its own +page.ts about prerendering; it reads: ${mode}`,
+		);
+		assert.equal(
+			mode.includes('entries()'),
+			/export const entries\b/.test(loader),
+			`${route.surface}: only a route with a dynamic segment to enumerate has entries(); the cell reads: ${mode}`,
+		);
+
+		// Head owner: who writes the head, and which JSON-LD builder it calls.
+		assert.equal(
+			headOwner.includes('<svelte:head>'),
+			page.includes('<svelte:head>'),
+			`${route.surface}: the head-owner cell disagrees with the page; it reads: ${headOwner}`,
+		);
+		for (const builder of ['buildLearnCollectionJsonLd', 'buildGuideJsonLd']) {
+			assert.equal(
+				headOwner.includes(builder),
+				page.includes(builder),
+				`${route.surface}: the head-owner cell must name the builder the page calls, and only that one; it reads: ${headOwner}`,
+			);
+		}
+
+		// Structured data, against the same expectation the artifact cases assert.
+		const owed = [DECLARED_TYPE[route.kind], 'BreadcrumbList'];
+		if (route.kind !== 'guide') owed.push('ItemList');
+		for (const name of owed) {
+			assert.ok(
+				structured.includes(name),
+				`${route.surface}: the structured-data cell must name ${name}; it reads: ${structured}`,
+			);
+		}
+		// Under-claiming reads as a dash, which the loop above already rejects;
+		// over-claiming reads as the wrong type name beside the right one.
+		const otherType = route.kind === 'guide' ? DECLARED_TYPE.hub : DECLARED_TYPE.guide;
+		assert.equal(
+			structured.includes(otherType),
+			false,
+			`${route.surface}: a ${route.kind} page is not a ${otherType}; the cell reads: ${structured}`,
 		);
 	}
-	for (const name of [DECLARED_TYPE.guide, 'BreadcrumbList']) {
-		assert.ok(
-			guideRow[4].includes(name),
-			`the Learn guide row must name ${name}; it reads: ${guideRow[4]}`,
-		);
-	}
-	// Both historical drifts, stated as the negatives. Under-claiming reads as
-	// a dash, which the loop above already rejects; over-claiming reads as the
-	// wrong type name beside the right one, which it does not.
-	assert.equal(
-		indexRow[4].includes(DECLARED_TYPE.guide),
-		false,
-		`an index page is not an ${DECLARED_TYPE.guide}; the row reads: ${indexRow[4]}`,
-	);
-	assert.equal(
-		guideRow[4].includes(DECLARED_TYPE.hub),
-		false,
-		`a guide is not a ${DECLARED_TYPE.hub}; the row reads: ${guideRow[4]}`,
-	);
 });

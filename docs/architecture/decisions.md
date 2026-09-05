@@ -22079,3 +22079,36 @@ instead — while the module those guards measure was doing the opposite thing f
 the opposite reason. The `social` and `canonical` strips beside it were already
 single global passes over multi-character structures, so the loop was never what
 satisfied the query for this file.
+
+## 1193. The Learn render-map rows are split one per route and derived cell by cell, because a row covering two routes could not state either exactly
+
+[§ 1191](../architecture/decisions.md) bound the render map's structured-data
+cell for the Learn routes to the same expectation the artifact guard asserts,
+after that cell had been corrected in both wrong directions in consecutive
+rounds. Widening the audit to the rest of the row found the next one already
+there: the mode cell read `prerendered (entries())` for `/learn`, which is a
+static route — `src/routes/learn/+page.ts` exports `prerender = true` and no
+`entries` at all, because there is no dynamic segment to enumerate. Only
+`/learn/category/[category]` and `/learn/[slug]` have one.
+
+That cell could not have been right, because the row described TWO routes whose
+modes differ. So the row is split — `/learn` and `/learn/category/[category]`
+now have one row each — and with each row describing exactly one route, every
+cell becomes a checkable statement about a named file rather than a summary of
+two.
+
+The guard is widened to match, and now derives all three cells from the route's
+own source: the mode cell names `prerendered` exactly when the loader exports
+`prerender = true` and `entries()` exactly when it exports `entries`; the
+head-owner cell names `<svelte:head>` exactly when the page uses one and names
+the JSON-LD builder the page actually calls, and only that one; the
+structured-data cell keeps § 1191's binding to `DECLARED_TYPE` plus the
+`BreadcrumbList` and, for the two index routes, the `ItemList`. Proved against
+five planted drifts — the two historical ones, both directions of the
+`entries()` claim, and a head-owner cell that stops naming its builder.
+
+Still deliberately no build: the three artifact cases self-skip without one and
+`test-web` does not build, so anything folded into them would bind nowhere,
+which is the condition all of these cells drifted under. Route source and a
+committed markdown file are both readable without an artifact, so this half runs
+on every PR today.
