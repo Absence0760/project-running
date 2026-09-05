@@ -23961,3 +23961,46 @@ normalisation for the queued branch, and a rename of the class (which the
 vacuity assertion catches rather than passing on an empty extraction). Verified
 by running the targeted Dart suites (131 tests) plus the twin diff; the Swift
 half is unchanged and remains read-not-run.
+
+## 1255. The DEBUG direct-upload path is typed rather than deleted, and claim (9) holds it against the envelope
+
+`SupabaseService.RunPayload.metadata` was `[String: String]`, so `avg_bpm` and
+`hr_coverage` were not omitted from the DEBUG direct-to-Supabase write — they
+were UNSENDABLE, because a Double had nowhere to go. § 1207 filed the choice
+between typing the payload and deleting a path that lands a row short of the one
+the same run produces through the phone.
+
+**Typed, not deleted, and the reason is who reads it.** This is the path a
+watch-sim-alone developer uses to see a row land with no phone in the loop, and
+it is the ONLY such path — deleting it removes the capability rather than the
+defect, and the DEBUG button in `ContentView` would go with it. The claim it
+makes is also not false, just short: it says "this run synced", which is true.
+`RunPayload.metadata` is now a `RunMetadata: Encodable` carrying
+`activity_type` / `last_modified_at` / `avg_bpm?` / `hr_coverage?`. Swift's
+synthesized encoder uses `encodeIfPresent` for an Optional, so a nil is omitted
+rather than written as `null` — which is exactly the rule § 1207 needs, where
+absent means UNMEASURED and a fabricated zero is worse than a missing key.
+
+**The durable half is the guard, not the four fields.** Two transports writing
+one run from two hand-written field lists is § 1254's shape one tier up, and it
+had already produced this defect. Claim (9) of `check_watch_ios_source.mjs`
+reads the WCSession envelope's key set and the union of `RunPayload`'s and
+`RunMetadata`'s stored properties, and requires the first to be contained in the
+second. The reverse direction is a named register, `DIRECT_ONLY_FIELDS`, holding
+the two fields the phone supplies on the envelope path — `user_id` from its own
+session, `track_url` from its own Storage upload — and an entry naming a field
+the payload no longer sends FAILS, the same staleness rule `UNGUARDED_DESTRUCTIVE`
+carries. `metadata` itself is excluded as the container rather than exempted as a
+datum. Six mutations are pinned in the test file: dropping `hr_coverage` from
+`RunMetadata`, adding a `cadence_spm` the envelope has never heard of, renaming
+`track_url` so its exemption goes stale, renaming `RunMetadata`, renaming the
+`metadata` field on `RunPayload` so the bag is unreachable, and a parser unit
+test that a computed property and a method-local are not fields. Breaking the
+envelope literal now reports vacuity from claims (6) AND (9), and the existing
+vacuity test was tightened to require both rather than loosened to accept
+either.
+
+Read, not compiled: there is no Xcode here, the Swift change is
+`build-verified` only once the `Test watchOS app (Swift)` macOS job runs, and
+what a Mac must confirm is that `RunMetadata` encodes to the same JSON object
+the `[String: String]` literal did for its two shared keys.

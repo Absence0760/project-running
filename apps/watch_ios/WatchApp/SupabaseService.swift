@@ -108,6 +108,13 @@ actor SupabaseService {
         // mobile's delta-fetch filters on `metadata->>'last_modified_at'`, so
         // a direct-uploaded run without it would never resurface on another
         // device after the first full pull.
+        //
+        // The two heart-rate fields carry the same claim they carry on the
+        // WCSession envelope, and for the same reason: this is the path a
+        // watch-sim-alone developer watches a row land on, and a row that
+        // silently lacks them is the shape that makes someone debug the wrong
+        // tier. Nil stays nil — `hr_coverage` absent is UNMEASURED and a
+        // fabricated zero is worse than a missing key (decisions § 1207).
         let runPayload = RunPayload(
             id: run.id,
             user_id: userId,
@@ -116,10 +123,12 @@ actor SupabaseService {
             distance_m: run.distanceMetres,
             track_url: objectPath,
             source: "watch",
-            metadata: [
-                "activity_type": "run",
-                "last_modified_at": formatter.string(from: Date()),
-            ]
+            metadata: RunMetadata(
+                activity_type: "run",
+                last_modified_at: formatter.string(from: Date()),
+                avg_bpm: run.averageBPM,
+                hr_coverage: run.hrCoverage
+            )
         )
 
         let url = URL(string: "\(baseURL)/rest/v1/runs")!
@@ -178,7 +187,22 @@ actor SupabaseService {
         let distance_m: Double
         let track_url: String
         let source: String
-        let metadata: [String: String]
+        let metadata: RunMetadata
+    }
+
+    /// The row's `metadata` bag.
+    ///
+    /// Typed rather than `[String: String]`, which is why the two heart-rate
+    /// keys were once UNSENDABLE rather than merely unsent — a numeric value
+    /// had nowhere to go in a dictionary of strings, and the omission read as
+    /// a design choice. Swift's synthesized encoder uses `encodeIfPresent`
+    /// for an Optional, so a nil is omitted rather than written as `null`,
+    /// which is exactly the rule `hr_coverage` needs.
+    private struct RunMetadata: Encodable {
+        let activity_type: String
+        let last_modified_at: String
+        let avg_bpm: Double?
+        let hr_coverage: Double?
     }
 
     enum SupabaseError: LocalizedError {

@@ -1,6 +1,6 @@
 // Unit tests for scripts/check_watch_ios_source.mjs.
 //
-// That guard makes eight claims about a tier this repo compiles in exactly one
+// That guard makes nine claims about a tier this repo compiles in exactly one
 // job, on a runner nobody here has. Every failure it exists to catch is silent
 // on the platform: a localization key with no catalog entry renders English and
 // throws nothing, an entitlement nothing claims builds and links fine and is
@@ -23,6 +23,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
 import {
+	DIRECT_ONLY_FIELDS,
 	INGEST,
 	ROUTE_BRIDGE,
 	UNGUARDED_DESTRUCTIVE,
@@ -37,6 +38,7 @@ import {
 	phoneEnvelopeKeys,
 	stripSwiftComments,
 	swiftPayloadKeys,
+	swiftStructFields,
 	watchEnvelopeKeys,
 } from './check_watch_ios_source.mjs';
 
@@ -58,6 +60,7 @@ const STAGED_INGEST = 'WatchIngestBridge.swift';
 /** …and of the Dart end of the route-push envelope. */
 const STAGED_ROUTE_BRIDGE = 'apple_watch_route_bridge.dart';
 const ARMED = join('WatchApp', 'ArmedRoute.swift');
+const DIRECT = join('WatchApp', 'SupabaseService.swift');
 
 /** Copy only the files the guard reads into a throwaway tree. */
 function stage() {
@@ -419,10 +422,16 @@ test('a metadata key the phone reads and the watch never sends is refused', () =
 test('an unparseable envelope on either end fails loudly rather than vacuously', () => {
 	// Both extractors read a hand-written literal. If either shape changes,
 	// the honest answer is "this claim can no longer be made", not silence.
+	// TWO claims read this literal — (6) against the phone lift and (9)
+	// against the DEBUG direct writer — and both must say so, because a claim
+	// that quietly stopped reading is the failure mode the whole file is
+	// written against.
 	const { errors } = runMutated((dir) => {
 		edit(dir, SYNC, (s) => s.replace('var metadata: [String: Any] = [', 'var metadata = buildMetadata(['));
 	});
-	assert.equal(matched(errors, /pass vacuously/).length, 1, errors.join('\n'));
+	assert.equal(matched(errors, /pass vacuously/).length, 2, errors.join('\n'));
+	assert.equal(matched(errors, /claim \(6\) would pass vacuously/).length, 1, errors.join('\n'));
+	assert.equal(matched(errors, /claim \(9\) would pass vacuously/).length, 1, errors.join('\n'));
 });
 
 test('claims 6 and 7 are skipped, not faked, when no phone half is available', () => {
@@ -633,4 +642,84 @@ test('claim (8) fails on an exemption for a button that no longer exists', () =>
 		errors.some((e) => e.includes('UNGUARDED_DESTRUCTIVE exempts a destructive Button')),
 		errors.join('\n'),
 	);
+});
+
+// --- claim 9: the two run-write paths send the same run ---------------------
+
+test('claim (9) fails when the DEBUG direct path drops a field the envelope sends', () => {
+	// The shape it shipped in: `RunPayload.metadata` was `[String: String]`, so
+	// the two numeric heart-rate keys had nowhere to go and the row simply
+	// arrived short. Nothing failed — which is why this is a guard.
+	const { errors } = runMutated((dir) => {
+		edit(dir, DIRECT, (s) => s.replace('        let hr_coverage: Double?\n', ''));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('`hr_coverage`') && e.includes('sends it on neither')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (9) fails when the direct path grows a field the envelope has no idea about', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, DIRECT, (s) =>
+			s.replace('        let hr_coverage: Double?', '        let hr_coverage: Double?\n        let cadence_spm: Double?'),
+		);
+	});
+	assert.ok(
+		errors.some((e) => e.includes('`cadence_spm`') && e.includes('DIRECT_ONLY_FIELDS')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (9) fails on an exemption for a field the direct path no longer sends', () => {
+	assert.ok(
+		Object.keys(DIRECT_ONLY_FIELDS).length > 0,
+		'the register is empty, so the staleness test below proves nothing',
+	);
+	const { errors } = runMutated((dir) => {
+		edit(dir, DIRECT, (s) => s.replaceAll('track_url', 'object_path'));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('DIRECT_ONLY_FIELDS exempts `track_url`')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (9) refuses to pass vacuously when the payload struct is renamed', () => {
+	// A renamed struct parses to null, not to an empty field set: reporting
+	// that a payload nobody sends agrees with the envelope is the failure this
+	// whole guard exists to avoid.
+	const { errors } = runMutated((dir) => {
+		edit(dir, DIRECT, (s) => s.replace('private struct RunMetadata: Encodable', 'private struct RowMetadata: Encodable'));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('claim (9) would pass vacuously')),
+		errors.join('\n'),
+	);
+});
+
+test('claim (9) refuses to pass vacuously when RunPayload stops carrying the bag', () => {
+	const { errors } = runMutated((dir) => {
+		edit(dir, DIRECT, (s) => s.replace('        let metadata: RunMetadata', '        let extra: RunMetadata'));
+	});
+	assert.ok(
+		errors.some((e) => e.includes('claim (9) would pass vacuously')),
+		errors.join('\n'),
+	);
+});
+
+test('swiftStructFields reads stored properties and not computed ones', () => {
+	const src = [
+		'private struct Thing: Encodable {',
+		'    let a: String',
+		'    var b: Double?',
+		'    var c: Int { 3 }',
+		'    func d(x: Int) -> Int {',
+		'        let local: Int = x',
+		'        return local',
+		'    }',
+		'}',
+	].join('\n');
+	assert.deepEqual(swiftStructFields(src, 'Thing'), ['a', 'b']);
+	assert.equal(swiftStructFields(src, 'Absent'), null);
 });
