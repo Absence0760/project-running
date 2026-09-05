@@ -121,34 +121,9 @@ export const KNOWN_GAPS = [
 		reason: 'not a pair and cannot become one: the counterpart is a SCREEN, and the syncer row already records that mobile keeps those gates inline there. The header is what needs rewording, and `apps/web/src/lib/core` is another lane\'s tree',
 	},
 	{
-		file: 'apps/web/src/lib/runs/run_stats.ts',
-		counterpart: 'apps/mobile_android/lib/run_stats.dart',
-		reason: 'a genuine pair with a third rail in the firmware (`core/src/run_stats.rs`); owed a row in both registries',
-	},
-	{
-		file: 'apps/web/src/lib/training/goals.ts',
-		counterpart: 'apps/mobile_android/lib/goals.dart',
-		reason: 'a genuine pair with mirror suites on both sides; owed a row in both registries',
-	},
-	{
 		file: 'apps/web/src/lib/training/hr_zones.ts',
 		counterpart: 'apps/mobile_android/lib/hr_zones.dart',
 		reason: 'a THREE-rail helper (the Wear OS `resolveZoneCutoffs` is the third); owed a row in both registries',
-	},
-	{
-		file: 'apps/web/src/lib/training/workout_kind_color.ts',
-		counterpart: 'apps/mobile_android/lib/workout_kind_color.dart',
-		reason: 'a genuine pair; owed a row in both registries',
-	},
-	{
-		file: 'apps/mobile_android/lib/workout_kind_color.dart',
-		counterpart: 'apps/web/src/lib/training/workout_kind_color.ts',
-		reason: 'the other half of the same unregistered pair',
-	},
-	{
-		file: 'apps/mobile_android/lib/elevation.dart',
-		counterpart: 'apps/web/src/lib/routes/elevation.ts',
-		reason: 'a genuine pair with mirror suites on both sides; owed a row in both registries',
 	},
 	{
 		file: 'apps/mobile_android/lib/food_search.dart',
