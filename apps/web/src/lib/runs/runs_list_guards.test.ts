@@ -1,8 +1,10 @@
-// Source guards over the /runs list toolbar.
+// Source guards over the /runs list toolbar and its back-navigation snapshot.
 //
-// A hand-written subset of a union typechecks perfectly, so only the source
-// says whether the list of sources the runner is offered is the list the column
-// actually allows.
+// Both defects here are invisible to the type checker. A hand-written subset of
+// a union typechecks perfectly, and a snapshot payload that omits a field is
+// just a smaller object. Only the source says whether the list of sources the
+// runner is offered is the list the column allows, and whether what the page
+// captured is what it restores.
 //
 // Runs with cwd = apps/web, like the other source guards in this directory.
 
@@ -48,4 +50,39 @@ test('the source filter offers every source the column allows', () => {
 	for (const s of RUN_SOURCES) {
 		assert.match(labels, new RegExp(`\\b${s}:`), `no filter label for the '${s}' source`);
 	}
+});
+
+test('the back-nav snapshot restores every field it captures', () => {
+	// `renderLimit` was component state and not in the payload, and the reset
+	// effect fired on the restore's own filter writes -- so a list expanded to
+	// 200 cards came back as 50, the document was a quarter of its captured
+	// height, and the scroll the restore then re-applied clamped to the top.
+	const captured = [...block('capture: () => ({', '}),').matchAll(/^\t{3}(\w+)[,:]/gm)].map(
+		(m) => m[1],
+	);
+	assert.ok(captured.includes('renderLimit'), 'renderLimit must be captured');
+	const restore = block('restore: (s) => {', '\n\t};');
+	for (const field of captured) {
+		assert.match(
+			restore,
+			new RegExp(`\\b${field}\\b`),
+			`the snapshot captures \`${field}\` and never restores it`,
+		);
+	}
+});
+
+test('a restore does not trip the render-window reset', () => {
+	// The reset has to compare the filter set rather than fire on any write to
+	// it: a restore ASSIGNS the filters, which is a write like any other.
+	const effect = block('let renderWindowKey', 'const sourceFilterLabels');
+	assert.match(
+		effect,
+		/if \(key === renderWindowKey\) return;/,
+		'the reset must skip when the filter set is unchanged',
+	);
+	assert.match(
+		block('restore: (s) => {', '\n\t};'),
+		/renderWindowKey = renderWindowSignature\(\);/,
+		'restore must adopt the restored filter set as the window it belongs to',
+	);
 });
