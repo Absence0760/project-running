@@ -555,7 +555,7 @@ export async function fetchRunsOnRoute(
 		.eq('route_id', routeId)
 		.order('duration_s', { ascending: true });
 	if (error || !data) return [];
-	return data as never;
+	return data;
 }
 
 /**
@@ -2969,16 +2969,34 @@ export async function fetchNextRsvpedEvent(
 }
 
 export async function fetchUpcomingEvents(clubId: string): Promise<EventWithMeta[]> {
-	// For recurring series, `starts_at` can be in the past even though the
-	// next instance is in the future. Pull anything that's either (a) one-off
-	// in the future OR (b) recurring with an until-date that's still ahead.
-	// The client-side enrichment computes `next_instance_start` per event.
-	// Cap at 200 — busy clubs accumulate event history but the upcoming-set
-	// of interest is far smaller; the client filter discards the rest.
+	// For recurring series, `starts_at` can be in the past even though the next
+	// instance is in the future, so the candidate set is (a) one-off in the
+	// future OR (b) recurring and not past its until-date. That predicate has
+	// to run SERVER-side: ordering `starts_at` ascending under a cap returns
+	// the club's OLDEST rows, so a club with more than `limit` finished
+	// one-offs — a weekly series is 200 rows in four years — pushed every
+	// future event past the cap and its Events tab went permanently empty.
+	// (The same shape `fetchWeeklyMileage` documents: an ascending cap over a
+	// growing history windows the wrong end of it.)
+	//
+	// A count-limited series carries no until-date, so it lands in the
+	// candidate set and `nextLiveInstance` retires it once exhausted — the
+	// filter below is deliberately a superset of what is actually live. The
+	// two recurring clauses are spelled separately rather than as one nested
+	// `or(...)` because a single `and(...)` inside an `or=` is the only nesting
+	// depth this file already exercises, and a filter PostgREST cannot parse
+	// 400s into the discarded `error` and empties the tab exactly as the bug
+	// being fixed did.
+	const nowIso = new Date().toISOString();
 	const { data } = await supabase
 		.from('events')
 		.select(EVENT_SELECT_COLS)
 		.eq('club_id', clubId)
+		.or(
+			`starts_at.gte.${nowIso},` +
+				`and(recurrence_freq.not.is.null,recurrence_until.is.null),` +
+				`and(recurrence_freq.not.is.null,recurrence_until.gte.${nowIso})`
+		)
 		.order('starts_at', { ascending: true })
 		.limit(200);
 	const events = (data as Event[]) ?? [];

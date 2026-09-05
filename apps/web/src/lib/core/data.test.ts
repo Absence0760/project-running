@@ -1215,15 +1215,22 @@ test('every race-import availability probe asks the results leg, not the listing
 });
 
 test('every data.ts RPC names its function as a checked literal, never through a cast', () => {
-	// Reason: `database.types.ts` is generated so that `supabase.rpc()` checks
-	// the function name AND the argument object against the deployed routine.
-	// Casting the name (`'foo' as never`) turns that check off for the whole
+	// Reason: `database.types.ts` is generated so that `supabase.rpc()` can
+	// check the function name AND the argument object against the deployed
+	// routine. Casting the name (`'foo' as never`) turns that off for the whole
 	// call — the params cast goes with it — so a renamed function, a dropped
-	// parameter, or a mistyped argument reaches production as a runtime 404 /
-	// 400 from PostgREST instead of a build failure. The going-count call
+	// parameter or a mistyped argument would reach production as a runtime 404
+	// / 400 from PostgREST rather than as a build failure. The going-count call
 	// carried both casts for months after the migration that made them
 	// unnecessary landed; the comment excusing them named a regeneration that
 	// had already happened.
+	//
+	// The check is not live yet: `core/supabase.ts` calls `createBrowserClient`
+	// with no `Database` generic, which defaults to `any`, so today every
+	// `.rpc()` and `.from()` in this file is unchecked whatever it is written
+	// as. That is filed separately, measured. This guard is what keeps the call
+	// sites in the shape the generic will check the day it is passed — a cast
+	// survives it silently.
 	const source = stripComments(read('src/lib/core/data.ts'));
 	const calls = [...source.matchAll(/\.rpc\(\s*([^,)]+)/g)].map((m) => m[1].trim());
 
@@ -1237,4 +1244,54 @@ test('every data.ts RPC names its function as a checked literal, never through a
 			`.rpc(${name}) does not name its function as a bare string literal — a cast or a computed name disables the generated type check`
 		);
 	}
+});
+
+test('fetchUpcomingEvents windows the candidate set server-side, not the club\'s oldest 200', () => {
+	// Reason: the read is `order('starts_at', ascending).limit(200)` over every
+	// event the club has ever had. Without a server-side predicate that is the
+	// OLDEST 200 rows — a weekly series accumulates 200 finished one-offs in
+	// four years — so every future event falls past the cap and the club's
+	// Events tab reports "no upcoming events" permanently, getting worse as the
+	// club gets older. The client-side `next_instance_start >= now` filter
+	// cannot recover a row the query never returned. Same shape
+	// `fetchRunsForDashboard` and `fetchWeeklyMileage` already carry guards for.
+	//
+	// The predicate must stay a SUPERSET of what is live: a recurring series
+	// with no until-date has to be admitted (its end may be a `recurrence_count`
+	// only `nextLiveInstance` can evaluate), or a count-limited series
+	// disappears from the tab while it is still running.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('export async function fetchUpcomingEvents');
+	assert.ok(start >= 0, 'fetchUpcomingEvents moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+
+	assert.match(
+		body,
+		/\.or\(/,
+		'the candidate set must be narrowed server-side — an ascending cap over the whole history windows the wrong end of it',
+	);
+	assert.match(
+		body,
+		/starts_at\.gte\.\$\{nowIso\}/,
+		'a one-off is a candidate only when it has not happened yet',
+	);
+	assert.match(
+		body,
+		/recurrence_freq\.not\.is\.null,recurrence_until\.is\.null/,
+		'a recurring series with no until-date must be admitted — its end may be a recurrence_count',
+	);
+	assert.match(
+		body,
+		/recurrence_freq\.not\.is\.null,recurrence_until\.gte\.\$\{nowIso\}/,
+		'and one whose until-date is still ahead',
+	);
+	// Nesting depth: a PostgREST filter this build cannot parse 400s into the
+	// discarded `error` and empties the tab exactly as the bug did, so the
+	// clauses stay at the one `and(...)`-inside-`or=` depth the file already
+	// exercises rather than nesting a second `or(` inside an `and(`.
+	assert.doesNotMatch(
+		body,
+		/and\([^)]*or\(/,
+		'no `or(` nested inside an `and(` — that depth is unexercised in this file',
+	);
 });
