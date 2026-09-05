@@ -22096,3 +22096,52 @@ silent failure mode is a sample-timestamp source reading blank on hardware, whic
 would send `hr_coverage: 0.0` on every run — the non-nil gate does not catch
 that, because zero is a measurement. A simulator or bench run is owed before the
 figure is trusted, per `docs/custom_watch/quality_standards.md`.
+
+## 1208. Both watchOS Discard buttons are confirmed, and claim (8) of the source guard is what keeps them that way
+
+Hunted in the same round that fixed the Wear side (§ 1206) and found to be the
+same defect twice on the other watch. `ContentView.swift` carried two
+`Button("Discard", role: .destructive)` controls, each calling its closure on a
+single tap. `RecoveryView`'s ends the crash-recovery checkpoint — the run's only
+durable record, and the next `start()` purges the NDJSON a discarded recovery
+strands. `PostRunView`'s sits on the **unsynced** branch, where the run has not
+been handed to `WCSession` at all and `reset()` deletes its track file: the tap
+is the end of the run, not a tidy-up. Neither had a confirmation, and the
+accessibility hints said so out loud ("Deletes the unsaved run permanently",
+"Throws away the unsynced run permanently").
+
+Both now arm a `.confirmationDialog` — the platform's own idiom, available at
+the project's watchOS 10 floor, and already anticipated by the guard's
+`LOCALIZING_APIS` list — titled "Discard this run?" with the stake stated
+underneath as "Not saved anywhere else", the same sentence the Wear chip shows.
+Three catalog keys in all six translated locales. `Start next run` in the SYNCED
+branch calls the identical closure and is deliberately left unguarded: there the
+run is already on its way and nothing is lost.
+
+**The pin is a new claim in `scripts/check_watch_ios_source.mjs`, not a Swift
+test**, and the reason is structural rather than convenient. A new file in
+`WatchAppTests` has to be added to an Xcode target by hand, and a test file in no
+target is the exact failure mode claim (4) already exists to catch; the Node
+guard also runs on Linux CI, where every PR sees it, rather than only in the one
+macOS job. Claim (8) brace-matches every `Button(…, role: .destructive)` and its
+action closure, computes the `[start, end)` span of every `.confirmationDialog(…)`
+including its trailing `actions:` / `message:` closures, and requires each
+destructive button either to ARM a flag that some dialog is `isPresented:` on, or
+to sit inside a dialog span as that dialog's own action. It refuses to pass
+vacuously in both directions: no destructive button parsed, or destructive
+buttons with no dialog anywhere, are each an error.
+
+`role: .destructive` is a colour as well as a claim, so the guard needs a way to
+say "this one destroys nothing" — `Stop` ends the recording into a `PostRunView`
+that still holds the run, its track and a Sync button. `UNGUARDED_DESTRUCTIVE`
+registers that by label with the reason, and an entry matching no button in the
+file FAILS: a stale exemption is a hole nobody can see, because the next button
+to take that label inherits it. Four mutation tests in
+`check_watch_ios_source.test.mjs` drive each refusal, plus two on the parsers —
+one pinning that a paren inside a button label does not unbalance the argument
+walk, and one that a dialog span ends where its closures end rather than running
+to EOF, which would swallow every later button in the file and pass them all.
+
+Read, not run: there is no Xcode on this workstation and none in Linux CI, so
+nothing here has been compiled. The `Test watchOS app (Swift)` macOS job settles
+whether it builds; this ADR claims only what a parser can see.

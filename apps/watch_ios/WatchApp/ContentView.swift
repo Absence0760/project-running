@@ -473,6 +473,7 @@ struct RecoveryView: View {
     let workoutManager: WorkoutManager
     let onRecover: () -> Void
     let onDiscard: () -> Void
+    @State private var confirmingDiscard = false
 
     var body: some View {
         ScrollView {
@@ -498,11 +499,25 @@ struct RecoveryView: View {
                 .accessibilityHint("Restores the unsaved run from the last checkpoint")
 
                 Button("Discard", role: .destructive) {
-                    onDiscard()
+                    confirmingDiscard = true
                 }
                 .font(.caption)
                 .accessibilityHint("Deletes the unsaved run permanently")
             }
+        }
+        // The checkpoint is the run's only durable record: nothing else on
+        // this device or any other holds it, and the next `start()` purges
+        // the track file a discarded recovery strands. One tap must not end
+        // it (decisions § 1208).
+        .confirmationDialog(
+            "Discard this run?",
+            isPresented: $confirmingDiscard,
+            titleVisibility: .visible
+        ) {
+            Button("Discard", role: .destructive) { onDiscard() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Not saved anywhere else")
         }
     }
 
@@ -535,6 +550,7 @@ struct PostRunView: View {
     let onSync: () -> Void
     let onSyncDirect: () -> Void
     let onDiscard: () -> Void
+    @State private var confirmingDiscard = false
 
     var body: some View {
         ScrollView {
@@ -613,12 +629,27 @@ struct PostRunView: View {
                     #endif
 
                     Button("Discard", role: .destructive) {
-                        onDiscard()
+                        confirmingDiscard = true
                     }
                     .font(.caption)
                     .accessibilityHint("Throws away the unsynced run permanently")
                 }
             }
+        }
+        // Only reachable on the UNSYNCED branch, where the run has not been
+        // handed to WCSession and `reset()` deletes its track file — so the
+        // tap is the end of the run, not a tidy-up. "Start next run" in the
+        // synced branch calls the same closure and is deliberately NOT
+        // guarded: there the run is already on its way (decisions § 1208).
+        .confirmationDialog(
+            "Discard this run?",
+            isPresented: $confirmingDiscard,
+            titleVisibility: .visible
+        ) {
+            Button("Discard", role: .destructive) { onDiscard() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Not saved anywhere else")
         }
     }
 
