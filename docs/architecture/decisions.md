@@ -23875,3 +23875,39 @@ difference. Semantics checked against SQL ground truth on the same data: 12
 events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
+
+## 1263. The two new doc guards join `parity-matrix` rather than a job of their own, because the property they need is the one that job already has
+
+`scripts/check_doc_links.mjs` and `scripts/check_test_inventory_counts.mjs`
+read markdown and the suites markdown describes. Every job in `ci.yml` that
+runs a guard is gated on `needs.changes.outputs.code == 'true'` except three,
+and the `changes` filter classifies `docs/`, `.claude/` and every `*.md` as a
+docs-only diff — so a doc-link guard in a gated job would be skipped on exactly
+the pull requests that break a doc link, and the `CI gate` counts a skip as a
+pass. That is [§ 764](#764)'s "green having tested nothing", and it is the
+documented reason `parity-matrix` is ungated. Both guards therefore run there,
+ahead of the Flutter setup, which is the only real cost that job pays.
+
+**A new job was considered and declined on the same measurement
+[§ 1129](#1129) and [§ 770](#770) already made.** A separate job buys a second
+runner and a second checkout+setup-node pair — GitHub bills by the minute,
+rounded up, so seconds of `node` costs a minute — to say nothing a per-step
+`::error::` does not already say, and it needs its own line in the `CI gate`
+aggregator's `needs:` list, where an omission turns a red into an invisible
+one rather than merely an unlabelled one. `parity-matrix` is already in that
+list, so this change adds no `needs:` obligation at all; what it does add is
+rule 2's, because the job now runs eight of this repo's guards instead of six
+and every check step has to diagnose itself.
+
+**Both obligations were mutation-tested rather than asserted.** Stripping both
+`::error::` lines from the doc-links step fails the guard at exit 1 naming the
+step, the job and the eight-guard count; a backtick planted inside one of the
+new double-quoted messages fails rule 5 at the right line; and deleting
+`- parity-matrix` from the gate's `needs:` list fails rule 3. Removing only
+ONE of a step's two `::error::` lines does not fail — rule 2's subject is the
+step, and each step here runs a guard and then that guard's own unit suite
+under one name, which is the idiom every other step in the job uses. Clean
+tree: 70 self-diagnosing steps across 12 derived + 2 listed bundled jobs, the
+gate waiting for all 33 others, 2,196 shell lines clean; `actionlint
+-shellcheck= -pyflakes=` exit 0; 134 unit tests across
+`check_ci_diagnostics.test.mjs` + `check_infra_coverage.test.mjs`.
