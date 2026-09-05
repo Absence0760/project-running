@@ -22097,3 +22097,97 @@ confirmed to accept the first. The suite that makes this file's green mean
 anything, `scripts/check_garmin_source.test.mjs`, lives in another lane's tree —
 its rows for claim 7 and for the suffixed rename are filed, not written, so
 those two mutations are measured here and unmeasured in CI.
+
+## 1203. Two firmware ports answered a question their own headers said they mirrored
+
+Three findings from one sweep of the `apps/custom_watch/core/src` ports against
+the web originals their module docs name. All three are [§ 641](#641)'s class —
+a rail asserting lockstep that nothing compares — and all three were measured
+before being touched.
+
+**`plan_progress` had no name for the `graduation` phase.** Web's
+`PLAN_PHASE_ORDER` and the Dart `planPhaseOrder` both carry six phases; the
+firmware enum carried five, and its `PLAN_PHASE_ORDER` doc comment said
+"mirroring web's `PLAN_PHASE_ORDER`". `graduation` is not exotic — it is what
+`generatePlan(beginnerWalkRun)` stamps on the terminal week of every C25K plan
+instead of `race`, so the whole arc of a beginner plan is `build` then this.
+`from_name` answered `None` for it and `ordered_plan_phases` skipped it, so the
+watch rendered that plan's phase marker as `[build]`: not a mis-ordering, a
+deleted ending. Confirmed by mutation — with the arm removed the new test reports
+`left: [Build]` against `right: [Build, Graduation]`. The pin is two tests: the
+walk-run case web and Dart both already carry, and the ladder spelled as strings
+plus a `from_name` round-trip over every variant, so an enum variant added
+without a parse arm fails here instead of silently dropping every week carrying
+it.
+
+**`relink_candidates` scrambled a double day.** The port collapses web's
+instants to a day index, which its header explains and which is right — no
+timezone database belongs in `no_std`. What the header also claimed was "Output
+is newest-first", and the sort was `sort_unstable_by_key`, so two runs on ONE day
+came out in an arbitrary order rather than in the order the phone sent them
+(which is the phone's own `started_at`-descending list). There is nothing finer
+on the wire to order that pair BY, so the achievable contract is stability, and
+`core` has no stable sort — `slice::sort` lives in `alloc` — so it is now an
+explicit insertion sort. The first test written for it passed under BOTH sorts,
+because `sort_unstable` is an insertion sort under about twenty elements and
+stable there by accident; the test that ships is forty runs over four day
+buckets, which fails under the old sort and passes under the new one.
+
+**`fitness` rounded three cutoffs and called it a collapse.** Its header said the
+day-index change was "the honest collapse of `localDateKey` + `Date.now()`". That
+is exact for the trainingLoad EWMA walk, which web genuinely buckets by
+`localDateKey` — and a rounding for the other three, which web measures in raw
+milliseconds between instants: `isReturningFromLayoff`'s 14-day activity window,
+`hasLayoffGap`, and `currentVdot`'s 90-day cutoff. A gap web calls 27 d 20 h is
+28 whole calendar days here, so each cutoff sits up to a day wider on this rail.
+Nothing on the wire carries a run's time of day, so this is not a rounding that
+could be tightened without a frame change. It is now stated in the header and
+pinned by a boundary test, which is the difference between a stated difference
+and an accident.
+
+## 1204. The twin-claim census is blind to a quarter of the claims it exists to police
+
+`check_twin_claims.mjs` reports "106 twin declaration(s) across 3 source roots;
+every one names a file that exists and a pair the syncer table carries". The
+verdict is true of what it read. Measured over the same 772 files, it is reading
+about three quarters of the population.
+
+Two mechanisms, five shapes. `headerComment` folds only the comment block at the
+very TOP of a file and stops at the first non-comment line, so a file whose doc
+block sits after an `import` contributes NOTHING: **27 files carry a
+twin-shaped claim naming an `apps/` path that the guard never sees at all**,
+`run_stats.ts`, `grade_adjusted_pace.ts`, `age_grade.ts`, `pace_analysis.ts`,
+`elevation.dart` and `fitness.dart` among them. And inside the headers it does
+read, `DECLARATION` requires a verb from a fixed list followed by a backticked
+path ending in `.ts`/`.dart`, which misses four further forms — "the Dart twin
+`path`" with no *of* (`hr_zones.ts`), "Mirrors apps/…/x.dart" with no backticks
+(`workout_kind_color.ts`), a backticked path carrying a `:symbol` suffix
+(`run_stats.ts`), and "ported from `path`" (`goals.ts`). Widening the regex over
+those same headers finds **27 more declarations**: 24 for pairs already
+registered, two for pairs registered in NEITHER registry (`goals`, `hr_zones`),
+and one naming a path that does not exist — `current_week.ts` points at
+`apps/mobile_android/lib/widgets/current_week.dart`, and the real twin is
+`apps/mobile_android/lib/current_week.dart`. That last one is precisely the
+failure the guard's file-exists claim was written for, invisible because the
+sentence carrying it is phrased the wrong way.
+
+`MIN_DECLARATIONS = 60` is the floor meant to catch exactly this — "a reworded
+header convention, or a header-block scanner that stops recognising `///`, would
+otherwise report zero declarations as zero violations". Against an actual 106 it
+has 46 of slack, so a 25 % shortfall passes it comfortably. The durable fix is in
+another lane's tree and is filed with the four regex forms and the
+header-position rule; the floor should move with it, because a floor set below
+the census it guards is not a floor.
+
+`hr_zones` is the pair this blindness was hiding, and it is a three-rail helper,
+not two: `hr_zones.ts`, `hr_zones.dart` and Wear OS's `resolveZoneCutoffs` in
+`SupabaseClient.kt`. The two scripting rails were measured **identical over their
+whole valid input range** — every age 5..120 through `tanakaMaxHr` and every max
+HR 80..240 through `zoneCutoffsFromMaxHr`, byte-identical output, because
+`Math.round` and Dart's `.round()` differ only on negative halves and neither
+range reaches one. The Kotlin rail diverges twice, and `max_hr_bpm` has no CHECK
+anywhere — it is a jsonb prefs key, and `settings/account/+page.svelte` writes it
+as a bare `parseInt` with no bound at all — so a stored 300 is used by the watch
+and ignored by web and mobile, which fall back to Tanaka or the 190 default.
+Filed rather than fixed: two of the three rails and both registries are outside
+this lane.
