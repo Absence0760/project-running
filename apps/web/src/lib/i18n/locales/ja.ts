@@ -1237,6 +1237,8 @@ export const messages = {
 	"runs.sortLabel": "並べ替え",
 	"runs.sourceAll": "すべてのソース",
 	"runs.sourceRecorded": "記録済み",
+	"runs.sourceWatch": "ウォッチ",
+	"runs.sourceRace": "レース",
 	"runs.activityAll": "すべて",
 	"runs.rangeAllTime": "全期間",
 	"runs.rangeToday": "今日",

@@ -1242,6 +1242,8 @@ export const messages = {
 	"runs.sortLabel": "Ordenar",
 	"runs.sourceAll": "Todas las fuentes",
 	"runs.sourceRecorded": "Grabadas",
+	"runs.sourceWatch": "Reloj",
+	"runs.sourceRace": "Carrera",
 	"runs.activityAll": "Todas",
 	"runs.rangeAllTime": "Todo el tiempo",
 	"runs.rangeToday": "Hoy",

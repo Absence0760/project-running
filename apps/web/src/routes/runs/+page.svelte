@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { formatPace, formatDistance, sourceLabel } from '$lib/core/mock-data';
-	import { sourceColor, sourceInk } from '$lib/runs/source_badge';
+	import { RUN_SOURCES, sourceColor, sourceInk } from '$lib/runs/source_badge';
 	import { formatDate, formatDuration } from '$lib/format/time';
 	import { fetchRunsWithError, deleteRuns } from '$lib/core/data';
 	import { loadSettings, effective } from '$lib/settings/settings';
@@ -313,15 +313,34 @@
 		renderLimit = PAGE_SIZE;
 	});
 
-	// $derived (not plain const) so the m() labels recompute when the locale
-	// changes — a top-level const would call m() once at init, capture the
-	// pre-load locale, and never update (the live-switch + async-chunk race).
+	/// One entry per value `runs_source_check` allows. A `Record<RunSource, _>`
+	/// so tsc refuses an incomplete map, and the ORDER comes from
+	/// `RUN_SOURCES` rather than from a second hand-written list — the
+	/// dropdown used to enumerate four of the eight, so a Wear OS runner saw a
+	/// "Watch" badge on every card and no Watch option to filter by, and the
+	/// same held for a Garmin ZIP import, a Health Connect sync and imported
+	/// race results. Deriving it means the next value added to the CHECK
+	/// cannot reach the union (which `check_constraint_unions.mjs` holds
+	/// against it) without failing this map's exhaustiveness.
+	///
+	/// Brand marks stay untranslated; the two generic sources carry keys.
+	///
+	/// $derived (not plain const) so the m() labels recompute when the locale
+	/// changes — a top-level const would call m() once at init, capture the
+	/// pre-load locale, and never update (the live-switch + async-chunk race).
+	const sourceFilterLabels = $derived<Record<RunSource, string>>({
+		app: m('runs.sourceRecorded'),
+		watch: m('runs.sourceWatch'),
+		healthkit: 'HealthKit',
+		healthconnect: 'Health Connect',
+		strava: 'Strava',
+		garmin: 'Garmin',
+		parkrun: 'parkrun',
+		race: m('runs.sourceRace'),
+	});
 	const sources = $derived<{ value: RunSource | 'all'; label: string }[]>([
 		{ value: 'all', label: m('runs.sourceAll') },
-		{ value: 'app', label: m('runs.sourceRecorded') },
-		{ value: 'strava', label: 'Strava' },
-		{ value: 'parkrun', label: 'parkrun' },
-		{ value: 'healthkit', label: 'HealthKit' },
+		...RUN_SOURCES.map((v) => ({ value: v, label: sourceFilterLabels[v] })),
 	]);
 
 	const activities = $derived<{ value: string; label: string; icon: string }[]>([

@@ -1253,6 +1253,8 @@ export const en = {
 	"runs.sortLabel": "Sort",
 	"runs.sourceAll": "All Sources",
 	"runs.sourceRecorded": "Recorded",
+	"runs.sourceWatch": "Watch",
+	"runs.sourceRace": "Race",
 	"runs.activityAll": "All",
 	"runs.rangeAllTime": "All time",
 	"runs.rangeToday": "Today",
