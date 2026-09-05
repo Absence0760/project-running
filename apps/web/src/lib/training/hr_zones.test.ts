@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tanakaMaxHr, zoneCutoffsFromMaxHr, defaultZoneCutoffs } from './hr_zones';
+import {
+	MAX_HR_BPM_MAX,
+	MAX_HR_BPM_MIN,
+	TANAKA_AGE_MAX,
+	TANAKA_AGE_MIN,
+	defaultZoneCutoffs,
+	tanakaMaxHr,
+	zoneCutoffsFromMaxHr
+} from './hr_zones';
 
 test('tanakaMaxHr applies 208 − 0.7×age, rounded', () => {
 	assert.equal(tanakaMaxHr(20), 194); // 208 − 14
@@ -38,4 +46,35 @@ test('defaultZoneCutoffs ignores out-of-range inputs', () => {
 	assert.deepEqual(defaultZoneCutoffs({ maxHrBpm: 40, ageYears: 30 }), zoneCutoffsFromMaxHr(tanakaMaxHr(30)));
 	// implausible age → fall through to legacy default
 	assert.deepEqual(defaultZoneCutoffs({ ageYears: 200 }), [114, 133, 152, 171, 190]);
+});
+
+// The bounds are the part the THIRD rail shares — the Wear OS
+// `resolveZoneCutoffs` applied `max_hr_bpm` flat until decisions § 1245, so a
+// mistyped 300 gave the same run different zones on the watch and the phone.
+// `max_hr_bpm` is a jsonb prefs key with no CHECK, so nothing but these reads
+// stands between a typo and a zone ladder.
+test('the usable ranges are the bounds defaultZoneCutoffs applies', () => {
+	assert.equal(defaultZoneCutoffs({ maxHrBpm: MAX_HR_BPM_MIN })[4], MAX_HR_BPM_MIN);
+	assert.equal(defaultZoneCutoffs({ maxHrBpm: MAX_HR_BPM_MAX })[4], MAX_HR_BPM_MAX);
+	assert.deepEqual(defaultZoneCutoffs({ maxHrBpm: MAX_HR_BPM_MIN - 1 }), [114, 133, 152, 171, 190]);
+	assert.deepEqual(defaultZoneCutoffs({ maxHrBpm: MAX_HR_BPM_MAX + 1 }), [114, 133, 152, 171, 190]);
+
+	assert.deepEqual(
+		defaultZoneCutoffs({ ageYears: TANAKA_AGE_MIN }),
+		zoneCutoffsFromMaxHr(tanakaMaxHr(TANAKA_AGE_MIN))
+	);
+	assert.deepEqual(
+		defaultZoneCutoffs({ ageYears: TANAKA_AGE_MAX }),
+		zoneCutoffsFromMaxHr(tanakaMaxHr(TANAKA_AGE_MAX))
+	);
+	assert.deepEqual(defaultZoneCutoffs({ ageYears: TANAKA_AGE_MIN - 1 }), [114, 133, 152, 171, 190]);
+	assert.deepEqual(defaultZoneCutoffs({ ageYears: TANAKA_AGE_MAX + 1 }), [114, 133, 152, 171, 190]);
+});
+
+// 0 survives every `!= null` check and is exactly what an emptied number input
+// posts. Applied flat it yields an all-zero ladder that puts every real sample
+// above Z5 — the shape the watch rail had.
+test('a zero max HR is ignored, not applied as a ceiling', () => {
+	assert.deepEqual(defaultZoneCutoffs({ maxHrBpm: 0 }), [114, 133, 152, 171, 190]);
+	assert.deepEqual(defaultZoneCutoffs({ maxHrBpm: -1 }), [114, 133, 152, 171, 190]);
 });

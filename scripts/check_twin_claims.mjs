@@ -121,11 +121,6 @@ export const KNOWN_GAPS = [
 		reason: 'not a pair and cannot become one: the counterpart is a SCREEN, and the syncer row already records that mobile keeps those gates inline there. The header is what needs rewording, and `apps/web/src/lib/core` is another lane\'s tree',
 	},
 	{
-		file: 'apps/web/src/lib/training/hr_zones.ts',
-		counterpart: 'apps/mobile_android/lib/hr_zones.dart',
-		reason: 'a THREE-rail helper (the Wear OS `resolveZoneCutoffs` is the third); owed a row in both registries',
-	},
-	{
 		file: 'apps/mobile_android/lib/food_search.dart',
 		counterpart: 'apps/web/src/lib/nutrition/food_search.ts',
 		reason: 'a genuine pair with mirror suites on both sides; owed a row in both registries',

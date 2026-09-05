@@ -371,8 +371,53 @@ class UniversalSettingsTest {
 
     @Test
     fun `resolveZoneCutoffs returns null when no signal available`() {
-        // Empty bag → no zones to show.
+        // Empty bag → no zones to show. This is the one place the three
+        // hr_zones rails differ on purpose: web and Dart end their ladder at
+        // the legacy 190 cutoffs, the watch shows nothing rather than a
+        // stranger's zones (decisions § 1245).
         val s = UniversalSettings(defaultActivityType = null, privacyDefault = null)
         assertNull(resolveZoneCutoffs(s, 0L))
+    }
+
+    // `max_hr_bpm` is a jsonb prefs key with no CHECK and the web preferences
+    // page writes it as a bare parseInt, so an out-of-range value really does
+    // reach here. Applying it flat gave the same run different zones on the
+    // watch and the phone.
+    @Test
+    fun `resolveZoneCutoffs ignores a max_hr_bpm outside the usable range`() {
+        for (bpm in listOf(300, 79, 0, -1)) {
+            val s = UniversalSettings(
+                defaultActivityType = null,
+                privacyDefault = null,
+                maxHrBpm = bpm,
+            )
+            assertNull(resolveZoneCutoffs(s, 0L))
+        }
+    }
+
+    @Test
+    fun `resolveZoneCutoffs falls through an out-of-range max_hr_bpm to age`() {
+        // Born 1990-01-01, "now" 2026-01-01 → 36 → Tanaka 183.
+        val s = UniversalSettings(
+            defaultActivityType = null,
+            privacyDefault = null,
+            maxHrBpm = 300,
+            dateOfBirth = "1990-01-01",
+        )
+        val now2026 = java.time.LocalDate.of(2026, 1, 1)
+            .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        assertEquals(listOf(110, 128, 146, 165, 183), resolveZoneCutoffs(s, now2026))
+    }
+
+    @Test
+    fun `resolveZoneCutoffs accepts both ends of the usable range`() {
+        for (bpm in listOf(80, 240)) {
+            val s = UniversalSettings(
+                defaultActivityType = null,
+                privacyDefault = null,
+                maxHrBpm = bpm,
+            )
+            assertEquals(bpm, resolveZoneCutoffs(s, 0L)?.last())
+        }
     }
 }
