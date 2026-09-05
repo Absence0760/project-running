@@ -1213,3 +1213,28 @@ test('every race-import availability probe asks the results leg, not the listing
 		);
 	}
 });
+
+test('every data.ts RPC names its function as a checked literal, never through a cast', () => {
+	// Reason: `database.types.ts` is generated so that `supabase.rpc()` checks
+	// the function name AND the argument object against the deployed routine.
+	// Casting the name (`'foo' as never`) turns that check off for the whole
+	// call — the params cast goes with it — so a renamed function, a dropped
+	// parameter, or a mistyped argument reaches production as a runtime 404 /
+	// 400 from PostgREST instead of a build failure. The going-count call
+	// carried both casts for months after the migration that made them
+	// unnecessary landed; the comment excusing them named a regeneration that
+	// had already happened.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const calls = [...source.matchAll(/\.rpc\(\s*([^,)]+)/g)].map((m) => m[1].trim());
+
+	// Population: an empty parse would satisfy the assertion below.
+	assert.ok(calls.length >= 10, `parsed only ${calls.length} rpc calls — reshaped?`);
+
+	for (const name of calls) {
+		assert.match(
+			name,
+			/^'[a-z0-9_]+'$/,
+			`.rpc(${name}) does not name its function as a bare string literal — a cast or a computed name disables the generated type check`
+		);
+	}
+});

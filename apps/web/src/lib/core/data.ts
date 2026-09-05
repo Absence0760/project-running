@@ -3076,12 +3076,10 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	// produce N integers. The viewer's RSVPs are a single bounded per-user
 	// fetch, so those still come back as rows and are matched to the next
 	// instance client-side.
-	const countsPromise = supabase.rpc(
-		// Not yet in database.types.ts (orchestrator regenerates on landing the
-		// 20270122_001 migration); the RPC name is cast until then.
-		'event_next_instance_going_counts' as never,
-		{ p_event_ids: ids, p_next_starts: nextStarts } as never
-	);
+	const countsPromise = supabase.rpc('event_next_instance_going_counts', {
+		p_event_ids: ids,
+		p_next_starts: nextStarts,
+	});
 	const rsvpPromise = userId
 		? supabase
 				.from(TABLES.event_attendees)
@@ -3100,7 +3098,7 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	const sameInstant = (a: string, b: string | undefined): boolean =>
 		b != null && new Date(a).getTime() === new Date(b).getTime();
 	const counts = new Map<string, number>();
-	for (const row of (countRes.data ?? []) as { event_id: string; going_count: number }[]) {
+	for (const row of countRes.data ?? []) {
 		counts.set(row.event_id, Number(row.going_count));
 	}
 	const rsvps = new Map<string, RsvpStatus | null>();
