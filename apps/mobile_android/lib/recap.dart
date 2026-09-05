@@ -216,6 +216,16 @@ List<RecapBadge> computeRecapBadges(_BadgeInputs i) {
 }
 
 /// Monday of the local week as a YYYY-MM-DD string.
+///
+/// Deliberately ISO-8601 Monday-anchored and NOT the runner's `week_start`
+/// preference, which `current_week.dart` does honour over the same runs. The
+/// two answer different questions in different frames: the dashboard strip
+/// says what the runner has done THIS week, which is their own calendar; the
+/// recap is a snapshot PUBLISHED to `public_recaps` (this side writes it
+/// through `recapSnapshotJson`) and re-rendered by the web `/recap/share/[id]`
+/// page and the OG image for readers who are not the runner. A week boundary
+/// that varied with a preference would make one artifact mean two things with
+/// nothing in the payload saying which.
 String _mondayOf(DateTime d) {
   final local = DateTime(d.year, d.month, d.day);
   final dow = (local.weekday + 6) % 7; // 0=Mon, 6=Sun (matches JS)
