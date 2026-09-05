@@ -87,6 +87,7 @@
     "gen:types:check": "pnpm -C apps/backend gen:types:check",
     "gen:dart": "dart run scripts/gen_dart_models.dart",
 		"gen:icon-font": "node scripts/gen_web_icon_font.mjs",
+		"gen:exercise-fold-table": "node scripts/gen_exercise_fold_table.mjs",
 
     "//-- sync --": "deno.lock's `workspace` section is generated from the npm workspace's package.json files — re-sync it after any npm dep bump. Needs deno, but no network, no node_modules and no Docker. CI's parity-types job runs the :check half.",
     "sync:deno-lock": "node scripts/sync_deno_lock.mjs",
