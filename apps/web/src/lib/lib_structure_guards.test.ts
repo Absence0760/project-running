@@ -101,13 +101,37 @@ test('the unit-test glob covers every suite under src', () => {
 			`either by running \`npm run test:unit\` or by spelling the glob itself.`,
 	);
 
+	// The hazard is a narrower glob SUBSTITUTED for the suite, not an extra run.
+	// The assertion above already fixes that the recursive lane exists, so a
+	// second invocation naming explicit files skips nothing -- `build-web` runs
+	// the three artifact-reading suites again after the build, because they
+	// self-skip in `test-web` where no build exists (decisions § 1210). What
+	// must still fail is a wildcard standing in for the suite, and a named file
+	// the recursive lane would not have run at all.
 	const inline = [...code.matchAll(/tsx --test ([^\n]*)/g)].map((m) => m[1]);
 	for (const args of inline) {
+		if (args.includes(RECURSIVE)) continue;
+		const named = args
+			.split(/\s+/)
+			.filter((a) => a.endsWith('.test.ts') || a.includes('*'));
 		assert.ok(
-			args.includes(RECURSIVE),
-			`.github/workflows/ci.yml invokes 'tsx --test' with a glob that is not ` +
-				`'${RECURSIVE}' (got: ${args}). A narrower glob silently skips suites.`,
+			named.length > 0,
+			`.github/workflows/ci.yml invokes 'tsx --test' with neither '${RECURSIVE}' ` +
+				`nor any named suite (got: ${args}).`,
 		);
+		for (const a of named) {
+			assert.ok(
+				!a.includes('*'),
+				`.github/workflows/ci.yml invokes 'tsx --test' with the wildcard '${a}', ` +
+					`which is not '${RECURSIVE}'. A narrower glob silently skips suites; ` +
+					`an extra lane must name its files.`,
+			);
+			assert.ok(
+				a.startsWith('src/') && existsSync(resolve(webRoot, a)),
+				`.github/workflows/ci.yml runs 'tsx --test ${a}', which is not a file ` +
+					`under apps/web/src that the recursive lane also runs.`,
+			);
+		}
 	}
 });
 
