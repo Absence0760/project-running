@@ -180,6 +180,19 @@ function hhmm(d: Date): string {
 }
 
 /**
+ * The day the "current streak" walk may count back from: the earlier of the
+ * period's last day and now.
+ *
+ * `computeRunStreaks` ignores runs after its anchor and starts the walk at the
+ * anchor (or its grace day), so an anchor in the future is not merely
+ * imprecise — it puts the walk on two empty days and returns 0 for every live
+ * streak there is.
+ */
+function currentAnchor(periodEnd: Date, now: Date): Date {
+	return now.getTime() < periodEnd.getTime() ? now : periodEnd;
+}
+
+/**
  * Build the year-in-running aggregate from a list of Runs.
  *
  * Pass *all* of the user's runs, not just the ones in the target year;
@@ -191,6 +204,7 @@ export function buildYearInRunningRecap(
 	runs: Run[],
 	year: number,
 	extras: RecapExtras = {},
+	now: Date = new Date(),
 ): YearInRunningRecap {
 	const inYear: Run[] = [];
 	for (const r of runs) {
@@ -288,13 +302,20 @@ export function buildYearInRunningRecap(
 
 	// Streaks — pass the *full* run set (not just inYear) because a
 	// streak that started in the previous year still counts the days
-	// it covered in this year. Anchor "today" at Dec 31 23:59 local, and
-	// bound `best` at Jan 1 so a streak that ended before this year is
-	// somebody else's card's headline, not this one's.
+	// it covered in this year. Bound `best` at Jan 1 so a streak that
+	// ended before this year is somebody else's card's headline.
+	//
+	// The "current" anchor is the EARLIER of the period's last day and now.
+	// Anchoring unconditionally at 31 Dec meant that for the year you are
+	// living in — the only card anyone opens while a streak is running — the
+	// walk looked for a run on 31 Dec, then on the grace day of 30 Dec, found
+	// neither, and reported `current: 0`. A runner on a live 40-day streak got
+	// a zero. `best` keeps the period's own end so a past year's card still
+	// clamps at 31 Dec of that year rather than at today.
 	const endOfYear = new Date(year, 11, 31, 23, 59);
 	const streaks = computeRunStreaks(
 		runs.map((r) => new Date(r.started_at)),
-		endOfYear,
+		currentAnchor(endOfYear, now),
 		new Date(year, 0, 1),
 	);
 
@@ -358,8 +379,9 @@ export function buildMonthInRunningRecap(
 	year: number,
 	month: number,
 	extras: RecapExtras = {},
+	now: Date = new Date(),
 ): YearInRunningRecap {
-	const yearRecap = buildYearInRunningRecap(runs, year, extras);
+	const yearRecap = buildYearInRunningRecap(runs, year, extras, now);
 	const bucket = yearRecap.monthly[month - 1] ?? {
 		month,
 		distanceM: 0,
@@ -429,7 +451,7 @@ export function buildMonthInRunningRecap(
 	const endOfMonth = new Date(year, month, 0, 23, 59); // day 0 of next month = last day of this
 	const streaks = computeRunStreaks(
 		runs.map((r) => new Date(r.started_at)),
-		endOfMonth,
+		currentAnchor(endOfMonth, now),
 		new Date(year, month - 1, 1),
 	);
 
