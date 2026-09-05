@@ -84,13 +84,20 @@ test('the run-detail page only falls back to public attribution on a real not-yo
 	const page = stripComments(
 		readFileSync(resolve(import.meta.dirname, '../../routes/runs/[id]/+page.svelte'), 'utf-8'),
 	);
-	const call = page
-		.split('\n')
-		.find((l) => l.includes('otherRunOwner = ') && l.includes('fetchPublicRunAttribution'));
-	assert.ok(call, 'the attribution fallback moved — re-anchor this guard');
+	const at = page.indexOf('fetchPublicRunAttribution(pageData.id)');
+	assert.ok(at > 0, 'the attribution fallback moved — re-anchor this guard');
+	const block = page.slice(Math.max(0, at - 400), at + 400);
 	assert.match(
-		call,
-		/if \(!runError\)/,
+		block,
+		/if \(!runError\) \{/,
 		'the fallback must be gated on the owner read having answered — an errored read is not evidence of anything about ownership',
+	);
+	// And the attribution read establishes nothing when IT fails either, so it
+	// must reach the same retry surface rather than falling through to the
+	// not-found branch below it.
+	assert.match(
+		block,
+		/loadError = \w+\.error;/,
+		'a failed attribution read must set loadError, not leave the page on "Run not found"',
 	);
 });

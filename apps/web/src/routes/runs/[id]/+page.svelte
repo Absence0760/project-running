@@ -229,7 +229,14 @@
 			// themselves, every edit / delete / visibility / export control
 			// gone — while the template's retry card sat behind it in a later
 			// branch and never showed.
-			if (!runError) otherRunOwner = await fetchPublicRunAttribution(pageData.id);
+			if (!runError) {
+				const attr = await fetchPublicRunAttribution(pageData.id);
+				otherRunOwner = attr.attribution;
+				// A failed attribution read establishes nothing either, so it
+				// takes the same path the owner read's failure does rather
+				// than falling through to "Run not found".
+				loadError = attr.error;
+			}
 			loading = false;
 			// None of the background work below is reachable for a
 			// non-owner: the matched track, route suggestion, linked

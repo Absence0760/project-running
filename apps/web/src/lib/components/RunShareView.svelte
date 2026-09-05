@@ -26,9 +26,23 @@
 	let track = $state<TrackPoint[]>([]);
 	let loading = $state(true);
 	let notFound = $state(false);
+	// Distinct from `notFound`: this page is mostly reached by someone the
+	// runner shared a link with, and a stranger cannot tell a broken read from
+	// a deleted run. Telling them the run does not exist is a claim; telling
+	// them it could not be loaded is the truth, and it is the one they can act
+	// on by retrying.
+	let loadError = $state(false);
 
-	onMount(async () => {
-		const r = await fetchPublicRun(runId);
+	async function load() {
+		loading = true;
+		notFound = false;
+		loadError = false;
+		const { run: r, error } = await fetchPublicRun(runId);
+		if (error) {
+			loadError = true;
+			loading = false;
+			return;
+		}
 		if (r) {
 			run = r;
 			// Owner views render the unclipped track via a direct Storage
@@ -88,7 +102,9 @@
 			notFound = true;
 		}
 		loading = false;
-	});
+	}
+
+	onMount(load);
 
 	let elevations = $derived(track.map((p) => p.ele ?? 0));
 
@@ -119,6 +135,11 @@
 
 {#if loading}
 	<p class="status">{m('shell.loading')}</p>
+{:else if loadError}
+	<p class="status" role="alert">
+		{m('runDetail.loadErrorTitle')}
+		<button class="btn btn-outline" onclick={load}>{m('runDetail.retry')}</button>
+	</p>
 {:else if notFound}
 	<p class="status">{m('runShareView.runNotFound')}</p>
 {:else if run}

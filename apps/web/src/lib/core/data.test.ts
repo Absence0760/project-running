@@ -1295,3 +1295,131 @@ test('fetchUpcomingEvents windows the candidate set server-side, not the club\'s
 		'no `or(` nested inside an `and(` — that depth is unexercised in this file',
 	);
 });
+
+test('every "answered empty" read that a stranger can hit reports the failure separately', () => {
+	// Reason: supabase-js RESOLVES `{data: null, error}` rather than throwing,
+	// so `const { data } = await …` turns a transport fault, an RLS refusal and
+	// a genuinely absent row into one indistinguishable null. Each of these
+	// four then rendered a confident falsehood: "Run not found" to every
+	// recipient of a shared link; a routes list with the runner's bookmarks
+	// silently missing and `error: null` beside it; a club owner stripped of
+	// their admin controls and offered "Join"; and a fundraiser page telling a
+	// donor the campaign they followed a link to does not exist.
+	//
+	// `fetchRunById` and `fetchClubBySlug` were each fixed for exactly this and
+	// carry comments saying so. These are the same collapse elsewhere.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const bodyOf = (name: string): string => {
+		const start = source.indexOf(`export async function ${name}(`);
+		assert.ok(start >= 0, `${name} moved — re-anchor this guard`);
+		const next = source.indexOf('\nexport ', start + 1);
+		return source.slice(start, next > start ? next : undefined);
+	};
+
+	// The public run read a stranger hits. PGRST116 is the only "no row".
+	const publicRun = bodyOf('fetchPublicRun');
+	assert.match(
+		publicRun,
+		/Promise<\{ run: Run \| null; error: string \| null \}>/,
+		'fetchPublicRun must report the failure alongside the row, like fetchRunById',
+	);
+	assert.match(
+		publicRun,
+		/error\.code !== 'PGRST116'/,
+		'only "no rows matched" may read as a genuine miss',
+	);
+	assert.doesNotMatch(
+		publicRun,
+		/const \{ data \} =/,
+		'binding data alone is the defect — the error must be read',
+	);
+
+	// The entitlement read behind /runs/[id]'s non-owner branch.
+	const attribution = bodyOf('fetchPublicRunAttribution');
+	assert.match(
+		attribution,
+		/Promise<\{ attribution: PublicRunAttribution \| null; error: string \| null \}>/,
+		'fetchPublicRunAttribution must report its failure — a caller cannot otherwise tell "not yours" from "unknown"',
+	);
+	assert.match(
+		attribution,
+		/if \(error\) return \{ attribution: null, error: error\.message \};/,
+		'the public_runs read is the entitlement; its failure is not a non-entitlement',
+	);
+
+	// The saved half of "My routes" — three reads, none of which was checked.
+	const routes = bodyOf('fetchRoutesWithError');
+	assert.ok(
+		routes.indexOf('if (savedIdsRes.error)') >= 0 &&
+			routes.indexOf('if (savedIdsRes.error)') < routes.indexOf('savedIdsRes.data ?? []'),
+		'the saved-id read must be checked BEFORE its rows are defaulted to [] — a failed read is not an empty bookmark list',
+	);
+	assert.match(
+		routes,
+		/savedBaseRes\.error \?\? savedPublicRes\.error/,
+		'both saved-body reads must be checked — each carries a whole class of bookmark',
+	);
+
+	// Fundraisers: the two sibling reads that swallowed where the third throws.
+	for (const fn of ['fetchFundraiserForRun', 'fetchFundraiserForEvent']) {
+		const body = bodyOf(fn);
+		assert.doesNotMatch(
+			body,
+			/if \(error \|\| !data\) return null;/,
+			`${fn} must not collapse a failed read into "no campaign" — fetchFundraiserById throws and says why`,
+		);
+		assert.match(body, /if \(error\) throw error;/, `${fn} must throw on a failed read`);
+	}
+});
+
+test('enrichClubs reports a failed membership read instead of asserting non-membership', () => {
+	// Reason: `viewer_role` decides whether an owner sees their admin controls
+	// and whether a member is offered "Join". It is derived from one
+	// club_members read whose error was discarded, so a blip logged every
+	// member out of their own club while the enclosing `{ clubs, error }` said
+	// `error: null`. The irony is local: `fetchClubBySlug`'s doc comment
+	// describes precisely this collapse for the club row, one call above the
+	// membership row that still had it.
+	const source = stripComments(read('src/lib/core/data.ts'));
+	const start = source.indexOf('async function enrichClubs(');
+	assert.ok(start >= 0, 'enrichClubs moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	assert.match(
+		body,
+		/Promise<\{ clubs: ClubWithMeta\[\]; error: string \| null \}>/,
+		'enrichClubs must return the failure in the same shape its callers already return',
+	);
+	assert.match(
+		body,
+		/if \(rolesRes\.error\)/,
+		'the membership read must be checked before any role is asserted',
+	);
+
+	// And every caller has to propagate it — three hand the shape straight
+	// back, the fourth is the single-club read.
+	// Counting call sites is not enough: a caller can keep the call and drop the
+	// error (`{ clubs: (await enrichClubs(rows)).clubs, error: null }`), which
+	// is the original defect wearing the new shape. Every site must either hand
+	// the whole result back or branch on its error.
+	const sites = [...source.matchAll(/^.*enrichClubs\(/gm)]
+		.map((m) => m[0])
+		.filter((line) => !line.includes('async function enrichClubs('));
+	assert.equal(
+		sites.length,
+		4,
+		`enrichClubs has ${sites.length} call sites, expected 4 — check the new one propagates the error`,
+	);
+	for (const line of sites) {
+		assert.ok(
+			/return (await )?enrichClubs\(/.test(line) ||
+				/\? enrichClubs\(/.test(line) ||
+				/const \{ clubs: \w+, error: \w+ \} = await enrichClubs\(/.test(line),
+			`this enrichClubs call site drops the error rather than propagating it: ${line.trim()}`,
+		);
+	}
+	assert.match(
+		source,
+		/const \{ clubs: enrichedClubs, error: rolesError \} = await enrichClubs\(\[data\]\);\s*\n\s*if \(rolesError\) return \{ club: null, error: rolesError \};/,
+		'fetchClubBySlug must surface a membership-read failure rather than returning the club with no role',
+	);
+});

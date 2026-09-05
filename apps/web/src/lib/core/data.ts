@@ -786,7 +786,9 @@ async function decompressGzip(buf: ArrayBuffer): Promise<Uint8Array> {
 	return out;
 }
 
-export async function fetchPublicRun(id: string): Promise<Run | null> {
+export async function fetchPublicRun(
+	id: string,
+): Promise<{ run: Run | null; error: string | null }> {
 	// Public reads go through the public_runs view (decisions §33,
 	// migration 20260626_001) which strips external_id, redacts the
 	// metadata bag's audit / sync / training-plan-linkage keys, and
@@ -800,14 +802,21 @@ export async function fetchPublicRun(id: string): Promise<Run | null> {
 	// decisions §33. RunShareView already branches on owner — owner takes
 	// the direct Storage path via fetchTrack(); non-owner takes
 	// fetchClippedTrackForRun(). This function only returns the row.
-	const { data } = await supabase
+	const { data, error } = await supabase
 		.from('public_runs')
 		.select('*')
 		.eq('id', id)
 		.single();
 
-	if (!data) return null;
-	return { ...data, track: null } as Run;
+	// PGRST116 is "no rows matched" — the run is private, deleted, or was
+	// never there. Anything else is a failure to find out, and collapsing the
+	// two rendered "Run not found" to every recipient of a shared link
+	// whenever the read merely failed. `fetchRunById` was fixed for exactly
+	// this and says so; the public half is the one strangers hit, and a
+	// stranger has no way to tell a broken read from a deleted run.
+	if (error && error.code !== 'PGRST116') return { run: null, error: error.message };
+	if (!data) return { run: null, error: null };
+	return { run: { ...data, track: null } as Run, error: null };
 }
 
 export interface PublicRunAttribution {
@@ -837,14 +846,21 @@ export interface PublicRunAttribution {
 /// surface is `/coaching/athletes/[id]`.
 export async function fetchPublicRunAttribution(
 	runId: string,
-): Promise<PublicRunAttribution | null> {
-	const { data: run } = await supabase
+): Promise<{ attribution: PublicRunAttribution | null; error: string | null }> {
+	// Reported separately for the same reason `fetchRunById` reports it: the
+	// caller decides whether the viewer is a non-owner or whether nothing has
+	// been established yet, and an errored read is evidence of neither.
+	const { data: run, error } = await supabase
 		.from('public_runs')
 		.select('user_id')
 		.eq('id', runId)
 		.maybeSingle();
+	if (error) return { attribution: null, error: error.message };
 	const ownerId = (run as { user_id?: string | null } | null)?.user_id;
-	if (!ownerId) return null;
+	if (!ownerId) return { attribution: null, error: null };
+	// The display name is decoration on an entitlement already established by
+	// the row above, so its own failure degrades to an unnamed owner rather
+	// than withdrawing the entitlement.
 	const { data: profile } = await supabase
 		.from('user_profiles')
 		.select('display_name, avatar_url')
@@ -852,9 +868,12 @@ export async function fetchPublicRunAttribution(
 		.maybeSingle();
 	const p = profile as { display_name?: string | null; avatar_url?: string | null } | null;
 	return {
-		ownerId,
-		displayName: p?.display_name ?? null,
-		avatarUrl: p?.avatar_url ?? null,
+		attribution: {
+			ownerId,
+			displayName: p?.display_name ?? null,
+			avatarUrl: p?.avatar_url ?? null,
+		},
+		error: null,
 	};
 }
 
@@ -1527,6 +1546,13 @@ export async function fetchRoutes(): Promise<Route[]> {
 	return result.routes;
 }
 
+/// Reason string for a failed routes read: message plus the PostgREST code
+/// when there is one, which is what tells a reporting user whether they hit a
+/// policy or a transport fault.
+function describeReadError(e: { message: string; code?: string | null }): string {
+	return `${e.message}${e.code ? ` (${e.code})` : ''}`;
+}
+
 /// Same as `fetchRoutes` but returns the error message alongside the
 /// rows. Callers that want to surface a failure to the user (rather
 /// than silently rendering an empty state — which is indistinguishable
@@ -1564,10 +1590,7 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 
 	if (ownedRes.error) {
 		console.error('fetchRoutes (owned) failed', ownedRes.error);
-		return {
-			routes: [],
-			error: `${ownedRes.error.message}${ownedRes.error.code ? ` (${ownedRes.error.code})` : ''}`,
-		};
+		return { routes: [], error: describeReadError(ownedRes.error) };
 	}
 
 	const owned = (ownedRes.data ?? []) as unknown as Route[];
@@ -1581,6 +1604,17 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 	// the same privacy-preserving path Explore uses — waypoints stay behind
 	// clip_route_for_viewer) AND the base table (for own / club-visible
 	// saved routes), then union, preferring the fuller base-table row.
+	//
+	// A failed saved-route read is not an empty bookmark list. `?? []` on any
+	// of the three below reported the runner's own routes with `error: null`
+	// and their bookmarks silently gone — inside the one function in this file
+	// whose whole shape exists to keep that from happening. The page renders
+	// the banner INSTEAD of the list, so a partial answer would still be
+	// hidden; report the failure and let the retry button do its job.
+	if (savedIdsRes.error) {
+		console.error('fetchRoutes (saved ids) failed', savedIdsRes.error);
+		return { routes: [], error: describeReadError(savedIdsRes.error) };
+	}
 	const savedIds = ((savedIdsRes.data ?? []) as { route_id: string }[]).map(
 		(r) => r.route_id,
 	);
@@ -1590,6 +1624,15 @@ export async function fetchRoutesWithError(): Promise<{ routes: Route[]; error: 
 			supabase.from('routes').select(ROUTE_LIST_COLS).in('id', savedIds),
 			supabase.from('public_routes').select(PUBLIC_ROUTE_LIST_COLS).in('id', savedIds),
 		]);
+		// Either half missing is a whole class of bookmark gone: the base table
+		// carries the runner's own + club-visible saved routes, the view
+		// carries every route they saved from someone else's — the dominant
+		// case, per the comment above.
+		const savedErr = savedBaseRes.error ?? savedPublicRes.error;
+		if (savedErr) {
+			console.error('fetchRoutes (saved bodies) failed', savedErr);
+			return { routes: [], error: describeReadError(savedErr) };
+		}
 		const byId = new Map<string, Route>();
 		for (const r of [
 			...((savedBaseRes.data ?? []) as unknown as Route[]),
@@ -2008,7 +2051,7 @@ export async function browseClubsWithError(
 	}
 	const { data, error } = await query.order('created_at', { ascending: false }).limit(60);
 	if (error) return { clubs: [], error: error.message };
-	return { clubs: data ? await enrichClubs(data) : [], error: null };
+	return data ? enrichClubs(data) : { clubs: [], error: null };
 }
 
 export async function browseClubs(search?: string): Promise<ClubWithMeta[]> {
@@ -2069,7 +2112,7 @@ export async function searchClubsWithError(
 		created_at: r.created_at as string,
 		updated_at: r.updated_at as string,
 	}));
-	return { clubs: await enrichClubs(rows), error: null };
+	return enrichClubs(rows);
 }
 
 export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
@@ -2497,7 +2540,7 @@ export async function fetchMyClubsWithError(): Promise<{
 		.order('joined_at', { ascending: false });
 	if (error) return { clubs: [], error: error.message };
 	const clubs = (data ?? []).map((row: any) => row.clubs).filter(Boolean);
-	return { clubs: await enrichClubs(clubs), error: null };
+	return enrichClubs(clubs);
 }
 
 export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
@@ -2518,7 +2561,9 @@ export async function fetchClubBySlug(
 		.maybeSingle();
 	if (error) return { club: null, error: error.message };
 	if (!data) return { club: null, error: null };
-	const [enriched] = await enrichClubs([data]);
+	const { clubs: enrichedClubs, error: rolesError } = await enrichClubs([data]);
+	if (rolesError) return { club: null, error: rolesError };
+	const [enriched] = enrichedClubs;
 	if (!enriched) return { club: null, error: null };
 	if (enriched.viewer_role === 'owner' || enriched.viewer_role === 'admin') {
 		const { data: token } = await supabase.rpc('get_club_invite_token', {
@@ -2556,9 +2601,23 @@ export async function fetchClubSlugById(id: string): Promise<string | null> {
 }
 
 /** Attach viewer_role + viewer_status to clubs. member_count is the
- * trigger-maintained cache on the row (derived_state.md), not recomputed. */
-async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
-	if (clubs.length === 0) return [];
+ * trigger-maintained cache on the row (derived_state.md), not recomputed.
+ *
+ * Returns the read failure rather than absorbing it. `viewer_role: null` is
+ * the assertion "you are not a member of this club", and it drives whether the
+ * owner gets their admin controls, whether a member is offered "Join", and
+ * whether `fetchClubBySlug` asks for an invite token at all — so deriving it
+ * from a membership read nobody checked meant a transport blip logged every
+ * member out of their own club while `error: null` said the answer was good.
+ * `fetchClubBySlug`'s own doc comment describes that exact failure one call
+ * up, for the club row; this is the same collapse for the membership row.
+ *
+ * The result shape matches the `{ clubs, error }` every caller already
+ * returns, so three of the four hand it straight back. */
+async function enrichClubs(
+	clubs: Club[]
+): Promise<{ clubs: ClubWithMeta[]; error: string | null }> {
+	if (clubs.length === 0) return { clubs: [], error: null };
 	const ids = clubs.map((c) => c.id);
 	const userId = auth.user?.id;
 
@@ -2568,7 +2627,12 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 				.select('club_id, role, status')
 				.in('club_id', ids)
 				.eq('user_id', userId)
-		: { data: [] as { club_id: string; role: string; status: string }[] };
+		: { data: [] as { club_id: string; role: string; status: string }[], error: null };
+
+	if (rolesRes.error) {
+		console.error('enrichClubs (viewer membership) failed', rolesRes.error);
+		return { clubs: [], error: describeReadError(rolesRes.error) };
+	}
 
 	const roles = new Map<string, ClubRole>();
 	const statuses = new Map<string, MembershipStatus>();
@@ -2576,13 +2640,16 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 		if (row.status === 'active') roles.set(row.club_id, row.role as ClubRole);
 		statuses.set(row.club_id, row.status as MembershipStatus);
 	}
-	return clubs.map((c) => ({
-		...c,
-		join_policy: (c.join_policy ?? 'open') as JoinPolicy,
-		member_count: c.member_count ?? 0,
-		viewer_role: roles.get(c.id) ?? null,
-		viewer_status: statuses.get(c.id) ?? null
-	}));
+	return {
+		clubs: clubs.map((c) => ({
+			...c,
+			join_policy: (c.join_policy ?? 'open') as JoinPolicy,
+			member_count: c.member_count ?? 0,
+			viewer_role: roles.get(c.id) ?? null,
+			viewer_status: statuses.get(c.id) ?? null
+		})),
+		error: null
+	};
 }
 
 export async function createClub(input: {
@@ -11611,7 +11678,15 @@ export async function fetchFundraiserForRun(runId: string): Promise<Fundraiser |
 		.select('*')
 		.eq('run_id', runId)
 		.maybeSingle();
-	if (error || !data) return null;
+	// Throws on a failed read, exactly as `fetchFundraiserById` does and for
+	// the reason its comment gives: `.maybeSingle()` already distinguishes a
+	// genuine miss (`{data: null, error: null}`) from a failure, and returning
+	// null for both told a donor the campaign they were linked to does not
+	// exist. The section's own loader catches this and keeps the owner's
+	// "Create fundraiser" CTA alive — a branch that could never run while the
+	// error was swallowed here.
+	if (error) throw error;
+	if (!data) return null;
 	return fundraiserFromRow(data);
 }
 
@@ -11621,7 +11696,15 @@ export async function fetchFundraiserForEvent(eventId: string): Promise<Fundrais
 		.select('*')
 		.eq('event_id', eventId)
 		.maybeSingle();
-	if (error || !data) return null;
+	// Throws on a failed read, exactly as `fetchFundraiserById` does and for
+	// the reason its comment gives: `.maybeSingle()` already distinguishes a
+	// genuine miss (`{data: null, error: null}`) from a failure, and returning
+	// null for both told a donor the campaign they were linked to does not
+	// exist. The section's own loader catches this and keeps the owner's
+	// "Create fundraiser" CTA alive — a branch that could never run while the
+	// error was swallowed here.
+	if (error) throw error;
+	if (!data) return null;
 	return fundraiserFromRow(data);
 }
 
