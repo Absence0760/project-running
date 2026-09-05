@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { deleteRunsBounded, DELETE_RUNS_CONCURRENCY } from './bulk_delete';
+import { stripComments } from './strip_comments';
 
 function makeTracker(rejectIds: Set<string> = new Set()) {
 	let inFlight = 0;
@@ -65,4 +68,37 @@ test('deleteRunsBounded handles an empty id list without calling deleteFn', asyn
 
 test('the shipped cap is a sane bounded value', () => {
 	assert.ok(DELETE_RUNS_CONCURRENCY >= 1 && DELETE_RUNS_CONCURRENCY <= 16);
+});
+
+test('the /runs bulk delete reconciles the list against the ids it issued', () => {
+	// `deleteRunsBounded` is deliberately slow-and-partial: waves of up to
+	// DELETE_RUNS_CONCURRENCY, several round trips per run, `allSettled` so one
+	// failure does not abort the rest. A 200-run delete therefore runs for many
+	// seconds, and the /runs cards stay tappable the whole time — only the
+	// Delete button is disabled. The page filtered its in-memory list against
+	// the LIVE `selected` set, so a tap mid-flight rewrote the reconciliation:
+	// un-selecting a run already gone from the server left a ghost card that
+	// 404s on tap, and selecting another removed a run that still exists. The
+	// captured `ids` are what the server was actually asked about.
+	const page = stripComments(
+		readFileSync(resolve(import.meta.dirname, '../../routes/runs/+page.svelte'), 'utf-8'),
+	);
+	const start = page.indexOf('async function handleBulkDelete(');
+	assert.ok(start >= 0, 'handleBulkDelete moved — re-anchor this guard');
+	const body = page.slice(start, page.indexOf('\n\t}', start));
+	assert.match(
+		body,
+		/const ids = Array\.from\(selected\);/,
+		'the selection is captured once, before the await',
+	);
+	assert.doesNotMatch(
+		body,
+		/runs\.filter\([^)]*selected\.has/,
+		'the list must not be reconciled against the live selection — it can change mid-delete',
+	);
+	assert.match(
+		body,
+		/runs = runs\.filter\(\(r\) => failedSet\.has\(r\.id\) \|\| !requested\.has\(r\.id\)\);/,
+		'reconcile against the captured ids, keeping only the ones that failed',
+	);
 });
