@@ -10,6 +10,7 @@ import {
 	stampGlobalSegmentsScored,
 	GLOBAL_SEGMENT_SCORING_LIMIT,
 	singleEmbed,
+	fitnessSnapshotDue,
 } from './data_normalise.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -386,5 +387,118 @@ test('the run track and HR sidecar uploads address the Storage bucket registry, 
 		[...new Set(storageReads)],
 		['BUCKETS'],
 		'every supabase.storage.from(...) must name the BUCKETS registry',
+	);
+});
+
+// -------------------------------------------------------------------
+// fitnessSnapshotDue — at most one snapshot per user per UTC day
+// -------------------------------------------------------------------
+
+test('a runner with no snapshot yet is owed one', () => {
+	assert.equal(fitnessSnapshotDue(null, new Date('2026-03-14T10:00:00Z')), true);
+	assert.equal(fitnessSnapshotDue(undefined, new Date('2026-03-14T10:00:00Z')), true);
+});
+
+test('a second dashboard mount on the same UTC day is not owed a snapshot', () => {
+	// Reason: /dashboard recomputes on every mount and used to persist every
+	// time. fetchFitnessSnapshots windows at 60 points, so three or four opens
+	// a day fill the whole trend chart with one fortnight of duplicates and the
+	// multi-month trend the chart exists for scrolls off.
+	const now = new Date('2026-03-14T23:59:00Z');
+	assert.equal(fitnessSnapshotDue('2026-03-14T00:00:01Z', now), false);
+	assert.equal(fitnessSnapshotDue('2026-03-14T12:30:00Z', now), false);
+});
+
+test('the answer does not depend on the zone the reader happens to be in', () => {
+	// Reason: the previous assertion is only DISCRIMINATING off UTC — on a UTC
+	// runner (which CI is) a local-day implementation gives the same answers
+	// and the guard passes over the bug. Sweep the zone instead: the boundary
+	// is a property of the constraint this pairs with, not of the reader, so
+	// every zone must agree. Node re-reads `process.env.TZ` per Date operation.
+	const original = process.env.TZ;
+	try {
+		const cases: [string | null, string, boolean][] = [
+			['2026-03-14T23:30:00Z', '2026-03-15T00:30:00Z', true],
+			['2026-03-14T23:30:00Z', '2026-03-14T23:59:59Z', false],
+			['2026-03-14T00:00:01Z', '2026-03-14T23:59:00Z', false],
+			['2026-03-14T12:00:00Z', '2026-03-15T11:00:00Z', true],
+		];
+		for (const zone of ['UTC', 'Pacific/Auckland', 'America/Los_Angeles', 'Asia/Kolkata']) {
+			process.env.TZ = zone;
+			for (const [latest, now, expected] of cases) {
+				assert.equal(
+					fitnessSnapshotDue(latest, new Date(now)),
+					expected,
+					`${zone}: latest=${latest} now=${now} should be ${expected}`,
+				);
+			}
+		}
+	} finally {
+		if (original === undefined) delete process.env.TZ;
+		else process.env.TZ = original;
+	}
+});
+
+test('the day boundary is UTC, not the reader local one', () => {
+	// Reason: the uniqueness this pairs with is a database constraint over
+	// `computed_at`, and a `date` cast there runs in the connection time zone —
+	// UTC for PostgREST. A client measuring local days would ask for a second
+	// row on the same database day (absorbed, but a pointless round trip) or
+	// skip a genuinely new one, depending on which side of midnight it sits.
+	// 23:30 UTC on the 14th and 00:30 UTC on the 15th are different UTC days
+	// however far the reader is from Greenwich.
+	assert.equal(
+		fitnessSnapshotDue('2026-03-14T23:30:00Z', new Date('2026-03-15T00:30:00Z')),
+		true,
+	);
+	assert.equal(
+		fitnessSnapshotDue('2026-03-14T23:30:00Z', new Date('2026-03-14T23:59:59Z')),
+		false,
+	);
+});
+
+test('yesterday, last month and last year each owe a new snapshot', () => {
+	const now = new Date('2026-03-01T09:00:00Z');
+	assert.equal(fitnessSnapshotDue('2026-02-28T09:00:00Z', now), true);
+	assert.equal(fitnessSnapshotDue('2025-03-01T09:00:00Z', now), true);
+	assert.equal(fitnessSnapshotDue('2026-04-01T09:00:00Z', now), true);
+});
+
+test('an unreadable timestamp fails closed — no snapshot is written', () => {
+	// Reason: the two mistakes are not symmetric. Skipping a write loses one
+	// day point from a chart that self-heals tomorrow; writing when we cannot
+	// tell is the duplicate spam the gate exists to stop.
+	const now = new Date('2026-03-14T10:00:00Z');
+	assert.equal(fitnessSnapshotDue('not a timestamp', now), false);
+	assert.equal(fitnessSnapshotDue('', now), false);
+	assert.equal(fitnessSnapshotDue('2026-03-14T10:00:00Z', new Date(NaN)), false);
+});
+
+test('the fitness-snapshot write is gated on the per-day check and reports its own failure', () => {
+	// Reason: the write ran on every /dashboard mount with its `{ error }`
+	// unbound — a PostgREST error resolves rather than throws, so the caller's
+	// `.catch(() => {})` could never fire and a failing write was invisible.
+	// The gate must sit between the sufficiency check and the insert, and the
+	// insert must absorb only the duplicate a race with another tab produces
+	// once fitness_snapshots_user_day_uniq exists.
+	const source = stripComments(
+		readFileSync(resolve('src/lib/core/data.ts'), 'utf-8'),
+	);
+	const start = source.indexOf('export async function insertFitnessSnapshot(');
+	assert.ok(start > 0, 'insertFitnessSnapshot moved — re-anchor this guard');
+	const body = source.slice(start, source.indexOf('\nexport ', start + 1));
+	const gate = body.indexOf('fitnessSnapshotDue(');
+	const insert = body.indexOf('.insert({');
+	assert.ok(gate > 0, 'the write must be gated on fitnessSnapshotDue');
+	assert.ok(insert > gate, 'the per-day gate must run before the insert, not after');
+	assert.match(
+		body,
+		/const \{ error \} = await supabase/,
+		"the insert's error must be bound — an unbound one is invisible to every caller",
+	);
+	assert.doesNotMatch(
+		body,
+		/\.upsert\(/,
+		'fitness_snapshots has no UPDATE policy, so ON CONFLICT DO UPDATE is refused by RLS',
 	);
 });

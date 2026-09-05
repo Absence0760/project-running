@@ -161,3 +161,38 @@ export function singleEmbed<T>(value: T | T[] | null | undefined): T | null {
 	if (Array.isArray(value)) return value[0] ?? null;
 	return value ?? null;
 }
+
+/// Whether a fitness snapshot is owed for the calendar day `now` falls in,
+/// given the `computed_at` of the runner's most recent one (null when they
+/// have none).
+///
+/// `/dashboard` recomputes the snapshot on every mount and persisted it every
+/// time, so a runner who opens the dashboard three or four times a day filled
+/// the trend chart's 60-point window with same-day duplicates inside about two
+/// and a half weeks and the real multi-month trend scrolled off the left.
+///
+/// The day is measured in UTC on purpose: the uniqueness this pairs with is a
+/// database constraint over `computed_at`, and a `date` cast there runs in the
+/// connection's time zone, which is UTC for PostgREST. Comparing local days
+/// would put the client and the constraint on different calendars near
+/// midnight.
+///
+/// Fails CLOSED — an unreadable or unparseable timestamp answers "not owed".
+/// The two mistakes are not symmetric: skipping a write loses one day's point
+/// from a chart that self-heals tomorrow, while writing when unsure is the
+/// duplicate-spam this exists to stop.
+export function fitnessSnapshotDue(
+	latestComputedAt: string | null | undefined,
+	now: Date,
+): boolean {
+	const nowMs = now.getTime();
+	if (!Number.isFinite(nowMs)) return false;
+	if (latestComputedAt == null) return true;
+	const latest = new Date(latestComputedAt);
+	if (!Number.isFinite(latest.getTime())) return false;
+	return (
+		latest.getUTCFullYear() !== now.getUTCFullYear() ||
+		latest.getUTCMonth() !== now.getUTCMonth() ||
+		latest.getUTCDate() !== now.getUTCDate()
+	);
+}

@@ -23954,3 +23954,47 @@ six ways: reverting `joinChallenge` to a bare throw, restating the `'23505'`
 literal, widening the predicate to `235*`, hand-rolling one embed collapse,
 sending one upload back to `TABLES.runs`, and letting `singleEmbed` return
 `undefined` for an empty array each fail exactly one assertion.
+
+## 1232. The fitness snapshot is written at most once per UTC day by a read-then-insert, not by an upsert — and the mechanism is correct with no uniqueness constraint at all
+
+`/dashboard` recomputes the fitness snapshot on every mount and persisted it
+every time. `fetchFitnessSnapshots` windows at 60 points, so a runner who opens
+the dashboard three or four times a day fills the entire trend chart with about
+two and a half weeks of same-day duplicates and the multi-month trend the chart
+exists to show scrolls off the left. The write's `{ error }` was unbound as
+well, and a PostgREST error resolves rather than throws, so the caller's
+`.catch(() => {})` could never fire either: a failing write was invisible from
+every direction.
+
+The obvious fix — a PostgREST upsert on the day — does not work here, for two
+independent reasons, and both are worth recording because they are not visible
+from the call site. `fitness_snapshots` carries self SELECT, INSERT and DELETE
+policies and no UPDATE one, so `INSERT … ON CONFLICT DO UPDATE` is refused by
+RLS rather than merging. And the conflict target is a DERIVED day, which
+`on_conflict=` cannot name — it takes column names, not expressions — so the
+request could not address the constraint even with the policy in place. A
+`DO NOTHING` upsert avoids both but raises 42P10 on any database that does not
+yet have a matching unique index, which is precisely the database this had to
+keep working on while the index lands in another tree.
+
+So the gate is a read of the runner's newest `computed_at` and a pure
+`fitnessSnapshotDue` comparison, and the insert absorbs a duplicate through
+§ 1230's predicate. That is correct with no constraint at all, and once
+`fitness_snapshots_user_day_uniq` exists a second tab racing the read gets a
+23505 — the state we wanted, not a failure. The index is the hard guarantee;
+this is the mechanism. The day is measured in UTC because the constraint it
+pairs with is a `date` cast over `computed_at` running in the connection's zone,
+which is UTC for PostgREST; measuring local days would put client and constraint
+on different calendars near midnight. `fitnessSnapshotDue` fails CLOSED on an
+unreadable timestamp, because the two mistakes are not symmetric: a skipped
+write loses one day point from a chart that self-heals tomorrow, while writing
+when unsure is the duplicate spam being fixed.
+
+One guard is worth naming: the first UTC-boundary assertion written for this was
+only DISCRIMINATING off UTC — on a UTC runner, which CI is, a local-day
+implementation gives identical answers and the assertion passes over the bug.
+It is now a sweep that re-answers the same four boundary cases under four zones,
+so the invariance is what is tested rather than one zone's coincidence.
+Mutation-tested: unbinding the insert error, failing open on an unparseable
+timestamp, and switching to local-day comparison each fail, the last of them
+under `TZ=UTC`.

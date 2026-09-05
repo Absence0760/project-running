@@ -3,8 +3,8 @@
  */
 import { supabase } from './supabase';
 import { edgeFunctionErrorCode, edgeFunctionErrorMessage } from './edge_function_error';
-import { isDuplicateKeyError } from './supabase_error';
-import { singleEmbed } from './data_normalise';
+import { isDuplicateKeyError, supabaseErrorFields } from './supabase_error';
+import { singleEmbed, fitnessSnapshotDue } from './data_normalise';
 import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { isEntityId } from './entity_id';
 import { probeSaysConfigured } from './provider_probe';
@@ -982,11 +982,20 @@ export async function setRunPublic(id: string, isPublic: boolean): Promise<void>
 	if (error) throw error;
 }
 
-/// Upsert a fitness snapshot for the signed-in user. The dashboard
-/// call path computes the snapshot on every open (cheap — pure math
-/// over the run list the dashboard already fetched) and persists so
-/// the trend chart has a history to draw. Returns the id of the
-/// inserted row.
+/// Persist at most one fitness snapshot per user per UTC day. The dashboard
+/// call path computes the snapshot on every open (cheap — pure math over the
+/// run list the dashboard already fetched) and persists so the trend chart has
+/// a history to draw; without the per-day gate a runner who opens /dashboard
+/// three times a day fills the chart's 60-point window with same-day
+/// duplicates inside about two and a half weeks.
+///
+/// Read-then-insert rather than an upsert, deliberately. `fitness_snapshots`
+/// carries self SELECT / INSERT / DELETE policies and no UPDATE one, so
+/// PostgREST's `ON CONFLICT DO UPDATE` would be refused by RLS; and the
+/// conflict target is a derived day, which `on_conflict=` cannot name. This
+/// shape is correct on a database with no uniqueness constraint at all, and
+/// once `fitness_snapshots_user_day_uniq` exists a second tab racing the read
+/// gets a 23505 — the state we wanted, not a failure.
 export async function insertFitnessSnapshot(input: {
 	vdot: number | null;
 	vo2Max: number | null;
@@ -1008,7 +1017,21 @@ export async function insertFitnessSnapshot(input: {
 	) {
 		return;
 	}
-	await supabase.from(TABLES.fitness_snapshots).insert({
+	const { data: latest, error: latestErr } = await supabase
+		.from(TABLES.fitness_snapshots)
+		.select('computed_at')
+		.eq('user_id', userId)
+		.order('computed_at', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	if (latestErr) {
+		console.warn('insertFitnessSnapshot: latest-snapshot read failed', supabaseErrorFields(latestErr));
+		return;
+	}
+	if (!fitnessSnapshotDue((latest as { computed_at: string } | null)?.computed_at, new Date())) {
+		return;
+	}
+	const { error } = await supabase.from(TABLES.fitness_snapshots).insert({
 		user_id: userId,
 		vdot: input.vdot,
 		vo2_max: input.vo2Max,
@@ -1018,6 +1041,11 @@ export async function insertFitnessSnapshot(input: {
 		qualifying_run_count: input.qualifyingRunCount,
 		source: 'client',
 	});
+	// A PostgREST error resolves rather than throws, so the caller's catch
+	// cannot see this one — the write used to fail entirely silently.
+	if (error && !isDuplicateKeyError(error)) {
+		console.warn('insertFitnessSnapshot failed', supabaseErrorFields(error));
+	}
 }
 
 export interface FitnessSnapshotRow {
