@@ -782,8 +782,6 @@ void main() {
         expect(args['text'], isNotEmpty);
       }
 
-      // Drain the split top-banner timers (3 s each) before teardown.
-      await tester.pump(const Duration(seconds: 4));
       tester.takeException();
 
       await tester.pumpWidget(const SizedBox());
@@ -1127,7 +1125,6 @@ void main() {
       expect(map, isNotEmpty,
           reason: 'Resume re-hydrates the recorder into the recording surface');
 
-      // Drain the 3 s resumed banner timer before finishing (still < 10 s).
       await tester.pump(const Duration(seconds: 4));
       tester.takeException();
 
@@ -1170,7 +1167,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
       tester.takeException(); // LiveRunMap tile-fetch noise on the recording mount
 
-      // Drain the 3 s resumed banner timer before finishing (still < 10 s).
       await tester.pump(const Duration(seconds: 4));
       tester.takeException();
 

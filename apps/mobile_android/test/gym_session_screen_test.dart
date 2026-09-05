@@ -507,8 +507,6 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Complete set'), findsOneWidget);
     expect(g.store.workouts, isEmpty);
 
-    // showTopBanner leaves an auto-dismiss timer pending.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('back → Discard pops and deletes the draft', (tester) async {

@@ -687,8 +687,6 @@ void main() {
       // The chip stays (the remove didn't persist).
       expect(find.text('hillsprint'), findsOneWidget);
 
-      // Drain the showTopBanner auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 

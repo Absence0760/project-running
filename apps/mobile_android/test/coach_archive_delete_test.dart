@@ -175,9 +175,6 @@ void main() {
       expect(find.textContaining('Something went wrong'), findsOneWidget);
       expect(find.textContaining('Exception: boom'), findsNothing);
 
-      // Let the banner's auto-dismiss timer fire so it isn't left
-      // pending when the widget tree is disposed.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 }

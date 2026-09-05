@@ -164,8 +164,6 @@ void main() {
 
       expect(training.updateCalls, 1);
       expect(find.textContaining("Couldn't update the plan"), findsOneWidget);
-      // showTopBanner leaves a 4s auto-dismiss timer — drain it.
-      await tester.pump(const Duration(seconds: 4));
     });
   });
 }

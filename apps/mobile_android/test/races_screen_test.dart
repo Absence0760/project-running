@@ -202,8 +202,6 @@ void main() {
     expect(service.lastImportProvider, 'runsignup');
     expect(service.lastImportBib, '1234');
 
-    // Drain the success top-banner's pending timer (mobile-test gotcha).
-    await tester.pump(const Duration(seconds: 3));
   });
 
   Future<void> _driveImport(WidgetTester tester, _FakeRaceService service) async {
@@ -503,8 +501,6 @@ void main() {
     expect(find.text("Couldn't open that link."), findsOneWidget);
     expect(launchCalls, 0);
 
-    // showTopBanner leaves a pending auto-dismiss timer.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('tapping Register with a malformed URL surfaces a banner rather than throwing',

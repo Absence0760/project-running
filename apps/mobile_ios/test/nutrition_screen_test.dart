@@ -298,8 +298,6 @@ void main() {
         find.textContaining("Couldn’t delete the entry"),
         findsOneWidget,
       );
-      // Drain the showTopBanner auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 5));
     } finally {
       await pumpUntilStoreWritesSettle(tester);
       dir.deleteSync(recursive: true);
@@ -368,8 +366,6 @@ void main() {
 
       await tester.tap(find.text('Undo'));
       await tester.pump();
-      // Drain the Restored banner's auto-dismiss timer.
-      await tester.pump(const Duration(seconds: 5));
     } finally {
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
@@ -563,8 +559,6 @@ void main() {
       expect(find.text('My breakfast'), findsOneWidget);
       expect(saveBtn().onPressed, isNotNull);
 
-      // Drain the showTopBanner auto-dismiss timer (mobile-test gotcha).
-      await tester.pump(const Duration(seconds: 5));
     } finally {
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
@@ -801,9 +795,6 @@ void _diaryDayTests() {
       await tester.pump(const Duration(seconds: 5));
     } finally {
       await pumpUntilStoreWritesSettle(tester);
-      // The drain lets `_saveAsMeal` finish, which arms `showTopBanner`'s
-      // dismissal timer; the widget tree may not be disposed under it.
-      await tester.pump(const Duration(seconds: 4));
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
     }
@@ -861,9 +852,6 @@ void _diaryDayTests() {
       await tester.pump(const Duration(seconds: 5));
     } finally {
       await pumpUntilStoreWritesSettle(tester);
-      // The drain lets `_saveAsMeal` finish, which arms `showTopBanner`'s
-      // dismissal timer; the widget tree may not be disposed under it.
-      await tester.pump(const Duration(seconds: 4));
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
     }
@@ -917,9 +905,6 @@ void _diaryDayTests() {
       await tester.pump(const Duration(seconds: 5));
     } finally {
       await pumpUntilStoreWritesSettle(tester);
-      // The drain lets `_saveAsMeal` finish, which arms `showTopBanner`'s
-      // dismissal timer; the widget tree may not be disposed under it.
-      await tester.pump(const Duration(seconds: 4));
       f.dir.deleteSync(recursive: true);
       pp.deleteSync(recursive: true);
     }

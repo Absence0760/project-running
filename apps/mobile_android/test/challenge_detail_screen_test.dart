@@ -287,8 +287,6 @@ void main() {
     // NOT the misleading load-failure copy.
     expect(find.text("Couldn't load challenges."), findsNothing);
 
-    // Drain the showTopBanner auto-dismiss timer.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   group('ChallengeDetailScreen — the viewer standing card', () {

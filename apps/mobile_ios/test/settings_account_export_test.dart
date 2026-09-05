@@ -225,8 +225,6 @@ void main() {
     // Nothing was downloaded: the archive does not exist yet, and the
     // connection that used to build it is gone.
     expect(service.downloads, 0);
-    // Let the banner's dismissal timer run out so the test ends clean.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('a refused export is surfaced, never demoted to the on-device archive',
@@ -250,8 +248,6 @@ void main() {
     expect(find.byKey(const Key('account-export-building')), findsNothing);
     expect(find.byKey(const Key('backup-on-device')), findsNothing);
     expect(service.downloads, 0);
-    // Let the banner's dismissal timer run out so the test ends clean.
-    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('a ready job that arrived with no URL is a failure, not a dead button',
