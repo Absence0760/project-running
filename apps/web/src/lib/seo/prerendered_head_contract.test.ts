@@ -27,6 +27,8 @@ import { relative, resolve } from 'node:path';
 const webRoot = resolve(import.meta.dirname, '..', '..', '..');
 const BUILD = resolve(webRoot, 'build');
 const SVELTE_CONFIG = resolve(webRoot, 'svelte.config.js');
+const SEO_DOC = resolve(webRoot, '..', '..', 'docs', 'features', 'seo.md');
+const ROOT_PAGE = resolve(webRoot, 'src', 'routes', '+page.ts');
 
 const SHELL = (() => {
 	const found = /\bfallback:\s*["']([^"']+)["']/.exec(readFileSync(SVELTE_CONFIG, 'utf8'));
@@ -200,5 +202,29 @@ test('every prerendered page carries a title, a description and social meta', (t
 		[],
 		'These are the only surfaces this app prerenders FOR indexing and unfurling ' +
 			`(decisions § 161), so a missing signal here is the whole point of the page:\n  ${missing.join('\n  ')}`,
+	);
+});
+
+test("seo.md's `/` row says what the route does, not what it was meant to do", () => {
+	// The row read "prerendered (intended -- the artifact is the SPA shell
+	// today)" for as long as the surface existed, which is a render map
+	// describing a page that was not being served. Anchored to the loader
+	// rather than to the sentence: a row that stops agreeing with `+page.ts`
+	// fails whichever of the two moved.
+	const row = readFileSync(SEO_DOC, 'utf8')
+		.split('\n')
+		.filter((line) => line.startsWith('|'))
+		.map((line) => line.split('|').map((c) => c.trim()))
+		.filter((cells) => cells[1] === '`/` landing');
+	assert.equal(row.length, 1, `expected exactly one render-map row for /, found ${row.length}`);
+	assert.equal(
+		row[0][2].includes('prerendered'),
+		/export const prerender\s*=\s*true/.test(readFileSync(ROOT_PAGE, 'utf8')),
+		`the mode cell disagrees with src/routes/+page.ts; it reads: ${row[0][2]}`,
+	);
+	assert.ok(
+		!/intend|today|SPA shell/i.test(row[0][2]),
+		'the mode cell hedges about the artifact; the artifact cases above are what state it: ' +
+			row[0][2],
 	);
 });
