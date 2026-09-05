@@ -9,6 +9,11 @@ import {
 	kE1rmMaxReps,
 	type GymSetLike,
 } from './gym_prs';
+import {
+	EXERCISE_FOLD_KEYS,
+	EXERCISE_FOLD_VALUES,
+	EXERCISE_FOLD_UNICODE_VERSION,
+} from './exercise_fold_table';
 
 function set(exercise_name: string, reps: number | null, weight_kg: number | null): GymSetLike {
 	return { exercise_name, reps, weight_kg };
@@ -207,16 +212,14 @@ test('normaliseExerciseName folds what the SQL rail folds, and nothing more', ()
 });
 
 test('normaliseExerciseName case-folds what the SQL rail case-folds', () => {
-	// The three rails' lowercase tables are not each other's: measured over
-	// every assignable code point, JS and Dart disagree at 466, and Postgres
-	// answers with its argument's collation until the SQL mirror pins
-	// `collate "und-x-icu"` (decisions § 830). These are the disagreements
-	// reachable in a Latin or Greek exercise name.
+	// No rail reaches for its own runtime's lowercase any more: all three fold
+	// through the frozen table (decisions § 1175). These are the cases that
+	// were reachable in a Latin or Greek exercise name while they did.
 	//
 	// U+0130's FULL lowercase is 'i' + U+0307 (what JS and ICU return); its
-	// SIMPLE one is a bare 'i' (what Dart and the libc provider return). The key
-	// takes the simple form, so a mobile-written exercise_key for this name no
-	// longer violates the CHECK on gym_routine_exercises.
+	// SIMPLE one is a bare 'i', which is the mapping the table carries, so a
+	// mobile-written exercise_key for this name satisfies the CHECK on
+	// gym_routine_exercises.
 	assert.equal(normaliseExerciseName('\u0130tme'), 'itme');
 	assert.equal(normaliseExerciseName('\u0130TME'), 'itme');
 	// Final sigma: ICU and JS apply Unicode's contextual Final_Sigma rule and
@@ -231,4 +234,84 @@ test('normaliseExerciseName case-folds what the SQL rail case-folds', () => {
 	// intact — an ASCII-only fold would have split these two.
 	assert.equal(normaliseExerciseName('\u00dcBERZ\u00dcGE'), '\u00fcberz\u00fcge');
 	assert.equal(normaliseExerciseName('\u00fcberz\u00fcge'), '\u00fcberz\u00fcge');
+});
+
+test('the frozen fold table is 1:1, ascending and unchained', () => {
+	// Every rail applies the table in ONE pass — Postgres translate() and both
+	// clients' per-code-point lookup — so these are the claims that make the
+	// three answers the same answer rather than three passes that happen to
+	// agree today (decisions § 1175).
+	assert.equal(EXERCISE_FOLD_KEYS.length, EXERCISE_FOLD_VALUES.length);
+	const keys = new Set(EXERCISE_FOLD_KEYS);
+	assert.equal(keys.size, EXERCISE_FOLD_KEYS.length);
+	for (let i = 1; i < EXERCISE_FOLD_KEYS.length; i++) {
+		assert.ok(EXERCISE_FOLD_KEYS[i - 1] < EXERCISE_FOLD_KEYS[i]);
+	}
+	for (let i = 0; i < EXERCISE_FOLD_KEYS.length; i++) {
+		assert.notEqual(EXERCISE_FOLD_VALUES[i], EXERCISE_FOLD_KEYS[i]);
+		// A value the table also folds would make fold(fold(x)) differ from
+		// fold(x), and the CHECK re-derives the key from the name on every write.
+		assert.ok(!keys.has(EXERCISE_FOLD_VALUES[i]));
+	}
+	// The SQL rail takes a 26-pair fast path for an all-ASCII name, which is
+	// only answer-identical to the full table while its ASCII half is exactly
+	// this.
+	const ascii = EXERCISE_FOLD_KEYS.map((cp, i) => [cp, EXERCISE_FOLD_VALUES[i]] as const).filter(
+		([cp]) => cp < 0x80,
+	);
+	assert.deepEqual(
+		ascii,
+		Array.from({ length: 26 }, (_, i) => [0x41 + i, 0x61 + i]),
+	);
+});
+
+test('the frozen fold table is the simple lowercase mapping of the version it names', () => {
+	// The table is FROZEN, so a newer Node folding more letters is not drift —
+	// it is the next migration's work. This checks the table against the data it
+	// was rendered from only when the two are the same version, and says so
+	// rather than passing silently when they are not.
+	if (process.versions.unicode !== EXERCISE_FOLD_UNICODE_VERSION) {
+		assert.ok(
+			true,
+			`skipped: this Node carries Unicode ${process.versions.unicode}, the table is frozen at ${EXERCISE_FOLD_UNICODE_VERSION}`,
+		);
+		return;
+	}
+	const table = new Map(EXERCISE_FOLD_KEYS.map((cp, i) => [cp, EXERCISE_FOLD_VALUES[i]]));
+	for (let cp = 0; cp <= 0x10ffff; cp++) {
+		if (cp >= 0xd800 && cp <= 0xdfff) continue;
+		const source = String.fromCodePoint(cp);
+		const lowered = source.toLowerCase();
+		// U+0130 is the only code point whose UNCONDITIONAL full lowercase is
+		// longer than one code point; the table takes its simple mapping.
+		const expected =
+			lowered === source ? undefined : cp === 0x0130 ? 0x0069 : lowered.codePointAt(0);
+		assert.equal(
+			table.get(cp),
+			expected,
+			`U+${cp.toString(16).toUpperCase()} disagrees with this build's simple lowercase`,
+		);
+		if (lowered !== source && cp !== 0x0130) assert.equal([...lowered].length, 1);
+	}
+});
+
+test('normaliseExerciseName folds code points the runtimes disagreed about', () => {
+	// One from each family the 465-code-point web-to-mobile gap covered:
+	// Cherokee (Unicode 8.0), the Latin Extended-D additions, Garay and
+	// Medefaidrin in the supplementary planes. Dart's own toLowerCase leaves
+	// every one of them alone, so before the table these were names the phone
+	// could not persist without a 23514 (decisions § 1175).
+	assert.equal(normaliseExerciseName('\u13a0'), '\uab70');
+	assert.equal(normaliseExerciseName('\ua7cb'), '\u0264');
+	assert.equal(normaliseExerciseName('\u{10d50}'), '\u{10d70}');
+	assert.equal(normaliseExerciseName('\u{16e40}'), '\u{16e60}');
+});
+
+test('normaliseExerciseName folds by code point, not by code unit', () => {
+	// 307 of the 1,488 entries are outside the BMP. A code-unit walk would fold
+	// each half of the surrogate pair separately, match neither, and leave the
+	// name uppercase — a second bucket for the same lift.
+	const deseret = '\u{10400}\u{10401}';
+	assert.equal(normaliseExerciseName(deseret), '\u{10428}\u{10429}');
+	assert.equal(normaliseExerciseName(`Bench ${deseret} Press`), `bench \u{10428}\u{10429} press`);
 });
