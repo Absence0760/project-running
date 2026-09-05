@@ -22141,3 +22141,146 @@ disabled during that window; the cards stay tappable. Un-selecting a run already
 gone from the server left a ghost card that 404s on tap, and selecting another
 dropped a run that still exists. It reconciles against the captured ids now —
 the only set the server was actually asked about.
+
+## 1220. Four reads answered "there is nothing here" when what had happened was "the read failed", and the worst of them told a stranger a shared run does not exist
+
+supabase-js **resolves** `{data: null, error}` rather than throwing, so
+`const { data } = await …` collapses a transport fault, an RLS refusal and a
+genuinely absent row into one indistinguishable null. `fetchRunById` and
+`fetchClubBySlug` were each repaired for exactly that and carry comments saying
+so. Four more reads still had it, and each rendered a confident falsehood
+rather than an unhelpful truth:
+
+- **`fetchPublicRun`** backs `/share/run/[id]` and the non-owner branch of
+  `/runs/[id]`. A failed read rendered **"Run not found."** to every recipient
+  of a link the runner shared. This is the sharpest of the four for a reason
+  the other three do not have: the person who hits it is usually not the owner,
+  has no other way to check, and reasonably concludes the run was deleted or
+  they were blocked. It now mirrors `fetchRunById` character for character —
+  `PGRST116` is the only code that reads as a genuine miss — and
+  `RunShareView` grew a `loadError` branch with a retry beside the existing
+  `notFound` one. The copy is `runDetail.loadErrorTitle` / `runDetail.retry`,
+  reused rather than added: the component already resolves `shell.loading`
+  across namespaces, and adding a key means editing seven catalogues in a tree
+  this lane does not own.
+- **`fetchPublicRunAttribution`** is the entitlement read behind the same
+  non-owner branch. A failure returned null, which the caller reads as "you are
+  not the owner" — the identical mistake § 1189 closed one call earlier in the
+  same function. It reports separately now, and `/runs/[id]` routes that
+  failure to the retry card instead of "Run not found".
+- **`fetchRoutesWithError`** exists *specifically* so a failure is not rendered
+  as an empty state — and then checked only the owned-routes read, taking
+  `?? []` on all three saved-route reads. A failed `saved_routes` read
+  therefore rendered the runner's own routes with `error: null` beside them and
+  their bookmarks silently gone. Both saved-body reads are checked too: the
+  base table carries their own and club-visible saved routes, the
+  `public_routes` view carries everything they saved from someone else — the
+  dominant case, per the function's own comment.
+- **`enrichClubs`** derived `viewer_role` from one `club_members` read whose
+  error was discarded. `viewer_role: null` is the assertion "you are not a
+  member": it decides whether an owner gets their admin controls, whether a
+  member is offered "Join", and whether `fetchClubBySlug` fetches an invite
+  token at all. A blip logged every member out of their own club, under
+  `error: null`. It returns `{ clubs, error }` now — the shape all four callers
+  already return, so three hand it straight back.
+- **`fetchFundraiserForRun` / `fetchFundraiserForEvent`** returned null on error
+  where their own sibling `fetchFundraiserById` throws, with a comment
+  explaining that a donor must get a retry rather than being told the campaign
+  does not exist. They throw now. `FundraiserSection` already catches, with a
+  deliberate policy (a transient failure must not hide the owner's "Create
+  fundraiser" CTA) — a branch that could never execute while the error was
+  being swallowed upstream. Turning that degradation into a visible retry needs
+  new copy and is filed.
+
+Five source guards pin the set, each negative-tested by reverting the fix and
+confirming the failure message names the right claim. One of them counts
+`enrichClubs` call sites *and* checks each one propagates: the first draft
+counted only, which a caller writing
+`{ clubs: (await enrichClubs(rows)).clubs, error: null }` walks straight past —
+the original defect wearing the new shape.
+
+## 1221. The recap anchored "current streak" at 31 December, so the card for the year you are living in reported every live streak as zero — and its test agreed for a second, wrong reason
+
+`buildYearInRunningRecap` anchored `computeRunStreaks` at
+`new Date(year, 11, 31, 23, 59)`, and the month builder at the last day of its
+month. `computeRunStreaks` ignores runs after its anchor and begins the
+backward walk at the anchor day, falling back to the Strava grace day before
+it. For a **past** period that is right. For the period you are *in* — the only
+card anyone opens while a streak is running — the anchor is in the future, so
+the walk looked for a run on 31 December, then on 30 December, found neither,
+and returned `current: 0`. A runner on a live 40-day streak got a zero. The
+anchor is now the earlier of the period's end and `now`, threaded in as an
+optional parameter so it stays stateable in a test; `best` keeps the period's
+own end, so a past year's card still clamps at its own 31 December instead of
+being dragged forward.
+
+The more dangerous half was the test. `recap.test.ts` asserted
+`currentStreakDays === 0` on a fixture whose runs are in January 2026, with the
+comment "Anchored at 31 Dec 2026, nine months after the last run" — a correct
+expectation reached through the defect's own reasoning. It would have survived
+the fix unchanged and gone on passing, so the regression could return in
+silence. Two things were done rather than one: that assertion now states its
+`now` explicitly and says in comment form why it is 0 for a real reason, and a
+new pair of tests covers the case it never exercised — a streak running up to
+and including today, the same streak one day before today's run (proving the
+grace day still applies at the near end), and a past year's card proving it
+still clamps. Reverting the anchor fix now fails with
+`a streak running up to and including today is the current streak — actual: 0,
+expected: 4`, which names the thing that broke.
+
+`recap` is an enforced TS↔Dart parity pair and **the pair is temporarily
+diverged**: `apps/mobile_android/lib/recap.dart` still anchors at
+`DateTime(year, 12, 31, 23, 59)` and `DateTime(year, month + 1, 0, 23, 59)`.
+The Dart half is another lane's tree, so it is filed with the exact lines and
+the same `now`-parameter shape. Mobile's `recapSnapshotJson` serialises this
+field into `public_recaps`, so until it lands a phone-published snapshot of an
+in-progress period carries the zero.
+
+## 1222. Two "exact" tallies counted a page of rows and called it the set, one of them on the paid-registration path
+
+PostgREST returns at most its configured row ceiling and gives the client no
+signal when it truncates. Measured on the stack this repo runs:
+`PGRST_DB_MAX_ROWS=1000` on PostgREST v14.14, and a plain read comes back
+`Content-Range: 0-11/*` — the total is literally `*`, unknown. Only an explicit
+exact count fills it in (`Content-Range: 0-11/12`). So a tally built by
+counting the rows a `.select()` returned is a count of the page, presented as a
+count of the set, and nothing in the response says otherwise.
+
+**`fetchEventRsvpSummary`** carried a doc comment promising that the
+going/maybe/declined/waitlisted counts "must stay exact even when the displayed
+roster is only its first page", and then read every attendee row for the
+instance and tallied them in a loop. Past the ceiling the capacity and waitlist
+math believes a full event has room. Worse, the same page supplied
+`viewerStatus`: the viewer's own row could fall outside it, `viewerStatus` read
+null, and the page re-showed "Register for £X" to someone who had already paid
+— burning a Stripe session and a capacity-holding pending order. It is now four
+`count: 'exact', head: true` requests (a `count(*)` over the filtered set, not
+subject to the row cap, transferring no rows) plus one scoped single-row read
+for the viewer's own status, all issued together. Five round trips became one
+wall-clock wait and the bytes went to roughly zero.
+
+**`fetchChallenges` and `fetchChallengeById`** lengthed a
+`challenge_participants` array for a number that is already a column on the row
+they had already fetched: `challenges.participant_count`, the
+trigger-maintained, self-healing, client-write-frozen cache added by
+`20270308_001` and documented in `derived_state.md`. `select('*')` was carrying
+it the whole time. This is the same shape `clubs.member_count` was created to
+remove (issue #331), and `enrichClubs`'s own comment says so one screen away.
+The list read also spanned every listed challenge at once, so a couple of
+popular public boards were enough to exhaust the page — every board then
+under-reported, and a genuine participant's own row could fall outside it,
+emptying their "My challenges" tab and offering them "Join" on a challenge they
+were in. Both now read the cache and scope the membership read to the caller,
+which bounds it by the number of challenges listed rather than by how many
+people are in them.
+
+**Postscript — § 1189's `.or()` clause, now verified.** That entry pushed the
+upcoming-events predicate server-side and recorded that the filter had not been
+executed against a live PostgREST, because doing so appeared to require an API
+key. It does not: Kong enforces the key, PostgREST's own port does not, so the
+clause can be exercised from inside the compose network with no credential in
+play. Result: HTTP 200 with rows. A deliberately malformed control returned
+`400 PGRST100 "failed to parse logic tree"`, proving the probe can tell the
+difference. Semantics checked against SQL ground truth on the same data: 12
+events total, the predicate admits 9 and excludes exactly the 3 finished
+one-offs, and PostgREST returns the same 9 through the client-facing path.
