@@ -37,6 +37,11 @@ const SOURCES: Readonly<Record<HeadSignal, string>> = {
 
 const HEAD_CLOSE = /<\/head(?=[\s/>])[^>]*>/i;
 
+/// What a stripped signal leaves behind. Whitespace rather than nothing,
+/// because a tag name cannot contain whitespace: it is the shortest string that
+/// cannot become part of whatever stood either side of the match.
+const SEPARATOR = '\n';
+
 function all(signal: HeadSignal): RegExp {
 	return new RegExp(SOURCES[signal], 'gi');
 }
@@ -49,18 +54,25 @@ export function stripStaleHeadSignals(html: string, signals: readonly HeadSignal
 			// The FIRST only: the injected head supplies the one that wins, and a
 			// shell arriving with two is a defect to report rather than one to
 			// absorb silently.
-			out = out.replace(new RegExp(SOURCES.title, 'i'), '');
+			out = out.replace(new RegExp(SOURCES.title, 'i'), SEPARATOR);
 			continue;
 		}
-		// ONE global pass, never repeated to a fixpoint. A global replace already
-		// consumes every leftmost non-overlapping match the input contains, so a
-		// second pass can only match text that became adjacent when the first
-		// deleted something -- a block the document never carried. The JSON-LD
-		// strip did loop, to stop an overlapping `<script ...><script>` leaving a
-		// residual; it never could, and the loop instead deleted `</head>`, the
-		// mount div and the bundle tag out of a head holding `<scr` before a block
-		// and `ipt type="application/ld+json">` after it. See decisions § 1192.
-		out = out.replace(all(signal), '');
+		// ONE global pass, and what replaces a match is WHITESPACE, not nothing.
+		// Both halves matter and both were wrong here.
+		//
+		// Deleting to the empty string joins the characters either side, so the
+		// output can be re-parsed into an element the input never contained. The
+		// old code chased that by re-running to a fixpoint, which does remove the
+		// synthesised block -- and can then run on, because the synthesised open's
+		// nearest close may be the SPA bundle's, taking `</head>`, the mount div
+		// and the bundle tag with it. Bounded wrongness beats unbounded: a strip
+		// must never delete more than it matched.
+		//
+		// So the join is prevented instead of chased. A tag name cannot contain
+		// whitespace, so a separator makes `<sc` + `ript type=...>` inert rather
+		// than joining them into a script element -- one pass, nothing synthesised,
+		// nothing over-deleted. See decisions § 1194.
+		out = out.replace(all(signal), SEPARATOR);
 	}
 	return out;
 }

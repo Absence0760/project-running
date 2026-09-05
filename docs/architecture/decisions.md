@@ -22112,3 +22112,44 @@ Still deliberately no build: the three artifact cases self-skip without one and
 which is the condition all of these cells drifted under. Route source and a
 committed markdown file are both readable without an artifact, so this half runs
 on every PR today.
+
+## 1194. A stripped head signal is replaced by whitespace, not by nothing — deleting to the empty string is what made the fixpoint loop look necessary
+
+[§ 1192](../architecture/decisions.md) removed the JSON-LD strip's fixpoint loop
+after measuring that it could delete `</head>`, the mount div and the SPA bundle
+tag out of a shell. That was right and incomplete, and running the whole share
+suite rather than the module's own file surfaced the missing half: a test in
+`share_route_spa_shell.test.ts` had been asserting the loop's behaviour was
+*required*, and it went red.
+
+Both positions were defensible because both forms are wrong. Deleting a match to
+the empty string joins whatever stood either side of it, so the OUTPUT can be
+re-parsed into an element the input never contained — plant `<sc` before a real
+block and `ript type="application/ld+json">…` after it, and removing the block
+joins them into a live JSON-LD element on the served page. That is a real
+regression, and the route test was guarding a real thing. The loop chased that
+join; the trouble is that it cannot stop, because the synthesised open's nearest
+close may be the bundle's, and then the extra pass eats the document. So the
+tree held two tests encoding contradictory contracts — chase the join, and do
+not chase it — and each was pinning half of a defect.
+
+The fix is to prevent the join instead of arbitrating between the two: a match
+is replaced by a newline. A tag name cannot contain whitespace, so `<sc` +
+separator + `ript type=…>` is inert text rather than a script element. One pass,
+nothing synthesised, and nothing deleted beyond what was matched. Applied to all
+four signals, because the hazard is general to delete-based rewriting and not
+specific to JSON-LD. Measured on both adversarial inputs: the separator is the
+only one of the three forms that keeps `</head>`, the mount div and the bundle
+while leaving no parseable block behind.
+
+The route case is rewritten rather than deleted, and now asserts what it was
+really for — no synthesised block, exactly one JSON-LD element on the page, the
+real one gone — plus the structural survival the loop could not promise. Its old
+demand that the leftover fragments vanish as TEXT is dropped deliberately: that
+is the one thing only chasing the join can achieve, the fragments are inert
+either way, and the input cannot arise in our own build artifact. The two cases
+now bracket the behaviour from both sides — reverting to the empty string fails
+the route case, reverting to the loop fails the `head_splice` case.
+
+Process note worth keeping: § 1192's verification ran the changed module's own
+test file and not the suite around it. The contradiction was one directory away.
