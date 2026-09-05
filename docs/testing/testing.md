@@ -73,7 +73,7 @@ The exhaustive, file-by-file inventory of what every test file covers (plus the 
 
 ## Patterns
 
-Three patterns show up across the suite. Adopt them when adding new tests so the style stays consistent.
+Six patterns show up across the suite. Adopt them when adding new tests so the style stays consistent.
 
 ### 1. `@visibleForTesting` hooks for untestable subsystems
 
@@ -204,7 +204,21 @@ The same file carries `holdFinish`, the RunScreen Finish-hold drive built on it:
 - **Not from inside `tester.runAsync`.** `pumpUntil` calls `runAsync` itself and it does not nest; a test whose body is already wrapped has to be restructured first.
 - **Check the predicate is ever false.** A `pumpUntil` whose condition already holds on its first evaluation has converted nothing, and reading the diff will not tell you. Temporarily count the iterations inside `pumpUntil` and run the file: zero means either the work is microtask-only (the preceding `pump()` already drained it, and the wait is a guard rather than a wait) or the predicate is wrong — one converted case waited on a run being synced when the fixture had already synced it.
 
-### 5. Owning the day — a Playwright spec may not assert over rows it did not seed
+### 5. The store-write watch — every mobile test is checked for a write it did not wait for
+
+`apps/mobile_android/test/flutter_test_config.dart` runs before every test in that directory and installs a `StoreWriteObserver` on `serialiseStoreWrite`, the chain every disk-backed mobile store serialises its directory-mutating work through. A test that ends with an operation still on that chain **fails in teardown**, naming the store directory and the stack that queued it. The failure is not pedantry: a widget test's `tester.tap` runs on the fake clock while the write it starts completes on the real event loop, so the file I/O is still in flight when `tearDown` deletes the temp directory out from under it — and the torn rename is either silent or an unattributable failure in whichever test runs next (decisions.md § 1129).
+
+Three ways to satisfy it, in order of preference:
+
+1. **An observable outcome via `pumpUntil`** — a saved banner, a flipped chip, a listener the fixture set. Best, because it says what the test is waiting for.
+2. **The store's own `debugWritesSettled()`**, awaited from inside `tester.runAsync`, when the test constructs the store and holds a handle to it. It is bounded and reports itself rather than hanging when the zone precondition is not met (decisions.md § 1093).
+3. **`pumpUntilStoreWritesSettle(tester)`** from `test/store_write_watch.dart`, when the store belongs to the **screen** — there is no handle to call `debugWritesSettled` on, and no UI signal that tracks the file rather than the in-memory row, so the chain being empty *is* the observable outcome. It is an ordinary bounded `pumpUntil`, never a fixed delay, and costs nothing where nothing is open.
+
+`allowStoreWritesToOutliveTest(why)` is not an escape hatch. Its only honest use is a test whose **subject** is an unsettleable write — `storeWritesSettled`'s own zone precondition cannot be pinned without queueing one from a zone nothing will drain. A screen test that taps and does not wait is the defect the watch exists to name, not a case for the exemption.
+
+Reaching a screen's completion path for the first time can surface a *second* pending-work failure underneath the first — the framework's own `A Timer is still pending even after the widget tree was disposed`. Do not pump a fixed duration past it. That assertion is raised from **inside the test body**, after the harness unmounts the tree and before any `tearDown` runs, so no harness cleanup can reach it and the only remedy available to a test was a drain pump; the durable answer is for the widget to own its own clock, which is what `showTopBanner`'s pill now does (decisions.md § 1195). A pending timer under a widget you control is that widget's bug, not the test's.
+
+### 6. Owning the day — a Playwright spec may not assert over rows it did not seed
 
 `decisions.md § 728` covers the *zone* half of this: a seed built with local-time `Date` getters lands on the adjacent calendar day from the one the UTC-pinned browser reads. The other half is that a row can be on the right day and still not be yours. `apps/backend/supabase/seed.sql` places rows for the shared users relative to the database's own `now()` — four `food_log` meals on USER_A's day at −8 h / −5 h / −4 h / −1 h, plus `body_metrics`, `gym_workouts`, `runs` and challenge windows — so a surface that aggregates "everything today" sees them alongside whatever the spec seeded.
 

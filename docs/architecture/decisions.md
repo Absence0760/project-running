@@ -21978,3 +21978,48 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1195. The top banner's dismissal clock belongs to the pill, and both fixes the filing proposed are impossible
+
+[§ 1131](#1131) found five tests needing a four-second pump after
+`showTopBanner`, and filed two candidate fixes: return a handle a test can
+dismiss, or "register its timer somewhere `tearDown` can drain". **Both were
+measured and neither can work.**
+
+`A Timer is still pending even after the widget tree was disposed` is raised by
+`AutomatedTestWidgetsFlutterBinding._verifyInvariants`, called from
+`_runTestBody` immediately after the harness unmounts the tree — *inside* the
+test body, before `package:test` runs a single `tearDown`. A scratch test
+registering `tearDown(hideTopBanner)` and ending with a banner up fails exactly
+as it did without it. And a returned handle is unreachable from the tests that
+hit this: the caller is a screen, so the test never holds what `showTopBanner`
+returned. A repo that had already written `tearDown(hideTopBanner)` into
+`settings_email_reoptin_test.dart` was carrying a cleanup that cannot do what
+its position implies.
+
+The filing also undercounted its own population by an order of magnitude.
+Scanning for a `tester.pump(Duration(...))` under a comment naming the banner
+finds **70 sites across 34 files**, not five — every screen test that ever
+reached a completion path, each one having independently rediscovered the same
+remedy and written its own sentence for it.
+
+**So the fix is on the widget, and it is the ordinary one: a `State` owns its
+own `Timer`.** `_TopBannerWidget` is now stateful; it arms the dismissal timer
+in `initState` and cancels it in `dispose`. Two failure modes close at once,
+and the first fix attempted here only closed one of them — cancelling on
+dispose left `plan_detail_adherence_test` still failing, because
+`showTopBanner` can only *insert* an `OverlayEntry`: a banner shown on a path
+the test never pumps again is never built, so there is no `State` to dispose
+and the externally-armed timer survived a pill that was never displayed.
+Arming from `initState` means an undisplayed banner arms nothing at all.
+
+The behaviour change this carries is a correction, not a cost: the display
+duration now runs from the frame the pill first renders rather than from the
+call, which is what "auto-dismisses after 3 s" has always claimed. 60 of the 70
+drains — every one that was the last statement of its test — are deleted with
+it. The remaining ten stay: two in `run_screen_recording_flow_test.dart` sit
+mid-test and advance the recording clock for their own reasons, and eight are
+followed by further pumping whose purpose is not the banner. Pinned by three
+cases in `top_banner_test.dart` (a banner still up at the end, one whose tree
+is unmounted under it, one never rendered), each verified failing against the
+old widget.
