@@ -146,7 +146,16 @@ Not a pair: `apps/mobile_android/lib/exercise_records.dart` (per-exercise curren
    - Same constants and thresholds.
    - Same public-function set (a function added on one side must be added to the other).
 3. Read both mirror test suites. Compare:
-   - Test count parity (the per-app CLAUDE.md notes the canonical count for each — e.g. "8-test mirror suite").
+   - Test count parity, **counted from the two suites, never read off a doc**.
+     `apps/mobile_android/CLAUDE.md` states a count per test file, but nothing
+     re-derives those numbers and 44 of its 79 such claims were wrong when they
+     were last measured ([decisions § 1215](../../docs/architecture/decisions.md));
+     treat the note as a cross-check that may itself be stale, and count with
+     `grep -cE '^\s*(test|testWidgets)\(' <file>` on the Dart side and the
+     matching `test(` / `it(` count on the web side. A count written against a
+     PARAMETERISED declaration (a `test()` inside a `for` loop) is a runtime
+     count and will not match the grep — read the note's own wording before
+     calling it a divergence.
    - Test names — ideally identical strings.
    - Same fixture data where the test uses concrete numbers.
 4. Report:
