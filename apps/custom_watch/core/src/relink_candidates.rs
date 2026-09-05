@@ -8,8 +8,16 @@
 //! ±`window_days` of the scheduled date) AND not already linked to a
 //! *different* workout, so `plan_progress` can never double-count one run
 //! against two workouts. The workout's own current pick stays selectable
-//! regardless of window so the current row is always visible. Output is
-//! newest-first.
+//! regardless of window so the current row is always visible.
+//!
+//! **Ordering is newest-DAY-first, and within a day it is the caller's own
+//! order.** Web and Dart sort on the full `started_at` instant, so a double day
+//! puts the evening run above the morning one; this rail is handed a day index
+//! and nothing finer, so there is nothing here to order that pair BY. What it
+//! can do — and does — is not scramble them: the sort below is stable, so two
+//! runs on one day come out in the order the phone sent them, which is the
+//! phone's own newest-first list. An unstable sort would have reordered them
+//! against it, which is the one difference this collapse did not have to have.
 //!
 //! The one representational change from the canonical helper: web/Dart parse
 //! `started_at` / `scheduled_date` from ISO into `Date`s and take a
@@ -91,8 +99,22 @@ pub fn filter_relink_candidates<'a>(
         }
     }
 
-    out.sort_unstable_by_key(|r| core::cmp::Reverse(r.day));
+    sort_by_day_desc(&mut out);
     out
+}
+
+/// Descending by day, STABLE. `slice::sort` lives in `alloc`, and `core` offers
+/// only `sort_unstable`, so the stability the ordering contract above depends on
+/// is written out: swapping only on a strict `<` leaves an equal-day pair in the
+/// order it arrived.
+fn sort_by_day_desc(runs: &mut [RelinkCandidateRun]) {
+    for i in 1..runs.len() {
+        let mut j = i;
+        while j > 0 && runs[j - 1].day < runs[j].day {
+            runs.swap(j - 1, j);
+            j -= 1;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -244,5 +266,44 @@ mod tests {
             window_days: None,
         });
         assert_eq!(ids(&out).as_slice(), &["inside"]);
+    }
+
+    /// A double day, and enough rows that the answer is a real claim about the
+    /// sort rather than about its small-slice path — `sort_unstable` is
+    /// insertion sort under ~20 elements and is stable there by accident, so a
+    /// four-run case pinned nothing. Web and Dart order a same-day pair by time
+    /// of day; this rail is handed only a day index, so the most it can promise
+    /// is that same-day runs come out in the order the phone sent them, which
+    /// is the phone's own newest-first list.
+    #[test]
+    fn same_day_runs_keep_the_order_they_arrived_in() {
+        const IDS: [&str; 40] = [
+            "r00", "r01", "r02", "r03", "r04", "r05", "r06", "r07", "r08", "r09", "r10", "r11",
+            "r12", "r13", "r14", "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
+            "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31", "r32", "r33", "r34", "r35",
+            "r36", "r37", "r38", "r39",
+        ];
+        let runs: heapless::Vec<RelinkCandidateRun, 40> = IDS
+            .iter()
+            .enumerate()
+            .map(|(i, id)| run(id, -((i % 4) as i32)))
+            .collect();
+        let out = filter_relink_candidates(&RelinkFilterInput {
+            runs: &runs,
+            linked_run_ids: &[],
+            current_run_id: None,
+            scheduled_day: 0,
+            window_days: None,
+        });
+        // Four day buckets, each holding every tenth id in arrival order.
+        let mut want: heapless::Vec<&str, 40> = heapless::Vec::new();
+        for bucket in 0..4 {
+            for (i, id) in IDS.iter().enumerate() {
+                if i % 4 == bucket {
+                    let _ = want.push(id);
+                }
+            }
+        }
+        assert_eq!(ids(&out).as_slice(), want.as_slice());
     }
 }
