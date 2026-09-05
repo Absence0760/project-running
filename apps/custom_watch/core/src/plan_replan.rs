@@ -991,4 +991,122 @@ mod tests {
         assert!(r.changes.is_empty());
         assert!(r.on_track);
     }
+
+    /// A plan can carry two future long runs on the same date. All three rails
+    /// keep the FIRST in week-then-workout order, so the make-up lands on the
+    /// same session on the watch, the phone and the web.
+    #[test]
+    fn same_date_future_long_runs_make_up_the_first_in_plan_order() {
+        let w0 = [wo(
+            "missed",
+            "2026-06-01",
+            "long",
+            Some(28_000.0),
+            false,
+            false,
+            true,
+        )];
+        let w1 = [
+            wo(
+                "first",
+                "2026-06-08",
+                "long",
+                Some(22_000.0),
+                false,
+                false,
+                false,
+            ),
+            wo(
+                "second",
+                "2026-06-08",
+                "long",
+                Some(22_000.0),
+                false,
+                false,
+                false,
+            ),
+        ];
+        let weeks = [
+            week(0, "build", 40_000.0, 20_000.0, true, &w0),
+            week(1, "build", 42_000.0, 0.0, false, &w1),
+        ];
+        let r = replan_remaining(&ReplanInput {
+            weeks: &weeks,
+            today: "2026-06-05",
+        });
+        let make_ups = r
+            .changes
+            .iter()
+            .filter(|c| c.reason == ReplanReason::MakeUpLong)
+            .count();
+        assert_eq!(make_ups, 1);
+        assert_eq!(
+            find(&r, "first").map(|c| c.reason),
+            Some(ReplanReason::MakeUpLong)
+        );
+    }
+
+    /// The same tie on a plan far past the small-array sort path the two
+    /// scripting rails used to lean on. This rail has never sorted, so the test
+    /// is the reference the other two are pinned against.
+    #[test]
+    fn same_date_tie_holds_past_the_small_array_sort_path() {
+        let w0 = [wo(
+            "missed",
+            "2026-06-01",
+            "long",
+            Some(28_000.0),
+            false,
+            false,
+            true,
+        )];
+        let mut future: Vec<ReplanWorkout, 64> = Vec::new();
+        let _ = future.push(wo(
+            "first",
+            "2026-06-08",
+            "long",
+            Some(22_000.0),
+            false,
+            false,
+            false,
+        ));
+        for _ in 0..38 {
+            let _ = future.push(wo(
+                "mid",
+                "2026-06-15",
+                "long",
+                Some(22_000.0),
+                false,
+                false,
+                false,
+            ));
+        }
+        let _ = future.push(wo(
+            "last",
+            "2026-06-08",
+            "long",
+            Some(22_000.0),
+            false,
+            false,
+            false,
+        ));
+        let weeks = [
+            week(0, "build", 40_000.0, 20_000.0, true, &w0),
+            week(1, "build", 42_000.0, 0.0, false, &future),
+        ];
+        let r = replan_remaining(&ReplanInput {
+            weeks: &weeks,
+            today: "2026-06-05",
+        });
+        let make_ups = r
+            .changes
+            .iter()
+            .filter(|c| c.reason == ReplanReason::MakeUpLong)
+            .count();
+        assert_eq!(make_ups, 1);
+        assert_eq!(
+            find(&r, "first").map(|c| c.reason),
+            Some(ReplanReason::MakeUpLong)
+        );
+    }
 }

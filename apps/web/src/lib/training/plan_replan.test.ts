@@ -490,3 +490,63 @@ test('easeOffNextWeek: returns nothing when the only week ahead is a taper (and 
 	// -1 means "no completed week yet" — the earliest eligible week is eased.
 	assert.equal(easeOffNextWeek(buildOnly, -1).length, 1);
 });
+
+test('replanRemaining: two future long runs on the same date — the first in plan order absorbs the make-up', () => {
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			workouts: [wo('missed', '2026-06-01', 'long', 28_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 42_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: [
+				wo('first', '2026-06-08', 'long', 22_000),
+				wo('second', '2026-06-08', 'long', 22_000),
+			],
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-05' });
+	const makeUps = r.changes.filter((c) => c.reason === 'make_up_long');
+	assert.equal(makeUps.length, 1);
+	assert.equal(makeUps[0].workoutId, 'first');
+});
+
+test('replanRemaining: the same-date tie holds on a plan past the small-array sort path', () => {
+	// 40 future long runs, the first and last sharing the earliest date, so an
+	// unstable ordering of the equal pair would pick the wrong session. Dart's
+	// `List.sort` hands off to an unstable quicksort past 33 elements, which is
+	// what made a shipped tie-break by sort unsafe on either platform.
+	const future = [wo('first', '2026-06-08', 'long', 22_000)];
+	for (let i = 0; i < 38; i++) future.push(wo('mid', '2026-06-15', 'long', 22_000));
+	future.push(wo('last', '2026-06-08', 'long', 22_000));
+	const weeks: ReplanWeek[] = [
+		{
+			weekIndex: 0,
+			phase: 'build',
+			plannedMetres: 40_000,
+			actualMetres: 20_000,
+			isComplete: true,
+			workouts: [wo('missed', '2026-06-01', 'long', 28_000, { isPast: true })],
+		},
+		{
+			weekIndex: 1,
+			phase: 'build',
+			plannedMetres: 42_000,
+			actualMetres: 0,
+			isComplete: false,
+			workouts: future,
+		},
+	];
+	const r = replanRemaining({ weeks, today: '2026-06-05' });
+	const makeUps = r.changes.filter((c) => c.reason === 'make_up_long');
+	assert.equal(makeUps.length, 1);
+	assert.equal(makeUps[0].workoutId, 'first');
+});
