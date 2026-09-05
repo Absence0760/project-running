@@ -287,6 +287,21 @@ void main() {
       expect(gymExerciseCount(w), 2);
     });
 
+    test('gymExerciseCount buckets on the canonical key, not trim+toLowerCase',
+        () {
+      // The row stat has to answer what every keyed surface answers. An
+      // internal whitespace run and a non-breaking space both survive
+      // `trim().toLowerCase()`, so this workout used to read as four
+      // exercises where `gym_workout_summaries` reports one (§ 1248).
+      final w = _w('a', sets: [
+        _s('Bench Press', reps: 5, weight: 100),
+        _s('Bench  Press', reps: 5, weight: 100),
+        _s('bench\u00a0press', reps: 5, weight: 100),
+        _s(' BENCH PRESS ', reps: 5, weight: 100),
+      ]);
+      expect(gymExerciseCount(w), 1);
+    });
+
     test('gymPrWorkoutIds: first workout + any later workout that beats it', () {
       final a = _w('a',
           startedAt: DateTime.utc(2026, 1, 1),
@@ -382,6 +397,23 @@ void main() {
       // Bench Press used twice → first; original spelling of first occurrence.
       expect(out.first, 'Bench Press');
       expect(out, containsAll(['Bench Press', 'Squat', 'Deadlift']));
+    });
+
+    test('gymExerciseSuggestions merges spellings the canonical fold merges',
+        () {
+      // The composer's autocomplete is a local re-derivation of what the
+      // server's `gym_exercise_names` answers, so it has to bucket the way
+      // `exercise_key` does. Keyed on `trim().toLowerCase()` the double space
+      // survived, so one lift appeared twice in the list and its use count —
+      // which decides the order — was split between the two entries (§ 1248).
+      final a = _w('a', sets: [
+        _s('Bench  Press', reps: 5, weight: 100),
+        _s('Bench Press', reps: 5, weight: 100),
+        _s('Squat', reps: 5, weight: 140),
+        _s('Squat', reps: 5, weight: 140),
+      ]);
+      final out = gymExerciseSuggestions([a]);
+      expect(out, ['Bench  Press', 'Squat']);
     });
   });
 

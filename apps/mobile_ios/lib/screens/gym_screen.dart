@@ -104,8 +104,8 @@ List<String> gymExerciseSuggestions(List<StoredGymWorkout> workouts) {
   for (final w in workouts) {
     for (final s in w.sets) {
       final raw = ((s['exercise_name'] as String?) ?? '').trim();
-      if (raw.isEmpty) continue;
-      final key = raw.toLowerCase();
+      final key = normaliseExerciseName(raw);
+      if (key.isEmpty) continue;
       counts[key] = (counts[key] ?? 0) + 1;
       display.putIfAbsent(key, () => raw);
     }
