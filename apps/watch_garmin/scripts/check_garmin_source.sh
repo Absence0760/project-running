@@ -13,7 +13,7 @@
 # keep test code off the watch, the permissions the runtime enforces and the
 # build does not — was unread.
 #
-# Four claims, each covering a failure that produces no error anywhere:
+# Seven claims, each covering a failure that produces no error anywhere:
 #
 #   1. The grade tracker recovers from a distance rewind, in both of the two
 #      ways it can. `Activity.Info.elapsedDistance` restarts at 0 when the
@@ -393,7 +393,7 @@ for name in NAMED_CONSTANTS:
 strings_xml = read("resources/strings/strings.xml")
 defined = set(re.findall(r'<string\s+id="([^"]+)"', strings_xml))
 if not defined:
-    fail("resources/strings/strings.xml defines no <string> — claim 4 would pass vacuously")
+    fail("resources/strings/strings.xml defines no <string> — claim 5 would pass vacuously")
 
 referenced = set(re.findall(r"@Strings\.([A-Za-z_][A-Za-z_0-9]*)", manifest))
 for mc in sorted((root / "source").glob("*.mc")):
