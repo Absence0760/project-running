@@ -21978,3 +21978,159 @@ they do not. And `document_title.test.ts` gained the assertion that would have
 caught it: no built page may carry an unsubstituted `%sveltekit.*` placeholder.
 That is a whole-artifact claim rather than a head-shape one, which is the level
 this class of damage is visible at.
+
+## 1210. The three artifact-reading web guards now run in the job that builds, because the job that owns them never does
+
+**Decided 2026-09-05.** `spa_shell_head_signals.test.ts` ([§ 1115](#1115)),
+`document_title.test.ts` ([§ 1167](#1167)) and `learn_structured_data.test.ts`
+([§ 1168](#1168)) each read `apps/web/build` only when a build is present, and
+report `# no apps/web/build` otherwise. `test:unit` runs in `parity-types`,
+which never builds; `build-web` builds and ran none of them. So the artifact
+half of all three was executed by nothing in CI, and the shape of the omission
+is the dangerous one: a self-skip is a PASS, on a green row, in a job the
+required gate waits for.
+
+Measured on this branch against a real production build rather than argued:
+with `apps/web/build` present all **11** cases pass; with the directory parked,
+`# no apps/web/build` is printed **7** times and the run still exits 0 with
+`tests 11 / pass 4`. Seven assertions, four of them about JSON-LD that has no
+source-level twin at all, were being made by nobody.
+
+One step in `build-web` after the bundle budget runs all three from `apps/web`
+through `npx tsx --test`. `tsx` is declared in `apps/web`'s devDependencies, so
+this satisfies [§ 764](#764)'s no-unpinned-`npx` rule rather than restoring the
+run-time download that rule exists to refuse — `check_workflow_binaries.mjs`
+already maps the binary. The step prints its own `::error::`, as every check
+step in that bundled job must. `build-web` was already in the `CI gate`
+aggregator's `needs:`, so the gate's list and job count are unchanged: 33 jobs,
+33 `needs:` entries.
+
+Placed after the budget rather than immediately after the build so the
+diagnosis can say the compile gate and the budget both passed, which is what
+narrows the reader's search to the emitted HTML.
+
+## 1211. Terraform outside `infra/` is now a red check, rather than a stack nothing looks at
+
+**Decided 2026-09-05.** `check_infra_coverage.mjs`'s stack-coverage half walks
+`infra/`, so its claim — every Terraform directory validated, fmt-scoped and
+dependency-tracked — was scoped to the one tree that is already covered. A `.tf`
+file anywhere else was not reported as uncovered; it was not seen. Nothing else
+would have seen it either: `ci.yml`'s `changes` job gates the `terraform` call
+on an `infra/`-shaped path filter inherited from the old workflow trigger, and
+the fmt scopes, the stack matrix and the dependabot entries are all paths under
+`infra/`. Such a stack would be format-checked, validated, Trivy-scanned and
+triggered by nothing at all.
+
+The fix is the guard, not the filter. Widening the path filter to a tree that
+does not exist buys nothing and makes the trigger a lie in the other direction;
+`scanStrayTerraform` sweeps from the repo ROOT instead and fails on any
+Terraform directory outside the top-level `infra/`, naming the tree and what
+does not read it. Today there is none — measured, `find . -name '*.tf'` outside
+`infra/` and `node_modules` is empty — so the sweep's verdict is an absence, and
+an absence from a walk that never started is worth nothing. It therefore also
+reports whether it saw `infra/` at the top level, and an unrooted sweep fails
+even with nothing to report. Both directions are pinned by the guard's own
+suite, and the sweep was mutation-tested end to end: a `.tf` planted under
+`docs/ops/` fails the guard by name and exit 1.
+
+The walk skips `node_modules`, `build`, `dist`, `target`, `vendor` and
+`coverage` — dependency trees and build output, where a `.tf` is not a stack
+anyone deploys, and where `node_modules` alone would dominate the cost. Measured
+whole-guard runtime with the sweep added: 0.13 s. A nested directory *named*
+`infra` is still swept; only the top-level one is the covered tree.
+
+One residual, stated rather than closed: `infra-guards` is gated on the
+`changes` job's `code` output, which is false for a docs-only diff, so a `.tf`
+committed under `docs/` would land before the sweep sees it and then fail every
+subsequent PR. Loud, and late, which is the right side of that trade for a case
+nothing else in the repo protects against either.
+
+## 1212. The committed-env scan is derived from the index, after its hand-written list fell four files behind the repo
+
+**Decided 2026-09-05.** `env-isolation`'s third step is named for the
+`.env.example` scan and read a nine-entry array written by hand. The repo has
+**twelve** committed `.env*` files. The four it did not name are
+`apps/backend/supabase/functions/.env`, `apps/mobile_android/.env.example`,
+`apps/mobile_ios/.env.example` and `apps/watch_wear/android/.env.example` —
+three of the six `.env.example` templates the step is named for, plus the edge
+runtime's own committed env.
+
+gitleaks still scans those four (they are not in `.gitleaks.toml`'s path
+allowlist, which covers exactly the seven dev defaults the list did name), so
+this is a coverage gap rather than a live leak, and measured as such: none of
+the four matches any of the four patterns today. But two of the step's four
+patterns are not secret shapes at all — a live-looking `<20 letters>.supabase.co`
+project URL and `ALLOW_PROD_URL_IN_DEV=true` — and gitleaks has no opinion about
+either. Those two were read by nothing in three of the six templates whose whole
+purpose is to carry no live value.
+
+The list is now derived from `git ls-files`, so a new app's env file is scanned
+the day it is committed and a rename cannot silently drop one. Two guards come
+with it, because a derivation that stops matching fails the same way the list
+did: an empty derivation is an error rather than a clean pass (the `grep` sits
+in a process substitution, whose exit status `set -euo pipefail` does not read),
+and the one entry that is still named by hand —
+`apps/watch_ios/WatchApp/SupabaseService.swift`, the non-env source that
+hard-codes a Supabase URL and that [§ 866](#866) put in scope — fails when it is
+absent instead of being skipped by the `[ -f ] || continue` the loop used to
+carry.
+
+## 1213. A diagnosis that quotes an identifier in backticks hands it to bash to run, and two of them did
+
+**Decided 2026-09-05.** `check_ci_diagnostics.mjs` had four rules about whether
+a CI failure is SEEN and ATTRIBUTED to the right step. None of them asks whether
+the message survives the shell. A backtick inside a double-quoted word is
+command substitution, and this repo's prose quotes identifiers in backticks
+everywhere, so the two habits met inside an `::error::` string.
+
+Measured by running the committed line: `parity-matrix`'s malformed-table
+annotation named the legal symbol set and the `Partial` keyword in backticks, so
+bash executed `✓ / ✗ / Partial / N/A`, printed two `command not found` lines to
+stderr and spliced the empty result in. The reader was shown
+
+    a symbol outside , a  with no Notes
+
+with both of the things the sentence exists to name cut out of it. Rules 1-4 all
+passed on it: the annotation fired, from the right step, in a job the gate waits
+for. That is why it survived — those rules are about attribution, and this is
+about delivery.
+
+Rule 5 scans every non-comment line of every `run:` block for an unescaped
+backtick inside double quotes, tracking quote state per line so
+`"$(go env GOPATH)/bin/actionlint"` and `echo '```json'` are both left alone —
+a backtick inside single quotes is literal, which is how `audit.yml` writes a
+Markdown fence. Measured over the committed workflows: 6 backtick-bearing echo
+lines, 4 of them correctly single-quoted, 2 defects. Both are fixed by escaping;
+the second was in the very message this round added to the env scan, written the
+same way for the same reason, which is the argument for a rule rather than two
+edits. The rule also fails when it reads no shell line at all.
+
+## 1214. Every `setup-node` step names an exact Node, because the release build was on whatever 24.x shipped that week
+
+**Decided 2026-09-05.** Twenty-two `actions/setup-node` steps named
+`node-version: 24`, which resolves to the newest 24.x at run time. The standing
+reason for leaving it was that "a Node minor break is loud and local to the job
+that runs it, not a silent change to what gets built or shipped". The second
+half is not true: `release-web.yml` builds the shipped web bundle under the same
+floating input, so the artifact that reaches production is compiled by whichever
+runtime the runner resolved that morning.
+
+The first half is the argument [§ 595](#595) already rejected for Flutter and
+`check_toolchain_pins.mjs`'s own header rejects for Deno — "a Deno release
+lands, `deno check` gains a diagnostic, and CI fails on code nobody touched with
+the blame landing on whichever PR ran next". Node is the runtime under roughly
+thirty stdlib-only `node --test` guard suites, `tsc`, and every `vite build` in
+the repo. There is no principled line that pins the Flutter SDK, the Rust
+channel, `defmt-print`, Terraform and Deno and leaves this one floating.
+
+Pinned to **24.20.0**, the current Krypton LTS (2026-08-26), verified against
+`nodejs.org/dist/index.json` rather than recalled. No other file changes:
+`check_toolchain_pins.mjs` compares `.tool-versions`' `nodejs` line on the MAJOR
+alone by design ("asdf needs a version it can resolve"), so `nodejs 24` still
+matches, and its cross-step rule — every `setup-node` names a version and all of
+them agree — is satisfied by the pin exactly as it was by the line. The guard
+reports `22 setup-node step(s) on Node 24.20.0`.
+
+The cost is a manual bump, like the six toolchains already on that footing, and
+possibly a tool-cache miss on runners whose preinstalled 24.x differs. The
+alternative is that nothing in the repo can say which runtime built the release.
