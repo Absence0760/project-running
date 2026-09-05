@@ -475,8 +475,9 @@ class _GlobalSegmentDetailScreenState extends State<GlobalSegmentDetailScreen> {
   ) {
     final theme = Theme.of(context);
     // The catalogue geometry is public curated data, NOT any athlete's GPS
-    // track, so it renders directly — there is nothing here for
-    // `clipTrackForUser` to protect.
+    // track, so it renders directly — there is no owner whose privacy
+    // zones could apply, and nothing for `fetchClippedTrackForRun` to
+    // protect.
     final geometry = ApiClient.globalSegmentGeometry(segment);
     final elevation = segment.elevationM;
     return ListView(
