@@ -24002,3 +24002,36 @@ throwing — and to pass after. The pinning case for the durable half plants one
 infinite fix in the middle of a 41-point graded track and requires the GAP to
 move by under 10 %; measured, it moves by well under that where before it was
 null on one platform and an exception on the other.
+
+## 1227. The negative-split header was wrong, not the code, and an assertion now says which
+
+`negativeSplitPacing`'s header claimed "A 2% negative split for a 4:30/km
+marathon means first half ~4:33, second half ~4:27". The code applies
+`delta = avgPerUnit * deltaPercent / 100` to EACH half, so 2% on a 270 s/km
+average gives 275.4 / 264.6 — 4:35 and 4:25. The header describes a total
+spread of `deltaPercent` (±1.11%); the code applies `deltaPercent` per half, a
+total spread of twice it. A maintainer tuning the parameter against the header
+was off by 2x.
+
+The header is what moved. Both readings are defensible in isolation — "a 2%
+negative split" is often said to mean the second half is 2% faster than the
+first, which is exactly the header's arithmetic — but this product already has
+a SECOND implementation of the same named strategy: `race_phases.ts`'s
+`negative_split` preset is `HOLD_BACK_FACTOR = 1.02` with a derived 0.98 second
+half, and `race_phases` is a registered TS<->Dart pair with a `no_std` firmware
+port driving the watch's Pacer glance page. Changing `race_day` to match its
+own header would make the race-day panel plan a race differently from the
+mobile race-strategy sheet and the watch, for one strategy under one name.
+
+The filing cited `race_day.test.ts:179` as pinning ±2% of 300. That line is a
+COMMENT beside a test that only asserts the splits sum to 3000, which holds
+under either reading — so nothing in the suite actually held the magnitude, and
+a doc and a comment disagreeing is how it drifted. Two assertions now do: one
+pins the literal 306/294 halves, and one derives the expected halves from
+`buildPhasePlan('negative_split')`'s own factors, so the two implementations
+fail the PR the day they disagree. Separately, `evenSplitPacing` and
+`negativeSplitPacing` guarded with `distanceM <= 0`, which NaN passes — the
+panel then rendered a NaN average pace and one bogus split holding the whole
+predicted time. Both now use the NaN-rejecting `!(x > 0)` form `goalFeasibility`
+uses twenty lines further down the same file, extended to `unitMetres` and to
+`deltaPercent`.

@@ -57,7 +57,7 @@ export function evenSplitPacing(
 	totalSec: number,
 	unitMetres = 1000,
 ): PacingStrategy {
-	if (distanceM <= 0 || totalSec <= 0) {
+	if (!(distanceM > 0) || !(totalSec > 0) || !(unitMetres > 0)) {
 		return { avgSecPerKm: 0, splitsSec: [], label: 'even' };
 	}
 	const units = Math.ceil(distanceM / unitMetres);
@@ -79,12 +79,23 @@ export function evenSplitPacing(
 }
 
 /**
- * Negative-split pacing — second half faster than the first by
- * `deltaPercent`. A 2% negative split for a 4:30/km marathon means
- * first half ~4:33, second half ~4:27. Halves are by *distance*, not
- * unit count, so the math works on 5k as well as on full marathons.
- * Pass `unitMetres=1000` for per-km splits (default) or `MILE_METRES`
- * for per-mile splits.
+ * Negative-split pacing — `deltaPercent` is applied to EACH half, so the first
+ * half runs `deltaPercent` slower than average and the second `deltaPercent`
+ * faster, a total spread of twice it. A 2% negative split for a 4:30/km
+ * marathon is first half 4:35, second half 4:25.
+ *
+ * That reading of the parameter is the one `race_phases.ts` independently
+ * implements for the same named strategy (`HOLD_BACK_FACTOR = 1.02` with a
+ * derived 0.98 second half), and `race_phases` is a registered TS<->Dart pair
+ * with a firmware port besides — so the mobile race-strategy sheet and the
+ * watch Pacer page grade a "2% negative split" this way. This header used to
+ * document a total spread of 2% instead (first half ~4:33, second ~4:27, i.e.
+ * ±1.11%), which is off by 2x, and the only thing pinning the real semantics
+ * was a comment in the test file (decisions § 1227).
+ *
+ * Halves are by *distance*, not unit count, so the math works on 5k as well as
+ * on full marathons. Pass `unitMetres=1000` for per-km splits (default) or
+ * `MILE_METRES` for per-mile splits.
  */
 export function negativeSplitPacing(
 	distanceM: number,
@@ -92,7 +103,12 @@ export function negativeSplitPacing(
 	deltaPercent = 2,
 	unitMetres = 1000,
 ): PacingStrategy {
-	if (distanceM <= 0 || totalSec <= 0) {
+	if (
+		!(distanceM > 0) ||
+		!(totalSec > 0) ||
+		!(unitMetres > 0) ||
+		!Number.isFinite(deltaPercent)
+	) {
 		return { avgSecPerKm: 0, splitsSec: [], label: 'negative-split' };
 	}
 	const avgSecPerKm = totalSec / (distanceM / 1000);

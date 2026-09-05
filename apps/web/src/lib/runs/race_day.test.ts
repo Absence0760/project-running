@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { buildPhasePlan } from './race_phases';
 import {
 	daysUntilRace,
 	evenSplitPacing,
@@ -404,4 +405,52 @@ test('goalFeasibility: deltaSec is rounded to whole seconds', () => {
 	assert.ok(f);
 	assert.equal(f!.deltaSec, 1);
 	assert.equal(f!.verdict, 'on_track');
+});
+
+// ─────────── the negative-split delta, pinned by assertion ───────────
+
+test('negativeSplitPacing: deltaPercent is applied to EACH half, not split across them', () => {
+	// The header used to document a total spread of `deltaPercent` (a 2% call
+	// on a 4:30/km marathon reading "first half ~4:33, second half ~4:27"),
+	// which is half what the code applies. Nothing asserted the magnitude — the
+	// only statement of it was a comment beside a sum-preservation test — so a
+	// maintainer tuning the parameter against the header was off by 2x.
+	// 10 km in 3000 s is 300 s/km average; 2% of that is 6 s.
+	const s = negativeSplitPacing(10_000, 3000, 2);
+	assert.equal(s.splitsSec.length, 10);
+	for (let i = 0; i < 5; i++) assert.equal(s.splitsSec[i], 306);
+	for (let i = 5; i < 10; i++) assert.equal(s.splitsSec[i], 294);
+});
+
+test('negativeSplitPacing: the halves match race_phases\' factors for the same strategy', () => {
+	// Two independent implementations of "negative split" in one product, one
+	// of them a registered TS<->Dart pair with a firmware port. If they drift,
+	// the race-day panel and the mobile race-strategy sheet plan the same race
+	// two different ways. Anchored to the plan's own factors, not to a literal.
+	const plan = buildPhasePlan(10_000, 'negative_split');
+	assert.equal(plan.length, 2);
+	const s = negativeSplitPacing(10_000, 3000, 2);
+	const avgPerUnit = 300;
+	assert.equal(s.splitsSec[0], Math.round(avgPerUnit * plan[0].paceFactor));
+	assert.equal(s.splitsSec[9], Math.round(avgPerUnit * plan[1].paceFactor));
+});
+
+test('pacing helpers refuse a non-numeric input rather than emitting NaN splits', () => {
+	// `distanceM <= 0` is false for NaN, so the panel rendered a NaN average
+	// pace and one bogus split holding the whole predicted time. The
+	// NaN-rejecting `!(x > 0)` form is what `goalFeasibility` in this same file
+	// already uses.
+	const refusals = [
+		evenSplitPacing(NaN, 3000),
+		evenSplitPacing(10_000, NaN),
+		evenSplitPacing(10_000, 3000, NaN),
+		negativeSplitPacing(NaN, 3000, 2),
+		negativeSplitPacing(10_000, NaN, 2),
+		negativeSplitPacing(10_000, 3000, NaN),
+		negativeSplitPacing(10_000, 3000, 2, NaN),
+	];
+	for (const r of refusals) {
+		assert.deepEqual(r.splitsSec, []);
+		assert.equal(r.avgSecPerKm, 0);
+	}
 });
