@@ -446,6 +446,10 @@
 		target_duration_s?: number;
 		target_pace_sec_per_km: number;
 		actual_pace_sec_per_km: number | null;
+		// Per-step pace tolerance the workout was authored with. The editor
+		// offers 0-60 s/km and the recorder stamps whatever was armed, so a
+		// literal here grades the run against a number the author overrode.
+		tolerance_sec_per_km?: number;
 		duration_s: number;
 		status: 'completed' | 'skipped';
 	}
@@ -489,8 +493,12 @@
 					? m('runDetail.stepRepNumbered', { index: s.rep_index, total: s.rep_total })
 					: m('runDetail.stepRep');
 			case 'recovery':
+				// `rep_total` is already the recovery count, not the rep count:
+				// the recorder emits one recovery BETWEEN reps and stamps
+				// `repTotal: count - 1` on it. Subtracting again rendered the
+				// last recovery of a 6x400 as "Recovery 5/4".
 				return s.rep_index && s.rep_total
-					? m('runDetail.stepRecoveryNumbered', { index: s.rep_index, total: s.rep_total - 1 })
+					? m('runDetail.stepRecoveryNumbered', { index: s.rep_index, total: s.rep_total })
 					: m('runDetail.stepRecovery');
 			default:
 				return s.kind;
@@ -505,8 +513,8 @@
 		// The pace column shows /mi for miles users; the delta must match
 		// or "+12s" reads as sec/km against a sec/mi pace. Convert the
 		// displayed seconds to the preferred unit (the on/amber/off colour
-		// band in paceDeltaClass stays canonical sec/km — a fixed adherence
-		// tolerance, not a display number).
+		// band in paceDeltaClass stays canonical sec/km — the workout's own
+		// adherence tolerance, not a display number).
 		const d = getUnit() === 'mi' ? dPerKm * (METRES_PER_MILE / 1000) : dPerKm;
 		const sign = d > 0 ? '+' : '−';
 		return `${sign}${Math.abs(Math.round(d))}s`;
@@ -515,7 +523,11 @@
 	function paceDeltaClass(s: WorkoutStepResult): string {
 		if (s.actual_pace_sec_per_km == null) return 'neutral';
 		const d = Math.abs(s.actual_pace_sec_per_km - s.target_pace_sec_per_km);
-		const tol = 10; // matches the recorder's default tolerance
+		// The workout's OWN tolerance, which the recorder stamps on every step
+		// result. A coach who set 25 s/km on the plan workout had the phone
+		// grade the step green and this page grade the same step amber.
+		const stamped = s.tolerance_sec_per_km;
+		const tol = typeof stamped === 'number' && Number.isFinite(stamped) ? stamped : 10;
 		if (d <= tol) return 'on';
 		if (d <= tol * 2) return 'amber';
 		return 'off';
