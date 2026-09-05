@@ -29,7 +29,7 @@
 
 begin;
 
-select plan(18);
+select plan(19);
 
 -- Accepted kinds round-trip cleanly. We're not asserting any
 -- particular id; just that the INSERT doesn't throw.
@@ -151,6 +151,12 @@ select lives_ok(
                                 'user_id', gen_random_uuid(),
                                 'format', 'backup')) $$,
   'public.jobs accepts kind = ''data_export'''
+);
+
+select lives_ok(
+  $$ insert into public.jobs (kind, payload)
+     values ('export_blob_reap', '{}'::jsonb) $$,
+  'public.jobs accepts kind = ''export_blob_reap'''
 );
 
 -- Junk kinds are rejected at INSERT time, not deferred to dispatch.
