@@ -23875,3 +23875,210 @@ difference. Semantics checked against SQL ground truth on the same data: 12
 events total, the predicate admits 9 and excludes exactly the 3 finished
 one-offs, and PostgREST returns the same 9 through the client-facing path.
 
+
+## 1228. Both plan publishers copy a plan through one shared field list, and a new plan column now fails the build until it is copied or excused
+
+`publishPlanToLibrary` and `publishPlanAsTemplate` do the same thing in two
+directions — insert a template sibling, copy every `plan_weeks` row, copy every
+`plan_workouts` row — and each carried its own hand-written column list. The
+public-library half had fallen four fields behind the club half: every published
+workout lost `target_pace_end_sec_per_km` (the progression target the workout
+detail page renders) and `pace_zone` (the zone chip), and the head lost `source`
+and `rules`. So an author who published a plan to a club kept their tempo
+sessions' zone labels and progression paces, and publishing the same plan to the
+public library silently dropped both, plus the `rules` the adaptive re-plan
+reads. No error, no warning — the insert simply did not name the columns.
+
+The fix is not to add four lines to the shorter list. Two lists that must agree
+is the defect; `apps/web/src/lib/core/plan_copy.ts` is one list both spread.
+`planHeadCopyFields` / `planWeekCopyRows` / `planWorkoutCopyRows` are pure and
+Supabase-free, so the shape is unit-testable, and the publisher-private fields
+(`vdot`, `current_5k_seconds`, `notes`) are deliberately absent from the shared
+head helper rather than nulled inside it — each caller still states its own
+`vdot: null`, which is what the § 1220-era privacy guard reads and what the
+trigger in `20270508_001` enforces.
+
+The census guard is the durable half. `plan_copy.test.ts` reads the `Row` key
+list for `plan_workouts`, `plan_weeks` and `training_plans` out of the generated
+`database.types.ts` and demands every column be either present on the object the
+helper actually returns or listed in an exclusion map with a stated reason —
+completion state, server-maintained fields, and the four that define what makes
+a row a template. The requirement therefore comes from a file only a migration
+changes, and it is checked against runtime output rather than against a source
+line, so it cannot be satisfied by editing the thing it checks. A fourth guard
+pins that both publishers still route through the module, because re-inlining a
+list would leave the census correct and unused. Mutation-tested: dropping
+`pace_zone` from the copy fails two tests, dropping `rules` fails two, and
+re-inlining the workout list in `publishPlanToLibrary` fails the fourth.
+
+Not closed here: `clone_public_plan` (`20270126_001`) drops the same four
+columns on the read-back path, so a cloner of an already-published plan still
+loses them. That is a migration and belongs to the backend tree; it is filed.
+
+## 1230. Two idioms that were copied to each call site are now one function each — the duplicate-key absorb and the PostgREST to-one embed collapse
+
+Five writes in `core/data.ts` compared `error.code !== '23505'` themselves and
+a sixth, `joinChallenge`, never got the comparison at all. `challenge_participants`
+has a `(challenge_id, user_id)` primary key, so a second tap on Join — or a
+first tap on a list whose `joined` flag was computed before another tab wrote
+the row — surfaced a raw failure toast for the state the user had already
+reached. The same shape holds for the embed collapse: a PostgREST embed comes
+back as an object when it can prove the relation is to-one and as an array when
+it cannot, and which you get depends on the FK metadata it detects rather than
+on the query. Three `events → clubs(slug)` readers normalised it; the fourth,
+`fetchNextRsvpedEvent`, read `ev.clubs.slug` through, which under the array
+shape puts `undefined` into a `club_slug` field typed `string` and deep-links
+the dashboard's next-run card at `/clubs/undefined/events/…`.
+
+Both are the same defect in two costumes: an idiom restated at every site is an
+idiom that can be missed at a site, and nothing can see the one that was.
+`isDuplicateKeyError` now lives beside `supabaseErrorFields` in
+`core/supabase_error.ts` and `singleEmbed` beside the other pure reshapers in
+`core/data_normalise.ts`; all ten call sites route through them. The predicate
+is deliberately exact rather than a prefix — 23503 is a dangling FK, 23514 a
+CHECK the row genuinely violates, 42501 an RLS refusal, and each must still
+reach the caller as a failure. `fetchNextRsvpedEvent` additionally skips a
+candidate whose club slug will not resolve instead of returning a card that
+cannot be clicked.
+
+Both guards scan for the restated form rather than for the helper's name, so
+they fail on the drift returning rather than on a rename. A third, in the same
+commit, pins that every `supabase.storage.from(...)` in the file names the
+`BUCKETS` registry: `saveRun`'s track and HR-sidecar uploads addressed
+`TABLES.runs`, which is the same string today and would therefore have gone on
+working right up until either registry was renamed, at which point a runner's
+GPS trace uploads to a bucket that does not exist and the failure path is a
+`console.warn`. That is two sites, not the one the filing named — the second is
+the HR sidecar, missed because the call wraps across a line. Mutation-tested
+six ways: reverting `joinChallenge` to a bare throw, restating the `'23505'`
+literal, widening the predicate to `235*`, hand-rolling one embed collapse,
+sending one upload back to `TABLES.runs`, and letting `singleEmbed` return
+`undefined` for an empty array each fail exactly one assertion.
+
+## 1232. The fitness snapshot is written at most once per UTC day by a read-then-insert, not by an upsert — and the mechanism is correct with no uniqueness constraint at all
+
+`/dashboard` recomputes the fitness snapshot on every mount and persisted it
+every time. `fetchFitnessSnapshots` windows at 60 points, so a runner who opens
+the dashboard three or four times a day fills the entire trend chart with about
+two and a half weeks of same-day duplicates and the multi-month trend the chart
+exists to show scrolls off the left. The write's `{ error }` was unbound as
+well, and a PostgREST error resolves rather than throws, so the caller's
+`.catch(() => {})` could never fire either: a failing write was invisible from
+every direction.
+
+The obvious fix — a PostgREST upsert on the day — does not work here, for two
+independent reasons, and both are worth recording because they are not visible
+from the call site. `fitness_snapshots` carries self SELECT, INSERT and DELETE
+policies and no UPDATE one, so `INSERT … ON CONFLICT DO UPDATE` is refused by
+RLS rather than merging. And the conflict target is a DERIVED day, which
+`on_conflict=` cannot name — it takes column names, not expressions — so the
+request could not address the constraint even with the policy in place. A
+`DO NOTHING` upsert avoids both but raises 42P10 on any database that does not
+yet have a matching unique index, which is precisely the database this had to
+keep working on while the index lands in another tree.
+
+So the gate is a read of the runner's newest `computed_at` and a pure
+`fitnessSnapshotDue` comparison, and the insert absorbs a duplicate through
+§ 1230's predicate. That is correct with no constraint at all, and once
+`fitness_snapshots_user_day_uniq` exists a second tab racing the read gets a
+23505 — the state we wanted, not a failure. The index is the hard guarantee;
+this is the mechanism. The day is measured in UTC because the constraint it
+pairs with is a `date` cast over `computed_at` running in the connection's zone,
+which is UTC for PostgREST; measuring local days would put client and constraint
+on different calendars near midnight. `fitnessSnapshotDue` fails CLOSED on an
+unreadable timestamp, because the two mistakes are not symmetric: a skipped
+write loses one day point from a chart that self-heals tomorrow, while writing
+when unsure is the duplicate spam being fixed.
+
+One guard is worth naming: the first UTC-boundary assertion written for this was
+only DISCRIMINATING off UTC — on a UTC runner, which CI is, a local-day
+implementation gives identical answers and the assertion passes over the bug.
+It is now a sweep that re-answers the same four boundary cases under four zones,
+so the invariance is what is tested rather than one zone's coincidence.
+Mutation-tested: unbinding the insert error, failing open on an unparseable
+timestamp, and switching to local-day comparison each fail, the last of them
+under `TZ=UTC`.
+
+## 1229. The saved-public route rows are filled with what the view withholds, not cast to the type they are not
+
+`fetchRoutesWithError` merges two reads: the base `routes` table via
+`ROUTE_LIST_COLS`, and the `public_routes` view via `PUBLIC_ROUTE_LIST_COLS`
+for every route the runner bookmarked from Explore — which its own comment
+calls the dominant case, because the base table's RLS only exposes your own and
+your clubs' routes. The view withholds `waypoints` and `is_starred` by
+construction, and both halves were then `as unknown as Route[]`. `Route`
+declares `waypoints: TrackPoint[]`, non-nullable, so every bookmarked route
+carried `undefined` under a type promising an array. `/routes` gates its
+thumbnail on `route.waypoints && route.waypoints.length > 1`, so the whole
+class rendered a grey icon instead of a mini-map, with no crash and no error.
+
+Withholding the polyline is right and is not the defect: a non-owner's line is
+served only through `clip_route_for_viewer`, with the owner's privacy zones
+removed (§ 33). Widening the select would undo that. The defect is modelling
+the narrow row as the wide type, so the fix is to fill the two withheld columns
+with the values that state what is true. `waypoints: []` is not "this route has
+no line" — it is the signal `RouteTrackPreview` already reads as "fetch this
+viewer's clipped line", which is exactly what the RouteExplorer cards pass, so
+the fill routes the thumbnail through the clip RPC rather than fabricating one.
+`is_starred: false` is the truth rather than a placeholder: the star is the
+owner's own flag and every row from this view belongs to somebody else.
+
+The guard derives its requirement from the two column-list constants the reads
+actually pass to `.select()`, computes the set difference and demands the fill
+supply a key for each — so adding a column to `ROUTE_LIST_COLS` fails the PR
+until the public half is taught about it, rather than silently producing rows
+missing a field under a type that promises it. Mutation-tested three ways:
+widening `ROUTE_LIST_COLS`, restoring the bare cast, and sharing one empty
+array across rows each fail exactly one assertion.
+
+Two things are deliberately not done here. The list rows are still typed
+`Route` while the projection omits `description`, `tags`, `is_public` and
+`updated_at` on BOTH halves — narrowing that to a `RouteListItem` is right but
+retypes four consumer files across three trees this lane does not own, so it is
+filed with its blast radius rather than half-applied. And `/routes` still gates
+the preview on a non-empty `waypoints`, so the fill alone does not yet put the
+map back on screen; that is one block in a page this lane does not own, handed
+to the integrator as a grant.
+
+## 1231. A failed read is legible on both surfaces § 1220 left half-done — the donor gets a retry, and a club list survives a membership blip
+
+§ 1220 made five reads report their failures instead of returning a neutral
+value, and named two surfaces it could not finish. Both are finished here, and
+they are the same shape: the data layer now knows the difference between "there
+is nothing" and "we could not tell", and the surface has to say which.
+
+`FundraiserSection` catches its campaign read on purpose — a transient failure
+must not hide the owner's "Create fundraiser" CTA — and that policy is kept.
+What it did not do was tell the OTHER reader anything: a donor following a
+shared link to a run whose fundraiser read failed saw the section render
+nothing, byte for byte what a run with no campaign renders. The component
+already modelled the sibling failure precisely (`totalsFailed`, so a totals blip
+is not drawn as "0 raised"), so this is that treatment one read up: a
+`loadFailed` state, a `role="alert"` line with a retry that re-runs the load,
+and the owner CTA still rendered beneath it. **The filing's stated blocker was
+wrong and worth recording**: it said this needed a new key in all seven
+catalogues, which is why an earlier lane skipped it. `fundraiser.loadFailed` and
+`fundraiser.retry` already exist in all seven — `/fundraisers/[id]` added them
+— so the change needed no new copy at all.
+
+`enrichClubs` reporting a failed `club_members` read was right; returning
+`clubs: []` alongside the error was not. Browsing a club list does not require
+knowing your own role in each one, so discarding rows the caller had already
+read turned a membership blip into "you are in no clubs" on a list that had
+loaded fine. It now returns the rows with every `viewer_role` and
+`viewer_status` null and the error beside them, and `SocialClubs` renders the
+list under a "couldn't check which of these you've joined" notice when it has
+rows, keeping the full error card for when it has none. `fetchClubBySlug` is
+deliberately excluded and still fails the whole read: an unknown role on a club
+detail page silently downgrades an owner to the member view, which is a worse
+lie than an error. That asymmetry is what the guard pins.
+
+Five mutations, each caught by exactly one assertion: dropping `loadFailed =
+true` from the catch, never resetting it between attempts (a successful retry
+would keep showing the error), restoring `clubs: []`, making the panel show the
+error card even when it has rows, and adding the one new key
+(`socialClubs.membershipUnknown`) to English only. The Playwright spec
+`tests-e2e/fundraising/section-load-failure.spec.ts` covers the donor path
+anonymously and carries the control the assertion needs to mean anything — that
+a run with genuinely no campaign still renders nothing — and was NOT executed in
+this lane.

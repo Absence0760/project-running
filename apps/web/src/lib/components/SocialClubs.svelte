@@ -88,6 +88,57 @@
 
 </script>
 
+{#snippet clubGrid()}
+	<div class="grid">
+		{#each visible as club (club.id)}
+			<a href="/clubs/{club.slug}" class="card">
+				<div class="card-header">
+					<Avatar
+						name={club.name}
+						size="2.5rem"
+						font="1.1rem"
+						bg="seed"
+						seedHue={hashHue(club.id)}
+					/>
+					<div class="card-title">
+						<h3>
+								{club.name}
+								{#if club.is_verified}
+									<VerifiedBadge />
+								{/if}
+							</h3>
+						{#if club.location_label}
+							<span class="location">
+								<span class="material-symbols" aria-hidden="true">place</span>
+								{club.location_label}
+							</span>
+						{/if}
+					</div>
+					{#if !club.is_public}
+						<span class="badge" title={m('socialClubs.privateTitle')}>{m('socialClubs.private')}</span>
+					{/if}
+				</div>
+				{#if club.description}
+					<p class="desc">{club.description}</p>
+				{/if}
+				<div class="card-foot">
+					<span class="members">
+						<span class="material-symbols" aria-hidden="true">group</span>
+						{m(club.member_count === 1 ? 'socialClubs.memberCountOne' : 'socialClubs.memberCountMany', { n: club.member_count })}
+					</span>
+					{#if club.viewer_role}
+						<span class="chip chip-mine">{clubRoleLabel(club.viewer_role)}</span>
+					{:else if club.viewer_status === 'pending'}
+						<span class="chip chip-pending" title={m('socialClubs.requestPendingTitle')}>
+							{m('socialClubs.requestPending')}
+						</span>
+					{/if}
+				</div>
+			</a>
+		{/each}
+	</div>
+{/snippet}
+
 <div class="clubs-panel">
 	<div class="tabs" role="tablist" aria-label={m('socialClubs.tablistLabel')}>
 		<button
@@ -159,6 +210,21 @@
 			{/each}
 		</div>
 		<p class="sr-only" role="status">{m('socialClubs.loadingClubs')}</p>
+	{:else if loadError && visible.length > 0}
+		<!-- The clubs read succeeded and only the viewer's own membership did
+		     not, so the list is real; say the roles and Join buttons are
+		     unreliable rather than replacing the list with an error. -->
+		<p class="membership-unknown" role="alert" data-testid="clubs-membership-unknown">
+			{m('socialClubs.membershipUnknown')}
+			<button
+				class="btn btn-secondary btn-sm"
+				type="button"
+				onclick={() => (subtab === 'browse' ? loadBrowse() : loadMine())}
+			>
+				{m('socialClubs.retry')}
+			</button>
+		</p>
+		{@render clubGrid()}
 	{:else if loadError}
 		<div class="empty-card" role="alert">
 			<span class="material-symbols empty-icon" aria-hidden="true">cloud_off</span>
@@ -223,54 +289,7 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="grid">
-			{#each visible as club (club.id)}
-				<a href="/clubs/{club.slug}" class="card">
-					<div class="card-header">
-						<Avatar
-							name={club.name}
-							size="2.5rem"
-							font="1.1rem"
-							bg="seed"
-							seedHue={hashHue(club.id)}
-						/>
-						<div class="card-title">
-							<h3>
-									{club.name}
-									{#if club.is_verified}
-										<VerifiedBadge />
-									{/if}
-								</h3>
-							{#if club.location_label}
-								<span class="location">
-									<span class="material-symbols" aria-hidden="true">place</span>
-									{club.location_label}
-								</span>
-							{/if}
-						</div>
-						{#if !club.is_public}
-							<span class="badge" title={m('socialClubs.privateTitle')}>{m('socialClubs.private')}</span>
-						{/if}
-					</div>
-					{#if club.description}
-						<p class="desc">{club.description}</p>
-					{/if}
-					<div class="card-foot">
-						<span class="members">
-							<span class="material-symbols" aria-hidden="true">group</span>
-							{m(club.member_count === 1 ? 'socialClubs.memberCountOne' : 'socialClubs.memberCountMany', { n: club.member_count })}
-						</span>
-						{#if club.viewer_role}
-							<span class="chip chip-mine">{clubRoleLabel(club.viewer_role)}</span>
-						{:else if club.viewer_status === 'pending'}
-							<span class="chip chip-pending" title={m('socialClubs.requestPendingTitle')}>
-								{m('socialClubs.requestPending')}
-							</span>
-						{/if}
-					</div>
-				</a>
-			{/each}
-		</div>
+		{@render clubGrid()}
 	{/if}
 </div>
 
@@ -283,6 +302,15 @@
 </Modal>
 
 <style>
+	.membership-unknown {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		margin: 0 0 var(--space-sm);
+		color: var(--color-text-secondary);
+		font-size: 0.9rem;
+	}
 	.clubs-panel {
 		display: flex;
 		flex-direction: column;

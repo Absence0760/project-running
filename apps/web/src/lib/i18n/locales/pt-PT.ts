@@ -3228,6 +3228,7 @@ export const messages = {
 	"socialClubs.loadErrorTitle": "Não foi possível carregar os clubes",
 	"socialClubs.loadErrorText": "Algo deu errado ao carregar os clubes. Verifique sua ligação e tente novamente.",
 	"socialClubs.retry": "Tentar novamente",
+	"socialClubs.membershipUnknown": "Não foi possível verificar a quais aderiu — a sua função e os botões de aderir podem estar errados até recarregar.",
 	"socialClubs.emptyMineTitle": "Ainda não entrou em nenhum clube",
 	"socialClubs.emptyMineText": "Clubes são grupos semanais, círculos de partilha de rotas e pontos de encontro para eventos. Explore os públicos perto de si, peça para entrar com um toque ou crie o seu.",
 	"socialClubs.findAClub": "Encontrar um clube",
