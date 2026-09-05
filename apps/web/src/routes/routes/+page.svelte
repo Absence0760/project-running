@@ -473,15 +473,11 @@
 					{#each filteredRoutes as route (route.id)}
 						<a href="/routes/{route.id}" class="route-card">
 							<div class="route-map-placeholder">
-								{#if route.waypoints && route.waypoints.length > 1}
-									<RouteTrackPreview
-										routeId={route.id}
-										waypoints={route.waypoints}
-										ownerUserId={route.user_id}
-									/>
-								{:else}
-									<span class="material-symbols" aria-hidden="true">route</span>
-								{/if}
+								<RouteTrackPreview
+									routeId={route.id}
+									waypoints={route.waypoints ?? []}
+									ownerUserId={route.user_id}
+								/>
 								{#if auth.user?.id === route.user_id}
 									<button
 										type="button"
